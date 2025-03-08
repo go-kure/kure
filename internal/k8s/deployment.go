@@ -2,7 +2,7 @@ package k8s
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
-	apiv1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
@@ -28,13 +28,13 @@ func CreateDeployment(name string) *appsv1.Deployment {
 					"app": name,
 				},
 			},
-			Template: apiv1.PodTemplateSpec{
+			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"app": name,
 					},
 				},
-				Spec: apiv1.PodSpec{
+				Spec: corev1.PodSpec{
 					AutomountServiceAccountToken: pointer.Bool(false),
 				},
 			},
@@ -43,27 +43,27 @@ func CreateDeployment(name string) *appsv1.Deployment {
 	return deployment
 }
 
-func AddDeploymentContainer(deployment *appsv1.Deployment, container *apiv1.Container) {
+func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) {
 	deployment.Spec.Template.Spec.Containers = append(deployment.Spec.Template.Spec.Containers, *container)
 }
 
-func AddDeploymentInitContainer(deployment *appsv1.Deployment, container *apiv1.Container) {
+func AddDeploymentInitContainer(deployment *appsv1.Deployment, container *corev1.Container) {
 	deployment.Spec.Template.Spec.InitContainers = append(deployment.Spec.Template.Spec.InitContainers, *container)
 }
 
-func AddDeploymentVolume(deployment *appsv1.Deployment, volume *apiv1.Volume) {
+func AddDeploymentVolume(deployment *appsv1.Deployment, volume *corev1.Volume) {
 	deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, *volume)
 }
 
-func AddDeploymentImagePullSecret(deployment *appsv1.Deployment, imagePullSecret *apiv1.LocalObjectReference) {
+func AddDeploymentImagePullSecret(deployment *appsv1.Deployment, imagePullSecret *corev1.LocalObjectReference) {
 	deployment.Spec.Template.Spec.ImagePullSecrets = append(deployment.Spec.Template.Spec.ImagePullSecrets, *imagePullSecret)
 }
 
-func AddDeploymentToleration(deployment *appsv1.Deployment, toleration *apiv1.Toleration) {
+func AddDeploymentToleration(deployment *appsv1.Deployment, toleration *corev1.Toleration) {
 	deployment.Spec.Template.Spec.Tolerations = append(deployment.Spec.Template.Spec.Tolerations, *toleration)
 }
 
-func AddDeploymentTopologySpreadConstraints(deployment *appsv1.Deployment, topologySpreadConstraint *apiv1.TopologySpreadConstraint) {
+func AddDeploymentTopologySpreadConstraints(deployment *appsv1.Deployment, topologySpreadConstraint *corev1.TopologySpreadConstraint) {
 	deployment.Spec.Template.Spec.TopologySpreadConstraints = append(deployment.Spec.Template.Spec.TopologySpreadConstraints)
 }
 
@@ -71,11 +71,11 @@ func SetDeploymentServiceAccountName(deployment *appsv1.Deployment, serviceAccou
 	deployment.Spec.Template.Spec.ServiceAccountName = serviceAccountName
 }
 
-func SetDeploymentSecurityContext(deployment *appsv1.Deployment, securityContext *apiv1.PodSecurityContext) {
+func SetDeploymentSecurityContext(deployment *appsv1.Deployment, securityContext *corev1.PodSecurityContext) {
 	deployment.Spec.Template.Spec.SecurityContext = securityContext
 }
 
-func SetDeploymentAffinity(deployment *appsv1.Deployment, affinity *apiv1.Affinity) {
+func SetDeploymentAffinity(deployment *appsv1.Deployment, affinity *corev1.Affinity) {
 	deployment.Spec.Template.Spec.Affinity = affinity
 }
 

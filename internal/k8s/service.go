@@ -1,12 +1,12 @@
 package k8s
 
 import (
-	apiv1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func CreateService(name string) *apiv1.Service {
-	service := &apiv1.Service{
+func CreateService(name string) *corev1.Service {
+	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
@@ -18,32 +18,37 @@ func CreateService(name string) *apiv1.Service {
 		},
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
-			APIVersion: apiv1.SchemeGroupVersion.String(),
+			APIVersion: corev1.SchemeGroupVersion.String(),
 		},
-		Spec: apiv1.ServiceSpec{
+		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{},
-			Ports:    []apiv1.ServicePort{},
+			Ports:    []corev1.ServicePort{},
 		},
 	}
 	return service
 }
 
-func AddServicePort(service *apiv1.Service, port apiv1.ServicePort) {
+func AddServicePort(service *corev1.Service, port corev1.ServicePort) {
 	service.Spec.Ports = append(service.Spec.Ports, port)
 }
 
-func SetServiceSelector(service *apiv1.Service, selector map[string]string) {
+func SetServiceSelector(service *corev1.Service, selector map[string]string) {
 	service.Spec.Selector = selector
 }
 
-func SetServiceType(service *apiv1.Service, type_ apiv1.ServiceType) {
+func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) {
 	service.Spec.Type = type_
 }
 
-func SetServiceLoadBalancerIP(service *apiv1.Service, ip string) {
-	service.Spec.LoadBalancerIP = ip
-}
+/*
+   service.Spec.LoadBalancerIP
 
-func SetServiceExternalTrafficPolicy(service *apiv1.Service, trafficPolicy apiv1.ServiceExternalTrafficPolicy) {
+   Deprecated: This field was under-specified and
+   its meaning varies across implementations, and it cannot support dual-stack.
+   As of Kubernetes v1.24, users are encouraged to use implementation-specific
+   annotations when available.
+*/
+
+func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) {
 	service.Spec.ExternalTrafficPolicy = trafficPolicy
 }
