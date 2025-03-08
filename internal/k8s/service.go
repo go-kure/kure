@@ -5,10 +5,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func CreateService(name string) *corev1.Service {
-	service := &corev1.Service{
+func CreateService(name string, namespace string) *corev1.Service {
+	obj := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:      name,
+			Namespace: namespace,
 			Labels: map[string]string{
 				"app": name,
 			},
@@ -25,7 +26,7 @@ func CreateService(name string) *corev1.Service {
 			Ports:    []corev1.ServicePort{},
 		},
 	}
-	return service
+	return obj
 }
 
 func AddServicePort(service *corev1.Service, port corev1.ServicePort) {

@@ -5,10 +5,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func CreateIngress(name string, classname string) *netv1.Ingress {
-	ingress := &netv1.Ingress{
+func CreateIngress(name string, namespace string, classname string) *netv1.Ingress {
+	obj := &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:      name,
+			Namespace: namespace,
 			Labels: map[string]string{
 				"app": name,
 			},
@@ -26,7 +27,7 @@ func CreateIngress(name string, classname string) *netv1.Ingress {
 			TLS:              []netv1.IngressTLS{},
 		},
 	}
-	return ingress
+	return obj
 }
 
 func AddIngressRule(ingress *netv1.Ingress, rule netv1.IngressRule) {

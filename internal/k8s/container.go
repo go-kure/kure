@@ -6,7 +6,7 @@ import (
 )
 
 func CreateContainer(name string, image string, command []string, args []string) *corev1.Container {
-	container := corev1.Container{
+	obj := corev1.Container{
 		Name:    name,
 		Image:   image,
 		Command: command,
@@ -31,7 +31,7 @@ func CreateContainer(name string, image string, command []string, args []string)
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{},
 	}
-	return &container
+	return &obj
 }
 
 func AddContainerPort(container *corev1.Container, port corev1.ContainerPort) {
