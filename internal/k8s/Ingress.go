@@ -58,6 +58,9 @@ func AddIngressRule(ingress *netv1.Ingress, rule *netv1.IngressRule) {
 	ingress.Spec.Rules = append(ingress.Spec.Rules, *rule)
 }
 func AddIngressRulePath(rule *netv1.IngressRule, path netv1.HTTPIngressPath) {
+	if rule.IngressRuleValue.HTTP == nil {
+		rule.IngressRuleValue.HTTP = &netv1.HTTPIngressRuleValue{}
+	}
 	rule.IngressRuleValue.HTTP.Paths = append(rule.IngressRuleValue.HTTP.Paths, path)
 }
 
