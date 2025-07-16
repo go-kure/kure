@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	batchv1 "k8s.io/api/batch/v1"
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -137,6 +138,18 @@ func main() {
 	k8s.SetDaemonSetServiceAccountName(ds, sa.Name)
 	k8s.SetDaemonSetNodeSelector(ds, map[string]string{"type": "worker"})
 
+	// Job example
+	job := k8s.CreateJob("demo-job", "demo")
+	k8s.AddJobContainer(job, mainCtr)
+	k8s.SetJobBackoffLimit(job, 3)
+	k8s.SetJobCompletions(job, 1)
+	k8s.SetJobParallelism(job, 1)
+
+	// CronJob example
+	cron := k8s.CreateCronJob("demo-cron", "demo", "*/5 * * * *")
+	k8s.AddCronJobContainer(cron, mainCtr)
+	k8s.SetCronJobConcurrencyPolicy(cron, batchv1.ForbidConcurrent)
+
 	// Service and ingress example
 	svc := k8s.CreateService("demo-svc", "demo")
 	k8s.SetServiceSelector(svc, map[string]string{"app": "demo"})
@@ -175,6 +188,8 @@ func main() {
 	y.PrintObj(dep, os.Stdout)
 	y.PrintObj(sts, os.Stdout)
 	y.PrintObj(ds, os.Stdout)
+	y.PrintObj(job, os.Stdout)
+	y.PrintObj(cron, os.Stdout)
 	y.PrintObj(svc, os.Stdout)
 	y.PrintObj(ing, os.Stdout)
 	y.PrintObj(role, os.Stdout)
