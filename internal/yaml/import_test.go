@@ -1,6 +1,7 @@
 package yaml
 
 import (
+	"os"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -25,7 +26,10 @@ metadata:
 spec:
   containers: []
 `
-	objs := parse([]byte(data))
+	objs, err := parse([]byte(data))
+	if err != nil {
+		t.Fatalf("parse returned error: %v", err)
+	}
 	if len(objs) != 2 {
 		t.Fatalf("expected 2 objects, got %d", len(objs))
 	}
@@ -52,5 +56,32 @@ func TestCheckType(t *testing.T) {
 	bad := &corev1.Pod{TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"}}
 	if err := checkType(bad); err == nil {
 		t.Fatalf("expected type mismatch error")
+	}
+}
+
+func TestParseFile(t *testing.T) {
+	data := `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod
+spec:
+  containers: []
+`
+	dir := t.TempDir()
+	path := dir + "/objects.yaml"
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	objs, err := ParseFile(path)
+	if err != nil {
+		t.Fatalf("ParseFile returned error: %v", err)
+	}
+	if len(objs) != 2 {
+		t.Fatalf("expected 2 objects, got %d", len(objs))
 	}
 }
