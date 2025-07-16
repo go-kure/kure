@@ -30,8 +30,35 @@ func CreateIngress(name string, namespace string, classname string) *netv1.Ingre
 	return obj
 }
 
+func CreateIngressRule(host string) netv1.IngressRule {
+	return netv1.IngressRule{
+		Host: host,
+		IngressRuleValue: netv1.IngressRuleValue{
+			HTTP: &netv1.HTTPIngressRuleValue{
+				Paths: []netv1.HTTPIngressPath{},
+			},
+		},
+	}
+}
+func CreateIngressPath(path string, pathType *netv1.PathType, servicename string, serviceportname string) netv1.HTTPIngressPath {
+	return netv1.HTTPIngressPath{
+		Path:     path,
+		PathType: pathType,
+		Backend: netv1.IngressBackend{
+			Service: &netv1.IngressServiceBackend{
+				Name: servicename,
+				Port: netv1.ServiceBackendPort{
+					Name: serviceportname,
+				},
+			},
+		},
+	}
+}
 func AddIngressRule(ingress *netv1.Ingress, rule netv1.IngressRule) {
 	ingress.Spec.Rules = append(ingress.Spec.Rules, rule)
+}
+func AddIngressRulePath(rule netv1.IngressRule, path netv1.HTTPIngressPath) {
+	rule.IngressRuleValue.HTTP.Paths = append(rule.IngressRuleValue.HTTP.Paths, path)
 }
 
 func AddIngressTls(ingress *netv1.Ingress, tls netv1.IngressTLS) {

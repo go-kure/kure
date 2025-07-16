@@ -6,21 +6,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func CreateDeployment(name string, namespace string, spec corev1.PodSpec) *appsv1.Deployment {
+func CreateDeployment(name string, namespace string) *appsv1.Deployment {
 
 	obj := &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: appsv1.SchemeGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:      name,
+			Namespace: namespace,
 			Labels: map[string]string{
 				"app": name,
 			},
 			Annotations: map[string]string{
 				"app": name,
 			},
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Deployment",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -34,7 +35,19 @@ func CreateDeployment(name string, namespace string, spec corev1.PodSpec) *appsv
 						"app": name,
 					},
 				},
-				Spec: spec,
+				Spec: corev1.PodSpec{
+					Containers:                    []corev1.Container{},
+					InitContainers:                []corev1.Container{},
+					Volumes:                       []corev1.Volume{},
+					RestartPolicy:                 corev1.RestartPolicyAlways,
+					TerminationGracePeriodSeconds: new(int64),
+					SecurityContext:               &corev1.PodSecurityContext{},
+					ImagePullSecrets:              []corev1.LocalObjectReference{},
+					ServiceAccountName:            "",
+					NodeSelector:                  map[string]string{},
+					Affinity:                      &corev1.Affinity{},
+					Tolerations:                   []corev1.Toleration{},
+				},
 			},
 		},
 	}
