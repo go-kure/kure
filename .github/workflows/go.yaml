@@ -56,3 +56,6 @@ jobs:
     - name: Build
       run: go build -v ./...
 
+    - name: Run example
+      run: go run main.go
+
