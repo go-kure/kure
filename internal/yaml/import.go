@@ -12,7 +12,30 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 )
 
-func parse(yamlbytes []byte) []runtime.Object {
+// ParseErrors aggregates errors encountered while parsing a YAML document.
+type ParseErrors struct {
+	Errs []error
+}
+
+func (e *ParseErrors) Error() string {
+	if len(e.Errs) == 0 {
+		return ""
+	}
+	if len(e.Errs) == 1 {
+		return e.Errs[0].Error()
+	}
+	sb := strings.Builder{}
+	sb.WriteString("multiple parse errors:")
+	for _, err := range e.Errs {
+		sb.WriteString("\n - ")
+		sb.WriteString(err.Error())
+	}
+	return sb.String()
+}
+
+func (e *ParseErrors) Unwrap() []error { return e.Errs }
+
+func parse(yamlbytes []byte) ([]runtime.Object, error) {
 
 	/*
 	   https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
@@ -26,6 +49,7 @@ func parse(yamlbytes []byte) []runtime.Object {
 		log.Printf("failed to register kustomize scheme: %v", err)
 	}
 	decode := scheme.Codecs.UniversalDeserializer().Decode
+	errs := make([]error, 0)
 
 	for _, f := range sepYamlfiles {
 		// skip empty documents, `Decode` will fail on them
@@ -35,17 +59,20 @@ func parse(yamlbytes []byte) []runtime.Object {
 		obj, _, err := decode([]byte(f), nil, nil)
 
 		if err != nil {
-			log.Fatal(fmt.Sprintf("Error while decoding YAML object. Err was: %s", err))
+			errs = append(errs, fmt.Errorf("decode error: %w", err))
 			continue
 		}
 		if err := checkType(obj); err != nil {
-			log.Printf("skipping unsupported object: %v", err)
+			errs = append(errs, err)
 			continue
 		}
 		retVal = append(retVal, obj)
 	}
 
-	return retVal
+	if len(errs) > 0 {
+		return retVal, &ParseErrors{Errs: errs}
+	}
+	return retVal, nil
 }
 
 func checkType(obj runtime.Object) error {
