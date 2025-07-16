@@ -18,6 +18,11 @@ func ptr[T any](v T) *T { return &v }
 func main() {
 	y := printers.YAMLPrinter{}
 
+	// Namespace example
+	ns := k8s.CreateNamespace("demo")
+	k8s.AddNamespaceLabel(ns, "env", "demo")
+	k8s.AddNamespaceAnnotation(ns, "owner", "example")
+
 	// Service account
 	sa := k8s.CreateServiceAccount("demo-sa", "demo")
 	k8s.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"})
@@ -121,6 +126,7 @@ func main() {
 
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
+	y.PrintObj(ns, os.Stdout)
 	y.PrintObj(secret, os.Stdout)
 	y.PrintObj(cm, os.Stdout)
 	y.PrintObj(pvc, os.Stdout)
