@@ -2,7 +2,9 @@ package fluxcd
 
 import (
 	"testing"
+	"time"
 
+	meta "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -316,5 +318,112 @@ func TestCreateHelmRepository(t *testing.T) {
 					tt.inputName, tt.inputNS, tt.inputSpec, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestGitRepositoryHelpers(t *testing.T) {
+	repo := CreateGitRepository("git", "ns", sourcev1.GitRepositorySpec{})
+	SetGitRepositoryURL(repo, "https://example.com/repo.git")
+	sr := meta.LocalObjectReference{Name: "secret"}
+	SetGitRepositorySecretRef(repo, &sr)
+	interval := metav1.Duration{Duration: time.Minute}
+	SetGitRepositoryInterval(repo, interval)
+	include := sourcev1.GitRepositoryInclude{GitRepositoryRef: meta.LocalObjectReference{Name: "other"}}
+	AddGitRepositoryInclude(repo, include)
+
+	if repo.Spec.URL != "https://example.com/repo.git" {
+		t.Errorf("unexpected url %s", repo.Spec.URL)
+	}
+	if repo.Spec.SecretRef == nil || repo.Spec.SecretRef.Name != "secret" {
+		t.Errorf("secret ref not set")
+	}
+	if repo.Spec.Interval != interval {
+		t.Errorf("interval not set")
+	}
+	if len(repo.Spec.Include) != 1 || repo.Spec.Include[0].GitRepositoryRef.Name != "other" {
+		t.Errorf("include not added")
+	}
+}
+
+func TestHelmRepositoryHelpers(t *testing.T) {
+	repo := CreateHelmRepository("hr", "ns", sourcev1.HelmRepositorySpec{})
+	SetHelmRepositoryURL(repo, "https://charts.example.com")
+	sr := meta.LocalObjectReference{Name: "cred"}
+	SetHelmRepositorySecretRef(repo, &sr)
+	SetHelmRepositoryInterval(repo, metav1.Duration{Duration: time.Hour})
+	SetHelmRepositoryProvider(repo, "aws")
+	if repo.Spec.URL != "https://charts.example.com" {
+		t.Errorf("url not set")
+	}
+	if repo.Spec.SecretRef == nil || repo.Spec.SecretRef.Name != "cred" {
+		t.Errorf("secret not set")
+	}
+	if repo.Spec.Interval.Duration != time.Hour {
+		t.Errorf("interval not set")
+	}
+	if repo.Spec.Provider != "aws" {
+		t.Errorf("provider not set")
+	}
+}
+
+func TestBucketHelpers(t *testing.T) {
+	b := CreateBucket("b", "ns", sourcev1.BucketSpec{})
+	SetBucketName(b, "bucket")
+	SetBucketEndpoint(b, "https://s3.example.com")
+	SetBucketInterval(b, metav1.Duration{Duration: time.Hour})
+	ref := meta.LocalObjectReference{Name: "creds"}
+	SetBucketSecretRef(b, &ref)
+	if b.Spec.BucketName != "bucket" {
+		t.Errorf("bucket name not set")
+	}
+	if b.Spec.Endpoint != "https://s3.example.com" {
+		t.Errorf("endpoint not set")
+	}
+	if b.Spec.Interval.Duration != time.Hour {
+		t.Errorf("interval not set")
+	}
+	if b.Spec.SecretRef == nil || b.Spec.SecretRef.Name != "creds" {
+		t.Errorf("secret ref not set")
+	}
+}
+
+func TestHelmChartHelpers(t *testing.T) {
+	hc := CreateHelmChart("chart", "ns", sourcev1.HelmChartSpec{})
+	SetHelmChartChart(hc, "app")
+	SetHelmChartVersion(hc, "1.0.0")
+	SetHelmChartInterval(hc, metav1.Duration{Duration: time.Minute})
+	AddHelmChartValuesFile(hc, "values.yaml")
+	if hc.Spec.Chart != "app" {
+		t.Errorf("chart not set")
+	}
+	if hc.Spec.Version != "1.0.0" {
+		t.Errorf("version not set")
+	}
+	if hc.Spec.Interval.Duration != time.Minute {
+		t.Errorf("interval not set")
+	}
+	if len(hc.Spec.ValuesFiles) != 1 || hc.Spec.ValuesFiles[0] != "values.yaml" {
+		t.Errorf("values file not added")
+	}
+}
+
+func TestOCIRepositoryHelpers(t *testing.T) {
+	or := CreateOCIRepository("oci", "ns", sourcev1beta2.OCIRepositorySpec{})
+	SetOCIRepositoryURL(or, "oci://repo")
+	SetOCIRepositoryInterval(or, metav1.Duration{Duration: time.Minute})
+	SetOCIRepositoryProvider(or, "aws")
+	ref := meta.LocalObjectReference{Name: "creds"}
+	SetOCIRepositorySecretRef(or, &ref)
+	if or.Spec.URL != "oci://repo" {
+		t.Errorf("url not set")
+	}
+	if or.Spec.Interval.Duration != time.Minute {
+		t.Errorf("interval not set")
+	}
+	if or.Spec.Provider != "aws" {
+		t.Errorf("provider not set")
+	}
+	if or.Spec.SecretRef == nil || or.Spec.SecretRef.Name != "creds" {
+		t.Errorf("secret not set")
 	}
 }
