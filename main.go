@@ -16,9 +16,10 @@ import (
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
-	flux "github.com/go-kure/kure/internal/fluxcd"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 
-	"github.com/go-kure/kure/internal/fluxcd"
+	fluxcd "github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
 )
 
@@ -172,17 +173,17 @@ func main() {
 	k8s.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{"example.com"}, SecretName: secret.Name})
 
 	// RBAC examples
-	role := flux.CreateRole("demo-role", "demo")
-	flux.AddRoleRule(role, rbacv1.PolicyRule{Verbs: []string{"get"}, Resources: []string{"pods"}})
+	role := k8s.CreateRole("demo-role", "demo")
+	k8s.AddRoleRule(role, rbacv1.PolicyRule{Verbs: []string{"get"}, Resources: []string{"pods"}})
 
-	clusterRole := flux.CreateClusterRole("demo-cr")
-	flux.AddClusterRoleRule(clusterRole, rbacv1.PolicyRule{Verbs: []string{"list"}, Resources: []string{"nodes"}})
+	clusterRole := k8s.CreateClusterRole("demo-cr")
+	k8s.AddClusterRoleRule(clusterRole, rbacv1.PolicyRule{Verbs: []string{"list"}, Resources: []string{"nodes"}})
 
-	roleBind := flux.CreateRoleBinding("demo-rb", "demo", rbacv1.RoleRef{Kind: "Role", Name: role.Name})
-	flux.AddRoleBindingSubject(roleBind, rbacv1.Subject{Kind: "ServiceAccount", Name: sa.Name, Namespace: sa.Namespace})
+	roleBind := k8s.CreateRoleBinding("demo-rb", "demo", rbacv1.RoleRef{Kind: "Role", Name: role.Name})
+	k8s.AddRoleBindingSubject(roleBind, rbacv1.Subject{Kind: "ServiceAccount", Name: sa.Name, Namespace: sa.Namespace})
 
-	clusterRoleBind := flux.CreateClusterRoleBinding("demo-crb", rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRole.Name})
-	flux.AddClusterRoleBindingSubject(clusterRoleBind, rbacv1.Subject{Kind: "User", Name: "admin"})
+	clusterRoleBind := k8s.CreateClusterRoleBinding("demo-crb", rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRole.Name})
+	k8s.AddClusterRoleBindingSubject(clusterRoleBind, rbacv1.Subject{Kind: "User", Name: "admin"})
 
 	// HelmRelease example
 	hr := fluxcd.CreateHelmRelease("demo-hr", "demo", helmv2.HelmReleaseSpec{})
@@ -207,6 +208,25 @@ func main() {
 	fluxcd.SetKustomizationSourceRef(ks, kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "demo-repo"})
 	fluxcd.AddKustomizationImage(ks, kustomize.Image{Name: "nginx", NewTag: "latest"})
 
+	// Flux source-controller examples
+	gitRepo := fluxcd.CreateGitRepository("demo-git", "demo", sourcev1.GitRepositorySpec{})
+	fluxcd.SetGitRepositoryURL(gitRepo, "https://github.com/example/repo.git")
+	fluxcd.SetGitRepositoryInterval(gitRepo, metav1.Duration{Duration: time.Minute})
+
+	helmRepo := fluxcd.CreateHelmRepository("demo-helm", "demo", sourcev1.HelmRepositorySpec{})
+	fluxcd.SetHelmRepositoryURL(helmRepo, "https://charts.example.com")
+	fluxcd.SetHelmRepositoryInterval(helmRepo, metav1.Duration{Duration: time.Hour})
+
+	bucket := fluxcd.CreateBucket("demo-bucket", "demo", sourcev1.BucketSpec{})
+	fluxcd.SetBucketName(bucket, "artifacts")
+	fluxcd.SetBucketEndpoint(bucket, "https://s3.example.com")
+
+	chart := fluxcd.CreateHelmChart("demo-chart", "demo", sourcev1.HelmChartSpec{})
+	fluxcd.SetHelmChartChart(chart, "app")
+
+	ociRepo := fluxcd.CreateOCIRepository("demo-oci", "demo", sourcev1beta2.OCIRepositorySpec{})
+	fluxcd.SetOCIRepositoryURL(ociRepo, "oci://registry/app")
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -227,4 +247,9 @@ func main() {
 	y.PrintObj(clusterRoleBind, os.Stdout)
 	y.PrintObj(hr, os.Stdout)
 	y.PrintObj(ks, os.Stdout)
+	y.PrintObj(gitRepo, os.Stdout)
+	y.PrintObj(helmRepo, os.Stdout)
+	y.PrintObj(bucket, os.Stdout)
+	y.PrintObj(chart, os.Stdout)
+	y.PrintObj(ociRepo, os.Stdout)
 }
