@@ -14,6 +14,8 @@ import (
 	"k8s.io/cli-runtime/pkg/printers"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	flux "github.com/go-kure/kure/internal/fluxcd"
 
 	"github.com/go-kure/kure/internal/fluxcd"
@@ -199,6 +201,12 @@ func main() {
 		},
 	})
 
+	// Kustomization example
+	ks := fluxcd.CreateKustomization("demo-ks", "demo", kustv1.KustomizationSpec{Path: "./manifests", Prune: true})
+	fluxcd.SetKustomizationInterval(ks, metav1.Duration{Duration: time.Minute})
+	fluxcd.SetKustomizationSourceRef(ks, kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "demo-repo"})
+	fluxcd.AddKustomizationImage(ks, kustomize.Image{Name: "nginx", NewTag: "latest"})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -218,4 +226,5 @@ func main() {
 	y.PrintObj(clusterRole, os.Stdout)
 	y.PrintObj(clusterRoleBind, os.Stdout)
 	y.PrintObj(hr, os.Stdout)
+	y.PrintObj(ks, os.Stdout)
 }
