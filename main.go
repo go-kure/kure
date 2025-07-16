@@ -14,6 +14,7 @@ import (
 	"k8s.io/cli-runtime/pkg/printers"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -261,6 +262,18 @@ func main() {
 		SecretRef: meta.LocalObjectReference{Name: "webhook-secret"},
 	})
 
+	// Image automation example
+	author := fluxcd.CreateCommitUser("Flux Bot", "bot@example.com")
+	commit := fluxcd.CreateCommitSpec(author)
+	gitSpec := fluxcd.CreateGitSpec(commit, nil, nil)
+	autoSpec := imagev1.ImageUpdateAutomationSpec{
+		SourceRef: fluxcd.CreateCrossNamespaceSourceReference("", "GitRepository", "demo-repo", "demo"),
+		Interval:  metav1.Duration{Duration: time.Minute},
+		GitSpec:   gitSpec,
+	}
+	auto := fluxcd.CreateImageUpdateAutomation("demo-auto", "demo", autoSpec)
+	fluxcd.SetImageUpdateAutomationSuspend(auto, false)
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -292,4 +305,5 @@ func main() {
 	y.PrintObj(provider, os.Stdout)
 	y.PrintObj(alert, os.Stdout)
 	y.PrintObj(receiver, os.Stdout)
+	y.PrintObj(auto, os.Stdout)
 }
