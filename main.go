@@ -5,11 +5,13 @@ import (
 
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/cli-runtime/pkg/printers"
 
+	flux "github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
 )
 
@@ -124,6 +126,19 @@ func main() {
 	k8s.AddIngressRule(ing, rule)
 	k8s.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{"example.com"}, SecretName: secret.Name})
 
+	// RBAC examples
+	role := flux.CreateRole("demo-role", "demo")
+	flux.AddRoleRule(role, rbacv1.PolicyRule{Verbs: []string{"get"}, Resources: []string{"pods"}})
+
+	clusterRole := flux.CreateClusterRole("demo-cr")
+	flux.AddClusterRoleRule(clusterRole, rbacv1.PolicyRule{Verbs: []string{"list"}, Resources: []string{"nodes"}})
+
+	roleBind := flux.CreateRoleBinding("demo-rb", "demo", rbacv1.RoleRef{Kind: "Role", Name: role.Name})
+	flux.AddRoleBindingSubject(roleBind, rbacv1.Subject{Kind: "ServiceAccount", Name: sa.Name, Namespace: sa.Namespace})
+
+	clusterRoleBind := flux.CreateClusterRoleBinding("demo-crb", rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRole.Name})
+	flux.AddClusterRoleBindingSubject(clusterRoleBind, rbacv1.Subject{Kind: "User", Name: "admin"})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -134,4 +149,8 @@ func main() {
 	y.PrintObj(dep, os.Stdout)
 	y.PrintObj(svc, os.Stdout)
 	y.PrintObj(ing, os.Stdout)
+	y.PrintObj(role, os.Stdout)
+	y.PrintObj(roleBind, os.Stdout)
+	y.PrintObj(clusterRole, os.Stdout)
+	y.PrintObj(clusterRoleBind, os.Stdout)
 }
