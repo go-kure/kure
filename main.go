@@ -63,6 +63,12 @@ func main() {
 	k8s.SetPVCDataSource(pvc, &apiv1.TypedLocalObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
 	k8s.SetPVCDataSourceRef(pvc, &apiv1.TypedObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
 
+	// StorageClass example
+	sc := k8s.CreateStorageClass("demo-sc", "kubernetes.io/no-provisioner")
+	k8s.AddStorageClassParameter(sc, "type", "local")
+	k8s.SetStorageClassAllowVolumeExpansion(sc, true)
+	k8s.SetPVCStorageClass(pvc, sc)
+
 	// Pod example
 	pod := k8s.CreatePod("demo-pod", "demo")
 	mainCtr := k8s.CreateContainer("app", "nginx", nil, nil)
