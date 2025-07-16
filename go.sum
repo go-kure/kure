@@ -8,6 +8,8 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/external-secrets/external-secrets v0.18.2 h1:uTGUkEeclsLu93SkhToDGBs8+aaSwkstLWIQ3g21ZMI=
+github.com/external-secrets/external-secrets v0.18.2/go.mod h1:+l6+AHa3kb/d1/9BHlrLzHw9LO+rjHwI+kC5KS1+CRc=
 github.com/fluxcd/helm-controller/api v1.2.0 h1:cjpHBpJQv+8WyYQNwoujoNMFOQx2llllv4peLIiWyxU=
 github.com/fluxcd/helm-controller/api v1.2.0/go.mod h1:3NZts/4n6PpD4sONSDJWXPQzfPpBk3YpknIFA6rLW3I=
 github.com/fluxcd/image-automation-controller/api v0.41.2 h1:miYjID4Mg51xcObVLQPRGkiWFYGpBSgItTXfQ4jVUVI=

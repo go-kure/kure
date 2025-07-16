@@ -26,9 +26,11 @@ import (
 
 	"github.com/go-kure/kure/internal/certmanager"
 
+	"github.com/go-kure/kure/internal/externalsecrets"
 	"github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
 
+	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	v1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
 	meta "github.com/fluxcd/pkg/apis/meta"
@@ -293,6 +295,12 @@ func main() {
 	certmanager.SetCertificateIssuerRef(cert, cmmeta.ObjectReference{Name: issuer.Name, Kind: "Issuer", Group: certmanagerapi.GroupName})
 	clusterIssuer := certmanager.CreateClusterIssuer("demo-clusterissuer", certv1.IssuerSpec{})
 
+	// external-secrets examples
+	esStore := externalsecrets.CreateSecretStore("demo-store", "demo", esv1beta1.SecretStoreSpec{})
+	cesStore := externalsecrets.CreateClusterSecretStore("demo-clusterstore", esv1beta1.SecretStoreSpec{})
+	es := externalsecrets.CreateExternalSecret("demo-es", "demo", esv1beta1.ExternalSecretSpec{})
+	ces := externalsecrets.CreateClusterExternalSecret("demo-ces", esv1beta1.ClusterExternalSecretSpec{})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -328,4 +336,8 @@ func main() {
 	y.PrintObj(issuer, os.Stdout)
 	y.PrintObj(clusterIssuer, os.Stdout)
 	y.PrintObj(cert, os.Stdout)
+	y.PrintObj(esStore, os.Stdout)
+	y.PrintObj(cesStore, os.Stdout)
+	y.PrintObj(es, os.Stdout)
+	y.PrintObj(ces, os.Stdout)
 }

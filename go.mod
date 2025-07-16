@@ -17,8 +17,9 @@ require (
 	github.com/fluxcd/notification-controller/api v1.6.0
 	github.com/fluxcd/pkg/apis/acl v0.7.0
 	github.com/fluxcd/pkg/apis/kustomize v1.9.0
-	github.com/fluxcd/pkg/apis/meta v1.12.0
-	github.com/fluxcd/source-controller/api v1.6.1
+       github.com/fluxcd/pkg/apis/meta v1.12.0
+       github.com/external-secrets/external-secrets v0.18.2
+       github.com/fluxcd/source-controller/api v1.6.1
 	k8s.io/api v0.33.0
 	k8s.io/apiextensions-apiserver v0.33.0
 	k8s.io/apimachinery v0.33.0
