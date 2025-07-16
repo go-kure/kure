@@ -54,7 +54,7 @@ func main() {
 	k8s.SetPVCSelector(pvc, &metav1.LabelSelector{MatchLabels: map[string]string{"disk": "fast"}})
 	k8s.SetPVCVolumeName(pvc, "pv1")
 	k8s.SetPVCDataSource(pvc, &apiv1.TypedLocalObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
-	k8s.SetPVCDataSourceRef(pvc, &apiv1.TypedObjectReference{Kind: "VolumeSnapshot", Name: "snap"})
+	k8s.SetPVCDataSourceRef(pvc, &apiv1.TypedObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
 
 	// Pod example
 	pod := k8s.CreatePod("demo-pod", "demo")
