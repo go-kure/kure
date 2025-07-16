@@ -282,6 +282,11 @@ func main() {
 
 	// cert-manager examples
 	issuer := certmanager.CreateIssuer("demo-issuer", "demo", certv1.IssuerSpec{})
+	acme := certmanager.CreateACMEIssuer("https://acme.example.com", "ops@example.com",
+		cmmeta.SecretKeySelector{LocalObjectReference: cmmeta.LocalObjectReference{Name: "acme-key"}})
+	certmanager.AddACMEIssuerSolver(acme, certmanager.CreateACMEHTTP01Solver(apiv1.ServiceTypeNodePort, "nginx"))
+	certmanager.SetIssuerACME(issuer, acme)
+
 	certmanager.SetIssuerCA(issuer, &certv1.CAIssuer{SecretName: "ca-key"})
 	cert := certmanager.CreateCertificate("demo-cert", "demo", certv1.CertificateSpec{})
 	certmanager.AddCertificateDNSName(cert, "example.com")
