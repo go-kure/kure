@@ -19,8 +19,12 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 
-	fluxcd "github.com/go-kure/kure/internal/fluxcd"
+	"github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
+
+	v1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	meta "github.com/fluxcd/pkg/apis/meta"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -245,6 +249,18 @@ func main() {
 	k8s.AddLimitRangeItemDefaultRequest(&lrItem, apiv1.ResourceCPU, resource.MustParse("100m"))
 	k8s.AddLimitRangeItem(lr, lrItem)
 
+	// Notification controller examples
+	provider := fluxcd.CreateProvider("demo-provider", "demo", notificationv1beta2.ProviderSpec{Type: notificationv1beta2.SlackProvider})
+	alert := fluxcd.CreateAlert("demo-alert", "demo", notificationv1beta2.AlertSpec{
+		ProviderRef:  meta.LocalObjectReference{Name: provider.Name},
+		EventSources: []v1.CrossNamespaceObjectReference{{Kind: "Kustomization", Name: dep.Name, Namespace: dep.Namespace}},
+	})
+	receiver := fluxcd.CreateReceiver("demo-receiver", "demo", notificationv1beta2.ReceiverSpec{
+		Type:      notificationv1beta2.GitHubReceiver,
+		Resources: []v1.CrossNamespaceObjectReference{{Kind: "Kustomization", Name: dep.Name, Namespace: dep.Namespace}},
+		SecretRef: meta.LocalObjectReference{Name: "webhook-secret"},
+	})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -273,4 +289,7 @@ func main() {
 	y.PrintObj(np, os.Stdout)
 	y.PrintObj(rq, os.Stdout)
 	y.PrintObj(lr, os.Stdout)
+	y.PrintObj(provider, os.Stdout)
+	y.PrintObj(alert, os.Stdout)
+	y.PrintObj(receiver, os.Stdout)
 }
