@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	apiv1 "k8s.io/api/core/v1"
@@ -12,7 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/cli-runtime/pkg/printers"
 
+	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	flux "github.com/go-kure/kure/internal/fluxcd"
+
+	"github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
 )
 
@@ -178,6 +182,23 @@ func main() {
 	clusterRoleBind := flux.CreateClusterRoleBinding("demo-crb", rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRole.Name})
 	flux.AddClusterRoleBindingSubject(clusterRoleBind, rbacv1.Subject{Kind: "User", Name: "admin"})
 
+	// HelmRelease example
+	hr := fluxcd.CreateHelmRelease("demo-hr", "demo", helmv2.HelmReleaseSpec{})
+	fluxcd.SetHelmReleaseReleaseName(hr, "demo")
+	fluxcd.SetHelmReleaseInterval(hr, metav1.Duration{Duration: time.Minute})
+	fluxcd.AddHelmReleaseLabel(hr, "app", "demo")
+	fluxcd.SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
+		Spec: helmv2.HelmChartTemplateSpec{
+			Chart:   "demo",
+			Version: "1.0.0",
+			SourceRef: helmv2.CrossNamespaceObjectReference{
+				Kind:      "HelmRepository",
+				Name:      "demo",
+				Namespace: "demo",
+			},
+		},
+	})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -196,4 +217,5 @@ func main() {
 	y.PrintObj(roleBind, os.Stdout)
 	y.PrintObj(clusterRole, os.Stdout)
 	y.PrintObj(clusterRoleBind, os.Stdout)
+	y.PrintObj(hr, os.Stdout)
 }
