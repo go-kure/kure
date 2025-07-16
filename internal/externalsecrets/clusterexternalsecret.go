@@ -11,7 +11,7 @@ func CreateClusterExternalSecret(name string, spec esv1beta1.ClusterExternalSecr
 	obj := &esv1beta1.ClusterExternalSecret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterExternalSecret",
-			APIVersion: esv1beta1.GroupVersion.String(),
+			APIVersion: esv1beta1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,

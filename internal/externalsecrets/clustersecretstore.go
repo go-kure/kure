@@ -11,7 +11,7 @@ func CreateClusterSecretStore(name string, spec esv1beta1.SecretStoreSpec) *esv1
 	obj := &esv1beta1.ClusterSecretStore{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterSecretStore",
-			APIVersion: esv1beta1.GroupVersion.String(),
+			APIVersion: esv1beta1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,

@@ -11,7 +11,7 @@ func CreateSecretStore(name, namespace string, spec esv1beta1.SecretStoreSpec) *
 	obj := &esv1beta1.SecretStore{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "SecretStore",
-			APIVersion: esv1beta1.GroupVersion.String(),
+			APIVersion: esv1beta1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

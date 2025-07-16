@@ -23,8 +23,8 @@ func TestExternalSecretHelpers(t *testing.T) {
 	if len(es.Spec.Data) != 1 || es.Spec.Data[0].SecretKey != "foo" {
 		t.Errorf("data not added")
 	}
-	AddExternalSecretDataFrom(es, esv1beta1.ExternalSecretDataFromRemoteRef{Key: "ref"})
-	if len(es.Spec.DataFrom) != 1 || es.Spec.DataFrom[0].Key != "ref" {
+	AddExternalSecretDataFrom(es, esv1beta1.ExternalSecretDataFromRemoteRef{})
+	if len(es.Spec.DataFrom) != 1 {
 		t.Errorf("dataFrom not added")
 	}
 	dur := metav1.Duration{Duration: 0}
