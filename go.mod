@@ -12,6 +12,7 @@ replace (
 require (
 	github.com/fluxcd/helm-controller/api v1.2.0
 	github.com/fluxcd/kustomize-controller/api v1.5.1
+	github.com/fluxcd/pkg/apis/kustomize v1.9.0
 	github.com/fluxcd/source-controller/api v1.5.0
 	k8s.io/api v0.32.2
 	k8s.io/apimachinery v0.32.2
@@ -22,7 +23,6 @@ require (
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/fluxcd/pkg/apis/acl v0.6.0 // indirect
-	github.com/fluxcd/pkg/apis/kustomize v1.9.0 // indirect
 	github.com/fluxcd/pkg/apis/meta v1.10.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
