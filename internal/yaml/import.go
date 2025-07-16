@@ -1,49 +1,61 @@
 package yaml
 
 import (
-	"fmt"
+	"bytes"
+	"io"
 	"log"
+	"os"
 	"regexp"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 )
 
-func parse(yamlbytes []byte) []runtime.Object {
-
-	/*
-	   https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
-	*/
-
-	fileAsString := string(yamlbytes[:])
-	sepYamlfiles := strings.Split(fileAsString, "---")
-	retVal := make([]runtime.Object, 0, len(sepYamlfiles))
-
-	err := kustv1.AddToScheme(scheme.Scheme)
-	if err != nil {
+// Parse converts a YAML document containing one or more Kubernetes resources
+// into a slice of runtime.Objects. Each document must be separated by `---`.
+func Parse(data []byte) ([]runtime.Object, error) {
+	if err := kustv1.AddToScheme(scheme.Scheme); err != nil {
+		return nil, err
 	}
+
+	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 1024)
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 
-	for _, f := range sepYamlfiles {
-		// skip empty documents, `Decode` will fail on them
-		if len(f) == 0 {
+	objs := []runtime.Object{}
+	for {
+		var raw runtime.RawExtension
+		if err := decoder.Decode(&raw); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		if len(raw.Raw) == 0 {
 			continue
 		}
-		obj, _, err := decode([]byte(f), nil, nil)
 
+		obj, _, err := decode(raw.Raw, nil, nil)
 		if err != nil {
-			log.Fatal(fmt.Sprintf("Error while decoding YAML object. Err was: %s", err))
-			continue
+			return nil, err
 		}
-		retVal = append(retVal, obj)
+		objs = append(objs, obj)
 	}
+	return objs, nil
+}
 
-	return retVal
+// ParseFile reads the YAML file at the given path and returns the Kubernetes
+// objects it defines.
+func ParseFile(path string) ([]runtime.Object, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return Parse(data)
 }
 
 func checkType(obj runtime.Object) {
