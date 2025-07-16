@@ -26,10 +26,12 @@ import (
 
 	"github.com/go-kure/kure/internal/certmanager"
 
+	"github.com/go-kure/kure/internal/externalsecrets"
 	"github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
 	"github.com/go-kure/kure/internal/metallb"
 
+	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	v1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
 	meta "github.com/fluxcd/pkg/apis/meta"
@@ -305,6 +307,16 @@ func main() {
 	bgpPeer := metallb.CreateBGPPeer("demo-peer", "demo", metallbv1beta1.BGPPeerSpec{MyASN: 64512, ASN: 64512, Address: "10.0.0.2"})
 	bfd := metallb.CreateBFDProfile("demo-bfd", "demo", metallbv1beta1.BFDProfileSpec{})
 
+	// external-secrets examples
+	ss := externalsecrets.CreateSecretStore("demo-store", "demo", esv1.SecretStoreSpec{})
+	ssProvider := &esv1.SecretStoreProvider{AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "us-east-1"}}
+	externalsecrets.SetSecretStoreProvider(ss, ssProvider)
+	css := externalsecrets.CreateClusterSecretStore("demo-css", esv1.SecretStoreSpec{})
+	externalsecrets.SetClusterSecretStoreProvider(css, ssProvider)
+	es := externalsecrets.CreateExternalSecret("demo-external", "demo", esv1.ExternalSecretSpec{})
+	externalsecrets.AddExternalSecretData(es, esv1.ExternalSecretData{SecretKey: "password", RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "db/password"}})
+	externalsecrets.SetExternalSecretSecretStoreRef(es, esv1.SecretStoreRef{Name: ss.Name})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -335,6 +347,9 @@ func main() {
 	y.PrintObj(bgpadv, os.Stdout)
 	y.PrintObj(bgpPeer, os.Stdout)
 	y.PrintObj(bfd, os.Stdout)
+	y.PrintObj(ss, os.Stdout)
+	y.PrintObj(css, os.Stdout)
+	y.PrintObj(es, os.Stdout)
 	y.PrintObj(np, os.Stdout)
 	y.PrintObj(rq, os.Stdout)
 	y.PrintObj(lr, os.Stdout)
