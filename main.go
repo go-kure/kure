@@ -227,6 +227,24 @@ func main() {
 	ociRepo := fluxcd.CreateOCIRepository("demo-oci", "demo", sourcev1beta2.OCIRepositorySpec{})
 	fluxcd.SetOCIRepositoryURL(ociRepo, "oci://registry/app")
 
+	// Network policy example
+	np := k8s.CreateNetworkPolicy("demo-netpol", "demo")
+	npRule := netv1.NetworkPolicyIngressRule{}
+	peer := netv1.NetworkPolicyPeer{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}
+	k8s.AddNetworkPolicyIngressPeer(&npRule, peer)
+	k8s.AddNetworkPolicyIngressRule(np, npRule)
+	k8s.AddNetworkPolicyPolicyType(np, netv1.PolicyTypeIngress)
+
+	// Resource quota example
+	rq := k8s.CreateResourceQuota("demo-quota", "demo")
+	k8s.AddResourceQuotaHard(rq, apiv1.ResourceRequestsStorage, resource.MustParse("1Gi"))
+
+	// Limit range example
+	lr := k8s.CreateLimitRange("demo-limits", "demo")
+	lrItem := apiv1.LimitRangeItem{Type: apiv1.LimitTypeContainer}
+	k8s.AddLimitRangeItemDefaultRequest(&lrItem, apiv1.ResourceCPU, resource.MustParse("100m"))
+	k8s.AddLimitRangeItem(lr, lrItem)
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -252,4 +270,7 @@ func main() {
 	y.PrintObj(bucket, os.Stdout)
 	y.PrintObj(chart, os.Stdout)
 	y.PrintObj(ociRepo, os.Stdout)
+	y.PrintObj(np, os.Stdout)
+	y.PrintObj(rq, os.Stdout)
+	y.PrintObj(lr, os.Stdout)
 }
