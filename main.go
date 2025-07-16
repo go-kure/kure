@@ -117,6 +117,26 @@ func main() {
 	k8s.SetDeploymentAffinity(dep, &apiv1.Affinity{})
 	k8s.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"})
 
+	// StatefulSet example
+	sts := k8s.CreateStatefulSet("demo-sts", "demo")
+	k8s.AddStatefulSetContainer(sts, mainCtr)
+	k8s.AddStatefulSetInitContainer(sts, initCtr)
+	k8s.AddStatefulSetVolume(sts, &apiv1.Volume{Name: "data"})
+	k8s.AddStatefulSetVolumeClaimTemplate(sts, *k8s.CreatePersistentVolumeClaim("data", "demo"))
+	k8s.AddStatefulSetToleration(sts, &apiv1.Toleration{Key: "role"})
+	k8s.SetStatefulSetServiceAccountName(sts, sa.Name)
+	k8s.SetStatefulSetServiceName(sts, "demo-svc")
+	k8s.SetStatefulSetReplicas(sts, 3)
+
+	// DaemonSet example
+	ds := k8s.CreateDaemonSet("demo-ds", "demo")
+	k8s.AddDaemonSetContainer(ds, mainCtr)
+	k8s.AddDaemonSetInitContainer(ds, initCtr)
+	k8s.AddDaemonSetVolume(ds, &apiv1.Volume{Name: "data"})
+	k8s.AddDaemonSetToleration(ds, &apiv1.Toleration{Key: "role"})
+	k8s.SetDaemonSetServiceAccountName(ds, sa.Name)
+	k8s.SetDaemonSetNodeSelector(ds, map[string]string{"type": "worker"})
+
 	// Service and ingress example
 	svc := k8s.CreateService("demo-svc", "demo")
 	k8s.SetServiceSelector(svc, map[string]string{"app": "demo"})
@@ -153,6 +173,8 @@ func main() {
 	y.PrintObj(pvc, os.Stdout)
 	y.PrintObj(pod, os.Stdout)
 	y.PrintObj(dep, os.Stdout)
+	y.PrintObj(sts, os.Stdout)
+	y.PrintObj(ds, os.Stdout)
 	y.PrintObj(svc, os.Stdout)
 	y.PrintObj(ing, os.Stdout)
 	y.PrintObj(role, os.Stdout)
