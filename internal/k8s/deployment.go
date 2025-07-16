@@ -75,7 +75,13 @@ func AddDeploymentToleration(deployment *appsv1.Deployment, toleration *corev1.T
 }
 
 func AddDeploymentTopologySpreadConstraints(deployment *appsv1.Deployment, topologySpreadConstraint *corev1.TopologySpreadConstraint) {
-	deployment.Spec.Template.Spec.TopologySpreadConstraints = append(deployment.Spec.Template.Spec.TopologySpreadConstraints)
+	if topologySpreadConstraint == nil {
+		return
+	}
+	deployment.Spec.Template.Spec.TopologySpreadConstraints = append(
+		deployment.Spec.Template.Spec.TopologySpreadConstraints,
+		*topologySpreadConstraint,
+	)
 }
 
 func SetDeploymentServiceAccountName(deployment *appsv1.Deployment, serviceAccountName string) {

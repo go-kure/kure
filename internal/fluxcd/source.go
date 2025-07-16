@@ -38,7 +38,7 @@ func CreateHelmRepository(name string, namespace string, spec sourcev1.HelmRepos
 func CreateOCIRepository(name string, namespace string, spec sourcev1beta2.OCIRepositorySpec) *sourcev1beta2.OCIRepository {
 	obj := &sourcev1beta2.OCIRepository{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "HelmRepository",
+			Kind:       "OCIRepository",
 			APIVersion: sourcev1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{

@@ -25,7 +25,7 @@ func TestCreateOCIRepository(t *testing.T) {
 			},
 			expected: &sourcev1beta2.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "HelmRepository",
+					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
@@ -46,7 +46,7 @@ func TestCreateOCIRepository(t *testing.T) {
 			},
 			expected: &sourcev1beta2.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "HelmRepository",
+					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
@@ -67,7 +67,7 @@ func TestCreateOCIRepository(t *testing.T) {
 			},
 			expected: &sourcev1beta2.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "HelmRepository",
+					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
@@ -86,7 +86,7 @@ func TestCreateOCIRepository(t *testing.T) {
 			inputSpec: sourcev1beta2.OCIRepositorySpec{},
 			expected: &sourcev1beta2.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "HelmRepository",
+					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{

@@ -26,7 +26,7 @@ func main() {
 	pathtype := netv1.PathTypePrefix
 	path := k8s.CreateIngressPath("/", &pathtype, "web", "web")
 
-	k8s.AddIngressRulePath(rule, path)
+	k8s.AddIngressRulePath(&rule, path)
 	k8s.AddContainerPort(ctr, ctrp)
 	k8s.AddDeploymentContainer(depl, ctr)
 	k8s.AddServicePort(svc, svcp)
