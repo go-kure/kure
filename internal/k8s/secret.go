@@ -1,0 +1,55 @@
+package k8s
+
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+func CreateSecret(name, namespace string) *corev1.Secret {
+	obj := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app": name,
+			},
+			Annotations: map[string]string{
+				"app": name,
+			},
+		},
+		Data:       map[string][]byte{},
+		StringData: map[string]string{},
+		Type:       corev1.SecretTypeOpaque,
+		Immutable:  new(bool),
+	}
+	return obj
+}
+
+func AddSecretData(secret *corev1.Secret, key string, value []byte) {
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+	secret.Data[key] = value
+}
+
+func AddSecretStringData(secret *corev1.Secret, key, value string) {
+	if secret.StringData == nil {
+		secret.StringData = make(map[string]string)
+	}
+	secret.StringData[key] = value
+}
+
+func SetSecretType(secret *corev1.Secret, type_ corev1.SecretType) {
+	secret.Type = type_
+}
+
+func SetSecretImmutable(secret *corev1.Secret, immutable bool) {
+	if secret.Immutable == nil {
+		secret.Immutable = new(bool)
+	}
+	*secret.Immutable = immutable
+}
