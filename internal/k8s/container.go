@@ -25,9 +25,6 @@ func CreateContainer(name string, image string, command []string, args []string)
 		},
 		VolumeMounts:    []corev1.VolumeMount{},
 		VolumeDevices:   []corev1.VolumeDevice{},
-		LivenessProbe:   &corev1.Probe{},
-		ReadinessProbe:  &corev1.Probe{},
-		StartupProbe:    &corev1.Probe{},
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		SecurityContext: &corev1.SecurityContext{},
 	}
