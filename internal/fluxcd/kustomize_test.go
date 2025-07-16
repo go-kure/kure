@@ -3,9 +3,12 @@ package fluxcd
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
+	meta "github.com/fluxcd/pkg/apis/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestCreateKustomization(t *testing.T) {
@@ -86,5 +89,70 @@ func TestCreateKustomization(t *testing.T) {
 				t.Errorf("expected Spec %+v, got %+v", tt.wantSpec, got.Spec)
 			}
 		})
+	}
+}
+
+func TestKustomizationSettersAndAdders(t *testing.T) {
+	k := CreateKustomization("demo", "default", kustv1.KustomizationSpec{})
+	iv := metav1.Duration{Duration: time.Minute}
+	rv := metav1.Duration{Duration: time.Second}
+	SetKustomizationInterval(k, iv)
+	SetKustomizationRetryInterval(k, rv)
+	SetKustomizationPath(k, "./manifests")
+	SetKustomizationPrune(k, true)
+	SetKustomizationDeletionPolicy(k, "Delete")
+	AddKustomizationComponent(k, "comp")
+	AddKustomizationDependsOn(k, meta.NamespacedObjectReference{Name: "other"})
+	AddKustomizationHealthCheck(k, meta.NamespacedObjectKindReference{Kind: "Deployment", Name: "app"})
+	AddKustomizationImage(k, kustomize.Image{Name: "nginx", NewTag: "1"})
+	AddKustomizationPatch(k, kustomize.Patch{Patch: "data"})
+	if k.Spec.Interval != iv {
+		t.Errorf("interval not set")
+	}
+	if k.Spec.RetryInterval == nil || *k.Spec.RetryInterval != rv {
+		t.Errorf("retry interval not set")
+	}
+	if k.Spec.Path != "./manifests" || !k.Spec.Prune || k.Spec.DeletionPolicy != "Delete" {
+		t.Errorf("basic fields not set")
+	}
+	if len(k.Spec.Components) != 1 || k.Spec.Components[0] != "comp" {
+		t.Errorf("component not added")
+	}
+	if len(k.Spec.DependsOn) != 1 || k.Spec.DependsOn[0].Name != "other" {
+		t.Errorf("dependsOn not added")
+	}
+	if len(k.Spec.HealthChecks) != 1 || k.Spec.HealthChecks[0].Name != "app" {
+		t.Errorf("health check not added")
+	}
+	if len(k.Spec.Images) != 1 || k.Spec.Images[0].Name != "nginx" {
+		t.Errorf("image not added")
+	}
+	if len(k.Spec.Patches) != 1 || k.Spec.Patches[0].Patch != "data" {
+		t.Errorf("patch not added")
+	}
+}
+
+func TestPostBuildAndCommonMetadataHelpers(t *testing.T) {
+	pb := CreatePostBuild()
+	AddPostBuildSubstitute(pb, "VAR", "value")
+	ref := CreateSubstituteReference("ConfigMap", "vars", false)
+	AddPostBuildSubstituteFrom(pb, ref)
+	if pb.Substitute["VAR"] != "value" {
+		t.Errorf("substitute not added")
+	}
+	if len(pb.SubstituteFrom) != 1 || pb.SubstituteFrom[0].Name != "vars" {
+		t.Errorf("substituteFrom not added")
+	}
+
+	cm := CreateCommonMetadata()
+	AddCommonMetadataLabel(cm, "app", "demo")
+	AddCommonMetadataAnnotation(cm, "owner", "team")
+	if cm.Labels["app"] != "demo" || cm.Annotations["owner"] != "team" {
+		t.Errorf("common metadata not updated")
+	}
+
+	dec := CreateDecryption("sops", &meta.LocalObjectReference{Name: "sec"})
+	if dec.Provider != "sops" || dec.SecretRef.Name != "sec" {
+		t.Errorf("decryption not created")
 	}
 }
