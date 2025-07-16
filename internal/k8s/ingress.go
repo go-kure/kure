@@ -64,6 +64,6 @@ func AddIngressRulePath(rule *netv1.IngressRule, path netv1.HTTPIngressPath) {
 	rule.IngressRuleValue.HTTP.Paths = append(rule.IngressRuleValue.HTTP.Paths, path)
 }
 
-func AddIngressTls(ingress *netv1.Ingress, tls netv1.IngressTLS) {
+func AddIngressTLS(ingress *netv1.Ingress, tls netv1.IngressTLS) {
 	ingress.Spec.TLS = append(ingress.Spec.TLS, tls)
 }
