@@ -254,26 +254,28 @@ func TestCreateContainer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := CreateContainer(tt.inputName, tt.inputImage, tt.inputCommand, tt.inputArgs)
-
-			if result.Name != tt.expectedResult.Name || result.Image != tt.expectedResult.Image ||
-				len(result.Command) != len(tt.expectedResult.Command) ||
-				len(result.Args) != len(tt.expectedResult.Args) ||
-				result.ImagePullPolicy != tt.expectedResult.ImagePullPolicy {
-				t.Errorf("unexpected result: got %#v, want %#v", result, tt.expectedResult)
-			}
-
-			for i := range tt.inputCommand {
-				if result.Command[i] != tt.expectedResult.Command[i] {
-					t.Errorf("unexpected command: got %v, want %v", result.Command, tt.expectedResult.Command)
-				}
-			}
-
-			for i := range tt.inputArgs {
-				if result.Args[i] != tt.expectedResult.Args[i] {
-					t.Errorf("unexpected args: got %v, want %v", result.Args, tt.expectedResult.Args)
-				}
-			}
+			assertContainerEqual(t, result, &tt.expectedResult)
 		})
+	}
+}
+func assertContainerEqual(t *testing.T, got, want *corev1.Container) {
+	t.Helper()
+
+	if got.Name != want.Name {
+		t.Errorf("container name mismatch: got %q, want %q", got.Name, want.Name)
+	}
+	if got.Image != want.Image {
+		t.Errorf("container image mismatch: got %q, want %q", got.Image, want.Image)
+	}
+	if got.ImagePullPolicy != want.ImagePullPolicy {
+		t.Errorf("image pull policy mismatch: got %v, want %v", got.ImagePullPolicy, want.ImagePullPolicy)
+	}
+
+	if !reflect.DeepEqual(got.Command, want.Command) {
+		t.Errorf("command mismatch: got %v, want %v", got.Command, want.Command)
+	}
+	if !reflect.DeepEqual(got.Args, want.Args) {
+		t.Errorf("args mismatch: got %v, want %v", got.Args, want.Args)
 	}
 }
 func TestAddContainerPort(t *testing.T) {

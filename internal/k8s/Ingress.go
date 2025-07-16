@@ -30,8 +30,8 @@ func CreateIngress(name string, namespace string, classname string) *netv1.Ingre
 	return obj
 }
 
-func CreateIngressRule(host string) netv1.IngressRule {
-	return netv1.IngressRule{
+func CreateIngressRule(host string) *netv1.IngressRule {
+	return &netv1.IngressRule{
 		Host: host,
 		IngressRuleValue: netv1.IngressRuleValue{
 			HTTP: &netv1.HTTPIngressRuleValue{
@@ -54,8 +54,8 @@ func CreateIngressPath(path string, pathType *netv1.PathType, servicename string
 		},
 	}
 }
-func AddIngressRule(ingress *netv1.Ingress, rule netv1.IngressRule) {
-	ingress.Spec.Rules = append(ingress.Spec.Rules, rule)
+func AddIngressRule(ingress *netv1.Ingress, rule *netv1.IngressRule) {
+	ingress.Spec.Rules = append(ingress.Spec.Rules, *rule)
 }
 func AddIngressRulePath(rule *netv1.IngressRule, path netv1.HTTPIngressPath) {
 	if rule.IngressRuleValue.HTTP == nil {

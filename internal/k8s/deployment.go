@@ -78,10 +78,7 @@ func AddDeploymentTopologySpreadConstraints(deployment *appsv1.Deployment, topol
 	if topologySpreadConstraint == nil {
 		return
 	}
-	deployment.Spec.Template.Spec.TopologySpreadConstraints = append(
-		deployment.Spec.Template.Spec.TopologySpreadConstraints,
-		*topologySpreadConstraint,
-	)
+	deployment.Spec.Template.Spec.TopologySpreadConstraints = append(deployment.Spec.Template.Spec.TopologySpreadConstraints, *topologySpreadConstraint)
 }
 
 func SetDeploymentServiceAccountName(deployment *appsv1.Deployment, serviceAccountName string) {
