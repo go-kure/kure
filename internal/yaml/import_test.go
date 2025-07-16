@@ -1,6 +1,7 @@
 package yaml
 
 import (
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -25,7 +26,10 @@ metadata:
 spec:
   containers: []
 `
-	objs := parse([]byte(data))
+	objs, err := parse([]byte(data))
+	if err != nil {
+		t.Fatalf("parse returned unexpected error: %v", err)
+	}
 	if len(objs) != 2 {
 		t.Fatalf("expected 2 objects, got %d", len(objs))
 	}
@@ -52,5 +56,56 @@ func TestCheckType(t *testing.T) {
 	bad := &corev1.Pod{TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"}}
 	if err := checkType(bad); err == nil {
 		t.Fatalf("expected type mismatch error")
+	}
+}
+
+func TestParseDecodeError(t *testing.T) {
+	data := `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa
+---
+this is : [ invalid yaml
+`
+	objs, err := parse([]byte(data))
+	if len(objs) != 1 {
+		t.Fatalf("expected 1 object, got %d", len(objs))
+	}
+	if _, ok := objs[0].(*corev1.ServiceAccount); !ok {
+		t.Fatalf("unexpected object parsed: %#v", objs[0])
+	}
+	var pErr *ParseErrors
+	if err == nil || !errors.As(err, &pErr) {
+		t.Fatalf("expected ParseErrors, got %v", err)
+	}
+	if len(pErr.Errs) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(pErr.Errs))
+	}
+}
+
+func TestParseUnsupportedObject(t *testing.T) {
+	data := `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa
+---
+apiVersion: foo/v1
+kind: Dummy
+metadata:
+  name: d
+`
+	objs, err := parse([]byte(data))
+	if len(objs) != 1 {
+		t.Fatalf("expected 1 object, got %d", len(objs))
+	}
+	if _, ok := objs[0].(*corev1.ServiceAccount); !ok {
+		t.Fatalf("unexpected object parsed: %#v", objs[0])
+	}
+	var pErr *ParseErrors
+	if err == nil || !errors.As(err, &pErr) {
+		t.Fatalf("expected ParseErrors, got %v", err)
+	}
+	if len(pErr.Errs) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(pErr.Errs))
 	}
 }
