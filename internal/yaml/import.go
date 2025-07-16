@@ -3,6 +3,7 @@ package yaml
 import (
 	"fmt"
 	"log"
+	"os"
 	"reflect"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 )
 
-func parse(yamlbytes []byte) []runtime.Object {
+func parse(yamlbytes []byte) ([]runtime.Object, error) {
 
 	/*
 	   https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
@@ -35,8 +36,7 @@ func parse(yamlbytes []byte) []runtime.Object {
 		obj, _, err := decode([]byte(f), nil, nil)
 
 		if err != nil {
-			log.Fatal(fmt.Sprintf("Error while decoding YAML object. Err was: %s", err))
-			continue
+			return nil, fmt.Errorf("decode YAML object: %w", err)
 		}
 		if err := checkType(obj); err != nil {
 			log.Printf("skipping unsupported object: %v", err)
@@ -45,7 +45,18 @@ func parse(yamlbytes []byte) []runtime.Object {
 		retVal = append(retVal, obj)
 	}
 
-	return retVal
+	return retVal, nil
+}
+
+// ParseFile reads the YAML file at path and returns the runtime objects
+// defined within. Each object is decoded using the client-go scheme. An error
+// is returned if the file cannot be read or if decoding any document fails.
+func ParseFile(path string) ([]runtime.Object, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return parse(data)
 }
 
 func checkType(obj runtime.Object) error {
