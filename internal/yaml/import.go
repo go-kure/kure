@@ -46,7 +46,7 @@ func parse(yamlbytes []byte) []runtime.Object {
 	return retVal
 }
 
-func checktype(obj runtime.Object) {
+func checkType(obj runtime.Object) {
 	acceptedK8sTypes := regexp.MustCompile(`(Role|ClusterRole|RoleBinding|ClusterRoleBinding|ServiceAccount)`)
 	groupVersionKind := obj.GetObjectKind().GroupVersionKind()
 	if !acceptedK8sTypes.MatchString(groupVersionKind.Kind) {
