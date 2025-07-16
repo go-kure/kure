@@ -471,3 +471,52 @@ func TestAddContainerEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestAdditionalContainerFunctions(t *testing.T) {
+	c := &corev1.Container{}
+
+	mount := corev1.VolumeMount{Name: "data", MountPath: "/data"}
+	AddContainerVolumeMount(c, mount)
+	if len(c.VolumeMounts) != 1 || c.VolumeMounts[0] != mount {
+		t.Errorf("volume mount not added")
+	}
+
+	dev := corev1.VolumeDevice{Name: "block", DevicePath: "/dev/block"}
+	AddContainerVolumeDevice(c, dev)
+	if len(c.VolumeDevices) != 1 || c.VolumeDevices[0] != dev {
+		t.Errorf("volume device not added")
+	}
+
+	probe := corev1.Probe{TimeoutSeconds: 5}
+	SetContainerLivenessProbe(c, probe)
+	if c.LivenessProbe == nil || *c.LivenessProbe != probe {
+		t.Errorf("liveness probe not set")
+	}
+
+	SetContainerReadinessProbe(c, probe)
+	if c.ReadinessProbe == nil || *c.ReadinessProbe != probe {
+		t.Errorf("readiness probe not set")
+	}
+
+	SetContainerStartupProbe(c, probe)
+	if c.StartupProbe == nil || *c.StartupProbe != probe {
+		t.Errorf("startup probe not set")
+	}
+
+	resources := corev1.ResourceRequirements{}
+	SetContainerResources(c, resources)
+	if !reflect.DeepEqual(c.Resources, resources) {
+		t.Errorf("resources not set")
+	}
+
+	SetContainerImagePullPolicy(c, corev1.PullAlways)
+	if c.ImagePullPolicy != corev1.PullAlways {
+		t.Errorf("image pull policy not set")
+	}
+
+	sc := corev1.SecurityContext{RunAsUser: new(int64)}
+	SetContainerSecurityContext(c, sc)
+	if c.SecurityContext == nil || *c.SecurityContext != sc {
+		t.Errorf("security context not set")
+	}
+}
