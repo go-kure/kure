@@ -28,10 +28,12 @@ import (
 
 	"github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
+	"github.com/go-kure/kure/internal/metallb"
 
 	v1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
 	meta "github.com/fluxcd/pkg/apis/meta"
+	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -293,6 +295,16 @@ func main() {
 	certmanager.SetCertificateIssuerRef(cert, cmmeta.ObjectReference{Name: issuer.Name, Kind: "Issuer", Group: certmanagerapi.GroupName})
 	clusterIssuer := certmanager.CreateClusterIssuer("demo-clusterissuer", certv1.IssuerSpec{})
 
+	// metallb examples
+	pool := metallb.CreateIPAddressPool("demo-pool", "demo", metallbv1beta1.IPAddressPoolSpec{Addresses: []string{"172.18.0.0/24"}})
+	metallb.AddIPAddressPoolAddress(pool, "172.19.0.0/24")
+	l2adv := metallb.CreateL2Advertisement("demo-l2adv", "demo", metallbv1beta1.L2AdvertisementSpec{})
+	metallb.AddL2AdvertisementIPAddressPool(l2adv, pool.Name)
+	bgpadv := metallb.CreateBGPAdvertisement("demo-bgpadv", "demo", metallbv1beta1.BGPAdvertisementSpec{})
+	metallb.SetBGPAdvertisementLocalPref(bgpadv, 100)
+	bgpPeer := metallb.CreateBGPPeer("demo-peer", "demo", metallbv1beta1.BGPPeerSpec{MyASN: 64512, ASN: 64512, Address: "10.0.0.2"})
+	bfd := metallb.CreateBFDProfile("demo-bfd", "demo", metallbv1beta1.BFDProfileSpec{})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -318,6 +330,11 @@ func main() {
 	y.PrintObj(bucket, os.Stdout)
 	y.PrintObj(chart, os.Stdout)
 	y.PrintObj(ociRepo, os.Stdout)
+	y.PrintObj(pool, os.Stdout)
+	y.PrintObj(l2adv, os.Stdout)
+	y.PrintObj(bgpadv, os.Stdout)
+	y.PrintObj(bgpPeer, os.Stdout)
+	y.PrintObj(bfd, os.Stdout)
 	y.PrintObj(np, os.Stdout)
 	y.PrintObj(rq, os.Stdout)
 	y.PrintObj(lr, os.Stdout)
