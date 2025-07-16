@@ -20,6 +20,12 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 
+	certmanagerapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager"
+	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+
+	"github.com/go-kure/kure/internal/certmanager"
+
 	"github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
 
@@ -274,6 +280,14 @@ func main() {
 	auto := fluxcd.CreateImageUpdateAutomation("demo-auto", "demo", autoSpec)
 	fluxcd.SetImageUpdateAutomationSuspend(auto, false)
 
+	// cert-manager examples
+	issuer := certmanager.CreateIssuer("demo-issuer", "demo", certv1.IssuerSpec{})
+	certmanager.SetIssuerCA(issuer, &certv1.CAIssuer{SecretName: "ca-key"})
+	cert := certmanager.CreateCertificate("demo-cert", "demo", certv1.CertificateSpec{})
+	certmanager.AddCertificateDNSName(cert, "example.com")
+	certmanager.SetCertificateIssuerRef(cert, cmmeta.ObjectReference{Name: issuer.Name, Kind: "Issuer", Group: certmanagerapi.GroupName})
+	clusterIssuer := certmanager.CreateClusterIssuer("demo-clusterissuer", certv1.IssuerSpec{})
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -306,4 +320,7 @@ func main() {
 	y.PrintObj(alert, os.Stdout)
 	y.PrintObj(receiver, os.Stdout)
 	y.PrintObj(auto, os.Stdout)
+	y.PrintObj(issuer, os.Stdout)
+	y.PrintObj(clusterIssuer, os.Stdout)
+	y.PrintObj(cert, os.Stdout)
 }
