@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/cli-runtime/pkg/printers"
 
@@ -336,50 +338,17 @@ func main() {
 	_ = fluxcd.AddResourceSetInputProviderSchedule(prov, fluxcd.CreateSchedule("@daily"))
 
 	// Print objects as YAML
-	y.PrintObj(sa, os.Stdout)
-	y.PrintObj(ns, os.Stdout)
-	y.PrintObj(secret, os.Stdout)
-	y.PrintObj(cm, os.Stdout)
-	y.PrintObj(pvc, os.Stdout)
-	y.PrintObj(pod, os.Stdout)
-	y.PrintObj(dep, os.Stdout)
-	y.PrintObj(sts, os.Stdout)
-	y.PrintObj(ds, os.Stdout)
-	y.PrintObj(job, os.Stdout)
-	y.PrintObj(cron, os.Stdout)
-	y.PrintObj(svc, os.Stdout)
-	y.PrintObj(ing, os.Stdout)
-	y.PrintObj(role, os.Stdout)
-	y.PrintObj(roleBind, os.Stdout)
-	y.PrintObj(clusterRole, os.Stdout)
-	y.PrintObj(clusterRoleBind, os.Stdout)
-	y.PrintObj(hr, os.Stdout)
-	y.PrintObj(ks, os.Stdout)
-	y.PrintObj(gitRepo, os.Stdout)
-	y.PrintObj(helmRepo, os.Stdout)
-	y.PrintObj(bucket, os.Stdout)
-	y.PrintObj(chart, os.Stdout)
-	y.PrintObj(ociRepo, os.Stdout)
-	y.PrintObj(pool, os.Stdout)
-	y.PrintObj(l2adv, os.Stdout)
-	y.PrintObj(bgpadv, os.Stdout)
-	y.PrintObj(bgpPeer, os.Stdout)
-	y.PrintObj(bfd, os.Stdout)
-	y.PrintObj(ss, os.Stdout)
-	y.PrintObj(css, os.Stdout)
-	y.PrintObj(es, os.Stdout)
-	y.PrintObj(fi, os.Stdout)
-	y.PrintObj(fr, os.Stdout)
-	y.PrintObj(rs, os.Stdout)
-	y.PrintObj(prov, os.Stdout)
-	y.PrintObj(np, os.Stdout)
-	y.PrintObj(rq, os.Stdout)
-	y.PrintObj(lr, os.Stdout)
-	y.PrintObj(provider, os.Stdout)
-	y.PrintObj(alert, os.Stdout)
-	y.PrintObj(receiver, os.Stdout)
-	y.PrintObj(auto, os.Stdout)
-	y.PrintObj(issuer, os.Stdout)
-	y.PrintObj(clusterIssuer, os.Stdout)
-	y.PrintObj(cert, os.Stdout)
+	objects := []runtime.Object{
+		sa, ns, secret, cm, pvc, pod, dep, sts, ds, job, cron, svc, ing,
+		role, roleBind, clusterRole, clusterRoleBind, hr, ks, gitRepo,
+		helmRepo, bucket, chart, ociRepo, pool, l2adv, bgpadv, bgpPeer,
+		bfd, ss, css, es, fi, fr, rs, prov, np, rq, lr, provider, alert,
+		receiver, auto, issuer, clusterIssuer, cert,
+	}
+
+	for _, obj := range objects {
+		if err := y.PrintObj(obj, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to print YAML: %v\n", err)
+		}
+	}
 }
