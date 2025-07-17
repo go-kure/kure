@@ -78,3 +78,27 @@ func TestSetConfigMapImmutable(t *testing.T) {
 		t.Errorf("immutable not updated to false")
 	}
 }
+
+func TestConfigMapMetadataFunctions(t *testing.T) {
+	cm := CreateConfigMap("cm", "ns")
+
+	AddConfigMapLabel(cm, "k", "v")
+	if cm.Labels["k"] != "v" {
+		t.Errorf("label not added")
+	}
+
+	AddConfigMapAnnotation(cm, "a", "b")
+	if cm.Annotations["a"] != "b" {
+		t.Errorf("annotation not added")
+	}
+
+	SetConfigMapLabels(cm, map[string]string{"x": "y"})
+	if !reflect.DeepEqual(cm.Labels, map[string]string{"x": "y"}) {
+		t.Errorf("labels not set")
+	}
+
+	SetConfigMapAnnotations(cm, map[string]string{"c": "d"})
+	if !reflect.DeepEqual(cm.Annotations, map[string]string{"c": "d"}) {
+		t.Errorf("annotations not set")
+	}
+}
