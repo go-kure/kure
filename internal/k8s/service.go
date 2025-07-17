@@ -99,34 +99,58 @@ func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy core
 	return nil
 }
 
-func SetServiceSessionAffinity(service *corev1.Service, affinity corev1.ServiceAffinity) {
+func SetServiceSessionAffinity(service *corev1.Service, affinity corev1.ServiceAffinity) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
 	service.Spec.SessionAffinity = affinity
+	return nil
 }
 
-func SetServiceLoadBalancerClass(service *corev1.Service, class string) {
+func SetServiceLoadBalancerClass(service *corev1.Service, class string) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
 	service.Spec.LoadBalancerClass = &class
+	return nil
 }
 
-func AddServiceLabel(svc *corev1.Service, key, value string) {
+func AddServiceLabel(svc *corev1.Service, key, value string) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
 	if svc.Labels == nil {
 		svc.Labels = make(map[string]string)
 	}
 	svc.Labels[key] = value
+	return nil
 }
 
-func AddServiceAnnotation(svc *corev1.Service, key, value string) {
+func AddServiceAnnotation(svc *corev1.Service, key, value string) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
 	if svc.Annotations == nil {
 		svc.Annotations = make(map[string]string)
 	}
 	svc.Annotations[key] = value
+	return nil
 }
 
-func SetServiceLabels(svc *corev1.Service, labels map[string]string) {
+func SetServiceLabels(svc *corev1.Service, labels map[string]string) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
 	svc.Labels = labels
+	return nil
 }
 
-func SetServiceAnnotations(svc *corev1.Service, anns map[string]string) {
+func SetServiceAnnotations(svc *corev1.Service, anns map[string]string) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
 	svc.Annotations = anns
+	return nil
 }
 
 func SetServicePublishNotReadyAddresses(svc *corev1.Service, publish bool) error {

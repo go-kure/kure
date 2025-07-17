@@ -1,6 +1,8 @@
 package metallb
 
 import (
+	"errors"
+
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,16 +24,28 @@ func CreateL2Advertisement(name, namespace string, spec metallbv1beta1.L2Adverti
 }
 
 // AddL2AdvertisementIPAddressPool appends an IPAddressPool reference to the L2Advertisement spec.
-func AddL2AdvertisementIPAddressPool(obj *metallbv1beta1.L2Advertisement, pool string) {
+func AddL2AdvertisementIPAddressPool(obj *metallbv1beta1.L2Advertisement, pool string) error {
+	if obj == nil {
+		return errors.New("nil L2Advertisement")
+	}
 	obj.Spec.IPAddressPools = append(obj.Spec.IPAddressPools, pool)
+	return nil
 }
 
 // AddL2AdvertisementNodeSelector appends a node selector to the L2Advertisement spec.
-func AddL2AdvertisementNodeSelector(obj *metallbv1beta1.L2Advertisement, sel metav1.LabelSelector) {
+func AddL2AdvertisementNodeSelector(obj *metallbv1beta1.L2Advertisement, sel metav1.LabelSelector) error {
+	if obj == nil {
+		return errors.New("nil L2Advertisement")
+	}
 	obj.Spec.NodeSelectors = append(obj.Spec.NodeSelectors, sel)
+	return nil
 }
 
 // AddL2AdvertisementInterface appends a network interface name to the L2Advertisement spec.
-func AddL2AdvertisementInterface(obj *metallbv1beta1.L2Advertisement, iface string) {
+func AddL2AdvertisementInterface(obj *metallbv1beta1.L2Advertisement, iface string) error {
+	if obj == nil {
+		return errors.New("nil L2Advertisement")
+	}
 	obj.Spec.Interfaces = append(obj.Spec.Interfaces, iface)
+	return nil
 }
