@@ -8,6 +8,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -31,6 +32,7 @@ import (
 	"github.com/go-kure/kure/internal/k8s"
 	"github.com/go-kure/kure/internal/metallb"
 
+	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	v1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
@@ -317,6 +319,22 @@ func main() {
 	externalsecrets.AddExternalSecretData(es, esv1.ExternalSecretData{SecretKey: "password", RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "db/password"}})
 	externalsecrets.SetExternalSecretSecretStoreRef(es, esv1.SecretStoreRef{Name: ss.Name})
 
+	// flux-operator examples
+	fi := fluxcd.CreateFluxInstance("flux", "flux-system", fluxv1.FluxInstanceSpec{
+		Distribution: fluxv1.Distribution{Version: "2.x", Registry: "ghcr.io/fluxcd"},
+	})
+	fluxcd.AddFluxInstanceComponent(fi, "source-controller")
+
+	fr := fluxcd.CreateFluxReport("flux", "flux-system", fluxv1.FluxReportSpec{
+		Distribution: fluxv1.FluxDistributionStatus{Entitlement: "oss", Status: "Running"},
+	})
+
+	rs := fluxcd.CreateResourceSet("demo-rs", "demo", fluxv1.ResourceSetSpec{})
+	fluxcd.AddResourceSetResource(rs, &apiextensionsv1.JSON{Raw: []byte("{}")})
+
+	prov := fluxcd.CreateResourceSetInputProvider("demo-rsip", "demo", fluxv1.ResourceSetInputProviderSpec{Type: fluxv1.InputProviderStatic})
+	fluxcd.AddResourceSetInputProviderSchedule(prov, fluxcd.CreateSchedule("@daily"))
+
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
 	y.PrintObj(ns, os.Stdout)
@@ -350,6 +368,10 @@ func main() {
 	y.PrintObj(ss, os.Stdout)
 	y.PrintObj(css, os.Stdout)
 	y.PrintObj(es, os.Stdout)
+	y.PrintObj(fi, os.Stdout)
+	y.PrintObj(fr, os.Stdout)
+	y.PrintObj(rs, os.Stdout)
+	y.PrintObj(prov, os.Stdout)
 	y.PrintObj(np, os.Stdout)
 	y.PrintObj(rq, os.Stdout)
 	y.PrintObj(lr, os.Stdout)
