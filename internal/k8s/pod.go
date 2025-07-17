@@ -146,3 +146,11 @@ func SetPodDNSPolicy(pod *corev1.Pod, policy corev1.DNSPolicy) error {
 	pod.Spec.DNSPolicy = policy
 	return nil
 }
+
+func SetPodDNSConfig(pod *corev1.Pod, dnsConfig *corev1.PodDNSConfig) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.DNSConfig = dnsConfig
+	return nil
+}
