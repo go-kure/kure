@@ -24,8 +24,12 @@ func TestCreateFluxInstance(t *testing.T) {
 
 func TestFluxInstanceHelpers(t *testing.T) {
 	fi := CreateFluxInstance("flux", "ns", fluxv1.FluxInstanceSpec{Distribution: fluxv1.Distribution{}})
-	AddFluxInstanceComponent(fi, "source-controller")
-	SetFluxInstanceWait(fi, true)
+	if err := AddFluxInstanceComponent(fi, "source-controller"); err != nil {
+		t.Fatalf("AddFluxInstanceComponent returned error: %v", err)
+	}
+	if err := SetFluxInstanceWait(fi, true); err != nil {
+		t.Fatalf("SetFluxInstanceWait returned error: %v", err)
+	}
 	if len(fi.Spec.Components) != 1 || fi.Spec.Components[0] != "source-controller" {
 		t.Errorf("component not added")
 	}

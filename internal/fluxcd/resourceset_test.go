@@ -19,12 +19,24 @@ func TestCreateResourceSet(t *testing.T) {
 
 func TestResourceSetHelpers(t *testing.T) {
 	rs := CreateResourceSet("rs", "ns", fluxv1.ResourceSetSpec{})
-	AddResourceSetInput(rs, fluxv1.ResourceSetInput{"k": &apiextensionsv1.JSON{Raw: []byte("1")}})
-	AddResourceSetInputFrom(rs, fluxv1.InputProviderReference{Kind: fluxv1.ResourceSetInputProviderKind})
-	AddResourceSetResource(rs, &apiextensionsv1.JSON{Raw: []byte("{}")})
-	AddResourceSetDependency(rs, fluxv1.Dependency{Kind: "ConfigMap", Name: "cm"})
-	SetResourceSetServiceAccountName(rs, "sa")
-	SetResourceSetWait(rs, true)
+	if err := AddResourceSetInput(rs, fluxv1.ResourceSetInput{"k": &apiextensionsv1.JSON{Raw: []byte("1")}}); err != nil {
+		t.Fatalf("AddResourceSetInput returned error: %v", err)
+	}
+	if err := AddResourceSetInputFrom(rs, fluxv1.InputProviderReference{Kind: fluxv1.ResourceSetInputProviderKind}); err != nil {
+		t.Fatalf("AddResourceSetInputFrom returned error: %v", err)
+	}
+	if err := AddResourceSetResource(rs, &apiextensionsv1.JSON{Raw: []byte("{}")}); err != nil {
+		t.Fatalf("AddResourceSetResource returned error: %v", err)
+	}
+	if err := AddResourceSetDependency(rs, fluxv1.Dependency{Kind: "ConfigMap", Name: "cm"}); err != nil {
+		t.Fatalf("AddResourceSetDependency returned error: %v", err)
+	}
+	if err := SetResourceSetServiceAccountName(rs, "sa"); err != nil {
+		t.Fatalf("SetResourceSetServiceAccountName returned error: %v", err)
+	}
+	if err := SetResourceSetWait(rs, true); err != nil {
+		t.Fatalf("SetResourceSetWait returned error: %v", err)
+	}
 	if len(rs.Spec.Inputs) != 1 {
 		t.Errorf("input not added")
 	}

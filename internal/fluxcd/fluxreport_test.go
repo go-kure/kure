@@ -24,8 +24,12 @@ func TestCreateFluxReport(t *testing.T) {
 
 func TestFluxReportHelpers(t *testing.T) {
 	fr := CreateFluxReport("flux", "ns", fluxv1.FluxReportSpec{})
-	AddFluxReportComponentStatus(fr, fluxv1.FluxComponentStatus{Name: "source-controller"})
-	AddFluxReportReconcilerStatus(fr, fluxv1.FluxReconcilerStatus{Kind: "Kustomization"})
+	if err := AddFluxReportComponentStatus(fr, fluxv1.FluxComponentStatus{Name: "source-controller"}); err != nil {
+		t.Fatalf("AddFluxReportComponentStatus returned error: %v", err)
+	}
+	if err := AddFluxReportReconcilerStatus(fr, fluxv1.FluxReconcilerStatus{Kind: "Kustomization"}); err != nil {
+		t.Fatalf("AddFluxReportReconcilerStatus returned error: %v", err)
+	}
 	if len(fr.Spec.ComponentsStatus) != 1 {
 		t.Errorf("component status not added")
 	}
