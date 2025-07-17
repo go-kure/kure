@@ -19,15 +19,33 @@ func TestCreateBGPPeer(t *testing.T) {
 
 func TestBGPPeerHelpers(t *testing.T) {
 	p := CreateBGPPeer("peer", "ns", metallbv1beta1.BGPPeerSpec{})
-	AddBGPPeerNodeSelector(p, metallbv1beta1.NodeSelector{MatchLabels: map[string]string{"disktype": "ssd"}})
-	SetBGPPeerPort(p, 179)
-	SetBGPPeerHoldTime(p, metav1.Duration{})
-	SetBGPPeerKeepaliveTime(p, metav1.Duration{})
-	SetBGPPeerSrcAddress(p, "1.1.1.2")
-	SetBGPPeerRouterID(p, "2.2.2.2")
-	SetBGPPeerEBGPMultiHop(p, true)
-	SetBGPPeerPassword(p, "pw")
-	SetBGPPeerBFDProfile(p, "profile")
+	if err := AddBGPPeerNodeSelector(p, metallbv1beta1.NodeSelector{MatchLabels: map[string]string{"disktype": "ssd"}}); err != nil {
+		t.Fatalf("AddBGPPeerNodeSelector returned error: %v", err)
+	}
+	if err := SetBGPPeerPort(p, 179); err != nil {
+		t.Fatalf("SetBGPPeerPort returned error: %v", err)
+	}
+	if err := SetBGPPeerHoldTime(p, metav1.Duration{}); err != nil {
+		t.Fatalf("SetBGPPeerHoldTime returned error: %v", err)
+	}
+	if err := SetBGPPeerKeepaliveTime(p, metav1.Duration{}); err != nil {
+		t.Fatalf("SetBGPPeerKeepaliveTime returned error: %v", err)
+	}
+	if err := SetBGPPeerSrcAddress(p, "1.1.1.2"); err != nil {
+		t.Fatalf("SetBGPPeerSrcAddress returned error: %v", err)
+	}
+	if err := SetBGPPeerRouterID(p, "2.2.2.2"); err != nil {
+		t.Fatalf("SetBGPPeerRouterID returned error: %v", err)
+	}
+	if err := SetBGPPeerEBGPMultiHop(p, true); err != nil {
+		t.Fatalf("SetBGPPeerEBGPMultiHop returned error: %v", err)
+	}
+	if err := SetBGPPeerPassword(p, "pw"); err != nil {
+		t.Fatalf("SetBGPPeerPassword returned error: %v", err)
+	}
+	if err := SetBGPPeerBFDProfile(p, "profile"); err != nil {
+		t.Fatalf("SetBGPPeerBFDProfile returned error: %v", err)
+	}
 
 	if len(p.Spec.NodeSelectors) != 1 || p.Spec.NodeSelectors[0].MatchLabels["disktype"] != "ssd" {
 		t.Errorf("node selector not added")
@@ -49,5 +67,33 @@ func TestBGPPeerHelpers(t *testing.T) {
 	}
 	if p.Spec.BFDProfile != "profile" {
 		t.Errorf("bfd profile not set")
+	}
+
+	if err := AddBGPPeerNodeSelector(nil, metallbv1beta1.NodeSelector{}); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerPort(nil, 1); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerHoldTime(nil, metav1.Duration{}); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerKeepaliveTime(nil, metav1.Duration{}); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerSrcAddress(nil, ""); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerRouterID(nil, ""); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerEBGPMultiHop(nil, false); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerPassword(nil, ""); err == nil {
+		t.Errorf("expected error when peer nil")
+	}
+	if err := SetBGPPeerBFDProfile(nil, ""); err == nil {
+		t.Errorf("expected error when peer nil")
 	}
 }

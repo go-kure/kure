@@ -16,9 +16,15 @@ func TestCreateL2Advertisement(t *testing.T) {
 
 func TestL2AdvertisementHelpers(t *testing.T) {
 	adv := CreateL2Advertisement("adv", "ns", metallbv1beta1.L2AdvertisementSpec{})
-	AddL2AdvertisementIPAddressPool(adv, "pool")
-	AddL2AdvertisementNodeSelector(adv, metav1.LabelSelector{MatchLabels: map[string]string{"role": "lb"}})
-	AddL2AdvertisementInterface(adv, "eth0")
+	if err := AddL2AdvertisementIPAddressPool(adv, "pool"); err != nil {
+		t.Fatalf("AddL2AdvertisementIPAddressPool returned error: %v", err)
+	}
+	if err := AddL2AdvertisementNodeSelector(adv, metav1.LabelSelector{MatchLabels: map[string]string{"role": "lb"}}); err != nil {
+		t.Fatalf("AddL2AdvertisementNodeSelector returned error: %v", err)
+	}
+	if err := AddL2AdvertisementInterface(adv, "eth0"); err != nil {
+		t.Fatalf("AddL2AdvertisementInterface returned error: %v", err)
+	}
 
 	if len(adv.Spec.IPAddressPools) != 1 || adv.Spec.IPAddressPools[0] != "pool" {
 		t.Errorf("pool not added")
@@ -28,5 +34,15 @@ func TestL2AdvertisementHelpers(t *testing.T) {
 	}
 	if len(adv.Spec.Interfaces) != 1 || adv.Spec.Interfaces[0] != "eth0" {
 		t.Errorf("interface not added")
+	}
+
+	if err := AddL2AdvertisementIPAddressPool(nil, "x"); err == nil {
+		t.Errorf("expected error when adv nil")
+	}
+	if err := AddL2AdvertisementNodeSelector(nil, metav1.LabelSelector{}); err == nil {
+		t.Errorf("expected error when adv nil")
+	}
+	if err := AddL2AdvertisementInterface(nil, "x"); err == nil {
+		t.Errorf("expected error when adv nil")
 	}
 }

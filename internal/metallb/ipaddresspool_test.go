@@ -21,10 +21,18 @@ func TestCreateIPAddressPool(t *testing.T) {
 
 func TestIPAddressPoolHelpers(t *testing.T) {
 	pool := CreateIPAddressPool("pool", "ns", metallbv1beta1.IPAddressPoolSpec{})
-	AddIPAddressPoolAddress(pool, "10.0.0.1")
-	SetIPAddressPoolAutoAssign(pool, false)
-	SetIPAddressPoolAvoidBuggyIPs(pool, true)
-	SetIPAddressPoolAllocateTo(pool, &metallbv1beta1.ServiceAllocation{Priority: 1})
+	if err := AddIPAddressPoolAddress(pool, "10.0.0.1"); err != nil {
+		t.Fatalf("AddIPAddressPoolAddress returned error: %v", err)
+	}
+	if err := SetIPAddressPoolAutoAssign(pool, false); err != nil {
+		t.Fatalf("SetIPAddressPoolAutoAssign returned error: %v", err)
+	}
+	if err := SetIPAddressPoolAvoidBuggyIPs(pool, true); err != nil {
+		t.Fatalf("SetIPAddressPoolAvoidBuggyIPs returned error: %v", err)
+	}
+	if err := SetIPAddressPoolAllocateTo(pool, &metallbv1beta1.ServiceAllocation{Priority: 1}); err != nil {
+		t.Fatalf("SetIPAddressPoolAllocateTo returned error: %v", err)
+	}
 
 	if len(pool.Spec.Addresses) != 1 || pool.Spec.Addresses[0] != "10.0.0.1" {
 		t.Errorf("address not added")
@@ -37,5 +45,18 @@ func TestIPAddressPoolHelpers(t *testing.T) {
 	}
 	if pool.Spec.AllocateTo == nil || pool.Spec.AllocateTo.Priority != 1 {
 		t.Errorf("allocateTo not set")
+	}
+
+	if err := AddIPAddressPoolAddress(nil, "x"); err == nil {
+		t.Errorf("expected error when pool nil")
+	}
+	if err := SetIPAddressPoolAutoAssign(nil, true); err == nil {
+		t.Errorf("expected error when pool nil")
+	}
+	if err := SetIPAddressPoolAvoidBuggyIPs(nil, true); err == nil {
+		t.Errorf("expected error when pool nil")
+	}
+	if err := SetIPAddressPoolAllocateTo(nil, nil); err == nil {
+		t.Errorf("expected error when pool nil")
 	}
 }

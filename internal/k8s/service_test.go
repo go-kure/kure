@@ -49,14 +49,24 @@ func TestServiceFunctions(t *testing.T) {
 		t.Errorf("external traffic policy not set")
 	}
 
-	SetServiceSessionAffinity(svc, corev1.ServiceAffinityClientIP)
+	if err := SetServiceSessionAffinity(svc, corev1.ServiceAffinityClientIP); err != nil {
+		t.Fatalf("SetServiceSessionAffinity returned error: %v", err)
+	}
 	if svc.Spec.SessionAffinity != corev1.ServiceAffinityClientIP {
 		t.Errorf("session affinity not set")
 	}
+	if err := SetServiceSessionAffinity(nil, corev1.ServiceAffinityClientIP); err == nil {
+		t.Errorf("expected error when service nil")
+	}
 
-	SetServiceLoadBalancerClass(svc, "lb-class")
+	if err := SetServiceLoadBalancerClass(svc, "lb-class"); err != nil {
+		t.Fatalf("SetServiceLoadBalancerClass returned error: %v", err)
+	}
 	if svc.Spec.LoadBalancerClass == nil || *svc.Spec.LoadBalancerClass != "lb-class" {
 		t.Errorf("load balancer class not set")
+	}
+	if err := SetServiceLoadBalancerClass(nil, "x"); err == nil {
+		t.Errorf("expected error when service nil")
 	}
 
 	if err := SetServiceClusterIP(svc, "10.0.0.1"); err != nil {
@@ -158,25 +168,47 @@ func TestServiceFunctions(t *testing.T) {
 func TestServiceMetadataFunctions(t *testing.T) {
 	svc := CreateService("svc", "ns")
 
-	AddServiceLabel(svc, "k", "v")
+	if err := AddServiceLabel(svc, "k", "v"); err != nil {
+		t.Fatalf("AddServiceLabel returned error: %v", err)
+	}
 	if svc.Labels["k"] != "v" {
 		t.Errorf("label not added")
 	}
 
-	AddServiceAnnotation(svc, "a", "b")
+	if err := AddServiceAnnotation(svc, "a", "b"); err != nil {
+		t.Fatalf("AddServiceAnnotation returned error: %v", err)
+	}
 	if svc.Annotations["a"] != "b" {
 		t.Errorf("annotation not added")
 	}
 
 	labels := map[string]string{"x": "y"}
-	SetServiceLabels(svc, labels)
+	if err := SetServiceLabels(svc, labels); err != nil {
+		t.Fatalf("SetServiceLabels returned error: %v", err)
+	}
 	if !reflect.DeepEqual(svc.Labels, labels) {
 		t.Errorf("labels not set")
 	}
 
 	anns := map[string]string{"c": "d"}
-	SetServiceAnnotations(svc, anns)
+	if err := SetServiceAnnotations(svc, anns); err != nil {
+		t.Fatalf("SetServiceAnnotations returned error: %v", err)
+	}
 	if !reflect.DeepEqual(svc.Annotations, anns) {
 		t.Errorf("annotations not set")
+	}
+
+	// nil service cases
+	if err := AddServiceLabel(nil, "k", "v"); err == nil {
+		t.Errorf("expected error when service nil")
+	}
+	if err := AddServiceAnnotation(nil, "k", "v"); err == nil {
+		t.Errorf("expected error when service nil")
+	}
+	if err := SetServiceLabels(nil, nil); err == nil {
+		t.Errorf("expected error when service nil")
+	}
+	if err := SetServiceAnnotations(nil, nil); err == nil {
+		t.Errorf("expected error when service nil")
 	}
 }

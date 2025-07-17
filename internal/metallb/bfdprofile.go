@@ -1,6 +1,8 @@
 package metallb
 
 import (
+	"errors"
+
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,21 +24,37 @@ func CreateBFDProfile(name, namespace string, spec metallbv1beta1.BFDProfileSpec
 }
 
 // SetBFDProfileDetectMultiplier sets the detect multiplier on the BFDProfile spec.
-func SetBFDProfileDetectMultiplier(obj *metallbv1beta1.BFDProfile, mult uint32) {
+func SetBFDProfileDetectMultiplier(obj *metallbv1beta1.BFDProfile, mult uint32) error {
+	if obj == nil {
+		return errors.New("nil BFDProfile")
+	}
 	obj.Spec.DetectMultiplier = &mult
+	return nil
 }
 
 // SetBFDProfileEchoInterval sets the echo interval on the BFDProfile spec.
-func SetBFDProfileEchoInterval(obj *metallbv1beta1.BFDProfile, interval uint32) {
+func SetBFDProfileEchoInterval(obj *metallbv1beta1.BFDProfile, interval uint32) error {
+	if obj == nil {
+		return errors.New("nil BFDProfile")
+	}
 	obj.Spec.EchoInterval = &interval
+	return nil
 }
 
 // SetBFDProfileEchoMode sets the echo mode on the BFDProfile spec.
-func SetBFDProfileEchoMode(obj *metallbv1beta1.BFDProfile, mode bool) {
+func SetBFDProfileEchoMode(obj *metallbv1beta1.BFDProfile, mode bool) error {
+	if obj == nil {
+		return errors.New("nil BFDProfile")
+	}
 	obj.Spec.EchoMode = &mode
+	return nil
 }
 
 // SetBFDProfilePassiveMode sets the passive mode on the BFDProfile spec.
-func SetBFDProfilePassiveMode(obj *metallbv1beta1.BFDProfile, mode bool) {
+func SetBFDProfilePassiveMode(obj *metallbv1beta1.BFDProfile, mode bool) error {
+	if obj == nil {
+		return errors.New("nil BFDProfile")
+	}
 	obj.Spec.PassiveMode = &mode
+	return nil
 }
