@@ -78,3 +78,29 @@ func SetConfigMapBinaryData(cm *corev1.ConfigMap, data map[string][]byte) {
 func SetConfigMapImmutable(cm *corev1.ConfigMap, immutable bool) {
 	cm.Immutable = &immutable
 }
+
+// AddConfigMapLabel adds a label to the ConfigMap.
+func AddConfigMapLabel(cm *corev1.ConfigMap, key, value string) {
+	if cm.Labels == nil {
+		cm.Labels = make(map[string]string)
+	}
+	cm.Labels[key] = value
+}
+
+// AddConfigMapAnnotation adds an annotation to the ConfigMap.
+func AddConfigMapAnnotation(cm *corev1.ConfigMap, key, value string) {
+	if cm.Annotations == nil {
+		cm.Annotations = make(map[string]string)
+	}
+	cm.Annotations[key] = value
+}
+
+// SetConfigMapLabels replaces all labels on the ConfigMap.
+func SetConfigMapLabels(cm *corev1.ConfigMap, labels map[string]string) {
+	cm.Labels = labels
+}
+
+// SetConfigMapAnnotations replaces all annotations on the ConfigMap.
+func SetConfigMapAnnotations(cm *corev1.ConfigMap, anns map[string]string) {
+	cm.Annotations = anns
+}
