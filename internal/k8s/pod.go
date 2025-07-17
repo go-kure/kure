@@ -56,6 +56,14 @@ func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) error {
 	return nil
 }
 
+func AddPodEphemeralContainer(pod *corev1.Pod, container *corev1.EphemeralContainer) error {
+	if pod == nil || container == nil {
+		return errors.New("nil pod or container")
+	}
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, *container)
+	return nil
+}
+
 func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) error {
 	if pod == nil || volume == nil {
 		return errors.New("nil pod or volume")
@@ -120,5 +128,21 @@ func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) error {
 		return errors.New("nil pod")
 	}
 	pod.Spec.NodeSelector = nodeSelector
+	return nil
+}
+
+func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.HostNetwork = hostNetwork
+	return nil
+}
+
+func SetPodDNSPolicy(pod *corev1.Pod, policy corev1.DNSPolicy) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.DNSPolicy = policy
 	return nil
 }
