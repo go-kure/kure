@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -354,8 +353,6 @@ func main() {
 	}
 
 	for _, obj := range objects {
-		if err := y.PrintObj(obj, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to print YAML: %v\n", err)
-		}
+		logError("failed to print YAML", y.PrintObj(obj, os.Stdout))
 	}
 }
