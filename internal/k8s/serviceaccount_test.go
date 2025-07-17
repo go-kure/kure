@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -63,5 +64,29 @@ func TestSetServiceAccountAutomountToken(t *testing.T) {
 	}
 	if sa.AutomountServiceAccountToken == nil || *sa.AutomountServiceAccountToken {
 		t.Errorf("automount token not updated to false")
+	}
+}
+
+func TestServiceAccountMetadataFunctions(t *testing.T) {
+	sa := CreateServiceAccount("sa", "ns")
+	AddServiceAccountLabel(sa, "team", "dev")
+	if sa.Labels["team"] != "dev" {
+		t.Errorf("label not added")
+	}
+	AddServiceAccountAnnotation(sa, "owner", "bob")
+	if sa.Annotations["owner"] != "bob" {
+		t.Errorf("annotation not added")
+	}
+
+	newLabels := map[string]string{"a": "b"}
+	SetServiceAccountLabels(sa, newLabels)
+	if !reflect.DeepEqual(sa.Labels, newLabels) {
+		t.Errorf("labels not set")
+	}
+
+	newAnn := map[string]string{"x": "y"}
+	SetServiceAccountAnnotations(sa, newAnn)
+	if !reflect.DeepEqual(sa.Annotations, newAnn) {
+		t.Errorf("annotations not set")
 	}
 }

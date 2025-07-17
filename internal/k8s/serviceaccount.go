@@ -56,3 +56,25 @@ func SetServiceAccountAutomountToken(sa *corev1.ServiceAccount, automount bool) 
 	*sa.AutomountServiceAccountToken = automount
 	return nil
 }
+
+func AddServiceAccountLabel(sa *corev1.ServiceAccount, key, value string) {
+	if sa.Labels == nil {
+		sa.Labels = make(map[string]string)
+	}
+	sa.Labels[key] = value
+}
+
+func AddServiceAccountAnnotation(sa *corev1.ServiceAccount, key, value string) {
+	if sa.Annotations == nil {
+		sa.Annotations = make(map[string]string)
+	}
+	sa.Annotations[key] = value
+}
+
+func SetServiceAccountLabels(sa *corev1.ServiceAccount, labels map[string]string) {
+	sa.Labels = labels
+}
+
+func SetServiceAccountAnnotations(sa *corev1.ServiceAccount, annotations map[string]string) {
+	sa.Annotations = annotations
+}
