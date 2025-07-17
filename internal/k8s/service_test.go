@@ -58,6 +58,27 @@ func TestServiceFunctions(t *testing.T) {
 	if svc.Spec.LoadBalancerClass == nil || *svc.Spec.LoadBalancerClass != "lb-class" {
 		t.Errorf("load balancer class not set")
 	}
+
+	if err := SetServiceClusterIP(svc, "10.0.0.1"); err != nil {
+		t.Fatalf("SetServiceClusterIP returned error: %v", err)
+	}
+	if svc.Spec.ClusterIP != "10.0.0.1" {
+		t.Errorf("clusterIP not set")
+	}
+
+	if err := AddServiceExternalIP(svc, "192.168.1.2"); err != nil {
+		t.Fatalf("AddServiceExternalIP returned error: %v", err)
+	}
+	if len(svc.Spec.ExternalIPs) != 1 || svc.Spec.ExternalIPs[0] != "192.168.1.2" {
+		t.Errorf("external IP not added")
+	}
+
+	if err := SetServiceLoadBalancerIP(svc, "1.1.1.1"); err != nil {
+		t.Fatalf("SetServiceLoadBalancerIP returned error: %v", err)
+	}
+	if svc.Spec.LoadBalancerIP != "1.1.1.1" {
+		t.Errorf("loadBalancerIP not set")
+	}
 }
 
 func TestServiceMetadataFunctions(t *testing.T) {

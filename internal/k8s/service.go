@@ -55,6 +55,33 @@ func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) error {
 	return nil
 }
 
+// SetServiceClusterIP sets the clusterIP on the Service spec.
+func SetServiceClusterIP(service *corev1.Service, ip string) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
+	service.Spec.ClusterIP = ip
+	return nil
+}
+
+// AddServiceExternalIP appends an external IP address to the Service spec.
+func AddServiceExternalIP(service *corev1.Service, ip string) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
+	service.Spec.ExternalIPs = append(service.Spec.ExternalIPs, ip)
+	return nil
+}
+
+// SetServiceLoadBalancerIP sets the load balancer IP on the Service spec.
+func SetServiceLoadBalancerIP(service *corev1.Service, ip string) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
+	service.Spec.LoadBalancerIP = ip
+	return nil
+}
+
 /*
    service.Spec.LoadBalancerIP
 
