@@ -11,6 +11,7 @@ replace (
 
 require (
 	github.com/cert-manager/cert-manager v1.16.2
+	github.com/controlplaneio-fluxcd/flux-operator v0.24.1
 	github.com/external-secrets/external-secrets v0.18.2
 	github.com/fluxcd/helm-controller/api v1.2.0
 	github.com/fluxcd/image-automation-controller/api v0.41.2
@@ -26,18 +27,20 @@ require (
 	k8s.io/apimachinery v0.33.2
 	k8s.io/cli-runtime v0.33.0
 	k8s.io/client-go v0.33.2
+	sigs.k8s.io/kustomize/api v0.20.0
+	sigs.k8s.io/yaml v1.5.0
 )
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/controlplaneio-fluxcd/flux-operator v0.24.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
+	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-openapi/jsonpointer v0.21.1 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
@@ -82,7 +85,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.21.0 // indirect
 	sigs.k8s.io/gateway-api v1.1.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
+	sigs.k8s.io/kustomize/kyaml v0.20.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
-	sigs.k8s.io/yaml v1.5.0 // indirect
 )
