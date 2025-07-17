@@ -34,3 +34,11 @@ go test ./...
 ```
 
 The `go test` command will discover and execute tests across all packages.
+
+## Documentation
+
+API reference documentation is available at
+[pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure). Packages like
+`k8s`, `fluxcd`, `certmanager`, and `metallb` are located under the
+`internal/` directory and include helpers for constructing related
+resources.
