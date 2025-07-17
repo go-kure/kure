@@ -1,0 +1,9 @@
+version: "1.0"
+profile:
+  name: qodana.starter
+exclude:
+  - name: GoUnusedExportedFunction
+
+# Possible values: apply | cleanup
+fixesStrategy: apply
+push-fixes: pull-request
