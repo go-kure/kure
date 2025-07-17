@@ -118,4 +118,26 @@ func TestPodFunctions(t *testing.T) {
 	if !reflect.DeepEqual(pod.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}
+
+	ec := corev1.EphemeralContainer{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debug"}}
+	if err := AddPodEphemeralContainer(pod, &ec); err != nil {
+		t.Fatalf("AddPodEphemeralContainer returned error: %v", err)
+	}
+	if len(pod.Spec.EphemeralContainers) != 1 {
+		t.Errorf("ephemeral container not added")
+	}
+
+	if err := SetPodHostNetwork(pod, true); err != nil {
+		t.Fatalf("SetPodHostNetwork returned error: %v", err)
+	}
+	if !pod.Spec.HostNetwork {
+		t.Errorf("host network not set")
+	}
+
+	if err := SetPodDNSPolicy(pod, corev1.DNSClusterFirstWithHostNet); err != nil {
+		t.Fatalf("SetPodDNSPolicy returned error: %v", err)
+	}
+	if pod.Spec.DNSPolicy != corev1.DNSClusterFirstWithHostNet {
+		t.Errorf("dns policy not set")
+	}
 }
