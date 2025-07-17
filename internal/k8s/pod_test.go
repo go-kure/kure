@@ -134,6 +134,20 @@ func TestPodFunctions(t *testing.T) {
 		t.Errorf("host network not set")
 	}
 
+	if err := SetPodHostPID(pod, true); err != nil {
+		t.Fatalf("SetPodHostPID returned error: %v", err)
+	}
+	if !pod.Spec.HostPID {
+		t.Errorf("host pid not set")
+	}
+
+	if err := SetPodHostIPC(pod, true); err != nil {
+		t.Fatalf("SetPodHostIPC returned error: %v", err)
+	}
+	if !pod.Spec.HostIPC {
+		t.Errorf("host ipc not set")
+	}
+
 	if err := SetPodDNSPolicy(pod, corev1.DNSClusterFirstWithHostNet); err != nil {
 		t.Fatalf("SetPodDNSPolicy returned error: %v", err)
 	}

@@ -162,6 +162,24 @@ func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) error {
 	return nil
 }
 
+// SetPodHostPID configures host PID namespace usage for the Pod.
+func SetPodHostPID(pod *corev1.Pod, hostPID bool) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.HostPID = hostPID
+	return nil
+}
+
+// SetPodHostIPC configures host IPC namespace usage for the Pod.
+func SetPodHostIPC(pod *corev1.Pod, hostIPC bool) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.HostIPC = hostIPC
+	return nil
+}
+
 // SetPodDNSPolicy sets the DNS policy for the Pod.
 func SetPodDNSPolicy(pod *corev1.Pod, policy corev1.DNSPolicy) error {
 	if pod == nil {

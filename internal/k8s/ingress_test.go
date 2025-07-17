@@ -50,4 +50,11 @@ func TestIngressFunctions(t *testing.T) {
 	if ing.Spec.DefaultBackend == nil || ing.Spec.DefaultBackend.Service.Name != "svc" {
 		t.Errorf("default backend not set")
 	}
+
+	if err := SetIngressClassName(ing, "newclass"); err != nil {
+		t.Fatalf("SetIngressClassName returned error: %v", err)
+	}
+	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != "newclass" {
+		t.Errorf("ingress class name not set")
+	}
 }
