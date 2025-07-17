@@ -12,7 +12,9 @@ import (
 func TestAddStatefulSetTopologySpreadConstraints(t *testing.T) {
 	t.Run("nil constraint", func(t *testing.T) {
 		sts := CreateStatefulSet("test", "default")
-		AddStatefulSetTopologySpreadConstraints(sts, nil)
+		if err := AddStatefulSetTopologySpreadConstraints(sts, nil); err != nil {
+			t.Fatalf("AddStatefulSetTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(sts.Spec.Template.Spec.TopologySpreadConstraints) != 0 {
 			t.Errorf("expected no constraints, got %d", len(sts.Spec.Template.Spec.TopologySpreadConstraints))
 		}
@@ -26,7 +28,9 @@ func TestAddStatefulSetTopologySpreadConstraints(t *testing.T) {
 			WhenUnsatisfiable: corev1.DoNotSchedule,
 			LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 		}
-		AddStatefulSetTopologySpreadConstraints(sts, &c)
+		if err := AddStatefulSetTopologySpreadConstraints(sts, &c); err != nil {
+			t.Fatalf("AddStatefulSetTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(sts.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 			t.Fatalf("expected 1 constraint, got %d", len(sts.Spec.Template.Spec.TopologySpreadConstraints))
 		}
@@ -49,8 +53,12 @@ func TestAddStatefulSetTopologySpreadConstraints(t *testing.T) {
 			WhenUnsatisfiable: corev1.DoNotSchedule,
 			LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 		}
-		AddStatefulSetTopologySpreadConstraints(sts, &first)
-		AddStatefulSetTopologySpreadConstraints(sts, &second)
+		if err := AddStatefulSetTopologySpreadConstraints(sts, &first); err != nil {
+			t.Fatalf("AddStatefulSetTopologySpreadConstraints returned error: %v", err)
+		}
+		if err := AddStatefulSetTopologySpreadConstraints(sts, &second); err != nil {
+			t.Fatalf("AddStatefulSetTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(sts.Spec.Template.Spec.TopologySpreadConstraints) != 2 {
 			t.Fatalf("expected 2 constraints, got %d", len(sts.Spec.Template.Spec.TopologySpreadConstraints))
 		}

@@ -12,7 +12,9 @@ import (
 func TestAddDeploymentTopologySpreadConstraints(t *testing.T) {
 	t.Run("nil constraint", func(t *testing.T) {
 		dep := CreateDeployment("test", "default")
-		AddDeploymentTopologySpreadConstraints(dep, nil)
+		if err := AddDeploymentTopologySpreadConstraints(dep, nil); err != nil {
+			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 0 {
 			t.Errorf("expected no constraints, got %d", len(dep.Spec.Template.Spec.TopologySpreadConstraints))
 		}
@@ -28,7 +30,9 @@ func TestAddDeploymentTopologySpreadConstraints(t *testing.T) {
 				MatchLabels: map[string]string{"app": "test"},
 			},
 		}
-		AddDeploymentTopologySpreadConstraints(dep, &c)
+		if err := AddDeploymentTopologySpreadConstraints(dep, &c); err != nil {
+			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 			t.Fatalf("expected 1 constraint, got %d", len(dep.Spec.Template.Spec.TopologySpreadConstraints))
 		}
@@ -55,8 +59,12 @@ func TestAddDeploymentTopologySpreadConstraints(t *testing.T) {
 				MatchLabels: map[string]string{"app": "test"},
 			},
 		}
-		AddDeploymentTopologySpreadConstraints(dep, &first)
-		AddDeploymentTopologySpreadConstraints(dep, &second)
+		if err := AddDeploymentTopologySpreadConstraints(dep, &first); err != nil {
+			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
+		}
+		if err := AddDeploymentTopologySpreadConstraints(dep, &second); err != nil {
+			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 2 {
 			t.Fatalf("expected 2 constraints, got %d", len(dep.Spec.Template.Spec.TopologySpreadConstraints))
 		}

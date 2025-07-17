@@ -12,7 +12,9 @@ import (
 func TestAddDaemonSetTopologySpreadConstraints(t *testing.T) {
 	t.Run("nil constraint", func(t *testing.T) {
 		ds := CreateDaemonSet("test", "default")
-		AddDaemonSetTopologySpreadConstraints(ds, nil)
+		if err := AddDaemonSetTopologySpreadConstraints(ds, nil); err != nil {
+			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 0 {
 			t.Errorf("expected no constraints, got %d", len(ds.Spec.Template.Spec.TopologySpreadConstraints))
 		}
@@ -26,7 +28,9 @@ func TestAddDaemonSetTopologySpreadConstraints(t *testing.T) {
 			WhenUnsatisfiable: corev1.DoNotSchedule,
 			LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 		}
-		AddDaemonSetTopologySpreadConstraints(ds, &c)
+		if err := AddDaemonSetTopologySpreadConstraints(ds, &c); err != nil {
+			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 			t.Fatalf("expected 1 constraint, got %d", len(ds.Spec.Template.Spec.TopologySpreadConstraints))
 		}
@@ -49,8 +53,12 @@ func TestAddDaemonSetTopologySpreadConstraints(t *testing.T) {
 			WhenUnsatisfiable: corev1.DoNotSchedule,
 			LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
 		}
-		AddDaemonSetTopologySpreadConstraints(ds, &first)
-		AddDaemonSetTopologySpreadConstraints(ds, &second)
+		if err := AddDaemonSetTopologySpreadConstraints(ds, &first); err != nil {
+			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
+		}
+		if err := AddDaemonSetTopologySpreadConstraints(ds, &second); err != nil {
+			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
+		}
 		if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 2 {
 			t.Fatalf("expected 2 constraints, got %d", len(ds.Spec.Template.Spec.TopologySpreadConstraints))
 		}
