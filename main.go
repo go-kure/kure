@@ -105,23 +105,23 @@ func main() {
 	// Pod example
 	pod := k8s.CreatePod("demo-pod", "demo")
 	mainCtr := k8s.CreateContainer("app", "nginx", nil, nil)
-	k8s.AddContainerPort(mainCtr, apiv1.ContainerPort{Name: "http", ContainerPort: 80})
-	k8s.AddContainerEnv(mainCtr, apiv1.EnvVar{Name: "ENV", Value: "prod"})
-	k8s.AddContainerEnvFrom(mainCtr, apiv1.EnvFromSource{ConfigMapRef: &apiv1.ConfigMapEnvSource{LocalObjectReference: apiv1.LocalObjectReference{Name: cm.Name}}})
-	k8s.AddContainerVolumeMount(mainCtr, apiv1.VolumeMount{Name: "data", MountPath: "/data"})
-	k8s.AddContainerVolumeDevice(mainCtr, apiv1.VolumeDevice{Name: "block", DevicePath: "/dev/block"})
-	k8s.SetContainerLivenessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5})
-	k8s.SetContainerReadinessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5})
-	k8s.SetContainerStartupProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 1})
-	k8s.SetContainerResources(mainCtr, apiv1.ResourceRequirements{
+	logError("add container port", k8s.AddContainerPort(mainCtr, apiv1.ContainerPort{Name: "http", ContainerPort: 80}))
+	logError("add container env", k8s.AddContainerEnv(mainCtr, apiv1.EnvVar{Name: "ENV", Value: "prod"}))
+	logError("add container env from", k8s.AddContainerEnvFrom(mainCtr, apiv1.EnvFromSource{ConfigMapRef: &apiv1.ConfigMapEnvSource{LocalObjectReference: apiv1.LocalObjectReference{Name: cm.Name}}}))
+	logError("add container volume mount", k8s.AddContainerVolumeMount(mainCtr, apiv1.VolumeMount{Name: "data", MountPath: "/data"}))
+	logError("add container volume device", k8s.AddContainerVolumeDevice(mainCtr, apiv1.VolumeDevice{Name: "block", DevicePath: "/dev/block"}))
+	logError("set container liveness probe", k8s.SetContainerLivenessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5}))
+	logError("set container readiness probe", k8s.SetContainerReadinessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5}))
+	logError("set container startup probe", k8s.SetContainerStartupProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 1}))
+	logError("set container resources", k8s.SetContainerResources(mainCtr, apiv1.ResourceRequirements{
 		Limits: apiv1.ResourceList{"memory": resource.MustParse("128Mi")},
 		Requests: apiv1.ResourceList{
 			"cpu":    resource.MustParse("50m"),
 			"memory": resource.MustParse("64Mi"),
 		},
-	})
-	k8s.SetContainerImagePullPolicy(mainCtr, apiv1.PullIfNotPresent)
-	k8s.SetContainerSecurityContext(mainCtr, apiv1.SecurityContext{RunAsUser: ptr[int64](1000)})
+	}))
+	logError("set container image pull policy", k8s.SetContainerImagePullPolicy(mainCtr, apiv1.PullIfNotPresent))
+	logError("set container security context", k8s.SetContainerSecurityContext(mainCtr, apiv1.SecurityContext{RunAsUser: ptr[int64](1000)}))
 
 	initCtr := k8s.CreateContainer("init", "busybox", []string{"sh", "-c"}, []string{"echo init"})
 
@@ -152,42 +152,42 @@ func main() {
 
 	// StatefulSet example
 	sts := k8s.CreateStatefulSet("demo-sts", "demo")
-	k8s.AddStatefulSetContainer(sts, mainCtr)
-	k8s.AddStatefulSetInitContainer(sts, initCtr)
-	k8s.AddStatefulSetVolume(sts, &apiv1.Volume{Name: "data"})
-	k8s.AddStatefulSetVolumeClaimTemplate(sts, *k8s.CreatePersistentVolumeClaim("data", "demo"))
-	k8s.AddStatefulSetToleration(sts, &apiv1.Toleration{Key: "role"})
-	k8s.SetStatefulSetServiceAccountName(sts, sa.Name)
-	k8s.SetStatefulSetServiceName(sts, "demo-svc")
-	k8s.SetStatefulSetReplicas(sts, 3)
+	logError("add statefulset container", k8s.AddStatefulSetContainer(sts, mainCtr))
+	logError("add statefulset init container", k8s.AddStatefulSetInitContainer(sts, initCtr))
+	logError("add statefulset volume", k8s.AddStatefulSetVolume(sts, &apiv1.Volume{Name: "data"}))
+	logError("add statefulset volumeclaim template", k8s.AddStatefulSetVolumeClaimTemplate(sts, *k8s.CreatePersistentVolumeClaim("data", "demo")))
+	logError("add statefulset toleration", k8s.AddStatefulSetToleration(sts, &apiv1.Toleration{Key: "role"}))
+	logError("set statefulset serviceaccount name", k8s.SetStatefulSetServiceAccountName(sts, sa.Name))
+	logError("set statefulset service name", k8s.SetStatefulSetServiceName(sts, "demo-svc"))
+	logError("set statefulset replicas", k8s.SetStatefulSetReplicas(sts, 3))
 
 	// DaemonSet example
 	ds := k8s.CreateDaemonSet("demo-ds", "demo")
-	k8s.AddDaemonSetContainer(ds, mainCtr)
-	k8s.AddDaemonSetInitContainer(ds, initCtr)
-	k8s.AddDaemonSetVolume(ds, &apiv1.Volume{Name: "data"})
-	k8s.AddDaemonSetToleration(ds, &apiv1.Toleration{Key: "role"})
-	k8s.SetDaemonSetServiceAccountName(ds, sa.Name)
-	k8s.SetDaemonSetNodeSelector(ds, map[string]string{"type": "worker"})
+	logError("add daemonset container", k8s.AddDaemonSetContainer(ds, mainCtr))
+	logError("add daemonset init container", k8s.AddDaemonSetInitContainer(ds, initCtr))
+	logError("add daemonset volume", k8s.AddDaemonSetVolume(ds, &apiv1.Volume{Name: "data"}))
+	logError("add daemonset toleration", k8s.AddDaemonSetToleration(ds, &apiv1.Toleration{Key: "role"}))
+	logError("set daemonset serviceaccount name", k8s.SetDaemonSetServiceAccountName(ds, sa.Name))
+	logError("set daemonset node selector", k8s.SetDaemonSetNodeSelector(ds, map[string]string{"type": "worker"}))
 
 	// Job example
 	job := k8s.CreateJob("demo-job", "demo")
-	k8s.AddJobContainer(job, mainCtr)
-	k8s.SetJobBackoffLimit(job, 3)
-	k8s.SetJobCompletions(job, 1)
-	k8s.SetJobParallelism(job, 1)
+	logError("add job container", k8s.AddJobContainer(job, mainCtr))
+	logError("set job backoff limit", k8s.SetJobBackoffLimit(job, 3))
+	logError("set job completions", k8s.SetJobCompletions(job, 1))
+	logError("set job parallelism", k8s.SetJobParallelism(job, 1))
 
 	// CronJob example
 	cron := k8s.CreateCronJob("demo-cron", "demo", "*/5 * * * *")
-	k8s.AddCronJobContainer(cron, mainCtr)
-	k8s.SetCronJobConcurrencyPolicy(cron, batchv1.ForbidConcurrent)
+	logError("add cronjob container", k8s.AddCronJobContainer(cron, mainCtr))
+	logError("set cronjob concurrency policy", k8s.SetCronJobConcurrencyPolicy(cron, batchv1.ForbidConcurrent))
 
 	// Service and ingress example
 	svc := k8s.CreateService("demo-svc", "demo")
-	k8s.SetServiceSelector(svc, map[string]string{"app": "demo"})
-	k8s.AddServicePort(svc, apiv1.ServicePort{Name: "http", Port: 80, TargetPort: intstr.FromString("http")})
-	k8s.SetServiceType(svc, apiv1.ServiceTypeClusterIP)
-	k8s.SetServiceExternalTrafficPolicy(svc, apiv1.ServiceExternalTrafficPolicyCluster)
+	logError("set service selector", k8s.SetServiceSelector(svc, map[string]string{"app": "demo"}))
+	logError("add service port", k8s.AddServicePort(svc, apiv1.ServicePort{Name: "http", Port: 80, TargetPort: intstr.FromString("http")}))
+	logError("set service type", k8s.SetServiceType(svc, apiv1.ServiceTypeClusterIP))
+	logError("set service external traffic policy", k8s.SetServiceExternalTrafficPolicy(svc, apiv1.ServiceExternalTrafficPolicyCluster))
 
 	ing := k8s.CreateIngress("demo-ing", "demo", "nginx")
 	rule := k8s.CreateIngressRule("example.com")
@@ -309,11 +309,11 @@ func main() {
 
 	// metallb examples
 	pool := metallb.CreateIPAddressPool("demo-pool", "demo", metallbv1beta1.IPAddressPoolSpec{Addresses: []string{"172.18.0.0/24"}})
-	metallb.AddIPAddressPoolAddress(pool, "172.19.0.0/24")
+	logError("add ipaddresspool address", metallb.AddIPAddressPoolAddress(pool, "172.19.0.0/24"))
 	l2adv := metallb.CreateL2Advertisement("demo-l2adv", "demo", metallbv1beta1.L2AdvertisementSpec{})
-	metallb.AddL2AdvertisementIPAddressPool(l2adv, pool.Name)
+	logError("add l2advertisement ipaddresspool", metallb.AddL2AdvertisementIPAddressPool(l2adv, pool.Name))
 	bgpadv := metallb.CreateBGPAdvertisement("demo-bgpadv", "demo", metallbv1beta1.BGPAdvertisementSpec{})
-	metallb.SetBGPAdvertisementLocalPref(bgpadv, 100)
+	logError("set bgpadvertisement localpref", metallb.SetBGPAdvertisementLocalPref(bgpadv, 100))
 	bgpPeer := metallb.CreateBGPPeer("demo-peer", "demo", metallbv1beta1.BGPPeerSpec{MyASN: 64512, ASN: 64512, Address: "10.0.0.2"})
 	bfd := metallb.CreateBFDProfile("demo-bfd", "demo", metallbv1beta1.BFDProfileSpec{})
 
