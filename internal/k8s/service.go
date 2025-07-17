@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"errors"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -29,16 +31,28 @@ func CreateService(name string, namespace string) *corev1.Service {
 	return obj
 }
 
-func AddServicePort(service *corev1.Service, port corev1.ServicePort) {
+func AddServicePort(service *corev1.Service, port corev1.ServicePort) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
 	service.Spec.Ports = append(service.Spec.Ports, port)
+	return nil
 }
 
-func SetServiceSelector(service *corev1.Service, selector map[string]string) {
+func SetServiceSelector(service *corev1.Service, selector map[string]string) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
 	service.Spec.Selector = selector
+	return nil
 }
 
-func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) {
+func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
 	service.Spec.Type = type_
+	return nil
 }
 
 /*
@@ -50,8 +64,12 @@ func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) {
    annotations when available.
 */
 
-func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) {
+func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) error {
+	if service == nil {
+		return errors.New("nil service")
+	}
 	service.Spec.ExternalTrafficPolicy = trafficPolicy
+	return nil
 }
 
 func SetServiceSessionAffinity(service *corev1.Service, affinity corev1.ServiceAffinity) {

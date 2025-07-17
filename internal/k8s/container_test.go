@@ -124,7 +124,9 @@ func TestAddContainerEnvFrom(t *testing.T) {
 				EnvFrom: tt.initialEnvFrom,
 			}
 
-			AddContainerEnvFrom(container, tt.newEnvFrom)
+			if err := AddContainerEnvFrom(container, tt.newEnvFrom); err != nil {
+				t.Fatalf("AddContainerEnvFrom returned error: %v", err)
+			}
 			if err := compareEnvFromSources(container.EnvFrom, tt.expectedResult); err != nil {
 				t.Error(err)
 			}
@@ -390,7 +392,9 @@ func TestAddContainerPort(t *testing.T) {
 				Ports: tt.initialPorts,
 			}
 
-			AddContainerPort(container, tt.newPort)
+			if err := AddContainerPort(container, tt.newPort); err != nil {
+				t.Fatalf("AddContainerPort returned error: %v", err)
+			}
 
 			if len(container.Ports) != len(tt.expectedResult) {
 				t.Errorf("unexpected number of ports: got %d, want %d", len(container.Ports), len(tt.expectedResult))
@@ -457,7 +461,9 @@ func TestAddContainerEnv(t *testing.T) {
 				Env: tt.initialEnv,
 			}
 
-			AddContainerEnv(container, tt.newEnv)
+			if err := AddContainerEnv(container, tt.newEnv); err != nil {
+				t.Fatalf("AddContainerEnv returned error: %v", err)
+			}
 
 			if len(container.Env) != len(tt.expectedResult) {
 				t.Errorf("unexpected number of env vars: got %d, want %d", len(container.Env), len(tt.expectedResult))
@@ -476,46 +482,62 @@ func TestAdditionalContainerFunctions(t *testing.T) {
 	c := &corev1.Container{}
 
 	mount := corev1.VolumeMount{Name: "data", MountPath: "/data"}
-	AddContainerVolumeMount(c, mount)
+	if err := AddContainerVolumeMount(c, mount); err != nil {
+		t.Fatalf("AddContainerVolumeMount returned error: %v", err)
+	}
 	if len(c.VolumeMounts) != 1 || c.VolumeMounts[0] != mount {
 		t.Errorf("volume mount not added")
 	}
 
 	dev := corev1.VolumeDevice{Name: "block", DevicePath: "/dev/block"}
-	AddContainerVolumeDevice(c, dev)
+	if err := AddContainerVolumeDevice(c, dev); err != nil {
+		t.Fatalf("AddContainerVolumeDevice returned error: %v", err)
+	}
 	if len(c.VolumeDevices) != 1 || c.VolumeDevices[0] != dev {
 		t.Errorf("volume device not added")
 	}
 
 	probe := corev1.Probe{TimeoutSeconds: 5}
-	SetContainerLivenessProbe(c, probe)
+	if err := SetContainerLivenessProbe(c, probe); err != nil {
+		t.Fatalf("SetContainerLivenessProbe returned error: %v", err)
+	}
 	if c.LivenessProbe == nil || *c.LivenessProbe != probe {
 		t.Errorf("liveness probe not set")
 	}
 
-	SetContainerReadinessProbe(c, probe)
+	if err := SetContainerReadinessProbe(c, probe); err != nil {
+		t.Fatalf("SetContainerReadinessProbe returned error: %v", err)
+	}
 	if c.ReadinessProbe == nil || *c.ReadinessProbe != probe {
 		t.Errorf("readiness probe not set")
 	}
 
-	SetContainerStartupProbe(c, probe)
+	if err := SetContainerStartupProbe(c, probe); err != nil {
+		t.Fatalf("SetContainerStartupProbe returned error: %v", err)
+	}
 	if c.StartupProbe == nil || *c.StartupProbe != probe {
 		t.Errorf("startup probe not set")
 	}
 
 	resources := corev1.ResourceRequirements{}
-	SetContainerResources(c, resources)
+	if err := SetContainerResources(c, resources); err != nil {
+		t.Fatalf("SetContainerResources returned error: %v", err)
+	}
 	if !reflect.DeepEqual(c.Resources, resources) {
 		t.Errorf("resources not set")
 	}
 
-	SetContainerImagePullPolicy(c, corev1.PullAlways)
+	if err := SetContainerImagePullPolicy(c, corev1.PullAlways); err != nil {
+		t.Fatalf("SetContainerImagePullPolicy returned error: %v", err)
+	}
 	if c.ImagePullPolicy != corev1.PullAlways {
 		t.Errorf("image pull policy not set")
 	}
 
 	sc := corev1.SecurityContext{RunAsUser: new(int64)}
-	SetContainerSecurityContext(c, sc)
+	if err := SetContainerSecurityContext(c, sc); err != nil {
+		t.Fatalf("SetContainerSecurityContext returned error: %v", err)
+	}
 	if c.SecurityContext == nil || *c.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}

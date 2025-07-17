@@ -20,23 +20,31 @@ func TestServiceFunctions(t *testing.T) {
 	}
 
 	port := corev1.ServicePort{Name: "http", Port: 80}
-	AddServicePort(svc, port)
+	if err := AddServicePort(svc, port); err != nil {
+		t.Fatalf("AddServicePort returned error: %v", err)
+	}
 	if len(svc.Spec.Ports) != 1 || svc.Spec.Ports[0] != port {
 		t.Errorf("port not added correctly: %+v", svc.Spec.Ports)
 	}
 
 	selector := map[string]string{"app": "svc"}
-	SetServiceSelector(svc, selector)
+	if err := SetServiceSelector(svc, selector); err != nil {
+		t.Fatalf("SetServiceSelector returned error: %v", err)
+	}
 	if !reflect.DeepEqual(svc.Spec.Selector, selector) {
 		t.Errorf("selector not set: %+v", svc.Spec.Selector)
 	}
 
-	SetServiceType(svc, corev1.ServiceTypeNodePort)
+	if err := SetServiceType(svc, corev1.ServiceTypeNodePort); err != nil {
+		t.Fatalf("SetServiceType returned error: %v", err)
+	}
 	if svc.Spec.Type != corev1.ServiceTypeNodePort {
 		t.Errorf("service type not set")
 	}
 
-	SetServiceExternalTrafficPolicy(svc, corev1.ServiceExternalTrafficPolicyLocal)
+	if err := SetServiceExternalTrafficPolicy(svc, corev1.ServiceExternalTrafficPolicyLocal); err != nil {
+		t.Fatalf("SetServiceExternalTrafficPolicy returned error: %v", err)
+	}
 	if svc.Spec.ExternalTrafficPolicy != corev1.ServiceExternalTrafficPolicyLocal {
 		t.Errorf("external traffic policy not set")
 	}
