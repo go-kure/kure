@@ -165,6 +165,15 @@ func SetJobTTLSecondsAfterFinished(job *batchv1.Job, ttl int32) error {
 	return nil
 }
 
+// SetJobActiveDeadlineSeconds sets the active deadline seconds for the job.
+func SetJobActiveDeadlineSeconds(job *batchv1.Job, secs *int64) error {
+	if job == nil {
+		return errors.New("nil job")
+	}
+	job.Spec.ActiveDeadlineSeconds = secs
+	return nil
+}
+
 func CreateCronJob(name, namespace, schedule string) *batchv1.CronJob {
 	obj := &batchv1.CronJob{
 		TypeMeta: metav1.TypeMeta{
@@ -340,5 +349,14 @@ func SetCronJobStartingDeadlineSeconds(cron *batchv1.CronJob, sec int64) error {
 		return errors.New("nil cronjob")
 	}
 	cron.Spec.StartingDeadlineSeconds = &sec
+	return nil
+}
+
+// SetCronJobTimeZone sets the time zone field.
+func SetCronJobTimeZone(cron *batchv1.CronJob, tz *string) error {
+	if cron == nil {
+		return errors.New("nil cronjob")
+	}
+	cron.Spec.TimeZone = tz
 	return nil
 }

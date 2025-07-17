@@ -144,6 +144,15 @@ func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) error {
 	return nil
 }
 
+// SetPodPriorityClassName sets the priority class name.
+func SetPodPriorityClassName(pod *corev1.Pod, class string) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.PriorityClassName = class
+	return nil
+}
+
 // SetPodHostNetwork configures host networking for the Pod.
 func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) error {
 	if pod == nil {

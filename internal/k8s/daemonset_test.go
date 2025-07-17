@@ -158,4 +158,12 @@ func TestDaemonSetFunctions(t *testing.T) {
 	if ds.Spec.UpdateStrategy.Type != appsv1.RollingUpdateDaemonSetStrategyType {
 		t.Errorf("update strategy not set")
 	}
+
+	rhl := int32(3)
+	if err := SetDaemonSetRevisionHistoryLimit(ds, &rhl); err != nil {
+		t.Fatalf("SetDaemonSetRevisionHistoryLimit returned error: %v", err)
+	}
+	if ds.Spec.RevisionHistoryLimit == nil || *ds.Spec.RevisionHistoryLimit != 3 {
+		t.Errorf("revision history limit not set")
+	}
 }

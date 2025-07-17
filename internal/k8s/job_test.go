@@ -134,6 +134,14 @@ func TestJobFunctions(t *testing.T) {
 	if job.Spec.TTLSecondsAfterFinished == nil || *job.Spec.TTLSecondsAfterFinished != 30 {
 		t.Errorf("ttl not set")
 	}
+
+	ad := int64(100)
+	if err := SetJobActiveDeadlineSeconds(job, &ad); err != nil {
+		t.Fatalf("SetJobActiveDeadlineSeconds returned error: %v", err)
+	}
+	if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != 100 {
+		t.Errorf("active deadline not set")
+	}
 }
 
 func TestCreateCronJob(t *testing.T) {
@@ -274,5 +282,13 @@ func TestCronJobFunctions(t *testing.T) {
 	}
 	if cj.Spec.StartingDeadlineSeconds == nil || *cj.Spec.StartingDeadlineSeconds != 60 {
 		t.Errorf("deadline not set")
+	}
+
+	tz := "UTC"
+	if err := SetCronJobTimeZone(cj, &tz); err != nil {
+		t.Fatalf("SetCronJobTimeZone returned error: %v", err)
+	}
+	if cj.Spec.TimeZone == nil || *cj.Spec.TimeZone != "UTC" {
+		t.Errorf("timezone not set")
 	}
 }

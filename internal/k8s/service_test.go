@@ -131,6 +131,28 @@ func TestServiceFunctions(t *testing.T) {
 	if svc.Spec.AllocateLoadBalancerNodePorts == nil || *svc.Spec.AllocateLoadBalancerNodePorts {
 		t.Errorf("allocate LB node ports not set")
 	}
+
+	if err := SetServiceExternalName(svc, "example.com"); err != nil {
+		t.Fatalf("SetServiceExternalName returned error: %v", err)
+	}
+	if svc.Spec.ExternalName != "example.com" {
+		t.Errorf("external name not set")
+	}
+
+	if err := SetServiceHealthCheckNodePort(svc, 30000); err != nil {
+		t.Fatalf("SetServiceHealthCheckNodePort returned error: %v", err)
+	}
+	if svc.Spec.HealthCheckNodePort != 30000 {
+		t.Errorf("health check node port not set")
+	}
+
+	cfg := &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: new(int32)}}
+	if err := SetServiceSessionAffinityConfig(svc, cfg); err != nil {
+		t.Fatalf("SetServiceSessionAffinityConfig returned error: %v", err)
+	}
+	if svc.Spec.SessionAffinityConfig != cfg {
+		t.Errorf("session affinity config not set")
+	}
 }
 
 func TestServiceMetadataFunctions(t *testing.T) {

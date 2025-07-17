@@ -161,3 +161,18 @@ func SetContainerStdinOnce(container *corev1.Container, once bool) {
 func SetContainerTTY(container *corev1.Container, tty bool) {
 	container.TTY = tty
 }
+
+// SetContainerImage sets the image on the container.
+func SetContainerImage(container *corev1.Container, image string) {
+	container.Image = image
+}
+
+// SetContainerCommand replaces the command slice on the container.
+func SetContainerCommand(container *corev1.Container, command []string) {
+	container.Command = command
+}
+
+// SetContainerArgs replaces the args slice on the container.
+func SetContainerArgs(container *corev1.Container, args []string) {
+	container.Args = args
+}
