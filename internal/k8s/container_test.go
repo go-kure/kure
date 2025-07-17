@@ -542,3 +542,43 @@ func TestAdditionalContainerFunctions(t *testing.T) {
 		t.Errorf("security context not set")
 	}
 }
+
+func TestContainerMiscFunctions(t *testing.T) {
+	c := &corev1.Container{}
+
+	SetContainerWorkingDir(c, "/work")
+	if c.WorkingDir != "/work" {
+		t.Errorf("working dir not set")
+	}
+
+	lc := &corev1.Lifecycle{}
+	SetContainerLifecycle(c, lc)
+	if c.Lifecycle != lc {
+		t.Errorf("lifecycle not set")
+	}
+
+	SetContainerTerminationMessagePath(c, "/tmp/msg")
+	if c.TerminationMessagePath != "/tmp/msg" {
+		t.Errorf("termination message path not set")
+	}
+
+	SetContainerTerminationMessagePolicy(c, corev1.TerminationMessageReadFile)
+	if c.TerminationMessagePolicy != corev1.TerminationMessageReadFile {
+		t.Errorf("termination message policy not set")
+	}
+
+	SetContainerStdin(c, true)
+	if !c.Stdin {
+		t.Errorf("stdin not set")
+	}
+
+	SetContainerStdinOnce(c, true)
+	if !c.StdinOnce {
+		t.Errorf("stdin once not set")
+	}
+
+	SetContainerTTY(c, true)
+	if !c.TTY {
+		t.Errorf("tty not set")
+	}
+}
