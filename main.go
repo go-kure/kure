@@ -44,6 +44,12 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+func logError(msg string, err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", msg, err)
+	}
+}
+
 func main() {
 	y := printers.YAMLPrinter{}
 
@@ -54,9 +60,9 @@ func main() {
 
 	// Service account
 	sa := k8s.CreateServiceAccount("demo-sa", "demo")
-	_ = k8s.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"})
-	_ = k8s.AddServiceAccountImagePullSecret(sa, apiv1.LocalObjectReference{Name: "sa-pull"})
-	_ = k8s.SetServiceAccountAutomountToken(sa, true)
+	logError("add serviceaccount secret", k8s.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"}))
+	logError("add serviceaccount image pull secret", k8s.AddServiceAccountImagePullSecret(sa, apiv1.LocalObjectReference{Name: "sa-pull"}))
+	logError("set serviceaccount automount token", k8s.SetServiceAccountAutomountToken(sa, true))
 
 	// Secret example
 	secret := k8s.CreateSecret("demo-secret", "demo")
@@ -119,30 +125,30 @@ func main() {
 
 	initCtr := k8s.CreateContainer("init", "busybox", []string{"sh", "-c"}, []string{"echo init"})
 
-	_ = k8s.AddPodContainer(pod, mainCtr)
-	_ = k8s.AddPodInitContainer(pod, initCtr)
-	_ = k8s.AddPodVolume(pod, &apiv1.Volume{Name: "data"})
-	_ = k8s.AddPodImagePullSecret(pod, &apiv1.LocalObjectReference{Name: "pullsecret"})
-	_ = k8s.AddPodToleration(pod, &apiv1.Toleration{Key: "role"})
+	logError("add pod container", k8s.AddPodContainer(pod, mainCtr))
+	logError("add pod init container", k8s.AddPodInitContainer(pod, initCtr))
+	logError("add pod volume", k8s.AddPodVolume(pod, &apiv1.Volume{Name: "data"}))
+	logError("add pod image pull secret", k8s.AddPodImagePullSecret(pod, &apiv1.LocalObjectReference{Name: "pullsecret"}))
+	logError("add pod toleration", k8s.AddPodToleration(pod, &apiv1.Toleration{Key: "role"}))
 	tsc := apiv1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: apiv1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}
-	_ = k8s.AddPodTopologySpreadConstraints(pod, &tsc)
-	_ = k8s.SetPodServiceAccountName(pod, sa.Name)
-	_ = k8s.SetPodSecurityContext(pod, &apiv1.PodSecurityContext{})
-	_ = k8s.SetPodAffinity(pod, &apiv1.Affinity{})
-	_ = k8s.SetPodNodeSelector(pod, map[string]string{"type": "worker"})
+	logError("add pod topology spread constraints", k8s.AddPodTopologySpreadConstraints(pod, &tsc))
+	logError("set pod serviceaccount name", k8s.SetPodServiceAccountName(pod, sa.Name))
+	logError("set pod security context", k8s.SetPodSecurityContext(pod, &apiv1.PodSecurityContext{}))
+	logError("set pod affinity", k8s.SetPodAffinity(pod, &apiv1.Affinity{}))
+	logError("set pod node selector", k8s.SetPodNodeSelector(pod, map[string]string{"type": "worker"}))
 
 	// Deployment example
 	dep := k8s.CreateDeployment("demo-deployment", "demo")
-	_ = k8s.AddDeploymentContainer(dep, mainCtr)
-	_ = k8s.AddDeploymentInitContainer(dep, initCtr)
-	_ = k8s.AddDeploymentVolume(dep, &apiv1.Volume{Name: "data"})
-	_ = k8s.AddDeploymentImagePullSecret(dep, &apiv1.LocalObjectReference{Name: "pullsecret"})
-	_ = k8s.AddDeploymentToleration(dep, &apiv1.Toleration{Key: "role"})
-	_ = k8s.AddDeploymentTopologySpreadConstraints(dep, &tsc)
-	_ = k8s.SetDeploymentServiceAccountName(dep, sa.Name)
-	_ = k8s.SetDeploymentSecurityContext(dep, &apiv1.PodSecurityContext{})
-	_ = k8s.SetDeploymentAffinity(dep, &apiv1.Affinity{})
-	_ = k8s.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"})
+	logError("add deployment container", k8s.AddDeploymentContainer(dep, mainCtr))
+	logError("add deployment init container", k8s.AddDeploymentInitContainer(dep, initCtr))
+	logError("add deployment volume", k8s.AddDeploymentVolume(dep, &apiv1.Volume{Name: "data"}))
+	logError("add deployment image pull secret", k8s.AddDeploymentImagePullSecret(dep, &apiv1.LocalObjectReference{Name: "pullsecret"}))
+	logError("add deployment toleration", k8s.AddDeploymentToleration(dep, &apiv1.Toleration{Key: "role"}))
+	logError("add deployment topology spread constraints", k8s.AddDeploymentTopologySpreadConstraints(dep, &tsc))
+	logError("set deployment serviceaccount name", k8s.SetDeploymentServiceAccountName(dep, sa.Name))
+	logError("set deployment security context", k8s.SetDeploymentSecurityContext(dep, &apiv1.PodSecurityContext{}))
+	logError("set deployment affinity", k8s.SetDeploymentAffinity(dep, &apiv1.Affinity{}))
+	logError("set deployment node selector", k8s.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"}))
 
 	// StatefulSet example
 	sts := k8s.CreateStatefulSet("demo-sts", "demo")
@@ -325,17 +331,17 @@ func main() {
 	fi := fluxcd.CreateFluxInstance("flux", "flux-system", fluxv1.FluxInstanceSpec{
 		Distribution: fluxv1.Distribution{Version: "2.x", Registry: "ghcr.io/fluxcd"},
 	})
-	_ = fluxcd.AddFluxInstanceComponent(fi, "source-controller")
+	logError("add flux instance component", fluxcd.AddFluxInstanceComponent(fi, "source-controller"))
 
 	fr := fluxcd.CreateFluxReport("flux", "flux-system", fluxv1.FluxReportSpec{
 		Distribution: fluxv1.FluxDistributionStatus{Entitlement: "oss", Status: "Running"},
 	})
 
 	rs := fluxcd.CreateResourceSet("demo-rs", "demo", fluxv1.ResourceSetSpec{})
-	_ = fluxcd.AddResourceSetResource(rs, &apiextensionsv1.JSON{Raw: []byte("{}")})
+	logError("add resource set resource", fluxcd.AddResourceSetResource(rs, &apiextensionsv1.JSON{Raw: []byte("{}")}))
 
 	prov := fluxcd.CreateResourceSetInputProvider("demo-rsip", "demo", fluxv1.ResourceSetInputProviderSpec{Type: fluxv1.InputProviderStatic})
-	_ = fluxcd.AddResourceSetInputProviderSchedule(prov, fluxcd.CreateSchedule("@daily"))
+	logError("add resource set input provider schedule", fluxcd.AddResourceSetInputProviderSchedule(prov, fluxcd.CreateSchedule("@daily")))
 
 	// Print objects as YAML
 	objects := []runtime.Object{
