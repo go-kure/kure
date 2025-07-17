@@ -1,9 +1,11 @@
 version: "1.0"
 profile:
-  name: qodana.starter
+  name: qodana.recommended
 exclude:
   - name: GoUnusedExportedFunction
-
+include:
+  - name: VulnerableLibrariesGlobal
+linter: jetbrains/qodana-go:2025.1
 # Possible values: apply | cleanup
 fixesStrategy: apply
-push-fixes: pull-request
+pr-mode: true
