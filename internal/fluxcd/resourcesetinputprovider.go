@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
-	meta "github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
