@@ -8,4 +8,3 @@ include:
 linter: jetbrains/qodana-go:2025.1
 # Possible values: apply | cleanup
 fixesStrategy: apply
-pr-mode: true
