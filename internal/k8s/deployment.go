@@ -138,3 +138,24 @@ func SetDeploymentNodeSelector(deployment *appsv1.Deployment, nodeSelector map[s
 	deployment.Spec.Template.Spec.NodeSelector = nodeSelector
 	return nil
 }
+
+// SetDeploymentReplicas sets the desired replica count.
+func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32) error {
+	if deployment == nil {
+		return errors.New("nil deployment")
+	}
+	if deployment.Spec.Replicas == nil {
+		deployment.Spec.Replicas = new(int32)
+	}
+	*deployment.Spec.Replicas = replicas
+	return nil
+}
+
+// SetDeploymentStrategy sets the deployment strategy.
+func SetDeploymentStrategy(deployment *appsv1.Deployment, strategy appsv1.DeploymentStrategy) error {
+	if deployment == nil {
+		return errors.New("nil deployment")
+	}
+	deployment.Spec.Strategy = strategy
+	return nil
+}

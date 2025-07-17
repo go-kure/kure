@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -153,5 +154,20 @@ func TestDeploymentFunctions(t *testing.T) {
 	}
 	if !reflect.DeepEqual(dep.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
+	}
+
+	if err := SetDeploymentReplicas(dep, 3); err != nil {
+		t.Fatalf("SetDeploymentReplicas returned error: %v", err)
+	}
+	if dep.Spec.Replicas == nil || *dep.Spec.Replicas != 3 {
+		t.Errorf("replicas not set")
+	}
+
+	strat := appsv1.DeploymentStrategy{Type: appsv1.RollingUpdateDeploymentStrategyType}
+	if err := SetDeploymentStrategy(dep, strat); err != nil {
+		t.Fatalf("SetDeploymentStrategy returned error: %v", err)
+	}
+	if dep.Spec.Strategy.Type != appsv1.RollingUpdateDeploymentStrategyType {
+		t.Errorf("strategy not set")
 	}
 }
