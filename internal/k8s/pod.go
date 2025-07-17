@@ -169,3 +169,46 @@ func SetPodDNSConfig(pod *corev1.Pod, dnsConfig *corev1.PodDNSConfig) error {
 	pod.Spec.DNSConfig = dnsConfig
 	return nil
 }
+
+func SetPodHostname(pod *corev1.Pod, hostname string) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.Hostname = hostname
+	return nil
+}
+
+func SetPodSubdomain(pod *corev1.Pod, subdomain string) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.Subdomain = subdomain
+	return nil
+}
+
+func SetPodRestartPolicy(pod *corev1.Pod, policy corev1.RestartPolicy) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.RestartPolicy = policy
+	return nil
+}
+
+func SetPodTerminationGracePeriod(pod *corev1.Pod, secs int64) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	if pod.Spec.TerminationGracePeriodSeconds == nil {
+		pod.Spec.TerminationGracePeriodSeconds = new(int64)
+	}
+	*pod.Spec.TerminationGracePeriodSeconds = secs
+	return nil
+}
+
+func SetPodSchedulerName(pod *corev1.Pod, scheduler string) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
+	pod.Spec.SchedulerName = scheduler
+	return nil
+}

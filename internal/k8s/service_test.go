@@ -79,6 +79,58 @@ func TestServiceFunctions(t *testing.T) {
 	if svc.Spec.LoadBalancerIP != "1.1.1.1" {
 		t.Errorf("loadBalancerIP not set")
 	}
+
+	if err := SetServicePublishNotReadyAddresses(svc, true); err != nil {
+		t.Fatalf("SetServicePublishNotReadyAddresses returned error: %v", err)
+	}
+	if !svc.Spec.PublishNotReadyAddresses {
+		t.Errorf("publish not ready addresses not set")
+	}
+
+	if err := AddServiceLoadBalancerSourceRange(svc, "10.0.0.0/24"); err != nil {
+		t.Fatalf("AddServiceLoadBalancerSourceRange returned error: %v", err)
+	}
+	if len(svc.Spec.LoadBalancerSourceRanges) != 1 || svc.Spec.LoadBalancerSourceRanges[0] != "10.0.0.0/24" {
+		t.Errorf("source range not added")
+	}
+
+	ranges := []string{"10.0.1.0/24", "10.0.2.0/24"}
+	if err := SetServiceLoadBalancerSourceRanges(svc, ranges); err != nil {
+		t.Fatalf("SetServiceLoadBalancerSourceRanges returned error: %v", err)
+	}
+	if !reflect.DeepEqual(svc.Spec.LoadBalancerSourceRanges, ranges) {
+		t.Errorf("source ranges not set")
+	}
+
+	if err := SetServiceIPFamilies(svc, []corev1.IPFamily{corev1.IPv4Protocol}); err != nil {
+		t.Fatalf("SetServiceIPFamilies returned error: %v", err)
+	}
+	if len(svc.Spec.IPFamilies) != 1 || svc.Spec.IPFamilies[0] != corev1.IPv4Protocol {
+		t.Errorf("ip families not set")
+	}
+
+	policy := corev1.IPFamilyPolicyPreferDualStack
+	if err := SetServiceIPFamilyPolicy(svc, &policy); err != nil {
+		t.Fatalf("SetServiceIPFamilyPolicy returned error: %v", err)
+	}
+	if svc.Spec.IPFamilyPolicy == nil || *svc.Spec.IPFamilyPolicy != policy {
+		t.Errorf("ip family policy not set")
+	}
+
+	itp := corev1.ServiceInternalTrafficPolicyLocal
+	if err := SetServiceInternalTrafficPolicy(svc, &itp); err != nil {
+		t.Fatalf("SetServiceInternalTrafficPolicy returned error: %v", err)
+	}
+	if svc.Spec.InternalTrafficPolicy == nil || *svc.Spec.InternalTrafficPolicy != itp {
+		t.Errorf("internal traffic policy not set")
+	}
+
+	if err := SetServiceAllocateLoadBalancerNodePorts(svc, false); err != nil {
+		t.Fatalf("SetServiceAllocateLoadBalancerNodePorts returned error: %v", err)
+	}
+	if svc.Spec.AllocateLoadBalancerNodePorts == nil || *svc.Spec.AllocateLoadBalancerNodePorts {
+		t.Errorf("allocate LB node ports not set")
+	}
 }
 
 func TestServiceMetadataFunctions(t *testing.T) {
