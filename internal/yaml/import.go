@@ -87,9 +87,8 @@ func registerSchemes() error {
 
 func parse(yamlbytes []byte) ([]runtime.Object, error) {
 
-	/*
-	   https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
-	*/
+	// Parsing approach adapted from
+	// https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
 
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlbytes), 4096)
 	retVal := make([]runtime.Object, 0)
