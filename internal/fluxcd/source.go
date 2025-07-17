@@ -1,8 +1,8 @@
 package fluxcd
 
 import (
-	acl "github.com/fluxcd/pkg/apis/acl"
-	meta "github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/apis/acl"
+	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -7,7 +7,7 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/kustomize"
-	meta "github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
