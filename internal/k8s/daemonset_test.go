@@ -73,66 +73,88 @@ func TestDaemonSetFunctions(t *testing.T) {
 	}
 
 	c := corev1.Container{Name: "c"}
-	AddDaemonSetContainer(ds, &c)
+	if err := AddDaemonSetContainer(ds, &c); err != nil {
+		t.Fatalf("AddDaemonSetContainer returned error: %v", err)
+	}
 	if len(ds.Spec.Template.Spec.Containers) != 1 || ds.Spec.Template.Spec.Containers[0].Name != "c" {
 		t.Errorf("container not added")
 	}
 
 	ic := corev1.Container{Name: "init"}
-	AddDaemonSetInitContainer(ds, &ic)
+	if err := AddDaemonSetInitContainer(ds, &ic); err != nil {
+		t.Fatalf("AddDaemonSetInitContainer returned error: %v", err)
+	}
 	if len(ds.Spec.Template.Spec.InitContainers) != 1 {
 		t.Errorf("init container not added")
 	}
 
 	v := corev1.Volume{Name: "vol"}
-	AddDaemonSetVolume(ds, &v)
+	if err := AddDaemonSetVolume(ds, &v); err != nil {
+		t.Fatalf("AddDaemonSetVolume returned error: %v", err)
+	}
 	if len(ds.Spec.Template.Spec.Volumes) != 1 {
 		t.Errorf("volume not added")
 	}
 
 	secret := corev1.LocalObjectReference{Name: "secret"}
-	AddDaemonSetImagePullSecret(ds, &secret)
+	if err := AddDaemonSetImagePullSecret(ds, &secret); err != nil {
+		t.Fatalf("AddDaemonSetImagePullSecret returned error: %v", err)
+	}
 	if len(ds.Spec.Template.Spec.ImagePullSecrets) != 1 {
 		t.Errorf("image pull secret not added")
 	}
 
 	tol := corev1.Toleration{Key: "k"}
-	AddDaemonSetToleration(ds, &tol)
+	if err := AddDaemonSetToleration(ds, &tol); err != nil {
+		t.Fatalf("AddDaemonSetToleration returned error: %v", err)
+	}
 	if len(ds.Spec.Template.Spec.Tolerations) != 1 {
 		t.Errorf("toleration not added")
 	}
 
 	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.ScheduleAnyway, LabelSelector: &metav1.LabelSelector{}}
-	AddDaemonSetTopologySpreadConstraints(ds, &tsc)
+	if err := AddDaemonSetTopologySpreadConstraints(ds, &tsc); err != nil {
+		t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
+	}
 	if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 		t.Errorf("topology constraint not added")
 	}
 
-	SetDaemonSetServiceAccountName(ds, "sa")
+	if err := SetDaemonSetServiceAccountName(ds, "sa"); err != nil {
+		t.Fatalf("SetDaemonSetServiceAccountName returned error: %v", err)
+	}
 	if ds.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account name not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	SetDaemonSetSecurityContext(ds, sc)
+	if err := SetDaemonSetSecurityContext(ds, sc); err != nil {
+		t.Fatalf("SetDaemonSetSecurityContext returned error: %v", err)
+	}
 	if ds.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	SetDaemonSetAffinity(ds, aff)
+	if err := SetDaemonSetAffinity(ds, aff); err != nil {
+		t.Fatalf("SetDaemonSetAffinity returned error: %v", err)
+	}
 	if ds.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	ns := map[string]string{"role": "db"}
-	SetDaemonSetNodeSelector(ds, ns)
+	if err := SetDaemonSetNodeSelector(ds, ns); err != nil {
+		t.Fatalf("SetDaemonSetNodeSelector returned error: %v", err)
+	}
 	if !reflect.DeepEqual(ds.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}
 
 	strat := appsv1.DaemonSetUpdateStrategy{Type: appsv1.RollingUpdateDaemonSetStrategyType}
-	SetDaemonSetUpdateStrategy(ds, strat)
+	if err := SetDaemonSetUpdateStrategy(ds, strat); err != nil {
+		t.Fatalf("SetDaemonSetUpdateStrategy returned error: %v", err)
+	}
 	if ds.Spec.UpdateStrategy.Type != appsv1.RollingUpdateDaemonSetStrategyType {
 		t.Errorf("update strategy not set")
 	}

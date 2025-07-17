@@ -31,7 +31,9 @@ func TestCreateSecret(t *testing.T) {
 
 func TestAddSecretData(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	AddSecretData(sec, "key", []byte("val"))
+	if err := AddSecretData(sec, "key", []byte("val")); err != nil {
+		t.Fatalf("AddSecretData returned error: %v", err)
+	}
 	if v, ok := sec.Data["key"]; !ok || string(v) != "val" {
 		t.Errorf("data not added correctly")
 	}
@@ -39,7 +41,9 @@ func TestAddSecretData(t *testing.T) {
 
 func TestAddSecretStringData(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	AddSecretStringData(sec, "key", "val")
+	if err := AddSecretStringData(sec, "key", "val"); err != nil {
+		t.Fatalf("AddSecretStringData returned error: %v", err)
+	}
 	if v, ok := sec.StringData["key"]; !ok || v != "val" {
 		t.Errorf("stringData not added correctly")
 	}
@@ -47,7 +51,9 @@ func TestAddSecretStringData(t *testing.T) {
 
 func TestSetSecretType(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	SetSecretType(sec, corev1.SecretTypeDockercfg)
+	if err := SetSecretType(sec, corev1.SecretTypeDockercfg); err != nil {
+		t.Fatalf("SetSecretType returned error: %v", err)
+	}
 	if sec.Type != corev1.SecretTypeDockercfg {
 		t.Errorf("secret type not set")
 	}
@@ -55,11 +61,15 @@ func TestSetSecretType(t *testing.T) {
 
 func TestSetSecretImmutable(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	SetSecretImmutable(sec, true)
+	if err := SetSecretImmutable(sec, true); err != nil {
+		t.Fatalf("SetSecretImmutable returned error: %v", err)
+	}
 	if sec.Immutable == nil || !*sec.Immutable {
 		t.Errorf("immutable not set to true")
 	}
-	SetSecretImmutable(sec, false)
+	if err := SetSecretImmutable(sec, false); err != nil {
+		t.Fatalf("SetSecretImmutable returned error: %v", err)
+	}
 	if sec.Immutable == nil || *sec.Immutable {
 		t.Errorf("immutable not updated to false")
 	}
@@ -67,12 +77,16 @@ func TestSetSecretImmutable(t *testing.T) {
 
 func TestSecretLabelFunctions(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	AddSecretLabel(sec, "env", "prod")
+	if err := AddSecretLabel(sec, "env", "prod"); err != nil {
+		t.Fatalf("AddSecretLabel returned error: %v", err)
+	}
 	if sec.Labels["env"] != "prod" {
 		t.Errorf("label not added")
 	}
 	newLabels := map[string]string{"a": "b"}
-	SetSecretLabels(sec, newLabels)
+	if err := SetSecretLabels(sec, newLabels); err != nil {
+		t.Fatalf("SetSecretLabels returned error: %v", err)
+	}
 	if !reflect.DeepEqual(sec.Labels, newLabels) {
 		t.Errorf("labels not set correctly")
 	}
@@ -80,12 +94,16 @@ func TestSecretLabelFunctions(t *testing.T) {
 
 func TestSecretAnnotationFunctions(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	AddSecretAnnotation(sec, "team", "dev")
+	if err := AddSecretAnnotation(sec, "team", "dev"); err != nil {
+		t.Fatalf("AddSecretAnnotation returned error: %v", err)
+	}
 	if sec.Annotations["team"] != "dev" {
 		t.Errorf("annotation not added")
 	}
 	newAnn := map[string]string{"x": "y"}
-	SetSecretAnnotations(sec, newAnn)
+	if err := SetSecretAnnotations(sec, newAnn); err != nil {
+		t.Fatalf("SetSecretAnnotations returned error: %v", err)
+	}
 	if !reflect.DeepEqual(sec.Annotations, newAnn) {
 		t.Errorf("annotations not set correctly")
 	}

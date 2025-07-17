@@ -29,80 +29,108 @@ func TestJobFunctions(t *testing.T) {
 	job := CreateJob("job", "ns")
 
 	c := corev1.Container{Name: "c"}
-	AddJobContainer(job, &c)
+	if err := AddJobContainer(job, &c); err != nil {
+		t.Fatalf("AddJobContainer returned error: %v", err)
+	}
 	if len(job.Spec.Template.Spec.Containers) != 1 || job.Spec.Template.Spec.Containers[0].Name != "c" {
 		t.Errorf("container not added")
 	}
 
 	ic := corev1.Container{Name: "init"}
-	AddJobInitContainer(job, &ic)
+	if err := AddJobInitContainer(job, &ic); err != nil {
+		t.Fatalf("AddJobInitContainer returned error: %v", err)
+	}
 	if len(job.Spec.Template.Spec.InitContainers) != 1 {
 		t.Errorf("init container not added")
 	}
 
 	v := corev1.Volume{Name: "vol"}
-	AddJobVolume(job, &v)
+	if err := AddJobVolume(job, &v); err != nil {
+		t.Fatalf("AddJobVolume returned error: %v", err)
+	}
 	if len(job.Spec.Template.Spec.Volumes) != 1 {
 		t.Errorf("volume not added")
 	}
 
 	secret := corev1.LocalObjectReference{Name: "pull"}
-	AddJobImagePullSecret(job, &secret)
+	if err := AddJobImagePullSecret(job, &secret); err != nil {
+		t.Fatalf("AddJobImagePullSecret returned error: %v", err)
+	}
 	if len(job.Spec.Template.Spec.ImagePullSecrets) != 1 {
 		t.Errorf("pull secret not added")
 	}
 
 	tol := corev1.Toleration{Key: "k"}
-	AddJobToleration(job, &tol)
+	if err := AddJobToleration(job, &tol); err != nil {
+		t.Fatalf("AddJobToleration returned error: %v", err)
+	}
 	if len(job.Spec.Template.Spec.Tolerations) != 1 {
 		t.Errorf("toleration not added")
 	}
 
 	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}}
-	AddJobTopologySpreadConstraint(job, &tsc)
+	if err := AddJobTopologySpreadConstraint(job, &tsc); err != nil {
+		t.Fatalf("AddJobTopologySpreadConstraint returned error: %v", err)
+	}
 	if len(job.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 		t.Errorf("topology constraint not added")
 	}
 
-	SetJobServiceAccountName(job, "sa")
+	if err := SetJobServiceAccountName(job, "sa"); err != nil {
+		t.Fatalf("SetJobServiceAccountName returned error: %v", err)
+	}
 	if job.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	SetJobSecurityContext(job, sc)
+	if err := SetJobSecurityContext(job, sc); err != nil {
+		t.Fatalf("SetJobSecurityContext returned error: %v", err)
+	}
 	if job.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	SetJobAffinity(job, aff)
+	if err := SetJobAffinity(job, aff); err != nil {
+		t.Fatalf("SetJobAffinity returned error: %v", err)
+	}
 	if job.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	sel := map[string]string{"role": "db"}
-	SetJobNodeSelector(job, sel)
+	if err := SetJobNodeSelector(job, sel); err != nil {
+		t.Fatalf("SetJobNodeSelector returned error: %v", err)
+	}
 	if !reflect.DeepEqual(job.Spec.Template.Spec.NodeSelector, sel) {
 		t.Errorf("node selector not set")
 	}
 
-	SetJobCompletions(job, 2)
+	if err := SetJobCompletions(job, 2); err != nil {
+		t.Fatalf("SetJobCompletions returned error: %v", err)
+	}
 	if job.Spec.Completions == nil || *job.Spec.Completions != 2 {
 		t.Errorf("completions not set")
 	}
 
-	SetJobParallelism(job, 3)
+	if err := SetJobParallelism(job, 3); err != nil {
+		t.Fatalf("SetJobParallelism returned error: %v", err)
+	}
 	if job.Spec.Parallelism == nil || *job.Spec.Parallelism != 3 {
 		t.Errorf("parallelism not set")
 	}
 
-	SetJobBackoffLimit(job, 4)
+	if err := SetJobBackoffLimit(job, 4); err != nil {
+		t.Fatalf("SetJobBackoffLimit returned error: %v", err)
+	}
 	if job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 4 {
 		t.Errorf("backoff limit not set")
 	}
 
-	SetJobTTLSecondsAfterFinished(job, 30)
+	if err := SetJobTTLSecondsAfterFinished(job, 30); err != nil {
+		t.Fatalf("SetJobTTLSecondsAfterFinished returned error: %v", err)
+	}
 	if job.Spec.TTLSecondsAfterFinished == nil || *job.Spec.TTLSecondsAfterFinished != 30 {
 		t.Errorf("ttl not set")
 	}
@@ -128,90 +156,122 @@ func TestCronJobFunctions(t *testing.T) {
 	cj := CreateCronJob("cron", "ns", "* * * * *")
 
 	c := corev1.Container{Name: "c"}
-	AddCronJobContainer(cj, &c)
+	if err := AddCronJobContainer(cj, &c); err != nil {
+		t.Fatalf("AddCronJobContainer returned error: %v", err)
+	}
 	if len(cj.Spec.JobTemplate.Spec.Template.Spec.Containers) != 1 {
 		t.Errorf("container not added")
 	}
 
 	ic := corev1.Container{Name: "init"}
-	AddCronJobInitContainer(cj, &ic)
+	if err := AddCronJobInitContainer(cj, &ic); err != nil {
+		t.Fatalf("AddCronJobInitContainer returned error: %v", err)
+	}
 	if len(cj.Spec.JobTemplate.Spec.Template.Spec.InitContainers) != 1 {
 		t.Errorf("init container not added")
 	}
 
 	v := corev1.Volume{Name: "vol"}
-	AddCronJobVolume(cj, &v)
+	if err := AddCronJobVolume(cj, &v); err != nil {
+		t.Fatalf("AddCronJobVolume returned error: %v", err)
+	}
 	if len(cj.Spec.JobTemplate.Spec.Template.Spec.Volumes) != 1 {
 		t.Errorf("volume not added")
 	}
 
 	sec := corev1.LocalObjectReference{Name: "pull"}
-	AddCronJobImagePullSecret(cj, &sec)
+	if err := AddCronJobImagePullSecret(cj, &sec); err != nil {
+		t.Fatalf("AddCronJobImagePullSecret returned error: %v", err)
+	}
 	if len(cj.Spec.JobTemplate.Spec.Template.Spec.ImagePullSecrets) != 1 {
 		t.Errorf("pull secret not added")
 	}
 
 	tol := corev1.Toleration{Key: "k"}
-	AddCronJobToleration(cj, &tol)
+	if err := AddCronJobToleration(cj, &tol); err != nil {
+		t.Fatalf("AddCronJobToleration returned error: %v", err)
+	}
 	if len(cj.Spec.JobTemplate.Spec.Template.Spec.Tolerations) != 1 {
 		t.Errorf("toleration not added")
 	}
 
 	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}}
-	AddCronJobTopologySpreadConstraint(cj, &tsc)
+	if err := AddCronJobTopologySpreadConstraint(cj, &tsc); err != nil {
+		t.Fatalf("AddCronJobTopologySpreadConstraint returned error: %v", err)
+	}
 	if len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 		t.Errorf("topology constraint not added")
 	}
 
-	SetCronJobServiceAccountName(cj, "sa")
+	if err := SetCronJobServiceAccountName(cj, "sa"); err != nil {
+		t.Fatalf("SetCronJobServiceAccountName returned error: %v", err)
+	}
 	if cj.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	SetCronJobSecurityContext(cj, sc)
+	if err := SetCronJobSecurityContext(cj, sc); err != nil {
+		t.Fatalf("SetCronJobSecurityContext returned error: %v", err)
+	}
 	if cj.Spec.JobTemplate.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	SetCronJobAffinity(cj, aff)
+	if err := SetCronJobAffinity(cj, aff); err != nil {
+		t.Fatalf("SetCronJobAffinity returned error: %v", err)
+	}
 	if cj.Spec.JobTemplate.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	sel := map[string]string{"role": "db"}
-	SetCronJobNodeSelector(cj, sel)
+	if err := SetCronJobNodeSelector(cj, sel); err != nil {
+		t.Fatalf("SetCronJobNodeSelector returned error: %v", err)
+	}
 	if !reflect.DeepEqual(cj.Spec.JobTemplate.Spec.Template.Spec.NodeSelector, sel) {
 		t.Errorf("node selector not set")
 	}
 
-	SetCronJobSchedule(cj, "*/5 * * * *")
+	if err := SetCronJobSchedule(cj, "*/5 * * * *"); err != nil {
+		t.Fatalf("SetCronJobSchedule returned error: %v", err)
+	}
 	if cj.Spec.Schedule != "*/5 * * * *" {
 		t.Errorf("schedule not updated")
 	}
 
-	SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent)
+	if err := SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent); err != nil {
+		t.Fatalf("SetCronJobConcurrencyPolicy returned error: %v", err)
+	}
 	if cj.Spec.ConcurrencyPolicy != batchv1.ForbidConcurrent {
 		t.Errorf("policy not set")
 	}
 
-	SetCronJobSuspend(cj, true)
+	if err := SetCronJobSuspend(cj, true); err != nil {
+		t.Fatalf("SetCronJobSuspend returned error: %v", err)
+	}
 	if cj.Spec.Suspend == nil || !*cj.Spec.Suspend {
 		t.Errorf("suspend not set")
 	}
 
-	SetCronJobSuccessfulJobsHistoryLimit(cj, 1)
+	if err := SetCronJobSuccessfulJobsHistoryLimit(cj, 1); err != nil {
+		t.Fatalf("SetCronJobSuccessfulJobsHistoryLimit returned error: %v", err)
+	}
 	if cj.Spec.SuccessfulJobsHistoryLimit == nil || *cj.Spec.SuccessfulJobsHistoryLimit != 1 {
 		t.Errorf("success limit not set")
 	}
 
-	SetCronJobFailedJobsHistoryLimit(cj, 2)
+	if err := SetCronJobFailedJobsHistoryLimit(cj, 2); err != nil {
+		t.Fatalf("SetCronJobFailedJobsHistoryLimit returned error: %v", err)
+	}
 	if cj.Spec.FailedJobsHistoryLimit == nil || *cj.Spec.FailedJobsHistoryLimit != 2 {
 		t.Errorf("failed limit not set")
 	}
 
-	SetCronJobStartingDeadlineSeconds(cj, 60)
+	if err := SetCronJobStartingDeadlineSeconds(cj, 60); err != nil {
+		t.Fatalf("SetCronJobStartingDeadlineSeconds returned error: %v", err)
+	}
 	if cj.Spec.StartingDeadlineSeconds == nil || *cj.Spec.StartingDeadlineSeconds != 60 {
 		t.Errorf("deadline not set")
 	}

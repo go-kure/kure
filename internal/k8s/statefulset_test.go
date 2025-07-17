@@ -73,87 +73,117 @@ func TestStatefulSetFunctions(t *testing.T) {
 	}
 
 	c := corev1.Container{Name: "c"}
-	AddStatefulSetContainer(sts, &c)
+	if err := AddStatefulSetContainer(sts, &c); err != nil {
+		t.Fatalf("AddStatefulSetContainer returned error: %v", err)
+	}
 	if len(sts.Spec.Template.Spec.Containers) != 1 || sts.Spec.Template.Spec.Containers[0].Name != "c" {
 		t.Errorf("container not added")
 	}
 
 	ic := corev1.Container{Name: "init"}
-	AddStatefulSetInitContainer(sts, &ic)
+	if err := AddStatefulSetInitContainer(sts, &ic); err != nil {
+		t.Fatalf("AddStatefulSetInitContainer returned error: %v", err)
+	}
 	if len(sts.Spec.Template.Spec.InitContainers) != 1 {
 		t.Errorf("init container not added")
 	}
 
 	v := corev1.Volume{Name: "vol"}
-	AddStatefulSetVolume(sts, &v)
+	if err := AddStatefulSetVolume(sts, &v); err != nil {
+		t.Fatalf("AddStatefulSetVolume returned error: %v", err)
+	}
 	if len(sts.Spec.Template.Spec.Volumes) != 1 {
 		t.Errorf("volume not added")
 	}
 
 	secret := corev1.LocalObjectReference{Name: "secret"}
-	AddStatefulSetImagePullSecret(sts, &secret)
+	if err := AddStatefulSetImagePullSecret(sts, &secret); err != nil {
+		t.Fatalf("AddStatefulSetImagePullSecret returned error: %v", err)
+	}
 	if len(sts.Spec.Template.Spec.ImagePullSecrets) != 1 {
 		t.Errorf("image pull secret not added")
 	}
 
 	tol := corev1.Toleration{Key: "k"}
-	AddStatefulSetToleration(sts, &tol)
+	if err := AddStatefulSetToleration(sts, &tol); err != nil {
+		t.Fatalf("AddStatefulSetToleration returned error: %v", err)
+	}
 	if len(sts.Spec.Template.Spec.Tolerations) != 1 {
 		t.Errorf("toleration not added")
 	}
 
 	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.ScheduleAnyway, LabelSelector: &metav1.LabelSelector{}}
-	AddStatefulSetTopologySpreadConstraints(sts, &tsc)
+	if err := AddStatefulSetTopologySpreadConstraints(sts, &tsc); err != nil {
+		t.Fatalf("AddStatefulSetTopologySpreadConstraints returned error: %v", err)
+	}
 	if len(sts.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 		t.Errorf("topology constraint not added")
 	}
 
 	pvc := corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "data"}}
-	AddStatefulSetVolumeClaimTemplate(sts, pvc)
+	if err := AddStatefulSetVolumeClaimTemplate(sts, pvc); err != nil {
+		t.Fatalf("AddStatefulSetVolumeClaimTemplate returned error: %v", err)
+	}
 	if len(sts.Spec.VolumeClaimTemplates) != 1 {
 		t.Errorf("volume claim template not added")
 	}
 
-	SetStatefulSetServiceAccountName(sts, "sa")
+	if err := SetStatefulSetServiceAccountName(sts, "sa"); err != nil {
+		t.Fatalf("SetStatefulSetServiceAccountName returned error: %v", err)
+	}
 	if sts.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account name not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	SetStatefulSetSecurityContext(sts, sc)
+	if err := SetStatefulSetSecurityContext(sts, sc); err != nil {
+		t.Fatalf("SetStatefulSetSecurityContext returned error: %v", err)
+	}
 	if sts.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	SetStatefulSetAffinity(sts, aff)
+	if err := SetStatefulSetAffinity(sts, aff); err != nil {
+		t.Fatalf("SetStatefulSetAffinity returned error: %v", err)
+	}
 	if sts.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	ns := map[string]string{"role": "db"}
-	SetStatefulSetNodeSelector(sts, ns)
+	if err := SetStatefulSetNodeSelector(sts, ns); err != nil {
+		t.Fatalf("SetStatefulSetNodeSelector returned error: %v", err)
+	}
 	if !reflect.DeepEqual(sts.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}
 
 	strat := appsv1.StatefulSetUpdateStrategy{Type: appsv1.RollingUpdateStatefulSetStrategyType}
-	SetStatefulSetUpdateStrategy(sts, strat)
+	if err := SetStatefulSetUpdateStrategy(sts, strat); err != nil {
+		t.Fatalf("SetStatefulSetUpdateStrategy returned error: %v", err)
+	}
 	if sts.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
 		t.Errorf("update strategy not set")
 	}
 
-	SetStatefulSetReplicas(sts, 3)
+	if err := SetStatefulSetReplicas(sts, 3); err != nil {
+		t.Fatalf("SetStatefulSetReplicas returned error: %v", err)
+	}
 	if sts.Spec.Replicas == nil || *sts.Spec.Replicas != 3 {
 		t.Errorf("replicas not set")
 	}
 
-	SetStatefulSetServiceName(sts, "svc")
+	if err := SetStatefulSetServiceName(sts, "svc"); err != nil {
+		t.Fatalf("SetStatefulSetServiceName returned error: %v", err)
+	}
 	if sts.Spec.ServiceName != "svc" {
 		t.Errorf("service name not set")
 	}
 
-	SetStatefulSetPodManagementPolicy(sts, appsv1.ParallelPodManagement)
+	if err := SetStatefulSetPodManagementPolicy(sts, appsv1.ParallelPodManagement); err != nil {
+		t.Fatalf("SetStatefulSetPodManagementPolicy returned error: %v", err)
+	}
 	if sts.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 		t.Errorf("pod management policy not set")
 	}
