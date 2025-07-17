@@ -92,6 +92,7 @@ func CreateHelmChart(name, namespace string, spec sourcev1.HelmChartSpec) *sourc
 }
 
 // GitRepository helpers
+
 // SetGitRepositoryURL sets the repository clone URL.
 func SetGitRepositoryURL(gr *sourcev1.GitRepository, url string) {
 	gr.Spec.URL = url
@@ -153,6 +154,7 @@ func AddGitRepositoryInclude(gr *sourcev1.GitRepository, include sourcev1.GitRep
 }
 
 // HelmRepository helpers
+
 // SetHelmRepositoryURL sets the repository URL.
 func SetHelmRepositoryURL(hr *sourcev1.HelmRepository, url string) {
 	hr.Spec.URL = url
@@ -209,6 +211,7 @@ func SetHelmRepositoryProvider(hr *sourcev1.HelmRepository, provider string) {
 }
 
 // Bucket helpers
+
 // SetBucketProvider sets the cloud provider for the bucket.
 func SetBucketProvider(b *sourcev1.Bucket, provider string) {
 	b.Spec.Provider = provider
@@ -280,6 +283,7 @@ func SetBucketSuspend(b *sourcev1.Bucket, suspend bool) {
 }
 
 // HelmChart helpers
+
 // SetHelmChartChart sets the chart name on the HelmChart.
 func SetHelmChartChart(hc *sourcev1.HelmChart, chart string) {
 	hc.Spec.Chart = chart
@@ -331,6 +335,7 @@ func SetHelmChartVerify(hc *sourcev1.HelmChart, verify *sourcev1.OCIRepositoryVe
 }
 
 // OCIRepository helpers
+
 // SetOCIRepositoryURL sets the container registry URL.
 func SetOCIRepositoryURL(or *sourcev1beta2.OCIRepository, url string) {
 	or.Spec.URL = url

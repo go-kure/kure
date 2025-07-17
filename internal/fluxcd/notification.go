@@ -75,6 +75,7 @@ func SetProviderSuspend(provider *notificationv1beta2.Provider, suspend bool) {
 }
 
 // Alert helpers
+
 // CreateAlert returns a new Alert object configured with the given name,
 // namespace and specification.
 func CreateAlert(name, namespace string, spec notificationv1beta2.AlertSpec) *notificationv1beta2.Alert {
@@ -136,6 +137,7 @@ func SetAlertSuspend(alert *notificationv1beta2.Alert, suspend bool) {
 }
 
 // Receiver helpers
+
 // CreateReceiver returns a new Receiver object configured with the given name,
 // namespace and specification.
 func CreateReceiver(name, namespace string, spec notificationv1beta2.ReceiverSpec) *notificationv1beta2.Receiver {
