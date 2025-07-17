@@ -323,17 +323,17 @@ func main() {
 	fi := fluxcd.CreateFluxInstance("flux", "flux-system", fluxv1.FluxInstanceSpec{
 		Distribution: fluxv1.Distribution{Version: "2.x", Registry: "ghcr.io/fluxcd"},
 	})
-	fluxcd.AddFluxInstanceComponent(fi, "source-controller")
+	_ = fluxcd.AddFluxInstanceComponent(fi, "source-controller")
 
 	fr := fluxcd.CreateFluxReport("flux", "flux-system", fluxv1.FluxReportSpec{
 		Distribution: fluxv1.FluxDistributionStatus{Entitlement: "oss", Status: "Running"},
 	})
 
 	rs := fluxcd.CreateResourceSet("demo-rs", "demo", fluxv1.ResourceSetSpec{})
-	fluxcd.AddResourceSetResource(rs, &apiextensionsv1.JSON{Raw: []byte("{}")})
+	_ = fluxcd.AddResourceSetResource(rs, &apiextensionsv1.JSON{Raw: []byte("{}")})
 
 	prov := fluxcd.CreateResourceSetInputProvider("demo-rsip", "demo", fluxv1.ResourceSetInputProviderSpec{Type: fluxv1.InputProviderStatic})
-	fluxcd.AddResourceSetInputProviderSchedule(prov, fluxcd.CreateSchedule("@daily"))
+	_ = fluxcd.AddResourceSetInputProviderSchedule(prov, fluxcd.CreateSchedule("@daily"))
 
 	// Print objects as YAML
 	y.PrintObj(sa, os.Stdout)
