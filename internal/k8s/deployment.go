@@ -159,3 +159,30 @@ func SetDeploymentStrategy(deployment *appsv1.Deployment, strategy appsv1.Deploy
 	deployment.Spec.Strategy = strategy
 	return nil
 }
+
+// SetDeploymentRevisionHistoryLimit sets the revision history limit.
+func SetDeploymentRevisionHistoryLimit(deployment *appsv1.Deployment, limit int32) error {
+	if deployment == nil {
+		return errors.New("nil deployment")
+	}
+	deployment.Spec.RevisionHistoryLimit = &limit
+	return nil
+}
+
+// SetDeploymentMinReadySeconds sets the minimum ready seconds.
+func SetDeploymentMinReadySeconds(deployment *appsv1.Deployment, secs int32) error {
+	if deployment == nil {
+		return errors.New("nil deployment")
+	}
+	deployment.Spec.MinReadySeconds = secs
+	return nil
+}
+
+// SetDeploymentProgressDeadlineSeconds sets the progress deadline seconds.
+func SetDeploymentProgressDeadlineSeconds(deployment *appsv1.Deployment, secs int32) error {
+	if deployment == nil {
+		return errors.New("nil deployment")
+	}
+	deployment.Spec.ProgressDeadlineSeconds = &secs
+	return nil
+}

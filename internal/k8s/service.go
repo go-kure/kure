@@ -184,3 +184,30 @@ func SetServiceAllocateLoadBalancerNodePorts(svc *corev1.Service, allocate bool)
 	svc.Spec.AllocateLoadBalancerNodePorts = &allocate
 	return nil
 }
+
+// SetServiceExternalName sets the externalName field for ExternalName services.
+func SetServiceExternalName(svc *corev1.Service, name string) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.ExternalName = name
+	return nil
+}
+
+// SetServiceHealthCheckNodePort sets the healthCheckNodePort field for LoadBalancer services.
+func SetServiceHealthCheckNodePort(svc *corev1.Service, port int32) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.HealthCheckNodePort = port
+	return nil
+}
+
+// SetServiceSessionAffinityConfig configures the session affinity options.
+func SetServiceSessionAffinityConfig(svc *corev1.Service, cfg *corev1.SessionAffinityConfig) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.SessionAffinityConfig = cfg
+	return nil
+}

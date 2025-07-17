@@ -150,3 +150,12 @@ func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strat appsv1.DaemonSetUpda
 	ds.Spec.UpdateStrategy = strat
 	return nil
 }
+
+// SetDaemonSetRevisionHistoryLimit sets the revision history limit.
+func SetDaemonSetRevisionHistoryLimit(ds *appsv1.DaemonSet, limit *int32) error {
+	if ds == nil {
+		return errors.New("nil daemonset")
+	}
+	ds.Spec.RevisionHistoryLimit = limit
+	return nil
+}

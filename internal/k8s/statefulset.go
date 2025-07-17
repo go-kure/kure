@@ -193,3 +193,21 @@ func SetStatefulSetPodManagementPolicy(sts *appsv1.StatefulSet, policy appsv1.Po
 	sts.Spec.PodManagementPolicy = policy
 	return nil
 }
+
+// SetStatefulSetRevisionHistoryLimit sets the revision history limit.
+func SetStatefulSetRevisionHistoryLimit(sts *appsv1.StatefulSet, limit *int32) error {
+	if sts == nil {
+		return errors.New("nil statefulset")
+	}
+	sts.Spec.RevisionHistoryLimit = limit
+	return nil
+}
+
+// SetStatefulSetMinReadySeconds sets the minimum ready seconds.
+func SetStatefulSetMinReadySeconds(sts *appsv1.StatefulSet, secs int32) error {
+	if sts == nil {
+		return errors.New("nil statefulset")
+	}
+	sts.Spec.MinReadySeconds = secs
+	return nil
+}

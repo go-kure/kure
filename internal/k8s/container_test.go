@@ -582,3 +582,24 @@ func TestContainerMiscFunctions(t *testing.T) {
 		t.Errorf("tty not set")
 	}
 }
+
+func TestContainerSetters(t *testing.T) {
+	c := &corev1.Container{}
+
+	SetContainerImage(c, "nginx")
+	if c.Image != "nginx" {
+		t.Errorf("image not set")
+	}
+
+	cmd := []string{"/bin/sh"}
+	SetContainerCommand(c, cmd)
+	if !reflect.DeepEqual(c.Command, cmd) {
+		t.Errorf("command not set")
+	}
+
+	args := []string{"-c", "echo"}
+	SetContainerArgs(c, args)
+	if !reflect.DeepEqual(c.Args, args) {
+		t.Errorf("args not set")
+	}
+}

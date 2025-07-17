@@ -187,4 +187,19 @@ func TestStatefulSetFunctions(t *testing.T) {
 	if sts.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 		t.Errorf("pod management policy not set")
 	}
+
+	rhl := int32(4)
+	if err := SetStatefulSetRevisionHistoryLimit(sts, &rhl); err != nil {
+		t.Fatalf("SetStatefulSetRevisionHistoryLimit returned error: %v", err)
+	}
+	if sts.Spec.RevisionHistoryLimit == nil || *sts.Spec.RevisionHistoryLimit != 4 {
+		t.Errorf("revision history limit not set")
+	}
+
+	if err := SetStatefulSetMinReadySeconds(sts, 5); err != nil {
+		t.Fatalf("SetStatefulSetMinReadySeconds returned error: %v", err)
+	}
+	if sts.Spec.MinReadySeconds != 5 {
+		t.Errorf("min ready seconds not set")
+	}
 }

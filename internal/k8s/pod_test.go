@@ -184,3 +184,13 @@ func TestPodFunctions(t *testing.T) {
 		t.Errorf("scheduler name not set")
 	}
 }
+
+func TestSetPodPriorityClassName(t *testing.T) {
+	pod := CreatePod("p", "ns")
+	if err := SetPodPriorityClassName(pod, "high"); err != nil {
+		t.Fatalf("SetPodPriorityClassName returned error: %v", err)
+	}
+	if pod.Spec.PriorityClassName != "high" {
+		t.Errorf("priority class name not set")
+	}
+}

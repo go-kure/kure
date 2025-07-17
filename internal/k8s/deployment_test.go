@@ -170,4 +170,25 @@ func TestDeploymentFunctions(t *testing.T) {
 	if dep.Spec.Strategy.Type != appsv1.RollingUpdateDeploymentStrategyType {
 		t.Errorf("strategy not set")
 	}
+
+	if err := SetDeploymentRevisionHistoryLimit(dep, 5); err != nil {
+		t.Fatalf("SetDeploymentRevisionHistoryLimit returned error: %v", err)
+	}
+	if dep.Spec.RevisionHistoryLimit == nil || *dep.Spec.RevisionHistoryLimit != 5 {
+		t.Errorf("revision history limit not set")
+	}
+
+	if err := SetDeploymentMinReadySeconds(dep, 10); err != nil {
+		t.Fatalf("SetDeploymentMinReadySeconds returned error: %v", err)
+	}
+	if dep.Spec.MinReadySeconds != 10 {
+		t.Errorf("min ready seconds not set")
+	}
+
+	if err := SetDeploymentProgressDeadlineSeconds(dep, 60); err != nil {
+		t.Fatalf("SetDeploymentProgressDeadlineSeconds returned error: %v", err)
+	}
+	if dep.Spec.ProgressDeadlineSeconds == nil || *dep.Spec.ProgressDeadlineSeconds != 60 {
+		t.Errorf("progress deadline seconds not set")
+	}
 }
