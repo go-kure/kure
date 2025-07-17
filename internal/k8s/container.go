@@ -7,6 +7,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+// CreateContainer returns a Container populated with the provided name, image,
+// command and arguments. All collection fields are initialized and basic
+// resource requests and limits are set.
 func CreateContainer(name string, image string, command []string, args []string) *corev1.Container {
 	obj := corev1.Container{
 		Name:    name,
@@ -32,6 +35,7 @@ func CreateContainer(name string, image string, command []string, args []string)
 	return &obj
 }
 
+// AddContainerPort appends a container port to the Ports slice.
 func AddContainerPort(container *corev1.Container, port corev1.ContainerPort) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -40,6 +44,7 @@ func AddContainerPort(container *corev1.Container, port corev1.ContainerPort) er
 	return nil
 }
 
+// AddContainerEnv appends an environment variable to the container.
 func AddContainerEnv(container *corev1.Container, env corev1.EnvVar) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -48,6 +53,7 @@ func AddContainerEnv(container *corev1.Container, env corev1.EnvVar) error {
 	return nil
 }
 
+// AddContainerEnvFrom appends an EnvFromSource entry to the container.
 func AddContainerEnvFrom(container *corev1.Container, envFrom corev1.EnvFromSource) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -56,6 +62,7 @@ func AddContainerEnvFrom(container *corev1.Container, envFrom corev1.EnvFromSour
 	return nil
 }
 
+// AddContainerVolumeMount appends a volume mount to the container.
 func AddContainerVolumeMount(container *corev1.Container, volumeMount corev1.VolumeMount) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -64,6 +71,7 @@ func AddContainerVolumeMount(container *corev1.Container, volumeMount corev1.Vol
 	return nil
 }
 
+// AddContainerVolumeDevice appends a volume device to the container.
 func AddContainerVolumeDevice(container *corev1.Container, volumeDevice corev1.VolumeDevice) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -72,6 +80,7 @@ func AddContainerVolumeDevice(container *corev1.Container, volumeDevice corev1.V
 	return nil
 }
 
+// SetContainerLivenessProbe sets the container's liveness probe.
 func SetContainerLivenessProbe(container *corev1.Container, livenessProbe corev1.Probe) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -80,6 +89,7 @@ func SetContainerLivenessProbe(container *corev1.Container, livenessProbe corev1
 	return nil
 }
 
+// SetContainerReadinessProbe sets the container's readiness probe.
 func SetContainerReadinessProbe(container *corev1.Container, readinessProbe corev1.Probe) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -88,6 +98,7 @@ func SetContainerReadinessProbe(container *corev1.Container, readinessProbe core
 	return nil
 }
 
+// SetContainerStartupProbe sets the container's startup probe.
 func SetContainerStartupProbe(container *corev1.Container, startupProbe corev1.Probe) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -96,6 +107,7 @@ func SetContainerStartupProbe(container *corev1.Container, startupProbe corev1.P
 	return nil
 }
 
+// SetContainerResources sets resource requirements on the container.
 func SetContainerResources(container *corev1.Container, resources corev1.ResourceRequirements) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -104,6 +116,7 @@ func SetContainerResources(container *corev1.Container, resources corev1.Resourc
 	return nil
 }
 
+// SetContainerImagePullPolicy sets the image pull policy.
 func SetContainerImagePullPolicy(container *corev1.Container, imagePullPolicy corev1.PullPolicy) error {
 	if container == nil {
 		return errors.New("nil container")
@@ -112,6 +125,7 @@ func SetContainerImagePullPolicy(container *corev1.Container, imagePullPolicy co
 	return nil
 }
 
+// SetContainerSecurityContext sets the security context on the container.
 func SetContainerSecurityContext(container *corev1.Container, securityContext corev1.SecurityContext) error {
 	if container == nil {
 		return errors.New("nil container")

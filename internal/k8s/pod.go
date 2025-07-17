@@ -7,6 +7,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// CreatePod returns a Pod with the provided name and namespace. The object is
+// populated with sensible defaults for metadata and spec fields.
 func CreatePod(name string, namespace string) *corev1.Pod {
 	obj := corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -40,6 +42,7 @@ func CreatePod(name string, namespace string) *corev1.Pod {
 	return &obj
 }
 
+// AddPodContainer appends a container to the Pod spec.
 func AddPodContainer(pod *corev1.Pod, container *corev1.Container) error {
 	if pod == nil || container == nil {
 		return errors.New("nil pod or container")
@@ -48,6 +51,7 @@ func AddPodContainer(pod *corev1.Pod, container *corev1.Container) error {
 	return nil
 }
 
+// AddPodInitContainer appends an init container to the Pod spec.
 func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) error {
 	if pod == nil || container == nil {
 		return errors.New("nil pod or container")
@@ -56,6 +60,7 @@ func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) error {
 	return nil
 }
 
+// AddPodEphemeralContainer appends an ephemeral container to the Pod spec.
 func AddPodEphemeralContainer(pod *corev1.Pod, container *corev1.EphemeralContainer) error {
 	if pod == nil || container == nil {
 		return errors.New("nil pod or container")
@@ -64,6 +69,7 @@ func AddPodEphemeralContainer(pod *corev1.Pod, container *corev1.EphemeralContai
 	return nil
 }
 
+// AddPodVolume appends a volume to the Pod spec.
 func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) error {
 	if pod == nil || volume == nil {
 		return errors.New("nil pod or volume")
@@ -72,6 +78,7 @@ func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) error {
 	return nil
 }
 
+// AddPodImagePullSecret appends an image pull secret to the Pod spec.
 func AddPodImagePullSecret(pod *corev1.Pod, imagePullSecret *corev1.LocalObjectReference) error {
 	if pod == nil || imagePullSecret == nil {
 		return errors.New("nil pod or imagePullSecret")
@@ -80,6 +87,7 @@ func AddPodImagePullSecret(pod *corev1.Pod, imagePullSecret *corev1.LocalObjectR
 	return nil
 }
 
+// AddPodToleration appends a toleration to the Pod spec.
 func AddPodToleration(pod *corev1.Pod, toleration *corev1.Toleration) error {
 	if pod == nil || toleration == nil {
 		return errors.New("nil pod or toleration")
@@ -88,6 +96,7 @@ func AddPodToleration(pod *corev1.Pod, toleration *corev1.Toleration) error {
 	return nil
 }
 
+// AddPodTopologySpreadConstraints appends a topology spread constraint if provided.
 func AddPodTopologySpreadConstraints(pod *corev1.Pod, topologySpreadConstraint *corev1.TopologySpreadConstraint) error {
 	if pod == nil {
 		return errors.New("nil pod")
@@ -99,6 +108,7 @@ func AddPodTopologySpreadConstraints(pod *corev1.Pod, topologySpreadConstraint *
 	return nil
 }
 
+// SetPodServiceAccountName sets the service account used by the Pod.
 func SetPodServiceAccountName(pod *corev1.Pod, serviceAccountName string) error {
 	if pod == nil {
 		return errors.New("nil pod")
@@ -107,6 +117,7 @@ func SetPodServiceAccountName(pod *corev1.Pod, serviceAccountName string) error 
 	return nil
 }
 
+// SetPodSecurityContext sets the pod-level security context.
 func SetPodSecurityContext(pod *corev1.Pod, securityContext *corev1.PodSecurityContext) error {
 	if pod == nil {
 		return errors.New("nil pod")
@@ -115,6 +126,7 @@ func SetPodSecurityContext(pod *corev1.Pod, securityContext *corev1.PodSecurityC
 	return nil
 }
 
+// SetPodAffinity assigns affinity rules to the Pod.
 func SetPodAffinity(pod *corev1.Pod, affinity *corev1.Affinity) error {
 	if pod == nil {
 		return errors.New("nil pod")
@@ -123,6 +135,7 @@ func SetPodAffinity(pod *corev1.Pod, affinity *corev1.Affinity) error {
 	return nil
 }
 
+// SetPodNodeSelector sets the node selector map.
 func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) error {
 	if pod == nil {
 		return errors.New("nil pod")
@@ -131,6 +144,7 @@ func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) error {
 	return nil
 }
 
+// SetPodHostNetwork configures host networking for the Pod.
 func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) error {
 	if pod == nil {
 		return errors.New("nil pod")
@@ -139,6 +153,7 @@ func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) error {
 	return nil
 }
 
+// SetPodDNSPolicy sets the DNS policy for the Pod.
 func SetPodDNSPolicy(pod *corev1.Pod, policy corev1.DNSPolicy) error {
 	if pod == nil {
 		return errors.New("nil pod")
