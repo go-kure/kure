@@ -77,60 +77,80 @@ func TestDeploymentFunctions(t *testing.T) {
 	}
 
 	c := corev1.Container{Name: "c"}
-	AddDeploymentContainer(dep, &c)
+	if err := AddDeploymentContainer(dep, &c); err != nil {
+		t.Fatalf("AddDeploymentContainer returned error: %v", err)
+	}
 	if len(dep.Spec.Template.Spec.Containers) != 1 || dep.Spec.Template.Spec.Containers[0].Name != "c" {
 		t.Errorf("container not added")
 	}
 
 	ic := corev1.Container{Name: "init"}
-	AddDeploymentInitContainer(dep, &ic)
+	if err := AddDeploymentInitContainer(dep, &ic); err != nil {
+		t.Fatalf("AddDeploymentInitContainer returned error: %v", err)
+	}
 	if len(dep.Spec.Template.Spec.InitContainers) != 1 {
 		t.Errorf("init container not added")
 	}
 
 	v := corev1.Volume{Name: "vol"}
-	AddDeploymentVolume(dep, &v)
+	if err := AddDeploymentVolume(dep, &v); err != nil {
+		t.Fatalf("AddDeploymentVolume returned error: %v", err)
+	}
 	if len(dep.Spec.Template.Spec.Volumes) != 1 {
 		t.Errorf("volume not added")
 	}
 
 	secret := corev1.LocalObjectReference{Name: "secret"}
-	AddDeploymentImagePullSecret(dep, &secret)
+	if err := AddDeploymentImagePullSecret(dep, &secret); err != nil {
+		t.Fatalf("AddDeploymentImagePullSecret returned error: %v", err)
+	}
 	if len(dep.Spec.Template.Spec.ImagePullSecrets) != 1 {
 		t.Errorf("image pull secret not added")
 	}
 
 	tol := corev1.Toleration{Key: "k"}
-	AddDeploymentToleration(dep, &tol)
+	if err := AddDeploymentToleration(dep, &tol); err != nil {
+		t.Fatalf("AddDeploymentToleration returned error: %v", err)
+	}
 	if len(dep.Spec.Template.Spec.Tolerations) != 1 {
 		t.Errorf("toleration not added")
 	}
 
 	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.ScheduleAnyway, LabelSelector: &metav1.LabelSelector{}}
-	AddDeploymentTopologySpreadConstraints(dep, &tsc)
+	if err := AddDeploymentTopologySpreadConstraints(dep, &tsc); err != nil {
+		t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
+	}
 	if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
 		t.Errorf("topology constraint not added")
 	}
 
-	SetDeploymentServiceAccountName(dep, "sa")
+	if err := SetDeploymentServiceAccountName(dep, "sa"); err != nil {
+		t.Fatalf("SetDeploymentServiceAccountName returned error: %v", err)
+	}
 	if dep.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account name not set")
 	}
 
 	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
-	SetDeploymentSecurityContext(dep, sc)
+	if err := SetDeploymentSecurityContext(dep, sc); err != nil {
+		t.Fatalf("SetDeploymentSecurityContext returned error: %v", err)
+	}
 	if dep.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	SetDeploymentAffinity(dep, aff)
+	if err := SetDeploymentAffinity(dep, aff); err != nil {
+		t.Fatalf("SetDeploymentAffinity returned error: %v", err)
+	}
 	if dep.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	ns := map[string]string{"role": "db"}
-	SetDeploymentNodeSelector(dep, ns)
+	if err := SetDeploymentNodeSelector(dep, ns); err != nil {
+		t.Fatalf("SetDeploymentNodeSelector returned error: %v", err)
+	}
 	if !reflect.DeepEqual(dep.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}

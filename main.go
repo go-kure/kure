@@ -50,9 +50,9 @@ func main() {
 
 	// Service account
 	sa := k8s.CreateServiceAccount("demo-sa", "demo")
-	k8s.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"})
-	k8s.AddServiceAccountImagePullSecret(sa, apiv1.LocalObjectReference{Name: "sa-pull"})
-	k8s.SetServiceAccountAutomountToken(sa, true)
+	_ = k8s.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"})
+	_ = k8s.AddServiceAccountImagePullSecret(sa, apiv1.LocalObjectReference{Name: "sa-pull"})
+	_ = k8s.SetServiceAccountAutomountToken(sa, true)
 
 	// Secret example
 	secret := k8s.CreateSecret("demo-secret", "demo")
@@ -115,30 +115,30 @@ func main() {
 
 	initCtr := k8s.CreateContainer("init", "busybox", []string{"sh", "-c"}, []string{"echo init"})
 
-	k8s.AddPodContainer(pod, mainCtr)
-	k8s.AddPodInitContainer(pod, initCtr)
-	k8s.AddPodVolume(pod, &apiv1.Volume{Name: "data"})
-	k8s.AddPodImagePullSecret(pod, &apiv1.LocalObjectReference{Name: "pullsecret"})
-	k8s.AddPodToleration(pod, &apiv1.Toleration{Key: "role"})
+	_ = k8s.AddPodContainer(pod, mainCtr)
+	_ = k8s.AddPodInitContainer(pod, initCtr)
+	_ = k8s.AddPodVolume(pod, &apiv1.Volume{Name: "data"})
+	_ = k8s.AddPodImagePullSecret(pod, &apiv1.LocalObjectReference{Name: "pullsecret"})
+	_ = k8s.AddPodToleration(pod, &apiv1.Toleration{Key: "role"})
 	tsc := apiv1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: apiv1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}
-	k8s.AddPodTopologySpreadConstraints(pod, &tsc)
-	k8s.SetPodServiceAccountName(pod, sa.Name)
-	k8s.SetPodSecurityContext(pod, &apiv1.PodSecurityContext{})
-	k8s.SetPodAffinity(pod, &apiv1.Affinity{})
-	k8s.SetPodNodeSelector(pod, map[string]string{"type": "worker"})
+	_ = k8s.AddPodTopologySpreadConstraints(pod, &tsc)
+	_ = k8s.SetPodServiceAccountName(pod, sa.Name)
+	_ = k8s.SetPodSecurityContext(pod, &apiv1.PodSecurityContext{})
+	_ = k8s.SetPodAffinity(pod, &apiv1.Affinity{})
+	_ = k8s.SetPodNodeSelector(pod, map[string]string{"type": "worker"})
 
 	// Deployment example
 	dep := k8s.CreateDeployment("demo-deployment", "demo")
-	k8s.AddDeploymentContainer(dep, mainCtr)
-	k8s.AddDeploymentInitContainer(dep, initCtr)
-	k8s.AddDeploymentVolume(dep, &apiv1.Volume{Name: "data"})
-	k8s.AddDeploymentImagePullSecret(dep, &apiv1.LocalObjectReference{Name: "pullsecret"})
-	k8s.AddDeploymentToleration(dep, &apiv1.Toleration{Key: "role"})
-	k8s.AddDeploymentTopologySpreadConstraints(dep, &tsc)
-	k8s.SetDeploymentServiceAccountName(dep, sa.Name)
-	k8s.SetDeploymentSecurityContext(dep, &apiv1.PodSecurityContext{})
-	k8s.SetDeploymentAffinity(dep, &apiv1.Affinity{})
-	k8s.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"})
+	_ = k8s.AddDeploymentContainer(dep, mainCtr)
+	_ = k8s.AddDeploymentInitContainer(dep, initCtr)
+	_ = k8s.AddDeploymentVolume(dep, &apiv1.Volume{Name: "data"})
+	_ = k8s.AddDeploymentImagePullSecret(dep, &apiv1.LocalObjectReference{Name: "pullsecret"})
+	_ = k8s.AddDeploymentToleration(dep, &apiv1.Toleration{Key: "role"})
+	_ = k8s.AddDeploymentTopologySpreadConstraints(dep, &tsc)
+	_ = k8s.SetDeploymentServiceAccountName(dep, sa.Name)
+	_ = k8s.SetDeploymentSecurityContext(dep, &apiv1.PodSecurityContext{})
+	_ = k8s.SetDeploymentAffinity(dep, &apiv1.Affinity{})
+	_ = k8s.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"})
 
 	// StatefulSet example
 	sts := k8s.CreateStatefulSet("demo-sts", "demo")
