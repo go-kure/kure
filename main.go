@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -46,7 +47,7 @@ func ptr[T any](v T) *T { return &v }
 
 func logError(msg string, err error) {
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", msg, err)
+		log.Printf("%s: %v", msg, err)
 	}
 }
 
