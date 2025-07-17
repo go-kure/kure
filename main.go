@@ -66,20 +66,20 @@ func main() {
 
 	// Secret example
 	secret := k8s.CreateSecret("demo-secret", "demo")
-	k8s.AddSecretData(secret, "cert", []byte("data"))
-	k8s.AddSecretStringData(secret, "token", "abcd")
-	k8s.SetSecretType(secret, apiv1.SecretTypeOpaque)
-	k8s.SetSecretImmutable(secret, true)
+	logError("add secret data", k8s.AddSecretData(secret, "cert", []byte("data")))
+	logError("add secret string data", k8s.AddSecretStringData(secret, "token", "abcd"))
+	logError("set secret type", k8s.SetSecretType(secret, apiv1.SecretTypeOpaque))
+	logError("set secret immutable", k8s.SetSecretImmutable(secret, true))
 
 	// ConfigMap example
 	cm := k8s.CreateConfigMap("demo-config", "demo")
-	k8s.AddConfigMapData(cm, "foo", "bar")
-	k8s.AddConfigMapDataMap(cm, map[string]string{"extra": "value"})
-	k8s.AddConfigMapBinaryData(cm, "bin", []byte{0x1})
-	k8s.AddConfigMapBinaryDataMap(cm, map[string][]byte{"more": {0x2}})
-	k8s.SetConfigMapData(cm, map[string]string{"hello": "world"})
-	k8s.SetConfigMapBinaryData(cm, map[string][]byte{"bye": {0x0}})
-	k8s.SetConfigMapImmutable(cm, false)
+	logError("add configmap data", k8s.AddConfigMapData(cm, "foo", "bar"))
+	logError("add configmap data map", k8s.AddConfigMapDataMap(cm, map[string]string{"extra": "value"}))
+	logError("add configmap binary data", k8s.AddConfigMapBinaryData(cm, "bin", []byte{0x1}))
+	logError("add configmap binary data map", k8s.AddConfigMapBinaryDataMap(cm, map[string][]byte{"more": {0x2}}))
+	logError("set configmap data", k8s.SetConfigMapData(cm, map[string]string{"hello": "world"}))
+	logError("set configmap binary data", k8s.SetConfigMapBinaryData(cm, map[string][]byte{"bye": {0x0}}))
+	logError("set configmap immutable", k8s.SetConfigMapImmutable(cm, false))
 
 	// PersistentVolumeClaim example
 	pvc := k8s.CreatePersistentVolumeClaim("demo-pvc", "demo")
