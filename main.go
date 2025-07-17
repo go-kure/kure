@@ -36,9 +36,9 @@ import (
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
-	v1 "github.com/fluxcd/notification-controller/api/v1"
+	"github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
-	meta "github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/apis/meta"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 )
 
