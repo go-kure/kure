@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"errors"
+
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -70,4 +72,12 @@ func AddIngressTLS(ingress *netv1.Ingress, tls netv1.IngressTLS) {
 
 func SetIngressDefaultBackend(ingress *netv1.Ingress, backend netv1.IngressBackend) {
 	ingress.Spec.DefaultBackend = &backend
+}
+
+func SetIngressClassName(ingress *netv1.Ingress, class string) error {
+	if ingress == nil {
+		return errors.New("nil ingress")
+	}
+	ingress.Spec.IngressClassName = &class
+	return nil
 }
