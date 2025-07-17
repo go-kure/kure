@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"errors"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -38,45 +40,85 @@ func CreatePod(name string, namespace string) *corev1.Pod {
 	return &obj
 }
 
-func AddPodContainer(pod *corev1.Pod, container *corev1.Container) {
+func AddPodContainer(pod *corev1.Pod, container *corev1.Container) error {
+	if pod == nil || container == nil {
+		return errors.New("nil pod or container")
+	}
 	pod.Spec.Containers = append(pod.Spec.Containers, *container)
+	return nil
 }
 
-func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) {
+func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) error {
+	if pod == nil || container == nil {
+		return errors.New("nil pod or container")
+	}
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, *container)
+	return nil
 }
 
-func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) {
+func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) error {
+	if pod == nil || volume == nil {
+		return errors.New("nil pod or volume")
+	}
 	pod.Spec.Volumes = append(pod.Spec.Volumes, *volume)
+	return nil
 }
 
-func AddPodImagePullSecret(pod *corev1.Pod, imagePullSecret *corev1.LocalObjectReference) {
+func AddPodImagePullSecret(pod *corev1.Pod, imagePullSecret *corev1.LocalObjectReference) error {
+	if pod == nil || imagePullSecret == nil {
+		return errors.New("nil pod or imagePullSecret")
+	}
 	pod.Spec.ImagePullSecrets = append(pod.Spec.ImagePullSecrets, *imagePullSecret)
+	return nil
 }
 
-func AddPodToleration(pod *corev1.Pod, toleration *corev1.Toleration) {
+func AddPodToleration(pod *corev1.Pod, toleration *corev1.Toleration) error {
+	if pod == nil || toleration == nil {
+		return errors.New("nil pod or toleration")
+	}
 	pod.Spec.Tolerations = append(pod.Spec.Tolerations, *toleration)
+	return nil
 }
 
-func AddPodTopologySpreadConstraints(pod *corev1.Pod, topologySpreadConstraint *corev1.TopologySpreadConstraint) {
+func AddPodTopologySpreadConstraints(pod *corev1.Pod, topologySpreadConstraint *corev1.TopologySpreadConstraint) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
 	if topologySpreadConstraint == nil {
-		return
+		return nil
 	}
 	pod.Spec.TopologySpreadConstraints = append(pod.Spec.TopologySpreadConstraints, *topologySpreadConstraint)
+	return nil
 }
 
-func SetPodServiceAccountName(pod *corev1.Pod, serviceAccountName string) {
+func SetPodServiceAccountName(pod *corev1.Pod, serviceAccountName string) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
 	pod.Spec.ServiceAccountName = serviceAccountName
+	return nil
 }
 
-func SetPodSecurityContext(pod *corev1.Pod, securityContext *corev1.PodSecurityContext) {
+func SetPodSecurityContext(pod *corev1.Pod, securityContext *corev1.PodSecurityContext) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
 	pod.Spec.SecurityContext = securityContext
+	return nil
 }
 
-func SetPodAffinity(pod *corev1.Pod, affinity *corev1.Affinity) {
+func SetPodAffinity(pod *corev1.Pod, affinity *corev1.Affinity) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
 	pod.Spec.Affinity = affinity
+	return nil
 }
 
-func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) {
+func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) error {
+	if pod == nil {
+		return errors.New("nil pod")
+	}
 	pod.Spec.NodeSelector = nodeSelector
+	return nil
 }

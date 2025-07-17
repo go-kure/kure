@@ -31,7 +31,9 @@ func TestCreateServiceAccount(t *testing.T) {
 func TestAddServiceAccountSecret(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
 	ref := corev1.ObjectReference{Name: "secret"}
-	AddServiceAccountSecret(sa, ref)
+	if err := AddServiceAccountSecret(sa, ref); err != nil {
+		t.Fatalf("AddServiceAccountSecret returned error: %v", err)
+	}
 	if len(sa.Secrets) != 1 || sa.Secrets[0] != ref {
 		t.Errorf("secret not added")
 	}
@@ -40,7 +42,9 @@ func TestAddServiceAccountSecret(t *testing.T) {
 func TestAddServiceAccountImagePullSecret(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
 	ref := corev1.LocalObjectReference{Name: "pullsecret"}
-	AddServiceAccountImagePullSecret(sa, ref)
+	if err := AddServiceAccountImagePullSecret(sa, ref); err != nil {
+		t.Fatalf("AddServiceAccountImagePullSecret returned error: %v", err)
+	}
 	if len(sa.ImagePullSecrets) != 1 || sa.ImagePullSecrets[0] != ref {
 		t.Errorf("image pull secret not added")
 	}
@@ -48,11 +52,15 @@ func TestAddServiceAccountImagePullSecret(t *testing.T) {
 
 func TestSetServiceAccountAutomountToken(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
-	SetServiceAccountAutomountToken(sa, true)
+	if err := SetServiceAccountAutomountToken(sa, true); err != nil {
+		t.Fatalf("SetServiceAccountAutomountToken returned error: %v", err)
+	}
 	if sa.AutomountServiceAccountToken == nil || !*sa.AutomountServiceAccountToken {
 		t.Errorf("automount token not set to true")
 	}
-	SetServiceAccountAutomountToken(sa, false)
+	if err := SetServiceAccountAutomountToken(sa, false); err != nil {
+		t.Fatalf("SetServiceAccountAutomountToken returned error: %v", err)
+	}
 	if sa.AutomountServiceAccountToken == nil || *sa.AutomountServiceAccountToken {
 		t.Errorf("automount token not updated to false")
 	}
