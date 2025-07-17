@@ -40,4 +40,14 @@ func TestServiceFunctions(t *testing.T) {
 	if svc.Spec.ExternalTrafficPolicy != corev1.ServiceExternalTrafficPolicyLocal {
 		t.Errorf("external traffic policy not set")
 	}
+
+	SetServiceSessionAffinity(svc, corev1.ServiceAffinityClientIP)
+	if svc.Spec.SessionAffinity != corev1.ServiceAffinityClientIP {
+		t.Errorf("session affinity not set")
+	}
+
+	SetServiceLoadBalancerClass(svc, "lb-class")
+	if svc.Spec.LoadBalancerClass == nil || *svc.Spec.LoadBalancerClass != "lb-class" {
+		t.Errorf("load balancer class not set")
+	}
 }

@@ -67,3 +67,7 @@ func AddIngressRulePath(rule *netv1.IngressRule, path netv1.HTTPIngressPath) {
 func AddIngressTLS(ingress *netv1.Ingress, tls netv1.IngressTLS) {
 	ingress.Spec.TLS = append(ingress.Spec.TLS, tls)
 }
+
+func SetIngressDefaultBackend(ingress *netv1.Ingress, backend netv1.IngressBackend) {
+	ingress.Spec.DefaultBackend = &backend
+}

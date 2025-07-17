@@ -140,4 +140,12 @@ func TestPodFunctions(t *testing.T) {
 	if pod.Spec.DNSPolicy != corev1.DNSClusterFirstWithHostNet {
 		t.Errorf("dns policy not set")
 	}
+
+	dnsCfg := &corev1.PodDNSConfig{Nameservers: []string{"8.8.8.8"}}
+	if err := SetPodDNSConfig(pod, dnsCfg); err != nil {
+		t.Fatalf("SetPodDNSConfig returned error: %v", err)
+	}
+	if pod.Spec.DNSConfig != dnsCfg {
+		t.Errorf("dns config not set")
+	}
 }

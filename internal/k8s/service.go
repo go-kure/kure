@@ -53,3 +53,11 @@ func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) {
 func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) {
 	service.Spec.ExternalTrafficPolicy = trafficPolicy
 }
+
+func SetServiceSessionAffinity(service *corev1.Service, affinity corev1.ServiceAffinity) {
+	service.Spec.SessionAffinity = affinity
+}
+
+func SetServiceLoadBalancerClass(service *corev1.Service, class string) {
+	service.Spec.LoadBalancerClass = &class
+}

@@ -44,4 +44,10 @@ func TestIngressFunctions(t *testing.T) {
 	if len(ing.Spec.TLS) != 1 || ing.Spec.TLS[0].Hosts[0] != "example.com" {
 		t.Errorf("tls not added")
 	}
+
+	backend := netv1.IngressBackend{Service: &netv1.IngressServiceBackend{Name: "svc", Port: netv1.ServiceBackendPort{Number: 80}}}
+	SetIngressDefaultBackend(ing, backend)
+	if ing.Spec.DefaultBackend == nil || ing.Spec.DefaultBackend.Service.Name != "svc" {
+		t.Errorf("default backend not set")
+	}
 }
