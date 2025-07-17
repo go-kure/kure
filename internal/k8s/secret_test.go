@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -61,5 +62,31 @@ func TestSetSecretImmutable(t *testing.T) {
 	SetSecretImmutable(sec, false)
 	if sec.Immutable == nil || *sec.Immutable {
 		t.Errorf("immutable not updated to false")
+	}
+}
+
+func TestSecretLabelFunctions(t *testing.T) {
+	sec := CreateSecret("s", "ns")
+	AddSecretLabel(sec, "env", "prod")
+	if sec.Labels["env"] != "prod" {
+		t.Errorf("label not added")
+	}
+	newLabels := map[string]string{"a": "b"}
+	SetSecretLabels(sec, newLabels)
+	if !reflect.DeepEqual(sec.Labels, newLabels) {
+		t.Errorf("labels not set correctly")
+	}
+}
+
+func TestSecretAnnotationFunctions(t *testing.T) {
+	sec := CreateSecret("s", "ns")
+	AddSecretAnnotation(sec, "team", "dev")
+	if sec.Annotations["team"] != "dev" {
+		t.Errorf("annotation not added")
+	}
+	newAnn := map[string]string{"x": "y"}
+	SetSecretAnnotations(sec, newAnn)
+	if !reflect.DeepEqual(sec.Annotations, newAnn) {
+		t.Errorf("annotations not set correctly")
 	}
 }

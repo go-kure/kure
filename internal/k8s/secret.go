@@ -53,3 +53,25 @@ func SetSecretImmutable(secret *corev1.Secret, immutable bool) {
 	}
 	*secret.Immutable = immutable
 }
+
+func AddSecretLabel(secret *corev1.Secret, key, value string) {
+	if secret.Labels == nil {
+		secret.Labels = make(map[string]string)
+	}
+	secret.Labels[key] = value
+}
+
+func AddSecretAnnotation(secret *corev1.Secret, key, value string) {
+	if secret.Annotations == nil {
+		secret.Annotations = make(map[string]string)
+	}
+	secret.Annotations[key] = value
+}
+
+func SetSecretLabels(secret *corev1.Secret, labels map[string]string) {
+	secret.Labels = labels
+}
+
+func SetSecretAnnotations(secret *corev1.Secret, anns map[string]string) {
+	secret.Annotations = anns
+}
