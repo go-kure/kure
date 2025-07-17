@@ -51,6 +51,28 @@ func TestAddServiceAccountImagePullSecret(t *testing.T) {
 	}
 }
 
+func TestSetServiceAccountSecrets(t *testing.T) {
+	sa := CreateServiceAccount("sa", "ns")
+	secrets := []corev1.ObjectReference{{Name: "a"}, {Name: "b"}}
+	if err := SetServiceAccountSecrets(sa, secrets); err != nil {
+		t.Fatalf("SetServiceAccountSecrets returned error: %v", err)
+	}
+	if !reflect.DeepEqual(sa.Secrets, secrets) {
+		t.Errorf("secrets not set")
+	}
+}
+
+func TestSetServiceAccountImagePullSecrets(t *testing.T) {
+	sa := CreateServiceAccount("sa", "ns")
+	pulls := []corev1.LocalObjectReference{{Name: "x"}, {Name: "y"}}
+	if err := SetServiceAccountImagePullSecrets(sa, pulls); err != nil {
+		t.Fatalf("SetServiceAccountImagePullSecrets returned error: %v", err)
+	}
+	if !reflect.DeepEqual(sa.ImagePullSecrets, pulls) {
+		t.Errorf("image pull secrets not set")
+	}
+}
+
 func TestSetServiceAccountAutomountToken(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
 	if err := SetServiceAccountAutomountToken(sa, true); err != nil {

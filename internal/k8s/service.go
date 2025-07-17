@@ -128,3 +128,59 @@ func SetServiceLabels(svc *corev1.Service, labels map[string]string) {
 func SetServiceAnnotations(svc *corev1.Service, anns map[string]string) {
 	svc.Annotations = anns
 }
+
+func SetServicePublishNotReadyAddresses(svc *corev1.Service, publish bool) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.PublishNotReadyAddresses = publish
+	return nil
+}
+
+func AddServiceLoadBalancerSourceRange(svc *corev1.Service, cidr string) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.LoadBalancerSourceRanges = append(svc.Spec.LoadBalancerSourceRanges, cidr)
+	return nil
+}
+
+func SetServiceLoadBalancerSourceRanges(svc *corev1.Service, ranges []string) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.LoadBalancerSourceRanges = ranges
+	return nil
+}
+
+func SetServiceIPFamilies(svc *corev1.Service, fams []corev1.IPFamily) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.IPFamilies = fams
+	return nil
+}
+
+func SetServiceIPFamilyPolicy(svc *corev1.Service, policy *corev1.IPFamilyPolicyType) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.IPFamilyPolicy = policy
+	return nil
+}
+
+func SetServiceInternalTrafficPolicy(svc *corev1.Service, policy *corev1.ServiceInternalTrafficPolicyType) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.InternalTrafficPolicy = policy
+	return nil
+}
+
+func SetServiceAllocateLoadBalancerNodePorts(svc *corev1.Service, allocate bool) error {
+	if svc == nil {
+		return errors.New("nil service")
+	}
+	svc.Spec.AllocateLoadBalancerNodePorts = &allocate
+	return nil
+}

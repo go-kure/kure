@@ -148,4 +148,39 @@ func TestPodFunctions(t *testing.T) {
 	if pod.Spec.DNSConfig != dnsCfg {
 		t.Errorf("dns config not set")
 	}
+
+	if err := SetPodHostname(pod, "myhost"); err != nil {
+		t.Fatalf("SetPodHostname returned error: %v", err)
+	}
+	if pod.Spec.Hostname != "myhost" {
+		t.Errorf("hostname not set")
+	}
+
+	if err := SetPodSubdomain(pod, "sub"); err != nil {
+		t.Fatalf("SetPodSubdomain returned error: %v", err)
+	}
+	if pod.Spec.Subdomain != "sub" {
+		t.Errorf("subdomain not set")
+	}
+
+	if err := SetPodRestartPolicy(pod, corev1.RestartPolicyOnFailure); err != nil {
+		t.Fatalf("SetPodRestartPolicy returned error: %v", err)
+	}
+	if pod.Spec.RestartPolicy != corev1.RestartPolicyOnFailure {
+		t.Errorf("restart policy not set")
+	}
+
+	if err := SetPodTerminationGracePeriod(pod, 15); err != nil {
+		t.Fatalf("SetPodTerminationGracePeriod returned error: %v", err)
+	}
+	if pod.Spec.TerminationGracePeriodSeconds == nil || *pod.Spec.TerminationGracePeriodSeconds != 15 {
+		t.Errorf("termination grace period not set")
+	}
+
+	if err := SetPodSchedulerName(pod, "sched"); err != nil {
+		t.Fatalf("SetPodSchedulerName returned error: %v", err)
+	}
+	if pod.Spec.SchedulerName != "sched" {
+		t.Errorf("scheduler name not set")
+	}
 }

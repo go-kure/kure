@@ -46,6 +46,22 @@ func AddServiceAccountImagePullSecret(sa *corev1.ServiceAccount, secret corev1.L
 	return nil
 }
 
+func SetServiceAccountSecrets(sa *corev1.ServiceAccount, secrets []corev1.ObjectReference) error {
+	if sa == nil {
+		return errors.New("nil serviceaccount")
+	}
+	sa.Secrets = secrets
+	return nil
+}
+
+func SetServiceAccountImagePullSecrets(sa *corev1.ServiceAccount, secrets []corev1.LocalObjectReference) error {
+	if sa == nil {
+		return errors.New("nil serviceaccount")
+	}
+	sa.ImagePullSecrets = secrets
+	return nil
+}
+
 func SetServiceAccountAutomountToken(sa *corev1.ServiceAccount, automount bool) error {
 	if sa == nil {
 		return errors.New("nil serviceaccount")
