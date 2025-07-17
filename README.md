@@ -42,3 +42,7 @@ API reference documentation is available at
 `k8s`, `fluxcd`, `certmanager`, and `metallb` are located under the
 `internal/` directory and include helpers for constructing related
 resources.
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
