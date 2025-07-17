@@ -41,3 +41,29 @@ func TestServiceFunctions(t *testing.T) {
 		t.Errorf("external traffic policy not set")
 	}
 }
+
+func TestServiceMetadataFunctions(t *testing.T) {
+	svc := CreateService("svc", "ns")
+
+	AddServiceLabel(svc, "k", "v")
+	if svc.Labels["k"] != "v" {
+		t.Errorf("label not added")
+	}
+
+	AddServiceAnnotation(svc, "a", "b")
+	if svc.Annotations["a"] != "b" {
+		t.Errorf("annotation not added")
+	}
+
+	labels := map[string]string{"x": "y"}
+	SetServiceLabels(svc, labels)
+	if !reflect.DeepEqual(svc.Labels, labels) {
+		t.Errorf("labels not set")
+	}
+
+	anns := map[string]string{"c": "d"}
+	SetServiceAnnotations(svc, anns)
+	if !reflect.DeepEqual(svc.Annotations, anns) {
+		t.Errorf("annotations not set")
+	}
+}

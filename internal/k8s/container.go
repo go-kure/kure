@@ -73,3 +73,31 @@ func SetContainerImagePullPolicy(container *corev1.Container, imagePullPolicy co
 func SetContainerSecurityContext(container *corev1.Container, securityContext corev1.SecurityContext) {
 	container.SecurityContext = &securityContext
 }
+
+func SetContainerWorkingDir(container *corev1.Container, dir string) {
+	container.WorkingDir = dir
+}
+
+func SetContainerLifecycle(container *corev1.Container, lifecycle *corev1.Lifecycle) {
+	container.Lifecycle = lifecycle
+}
+
+func SetContainerTerminationMessagePath(container *corev1.Container, path string) {
+	container.TerminationMessagePath = path
+}
+
+func SetContainerTerminationMessagePolicy(container *corev1.Container, policy corev1.TerminationMessagePolicy) {
+	container.TerminationMessagePolicy = policy
+}
+
+func SetContainerStdin(container *corev1.Container, stdin bool) {
+	container.Stdin = stdin
+}
+
+func SetContainerStdinOnce(container *corev1.Container, once bool) {
+	container.StdinOnce = once
+}
+
+func SetContainerTTY(container *corev1.Container, tty bool) {
+	container.TTY = tty
+}

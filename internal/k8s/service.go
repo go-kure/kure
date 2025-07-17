@@ -53,3 +53,25 @@ func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) {
 func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) {
 	service.Spec.ExternalTrafficPolicy = trafficPolicy
 }
+
+func AddServiceLabel(svc *corev1.Service, key, value string) {
+	if svc.Labels == nil {
+		svc.Labels = make(map[string]string)
+	}
+	svc.Labels[key] = value
+}
+
+func AddServiceAnnotation(svc *corev1.Service, key, value string) {
+	if svc.Annotations == nil {
+		svc.Annotations = make(map[string]string)
+	}
+	svc.Annotations[key] = value
+}
+
+func SetServiceLabels(svc *corev1.Service, labels map[string]string) {
+	svc.Labels = labels
+}
+
+func SetServiceAnnotations(svc *corev1.Service, anns map[string]string) {
+	svc.Annotations = anns
+}
