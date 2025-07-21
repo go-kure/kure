@@ -2,8 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"os"
+	"log"
 
 	"github.com/go-kure/kure/pkg/cluster"
 )
@@ -19,20 +18,17 @@ func main() {
 	flag.Parse()
 
 	if configPath == "" {
-		fmt.Println("Error: --config path is required")
-		os.Exit(1)
+		log.Fatalf("Error: --config path is required")
 	}
 
 	cfg, err := cluster.LoadClusterConfigFromYAML(configPath)
 	if err != nil {
-		fmt.Println("Failed to load cluster config:", err)
-		os.Exit(1)
+		log.Fatalf("Failed to load cluster config: %v", err)
 	}
 
 	if err := cluster.WriteCluster(*cfg, manifestsPath, fluxPath); err != nil {
-		fmt.Println("Failed to write cluster files:", err)
-		os.Exit(1)
+		log.Fatalf("Failed to write cluster files: %v", err)
 	}
 
-	fmt.Println("Cluster generated successfully.")
+	log.Println("Cluster generated successfully.")
 }
