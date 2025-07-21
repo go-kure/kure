@@ -63,15 +63,18 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		for _, obj := range objs {
 			data, err := yaml.Marshal(obj)
 			if err != nil {
+				_ = f.Close()
 				return err
 			}
-			_, err = f.Write(data)
-			if err != nil {
+			if _, err = f.Write(data); err != nil {
+				_ = f.Close()
 				return err
 			}
 			_, _ = f.Write([]byte("---"))
 		}
-		defer f.Close()
+		if err := f.Close(); err != nil {
+			return err
+		}
 	}
 
 	// Write kustomization.yaml
@@ -80,7 +83,6 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	if err != nil {
 		return err
 	}
-	defer kf.Close()
 	_, _ = kf.WriteString("resources: ")
 	for file := range fileGroups {
 		_, _ = kf.WriteString(fmt.Sprintf("  - %s ", file))
@@ -92,9 +94,9 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 
 	for _, child := range ml.Children {
 		if err := child.WriteToDisk(basePath); err != nil {
+			_ = kf.Close()
 			return err
 		}
 	}
-
-	return nil
+	return kf.Close()
 }
