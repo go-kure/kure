@@ -27,10 +27,11 @@
 //
 //   - Targeted patch list:
 //
-//     - target: my-deployment
-//       patch:
-//         spec.replicas: 5
-//         spec.template.metadata.labels.foo: bar
+//   - target: my-deployment
+//     patch:
+//     spec.replicas: 5
+//     spec.template.metadata.labels.foo: bar
+//     metadata.labels[delete=app]: ""
 //
 // Supported path selectors include:
 //
@@ -44,27 +45,27 @@
 //
 // Patch operations are defined via the PatchOp struct:
 //
-//     type PatchOp struct {
-//         Path       string
-//         Value      interface{}
-//         Op         string // "replace", "add", "delete", "insertbefore", "insertafter"
-//         ParsedPath []PathPart
-//     }
+//	type PatchOp struct {
+//	    Path       string
+//	    Value      interface{}
+//	    Op         string // "replace", "delete", "insertbefore", "insertafter", "append"
+//	    ParsedPath []PathPart
+//	}
 //
 // Each patch is parsed and validated via NormalizePath() and mapped to a
 // list of field operations at runtime.
 //
 // ## Main Types
 //
-//     PatchableAppSet — Holds resources and patch operations
-//     PatchOp         — Describes a single patch instruction
-//     PathPart        — Parsed component of a patch path
+//	PatchableAppSet — Holds resources and patch operations
+//	PatchOp         — Describes a single patch instruction
+//	PathPart        — Parsed component of a patch path
 //
 // ## Main Functions
 //
-//     LoadPatchFile(r io.Reader) ([]PatchOp, error)
-//     LoadResourcesFromMultiYAML(r io.Reader) ([]*unstructured.Unstructured, error)
-//     LoadPatchableAppSet(resourceReaders []io.Reader, patchReader io.Reader) (*PatchableAppSet, error)
+//	LoadPatchFile(r io.Reader) ([]PatchOp, error)
+//	LoadResourcesFromMultiYAML(r io.Reader) ([]*unstructured.Unstructured, error)
+//	LoadPatchableAppSet(resourceReaders []io.Reader, patchReader io.Reader) (*PatchableAppSet, error)
 //
 // These helpers allow loading resources and patches from YAML files or from programmatic input.
 //
@@ -72,7 +73,7 @@
 //
 // Enable verbose patch resolution and loading by setting:
 //
-//     export KURE_DEBUG=1
+//	export KURE_DEBUG=1
 //
 // ## Future Extensions
 //
@@ -82,4 +83,3 @@
 //
 // This package is designed for use by higher-level tools like Wharf, Crane, or Kur8.
 package appsets
-
