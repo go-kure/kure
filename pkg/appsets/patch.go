@@ -40,6 +40,29 @@ func applyPatchOp(obj map[string]interface{}, op PatchOp) error {
 	switch op.Op {
 	case "replace":
 		return unstructured.SetNestedField(obj, op.Value, parsePath(op.Path)...)
+	case "delete":
+		if op.Selector == "" {
+			_, found, err := unstructured.NestedFieldNoCopy(obj, parsePath(op.Path)...)
+			if err != nil || !found {
+				return fmt.Errorf("path not found: %s", op.Path)
+			}
+			unstructured.RemoveNestedField(obj, parsePath(op.Path)...)
+			return nil
+		}
+		path := parsePath(op.Path)
+		lst, found, err := unstructured.NestedSlice(obj, path...)
+		if err != nil || !found {
+			return fmt.Errorf("path not found for list delete: %s", op.Path)
+		}
+		idx, err := resolveListIndex(lst, op.Selector)
+		if err != nil {
+			return err
+		}
+		if idx < 0 || idx >= len(lst) {
+			return fmt.Errorf("index out of bounds: %d", idx)
+		}
+		lst = append(lst[:idx], lst[idx+1:]...)
+		return unstructured.SetNestedSlice(obj, lst, path...)
 	case "append":
 		lst, found, err := unstructured.NestedSlice(obj, parsePath(op.Path)...)
 		if err != nil || !found {
@@ -102,8 +125,11 @@ func resolveListIndex(list []interface{}, selector string) (int, error) {
 }
 
 func parsePath(path string) []string {
-	clean := strings.TrimPrefix(path, "/")
-	return strings.Split(clean, "/")
+	clean := strings.Trim(path, ".")
+	if clean == "" {
+		return []string{}
+	}
+	return strings.Split(clean, ".")
 }
 
 // ParsePatchLine converts a YAML patch line of form "path[selector]" into a PatchOp.
@@ -113,6 +139,16 @@ func ParsePatchLine(key string, value interface{}) (PatchOp, error) {
 		op.Op = "append"
 		op.Path = strings.TrimSuffix(key, "[-]")
 		op.Value = value
+		return op, nil
+	}
+
+	// handle delete syntax: path[delete] or path[delete=selector]
+	delRe := regexp.MustCompile(`^(.*)\[delete(?:=(.*))?]$`)
+	if m := delRe.FindStringSubmatch(key); len(m) == 3 {
+		op.Op = "delete"
+		op.Path = m[1]
+		op.Selector = m[2]
+		op.Value = nil
 		return op, nil
 	}
 
@@ -153,6 +189,27 @@ func (p *PatchOp) ValidateAgainst(obj *unstructured.Unstructured) error {
 		}
 		if !found {
 			return fmt.Errorf("path not found for replace: %s", p.Path)
+		}
+	case "delete":
+		if p.Selector == "" {
+			_, found, err := unstructured.NestedFieldNoCopy(obj.Object, path...)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return fmt.Errorf("path not found for delete: %s", p.Path)
+			}
+			return nil
+		}
+		lst, found, err := unstructured.NestedSlice(obj.Object, path...)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("path not found for list delete: %s", p.Path)
+		}
+		if _, err := resolveListIndex(lst, p.Selector); err != nil {
+			return err
 		}
 	case "insertBefore", "insertAfter", "append":
 		_, found, err := unstructured.NestedSlice(obj.Object, path...)
@@ -199,12 +256,12 @@ func InferPatchOp(path string) string {
 
 // ParsePatchPath parses a patch path with selectors into structured parts.
 func ParsePatchPath(path string) ([]PathPart, error) {
-	clean := strings.Trim(path, "/")
+	clean := strings.Trim(path, ".")
 	if clean == "" {
 		return nil, fmt.Errorf("empty path")
 	}
 
-	segments := strings.Split(clean, "/")
+	segments := strings.Split(clean, ".")
 	parts := make([]PathPart, 0, len(segments))
 
 	for _, seg := range segments {

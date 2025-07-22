@@ -55,4 +55,5 @@ Supports expressive list modification syntax:
 spec.containers[3].image: nginx:latest        # replace
 spec.containers[+=name=web].image: sidecar:1  # insert after matching item
 spec.containers[-]: { name: debug }           # append
+metadata.labels[delete=app]: ""               # delete label
 
