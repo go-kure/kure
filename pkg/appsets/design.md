@@ -4,7 +4,7 @@
 
 The `appsets` module provides the **core abstraction layer** for loading, representing, and mutating Kubernetes resources using **structured patches** — without templates, overlays, or DSLs.
 
-It enables tools like **Crane** and **Kur8** to declaratively define resource configurations and safe modifications using **pure YAML** and **Go-native data structures**.
+It enables tools like **Crane** and **Kur8** to declaratively define resource configurations and safe modifications using **pure YAML** and **Go-native data structures**. Patches themselves modify an existing **base resource**, which must be provided when a patchable set is created, either loaded from YAML or passed directly as an object.
 
 This forms the foundation for Kure's deterministic, introspectable Kubernetes manifest generation pipeline.
 
@@ -28,6 +28,9 @@ This forms the foundation for Kure's deterministic, introspectable Kubernetes ma
    - All paths are parsed and normalized into `PathPart` structs.
    - Path syntax is explicitly validated before application.
 
+5. **Base resource required**:
+   - Each patch is applied on top of an existing object loaded from a file or provided programmatically.
+
 ---
 
 ## Core Types
@@ -42,6 +45,7 @@ This forms the foundation for Kure's deterministic, introspectable Kubernetes ma
 
 - `LoadResourcesFromMultiYAML(io.Reader)` — Load 1..n Kubernetes resources
 - `LoadPatchFile(io.Reader)` — Load simple or targeted patch syntax
+- `NewPatchableAppSet([]*unstructured.Unstructured, []PatchSpec)` — Create a patchable set from in-memory objects
 - `LoadPatchableAppSet([]io.Reader, io.Reader)` — Create a full working patchable set
 - `NormalizePath()` — Validate and parse patch paths before application
 

@@ -116,6 +116,49 @@ func LoadPatchableAppSet(resourceReaders []io.Reader, patchReader io.Reader) (*P
 		return nil, err
 	}
 
+	return NewPatchableAppSet(resources, patches)
+}
+
+func resolvePatchTarget(resources []*unstructured.Unstructured, path string) (string, string) {
+	pathParts := parsePath(path)
+	if len(pathParts) == 0 {
+		return "", ""
+	}
+	first := strings.ToLower(pathParts[0])
+	for _, r := range resources {
+		name := strings.ToLower(r.GetName())
+		kind := strings.ToLower(r.GetKind())
+		if first == name || first == fmt.Sprintf("%s.%s", kind, name) {
+			trimmed := strings.Join(pathParts[1:], ".")
+			return r.GetName(), trimmed
+		}
+	}
+	return "", ""
+}
+
+func resourceExists(resources []*unstructured.Unstructured, name string) bool {
+	for _, r := range resources {
+		if r.GetName() == name {
+			return true
+		}
+	}
+	return false
+}
+
+// smartTarget attempts to match a patch to a resource based on field presence.
+func smartTarget(resources []*unstructured.Unstructured, p PatchOp) []string {
+	var matches []string
+	for _, r := range resources {
+		if err := p.ValidateAgainst(r); err == nil {
+			matches = append(matches, r.GetName())
+		}
+	}
+	return matches
+}
+
+// NewPatchableAppSet constructs a PatchableAppSet from already loaded resources
+// and parsed patch specifications.
+func NewPatchableAppSet(resources []*unstructured.Unstructured, patches []PatchSpec) (*PatchableAppSet, error) {
 	var wrapped []struct {
 		Target string
 		Patch  PatchOp
@@ -165,41 +208,4 @@ func LoadPatchableAppSet(resourceReaders []io.Reader, patchReader io.Reader) (*P
 		Resources: resources,
 		Patches:   wrapped,
 	}, nil
-}
-
-func resolvePatchTarget(resources []*unstructured.Unstructured, path string) (string, string) {
-	pathParts := parsePath(path)
-	if len(pathParts) == 0 {
-		return "", ""
-	}
-	first := strings.ToLower(pathParts[0])
-	for _, r := range resources {
-		name := strings.ToLower(r.GetName())
-		kind := strings.ToLower(r.GetKind())
-		if first == name || first == fmt.Sprintf("%s.%s", kind, name) {
-			trimmed := strings.Join(pathParts[1:], ".")
-			return r.GetName(), trimmed
-		}
-	}
-	return "", ""
-}
-
-func resourceExists(resources []*unstructured.Unstructured, name string) bool {
-	for _, r := range resources {
-		if r.GetName() == name {
-			return true
-		}
-	}
-	return false
-}
-
-// smartTarget attempts to match a patch to a resource based on field presence.
-func smartTarget(resources []*unstructured.Unstructured, p PatchOp) []string {
-	var matches []string
-	for _, r := range resources {
-		if err := p.ValidateAgainst(r); err == nil {
-			matches = append(matches, r.GetName())
-		}
-	}
-	return matches
 }
