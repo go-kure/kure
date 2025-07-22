@@ -1,0 +1,8 @@
+- target: demo-config
+  patch:
+    data.foo: qux
+    metadata.labels.env: prod
+- target: demo-deploy
+  patch:
+    spec.replicas: 3
+    spec.template.spec.containers[0].image: myapp:v2

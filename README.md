@@ -42,6 +42,16 @@ API reference documentation is available at
 `k8s`, `fluxcd`, `certmanager`, and `metallb` are located under the
 `internal/` directory and include helpers for constructing related
 resources.
+## Patching manifests
+
+The `kure` CLI can patch a base manifest using a file of patch operations. Example files are located in `examples/patch`:
+
+```bash
+kure patch --base examples/patch/base-config.yaml --patch examples/patch/patch.yaml
+```
+
+The command reads the base resource(s) and applies the patches, printing the resulting YAML to stdout.
+
 
 ## License
 
