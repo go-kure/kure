@@ -1,10 +1,10 @@
-package main
+package appsets
 
 import (
-	"github.com/go-kure/kure/pkg/appsets"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"os"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func writeTempFile(t *testing.T, content string) string {
@@ -40,9 +40,9 @@ data:
 	basePath := writeTempFile(t, base)
 	patchPath := writeTempFile(t, patch)
 
-	objs, err := appsets.ApplyPatch(basePath, patchPath)
+	objs, err := ApplyPatch(basePath, patchPath)
 	if err != nil {
-		t.Fatalf("appsets.ApplyPatch: %v", err)
+		t.Fatalf("ApplyPatch: %v", err)
 	}
 	if len(objs) != 1 {
 		t.Fatalf("expected 1 object, got %d", len(objs))
@@ -53,12 +53,5 @@ data:
 	}
 	if labels["env"] != "prod" {
 		t.Fatalf("patch not applied: %+v", labels)
-	}
-}
-
-func TestRunPatchMissingArgs(t *testing.T) {
-	err := runPatch([]string{})
-	if err == nil {
-		t.Fatalf("expected error")
 	}
 }
