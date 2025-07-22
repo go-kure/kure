@@ -56,4 +56,38 @@ spec.containers[3].image: nginx:latest        # replace
 spec.containers[+=name=web].image: sidecar:1  # insert after matching item
 spec.containers[-]: { name: debug }           # append
 metadata.labels[delete=app]: ""               # delete label
+```
 
+---
+
+## Base resources and patch application
+
+Patches are applied to a **base Kubernetes object**. A `PatchableAppSet` groups
+one or more base resources with the list of `PatchOp` instructions targeting
+them.
+
+The resulting mapping is represented by `ResourceWithPatches`:
+
+```go
+type ResourceWithPatches struct {
+    Name    string
+    Base    *unstructured.Unstructured
+    Patches []PatchOp
+}
+```
+
+`Resolve()` returns a slice of these structs so patches can be executed. Each
+resource can optionally capture intermediate states after each patch to aid
+debugging.
+
+---
+
+## Implementation tasks
+
+1. Define `ResourceWithPatches` and optional `PatchState` structures.
+2. Extend `PatchableAppSet.Resolve` to produce `ResourceWithPatches` for each
+   base resource loaded from YAML.
+3. Implement `Apply()` on `ResourceWithPatches` to execute patches sequentially
+   and produce the final resource.
+4. Optionally collect intermediate patch results for introspection.
+5. Add unit tests covering patch application and intermediate state recording.

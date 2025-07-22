@@ -14,7 +14,7 @@ import (
 type PatchOp struct {
 	Op         string      `json:"op"`
 	Path       string      `json:"path"`
-	ParsedPath []PathPart  `json:"patsedpath,omitempty"`
+	ParsedPath []PathPart  `json:"parsedpath,omitempty"`
 	Selector   string      `json:"selector,omitempty"`
 	Value      interface{} `json:"value"`
 }
