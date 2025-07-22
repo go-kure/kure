@@ -130,3 +130,42 @@ data:
 		t.Fatalf("patch not applied")
 	}
 }
+
+func TestNewPatchableAppSet(t *testing.T) {
+	resYaml := `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo2
+data:
+  foo: bar
+`
+	var rm map[string]interface{}
+	if err := yaml.Unmarshal([]byte(resYaml), &rm); err != nil {
+		t.Fatalf("yaml decode: %v", err)
+	}
+	patchYaml := "- target: demo2\n  patch:\n    data.foo: baz\n"
+	patches, err := LoadPatchFile(strings.NewReader(patchYaml))
+	if err != nil {
+		t.Fatalf("load patch: %v", err)
+	}
+	base := &unstructured.Unstructured{Object: rm}
+	set, err := NewPatchableAppSet([]*unstructured.Unstructured{base}, patches)
+	if err != nil {
+		t.Fatalf("NewPatchableAppSet: %v", err)
+	}
+	resolved, err := set.Resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if len(resolved) != 1 || resolved[0].Name != "demo2" {
+		t.Fatalf("unexpected resolve result")
+	}
+	if err := resolved[0].Apply(); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	val, _, _ := unstructured.NestedString(resolved[0].Base.Object, "data", "foo")
+	if val != "baz" {
+		t.Fatalf("patch not applied")
+	}
+}

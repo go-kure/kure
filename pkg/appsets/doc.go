@@ -11,6 +11,8 @@
 //
 //   - A set of Kubernetes resources, loaded as *unstructured.Unstructured
 //   - A set of declarative patch instructions, using a concise single-line syntax
+//   - Patches are always applied to a base resource that must be loaded or
+//     provided when the PatchableAppSet is created
 //
 // Patches are matched to target resources by name or kind.name unless a `target:`
 // field is explicitly specified.
@@ -63,9 +65,10 @@
 //
 // ## Main Functions
 //
-//	LoadPatchFile(r io.Reader) ([]PatchOp, error)
-//	LoadResourcesFromMultiYAML(r io.Reader) ([]*unstructured.Unstructured, error)
-//	LoadPatchableAppSet(resourceReaders []io.Reader, patchReader io.Reader) (*PatchableAppSet, error)
+//		LoadPatchFile(r io.Reader) ([]PatchOp, error)
+//		LoadResourcesFromMultiYAML(r io.Reader) ([]*unstructured.Unstructured, error)
+//	     NewPatchableAppSet(resources []*unstructured.Unstructured, patches []PatchSpec) (*PatchableAppSet, error)
+//	     LoadPatchableAppSet(resourceReaders []io.Reader, patchReader io.Reader) (*PatchableAppSet, error)
 //
 // These helpers allow loading resources and patches from YAML files or from programmatic input.
 //
