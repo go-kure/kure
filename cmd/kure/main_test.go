@@ -64,6 +64,7 @@ func TestRunPatchMissingArgs(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestRunClusterMissingConfig(t *testing.T) {
 	if err := runCluster([]string{}); err == nil {
 		t.Fatalf("expected error")
@@ -94,5 +95,35 @@ appGroups:
 	}
 	if _, err := os.Stat(filepath.Join(flux, "clusters", "demo")); err != nil {
 		t.Fatalf("flux not written: %v", err)
+
+func TestRunCluster(t *testing.T) {
+	cfg := `name: demo
+interval: 5m
+sourceRef: flux-system
+appGroups:
+  - name: apps
+    namespace: default
+    apps:
+      - name: demo
+        image: nginx
+`
+	cfgPath := writeTempFile(t, cfg)
+	tmp := t.TempDir()
+	manifests := filepath.Join(tmp, "manifests")
+	flux := filepath.Join(tmp, "flux")
+
+	if err := runCluster([]string{"--config", cfgPath, "--manifests", manifests, "--flux", flux}); err != nil {
+		t.Fatalf("runCluster: %v", err)
+	}
+	exp := filepath.Join(flux, "clusters", "demo", "clusters", "demo", "kustomization-flux-system.yaml")
+	if _, err := os.Stat(exp); err != nil {
+		t.Fatalf("expected file not written: %v", err)
+	}
+}
+
+func TestRunClusterMissingConfig(t *testing.T) {
+	err := runCluster([]string{})
+	if err == nil {
+		t.Fatalf("expected error")
 	}
 }
