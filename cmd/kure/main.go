@@ -3,12 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"path/filepath"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/cli-runtime/pkg/printers"
 
 	"github.com/go-kure/kure/pkg/appsets"
@@ -38,35 +35,6 @@ func runCluster(args []string) error {
 	return nil
 }
 
-func applyPatch(basePath, patchPath string) ([]*unstructured.Unstructured, error) {
-	baseFile, err := os.Open(filepath.Clean(basePath))
-	if err != nil {
-		return nil, err
-	}
-	defer baseFile.Close()
-	patchFile, err := os.Open(filepath.Clean(patchPath))
-	if err != nil {
-		return nil, err
-	}
-	defer patchFile.Close()
-	set, err := appsets.LoadPatchableAppSet([]io.Reader{baseFile}, patchFile)
-	if err != nil {
-		return nil, err
-	}
-	resources, err := set.Resolve()
-	if err != nil {
-		return nil, err
-	}
-	var patched []*unstructured.Unstructured
-	for _, r := range resources {
-		if err := r.Apply(); err != nil {
-			return nil, err
-		}
-		patched = append(patched, r.Base)
-	}
-	return patched, nil
-}
-
 func runPatch(args []string) error {
 	fs := flag.NewFlagSet("patch", flag.ExitOnError)
 	var basePath, patchPath string
@@ -78,7 +46,7 @@ func runPatch(args []string) error {
 	if basePath == "" || patchPath == "" {
 		return fmt.Errorf("--base and --patch are required")
 	}
-	objs, err := applyPatch(basePath, patchPath)
+	objs, err := appsets.ApplyPatch(basePath, patchPath)
 	if err != nil {
 		return err
 	}
