@@ -19,7 +19,7 @@ func NewClusterLayouts(cfg api.ClusterConfig) ([]*layout.ManifestLayout, []*layo
 		fluxes = append(fluxes, flux)
 	}
 
-	bootstrapFlux, err := bootstrap.NewFluxBootstrap(cfg.Name, cfg.SourceRef, cfg.Interval, "clusters/"+cfg.Name)
+	bootstrapFlux, err := bootstrap.NewFluxBootstrap(cfg.Name, cfg.SourceRef, cfg.Interval, "flux-system")
 	if err != nil {
 		return nil, nil, nil, err
 	}
