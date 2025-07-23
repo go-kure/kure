@@ -64,6 +64,7 @@ func TestRunPatchMissingArgs(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestRunClusterMissingConfig(t *testing.T) {
 	if err := runCluster([]string{}); err == nil {
 		t.Fatalf("expected error")
@@ -94,6 +95,8 @@ appGroups:
 	}
 	if _, err := os.Stat(filepath.Join(flux, "clusters", "demo")); err != nil {
 		t.Fatalf("flux not written: %v", err)
+	}
+}
 
 func TestRunCluster(t *testing.T) {
 	cfg := `name: demo
@@ -114,6 +117,12 @@ appGroups:
 	if err := runCluster([]string{"--config", cfgPath, "--manifests", manifests, "--flux", flux}); err != nil {
 		t.Fatalf("runCluster: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(manifests, "clusters", "demo")); err != nil {
+		t.Fatalf("manifests not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(flux, "clusters", "demo")); err != nil {
+		t.Fatalf("flux not written: %v", err)
+	}
 	exp := filepath.Join(flux, "clusters", "demo", "flux-system", "kustomization-flux-system.yaml")
 	if _, err := os.Stat(exp); err != nil {
 		t.Fatalf("expected file not written: %v", err)
@@ -121,8 +130,8 @@ appGroups:
 }
 
 func TestRunClusterMissingConfig(t *testing.T) {
-	err := runCluster([]string{})
-	if err == nil {
+	if err := runCluster([]string{}); err == nil {
 		t.Fatalf("expected error")
 	}
 }
+
