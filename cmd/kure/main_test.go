@@ -114,7 +114,7 @@ appGroups:
 	if err := runCluster([]string{"--config", cfgPath, "--manifests", manifests, "--flux", flux}); err != nil {
 		t.Fatalf("runCluster: %v", err)
 	}
-	exp := filepath.Join(flux, "clusters", "demo", "clusters", "demo", "kustomization-flux-system.yaml")
+	exp := filepath.Join(flux, "clusters", "demo", "flux-system", "kustomization-flux-system.yaml")
 	if _, err := os.Stat(exp); err != nil {
 		t.Fatalf("expected file not written: %v", err)
 	}
