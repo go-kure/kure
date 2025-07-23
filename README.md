@@ -4,7 +4,7 @@ Kure provides helper functions for building Kubernetes objects and resources use
 Flux, cert-manager, MetalLB and External Secrets. The library focuses on creating
 strongly typed objects that can be modified through small helper functions.
 
-The repository includes an extensive example in [main.go](main.go) that constructs
+The repository includes an extensive example in [cmd/demo/main.go](cmd/demo/main.go) that constructs
 several resources and prints them as YAML. A short excerpt is shown below:
 
 ```go
@@ -19,11 +19,8 @@ if err := y.PrintObj(ns, os.Stdout); err != nil {
 ```
 
 To use the helpers in your own code, import the desired package from
-`github.com/go-kure/kure`:
+`github.com/go-kure/kure`.
 
-```go
-import "github.com/go-kure/kure/internal/k8s"
-```
 
 ## Running tests
 
@@ -42,6 +39,7 @@ API reference documentation is available at
 `k8s`, `fluxcd`, `certmanager`, and `metallb` are located under the
 `internal/` directory and include helpers for constructing related
 resources.
+
 ## Patching manifests
 
 The `kure` CLI can patch a base manifest using a file of patch operations. Example files are located in `examples/patch`:
