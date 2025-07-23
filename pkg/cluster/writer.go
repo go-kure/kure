@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/go-kure/kure/pkg/api"
-	"github.com/go-kure/kure/pkg/bootstrap"
+	"github.com/go-kure/kure/pkg/fluxcd"
 )
 
 func WriteCluster(cfg api.ClusterConfig, manifestsBasePath, fluxBasePath string) error {
@@ -31,9 +31,9 @@ func WriteCluster(cfg api.ClusterConfig, manifestsBasePath, fluxBasePath string)
 	}
 
 	if cfg.OCIRepo != nil {
-		ocirepo := bootstrap.NewOCIRepositoryYAML(cfg.OCIRepo)
+		ocirepo := fluxcd.NewOCIRepositoryYAML(cfg.OCIRepo)
 		ocipath := filepath.Join(fluxBasePath, "clusters", cfg.Name, "flux-system", "ocirepository-"+cfg.Name+".yaml")
-		if err := bootstrap.WriteYAMLResource(ocipath, ocirepo); err != nil {
+		if err := fluxcd.WriteYAMLResource(ocipath, ocirepo); err != nil {
 			return fmt.Errorf("write OCI repo: %w", err)
 		}
 	}
