@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestLoadClusterConfigFromYAML(t *testing.T) {
+func TestLoadClusterFromYAML(t *testing.T) {
 	data := []byte("name: demo\ninterval: 5m\nsourceRef: flux-system\n")
 	f, err := os.CreateTemp(t.TempDir(), "cfg*.yaml")
 	if err != nil {
@@ -16,11 +16,11 @@ func TestLoadClusterConfigFromYAML(t *testing.T) {
 	}
 	f.Close()
 
-	cfg, err := LoadClusterConfigFromYAML(f.Name())
+	cfg, err := LoadClusterFromYAML(f.Name())
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	if cfg.Name != "demo" || cfg.Interval != "5m" || cfg.SourceRef != "flux-system" {
+	if cfg.GetName() != "demo" || cfg.GetInterval() != "5m" || cfg.GetSourceRef() != "flux-system" {
 		t.Fatalf("unexpected config %+v", cfg)
 	}
 }

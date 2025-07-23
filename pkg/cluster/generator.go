@@ -1,28 +1,12 @@
 package cluster
 
-import (
-	"github.com/go-kure/kure/pkg/api"
-	"github.com/go-kure/kure/pkg/fluxcd"
-	"github.com/go-kure/kure/pkg/layout"
-)
+import "github.com/go-kure/kure/pkg/layout"
 
-func NewClusterLayouts(cfg api.ClusterConfig) ([]*layout.ManifestLayout, []*layout.FluxLayout, *layout.FluxLayout, error) {
-	var manifests []*layout.ManifestLayout
-	var fluxes []*layout.FluxLayout
+// NewClusterLayouts generates the layouts for the given Cluster.
+func NewClusterLayouts(c *Cluster) ([]*layout.ManifestLayout, []*layout.FluxLayout, *layout.FluxLayout, error) {
 
-	for _, group := range cfg.AppGroups {
-		manifest, flux, err := layout.NewAppGroup(group)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		manifests = append(manifests, manifest)
-		fluxes = append(fluxes, flux)
-	}
-
-	bootstrapFlux, err := fluxcd.NewFluxBootstrap(cfg.Name, cfg.SourceRef, cfg.Interval, "flux-system")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return manifests, fluxes, bootstrapFlux, nil
+    if c == nil {
+        return nil, nil, nil, nil
+    }
+    return c.BuildLayout(LayoutRules{})
 }
