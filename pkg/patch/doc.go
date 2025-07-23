@@ -1,4 +1,4 @@
-// Package appsets provides core structures and helpers for loading,
+// Package patch provides core structures and helpers for loading,
 // patching, and managing sets of Kubernetes resources and declarative patch instructions.
 //
 // This package defines the low-level model used internally by Kure to support
@@ -7,7 +7,7 @@
 //
 // ## Core Concepts
 //
-// The appsets package revolves around the PatchableAppSet, which holds:
+// The patch package revolves around the PatchableAppSet, which holds:
 //
 //   - A set of Kubernetes resources, loaded as *unstructured.Unstructured
 //   - A set of declarative patch instructions, using a concise single-line syntax
@@ -85,4 +85,4 @@
 // - Cluster-wide configuration influence
 //
 // This package is designed for use by higher-level tools like Wharf, Crane, or Kur8.
-package appsets
+package patch

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/go-kure/kure/pkg/appsets"
+	"github.com/go-kure/kure/pkg/patch"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"os"
 	"path/filepath"
@@ -33,17 +33,17 @@ metadata:
 data:
   foo: bar
 `
-	patch := `- target: demo
+	patchYAML := `- target: demo
   patch:
     data.foo: baz
     metadata.labels.env: prod
 `
 	basePath := writeTempFile(t, base)
-	patchPath := writeTempFile(t, patch)
+	patchPath := writeTempFile(t, patchYAML)
 
-	objs, err := appsets.ApplyPatch(basePath, patchPath)
+	objs, err := patch.ApplyPatch(basePath, patchPath)
 	if err != nil {
-		t.Fatalf("appsets.ApplyPatch: %v", err)
+		t.Fatalf("patch.ApplyPatch: %v", err)
 	}
 	if len(objs) != 1 {
 		t.Fatalf("expected 1 object, got %d", len(objs))
@@ -100,4 +100,3 @@ func TestRunClusterMissingConfig(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
-
