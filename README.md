@@ -18,6 +18,12 @@ if err := y.PrintObj(ns, os.Stdout); err != nil {
 }
 ```
 
+Run the full example locally using:
+
+```bash
+go run ./cmd/demo
+```
+
 To use the helpers in your own code, import the desired package from
 `github.com/go-kure/kure`.
 

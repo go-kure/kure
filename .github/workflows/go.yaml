@@ -52,5 +52,5 @@ jobs:
       run: go build -v ./...
 
     - name: Run example
-      run: go run main.go
+      run: go run ./cmd/demo/main.go
 
