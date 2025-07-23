@@ -29,11 +29,11 @@ func runCluster(args []string) error {
 	if configPath == "" {
 		return fmt.Errorf("--config path is required")
 	}
-	cfg, err := cluster.LoadClusterConfigFromYAML(configPath)
+	cfg, err := cluster.LoadClusterFromYAML(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cluster config: %w", err)
 	}
-	if err := cluster.WriteCluster(*cfg, manifestsPath, fluxPath); err != nil {
+	if err := cluster.WriteCluster(cfg, manifestsPath, fluxPath); err != nil {
 		return fmt.Errorf("failed to write cluster files: %w", err)
 	}
 	log.Println("Cluster generated successfully.")
