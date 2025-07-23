@@ -8,8 +8,8 @@ import (
 
 	"k8s.io/cli-runtime/pkg/printers"
 
-	"github.com/go-kure/kure/pkg/appsets"
 	"github.com/go-kure/kure/pkg/cluster"
+	"github.com/go-kure/kure/pkg/patch"
 )
 
 func runCluster(args []string) error {
@@ -56,7 +56,7 @@ func runPatch(args []string) error {
 	if basePath == "" || patchPath == "" {
 		return fmt.Errorf("--base and --patch are required")
 	}
-	objs, err := appsets.ApplyPatch(basePath, patchPath)
+	objs, err := patch.ApplyPatch(basePath, patchPath)
 	if err != nil {
 		return err
 	}

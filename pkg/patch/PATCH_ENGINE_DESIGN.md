@@ -1,8 +1,8 @@
-# Kure `appsets` Module — Purpose and Design
+# Kure `patch` Module — Purpose and Design
 
 ## Purpose
 
-The `appsets` module provides the **core abstraction layer** for loading, representing, and mutating Kubernetes resources using **structured patches** — without templates, overlays, or DSLs.
+The `patch` module provides the **core abstraction layer** for loading, representing, and mutating Kubernetes resources using **structured patches** — without templates, overlays, or DSLs.
 
 It enables tools like **Crane** and **Kur8** to declaratively define resource configurations and safe modifications using **pure YAML** and **Go-native data structures**. Patches themselves modify an existing **base resource**, which must be provided when a patchable set is created, either loaded from YAML or passed directly as an object.
 
