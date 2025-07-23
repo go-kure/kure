@@ -28,7 +28,7 @@ jobs:
         # Optional: pass GITHUB_TOKEN to avoid rate limiting.
         token: ${{ secrets.GITHUB_TOKEN }}
         # Optional: pass the gotestfmt version you want to run.
-        version: v2.0.0
+        version: v2.2.0
         # Optional: pass an organization name and repo to use a fork
         org: GoTestTools
         repo: gotestfmt
