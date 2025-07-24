@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	cllayout "github.com/go-kure/kure/pkg/cluster/layout"
-	"github.com/go-kure/kure/pkg/layout"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -20,7 +19,7 @@ func TestManifestLayoutWrite(t *testing.T) {
 	obj.SetName("test")
 	obj.SetNamespace("default")
 
-	ml := &layout.ManifestLayout{
+	ml := &cllayout.ManifestLayout{
 		Name:      "test",
 		Namespace: "default",
 		FilePer:   api.FilePerResource,
@@ -44,7 +43,7 @@ func TestManifestLayoutWriteWithConfig(t *testing.T) {
 	obj.SetName("demo")
 	obj.SetNamespace("demo")
 
-	ml := &layout.ManifestLayout{
+	ml := &cllayout.ManifestLayout{
 		Name:      "app",
 		Namespace: "demo",
 		Resources: []client.Object{obj},

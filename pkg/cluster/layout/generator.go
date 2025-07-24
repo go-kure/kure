@@ -2,15 +2,13 @@ package layout
 
 import (
 	"github.com/go-kure/kure/pkg/api"
-	"github.com/go-kure/kure/pkg/fluxcd"
-	baselayout "github.com/go-kure/kure/pkg/layout"
 )
 
 // ClusterLayout groups the manifest and Flux layouts produced for a cluster.
 type ClusterLayout struct {
-	Manifests []*baselayout.ManifestLayout
-	Fluxes    []*baselayout.FluxLayout
-	Bootstrap *baselayout.FluxLayout
+	Manifests []*ManifestLayout
+	Fluxes    []*FluxLayout
+	Bootstrap *FluxLayout
 }
 
 // FluxLayoutGenerator generates a cluster layout from a configuration and LayoutConfig.
@@ -23,11 +21,11 @@ type DefaultGenerator struct{}
 
 // Generate builds ManifestLayout and FluxLayout trees from the given cluster configuration.
 func (DefaultGenerator) Generate(cfg api.ClusterConfig, lc LayoutConfig) (*ClusterLayout, error) {
-	var manifests []*baselayout.ManifestLayout
-	var fluxes []*baselayout.FluxLayout
+	var manifests []*ManifestLayout
+	var fluxes []*FluxLayout
 
 	for _, group := range cfg.AppGroups {
-		m, f, err := baselayout.NewAppGroup(group)
+		m, f, err := NewAppGroup(group)
 		if err != nil {
 			return nil, err
 		}
@@ -38,7 +36,7 @@ func (DefaultGenerator) Generate(cfg api.ClusterConfig, lc LayoutConfig) (*Clust
 		fluxes = append(fluxes, f)
 	}
 
-	bs, err := fluxcd.NewFluxBootstrap(cfg.Name, cfg.SourceRef, cfg.Interval, "flux-system")
+	bs, err := NewFluxBootstrap(cfg.Name, cfg.SourceRef, cfg.Interval, "flux-system")
 	if err != nil {
 		return nil, err
 	}
