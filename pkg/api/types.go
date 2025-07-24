@@ -19,6 +19,8 @@ const (
 	FilePerResource FileExportMode = "resource"
 	// FilePerKind groups resources by kind into a single file.
 	FilePerKind FileExportMode = "kind"
+	// FilePerUnset indicates that no export mode is specified.
+	FilePerUnset FileExportMode = ""
 )
 
 // OCIRepositoryConfig describes an OCIRepository resource used by Flux.

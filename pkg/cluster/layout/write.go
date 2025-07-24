@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"github.com/go-kure/kure/pkg/api"
 )
 
 // WriteManifest writes a ManifestLayout to disk using the provided configuration.
@@ -19,7 +20,7 @@ func WriteManifest(basePath string, cfg LayoutConfig, ml *ManifestLayout) error 
 		cfg.ManifestsDir = "clusters"
 	}
 	mode := ml.FilePer
-	if mode == "" {
+	if mode == api.FilePerUnset {
 		mode = cfg.FilePer
 	}
 

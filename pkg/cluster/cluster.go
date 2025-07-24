@@ -39,7 +39,7 @@ func (c *Cluster) SetOCIRepository(repo *api.OCIRepositoryConfig) { c.OCIRepo = 
 
 // BuildLayout generates manifest and Flux layouts for the cluster.
 func (c *Cluster) BuildLayout(r LayoutRules) ([]*layout.ManifestLayout, []*layout.FluxLayout, *layout.FluxLayout, error) {
-	if r.FilePer == "" {
+	if r.FilePer == api.FilePerUnset {
 		r.FilePer = c.FilePer
 	}
 
@@ -48,7 +48,7 @@ func (c *Cluster) BuildLayout(r LayoutRules) ([]*layout.ManifestLayout, []*layou
 
 	for _, set := range c.AppSets {
 		group := set.AppGroup
-		if r.FilePer != "" && group.FilePer == "" {
+		if r.FilePer != api.FilePerUnset && group.FilePer == api.FilePerUnset {
 			group.FilePer = r.FilePer
 		}
 		manifest, flux, err := layout.NewAppGroup(group)
