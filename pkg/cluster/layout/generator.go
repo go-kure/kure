@@ -29,7 +29,7 @@ func (DefaultGenerator) Generate(cfg api.ClusterConfig, lc LayoutConfig) (*Clust
 		if err != nil {
 			return nil, err
 		}
-		if m.FilePer == "" {
+		if m.FilePer == api.FilePerUnset {
 			m.FilePer = lc.FilePer
 		}
 		manifests = append(manifests, m)
