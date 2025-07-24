@@ -2,7 +2,7 @@ package cluster
 
 import (
 	"github.com/go-kure/kure/pkg/api"
-	"github.com/go-kure/kure/pkg/bootstrap"
+	"github.com/go-kure/kure/pkg/fluxcd"
 	"github.com/go-kure/kure/pkg/layout"
 )
 
@@ -60,7 +60,7 @@ func (c *Cluster) BuildLayout(r LayoutRules) ([]*layout.ManifestLayout, []*layou
 		fluxes = append(fluxes, flux)
 	}
 
-	bootstrapFlux, err := bootstrap.NewFluxBootstrap(c.Name, c.SourceRef, c.Interval, "flux-system")
+	bootstrapFlux, err := fluxcd.NewFluxBootstrap(c.Name, c.SourceRef, c.Interval, "flux-system")
 	if err != nil {
 		return nil, nil, nil, err
 	}

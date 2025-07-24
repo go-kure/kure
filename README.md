@@ -56,6 +56,17 @@ kure patch --base examples/patch/base-config.yaml --patch examples/patch/patch.y
 
 The command reads the base resource(s) and applies the patches, printing the resulting YAML to stdout.
 
+## Cluster example
+
+The repository also provides an example for building a cluster configuration
+programmatically. Running the following command will print the generated YAML
+to stdout:
+
+```bash
+go run ./cmd/cluster
+```
+
+
 
 ## License
 

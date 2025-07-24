@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/go-kure/kure/pkg/bootstrap"
+	"github.com/go-kure/kure/pkg/fluxcd"
 )
 
 // WriteCluster writes the manifests and Flux layouts for the cluster to disk.
@@ -31,9 +31,9 @@ func WriteCluster(c *Cluster, manifestsBasePath, fluxBasePath string) error {
 	}
 
 	if c.OCIRepo != nil {
-		ocirepo := bootstrap.NewOCIRepositoryYAML(c.OCIRepo)
+		ocirepo := fluxcd.NewOCIRepositoryYAML(c.OCIRepo)
 		ocipath := filepath.Join(fluxBasePath, "clusters", c.Name, "flux-system", "ocirepository-"+c.Name+".yaml")
-		if err := bootstrap.WriteYAMLResource(ocipath, ocirepo); err != nil {
+		if err := fluxcd.WriteYAMLResource(ocipath, ocirepo); err != nil {
 			return fmt.Errorf("write OCI repo: %w", err)
 		}
 	}

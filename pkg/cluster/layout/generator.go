@@ -2,7 +2,7 @@ package layout
 
 import (
 	"github.com/go-kure/kure/pkg/api"
-	"github.com/go-kure/kure/pkg/bootstrap"
+	"github.com/go-kure/kure/pkg/fluxcd"
 	baselayout "github.com/go-kure/kure/pkg/layout"
 )
 
@@ -38,7 +38,7 @@ func (DefaultGenerator) Generate(cfg api.ClusterConfig, lc LayoutConfig) (*Clust
 		fluxes = append(fluxes, f)
 	}
 
-	bs, err := bootstrap.NewFluxBootstrap(cfg.Name, cfg.SourceRef, cfg.Interval, "flux-system")
+	bs, err := fluxcd.NewFluxBootstrap(cfg.Name, cfg.SourceRef, cfg.Interval, "flux-system")
 	if err != nil {
 		return nil, err
 	}
