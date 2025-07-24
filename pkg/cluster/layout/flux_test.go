@@ -6,11 +6,10 @@ import (
 	"testing"
 
 	cllayout "github.com/go-kure/kure/pkg/cluster/layout"
-	"github.com/go-kure/kure/pkg/layout"
 )
 
 func TestFluxLayoutWriteWithConfig(t *testing.T) {
-	fl := &layout.FluxLayout{Name: "app", TargetPath: "demo/app"}
+	fl := &cllayout.FluxLayout{Name: "app", TargetPath: "demo/app"}
 
 	cfg := cllayout.DefaultLayoutConfig()
 	cfg.FluxDir = "flux"

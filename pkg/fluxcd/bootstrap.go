@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/api"
-	"github.com/go-kure/kure/pkg/layout"
+	"github.com/go-kure/kure/pkg/cluster/layout"
 )
 
 // NewFluxBootstrap returns a FluxLayout for bootstrapping a cluster's

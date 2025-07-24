@@ -8,12 +8,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	baselayout "github.com/go-kure/kure/pkg/layout"
 )
 
 // WriteManifest writes a ManifestLayout to disk using the provided configuration.
-func WriteManifest(basePath string, cfg LayoutConfig, ml *baselayout.ManifestLayout) error {
+func WriteManifest(basePath string, cfg LayoutConfig, ml *ManifestLayout) error {
 	if cfg.ManifestFileName == nil {
 		cfg.ManifestFileName = DefaultManifestFileName
 	}
@@ -89,7 +87,7 @@ func WriteManifest(basePath string, cfg LayoutConfig, ml *baselayout.ManifestLay
 }
 
 // WriteFlux writes a FluxLayout to disk using the provided configuration.
-func WriteFlux(basePath string, cfg LayoutConfig, fl *baselayout.FluxLayout) error {
+func WriteFlux(basePath string, cfg LayoutConfig, fl *FluxLayout) error {
 	if cfg.KustomizationFileName == nil {
 		cfg.KustomizationFileName = DefaultKustomizationFileName
 	}

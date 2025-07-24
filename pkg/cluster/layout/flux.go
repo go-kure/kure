@@ -20,6 +20,20 @@ type FluxLayout struct {
 	SourceRef string
 }
 
+// NewFluxBootstrap returns a FluxLayout for bootstrapping a cluster's
+// flux-system Kustomization.
+func NewFluxBootstrap(clusterName, sourceRef, interval, targetPath string) (*FluxLayout, error) {
+	if targetPath == "" {
+		targetPath = "clusters/" + clusterName
+	}
+	return &FluxLayout{
+		Name:       "flux-system",
+		TargetPath: targetPath,
+		Interval:   interval,
+		SourceRef:  sourceRef,
+	}, nil
+}
+
 func (fl *FluxLayout) WriteToDisk(basePath string) error {
 	if fl.TargetPath == "" && fl.Manifest != nil {
 		fl.TargetPath = fl.Manifest.FullRepoPath()
