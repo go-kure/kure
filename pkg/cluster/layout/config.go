@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
 )
 
 // ManifestFileNameFunc returns a file name for the given namespace, kind and resource name.

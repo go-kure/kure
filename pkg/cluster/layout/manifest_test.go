@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	cllayout "github.com/go-kure/kure/pkg/cluster/layout"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
+	cllayout "github.com/go-kure/kure/pkg/cluster/layout"
 )
 
 func TestManifestLayoutWrite(t *testing.T) {

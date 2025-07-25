@@ -4,15 +4,16 @@ import (
 	"log"
 	"os"
 
-	"github.com/go-kure/kure/pkg/api"
 	"github.com/go-kure/kure/pkg/cluster"
+	"github.com/go-kure/kure/pkg/cluster/api"
+	"github.com/go-kure/kure/pkg/fluxcd"
 	"github.com/go-kure/kure/pkg/kio"
 )
 
 func ptr[T any](v T) *T { return &v }
 
 func main() {
-	c := cluster.NewCluster("prod", "10m", "flux-system", &api.OCIRepositoryConfig{
+	c := cluster.NewCluster("prod", "10m", "flux-system", &fluxcd.OCIRepositoryConfig{
 		Name:      "flux-system",
 		Namespace: "flux-system",
 		URL:       "oci://ghcr.io/my-org/flux-manifests",

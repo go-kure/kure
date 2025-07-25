@@ -8,27 +8,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
-
-	"github.com/go-kure/kure/pkg/api"
-	"github.com/go-kure/kure/pkg/cluster/layout"
 )
 
-// NewFluxBootstrap returns a FluxLayout for bootstrapping a cluster's
-// flux-system Kustomization.
-func NewFluxBootstrap(clusterName, sourceRef, interval, targetPath string) (*layout.FluxLayout, error) {
-	if targetPath == "" {
-		targetPath = "clusters/" + clusterName
-	}
-	return &layout.FluxLayout{
-		Name:       "flux-system",
-		TargetPath: targetPath,
-		Interval:   interval,
-		SourceRef:  sourceRef,
-	}, nil
-}
-
 // NewOCIRepositoryYAML constructs an OCIRepository resource from config.
-func NewOCIRepositoryYAML(cfg *api.OCIRepositoryConfig) *sourcev1beta2.OCIRepository {
+func NewOCIRepositoryYAML(cfg *OCIRepositoryConfig) *sourcev1beta2.OCIRepository {
 	return &sourcev1beta2.OCIRepository{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OCIRepository",

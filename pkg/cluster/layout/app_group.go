@@ -3,7 +3,7 @@ package layout
 import (
 	"fmt"
 
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
 )
 
 func NewAppGroup(group api.AppGroup) (*ManifestLayout, *FluxLayout, error) {

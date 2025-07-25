@@ -1,8 +1,9 @@
 package cluster
 
 import (
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
 	"github.com/go-kure/kure/pkg/cluster/layout"
+	"github.com/go-kure/kure/pkg/fluxcd"
 )
 
 // LayoutRules control how layouts are generated.
@@ -18,16 +19,16 @@ type AppSet struct {
 
 // Cluster describes a target cluster configuration.
 type Cluster struct {
-	Name      string                   `yaml:"name"`
-	Interval  string                   `yaml:"interval"`
-	SourceRef string                   `yaml:"sourceRef"`
-	FilePer   api.FileExportMode       `yaml:"filePer,omitempty"`
-	OCIRepo   *api.OCIRepositoryConfig `yaml:"ociRepo,omitempty"`
-	AppSets   []AppSet                 `yaml:"appGroups,omitempty"`
+	Name      string                      `yaml:"name"`
+	Interval  string                      `yaml:"interval"`
+	SourceRef string                      `yaml:"sourceRef"`
+	FilePer   api.FileExportMode          `yaml:"filePer,omitempty"`
+	OCIRepo   *fluxcd.OCIRepositoryConfig `yaml:"ociRepo,omitempty"`
+	AppSets   []AppSet                    `yaml:"appGroups,omitempty"`
 }
 
 // NewCluster creates a Cluster with the provided metadata.
-func NewCluster(name, interval, sourceRef string, repo *api.OCIRepositoryConfig) *Cluster {
+func NewCluster(name, interval, sourceRef string, repo *fluxcd.OCIRepositoryConfig) *Cluster {
 	return &Cluster{Name: name, Interval: interval, SourceRef: sourceRef, OCIRepo: repo}
 }
 
@@ -35,7 +36,7 @@ func NewCluster(name, interval, sourceRef string, repo *api.OCIRepositoryConfig)
 func (c *Cluster) AddAppSet(set AppSet) { c.AppSets = append(c.AppSets, set) }
 
 // SetOCIRepository sets the OCI repository configuration.
-func (c *Cluster) SetOCIRepository(repo *api.OCIRepositoryConfig) { c.OCIRepo = repo }
+func (c *Cluster) SetOCIRepository(repo *fluxcd.OCIRepositoryConfig) { c.OCIRepo = repo }
 
 // BuildLayout generates manifest and Flux layouts for the cluster.
 func (c *Cluster) BuildLayout(r LayoutRules) ([]*layout.ManifestLayout, []*layout.FluxLayout, *layout.FluxLayout, error) {
@@ -67,11 +68,11 @@ func (c *Cluster) BuildLayout(r LayoutRules) ([]*layout.ManifestLayout, []*layou
 }
 
 // Helper getters.
-func (c *Cluster) GetName() string                            { return c.Name }
-func (c *Cluster) GetInterval() string                        { return c.Interval }
-func (c *Cluster) GetSourceRef() string                       { return c.SourceRef }
-func (c *Cluster) GetOCIRepository() *api.OCIRepositoryConfig { return c.OCIRepo }
-func (c *Cluster) GetAppSets() []AppSet                       { return c.AppSets }
+func (c *Cluster) GetName() string                               { return c.Name }
+func (c *Cluster) GetInterval() string                           { return c.Interval }
+func (c *Cluster) GetSourceRef() string                          { return c.SourceRef }
+func (c *Cluster) GetOCIRepository() *fluxcd.OCIRepositoryConfig { return c.OCIRepo }
+func (c *Cluster) GetAppSets() []AppSet                          { return c.AppSets }
 
 // Setters for metadata fields.
 func (c *Cluster) SetName(n string)                { c.Name = n }

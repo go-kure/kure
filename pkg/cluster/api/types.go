@@ -2,6 +2,8 @@
 // Kubernetes manifests and Flux resources.
 package api
 
+import "github.com/go-kure/kure/pkg/fluxcd"
+
 // WorkloadType enumerates the supported Kubernetes workload kinds.
 type WorkloadType string
 
@@ -22,15 +24,6 @@ const (
 	// FilePerUnset indicates that no export mode is specified.
 	FilePerUnset FileExportMode = ""
 )
-
-// OCIRepositoryConfig describes an OCIRepository resource used by Flux.
-type OCIRepositoryConfig struct {
-	Name      string `yaml:"name"`
-	Namespace string `yaml:"namespace"`
-	URL       string `yaml:"url"`
-	Ref       string `yaml:"ref"`
-	Interval  string `yaml:"interval"`
-}
 
 // IngressConfig defines ingress settings for an application.
 type IngressConfig struct {
@@ -58,12 +51,12 @@ type AppDeploymentConfig struct {
 
 // ClusterConfig is the root configuration for a cluster layout.
 type ClusterConfig struct {
-	Name      string               `yaml:"name"`
-	Interval  string               `yaml:"interval"`
-	SourceRef string               `yaml:"sourceRef"`
-	FilePer   FileExportMode       `yaml:"filePer,omitempty"`
-	OCIRepo   *OCIRepositoryConfig `yaml:"ociRepo,omitempty"`
-	AppGroups []AppGroup           `yaml:"appGroups,omitempty"`
+	Name      string                      `yaml:"name"`
+	Interval  string                      `yaml:"interval"`
+	SourceRef string                      `yaml:"sourceRef"`
+	FilePer   FileExportMode              `yaml:"filePer,omitempty"`
+	OCIRepo   *fluxcd.OCIRepositoryConfig `yaml:"ociRepo,omitempty"`
+	AppGroups []AppGroup                  `yaml:"appGroups,omitempty"`
 }
 
 // AppGroup groups related applications under a single namespace.

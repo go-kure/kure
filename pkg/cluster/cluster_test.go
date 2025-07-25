@@ -3,7 +3,7 @@ package cluster
 import (
 	"testing"
 
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
 )
 
 func TestBuildLayoutUsesDefaultFilePer(t *testing.T) {

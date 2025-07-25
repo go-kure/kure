@@ -1,7 +1,7 @@
 package layout
 
 import (
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
 )
 
 // ClusterLayout groups the manifest and Flux layouts produced for a cluster.

@@ -1,7 +1,7 @@
 package cluster
 
 import (
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
 	"github.com/go-kure/kure/pkg/cluster/appset"
 	"github.com/go-kure/kure/pkg/cluster/layout"
 )

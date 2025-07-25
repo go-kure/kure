@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/pkg/api"
+	"github.com/go-kure/kure/pkg/cluster/api"
 )
 
 type ManifestLayout struct {
