@@ -16,7 +16,7 @@ type AppWorkloadConfig struct {
 	Name      string            `yaml:"name"`
 	Namespace string            `yaml:"namespace,omitempty"`
 	Image     string            `yaml:"image"`
-	Ports     []int             `yaml:"ports,omitempty"`
+	Ports     []int32           `yaml:"ports,omitempty"`
 	Replicas  *int              `yaml:"replicas,omitempty"`
 	Env       map[string]string `yaml:"env,omitempty"`
 	Secrets   map[string]string `yaml:"secrets,omitempty"`
@@ -63,7 +63,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 		sts := k8s.CreateStatefulSet(app.Name, app.Namespace)
 		container := k8s.CreateContainer(app.Name, cfg.Image, nil, nil)
 		for _, p := range cfg.Ports {
-			_ = k8s.AddContainerPort(container, v1.ContainerPort{ContainerPort: int32(p)})
+			_ = k8s.AddContainerPort(container, v1.ContainerPort{ContainerPort: p})
 		}
 		if err := k8s.AddStatefulSetContainer(sts, container); err != nil {
 			return nil, err
@@ -76,7 +76,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 		ds := k8s.CreateDaemonSet(app.Name, app.Namespace)
 		container := k8s.CreateContainer(app.Name, cfg.Image, nil, nil)
 		for _, p := range cfg.Ports {
-			_ = k8s.AddContainerPort(container, v1.ContainerPort{ContainerPort: int32(p)})
+			_ = k8s.AddContainerPort(container, v1.ContainerPort{ContainerPort: p})
 		}
 		if err := k8s.AddDaemonSetContainer(ds, container); err != nil {
 			return nil, err
@@ -86,7 +86,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 		dep := k8s.CreateDeployment(app.Name, app.Namespace)
 		container := k8s.CreateContainer(app.Name, cfg.Image, nil, nil)
 		for _, p := range cfg.Ports {
-			_ = k8s.AddContainerPort(container, v1.ContainerPort{ContainerPort: int32(p)})
+			_ = k8s.AddContainerPort(container, v1.ContainerPort{ContainerPort: p})
 		}
 		if err := k8s.AddDeploymentContainer(dep, container); err != nil {
 			return nil, err
@@ -105,8 +105,8 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 		for _, p := range cfg.Ports {
 			_ = k8s.AddServicePort(svc, v1.ServicePort{
 				Name:       fmt.Sprintf("p-%d", p),
-				Port:       int32(p),
-				TargetPort: intstr.FromInt(p),
+				Port:       p,
+				TargetPort: intstr.FromInt32(p),
 			})
 		}
 		objs = append(objs, svc)
