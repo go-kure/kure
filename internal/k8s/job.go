@@ -31,106 +31,90 @@ func CreateJob(name, namespace string) *batchv1.Job {
 						"app": name,
 					},
 				},
-				Spec: corev1.PodSpec{
-					Containers:                    []corev1.Container{},
-					InitContainers:                []corev1.Container{},
-					Volumes:                       []corev1.Volume{},
-					RestartPolicy:                 corev1.RestartPolicyNever,
-					TerminationGracePeriodSeconds: new(int64),
-					SecurityContext:               &corev1.PodSecurityContext{},
-					ImagePullSecrets:              []corev1.LocalObjectReference{},
-					ServiceAccountName:            "",
-					NodeSelector:                  map[string]string{},
-					Affinity:                      &corev1.Affinity{},
-					Tolerations:                   []corev1.Toleration{},
-				},
+				Spec: corev1.PodSpec{},
 			},
 		},
 	}
 	return obj
 }
 
-func AddJobContainer(job *batchv1.Job, container *corev1.Container) error {
-	if job == nil || container == nil {
-		return errors.New("nil job or container")
+// SetJobPodSpec assigns a PodSpec to the Job template.
+func SetJobPodSpec(job *batchv1.Job, spec *corev1.PodSpec) error {
+	if job == nil || spec == nil {
+		return errors.New("nil job or spec")
 	}
-	job.Spec.Template.Spec.Containers = append(job.Spec.Template.Spec.Containers, *container)
+	job.Spec.Template.Spec = *spec
 	return nil
+}
+
+func AddJobContainer(job *batchv1.Job, container *corev1.Container) error {
+	if job == nil {
+		return errors.New("nil job")
+	}
+	return AddPodSpecContainer(&job.Spec.Template.Spec, container)
 }
 
 func AddJobInitContainer(job *batchv1.Job, container *corev1.Container) error {
-	if job == nil || container == nil {
-		return errors.New("nil job or container")
+	if job == nil {
+		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.InitContainers = append(job.Spec.Template.Spec.InitContainers, *container)
-	return nil
+	return AddPodSpecInitContainer(&job.Spec.Template.Spec, container)
 }
 
 func AddJobVolume(job *batchv1.Job, volume *corev1.Volume) error {
-	if job == nil || volume == nil {
-		return errors.New("nil job or volume")
+	if job == nil {
+		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, *volume)
-	return nil
+	return AddPodSpecVolume(&job.Spec.Template.Spec, volume)
 }
 
 func AddJobImagePullSecret(job *batchv1.Job, secret *corev1.LocalObjectReference) error {
-	if job == nil || secret == nil {
-		return errors.New("nil job or secret")
+	if job == nil {
+		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.ImagePullSecrets = append(job.Spec.Template.Spec.ImagePullSecrets, *secret)
-	return nil
+	return AddPodSpecImagePullSecret(&job.Spec.Template.Spec, secret)
 }
 
 func AddJobToleration(job *batchv1.Job, toleration *corev1.Toleration) error {
-	if job == nil || toleration == nil {
-		return errors.New("nil job or toleration")
+	if job == nil {
+		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.Tolerations = append(job.Spec.Template.Spec.Tolerations, *toleration)
-	return nil
+	return AddPodSpecToleration(&job.Spec.Template.Spec, toleration)
 }
 
 func AddJobTopologySpreadConstraint(job *batchv1.Job, constraint *corev1.TopologySpreadConstraint) error {
 	if job == nil {
 		return errors.New("nil job")
 	}
-	if constraint == nil {
-		return nil
-	}
-	job.Spec.Template.Spec.TopologySpreadConstraints = append(job.Spec.Template.Spec.TopologySpreadConstraints, *constraint)
-	return nil
+	return AddPodSpecTopologySpreadConstraints(&job.Spec.Template.Spec, constraint)
 }
 
 func SetJobServiceAccountName(job *batchv1.Job, name string) error {
 	if job == nil {
 		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.ServiceAccountName = name
-	return nil
+	return SetPodSpecServiceAccountName(&job.Spec.Template.Spec, name)
 }
 
 func SetJobSecurityContext(job *batchv1.Job, sc *corev1.PodSecurityContext) error {
 	if job == nil {
 		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.SecurityContext = sc
-	return nil
+	return SetPodSpecSecurityContext(&job.Spec.Template.Spec, sc)
 }
 
 func SetJobAffinity(job *batchv1.Job, aff *corev1.Affinity) error {
 	if job == nil {
 		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.Affinity = aff
-	return nil
+	return SetPodSpecAffinity(&job.Spec.Template.Spec, aff)
 }
 
 func SetJobNodeSelector(job *batchv1.Job, selector map[string]string) error {
 	if job == nil {
 		return errors.New("nil job")
 	}
-	job.Spec.Template.Spec.NodeSelector = selector
-	return nil
+	return SetPodSpecNodeSelector(&job.Spec.Template.Spec, selector)
 }
 
 func SetJobCompletions(job *batchv1.Job, completions int32) error {
@@ -200,19 +184,7 @@ func CreateCronJob(name, namespace, schedule string) *batchv1.CronJob {
 								"app": name,
 							},
 						},
-						Spec: corev1.PodSpec{
-							Containers:                    []corev1.Container{},
-							InitContainers:                []corev1.Container{},
-							Volumes:                       []corev1.Volume{},
-							RestartPolicy:                 corev1.RestartPolicyNever,
-							TerminationGracePeriodSeconds: new(int64),
-							SecurityContext:               &corev1.PodSecurityContext{},
-							ImagePullSecrets:              []corev1.LocalObjectReference{},
-							ServiceAccountName:            "",
-							NodeSelector:                  map[string]string{},
-							Affinity:                      &corev1.Affinity{},
-							Tolerations:                   []corev1.Toleration{},
-						},
+						Spec: corev1.PodSpec{},
 					},
 				},
 			},
@@ -221,87 +193,83 @@ func CreateCronJob(name, namespace, schedule string) *batchv1.CronJob {
 	return obj
 }
 
-func AddCronJobContainer(cron *batchv1.CronJob, container *corev1.Container) error {
-	if cron == nil || container == nil {
-		return errors.New("nil cronjob or container")
+// SetCronJobPodSpec assigns a PodSpec to the CronJob template.
+func SetCronJobPodSpec(cron *batchv1.CronJob, spec *corev1.PodSpec) error {
+	if cron == nil || spec == nil {
+		return errors.New("nil cronjob or spec")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.Containers = append(cron.Spec.JobTemplate.Spec.Template.Spec.Containers, *container)
+	cron.Spec.JobTemplate.Spec.Template.Spec = *spec
 	return nil
+}
+
+func AddCronJobContainer(cron *batchv1.CronJob, container *corev1.Container) error {
+	if cron == nil {
+		return errors.New("nil cronjob")
+	}
+	return AddPodSpecContainer(&cron.Spec.JobTemplate.Spec.Template.Spec, container)
 }
 
 func AddCronJobInitContainer(cron *batchv1.CronJob, container *corev1.Container) error {
-	if cron == nil || container == nil {
-		return errors.New("nil cronjob or container")
+	if cron == nil {
+		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.InitContainers = append(cron.Spec.JobTemplate.Spec.Template.Spec.InitContainers, *container)
-	return nil
+	return AddPodSpecInitContainer(&cron.Spec.JobTemplate.Spec.Template.Spec, container)
 }
 
 func AddCronJobVolume(cron *batchv1.CronJob, volume *corev1.Volume) error {
-	if cron == nil || volume == nil {
-		return errors.New("nil cronjob or volume")
+	if cron == nil {
+		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.Volumes = append(cron.Spec.JobTemplate.Spec.Template.Spec.Volumes, *volume)
-	return nil
+	return AddPodSpecVolume(&cron.Spec.JobTemplate.Spec.Template.Spec, volume)
 }
 
 func AddCronJobImagePullSecret(cron *batchv1.CronJob, secret *corev1.LocalObjectReference) error {
-	if cron == nil || secret == nil {
-		return errors.New("nil cronjob or secret")
+	if cron == nil {
+		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.ImagePullSecrets = append(cron.Spec.JobTemplate.Spec.Template.Spec.ImagePullSecrets, *secret)
-	return nil
+	return AddPodSpecImagePullSecret(&cron.Spec.JobTemplate.Spec.Template.Spec, secret)
 }
 
 func AddCronJobToleration(cron *batchv1.CronJob, toleration *corev1.Toleration) error {
-	if cron == nil || toleration == nil {
-		return errors.New("nil cronjob or toleration")
+	if cron == nil {
+		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.Tolerations = append(cron.Spec.JobTemplate.Spec.Template.Spec.Tolerations, *toleration)
-	return nil
+	return AddPodSpecToleration(&cron.Spec.JobTemplate.Spec.Template.Spec, toleration)
 }
 
 func AddCronJobTopologySpreadConstraint(cron *batchv1.CronJob, constraint *corev1.TopologySpreadConstraint) error {
 	if cron == nil {
 		return errors.New("nil cronjob")
 	}
-	if constraint == nil {
-		return nil
-	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints = append(cron.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints, *constraint)
-	return nil
+	return AddPodSpecTopologySpreadConstraints(&cron.Spec.JobTemplate.Spec.Template.Spec, constraint)
 }
 
 func SetCronJobServiceAccountName(cron *batchv1.CronJob, name string) error {
 	if cron == nil {
 		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName = name
-	return nil
+	return SetPodSpecServiceAccountName(&cron.Spec.JobTemplate.Spec.Template.Spec, name)
 }
 
 func SetCronJobSecurityContext(cron *batchv1.CronJob, sc *corev1.PodSecurityContext) error {
 	if cron == nil {
 		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.SecurityContext = sc
-	return nil
+	return SetPodSpecSecurityContext(&cron.Spec.JobTemplate.Spec.Template.Spec, sc)
 }
 
 func SetCronJobAffinity(cron *batchv1.CronJob, aff *corev1.Affinity) error {
 	if cron == nil {
 		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.Affinity = aff
-	return nil
+	return SetPodSpecAffinity(&cron.Spec.JobTemplate.Spec.Template.Spec, aff)
 }
 
 func SetCronJobNodeSelector(cron *batchv1.CronJob, selector map[string]string) error {
 	if cron == nil {
 		return errors.New("nil cronjob")
 	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.NodeSelector = selector
-	return nil
+	return SetPodSpecNodeSelector(&cron.Spec.JobTemplate.Spec.Template.Spec, selector)
 }
 
 func SetCronJobSchedule(cron *batchv1.CronJob, schedule string) error {
