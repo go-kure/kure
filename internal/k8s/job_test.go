@@ -17,7 +17,7 @@ func TestCreateJob(t *testing.T) {
 	if job.Kind != "Job" {
 		t.Errorf("unexpected kind %q", job.Kind)
 	}
-	if job.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+	if job.Spec.Template.Spec.RestartPolicy != "" {
 		t.Errorf("unexpected restart policy %v", job.Spec.Template.Spec.RestartPolicy)
 	}
 	if len(job.Spec.Template.Spec.Containers) != 0 {
@@ -155,7 +155,7 @@ func TestCreateCronJob(t *testing.T) {
 	if cj.Spec.Schedule != "* * * * *" {
 		t.Errorf("schedule not set")
 	}
-	if cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+	if cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy != "" {
 		t.Errorf("unexpected restart policy")
 	}
 }

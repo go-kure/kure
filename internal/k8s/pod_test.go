@@ -23,11 +23,11 @@ func TestCreatePod(t *testing.T) {
 	if pod.APIVersion != "v1" {
 		t.Errorf("expected apiVersion v1 got %q", pod.APIVersion)
 	}
-	if pod.Spec.RestartPolicy != corev1.RestartPolicyAlways {
+	if pod.Spec.RestartPolicy != "" {
 		t.Errorf("unexpected restart policy %v", pod.Spec.RestartPolicy)
 	}
-	if pod.Spec.TerminationGracePeriodSeconds == nil {
-		t.Errorf("expected TerminationGracePeriodSeconds to be set")
+	if pod.Spec.TerminationGracePeriodSeconds != nil {
+		t.Errorf("expected TerminationGracePeriodSeconds to be nil")
 	}
 }
 

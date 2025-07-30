@@ -30,19 +30,7 @@ func CreateStatefulSet(name, namespace string) *appsv1.StatefulSet {
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
-				Spec: corev1.PodSpec{
-					Containers:                    []corev1.Container{},
-					InitContainers:                []corev1.Container{},
-					Volumes:                       []corev1.Volume{},
-					RestartPolicy:                 corev1.RestartPolicyAlways,
-					TerminationGracePeriodSeconds: new(int64),
-					SecurityContext:               &corev1.PodSecurityContext{},
-					ImagePullSecrets:              []corev1.LocalObjectReference{},
-					ServiceAccountName:            "",
-					NodeSelector:                  map[string]string{},
-					Affinity:                      &corev1.Affinity{},
-					Tolerations:                   []corev1.Toleration{},
-				},
+				Spec:       corev1.PodSpec{},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{},
 			ServiceName:          "",
@@ -53,49 +41,53 @@ func CreateStatefulSet(name, namespace string) *appsv1.StatefulSet {
 	return obj
 }
 
+// SetStatefulSetPodSpec assigns a PodSpec to the StatefulSet template.
+func SetStatefulSetPodSpec(sts *appsv1.StatefulSet, spec *corev1.PodSpec) error {
+	if sts == nil || spec == nil {
+		return errors.New("nil statefulset or spec")
+	}
+	sts.Spec.Template.Spec = *spec
+	return nil
+}
+
 // AddStatefulSetContainer appends a container to the StatefulSet pod template.
 func AddStatefulSetContainer(sts *appsv1.StatefulSet, c *corev1.Container) error {
-	if sts == nil || c == nil {
-		return errors.New("nil statefulset or container")
+	if sts == nil {
+		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers, *c)
-	return nil
+	return AddPodSpecContainer(&sts.Spec.Template.Spec, c)
 }
 
 // AddStatefulSetInitContainer appends an init container to the pod template.
 func AddStatefulSetInitContainer(sts *appsv1.StatefulSet, c *corev1.Container) error {
-	if sts == nil || c == nil {
-		return errors.New("nil statefulset or container")
+	if sts == nil {
+		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, *c)
-	return nil
+	return AddPodSpecInitContainer(&sts.Spec.Template.Spec, c)
 }
 
 // AddStatefulSetVolume appends a volume to the pod template.
 func AddStatefulSetVolume(sts *appsv1.StatefulSet, v *corev1.Volume) error {
-	if sts == nil || v == nil {
-		return errors.New("nil statefulset or volume")
+	if sts == nil {
+		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, *v)
-	return nil
+	return AddPodSpecVolume(&sts.Spec.Template.Spec, v)
 }
 
 // AddStatefulSetImagePullSecret appends an image pull secret to the pod template.
 func AddStatefulSetImagePullSecret(sts *appsv1.StatefulSet, s *corev1.LocalObjectReference) error {
-	if sts == nil || s == nil {
-		return errors.New("nil statefulset or secret")
+	if sts == nil {
+		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.ImagePullSecrets = append(sts.Spec.Template.Spec.ImagePullSecrets, *s)
-	return nil
+	return AddPodSpecImagePullSecret(&sts.Spec.Template.Spec, s)
 }
 
 // AddStatefulSetToleration appends a toleration to the pod template.
 func AddStatefulSetToleration(sts *appsv1.StatefulSet, t *corev1.Toleration) error {
-	if sts == nil || t == nil {
-		return errors.New("nil statefulset or toleration")
+	if sts == nil {
+		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.Tolerations = append(sts.Spec.Template.Spec.Tolerations, *t)
-	return nil
+	return AddPodSpecToleration(&sts.Spec.Template.Spec, t)
 }
 
 // AddStatefulSetTopologySpreadConstraints appends a topology spread constraint if not nil.
@@ -103,11 +95,7 @@ func AddStatefulSetTopologySpreadConstraints(sts *appsv1.StatefulSet, c *corev1.
 	if sts == nil {
 		return errors.New("nil statefulset")
 	}
-	if c == nil {
-		return nil
-	}
-	sts.Spec.Template.Spec.TopologySpreadConstraints = append(sts.Spec.Template.Spec.TopologySpreadConstraints, *c)
-	return nil
+	return AddPodSpecTopologySpreadConstraints(&sts.Spec.Template.Spec, c)
 }
 
 // AddStatefulSetVolumeClaimTemplate appends a PVC template to the StatefulSet.
@@ -124,8 +112,7 @@ func SetStatefulSetServiceAccountName(sts *appsv1.StatefulSet, name string) erro
 	if sts == nil {
 		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.ServiceAccountName = name
-	return nil
+	return SetPodSpecServiceAccountName(&sts.Spec.Template.Spec, name)
 }
 
 // SetStatefulSetSecurityContext sets the pod security context.
@@ -133,8 +120,7 @@ func SetStatefulSetSecurityContext(sts *appsv1.StatefulSet, sc *corev1.PodSecuri
 	if sts == nil {
 		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.SecurityContext = sc
-	return nil
+	return SetPodSpecSecurityContext(&sts.Spec.Template.Spec, sc)
 }
 
 // SetStatefulSetAffinity sets the pod affinity rules.
@@ -142,8 +128,7 @@ func SetStatefulSetAffinity(sts *appsv1.StatefulSet, aff *corev1.Affinity) error
 	if sts == nil {
 		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.Affinity = aff
-	return nil
+	return SetPodSpecAffinity(&sts.Spec.Template.Spec, aff)
 }
 
 // SetStatefulSetNodeSelector sets the node selector.
@@ -151,8 +136,7 @@ func SetStatefulSetNodeSelector(sts *appsv1.StatefulSet, ns map[string]string) e
 	if sts == nil {
 		return errors.New("nil statefulset")
 	}
-	sts.Spec.Template.Spec.NodeSelector = ns
-	return nil
+	return SetPodSpecNodeSelector(&sts.Spec.Template.Spec, ns)
 }
 
 // SetStatefulSetUpdateStrategy sets the update strategy for the StatefulSet.

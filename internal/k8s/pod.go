@@ -25,75 +25,66 @@ func CreatePod(name string, namespace string) *corev1.Pod {
 				"app": name,
 			},
 		},
-		Spec: corev1.PodSpec{
-			Containers:                    []corev1.Container{},
-			InitContainers:                []corev1.Container{},
-			Volumes:                       []corev1.Volume{},
-			RestartPolicy:                 corev1.RestartPolicyAlways,
-			TerminationGracePeriodSeconds: new(int64),
-			SecurityContext:               &corev1.PodSecurityContext{},
-			ImagePullSecrets:              []corev1.LocalObjectReference{},
-			ServiceAccountName:            "",
-			NodeSelector:                  map[string]string{},
-			Affinity:                      &corev1.Affinity{},
-			Tolerations:                   []corev1.Toleration{},
-		},
+		Spec: corev1.PodSpec{},
 	}
 	return &obj
 }
 
+// SetPodSpec assigns a pod spec to the Pod.
+func SetPodSpec(pod *corev1.Pod, spec *corev1.PodSpec) error {
+	if pod == nil || spec == nil {
+		return errors.New("nil pod or spec")
+	}
+	pod.Spec = *spec
+	return nil
+}
+
 // AddPodContainer appends a container to the Pod spec.
 func AddPodContainer(pod *corev1.Pod, container *corev1.Container) error {
-	if pod == nil || container == nil {
-		return errors.New("nil pod or container")
+	if pod == nil {
+		return errors.New("nil pod")
 	}
-	pod.Spec.Containers = append(pod.Spec.Containers, *container)
-	return nil
+	return AddPodSpecContainer(&pod.Spec, container)
 }
 
 // AddPodInitContainer appends an init container to the Pod spec.
 func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) error {
-	if pod == nil || container == nil {
-		return errors.New("nil pod or container")
+	if pod == nil {
+		return errors.New("nil pod")
 	}
-	pod.Spec.InitContainers = append(pod.Spec.InitContainers, *container)
-	return nil
+	return AddPodSpecInitContainer(&pod.Spec, container)
 }
 
 // AddPodEphemeralContainer appends an ephemeral container to the Pod spec.
 func AddPodEphemeralContainer(pod *corev1.Pod, container *corev1.EphemeralContainer) error {
-	if pod == nil || container == nil {
-		return errors.New("nil pod or container")
+	if pod == nil {
+		return errors.New("nil pod")
 	}
-	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, *container)
-	return nil
+	return AddPodSpecEphemeralContainer(&pod.Spec, container)
 }
 
 // AddPodVolume appends a volume to the Pod spec.
 func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) error {
-	if pod == nil || volume == nil {
-		return errors.New("nil pod or volume")
+	if pod == nil {
+		return errors.New("nil pod")
 	}
-	pod.Spec.Volumes = append(pod.Spec.Volumes, *volume)
-	return nil
+	return AddPodSpecVolume(&pod.Spec, volume)
 }
 
 // AddPodImagePullSecret appends an image pull secret to the Pod spec.
 func AddPodImagePullSecret(pod *corev1.Pod, imagePullSecret *corev1.LocalObjectReference) error {
-	if pod == nil || imagePullSecret == nil {
-		return errors.New("nil pod or imagePullSecret")
+	if pod == nil {
+		return errors.New("nil pod")
 	}
-	pod.Spec.ImagePullSecrets = append(pod.Spec.ImagePullSecrets, *imagePullSecret)
-	return nil
+	return AddPodSpecImagePullSecret(&pod.Spec, imagePullSecret)
 }
 
 // AddPodToleration appends a toleration to the Pod spec.
 func AddPodToleration(pod *corev1.Pod, toleration *corev1.Toleration) error {
-	if pod == nil || toleration == nil {
-		return errors.New("nil pod or toleration")
+	if pod == nil {
+		return errors.New("nil pod")
 	}
-	pod.Spec.Tolerations = append(pod.Spec.Tolerations, *toleration)
-	return nil
+	return AddPodSpecToleration(&pod.Spec, toleration)
 }
 
 // AddPodTopologySpreadConstraints appends a topology spread constraint if provided.
@@ -101,11 +92,7 @@ func AddPodTopologySpreadConstraints(pod *corev1.Pod, topologySpreadConstraint *
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	if topologySpreadConstraint == nil {
-		return nil
-	}
-	pod.Spec.TopologySpreadConstraints = append(pod.Spec.TopologySpreadConstraints, *topologySpreadConstraint)
-	return nil
+	return AddPodSpecTopologySpreadConstraints(&pod.Spec, topologySpreadConstraint)
 }
 
 // SetPodServiceAccountName sets the service account used by the Pod.
@@ -113,8 +100,7 @@ func SetPodServiceAccountName(pod *corev1.Pod, serviceAccountName string) error 
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.ServiceAccountName = serviceAccountName
-	return nil
+	return SetPodSpecServiceAccountName(&pod.Spec, serviceAccountName)
 }
 
 // SetPodSecurityContext sets the pod-level security context.
@@ -122,8 +108,7 @@ func SetPodSecurityContext(pod *corev1.Pod, securityContext *corev1.PodSecurityC
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.SecurityContext = securityContext
-	return nil
+	return SetPodSpecSecurityContext(&pod.Spec, securityContext)
 }
 
 // SetPodAffinity assigns affinity rules to the Pod.
@@ -131,8 +116,7 @@ func SetPodAffinity(pod *corev1.Pod, affinity *corev1.Affinity) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.Affinity = affinity
-	return nil
+	return SetPodSpecAffinity(&pod.Spec, affinity)
 }
 
 // SetPodNodeSelector sets the node selector map.
@@ -140,8 +124,7 @@ func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.NodeSelector = nodeSelector
-	return nil
+	return SetPodSpecNodeSelector(&pod.Spec, nodeSelector)
 }
 
 // SetPodPriorityClassName sets the priority class name.
@@ -149,8 +132,7 @@ func SetPodPriorityClassName(pod *corev1.Pod, class string) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.PriorityClassName = class
-	return nil
+	return SetPodSpecPriorityClassName(&pod.Spec, class)
 }
 
 // SetPodHostNetwork configures host networking for the Pod.
@@ -158,8 +140,7 @@ func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.HostNetwork = hostNetwork
-	return nil
+	return SetPodSpecHostNetwork(&pod.Spec, hostNetwork)
 }
 
 // SetPodHostPID configures host PID namespace usage for the Pod.
@@ -167,8 +148,7 @@ func SetPodHostPID(pod *corev1.Pod, hostPID bool) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.HostPID = hostPID
-	return nil
+	return SetPodSpecHostPID(&pod.Spec, hostPID)
 }
 
 // SetPodHostIPC configures host IPC namespace usage for the Pod.
@@ -176,8 +156,7 @@ func SetPodHostIPC(pod *corev1.Pod, hostIPC bool) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.HostIPC = hostIPC
-	return nil
+	return SetPodSpecHostIPC(&pod.Spec, hostIPC)
 }
 
 // SetPodDNSPolicy sets the DNS policy for the Pod.
@@ -185,57 +164,47 @@ func SetPodDNSPolicy(pod *corev1.Pod, policy corev1.DNSPolicy) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.DNSPolicy = policy
-	return nil
+	return SetPodSpecDNSPolicy(&pod.Spec, policy)
 }
 
 func SetPodDNSConfig(pod *corev1.Pod, dnsConfig *corev1.PodDNSConfig) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.DNSConfig = dnsConfig
-	return nil
+	return SetPodSpecDNSConfig(&pod.Spec, dnsConfig)
 }
 
 func SetPodHostname(pod *corev1.Pod, hostname string) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.Hostname = hostname
-	return nil
+	return SetPodSpecHostname(&pod.Spec, hostname)
 }
 
 func SetPodSubdomain(pod *corev1.Pod, subdomain string) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.Subdomain = subdomain
-	return nil
+	return SetPodSpecSubdomain(&pod.Spec, subdomain)
 }
 
 func SetPodRestartPolicy(pod *corev1.Pod, policy corev1.RestartPolicy) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.RestartPolicy = policy
-	return nil
+	return SetPodSpecRestartPolicy(&pod.Spec, policy)
 }
 
 func SetPodTerminationGracePeriod(pod *corev1.Pod, secs int64) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	if pod.Spec.TerminationGracePeriodSeconds == nil {
-		pod.Spec.TerminationGracePeriodSeconds = new(int64)
-	}
-	*pod.Spec.TerminationGracePeriodSeconds = secs
-	return nil
+	return SetPodSpecTerminationGracePeriod(&pod.Spec, secs)
 }
 
 func SetPodSchedulerName(pod *corev1.Pod, scheduler string) error {
 	if pod == nil {
 		return errors.New("nil pod")
 	}
-	pod.Spec.SchedulerName = scheduler
-	return nil
+	return SetPodSpecSchedulerName(&pod.Spec, scheduler)
 }
