@@ -34,8 +34,8 @@ type IngressConfig struct {
 	UseACMEHTTP01 bool   `yaml:"useACMEHTTP01,omitempty"`
 }
 
-// AppDeploymentConfig describes a single deployable application.
-type AppDeploymentConfig struct {
+// AppWorkloadConfig describes a single deployable application.
+type AppWorkloadConfig struct {
 	Name      string            `yaml:"name"`
 	Namespace string            `yaml:"namespace,omitempty"`
 	Image     string            `yaml:"image"`
@@ -61,9 +61,9 @@ type ClusterConfig struct {
 
 // AppGroup groups related applications under a single namespace.
 type AppGroup struct {
-	Name          string                `yaml:"name"`
-	Namespace     string                `yaml:"namespace,omitempty"`
-	Apps          []AppDeploymentConfig `yaml:"apps,omitempty"`
-	FilePer       FileExportMode        `yaml:"filePer,omitempty"`
-	FluxDependsOn []string              `yaml:"fluxDependsOn,omitempty"`
+	Name          string              `yaml:"name"`
+	Namespace     string              `yaml:"namespace,omitempty"`
+	Apps          []AppWorkloadConfig `yaml:"apps,omitempty"`
+	FilePer       FileExportMode      `yaml:"filePer,omitempty"`
+	FluxDependsOn []string            `yaml:"fluxDependsOn,omitempty"`
 }

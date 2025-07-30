@@ -13,7 +13,7 @@ func TestBuildLayoutUsesDefaultFilePer(t *testing.T) {
 	group := api.AppGroup{
 		Name:      "core",
 		Namespace: "default",
-		Apps: []api.AppDeploymentConfig{{
+		Apps: []api.AppWorkloadConfig{{
 			Name: "app",
 		}},
 	}

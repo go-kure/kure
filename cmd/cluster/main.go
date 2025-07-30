@@ -22,7 +22,7 @@ func main() {
 	})
 	c.SetFilePer(api.FilePerResource)
 
-	app := api.AppDeploymentConfig{
+	app := api.AppWorkloadConfig{
 		Name:     "my-app",
 		Image:    "ghcr.io/my-org/my-app:v1",
 		Ports:    []int{80},
@@ -37,7 +37,7 @@ func main() {
 	group := api.AppGroup{
 		Name:      "apps",
 		Namespace: "default",
-		Apps:      []api.AppDeploymentConfig{app},
+		Apps:      []api.AppWorkloadConfig{app},
 	}
 
 	c.AddAppSet(cluster.AppSet{AppGroup: group})
