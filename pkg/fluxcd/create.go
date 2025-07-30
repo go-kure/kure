@@ -1,6 +1,8 @@
 package fluxcd
 
 import (
+	"time"
+
 	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
@@ -214,4 +216,12 @@ func NewFluxReport(cfg *FluxReportConfig) *fluxv1.FluxReport {
 	}
 	spec := fluxv1.FluxReportSpec{Distribution: fluxv1.FluxDistributionStatus{Entitlement: cfg.Entitlement, Status: cfg.Status}}
 	return intfluxcd.CreateFluxReport(cfg.Name, cfg.Namespace, spec)
+}
+
+func parseDurationOrDefault(s string) time.Duration {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 5 * time.Minute
+	}
+	return d
 }
