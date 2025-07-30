@@ -1,25 +1,23 @@
-package cluster
+package layout
 
 import (
-	"github.com/go-kure/kure/pkg/cluster/api"
-	"github.com/go-kure/kure/pkg/cluster/appset"
-	"github.com/go-kure/kure/pkg/cluster/layout"
+	"github.com/go-kure/kure/pkg/application"
 )
 
 // AddAppSet converts the provided AppSet into layout structures and appends
 // them to the manifest and Flux layout slices.
-func AddAppSet(manifests *[]*layout.ManifestLayout, fluxes *[]*layout.FluxLayout, as *appset.AppSet, filePer api.FileExportMode) error {
+func AddAppSet(manifests *[]*ManifestLayout, fluxes *[]*FluxLayout, as *application.ApplicationGroup, filePer FileExportMode) error {
 	if err := as.Validate(); err != nil {
 		return err
 	}
 
-	ml := &layout.ManifestLayout{
+	ml := &ManifestLayout{
 		Name:      as.Name,
 		Namespace: as.Namespace,
 		FilePer:   filePer,
 		Resources: as.Resources,
 	}
-	fl := &layout.FluxLayout{
+	fl := &FluxLayout{
 		Name:     as.Name,
 		Manifest: ml,
 	}

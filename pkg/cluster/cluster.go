@@ -1,30 +1,17 @@
 package cluster
 
 import (
-	"github.com/go-kure/kure/pkg/cluster/api"
-	"github.com/go-kure/kure/pkg/cluster/layout"
+	"github.com/go-kure/kure/pkg/application"
 	"github.com/go-kure/kure/pkg/fluxcd"
 )
 
-// LayoutRules control how layouts are generated.
-type LayoutRules struct {
-	// FilePer sets the default file export mode for resources.
-	FilePer api.FileExportMode
-}
-
-// AppSet represents a group of applications that share common settings.
-type AppSet struct {
-	api.AppGroup `yaml:",inline"`
-}
-
 // Cluster describes a target cluster configuration.
 type Cluster struct {
-	Name      string                      `yaml:"name"`
-	Interval  string                      `yaml:"interval"`
-	SourceRef string                      `yaml:"sourceRef"`
-	FilePer   api.FileExportMode          `yaml:"filePer,omitempty"`
-	OCIRepo   *fluxcd.OCIRepositoryConfig `yaml:"ociRepo,omitempty"`
-	AppSets   []AppSet                    `yaml:"appGroups,omitempty"`
+	Name             string                         `yaml:"name"`
+	Interval         string                         `yaml:"interval"`
+	SourceRef        string                         `yaml:"sourceRef"`
+	OCIRepo          *fluxcd.OCIRepositoryConfig    `yaml:"ociRepo,omitempty"`
+	ApplictionGroups []application.ApplicationGroup `yaml:"appGroups,omitempty"`
 }
 
 // NewCluster creates a Cluster with the provided metadata.
@@ -33,49 +20,21 @@ func NewCluster(name, interval, sourceRef string, repo *fluxcd.OCIRepositoryConf
 }
 
 // AddAppSet appends an application set to the cluster.
-func (c *Cluster) AddAppSet(set AppSet) { c.AppSets = append(c.AppSets, set) }
+func (c *Cluster) AddApplicationGroup(group application.ApplicationGroup) {
+	c.ApplictionGroups = append(c.ApplictionGroups, group)
+}
 
 // SetOCIRepository sets the OCI repository configuration.
 func (c *Cluster) SetOCIRepository(repo *fluxcd.OCIRepositoryConfig) { c.OCIRepo = repo }
 
-// BuildLayout generates manifest and Flux layouts for the cluster.
-func (c *Cluster) BuildLayout(r LayoutRules) ([]*layout.ManifestLayout, []*layout.FluxLayout, *layout.FluxLayout, error) {
-	if r.FilePer == api.FilePerUnset {
-		r.FilePer = c.FilePer
-	}
-
-	var manifests []*layout.ManifestLayout
-	var fluxes []*layout.FluxLayout
-
-	for _, set := range c.AppSets {
-		group := set.AppGroup
-		if r.FilePer != api.FilePerUnset && group.FilePer == api.FilePerUnset {
-			group.FilePer = r.FilePer
-		}
-		manifest, flux, err := layout.NewAppGroup(group)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		manifests = append(manifests, manifest)
-		fluxes = append(fluxes, flux)
-	}
-
-	bootstrapFlux, err := layout.NewFluxBootstrap(c.Name, c.SourceRef, c.Interval, "flux-system")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return manifests, fluxes, bootstrapFlux, nil
-}
-
 // Helper getters.
-func (c *Cluster) GetName() string                               { return c.Name }
-func (c *Cluster) GetInterval() string                           { return c.Interval }
-func (c *Cluster) GetSourceRef() string                          { return c.SourceRef }
-func (c *Cluster) GetOCIRepository() *fluxcd.OCIRepositoryConfig { return c.OCIRepo }
-func (c *Cluster) GetAppSets() []AppSet                          { return c.AppSets }
+func (c *Cluster) GetName() string                                      { return c.Name }
+func (c *Cluster) GetInterval() string                                  { return c.Interval }
+func (c *Cluster) GetSourceRef() string                                 { return c.SourceRef }
+func (c *Cluster) GetOCIRepository() *fluxcd.OCIRepositoryConfig        { return c.OCIRepo }
+func (c *Cluster) GetApplicationGroups() []application.ApplicationGroup { return c.ApplictionGroups }
 
 // Setters for metadata fields.
-func (c *Cluster) SetName(n string)                { c.Name = n }
-func (c *Cluster) SetInterval(i string)            { c.Interval = i }
-func (c *Cluster) SetSourceRef(s string)           { c.SourceRef = s }
-func (c *Cluster) SetFilePer(f api.FileExportMode) { c.FilePer = f }
+func (c *Cluster) SetName(n string)      { c.Name = n }
+func (c *Cluster) SetInterval(i string)  { c.Interval = i }
+func (c *Cluster) SetSourceRef(s string) { c.SourceRef = s }

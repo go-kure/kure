@@ -8,12 +8,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/go-kure/kure/pkg/cluster/api"
 )
 
 // WriteManifest writes a ManifestLayout to disk using the provided configuration.
-func WriteManifest(basePath string, cfg LayoutConfig, ml *ManifestLayout) error {
+func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if cfg.ManifestFileName == nil {
 		cfg.ManifestFileName = DefaultManifestFileName
 	}
@@ -21,7 +19,7 @@ func WriteManifest(basePath string, cfg LayoutConfig, ml *ManifestLayout) error 
 		cfg.ManifestsDir = "clusters"
 	}
 	mode := ml.FilePer
-	if mode == api.FilePerUnset {
+	if mode == FilePerUnset {
 		mode = cfg.FilePer
 	}
 
@@ -89,7 +87,7 @@ func WriteManifest(basePath string, cfg LayoutConfig, ml *ManifestLayout) error 
 }
 
 // WriteFlux writes a FluxLayout to disk using the provided configuration.
-func WriteFlux(basePath string, cfg LayoutConfig, fl *FluxLayout) error {
+func WriteFlux(basePath string, cfg Config, fl *FluxLayout) error {
 	if cfg.KustomizationFileName == nil {
 		cfg.KustomizationFileName = DefaultKustomizationFileName
 	}

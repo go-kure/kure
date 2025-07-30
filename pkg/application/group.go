@@ -1,4 +1,4 @@
-package appset
+package application
 
 import (
 	"fmt"
@@ -6,9 +6,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// AppSet represents a unit of deployment, typically the resources that
+// ApplicationGroup represents a unit of deployment, typically the resources that
 // are reconciled by a single Flux Kustomization.
-type AppSet struct {
+type ApplicationGroup struct {
 	// Name identifies the application set.
 	Name string
 	// Namespace is the target namespace for the resources. It may be empty
@@ -20,20 +20,20 @@ type AppSet struct {
 	Labels map[string]string
 }
 
-// New constructs an AppSet with the given name, resources and labels.
+// New constructs an ApplicationGroup with the given name, resources and labels.
 // It returns an error if validation fails.
-func New(name string, resources []client.Object, labels map[string]string) (*AppSet, error) {
-	a := &AppSet{Name: name, Namespace: "", Resources: resources, Labels: labels}
+func New(name string, resources []client.Object, labels map[string]string) (*ApplicationGroup, error) {
+	a := &ApplicationGroup{Name: name, Namespace: "", Resources: resources, Labels: labels}
 	if err := a.Validate(); err != nil {
 		return nil, err
 	}
 	return a, nil
 }
 
-// Validate performs basic sanity checks on the AppSet.
-func (a *AppSet) Validate() error {
+// Validate performs basic sanity checks on the ApplicationGroup.
+func (a *ApplicationGroup) Validate() error {
 	if a == nil {
-		return fmt.Errorf("nil AppSet")
+		return fmt.Errorf("nil ApplicationGroup")
 	}
 	if a.Name == "" {
 		return fmt.Errorf("name is required")
@@ -75,17 +75,17 @@ func labelsMatch(labels map[string]string, match map[string]string) bool {
 	return true
 }
 
-// SplitByLabels divides the AppSet into new AppSets based on the provided
+// SplitByLabels divides the ApplicationGroup into new AppSets based on the provided
 // label rules. Resources matching a rule are placed into the corresponding
 // subset. Resources that do not match any rule remain in the original set.
-func (a *AppSet) SplitByLabels(rules []LabelRule) ([]*AppSet, error) {
+func (a *ApplicationGroup) SplitByLabels(rules []LabelRule) ([]*ApplicationGroup, error) {
 	if err := a.Validate(); err != nil {
 		return nil, err
 	}
 
-	subsets := make([]*AppSet, len(rules))
+	subsets := make([]*ApplicationGroup, len(rules))
 	for i, r := range rules {
-		subsets[i] = &AppSet{
+		subsets[i] = &ApplicationGroup{
 			Name:      r.Name,
 			Namespace: a.Namespace,
 			Labels:    mergeLabels(a.Labels, r.Match),
@@ -109,14 +109,14 @@ func (a *AppSet) SplitByLabels(rules []LabelRule) ([]*AppSet, error) {
 	}
 
 	// Filter out empty subsets
-	var result []*AppSet
+	var result []*ApplicationGroup
 	for _, s := range subsets {
 		if len(s.Resources) > 0 {
 			result = append(result, s)
 		}
 	}
 
-	// Update current AppSet to hold remaining resources
+	// Update current ApplicationGroup to hold remaining resources
 	a.Resources = remaining
 	if len(a.Resources) > 0 {
 		result = append(result, a)

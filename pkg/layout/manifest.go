@@ -8,14 +8,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/go-kure/kure/pkg/cluster/api"
 )
 
 type ManifestLayout struct {
 	Name      string
 	Namespace string
-	FilePer   api.FileExportMode
+	FilePer   FileExportMode
 	Resources []client.Object
 	Children  []*ManifestLayout
 }
@@ -46,9 +44,9 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 
 		var fileName string
 		switch ml.FilePer {
-		case api.FilePerResource:
+		case FilePerResource:
 			fileName = fmt.Sprintf("%s-%s-%s.yaml", ns, kind, name)
-		case api.FilePerKind:
+		case FilePerKind:
 			fileName = fmt.Sprintf("%s-%s.yaml", ns, kind)
 		}
 

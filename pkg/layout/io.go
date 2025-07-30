@@ -1,16 +1,17 @@
-package cluster
+package layout
 
 import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/go-kure/kure/pkg/cluster"
 	"github.com/go-kure/kure/pkg/fluxcd"
 	"github.com/go-kure/kure/pkg/kio"
 )
 
 // LoadClusterFromYAML reads and parses a cluster configuration from a YAML file.
-func LoadClusterFromYAML(configPath string) (*Cluster, error) {
-	var c Cluster
+func LoadClusterFromYAML(configPath string) (*cluster.Cluster, error) {
+	var c cluster.Cluster
 	if err := kio.LoadFile(configPath, &c); err != nil {
 		return nil, err
 	}
@@ -18,7 +19,7 @@ func LoadClusterFromYAML(configPath string) (*Cluster, error) {
 }
 
 // WriteCluster writes the manifests and Flux layouts for the cluster to disk.
-func WriteCluster(c *Cluster, manifestsBasePath, fluxBasePath string) error {
+func WriteCluster(c *cluster.Cluster, manifestsBasePath, fluxBasePath string) error {
 	manifests, fluxes, bootstrapFlux, err := NewClusterLayouts(c)
 	if err != nil {
 		return err

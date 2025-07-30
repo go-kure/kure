@@ -5,18 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	cllayout "github.com/go-kure/kure/pkg/cluster/layout"
+	"github.com/go-kure/kure/pkg/layout"
 )
 
 func TestFluxLayoutWriteWithConfig(t *testing.T) {
-	fl := &cllayout.FluxLayout{Name: "app", TargetPath: "demo/app"}
+	fl := &layout.FluxLayout{Name: "app", TargetPath: "demo/app"}
 
-	cfg := cllayout.DefaultLayoutConfig()
+	cfg := layout.DefaultLayoutConfig()
 	cfg.FluxDir = "flux"
 	cfg.KustomizationFileName = func(name string) string { return name + ".flux.yaml" }
 
 	dir := t.TempDir()
-	if err := cllayout.WriteFlux(dir, cfg, fl); err != nil {
+	if err := layout.WriteFlux(dir, cfg, fl); err != nil {
 		t.Fatalf("write with config: %v", err)
 	}
 

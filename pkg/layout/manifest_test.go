@@ -8,8 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/pkg/cluster/api"
-	cllayout "github.com/go-kure/kure/pkg/cluster/layout"
+	"github.com/go-kure/kure/pkg/layout"
 )
 
 func TestManifestLayoutWrite(t *testing.T) {
@@ -19,10 +18,10 @@ func TestManifestLayoutWrite(t *testing.T) {
 	obj.SetName("test")
 	obj.SetNamespace("default")
 
-	ml := &cllayout.ManifestLayout{
+	ml := &layout.ManifestLayout{
 		Name:      "test",
 		Namespace: "default",
-		FilePer:   api.FilePerResource,
+		FilePer:   layout.FilePerResource,
 		Resources: []client.Object{obj},
 	}
 
@@ -43,20 +42,20 @@ func TestManifestLayoutWriteWithConfig(t *testing.T) {
 	obj.SetName("demo")
 	obj.SetNamespace("demo")
 
-	ml := &cllayout.ManifestLayout{
+	ml := &layout.ManifestLayout{
 		Name:      "app",
 		Namespace: "demo",
 		Resources: []client.Object{obj},
 	}
 
-	cfg := cllayout.DefaultLayoutConfig()
+	cfg := layout.DefaultLayoutConfig()
 	cfg.ManifestsDir = "manifests"
-	cfg.ManifestFileName = func(ns, kind, name string, _ api.FileExportMode) string {
+	cfg.ManifestFileName = func(ns, kind, name string, _ layout.FileExportMode) string {
 		return ns + "_" + kind + "_" + name + ".yml"
 	}
 
 	dir := t.TempDir()
-	if err := cllayout.WriteManifest(dir, cfg, ml); err != nil {
+	if err := layout.WriteManifest(dir, cfg, ml); err != nil {
 		t.Fatalf("write with config: %v", err)
 	}
 

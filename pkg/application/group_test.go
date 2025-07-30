@@ -1,4 +1,4 @@
-package appset
+package application
 
 import (
 	"testing"
@@ -54,7 +54,7 @@ func TestSplitByLabels(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	as := &AppSet{Name: "", Resources: []client.Object{}}
+	as := &ApplicationGroup{Name: "", Resources: []client.Object{}}
 	if err := as.Validate(); err == nil {
 		t.Fatalf("expected validation error")
 	}

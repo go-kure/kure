@@ -8,7 +8,7 @@ import (
 
 	"k8s.io/cli-runtime/pkg/printers"
 
-	"github.com/go-kure/kure/pkg/cluster"
+	"github.com/go-kure/kure/pkg/layout"
 	"github.com/go-kure/kure/pkg/patch"
 )
 
@@ -29,11 +29,11 @@ func runCluster(args []string) error {
 	if configPath == "" {
 		return fmt.Errorf("--config path is required")
 	}
-	cfg, err := cluster.LoadClusterFromYAML(configPath)
+	cfg, err := layout.LoadClusterFromYAML(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cluster config: %w", err)
 	}
-	if err := cluster.WriteCluster(cfg, manifestsPath, fluxPath); err != nil {
+	if err := layout.WriteCluster(cfg, manifestsPath, fluxPath); err != nil {
 		return fmt.Errorf("failed to write cluster files: %w", err)
 	}
 	log.Println("Cluster generated successfully.")

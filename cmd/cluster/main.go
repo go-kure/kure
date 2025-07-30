@@ -4,10 +4,11 @@ import (
 	"log"
 	"os"
 
+	"github.com/go-kure/kure/pkg/application"
 	"github.com/go-kure/kure/pkg/cluster"
-	"github.com/go-kure/kure/pkg/cluster/api"
 	"github.com/go-kure/kure/pkg/fluxcd"
 	"github.com/go-kure/kure/pkg/kio"
+	"github.com/go-kure/kure/pkg/layout"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -20,24 +21,24 @@ func main() {
 		Ref:       "main",
 		Interval:  "10m",
 	})
-	c.SetFilePer(api.FilePerResource)
+	c.SetFilePer(layout.FilePerResource)
 
-	app := api.AppWorkloadConfig{
+	app := application.AppWorkloadConfig{
 		Name:     "my-app",
 		Image:    "ghcr.io/my-org/my-app:v1",
 		Ports:    []int{80},
 		Replicas: ptr(2),
-		Ingress: &api.IngressConfig{
+		Ingress: &application.IngressConfig{
 			Host:   "my-app.example.com",
 			TLS:    true,
 			Issuer: "letsencrypt",
 		},
 	}
 
-	group := api.AppGroup{
+	group := layout.AppGroup{
 		Name:      "apps",
 		Namespace: "default",
-		Apps:      []api.AppWorkloadConfig{app},
+		Apps:      []application.AppWorkloadConfig{app},
 	}
 
 	c.AddAppSet(cluster.AppSet{AppGroup: group})
