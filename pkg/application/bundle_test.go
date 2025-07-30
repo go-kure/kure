@@ -5,7 +5,7 @@ import (
 )
 
 func TestValidate(t *testing.T) {
-	as := &Group{Name: "", Applications: &[]*Application{}}
+	as := &Bundle{Name: "", Applications: &[]*Application{}}
 	if err := as.Validate(); err == nil {
 		t.Fatalf("expected validation error")
 	}
