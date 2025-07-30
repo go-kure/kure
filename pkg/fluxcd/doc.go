@@ -11,7 +11,7 @@
 // configuration structures defined in this package and convert them to the
 // appropriate Flux custom resources.
 //
-// Resources covered include sources (`GitRepository`, `OCIRepository`,
+// Applications covered include sources (`GitRepository`, `OCIRepository`,
 // `HelmRepository`, `Bucket`), workloads (`Kustomization`, `HelmRelease`), the
 // notification stack (`Provider`, `Alert`, `Receiver`), and objects from the
 // Flux operator (`FluxInstance`, `FluxReport`, `ResourceSet`,

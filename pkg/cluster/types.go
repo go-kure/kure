@@ -7,9 +7,9 @@ import (
 
 // ClusterConfig is the root configuration for a cluster layout.
 type ClusterConfig struct {
-	Name              string                         `yaml:"name"`
-	Interval          string                         `yaml:"interval"`
-	SourceRef         string                         `yaml:"sourceRef"`
-	OCIRepo           *fluxcd.OCIRepositoryConfig    `yaml:"ociRepo,omitempty"`
-	ApplicationGroups []application.ApplicationGroup `yaml:"appGroups,omitempty"`
+	Name              string                      `yaml:"name"`
+	Interval          string                      `yaml:"interval"`
+	SourceRef         string                      `yaml:"sourceRef"`
+	OCIRepo           *fluxcd.OCIRepositoryConfig `yaml:"ociRepo,omitempty"`
+	ApplicationGroups []application.Group         `yaml:"appGroups,omitempty"`
 }
