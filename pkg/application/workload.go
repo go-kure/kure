@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	ik8s "github.com/go-kure/kure/internal/k8s"
+	"github.com/go-kure/kure/internal/kubernetes"
 	"github.com/go-kure/kure/pkg/k8s"
 )
 
@@ -85,30 +85,30 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, erro
 	// Determine workload type
 	switch cfg.Workload {
 	case StatefulSetWorkload:
-		sts := ik8s.CreateStatefulSet(app.Name, app.Namespace)
+		sts := kubernetes.CreateStatefulSet(app.Name, app.Namespace)
 		for _, c := range containers {
-			if err := ik8s.AddStatefulSetContainer(sts, c); err != nil {
+			if err := kubernetes.AddStatefulSetContainer(sts, c); err != nil {
 				return nil, err
 			}
 		}
-		_ = ik8s.SetStatefulSetReplicas(sts, cfg.Replicas)
+		_ = kubernetes.SetStatefulSetReplicas(sts, cfg.Replicas)
 		objs = append(objs, k8s.ToClientObject(sts))
 	case DaemonSetWorkload:
-		ds := ik8s.CreateDaemonSet(app.Name, app.Namespace)
+		ds := kubernetes.CreateDaemonSet(app.Name, app.Namespace)
 		for _, c := range containers {
-			if err := ik8s.AddDaemonSetContainer(ds, c); err != nil {
+			if err := kubernetes.AddDaemonSetContainer(ds, c); err != nil {
 				return nil, err
 			}
 		}
 		objs = append(objs, k8s.ToClientObject(ds))
 	case DeploymentWorkload:
-		dep := ik8s.CreateDeployment(app.Name, app.Namespace)
+		dep := kubernetes.CreateDeployment(app.Name, app.Namespace)
 		for _, c := range containers {
-			if err := ik8s.AddDeploymentContainer(dep, c); err != nil {
+			if err := kubernetes.AddDeploymentContainer(dep, c); err != nil {
 				return nil, err
 			}
 		}
-		_ = ik8s.SetDeploymentReplicas(dep, cfg.Replicas)
+		_ = kubernetes.SetDeploymentReplicas(dep, cfg.Replicas)
 		objs = append(objs, k8s.ToClientObject(dep))
 	default:
 		return nil, fmt.Errorf("unsupported workload type %s", cfg.Workload)
@@ -117,10 +117,10 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, erro
 	// Service creation when ports are specified
 	var svc *corev1.Service
 	if len(allports) > 0 {
-		svc = ik8s.CreateService(app.Name, app.Namespace)
-		_ = ik8s.SetServiceSelector(svc, map[string]string{"app": app.Name})
+		svc = kubernetes.CreateService(app.Name, app.Namespace)
+		_ = kubernetes.SetServiceSelector(svc, map[string]string{"app": app.Name})
 		for _, p := range allports {
-			_ = ik8s.AddServicePort(svc, corev1.ServicePort{
+			_ = kubernetes.AddServicePort(svc, corev1.ServicePort{
 				Name:       p.Name,
 				Port:       p.ContainerPort,
 				TargetPort: intstr.FromInt32(p.ContainerPort),
@@ -130,17 +130,17 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, erro
 	}
 
 	if cfg.Ingress != nil && svc != nil {
-		ing := ik8s.CreateIngress(app.Name, app.Namespace, "")
-		rule := ik8s.CreateIngressRule(cfg.Ingress.Host)
+		ing := kubernetes.CreateIngress(app.Name, app.Namespace, "")
+		rule := kubernetes.CreateIngressRule(cfg.Ingress.Host)
 		pt := netv1.PathTypeImplementationSpecific
 		path := cfg.Ingress.Path
 		if path == "" {
 			path = "/"
 		}
 		port := cfg.Ingress.ServicePortName
-		ik8s.AddIngressRulePath(rule, ik8s.CreateIngressPath(path, &pt, svc.Name, port))
-		ik8s.AddIngressRule(ing, rule)
-		ik8s.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
+		kubernetes.AddIngressRulePath(rule, kubernetes.CreateIngressPath(path, &pt, svc.Name, port))
+		kubernetes.AddIngressRule(ing, rule)
+		kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
 		objs = append(objs, k8s.ToClientObject(ing))
 	}
 
@@ -148,10 +148,10 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, erro
 }
 
 func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort, error) {
-	container := ik8s.CreateContainer(cfg.Name, cfg.Image, nil, nil)
+	container := kubernetes.CreateContainer(cfg.Name, cfg.Image, nil, nil)
 	var ports []corev1.ContainerPort
 	for _, p := range cfg.Ports {
-		_ = ik8s.AddContainerPort(container, p)
+		_ = kubernetes.AddContainerPort(container, p)
 		ports = append(ports, p)
 	}
 	for k, v := range cfg.VolumeMounts {
@@ -159,7 +159,7 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 			Name:      k,
 			MountPath: v,
 		}
-		_ = ik8s.AddContainerVolumeMount(container, volume)
+		_ = kubernetes.AddContainerVolumeMount(container, volume)
 	}
 	return container, ports, nil
 }

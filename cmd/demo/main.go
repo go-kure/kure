@@ -30,10 +30,10 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/internal/certmanager"
+	"github.com/go-kure/kure/internal/kubernetes"
 
 	"github.com/go-kure/kure/internal/externalsecrets"
 	"github.com/go-kure/kure/internal/fluxcd"
-	"github.com/go-kure/kure/internal/k8s"
 	"github.com/go-kure/kure/internal/metallb"
 	"github.com/go-kure/kure/pkg/application"
 	kio "github.com/go-kure/kure/pkg/io"
@@ -86,161 +86,161 @@ func runInternals() {
 	y := printers.YAMLPrinter{}
 
 	// Namespace example
-	ns := k8s.CreateNamespace("demo")
-	k8s.AddNamespaceLabel(ns, "env", "demo")
-	k8s.AddNamespaceAnnotation(ns, "owner", "example")
+	ns := kubernetes.CreateNamespace("demo")
+	kubernetes.AddNamespaceLabel(ns, "env", "demo")
+	kubernetes.AddNamespaceAnnotation(ns, "owner", "example")
 
 	// Service account
-	sa := k8s.CreateServiceAccount("demo-sa", "demo")
-	logError("add serviceaccount secret", k8s.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"}))
-	logError("add serviceaccount image pull secret", k8s.AddServiceAccountImagePullSecret(sa, apiv1.LocalObjectReference{Name: "sa-pull"}))
-	logError("set serviceaccount automount token", k8s.SetServiceAccountAutomountToken(sa, true))
+	sa := kubernetes.CreateServiceAccount("demo-sa", "demo")
+	logError("add serviceaccount secret", kubernetes.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"}))
+	logError("add serviceaccount image pull secret", kubernetes.AddServiceAccountImagePullSecret(sa, apiv1.LocalObjectReference{Name: "sa-pull"}))
+	logError("set serviceaccount automount token", kubernetes.SetServiceAccountAutomountToken(sa, true))
 
 	// Secret example
-	secret := k8s.CreateSecret("demo-secret", "demo")
-	logError("add secret data", k8s.AddSecretData(secret, "cert", []byte("data")))
-	logError("add secret string data", k8s.AddSecretStringData(secret, "token", "abcd"))
-	logError("set secret type", k8s.SetSecretType(secret, apiv1.SecretTypeOpaque))
-	logError("set secret immutable", k8s.SetSecretImmutable(secret, true))
+	secret := kubernetes.CreateSecret("demo-secret", "demo")
+	logError("add secret data", kubernetes.AddSecretData(secret, "cert", []byte("data")))
+	logError("add secret string data", kubernetes.AddSecretStringData(secret, "token", "abcd"))
+	logError("set secret type", kubernetes.SetSecretType(secret, apiv1.SecretTypeOpaque))
+	logError("set secret immutable", kubernetes.SetSecretImmutable(secret, true))
 
 	// ConfigMap example
-	cm := k8s.CreateConfigMap("demo-config", "demo")
-	logError("add configmap data", k8s.AddConfigMapData(cm, "foo", "bar"))
-	logError("add configmap data map", k8s.AddConfigMapDataMap(cm, map[string]string{"extra": "value"}))
-	logError("add configmap binary data", k8s.AddConfigMapBinaryData(cm, "bin", []byte{0x1}))
-	logError("add configmap binary data map", k8s.AddConfigMapBinaryDataMap(cm, map[string][]byte{"more": {0x2}}))
-	logError("set configmap data", k8s.SetConfigMapData(cm, map[string]string{"hello": "world"}))
-	logError("set configmap binary data", k8s.SetConfigMapBinaryData(cm, map[string][]byte{"bye": {0x0}}))
-	logError("set configmap immutable", k8s.SetConfigMapImmutable(cm, false))
+	cm := kubernetes.CreateConfigMap("demo-config", "demo")
+	logError("add configmap data", kubernetes.AddConfigMapData(cm, "foo", "bar"))
+	logError("add configmap data map", kubernetes.AddConfigMapDataMap(cm, map[string]string{"extra": "value"}))
+	logError("add configmap binary data", kubernetes.AddConfigMapBinaryData(cm, "bin", []byte{0x1}))
+	logError("add configmap binary data map", kubernetes.AddConfigMapBinaryDataMap(cm, map[string][]byte{"more": {0x2}}))
+	logError("set configmap data", kubernetes.SetConfigMapData(cm, map[string]string{"hello": "world"}))
+	logError("set configmap binary data", kubernetes.SetConfigMapBinaryData(cm, map[string][]byte{"bye": {0x0}}))
+	logError("set configmap immutable", kubernetes.SetConfigMapImmutable(cm, false))
 
 	// PersistentVolumeClaim example
-	pvc := k8s.CreatePersistentVolumeClaim("demo-pvc", "demo")
-	k8s.AddPVCAccessMode(pvc, apiv1.ReadWriteOnce)
-	k8s.SetPVCStorageClassName(pvc, "standard")
-	k8s.SetPVCVolumeMode(pvc, apiv1.PersistentVolumeFilesystem)
-	k8s.SetPVCResources(pvc, apiv1.VolumeResourceRequirements{
+	pvc := kubernetes.CreatePersistentVolumeClaim("demo-pvc", "demo")
+	kubernetes.AddPVCAccessMode(pvc, apiv1.ReadWriteOnce)
+	kubernetes.SetPVCStorageClassName(pvc, "standard")
+	kubernetes.SetPVCVolumeMode(pvc, apiv1.PersistentVolumeFilesystem)
+	kubernetes.SetPVCResources(pvc, apiv1.VolumeResourceRequirements{
 		Requests: apiv1.ResourceList{
 			apiv1.ResourceStorage: resource.MustParse("2Gi"),
 		},
 	})
-	k8s.SetPVCSelector(pvc, &metav1.LabelSelector{MatchLabels: map[string]string{"disk": "fast"}})
-	k8s.SetPVCVolumeName(pvc, "pv1")
-	k8s.SetPVCDataSource(pvc, &apiv1.TypedLocalObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
-	k8s.SetPVCDataSourceRef(pvc, &apiv1.TypedObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
+	kubernetes.SetPVCSelector(pvc, &metav1.LabelSelector{MatchLabels: map[string]string{"disk": "fast"}})
+	kubernetes.SetPVCVolumeName(pvc, "pv1")
+	kubernetes.SetPVCDataSource(pvc, &apiv1.TypedLocalObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
+	kubernetes.SetPVCDataSourceRef(pvc, &apiv1.TypedObjectReference{Kind: "PersistentVolumeClaim", Name: "source"})
 
 	// StorageClass example
-	sc := k8s.CreateStorageClass("demo-sc", "kubernetes.io/no-provisioner")
-	k8s.AddStorageClassParameter(sc, "type", "local")
-	k8s.SetStorageClassAllowVolumeExpansion(sc, true)
-	k8s.SetPVCStorageClass(pvc, sc)
+	sc := kubernetes.CreateStorageClass("demo-sc", "kubernetes.io/no-provisioner")
+	kubernetes.AddStorageClassParameter(sc, "type", "local")
+	kubernetes.SetStorageClassAllowVolumeExpansion(sc, true)
+	kubernetes.SetPVCStorageClass(pvc, sc)
 
 	// Pod example
-	pod := k8s.CreatePod("demo-pod", "demo")
-	mainCtr := k8s.CreateContainer("app", "nginx", nil, nil)
-	logError("add container port", k8s.AddContainerPort(mainCtr, apiv1.ContainerPort{Name: "http", ContainerPort: 80}))
-	logError("add container env", k8s.AddContainerEnv(mainCtr, apiv1.EnvVar{Name: "ENV", Value: "prod"}))
-	logError("add container env from", k8s.AddContainerEnvFrom(mainCtr, apiv1.EnvFromSource{ConfigMapRef: &apiv1.ConfigMapEnvSource{LocalObjectReference: apiv1.LocalObjectReference{Name: cm.Name}}}))
-	logError("add container volume mount", k8s.AddContainerVolumeMount(mainCtr, apiv1.VolumeMount{Name: "data", MountPath: "/data"}))
-	logError("add container volume device", k8s.AddContainerVolumeDevice(mainCtr, apiv1.VolumeDevice{Name: "block", DevicePath: "/dev/block"}))
-	logError("set container liveness probe", k8s.SetContainerLivenessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5}))
-	logError("set container readiness probe", k8s.SetContainerReadinessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5}))
-	logError("set container startup probe", k8s.SetContainerStartupProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 1}))
-	logError("set container resources", k8s.SetContainerResources(mainCtr, apiv1.ResourceRequirements{
+	pod := kubernetes.CreatePod("demo-pod", "demo")
+	mainCtr := kubernetes.CreateContainer("app", "nginx", nil, nil)
+	logError("add container port", kubernetes.AddContainerPort(mainCtr, apiv1.ContainerPort{Name: "http", ContainerPort: 80}))
+	logError("add container env", kubernetes.AddContainerEnv(mainCtr, apiv1.EnvVar{Name: "ENV", Value: "prod"}))
+	logError("add container env from", kubernetes.AddContainerEnvFrom(mainCtr, apiv1.EnvFromSource{ConfigMapRef: &apiv1.ConfigMapEnvSource{LocalObjectReference: apiv1.LocalObjectReference{Name: cm.Name}}}))
+	logError("add container volume mount", kubernetes.AddContainerVolumeMount(mainCtr, apiv1.VolumeMount{Name: "data", MountPath: "/data"}))
+	logError("add container volume device", kubernetes.AddContainerVolumeDevice(mainCtr, apiv1.VolumeDevice{Name: "block", DevicePath: "/dev/block"}))
+	logError("set container liveness probe", kubernetes.SetContainerLivenessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5}))
+	logError("set container readiness probe", kubernetes.SetContainerReadinessProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 5}))
+	logError("set container startup probe", kubernetes.SetContainerStartupProbe(mainCtr, apiv1.Probe{InitialDelaySeconds: 1}))
+	logError("set container resources", kubernetes.SetContainerResources(mainCtr, apiv1.ResourceRequirements{
 		Limits: apiv1.ResourceList{"memory": resource.MustParse("128Mi")},
 		Requests: apiv1.ResourceList{
 			"cpu":    resource.MustParse("50m"),
 			"memory": resource.MustParse("64Mi"),
 		},
 	}))
-	logError("set container image pull policy", k8s.SetContainerImagePullPolicy(mainCtr, apiv1.PullIfNotPresent))
-	logError("set container security context", k8s.SetContainerSecurityContext(mainCtr, apiv1.SecurityContext{RunAsUser: ptr[int64](1000)}))
+	logError("set container image pull policy", kubernetes.SetContainerImagePullPolicy(mainCtr, apiv1.PullIfNotPresent))
+	logError("set container security context", kubernetes.SetContainerSecurityContext(mainCtr, apiv1.SecurityContext{RunAsUser: ptr[int64](1000)}))
 
-	initCtr := k8s.CreateContainer("init", "busybox", []string{"sh", "-c"}, []string{"echo init"})
+	initCtr := kubernetes.CreateContainer("init", "busybox", []string{"sh", "-c"}, []string{"echo init"})
 
-	logError("add pod container", k8s.AddPodContainer(pod, mainCtr))
-	logError("add pod init container", k8s.AddPodInitContainer(pod, initCtr))
-	logError("add pod volume", k8s.AddPodVolume(pod, &apiv1.Volume{Name: "data"}))
-	logError("add pod image pull secret", k8s.AddPodImagePullSecret(pod, &apiv1.LocalObjectReference{Name: "pullsecret"}))
-	logError("add pod toleration", k8s.AddPodToleration(pod, &apiv1.Toleration{Key: "role"}))
+	logError("add pod container", kubernetes.AddPodContainer(pod, mainCtr))
+	logError("add pod init container", kubernetes.AddPodInitContainer(pod, initCtr))
+	logError("add pod volume", kubernetes.AddPodVolume(pod, &apiv1.Volume{Name: "data"}))
+	logError("add pod image pull secret", kubernetes.AddPodImagePullSecret(pod, &apiv1.LocalObjectReference{Name: "pullsecret"}))
+	logError("add pod toleration", kubernetes.AddPodToleration(pod, &apiv1.Toleration{Key: "role"}))
 	tsc := apiv1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: apiv1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}
-	logError("add pod topology spread constraints", k8s.AddPodTopologySpreadConstraints(pod, &tsc))
-	logError("set pod serviceaccount name", k8s.SetPodServiceAccountName(pod, sa.Name))
-	logError("set pod security context", k8s.SetPodSecurityContext(pod, &apiv1.PodSecurityContext{}))
-	logError("set pod affinity", k8s.SetPodAffinity(pod, &apiv1.Affinity{}))
-	logError("set pod node selector", k8s.SetPodNodeSelector(pod, map[string]string{"type": "worker"}))
+	logError("add pod topology spread constraints", kubernetes.AddPodTopologySpreadConstraints(pod, &tsc))
+	logError("set pod serviceaccount name", kubernetes.SetPodServiceAccountName(pod, sa.Name))
+	logError("set pod security context", kubernetes.SetPodSecurityContext(pod, &apiv1.PodSecurityContext{}))
+	logError("set pod affinity", kubernetes.SetPodAffinity(pod, &apiv1.Affinity{}))
+	logError("set pod node selector", kubernetes.SetPodNodeSelector(pod, map[string]string{"type": "worker"}))
 
 	// Deployment example
-	dep := k8s.CreateDeployment("demo-deployment", "demo")
-	logError("add deployment container", k8s.AddDeploymentContainer(dep, mainCtr))
-	logError("add deployment init container", k8s.AddDeploymentInitContainer(dep, initCtr))
-	logError("add deployment volume", k8s.AddDeploymentVolume(dep, &apiv1.Volume{Name: "data"}))
-	logError("add deployment image pull secret", k8s.AddDeploymentImagePullSecret(dep, &apiv1.LocalObjectReference{Name: "pullsecret"}))
-	logError("add deployment toleration", k8s.AddDeploymentToleration(dep, &apiv1.Toleration{Key: "role"}))
-	logError("add deployment topology spread constraints", k8s.AddDeploymentTopologySpreadConstraints(dep, &tsc))
-	logError("set deployment serviceaccount name", k8s.SetDeploymentServiceAccountName(dep, sa.Name))
-	logError("set deployment security context", k8s.SetDeploymentSecurityContext(dep, &apiv1.PodSecurityContext{}))
-	logError("set deployment affinity", k8s.SetDeploymentAffinity(dep, &apiv1.Affinity{}))
-	logError("set deployment node selector", k8s.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"}))
+	dep := kubernetes.CreateDeployment("demo-deployment", "demo")
+	logError("add deployment container", kubernetes.AddDeploymentContainer(dep, mainCtr))
+	logError("add deployment init container", kubernetes.AddDeploymentInitContainer(dep, initCtr))
+	logError("add deployment volume", kubernetes.AddDeploymentVolume(dep, &apiv1.Volume{Name: "data"}))
+	logError("add deployment image pull secret", kubernetes.AddDeploymentImagePullSecret(dep, &apiv1.LocalObjectReference{Name: "pullsecret"}))
+	logError("add deployment toleration", kubernetes.AddDeploymentToleration(dep, &apiv1.Toleration{Key: "role"}))
+	logError("add deployment topology spread constraints", kubernetes.AddDeploymentTopologySpreadConstraints(dep, &tsc))
+	logError("set deployment serviceaccount name", kubernetes.SetDeploymentServiceAccountName(dep, sa.Name))
+	logError("set deployment security context", kubernetes.SetDeploymentSecurityContext(dep, &apiv1.PodSecurityContext{}))
+	logError("set deployment affinity", kubernetes.SetDeploymentAffinity(dep, &apiv1.Affinity{}))
+	logError("set deployment node selector", kubernetes.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"}))
 
 	// StatefulSet example
-	sts := k8s.CreateStatefulSet("demo-sts", "demo")
-	logError("add statefulset container", k8s.AddStatefulSetContainer(sts, mainCtr))
-	logError("add statefulset init container", k8s.AddStatefulSetInitContainer(sts, initCtr))
-	logError("add statefulset volume", k8s.AddStatefulSetVolume(sts, &apiv1.Volume{Name: "data"}))
-	logError("add statefulset volumeclaim template", k8s.AddStatefulSetVolumeClaimTemplate(sts, *k8s.CreatePersistentVolumeClaim("data", "demo")))
-	logError("add statefulset toleration", k8s.AddStatefulSetToleration(sts, &apiv1.Toleration{Key: "role"}))
-	logError("set statefulset serviceaccount name", k8s.SetStatefulSetServiceAccountName(sts, sa.Name))
-	logError("set statefulset service name", k8s.SetStatefulSetServiceName(sts, "demo-svc"))
-	logError("set statefulset replicas", k8s.SetStatefulSetReplicas(sts, 3))
+	sts := kubernetes.CreateStatefulSet("demo-sts", "demo")
+	logError("add statefulset container", kubernetes.AddStatefulSetContainer(sts, mainCtr))
+	logError("add statefulset init container", kubernetes.AddStatefulSetInitContainer(sts, initCtr))
+	logError("add statefulset volume", kubernetes.AddStatefulSetVolume(sts, &apiv1.Volume{Name: "data"}))
+	logError("add statefulset volumeclaim template", kubernetes.AddStatefulSetVolumeClaimTemplate(sts, *kubernetes.CreatePersistentVolumeClaim("data", "demo")))
+	logError("add statefulset toleration", kubernetes.AddStatefulSetToleration(sts, &apiv1.Toleration{Key: "role"}))
+	logError("set statefulset serviceaccount name", kubernetes.SetStatefulSetServiceAccountName(sts, sa.Name))
+	logError("set statefulset service name", kubernetes.SetStatefulSetServiceName(sts, "demo-svc"))
+	logError("set statefulset replicas", kubernetes.SetStatefulSetReplicas(sts, 3))
 
 	// DaemonSet example
-	ds := k8s.CreateDaemonSet("demo-ds", "demo")
-	logError("add daemonset container", k8s.AddDaemonSetContainer(ds, mainCtr))
-	logError("add daemonset init container", k8s.AddDaemonSetInitContainer(ds, initCtr))
-	logError("add daemonset volume", k8s.AddDaemonSetVolume(ds, &apiv1.Volume{Name: "data"}))
-	logError("add daemonset toleration", k8s.AddDaemonSetToleration(ds, &apiv1.Toleration{Key: "role"}))
-	logError("set daemonset serviceaccount name", k8s.SetDaemonSetServiceAccountName(ds, sa.Name))
-	logError("set daemonset node selector", k8s.SetDaemonSetNodeSelector(ds, map[string]string{"type": "worker"}))
+	ds := kubernetes.CreateDaemonSet("demo-ds", "demo")
+	logError("add daemonset container", kubernetes.AddDaemonSetContainer(ds, mainCtr))
+	logError("add daemonset init container", kubernetes.AddDaemonSetInitContainer(ds, initCtr))
+	logError("add daemonset volume", kubernetes.AddDaemonSetVolume(ds, &apiv1.Volume{Name: "data"}))
+	logError("add daemonset toleration", kubernetes.AddDaemonSetToleration(ds, &apiv1.Toleration{Key: "role"}))
+	logError("set daemonset serviceaccount name", kubernetes.SetDaemonSetServiceAccountName(ds, sa.Name))
+	logError("set daemonset node selector", kubernetes.SetDaemonSetNodeSelector(ds, map[string]string{"type": "worker"}))
 
 	// Job example
-	job := k8s.CreateJob("demo-job", "demo")
-	logError("add job container", k8s.AddJobContainer(job, mainCtr))
-	logError("set job backoff limit", k8s.SetJobBackoffLimit(job, 3))
-	logError("set job completions", k8s.SetJobCompletions(job, 1))
-	logError("set job parallelism", k8s.SetJobParallelism(job, 1))
+	job := kubernetes.CreateJob("demo-job", "demo")
+	logError("add job container", kubernetes.AddJobContainer(job, mainCtr))
+	logError("set job backoff limit", kubernetes.SetJobBackoffLimit(job, 3))
+	logError("set job completions", kubernetes.SetJobCompletions(job, 1))
+	logError("set job parallelism", kubernetes.SetJobParallelism(job, 1))
 
 	// CronJob example
-	cron := k8s.CreateCronJob("demo-cron", "demo", "*/5 * * * *")
-	logError("add cronjob container", k8s.AddCronJobContainer(cron, mainCtr))
-	logError("set cronjob concurrency policy", k8s.SetCronJobConcurrencyPolicy(cron, batchv1.ForbidConcurrent))
+	cron := kubernetes.CreateCronJob("demo-cron", "demo", "*/5 * * * *")
+	logError("add cronjob container", kubernetes.AddCronJobContainer(cron, mainCtr))
+	logError("set cronjob concurrency policy", kubernetes.SetCronJobConcurrencyPolicy(cron, batchv1.ForbidConcurrent))
 
 	// Service and ingress example
-	svc := k8s.CreateService("demo-svc", "demo")
-	logError("set service selector", k8s.SetServiceSelector(svc, map[string]string{"app": "demo"}))
-	logError("add service port", k8s.AddServicePort(svc, apiv1.ServicePort{Name: "http", Port: 80, TargetPort: intstr.FromString("http")}))
-	logError("set service type", k8s.SetServiceType(svc, apiv1.ServiceTypeClusterIP))
-	logError("set service external traffic policy", k8s.SetServiceExternalTrafficPolicy(svc, apiv1.ServiceExternalTrafficPolicyCluster))
+	svc := kubernetes.CreateService("demo-svc", "demo")
+	logError("set service selector", kubernetes.SetServiceSelector(svc, map[string]string{"app": "demo"}))
+	logError("add service port", kubernetes.AddServicePort(svc, apiv1.ServicePort{Name: "http", Port: 80, TargetPort: intstr.FromString("http")}))
+	logError("set service type", kubernetes.SetServiceType(svc, apiv1.ServiceTypeClusterIP))
+	logError("set service external traffic policy", kubernetes.SetServiceExternalTrafficPolicy(svc, apiv1.ServiceExternalTrafficPolicyCluster))
 
-	ing := k8s.CreateIngress("demo-ing", "demo", "nginx")
-	rule := k8s.CreateIngressRule("example.com")
+	ing := kubernetes.CreateIngress("demo-ing", "demo", "nginx")
+	rule := kubernetes.CreateIngressRule("example.com")
 	pathtype := netv1.PathTypePrefix
-	path := k8s.CreateIngressPath("/", &pathtype, svc.Name, "http")
-	k8s.AddIngressRulePath(rule, path)
-	k8s.AddIngressRule(ing, rule)
-	k8s.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{"example.com"}, SecretName: secret.Name})
+	path := kubernetes.CreateIngressPath("/", &pathtype, svc.Name, "http")
+	kubernetes.AddIngressRulePath(rule, path)
+	kubernetes.AddIngressRule(ing, rule)
+	kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{"example.com"}, SecretName: secret.Name})
 
 	// RBAC examples
-	role := k8s.CreateRole("demo-role", "demo")
-	k8s.AddRoleRule(role, rbacv1.PolicyRule{Verbs: []string{"get"}, Resources: []string{"pods"}})
+	role := kubernetes.CreateRole("demo-role", "demo")
+	kubernetes.AddRoleRule(role, rbacv1.PolicyRule{Verbs: []string{"get"}, Resources: []string{"pods"}})
 
-	clusterRole := k8s.CreateClusterRole("demo-cr")
-	k8s.AddClusterRoleRule(clusterRole, rbacv1.PolicyRule{Verbs: []string{"list"}, Resources: []string{"nodes"}})
+	clusterRole := kubernetes.CreateClusterRole("demo-cr")
+	kubernetes.AddClusterRoleRule(clusterRole, rbacv1.PolicyRule{Verbs: []string{"list"}, Resources: []string{"nodes"}})
 
-	roleBind := k8s.CreateRoleBinding("demo-rb", "demo", rbacv1.RoleRef{Kind: "Role", Name: role.Name})
-	k8s.AddRoleBindingSubject(roleBind, rbacv1.Subject{Kind: "ServiceAccount", Name: sa.Name, Namespace: sa.Namespace})
+	roleBind := kubernetes.CreateRoleBinding("demo-rb", "demo", rbacv1.RoleRef{Kind: "Role", Name: role.Name})
+	kubernetes.AddRoleBindingSubject(roleBind, rbacv1.Subject{Kind: "ServiceAccount", Name: sa.Name, Namespace: sa.Namespace})
 
-	clusterRoleBind := k8s.CreateClusterRoleBinding("demo-crb", rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRole.Name})
-	k8s.AddClusterRoleBindingSubject(clusterRoleBind, rbacv1.Subject{Kind: "User", Name: "admin"})
+	clusterRoleBind := kubernetes.CreateClusterRoleBinding("demo-crb", rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRole.Name})
+	kubernetes.AddClusterRoleBindingSubject(clusterRoleBind, rbacv1.Subject{Kind: "User", Name: "admin"})
 
 	// HelmRelease example
 	hr := fluxcd.CreateHelmRelease("demo-hr", "demo", helmv2.HelmReleaseSpec{})
@@ -285,22 +285,22 @@ func runInternals() {
 	fluxcd.SetOCIRepositoryURL(ociRepo, "oci://registry/app")
 
 	// Network policy example
-	np := k8s.CreateNetworkPolicy("demo-netpol", "demo")
+	np := kubernetes.CreateNetworkPolicy("demo-netpol", "demo")
 	npRule := netv1.NetworkPolicyIngressRule{}
 	peer := netv1.NetworkPolicyPeer{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}
-	k8s.AddNetworkPolicyIngressPeer(&npRule, peer)
-	k8s.AddNetworkPolicyIngressRule(np, npRule)
-	k8s.AddNetworkPolicyPolicyType(np, netv1.PolicyTypeIngress)
+	kubernetes.AddNetworkPolicyIngressPeer(&npRule, peer)
+	kubernetes.AddNetworkPolicyIngressRule(np, npRule)
+	kubernetes.AddNetworkPolicyPolicyType(np, netv1.PolicyTypeIngress)
 
 	// Resource quota example
-	rq := k8s.CreateResourceQuota("demo-quota", "demo")
-	k8s.AddResourceQuotaHard(rq, apiv1.ResourceRequestsStorage, resource.MustParse("1Gi"))
+	rq := kubernetes.CreateResourceQuota("demo-quota", "demo")
+	kubernetes.AddResourceQuotaHard(rq, apiv1.ResourceRequestsStorage, resource.MustParse("1Gi"))
 
 	// Limit range example
-	lr := k8s.CreateLimitRange("demo-limits", "demo")
+	lr := kubernetes.CreateLimitRange("demo-limits", "demo")
 	lrItem := apiv1.LimitRangeItem{Type: apiv1.LimitTypeContainer}
-	k8s.AddLimitRangeItemDefaultRequest(&lrItem, apiv1.ResourceCPU, resource.MustParse("100m"))
-	k8s.AddLimitRangeItem(lr, lrItem)
+	kubernetes.AddLimitRangeItemDefaultRequest(&lrItem, apiv1.ResourceCPU, resource.MustParse("100m"))
+	kubernetes.AddLimitRangeItem(lr, lrItem)
 
 	// Notification controller examples
 	provider := fluxcd.CreateProvider("demo-provider", "demo", notificationv1beta2.ProviderSpec{Type: notificationv1beta2.SlackProvider})
