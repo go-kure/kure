@@ -1,4 +1,4 @@
-// Package kio provides utilities for reading, writing and parsing YAML
+// Package io provides utilities for reading, writing and parsing YAML
 // representations of Kubernetes resources. It acts as a thin wrapper
 // around sigs.k8s.io/yaml and the Kubernetes runtime scheme from client-go.
 //
@@ -14,7 +14,7 @@
 // io.Writer and exposes Marshal and Unmarshal methods. A Buffer can be reused
 // for multiple round trips without allocating new byte slices:
 //
-//	buf := new(kio.Buffer)
+//	buf := new(io.Buffer)
 //	if err := buf.Marshal(obj); err != nil {
 //	    log.Fatalf("marshal object: %v", err)
 //	}
@@ -35,9 +35,9 @@
 // callers may continue processing valid resources while reporting individual
 // failures.
 //
-//	objs, err := kio.ParseFile("./manifests.yaml")
+//	objs, err := io.ParseFile("./manifests.yaml")
 //	if err != nil {
-//	    var pe *kio.ParseErrors
+//	    var pe *io.ParseErrors
 //	    if errors.As(err, &pe) {
 //	        for _, e := range pe.Errors {
 //	            log.Printf("parse error: %v", e)
@@ -48,4 +48,4 @@
 // The package forms the foundation for the other packages within this
 // repository but can be imported directly by any program that requires
 // lightweight YAML handling and runtime object parsing.
-package kio
+package io

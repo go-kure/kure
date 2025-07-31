@@ -1,4 +1,4 @@
-package kio
+package io
 
 import (
 	"errors"
