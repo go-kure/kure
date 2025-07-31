@@ -1,0 +1,66 @@
+---
+name: web-app
+namespace: demo
+workload: Deployment
+replicas: 2
+labels:
+  app: web
+containers:
+  - name: web
+    image: nginx:1.21
+    ports:
+      - name: http
+        containerport: 80
+        hostport: 80
+    env:
+      ENV: prod
+    volumeMounts:
+      data: /usr/share/nginx/html
+volumes:
+  data: /data
+services:
+  - name: web
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+    protocol: TCP
+    selector:
+      app: web
+ingress:
+  host: example.com
+  path: /
+  serviceName: web
+  servicePortName: http
+---
+name: db-app
+namespace: demo
+workload: StatefulSet
+replicas: 3
+labels:
+  app: db
+containers:
+  - name: db
+    image: postgres:14
+    ports:
+      - name: psql
+        containerport: 5432
+        hostport: 5432
+    env:
+      POSTGRES_DB: example
+    volumeMounts:
+      db-data: /var/lib/postgresql/data
+volumes:
+  db-data: /var/lib/postgresql/data
+services:
+  - name: db
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+    selector:
+      app: db
+ingress:
+  host: db.example.com
+  path: /
+  serviceName: db
+  servicePortName: psql

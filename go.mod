@@ -21,13 +21,13 @@ require (
 	github.com/fluxcd/pkg/apis/kustomize v1.10.0
 	github.com/fluxcd/pkg/apis/meta v1.13.0
 	github.com/fluxcd/source-controller/api v1.6.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	go.universe.tf/metallb v0.15.2
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.2
 	k8s.io/apiextensions-apiserver v0.33.2
 	k8s.io/apimachinery v0.33.2
 	k8s.io/cli-runtime v0.33.0
-	k8s.io/client-go v0.33.2
 	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/kustomize/api v0.20.0
 	sigs.k8s.io/yaml v1.5.0
@@ -80,6 +80,7 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	k8s.io/client-go v0.33.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250628140032-d90c4fd18f59 // indirect
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect
