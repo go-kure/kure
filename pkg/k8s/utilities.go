@@ -13,6 +13,10 @@ func GetGroupVersionKind(obj runtime.Object) (schema.GroupVersionKind, error) {
 		return schema.GroupVersionKind{}, errors.ErrNilObject
 	}
 
+	if err := RegisterSchemes(); err != nil {
+		return schema.GroupVersionKind{}, err
+	}
+
 	gvks, _, err := Scheme.ObjectKinds(obj)
 	if err != nil {
 		return schema.GroupVersionKind{}, err

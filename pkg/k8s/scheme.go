@@ -23,33 +23,101 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"sync"
 )
 
 var (
-	Scheme = runtime.NewScheme()
-	Codecs = serializer.NewCodecFactory(Scheme)
+	Scheme       = runtime.NewScheme()
+	Codecs       = serializer.NewCodecFactory(Scheme)
+	registerOnce sync.Once
+	registerErr  error
 )
 
-func init() {
-	// Register core Kubernetes types
-	_ = corev1.AddToScheme(Scheme)
-	_ = appsv1.AddToScheme(Scheme)
-	_ = rbacv1.AddToScheme(Scheme)
-	_ = batchv1.AddToScheme(Scheme)
-	_ = netv1.AddToScheme(Scheme)
-	_ = storv1.AddToScheme(Scheme)
-	_ = apiextensionsv1.AddToScheme(Scheme)
-	_ = cmacme.AddToScheme(Scheme)
-	_ = certv1.AddToScheme(Scheme)
-	_ = cmmeta.AddToScheme(Scheme)
-	_ = fluxv1.AddToScheme(Scheme)
-	_ = helmv2.AddToScheme(Scheme)
-	_ = imagev1.AddToScheme(Scheme)
-	_ = kustv1.AddToScheme(Scheme)
-	_ = notificationv1.AddToScheme(Scheme)
-	_ = notificationv1beta2.AddToScheme(Scheme)
-	_ = sourcev1.AddToScheme(Scheme)
-	_ = sourcev1beta2.AddToScheme(Scheme)
-	_ = esv1.AddToScheme(Scheme)
-	_ = metallbv1beta1.AddToScheme(Scheme)
+// RegisterSchemes adds all Kubernetes and Flux custom resource schemes to Scheme.
+// The registration is performed only once. The first non-nil error returned by
+// any AddToScheme call is cached and returned on subsequent invocations.
+func RegisterSchemes() error {
+	registerOnce.Do(func() {
+		if err := corev1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := appsv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := rbacv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := batchv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := netv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := storv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := apiextensionsv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := cmacme.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := certv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := cmmeta.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := fluxv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := helmv2.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := imagev1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := kustv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := notificationv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := notificationv1beta2.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := sourcev1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := sourcev1beta2.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := esv1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+		if err := metallbv1beta1.AddToScheme(Scheme); err != nil {
+			registerErr = err
+			return
+		}
+	})
+	return registerErr
 }
