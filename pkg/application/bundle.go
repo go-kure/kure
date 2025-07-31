@@ -2,6 +2,8 @@ package application
 
 import (
 	"fmt"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Bundle represents a unit of deployment, typically the resources that
@@ -43,4 +45,16 @@ func (a *Bundle) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (a *Bundle) Generate() ([]*client.Object, error) {
+	var resources []*client.Object
+	for _, app := range *a.Applications {
+		addresources, err := app.Generate()
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, addresources...)
+	}
+	return resources, nil
 }

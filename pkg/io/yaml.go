@@ -5,7 +5,11 @@ import (
 	"io"
 	"os"
 
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	"github.com/go-kure/kure/pkg/k8s"
 )
 
 // Buffer is a simple in-memory buffer that implements io.Reader and io.Writer
@@ -55,7 +59,11 @@ func SaveFile(path string, obj interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+		}
+	}(f)
 	return Marshal(f, obj)
 }
 
@@ -65,6 +73,35 @@ func LoadFile(path string, obj interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+
+		}
+	}(f)
 	return Unmarshal(f, obj)
+}
+
+func EncodeObjectsTo(objects []*client.Object, yaml bool) ([]byte, error) {
+	serializer := kjson.NewSerializerWithOptions(
+		kjson.DefaultMetaFactory, k8s.Scheme, k8s.Scheme,
+		kjson.SerializerOptions{Yaml: yaml, Pretty: false, Strict: false},
+	)
+
+	var buf bytes.Buffer
+	for _, obj := range objects {
+		if err := serializer.Encode(*obj, &buf); err != nil {
+			return nil, err
+		}
+		// Add YAML document separator
+		buf.WriteString("---\n")
+	}
+	return buf.Bytes(), nil
+}
+
+func EncodeObjectsToYAML(objects []*client.Object) ([]byte, error) {
+	return EncodeObjectsTo(objects, true)
+}
+func EncodeObjectsToJSON(objects []*client.Object) ([]byte, error) {
+	return EncodeObjectsTo(objects, false)
 }

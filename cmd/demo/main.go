@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"io"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -38,15 +36,15 @@ import (
 	"github.com/go-kure/kure/internal/k8s"
 	"github.com/go-kure/kure/internal/metallb"
 	"github.com/go-kure/kure/pkg/application"
+	kio "github.com/go-kure/kure/pkg/io"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	"github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
 	"github.com/fluxcd/pkg/apis/meta"
-	toml "github.com/pelletier/go-toml/v2"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -76,7 +74,7 @@ func main() {
 	case internals:
 		runInternals()
 	case appWorkload:
-		if err := runAppWorkload(format); err != nil {
+		if err := runAppWorkload(); err != nil {
 			log.Printf("app-workload error: %v", err)
 		}
 	default:
@@ -391,12 +389,17 @@ func runInternals() {
 	}
 }
 
-func runAppWorkload(format string) error {
+func runAppWorkload() error {
 	file, err := os.Open("examples/app-workload.yaml")
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
 
 	dec := yaml.NewDecoder(file)
 	var apps []*application.Application
@@ -412,20 +415,20 @@ func runAppWorkload(format string) error {
 		apps = append(apps, app)
 	}
 
-	bundle, err := application.NewBundle("example", &apps, nil)
+	bundle, err := application.NewBundle("example", apps, nil)
+	if err != nil {
+		return err
+	}
+	err = bundle.Validate()
+	if err != nil {
+		return err
+	}
+	resources, err := bundle.Generate()
 	if err != nil {
 		return err
 	}
 
-	var out []byte
-	switch strings.ToLower(format) {
-	case "yaml", "yml":
-		out, err = yaml.Marshal(bundle)
-	case "toml":
-		out, err = toml.Marshal(bundle)
-	default:
-		out, err = json.MarshalIndent(bundle, "", "  ")
-	}
+	out, err := kio.EncodeObjectsToYAML(resources)
 	if err != nil {
 		return err
 	}

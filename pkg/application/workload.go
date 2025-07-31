@@ -68,9 +68,15 @@ type IngressConfig struct {
 }
 
 // Generate builds Kubernetes resources for the application workload.
-func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error) {
-	var objs []client.Object
+func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, error) {
+	var objs []*client.Object
 	var allports []corev1.ContainerPort
+
+	// Helper function to convert to client.Object
+	toObject := func(obj client.Object) *client.Object {
+		clientObj := client.Object(obj)
+		return &clientObj
+	}
 
 	var containers []*corev1.Container
 	for _, c := range cfg.Containers {
@@ -91,7 +97,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 			}
 		}
 		_ = k8s.SetStatefulSetReplicas(sts, cfg.Replicas)
-		objs = append(objs, sts)
+		objs = append(objs, toObject(sts))
 	case DaemonSetWorkload:
 		ds := k8s.CreateDaemonSet(app.Name, app.Namespace)
 		for _, c := range containers {
@@ -99,7 +105,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 				return nil, err
 			}
 		}
-		objs = append(objs, ds)
+		objs = append(objs, toObject(ds))
 	case DeploymentWorkload:
 		dep := k8s.CreateDeployment(app.Name, app.Namespace)
 		for _, c := range containers {
@@ -108,7 +114,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 			}
 		}
 		_ = k8s.SetDeploymentReplicas(dep, cfg.Replicas)
-		objs = append(objs, dep)
+		objs = append(objs, toObject(dep))
 	default:
 		return nil, fmt.Errorf("unsupported workload type %s", cfg.Workload)
 	}
@@ -121,11 +127,11 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 		for _, p := range allports {
 			_ = k8s.AddServicePort(svc, corev1.ServicePort{
 				Name:       p.Name,
-				Port:       p.HostPort,
-				TargetPort: intstr.FromInt32(p.HostPort),
+				Port:       p.ContainerPort,
+				TargetPort: intstr.FromInt32(p.ContainerPort),
 			})
 		}
-		objs = append(objs, svc)
+		objs = append(objs, toObject(svc))
 	}
 
 	if cfg.Ingress != nil && svc != nil {
@@ -140,8 +146,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 		k8s.AddIngressRulePath(rule, k8s.CreateIngressPath(path, &pt, svc.Name, port))
 		k8s.AddIngressRule(ing, rule)
 		k8s.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
-		objs = append(objs, ing)
-		objs = append(objs, ing)
+		objs = append(objs, toObject(ing))
 	}
 
 	return objs, nil
