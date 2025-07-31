@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	errors2 "github.com/go-kure/kure/pkg/errors"
 )
 
 type dummy struct{ runtime.TypeMeta }
@@ -107,7 +109,7 @@ metadata:
 	if len(objs) != 1 {
 		t.Fatalf("expected 1 valid object, got %d", len(objs))
 	}
-	var pe *ParseErrors
+	var pe *errors2.ParseErrors
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected ParseErrors, got %T", err)
 	}

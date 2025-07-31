@@ -12,6 +12,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/go-kure/kure/pkg/k8s"
+    "github.com/go-kure/kure/pkg/errors"
 )
 
 // ParseErrors aggregates multiple errors returned during YAML decoding.
@@ -37,9 +38,6 @@ func (pe *ParseErrors) Error() string {
 	return strings.TrimSuffix(b.String(), ";")
 }
 
-func (pe *ParseErrors) Unwrap() []error {
-	return pe.Errors
-}
 
 func parse(yamlbytes []byte) ([]runtime.Object, error) {
 
@@ -52,7 +50,7 @@ func parse(yamlbytes []byte) ([]runtime.Object, error) {
 	if err := k8s.RegisterSchemes(); err != nil {
 		return nil, fmt.Errorf("register schemes: %w", err)
 	}
-	decode := k8s.Codecs.UniversalDeserializer().Decode
+    decode := k8s.Codecs.UniversalDeserializer().Decode
 
 	var errs []error
 
@@ -81,7 +79,7 @@ func parse(yamlbytes []byte) ([]runtime.Object, error) {
 	}
 
 	if len(errs) > 0 {
-		return retVal, &ParseErrors{Errors: errs}
+		return retVal, &errors.ParseErrors{Errors: errs}
 	}
 	return retVal, nil
 }
