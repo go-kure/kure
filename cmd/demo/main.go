@@ -1,8 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
+	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -33,13 +37,16 @@ import (
 	"github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/internal/k8s"
 	"github.com/go-kure/kure/internal/metallb"
+	"github.com/go-kure/kure/pkg/application"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	"github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
 	"github.com/fluxcd/pkg/apis/meta"
+	toml "github.com/pelletier/go-toml/v2"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -51,6 +58,33 @@ func logError(msg string, err error) {
 }
 
 func main() {
+	var (
+		internals   bool
+		appWorkload bool
+		format      string
+	)
+
+	flag.BoolVar(&internals, "internals", false, "run internal demos")
+	flag.BoolVar(&internals, "i", false, "run internal demos")
+	flag.BoolVar(&appWorkload, "app-workload", false, "run AppWorkload example")
+	flag.BoolVar(&appWorkload, "a", false, "run AppWorkload example")
+	flag.StringVar(&format, "format", "json", "output format: json|yaml|toml")
+	flag.StringVar(&format, "f", "json", "output format: json|yaml|toml")
+	flag.Parse()
+
+	switch {
+	case internals:
+		runInternals()
+	case appWorkload:
+		if err := runAppWorkload(format); err != nil {
+			log.Printf("app-workload error: %v", err)
+		}
+	default:
+		flag.Usage()
+	}
+}
+
+func runInternals() {
 	y := printers.YAMLPrinter{}
 
 	// Namespace example
@@ -355,4 +389,49 @@ func main() {
 	for _, obj := range objects {
 		logError("failed to print YAML", y.PrintObj(obj, os.Stdout))
 	}
+}
+
+func runAppWorkload(format string) error {
+	file, err := os.Open("examples/app-workload.yaml")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	dec := yaml.NewDecoder(file)
+	var apps []*application.Application
+	for {
+		var cfg application.AppWorkloadConfig
+		if err := dec.Decode(&cfg); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		app := application.NewApplication(cfg.Name, cfg.Namespace, &cfg)
+		apps = append(apps, app)
+	}
+
+	bundle, err := application.NewBundle("example", &apps, nil)
+	if err != nil {
+		return err
+	}
+
+	var out []byte
+	switch strings.ToLower(format) {
+	case "yaml", "yml":
+		out, err = yaml.Marshal(bundle)
+	case "toml":
+		out, err = toml.Marshal(bundle)
+	default:
+		out, err = json.MarshalIndent(bundle, "", "  ")
+	}
+	if err != nil {
+		return err
+	}
+	_, err = os.Stdout.Write(out)
+	if err == nil {
+		_, err = os.Stdout.Write([]byte("\n"))
+	}
+	return err
 }
