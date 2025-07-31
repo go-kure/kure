@@ -1,0 +1,6 @@
+name: networking
+namespace: infra
+workload: Deployment
+containers:
+  - name: networking
+    image: nginx:1.21

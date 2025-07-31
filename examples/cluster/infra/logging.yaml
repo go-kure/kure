@@ -1,0 +1,6 @@
+name: logging
+namespace: infra
+workload: Deployment
+containers:
+  - name: logging
+    image: fluent/fluentd
