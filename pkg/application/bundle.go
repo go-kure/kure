@@ -16,14 +16,14 @@ type Bundle struct {
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []*Bundle
 	// Applications holds the Kubernetes objects that belong to the application.
-	Applications *[]*Application
+	Applications []*Application
 	// Labels are common labels that should be applied to each resource.
 	Labels map[string]string
 }
 
 // NewBundle constructs a Bundle with the given name, resources and labels.
 // It returns an error if validation fails.
-func NewBundle(name string, resources *[]*Application, labels map[string]string) (*Bundle, error) {
+func NewBundle(name string, resources []*Application, labels map[string]string) (*Bundle, error) {
 	a := &Bundle{Name: name, Applications: resources, Labels: labels}
 	if err := a.Validate(); err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (a *Bundle) Validate() error {
 	if a.Name == "" {
 		return fmt.Errorf("name is required")
 	}
-	for i, r := range *a.Applications {
+	for i, r := range a.Applications {
 		if r == nil {
 			return fmt.Errorf("resource %d is nil", i)
 		}
@@ -49,7 +49,7 @@ func (a *Bundle) Validate() error {
 
 func (a *Bundle) Generate() ([]*client.Object, error) {
 	var resources []*client.Object
-	for _, app := range *a.Applications {
+	for _, app := range a.Applications {
 		addresources, err := app.Generate()
 		if err != nil {
 			return nil, err
