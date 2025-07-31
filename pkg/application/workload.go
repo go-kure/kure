@@ -8,7 +8,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/internal/k8s"
+	ik8s "github.com/go-kure/kure/internal/k8s"
+	"github.com/go-kure/kure/pkg/k8s"
 )
 
 // WorkloadType enumerates the supported Kubernetes workload kinds.
@@ -72,12 +73,6 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, erro
 	var objs []*client.Object
 	var allports []corev1.ContainerPort
 
-	// Helper function to convert to client.Object
-	toObject := func(obj client.Object) *client.Object {
-		clientObj := client.Object(obj)
-		return &clientObj
-	}
-
 	var containers []*corev1.Container
 	for _, c := range cfg.Containers {
 		container, ports, err := c.Generate()
@@ -90,31 +85,31 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, erro
 	// Determine workload type
 	switch cfg.Workload {
 	case StatefulSetWorkload:
-		sts := k8s.CreateStatefulSet(app.Name, app.Namespace)
+		sts := ik8s.CreateStatefulSet(app.Name, app.Namespace)
 		for _, c := range containers {
-			if err := k8s.AddStatefulSetContainer(sts, c); err != nil {
+			if err := ik8s.AddStatefulSetContainer(sts, c); err != nil {
 				return nil, err
 			}
 		}
-		_ = k8s.SetStatefulSetReplicas(sts, cfg.Replicas)
-		objs = append(objs, toObject(sts))
+		_ = ik8s.SetStatefulSetReplicas(sts, cfg.Replicas)
+		objs = append(objs, k8s.ToClientObject(sts))
 	case DaemonSetWorkload:
-		ds := k8s.CreateDaemonSet(app.Name, app.Namespace)
+		ds := ik8s.CreateDaemonSet(app.Name, app.Namespace)
 		for _, c := range containers {
-			if err := k8s.AddDaemonSetContainer(ds, c); err != nil {
+			if err := ik8s.AddDaemonSetContainer(ds, c); err != nil {
 				return nil, err
 			}
 		}
-		objs = append(objs, toObject(ds))
+		objs = append(objs, k8s.ToClientObject(ds))
 	case DeploymentWorkload:
-		dep := k8s.CreateDeployment(app.Name, app.Namespace)
+		dep := ik8s.CreateDeployment(app.Name, app.Namespace)
 		for _, c := range containers {
-			if err := k8s.AddDeploymentContainer(dep, c); err != nil {
+			if err := ik8s.AddDeploymentContainer(dep, c); err != nil {
 				return nil, err
 			}
 		}
-		_ = k8s.SetDeploymentReplicas(dep, cfg.Replicas)
-		objs = append(objs, toObject(dep))
+		_ = ik8s.SetDeploymentReplicas(dep, cfg.Replicas)
+		objs = append(objs, k8s.ToClientObject(dep))
 	default:
 		return nil, fmt.Errorf("unsupported workload type %s", cfg.Workload)
 	}
@@ -122,41 +117,41 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, erro
 	// Service creation when ports are specified
 	var svc *corev1.Service
 	if len(allports) > 0 {
-		svc = k8s.CreateService(app.Name, app.Namespace)
-		_ = k8s.SetServiceSelector(svc, map[string]string{"app": app.Name})
+		svc = ik8s.CreateService(app.Name, app.Namespace)
+		_ = ik8s.SetServiceSelector(svc, map[string]string{"app": app.Name})
 		for _, p := range allports {
-			_ = k8s.AddServicePort(svc, corev1.ServicePort{
+			_ = ik8s.AddServicePort(svc, corev1.ServicePort{
 				Name:       p.Name,
 				Port:       p.ContainerPort,
 				TargetPort: intstr.FromInt32(p.ContainerPort),
 			})
 		}
-		objs = append(objs, toObject(svc))
+		objs = append(objs, k8s.ToClientObject(svc))
 	}
 
 	if cfg.Ingress != nil && svc != nil {
-		ing := k8s.CreateIngress(app.Name, app.Namespace, "")
-		rule := k8s.CreateIngressRule(cfg.Ingress.Host)
+		ing := ik8s.CreateIngress(app.Name, app.Namespace, "")
+		rule := ik8s.CreateIngressRule(cfg.Ingress.Host)
 		pt := netv1.PathTypeImplementationSpecific
 		path := cfg.Ingress.Path
 		if path == "" {
 			path = "/"
 		}
 		port := cfg.Ingress.ServicePortName
-		k8s.AddIngressRulePath(rule, k8s.CreateIngressPath(path, &pt, svc.Name, port))
-		k8s.AddIngressRule(ing, rule)
-		k8s.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
-		objs = append(objs, toObject(ing))
+		ik8s.AddIngressRulePath(rule, ik8s.CreateIngressPath(path, &pt, svc.Name, port))
+		ik8s.AddIngressRule(ing, rule)
+		ik8s.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
+		objs = append(objs, k8s.ToClientObject(ing))
 	}
 
 	return objs, nil
 }
 
 func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort, error) {
-	container := k8s.CreateContainer(cfg.Name, cfg.Image, nil, nil)
+	container := ik8s.CreateContainer(cfg.Name, cfg.Image, nil, nil)
 	var ports []corev1.ContainerPort
 	for _, p := range cfg.Ports {
-		_ = k8s.AddContainerPort(container, p)
+		_ = ik8s.AddContainerPort(container, p)
 		ports = append(ports, p)
 	}
 	for k, v := range cfg.VolumeMounts {
@@ -164,7 +159,7 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 			Name:      k,
 			MountPath: v,
 		}
-		_ = k8s.AddContainerVolumeMount(container, volume)
+		_ = ik8s.AddContainerVolumeMount(container, volume)
 	}
 	return container, ports, nil
 }

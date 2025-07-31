@@ -3,6 +3,7 @@ package k8s
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
@@ -35,4 +36,11 @@ func IsGVKAllowed(gvk schema.GroupVersionKind, allowed []schema.GroupVersionKind
 		}
 	}
 	return false
+}
+
+// Helper function to convert to client.Object
+func ToClientObject(obj client.Object) *client.Object {
+	// iThis is not a Redundant type conversion
+	clientObj := client.Object(obj)
+	return &clientObj
 }
