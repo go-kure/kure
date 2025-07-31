@@ -82,7 +82,7 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 			return nil, err
 		}
 		objs = append(objs, ds)
-	default:
+	case DeploymentWorkload:
 		dep := k8s.CreateDeployment(app.Name, app.Namespace)
 		container := k8s.CreateContainer(app.Name, cfg.Image, nil, nil)
 		for _, p := range cfg.Ports {
@@ -95,6 +95,8 @@ func (cfg *AppWorkloadConfig) Generate(app *Application) ([]client.Object, error
 			_ = k8s.SetDeploymentReplicas(dep, int32(*cfg.Replicas))
 		}
 		objs = append(objs, dep)
+	default:
+		return nil, fmt.Errorf("unsupported workload type %s", cfg.Workload)
 	}
 
 	// Service creation when ports are specified
