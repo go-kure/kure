@@ -4,4 +4,4 @@
 // An Bundle can be used by the cluster package to add a collection of
 // Kubernetes resources, typically represented by a Flux Kustomization, to
 // a cluster layout.
-package application
+package stack

@@ -1,4 +1,4 @@
-package application
+package stack
 
 import "sigs.k8s.io/controller-runtime/pkg/client"
 
