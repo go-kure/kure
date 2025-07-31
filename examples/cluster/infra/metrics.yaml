@@ -1,0 +1,6 @@
+name: metrics
+namespace: infra
+workload: Deployment
+containers:
+  - name: metrics
+    image: prom/prometheus

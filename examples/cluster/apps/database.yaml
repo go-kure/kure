@@ -1,0 +1,6 @@
+name: database
+namespace: apps
+workload: Deployment
+containers:
+  - name: db
+    image: postgres:14

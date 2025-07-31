@@ -1,0 +1,6 @@
+name: backend
+namespace: apps
+workload: Deployment
+containers:
+  - name: backend
+    image: busybox

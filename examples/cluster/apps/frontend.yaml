@@ -1,0 +1,9 @@
+name: frontend
+namespace: apps
+workload: Deployment
+containers:
+  - name: frontend
+    image: nginx:1.21
+    ports:
+      - name: http
+        containerport: 80
