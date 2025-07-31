@@ -7,19 +7,11 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/kubernetes/scheme"
 
-	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
-	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
-	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	notifv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
+	"github.com/go-kure/kure/pkg/k8s"
 )
 
 // ParseErrors aggregates multiple errors returned during YAML decoding.
@@ -49,42 +41,6 @@ func (pe *ParseErrors) Unwrap() []error {
 	return pe.Errors
 }
 
-var (
-	schemeOnce sync.Once
-	schemeErr  error
-)
-
-func registerSchemes() error {
-	schemeOnce.Do(func() {
-		var errs []error
-		if err := kustv1.AddToScheme(scheme.Scheme); err != nil {
-			errs = append(errs, fmt.Errorf("kustomize: %w", err))
-		}
-		if err := helmv2.AddToScheme(scheme.Scheme); err != nil {
-			errs = append(errs, fmt.Errorf("helm: %w", err))
-		}
-		if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
-			errs = append(errs, fmt.Errorf("image: %w", err))
-		}
-		if err := notifv1beta2.AddToScheme(scheme.Scheme); err != nil {
-			errs = append(errs, fmt.Errorf("notification: %w", err))
-		}
-		if err := sourcev1.AddToScheme(scheme.Scheme); err != nil {
-			errs = append(errs, fmt.Errorf("source: %w", err))
-		}
-		if err := certv1.AddToScheme(scheme.Scheme); err != nil {
-			errs = append(errs, fmt.Errorf("cert-manager: %w", err))
-		}
-		if err := metallbv1beta1.AddToScheme(scheme.Scheme); err != nil {
-			errs = append(errs, fmt.Errorf("metallb: %w", err))
-		}
-		if len(errs) > 0 {
-			schemeErr = &ParseErrors{Errors: errs}
-		}
-	})
-	return schemeErr
-}
-
 func parse(yamlbytes []byte) ([]runtime.Object, error) {
 
 	// Parsing approach adapted from
@@ -93,10 +49,10 @@ func parse(yamlbytes []byte) ([]runtime.Object, error) {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlbytes), 4096)
 	retVal := make([]runtime.Object, 0)
 
-	if err := registerSchemes(); err != nil {
+	if err := k8s.RegisterSchemes(); err != nil {
 		return nil, fmt.Errorf("register schemes: %w", err)
 	}
-	decode := scheme.Codecs.UniversalDeserializer().Decode
+	decode := k8s.Codecs.UniversalDeserializer().Decode
 
 	var errs []error
 
@@ -131,8 +87,8 @@ func parse(yamlbytes []byte) ([]runtime.Object, error) {
 }
 
 // ParseFile reads the YAML file at path and returns the runtime objects
-// defined within. Each object is decoded using the client-go scheme. An error
-// is returned if the file cannot be read or if decoding any document fails.
+// defined within. Each object is decoded using the k8s scheme. An error is
+// returned if the file cannot be read or if decoding any document fails.
 func ParseFile(path string) ([]runtime.Object, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -147,7 +103,10 @@ func checkType(obj runtime.Object) error {
 	}
 
 	gvk := obj.GetObjectKind().GroupVersionKind()
-	expected, ok := scheme.Scheme.AllKnownTypes()[gvk]
+	if err := k8s.RegisterSchemes(); err != nil {
+		return fmt.Errorf("register schemes: %w", err)
+	}
+	expected, ok := k8s.Scheme.AllKnownTypes()[gvk]
 	if !ok {
 		return fmt.Errorf("unsupported object kind %s", gvk.String())
 	}
