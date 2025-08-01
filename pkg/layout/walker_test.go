@@ -35,7 +35,7 @@ func TestWalkCluster(t *testing.T) {
 	node.Parent = root
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
-	ml, err := layout.WalkCluster(cluster)
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{})
 	if err != nil {
 		t.Fatalf("walk cluster: %v", err)
 	}
@@ -75,5 +75,44 @@ func TestWalkCluster(t *testing.T) {
 	}
 	if len(appLayout.Resources) != 1 {
 		t.Fatalf("expected one resource, got %d", len(appLayout.Resources))
+	}
+}
+
+func TestWalkClusterNodeOnly(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app", "ns", &fakeConfig{objs: []*client.Object{&o}})
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	node := &stack.Node{Name: "apps", Bundle: bundle}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.Parent = root
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat}
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("nil layout returned")
+	}
+
+	if len(ml.Children) != 1 {
+		t.Fatalf("expected node child, got %d", len(ml.Children))
+	}
+	nodeLayout := ml.Children[0]
+	if len(nodeLayout.Resources) != 1 {
+		t.Fatalf("expected node resources, got %d", len(nodeLayout.Resources))
+	}
+	if len(nodeLayout.Children) != 0 {
+		t.Fatalf("unexpected children: %d", len(nodeLayout.Children))
+	}
+	if nodeLayout.Namespace != "root" {
+		t.Fatalf("unexpected namespace: %s", nodeLayout.Namespace)
 	}
 }
