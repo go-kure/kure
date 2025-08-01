@@ -1,4 +1,4 @@
-package stack
+package stack_test
 
 import (
 	"testing"
@@ -7,12 +7,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/k8s"
+	"github.com/go-kure/kure/pkg/stack"
 )
 
 // TestNewApplicationAndSetters verifies constructor and setter behaviour.
 func TestNewApplicationAndSetters(t *testing.T) {
 	cfg1 := &fakeConfig{}
-	app := NewApplication("name", "ns", cfg1)
+	app := stack.NewApplication("name", "ns", cfg1)
 	if app.Name != "name" || app.Namespace != "ns" || app.Config != cfg1 {
 		t.Fatalf("application fields not set correctly: %#v", app)
 	}
@@ -35,7 +36,7 @@ func TestNewApplicationAndSetters(t *testing.T) {
 
 // TestGenerate exercises the Generate method with and without configuration.
 func TestGenerate(t *testing.T) {
-	app := NewApplication("app", "ns", nil)
+	app := stack.NewApplication("app", "ns", nil)
 	if _, err := app.Generate(); err == nil {
 		t.Fatalf("expected error when ApplicationConfig is nil")
 	}
