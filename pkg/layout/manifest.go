@@ -29,11 +29,6 @@ func (ml *ManifestLayout) FullRepoPath() string {
 }
 
 func (ml *ManifestLayout) WriteToDisk(basePath string) error {
-	fullPath := filepath.Join(basePath, ml.FullRepoPath())
-	if err := os.MkdirAll(fullPath, 0755); err != nil {
-		return fmt.Errorf("create dir: %w", err)
-	}
-
 	fileMode := ml.FilePer
 	if fileMode == FilePerUnset {
 		fileMode = FilePerResource
@@ -41,6 +36,16 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	appMode := ml.ApplicationFileMode
 	if appMode == AppFileUnset {
 		appMode = AppFilePerResource
+	}
+
+	var fullPath string
+	if appMode == AppFileSingle {
+		fullPath = filepath.Join(basePath, ml.Namespace)
+	} else {
+		fullPath = filepath.Join(basePath, ml.FullRepoPath())
+	}
+	if err := os.MkdirAll(fullPath, 0755); err != nil {
+		return fmt.Errorf("create dir: %w", err)
 	}
 
 	fileGroups := map[string][]client.Object{}
@@ -95,7 +100,7 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		kMode = KustomizationExplicit
 	}
 
-	if kMode == KustomizationExplicit || len(ml.Children) > 0 {
+	if (kMode == KustomizationExplicit || len(ml.Children) > 0) && !(appMode == AppFileSingle && len(ml.Children) == 0) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -108,7 +113,11 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 			}
 		}
 		for _, child := range ml.Children {
-			_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+			if child.ApplicationFileMode == AppFileSingle {
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml ", child.Name))
+			} else {
+				_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+			}
 		}
 		if err := kf.Close(); err != nil {
 			return err

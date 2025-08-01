@@ -91,9 +91,58 @@ func TestManifestLayoutSingleFile(t *testing.T) {
 		t.Fatalf("write to disk: %v", err)
 	}
 
-	expected := filepath.Join(dir, "demo", "app", "app.yaml")
+	expected := filepath.Join(dir, "demo", "app.yaml")
 	if _, err := os.Stat(expected); err != nil {
 		t.Fatalf("expected single file not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "demo", "app")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected application directory created")
+	}
+}
+
+func TestManifestLayoutSingleFileWithParent(t *testing.T) {
+	obj1 := &unstructured.Unstructured{}
+	obj1.SetAPIVersion("v1")
+	obj1.SetKind("ConfigMap")
+	obj1.SetName("one")
+	obj1.SetNamespace("demo")
+
+	obj2 := &unstructured.Unstructured{}
+	obj2.SetAPIVersion("v1")
+	obj2.SetKind("Secret")
+	obj2.SetName("two")
+	obj2.SetNamespace("demo")
+
+	child := &layout.ManifestLayout{
+		Name:                "app",
+		Namespace:           filepath.Join("demo", "parent"),
+		ApplicationFileMode: layout.AppFileSingle,
+		Resources:           []client.Object{obj1, obj2},
+	}
+
+	parent := &layout.ManifestLayout{
+		Name:      "parent",
+		Namespace: "demo",
+		Children:  []*layout.ManifestLayout{child},
+	}
+
+	dir := t.TempDir()
+	if err := parent.WriteToDisk(dir); err != nil {
+		t.Fatalf("write to disk: %v", err)
+	}
+
+	expected := filepath.Join(dir, "demo", "parent", "app.yaml")
+	if _, err := os.Stat(expected); err != nil {
+		t.Fatalf("expected application file not written: %v", err)
+	}
+
+	kustomPath := filepath.Join(dir, "demo", "parent", "kustomization.yaml")
+	data, err := os.ReadFile(kustomPath)
+	if err != nil {
+		t.Fatalf("read kustomization: %v", err)
+	}
+	if !strings.Contains(string(data), "app.yaml") {
+		t.Fatalf("expected app.yaml reference in kustomization")
 	}
 }
 
