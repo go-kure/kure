@@ -32,7 +32,9 @@ import (
 
 	"github.com/go-kure/kure/internal/certmanager"
 	"github.com/go-kure/kure/internal/kubernetes"
+	layout "github.com/go-kure/kure/pkg/layout"
 	"github.com/go-kure/kure/pkg/stack"
+	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/generators"
 
 	"github.com/go-kure/kure/internal/externalsecrets"
@@ -466,9 +468,21 @@ func runClusterExample() error {
 		return nil
 	}
 
+	rootBundle, err := stack.NewBundle(cl.Node.Name, nil, nil)
+	if err != nil {
+		return err
+	}
+	cl.Node.Bundle = rootBundle
+
 	baseDir := "examples/cluster"
 	for _, child := range cl.Node.Children {
 		child.Parent = cl.Node
+		childBundle, err := stack.NewBundle(child.Name, nil, nil)
+		if err != nil {
+			return err
+		}
+		child.Bundle = childBundle
+		childBundle.Parent = rootBundle
 		dir := filepath.Join(baseDir, child.Name)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -503,6 +517,7 @@ func runClusterExample() error {
 					_ = f.Close()
 					return err
 				}
+				bundle.Parent = child.Bundle
 				node := &stack.Node{Name: cfg.Name, Parent: child, Bundle: bundle}
 				child.Children = append(child.Children, node)
 			}
@@ -510,13 +525,28 @@ func runClusterExample() error {
 		}
 	}
 
-	out, err := yaml.Marshal(&cl)
+	repoDir := filepath.Join(baseDir, "repo")
+	if err := os.RemoveAll(repoDir); err != nil {
+		return err
+	}
+	cfg := layout.Config{ManifestsDir: ""}
+	ml, err := layout.WalkCluster(&cl, layout.LayoutRules{})
 	if err != nil {
 		return err
 	}
-	_, err = os.Stdout.Write(out)
-	if err == nil {
-		_, err = os.Stdout.Write([]byte("\n"))
+	ml.Namespace = "."
+	if err := layout.WriteManifest(repoDir, cfg, ml); err != nil {
+		return err
 	}
-	return err
+	wf := fluxstack.NewWorkflow()
+	fluxObjs, err := wf.Cluster(&cl)
+	if err != nil {
+		return err
+	}
+	fluxLayout := &layout.ManifestLayout{Name: "fluxcd", Namespace: ".", Resources: fluxObjs}
+	if err := layout.WriteManifest(repoDir, cfg, fluxLayout); err != nil {
+		return err
+	}
+	log.Printf("manifests written to %s", repoDir)
+	return nil
 }
