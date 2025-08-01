@@ -67,6 +67,59 @@ go run ./cmd/cluster
 ```
 
 
+## Flux vs ArgoCD paths
+
+Flux Kustomizations reference directories in a Git repository using
+`spec.path`. The value must begin with `./` and is interpreted relative to the
+repository root. ArgoCD Applications use `spec.source.path` without the `./`
+prefix but with the same relative semantics.
+
+When nodes or bundles are stored in subfolders, the path has to point directly
+to that folder unless the directory tree only contains files for a single
+node or bundle. Flux will recursively auto-generate a `kustomization.yaml` when
+one is missing and include every manifest under the specified path. ArgoCD does
+not auto-generate a `kustomization.yaml` and therefore ignores nested
+directories unless they are referenced from a `kustomization.yaml` at the
+target path.
+
+For example:
+
+```text
+repo/
+  clusters/
+    prod/
+      nodes/
+        cp/
+          kustomization.yaml
+      bundles/
+        monitoring/
+          kustomization.yaml
+```
+
+Flux Kustomization for the control-plane node:
+
+```yaml
+spec:
+  path: ./clusters/prod/nodes/cp
+```
+
+Equivalent ArgoCD Application:
+
+```yaml
+spec:
+  source:
+    path: clusters/prod/nodes/cp
+```
+
+With this layout, each node or bundle is targeted individually. Pointing a Flux
+Kustomization to the parent directory (`./clusters/prod`) would combine the
+`cp` and `monitoring` manifests into a single deployment because it would
+auto-generate a `kustomization.yaml` for the entire tree. ArgoCD will only
+process the manifests under `clusters/prod` itself unless a
+`kustomization.yaml` aggregates the subdirectories, so each subfolder must be
+referenced separately.
+
+
 
 ## License
 
