@@ -1,4 +1,4 @@
-package flux
+package fluxcd
 
 import (
 	"path/filepath"
@@ -14,24 +14,14 @@ import (
 
 // Workflow implements the stack.Workflow interface for Flux.
 type Workflow struct {
-	// SourceRef specifies the source reference for generated Kustomizations.
-	SourceRef kustv1.CrossNamespaceSourceReference
-	// Interval controls the reconciliation interval of the Kustomizations.
-	Interval string
 	// Mode controls how spec.path is generated.
 	Mode layoutpkg.KustomizationMode
 }
 
-// NewWorkflow returns a Workflow initialized with common defaults.
+// NewWorkflow returns a Workflow initialized with defaults.
 func NewWorkflow() Workflow {
 	return Workflow{
-		SourceRef: kustv1.CrossNamespaceSourceReference{
-			Kind:      "OCIRepository",
-			Name:      "flux-system",
-			Namespace: "flux-system",
-		},
-		Interval: "10m",
-		Mode:     layoutpkg.KustomizationExplicit,
+		Mode: layoutpkg.KustomizationExplicit,
 	}
 }
 
@@ -75,13 +65,33 @@ func (w Workflow) Bundle(b *stack.Bundle) ([]client.Object, error) {
 	if w.Mode == layoutpkg.KustomizationRecursive && b.Parent != nil {
 		path = bundlePath(b.Parent)
 	}
+	interval := b.Interval
+	if interval == "" {
+		interval = "10m"
+	}
+	sourceRef := kustv1.CrossNamespaceSourceReference{
+		Kind:      "OCIRepository",
+		Name:      "flux-system",
+		Namespace: "flux-system",
+	}
+	if b.SourceRef != nil {
+		if b.SourceRef.Kind != "" {
+			sourceRef.Kind = b.SourceRef.Kind
+		}
+		if b.SourceRef.Name != "" {
+			sourceRef.Name = b.SourceRef.Name
+		}
+		if b.SourceRef.Namespace != "" {
+			sourceRef.Namespace = b.SourceRef.Namespace
+		}
+	}
 	cfg := fluxcdpkg.KustomizationConfig{
 		Name:      b.Name,
 		Namespace: "flux-system",
 		Path:      path,
-		Interval:  w.Interval,
+		Interval:  interval,
 		Prune:     true,
-		SourceRef: w.SourceRef,
+		SourceRef: sourceRef,
 	}
 	k := fluxcdpkg.NewKustomization(&cfg)
 	for _, dep := range b.DependsOn {

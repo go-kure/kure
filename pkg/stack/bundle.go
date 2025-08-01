@@ -15,10 +15,21 @@ type Bundle struct {
 	Parent *Bundle
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []*Bundle
+	// Interval controls how often Flux reconciles the bundle.
+	Interval string
+	// SourceRef specifies the source for the bundle.
+	SourceRef *SourceRef
 	// Applications holds the Kubernetes objects that belong to the application.
 	Applications []*Application
 	// Labels are common labels that should be applied to each resource.
 	Labels map[string]string
+}
+
+// SourceRef defines a reference to a Flux source.
+type SourceRef struct {
+	Kind      string
+	Name      string
+	Namespace string
 }
 
 // NewBundle constructs a Bundle with the given name, resources and labels.
