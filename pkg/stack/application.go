@@ -10,16 +10,16 @@ import (
 type Application struct {
 	Name      string
 	Namespace string
-	Config    Config
+	Config    ApplicationConfig
 }
 
-// Config describes the behaviour of specific application types.
-type Config interface {
+// ApplicationConfig describes the behaviour of specific application types.
+type ApplicationConfig interface {
 	Generate(*Application) ([]*client.Object, error)
 }
 
 // NewApplication constructs an Application with the provided parameters.
-func NewApplication(name, namespace string, cfg Config) *Application {
+func NewApplication(name, namespace string, cfg ApplicationConfig) *Application {
 	return &Application{Name: name, Namespace: namespace, Config: cfg}
 }
 
@@ -30,7 +30,7 @@ func (a *Application) SetName(name string) { a.Name = name }
 func (a *Application) SetNamespace(ns string) { a.Namespace = ns }
 
 // SetConfig replaces the application configuration.
-func (a *Application) SetConfig(cfg Config) { a.Config = cfg }
+func (a *Application) SetConfig(cfg ApplicationConfig) { a.Config = cfg }
 
 // Generate returns the resources for this application.
 func (a *Application) Generate() ([]*client.Object, error) {

@@ -37,7 +37,7 @@ func TestNewApplicationAndSetters(t *testing.T) {
 func TestGenerate(t *testing.T) {
 	app := NewApplication("app", "ns", nil)
 	if _, err := app.Generate(); err == nil {
-		t.Fatalf("expected error when Config is nil")
+		t.Fatalf("expected error when ApplicationConfig is nil")
 	}
 
 	pod := k8s.ToClientObject(&corev1.Pod{})
