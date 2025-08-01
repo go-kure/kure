@@ -33,6 +33,7 @@ import (
 	"github.com/go-kure/kure/internal/certmanager"
 	"github.com/go-kure/kure/internal/kubernetes"
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/generators"
 
 	"github.com/go-kure/kure/internal/externalsecrets"
 	"github.com/go-kure/kure/internal/fluxcd"
@@ -412,7 +413,7 @@ func runAppWorkload() error {
 	dec := yaml.NewDecoder(file)
 	var apps []*stack.Application
 	for {
-		var cfg stack.AppWorkloadConfig
+		var cfg generators.AppWorkloadConfig
 		if err := dec.Decode(&cfg); err != nil {
 			if err == io.EOF {
 				break
@@ -488,7 +489,7 @@ func runClusterExample() error {
 			}
 			dec := yaml.NewDecoder(f)
 			for {
-				var cfg stack.AppWorkloadConfig
+				var cfg generators.AppWorkloadConfig
 				if err := dec.Decode(&cfg); err != nil {
 					if err == io.EOF {
 						break

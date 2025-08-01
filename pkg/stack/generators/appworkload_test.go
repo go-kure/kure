@@ -1,4 +1,4 @@
-package stack
+package generators
 
 import (
 	"testing"
@@ -6,6 +6,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+
+	"github.com/go-kure/kure/pkg/stack"
 )
 
 // TestContainerConfigGenerate verifies ports and volume mounts are propagated.
@@ -39,7 +41,7 @@ func TestAppWorkloadGenerate(t *testing.T) {
 			}},
 		}
 	}
-	app := NewApplication("app", "ns", nil)
+	app := stack.NewApplication("app", "ns", nil)
 
 	// Deployment with service and ingress
 	depCfg := newBase()

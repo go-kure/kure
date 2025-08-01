@@ -1,4 +1,4 @@
-package stack
+package generators
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-kure/kure/internal/kubernetes"
 	"github.com/go-kure/kure/pkg/k8s"
+	"github.com/go-kure/kure/pkg/stack"
 )
 
 // WorkloadType enumerates the supported Kubernetes workload kinds.
@@ -69,7 +70,7 @@ type IngressConfig struct {
 }
 
 // Generate builds Kubernetes resources for the application workload.
-func (cfg *AppWorkloadConfig) Generate(app *Application) ([]*client.Object, error) {
+func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object, error) {
 	var objs []*client.Object
 	var allports []corev1.ContainerPort
 
