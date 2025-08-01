@@ -66,6 +66,36 @@ to stdout:
 go run ./cmd/cluster
 ```
 
+## Layout rules and FluxCD integration
+
+`LayoutRules` control how nodes, bundles and applications are grouped when
+writing manifests. The example below flattens bundles and applications under
+their parent node, writes the manifests to `./repo` and then generates Flux
+Kustomizations for the cluster:
+
+```go
+rules := layout.LayoutRules{
+    BundleGrouping:      layout.GroupFlat,
+    ApplicationGrouping: layout.GroupFlat,
+}
+
+ml, err := layout.WalkCluster(cluster, rules)
+if err != nil {
+    // handle error
+}
+
+cfg := layout.DefaultLayoutConfig()
+if err := layout.WriteManifest("./repo", cfg, ml); err != nil {
+    // handle error
+}
+
+wf := fluxcd.NewWorkflow()
+fluxObjs, err := wf.Cluster(cluster)
+if err != nil {
+    // handle error
+}
+```
+
 
 ## Flux vs ArgoCD paths
 
