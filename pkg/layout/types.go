@@ -47,6 +47,18 @@ const (
 	AppFileUnset ApplicationFileMode = ""
 )
 
+// KustomizationMode determines how kustomization.yaml files reference manifests.
+type KustomizationMode string
+
+const (
+	// KustomizationExplicit lists each manifest file in kustomization.yaml.
+	KustomizationExplicit KustomizationMode = "explicit"
+	// KustomizationRecursive references only subdirectories in kustomization.yaml.
+	KustomizationRecursive KustomizationMode = "recursive"
+	// KustomizationUnset indicates no kustomization mode preference.
+	KustomizationUnset KustomizationMode = ""
+)
+
 // LayoutRules control how layouts are generated.
 //
 // Zero values are interpreted as the defaults described in the field

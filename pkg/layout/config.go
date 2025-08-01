@@ -22,6 +22,9 @@ type Config struct {
 	// ApplicationFileMode controls whether application resources are written
 	// to a single file or split per resource. Defaults to AppFilePerResource.
 	ApplicationFileMode ApplicationFileMode
+	// KustomizationMode controls how kustomization.yaml files are generated.
+	// Defaults to KustomizationExplicit.
+	KustomizationMode KustomizationMode
 	// ManifestFileName formats the file name for a resource manifest.
 	ManifestFileName ManifestFileNameFunc
 	// KustomizationFileName formats the file name for a Flux Kustomization.
@@ -36,6 +39,7 @@ func DefaultLayoutConfig() Config {
 		FluxDir:               "clusters",
 		FilePer:               FilePerResource,
 		ApplicationFileMode:   AppFilePerResource,
+		KustomizationMode:     KustomizationExplicit,
 		ManifestFileName:      DefaultManifestFileName,
 		KustomizationFileName: DefaultKustomizationFileName,
 	}

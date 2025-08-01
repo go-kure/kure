@@ -26,6 +26,10 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if appMode == AppFileUnset {
 		appMode = cfg.ApplicationFileMode
 	}
+	kMode := ml.Mode
+	if kMode == KustomizationUnset {
+		kMode = cfg.KustomizationMode
+	}
 
 	fullPath := filepath.Join(basePath, cfg.ManifestsDir, ml.FullRepoPath())
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
@@ -73,26 +77,31 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		}
 	}
 
-	kustomPath := filepath.Join(fullPath, "kustomization.yaml")
-	kf, err := os.Create(kustomPath)
-	if err != nil {
-		return err
-	}
-	_, _ = kf.WriteString("resources: ")
-	for file := range fileGroups {
-		_, _ = kf.WriteString(fmt.Sprintf("  - %s ", file))
-	}
-
-	for _, child := range ml.Children {
-		_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
-	}
-
-	for _, child := range ml.Children {
-		if err := WriteManifest(basePath, cfg, child); err != nil {
-			_ = kf.Close()
+	if kMode == KustomizationExplicit || len(ml.Children) > 0 {
+		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
+		kf, err := os.Create(kustomPath)
+		if err != nil {
+			return err
+		}
+		_, _ = kf.WriteString("resources: ")
+		if kMode == KustomizationExplicit {
+			for file := range fileGroups {
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s ", file))
+			}
+		}
+		for _, child := range ml.Children {
+			_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+		}
+		if err := kf.Close(); err != nil {
 			return err
 		}
 	}
 
-	return kf.Close()
+	for _, child := range ml.Children {
+		if err := WriteManifest(basePath, cfg, child); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

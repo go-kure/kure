@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fluxcdpkg "github.com/go-kure/kure/pkg/fluxcd"
+	layoutpkg "github.com/go-kure/kure/pkg/layout"
 	"github.com/go-kure/kure/pkg/stack"
 )
 
@@ -17,6 +18,8 @@ type Workflow struct {
 	SourceRef kustv1.CrossNamespaceSourceReference
 	// Interval controls the reconciliation interval of the Kustomizations.
 	Interval string
+	// Mode controls how spec.path is generated.
+	Mode layoutpkg.KustomizationMode
 }
 
 // NewWorkflow returns a Workflow initialized with common defaults.
@@ -28,6 +31,7 @@ func NewWorkflow() Workflow {
 			Namespace: "flux-system",
 		},
 		Interval: "10m",
+		Mode:     layoutpkg.KustomizationExplicit,
 	}
 }
 
@@ -67,10 +71,14 @@ func (w Workflow) Bundle(b *stack.Bundle) ([]client.Object, error) {
 	if b == nil {
 		return nil, nil
 	}
+	path := bundlePath(b)
+	if w.Mode == layoutpkg.KustomizationRecursive && b.Parent != nil {
+		path = bundlePath(b.Parent)
+	}
 	cfg := fluxcdpkg.KustomizationConfig{
 		Name:      b.Name,
 		Namespace: "flux-system",
-		Path:      bundlePath(b),
+		Path:      path,
 		Interval:  w.Interval,
 		Prune:     true,
 		SourceRef: w.SourceRef,

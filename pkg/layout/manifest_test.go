@@ -3,6 +3,7 @@ package layout_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -93,5 +94,50 @@ func TestManifestLayoutSingleFile(t *testing.T) {
 	expected := filepath.Join(dir, "demo", "app", "app.yaml")
 	if _, err := os.Stat(expected); err != nil {
 		t.Fatalf("expected single file not written: %v", err)
+	}
+}
+
+func TestManifestLayoutRecursiveMode(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("test")
+	obj.SetNamespace("default")
+
+	child := &layout.ManifestLayout{
+		Name:      "child",
+		Namespace: "default",
+		Mode:      layout.KustomizationRecursive,
+		Resources: []client.Object{obj},
+	}
+
+	root := &layout.ManifestLayout{
+		Name:      "root",
+		Namespace: "default",
+		Mode:      layout.KustomizationRecursive,
+		Children:  []*layout.ManifestLayout{child},
+	}
+
+	dir := t.TempDir()
+	if err := root.WriteToDisk(dir); err != nil {
+		t.Fatalf("write recursive: %v", err)
+	}
+
+	rootK := filepath.Join(dir, "default", "root", "kustomization.yaml")
+	data, err := os.ReadFile(rootK)
+	if err != nil {
+		t.Fatalf("read root kustomization: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatalf("root kustomization empty")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "default", "child", "kustomization.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected child kustomization")
+	}
+	if strings.Contains(string(data), "configmap") {
+		t.Fatalf("unexpected manifest file reference")
+	}
+	if !strings.Contains(string(data), "../child") {
+		t.Fatalf("missing child reference")
 	}
 }
