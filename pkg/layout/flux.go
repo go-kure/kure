@@ -15,6 +15,7 @@ type FluxLayout struct {
 	TargetPath string
 	Manifest   *ManifestLayout
 	Children   []*FluxLayout
+	Mode       KustomizationMode
 	// Interval controls how often Flux reconciles the Kustomization.
 	Interval string
 	// SourceRef specifies the source reference name for the Kustomization.
@@ -57,6 +58,11 @@ func (fl *FluxLayout) WriteToDisk(basePath string) error {
 		source = "flux-system"
 	}
 
+	path := fl.TargetPath
+	if fl.Mode == KustomizationRecursive {
+		path = filepath.Dir(fl.TargetPath)
+	}
+
 	var kustom = map[string]interface{}{
 		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
 		"kind":       "Kustomization",
@@ -66,7 +72,7 @@ func (fl *FluxLayout) WriteToDisk(basePath string) error {
 		},
 		"spec": map[string]interface{}{
 			"interval": interval,
-			"path":     "./" + strings.TrimPrefix(fl.TargetPath, basePath+"/"),
+			"path":     "./" + strings.TrimPrefix(path, basePath+"/"),
 			"prune":    true,
 			"sourceRef": map[string]string{
 				"kind":      "OCIRepository",

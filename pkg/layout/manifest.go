@@ -15,6 +15,7 @@ type ManifestLayout struct {
 	Namespace           string
 	FilePer             FileExportMode
 	ApplicationFileMode ApplicationFileMode
+	Mode                KustomizationMode
 	Resources           []client.Object
 	Children            []*ManifestLayout
 }
@@ -33,9 +34,9 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		return fmt.Errorf("create dir: %w", err)
 	}
 
-	mode := ml.FilePer
-	if mode == FilePerUnset {
-		mode = FilePerResource
+	fileMode := ml.FilePer
+	if fileMode == FilePerUnset {
+		fileMode = FilePerResource
 	}
 	appMode := ml.ApplicationFileMode
 	if appMode == AppFileUnset {
@@ -56,7 +57,7 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		if appMode == AppFileSingle {
 			fileName = fmt.Sprintf("%s.yaml", ml.Name)
 		} else {
-			switch mode {
+			switch fileMode {
 			case FilePerKind:
 				fileName = fmt.Sprintf("%s-%s.yaml", ns, kind)
 			default:
@@ -89,26 +90,35 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		}
 	}
 
-	// Write kustomization.yaml
-	kustomPath := filepath.Join(fullPath, "kustomization.yaml")
-	kf, err := os.Create(kustomPath)
-	if err != nil {
-		return err
-	}
-	_, _ = kf.WriteString("resources: ")
-	for file := range fileGroups {
-		_, _ = kf.WriteString(fmt.Sprintf("  - %s ", file))
+	kMode := ml.Mode
+	if kMode == KustomizationUnset {
+		kMode = KustomizationExplicit
 	}
 
-	for _, child := range ml.Children {
-		_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+	if kMode == KustomizationExplicit || len(ml.Children) > 0 {
+		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
+		kf, err := os.Create(kustomPath)
+		if err != nil {
+			return err
+		}
+		_, _ = kf.WriteString("resources: ")
+		if kMode == KustomizationExplicit {
+			for file := range fileGroups {
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s ", file))
+			}
+		}
+		for _, child := range ml.Children {
+			_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+		}
+		if err := kf.Close(); err != nil {
+			return err
+		}
 	}
 
 	for _, child := range ml.Children {
 		if err := child.WriteToDisk(basePath); err != nil {
-			_ = kf.Close()
 			return err
 		}
 	}
-	return kf.Close()
+	return nil
 }
