@@ -31,7 +31,12 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		kMode = cfg.KustomizationMode
 	}
 
-	fullPath := filepath.Join(basePath, cfg.ManifestsDir, ml.FullRepoPath())
+	var fullPath string
+	if appMode == AppFileSingle {
+		fullPath = filepath.Join(basePath, cfg.ManifestsDir, ml.Namespace)
+	} else {
+		fullPath = filepath.Join(basePath, cfg.ManifestsDir, ml.FullRepoPath())
+	}
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
 		return fmt.Errorf("create dir: %w", err)
 	}
@@ -77,7 +82,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		}
 	}
 
-	if kMode == KustomizationExplicit || len(ml.Children) > 0 {
+	if (kMode == KustomizationExplicit || len(ml.Children) > 0) && !(appMode == AppFileSingle && len(ml.Children) == 0) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -90,7 +95,11 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 			}
 		}
 		for _, child := range ml.Children {
-			_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+			if child.ApplicationFileMode == AppFileSingle {
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml ", child.Name))
+			} else {
+				_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+			}
 		}
 		if err := kf.Close(); err != nil {
 			return err
