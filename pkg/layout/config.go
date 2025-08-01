@@ -19,6 +19,9 @@ type Config struct {
 	FluxDir string
 	// FilePer determines how resources are grouped into files when writing manifests.
 	FilePer FileExportMode
+	// ApplicationFileMode controls whether application resources are written
+	// to a single file or split per resource. Defaults to AppFilePerResource.
+	ApplicationFileMode ApplicationFileMode
 	// ManifestFileName formats the file name for a resource manifest.
 	ManifestFileName ManifestFileNameFunc
 	// KustomizationFileName formats the file name for a Flux Kustomization.
@@ -32,6 +35,7 @@ func DefaultLayoutConfig() Config {
 		ManifestsDir:          "clusters",
 		FluxDir:               "clusters",
 		FilePer:               FilePerResource,
+		ApplicationFileMode:   AppFilePerResource,
 		ManifestFileName:      DefaultManifestFileName,
 		KustomizationFileName: DefaultKustomizationFileName,
 	}

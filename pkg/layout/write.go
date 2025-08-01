@@ -22,6 +22,10 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if mode == FilePerUnset {
 		mode = cfg.FilePer
 	}
+	appMode := ml.ApplicationFileMode
+	if appMode == AppFileUnset {
+		appMode = cfg.ApplicationFileMode
+	}
 
 	fullPath := filepath.Join(basePath, cfg.ManifestsDir, ml.FullRepoPath())
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
@@ -36,7 +40,14 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		}
 		kind := strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind)
 		name := obj.GetName()
-		fileName := cfg.ManifestFileName(ns, kind, name, mode)
+
+		var fileName string
+		if appMode == AppFileSingle {
+			fileName = fmt.Sprintf("%s.yaml", ml.Name)
+		} else {
+			fileName = cfg.ManifestFileName(ns, kind, name, mode)
+		}
+
 		fileGroups[fileName] = append(fileGroups[fileName], obj)
 	}
 

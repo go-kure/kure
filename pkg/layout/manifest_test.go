@@ -64,3 +64,34 @@ func TestManifestLayoutWriteWithConfig(t *testing.T) {
 		t.Fatalf("expected file not written: %v", err)
 	}
 }
+
+func TestManifestLayoutSingleFile(t *testing.T) {
+	obj1 := &unstructured.Unstructured{}
+	obj1.SetAPIVersion("v1")
+	obj1.SetKind("ConfigMap")
+	obj1.SetName("one")
+	obj1.SetNamespace("demo")
+
+	obj2 := &unstructured.Unstructured{}
+	obj2.SetAPIVersion("v1")
+	obj2.SetKind("Secret")
+	obj2.SetName("two")
+	obj2.SetNamespace("demo")
+
+	ml := &layout.ManifestLayout{
+		Name:                "app",
+		Namespace:           "demo",
+		ApplicationFileMode: layout.AppFileSingle,
+		Resources:           []client.Object{obj1, obj2},
+	}
+
+	dir := t.TempDir()
+	if err := ml.WriteToDisk(dir); err != nil {
+		t.Fatalf("write to disk: %v", err)
+	}
+
+	expected := filepath.Join(dir, "demo", "app", "app.yaml")
+	if _, err := os.Stat(expected); err != nil {
+		t.Fatalf("expected single file not written: %v", err)
+	}
+}
