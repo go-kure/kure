@@ -1,4 +1,4 @@
-package argo
+package argocd
 
 import (
 	"path/filepath"
