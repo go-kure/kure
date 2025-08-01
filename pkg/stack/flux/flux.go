@@ -1,0 +1,95 @@
+package flux
+
+import (
+	"path/filepath"
+
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	meta "github.com/fluxcd/pkg/apis/meta"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	fluxcdpkg "github.com/go-kure/kure/pkg/fluxcd"
+	"github.com/go-kure/kure/pkg/stack"
+)
+
+// Workflow implements the stack.Workflow interface for Flux.
+type Workflow struct {
+	// SourceRef specifies the source reference for generated Kustomizations.
+	SourceRef kustv1.CrossNamespaceSourceReference
+	// Interval controls the reconciliation interval of the Kustomizations.
+	Interval string
+}
+
+// NewWorkflow returns a Workflow initialized with common defaults.
+func NewWorkflow() Workflow {
+	return Workflow{
+		SourceRef: kustv1.CrossNamespaceSourceReference{
+			Kind:      "OCIRepository",
+			Name:      "flux-system",
+			Namespace: "flux-system",
+		},
+		Interval: "10m",
+	}
+}
+
+// Cluster converts the cluster definition into Flux Kustomizations.
+func (w Workflow) Cluster(c *stack.Cluster) ([]client.Object, error) {
+	if c == nil || c.Node == nil {
+		return nil, nil
+	}
+	return w.Node(c.Node)
+}
+
+// Node converts a Node and its children into Kustomizations.
+func (w Workflow) Node(n *stack.Node) ([]client.Object, error) {
+	if n == nil {
+		return nil, nil
+	}
+	var objs []client.Object
+	if n.Bundle != nil {
+		bObjs, err := w.Bundle(n.Bundle)
+		if err != nil {
+			return nil, err
+		}
+		objs = append(objs, bObjs...)
+	}
+	for _, child := range n.Children {
+		cObjs, err := w.Node(child)
+		if err != nil {
+			return nil, err
+		}
+		objs = append(objs, cObjs...)
+	}
+	return objs, nil
+}
+
+// Bundle converts a Bundle into a Flux Kustomization.
+func (w Workflow) Bundle(b *stack.Bundle) ([]client.Object, error) {
+	if b == nil {
+		return nil, nil
+	}
+	cfg := fluxcdpkg.KustomizationConfig{
+		Name:      b.Name,
+		Namespace: "flux-system",
+		Path:      bundlePath(b),
+		Interval:  w.Interval,
+		Prune:     true,
+		SourceRef: w.SourceRef,
+	}
+	k := fluxcdpkg.NewKustomization(&cfg)
+	for _, dep := range b.DependsOn {
+		k.Spec.DependsOn = append(k.Spec.DependsOn, meta.NamespacedObjectReference{Name: dep.Name})
+	}
+	var obj client.Object = k
+	return []client.Object{obj}, nil
+}
+
+// bundlePath builds a repository path for the bundle based on its ancestry.
+func bundlePath(b *stack.Bundle) string {
+	var parts []string
+	for p := b; p != nil; p = p.Parent {
+		if p.Name != "" {
+			parts = append([]string{p.Name}, parts...)
+		}
+	}
+	return filepath.ToSlash(filepath.Join(parts...))
+}
