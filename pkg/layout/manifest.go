@@ -11,11 +11,12 @@ import (
 )
 
 type ManifestLayout struct {
-	Name      string
-	Namespace string
-	FilePer   FileExportMode
-	Resources []client.Object
-	Children  []*ManifestLayout
+	Name                string
+	Namespace           string
+	FilePer             FileExportMode
+	ApplicationFileMode ApplicationFileMode
+	Resources           []client.Object
+	Children            []*ManifestLayout
 }
 
 func (ml *ManifestLayout) FullRepoPath() string {
@@ -32,6 +33,15 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		return fmt.Errorf("create dir: %w", err)
 	}
 
+	mode := ml.FilePer
+	if mode == FilePerUnset {
+		mode = FilePerResource
+	}
+	appMode := ml.ApplicationFileMode
+	if appMode == AppFileUnset {
+		appMode = AppFilePerResource
+	}
+
 	fileGroups := map[string][]client.Object{}
 	for _, obj := range ml.Resources {
 		ns := obj.GetNamespace()
@@ -43,11 +53,15 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		name := obj.GetName()
 
 		var fileName string
-		switch ml.FilePer {
-		case FilePerResource:
-			fileName = fmt.Sprintf("%s-%s-%s.yaml", ns, kind, name)
-		case FilePerKind:
-			fileName = fmt.Sprintf("%s-%s.yaml", ns, kind)
+		if appMode == AppFileSingle {
+			fileName = fmt.Sprintf("%s.yaml", ml.Name)
+		} else {
+			switch mode {
+			case FilePerKind:
+				fileName = fmt.Sprintf("%s-%s.yaml", ns, kind)
+			default:
+				fileName = fmt.Sprintf("%s-%s-%s.yaml", ns, kind, name)
+			}
 		}
 
 		fileGroups[fileName] = append(fileGroups[fileName], obj)
