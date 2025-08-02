@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	kio "github.com/go-kure/kure/pkg/io"
 )
 
 // WriteManifest writes a ManifestLayout to disk using the provided configuration.
@@ -65,42 +66,60 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		if err != nil {
 			return err
 		}
+		
+		// Convert to []*client.Object for the kio encoder
+		var objPtrs []*client.Object
 		for _, obj := range objs {
-			data, err := yaml.Marshal(obj)
-			if err != nil {
-				_ = f.Close()
-				return err
-			}
-			if _, err = f.Write(data); err != nil {
-				_ = f.Close()
-				return err
-			}
-			_, _ = f.Write([]byte("---"))
+			objPtr := &obj
+			objPtrs = append(objPtrs, objPtr)
 		}
+		
+		// Use proper Kubernetes YAML encoder
+		data, err := kio.EncodeObjectsToYAML(objPtrs)
+		if err != nil {
+			_ = f.Close()
+			return err
+		}
+		
+		if _, err = f.Write(data); err != nil {
+			_ = f.Close()
+			return err
+		}
+		
 		if err := f.Close(); err != nil {
 			return err
 		}
 	}
 
-	if (kMode == KustomizationExplicit || len(ml.Children) > 0) && !(appMode == AppFileSingle && len(ml.Children) == 0) {
+	// Generate kustomization.yaml if there are resources or children
+	if (kMode == KustomizationExplicit && len(fileGroups) > 0) || len(ml.Children) > 0 {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
 			return err
 		}
-		_, _ = kf.WriteString("resources: ")
+		
+		// Write proper YAML header
+		_, _ = kf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
+		_, _ = kf.WriteString("kind: Kustomization\n")
+		_, _ = kf.WriteString("resources:\n")
+		
+		// Add resource files if in explicit mode
 		if kMode == KustomizationExplicit {
 			for file := range fileGroups {
-				_, _ = kf.WriteString(fmt.Sprintf("  - %s ", file))
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
 			}
 		}
+		
+		// Add child references
 		for _, child := range ml.Children {
 			if child.ApplicationFileMode == AppFileSingle {
-				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml ", child.Name))
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else {
-				_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
 			}
 		}
+		
 		if err := kf.Close(); err != nil {
 			return err
 		}

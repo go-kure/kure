@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	kio "github.com/go-kure/kure/pkg/io"
 )
 
 type ManifestLayout struct {
@@ -53,22 +54,80 @@ func WritePackagesToDisk(packages map[string]*ManifestLayout, basePath string) e
 			continue
 		}
 		
-		// Create package-specific subdirectory
-		var packagePath string
-		if packageKey == "default" {
-			packagePath = filepath.Join(basePath, "default")
-		} else {
-			// Use a sanitized version of the package key for directory name
-			sanitized := strings.ReplaceAll(packageKey, "/", "-")
-			sanitized = strings.ReplaceAll(sanitized, ":", "-")
-			packagePath = filepath.Join(basePath, sanitized)
-		}
+		// Create package-specific subdirectory with proper sanitization
+		packageDirName := sanitizePackageKey(packageKey)
+		packagePath := filepath.Join(basePath, packageDirName)
 		
 		if err := layout.WriteToDisk(packagePath); err != nil {
 			return fmt.Errorf("write package %s to disk: %w", packageKey, err)
 		}
 	}
 	return nil
+}
+
+// sanitizePackageKey converts package reference strings to valid directory names
+func sanitizePackageKey(packageKey string) string {
+	if packageKey == "default" {
+		return "default"
+	}
+	
+	// Replace problematic characters with safe alternatives
+	sanitized := packageKey
+	
+	// Replace slashes and backslashes with dashes
+	sanitized = strings.ReplaceAll(sanitized, "/", "-")
+	sanitized = strings.ReplaceAll(sanitized, "\\", "-")
+	
+	// Replace colons with dashes
+	sanitized = strings.ReplaceAll(sanitized, ":", "-")
+	
+	// Replace spaces with dashes
+	sanitized = strings.ReplaceAll(sanitized, " ", "-")
+	
+	// Replace commas with dashes
+	sanitized = strings.ReplaceAll(sanitized, ",", "-")
+	
+	// Remove or replace other problematic characters
+	sanitized = strings.ReplaceAll(sanitized, "=", "-")
+	sanitized = strings.ReplaceAll(sanitized, "&", "-")
+	sanitized = strings.ReplaceAll(sanitized, "?", "-")
+	sanitized = strings.ReplaceAll(sanitized, "#", "-")
+	sanitized = strings.ReplaceAll(sanitized, "!", "-")
+	sanitized = strings.ReplaceAll(sanitized, "@", "-")
+	sanitized = strings.ReplaceAll(sanitized, "%", "-")
+	sanitized = strings.ReplaceAll(sanitized, "^", "-")
+	sanitized = strings.ReplaceAll(sanitized, "*", "-")
+	sanitized = strings.ReplaceAll(sanitized, "(", "-")
+	sanitized = strings.ReplaceAll(sanitized, ")", "-")
+	sanitized = strings.ReplaceAll(sanitized, "+", "-")
+	sanitized = strings.ReplaceAll(sanitized, "|", "-")
+	sanitized = strings.ReplaceAll(sanitized, "[", "-")
+	sanitized = strings.ReplaceAll(sanitized, "]", "-")
+	sanitized = strings.ReplaceAll(sanitized, "{", "-")
+	sanitized = strings.ReplaceAll(sanitized, "}", "-")
+	sanitized = strings.ReplaceAll(sanitized, ";", "-")
+	sanitized = strings.ReplaceAll(sanitized, "'", "-")
+	sanitized = strings.ReplaceAll(sanitized, "\"", "-")
+	sanitized = strings.ReplaceAll(sanitized, "<", "-")
+	sanitized = strings.ReplaceAll(sanitized, ">", "-")
+	sanitized = strings.ReplaceAll(sanitized, "`", "-")
+	sanitized = strings.ReplaceAll(sanitized, "~", "-")
+	sanitized = strings.ReplaceAll(sanitized, "$", "-")
+	
+	// Clean up multiple consecutive dashes
+	for strings.Contains(sanitized, "--") {
+		sanitized = strings.ReplaceAll(sanitized, "--", "-")
+	}
+	
+	// Trim leading/trailing dashes
+	sanitized = strings.Trim(sanitized, "-")
+	
+	// Ensure it's not empty and doesn't contain only special characters
+	if sanitized == "" || sanitized == "-" {
+		sanitized = "unknown-package"
+	}
+	
+	return sanitized
 }
 
 func (ml *ManifestLayout) WriteToDisk(basePath string) error {
@@ -121,18 +180,26 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		if err != nil {
 			return err
 		}
+		
+		// Convert to []*client.Object for the kio encoder
+		var objPtrs []*client.Object
 		for _, obj := range objs {
-			data, err := yaml.Marshal(obj)
-			if err != nil {
-				_ = f.Close()
-				return err
-			}
-			if _, err = f.Write(data); err != nil {
-				_ = f.Close()
-				return err
-			}
-			_, _ = f.Write([]byte("---"))
+			objPtr := &obj
+			objPtrs = append(objPtrs, objPtr)
 		}
+		
+		// Use proper Kubernetes YAML encoder
+		data, err := kio.EncodeObjectsToYAML(objPtrs)
+		if err != nil {
+			_ = f.Close()
+			return err
+		}
+		
+		if _, err = f.Write(data); err != nil {
+			_ = f.Close()
+			return err
+		}
+		
 		if err := f.Close(); err != nil {
 			return err
 		}
@@ -143,25 +210,40 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		kMode = KustomizationExplicit
 	}
 
-	if (kMode == KustomizationExplicit || len(ml.Children) > 0) && !(appMode == AppFileSingle && len(ml.Children) == 0) {
+	// Generate kustomization.yaml if there are resources or children
+	if (kMode == KustomizationExplicit && len(fileGroups) > 0) || len(ml.Children) > 0 {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
 			return err
 		}
-		_, _ = kf.WriteString("resources: ")
+		
+		// Write proper YAML header
+		_, _ = kf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
+		_, _ = kf.WriteString("kind: Kustomization\n")
+		_, _ = kf.WriteString("resources:\n")
+		
+		// Add resource files if in explicit mode
 		if kMode == KustomizationExplicit {
 			for file := range fileGroups {
-				_, _ = kf.WriteString(fmt.Sprintf("  - %s ", file))
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
 			}
 		}
+		
+		// Add child references
 		for _, child := range ml.Children {
 			if child.ApplicationFileMode == AppFileSingle {
-				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml ", child.Name))
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else {
-				_, _ = kf.WriteString(fmt.Sprintf("  - ../%s ", child.Name))
+				// For package-aware layouts, use relative path
+				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {
+					// Different packages - skip cross-package references in kustomization
+					continue
+				}
+				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
 			}
 		}
+		
 		if err := kf.Close(); err != nil {
 			return err
 		}
