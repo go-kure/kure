@@ -21,7 +21,6 @@ require (
 	github.com/fluxcd/pkg/apis/kustomize v1.10.0
 	github.com/fluxcd/pkg/apis/meta v1.13.0
 	github.com/fluxcd/source-controller/api v1.6.1
-	github.com/pelletier/go-toml/v2 v2.2.4
 	go.universe.tf/metallb v0.15.2
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.2

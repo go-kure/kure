@@ -7,7 +7,11 @@
       "Bash(cp:*)",
       "Bash(go run:*)",
       "WebFetch(domain:docs.anthropic.com)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(go run:*)",
+      "Bash(mv:*)",
+      "Bash(rmdir:*)",
+      "Bash(go mod:*)"
     ],
     "deny": []
   }

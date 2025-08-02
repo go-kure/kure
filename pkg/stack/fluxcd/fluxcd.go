@@ -7,7 +7,7 @@ import (
 	meta "github.com/fluxcd/pkg/apis/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fluxcdpkg "github.com/go-kure/kure/pkg/fluxcd"
+	fluxcdpkg "github.com/go-kure/kure/pkg/k8s/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
 )
