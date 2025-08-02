@@ -1,4 +1,4 @@
-We analyzed the code in modules stack, stack/fluxcd and layout.
+We analyzed the code in modules stack, stack/fluxcd and stack/layout.
 We here explain how we get from a Cluster to a fully rendered FluxCD set of yaml deployments.
 
 Overview
@@ -19,7 +19,7 @@ FluxCD workflow
 
 Layout generation
 
-    WalkCluster in package layout traverses the Cluster tree and builds a ManifestLayout hierarchy, collecting the Kubernetes objects produced by each application. Layout rules determine whether bundles or applications are flattened or nested in the directory tree
+    WalkCluster in package stack/layout traverses the Cluster tree and builds a ManifestLayout hierarchy, collecting the Kubernetes objects produced by each application. Layout rules determine whether bundles or applications are flattened or nested in the directory tree
 
 WriteManifest renders each ManifestLayout to disk: resources are grouped into files, a kustomization.yaml is generated when needed, and the function recurses into child layouts to build the full repository structure
 

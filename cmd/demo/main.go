@@ -32,7 +32,7 @@ import (
 
 	"github.com/go-kure/kure/internal/certmanager"
 	"github.com/go-kure/kure/internal/kubernetes"
-	layout "github.com/go-kure/kure/pkg/layout"
+	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/generators"

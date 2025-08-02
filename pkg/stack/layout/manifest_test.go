@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/pkg/layout"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 func TestManifestLayoutWrite(t *testing.T) {

@@ -31,7 +31,7 @@ Kure prioritizes **type safety**, **composability**, and **simplicity** over tem
 - **metallb/**: Load balancer resources (IPAddressPools, BGP configuration)
 - **externalsecrets/**: External secret management (SecretStores, ExternalSecrets)
 
-#### 3. Layout Management (`pkg/layout/`)
+#### 3. Layout Management (`pkg/stack/layout/`)
 - Controls manifest organization on disk
 - Handles Flux (`./path`) vs ArgoCD (`path`) conventions
 - Supports various grouping and file organization strategies

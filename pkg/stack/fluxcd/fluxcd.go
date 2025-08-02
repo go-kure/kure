@@ -8,20 +8,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fluxcdpkg "github.com/go-kure/kure/pkg/fluxcd"
-	layoutpkg "github.com/go-kure/kure/pkg/layout"
+	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
 )
 
 // Workflow implements the stack.Workflow interface for Flux.
 type Workflow struct {
 	// Mode controls how spec.path is generated.
-	Mode layoutpkg.KustomizationMode
+	Mode layout.KustomizationMode
 }
 
 // NewWorkflow returns a Workflow initialized with defaults.
 func NewWorkflow() Workflow {
 	return Workflow{
-		Mode: layoutpkg.KustomizationExplicit,
+		Mode: layout.KustomizationExplicit,
 	}
 }
 
@@ -62,7 +62,7 @@ func (w Workflow) Bundle(b *stack.Bundle) ([]client.Object, error) {
 		return nil, nil
 	}
 	path := bundlePath(b)
-	if w.Mode == layoutpkg.KustomizationRecursive && b.Parent != nil {
+	if w.Mode == layout.KustomizationRecursive && b.Parent != nil {
 		path = bundlePath(b.Parent)
 	}
 	interval := b.Interval

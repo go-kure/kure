@@ -16,7 +16,7 @@ This is **Kure**, a Go library for programmatically building Kubernetes resource
 ```
 internal/          # Resource builders (kubernetes, fluxcd, certmanager, metallb, externalsecrets)
 pkg/stack/         # Core domain model (Cluster, Node, Bundle, Application)
-pkg/layout/        # Manifest organization and directory structure
+pkg/stack/layout/  # Manifest organization and directory structure
 pkg/patch/         # JSONPath-based declarative patching system
 pkg/io/            # YAML serialization utilities
 pkg/fluxcd/        # Public API for Flux resources
@@ -67,7 +67,7 @@ go run ./cmd/demo -cluster  # Cluster example
 ### Extending Domain Model
 - Modify `pkg/stack/` for core abstractions
 - Update workflow implementations in `pkg/stack/fluxcd/` and `pkg/stack/argocd/`
-- Ensure layout generation works in `pkg/layout/`
+- Ensure layout generation works in `pkg/stack/layout/`
 
 ### Adding Patch Operations
 - Extend `pkg/patch/` for new patch types

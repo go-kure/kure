@@ -5,7 +5,7 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 
-	layoutpkg "github.com/go-kure/kure/pkg/layout"
+	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 )
@@ -15,7 +15,7 @@ func TestWorkflowBundlePathMode(t *testing.T) {
 	child := &stack.Bundle{Name: "child", Parent: parent}
 
 	wf := fluxstack.NewWorkflow()
-	wf.Mode = layoutpkg.KustomizationExplicit
+	wf.Mode = layout.KustomizationExplicit
 	objs, err := wf.Bundle(child)
 	if err != nil {
 		t.Fatalf("bundle explicit: %v", err)
@@ -28,7 +28,7 @@ func TestWorkflowBundlePathMode(t *testing.T) {
 		t.Fatalf("explicit path mismatch: %s", k.Spec.Path)
 	}
 
-	wf.Mode = layoutpkg.KustomizationRecursive
+	wf.Mode = layout.KustomizationRecursive
 	objs, err = wf.Bundle(child)
 	if err != nil {
 		t.Fatalf("bundle recursive: %v", err)
