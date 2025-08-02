@@ -7,12 +7,14 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type ManifestLayout struct {
 	Name                string
 	Namespace           string
+	PackageRef          *schema.GroupVersionKind
 	FilePer             FileExportMode
 	ApplicationFileMode ApplicationFileMode
 	Mode                KustomizationMode
@@ -26,6 +28,47 @@ func (ml *ManifestLayout) FullRepoPath() string {
 		ns = "cluster"
 	}
 	return filepath.ToSlash(filepath.Join(ns, ml.Name))
+}
+
+// FullRepoPathWithPackage returns the repository path including package-specific prefix
+func (ml *ManifestLayout) FullRepoPathWithPackage() string {
+	basePath := ml.FullRepoPath()
+	if ml.PackageRef != nil {
+		// Use package kind as prefix to avoid path collisions
+		prefix := strings.ToLower(ml.PackageRef.Kind)
+		if prefix == "ocirepository" {
+			prefix = "oci"
+		} else if prefix == "gitrepository" {
+			prefix = "git"
+		}
+		return filepath.ToSlash(filepath.Join(prefix, basePath))
+	}
+	return basePath
+}
+
+// WritePackagesToDisk writes multiple package layouts to separate directory structures
+func WritePackagesToDisk(packages map[string]*ManifestLayout, basePath string) error {
+	for packageKey, layout := range packages {
+		if layout == nil {
+			continue
+		}
+		
+		// Create package-specific subdirectory
+		var packagePath string
+		if packageKey == "default" {
+			packagePath = filepath.Join(basePath, "default")
+		} else {
+			// Use a sanitized version of the package key for directory name
+			sanitized := strings.ReplaceAll(packageKey, "/", "-")
+			sanitized = strings.ReplaceAll(sanitized, ":", "-")
+			packagePath = filepath.Join(basePath, sanitized)
+		}
+		
+		if err := layout.WriteToDisk(packagePath); err != nil {
+			return fmt.Errorf("write package %s to disk: %w", packageKey, err)
+		}
+	}
+	return nil
 }
 
 func (ml *ManifestLayout) WriteToDisk(basePath string) error {

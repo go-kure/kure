@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	batchv1 "k8s.io/api/batch/v1"
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -16,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/cli-runtime/pkg/printers"
 
@@ -48,7 +51,6 @@ import (
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
 	"github.com/fluxcd/pkg/apis/meta"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
-	"gopkg.in/yaml.v3"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -64,6 +66,7 @@ func main() {
 		internals   bool
 		appWorkload bool
 		clusterDemo bool
+		multiOCI    bool
 		format      string
 	)
 
@@ -73,6 +76,8 @@ func main() {
 	flag.BoolVar(&appWorkload, "a", false, "run AppWorkload example")
 	flag.BoolVar(&clusterDemo, "cluster", false, "run cluster example")
 	flag.BoolVar(&clusterDemo, "c", false, "run cluster example")
+	flag.BoolVar(&multiOCI, "multi-oci", false, "run multi-OCI package example")
+	flag.BoolVar(&multiOCI, "m", false, "run multi-OCI package example")
 	flag.StringVar(&format, "format", "json", "output format: json|yaml|toml")
 	flag.StringVar(&format, "f", "json", "output format: json|yaml|toml")
 	flag.Parse()
@@ -87,6 +92,10 @@ func main() {
 	case clusterDemo:
 		if err := runClusterExample(); err != nil {
 			log.Printf("cluster error: %v", err)
+		}
+	case multiOCI:
+		if err := runMultiOCIExample(); err != nil {
+			log.Printf("multi-oci error: %v", err)
 		}
 	default:
 		flag.Usage()
@@ -549,4 +558,195 @@ func runClusterExample() error {
 	}
 	log.Printf("manifests written to %s", repoDir)
 	return nil
+}
+
+// runMultiOCIExample demonstrates the new multi-OCI package functionality
+func runMultiOCIExample() error {
+	log.Println("Running multi-OCI package demo...")
+
+	// Define different package references
+	ociPackageRef := &schema.GroupVersionKind{
+		Group:   "source.toolkit.fluxcd.io",
+		Version: "v1beta2",
+		Kind:    "OCIRepository",
+	}
+	gitPackageRef := &schema.GroupVersionKind{
+		Group:   "source.toolkit.fluxcd.io",
+		Version: "v1",
+		Kind:    "GitRepository",
+	}
+
+	// Create applications for different packages
+	appConfig1 := &generators.AppWorkloadConfig{
+		Name:      "web-app",
+		Namespace: "production",
+		Workload:  generators.DeploymentWorkload,
+		Replicas:  3,
+		Containers: []generators.ContainerConfig{
+			{
+				Name:  "nginx",
+				Image: "nginx:latest",
+				Ports: []apiv1.ContainerPort{
+					{ContainerPort: 80, Protocol: apiv1.ProtocolTCP},
+				},
+			},
+		},
+	}
+	app1 := stack.NewApplication(appConfig1.Name, appConfig1.Namespace, appConfig1)
+	bundle1, err := stack.NewBundle("web-apps", []*stack.Application{app1}, nil)
+	if err != nil {
+		return err
+	}
+
+	appConfig2 := &generators.AppWorkloadConfig{
+		Name:      "database",
+		Namespace: "production",
+		Workload:  generators.StatefulSetWorkload,
+		Replicas:  1,
+		Containers: []generators.ContainerConfig{
+			{
+				Name:  "postgres",
+				Image: "postgres:13",
+				Ports: []apiv1.ContainerPort{
+					{ContainerPort: 5432, Protocol: apiv1.ProtocolTCP},
+				},
+			},
+		},
+	}
+	app2 := stack.NewApplication(appConfig2.Name, appConfig2.Namespace, appConfig2)
+	bundle2, err := stack.NewBundle("databases", []*stack.Application{app2}, nil)
+	if err != nil {
+		return err
+	}
+
+	appConfig3 := &generators.AppWorkloadConfig{
+		Name:      "monitoring",
+		Namespace: "monitoring",
+		Workload:  generators.DeploymentWorkload,
+		Replicas:  1,
+		Containers: []generators.ContainerConfig{
+			{
+				Name:  "prometheus",
+				Image: "prometheus:latest",
+				Ports: []apiv1.ContainerPort{
+					{ContainerPort: 9090, Protocol: apiv1.ProtocolTCP},
+				},
+			},
+		},
+	}
+	app3 := stack.NewApplication(appConfig3.Name, appConfig3.Namespace, appConfig3)
+	bundle3, err := stack.NewBundle("monitoring", []*stack.Application{app3}, nil)
+	if err != nil {
+		return err
+	}
+
+	// Create nodes with different package references
+	// OCI package will contain web apps and databases
+	webNode := &stack.Node{
+		Name:       "web",
+		Bundle:     bundle1,
+		PackageRef: ociPackageRef,
+	}
+	dbNode := &stack.Node{
+		Name:       "database",
+		Bundle:     bundle2,
+		PackageRef: ociPackageRef, // Same package as web apps
+	}
+
+	// Git package will contain monitoring
+	monitoringNode := &stack.Node{
+		Name:       "monitoring",
+		Bundle:     bundle3,
+		PackageRef: gitPackageRef, // Different package
+	}
+
+	// Create root cluster
+	root := &stack.Node{
+		Name:     "cluster",
+		Children: []*stack.Node{webNode, dbNode, monitoringNode},
+	}
+	webNode.Parent = root
+	dbNode.Parent = root
+	monitoringNode.Parent = root
+
+	cluster := &stack.Cluster{Name: "multi-oci-demo", Node: root}
+
+	// Demonstrate package separation
+	packages, err := layout.WalkClusterByPackage(cluster, layout.LayoutRules{})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Found %d packages:", len(packages))
+	for key, layout := range packages {
+		log.Printf("  Package: %s", key)
+		if layout != nil {
+			log.Printf("    Children: %d", len(layout.Children))
+			for _, child := range layout.Children {
+				log.Printf("      - %s (namespace: %s)", child.Name, child.Namespace)
+			}
+		}
+	}
+
+	// Write each package to separate directories
+	baseDir := "examples/multi-oci-demo"
+	if err := os.RemoveAll(baseDir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return err
+	}
+
+	if err := layout.WritePackagesToDisk(packages, baseDir); err != nil {
+		return err
+	}
+	log.Printf("Package manifests written to %s", baseDir)
+
+	// Demonstrate Flux workflow by package
+	wf := fluxstack.NewWorkflow()
+	fluxPackages, err := wf.ClusterByPackage(cluster)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Found %d Flux packages:", len(fluxPackages))
+	for key, objs := range fluxPackages {
+		log.Printf("  Flux Package: %s (%d objects)", key, len(objs))
+		for _, obj := range objs {
+			log.Printf("    - %s/%s", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+		}
+	}
+
+	// Write Flux configurations for each package
+	fluxDir := filepath.Join(baseDir, "flux")
+	if err := os.MkdirAll(fluxDir, 0755); err != nil {
+		return err
+	}
+
+	cfg := layout.Config{ManifestsDir: ""}
+	for packageKey, objs := range fluxPackages {
+		fluxLayout := &layout.ManifestLayout{
+			Name:      packageKey,
+			Namespace: ".",
+			Resources: objs,
+		}
+		packageDir := filepath.Join(fluxDir, sanitizePackageName(packageKey))
+		if err := layout.WriteManifest(packageDir, cfg, fluxLayout); err != nil {
+			return err
+		}
+	}
+	log.Printf("Flux manifests written to %s", fluxDir)
+
+	return nil
+}
+
+// sanitizePackageName converts package reference strings to valid directory names
+func sanitizePackageName(packageKey string) string {
+	if packageKey == "default" {
+		return "default"
+	}
+	// Replace problematic characters with dashes
+	name := packageKey
+	name = filepath.Base(name) // Remove any path separators
+	return name
 }
