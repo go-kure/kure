@@ -59,6 +59,18 @@ const (
 	KustomizationUnset KustomizationMode = ""
 )
 
+// FluxPlacement determines how Flux Kustomizations are placed in the layout.
+type FluxPlacement string
+
+const (
+	// FluxSeparate places all Flux Kustomizations in a separate directory.
+	FluxSeparate FluxPlacement = "separate"
+	// FluxIntegrated distributes Flux Kustomizations across their target nodes.
+	FluxIntegrated FluxPlacement = "integrated"
+	// FluxUnset indicates no flux placement preference.
+	FluxUnset FluxPlacement = ""
+)
+
 // LayoutRules control how layouts are generated.
 //
 // Zero values are interpreted as the defaults described in the field
@@ -80,6 +92,12 @@ type LayoutRules struct {
 	// FilePer sets the default file export mode for resources. Defaults to
 	// FilePerResource.
 	FilePer FileExportMode
+	// ClusterName specifies a cluster name to prepend to all paths.
+	// When set, creates clusters/{ClusterName}/... structure.
+	ClusterName string
+	// FluxPlacement determines how Flux Kustomizations are placed.
+	// Defaults to FluxSeparate.
+	FluxPlacement FluxPlacement
 }
 
 // DefaultLayoutRules returns a LayoutRules instance populated with the
@@ -91,6 +109,7 @@ func DefaultLayoutRules() LayoutRules {
 		ApplicationGrouping: GroupByName,
 		ApplicationFileMode: AppFilePerResource,
 		FilePer:             FilePerResource,
+		FluxPlacement:       FluxSeparate,
 	}
 }
 
@@ -127,6 +146,13 @@ func (lr LayoutRules) Validate() error {
 		// valid
 	default:
 		return fmt.Errorf("invalid file export mode: %s", lr.FilePer)
+	}
+
+	switch lr.FluxPlacement {
+	case FluxSeparate, FluxIntegrated, FluxUnset:
+		// valid
+	default:
+		return fmt.Errorf("invalid flux placement: %s", lr.FluxPlacement)
 	}
 
 	return nil

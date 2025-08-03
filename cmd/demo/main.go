@@ -538,22 +538,26 @@ func runClusterExample() error {
 	if err := os.RemoveAll(repoDir); err != nil {
 		return err
 	}
-	cfg := layout.Config{ManifestsDir: ""}
-	ml, err := layout.WalkCluster(&cl, layout.LayoutRules{})
-	if err != nil {
-		return err
+	
+	// Configure layout for proper GitOps structure
+	cfg := layout.Config{ManifestsDir: "clusters"}
+	rules := layout.LayoutRules{
+		NodeGrouping:        layout.GroupByName,
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+		ClusterName:         cl.Name,         // Use cluster name from cluster.yaml
+		FluxPlacement:       layout.FluxIntegrated, // Use integrated Flux placement
 	}
-	ml.Namespace = "."
-	if err := layout.WriteManifest(repoDir, cfg, ml); err != nil {
-		return err
-	}
+	
+	// Generate integrated layout with Flux Kustomizations
 	wf := fluxstack.NewWorkflow()
-	fluxObjs, err := wf.Cluster(&cl)
+	ml, err := wf.ClusterWithLayout(&cl, rules)
 	if err != nil {
 		return err
 	}
-	fluxLayout := &layout.ManifestLayout{Name: "fluxcd", Namespace: ".", Resources: fluxObjs}
-	if err := layout.WriteManifest(repoDir, cfg, fluxLayout); err != nil {
+	
+	// Write the complete integrated layout
+	if err := layout.WriteManifest(repoDir, cfg, ml); err != nil {
 		return err
 	}
 	log.Printf("manifests written to %s", repoDir)

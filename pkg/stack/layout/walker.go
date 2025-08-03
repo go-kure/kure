@@ -32,6 +32,9 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 	if rules.FilePer == FilePerUnset {
 		rules.FilePer = def.FilePer
 	}
+	if rules.FluxPlacement == FluxUnset {
+		rules.FluxPlacement = def.FluxPlacement
+	}
 
 	nodeOnly := rules.BundleGrouping == GroupFlat && rules.ApplicationGrouping == GroupFlat
 	filePer := rules.FilePer
@@ -39,7 +42,72 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		filePer = FilePerResource
 	}
 
-	return walkNode(c.Node, nil, nodeOnly, filePer, nil)
+	// For cluster-aware layout, we need to restructure the hierarchy
+	if rules.ClusterName != "" {
+		return walkClusterWithClusterName(c, rules, nodeOnly, filePer)
+	}
+
+	// Traditional layout without cluster name
+	ml, err := walkNode(c.Node, nil, nodeOnly, filePer, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return ml, nil
+}
+
+// walkClusterWithClusterName creates a cluster-aware layout where the cluster name is the root
+// and all nodes (including the root node) become siblings underneath it.
+func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bool, filePer FileExportMode) (*ManifestLayout, error) {
+	// Create a cluster-level layout with the cluster name as the root
+	clusterLayout := &ManifestLayout{
+		Name:      "",
+		Namespace: rules.ClusterName,
+		FilePer:   filePer,
+		Children:  []*ManifestLayout{},
+	}
+
+	// Process the root node as a sibling (only its bundle, not children)
+	if c.Node.Bundle != nil {
+		rootLayout := &ManifestLayout{
+			Name:      c.Node.Name,
+			Namespace: filepath.Join(rules.ClusterName, c.Node.Name),
+			FilePer:   filePer,
+			Children:  []*ManifestLayout{},
+		}
+		
+		// Add only the root node's bundle resources (not child resources)
+		for _, app := range c.Node.Bundle.Applications {
+			if app == nil {
+				continue
+			}
+			objsPtr, err := app.Generate()
+			if err != nil {
+				return nil, err
+			}
+			for _, o := range objsPtr {
+				if o == nil {
+					continue
+				}
+				rootLayout.Resources = append(rootLayout.Resources, *o)
+			}
+		}
+		
+		clusterLayout.Children = append(clusterLayout.Children, rootLayout)
+	}
+
+	// Process all child nodes as siblings at the cluster level (with their own resources)
+	for _, child := range c.Node.Children {
+		childLayout, err := walkNode(child, []string{rules.ClusterName}, nodeOnly, filePer, nil)
+		if err != nil {
+			return nil, err
+		}
+		if childLayout != nil {
+			clusterLayout.Children = append(clusterLayout.Children, childLayout)
+		}
+	}
+
+	return clusterLayout, nil
 }
 
 // WalkClusterByPackage traverses a stack.Cluster and builds separate ManifestLayout trees
