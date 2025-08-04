@@ -1,37 +1,32 @@
 package errors
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
-// CreateError returns an error that formats as the given text.
-// Each call to CreateError returns a distinct error value even if the text is identical.
+// Wrap wraps an error with a message using Go's standard error wrapping.
+// Use this instead of the deprecated New function.
+func Wrap(err error, message string) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", message, err)
+}
+
+// Deprecated: Use errors.New from standard library instead.
 func CreateError(text string) error {
-	return &errorString{text}
+	return errors.New(text)
 }
 
+// Deprecated: Use Wrap function instead for proper error chaining.
 func New(err error, message string) error {
-	return &KubeError{err, message}
+	return Wrap(err, message)
 }
 
-// errorString is a trivial implementation of error.
-type errorString struct {
-	s string
-}
-
-type KubeError struct {
-	err     error
-	message string
-}
-
-func (e *errorString) Error() string {
-	return e.s
-}
-func (e *KubeError) Error() string {
-	return fmt.Sprintf("%s: %s", e.err, e.message)
-}
-
-// You may want to define your own errors
+// Standard error variables using the standard library
 var (
-	ErrGVKNotFound   = CreateError("could not determine GroupVersionKind")
-	ErrGVKNotAllowed = CreateError("GroupVersionKind is not allowed")
-	ErrNilObject     = CreateError("provided object is nil")
+	ErrGVKNotFound   = errors.New("could not determine GroupVersionKind")
+	ErrGVKNotAllowed = errors.New("GroupVersionKind is not allowed")
+	ErrNilObject     = errors.New("provided object is nil")
 )
