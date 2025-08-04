@@ -27,3 +27,6 @@ mise.toml
 
 
 cmd/test/
+
+# Demo output files
+out/

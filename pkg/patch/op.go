@@ -39,7 +39,12 @@ func (r *ResourceWithPatches) Apply() error {
 func applyPatchOp(obj map[string]interface{}, op PatchOp) error {
 	switch op.Op {
 	case "replace":
-		return unstructured.SetNestedField(obj, op.Value, parsePath(op.Path)...)
+		// Handle array selector patches
+		if op.Selector != "" {
+			return applyArrayReplace(obj, op)
+		}
+		convertedValue := convertValueForUnstructured(op.Value)
+	return unstructured.SetNestedField(obj, convertedValue, parsePath(op.Path)...)
 	case "delete":
 		if op.Selector == "" {
 			_, found, err := unstructured.NestedFieldNoCopy(obj, parsePath(op.Path)...)
@@ -68,7 +73,8 @@ func applyPatchOp(obj map[string]interface{}, op PatchOp) error {
 		if err != nil || !found {
 			return fmt.Errorf("path not found: %s", op.Path)
 		}
-		lst = append(lst, op.Value)
+		convertedValue := convertValueForUnstructured(op.Value)
+		lst = append(lst, convertedValue)
 		return unstructured.SetNestedSlice(obj, lst, parsePath(op.Path)...)
 	case "insertBefore", "insertAfter":
 		return applyListPatch(obj, op)
@@ -89,11 +95,12 @@ func applyListPatch(obj map[string]interface{}, op PatchOp) error {
 		return err
 	}
 
+	convertedValue := convertValueForUnstructured(op.Value)
 	switch op.Op {
 	case "insertBefore":
-		lst = append(lst[:idx], append([]interface{}{op.Value}, lst[idx:]...)...)
+		lst = append(lst[:idx], append([]interface{}{convertedValue}, lst[idx:]...)...)
 	case "insertAfter":
-		lst = append(lst[:idx+1], append([]interface{}{op.Value}, lst[idx+1:]...)...)
+		lst = append(lst[:idx+1], append([]interface{}{convertedValue}, lst[idx+1:]...)...)
 	}
 
 	return unstructured.SetNestedSlice(obj, lst, path...)
@@ -124,6 +131,51 @@ func resolveListIndex(list []interface{}, selector string) (int, error) {
 	return i, nil
 }
 
+// applyArrayReplace handles replace operations on array elements using selectors
+func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
+	path := parsePath(op.Path)
+	lst, found, err := unstructured.NestedSlice(obj, path...)
+	if err != nil || !found {
+		return fmt.Errorf("path not found for array replace: %s", op.Path)
+	}
+
+	idx, err := resolveListIndex(lst, op.Selector)
+	if err != nil {
+		return fmt.Errorf("failed to resolve array index: %w", err)
+	}
+
+	if idx < 0 || idx >= len(lst) {
+		return fmt.Errorf("array index out of bounds: %d", idx)
+	}
+
+	// Check if this is a nested field patch (value is a map with remaining path)
+	if valueMap, ok := op.Value.(map[string]interface{}); ok && len(valueMap) == 1 {
+		// This is a nested patch - get the array item and patch it
+		item, ok := lst[idx].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("array item at index %d is not an object", idx)
+		}
+
+		// Apply the nested patch to the array item
+		for remainingPath, newValue := range valueMap {
+			// Convert value to appropriate type for unstructured
+			convertedValue := convertValueForUnstructured(newValue)
+			if err := unstructured.SetNestedField(item, convertedValue, parsePath(remainingPath)...); err != nil {
+				return fmt.Errorf("failed to set nested field %s: %w", remainingPath, err)
+			}
+		}
+		
+		// Update the array with the modified item
+		lst[idx] = item
+	} else {
+		// Direct replacement of the array item
+		convertedValue := convertValueForUnstructured(op.Value)
+		lst[idx] = convertedValue
+	}
+
+	return unstructured.SetNestedSlice(obj, lst, path...)
+}
+
 func parsePath(path string) []string {
 	clean := strings.Trim(path, ".")
 	if clean == "" {
@@ -152,6 +204,7 @@ func ParsePatchLine(key string, value interface{}) (PatchOp, error) {
 		return op, nil
 	}
 
+	// First check for selectors at the end (existing behavior)
 	re := regexp.MustCompile(`(.*)\[(.*?)]$`)
 	matches := re.FindStringSubmatch(key)
 	if len(matches) == 3 {
@@ -169,6 +222,29 @@ func ParsePatchLine(key string, value interface{}) (PatchOp, error) {
 		}
 		op.Path = path
 		op.Value = value
+		return op, nil
+	}
+
+	// Check for selectors in the middle of the path
+	midSelectorRe := regexp.MustCompile(`^(.+)\[([^\]]+)\]\.(.+)$`)
+	midMatches := midSelectorRe.FindStringSubmatch(key)
+	if len(midMatches) == 4 {
+		basePath, sel, remainingPath := midMatches[1], midMatches[2], midMatches[3]
+		switch {
+		case strings.HasPrefix(sel, "-="):
+			op.Op = "insertBefore"
+			op.Selector = strings.TrimPrefix(sel, "-=")
+		case strings.HasPrefix(sel, "+="):
+			op.Op = "insertAfter"
+			op.Selector = strings.TrimPrefix(sel, "+=")
+		default:
+			op.Op = "replace"
+			op.Selector = sel
+		}
+		op.Path = basePath
+		// Store the remaining path after the selector as part of the operation
+		// We'll need to modify the patch application logic to handle this
+		op.Value = map[string]interface{}{remainingPath: value}
 		return op, nil
 	}
 
@@ -300,4 +376,42 @@ func ParsePatchPath(path string) ([]PathPart, error) {
 	}
 
 	return parts, nil
+}
+
+// convertValueForUnstructured converts values to types compatible with unstructured.SetNestedField
+// The unstructured package expects specific types and doesn't handle raw int types well
+func convertValueForUnstructured(value interface{}) interface{} {
+	switch v := value.(type) {
+	case int:
+		return int64(v)  // Convert int to int64 for unstructured compatibility
+	case int32:
+		return int64(v)
+	case int64:
+		return v
+	case float32:
+		return float64(v)
+	case float64:
+		return v
+	case bool:
+		return v
+	case string:
+		return v
+	case map[string]interface{}:
+		// Recursively convert map values
+		converted := make(map[string]interface{})
+		for k, val := range v {
+			converted[k] = convertValueForUnstructured(val)
+		}
+		return converted
+	case []interface{}:
+		// Recursively convert slice values
+		converted := make([]interface{}, len(v))
+		for i, val := range v {
+			converted[i] = convertValueForUnstructured(val)
+		}
+		return converted
+	default:
+		// Return as-is for other types
+		return value
+	}
 }

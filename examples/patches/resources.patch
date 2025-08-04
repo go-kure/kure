@@ -1,0 +1,15 @@
+# Patch Set 1: Resource Limits and Requests
+# This patch increases resource limits for production workloads
+
+[deployment.cert-manager.containers.name=cert-manager-controller]
+resources.requests.cpu: 100m
+resources.requests.memory: 128Mi
+resources.limits.cpu: 500m
+resources.limits.memory: 512Mi
+
+[deployment.cert-manager-webhook.containers.name=cert-manager-webhook]
+resources.requests.cpu: 50m
+resources.requests.memory: 64Mi
+resources.limits.cpu: 200m
+resources.limits.memory: 256Mi
+

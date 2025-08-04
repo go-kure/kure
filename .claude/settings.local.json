@@ -8,7 +8,6 @@
       "Bash(go run:*)",
       "WebFetch(domain:docs.anthropic.com)",
       "Bash(grep:*)",
-      "Bash(go run:*)",
       "Bash(mv:*)",
       "Bash(rmdir:*)",
       "Bash(go mod:*)",
@@ -19,7 +18,13 @@
       "Bash(rm:*)",
       "Bash(go list:*)",
       "Bash(go mod list:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(echo \"PATH: $PATH\")",
+      "Bash(helm repo add:*)",
+      "Bash(git add:*)",
+      "Bash(git rebase:*)",
+      "Bash(mv:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": []
   }

@@ -1,0 +1,50 @@
+# Advanced Patch Examples
+# This demonstrates complex TOML header syntax and variable substitution
+
+# Basic resource targeting
+[deployment.cert-manager]
+metadata.labels.environment: production
+spec.replicas: 3
+
+# Container-specific patches with selectors
+[deployment.cert-manager.containers.name=cert-manager-controller]
+image.repository: custom-registry.example.com/cert-manager
+image.tag: "${values.cert_manager_version}"
+resources.requests.cpu: "${values.cpu_request}"
+resources.requests.memory: "${values.memory_request}"
+
+# Additional container configuration
+[deployment.cert-manager.containers.name=cert-manager-controller]
+imagePullPolicy: Always
+terminationMessagePolicy: FallbackToLogsOnError
+
+# Pod-level configuration
+[deployment.cert-manager]
+spec.template.spec.dnsPolicy: ClusterFirst
+spec.template.spec.restartPolicy: Always
+
+# Service patches with port selectors
+[service.cert-manager-webhook.ports.name=https]
+port: 9443
+targetPort: webhook
+
+# Multiple ingress rules
+[ingress.cert-manager-webhook.rules.0]
+host: "${values.webhook_host}"
+
+[ingress.cert-manager-webhook.rules.0.paths.0]
+path: /webhook
+pathType: Prefix
+backend.service.name: cert-manager-webhook
+backend.service.port.number: 443
+
+# TLS configuration
+[ingress.cert-manager-webhook.tls.0]
+hosts.0: "${values.webhook_host}"
+secretName: cert-manager-webhook-tls
+
+# Complex bracketed selector example
+[deployment.cert-manager.containers[image=cert-manager-controller]]
+imagePullPolicy: Always
+livenessProbe.httpGet.path: /healthz
+livenessProbe.httpGet.port: 6060

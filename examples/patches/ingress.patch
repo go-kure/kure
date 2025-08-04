@@ -1,0 +1,8 @@
+# Patch Set 2: Service Configuration
+# This patch modifies service configuration for cert-manager webhook
+
+[service.cert-manager-webhook]
+spec.type: NodePort
+
+[service.cert-manager-webhook.ports.name=https]
+nodePort: 30443

@@ -1,0 +1,20 @@
+# Patch Set 3: Security Settings
+# This patch enhances security configuration for cert-manager
+
+[deployment.cert-manager]
+spec.template.spec.securityContext.runAsNonRoot: true
+spec.template.spec.securityContext.runAsUser: 1000
+spec.template.spec.securityContext.fsGroup: 1000
+
+[deployment.cert-manager.containers.name=cert-manager-controller]
+securityContext.allowPrivilegeEscalation: false
+securityContext.readOnlyRootFilesystem: true
+
+[deployment.cert-manager-webhook]
+spec.template.spec.securityContext.runAsNonRoot: true
+spec.template.spec.securityContext.runAsUser: 1000
+spec.template.spec.securityContext.fsGroup: 1000
+
+[deployment.cert-manager-webhook.containers.name=cert-manager-webhook]
+securityContext.allowPrivilegeEscalation: false
+securityContext.readOnlyRootFilesystem: true

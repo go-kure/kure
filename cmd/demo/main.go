@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/go-kure/kure/internal/certmanager"
 	"github.com/go-kure/kure/internal/kubernetes"
+	"github.com/go-kure/kure/pkg/patch"
 	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -67,6 +69,7 @@ func main() {
 		appWorkload bool
 		clusterDemo bool
 		multiOCI    bool
+		patchDemo   bool
 		format      string
 	)
 
@@ -78,6 +81,8 @@ func main() {
 	flag.BoolVar(&clusterDemo, "c", false, "run cluster example")
 	flag.BoolVar(&multiOCI, "multi-oci", false, "run multi-OCI package example")
 	flag.BoolVar(&multiOCI, "m", false, "run multi-OCI package example")
+	flag.BoolVar(&patchDemo, "patches", false, "run patch module demo")
+	flag.BoolVar(&patchDemo, "p", false, "run patch module demo")
 	flag.StringVar(&format, "format", "json", "output format: json|yaml|toml")
 	flag.StringVar(&format, "f", "json", "output format: json|yaml|toml")
 	flag.Parse()
@@ -96,6 +101,10 @@ func main() {
 	case multiOCI:
 		if err := runMultiOCIExample(); err != nil {
 			log.Printf("multi-oci error: %v", err)
+		}
+	case patchDemo:
+		if err := runPatchDemo(); err != nil {
+			log.Printf("patch demo error: %v", err)
 		}
 	default:
 		flag.Usage()
@@ -534,7 +543,7 @@ func runClusterExample() error {
 		}
 	}
 
-	repoDir := filepath.Join(baseDir, "repo")
+	repoDir := filepath.Join("out", "cluster-repo")
 	if err := os.RemoveAll(repoDir); err != nil {
 		return err
 	}
@@ -722,7 +731,7 @@ func runMultiOCIExample() error {
 	}
 
 	// Write Flux configurations for each package
-	fluxDir := filepath.Join(baseDir, "flux")
+	fluxDir := filepath.Join("out", "multi-oci-flux")
 	if err := os.MkdirAll(fluxDir, 0755); err != nil {
 		return err
 	}
@@ -753,4 +762,81 @@ func sanitizePackageName(packageKey string) string {
 	name := packageKey
 	name = filepath.Base(name) // Remove any path separators
 	return name
+}
+
+func runPatchDemo() error {
+	fmt.Println("=== Kure Patch Module Demo (TOML Format) ===")
+	fmt.Println()
+
+	// Define paths to our example files
+	examplesDir := "examples/patches"
+	baseYAML := filepath.Join(examplesDir, "cert-manager-simple.yaml")
+	patchFiles := []string{
+		filepath.Join(examplesDir, "resources.patch"),
+		filepath.Join(examplesDir, "ingress.patch"),
+		filepath.Join(examplesDir, "security.patch"),
+		filepath.Join(examplesDir, "advanced.patch"),
+	}
+
+	// Check if files exist
+	if _, err := os.Stat(baseYAML); os.IsNotExist(err) {
+		return fmt.Errorf("base YAML file not found: %s", baseYAML)
+	}
+
+	fmt.Printf("Loading base cert-manager resources from: %s\n", baseYAML)
+	
+	// Load base resources with structure preservation
+	baseFile, err := os.Open(baseYAML)
+	if err != nil {
+		return fmt.Errorf("failed to open base YAML: %w", err)
+	}
+	defer baseFile.Close()
+
+	documentSet, err := patch.LoadResourcesWithStructure(baseFile)
+	if err != nil {
+		return fmt.Errorf("failed to load resources with structure: %w", err)
+	}
+
+	fmt.Printf("Loaded %d base resources with preserved structure\n", len(documentSet.Documents))
+	fmt.Println()
+
+	// Create patchable set with structure preservation (will be updated for each patch file)
+	// This is just a placeholder - actual patches will be loaded per file in WritePatchedFiles
+
+	// Write patched files to disk
+	fmt.Println("=== Writing Patched Files to Disk ===")
+	fmt.Printf("Using naming pattern: <originalname>-patch-<patchname>.yaml\n")
+	fmt.Println()
+
+	// Create a minimal patchable set just for the WritePatchedFiles functionality
+	patchableSet := &patch.PatchableAppSet{
+		Resources:   documentSet.GetResources(),
+		DocumentSet: documentSet,
+		Patches:     make([]struct{Target string; Patch patch.PatchOp}, 0),
+	}
+
+	outputDir := "out"
+	if err := patchableSet.WritePatchedFiles(baseYAML, patchFiles, outputDir); err != nil {
+		return fmt.Errorf("failed to write patched files: %w", err)
+	}
+
+	fmt.Println("=== TOML Patch Demo Complete ===")
+	fmt.Println()
+	fmt.Println("Key Features Demonstrated:")
+	fmt.Println("- TOML-style header format: [kind.name.section.selector]")
+	fmt.Println("- Complex selectors: containers.name=main, ports.0, containers[image=nginx]")
+	fmt.Println("- Automatic Kubernetes path mapping (deployment → spec.template.spec)")
+	fmt.Println("- Variable substitution: ${values.key} and ${features.flag}")
+	fmt.Println("- Context-aware field resolution based on resource kind")
+	fmt.Println("- YAML structure preservation with comments and order")
+	fmt.Println("- File output with naming pattern: <originalname>-patch-<patchname>.yaml")
+	fmt.Println()
+	fmt.Println("Generated Files:")
+	for _, patchFile := range patchFiles {
+		outputFile := patch.GenerateOutputFilename(baseYAML, patchFile, outputDir)
+		fmt.Printf("  - %s\n", outputFile)
+	}
+	fmt.Println()
+
+	return nil
 }
