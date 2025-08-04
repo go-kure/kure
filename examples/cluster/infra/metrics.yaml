@@ -6,7 +6,7 @@ containers:
     image: prom/prometheus:v2.46.0
     ports:
       - name: web
-        containerport: 9090
+        containerPort: 9090
     args:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus/

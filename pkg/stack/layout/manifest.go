@@ -19,6 +19,7 @@ type ManifestLayout struct {
 	FilePer             FileExportMode
 	ApplicationFileMode ApplicationFileMode
 	Mode                KustomizationMode
+	FluxPlacement       FluxPlacement // Track flux placement mode for kustomization generation
 	Resources           []client.Object
 	Children            []*ManifestLayout
 }
@@ -28,6 +29,12 @@ func (ml *ManifestLayout) FullRepoPath() string {
 	if ns == "" {
 		ns = "cluster"
 	}
+	
+	// Don't duplicate the name if it's already at the end of the namespace
+	if ml.Name != "" && strings.HasSuffix(ns, ml.Name) {
+		return filepath.ToSlash(ns)
+	}
+	
 	return filepath.ToSlash(filepath.Join(ns, ml.Name))
 }
 

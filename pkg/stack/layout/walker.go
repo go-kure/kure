@@ -48,7 +48,7 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 	}
 
 	// Traditional layout without cluster name
-	ml, err := walkNode(c.Node, nil, nodeOnly, filePer, nil)
+	ml, err := walkNode(c.Node, nil, nodeOnly, filePer, nil, rules.FluxPlacement)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 
 	// Process all child nodes as siblings at the cluster level (with their own resources)
 	for _, child := range c.Node.Children {
-		childLayout, err := walkNode(child, []string{rules.ClusterName}, nodeOnly, filePer, nil)
+		childLayout, err := walkNode(child, []string{rules.ClusterName}, nodeOnly, filePer, nil, rules.FluxPlacement)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +160,7 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 }
 
 // walkNode recursively processes a stack.Node and its children.
-func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, inheritedPackageRef *schema.GroupVersionKind) (*ManifestLayout, error) {
+func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, inheritedPackageRef *schema.GroupVersionKind, fluxPlacement FluxPlacement) (*ManifestLayout, error) {
 	if n == nil {
 		return nil, nil
 	}
@@ -171,9 +171,10 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExpo
 	}
 
 	ml := &ManifestLayout{
-		Name:      n.Name,
-		Namespace: filepath.Join(ancestors...),
-		FilePer:   filePer,
+		Name:          n.Name,
+		Namespace:     filepath.Join(ancestors...),
+		FilePer:       filePer,
+		FluxPlacement: fluxPlacement, // Pass flux placement mode
 	}
 
 	if nodeOnly {
@@ -214,22 +215,26 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExpo
 					objs = append(objs, *o)
 				}
 				appLayout := &ManifestLayout{
-					Name:      app.Name,
-					Namespace: filepath.Join(append(currentPath, b.Name)...),
-					Resources: objs,
+					Name:          app.Name,
+					Namespace:     filepath.Join(append(currentPath, b.Name)...),
+					Resources:     objs,
+					Mode:          KustomizationExplicit, // Ensure applications get their own kustomization.yaml
+					FluxPlacement: fluxPlacement,         // Pass flux placement mode
 				}
 				bundleChildren = append(bundleChildren, appLayout)
 			}
 			bundleLayout := &ManifestLayout{
-				Name:      b.Name,
-				Namespace: filepath.Join(currentPath...),
-				Children:  bundleChildren,
+				Name:          b.Name,
+				Namespace:     filepath.Join(currentPath...),
+				Children:      bundleChildren,
+				Mode:          KustomizationRecursive, // Bundle directories reference subdirectories
+				FluxPlacement: fluxPlacement,          // Pass flux placement mode
 			}
 			children = append(children, bundleLayout)
 		}
 
 		for _, child := range n.Children {
-			cl, err := walkNode(child, currentPath, nodeOnly, filePer, resolvePackageRef(n, inheritedPackageRef))
+			cl, err := walkNode(child, currentPath, nodeOnly, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement)
 			if err != nil {
 				return nil, err
 			}
@@ -243,7 +248,7 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExpo
 
 	if nodeOnly {
 		for _, child := range n.Children {
-			cl, err := walkNode(child, currentPath, nodeOnly, filePer, resolvePackageRef(n, inheritedPackageRef))
+			cl, err := walkNode(child, currentPath, nodeOnly, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement)
 			if err != nil {
 				return nil, err
 			}

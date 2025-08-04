@@ -91,8 +91,12 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		}
 	}
 
-	// Generate kustomization.yaml if there are resources or children
-	if (kMode == KustomizationExplicit && len(fileGroups) > 0) || len(ml.Children) > 0 {
+	// Don't generate root kustomization.yaml at cluster level (when namespace is just the cluster name)
+	isClusterRoot := strings.Count(ml.Namespace, string(filepath.Separator)) == 0 && ml.Name == ""
+	
+	// Generate kustomization.yaml if there are resources or children, but not at cluster root
+	// Also generate for explicit mode even if there are no children (for leaf applications)
+	if !isClusterRoot && ((kMode == KustomizationExplicit && len(fileGroups) > 0) || len(ml.Children) > 0) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -110,13 +114,20 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
 			}
 		}
+		// In recursive mode, only reference child directories, not files
 		
 		// Add child references
 		for _, child := range ml.Children {
 			if child.ApplicationFileMode == AppFileSingle {
 				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else {
-				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
+				// For FluxIntegrated mode, reference Flux Kustomization YAML files instead of directories
+				if ml.FluxPlacement == FluxIntegrated {
+					fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
+					_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", fluxKustName))
+				} else {
+					_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
+				}
 			}
 		}
 		

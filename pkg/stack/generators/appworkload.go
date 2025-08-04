@@ -114,25 +114,238 @@ type AppWorkloadConfig struct {
 	Labels    map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 
 	Containers            []ContainerConfig       `json:"containers" yaml:"containers"`
-	Volumes               []corev1.Volume         `json:"volumes,omitempty" yaml:"volumes,omitempty"`
+	Volumes               []Volume                `json:"volumes,omitempty" yaml:"volumes,omitempty"`
 	VolumeClaimTemplates  []VolumeClaimTemplate   `json:"volumeClaimTemplates,omitempty" yaml:"volumeClaimTemplates,omitempty"`
 
 	Services []ServiceConfig `json:"services,omitempty" yaml:"services,omitempty"`
 	Ingress  *IngressConfig  `json:"ingress,omitempty" yaml:"ingress,omitempty"`
 }
 
+// Custom types for proper YAML parsing
+
+type ContainerPort struct {
+	Name          string `json:"name,omitempty" yaml:"name,omitempty"`
+	ContainerPort int32  `json:"containerPort" yaml:"containerPort"`
+	Protocol      string `json:"protocol,omitempty" yaml:"protocol,omitempty"`
+}
+
+func (cp ContainerPort) ToKubernetesPort() corev1.ContainerPort {
+	protocol := corev1.ProtocolTCP
+	if cp.Protocol != "" {
+		protocol = corev1.Protocol(cp.Protocol)
+	}
+	return corev1.ContainerPort{
+		Name:          cp.Name,
+		ContainerPort: cp.ContainerPort,
+		Protocol:      protocol,
+	}
+}
+
+type VolumeMount struct {
+	Name      string `json:"name" yaml:"name"`
+	MountPath string `json:"mountPath" yaml:"mountPath"`
+	ReadOnly  bool   `json:"readOnly,omitempty" yaml:"readOnly,omitempty"`
+	SubPath   string `json:"subPath,omitempty" yaml:"subPath,omitempty"`
+}
+
+func (vm VolumeMount) ToKubernetesVolumeMount() corev1.VolumeMount {
+	return corev1.VolumeMount{
+		Name:      vm.Name,
+		MountPath: vm.MountPath,
+		ReadOnly:  vm.ReadOnly,
+		SubPath:   vm.SubPath,
+	}
+}
+
+type EnvVarSource struct {
+	SecretKeyRef    *SecretKeySelector    `json:"secretKeyRef,omitempty" yaml:"secretKeyRef,omitempty"`
+	ConfigMapKeyRef *ConfigMapKeySelector `json:"configMapKeyRef,omitempty" yaml:"configMapKeyRef,omitempty"`
+	FieldRef        *ObjectFieldSelector  `json:"fieldRef,omitempty" yaml:"fieldRef,omitempty"`
+}
+
+type SecretKeySelector struct {
+	Name string `json:"name" yaml:"name"`
+	Key  string `json:"key" yaml:"key"`
+}
+
+type ConfigMapKeySelector struct {
+	Name string `json:"name" yaml:"name"`
+	Key  string `json:"key" yaml:"key"`
+}
+
+type ObjectFieldSelector struct {
+	FieldPath string `json:"fieldPath" yaml:"fieldPath"`
+}
+
+type EnvVar struct {
+	Name      string        `json:"name" yaml:"name"`
+	Value     string        `json:"value,omitempty" yaml:"value,omitempty"`
+	ValueFrom *EnvVarSource `json:"valueFrom,omitempty" yaml:"valueFrom,omitempty"`
+}
+
+func (env EnvVar) ToKubernetesEnvVar() corev1.EnvVar {
+	k8sEnv := corev1.EnvVar{
+		Name:  env.Name,
+		Value: env.Value,
+	}
+	
+	if env.ValueFrom != nil {
+		k8sEnv.ValueFrom = &corev1.EnvVarSource{}
+		if env.ValueFrom.SecretKeyRef != nil {
+			k8sEnv.ValueFrom.SecretKeyRef = &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: env.ValueFrom.SecretKeyRef.Name,
+				},
+				Key: env.ValueFrom.SecretKeyRef.Key,
+			}
+		}
+		if env.ValueFrom.ConfigMapKeyRef != nil {
+			k8sEnv.ValueFrom.ConfigMapKeyRef = &corev1.ConfigMapKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: env.ValueFrom.ConfigMapKeyRef.Name,
+				},
+				Key: env.ValueFrom.ConfigMapKeyRef.Key,
+			}
+		}
+		if env.ValueFrom.FieldRef != nil {
+			k8sEnv.ValueFrom.FieldRef = &corev1.ObjectFieldSelector{
+				FieldPath: env.ValueFrom.FieldRef.FieldPath,
+			}
+		}
+	}
+	
+	return k8sEnv
+}
+
+type HTTPGetAction struct {
+	Path   string `json:"path,omitempty" yaml:"path,omitempty"`
+	Port   int32  `json:"port" yaml:"port"`
+	Scheme string `json:"scheme,omitempty" yaml:"scheme,omitempty"`
+}
+
+type ExecAction struct {
+	Command []string `json:"command,omitempty" yaml:"command,omitempty"`
+}
+
+type Probe struct {
+	HTTPGet                       *HTTPGetAction `json:"httpGet,omitempty" yaml:"httpGet,omitempty"`
+	Exec                          *ExecAction    `json:"exec,omitempty" yaml:"exec,omitempty"`
+	InitialDelaySeconds           int32          `json:"initialDelaySeconds,omitempty" yaml:"initialDelaySeconds,omitempty"`
+	TimeoutSeconds                int32          `json:"timeoutSeconds,omitempty" yaml:"timeoutSeconds,omitempty"`
+	PeriodSeconds                 int32          `json:"periodSeconds,omitempty" yaml:"periodSeconds,omitempty"`
+	SuccessThreshold              int32          `json:"successThreshold,omitempty" yaml:"successThreshold,omitempty"`
+	FailureThreshold              int32          `json:"failureThreshold,omitempty" yaml:"failureThreshold,omitempty"`
+}
+
+func (p Probe) ToKubernetesProbe() *corev1.Probe {
+	if p.HTTPGet == nil && p.Exec == nil {
+		return nil
+	}
+	
+	k8sProbe := &corev1.Probe{
+		InitialDelaySeconds: p.InitialDelaySeconds,
+		TimeoutSeconds:      p.TimeoutSeconds,
+		PeriodSeconds:       p.PeriodSeconds,
+		SuccessThreshold:    p.SuccessThreshold,
+		FailureThreshold:    p.FailureThreshold,
+	}
+	
+	if p.HTTPGet != nil {
+		k8sProbe.ProbeHandler.HTTPGet = &corev1.HTTPGetAction{
+			Path: p.HTTPGet.Path,
+			Port: intstr.FromInt32(p.HTTPGet.Port),
+		}
+		if p.HTTPGet.Scheme != "" {
+			k8sProbe.ProbeHandler.HTTPGet.Scheme = corev1.URIScheme(p.HTTPGet.Scheme)
+		}
+	}
+	
+	if p.Exec != nil {
+		k8sProbe.ProbeHandler.Exec = &corev1.ExecAction{
+			Command: p.Exec.Command,
+		}
+	}
+	
+	return k8sProbe
+}
+
+type VolumeSource struct {
+	EmptyDir  *EmptyDirVolumeSource  `json:"emptyDir,omitempty" yaml:"emptyDir,omitempty"`
+	ConfigMap *ConfigMapVolumeSource `json:"configMap,omitempty" yaml:"configMap,omitempty"`
+	Secret    *SecretVolumeSource    `json:"secret,omitempty" yaml:"secret,omitempty"`
+	HostPath  *HostPathVolumeSource  `json:"hostPath,omitempty" yaml:"hostPath,omitempty"`
+}
+
+type EmptyDirVolumeSource struct {
+	SizeLimit string `json:"sizeLimit,omitempty" yaml:"sizeLimit,omitempty"`
+}
+
+type ConfigMapVolumeSource struct {
+	Name string `json:"name" yaml:"name"`
+}
+
+type SecretVolumeSource struct {
+	SecretName string `json:"secretName" yaml:"secretName"`
+}
+
+type HostPathVolumeSource struct {
+	Path string `json:"path" yaml:"path"`
+}
+
+type Volume struct {
+	Name         string        `json:"name" yaml:"name"`
+	VolumeSource *VolumeSource `json:",inline" yaml:",inline"`
+}
+
+func (v Volume) ToKubernetesVolume() corev1.Volume {
+	k8sVol := corev1.Volume{
+		Name: v.Name,
+	}
+	
+	if v.VolumeSource != nil {
+		if v.VolumeSource.EmptyDir != nil {
+			k8sVol.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
+			if v.VolumeSource.EmptyDir.SizeLimit != "" {
+				qty, err := resource.ParseQuantity(v.VolumeSource.EmptyDir.SizeLimit)
+				if err == nil {
+					k8sVol.VolumeSource.EmptyDir.SizeLimit = &qty
+				}
+			}
+		}
+		if v.VolumeSource.ConfigMap != nil {
+			k8sVol.VolumeSource.ConfigMap = &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: v.VolumeSource.ConfigMap.Name,
+				},
+			}
+		}
+		if v.VolumeSource.Secret != nil {
+			k8sVol.VolumeSource.Secret = &corev1.SecretVolumeSource{
+				SecretName: v.VolumeSource.Secret.SecretName,
+			}
+		}
+		if v.VolumeSource.HostPath != nil {
+			k8sVol.VolumeSource.HostPath = &corev1.HostPathVolumeSource{
+				Path: v.VolumeSource.HostPath.Path,
+			}
+		}
+	}
+	
+	return k8sVol
+}
+
 type ContainerConfig struct {
 	Name         string                   `json:"name" yaml:"name"`
 	Image        string                   `json:"image" yaml:"image"`
-	Ports        []corev1.ContainerPort   `json:"ports,omitempty" yaml:"ports,omitempty"`
-	Env          []corev1.EnvVar          `json:"env,omitempty" yaml:"env,omitempty"`
-	VolumeMounts []corev1.VolumeMount     `json:"volumeMounts,omitempty" yaml:"volumeMounts,omitempty"`
+	Ports        []ContainerPort          `json:"ports,omitempty" yaml:"ports,omitempty"`
+	Env          []EnvVar                 `json:"env,omitempty" yaml:"env,omitempty"`
+	VolumeMounts []VolumeMount            `json:"volumeMounts,omitempty" yaml:"volumeMounts,omitempty"`
 
 	Resources *ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
 
-	StartupProbe   *corev1.Probe `json:"startupProbe,omitempty" yaml:"startupProbe,omitempty"`
-	LivenessProbe  *corev1.Probe `json:"livenessProbe,omitempty" yaml:"livenessProbe,omitempty"`
-	ReadinessProbe *corev1.Probe `json:"readinessProbe,omitempty" yaml:"readinessProbe,omitempty"`
+	StartupProbe   *Probe `json:"startupProbe,omitempty" yaml:"startupProbe,omitempty"`
+	LivenessProbe  *Probe `json:"livenessProbe,omitempty" yaml:"livenessProbe,omitempty"`
+	ReadinessProbe *Probe `json:"readinessProbe,omitempty" yaml:"readinessProbe,omitempty"`
 }
 
 type ServiceConfig struct {
@@ -177,7 +390,8 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 			}
 		}
 		for _, v := range cfg.Volumes {
-			if err := kubernetes.AddStatefulSetVolume(sts, &v); err != nil {
+			k8sVol := v.ToKubernetesVolume()
+			if err := kubernetes.AddStatefulSetVolume(sts, &k8sVol); err != nil {
 				return nil, err
 			}
 		}
@@ -200,7 +414,8 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 			}
 		}
 		for _, v := range cfg.Volumes {
-			if err := kubernetes.AddDaemonSetVolume(ds, &v); err != nil {
+			k8sVol := v.ToKubernetesVolume()
+			if err := kubernetes.AddDaemonSetVolume(ds, &k8sVol); err != nil {
 				return nil, err
 			}
 		}
@@ -213,7 +428,8 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 			}
 		}
 		for _, v := range cfg.Volumes {
-			if err := kubernetes.AddDeploymentVolume(dep, &v); err != nil {
+			k8sVol := v.ToKubernetesVolume()
+			if err := kubernetes.AddDeploymentVolume(dep, &k8sVol); err != nil {
 				return nil, err
 			}
 		}
@@ -262,18 +478,21 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 	
 	// Add ports
 	for _, p := range cfg.Ports {
-		_ = kubernetes.AddContainerPort(container, p)
-		ports = append(ports, p)
+		k8sPort := p.ToKubernetesPort()
+		_ = kubernetes.AddContainerPort(container, k8sPort)
+		ports = append(ports, k8sPort)
 	}
 	
 	// Add environment variables
 	for _, env := range cfg.Env {
-		_ = kubernetes.AddContainerEnv(container, env)
+		k8sEnv := env.ToKubernetesEnvVar()
+		_ = kubernetes.AddContainerEnv(container, k8sEnv)
 	}
 	
 	// Add volume mounts
 	for _, vm := range cfg.VolumeMounts {
-		_ = kubernetes.AddContainerVolumeMount(container, vm)
+		k8sMount := vm.ToKubernetesVolumeMount()
+		_ = kubernetes.AddContainerVolumeMount(container, k8sMount)
 	}
 	
 	// Set resources if provided
@@ -289,13 +508,22 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 	
 	// Set probes if provided
 	if cfg.LivenessProbe != nil {
-		_ = kubernetes.SetContainerLivenessProbe(container, *cfg.LivenessProbe)
+		k8sProbe := cfg.LivenessProbe.ToKubernetesProbe()
+		if k8sProbe != nil {
+			_ = kubernetes.SetContainerLivenessProbe(container, *k8sProbe)
+		}
 	}
 	if cfg.ReadinessProbe != nil {
-		_ = kubernetes.SetContainerReadinessProbe(container, *cfg.ReadinessProbe)
+		k8sProbe := cfg.ReadinessProbe.ToKubernetesProbe()
+		if k8sProbe != nil {
+			_ = kubernetes.SetContainerReadinessProbe(container, *k8sProbe)
+		}
 	}
 	if cfg.StartupProbe != nil {
-		_ = kubernetes.SetContainerStartupProbe(container, *cfg.StartupProbe)
+		k8sProbe := cfg.StartupProbe.ToKubernetesProbe()
+		if k8sProbe != nil {
+			_ = kubernetes.SetContainerStartupProbe(container, *k8sProbe)
+		}
 	}
 	
 	return container, ports, nil

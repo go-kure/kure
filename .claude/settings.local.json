@@ -15,7 +15,11 @@
       "Bash(ls:*)",
       "Bash(go build:*)",
       "Bash(grep:*)",
-      "WebFetch(domain:docs.anthropic.com)"
+      "Bash(tree:*)",
+      "Bash(rm:*)",
+      "Bash(go list:*)",
+      "Bash(go mod list:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }

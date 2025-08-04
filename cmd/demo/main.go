@@ -543,8 +543,8 @@ func runClusterExample() error {
 	cfg := layout.Config{ManifestsDir: "clusters"}
 	rules := layout.LayoutRules{
 		NodeGrouping:        layout.GroupByName,
-		BundleGrouping:      layout.GroupFlat,
-		ApplicationGrouping: layout.GroupFlat,
+		BundleGrouping:      layout.GroupFlat,       // Flatten bundles to avoid bundle/app/app/app nesting
+		ApplicationGrouping: layout.GroupByName,     // Group applications by name for individual directories
 		ClusterName:         cl.Name,         // Use cluster name from cluster.yaml
 		FluxPlacement:       layout.FluxIntegrated, // Use integrated Flux placement
 	}
@@ -590,8 +590,8 @@ func runMultiOCIExample() error {
 			{
 				Name:  "nginx",
 				Image: "nginx:latest",
-				Ports: []apiv1.ContainerPort{
-					{ContainerPort: 80, Protocol: apiv1.ProtocolTCP},
+				Ports: []generators.ContainerPort{
+					{ContainerPort: 80, Protocol: "TCP"},
 				},
 			},
 		},
@@ -611,8 +611,8 @@ func runMultiOCIExample() error {
 			{
 				Name:  "postgres",
 				Image: "postgres:13",
-				Ports: []apiv1.ContainerPort{
-					{ContainerPort: 5432, Protocol: apiv1.ProtocolTCP},
+				Ports: []generators.ContainerPort{
+					{ContainerPort: 5432, Protocol: "TCP"},
 				},
 			},
 		},
@@ -632,8 +632,8 @@ func runMultiOCIExample() error {
 			{
 				Name:  "prometheus",
 				Image: "prometheus:latest",
-				Ports: []apiv1.ContainerPort{
-					{ContainerPort: 9090, Protocol: apiv1.ProtocolTCP},
+				Ports: []generators.ContainerPort{
+					{ContainerPort: 9090, Protocol: "TCP"},
 				},
 			},
 		},
