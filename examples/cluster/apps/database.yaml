@@ -1,6 +1,80 @@
 name: database
 namespace: apps
-workload: Deployment
+workload: StatefulSet
 containers:
   - name: db
-    image: postgres:14
+    image: postgres:14-alpine
+    ports:
+      - name: postgres
+        containerPort: 5432
+    env:
+      - name: POSTGRES_DB
+        valueFrom:
+          configMapKeyRef:
+            name: postgres-config
+            key: database-name
+      - name: POSTGRES_USER
+        valueFrom:
+          secretKeyRef:
+            name: postgres-secrets
+            key: username
+      - name: POSTGRES_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: postgres-secrets
+            key: password
+      - name: PGDATA
+        value: /var/lib/postgresql/data/pgdata
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 1000m
+    livenessProbe:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+    readinessProbe:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    volumeMounts:
+      - name: postgres-data
+        mountPath: /var/lib/postgresql/data
+      - name: postgres-config
+        mountPath: /etc/postgresql/postgresql.conf
+        subPath: postgresql.conf
+        readOnly: true
+      - name: postgres-initdb
+        mountPath: /docker-entrypoint-initdb.d
+        readOnly: true
+volumes:
+  - name: postgres-config
+    configMap:
+      name: postgres-config
+  - name: postgres-initdb
+    configMap:
+      name: postgres-initdb
+volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 20Gi

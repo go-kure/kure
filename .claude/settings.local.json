@@ -5,7 +5,9 @@
       "Bash(go test:*)",
       "Bash(mkdir:*)",
       "Bash(cp:*)",
-      "Bash(go run:*)"
+      "Bash(go run:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

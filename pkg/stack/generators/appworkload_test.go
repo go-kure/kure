@@ -16,7 +16,7 @@ func TestContainerConfigGenerate(t *testing.T) {
 		Name:         "ctr",
 		Image:        "nginx",
 		Ports:        []corev1.ContainerPort{{Name: "http", ContainerPort: 80, HostPort: 80}},
-		VolumeMounts: map[string]string{"data": "/data"},
+		VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data"}},
 	}
 	container, ports, err := cfg.Generate()
 	if err != nil {

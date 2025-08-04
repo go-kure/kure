@@ -5,6 +5,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -22,6 +23,88 @@ const (
 	DaemonSetWorkload   WorkloadType = "DaemonSet"
 )
 
+// ResourceRequirements wraps corev1.ResourceRequirements with custom YAML unmarshaling
+type ResourceRequirements struct {
+	Limits   map[string]string `json:"limits,omitempty" yaml:"limits,omitempty"`
+	Requests map[string]string `json:"requests,omitempty" yaml:"requests,omitempty"`
+}
+
+// ToKubernetesResources converts to standard Kubernetes ResourceRequirements
+func (r *ResourceRequirements) ToKubernetesResources() (*corev1.ResourceRequirements, error) {
+	if r == nil {
+		return nil, nil
+	}
+	
+	result := &corev1.ResourceRequirements{}
+	
+	if len(r.Limits) > 0 {
+		result.Limits = make(corev1.ResourceList)
+		for k, v := range r.Limits {
+			qty, err := resource.ParseQuantity(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid resource limit %s=%s: %w", k, v, err)
+			}
+			result.Limits[corev1.ResourceName(k)] = qty
+		}
+	}
+	
+	if len(r.Requests) > 0 {
+		result.Requests = make(corev1.ResourceList)
+		for k, v := range r.Requests {
+			qty, err := resource.ParseQuantity(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid resource request %s=%s: %w", k, v, err)
+			}
+			result.Requests[corev1.ResourceName(k)] = qty
+		}
+	}
+	
+	return result, nil
+}
+
+// VolumeClaimTemplate wraps PersistentVolumeClaim with custom resource parsing
+type VolumeClaimTemplate struct {
+	Metadata struct {
+		Name string `json:"name" yaml:"name"`
+	} `json:"metadata" yaml:"metadata"`
+	Spec struct {
+		AccessModes      []string          `json:"accessModes,omitempty" yaml:"accessModes,omitempty"`
+		StorageClassName *string           `json:"storageClassName,omitempty" yaml:"storageClassName,omitempty"`
+		Resources        *ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
+	} `json:"spec" yaml:"spec"`
+}
+
+// ToKubernetesPVC converts to standard Kubernetes PersistentVolumeClaim
+func (vct *VolumeClaimTemplate) ToKubernetesPVC() (*corev1.PersistentVolumeClaim, error) {
+	pvc := &corev1.PersistentVolumeClaim{}
+	pvc.Name = vct.Metadata.Name
+	
+	// Convert access modes
+	for _, mode := range vct.Spec.AccessModes {
+		pvc.Spec.AccessModes = append(pvc.Spec.AccessModes, corev1.PersistentVolumeAccessMode(mode))
+	}
+	
+	// Set storage class
+	pvc.Spec.StorageClassName = vct.Spec.StorageClassName
+	
+	// Convert resources
+	if vct.Spec.Resources != nil {
+		k8sResources, err := vct.Spec.Resources.ToKubernetesResources()
+		if err != nil {
+			return nil, err
+		}
+		if k8sResources != nil {
+			// Convert ResourceRequirements to VolumeResourceRequirements
+			pvc.Spec.Resources = corev1.VolumeResourceRequirements{
+				Limits:   k8sResources.Limits,
+				Requests: k8sResources.Requests,
+			}
+		}
+	}
+	
+	return pvc, nil
+}
+
 // AppWorkloadConfig describes a single deployable application.
 type AppWorkloadConfig struct {
 	Name      string            `json:"name" yaml:"name"`
@@ -30,21 +113,22 @@ type AppWorkloadConfig struct {
 	Replicas  int32             `json:"replicas,omitempty" yaml:"replicas,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 
-	Containers []ContainerConfig `json:"containers" yaml:"containers"`
-	Volumes    map[string]string `json:"volumes,omitempty" yaml:"volumes,omitempty"` // volumeName -> hostPath
+	Containers            []ContainerConfig       `json:"containers" yaml:"containers"`
+	Volumes               []corev1.Volume         `json:"volumes,omitempty" yaml:"volumes,omitempty"`
+	VolumeClaimTemplates  []VolumeClaimTemplate   `json:"volumeClaimTemplates,omitempty" yaml:"volumeClaimTemplates,omitempty"`
 
 	Services []ServiceConfig `json:"services,omitempty" yaml:"services,omitempty"`
 	Ingress  *IngressConfig  `json:"ingress,omitempty" yaml:"ingress,omitempty"`
 }
 
 type ContainerConfig struct {
-	Name         string                 `json:"name" yaml:"name"`
-	Image        string                 `json:"image" yaml:"image"`
-	Ports        []corev1.ContainerPort `json:"ports,omitempty" yaml:"ports,omitempty"`
-	Env          map[string]string      `json:"env,omitempty" yaml:"env,omitempty"`
-	VolumeMounts map[string]string      `json:"volumeMounts,omitempty" yaml:"volumeMounts,omitempty"` // mountPath -> volumeName
+	Name         string                   `json:"name" yaml:"name"`
+	Image        string                   `json:"image" yaml:"image"`
+	Ports        []corev1.ContainerPort   `json:"ports,omitempty" yaml:"ports,omitempty"`
+	Env          []corev1.EnvVar          `json:"env,omitempty" yaml:"env,omitempty"`
+	VolumeMounts []corev1.VolumeMount     `json:"volumeMounts,omitempty" yaml:"volumeMounts,omitempty"`
 
-	Resources *corev1.ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
+	Resources *ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
 
 	StartupProbe   *corev1.Probe `json:"startupProbe,omitempty" yaml:"startupProbe,omitempty"`
 	LivenessProbe  *corev1.Probe `json:"livenessProbe,omitempty" yaml:"livenessProbe,omitempty"`
@@ -92,6 +176,20 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 				return nil, err
 			}
 		}
+		for _, v := range cfg.Volumes {
+			if err := kubernetes.AddStatefulSetVolume(sts, &v); err != nil {
+				return nil, err
+			}
+		}
+		for _, vct := range cfg.VolumeClaimTemplates {
+			k8sPVC, err := vct.ToKubernetesPVC()
+			if err != nil {
+				return nil, err
+			}
+			if err := kubernetes.AddStatefulSetVolumeClaimTemplate(sts, *k8sPVC); err != nil {
+				return nil, err
+			}
+		}
 		_ = kubernetes.SetStatefulSetReplicas(sts, cfg.Replicas)
 		objs = append(objs, k8s.ToClientObject(sts))
 	case DaemonSetWorkload:
@@ -101,11 +199,21 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 				return nil, err
 			}
 		}
+		for _, v := range cfg.Volumes {
+			if err := kubernetes.AddDaemonSetVolume(ds, &v); err != nil {
+				return nil, err
+			}
+		}
 		objs = append(objs, k8s.ToClientObject(ds))
 	case DeploymentWorkload:
 		dep := kubernetes.CreateDeployment(app.Name, app.Namespace)
 		for _, c := range containers {
 			if err := kubernetes.AddDeploymentContainer(dep, c); err != nil {
+				return nil, err
+			}
+		}
+		for _, v := range cfg.Volumes {
+			if err := kubernetes.AddDeploymentVolume(dep, &v); err != nil {
 				return nil, err
 			}
 		}
@@ -151,16 +259,44 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort, error) {
 	container := kubernetes.CreateContainer(cfg.Name, cfg.Image, nil, nil)
 	var ports []corev1.ContainerPort
+	
+	// Add ports
 	for _, p := range cfg.Ports {
 		_ = kubernetes.AddContainerPort(container, p)
 		ports = append(ports, p)
 	}
-	for k, v := range cfg.VolumeMounts {
-		volume := corev1.VolumeMount{
-			Name:      k,
-			MountPath: v,
-		}
-		_ = kubernetes.AddContainerVolumeMount(container, volume)
+	
+	// Add environment variables
+	for _, env := range cfg.Env {
+		_ = kubernetes.AddContainerEnv(container, env)
 	}
+	
+	// Add volume mounts
+	for _, vm := range cfg.VolumeMounts {
+		_ = kubernetes.AddContainerVolumeMount(container, vm)
+	}
+	
+	// Set resources if provided
+	if cfg.Resources != nil {
+		k8sResources, err := cfg.Resources.ToKubernetesResources()
+		if err != nil {
+			return nil, nil, err
+		}
+		if k8sResources != nil {
+			_ = kubernetes.SetContainerResources(container, *k8sResources)
+		}
+	}
+	
+	// Set probes if provided
+	if cfg.LivenessProbe != nil {
+		_ = kubernetes.SetContainerLivenessProbe(container, *cfg.LivenessProbe)
+	}
+	if cfg.ReadinessProbe != nil {
+		_ = kubernetes.SetContainerReadinessProbe(container, *cfg.ReadinessProbe)
+	}
+	if cfg.StartupProbe != nil {
+		_ = kubernetes.SetContainerStartupProbe(container, *cfg.StartupProbe)
+	}
+	
 	return container, ports, nil
 }

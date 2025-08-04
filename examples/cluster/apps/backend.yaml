@@ -3,4 +3,52 @@ namespace: apps
 workload: Deployment
 containers:
   - name: backend
-    image: busybox
+    image: node:18-alpine
+    ports:
+      - name: http
+        containerPort: 3000
+    env:
+      - name: NODE_ENV
+        value: production
+      - name: PORT
+        value: "3000"
+      - name: DATABASE_URL
+        valueFrom:
+          secretKeyRef:
+            name: backend-secrets
+            key: database-url
+      - name: REDIS_URL
+        valueFrom:
+          configMapKeyRef:
+            name: backend-config
+            key: redis-url
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 3000
+      initialDelaySeconds: 30
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 3000
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    volumeMounts:
+      - name: app-logs
+        mountPath: /app/logs
+      - name: temp-storage
+        mountPath: /tmp
+volumes:
+  - name: app-logs
+    emptyDir: {}
+  - name: temp-storage
+    emptyDir:
+      sizeLimit: 1Gi

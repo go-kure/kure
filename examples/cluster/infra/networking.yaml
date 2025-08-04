@@ -2,5 +2,75 @@ name: networking
 namespace: infra
 workload: Deployment
 containers:
-  - name: networking
-    image: nginx:1.21
+  - name: nginx-ingress
+    image: k8s.gcr.io/ingress-nginx/controller:v1.8.1
+    ports:
+      - name: http
+        containerport: 80
+      - name: https
+        containerport: 443
+      - name: webhook
+        containerport: 8443
+    env:
+      - name: POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: POD_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: LD_PRELOAD
+        value: /usr/local/lib/libmimalloc.so
+    args:
+      - /nginx-ingress-controller
+      - --publish-service=$(POD_NAMESPACE)/ingress-nginx-controller
+      - --election-id=ingress-controller-leader
+      - --controller-class=k8s.io/ingress-nginx
+      - --ingress-class=nginx
+      - --configmap=$(POD_NAMESPACE)/ingress-nginx-controller
+      - --validating-webhook=:8443
+      - --validating-webhook-certificate=/usr/local/certificates/cert
+      - --validating-webhook-key=/usr/local/certificates/key
+    resources:
+      requests:
+        memory: 90Mi
+        cpu: 100m
+      limits:
+        memory: 500Mi
+        cpu: 500m
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 10254
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 5
+    readinessProbe:
+      httpGet:
+        path: /healthz
+        port: 10254
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 3
+    volumeMounts:
+      - name: webhook-cert
+        mountPath: /usr/local/certificates/
+        readOnly: true
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 101
+      allowPrivilegeEscalation: true
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - NET_BIND_SERVICE
+volumes:
+  - name: webhook-cert
+    secret:
+      secretName: ingress-nginx-admission

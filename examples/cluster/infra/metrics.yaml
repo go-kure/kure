@@ -1,6 +1,75 @@
 name: metrics
 namespace: infra
-workload: Deployment
+workload: StatefulSet
 containers:
-  - name: metrics
-    image: prom/prometheus
+  - name: prometheus
+    image: prom/prometheus:v2.46.0
+    ports:
+      - name: web
+        containerport: 9090
+    args:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus/
+      - --web.console.libraries=/etc/prometheus/console_libraries
+      - --web.console.templates=/etc/prometheus/consoles
+      - --web.enable-lifecycle
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=50GB
+    env:
+      - name: PROMETHEUS_RETENTION_TIME
+        valueFrom:
+          configMapKeyRef:
+            name: prometheus-config
+            key: retention-time
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 2000m
+    livenessProbe:
+      httpGet:
+        path: /-/healthy
+        port: 9090
+      initialDelaySeconds: 30
+      periodSeconds: 15
+      timeoutSeconds: 10
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /-/ready
+        port: 9090
+      initialDelaySeconds: 30
+      periodSeconds: 5
+      timeoutSeconds: 4
+      failureThreshold: 3
+    volumeMounts:
+      - name: prometheus-config
+        mountPath: /etc/prometheus/
+        readOnly: true
+      - name: prometheus-storage
+        mountPath: /prometheus/
+      - name: prometheus-rules
+        mountPath: /etc/prometheus/rules
+        readOnly: true
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      fsGroup: 65534
+volumes:
+  - name: prometheus-config
+    configMap:
+      name: prometheus-config
+  - name: prometheus-rules
+    configMap:
+      name: prometheus-rules
+volumeClaimTemplates:
+  - metadata:
+      name: prometheus-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 100Gi
