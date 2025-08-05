@@ -54,6 +54,15 @@ var (
 	ErrNilVolume            = NewResourceValidationError("PodSpec", "", "volume", "volume cannot be nil", nil)
 	ErrNilImagePullSecret   = NewResourceValidationError("PodSpec", "", "secret", "image pull secret cannot be nil", nil)
 	ErrNilToleration        = NewResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
+	
+	// Additional resource errors
+	ErrNilNamespace            = NewResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
+	ErrNilRole                 = NewResourceValidationError("Role", "", "role", "role cannot be nil", nil)
+	ErrNilClusterRole          = NewResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
+	ErrNilRoleBinding          = NewResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
+	ErrNilClusterRoleBinding   = NewResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
+	ErrNilServicePort          = NewResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
+	ErrNilPodDisruptionBudget  = NewResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
 )
 
 // Common file operation errors
