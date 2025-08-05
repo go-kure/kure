@@ -273,14 +273,14 @@ func TestGetResourceStatus(t *testing.T) {
 	}
 }
 
-func TestCreateTablePrinter(t *testing.T) {
+func TestNewTablePrinter(t *testing.T) {
 	options := io.PrintOptions{
 		OutputFormat: io.OutputFormatYAML, // Should be overridden
 		NoHeaders:    true,
 		ShowLabels:   true,
 	}
 
-	printer := io.CreateTablePrinter(options)
+	printer := io.NewTablePrinter(options)
 	if printer == nil {
 		t.Fatal("Expected non-nil printer")
 	}

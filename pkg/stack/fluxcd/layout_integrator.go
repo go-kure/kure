@@ -18,8 +18,8 @@ type LayoutIntegrator struct {
 	FluxPlacement layout.FluxPlacement
 }
 
-// CreateLayoutIntegrator creates a FluxCD layout integrator.
-func CreateLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
+// NewLayoutIntegrator creates a FluxCD layout integrator.
+func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 	return &LayoutIntegrator{
 		Generator:     generator,
 		FluxPlacement: layout.FluxIntegrated,
@@ -52,13 +52,13 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 	// Generate the base manifest layout first
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
-		return nil, errors.NewResourceValidationError("Cluster", c.Name, "layout",
+		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
 			fmt.Sprintf("failed to create base layout: %v", err), err)
 	}
 	
 	// Integrate Flux resources into the layout
 	if err := li.IntegrateWithLayout(ml, c, rules); err != nil {
-		return nil, errors.NewResourceValidationError("Cluster", c.Name, "flux-integration",
+		return nil, errors.ResourceValidationError("Cluster", c.Name, "flux-integration",
 			fmt.Sprintf("failed to integrate Flux resources: %v", err), err)
 	}
 	
@@ -75,7 +75,7 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(ml *layout.ManifestLayo
 	// Find the corresponding layout node
 	layoutNode := li.findLayoutNode(ml, node)
 	if layoutNode == nil {
-		return errors.NewResourceValidationError("Node", node.Name, "layout",
+		return errors.ResourceValidationError("Node", node.Name, "layout",
 			"corresponding layout node not found", nil)
 	}
 	
@@ -83,7 +83,7 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(ml *layout.ManifestLayo
 	if node.Bundle != nil {
 		fluxResources, err := li.Generator.GenerateFromBundle(node.Bundle)
 		if err != nil {
-			return errors.NewResourceValidationError("Node", node.Name, "flux-resources",
+			return errors.ResourceValidationError("Node", node.Name, "flux-resources",
 				fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 		}
 		
@@ -106,7 +106,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// Generate all Flux resources for the cluster
 	fluxResources, err := li.Generator.GenerateFromCluster(c)
 	if err != nil {
-		return errors.NewResourceValidationError("Cluster", c.Name, "flux-resources",
+		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
 			fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 	}
 	

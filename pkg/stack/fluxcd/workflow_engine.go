@@ -19,11 +19,11 @@ type WorkflowEngine struct {
 	BootstrapGen *BootstrapGenerator
 }
 
-// CreateWorkflowEngine creates a FluxCD workflow engine with default components.
-func CreateWorkflowEngine() *WorkflowEngine {
-	resourceGen := CreateResourceGenerator()
-	layoutInteg := CreateLayoutIntegrator(resourceGen)
-	bootstrapGen := CreateBootstrapGenerator()
+// NewWorkflowEngine creates a FluxCD workflow engine with default components.
+func NewWorkflowEngine() *WorkflowEngine {
+	resourceGen := NewResourceGenerator()
+	layoutInteg := NewLayoutIntegrator(resourceGen)
+	bootstrapGen := NewBootstrapGenerator()
 	
 	return &WorkflowEngine{
 		ResourceGen:  resourceGen,
@@ -32,15 +32,15 @@ func CreateWorkflowEngine() *WorkflowEngine {
 	}
 }
 
-// CreateWorkflowEngineWithConfig creates a workflow engine with custom configuration.
-func CreateWorkflowEngineWithConfig(mode layout.KustomizationMode, placement layout.FluxPlacement) *WorkflowEngine {
-	resourceGen := CreateResourceGenerator()
+// NewWorkflowEngineWithConfig creates a workflow engine with custom configuration.
+func NewWorkflowEngineWithConfig(mode layout.KustomizationMode, placement layout.FluxPlacement) *WorkflowEngine {
+	resourceGen := NewResourceGenerator()
 	resourceGen.Mode = mode
 	
-	layoutInteg := CreateLayoutIntegrator(resourceGen)
+	layoutInteg := NewLayoutIntegrator(resourceGen)
 	layoutInteg.FluxPlacement = placement
 	
-	bootstrapGen := CreateBootstrapGenerator()
+	bootstrapGen := NewBootstrapGenerator()
 	
 	return &WorkflowEngine{
 		ResourceGen:  resourceGen,

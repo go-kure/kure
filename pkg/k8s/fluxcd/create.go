@@ -17,8 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// NewGitRepository converts the config to a GitRepository object.
-func NewGitRepository(cfg *GitRepositoryConfig) *sourcev1.GitRepository {
+// GitRepository converts the config to a GitRepository object.
+func GitRepository(cfg *GitRepositoryConfig) *sourcev1.GitRepository {
 	if cfg == nil {
 		return nil
 	}
@@ -31,8 +31,8 @@ func NewGitRepository(cfg *GitRepositoryConfig) *sourcev1.GitRepository {
 	return obj
 }
 
-// NewHelmRepository converts the config to a HelmRepository object.
-func NewHelmRepository(cfg *HelmRepositoryConfig) *sourcev1.HelmRepository {
+// HelmRepository converts the config to a HelmRepository object.
+func HelmRepository(cfg *HelmRepositoryConfig) *sourcev1.HelmRepository {
 	if cfg == nil {
 		return nil
 	}
@@ -41,8 +41,8 @@ func NewHelmRepository(cfg *HelmRepositoryConfig) *sourcev1.HelmRepository {
 	return obj
 }
 
-// NewBucket converts the config to a Bucket object.
-func NewBucket(cfg *BucketConfig) *sourcev1.Bucket {
+// Bucket converts the config to a Bucket object.
+func Bucket(cfg *BucketConfig) *sourcev1.Bucket {
 	if cfg == nil {
 		return nil
 	}
@@ -56,8 +56,8 @@ func NewBucket(cfg *BucketConfig) *sourcev1.Bucket {
 	return obj
 }
 
-// NewHelmChart converts the config to a HelmChart object.
-func NewHelmChart(cfg *HelmChartConfig) *sourcev1.HelmChart {
+// HelmChart converts the config to a HelmChart object.
+func HelmChart(cfg *HelmChartConfig) *sourcev1.HelmChart {
 	if cfg == nil {
 		return nil
 	}
@@ -71,8 +71,8 @@ func NewHelmChart(cfg *HelmChartConfig) *sourcev1.HelmChart {
 	return obj
 }
 
-// NewOCIRepository converts the config to an OCIRepository object.
-func NewOCIRepository(cfg *OCIRepositoryConfig) *sourcev1beta2.OCIRepository {
+// OCIRepository converts the config to an OCIRepository object.
+func OCIRepository(cfg *OCIRepositoryConfig) *sourcev1beta2.OCIRepository {
 	if cfg == nil {
 		return nil
 	}
@@ -84,8 +84,8 @@ func NewOCIRepository(cfg *OCIRepositoryConfig) *sourcev1beta2.OCIRepository {
 	return intfluxcd.CreateOCIRepository(cfg.Name, cfg.Namespace, spec)
 }
 
-// NewKustomization converts the config to a Kustomization object.
-func NewKustomization(cfg *KustomizationConfig) *kustv1.Kustomization {
+// Kustomization converts the config to a Kustomization object.
+func Kustomization(cfg *KustomizationConfig) *kustv1.Kustomization {
 	if cfg == nil {
 		return nil
 	}
@@ -98,8 +98,8 @@ func NewKustomization(cfg *KustomizationConfig) *kustv1.Kustomization {
 	return obj
 }
 
-// NewHelmRelease converts the config to a HelmRelease object.
-func NewHelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
+// HelmRelease converts the config to a HelmRelease object.
+func HelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
 	if cfg == nil {
 		return nil
 	}
@@ -119,8 +119,8 @@ func NewHelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
 	return obj
 }
 
-// NewProvider converts the config to a notification Provider object.
-func NewProvider(cfg *ProviderConfig) *notificationv1beta2.Provider {
+// Provider converts the config to a notification Provider object.
+func Provider(cfg *ProviderConfig) *notificationv1beta2.Provider {
 	if cfg == nil {
 		return nil
 	}
@@ -135,8 +135,8 @@ func NewProvider(cfg *ProviderConfig) *notificationv1beta2.Provider {
 	return obj
 }
 
-// NewAlert converts the config to an Alert object.
-func NewAlert(cfg *AlertConfig) *notificationv1beta2.Alert {
+// Alert converts the config to an Alert object.
+func Alert(cfg *AlertConfig) *notificationv1beta2.Alert {
 	if cfg == nil {
 		return nil
 	}
@@ -151,8 +151,8 @@ func NewAlert(cfg *AlertConfig) *notificationv1beta2.Alert {
 	return obj
 }
 
-// NewReceiver converts the config to a Receiver object.
-func NewReceiver(cfg *ReceiverConfig) *notificationv1beta2.Receiver {
+// Receiver converts the config to a Receiver object.
+func Receiver(cfg *ReceiverConfig) *notificationv1beta2.Receiver {
 	if cfg == nil {
 		return nil
 	}
@@ -168,8 +168,8 @@ func NewReceiver(cfg *ReceiverConfig) *notificationv1beta2.Receiver {
 	return obj
 }
 
-// NewImageUpdateAutomation converts the config to an ImageUpdateAutomation object.
-func NewImageUpdateAutomation(cfg *ImageUpdateAutomationConfig) *imagev1.ImageUpdateAutomation {
+// ImageUpdateAutomation converts the config to an ImageUpdateAutomation object.
+func ImageUpdateAutomation(cfg *ImageUpdateAutomationConfig) *imagev1.ImageUpdateAutomation {
 	if cfg == nil {
 		return nil
 	}
@@ -179,16 +179,16 @@ func NewImageUpdateAutomation(cfg *ImageUpdateAutomationConfig) *imagev1.ImageUp
 	return obj
 }
 
-// NewResourceSet converts the config to a ResourceSet object.
-func NewResourceSet(cfg *ResourceSetConfig) *fluxv1.ResourceSet {
+// ResourceSet converts the config to a ResourceSet object.
+func ResourceSet(cfg *ResourceSetConfig) *fluxv1.ResourceSet {
 	if cfg == nil {
 		return nil
 	}
 	return intfluxcd.CreateResourceSet(cfg.Name, cfg.Namespace, fluxv1.ResourceSetSpec{})
 }
 
-// NewResourceSetInputProvider converts the config to a ResourceSetInputProvider object.
-func NewResourceSetInputProvider(cfg *ResourceSetInputProviderConfig) *fluxv1.ResourceSetInputProvider {
+// ResourceSetInputProvider converts the config to a ResourceSetInputProvider object.
+func ResourceSetInputProvider(cfg *ResourceSetInputProviderConfig) *fluxv1.ResourceSetInputProvider {
 	if cfg == nil {
 		return nil
 	}
@@ -200,8 +200,8 @@ func NewResourceSetInputProvider(cfg *ResourceSetInputProviderConfig) *fluxv1.Re
 	return obj
 }
 
-// NewFluxInstance converts the config to a FluxInstance object.
-func NewFluxInstance(cfg *FluxInstanceConfig) *fluxv1.FluxInstance {
+// FluxInstance converts the config to a FluxInstance object.
+func FluxInstance(cfg *FluxInstanceConfig) *fluxv1.FluxInstance {
 	if cfg == nil {
 		return nil
 	}
@@ -209,8 +209,8 @@ func NewFluxInstance(cfg *FluxInstanceConfig) *fluxv1.FluxInstance {
 	return intfluxcd.CreateFluxInstance(cfg.Name, cfg.Namespace, spec)
 }
 
-// NewFluxReport converts the config to a FluxReport object.
-func NewFluxReport(cfg *FluxReportConfig) *fluxv1.FluxReport {
+// FluxReport converts the config to a FluxReport object.
+func FluxReport(cfg *FluxReportConfig) *fluxv1.FluxReport {
 	if cfg == nil {
 		return nil
 	}

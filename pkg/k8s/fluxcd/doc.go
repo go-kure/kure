@@ -19,10 +19,10 @@
 //
 // ## Constructors
 //
-// Constructors follow the form `New<Type>` and accept a configuration struct. A
+// Constructors follow the form `<Type>` and accept a configuration struct. A
 // minimal example creating a `Kustomization` and a `GitRepository` looks like:
 //
-//	ks := fluxcd.NewKustomization(&fluxcd.KustomizationConfig{
+//	ks := fluxcd.Kustomization(&fluxcd.KustomizationConfig{
 //	        Name:      "app",
 //	        Namespace: "flux-system",
 //	        Interval:  "1m",
@@ -32,7 +32,7 @@
 //	        },
 //	})
 //
-//	repo := fluxcd.NewGitRepository(&fluxcd.GitRepositoryConfig{
+//	repo := fluxcd.GitRepository(&fluxcd.GitRepositoryConfig{
 //	        Name:      "app-repo",
 //	        Namespace: "flux-system",
 //	        URL:       "https://github.com/example/app",
@@ -50,7 +50,7 @@
 // the generated objects.  They delegate to the internal package to perform the
 // actual mutations while keeping the public API stable.  For example:
 //
-//	hr := fluxcd.NewHelmRelease(&fluxcd.HelmReleaseConfig{...})
+//	hr := fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{...})
 //	fluxcd.SetHelmReleaseSpec(hr, helmv2.HelmReleaseSpec{Chart: chart})
 //
 // Using these setters avoids dealing with the nested fields of the underlying

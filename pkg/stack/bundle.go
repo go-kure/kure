@@ -59,7 +59,7 @@ func (a *Bundle) Validate() error {
 	}
 	for i, r := range a.Applications {
 		if r == nil {
-			return errors.NewResourceValidationError("Bundle", a.Name, "applications", fmt.Sprintf("application at index %d is nil", i), nil)
+			return errors.ResourceValidationError("Bundle", a.Name, "applications", fmt.Sprintf("application at index %d is nil", i), nil)
 		}
 	}
 	return nil

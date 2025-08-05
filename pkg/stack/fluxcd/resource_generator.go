@@ -26,8 +26,8 @@ type ResourceGenerator struct {
 	DefaultNamespace string
 }
 
-// CreateResourceGenerator creates a FluxCD resource generator with sensible defaults.
-func CreateResourceGenerator() *ResourceGenerator {
+// NewResourceGenerator creates a FluxCD resource generator with sensible defaults.
+func NewResourceGenerator() *ResourceGenerator {
 	return &ResourceGenerator{
 		Mode:             layout.KustomizationExplicit,
 		DefaultInterval:  5 * time.Minute,
@@ -55,7 +55,7 @@ func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, er
 	if n.Bundle != nil {
 		bundleResources, err := g.GenerateFromBundle(n.Bundle)
 		if err != nil {
-			return nil, errors.NewResourceValidationError("Node", n.Name, "bundle", 
+			return nil, errors.ResourceValidationError("Node", n.Name, "bundle", 
 				fmt.Sprintf("failed to generate bundle resources: %v", err), err)
 		}
 		resources = append(resources, bundleResources...)
@@ -65,7 +65,7 @@ func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, er
 	for _, child := range n.Children {
 		childResources, err := g.GenerateFromNode(child)
 		if err != nil {
-			return nil, errors.NewResourceValidationError("Node", n.Name, "children",
+			return nil, errors.ResourceValidationError("Node", n.Name, "children",
 				fmt.Sprintf("failed to generate child node resources: %v", err), err)
 		}
 		resources = append(resources, childResources...)
@@ -88,7 +88,7 @@ func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object
 	if b.SourceRef != nil {
 		source, err := g.createSource(b.SourceRef, b.Name)
 		if err != nil {
-			return nil, errors.NewResourceValidationError("Bundle", b.Name, "source",
+			return nil, errors.ResourceValidationError("Bundle", b.Name, "source",
 				fmt.Sprintf("failed to create source: %v", err), err)
 		}
 		if source != nil {

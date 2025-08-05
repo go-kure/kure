@@ -60,7 +60,7 @@ func (s *PatchableAppSet) Resolve() ([]*ResourceWithPatches, error) {
 				}
 			}
 		} else {
-			return nil, errors.NewResourceNotFoundError("patch target", p.Target, "", nil)
+			return nil, errors.ResourceNotFoundError("patch target", p.Target, "", nil)
 		}
 	}
 	

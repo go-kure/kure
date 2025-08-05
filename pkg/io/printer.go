@@ -256,8 +256,8 @@ func GetResourceStatus(obj client.Object) string {
 	return "Unknown"
 }
 
-// CreateTablePrinter creates a table printer configured for Kure resources
-func CreateTablePrinter(options PrintOptions) *ResourcePrinter {
+// NewTablePrinter creates a table printer configured for Kure resources
+func NewTablePrinter(options PrintOptions) *ResourcePrinter {
 	// Ensure table format for table printer
 	if options.OutputFormat != OutputFormatTable && options.OutputFormat != OutputFormatWide {
 		options.OutputFormat = OutputFormatTable

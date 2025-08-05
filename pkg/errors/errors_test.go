@@ -111,7 +111,7 @@ func TestValidationError(t *testing.T) {
 func TestResourceError(t *testing.T) {
 	t.Run("resource not found", func(t *testing.T) {
 		available := []string{"res1", "res2"}
-		err := kerrors.NewResourceNotFoundError("Deployment", "missing", "default", available)
+		err := kerrors.ResourceNotFoundError("Deployment", "missing", "default", available)
 
 		if err.Type() != kerrors.ErrorTypeResource {
 			t.Errorf("Expected resource error type, got %v", err.Type())
@@ -130,7 +130,7 @@ func TestResourceError(t *testing.T) {
 
 	t.Run("resource validation error", func(t *testing.T) {
 		cause := errors.New("field is required")
-		err := kerrors.NewResourceValidationError("Pod", "test-pod", "spec.containers", "missing containers", cause)
+		err := kerrors.ResourceValidationError("Pod", "test-pod", "spec.containers", "missing containers", cause)
 
 		if err.Type() != kerrors.ErrorTypeResource {
 			t.Errorf("Expected resource error type, got %v", err.Type())
@@ -282,7 +282,7 @@ func TestConfigError(t *testing.T) {
 
 func TestErrorTypeChecking(t *testing.T) {
 	validationErr := kerrors.NewValidationError("field", "value", "component", nil)
-	resourceErr := kerrors.NewResourceNotFoundError("Pod", "missing", "", nil)
+	resourceErr := kerrors.ResourceNotFoundError("Pod", "missing", "", nil)
 
 	// Test IsType function
 	if !kerrors.IsType(validationErr, kerrors.ErrorTypeValidation) {
@@ -371,7 +371,7 @@ func TestErrorJSON(t *testing.T) {
 }
 
 func TestBaseErrorInterface(t *testing.T) {
-	err := kerrors.NewResourceNotFoundError("Service", "missing-svc", "production", []string{"svc1", "svc2"})
+	err := kerrors.ResourceNotFoundError("Service", "missing-svc", "production", []string{"svc1", "svc2"})
 	
 	// Test that it implements error interface
 	var _ error = err

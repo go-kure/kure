@@ -32,48 +32,48 @@ var (
 // Common Kubernetes resource validation errors
 var (
 	// Nil resource errors
-	ErrNilDeployment        = NewResourceValidationError("Deployment", "", "deployment", "deployment cannot be nil", nil)
-	ErrNilPod               = NewResourceValidationError("Pod", "", "pod", "pod cannot be nil", nil)
-	ErrNilPodSpec           = NewResourceValidationError("PodSpec", "", "spec", "pod spec cannot be nil", nil)
-	ErrNilContainer         = NewResourceValidationError("Container", "", "container", "container cannot be nil", nil)
-	ErrNilStatefulSet       = NewResourceValidationError("StatefulSet", "", "statefulset", "statefulset cannot be nil", nil)
-	ErrNilDaemonSet         = NewResourceValidationError("DaemonSet", "", "daemonset", "daemonset cannot be nil", nil)
-	ErrNilJob               = NewResourceValidationError("Job", "", "job", "job cannot be nil", nil)
-	ErrNilCronJob           = NewResourceValidationError("CronJob", "", "cronjob", "cronjob cannot be nil", nil)
-	ErrNilService           = NewResourceValidationError("Service", "", "service", "service cannot be nil", nil)
-	ErrNilSecret            = NewResourceValidationError("Secret", "", "secret", "secret cannot be nil", nil)
-	ErrNilConfigMap         = NewResourceValidationError("ConfigMap", "", "configmap", "configmap cannot be nil", nil)
-	ErrNilServiceAccount    = NewResourceValidationError("ServiceAccount", "", "serviceaccount", "serviceaccount cannot be nil", nil)
-	ErrNilIngress           = NewResourceValidationError("Ingress", "", "ingress", "ingress cannot be nil", nil)
-	ErrNilBundle            = NewResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
+	ErrNilDeployment        = ResourceValidationError("Deployment", "", "deployment", "deployment cannot be nil", nil)
+	ErrNilPod               = ResourceValidationError("Pod", "", "pod", "pod cannot be nil", nil)
+	ErrNilPodSpec           = ResourceValidationError("PodSpec", "", "spec", "pod spec cannot be nil", nil)
+	ErrNilContainer         = ResourceValidationError("Container", "", "container", "container cannot be nil", nil)
+	ErrNilStatefulSet       = ResourceValidationError("StatefulSet", "", "statefulset", "statefulset cannot be nil", nil)
+	ErrNilDaemonSet         = ResourceValidationError("DaemonSet", "", "daemonset", "daemonset cannot be nil", nil)
+	ErrNilJob               = ResourceValidationError("Job", "", "job", "job cannot be nil", nil)
+	ErrNilCronJob           = ResourceValidationError("CronJob", "", "cronjob", "cronjob cannot be nil", nil)
+	ErrNilService           = ResourceValidationError("Service", "", "service", "service cannot be nil", nil)
+	ErrNilSecret            = ResourceValidationError("Secret", "", "secret", "secret cannot be nil", nil)
+	ErrNilConfigMap         = ResourceValidationError("ConfigMap", "", "configmap", "configmap cannot be nil", nil)
+	ErrNilServiceAccount    = ResourceValidationError("ServiceAccount", "", "serviceaccount", "serviceaccount cannot be nil", nil)
+	ErrNilIngress           = ResourceValidationError("Ingress", "", "ingress", "ingress cannot be nil", nil)
+	ErrNilBundle            = ResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
 
 	// Common field validation errors
-	ErrNilSpec              = NewResourceValidationError("Resource", "", "spec", "spec cannot be nil", nil)
-	ErrNilInitContainer     = NewResourceValidationError("PodSpec", "", "container", "init container cannot be nil", nil)
-	ErrNilEphemeralContainer = NewResourceValidationError("PodSpec", "", "container", "ephemeral container cannot be nil", nil)
-	ErrNilVolume            = NewResourceValidationError("PodSpec", "", "volume", "volume cannot be nil", nil)
-	ErrNilImagePullSecret   = NewResourceValidationError("PodSpec", "", "secret", "image pull secret cannot be nil", nil)
-	ErrNilToleration        = NewResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
+	ErrNilSpec              = ResourceValidationError("Resource", "", "spec", "spec cannot be nil", nil)
+	ErrNilInitContainer     = ResourceValidationError("PodSpec", "", "container", "init container cannot be nil", nil)
+	ErrNilEphemeralContainer = ResourceValidationError("PodSpec", "", "container", "ephemeral container cannot be nil", nil)
+	ErrNilVolume            = ResourceValidationError("PodSpec", "", "volume", "volume cannot be nil", nil)
+	ErrNilImagePullSecret   = ResourceValidationError("PodSpec", "", "secret", "image pull secret cannot be nil", nil)
+	ErrNilToleration        = ResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
 	
 	// Additional resource errors
-	ErrNilNamespace            = NewResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
-	ErrNilRole                 = NewResourceValidationError("Role", "", "role", "role cannot be nil", nil)
-	ErrNilClusterRole          = NewResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
-	ErrNilRoleBinding          = NewResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
-	ErrNilClusterRoleBinding   = NewResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
-	ErrNilServicePort          = NewResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
-	ErrNilPodDisruptionBudget  = NewResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
-	ErrNilKustomization        = NewResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
+	ErrNilNamespace            = ResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
+	ErrNilRole                 = ResourceValidationError("Role", "", "role", "role cannot be nil", nil)
+	ErrNilClusterRole          = ResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
+	ErrNilRoleBinding          = ResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
+	ErrNilClusterRoleBinding   = ResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
+	ErrNilServicePort          = ResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
+	ErrNilPodDisruptionBudget  = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
+	ErrNilKustomization        = ResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
 	
 	// Flux resources
-	ErrNilFluxInstance         = NewResourceValidationError("FluxInstance", "", "fluxinstance", "flux instance cannot be nil", nil)
+	ErrNilFluxInstance         = ResourceValidationError("FluxInstance", "", "fluxinstance", "flux instance cannot be nil", nil)
 	
 	// MetalLB resources
-	ErrNilIPAddressPool        = NewResourceValidationError("IPAddressPool", "", "ipaddresspool", "ip address pool cannot be nil", nil)
-	ErrNilBGPPeer              = NewResourceValidationError("BGPPeer", "", "bgppeer", "bgp peer cannot be nil", nil)
-	ErrNilBGPAdvertisement     = NewResourceValidationError("BGPAdvertisement", "", "bgpadvertisement", "bgp advertisement cannot be nil", nil)
-	ErrNilL2Advertisement      = NewResourceValidationError("L2Advertisement", "", "l2advertisement", "l2 advertisement cannot be nil", nil)
-	ErrNilBFDProfile           = NewResourceValidationError("BFDProfile", "", "bfdprofile", "bfd profile cannot be nil", nil)
+	ErrNilIPAddressPool        = ResourceValidationError("IPAddressPool", "", "ipaddresspool", "ip address pool cannot be nil", nil)
+	ErrNilBGPPeer              = ResourceValidationError("BGPPeer", "", "bgppeer", "bgp peer cannot be nil", nil)
+	ErrNilBGPAdvertisement     = ResourceValidationError("BGPAdvertisement", "", "bgpadvertisement", "bgp advertisement cannot be nil", nil)
+	ErrNilL2Advertisement      = ResourceValidationError("L2Advertisement", "", "l2advertisement", "l2 advertisement cannot be nil", nil)
+	ErrNilBFDProfile           = ResourceValidationError("BFDProfile", "", "bfdprofile", "bfd profile cannot be nil", nil)
 )
 
 // Common file operation errors
@@ -193,7 +193,7 @@ type ResourceError struct {
 	Available    []string `json:"available,omitempty"`
 }
 
-func NewResourceNotFoundError(resourceType, name, namespace string, available []string) *ResourceError {
+func ResourceNotFoundError(resourceType, name, namespace string, available []string) *ResourceError {
 	help := "Check that the resource exists and is spelled correctly"
 	if len(available) > 0 {
 		help = fmt.Sprintf("Available resources: %s", strings.Join(available, ", "))
@@ -222,7 +222,7 @@ func NewResourceNotFoundError(resourceType, name, namespace string, available []
 	}
 }
 
-func NewResourceValidationError(resourceType, name, field, reason string, cause error) *ResourceError {
+func ResourceValidationError(resourceType, name, field, reason string, cause error) *ResourceError {
 	message := fmt.Sprintf("validation failed for %s '%s'", resourceType, name)
 	if field != "" {
 		message += fmt.Sprintf(" field '%s'", field)

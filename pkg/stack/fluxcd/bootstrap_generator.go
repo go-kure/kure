@@ -27,8 +27,8 @@ type BootstrapGenerator struct {
 	DefaultInterval time.Duration
 }
 
-// CreateBootstrapGenerator creates a FluxCD bootstrap generator.
-func CreateBootstrapGenerator() *BootstrapGenerator {
+// NewBootstrapGenerator creates a FluxCD bootstrap generator.
+func NewBootstrapGenerator() *BootstrapGenerator {
 	return &BootstrapGenerator{
 		DefaultNamespace: "flux-system",
 		DefaultInterval:  10 * time.Minute,
@@ -64,7 +64,7 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 	// Generate core Flux components
 	gotkResources, err := bg.generateGotkComponents(config)
 	if err != nil {
-		return nil, errors.NewResourceValidationError("BootstrapConfig", "gotk", "components",
+		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "components",
 			fmt.Sprintf("failed to generate gotk components: %v", err), err)
 	}
 	resources = append(resources, gotkResources...)
@@ -120,7 +120,7 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 	// Generate manifests
 	content, err := install.Generate(opts, "")
 	if err != nil {
-		return nil, errors.NewResourceValidationError("BootstrapConfig", "gotk", "install",
+		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "install",
 			fmt.Sprintf("failed to generate Flux installation manifests: %v", err), err)
 	}
 	

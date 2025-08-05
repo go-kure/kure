@@ -7,17 +7,17 @@ import (
 // Engine returns a WorkflowEngine initialized with defaults.
 // This is the primary entry point for FluxCD workflow functionality.
 func Engine() *WorkflowEngine {
-	return CreateWorkflowEngine()
+	return NewWorkflowEngine()
 }
 
 // EngineWithMode returns a WorkflowEngine with a specific kustomization mode.
 func EngineWithMode(mode layout.KustomizationMode) *WorkflowEngine {
-	engine := CreateWorkflowEngine()
+	engine := NewWorkflowEngine()
 	engine.SetKustomizationMode(mode)
 	return engine
 }
 
 // EngineWithConfig returns a WorkflowEngine with custom configuration.
 func EngineWithConfig(mode layout.KustomizationMode, placement layout.FluxPlacement) *WorkflowEngine {
-	return CreateWorkflowEngineWithConfig(mode, placement)
+	return NewWorkflowEngineWithConfig(mode, placement)
 }
