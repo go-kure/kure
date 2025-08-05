@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/go-kure/kure/pkg/errors"
-	
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,7 +12,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/kustomize/api/types"
-	
+
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 )

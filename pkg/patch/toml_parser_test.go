@@ -103,27 +103,27 @@ func TestParseTOMLHeader(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := ParseTOMLHeader(tc.input)
-			
+
 			if tc.wantErr {
 				if err == nil {
 					t.Errorf("expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			if result.Kind != tc.expected.Kind {
 				t.Errorf("Kind: expected %s, got %s", tc.expected.Kind, result.Kind)
 			}
-			
+
 			if result.Name != tc.expected.Name {
 				t.Errorf("Name: expected %s, got %s", tc.expected.Name, result.Name)
 			}
-			
+
 			if len(result.Sections) != len(tc.expected.Sections) {
 				t.Errorf("Sections length: expected %d, got %d", len(tc.expected.Sections), len(result.Sections))
 			} else {
@@ -133,7 +133,7 @@ func TestParseTOMLHeader(t *testing.T) {
 					}
 				}
 			}
-			
+
 			// Check selector
 			if tc.expected.Selector == nil && result.Selector != nil {
 				t.Errorf("expected no selector but got one")
@@ -143,7 +143,7 @@ func TestParseTOMLHeader(t *testing.T) {
 				if result.Selector.Type != tc.expected.Selector.Type {
 					t.Errorf("Selector type: expected %s, got %s", tc.expected.Selector.Type, result.Selector.Type)
 				}
-				
+
 				switch tc.expected.Selector.Type {
 				case "index":
 					if tc.expected.Selector.Index != nil && result.Selector.Index != nil {
@@ -170,10 +170,10 @@ func TestParseTOMLHeader(t *testing.T) {
 
 func TestResolveTOMLPath(t *testing.T) {
 	testCases := []struct {
-		name               string
-		header             *TOMLHeader
-		expectedTarget     string
-		expectedFieldPath  string
+		name              string
+		header            *TOMLHeader
+		expectedTarget    string
+		expectedFieldPath string
 	}{
 		{
 			name: "deployment with containers",
@@ -236,11 +236,11 @@ func TestResolveTOMLPath(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			if target != tc.expectedTarget {
 				t.Errorf("Target: expected %s, got %s", tc.expectedTarget, target)
 			}
-			
+
 			if fieldPath != tc.expectedFieldPath {
 				t.Errorf("FieldPath: expected %s, got %s", tc.expectedFieldPath, fieldPath)
 			}
@@ -251,9 +251,9 @@ func TestResolveTOMLPath(t *testing.T) {
 func TestSubstituteVariables(t *testing.T) {
 	ctx := &VariableContext{
 		Values: map[string]interface{}{
-			"version":    "1.2.3",
-			"replicas":   3,
-			"cpu_limit":  "500m",
+			"version":   "1.2.3",
+			"replicas":  3,
+			"cpu_limit": "500m",
 		},
 		Features: map[string]bool{
 			"enable_debug": true,
@@ -310,7 +310,7 @@ func TestSubstituteVariables(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			if fmt.Sprintf("%v", result) != fmt.Sprintf("%v", tc.expected) {
 				t.Errorf("expected %v, got %v", tc.expected, result)
 			}
@@ -345,8 +345,8 @@ spec.image: nginx`,
 			expected: false,
 		},
 		{
-			name: "empty content",
-			content: ``,
+			name:     "empty content",
+			content:  ``,
 			expected: false,
 		},
 		{

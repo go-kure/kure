@@ -71,7 +71,7 @@ spec:
 	configMapComments := extractAllComments(configMap.Node)
 	expectedComments := []string{
 		"This is a name comment",
-		"This is a metadata comment", 
+		"This is a metadata comment",
 		"App label comment",
 		"Version comment",
 		"Configuration data section",
@@ -96,7 +96,7 @@ spec:
 	serviceExpectedComments := []string{
 		"Second resource comment",
 		"Service metadata comment",
-		"Service type comment", 
+		"Service type comment",
 		"HTTP port comment",
 		"Selector comment",
 	}
@@ -329,7 +329,7 @@ spec:
 	}
 
 	service := docSet.Documents[0]
-	
+
 	// Check that port values were converted to integers in the resource object
 	ports, found, err := unstructured.NestedSlice(service.Resource.Object, "spec", "ports")
 	if err != nil || !found {
@@ -401,7 +401,7 @@ metadata:
 	if len(copied.Documents) > 0 {
 		// Modify the copy
 		copied.Documents[0].Resource.SetName("modified-name")
-		
+
 		// Verify original is unchanged
 		if original.Documents[0].Resource.GetName() == "modified-name" {
 			t.Error("Modifying copy affected the original - copy is not deep")
@@ -417,11 +417,11 @@ metadata:
 // extractAllComments recursively extracts all comments from a YAML node
 func extractAllComments(node *yaml.Node) []string {
 	var comments []string
-	
+
 	if node == nil {
 		return comments
 	}
-	
+
 	// Collect comments from this node
 	if node.HeadComment != "" {
 		comments = append(comments, strings.TrimSpace(node.HeadComment))
@@ -432,12 +432,12 @@ func extractAllComments(node *yaml.Node) []string {
 	if node.FootComment != "" {
 		comments = append(comments, strings.TrimSpace(node.FootComment))
 	}
-	
+
 	// Recursively collect from child nodes
 	for _, child := range node.Content {
 		childComments := extractAllComments(child)
 		comments = append(comments, childComments...)
 	}
-	
+
 	return comments
 }

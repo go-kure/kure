@@ -7,8 +7,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // fakeConfig implements stack.ApplicationConfig for testing purposes.
@@ -185,7 +185,7 @@ func TestWalkClusterByPackage(t *testing.T) {
 		t.Fatalf("OCI layout is nil")
 	}
 
-	// Check Git package  
+	// Check Git package
 	gitKey := gitPackageRef.String()
 	gitLayout, exists := packages[gitKey]
 	if !exists {

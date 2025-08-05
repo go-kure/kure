@@ -15,7 +15,6 @@ import (
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
-
 func parse(yamlbytes []byte) ([]client.Object, error) {
 
 	// Parsing approach adapted from

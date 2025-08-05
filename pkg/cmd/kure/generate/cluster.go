@@ -12,9 +12,9 @@ import (
 	"github.com/go-kure/kure/pkg/cli"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack/generators"
-	
+	"github.com/go-kure/kure/pkg/stack/layout"
+
 	// Import implementations to register workflow factories
 	_ "github.com/go-kure/kure/pkg/stack/argocd"
 	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -25,16 +25,16 @@ type ClusterOptions struct {
 	// Input options
 	ConfigFile string
 	InputDir   string
-	
+
 	// Output options
 	OutputDir   string
 	ManifestDir string
-	
+
 	// Layout options
 	BundleGrouping      string
 	ApplicationGrouping string
 	FluxPlacement       string
-	
+
 	// Dependencies
 	Factory   cli.Factory
 	IOStreams cli.IOStreams
@@ -67,7 +67,7 @@ Examples:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			o.ConfigFile = args[0]
-			
+
 			if err := o.Complete(); err != nil {
 				return err
 			}
@@ -97,17 +97,17 @@ func (o *ClusterOptions) AddFlags(flags *pflag.FlagSet) {
 // Complete completes the options
 func (o *ClusterOptions) Complete() error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	// Set input directory default
 	if o.InputDir == "" {
 		o.InputDir = filepath.Dir(o.ConfigFile)
 	}
-	
+
 	// Apply dry-run logic
 	if globalOpts.DryRun && o.OutputDir == "out" {
 		o.OutputDir = "/dev/stdout"
 	}
-	
+
 	return nil
 }
 
@@ -117,7 +117,7 @@ func (o *ClusterOptions) Validate() error {
 	if _, err := os.Stat(o.ConfigFile); os.IsNotExist(err) {
 		return errors.NewFileError("read", o.ConfigFile, "file does not exist", errors.ErrFileNotFound)
 	}
-	
+
 	// Validate grouping options
 	validGroupings := []string{"flat", "nested"}
 	if !contains(validGroupings, o.BundleGrouping) {
@@ -126,51 +126,51 @@ func (o *ClusterOptions) Validate() error {
 	if !contains(validGroupings, o.ApplicationGrouping) {
 		return errors.NewValidationError("application-grouping", o.ApplicationGrouping, "Options", validGroupings)
 	}
-	
+
 	// Validate flux placement
 	validPlacements := []string{"integrated", "separate"}
 	if !contains(validPlacements, o.FluxPlacement) {
 		return errors.NewValidationError("flux-placement", o.FluxPlacement, "Options", validPlacements)
 	}
-	
+
 	return nil
 }
 
 // Run executes the cluster command
 func (o *ClusterOptions) Run() error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	if globalOpts.Verbose {
 		fmt.Fprintf(o.IOStreams.ErrOut, "Processing cluster config: %s\n", o.ConfigFile)
 	}
-	
+
 	// Load cluster configuration
 	cluster, err := o.loadClusterConfig()
 	if err != nil {
 		return errors.Wrapf(err, "failed to load cluster config")
 	}
-	
+
 	// Load applications from input directory
 	if err := o.loadClusterApps(cluster); err != nil {
 		return errors.Wrapf(err, "failed to load cluster apps")
 	}
-	
+
 	// Generate layout
 	rules := o.buildLayoutRules(cluster)
 	ml, err := o.generateLayout(cluster, rules)
 	if err != nil {
 		return errors.Wrapf(err, "failed to generate layout")
 	}
-	
+
 	// Write output
 	if err := o.writeOutput(ml); err != nil {
 		return errors.Wrapf(err, "failed to write output")
 	}
-	
+
 	if globalOpts.Verbose {
 		fmt.Fprintf(o.IOStreams.ErrOut, "Generated cluster manifests: %s\n", o.OutputDir)
 	}
-	
+
 	return nil
 }
 
@@ -236,7 +236,7 @@ func (o *ClusterOptions) loadNodeApps(node *stack.Node) error {
 		if entry.IsDir() {
 			continue
 		}
-		
+
 		ext := filepath.Ext(entry.Name())
 		if ext != ".yaml" && ext != ".yml" {
 			continue
@@ -275,7 +275,7 @@ func (o *ClusterOptions) loadAppConfig(node *stack.Node, configPath string) erro
 			return err
 		}
 		bundle.SetParent(node.Bundle)
-		
+
 		childNode := &stack.Node{Name: cfg.Name, Bundle: bundle}
 		childNode.SetParent(node)
 		node.Children = append(node.Children, childNode)
@@ -322,30 +322,30 @@ func (o *ClusterOptions) generateLayout(cluster *stack.Cluster, rules layout.Lay
 	if cluster.GitOps != nil && cluster.GitOps.Type != "" {
 		provider = cluster.GitOps.Type
 	}
-	
+
 	// Create workflow using the interface
 	wf, err := stack.NewWorkflow(provider)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create workflow for provider %s", provider)
 	}
-	
+
 	result, err := wf.CreateLayoutWithResources(cluster, rules)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	ml, ok := result.(*layout.ManifestLayout)
 	if !ok {
 		return nil, errors.NewValidationError("result", "interface{}", "Expected", []string{"*layout.ManifestLayout"})
 	}
-	
+
 	return ml, nil
 }
 
 // writeOutput writes the generated manifests to output
 func (o *ClusterOptions) writeOutput(ml *layout.ManifestLayout) error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	if globalOpts.DryRun {
 		// For dry-run, print to stdout
 		return o.printToStdout(ml)
@@ -368,7 +368,7 @@ func (o *ClusterOptions) printToStdout(ml *layout.ManifestLayout) error {
 	fmt.Fprintf(o.IOStreams.Out, "# Generated cluster manifests for: %s\n", ml.Name)
 	fmt.Fprintf(o.IOStreams.Out, "# Namespace: %s\n", ml.Namespace)
 	fmt.Fprintf(o.IOStreams.Out, "# Resources: %d\n", len(ml.Resources))
-	
+
 	// Print basic info about resources
 	for _, resource := range ml.Resources {
 		if namedObj, ok := resource.(interface {
@@ -376,11 +376,11 @@ func (o *ClusterOptions) printToStdout(ml *layout.ManifestLayout) error {
 			GetName() string
 			GetNamespace() string
 		}); ok {
-			fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n", 
+			fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n",
 				namedObj.GetKind(), namedObj.GetName(), namedObj.GetNamespace())
 		}
 	}
-	
+
 	return nil
 }
 

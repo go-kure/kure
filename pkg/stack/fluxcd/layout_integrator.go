@@ -31,7 +31,7 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	if ml == nil || c == nil {
 		return nil
 	}
-	
+
 	switch li.FluxPlacement {
 	case layout.FluxIntegrated:
 		return li.addIntegratedFluxToLayout(ml, c, rules)
@@ -48,20 +48,20 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 	if c == nil {
 		return nil, nil
 	}
-	
+
 	// Generate the base manifest layout first
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
 			fmt.Sprintf("failed to create base layout: %v", err), err)
 	}
-	
+
 	// Integrate Flux resources into the layout
 	if err := li.IntegrateWithLayout(ml, c, rules); err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "flux-integration",
 			fmt.Sprintf("failed to integrate Flux resources: %v", err), err)
 	}
-	
+
 	return ml, nil
 }
 
@@ -78,7 +78,7 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(ml *layout.ManifestLayo
 		return errors.ResourceValidationError("Node", node.Name, "layout",
 			"corresponding layout node not found", nil)
 	}
-	
+
 	// Generate Flux resources for this node
 	if node.Bundle != nil {
 		fluxResources, err := li.Generator.GenerateFromBundle(node.Bundle)
@@ -86,18 +86,18 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(ml *layout.ManifestLayo
 			return errors.ResourceValidationError("Node", node.Name, "flux-resources",
 				fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 		}
-		
+
 		// Add Flux resources to the layout node
 		layoutNode.Resources = append(layoutNode.Resources, fluxResources...)
 	}
-	
+
 	// Process child nodes
 	for _, child := range node.Children {
 		if err := li.processNodeForIntegratedFlux(layoutNode, child, clusterName); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -109,11 +109,11 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
 			fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 	}
-	
+
 	if len(fluxResources) == 0 {
 		return nil
 	}
-	
+
 	// Create a separate flux-system layout
 	fluxLayout := &layout.ManifestLayout{
 		Name:      "flux-system",
@@ -122,10 +122,10 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		Mode:      layout.KustomizationExplicit,
 		Resources: fluxResources,
 	}
-	
+
 	// Add to the main layout
 	ml.Children = append(ml.Children, fluxLayout)
-	
+
 	return nil
 }
 
@@ -135,14 +135,14 @@ func (li *LayoutIntegrator) findLayoutNode(ml *layout.ManifestLayout, node *stac
 	if ml.Name == node.Name {
 		return ml
 	}
-	
+
 	// Search in children
 	for _, child := range ml.Children {
 		if found := li.findLayoutNode(child, node); found != nil {
 			return found
 		}
 	}
-	
+
 	return nil
 }
 

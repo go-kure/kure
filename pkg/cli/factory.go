@@ -11,10 +11,10 @@ import (
 type Factory interface {
 	// Configuration
 	GlobalOptions() *options.GlobalOptions
-	
+
 	// IO
 	IOStreams() IOStreams
-	
+
 	// Validation
 	Validate() error
 }

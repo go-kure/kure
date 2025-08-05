@@ -32,63 +32,63 @@ var (
 // Common Kubernetes resource validation errors
 var (
 	// Nil resource errors
-	ErrNilDeployment        = ResourceValidationError("Deployment", "", "deployment", "deployment cannot be nil", nil)
-	ErrNilPod               = ResourceValidationError("Pod", "", "pod", "pod cannot be nil", nil)
-	ErrNilPodSpec           = ResourceValidationError("PodSpec", "", "spec", "pod spec cannot be nil", nil)
-	ErrNilContainer         = ResourceValidationError("Container", "", "container", "container cannot be nil", nil)
-	ErrNilStatefulSet       = ResourceValidationError("StatefulSet", "", "statefulset", "statefulset cannot be nil", nil)
-	ErrNilDaemonSet         = ResourceValidationError("DaemonSet", "", "daemonset", "daemonset cannot be nil", nil)
-	ErrNilJob               = ResourceValidationError("Job", "", "job", "job cannot be nil", nil)
-	ErrNilCronJob           = ResourceValidationError("CronJob", "", "cronjob", "cronjob cannot be nil", nil)
-	ErrNilService           = ResourceValidationError("Service", "", "service", "service cannot be nil", nil)
-	ErrNilSecret            = ResourceValidationError("Secret", "", "secret", "secret cannot be nil", nil)
-	ErrNilConfigMap         = ResourceValidationError("ConfigMap", "", "configmap", "configmap cannot be nil", nil)
-	ErrNilServiceAccount    = ResourceValidationError("ServiceAccount", "", "serviceaccount", "serviceaccount cannot be nil", nil)
-	ErrNilIngress           = ResourceValidationError("Ingress", "", "ingress", "ingress cannot be nil", nil)
-	ErrNilBundle            = ResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
+	ErrNilDeployment     = ResourceValidationError("Deployment", "", "deployment", "deployment cannot be nil", nil)
+	ErrNilPod            = ResourceValidationError("Pod", "", "pod", "pod cannot be nil", nil)
+	ErrNilPodSpec        = ResourceValidationError("PodSpec", "", "spec", "pod spec cannot be nil", nil)
+	ErrNilContainer      = ResourceValidationError("Container", "", "container", "container cannot be nil", nil)
+	ErrNilStatefulSet    = ResourceValidationError("StatefulSet", "", "statefulset", "statefulset cannot be nil", nil)
+	ErrNilDaemonSet      = ResourceValidationError("DaemonSet", "", "daemonset", "daemonset cannot be nil", nil)
+	ErrNilJob            = ResourceValidationError("Job", "", "job", "job cannot be nil", nil)
+	ErrNilCronJob        = ResourceValidationError("CronJob", "", "cronjob", "cronjob cannot be nil", nil)
+	ErrNilService        = ResourceValidationError("Service", "", "service", "service cannot be nil", nil)
+	ErrNilSecret         = ResourceValidationError("Secret", "", "secret", "secret cannot be nil", nil)
+	ErrNilConfigMap      = ResourceValidationError("ConfigMap", "", "configmap", "configmap cannot be nil", nil)
+	ErrNilServiceAccount = ResourceValidationError("ServiceAccount", "", "serviceaccount", "serviceaccount cannot be nil", nil)
+	ErrNilIngress        = ResourceValidationError("Ingress", "", "ingress", "ingress cannot be nil", nil)
+	ErrNilBundle         = ResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
 
 	// Common field validation errors
-	ErrNilSpec              = ResourceValidationError("Resource", "", "spec", "spec cannot be nil", nil)
-	ErrNilInitContainer     = ResourceValidationError("PodSpec", "", "container", "init container cannot be nil", nil)
+	ErrNilSpec               = ResourceValidationError("Resource", "", "spec", "spec cannot be nil", nil)
+	ErrNilInitContainer      = ResourceValidationError("PodSpec", "", "container", "init container cannot be nil", nil)
 	ErrNilEphemeralContainer = ResourceValidationError("PodSpec", "", "container", "ephemeral container cannot be nil", nil)
-	ErrNilVolume            = ResourceValidationError("PodSpec", "", "volume", "volume cannot be nil", nil)
-	ErrNilImagePullSecret   = ResourceValidationError("PodSpec", "", "secret", "image pull secret cannot be nil", nil)
-	ErrNilToleration        = ResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
-	
+	ErrNilVolume             = ResourceValidationError("PodSpec", "", "volume", "volume cannot be nil", nil)
+	ErrNilImagePullSecret    = ResourceValidationError("PodSpec", "", "secret", "image pull secret cannot be nil", nil)
+	ErrNilToleration         = ResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
+
 	// Additional resource errors
-	ErrNilNamespace            = ResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
-	ErrNilRole                 = ResourceValidationError("Role", "", "role", "role cannot be nil", nil)
-	ErrNilClusterRole          = ResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
-	ErrNilRoleBinding          = ResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
-	ErrNilClusterRoleBinding   = ResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
-	ErrNilServicePort          = ResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
-	ErrNilPodDisruptionBudget  = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
-	ErrNilKustomization        = ResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
-	
+	ErrNilNamespace           = ResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
+	ErrNilRole                = ResourceValidationError("Role", "", "role", "role cannot be nil", nil)
+	ErrNilClusterRole         = ResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
+	ErrNilRoleBinding         = ResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
+	ErrNilClusterRoleBinding  = ResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
+	ErrNilServicePort         = ResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
+	ErrNilPodDisruptionBudget = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
+	ErrNilKustomization       = ResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
+
 	// Flux resources
-	ErrNilFluxInstance         = ResourceValidationError("FluxInstance", "", "fluxinstance", "flux instance cannot be nil", nil)
-	
+	ErrNilFluxInstance = ResourceValidationError("FluxInstance", "", "fluxinstance", "flux instance cannot be nil", nil)
+
 	// MetalLB resources
-	ErrNilIPAddressPool        = ResourceValidationError("IPAddressPool", "", "ipaddresspool", "ip address pool cannot be nil", nil)
-	ErrNilBGPPeer              = ResourceValidationError("BGPPeer", "", "bgppeer", "bgp peer cannot be nil", nil)
-	ErrNilBGPAdvertisement     = ResourceValidationError("BGPAdvertisement", "", "bgpadvertisement", "bgp advertisement cannot be nil", nil)
-	ErrNilL2Advertisement      = ResourceValidationError("L2Advertisement", "", "l2advertisement", "l2 advertisement cannot be nil", nil)
-	ErrNilBFDProfile           = ResourceValidationError("BFDProfile", "", "bfdprofile", "bfd profile cannot be nil", nil)
+	ErrNilIPAddressPool    = ResourceValidationError("IPAddressPool", "", "ipaddresspool", "ip address pool cannot be nil", nil)
+	ErrNilBGPPeer          = ResourceValidationError("BGPPeer", "", "bgppeer", "bgp peer cannot be nil", nil)
+	ErrNilBGPAdvertisement = ResourceValidationError("BGPAdvertisement", "", "bgpadvertisement", "bgp advertisement cannot be nil", nil)
+	ErrNilL2Advertisement  = ResourceValidationError("L2Advertisement", "", "l2advertisement", "l2 advertisement cannot be nil", nil)
+	ErrNilBFDProfile       = ResourceValidationError("BFDProfile", "", "bfdprofile", "bfd profile cannot be nil", nil)
 )
 
 // Common file operation errors
 var (
-	ErrFileNotFound        = errors.New("file not found")
-	ErrDirectoryNotFound   = errors.New("directory not found")
-	ErrInvalidPath         = errors.New("invalid file path")
+	ErrFileNotFound      = errors.New("file not found")
+	ErrDirectoryNotFound = errors.New("directory not found")
+	ErrInvalidPath       = errors.New("invalid file path")
 )
 
-// Common parse/processing errors  
+// Common parse/processing errors
 var (
-	ErrNilRuntimeObject    = errors.New("nil runtime object provided")
-	ErrSchemeRegistration  = errors.New("failed to register schemes")
-	ErrUnsupportedKind     = errors.New("unsupported object kind")
-	ErrInteractiveMode     = errors.New("interactive mode not yet implemented")
+	ErrNilRuntimeObject   = errors.New("nil runtime object provided")
+	ErrSchemeRegistration = errors.New("failed to register schemes")
+	ErrUnsupportedKind    = errors.New("unsupported object kind")
+	ErrInteractiveMode    = errors.New("interactive mode not yet implemented")
 )
 
 // Common configuration errors
@@ -233,10 +233,10 @@ func ResourceValidationError(resourceType, name, field, reason string, cause err
 
 	return &ResourceError{
 		BaseError: &BaseError{
-			ErrType:    ErrorTypeResource,
-			Message:    message,
-			Cause:      cause,
-			Help:       "Check the resource specification and ensure all required fields are present",
+			ErrType: ErrorTypeResource,
+			Message: message,
+			Cause:   cause,
+			Help:    "Check the resource specification and ensure all required fields are present",
 			ErrContext: map[string]interface{}{
 				"resourceType": resourceType,
 				"name":         name,
@@ -276,10 +276,10 @@ func NewPatchError(operation, path, resourceName, reason string, cause error) *P
 
 	return &PatchError{
 		BaseError: &BaseError{
-			ErrType:    ErrorTypePatch,
-			Message:    message,
-			Cause:      cause,
-			Help:       help,
+			ErrType: ErrorTypePatch,
+			Message: message,
+			Cause:   cause,
+			Help:    help,
 			ErrContext: map[string]interface{}{
 				"operation":    operation,
 				"path":         path,
@@ -322,10 +322,10 @@ func NewParseError(source, reason string, line, column int, cause error) *ParseE
 
 	return &ParseError{
 		BaseError: &BaseError{
-			ErrType:    ErrorTypeParse,
-			Message:    message,
-			Cause:      cause,
-			Help:       help,
+			ErrType: ErrorTypeParse,
+			Message: message,
+			Cause:   cause,
+			Help:    help,
 			ErrContext: map[string]interface{}{
 				"source": source,
 				"line":   line,
@@ -356,10 +356,10 @@ func NewFileError(operation, path, reason string, cause error) *FileError {
 
 	return &FileError{
 		BaseError: &BaseError{
-			ErrType:    ErrorTypeFile,
-			Message:    message,
-			Cause:      cause,
-			Help:       help,
+			ErrType: ErrorTypeFile,
+			Message: message,
+			Cause:   cause,
+			Help:    help,
 			ErrContext: map[string]interface{}{
 				"operation": operation,
 				"path":      path,
@@ -418,9 +418,9 @@ func NewConfigError(source, field, value, reason string, validValues []string) *
 
 	return &ConfigError{
 		BaseError: &BaseError{
-			ErrType:    ErrorTypeConfiguration,
-			Message:    message,
-			Help:       help,
+			ErrType: ErrorTypeConfiguration,
+			Message: message,
+			Help:    help,
 			ErrContext: map[string]interface{}{
 				"source": source,
 				"field":  field,

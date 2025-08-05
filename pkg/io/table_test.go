@@ -131,7 +131,7 @@ func TestDefaultColumns(t *testing.T) {
 	// Check for expected columns
 	expectedHeaders := []string{"NAMESPACE", "NAME", "READY", "AGE"}
 	foundHeaders := make(map[string]bool)
-	
+
 	for _, col := range columns {
 		foundHeaders[col.Header] = true
 	}
@@ -178,7 +178,7 @@ func TestKindSpecificColumns_Service(t *testing.T) {
 	// Service columns should include TYPE and CLUSTER-IP
 	expectedHeaders := []string{"TYPE", "CLUSTER-IP"}
 	foundHeaders := make(map[string]bool)
-	
+
 	for _, col := range columns {
 		foundHeaders[col.Header] = true
 	}
@@ -236,15 +236,15 @@ func TestGetDetailedStatus(t *testing.T) {
 			expected: "Unknown",
 		},
 		{
-			name:     "object with message in status",
-			obj:      *createTestResourceWithStatus("Pod", "test", "default", map[string]interface{}{
+			name: "object with message in status",
+			obj: *createTestResourceWithStatus("Pod", "test", "default", map[string]interface{}{
 				"message": "Pod is running",
 			}),
 			expected: "Pod is running",
 		},
 		{
-			name:     "object with reason in status",
-			obj:      *createTestResourceWithStatus("Pod", "test", "default", map[string]interface{}{
+			name: "object with reason in status",
+			obj: *createTestResourceWithStatus("Pod", "test", "default", map[string]interface{}{
 				"reason": "ImagePullBackOff",
 			}),
 			expected: "ImagePullBackOff",
@@ -333,7 +333,7 @@ func createTestResource(kind, name, namespace string) *client.Object {
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
 	obj.SetCreationTimestamp(metav1.Time{Time: time.Now().Add(-5 * time.Minute)})
-	
+
 	clientObj := client.Object(obj)
 	return &clientObj
 }
@@ -345,7 +345,7 @@ func createTestResourceWithStatus(kind, name, namespace string, status map[strin
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
 	obj.Object["status"] = status
-	
+
 	clientObj := client.Object(obj)
 	return &clientObj
 }
@@ -443,7 +443,7 @@ func getPodReadyStatusForTest(obj client.Object) string {
 	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
 		ready := 0
 		total := len(containerStatuses)
-		
+
 		for _, cs := range containerStatuses {
 			if csMap, ok := cs.(map[string]interface{}); ok {
 				if isReady, ok := csMap["ready"].(bool); ok && isReady {
@@ -451,7 +451,7 @@ func getPodReadyStatusForTest(obj client.Object) string {
 				}
 			}
 		}
-		
+
 		return fmt.Sprintf("%d/%d", ready, total)
 	}
 
@@ -476,7 +476,7 @@ func getPodRestartsForTest(obj client.Object) string {
 
 	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
 		totalRestarts := 0
-		
+
 		for _, cs := range containerStatuses {
 			if csMap, ok := cs.(map[string]interface{}); ok {
 				if restartCount, ok := csMap["restartCount"].(float64); ok {
@@ -484,7 +484,7 @@ func getPodRestartsForTest(obj client.Object) string {
 				}
 			}
 		}
-		
+
 		return fmt.Sprintf("%d", totalRestarts)
 	}
 
@@ -583,4 +583,3 @@ func getConfigDataCountForTest(obj client.Object) string {
 
 	return "0"
 }
-

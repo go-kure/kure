@@ -77,14 +77,14 @@ func LoadResourcesWithStructure(r io.Reader) (*YAMLDocumentSet, error) {
 			// Fallback to original if conversion failed
 			resource = &unstructured.Unstructured{Object: raw}
 		}
-		
+
 		// Also apply type conversion to the YAML node to preserve formatting
 		if err := convertYAMLNodeTypes(&node); err != nil {
 			if Debug {
 				fmt.Printf("Warning: failed to convert YAML node types: %v\n", err)
 			}
 		}
-		
+
 		doc := &YAMLDocument{
 			Node:     &node,
 			Resource: resource,
@@ -93,7 +93,7 @@ func LoadResourcesWithStructure(r io.Reader) (*YAMLDocumentSet, error) {
 		}
 
 		set.Documents = append(set.Documents, doc)
-		
+
 		if Debug {
 			fmt.Printf("Loaded document %d: kind=%s name=%s\n", i, resource.GetKind(), resource.GetName())
 		}
@@ -106,12 +106,12 @@ func LoadResourcesWithStructure(r io.Reader) (*YAMLDocumentSet, error) {
 func parseYAMLDocuments(content string) ([]string, error) {
 	var documents []string
 	var currentDoc strings.Builder
-	
+
 	scanner := bufio.NewScanner(strings.NewReader(content))
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Check for document separator
 		if strings.TrimSpace(line) == "---" {
 			// Save current document if it has content
@@ -121,23 +121,23 @@ func parseYAMLDocuments(content string) ([]string, error) {
 			}
 			continue
 		}
-		
+
 		// Add line to current document
 		if currentDoc.Len() > 0 {
 			currentDoc.WriteString("\n")
 		}
 		currentDoc.WriteString(line)
 	}
-	
+
 	// Add final document
 	if currentDoc.Len() > 0 {
 		documents = append(documents, currentDoc.String())
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading YAML content: %w", err)
 	}
-	
+
 	return documents, nil
 }
 
@@ -216,8 +216,8 @@ func mergeMappingNodes(original, patched *yaml.Node) error {
 		key := original.Content[i].Value
 		if patchedValue, exists := patchedMap[key]; exists {
 			// Recursively merge if both are objects/arrays, otherwise replace
-			if original.Content[i+1].Kind == patchedValue.Kind && 
-			   (patchedValue.Kind == yaml.MappingNode || patchedValue.Kind == yaml.SequenceNode) {
+			if original.Content[i+1].Kind == patchedValue.Kind &&
+				(patchedValue.Kind == yaml.MappingNode || patchedValue.Kind == yaml.SequenceNode) {
 				mergeYAMLNodes(original.Content[i+1], patchedValue)
 			} else {
 				// Replace the value node but keep the key node (preserves comments on key)
@@ -250,32 +250,32 @@ func mergeSequenceNodes(original, patched *yaml.Node) error {
 // WriteToFile writes the document set to a file with preserved structure
 func (set *YAMLDocumentSet) WriteToFile(filename string) error {
 	var buf bytes.Buffer
-	
+
 	for i, doc := range set.Documents {
 		if i > 0 {
 			buf.WriteString(set.Separator + "\n")
 		}
-		
+
 		// Marshal the updated node back to YAML
 		encoder := yaml.NewEncoder(&buf)
 		encoder.SetIndent(2)
-		
+
 		if err := encoder.Encode(doc.Node); err != nil {
 			return fmt.Errorf("failed to encode document %d: %w", i, err)
 		}
-		
+
 		encoder.Close()
 	}
-	
+
 	// Write to file
 	content := buf.String()
 	// Clean up extra newlines at the end
 	content = strings.TrimSuffix(content, "\n") + "\n"
-	
+
 	if err := writeFile(filename, []byte(content)); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", filename, err)
 	}
-	
+
 	return nil
 }
 
@@ -306,8 +306,8 @@ func (set *YAMLDocumentSet) FindDocumentByName(name string) *YAMLDocument {
 // FindDocumentByKindAndName finds a document by resource kind and name
 func (set *YAMLDocumentSet) FindDocumentByKindAndName(kind, name string) *YAMLDocument {
 	for _, doc := range set.Documents {
-		if strings.ToLower(doc.Resource.GetKind()) == strings.ToLower(kind) && 
-		   doc.Resource.GetName() == name {
+		if strings.ToLower(doc.Resource.GetKind()) == strings.ToLower(kind) &&
+			doc.Resource.GetName() == name {
 			return doc
 		}
 	}
@@ -341,11 +341,11 @@ func GenerateOutputFilename(originalPath, patchPath, outputDir string) string {
 	// Extract base names without extensions
 	originalBase := extractBaseName(originalPath)
 	patchBase := extractBaseName(patchPath)
-	
+
 	if outputDir == "" {
 		outputDir = "." // Default to current directory
 	}
-	
+
 	return fmt.Sprintf("%s/%s-patch-%s.yaml", outputDir, originalBase, patchBase)
 }
 
@@ -355,17 +355,17 @@ func (set *YAMLDocumentSet) Copy() (*YAMLDocumentSet, error) {
 		Documents: make([]*YAMLDocument, len(set.Documents)),
 		Separator: set.Separator,
 	}
-	
+
 	for i, doc := range set.Documents {
 		// Deep copy the YAML node
 		copiedNode, err := copyYAMLNode(doc.Node)
 		if err != nil {
 			return nil, fmt.Errorf("failed to copy YAML node for document %d: %w", i, err)
 		}
-		
+
 		// Deep copy the unstructured resource
 		copiedResource := doc.Resource.DeepCopy()
-		
+
 		copiedSet.Documents[i] = &YAMLDocument{
 			Node:     copiedNode,
 			Resource: copiedResource,
@@ -373,7 +373,7 @@ func (set *YAMLDocumentSet) Copy() (*YAMLDocumentSet, error) {
 			Order:    doc.Order,
 		}
 	}
-	
+
 	return copiedSet, nil
 }
 
@@ -382,7 +382,7 @@ func copyYAMLNode(node *yaml.Node) (*yaml.Node, error) {
 	if node == nil {
 		return nil, nil
 	}
-	
+
 	copied := &yaml.Node{
 		Kind:        node.Kind,
 		Style:       node.Style,
@@ -397,7 +397,7 @@ func copyYAMLNode(node *yaml.Node) (*yaml.Node, error) {
 		Line:        node.Line,
 		Column:      node.Column,
 	}
-	
+
 	// Recursively copy content nodes
 	for i, child := range node.Content {
 		copiedChild, err := copyYAMLNode(child)
@@ -406,7 +406,7 @@ func copyYAMLNode(node *yaml.Node) (*yaml.Node, error) {
 		}
 		copied.Content[i] = copiedChild
 	}
-	
+
 	return copied, nil
 }
 
@@ -417,17 +417,17 @@ func extractBaseName(filePath string) string {
 	if lastSlash == -1 {
 		lastSlash = strings.LastIndex(filePath, "\\") // Windows path
 	}
-	
+
 	filename := filePath
 	if lastSlash >= 0 {
 		filename = filePath[lastSlash+1:]
 	}
-	
+
 	// Remove extension
 	if dotIndex := strings.LastIndex(filename, "."); dotIndex > 0 {
 		filename = filename[:dotIndex]
 	}
-	
+
 	// Clean up filename for use in output (remove invalid characters)
 	re := regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
 	return re.ReplaceAllString(filename, "-")
@@ -476,25 +476,25 @@ func shouldConvertToInteger(key, value string) bool {
 	if _, err := strconv.Atoi(value); err != nil {
 		return false
 	}
-	
+
 	// Convert common Kubernetes integer fields
 	integerFields := []string{
 		"port", "targetport", "nodeport", "containerport",
 		"replicas", "maxunavailable", "maxsurge",
-		"initialdelayseconds", "timeoutseconds", "periodseconds", 
+		"initialdelayseconds", "timeoutseconds", "periodseconds",
 		"successthreshold", "failurethreshold",
 		"terminationgraceperiodseconds", "activedeadlineseconds",
 		"runasuser", "runasgroup", "fsgroup",
 		"weight", "priority", "number",
 	}
-	
+
 	keyLower := strings.ToLower(key)
 	for _, field := range integerFields {
 		if strings.Contains(keyLower, field) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -510,7 +510,7 @@ func convertYAMLNodeTypes(node *yaml.Node) error {
 	if node == nil {
 		return nil
 	}
-	
+
 	switch node.Kind {
 	case yaml.DocumentNode:
 		// Process document content
@@ -519,24 +519,24 @@ func convertYAMLNodeTypes(node *yaml.Node) error {
 				return err
 			}
 		}
-		
+
 	case yaml.MappingNode:
 		// Process mapping nodes (key-value pairs)
 		for i := 0; i < len(node.Content); i += 2 {
 			keyNode := node.Content[i]
 			valueNode := node.Content[i+1]
-			
+
 			// Convert the value node based on the key name
 			if keyNode.Kind == yaml.ScalarNode && valueNode.Kind == yaml.ScalarNode {
 				convertScalarNodeType(keyNode.Value, valueNode)
 			}
-			
+
 			// Recursively process nested nodes
 			if err := convertYAMLNodeTypes(valueNode); err != nil {
 				return err
 			}
 		}
-		
+
 	case yaml.SequenceNode:
 		// Process sequence nodes (arrays)
 		for _, child := range node.Content {
@@ -544,12 +544,12 @@ func convertYAMLNodeTypes(node *yaml.Node) error {
 				return err
 			}
 		}
-		
+
 	case yaml.ScalarNode:
 		// Scalar nodes are handled by their parent mapping node
 		// No additional processing needed here
 	}
-	
+
 	return nil
 }
 
@@ -558,9 +558,9 @@ func convertScalarNodeType(fieldName string, valueNode *yaml.Node) {
 	if valueNode.Kind != yaml.ScalarNode {
 		return
 	}
-	
+
 	originalValue := valueNode.Value
-	
+
 	// Try integer conversion
 	if shouldConvertToInteger(fieldName, originalValue) {
 		if _, err := strconv.Atoi(originalValue); err == nil {
@@ -570,7 +570,7 @@ func convertScalarNodeType(fieldName string, valueNode *yaml.Node) {
 			return
 		}
 	}
-	
+
 	// Try boolean conversion
 	if shouldConvertToBoolean(originalValue) {
 		lowerValue := strings.ToLower(originalValue)

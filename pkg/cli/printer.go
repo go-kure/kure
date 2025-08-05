@@ -58,17 +58,17 @@ func (p *yamlPrinter) Print(objects []runtime.Object, writer io.Writer) error {
 		if i > 0 {
 			fmt.Fprintln(writer, "---")
 		}
-		
+
 		data, err := yaml.Marshal(obj)
 		if err != nil {
 			return fmt.Errorf("failed to marshal object to YAML: %w", err)
 		}
-		
+
 		if _, err := writer.Write(data); err != nil {
 			return fmt.Errorf("failed to write YAML: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -128,16 +128,16 @@ func (p *tablePrinter) Print(objects []runtime.Object, writer io.Writer) error {
 				unstructuredObj.GetKind(),
 				unstructuredObj.GetNamespace(),
 			}
-			
+
 			if p.options.Wide {
 				row = append(row, unstructuredObj.GetAPIVersion(), "<unknown>")
 			}
-			
+
 			if p.options.ShowLabels {
 				labels := formatLabels(unstructuredObj.GetLabels())
 				row = append(row, labels)
 			}
-			
+
 			fmt.Fprintln(w, joinTabs(row))
 		}
 	}
@@ -165,7 +165,7 @@ func joinTabs(strs []string) string {
 	if len(strs) == 0 {
 		return ""
 	}
-	
+
 	result := strs[0]
 	for _, s := range strs[1:] {
 		result += "\t" + s
@@ -177,7 +177,7 @@ func formatLabels(labels map[string]string) string {
 	if len(labels) == 0 {
 		return "<none>"
 	}
-	
+
 	result := ""
 	first := true
 	for k, v := range labels {

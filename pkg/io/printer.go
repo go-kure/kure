@@ -101,17 +101,17 @@ func (rp *ResourcePrinter) printNames(resources []*client.Object, w io.Writer) e
 		if obj == nil {
 			continue
 		}
-		
+
 		gvk := (*obj).GetObjectKind().GroupVersionKind()
 		name := (*obj).GetName()
 		namespace := (*obj).GetNamespace()
-		
+
 		// Format: kind/name or kind.group/name
 		kind := strings.ToLower(gvk.Kind)
 		if gvk.Group != "" {
 			kind = fmt.Sprintf("%s.%s", kind, gvk.Group)
 		}
-		
+
 		resourceName := fmt.Sprintf("%s/%s", kind, name)
 		if namespace != "" {
 			fmt.Fprintf(w, "%s (namespace: %s)\n", resourceName, namespace)
@@ -130,11 +130,11 @@ func (rp *ResourcePrinter) printTable(resources []*client.Object, w io.Writer, w
 
 	// Create a table printer
 	printer := printers.NewTablePrinter(printers.PrintOptions{
-		NoHeaders:    rp.options.NoHeaders,
+		NoHeaders:     rp.options.NoHeaders,
 		WithNamespace: true,
-		Wide:         wide,
-		ShowLabels:   rp.options.ShowLabels,
-		ColumnLabels: rp.options.ColumnLabels,
+		Wide:          wide,
+		ShowLabels:    rp.options.ShowLabels,
+		ColumnLabels:  rp.options.ColumnLabels,
 	})
 
 	// Convert resources to runtime objects for the table printer
@@ -168,7 +168,7 @@ func FormatAge(t *metav1.Time) string {
 	if t == nil {
 		return "<unknown>"
 	}
-	
+
 	duration := time.Since(t.Time)
 	if duration.Seconds() < 60 {
 		return fmt.Sprintf("%.0fs", duration.Seconds())
@@ -187,12 +187,12 @@ func GetResourceAge(obj client.Object) string {
 	if obj == nil {
 		return "<unknown>"
 	}
-	
+
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return "<unknown>"
 	}
-	
+
 	creationTime := accessor.GetCreationTimestamp()
 	return FormatAge(&creationTime)
 }
@@ -262,7 +262,7 @@ func NewTablePrinter(options PrintOptions) *ResourcePrinter {
 	if options.OutputFormat != OutputFormatTable && options.OutputFormat != OutputFormatWide {
 		options.OutputFormat = OutputFormatTable
 	}
-	
+
 	return NewResourcePrinter(options)
 }
 

@@ -52,9 +52,9 @@ func (w *WorkflowEngine) GenerateFromNode(n *stack.Node) ([]client.Object, error
 	if n == nil {
 		return nil, nil
 	}
-	
+
 	var objs []client.Object
-	
+
 	// Generate application for this node's bundle
 	if n.Bundle != nil {
 		bundleApps, err := w.GenerateFromBundle(n.Bundle)
@@ -63,7 +63,7 @@ func (w *WorkflowEngine) GenerateFromNode(n *stack.Node) ([]client.Object, error
 		}
 		objs = append(objs, bundleApps...)
 	}
-	
+
 	// Generate applications for child nodes
 	for _, child := range n.Children {
 		childApps, err := w.GenerateFromNode(child)
@@ -72,7 +72,7 @@ func (w *WorkflowEngine) GenerateFromNode(n *stack.Node) ([]client.Object, error
 		}
 		objs = append(objs, childApps...)
 	}
-	
+
 	return objs, nil
 }
 
@@ -81,34 +81,34 @@ func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, e
 	if b == nil {
 		return nil, nil
 	}
-	
+
 	app := &unstructured.Unstructured{}
 	app.SetAPIVersion("argoproj.io/v1alpha1")
 	app.SetKind("Application")
 	app.SetName(b.Name)
 	app.SetNamespace(w.DefaultNamespace)
-	
+
 	// Set labels if provided
 	if len(b.Labels) > 0 {
 		app.SetLabels(b.Labels)
 	}
-	
+
 	// Configure source
 	source := map[string]interface{}{
 		"repoURL": w.RepoURL,
 		"path":    w.bundlePath(b),
 	}
-	
+
 	// Configure destination
 	dest := map[string]interface{}{
 		"server":    "https://kubernetes.default.svc",
 		"namespace": "default",
 	}
-	
+
 	// Set spec fields
 	_ = unstructured.SetNestedField(app.Object, source, "spec", "source")
 	_ = unstructured.SetNestedField(app.Object, dest, "spec", "destination")
-	
+
 	// Add dependencies if present
 	if len(b.DependsOn) > 0 {
 		var deps []string
@@ -117,7 +117,7 @@ func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, e
 		}
 		_ = unstructured.SetNestedStringSlice(app.Object, deps, "spec", "dependencies")
 	}
-	
+
 	var obj client.Object = app
 	return []client.Object{obj}, nil
 }
@@ -143,13 +143,13 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// For ArgoCD, we typically create a separate argocd directory for Applications
 	apps, err := w.GenerateFromCluster(c)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(apps) > 0 {
 		argoCDLayout := &layout.ManifestLayout{
 			Name:      "argocd",
@@ -159,7 +159,7 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 		}
 		ml.Children = append(ml.Children, argoCDLayout)
 	}
-	
+
 	return ml, nil
 }
 
@@ -170,7 +170,7 @@ func (w *WorkflowEngine) GenerateBootstrap(config *stack.BootstrapConfig, rootNo
 	if config == nil || !config.Enabled {
 		return nil, nil
 	}
-	
+
 	// Mock implementation - returns empty for now
 	// TODO: Implement ArgoCD bootstrap with:
 	// - ArgoCD namespace

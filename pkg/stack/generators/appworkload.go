@@ -35,9 +35,9 @@ func (r *ResourceRequirements) ToKubernetesResources() (*corev1.ResourceRequirem
 	if r == nil {
 		return nil, nil
 	}
-	
+
 	result := &corev1.ResourceRequirements{}
-	
+
 	if len(r.Limits) > 0 {
 		result.Limits = make(corev1.ResourceList)
 		for k, v := range r.Limits {
@@ -48,7 +48,7 @@ func (r *ResourceRequirements) ToKubernetesResources() (*corev1.ResourceRequirem
 			result.Limits[corev1.ResourceName(k)] = qty
 		}
 	}
-	
+
 	if len(r.Requests) > 0 {
 		result.Requests = make(corev1.ResourceList)
 		for k, v := range r.Requests {
@@ -59,7 +59,7 @@ func (r *ResourceRequirements) ToKubernetesResources() (*corev1.ResourceRequirem
 			result.Requests[corev1.ResourceName(k)] = qty
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -69,8 +69,8 @@ type VolumeClaimTemplate struct {
 		Name string `json:"name" yaml:"name"`
 	} `json:"metadata" yaml:"metadata"`
 	Spec struct {
-		AccessModes      []string          `json:"accessModes,omitempty" yaml:"accessModes,omitempty"`
-		StorageClassName *string           `json:"storageClassName,omitempty" yaml:"storageClassName,omitempty"`
+		AccessModes      []string              `json:"accessModes,omitempty" yaml:"accessModes,omitempty"`
+		StorageClassName *string               `json:"storageClassName,omitempty" yaml:"storageClassName,omitempty"`
 		Resources        *ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
 	} `json:"spec" yaml:"spec"`
 }
@@ -79,15 +79,15 @@ type VolumeClaimTemplate struct {
 func (vct *VolumeClaimTemplate) ToKubernetesPVC() (*corev1.PersistentVolumeClaim, error) {
 	pvc := &corev1.PersistentVolumeClaim{}
 	pvc.Name = vct.Metadata.Name
-	
+
 	// Convert access modes
 	for _, mode := range vct.Spec.AccessModes {
 		pvc.Spec.AccessModes = append(pvc.Spec.AccessModes, corev1.PersistentVolumeAccessMode(mode))
 	}
-	
+
 	// Set storage class
 	pvc.Spec.StorageClassName = vct.Spec.StorageClassName
-	
+
 	// Convert resources
 	if vct.Spec.Resources != nil {
 		k8sResources, err := vct.Spec.Resources.ToKubernetesResources()
@@ -102,7 +102,7 @@ func (vct *VolumeClaimTemplate) ToKubernetesPVC() (*corev1.PersistentVolumeClaim
 			}
 		}
 	}
-	
+
 	return pvc, nil
 }
 
@@ -114,9 +114,9 @@ type AppWorkloadConfig struct {
 	Replicas  int32             `json:"replicas,omitempty" yaml:"replicas,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 
-	Containers            []ContainerConfig       `json:"containers" yaml:"containers"`
-	Volumes               []Volume                `json:"volumes,omitempty" yaml:"volumes,omitempty"`
-	VolumeClaimTemplates  []VolumeClaimTemplate   `json:"volumeClaimTemplates,omitempty" yaml:"volumeClaimTemplates,omitempty"`
+	Containers           []ContainerConfig     `json:"containers" yaml:"containers"`
+	Volumes              []Volume              `json:"volumes,omitempty" yaml:"volumes,omitempty"`
+	VolumeClaimTemplates []VolumeClaimTemplate `json:"volumeClaimTemplates,omitempty" yaml:"volumeClaimTemplates,omitempty"`
 
 	Services []ServiceConfig `json:"services,omitempty" yaml:"services,omitempty"`
 	Ingress  *IngressConfig  `json:"ingress,omitempty" yaml:"ingress,omitempty"`
@@ -189,7 +189,7 @@ func (env EnvVar) ToKubernetesEnvVar() corev1.EnvVar {
 		Name:  env.Name,
 		Value: env.Value,
 	}
-	
+
 	if env.ValueFrom != nil {
 		k8sEnv.ValueFrom = &corev1.EnvVarSource{}
 		if env.ValueFrom.SecretKeyRef != nil {
@@ -214,7 +214,7 @@ func (env EnvVar) ToKubernetesEnvVar() corev1.EnvVar {
 			}
 		}
 	}
-	
+
 	return k8sEnv
 }
 
@@ -229,20 +229,20 @@ type ExecAction struct {
 }
 
 type Probe struct {
-	HTTPGet                       *HTTPGetAction `json:"httpGet,omitempty" yaml:"httpGet,omitempty"`
-	Exec                          *ExecAction    `json:"exec,omitempty" yaml:"exec,omitempty"`
-	InitialDelaySeconds           int32          `json:"initialDelaySeconds,omitempty" yaml:"initialDelaySeconds,omitempty"`
-	TimeoutSeconds                int32          `json:"timeoutSeconds,omitempty" yaml:"timeoutSeconds,omitempty"`
-	PeriodSeconds                 int32          `json:"periodSeconds,omitempty" yaml:"periodSeconds,omitempty"`
-	SuccessThreshold              int32          `json:"successThreshold,omitempty" yaml:"successThreshold,omitempty"`
-	FailureThreshold              int32          `json:"failureThreshold,omitempty" yaml:"failureThreshold,omitempty"`
+	HTTPGet             *HTTPGetAction `json:"httpGet,omitempty" yaml:"httpGet,omitempty"`
+	Exec                *ExecAction    `json:"exec,omitempty" yaml:"exec,omitempty"`
+	InitialDelaySeconds int32          `json:"initialDelaySeconds,omitempty" yaml:"initialDelaySeconds,omitempty"`
+	TimeoutSeconds      int32          `json:"timeoutSeconds,omitempty" yaml:"timeoutSeconds,omitempty"`
+	PeriodSeconds       int32          `json:"periodSeconds,omitempty" yaml:"periodSeconds,omitempty"`
+	SuccessThreshold    int32          `json:"successThreshold,omitempty" yaml:"successThreshold,omitempty"`
+	FailureThreshold    int32          `json:"failureThreshold,omitempty" yaml:"failureThreshold,omitempty"`
 }
 
 func (p Probe) ToKubernetesProbe() *corev1.Probe {
 	if p.HTTPGet == nil && p.Exec == nil {
 		return nil
 	}
-	
+
 	k8sProbe := &corev1.Probe{
 		InitialDelaySeconds: p.InitialDelaySeconds,
 		TimeoutSeconds:      p.TimeoutSeconds,
@@ -250,7 +250,7 @@ func (p Probe) ToKubernetesProbe() *corev1.Probe {
 		SuccessThreshold:    p.SuccessThreshold,
 		FailureThreshold:    p.FailureThreshold,
 	}
-	
+
 	if p.HTTPGet != nil {
 		k8sProbe.ProbeHandler.HTTPGet = &corev1.HTTPGetAction{
 			Path: p.HTTPGet.Path,
@@ -260,13 +260,13 @@ func (p Probe) ToKubernetesProbe() *corev1.Probe {
 			k8sProbe.ProbeHandler.HTTPGet.Scheme = corev1.URIScheme(p.HTTPGet.Scheme)
 		}
 	}
-	
+
 	if p.Exec != nil {
 		k8sProbe.ProbeHandler.Exec = &corev1.ExecAction{
 			Command: p.Exec.Command,
 		}
 	}
-	
+
 	return k8sProbe
 }
 
@@ -302,7 +302,7 @@ func (v Volume) ToKubernetesVolume() corev1.Volume {
 	k8sVol := corev1.Volume{
 		Name: v.Name,
 	}
-	
+
 	if v.VolumeSource != nil {
 		if v.VolumeSource.EmptyDir != nil {
 			k8sVol.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
@@ -331,16 +331,16 @@ func (v Volume) ToKubernetesVolume() corev1.Volume {
 			}
 		}
 	}
-	
+
 	return k8sVol
 }
 
 type ContainerConfig struct {
-	Name         string                   `json:"name" yaml:"name"`
-	Image        string                   `json:"image" yaml:"image"`
-	Ports        []ContainerPort          `json:"ports,omitempty" yaml:"ports,omitempty"`
-	Env          []EnvVar                 `json:"env,omitempty" yaml:"env,omitempty"`
-	VolumeMounts []VolumeMount            `json:"volumeMounts,omitempty" yaml:"volumeMounts,omitempty"`
+	Name         string          `json:"name" yaml:"name"`
+	Image        string          `json:"image" yaml:"image"`
+	Ports        []ContainerPort `json:"ports,omitempty" yaml:"ports,omitempty"`
+	Env          []EnvVar        `json:"env,omitempty" yaml:"env,omitempty"`
+	VolumeMounts []VolumeMount   `json:"volumeMounts,omitempty" yaml:"volumeMounts,omitempty"`
 
 	Resources *ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
 
@@ -476,26 +476,26 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort, error) {
 	container := kubernetes.CreateContainer(cfg.Name, cfg.Image, nil, nil)
 	var ports []corev1.ContainerPort
-	
+
 	// Add ports
 	for _, p := range cfg.Ports {
 		k8sPort := p.ToKubernetesPort()
 		_ = kubernetes.AddContainerPort(container, k8sPort)
 		ports = append(ports, k8sPort)
 	}
-	
+
 	// Add environment variables
 	for _, env := range cfg.Env {
 		k8sEnv := env.ToKubernetesEnvVar()
 		_ = kubernetes.AddContainerEnv(container, k8sEnv)
 	}
-	
+
 	// Add volume mounts
 	for _, vm := range cfg.VolumeMounts {
 		k8sMount := vm.ToKubernetesVolumeMount()
 		_ = kubernetes.AddContainerVolumeMount(container, k8sMount)
 	}
-	
+
 	// Set resources if provided
 	if cfg.Resources != nil {
 		k8sResources, err := cfg.Resources.ToKubernetesResources()
@@ -506,7 +506,7 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 			_ = kubernetes.SetContainerResources(container, *k8sResources)
 		}
 	}
-	
+
 	// Set probes if provided
 	if cfg.LivenessProbe != nil {
 		k8sProbe := cfg.LivenessProbe.ToKubernetesProbe()
@@ -526,6 +526,6 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 			_ = kubernetes.SetContainerStartupProbe(container, *k8sProbe)
 		}
 	}
-	
+
 	return container, ports, nil
 }

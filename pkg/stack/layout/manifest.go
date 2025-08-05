@@ -9,8 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/errors"
+	kio "github.com/go-kure/kure/pkg/io"
 )
 
 type ManifestLayout struct {
@@ -30,12 +30,12 @@ func (ml *ManifestLayout) FullRepoPath() string {
 	if ns == "" {
 		ns = "cluster"
 	}
-	
+
 	// Don't duplicate the name if it's already at the end of the namespace
 	if ml.Name != "" && strings.HasSuffix(ns, ml.Name) {
 		return filepath.ToSlash(ns)
 	}
-	
+
 	return filepath.ToSlash(filepath.Join(ns, ml.Name))
 }
 
@@ -61,11 +61,11 @@ func WritePackagesToDisk(packages map[string]*ManifestLayout, basePath string) e
 		if layout == nil {
 			continue
 		}
-		
+
 		// Create package-specific subdirectory with proper sanitization
 		packageDirName := sanitizePackageKey(packageKey)
 		packagePath := filepath.Join(basePath, packageDirName)
-		
+
 		if err := layout.WriteToDisk(packagePath); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("write package %s to disk", packageKey))
 		}
@@ -78,21 +78,21 @@ func sanitizePackageKey(packageKey string) string {
 	if packageKey == "default" {
 		return "default"
 	}
-	
+
 	// Convert common GroupVersionKind strings to meaningful names
 	if strings.Contains(packageKey, "OCIRepository") {
 		return "oci-packages"
 	}
 	if strings.Contains(packageKey, "GitRepository") {
-		return "git-packages"  
+		return "git-packages"
 	}
 	if strings.Contains(packageKey, "Bucket") {
 		return "bucket-packages"
 	}
-	
+
 	// Fallback: sanitize the full string
 	sanitized := packageKey
-	
+
 	// Replace problematic characters with safe alternatives
 	sanitized = strings.ReplaceAll(sanitized, "/", "-")
 	sanitized = strings.ReplaceAll(sanitized, "\\", "-")
@@ -124,20 +124,20 @@ func sanitizePackageKey(packageKey string) string {
 	sanitized = strings.ReplaceAll(sanitized, "`", "-")
 	sanitized = strings.ReplaceAll(sanitized, "~", "-")
 	sanitized = strings.ReplaceAll(sanitized, "$", "-")
-	
+
 	// Clean up multiple consecutive dashes
 	for strings.Contains(sanitized, "--") {
 		sanitized = strings.ReplaceAll(sanitized, "--", "-")
 	}
-	
+
 	// Trim leading/trailing dashes
 	sanitized = strings.Trim(sanitized, "-")
-	
+
 	// Ensure it's not empty and doesn't contain only special characters
 	if sanitized == "" || sanitized == "-" {
 		sanitized = "unknown-package"
 	}
-	
+
 	return sanitized
 }
 
@@ -191,26 +191,26 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Convert to []*client.Object for the kio encoder
 		var objPtrs []*client.Object
 		for _, obj := range objs {
 			objPtr := &obj
 			objPtrs = append(objPtrs, objPtr)
 		}
-		
+
 		// Use proper Kubernetes YAML encoder
 		data, err := kio.EncodeObjectsToYAML(objPtrs)
 		if err != nil {
 			_ = f.Close()
 			return err
 		}
-		
+
 		if _, err = f.Write(data); err != nil {
 			_ = f.Close()
 			return err
 		}
-		
+
 		if err := f.Close(); err != nil {
 			return err
 		}
@@ -229,19 +229,19 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Write proper YAML header
 		_, _ = kf.WriteString("apiVersion: kustomize.config.kubernetes.io/v1beta1\n")
 		_, _ = kf.WriteString("kind: Kustomization\n")
 		_, _ = kf.WriteString("resources:\n")
-		
+
 		// Add resource files if in explicit mode OR if it's a leaf directory with no children
 		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
 			for file := range fileGroups {
 				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
 			}
 		}
-		
+
 		// Add child references
 		for _, child := range ml.Children {
 			if child.ApplicationFileMode == AppFileSingle {
@@ -255,7 +255,7 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
 			}
 		}
-		
+
 		if err := kf.Close(); err != nil {
 			return err
 		}

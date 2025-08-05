@@ -117,10 +117,10 @@ port: 8888`
 	if httpsPort["name"] != "https" {
 		t.Errorf("Expected first port to be 'https', got %v", httpsPort["name"])
 	}
-	if fmt.Sprintf("%v", httpsPort["port"]) != "9443" {  // Updated value
+	if fmt.Sprintf("%v", httpsPort["port"]) != "9443" { // Updated value
 		t.Errorf("Expected HTTPS port to be 9443, got %v", httpsPort["port"])
 	}
-	if httpsPort["targetPort"] != "webhook" {  // Updated value
+	if httpsPort["targetPort"] != "webhook" { // Updated value
 		t.Errorf("Expected HTTPS targetPort to be 'webhook', got %v", httpsPort["targetPort"])
 	}
 
@@ -129,21 +129,21 @@ port: 8888`
 	if httpPort["name"] != "http" {
 		t.Errorf("Expected second port to be 'http', got %v", httpPort["name"])
 	}
-	if fmt.Sprintf("%v", httpPort["port"]) != "8888" {  // Updated value
+	if fmt.Sprintf("%v", httpPort["port"]) != "8888" { // Updated value
 		t.Errorf("Expected HTTP port to be 8888, got %v", httpPort["port"])
 	}
-	if httpPort["targetPort"] != float64(8080) {  // Unchanged value
+	if httpPort["targetPort"] != float64(8080) { // Unchanged value
 		t.Errorf("Expected HTTP targetPort to be 8080, got %v", httpPort["targetPort"])
 	}
 }
 
 func TestParsePatchLineWithMidSelectors(t *testing.T) {
 	testCases := []struct {
-		name           string
-		input          string
-		expectedPath   string
-		expectedSel    string
-		expectedValue  interface{}
+		name          string
+		input         string
+		expectedPath  string
+		expectedSel   string
+		expectedValue interface{}
 	}{
 		{
 			name:          "service port selector",

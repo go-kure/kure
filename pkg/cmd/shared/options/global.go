@@ -17,11 +17,11 @@ type GlobalOptions struct {
 	Debug      bool
 
 	// Output options
-	Output       string
-	OutputFile   string
-	NoHeaders    bool
-	ShowLabels   bool
-	Wide         bool
+	Output     string
+	OutputFile string
+	NoHeaders  bool
+	ShowLabels bool
+	Wide       bool
 
 	// Common flags
 	DryRun    bool

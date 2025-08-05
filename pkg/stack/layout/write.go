@@ -8,8 +8,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/errors"
+	kio "github.com/go-kure/kure/pkg/io"
 )
 
 // WriteManifest writes a ManifestLayout to disk using the provided configuration.
@@ -67,26 +67,26 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Convert to []*client.Object for the kio encoder
 		var objPtrs []*client.Object
 		for _, obj := range objs {
 			objPtr := &obj
 			objPtrs = append(objPtrs, objPtr)
 		}
-		
+
 		// Use proper Kubernetes YAML encoder
 		data, err := kio.EncodeObjectsToYAML(objPtrs)
 		if err != nil {
 			_ = f.Close()
 			return err
 		}
-		
+
 		if _, err = f.Write(data); err != nil {
 			_ = f.Close()
 			return err
 		}
-		
+
 		if err := f.Close(); err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 
 	// Don't generate root kustomization.yaml at cluster level (when namespace is just the cluster name)
 	isClusterRoot := strings.Count(ml.Namespace, string(filepath.Separator)) == 0 && ml.Name == ""
-	
+
 	// Generate kustomization.yaml if there are resources or children, but not at cluster root
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
 	if !isClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0) {
@@ -103,12 +103,12 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Write proper YAML header
 		_, _ = kf.WriteString("apiVersion: kustomize.config.kubernetes.io/v1beta1\n")
 		_, _ = kf.WriteString("kind: Kustomization\n")
 		_, _ = kf.WriteString("resources:\n")
-		
+
 		// Add resource files if in explicit mode OR if it's a leaf directory with no children
 		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
 			for file := range fileGroups {
@@ -116,7 +116,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 			}
 		}
 		// In recursive mode, only reference child directories, not files
-		
+
 		// Add child references
 		for _, child := range ml.Children {
 			if child.ApplicationFileMode == AppFileSingle {
@@ -131,7 +131,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 				}
 			}
 		}
-		
+
 		if err := kf.Close(); err != nil {
 			return err
 		}

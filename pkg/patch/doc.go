@@ -47,7 +47,7 @@
 //	spec.containers[name=main].image: nginx:latest
 //	spec.ports[+name=https]: {name: https, port: 443}
 //
-//	# TOML format  
+//	# TOML format
 //	[deployment.app]
 //	spec.replicas: 3
 //

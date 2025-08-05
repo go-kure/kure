@@ -160,7 +160,7 @@ func TestValidateOutputFormat(t *testing.T) {
 
 func TestFormatAge(t *testing.T) {
 	now := time.Now()
-	
+
 	tests := []struct {
 		name     string
 		time     *metav1.Time
@@ -205,11 +205,11 @@ func TestFormatAge(t *testing.T) {
 
 func TestGetResourceAge(t *testing.T) {
 	obj := createTestConfigMap("test-cm", "default")
-	
+
 	// Set creation timestamp
 	now := time.Now()
 	obj.SetCreationTimestamp(metav1.Time{Time: now.Add(-5 * time.Minute)})
-	
+
 	age := io.GetResourceAge(obj)
 	if age != "5m" {
 		t.Errorf("Expected age '5m', got %q", age)
@@ -224,7 +224,7 @@ func TestGetResourceAge(t *testing.T) {
 
 func TestGetResourceStatus(t *testing.T) {
 	obj := createTestConfigMap("test-cm", "default")
-	
+
 	// Test default status
 	status := io.GetResourceStatus(obj)
 	if status != "Unknown" {

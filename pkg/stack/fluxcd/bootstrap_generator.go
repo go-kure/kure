@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
-	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/errors"
+	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
 )
 
@@ -40,7 +40,7 @@ func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, r
 	if config == nil || !config.Enabled {
 		return nil, nil
 	}
-	
+
 	switch config.FluxMode {
 	case "gotk":
 		return bg.generateGotkBootstrap(config, rootNode)
@@ -60,7 +60,7 @@ func (bg *BootstrapGenerator) SupportedBootstrapModes() []string {
 // generateGotkBootstrap generates bootstrap resources using the standard Flux toolkit.
 func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
 	var resources []client.Object
-	
+
 	// Generate core Flux components
 	gotkResources, err := bg.generateGotkComponents(config)
 	if err != nil {
@@ -68,11 +68,11 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 			fmt.Sprintf("failed to generate gotk components: %v", err), err)
 	}
 	resources = append(resources, gotkResources...)
-	
+
 	// Generate flux-system Kustomization
 	fluxSystemKust := bg.generateFluxSystemKustomization(rootNode)
 	resources = append(resources, fluxSystemKust)
-	
+
 	// Generate OCI source for the root node
 	if config.SourceURL != "" {
 		source := bg.generateOCISource(config, rootNode)
@@ -80,7 +80,7 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 			resources = append(resources, source)
 		}
 	}
-	
+
 	return resources, nil
 }
 
@@ -88,7 +88,7 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
 	// Generate FluxInstance resource
 	fluxInstance := bg.generateFluxInstance(config, rootNode)
-	
+
 	return []client.Object{fluxInstance}, nil
 }
 
@@ -96,40 +96,40 @@ func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.Bootst
 func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConfig) ([]client.Object, error) {
 	// Create install options with defaults
 	opts := install.MakeDefaultOptions()
-	
+
 	// Set version if specified
 	if config.FluxVersion != "" {
 		opts.Version = config.FluxVersion
 	}
-	
+
 	// Set registry if specified
 	if config.Registry != "" {
 		opts.Registry = config.Registry
 	}
-	
+
 	// Set image pull secret if specified
 	if config.ImagePullSecret != "" {
 		opts.ImagePullSecret = config.ImagePullSecret
 	}
-	
+
 	// Set components if specified
 	if len(config.Components) > 0 {
 		opts.Components = config.Components
 	}
-	
+
 	// Generate manifests
 	content, err := install.Generate(opts, "")
 	if err != nil {
 		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "install",
 			fmt.Sprintf("failed to generate Flux installation manifests: %v", err), err)
 	}
-	
+
 	// Parse the generated manifests
 	objects, err := kio.ParseYAML([]byte(content.Content))
 	if err != nil {
 		return nil, errors.NewParseError("gotk manifests", "failed to parse generated manifests", 0, 0, err)
 	}
-	
+
 	return objects, nil
 }
 
@@ -154,7 +154,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(rootNode *stack.No
 			},
 		},
 	}
-	
+
 	return kust
 }
 
@@ -164,7 +164,7 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	url := "oci://registry.example.com/flux-system"
 	ref := "latest"
 	sourceName := "flux-system"
-	
+
 	// Use configuration from BootstrapConfig if available
 	if config.SourceURL != "" {
 		url = config.SourceURL
@@ -172,12 +172,12 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	if config.SourceRef != "" {
 		ref = config.SourceRef
 	}
-	
+
 	// Create source name based on node
 	if rootNode != nil && rootNode.Name != "" {
 		sourceName = rootNode.Name
 	}
-	
+
 	spec := sourcev1beta2.OCIRepositorySpec{
 		URL:      url,
 		Interval: metav1.Duration{Duration: bg.DefaultInterval},
@@ -185,7 +185,7 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 			Tag: ref,
 		},
 	}
-	
+
 	return intfluxcd.CreateOCIRepository(sourceName, bg.DefaultNamespace, spec)
 }
 
@@ -197,19 +197,19 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 			Registry: config.Registry,
 		},
 	}
-	
+
 	// Add components if specified
 	for _, comp := range config.Components {
 		spec.Components = append(spec.Components, fluxv1.Component(comp))
 	}
-	
+
 	// Add sync configuration if source is provided
 	if config.SourceURL != "" {
 		path := "./"
 		if rootNode != nil && rootNode.Name != "" {
 			path = "./" + rootNode.Name
 		}
-		
+
 		spec.Sync = &fluxv1.Sync{
 			Kind:     "OCIRepository",
 			URL:      config.SourceURL,
@@ -218,6 +218,6 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 			Interval: &metav1.Duration{Duration: bg.DefaultInterval},
 		}
 	}
-	
+
 	return intfluxcd.CreateFluxInstance("flux-system", bg.DefaultNamespace, spec)
 }

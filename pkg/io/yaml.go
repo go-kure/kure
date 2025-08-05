@@ -110,11 +110,11 @@ func EncodeObjectsToJSON(objects []*client.Object) ([]byte, error) {
 // PrintObjects prints objects using the specified output format and options
 func PrintObjects(objects []*client.Object, format OutputFormat, options PrintOptions, w io.Writer) error {
 	printer := NewResourcePrinter(PrintOptions{
-		OutputFormat:  format,
-		NoHeaders:     options.NoHeaders,
-		ShowLabels:    options.ShowLabels,
-		ColumnLabels:  options.ColumnLabels,
-		SortBy:        options.SortBy,
+		OutputFormat: format,
+		NoHeaders:    options.NoHeaders,
+		ShowLabels:   options.ShowLabels,
+		ColumnLabels: options.ColumnLabels,
+		SortBy:       options.SortBy,
 	})
 	return printer.Print(objects, w)
 }

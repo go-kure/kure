@@ -186,7 +186,7 @@ func TestManifestLayoutRecursiveMode(t *testing.T) {
 	if _, err := os.Stat(childK); err != nil {
 		t.Fatalf("expected child kustomization.yaml for GitOps compliance: %v", err)
 	}
-	
+
 	// Verify child kustomization lists its manifest files
 	childData, err := os.ReadFile(childK)
 	if err != nil {
@@ -233,7 +233,7 @@ func TestManifestLayoutYAMLFormat(t *testing.T) {
 	}
 
 	yamlContent := string(data)
-	
+
 	// Verify proper Kubernetes YAML format
 	if !strings.Contains(yamlContent, "apiVersion: v1") {
 		t.Errorf("Expected proper apiVersion field, got: %s", yamlContent)
@@ -250,7 +250,7 @@ func TestManifestLayoutYAMLFormat(t *testing.T) {
 	if !strings.Contains(yamlContent, "namespace: test-ns") {
 		t.Errorf("Expected proper namespace field, got: %s", yamlContent)
 	}
-	
+
 	// Verify it's NOT using the old lowercase format
 	if strings.Contains(yamlContent, "typemeta:") {
 		t.Errorf("Found old lowercase typemeta format in: %s", yamlContent)
@@ -287,7 +287,7 @@ func TestManifestLayoutKustomizationFormat(t *testing.T) {
 	}
 
 	content := string(data)
-	
+
 	// Verify proper kustomization format
 	if !strings.Contains(content, "apiVersion: kustomize.config.kubernetes.io/v1beta1") {
 		t.Errorf("Expected proper apiVersion, got: %s", content)
@@ -301,7 +301,7 @@ func TestManifestLayoutKustomizationFormat(t *testing.T) {
 	if !strings.Contains(content, "- default-configmap-test.yaml") {
 		t.Errorf("Expected resource file reference, got: %s", content)
 	}
-	
+
 	// Verify proper line endings
 	lines := strings.Split(content, "\n")
 	if len(lines) < 4 {
@@ -366,7 +366,7 @@ func TestWritePackagesToDisk(t *testing.T) {
 
 	expectedDirs := []string{"default", "oci-packages", "git-packages"}
 	found := make(map[string]bool)
-	
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			found[entry.Name()] = true
@@ -440,7 +440,7 @@ func TestSanitizePackageKey(t *testing.T) {
 func TestLeafDirectoryKustomizationGeneration(t *testing.T) {
 	// Test that leaf directories (no children) with manifest files always get kustomization.yaml
 	// This covers the fix for missing kustomization.yaml files in GitOps layouts
-	
+
 	obj1 := &unstructured.Unstructured{}
 	obj1.SetAPIVersion("apps/v1")
 	obj1.SetKind("Deployment")
@@ -475,7 +475,7 @@ func TestLeafDirectoryKustomizationGeneration(t *testing.T) {
 	}
 
 	content := string(data)
-	
+
 	// Verify kustomization.yaml contains the manifest files
 	if !strings.Contains(content, "apiVersion: kustomize.config.kubernetes.io/v1beta1") {
 		t.Errorf("Expected proper apiVersion in leaf kustomization, got: %s", content)
@@ -486,7 +486,7 @@ func TestLeafDirectoryKustomizationGeneration(t *testing.T) {
 	if !strings.Contains(content, "resources:") {
 		t.Errorf("Expected resources section in leaf kustomization, got: %s", content)
 	}
-	
+
 	// Most importantly: verify both manifest files are listed
 	// (This was the bug - leaf directories weren't listing their manifest files)
 	if !strings.Contains(content, "apps-deployment-backend.yaml") {
@@ -499,7 +499,7 @@ func TestLeafDirectoryKustomizationGeneration(t *testing.T) {
 
 func TestParentDirectoryKustomizationGeneration(t *testing.T) {
 	// Test that parent directories with children reference child directories/files properly
-	
+
 	obj1 := &unstructured.Unstructured{}
 	obj1.SetAPIVersion("apps/v1")
 	obj1.SetKind("Deployment")
@@ -521,7 +521,7 @@ func TestParentDirectoryKustomizationGeneration(t *testing.T) {
 	}
 
 	backendChild := &layout.ManifestLayout{
-		Name:      "backend", 
+		Name:      "backend",
 		Namespace: "apps/backend",
 		Resources: []client.Object{obj2},
 		Children:  nil,
@@ -548,7 +548,7 @@ func TestParentDirectoryKustomizationGeneration(t *testing.T) {
 	}
 
 	parentContent := string(parentData)
-	
+
 	// Parent should reference children, not individual manifest files
 	if !strings.Contains(parentContent, "resources:") {
 		t.Errorf("Expected resources section in parent kustomization, got: %s", parentContent)
@@ -567,7 +567,7 @@ func TestParentDirectoryKustomizationGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read frontend child kustomization.yaml: %v", err)
 	}
-	
+
 	if !strings.Contains(string(frontendData), "apps-deployment-frontend.yaml") {
 		t.Errorf("Expected frontend deployment file in child kustomization, got: %s", string(frontendData))
 	}
@@ -577,7 +577,7 @@ func TestParentDirectoryKustomizationGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read backend child kustomization.yaml: %v", err)
 	}
-	
+
 	if !strings.Contains(string(backendData), "apps-deployment-backend.yaml") {
 		t.Errorf("Expected backend deployment file in child kustomization, got: %s", string(backendData))
 	}

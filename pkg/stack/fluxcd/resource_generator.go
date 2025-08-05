@@ -48,19 +48,19 @@ func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, er
 	if n == nil {
 		return nil, nil
 	}
-	
+
 	var resources []client.Object
-	
+
 	// Generate resources for this node's bundle
 	if n.Bundle != nil {
 		bundleResources, err := g.GenerateFromBundle(n.Bundle)
 		if err != nil {
-			return nil, errors.ResourceValidationError("Node", n.Name, "bundle", 
+			return nil, errors.ResourceValidationError("Node", n.Name, "bundle",
 				fmt.Sprintf("failed to generate bundle resources: %v", err), err)
 		}
 		resources = append(resources, bundleResources...)
 	}
-	
+
 	// Generate resources for child nodes
 	for _, child := range n.Children {
 		childResources, err := g.GenerateFromNode(child)
@@ -70,7 +70,7 @@ func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, er
 		}
 		resources = append(resources, childResources...)
 	}
-	
+
 	return resources, nil
 }
 
@@ -79,11 +79,11 @@ func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object
 	if b == nil {
 		return nil, nil
 	}
-	
+
 	// Create the main Kustomization for this bundle
 	kustomization := g.createKustomization(b)
 	resources := []client.Object{kustomization}
-	
+
 	// Create source if specified
 	if b.SourceRef != nil {
 		source, err := g.createSource(b.SourceRef, b.Name)
@@ -95,7 +95,7 @@ func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object
 			resources = append(resources, source)
 		}
 	}
-	
+
 	return resources, nil
 }
 
@@ -107,7 +107,7 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 			interval = d
 		}
 	}
-	
+
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
@@ -124,7 +124,7 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 			Prune:    true,
 		},
 	}
-	
+
 	// Set source reference
 	if b.SourceRef != nil {
 		kust.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
@@ -135,14 +135,14 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 			kust.Spec.SourceRef.Namespace = b.SourceRef.Namespace
 		}
 	}
-	
+
 	// Add dependencies
 	for _, dep := range b.DependsOn {
 		kust.Spec.DependsOn = append(kust.Spec.DependsOn, metaapi.NamespacedObjectReference{
 			Name: dep.Name,
 		})
 	}
-	
+
 	return kust
 }
 
@@ -157,7 +157,7 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		// For now, return nil - OCIRepository creation would need additional parameters
 		return nil, nil
 	default:
-		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef", 
+		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef",
 			[]string{"GitRepository", "OCIRepository"})
 	}
 }

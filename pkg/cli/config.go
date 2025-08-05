@@ -39,35 +39,35 @@ type Config struct {
 // NewDefaultConfig returns a config with default values
 func NewDefaultConfig() *Config {
 	config := &Config{}
-	
+
 	// Set defaults
 	config.Defaults.Output = "yaml"
 	config.Defaults.Namespace = ""
 	config.Defaults.Verbose = false
 	config.Defaults.Debug = false
-	
+
 	// Layout defaults
 	config.Layout.ManifestsDir = "manifests"
 	config.Layout.BundleGrouping = "flat"
 	config.Layout.ApplicationGrouping = "flat"
 	config.Layout.FluxPlacement = "integrated"
-	
+
 	// GitOps defaults
 	config.GitOps.Type = "flux"
 	config.GitOps.Branch = "main"
 	config.GitOps.Path = "clusters"
-	
+
 	return config
 }
 
 // LoadConfig loads configuration from file
 func LoadConfig(configFile string) (*Config, error) {
 	config := NewDefaultConfig()
-	
+
 	if configFile == "" {
 		return config, nil
 	}
-	
+
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -75,11 +75,11 @@ func LoadConfig(configFile string) (*Config, error) {
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	if err := yaml.Unmarshal(data, config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
-	
+
 	return config, nil
 }
 
@@ -90,16 +90,16 @@ func SaveConfig(config *Config, configFile string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	if err := os.WriteFile(configFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -108,12 +108,12 @@ func GetConfigPath() string {
 	if configFile := viper.ConfigFileUsed(); configFile != "" {
 		return configFile
 	}
-	
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ".kure.yaml"
 	}
-	
+
 	return filepath.Join(home, ".kure.yaml")
 }
 

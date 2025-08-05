@@ -14,11 +14,11 @@ import (
 
 // TableColumn represents a column in table output
 type TableColumn struct {
-	Header       string
-	Width        int
-	Accessor     func(client.Object) string
-	Priority     int // Lower values are shown first, higher values in wide mode
-	WideOnly     bool // Only shown in wide output
+	Header   string
+	Width    int
+	Accessor func(client.Object) string
+	Priority int  // Lower values are shown first, higher values in wide mode
+	WideOnly bool // Only shown in wide output
 }
 
 // DefaultColumns returns the default column set for Kubernetes resources
@@ -76,7 +76,7 @@ func DefaultColumns() []TableColumn {
 // KindSpecificColumns returns columns tailored for specific Kubernetes resource kinds
 func KindSpecificColumns(gvk metav1.GroupVersionKind) []TableColumn {
 	base := DefaultColumns()
-	
+
 	switch strings.ToLower(gvk.Kind) {
 	case "pod":
 		return podColumns(base)
@@ -95,7 +95,7 @@ func KindSpecificColumns(gvk metav1.GroupVersionKind) []TableColumn {
 func podColumns(base []TableColumn) []TableColumn {
 	// Insert pod-specific columns
 	columns := make([]TableColumn, 0, len(base)+2)
-	
+
 	for _, col := range base {
 		if col.Header == "READY" {
 			// Replace generic READY with pod-specific READY
@@ -103,7 +103,7 @@ func podColumns(base []TableColumn) []TableColumn {
 				return getPodReadyStatus(obj)
 			}
 			columns = append(columns, col)
-			
+
 			// Add RESTARTS column after READY
 			columns = append(columns, TableColumn{
 				Header:   "RESTARTS",
@@ -120,7 +120,7 @@ func podColumns(base []TableColumn) []TableColumn {
 			columns = append(columns, col)
 		}
 	}
-	
+
 	// Add NODE column at the end for wide output
 	columns = append(columns, TableColumn{
 		Header:   "NODE",
@@ -131,7 +131,7 @@ func podColumns(base []TableColumn) []TableColumn {
 			return getPodNode(obj)
 		},
 	})
-	
+
 	return columns
 }
 
@@ -144,7 +144,7 @@ func deploymentColumns(base []TableColumn) []TableColumn {
 			}
 		}
 	}
-	
+
 	// Add REPLICAS column for wide output
 	base = append(base, TableColumn{
 		Header:   "REPLICAS",
@@ -155,7 +155,7 @@ func deploymentColumns(base []TableColumn) []TableColumn {
 			return getDeploymentReplicas(obj)
 		},
 	})
-	
+
 	return base
 }
 
@@ -163,7 +163,7 @@ func deploymentColumns(base []TableColumn) []TableColumn {
 func serviceColumns(base []TableColumn) []TableColumn {
 	// Insert service-specific columns
 	columns := make([]TableColumn, 0, len(base)+2)
-	
+
 	for _, col := range base {
 		if col.Header == "READY" {
 			// Replace READY with TYPE for services
@@ -175,7 +175,7 @@ func serviceColumns(base []TableColumn) []TableColumn {
 					return getServiceType(obj)
 				},
 			})
-			
+
 			// Add CLUSTER-IP after TYPE
 			columns = append(columns, TableColumn{
 				Header:   "CLUSTER-IP",
@@ -185,7 +185,7 @@ func serviceColumns(base []TableColumn) []TableColumn {
 					return getServiceClusterIP(obj)
 				},
 			})
-			
+
 			// Add EXTERNAL-IP for wide output
 			columns = append(columns, TableColumn{
 				Header:   "EXTERNAL-IP",
@@ -203,7 +203,7 @@ func serviceColumns(base []TableColumn) []TableColumn {
 			columns = append(columns, col)
 		}
 	}
-	
+
 	return columns
 }
 
@@ -255,7 +255,7 @@ func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) er
 
 	// Filter columns based on wide mode
 	visibleColumns := stp.getVisibleColumns()
-	
+
 	// Create tabwriter for aligned output
 	tw := tabwriter.NewWriter(w, 0, 8, 2, ' ', 0)
 	defer tw.Flush()
@@ -278,7 +278,7 @@ func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) er
 		}
 		iObj := *sortedResources[i]
 		jObj := *sortedResources[j]
-		
+
 		// Sort by namespace first, then by name
 		if iObj.GetNamespace() != jObj.GetNamespace() {
 			return iObj.GetNamespace() < jObj.GetNamespace()
@@ -291,14 +291,14 @@ func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) er
 		if resource == nil {
 			continue
 		}
-		
+
 		obj := *resource
 		row := make([]string, len(visibleColumns))
-		
+
 		for i, col := range visibleColumns {
 			row[i] = col.Accessor(obj)
 		}
-		
+
 		fmt.Fprintln(tw, strings.Join(row, "\t"))
 	}
 
@@ -308,18 +308,18 @@ func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) er
 // getVisibleColumns returns columns that should be displayed based on wide mode
 func (stp *SimpleTablePrinter) getVisibleColumns() []TableColumn {
 	var visible []TableColumn
-	
+
 	for _, col := range stp.columns {
 		if !col.WideOnly || stp.wide {
 			visible = append(visible, col)
 		}
 	}
-	
+
 	// Sort by priority
 	sort.Slice(visible, func(i, j int) bool {
 		return visible[i].Priority < visible[j].Priority
 	})
-	
+
 	return visible
 }
 
@@ -347,11 +347,11 @@ func GetDetailedStatus(obj client.Object) string {
 
 	// Look for detailed status fields
 	var details []string
-	
+
 	if message, ok := statusMap["message"].(string); ok && message != "" {
 		details = append(details, message)
 	}
-	
+
 	if reason, ok := statusMap["reason"].(string); ok && reason != "" {
 		details = append(details, reason)
 	}
@@ -371,7 +371,7 @@ func getPodReadyStatus(obj client.Object) string {
 		return "Unknown"
 	}
 
-	statusVal, found := unstructured.UnstructuredContent()["status"] 
+	statusVal, found := unstructured.UnstructuredContent()["status"]
 	if !found {
 		return "0/0"
 	}
@@ -385,7 +385,7 @@ func getPodReadyStatus(obj client.Object) string {
 	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
 		ready := 0
 		total := len(containerStatuses)
-		
+
 		for _, cs := range containerStatuses {
 			if csMap, ok := cs.(map[string]interface{}); ok {
 				if isReady, ok := csMap["ready"].(bool); ok && isReady {
@@ -393,7 +393,7 @@ func getPodReadyStatus(obj client.Object) string {
 				}
 			}
 		}
-		
+
 		return fmt.Sprintf("%d/%d", ready, total)
 	}
 
@@ -419,7 +419,7 @@ func getPodRestarts(obj client.Object) string {
 	// Sum restart counts from container statuses
 	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
 		totalRestarts := 0
-		
+
 		for _, cs := range containerStatuses {
 			if csMap, ok := cs.(map[string]interface{}); ok {
 				if restartCount, ok := csMap["restartCount"].(float64); ok {
@@ -427,7 +427,7 @@ func getPodRestarts(obj client.Object) string {
 				}
 			}
 		}
-		
+
 		return fmt.Sprintf("%d", totalRestarts)
 	}
 

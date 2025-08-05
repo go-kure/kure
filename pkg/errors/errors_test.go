@@ -34,7 +34,7 @@ func TestWrap(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result := kerrors.Wrap(test.err, test.message)
-			
+
 			if test.wantNil {
 				if result != nil {
 					t.Errorf("Expected nil error, got %v", result)
@@ -204,10 +204,10 @@ func TestParseError(t *testing.T) {
 
 func TestFileError(t *testing.T) {
 	tests := []struct {
-		name           string
-		operation      string
-		path           string
-		cause          error
+		name               string
+		operation          string
+		path               string
+		cause              error
 		expectedSuggestion string
 	}{
 		{
@@ -347,17 +347,17 @@ func TestErrorChaining(t *testing.T) {
 
 func TestErrorJSON(t *testing.T) {
 	err := kerrors.NewValidationError("replicas", "-1", "Deployment", []string{"0", "1", "2", "3"})
-	
+
 	// Test that context is properly populated for JSON serialization
 	ctx := err.Context()
 	expectedFields := []string{"field", "value", "component"}
-	
+
 	for _, field := range expectedFields {
 		if _, exists := ctx[field]; !exists {
 			t.Errorf("Expected field %q in context", field)
 		}
 	}
-	
+
 	// Verify field values
 	if ctx["field"] != "replicas" {
 		t.Errorf("Expected field 'replicas', got %v", ctx["field"])
@@ -372,30 +372,30 @@ func TestErrorJSON(t *testing.T) {
 
 func TestBaseErrorInterface(t *testing.T) {
 	err := kerrors.ResourceNotFoundError("Service", "missing-svc", "production", []string{"svc1", "svc2"})
-	
+
 	// Test that it implements error interface
 	var _ error = err
-	
-	// Test that it implements KureError interface  
+
+	// Test that it implements KureError interface
 	var _ kerrors.KureError = err
-	
+
 	// Test Error() method
 	errMsg := err.Error()
 	if errMsg == "" {
 		t.Error("Expected non-empty error message")
 	}
-	
+
 	// Test Type() method
 	if err.Type() != kerrors.ErrorTypeResource {
 		t.Errorf("Expected resource error type, got %v", err.Type())
 	}
-	
+
 	// Test Suggestion() method
 	suggestion := err.Suggestion()
 	if suggestion == "" {
 		t.Error("Expected non-empty suggestion")
 	}
-	
+
 	// Test Context() method
 	ctx := err.Context()
 	if ctx == nil {

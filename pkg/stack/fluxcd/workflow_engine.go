@@ -2,7 +2,7 @@ package fluxcd
 
 import (
 	"fmt"
-	
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -29,7 +29,7 @@ func NewWorkflowEngine() *WorkflowEngine {
 	resourceGen := NewResourceGenerator()
 	layoutInteg := NewLayoutIntegrator(resourceGen)
 	bootstrapGen := NewBootstrapGenerator()
-	
+
 	return &WorkflowEngine{
 		ResourceGen:  resourceGen,
 		LayoutInteg:  layoutInteg,
@@ -41,12 +41,12 @@ func NewWorkflowEngine() *WorkflowEngine {
 func NewWorkflowEngineWithConfig(mode layout.KustomizationMode, placement layout.FluxPlacement) *WorkflowEngine {
 	resourceGen := NewResourceGenerator()
 	resourceGen.Mode = mode
-	
+
 	layoutInteg := NewLayoutIntegrator(resourceGen)
 	layoutInteg.FluxPlacement = placement
-	
+
 	bootstrapGen := NewBootstrapGenerator()
-	
+
 	return &WorkflowEngine{
 		ResourceGen:  resourceGen,
 		LayoutInteg:  layoutInteg,
@@ -110,7 +110,6 @@ func (we *WorkflowEngine) GetName() string {
 func (we *WorkflowEngine) GetVersion() string {
 	return "v2.0.0"
 }
-
 
 // Configuration methods
 

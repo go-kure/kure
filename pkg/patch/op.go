@@ -195,7 +195,7 @@ func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
 				return errors.NewPatchError(op.Op, op.Path+"."+remainingPath, "", "failed to set nested field", err)
 			}
 		}
-		
+
 		// Update the array with the modified item
 		lst[idx] = item
 	} else {
@@ -459,7 +459,7 @@ func isNumeric(s string) bool {
 func convertValueForUnstructured(value interface{}) interface{} {
 	switch v := value.(type) {
 	case int:
-		return int64(v)  // Convert int to int64 for unstructured compatibility
+		return int64(v) // Convert int to int64 for unstructured compatibility
 	case int32:
 		return int64(v)
 	case int64:

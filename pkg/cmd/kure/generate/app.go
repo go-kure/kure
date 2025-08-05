@@ -14,9 +14,9 @@ import (
 
 	"github.com/go-kure/kure/pkg/cli"
 	"github.com/go-kure/kure/pkg/errors"
+	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
-	kio "github.com/go-kure/kure/pkg/io"
 )
 
 // AppOptions contains options for the app command
@@ -24,11 +24,11 @@ type AppOptions struct {
 	// Input options
 	ConfigFiles []string
 	InputDir    string
-	
+
 	// Output options
 	OutputDir  string
 	OutputFile string
-	
+
 	// Dependencies
 	Factory   cli.Factory
 	IOStreams cli.IOStreams
@@ -64,7 +64,7 @@ Examples:
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			o.ConfigFiles = args
-			
+
 			if err := o.Complete(); err != nil {
 				return err
 			}
@@ -91,12 +91,12 @@ func (o *AppOptions) AddFlags(flags *pflag.FlagSet) {
 // Complete completes the options
 func (o *AppOptions) Complete() error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	// Use global output file if specified
 	if globalOpts.OutputFile != "" {
 		o.OutputFile = globalOpts.OutputFile
 	}
-	
+
 	// If input directory is specified, scan for config files
 	if o.InputDir != "" {
 		files, err := o.scanInputDirectory()
@@ -105,12 +105,12 @@ func (o *AppOptions) Complete() error {
 		}
 		o.ConfigFiles = append(o.ConfigFiles, files...)
 	}
-	
+
 	// Apply dry-run logic
 	if globalOpts.DryRun && o.OutputFile == "" {
 		o.OutputFile = "/dev/stdout"
 	}
-	
+
 	return nil
 }
 
@@ -119,82 +119,82 @@ func (o *AppOptions) Validate() error {
 	if len(o.ConfigFiles) == 0 {
 		return errors.NewValidationError("config-files", "empty", "Required", []string{"at least one config file or input directory"})
 	}
-	
+
 	// Validate all config files exist
 	for _, file := range o.ConfigFiles {
 		if _, err := os.Stat(file); os.IsNotExist(err) {
 			return errors.NewFileError("read", file, "file does not exist", errors.ErrFileNotFound)
 		}
 	}
-	
+
 	return nil
 }
 
 // Run executes the app command
 func (o *AppOptions) Run() error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	if globalOpts.Verbose {
 		fmt.Fprintf(o.IOStreams.ErrOut, "Processing %d app config files\n", len(o.ConfigFiles))
 	}
-	
+
 	// Load all applications
 	apps, err := o.loadApplications()
 	if err != nil {
 		return errors.Wrapf(err, "failed to load applications")
 	}
-	
+
 	if len(apps) == 0 {
 		fmt.Fprintf(o.IOStreams.ErrOut, "No applications found in config files\n")
 		return nil
 	}
-	
+
 	// Generate manifests
 	resources, err := o.generateManifests(apps)
 	if err != nil {
 		return errors.Wrapf(err, "failed to generate manifests")
 	}
-	
+
 	// Write output
 	if err := o.writeOutput(resources); err != nil {
 		return errors.Wrapf(err, "failed to write output")
 	}
-	
+
 	if globalOpts.Verbose {
 		fmt.Fprintf(o.IOStreams.ErrOut, "Generated %d resources for %d applications\n", len(resources), len(apps))
 	}
-	
+
 	return nil
 }
 
 // scanInputDirectory scans the input directory for config files
 func (o *AppOptions) scanInputDirectory() ([]string, error) {
 	var files []string
-	
+
 	err := filepath.Walk(o.InputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		ext := filepath.Ext(info.Name())
 		if ext == ".yaml" || ext == ".yml" {
 			files = append(files, path)
 		}
-		
+
 		return nil
 	})
-	
+
 	return files, err
 }
 
 // loadApplications loads all applications from config files
 func (o *AppOptions) loadApplications() ([]*stack.Application, error) {
 	var apps []*stack.Application
-	
+
 	for _, configFile := range o.ConfigFiles {
 		fileApps, err := o.loadApplicationsFromFile(configFile)
 		if err != nil {
@@ -202,7 +202,7 @@ func (o *AppOptions) loadApplications() ([]*stack.Application, error) {
 		}
 		apps = append(apps, fileApps...)
 	}
-	
+
 	return apps, nil
 }
 
@@ -216,7 +216,7 @@ func (o *AppOptions) loadApplicationsFromFile(configFile string) ([]*stack.Appli
 
 	var apps []*stack.Application
 	dec := yaml.NewDecoder(file)
-	
+
 	for {
 		var cfg generators.AppWorkloadConfig
 		if err := dec.Decode(&cfg); err != nil {
@@ -225,31 +225,31 @@ func (o *AppOptions) loadApplicationsFromFile(configFile string) ([]*stack.Appli
 			}
 			return nil, err
 		}
-		
+
 		app := stack.NewApplication(cfg.Name, cfg.Namespace, &cfg)
 		apps = append(apps, app)
 	}
-	
+
 	return apps, nil
 }
 
 // generateManifests generates Kubernetes manifests from applications
 func (o *AppOptions) generateManifests(apps []*stack.Application) ([]runtime.Object, error) {
 	var allResources []runtime.Object
-	
+
 	for _, app := range apps {
 		// Create a bundle for the application
 		bundle, err := stack.NewBundle(app.Name, []*stack.Application{app}, nil)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create bundle for app %s", app.Name)
 		}
-		
+
 		// Generate resources
 		resources, err := bundle.Generate()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to generate resources for app %s", app.Name)
 		}
-		
+
 		// Convert to runtime.Object if needed
 		for _, resource := range resources {
 			// resource is *client.Object, need to dereference it
@@ -260,14 +260,14 @@ func (o *AppOptions) generateManifests(apps []*stack.Application) ([]runtime.Obj
 			}
 		}
 	}
-	
+
 	return allResources, nil
 }
 
 // writeOutput writes the generated resources to output
 func (o *AppOptions) writeOutput(resources []runtime.Object) error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	// Convert to client.Object pointers
 	clientObjects := make([]*client.Object, 0, len(resources))
 	for _, resource := range resources {
@@ -275,23 +275,23 @@ func (o *AppOptions) writeOutput(resources []runtime.Object) error {
 			clientObjects = append(clientObjects, &clientObj)
 		}
 	}
-	
+
 	// Encode resources to YAML
 	output, err := kio.EncodeObjectsToYAML(clientObjects)
 	if err != nil {
 		return errors.Wrapf(err, "failed to encode resources")
 	}
-	
+
 	// Determine output destination
 	if o.OutputFile != "" {
 		return o.writeToFile(output)
 	}
-	
+
 	if globalOpts.DryRun {
 		_, err := o.IOStreams.Out.Write(output)
 		return err
 	}
-	
+
 	// Write to directory structure
 	return o.writeToDirectory(resources)
 }
@@ -302,13 +302,13 @@ func (o *AppOptions) writeToFile(output []byte) error {
 		_, err := o.IOStreams.Out.Write(output)
 		return err
 	}
-	
+
 	// Create directory if needed
 	dir := filepath.Dir(o.OutputFile)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(o.OutputFile, output, 0644)
 }
 
@@ -318,10 +318,10 @@ func (o *AppOptions) writeToDirectory(resources []runtime.Object) error {
 	if err := os.RemoveAll(o.OutputDir); err != nil {
 		return err
 	}
-	
+
 	// Group resources by application
 	appResources := make(map[string][]runtime.Object)
-	
+
 	for _, resource := range resources {
 		appName := "unknown"
 		if namedObj, ok := resource.(interface{ GetName() string }); ok {
@@ -329,14 +329,14 @@ func (o *AppOptions) writeToDirectory(resources []runtime.Object) error {
 		}
 		appResources[appName] = append(appResources[appName], resource)
 	}
-	
+
 	// Write each application's resources to separate files
 	for appName, appRes := range appResources {
 		appDir := filepath.Join(o.OutputDir, appName)
 		if err := os.MkdirAll(appDir, 0755); err != nil {
 			return err
 		}
-		
+
 		// Convert to client.Object pointers
 		clientObjects := make([]*client.Object, 0, len(appRes))
 		for _, resource := range appRes {
@@ -344,19 +344,19 @@ func (o *AppOptions) writeToDirectory(resources []runtime.Object) error {
 				clientObjects = append(clientObjects, &clientObj)
 			}
 		}
-		
+
 		output, err := kio.EncodeObjectsToYAML(clientObjects)
 		if err != nil {
 			return err
 		}
-		
+
 		fileName := fmt.Sprintf("%s-generated.yaml", appName)
 		filePath := filepath.Join(appDir, fileName)
-		
+
 		if err := os.WriteFile(filePath, output, 0644); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }

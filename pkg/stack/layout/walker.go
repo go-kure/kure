@@ -75,7 +75,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 			FilePer:   filePer,
 			Children:  []*ManifestLayout{},
 		}
-		
+
 		// Add only the root node's bundle resources (not child resources)
 		for _, app := range c.Node.Bundle.Applications {
 			if app == nil {
@@ -92,7 +92,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 				rootLayout.Resources = append(rootLayout.Resources, *o)
 			}
 		}
-		
+
 		clusterLayout.Children = append(clusterLayout.Children, rootLayout)
 	}
 
@@ -304,7 +304,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 	}
 
 	currentPackageRef := resolvePackageRef(n, inheritedPackageRef)
-	
+
 	// Check if this node belongs to the target package
 	belongsToPackage := packageRefKey(currentPackageRef) == targetKey
 

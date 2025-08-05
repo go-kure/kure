@@ -14,7 +14,7 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
-	
+
 	// Import implementations to register workflow factories
 	_ "github.com/go-kure/kure/pkg/stack/argocd"
 	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -24,15 +24,15 @@ import (
 type BootstrapOptions struct {
 	// Input options
 	ConfigFile string
-	
+
 	// Output options
 	OutputDir   string
 	ManifestDir string
-	
+
 	// Bootstrap options
 	GitOpsType string
 	FluxMode   string
-	
+
 	// Dependencies
 	Factory   cli.Factory
 	IOStreams cli.IOStreams
@@ -68,7 +68,7 @@ Examples:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			o.ConfigFile = args[0]
-			
+
 			if err := o.Complete(); err != nil {
 				return err
 			}
@@ -96,12 +96,12 @@ func (o *BootstrapOptions) AddFlags(flags *pflag.FlagSet) {
 // Complete completes the options
 func (o *BootstrapOptions) Complete() error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	// Apply dry-run logic
 	if globalOpts.DryRun && o.OutputDir == "out/bootstrap" {
 		o.OutputDir = "/dev/stdout"
 	}
-	
+
 	return nil
 }
 
@@ -111,7 +111,7 @@ func (o *BootstrapOptions) Validate() error {
 	if _, err := os.Stat(o.ConfigFile); os.IsNotExist(err) {
 		return errors.NewFileError("read", o.ConfigFile, "file does not exist", errors.ErrFileNotFound)
 	}
-	
+
 	// Validate GitOps type if specified
 	if o.GitOpsType != "" {
 		validTypes := []string{"flux", "argocd"}
@@ -119,7 +119,7 @@ func (o *BootstrapOptions) Validate() error {
 			return errors.NewValidationError("gitops-type", o.GitOpsType, "Options", validTypes)
 		}
 	}
-	
+
 	// Validate Flux mode if specified
 	if o.FluxMode != "" {
 		validModes := []string{"operator", "toolkit"}
@@ -127,40 +127,40 @@ func (o *BootstrapOptions) Validate() error {
 			return errors.NewValidationError("flux-mode", o.FluxMode, "Options", validModes)
 		}
 	}
-	
+
 	return nil
 }
 
 // Run executes the bootstrap command
 func (o *BootstrapOptions) Run() error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	if globalOpts.Verbose {
 		fmt.Fprintf(o.IOStreams.ErrOut, "Processing bootstrap config: %s\n", o.ConfigFile)
 	}
-	
+
 	// Load cluster configuration
 	cluster, err := o.loadClusterConfig()
 	if err != nil {
 		return errors.Wrapf(err, "failed to load cluster config")
 	}
-	
+
 	// Detect GitOps type and mode if not specified
 	if err := o.detectGitOpsSettings(cluster); err != nil {
 		return errors.Wrapf(err, "failed to detect GitOps settings")
 	}
-	
+
 	// Generate bootstrap manifests
 	ml, err := o.generateBootstrap(cluster)
 	if err != nil {
 		return errors.Wrapf(err, "failed to generate bootstrap manifests")
 	}
-	
+
 	// Write output
 	if err := o.writeOutput(ml, cluster); err != nil {
 		return errors.Wrapf(err, "failed to write output")
 	}
-	
+
 	if globalOpts.Verbose {
 		fmt.Fprintf(o.IOStreams.ErrOut, "Generated bootstrap manifests: %s\n", o.OutputDir)
 		if cluster.GitOps != nil && cluster.GitOps.Bootstrap != nil {
@@ -170,7 +170,7 @@ func (o *BootstrapOptions) Run() error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -205,28 +205,28 @@ func (o *BootstrapOptions) detectGitOpsSettings(cluster *stack.Cluster) error {
 	if o.GitOpsType != "" {
 		return nil
 	}
-	
+
 	// Auto-detect from cluster configuration
 	if cluster.GitOps != nil {
 		o.GitOpsType = cluster.GitOps.Type
-		
+
 		if cluster.GitOps.Bootstrap != nil {
 			if o.FluxMode == "" {
 				o.FluxMode = cluster.GitOps.Bootstrap.FluxMode
 			}
 		}
 	}
-	
+
 	// Default to flux if not specified
 	if o.GitOpsType == "" {
 		o.GitOpsType = "flux"
 	}
-	
+
 	// Default flux mode to operator if not specified
 	if o.GitOpsType == "flux" && o.FluxMode == "" {
 		o.FluxMode = "operator"
 	}
-	
+
 	return nil
 }
 
@@ -234,7 +234,7 @@ func (o *BootstrapOptions) detectGitOpsSettings(cluster *stack.Cluster) error {
 func (o *BootstrapOptions) generateBootstrap(cluster *stack.Cluster) (*layout.ManifestLayout, error) {
 	rules := layout.DefaultLayoutRules()
 	rules.FluxPlacement = layout.FluxSeparate
-	
+
 	switch o.GitOpsType {
 	case "argocd":
 		return o.generateArgoCDBootstrap(cluster, rules)
@@ -251,20 +251,20 @@ func (o *BootstrapOptions) generateArgoCDBootstrap(cluster *stack.Cluster, rules
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Generate bootstrap resources directly
 	bootstrapObjs, err := wf.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create a basic manifest layout for ArgoCD
 	ml := &layout.ManifestLayout{
 		Name:      cluster.Node.Name,
 		Namespace: cluster.Name,
 		Resources: bootstrapObjs,
 	}
-	
+
 	return ml, nil
 }
 
@@ -274,24 +274,24 @@ func (o *BootstrapOptions) generateFluxBootstrap(cluster *stack.Cluster, rules l
 	if err != nil {
 		return nil, err
 	}
-	
+
 	result, err := wf.CreateLayoutWithResources(cluster, rules)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	ml, ok := result.(*layout.ManifestLayout)
 	if !ok {
 		return nil, errors.NewValidationError("result", "interface{}", "Expected", []string{"*layout.ManifestLayout"})
 	}
-	
+
 	return ml, nil
 }
 
 // writeOutput writes the generated manifests to output
 func (o *BootstrapOptions) writeOutput(ml *layout.ManifestLayout, cluster *stack.Cluster) error {
 	globalOpts := o.Factory.GlobalOptions()
-	
+
 	if globalOpts.DryRun {
 		return o.printToStdout(ml)
 	}
@@ -299,7 +299,7 @@ func (o *BootstrapOptions) writeOutput(ml *layout.ManifestLayout, cluster *stack
 	// Determine output directory structure
 	configBaseName := strings.TrimSuffix(filepath.Base(o.ConfigFile), filepath.Ext(o.ConfigFile))
 	outputDir := filepath.Join(o.OutputDir, configBaseName)
-	
+
 	// Clean and create output directory
 	if err := os.RemoveAll(outputDir); err != nil {
 		return err
@@ -325,7 +325,7 @@ func (o *BootstrapOptions) printToStdout(ml *layout.ManifestLayout) error {
 	}
 	fmt.Fprintf(o.IOStreams.Out, "# Namespace: %s\n", ml.Namespace)
 	fmt.Fprintf(o.IOStreams.Out, "# Resources: %d\n", len(ml.Resources))
-	
+
 	// Print basic info about resources
 	for _, resource := range ml.Resources {
 		if namedObj, ok := resource.(interface {
@@ -333,10 +333,10 @@ func (o *BootstrapOptions) printToStdout(ml *layout.ManifestLayout) error {
 			GetName() string
 			GetNamespace() string
 		}); ok {
-			fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n", 
+			fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n",
 				namedObj.GetKind(), namedObj.GetName(), namedObj.GetNamespace())
 		}
 	}
-	
+
 	return nil
 }

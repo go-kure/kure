@@ -26,10 +26,10 @@ type Bundle struct {
 	Applications []*Application
 	// Labels are common labels that should be applied to each resource.
 	Labels map[string]string
-	
+
 	// Internal fields for runtime hierarchy navigation (not serialized)
-	parent   *Bundle            `yaml:"-"` // Runtime parent reference for efficient traversal
-	pathMap  map[string]*Bundle `yaml:"-"` // Runtime path lookup map (shared across tree)
+	parent  *Bundle            `yaml:"-"` // Runtime parent reference for efficient traversal
+	pathMap map[string]*Bundle `yaml:"-"` // Runtime path lookup map (shared across tree)
 }
 
 // SourceRef defines a reference to a Flux source.
@@ -110,14 +110,14 @@ func (b *Bundle) GetPath() string {
 // This should be called on the root bundle after the tree structure is complete.
 func (b *Bundle) InitializePathMap(allBundles []*Bundle) {
 	pathMap := make(map[string]*Bundle)
-	
+
 	// Build path map for all bundles
 	for _, bundle := range allBundles {
 		if bundle.Name != "" {
 			pathMap[bundle.GetPath()] = bundle
 		}
 	}
-	
+
 	// Set path map and parent references on all bundles
 	for _, bundle := range allBundles {
 		bundle.pathMap = pathMap

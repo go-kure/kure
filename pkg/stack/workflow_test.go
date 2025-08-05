@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/layout"
 	_ "github.com/go-kure/kure/pkg/stack/argocd"
 	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 func TestNewWorkflow(t *testing.T) {
@@ -59,14 +59,14 @@ func TestNewWorkflow(t *testing.T) {
 func TestWorkflowInterface(t *testing.T) {
 	// Test that both implementations satisfy the interface
 	providers := []string{"flux", "argocd"}
-	
+
 	for _, provider := range providers {
 		t.Run(provider, func(t *testing.T) {
 			wf, err := stack.NewWorkflow(provider)
 			if err != nil {
 				t.Fatalf("Failed to create %s workflow: %v", provider, err)
 			}
-			
+
 			// Create a minimal cluster for testing
 			cluster := &stack.Cluster{
 				Name: "test-cluster",
@@ -84,14 +84,14 @@ func TestWorkflowInterface(t *testing.T) {
 					},
 				},
 			}
-			
+
 			// Test GenerateFromCluster
 			_, err = wf.GenerateFromCluster(cluster)
 			if err != nil {
 				t.Errorf("GenerateFromCluster() error = %v", err)
 			}
 			// It's ok for resources to be nil for minimal test clusters
-			
+
 			// Test CreateLayoutWithResources
 			rules := layout.LayoutRules{}
 			result, err := wf.CreateLayoutWithResources(cluster, rules)
@@ -105,7 +105,7 @@ func TestWorkflowInterface(t *testing.T) {
 			if _, ok := result.(*layout.ManifestLayout); !ok {
 				t.Error("CreateLayoutWithResources() returned unexpected type")
 			}
-			
+
 			// Test GenerateBootstrap
 			_, err = wf.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
 			if err != nil {

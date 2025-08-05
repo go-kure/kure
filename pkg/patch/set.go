@@ -14,9 +14,9 @@ import (
 // PatchableAppSet represents a collection of resources together with the
 // patches that should be applied to them.
 type PatchableAppSet struct {
-	Resources    []*unstructured.Unstructured
-	DocumentSet  *YAMLDocumentSet // Preserves original YAML structure
-	Patches      []struct {
+	Resources   []*unstructured.Unstructured
+	DocumentSet *YAMLDocumentSet // Preserves original YAML structure
+	Patches     []struct {
 		Target string
 		Patch  PatchOp
 	}
@@ -28,34 +28,34 @@ func (s *PatchableAppSet) Resolve() ([]*ResourceWithPatches, error) {
 	// First create a unique key for each resource to avoid name collisions
 	resourceMap := make(map[string]*unstructured.Unstructured)
 	resourceKeys := make([]string, 0)
-	
+
 	for _, r := range s.Resources {
 		name := r.GetName()
 		kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), name)
-		
+
 		// Use kind.name as the primary key to ensure uniqueness
 		resourceMap[kindName] = r
 		resourceKeys = append(resourceKeys, kindName)
-		
+
 		// Also allow lookup by name alone if it's unique
 		if _, exists := resourceMap[name]; !exists {
 			resourceMap[name] = r
 		}
 	}
-	
+
 	// Group patches by target, using the unique resource key for grouping
 	out := make(map[string]*ResourceWithPatches)
 	for _, p := range s.Patches {
 		if resource, ok := resourceMap[p.Target]; ok {
 			// Use the resource's unique key (kind.name) as the map key for grouping
 			resourceKey := fmt.Sprintf("%s.%s", strings.ToLower(resource.GetKind()), resource.GetName())
-			
+
 			if rw, exists := out[resourceKey]; exists {
 				rw.Patches = append(rw.Patches, p.Patch)
 			} else {
 				out[resourceKey] = &ResourceWithPatches{
-					Name: resource.GetName(),
-					Base: resource.DeepCopy(),
+					Name:    resource.GetName(),
+					Base:    resource.DeepCopy(),
 					Patches: []PatchOp{p.Patch},
 				}
 			}
@@ -63,7 +63,7 @@ func (s *PatchableAppSet) Resolve() ([]*ResourceWithPatches, error) {
 			return nil, errors.ResourceNotFoundError("patch target", p.Target, "", nil)
 		}
 	}
-	
+
 	// Convert to result slice, preserving original resource order
 	var result []*ResourceWithPatches
 	for _, key := range resourceKeys {
@@ -71,7 +71,7 @@ func (s *PatchableAppSet) Resolve() ([]*ResourceWithPatches, error) {
 			result = append(result, rw)
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -112,16 +112,16 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 	if s.DocumentSet == nil {
 		return fmt.Errorf("no document set available for structure preservation")
 	}
-	
+
 	// Enable debug for this operation
 	oldDebug := Debug
-	Debug = true  
+	Debug = true
 	defer func() { Debug = oldDebug }()
 
 	for _, patchFile := range patchFiles {
 		// Generate output filename
 		outputFile := GenerateOutputFilename(originalPath, patchFile, outputDir)
-		
+
 		// Create a copy of the document set for this patch
 		docSetCopy, err := s.DocumentSet.Copy()
 		if err != nil {
@@ -190,7 +190,7 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 				return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 			}
 		}
-		
+
 		// Write to output file
 		if err := docSetCopy.WriteToFile(outputFile); err != nil {
 			return fmt.Errorf("failed to write patched file %s: %w", outputFile, err)

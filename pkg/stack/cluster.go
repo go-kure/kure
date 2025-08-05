@@ -14,7 +14,7 @@ type Cluster struct {
 
 // GitOpsConfig defines the GitOps tool configuration for the cluster
 type GitOpsConfig struct {
-	Type      string           `yaml:"type"`               // "flux" or "argocd"
+	Type      string           `yaml:"type"` // "flux" or "argocd"
 	Bootstrap *BootstrapConfig `yaml:"bootstrap,omitempty"`
 }
 
@@ -22,18 +22,18 @@ type GitOpsConfig struct {
 type BootstrapConfig struct {
 	// Common fields
 	Enabled bool `yaml:"enabled"`
-	
+
 	// Flux-specific
-	FluxMode        string   `yaml:"fluxMode,omitempty"`        // "gitops-toolkit" or "flux-operator"
+	FluxMode        string   `yaml:"fluxMode,omitempty"` // "gitops-toolkit" or "flux-operator"
 	FluxVersion     string   `yaml:"fluxVersion,omitempty"`
 	Components      []string `yaml:"components,omitempty"`
 	Registry        string   `yaml:"registry,omitempty"`
 	ImagePullSecret string   `yaml:"imagePullSecret,omitempty"`
-	
-	// Source configuration 
-	SourceURL       string `yaml:"sourceURL,omitempty"`       // OCI/Git repository URL
-	SourceRef       string `yaml:"sourceRef,omitempty"`       // Tag/branch/ref
-	
+
+	// Source configuration
+	SourceURL string `yaml:"sourceURL,omitempty"` // OCI/Git repository URL
+	SourceRef string `yaml:"sourceRef,omitempty"` // Tag/branch/ref
+
 	// ArgoCD-specific (mock for now)
 	ArgoCDVersion   string `yaml:"argoCDVersion,omitempty"`
 	ArgoCDNamespace string `yaml:"argoCDNamespace,omitempty"`
@@ -57,10 +57,10 @@ type Node struct {
 	PackageRef *schema.GroupVersionKind `yaml:"packageref,omitempty"`
 	// Bundle holds the applications that get deployed on this level
 	Bundle *Bundle `yaml:"bundle,omitempty"`
-	
+
 	// Internal fields for runtime hierarchy navigation (not serialized)
-	parent   *Node       `yaml:"-"` // Runtime parent reference for efficient traversal
-	pathMap  map[string]*Node `yaml:"-"` // Runtime path lookup map (shared across tree)
+	parent  *Node            `yaml:"-"` // Runtime parent reference for efficient traversal
+	pathMap map[string]*Node `yaml:"-"` // Runtime path lookup map (shared across tree)
 }
 
 // NewCluster creates a Cluster with the provided metadata.
@@ -69,13 +69,13 @@ func NewCluster(name string, tree *Node) *Cluster {
 }
 
 // GetName Helper getters.
-func (c *Cluster) GetName() string       { return c.Name }
-func (c *Cluster) GetNode() *Node        { return c.Node }
+func (c *Cluster) GetName() string          { return c.Name }
+func (c *Cluster) GetNode() *Node           { return c.Node }
 func (c *Cluster) GetGitOps() *GitOpsConfig { return c.GitOps }
 
 // SetName Setters for metadata fields.
-func (c *Cluster) SetName(n string)      { c.Name = n }
-func (c *Cluster) SetNode(t *Node)       { c.Node = t }
+func (c *Cluster) SetName(n string)          { c.Name = n }
+func (c *Cluster) SetNode(t *Node)           { c.Node = t }
 func (c *Cluster) SetGitOps(g *GitOpsConfig) { c.GitOps = g }
 
 func (n *Node) GetName() string                         { return n.Name }
@@ -124,9 +124,9 @@ func (n *Node) buildPathMap(pathMap map[string]*Node, parentPath string) {
 	if parentPath != "" {
 		currentPath = parentPath + "/" + n.Name
 	}
-	
+
 	pathMap[currentPath] = n
-	
+
 	for _, child := range n.Children {
 		child.buildPathMap(pathMap, currentPath)
 	}
@@ -135,14 +135,14 @@ func (n *Node) buildPathMap(pathMap map[string]*Node, parentPath string) {
 // setPathMapRecursive sets the path map reference on all nodes in the tree.
 func (n *Node) setPathMapRecursive(pathMap map[string]*Node) {
 	n.pathMap = pathMap
-	
+
 	// Set parent runtime reference from path
 	if n.ParentPath != "" {
 		if parent, exists := pathMap[n.ParentPath]; exists {
 			n.parent = parent
 		}
 	}
-	
+
 	for _, child := range n.Children {
 		child.setPathMapRecursive(pathMap)
 	}

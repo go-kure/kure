@@ -39,7 +39,7 @@ func LoadPatchFileWithVariables(r io.Reader, varCtx *VariableContext) ([]PatchSp
 	}
 
 	contentStr := string(content)
-	
+
 	// Detect format and delegate to appropriate parser
 	if IsTOMLFormat(contentStr) {
 		return LoadTOMLPatchFile(strings.NewReader(contentStr), varCtx)
@@ -72,12 +72,12 @@ func LoadYAMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 			if err != nil {
 				return nil, fmt.Errorf("variable substitution failed for key '%s': %w", k, err)
 			}
-			
+
 			// Apply type inference to convert strings to appropriate types (int, bool, etc.)
 			if valueStr, ok := substitutedValue.(string); ok {
 				substitutedValue = inferValueType(k, valueStr)
 			}
-			
+
 			op, err := ParsePatchLine(k, substitutedValue)
 			if err != nil {
 				return nil, fmt.Errorf("invalid patch line '%s': %w", k, err)
@@ -96,12 +96,12 @@ func LoadYAMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 				if err != nil {
 					return nil, fmt.Errorf("variable substitution failed for key '%s': %w", k, err)
 				}
-				
+
 				// Apply type inference to convert strings to appropriate types (int, bool, etc.)
 				if valueStr, ok := substitutedValue.(string); ok {
 					substitutedValue = inferValueType(k, valueStr)
 				}
-				
+
 				op, err := ParsePatchLine(k, substitutedValue)
 				if err != nil {
 					return nil, fmt.Errorf("invalid patch line '%s': %w", k, err)
@@ -126,17 +126,17 @@ func LoadTOMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 	scanner := bufio.NewScanner(r)
 	var patches []PatchSpec
 	var currentHeader *TOMLHeader
-	
+
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		// Check for TOML header
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			header, err := ParseTOMLHeader(line)
@@ -146,38 +146,38 @@ func LoadTOMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 			currentHeader = header
 			continue
 		}
-		
+
 		// Parse key-value pair
 		if currentHeader == nil {
 			return nil, fmt.Errorf("patch value without header at line %d: %s", lineNum, line)
 		}
-		
+
 		// Split key: value
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid patch line format at line %d: %s", lineNum, line)
 		}
-		
+
 		key := strings.TrimSpace(parts[0])
 		valueStr := strings.TrimSpace(parts[1])
-		
+
 		// Apply variable substitution to value
 		value, err := SubstituteVariables(valueStr, varCtx)
 		if err != nil {
 			return nil, fmt.Errorf("variable substitution failed at line %d: %w", lineNum, err)
 		}
-		
+
 		// Apply type inference to convert strings to appropriate types (int, bool, etc.)
 		if valueStr, ok := value.(string); ok {
 			value = inferValueType(key, valueStr)
 		}
-		
+
 		// Convert TOML header to resource target and field path
 		resourceTarget, fieldPath, err := currentHeader.ResolveTOMLPath()
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve TOML path for header %s: %w", currentHeader.String(), err)
 		}
-		
+
 		// Combine field path with key if we have a field path
 		var finalPath string
 		if fieldPath != "" {
@@ -185,29 +185,29 @@ func LoadTOMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 		} else {
 			finalPath = key
 		}
-		
+
 		// Create patch operation
 		op, err := ParsePatchLine(finalPath, value)
 		if err != nil {
 			return nil, fmt.Errorf("invalid patch line '%s' at line %d: %w", finalPath, lineNum, err)
 		}
-		
+
 		if err := op.NormalizePath(); err != nil {
 			return nil, fmt.Errorf("invalid patch path syntax: %s: %w", op.Path, err)
 		}
-		
+
 		if Debug {
-			log.Printf("TOML patch loaded: header=%s target=%s op=%s path=%s value=%v", 
+			log.Printf("TOML patch loaded: header=%s target=%s op=%s path=%s value=%v",
 				currentHeader.String(), resourceTarget, op.Op, op.Path, value)
 		}
-		
+
 		patches = append(patches, PatchSpec{Target: resourceTarget, Patch: op})
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading patch file: %w", err)
 	}
-	
+
 	return patches, nil
 }
 
@@ -306,7 +306,7 @@ func preserveTargetForDisambiguation(resources []*unstructured.Unstructured, tar
 	if strings.Contains(target, ".") && resourceExists(resources, target) {
 		return target
 	}
-	
+
 	// If it's just a name, check if there are multiple resources with this name
 	nameCount := 0
 	for _, r := range resources {
@@ -314,12 +314,12 @@ func preserveTargetForDisambiguation(resources []*unstructured.Unstructured, tar
 			nameCount++
 		}
 	}
-	
+
 	// If there's only one resource with this name, we can use the short name
 	if nameCount <= 1 {
 		return target
 	}
-	
+
 	// Multiple resources with same name - we need to keep the kind.name format
 	// Try to find the original kind.name format that matches this target
 	for _, r := range resources {
@@ -332,7 +332,7 @@ func preserveTargetForDisambiguation(resources []*unstructured.Unstructured, tar
 			return kindName
 		}
 	}
-	
+
 	return target
 }
 
@@ -405,7 +405,7 @@ func NewPatchableAppSet(resources []*unstructured.Unstructured, patches []PatchS
 // NewPatchableAppSetWithStructure constructs a PatchableAppSet with YAML structure preservation
 func NewPatchableAppSetWithStructure(documentSet *YAMLDocumentSet, patches []PatchSpec) (*PatchableAppSet, error) {
 	resources := documentSet.GetResources()
-	
+
 	var wrapped []struct {
 		Target string
 		Patch  PatchOp

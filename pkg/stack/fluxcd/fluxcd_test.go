@@ -5,9 +5,9 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 
-	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 func TestWorkflowBundlePathMode(t *testing.T) {

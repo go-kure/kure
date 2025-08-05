@@ -3,8 +3,8 @@ package generate
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/go-kure/kure/pkg/cmd/shared/options"
 	"github.com/go-kure/kure/pkg/cli"
+	"github.com/go-kure/kure/pkg/cmd/shared/options"
 )
 
 // NewGenerateCommand creates the generate command and its subcommands
