@@ -36,7 +36,10 @@ func TestWalkCluster(t *testing.T) {
 	node.Parent = root
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
-	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{})
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+	})
 	if err != nil {
 		t.Fatalf("walk cluster: %v", err)
 	}
@@ -55,7 +58,7 @@ func TestWalkCluster(t *testing.T) {
 		t.Fatalf("unexpected node namespace: %s", nodeLayout.Namespace)
 	}
 	if len(nodeLayout.Children) != 1 {
-		t.Fatalf("expected bundle child")
+		t.Fatalf("expected bundle child, got %d children", len(nodeLayout.Children))
 	}
 	bundleLayout := nodeLayout.Children[0]
 	if bundleLayout.Name != "bundle" {
@@ -249,7 +252,10 @@ func TestWalkClusterByPackageWithInheritance(t *testing.T) {
 	parentNode.Parent = root
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
-	packages, err := layout.WalkClusterByPackage(cluster, layout.LayoutRules{})
+	packages, err := layout.WalkClusterByPackage(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+	})
 	if err != nil {
 		t.Fatalf("walk cluster by package: %v", err)
 	}

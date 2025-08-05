@@ -215,7 +215,7 @@ func TestManifestLayoutYAMLFormat(t *testing.T) {
 	}
 
 	// Check the generated YAML file
-	yamlPath := filepath.Join(dir, "test", "test", "test-ns-configmap-test-config.yaml")
+	yamlPath := filepath.Join(dir, "test", "test-ns-configmap-test-config.yaml")
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatalf("read YAML file: %v", err)
@@ -353,7 +353,7 @@ func TestWritePackagesToDisk(t *testing.T) {
 		t.Fatalf("read output directory: %v", err)
 	}
 
-	expectedDirs := []string{"default", "source.toolkit.fluxcd.io-v1beta2-Kind-OCIRepository", "source.toolkit.fluxcd.io-v1-Kind-GitRepository"}
+	expectedDirs := []string{"default", "oci-packages", "git-packages"}
 	found := make(map[string]bool)
 	
 	for _, entry := range entries {
@@ -374,7 +374,7 @@ func TestWritePackagesToDisk(t *testing.T) {
 		t.Errorf("Expected default config file not found: %v", err)
 	}
 
-	ociSecret := filepath.Join(dir, "source.toolkit.fluxcd.io-v1beta2-Kind-OCIRepository", ".", "oci-package", "default-secret-secret1.yaml")
+	ociSecret := filepath.Join(dir, "oci-packages", "oci-package", "default-secret-secret1.yaml")
 	if _, err := os.Stat(ociSecret); err != nil {
 		t.Errorf("Expected OCI secret file not found: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestSanitizePackageKey(t *testing.T) {
 		expected string
 	}{
 		{"default", "default"},
-		{"source.toolkit.fluxcd.io/v1beta2, Kind=OCIRepository", "source.toolkit.fluxcd.io-v1beta2-Kind-OCIRepository"},
+		{"source.toolkit.fluxcd.io/v1beta2, Kind=OCIRepository", "oci-packages"},
 		{"example.com:8080/repo", "example.com-8080-repo"},
 		{"namespace/name?version=1.0", "namespace-name-version-1.0"},
 		{"test::with::colons", "test-with-colons"},
