@@ -75,7 +75,7 @@ func (w Workflow) Bundle(b *stack.Bundle) ([]client.Object, error) {
 
 func bundlePath(b *stack.Bundle) string {
 	var parts []string
-	for p := b; p != nil; p = p.Parent {
+	for p := b; p != nil; p = p.GetParent() {
 		if p.Name != "" {
 			parts = append([]string{p.Name}, parts...)
 		}

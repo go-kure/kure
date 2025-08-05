@@ -23,7 +23,7 @@ func buildTestCluster() *stack.Cluster {
 	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
 	node := &stack.Node{Name: "apps", Bundle: bundle}
 	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
-	node.Parent = root
+	node.SetParent(root)
 	return &stack.Cluster{Name: "demo", Node: root}
 }
 

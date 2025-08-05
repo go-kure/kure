@@ -203,13 +203,13 @@ func (o *ClusterOptions) loadClusterApps(cluster *stack.Cluster) error {
 
 	// Process child nodes
 	for _, child := range cluster.Node.Children {
-		child.Parent = cluster.Node
+		child.SetParent(cluster.Node)
 		childBundle, err := stack.NewBundle(child.Name, nil, nil)
 		if err != nil {
 			return err
 		}
 		child.Bundle = childBundle
-		childBundle.Parent = rootBundle
+		childBundle.SetParent(rootBundle)
 
 		// Load apps for this node
 		if err := o.loadNodeApps(child); err != nil {
@@ -271,9 +271,10 @@ func (o *ClusterOptions) loadAppConfig(node *stack.Node, configPath string) erro
 		if err != nil {
 			return err
 		}
-		bundle.Parent = node.Bundle
+		bundle.SetParent(node.Bundle)
 		
-		childNode := &stack.Node{Name: cfg.Name, Parent: node, Bundle: bundle}
+		childNode := &stack.Node{Name: cfg.Name, Bundle: bundle}
+		childNode.SetParent(node)
 		node.Children = append(node.Children, childNode)
 	}
 

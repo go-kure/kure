@@ -13,8 +13,9 @@ import (
 type Bundle struct {
 	// Name identifies the application set.
 	Name string
-	// Parent identifies the parent bundle
-	Parent *Bundle
+	// ParentPath is the hierarchical path to the parent bundle (e.g., "cluster/infrastructure")
+	// Empty for root bundles. This avoids circular references while maintaining hierarchy.
+	ParentPath string
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []*Bundle
 	// Interval controls how often Flux reconciles the bundle.
@@ -25,6 +26,10 @@ type Bundle struct {
 	Applications []*Application
 	// Labels are common labels that should be applied to each resource.
 	Labels map[string]string
+	
+	// Internal fields for runtime hierarchy navigation (not serialized)
+	parent   *Bundle            `yaml:"-"` // Runtime parent reference for efficient traversal
+	pathMap  map[string]*Bundle `yaml:"-"` // Runtime path lookup map (shared across tree)
 }
 
 // SourceRef defines a reference to a Flux source.
@@ -70,4 +75,56 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 		resources = append(resources, addresources...)
 	}
 	return resources, nil
+}
+
+// GetParent returns the runtime parent reference (may be nil).
+func (b *Bundle) GetParent() *Bundle {
+	return b.parent
+}
+
+// GetParentPath returns the hierarchical path to the parent bundle.
+func (b *Bundle) GetParentPath() string {
+	return b.ParentPath
+}
+
+// SetParent sets the parent bundle and updates the ParentPath accordingly.
+// This method maintains both the serializable path and runtime reference.
+func (b *Bundle) SetParent(parent *Bundle) {
+	b.parent = parent
+	if parent == nil {
+		b.ParentPath = ""
+	} else {
+		b.ParentPath = parent.GetPath()
+	}
+}
+
+// GetPath returns the full hierarchical path of this bundle.
+func (b *Bundle) GetPath() string {
+	if b.ParentPath == "" {
+		return b.Name
+	}
+	return b.ParentPath + "/" + b.Name
+}
+
+// InitializePathMap builds the runtime path lookup map for efficient hierarchy navigation.
+// This should be called on the root bundle after the tree structure is complete.
+func (b *Bundle) InitializePathMap(allBundles []*Bundle) {
+	pathMap := make(map[string]*Bundle)
+	
+	// Build path map for all bundles
+	for _, bundle := range allBundles {
+		if bundle.Name != "" {
+			pathMap[bundle.GetPath()] = bundle
+		}
+	}
+	
+	// Set path map and parent references on all bundles
+	for _, bundle := range allBundles {
+		bundle.pathMap = pathMap
+		if bundle.ParentPath != "" {
+			if parent, exists := pathMap[bundle.ParentPath]; exists {
+				bundle.parent = parent
+			}
+		}
+	}
 }

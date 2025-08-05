@@ -447,8 +447,8 @@ func (w Workflow) Bundle(b *stack.Bundle) ([]client.Object, error) {
 		return nil, nil
 	}
 	path := bundlePath(b)
-	if w.Mode == layout.KustomizationRecursive && b.Parent != nil {
-		path = bundlePath(b.Parent)
+	if w.Mode == layout.KustomizationRecursive && b.GetParent() != nil {
+		path = bundlePath(b.GetParent())
 	}
 	interval := b.Interval
 	if interval == "" {
@@ -494,8 +494,8 @@ func (w Workflow) BundleWithPackageRef(b *stack.Bundle, packageRef *schema.Group
 		return nil, nil
 	}
 	path := bundlePath(b)
-	if w.Mode == layout.KustomizationRecursive && b.Parent != nil {
-		path = bundlePath(b.Parent)
+	if w.Mode == layout.KustomizationRecursive && b.GetParent() != nil {
+		path = bundlePath(b.GetParent())
 	}
 	interval := b.Interval
 	if interval == "" {
@@ -539,7 +539,7 @@ func (w Workflow) BundleWithPackageRef(b *stack.Bundle, packageRef *schema.Group
 // bundlePath builds a repository path for the bundle based on its ancestry.
 func bundlePath(b *stack.Bundle) string {
 	var parts []string
-	for p := b; p != nil; p = p.Parent {
+	for p := b; p != nil; p = p.GetParent() {
 		if p.Name != "" {
 			parts = append([]string{p.Name}, parts...)
 		}

@@ -33,7 +33,7 @@ func TestWalkCluster(t *testing.T) {
 	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
 	node := &stack.Node{Name: "apps", Bundle: bundle}
 	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
-	node.Parent = root
+	node.SetParent(root)
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
 	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{
@@ -94,7 +94,7 @@ func TestWalkClusterNodeOnly(t *testing.T) {
 	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
 	node := &stack.Node{Name: "apps", Bundle: bundle}
 	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
-	node.Parent = root
+	node.SetParent(root)
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
 	rules := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat}
@@ -158,8 +158,8 @@ func TestWalkClusterByPackage(t *testing.T) {
 	node2 := &stack.Node{Name: "apps2", Bundle: bundle2, PackageRef: gitPackageRef}
 
 	root := &stack.Node{Name: "root", Children: []*stack.Node{node1, node2}}
-	node1.Parent = root
-	node2.Parent = root
+	node1.SetParent(root)
+	node2.SetParent(root)
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
 	packages, err := layout.WalkClusterByPackage(cluster, layout.LayoutRules{})
@@ -246,10 +246,10 @@ func TestWalkClusterByPackageWithInheritance(t *testing.T) {
 		PackageRef: ociPackageRef, // Parent has PackageRef
 		Children:   []*stack.Node{childNode},
 	}
-	childNode.Parent = parentNode
+	childNode.SetParent(parentNode)
 
 	root := &stack.Node{Name: "root", Children: []*stack.Node{parentNode}}
-	parentNode.Parent = root
+	parentNode.SetParent(root)
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
 	packages, err := layout.WalkClusterByPackage(cluster, layout.LayoutRules{
@@ -314,7 +314,7 @@ func TestWalkClusterByPackageDefaultPackage(t *testing.T) {
 	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
 	node := &stack.Node{Name: "apps", Bundle: bundle} // No PackageRef
 	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
-	node.Parent = root
+	node.SetParent(root)
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
 	packages, err := layout.WalkClusterByPackage(cluster, layout.LayoutRules{})

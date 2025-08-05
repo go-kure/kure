@@ -210,13 +210,13 @@ func runClusterExample(clusterFile string) error {
 	// Determine base directory for loading app configs
 	baseDir := filepath.Dir(clusterFile)
 	for _, child := range cl.Node.Children {
-		child.Parent = cl.Node
+		child.SetParent(cl.Node)
 		childBundle, err := stack.NewBundle(child.Name, nil, nil)
 		if err != nil {
 			return err
 		}
 		child.Bundle = childBundle
-		childBundle.Parent = rootBundle
+		childBundle.SetParent(rootBundle)
 		
 		// Load app configs from child directory
 		if err := loadNodeApps(child, baseDir); err != nil {
@@ -297,8 +297,9 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 				f.Close()
 				return err
 			}
-			bundle.Parent = node.Bundle
-			childNode := &stack.Node{Name: cfg.Name, Parent: node, Bundle: bundle}
+			bundle.SetParent(node.Bundle)
+			childNode := &stack.Node{Name: cfg.Name, Bundle: bundle}
+			childNode.SetParent(node)
 			node.Children = append(node.Children, childNode)
 		}
 		f.Close()
@@ -333,7 +334,7 @@ func runMultiOCIDemo() error {
 	cl.Node.Bundle = rootBundle
 
 	for _, child := range cl.Node.Children {
-		child.Parent = cl.Node
+		child.SetParent(cl.Node)
 		
 		// Parse packageRef from cluster.yaml 
 		if child.PackageRef == nil && len(cl.Node.Children) > 0 {

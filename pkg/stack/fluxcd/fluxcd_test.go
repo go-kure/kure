@@ -12,7 +12,8 @@ import (
 
 func TestWorkflowBundlePathMode(t *testing.T) {
 	parent := &stack.Bundle{Name: "parent"}
-	child := &stack.Bundle{Name: "child", Parent: parent}
+	child := &stack.Bundle{Name: "child"}
+	child.SetParent(parent)
 
 	wf := fluxstack.NewWorkflow()
 	wf.Mode = layout.KustomizationExplicit
@@ -44,7 +45,6 @@ func TestWorkflowBundleMetadata(t *testing.T) {
 	dep := &stack.Bundle{Name: "dep"}
 	child := &stack.Bundle{
 		Name:     "child",
-		Parent:   parent,
 		Interval: "1m",
 		SourceRef: &stack.SourceRef{
 			Kind:      "GitRepository",
@@ -53,6 +53,7 @@ func TestWorkflowBundleMetadata(t *testing.T) {
 		},
 		DependsOn: []*stack.Bundle{dep},
 	}
+	child.SetParent(parent)
 
 	wf := fluxstack.NewWorkflow()
 	objs, err := wf.Bundle(child)
