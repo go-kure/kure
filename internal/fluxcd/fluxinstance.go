@@ -1,7 +1,7 @@
 package fluxcd
 
 import (
-	"errors"
+	"github.com/go-kure/kure/internal/validation"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,8 +25,9 @@ func CreateFluxInstance(name, namespace string, spec fluxv1.FluxInstanceSpec) *f
 
 // AddFluxInstanceComponent appends a component to the FluxInstance spec.
 func AddFluxInstanceComponent(obj *fluxv1.FluxInstance, c fluxv1.Component) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Components = append(obj.Spec.Components, c)
 	return nil
@@ -34,8 +35,9 @@ func AddFluxInstanceComponent(obj *fluxv1.FluxInstance, c fluxv1.Component) erro
 
 // SetFluxInstanceDistribution sets the distribution of the FluxInstance.
 func SetFluxInstanceDistribution(obj *fluxv1.FluxInstance, dist fluxv1.Distribution) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Distribution = dist
 	return nil
@@ -43,8 +45,9 @@ func SetFluxInstanceDistribution(obj *fluxv1.FluxInstance, dist fluxv1.Distribut
 
 // SetFluxInstanceCommonMetadata sets the common metadata.
 func SetFluxInstanceCommonMetadata(obj *fluxv1.FluxInstance, cm *fluxv1.CommonMetadata) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.CommonMetadata = cm
 	return nil
@@ -52,8 +55,9 @@ func SetFluxInstanceCommonMetadata(obj *fluxv1.FluxInstance, cm *fluxv1.CommonMe
 
 // SetFluxInstanceCluster sets the cluster information.
 func SetFluxInstanceCluster(obj *fluxv1.FluxInstance, cluster *fluxv1.Cluster) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Cluster = cluster
 	return nil
@@ -61,8 +65,9 @@ func SetFluxInstanceCluster(obj *fluxv1.FluxInstance, cluster *fluxv1.Cluster) e
 
 // SetFluxInstanceSharding sets the sharding specification.
 func SetFluxInstanceSharding(obj *fluxv1.FluxInstance, shard *fluxv1.Sharding) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Sharding = shard
 	return nil
@@ -70,8 +75,9 @@ func SetFluxInstanceSharding(obj *fluxv1.FluxInstance, shard *fluxv1.Sharding) e
 
 // SetFluxInstanceStorage sets the storage specification.
 func SetFluxInstanceStorage(obj *fluxv1.FluxInstance, st *fluxv1.Storage) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Storage = st
 	return nil
@@ -79,8 +85,9 @@ func SetFluxInstanceStorage(obj *fluxv1.FluxInstance, st *fluxv1.Storage) error 
 
 // SetFluxInstanceKustomize sets the kustomize specification.
 func SetFluxInstanceKustomize(obj *fluxv1.FluxInstance, k *fluxv1.Kustomize) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Kustomize = k
 	return nil
@@ -88,8 +95,9 @@ func SetFluxInstanceKustomize(obj *fluxv1.FluxInstance, k *fluxv1.Kustomize) err
 
 // SetFluxInstanceWait sets the wait flag.
 func SetFluxInstanceWait(obj *fluxv1.FluxInstance, wait bool) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Wait = &wait
 	return nil
@@ -97,8 +105,9 @@ func SetFluxInstanceWait(obj *fluxv1.FluxInstance, wait bool) error {
 
 // SetFluxInstanceMigrateResources sets the migrateResources flag.
 func SetFluxInstanceMigrateResources(obj *fluxv1.FluxInstance, m bool) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.MigrateResources = &m
 	return nil
@@ -106,8 +115,9 @@ func SetFluxInstanceMigrateResources(obj *fluxv1.FluxInstance, m bool) error {
 
 // SetFluxInstanceSync sets the sync configuration.
 func SetFluxInstanceSync(obj *fluxv1.FluxInstance, sync *fluxv1.Sync) error {
-	if obj == nil {
-		return errors.New("nil FluxInstance")
+	validator := validation.NewValidator()
+	if err := validator.ValidateFluxInstance(obj); err != nil {
+		return err
 	}
 	obj.Spec.Sync = sync
 	return nil

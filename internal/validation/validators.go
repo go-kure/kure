@@ -11,6 +11,10 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"sigs.k8s.io/kustomize/api/types"
+	
+	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
+	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 )
 
 // Validator provides centralized validation for Kubernetes resources and their components.
@@ -133,6 +137,40 @@ func (v *Validator) ValidateServicePort(port *corev1.ServicePort) error {
 
 func (v *Validator) ValidatePodDisruptionBudget(pdb *policyv1.PodDisruptionBudget) error {
 	return v.validateNotNil(pdb, errors.ErrNilPodDisruptionBudget)
+}
+
+// Other Resources Validation
+
+func (v *Validator) ValidateKustomization(k *types.Kustomization) error {
+	return v.validateNotNil(k, errors.ErrNilKustomization)
+}
+
+// Flux Resources Validation
+
+func (v *Validator) ValidateFluxInstance(fi *fluxv1.FluxInstance) error {
+	return v.validateNotNil(fi, errors.ErrNilFluxInstance)
+}
+
+// MetalLB Resources Validation
+
+func (v *Validator) ValidateIPAddressPool(pool *metallbv1beta1.IPAddressPool) error {
+	return v.validateNotNil(pool, errors.ErrNilIPAddressPool)
+}
+
+func (v *Validator) ValidateBGPPeer(peer *metallbv1beta1.BGPPeer) error {
+	return v.validateNotNil(peer, errors.ErrNilBGPPeer)
+}
+
+func (v *Validator) ValidateBGPAdvertisement(adv *metallbv1beta1.BGPAdvertisement) error {
+	return v.validateNotNil(adv, errors.ErrNilBGPAdvertisement)
+}
+
+func (v *Validator) ValidateL2Advertisement(adv *metallbv1beta1.L2Advertisement) error {
+	return v.validateNotNil(adv, errors.ErrNilL2Advertisement)
+}
+
+func (v *Validator) ValidateBFDProfile(profile *metallbv1beta1.BFDProfile) error {
+	return v.validateNotNil(profile, errors.ErrNilBFDProfile)
 }
 
 // Compound validation methods for common patterns

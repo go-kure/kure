@@ -63,6 +63,17 @@ var (
 	ErrNilClusterRoleBinding   = NewResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
 	ErrNilServicePort          = NewResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
 	ErrNilPodDisruptionBudget  = NewResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
+	ErrNilKustomization        = NewResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
+	
+	// Flux resources
+	ErrNilFluxInstance         = NewResourceValidationError("FluxInstance", "", "fluxinstance", "flux instance cannot be nil", nil)
+	
+	// MetalLB resources
+	ErrNilIPAddressPool        = NewResourceValidationError("IPAddressPool", "", "ipaddresspool", "ip address pool cannot be nil", nil)
+	ErrNilBGPPeer              = NewResourceValidationError("BGPPeer", "", "bgppeer", "bgp peer cannot be nil", nil)
+	ErrNilBGPAdvertisement     = NewResourceValidationError("BGPAdvertisement", "", "bgpadvertisement", "bgp advertisement cannot be nil", nil)
+	ErrNilL2Advertisement      = NewResourceValidationError("L2Advertisement", "", "l2advertisement", "l2 advertisement cannot be nil", nil)
+	ErrNilBFDProfile           = NewResourceValidationError("BFDProfile", "", "bfdprofile", "bfd profile cannot be nil", nil)
 )
 
 // Common file operation errors
