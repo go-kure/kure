@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/go-kure/kure/pkg/cli"
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack/argocd"
@@ -106,14 +107,14 @@ func (o *BootstrapOptions) Complete() error {
 func (o *BootstrapOptions) Validate() error {
 	// Validate config file exists
 	if _, err := os.Stat(o.ConfigFile); os.IsNotExist(err) {
-		return fmt.Errorf("config file does not exist: %s", o.ConfigFile)
+		return errors.NewFileError("read", o.ConfigFile, "file does not exist", errors.ErrFileNotFound)
 	}
 	
 	// Validate GitOps type if specified
 	if o.GitOpsType != "" {
 		validTypes := []string{"flux", "argocd"}
 		if !contains(validTypes, o.GitOpsType) {
-			return fmt.Errorf("invalid gitops-type: %s. Valid options: %v", o.GitOpsType, validTypes)
+			return errors.NewValidationError("gitops-type", o.GitOpsType, "Options", validTypes)
 		}
 	}
 	
@@ -121,7 +122,7 @@ func (o *BootstrapOptions) Validate() error {
 	if o.FluxMode != "" {
 		validModes := []string{"operator", "toolkit"}
 		if !contains(validModes, o.FluxMode) {
-			return fmt.Errorf("invalid flux-mode: %s. Valid options: %v", o.FluxMode, validModes)
+			return errors.NewValidationError("flux-mode", o.FluxMode, "Options", validModes)
 		}
 	}
 	
@@ -139,23 +140,23 @@ func (o *BootstrapOptions) Run() error {
 	// Load cluster configuration
 	cluster, err := o.loadClusterConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load cluster config: %w", err)
+		return errors.Wrapf(err, "failed to load cluster config")
 	}
 	
 	// Detect GitOps type and mode if not specified
 	if err := o.detectGitOpsSettings(cluster); err != nil {
-		return fmt.Errorf("failed to detect GitOps settings: %w", err)
+		return errors.Wrapf(err, "failed to detect GitOps settings")
 	}
 	
 	// Generate bootstrap manifests
 	ml, err := o.generateBootstrap(cluster)
 	if err != nil {
-		return fmt.Errorf("failed to generate bootstrap manifests: %w", err)
+		return errors.Wrapf(err, "failed to generate bootstrap manifests")
 	}
 	
 	// Write output
 	if err := o.writeOutput(ml, cluster); err != nil {
-		return fmt.Errorf("failed to write output: %w", err)
+		return errors.Wrapf(err, "failed to write output")
 	}
 	
 	if globalOpts.Verbose {
@@ -238,7 +239,7 @@ func (o *BootstrapOptions) generateBootstrap(cluster *stack.Cluster) (*layout.Ma
 	case "flux":
 		return o.generateFluxBootstrap(cluster, rules)
 	default:
-		return nil, fmt.Errorf("unsupported GitOps type: %s", o.GitOpsType)
+		return nil, errors.NewValidationError("gitops-type", o.GitOpsType, "Supported types", []string{"flux", "argocd"})
 	}
 }
 

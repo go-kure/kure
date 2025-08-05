@@ -29,6 +29,55 @@ var (
 	ErrNilObject     = errors.New("provided object is nil")
 )
 
+// Common Kubernetes resource validation errors
+var (
+	// Nil resource errors
+	ErrNilDeployment        = NewResourceValidationError("Deployment", "", "deployment", "deployment cannot be nil", nil)
+	ErrNilPod               = NewResourceValidationError("Pod", "", "pod", "pod cannot be nil", nil)
+	ErrNilPodSpec           = NewResourceValidationError("PodSpec", "", "spec", "pod spec cannot be nil", nil)
+	ErrNilContainer         = NewResourceValidationError("Container", "", "container", "container cannot be nil", nil)
+	ErrNilStatefulSet       = NewResourceValidationError("StatefulSet", "", "statefulset", "statefulset cannot be nil", nil)
+	ErrNilDaemonSet         = NewResourceValidationError("DaemonSet", "", "daemonset", "daemonset cannot be nil", nil)
+	ErrNilJob               = NewResourceValidationError("Job", "", "job", "job cannot be nil", nil)
+	ErrNilCronJob           = NewResourceValidationError("CronJob", "", "cronjob", "cronjob cannot be nil", nil)
+	ErrNilService           = NewResourceValidationError("Service", "", "service", "service cannot be nil", nil)
+	ErrNilSecret            = NewResourceValidationError("Secret", "", "secret", "secret cannot be nil", nil)
+	ErrNilConfigMap         = NewResourceValidationError("ConfigMap", "", "configmap", "configmap cannot be nil", nil)
+	ErrNilServiceAccount    = NewResourceValidationError("ServiceAccount", "", "serviceaccount", "serviceaccount cannot be nil", nil)
+	ErrNilIngress           = NewResourceValidationError("Ingress", "", "ingress", "ingress cannot be nil", nil)
+	ErrNilBundle            = NewResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
+
+	// Common field validation errors
+	ErrNilSpec              = NewResourceValidationError("Resource", "", "spec", "spec cannot be nil", nil)
+	ErrNilInitContainer     = NewResourceValidationError("PodSpec", "", "container", "init container cannot be nil", nil)
+	ErrNilEphemeralContainer = NewResourceValidationError("PodSpec", "", "container", "ephemeral container cannot be nil", nil)
+	ErrNilVolume            = NewResourceValidationError("PodSpec", "", "volume", "volume cannot be nil", nil)
+	ErrNilImagePullSecret   = NewResourceValidationError("PodSpec", "", "secret", "image pull secret cannot be nil", nil)
+	ErrNilToleration        = NewResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
+)
+
+// Common file operation errors
+var (
+	ErrFileNotFound        = errors.New("file not found")
+	ErrDirectoryNotFound   = errors.New("directory not found")
+	ErrInvalidPath         = errors.New("invalid file path")
+)
+
+// Common parse/processing errors  
+var (
+	ErrNilRuntimeObject    = errors.New("nil runtime object provided")
+	ErrSchemeRegistration  = errors.New("failed to register schemes")
+	ErrUnsupportedKind     = errors.New("unsupported object kind")
+	ErrInteractiveMode     = errors.New("interactive mode not yet implemented")
+)
+
+// Common configuration errors
+var (
+	ErrInvalidOutputFormat = errors.New("invalid output format")
+	ErrInvalidGrouping     = errors.New("invalid grouping option")
+	ErrInvalidPlacement    = errors.New("invalid placement option")
+)
+
 // ErrorType represents the category of error
 type ErrorType string
 

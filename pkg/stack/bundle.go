@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // Bundle represents a unit of deployment, typically the resources that
@@ -45,14 +47,14 @@ func NewBundle(name string, resources []*Application, labels map[string]string) 
 // Validate performs basic sanity checks on the Bundle.
 func (a *Bundle) Validate() error {
 	if a == nil {
-		return fmt.Errorf("nil Bundle")
+		return errors.ErrNilBundle
 	}
 	if a.Name == "" {
-		return fmt.Errorf("name is required")
+		return errors.NewValidationError("name", "", "Bundle", nil)
 	}
 	for i, r := range a.Applications {
 		if r == nil {
-			return fmt.Errorf("resource %d is nil", i)
+			return errors.NewResourceValidationError("Bundle", a.Name, "applications", fmt.Sprintf("application at index %d is nil", i), nil)
 		}
 	}
 	return nil

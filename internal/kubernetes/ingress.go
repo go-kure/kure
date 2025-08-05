@@ -1,7 +1,7 @@
 package kubernetes
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -76,7 +76,7 @@ func SetIngressDefaultBackend(ingress *netv1.Ingress, backend netv1.IngressBacke
 
 func SetIngressClassName(ingress *netv1.Ingress, class string) error {
 	if ingress == nil {
-		return errors.New("nil ingress")
+		return errors.ErrNilIngress
 	}
 	ingress.Spec.IngressClassName = &class
 	return nil

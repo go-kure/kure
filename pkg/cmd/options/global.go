@@ -1,11 +1,12 @@
 package options
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // GlobalOptions contains global flags and configuration
@@ -94,7 +95,7 @@ func (o *GlobalOptions) Validate() error {
 		}
 	}
 	if !valid {
-		return fmt.Errorf("invalid output format: %s. Valid formats: %v", o.Output, validOutputs)
+		return errors.NewValidationError("output", o.Output, "GlobalOptions", validOutputs)
 	}
 
 	// Adjust wide flag based on output format

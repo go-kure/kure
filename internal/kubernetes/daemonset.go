@@ -1,7 +1,7 @@
 package kubernetes
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,8 +39,11 @@ func CreateDaemonSet(name, namespace string) *appsv1.DaemonSet {
 
 // SetDaemonSetPodSpec assigns a PodSpec to the DaemonSet template.
 func SetDaemonSetPodSpec(ds *appsv1.DaemonSet, spec *corev1.PodSpec) error {
-	if ds == nil || spec == nil {
-		return errors.New("nil daemonset or spec")
+	if ds == nil {
+		return errors.ErrNilDaemonSet
+	}
+	if spec == nil {
+		return errors.ErrNilSpec
 	}
 	ds.Spec.Template.Spec = *spec
 	return nil
@@ -49,7 +52,7 @@ func SetDaemonSetPodSpec(ds *appsv1.DaemonSet, spec *corev1.PodSpec) error {
 // AddDaemonSetContainer appends a container to the DaemonSet pod template.
 func AddDaemonSetContainer(ds *appsv1.DaemonSet, c *corev1.Container) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return AddPodSpecContainer(&ds.Spec.Template.Spec, c)
 }
@@ -57,7 +60,7 @@ func AddDaemonSetContainer(ds *appsv1.DaemonSet, c *corev1.Container) error {
 // AddDaemonSetInitContainer appends an init container to the pod template.
 func AddDaemonSetInitContainer(ds *appsv1.DaemonSet, c *corev1.Container) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return AddPodSpecInitContainer(&ds.Spec.Template.Spec, c)
 }
@@ -65,7 +68,7 @@ func AddDaemonSetInitContainer(ds *appsv1.DaemonSet, c *corev1.Container) error 
 // AddDaemonSetVolume appends a volume to the pod template.
 func AddDaemonSetVolume(ds *appsv1.DaemonSet, v *corev1.Volume) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return AddPodSpecVolume(&ds.Spec.Template.Spec, v)
 }
@@ -73,7 +76,7 @@ func AddDaemonSetVolume(ds *appsv1.DaemonSet, v *corev1.Volume) error {
 // AddDaemonSetImagePullSecret appends an image pull secret to the pod template.
 func AddDaemonSetImagePullSecret(ds *appsv1.DaemonSet, s *corev1.LocalObjectReference) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return AddPodSpecImagePullSecret(&ds.Spec.Template.Spec, s)
 }
@@ -81,7 +84,7 @@ func AddDaemonSetImagePullSecret(ds *appsv1.DaemonSet, s *corev1.LocalObjectRefe
 // AddDaemonSetToleration appends a toleration to the pod template.
 func AddDaemonSetToleration(ds *appsv1.DaemonSet, t *corev1.Toleration) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return AddPodSpecToleration(&ds.Spec.Template.Spec, t)
 }
@@ -89,7 +92,7 @@ func AddDaemonSetToleration(ds *appsv1.DaemonSet, t *corev1.Toleration) error {
 // AddDaemonSetTopologySpreadConstraints appends a topology spread constraint if not nil.
 func AddDaemonSetTopologySpreadConstraints(ds *appsv1.DaemonSet, c *corev1.TopologySpreadConstraint) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return AddPodSpecTopologySpreadConstraints(&ds.Spec.Template.Spec, c)
 }
@@ -97,7 +100,7 @@ func AddDaemonSetTopologySpreadConstraints(ds *appsv1.DaemonSet, c *corev1.Topol
 // SetDaemonSetServiceAccountName sets the service account name.
 func SetDaemonSetServiceAccountName(ds *appsv1.DaemonSet, name string) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return SetPodSpecServiceAccountName(&ds.Spec.Template.Spec, name)
 }
@@ -105,7 +108,7 @@ func SetDaemonSetServiceAccountName(ds *appsv1.DaemonSet, name string) error {
 // SetDaemonSetSecurityContext sets the pod security context.
 func SetDaemonSetSecurityContext(ds *appsv1.DaemonSet, sc *corev1.PodSecurityContext) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return SetPodSpecSecurityContext(&ds.Spec.Template.Spec, sc)
 }
@@ -113,7 +116,7 @@ func SetDaemonSetSecurityContext(ds *appsv1.DaemonSet, sc *corev1.PodSecurityCon
 // SetDaemonSetAffinity sets the pod affinity rules.
 func SetDaemonSetAffinity(ds *appsv1.DaemonSet, aff *corev1.Affinity) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return SetPodSpecAffinity(&ds.Spec.Template.Spec, aff)
 }
@@ -121,7 +124,7 @@ func SetDaemonSetAffinity(ds *appsv1.DaemonSet, aff *corev1.Affinity) error {
 // SetDaemonSetNodeSelector sets the node selector.
 func SetDaemonSetNodeSelector(ds *appsv1.DaemonSet, ns map[string]string) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	return SetPodSpecNodeSelector(&ds.Spec.Template.Spec, ns)
 }
@@ -129,7 +132,7 @@ func SetDaemonSetNodeSelector(ds *appsv1.DaemonSet, ns map[string]string) error 
 // SetDaemonSetUpdateStrategy sets the update strategy.
 func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strat appsv1.DaemonSetUpdateStrategy) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	ds.Spec.UpdateStrategy = strat
 	return nil
@@ -138,7 +141,7 @@ func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strat appsv1.DaemonSetUpda
 // SetDaemonSetRevisionHistoryLimit sets the revision history limit.
 func SetDaemonSetRevisionHistoryLimit(ds *appsv1.DaemonSet, limit *int32) error {
 	if ds == nil {
-		return errors.New("nil daemonset")
+		return errors.ErrNilDaemonSet
 	}
 	ds.Spec.RevisionHistoryLimit = limit
 	return nil

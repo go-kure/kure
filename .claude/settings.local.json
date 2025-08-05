@@ -35,7 +35,8 @@
       "Bash(./kure --help)",
       "Bash(./kure generate:*)",
       "Bash(./kure version)",
-      "Bash(./kure completion bash)"
+      "Bash(./kure completion bash)",
+      "Bash(/dev/null)"
     ],
     "deny": []
   }

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/go-kure/kure/pkg/cli"
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/patch"
 )
 
@@ -120,7 +121,7 @@ func (o *PatchOptions) Complete() error {
 func (o *PatchOptions) Validate() error {
 	// Validate base file exists
 	if _, err := os.Stat(o.BaseFile); os.IsNotExist(err) {
-		return fmt.Errorf("base file does not exist: %s", o.BaseFile)
+		return errors.NewFileError("read", o.BaseFile, "file does not exist", errors.ErrFileNotFound)
 	}
 	
 	// For interactive mode, we don't need patch files
@@ -130,13 +131,13 @@ func (o *PatchOptions) Validate() error {
 	
 	// Validate we have patch files
 	if len(o.PatchFiles) == 0 {
-		return fmt.Errorf("at least one patch file or patch directory must be specified")
+		return errors.NewValidationError("patches", "", "PatchOptions", []string{"patch-file", "patch-dir"})
 	}
 	
 	// Validate all patch files exist
 	for _, file := range o.PatchFiles {
 		if _, err := os.Stat(file); os.IsNotExist(err) {
-			return fmt.Errorf("patch file does not exist: %s", file)
+			return errors.NewFileError("read", file, "patch file does not exist", errors.ErrFileNotFound)
 		}
 	}
 	
@@ -260,7 +261,7 @@ func (o *PatchOptions) runInteractive() error {
 	
 	// This would implement the interactive loop similar to the existing main.go
 	// For now, returning a placeholder
-	return fmt.Errorf("interactive mode not yet implemented")
+	return errors.ErrInteractiveMode
 }
 
 // loadBaseResources loads and parses the base YAML file

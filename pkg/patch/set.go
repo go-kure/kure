@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // PatchableAppSet represents a collection of resources together with the
@@ -58,7 +60,7 @@ func (s *PatchableAppSet) Resolve() ([]*ResourceWithPatches, error) {
 				}
 			}
 		} else {
-			return nil, fmt.Errorf("target not found: %s", p.Target)
+			return nil, errors.NewResourceNotFoundError("patch target", p.Target, "", nil)
 		}
 	}
 	

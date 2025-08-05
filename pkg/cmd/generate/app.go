@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/cli"
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
 	kio "github.com/go-kure/kure/pkg/io"
@@ -95,7 +96,7 @@ func (o *AppOptions) Complete() error {
 	if o.InputDir != "" {
 		files, err := o.scanInputDirectory()
 		if err != nil {
-			return fmt.Errorf("failed to scan input directory: %w", err)
+			return errors.Wrapf(err, "failed to scan input directory")
 		}
 		o.ConfigFiles = append(o.ConfigFiles, files...)
 	}
@@ -111,13 +112,13 @@ func (o *AppOptions) Complete() error {
 // Validate validates the options
 func (o *AppOptions) Validate() error {
 	if len(o.ConfigFiles) == 0 {
-		return fmt.Errorf("at least one config file or input directory must be specified")
+		return errors.NewValidationError("config-files", "empty", "Required", []string{"at least one config file or input directory"})
 	}
 	
 	// Validate all config files exist
 	for _, file := range o.ConfigFiles {
 		if _, err := os.Stat(file); os.IsNotExist(err) {
-			return fmt.Errorf("config file does not exist: %s", file)
+			return errors.NewFileError("read", file, "file does not exist", errors.ErrFileNotFound)
 		}
 	}
 	
@@ -135,7 +136,7 @@ func (o *AppOptions) Run() error {
 	// Load all applications
 	apps, err := o.loadApplications()
 	if err != nil {
-		return fmt.Errorf("failed to load applications: %w", err)
+		return errors.Wrapf(err, "failed to load applications")
 	}
 	
 	if len(apps) == 0 {
@@ -146,12 +147,12 @@ func (o *AppOptions) Run() error {
 	// Generate manifests
 	resources, err := o.generateManifests(apps)
 	if err != nil {
-		return fmt.Errorf("failed to generate manifests: %w", err)
+		return errors.Wrapf(err, "failed to generate manifests")
 	}
 	
 	// Write output
 	if err := o.writeOutput(resources); err != nil {
-		return fmt.Errorf("failed to write output: %w", err)
+		return errors.Wrapf(err, "failed to write output")
 	}
 	
 	if globalOpts.Verbose {
@@ -192,7 +193,7 @@ func (o *AppOptions) loadApplications() ([]*stack.Application, error) {
 	for _, configFile := range o.ConfigFiles {
 		fileApps, err := o.loadApplicationsFromFile(configFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load from %s: %w", configFile, err)
+			return nil, errors.NewFileError("read", configFile, "failed to load applications", err)
 		}
 		apps = append(apps, fileApps...)
 	}
@@ -235,13 +236,13 @@ func (o *AppOptions) generateManifests(apps []*stack.Application) ([]runtime.Obj
 		// Create a bundle for the application
 		bundle, err := stack.NewBundle(app.Name, []*stack.Application{app}, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create bundle for app %s: %w", app.Name, err)
+			return nil, errors.Wrapf(err, "failed to create bundle for app %s", app.Name)
 		}
 		
 		// Generate resources
 		resources, err := bundle.Generate()
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate resources for app %s: %w", app.Name, err)
+			return nil, errors.Wrapf(err, "failed to generate resources for app %s", app.Name)
 		}
 		
 		// Convert to runtime.Object if needed
@@ -273,7 +274,7 @@ func (o *AppOptions) writeOutput(resources []runtime.Object) error {
 	// Encode resources to YAML
 	output, err := kio.EncodeObjectsToYAML(clientObjects)
 	if err != nil {
-		return fmt.Errorf("failed to encode resources: %w", err)
+		return errors.Wrapf(err, "failed to encode resources")
 	}
 	
 	// Determine output destination

@@ -1,9 +1,9 @@
 package stack
 
 import (
-	"fmt"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // Application represents a deployable application with a configuration.
@@ -35,7 +35,7 @@ func (a *Application) SetConfig(cfg ApplicationConfig) { a.Config = cfg }
 // Generate returns the resources for this application.
 func (a *Application) Generate() ([]*client.Object, error) {
 	if a.Config == nil {
-		return nil, fmt.Errorf("application config is nil")
+		return nil, errors.NewValidationError("application.config", "nil", "Required", []string{"non-nil application config"})
 	}
 	return a.Config.Generate(a)
 }

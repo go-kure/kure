@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/internal/kubernetes"
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/k8s"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -42,7 +43,7 @@ func (r *ResourceRequirements) ToKubernetesResources() (*corev1.ResourceRequirem
 		for k, v := range r.Limits {
 			qty, err := resource.ParseQuantity(v)
 			if err != nil {
-				return nil, fmt.Errorf("invalid resource limit %s=%s: %w", k, v, err)
+				return nil, errors.NewValidationError("limits", fmt.Sprintf("%s=%s", k, v), "ResourceRequirements", nil)
 			}
 			result.Limits[corev1.ResourceName(k)] = qty
 		}
@@ -53,7 +54,7 @@ func (r *ResourceRequirements) ToKubernetesResources() (*corev1.ResourceRequirem
 		for k, v := range r.Requests {
 			qty, err := resource.ParseQuantity(v)
 			if err != nil {
-				return nil, fmt.Errorf("invalid resource request %s=%s: %w", k, v, err)
+				return nil, errors.NewValidationError("requests", fmt.Sprintf("%s=%s", k, v), "ResourceRequirements", nil)
 			}
 			result.Requests[corev1.ResourceName(k)] = qty
 		}
@@ -436,7 +437,7 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 		_ = kubernetes.SetDeploymentReplicas(dep, cfg.Replicas)
 		objs = append(objs, k8s.ToClientObject(dep))
 	default:
-		return nil, fmt.Errorf("unsupported workload type %s", cfg.Workload)
+		return nil, errors.NewValidationError("workload", string(cfg.Workload), "AppWorkloadConfig", []string{"Deployment", "StatefulSet", "DaemonSet"})
 	}
 
 	// Service creation when ports are specified

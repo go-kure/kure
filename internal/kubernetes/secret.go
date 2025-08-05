@@ -1,7 +1,7 @@
 package kubernetes
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +33,7 @@ func CreateSecret(name, namespace string) *corev1.Secret {
 
 func AddSecretData(secret *corev1.Secret, key string, value []byte) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	if secret.Data == nil {
 		secret.Data = make(map[string][]byte)
@@ -44,7 +44,7 @@ func AddSecretData(secret *corev1.Secret, key string, value []byte) error {
 
 func AddSecretStringData(secret *corev1.Secret, key, value string) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	if secret.StringData == nil {
 		secret.StringData = make(map[string]string)
@@ -55,7 +55,7 @@ func AddSecretStringData(secret *corev1.Secret, key, value string) error {
 
 func SetSecretType(secret *corev1.Secret, type_ corev1.SecretType) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	secret.Type = type_
 	return nil
@@ -63,7 +63,7 @@ func SetSecretType(secret *corev1.Secret, type_ corev1.SecretType) error {
 
 func SetSecretImmutable(secret *corev1.Secret, immutable bool) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	if secret.Immutable == nil {
 		secret.Immutable = new(bool)
@@ -74,7 +74,7 @@ func SetSecretImmutable(secret *corev1.Secret, immutable bool) error {
 
 func AddSecretLabel(secret *corev1.Secret, key, value string) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	if secret.Labels == nil {
 		secret.Labels = make(map[string]string)
@@ -85,7 +85,7 @@ func AddSecretLabel(secret *corev1.Secret, key, value string) error {
 
 func AddSecretAnnotation(secret *corev1.Secret, key, value string) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	if secret.Annotations == nil {
 		secret.Annotations = make(map[string]string)
@@ -96,7 +96,7 @@ func AddSecretAnnotation(secret *corev1.Secret, key, value string) error {
 
 func SetSecretLabels(secret *corev1.Secret, labels map[string]string) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	secret.Labels = labels
 	return nil
@@ -104,7 +104,7 @@ func SetSecretLabels(secret *corev1.Secret, labels map[string]string) error {
 
 func SetSecretAnnotations(secret *corev1.Secret, anns map[string]string) error {
 	if secret == nil {
-		return errors.New("nil secret")
+		return errors.ErrNilSecret
 	}
 	secret.Annotations = anns
 	return nil

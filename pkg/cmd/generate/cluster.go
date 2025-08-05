@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/go-kure/kure/pkg/cli"
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -111,22 +112,22 @@ func (o *ClusterOptions) Complete() error {
 func (o *ClusterOptions) Validate() error {
 	// Validate config file exists
 	if _, err := os.Stat(o.ConfigFile); os.IsNotExist(err) {
-		return fmt.Errorf("config file does not exist: %s", o.ConfigFile)
+		return errors.NewFileError("read", o.ConfigFile, "file does not exist", errors.ErrFileNotFound)
 	}
 	
 	// Validate grouping options
 	validGroupings := []string{"flat", "nested"}
 	if !contains(validGroupings, o.BundleGrouping) {
-		return fmt.Errorf("invalid bundle-grouping: %s. Valid options: %v", o.BundleGrouping, validGroupings)
+		return errors.NewValidationError("bundle-grouping", o.BundleGrouping, "Options", validGroupings)
 	}
 	if !contains(validGroupings, o.ApplicationGrouping) {
-		return fmt.Errorf("invalid application-grouping: %s. Valid options: %v", o.ApplicationGrouping, validGroupings)
+		return errors.NewValidationError("application-grouping", o.ApplicationGrouping, "Options", validGroupings)
 	}
 	
 	// Validate flux placement
 	validPlacements := []string{"integrated", "separate"}
 	if !contains(validPlacements, o.FluxPlacement) {
-		return fmt.Errorf("invalid flux-placement: %s. Valid options: %v", o.FluxPlacement, validPlacements)
+		return errors.NewValidationError("flux-placement", o.FluxPlacement, "Options", validPlacements)
 	}
 	
 	return nil
@@ -143,24 +144,24 @@ func (o *ClusterOptions) Run() error {
 	// Load cluster configuration
 	cluster, err := o.loadClusterConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load cluster config: %w", err)
+		return errors.Wrapf(err, "failed to load cluster config")
 	}
 	
 	// Load applications from input directory
 	if err := o.loadClusterApps(cluster); err != nil {
-		return fmt.Errorf("failed to load cluster apps: %w", err)
+		return errors.Wrapf(err, "failed to load cluster apps")
 	}
 	
 	// Generate layout
 	rules := o.buildLayoutRules(cluster)
 	ml, err := o.generateLayout(cluster, rules)
 	if err != nil {
-		return fmt.Errorf("failed to generate layout: %w", err)
+		return errors.Wrapf(err, "failed to generate layout")
 	}
 	
 	// Write output
 	if err := o.writeOutput(ml); err != nil {
-		return fmt.Errorf("failed to write output: %w", err)
+		return errors.Wrapf(err, "failed to write output")
 	}
 	
 	if globalOpts.Verbose {
@@ -190,7 +191,7 @@ func (o *ClusterOptions) loadClusterConfig() (*stack.Cluster, error) {
 // loadClusterApps loads application configurations for the cluster
 func (o *ClusterOptions) loadClusterApps(cluster *stack.Cluster) error {
 	if cluster.Node == nil {
-		return fmt.Errorf("cluster node is nil")
+		return errors.NewValidationError("cluster.node", "nil", "Expected", []string{"non-nil cluster node"})
 	}
 
 	// Create root bundle
@@ -212,7 +213,7 @@ func (o *ClusterOptions) loadClusterApps(cluster *stack.Cluster) error {
 
 		// Load apps for this node
 		if err := o.loadNodeApps(child); err != nil {
-			return err
+			return errors.Wrapf(err, "failed to load apps for node %s", child.Name)
 		}
 	}
 
@@ -240,7 +241,7 @@ func (o *ClusterOptions) loadNodeApps(node *stack.Node) error {
 
 		appConfigPath := filepath.Join(nodeDir, entry.Name())
 		if err := o.loadAppConfig(node, appConfigPath); err != nil {
-			return fmt.Errorf("failed to load app config %s: %w", appConfigPath, err)
+			return errors.NewFileError("read", appConfigPath, "failed to load app config", err)
 		}
 	}
 

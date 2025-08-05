@@ -1,7 +1,7 @@
 package kubernetes
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +33,7 @@ func CreateService(name string, namespace string) *corev1.Service {
 
 func AddServicePort(service *corev1.Service, port corev1.ServicePort) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.Ports = append(service.Spec.Ports, port)
 	return nil
@@ -41,7 +41,7 @@ func AddServicePort(service *corev1.Service, port corev1.ServicePort) error {
 
 func SetServiceSelector(service *corev1.Service, selector map[string]string) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.Selector = selector
 	return nil
@@ -49,7 +49,7 @@ func SetServiceSelector(service *corev1.Service, selector map[string]string) err
 
 func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.Type = type_
 	return nil
@@ -58,7 +58,7 @@ func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) error {
 // SetServiceClusterIP sets the clusterIP on the Service spec.
 func SetServiceClusterIP(service *corev1.Service, ip string) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.ClusterIP = ip
 	return nil
@@ -67,7 +67,7 @@ func SetServiceClusterIP(service *corev1.Service, ip string) error {
 // AddServiceExternalIP appends an external IP address to the Service spec.
 func AddServiceExternalIP(service *corev1.Service, ip string) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.ExternalIPs = append(service.Spec.ExternalIPs, ip)
 	return nil
@@ -76,7 +76,7 @@ func AddServiceExternalIP(service *corev1.Service, ip string) error {
 // SetServiceLoadBalancerIP sets the load balancer IP on the Service spec.
 func SetServiceLoadBalancerIP(service *corev1.Service, ip string) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.LoadBalancerIP = ip
 	return nil
@@ -93,7 +93,7 @@ func SetServiceLoadBalancerIP(service *corev1.Service, ip string) error {
 
 func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.ExternalTrafficPolicy = trafficPolicy
 	return nil
@@ -101,7 +101,7 @@ func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy core
 
 func SetServiceSessionAffinity(service *corev1.Service, affinity corev1.ServiceAffinity) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.SessionAffinity = affinity
 	return nil
@@ -109,7 +109,7 @@ func SetServiceSessionAffinity(service *corev1.Service, affinity corev1.ServiceA
 
 func SetServiceLoadBalancerClass(service *corev1.Service, class string) error {
 	if service == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	service.Spec.LoadBalancerClass = &class
 	return nil
@@ -117,7 +117,7 @@ func SetServiceLoadBalancerClass(service *corev1.Service, class string) error {
 
 func AddServiceLabel(svc *corev1.Service, key, value string) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	if svc.Labels == nil {
 		svc.Labels = make(map[string]string)
@@ -128,7 +128,7 @@ func AddServiceLabel(svc *corev1.Service, key, value string) error {
 
 func AddServiceAnnotation(svc *corev1.Service, key, value string) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	if svc.Annotations == nil {
 		svc.Annotations = make(map[string]string)
@@ -139,7 +139,7 @@ func AddServiceAnnotation(svc *corev1.Service, key, value string) error {
 
 func SetServiceLabels(svc *corev1.Service, labels map[string]string) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Labels = labels
 	return nil
@@ -147,7 +147,7 @@ func SetServiceLabels(svc *corev1.Service, labels map[string]string) error {
 
 func SetServiceAnnotations(svc *corev1.Service, anns map[string]string) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Annotations = anns
 	return nil
@@ -155,7 +155,7 @@ func SetServiceAnnotations(svc *corev1.Service, anns map[string]string) error {
 
 func SetServicePublishNotReadyAddresses(svc *corev1.Service, publish bool) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.PublishNotReadyAddresses = publish
 	return nil
@@ -163,7 +163,7 @@ func SetServicePublishNotReadyAddresses(svc *corev1.Service, publish bool) error
 
 func AddServiceLoadBalancerSourceRange(svc *corev1.Service, cidr string) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.LoadBalancerSourceRanges = append(svc.Spec.LoadBalancerSourceRanges, cidr)
 	return nil
@@ -171,7 +171,7 @@ func AddServiceLoadBalancerSourceRange(svc *corev1.Service, cidr string) error {
 
 func SetServiceLoadBalancerSourceRanges(svc *corev1.Service, ranges []string) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.LoadBalancerSourceRanges = ranges
 	return nil
@@ -179,7 +179,7 @@ func SetServiceLoadBalancerSourceRanges(svc *corev1.Service, ranges []string) er
 
 func SetServiceIPFamilies(svc *corev1.Service, fams []corev1.IPFamily) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.IPFamilies = fams
 	return nil
@@ -187,7 +187,7 @@ func SetServiceIPFamilies(svc *corev1.Service, fams []corev1.IPFamily) error {
 
 func SetServiceIPFamilyPolicy(svc *corev1.Service, policy *corev1.IPFamilyPolicyType) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.IPFamilyPolicy = policy
 	return nil
@@ -195,7 +195,7 @@ func SetServiceIPFamilyPolicy(svc *corev1.Service, policy *corev1.IPFamilyPolicy
 
 func SetServiceInternalTrafficPolicy(svc *corev1.Service, policy *corev1.ServiceInternalTrafficPolicyType) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.InternalTrafficPolicy = policy
 	return nil
@@ -203,7 +203,7 @@ func SetServiceInternalTrafficPolicy(svc *corev1.Service, policy *corev1.Service
 
 func SetServiceAllocateLoadBalancerNodePorts(svc *corev1.Service, allocate bool) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.AllocateLoadBalancerNodePorts = &allocate
 	return nil
@@ -212,7 +212,7 @@ func SetServiceAllocateLoadBalancerNodePorts(svc *corev1.Service, allocate bool)
 // SetServiceExternalName sets the externalName field for ExternalName services.
 func SetServiceExternalName(svc *corev1.Service, name string) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.ExternalName = name
 	return nil
@@ -221,7 +221,7 @@ func SetServiceExternalName(svc *corev1.Service, name string) error {
 // SetServiceHealthCheckNodePort sets the healthCheckNodePort field for LoadBalancer services.
 func SetServiceHealthCheckNodePort(svc *corev1.Service, port int32) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.HealthCheckNodePort = port
 	return nil
@@ -230,7 +230,7 @@ func SetServiceHealthCheckNodePort(svc *corev1.Service, port int32) error {
 // SetServiceSessionAffinityConfig configures the session affinity options.
 func SetServiceSessionAffinityConfig(svc *corev1.Service, cfg *corev1.SessionAffinityConfig) error {
 	if svc == nil {
-		return errors.New("nil service")
+		return errors.ErrNilService
 	}
 	svc.Spec.SessionAffinityConfig = cfg
 	return nil

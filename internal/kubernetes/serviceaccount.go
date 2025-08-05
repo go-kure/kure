@@ -1,7 +1,7 @@
 package kubernetes
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,7 +32,7 @@ func CreateServiceAccount(name, namespace string) *corev1.ServiceAccount {
 
 func AddServiceAccountSecret(sa *corev1.ServiceAccount, secret corev1.ObjectReference) error {
 	if sa == nil {
-		return errors.New("nil serviceaccount")
+		return errors.ErrNilServiceAccount
 	}
 	sa.Secrets = append(sa.Secrets, secret)
 	return nil
@@ -40,7 +40,7 @@ func AddServiceAccountSecret(sa *corev1.ServiceAccount, secret corev1.ObjectRefe
 
 func AddServiceAccountImagePullSecret(sa *corev1.ServiceAccount, secret corev1.LocalObjectReference) error {
 	if sa == nil {
-		return errors.New("nil serviceaccount")
+		return errors.ErrNilServiceAccount
 	}
 	sa.ImagePullSecrets = append(sa.ImagePullSecrets, secret)
 	return nil
@@ -48,7 +48,7 @@ func AddServiceAccountImagePullSecret(sa *corev1.ServiceAccount, secret corev1.L
 
 func SetServiceAccountSecrets(sa *corev1.ServiceAccount, secrets []corev1.ObjectReference) error {
 	if sa == nil {
-		return errors.New("nil serviceaccount")
+		return errors.ErrNilServiceAccount
 	}
 	sa.Secrets = secrets
 	return nil
@@ -56,7 +56,7 @@ func SetServiceAccountSecrets(sa *corev1.ServiceAccount, secrets []corev1.Object
 
 func SetServiceAccountImagePullSecrets(sa *corev1.ServiceAccount, secrets []corev1.LocalObjectReference) error {
 	if sa == nil {
-		return errors.New("nil serviceaccount")
+		return errors.ErrNilServiceAccount
 	}
 	sa.ImagePullSecrets = secrets
 	return nil
@@ -64,7 +64,7 @@ func SetServiceAccountImagePullSecrets(sa *corev1.ServiceAccount, secrets []core
 
 func SetServiceAccountAutomountToken(sa *corev1.ServiceAccount, automount bool) error {
 	if sa == nil {
-		return errors.New("nil serviceaccount")
+		return errors.ErrNilServiceAccount
 	}
 	if sa.AutomountServiceAccountToken == nil {
 		sa.AutomountServiceAccountToken = new(bool)
