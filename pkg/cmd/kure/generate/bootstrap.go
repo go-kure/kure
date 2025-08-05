@@ -14,8 +14,10 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
-	"github.com/go-kure/kure/pkg/stack/argocd"
-	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	
+	// Import implementations to register workflow factories
+	_ "github.com/go-kure/kure/pkg/stack/argocd"
+	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
 )
 
 // BootstrapOptions contains options for the bootstrap command
@@ -245,7 +247,10 @@ func (o *BootstrapOptions) generateBootstrap(cluster *stack.Cluster) (*layout.Ma
 
 // generateArgoCDBootstrap generates ArgoCD bootstrap manifests
 func (o *BootstrapOptions) generateArgoCDBootstrap(cluster *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
-	wf := argocd.Engine()
+	wf, err := stack.NewWorkflow("argocd")
+	if err != nil {
+		return nil, err
+	}
 	
 	// Generate bootstrap resources directly
 	bootstrapObjs, err := wf.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
@@ -265,8 +270,22 @@ func (o *BootstrapOptions) generateArgoCDBootstrap(cluster *stack.Cluster, rules
 
 // generateFluxBootstrap generates Flux bootstrap manifests
 func (o *BootstrapOptions) generateFluxBootstrap(cluster *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
-	wf := fluxstack.Engine()
-	return wf.CreateLayoutWithResources(cluster, rules)
+	wf, err := stack.NewWorkflow("flux")
+	if err != nil {
+		return nil, err
+	}
+	
+	result, err := wf.CreateLayoutWithResources(cluster, rules)
+	if err != nil {
+		return nil, err
+	}
+	
+	ml, ok := result.(*layout.ManifestLayout)
+	if !ok {
+		return nil, errors.NewValidationError("result", "interface{}", "Expected", []string{"*layout.ManifestLayout"})
+	}
+	
+	return ml, nil
 }
 
 // writeOutput writes the generated manifests to output

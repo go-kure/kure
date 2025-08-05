@@ -1,6 +1,7 @@
 package argocd
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -10,7 +11,17 @@ import (
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
-// WorkflowEngine implements the workflow.WorkflowEngine interface for ArgoCD.
+// Ensure WorkflowEngine implements the stack.Workflow interface
+var _ stack.Workflow = (*WorkflowEngine)(nil)
+
+func init() {
+	// Register the ArgoCD workflow factory with the stack package
+	stack.RegisterArgoWorkflow(func() stack.Workflow {
+		return Engine()
+	})
+}
+
+// WorkflowEngine implements the stack.Workflow interface for ArgoCD.
 type WorkflowEngine struct {
 	// RepoURL is used as the source repo for generated Applications
 	RepoURL string
@@ -122,7 +133,11 @@ func (w *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack
 }
 
 // CreateLayoutWithResources creates a new layout that includes ArgoCD Applications.
-func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
+func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterface interface{}) (interface{}, error) {
+	rules, ok := rulesInterface.(layout.LayoutRules)
+	if !ok {
+		return nil, fmt.Errorf("rules must be of type layout.LayoutRules")
+	}
 	// Generate the base manifest layout
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {

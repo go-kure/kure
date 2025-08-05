@@ -18,10 +18,12 @@ import (
 	"github.com/go-kure/kure/pkg/patch"
 	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/argocd"
-	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/generators"
 	kio "github.com/go-kure/kure/pkg/io"
+	
+	// Import implementations to register workflow factories
+	_ "github.com/go-kure/kure/pkg/stack/argocd"
+	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -236,10 +238,19 @@ func runClusterExample(clusterFile string) error {
 	rules.ClusterName = cl.Name
 	rules.FluxPlacement = layout.FluxIntegrated
 
-	wf := fluxstack.Engine()
-	ml, err := wf.CreateLayoutWithResources(&cl, rules)
+	wf, err := stack.NewWorkflow("flux")
 	if err != nil {
 		return err
+	}
+	
+	result, err := wf.CreateLayoutWithResources(&cl, rules)
+	if err != nil {
+		return err
+	}
+	
+	ml, ok := result.(*layout.ManifestLayout)
+	if !ok {
+		return fmt.Errorf("unexpected result type from CreateLayoutWithResources")
 	}
 	
 	// Write manifests
@@ -407,9 +418,20 @@ func runBootstrapDemo() error {
 		
 		var ml *layout.ManifestLayout
 		
+		// Determine GitOps provider
+		provider := "flux" // default
+		if cl.GitOps != nil && cl.GitOps.Type != "" {
+			provider = cl.GitOps.Type
+		}
+		
+		// Create workflow using interface
+		wf, err := stack.NewWorkflow(provider)
+		if err != nil {
+			return err
+		}
+		
 		if cl.GitOps != nil && cl.GitOps.Type == "argocd" {
 			// For ArgoCD, generate bootstrap resources directly
-			wf := argocd.Engine()
 			bootstrapObjs, err := wf.GenerateBootstrap(cl.GitOps.Bootstrap, cl.Node)
 			if err != nil {
 				return err
@@ -423,8 +445,15 @@ func runBootstrapDemo() error {
 			}
 		} else {
 			// Default to Flux workflow
-			wf := fluxstack.Engine()
-			ml, err = wf.CreateLayoutWithResources(&cl, rules)
+			result, err := wf.CreateLayoutWithResources(&cl, rules)
+			if err != nil {
+				return err
+			}
+			var ok bool
+			ml, ok = result.(*layout.ManifestLayout)
+			if !ok {
+				return fmt.Errorf("unexpected result type from CreateLayoutWithResources")
+			}
 		}
 		if err != nil {
 			return err

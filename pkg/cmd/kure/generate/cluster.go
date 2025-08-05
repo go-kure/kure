@@ -13,8 +13,11 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
-	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/generators"
+	
+	// Import implementations to register workflow factories
+	_ "github.com/go-kure/kure/pkg/stack/argocd"
+	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
 )
 
 // ClusterOptions contains options for the cluster command
@@ -314,8 +317,29 @@ func (o *ClusterOptions) buildLayoutRules(cluster *stack.Cluster) layout.LayoutR
 
 // generateLayout generates the manifest layout
 func (o *ClusterOptions) generateLayout(cluster *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
-	wf := fluxstack.Engine()
-	return wf.CreateLayoutWithResources(cluster, rules)
+	// Determine GitOps provider from cluster config
+	provider := "flux" // default
+	if cluster.GitOps != nil && cluster.GitOps.Type != "" {
+		provider = cluster.GitOps.Type
+	}
+	
+	// Create workflow using the interface
+	wf, err := stack.NewWorkflow(provider)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create workflow for provider %s", provider)
+	}
+	
+	result, err := wf.CreateLayoutWithResources(cluster, rules)
+	if err != nil {
+		return nil, err
+	}
+	
+	ml, ok := result.(*layout.ManifestLayout)
+	if !ok {
+		return nil, errors.NewValidationError("result", "interface{}", "Expected", []string{"*layout.ManifestLayout"})
+	}
+	
+	return ml, nil
 }
 
 // writeOutput writes the generated manifests to output

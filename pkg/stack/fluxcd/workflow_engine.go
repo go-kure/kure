@@ -1,13 +1,18 @@
 package fluxcd
 
 import (
+	"fmt"
+	
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
-// WorkflowEngine implements the workflow.WorkflowEngine interface by composing
+// Ensure WorkflowEngine implements the stack.Workflow interface
+var _ stack.Workflow = (*WorkflowEngine)(nil)
+
+// WorkflowEngine implements the stack.Workflow interface by composing
 // the specialized generator components. This provides a complete FluxCD workflow
 // implementation with clear separation of concerns.
 type WorkflowEngine struct {
@@ -74,8 +79,12 @@ func (we *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stac
 }
 
 // CreateLayoutWithResources creates a new layout that includes Flux resources.
-func (we *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
-	return we.LayoutInteg.CreateLayoutWithResources(c, rules)
+func (we *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules interface{}) (interface{}, error) {
+	layoutRules, ok := rules.(layout.LayoutRules)
+	if !ok {
+		return nil, fmt.Errorf("rules must be of type layout.LayoutRules")
+	}
+	return we.LayoutInteg.CreateLayoutWithResources(c, layoutRules)
 }
 
 // BootstrapGenerator interface implementation
