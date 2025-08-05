@@ -210,12 +210,22 @@ func ParsePatchLine(key string, value interface{}) (PatchOp, error) {
 	if len(matches) == 3 {
 		path, sel := matches[1], matches[2]
 		switch {
-		case strings.HasPrefix(sel, "-="):
+		case strings.HasPrefix(sel, "-") && !isNumeric(strings.TrimPrefix(sel, "-")):
+			// Insert before matching item: [-name=value]
 			op.Op = "insertBefore"
-			op.Selector = strings.TrimPrefix(sel, "-=")
-		case strings.HasPrefix(sel, "+="):
+			op.Selector = strings.TrimPrefix(sel, "-")
+		case strings.HasPrefix(sel, "+") && !isNumeric(strings.TrimPrefix(sel, "+")):
+			// Insert after matching item: [+name=value]
 			op.Op = "insertAfter"
-			op.Selector = strings.TrimPrefix(sel, "+=")
+			op.Selector = strings.TrimPrefix(sel, "+")
+		case strings.HasPrefix(sel, "-") && isNumeric(strings.TrimPrefix(sel, "-")):
+			// Insert before index: [-3] means insert before index 3
+			op.Op = "insertBefore"
+			op.Selector = strings.TrimPrefix(sel, "-")
+		case strings.HasPrefix(sel, "+") && isNumeric(strings.TrimPrefix(sel, "+")):
+			// Insert after index: [+2] means insert after index 2
+			op.Op = "insertAfter"
+			op.Selector = strings.TrimPrefix(sel, "+")
 		default:
 			op.Op = "replace"
 			op.Selector = sel
@@ -231,12 +241,22 @@ func ParsePatchLine(key string, value interface{}) (PatchOp, error) {
 	if len(midMatches) == 4 {
 		basePath, sel, remainingPath := midMatches[1], midMatches[2], midMatches[3]
 		switch {
-		case strings.HasPrefix(sel, "-="):
+		case strings.HasPrefix(sel, "-") && !isNumeric(strings.TrimPrefix(sel, "-")):
+			// Insert before matching item in mid-path
 			op.Op = "insertBefore"
-			op.Selector = strings.TrimPrefix(sel, "-=")
-		case strings.HasPrefix(sel, "+="):
+			op.Selector = strings.TrimPrefix(sel, "-")
+		case strings.HasPrefix(sel, "+") && !isNumeric(strings.TrimPrefix(sel, "+")):
+			// Insert after matching item in mid-path
 			op.Op = "insertAfter"
-			op.Selector = strings.TrimPrefix(sel, "+=")
+			op.Selector = strings.TrimPrefix(sel, "+")
+		case strings.HasPrefix(sel, "-") && isNumeric(strings.TrimPrefix(sel, "-")):
+			// Insert before index in mid-path
+			op.Op = "insertBefore"
+			op.Selector = strings.TrimPrefix(sel, "-")
+		case strings.HasPrefix(sel, "+") && isNumeric(strings.TrimPrefix(sel, "+")):
+			// Insert after index in mid-path
+			op.Op = "insertAfter"
+			op.Selector = strings.TrimPrefix(sel, "+")
 		default:
 			op.Op = "replace"
 			op.Selector = sel
@@ -318,11 +338,27 @@ func (p *PatchOp) NormalizePath() error {
 
 // InferPatchOp infers a patch operation based on the path syntax.
 func InferPatchOp(path string) string {
-	if strings.Contains(path, "[+=]") || strings.Contains(path, "[+=name=") {
-		return "insertafter"
+	// Check for insertion patterns
+	if re := regexp.MustCompile(`\[([+-])[^0-9]`); re.MatchString(path) {
+		matches := re.FindStringSubmatch(path)
+		if len(matches) > 1 {
+			if matches[1] == "+" {
+				return "insertafter"
+			} else if matches[1] == "-" {
+				return "insertbefore"
+			}
+		}
 	}
-	if strings.Contains(path, "[-=") {
-		return "insertbefore"
+	// Check for pure index-based insertion
+	if re := regexp.MustCompile(`\[([+-])\d+\]`); re.MatchString(path) {
+		matches := re.FindStringSubmatch(path)
+		if len(matches) > 1 {
+			if matches[1] == "+" {
+				return "insertafter"
+			} else if matches[1] == "-" {
+				return "insertbefore"
+			}
+		}
 	}
 	if strings.HasSuffix(path, "[-]") {
 		return "append"
@@ -376,6 +412,12 @@ func ParsePatchPath(path string) ([]PathPart, error) {
 	}
 
 	return parts, nil
+}
+
+// isNumeric checks if a string represents a valid integer
+func isNumeric(s string) bool {
+	_, err := strconv.Atoi(s)
+	return err == nil
 }
 
 // convertValueForUnstructured converts values to types compatible with unstructured.SetNestedField

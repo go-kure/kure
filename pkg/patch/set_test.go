@@ -10,7 +10,7 @@ import (
 )
 
 func TestParsePatchLine(t *testing.T) {
-	op, err := ParsePatchLine("spec.template.spec.containers[+=name=main]", map[string]interface{}{"image": "nginx"})
+	op, err := ParsePatchLine("spec.template.spec.containers[+name=main]", map[string]interface{}{"image": "nginx"})
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -19,6 +19,56 @@ func TestParsePatchLine(t *testing.T) {
 	}
 	if op.Path != "spec.template.spec.containers" {
 		t.Fatalf("unexpected path %s", op.Path)
+	}
+}
+
+func TestParsePatchLineIndexBased(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantOp   string
+		wantSel  string
+		wantPath string
+	}{
+		{
+			name:     "insert before index",
+			input:    "spec.containers[-3]",
+			wantOp:   "insertBefore",
+			wantSel:  "3",
+			wantPath: "spec.containers",
+		},
+		{
+			name:     "insert after index",
+			input:    "spec.containers[+2]",
+			wantOp:   "insertAfter",
+			wantSel:  "2",
+			wantPath: "spec.containers",
+		},
+		{
+			name:     "append to list",
+			input:    "spec.containers[-]",
+			wantOp:   "append",
+			wantSel:  "",
+			wantPath: "spec.containers",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, err := ParsePatchLine(tt.input, map[string]interface{}{"name": "test"})
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			if op.Op != tt.wantOp {
+				t.Errorf("expected op %s, got %s", tt.wantOp, op.Op)
+			}
+			if op.Selector != tt.wantSel {
+				t.Errorf("expected selector %s, got %s", tt.wantSel, op.Selector)
+			}
+			if op.Path != tt.wantPath {
+				t.Errorf("expected path %s, got %s", tt.wantPath, op.Path)
+			}
+		})
 	}
 }
 

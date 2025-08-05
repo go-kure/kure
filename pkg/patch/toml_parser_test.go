@@ -187,7 +187,7 @@ func TestResolveTOMLPath(t *testing.T) {
 					Value: "main",
 				},
 			},
-			expectedTarget:    "app",
+			expectedTarget:    "deployment.app",
 			expectedFieldPath: "spec.template.spec.containers[name=main]",
 		},
 		{
@@ -201,7 +201,7 @@ func TestResolveTOMLPath(t *testing.T) {
 					Index: func() *int { i := 0; return &i }(),
 				},
 			},
-			expectedTarget:    "app",
+			expectedTarget:    "service.app",
 			expectedFieldPath: "spec.ports[0]",
 		},
 		{
@@ -210,7 +210,7 @@ func TestResolveTOMLPath(t *testing.T) {
 				Kind: "deployment",
 				Name: "app",
 			},
-			expectedTarget:    "app",
+			expectedTarget:    "deployment.app",
 			expectedFieldPath: "",
 		},
 		{
@@ -224,7 +224,7 @@ func TestResolveTOMLPath(t *testing.T) {
 					Index: func() *int { i := 0; return &i }(),
 				},
 			},
-			expectedTarget:    "web",
+			expectedTarget:    "ingress.web",
 			expectedFieldPath: "spec.rules.http.paths[0]",
 		},
 	}
@@ -388,8 +388,8 @@ resources.requests.cpu: 100m`
 	}
 
 	// Check first patch
-	if patches[0].Target != "app" {
-		t.Errorf("first patch target: expected 'app', got '%s'", patches[0].Target)
+	if patches[0].Target != "deployment.app" {
+		t.Errorf("first patch target: expected 'deployment.app', got '%s'", patches[0].Target)
 	}
 
 	if patches[0].Patch.Path != "replicas" {
@@ -438,16 +438,16 @@ debug: ${features.enable_debug}`
 	for _, patch := range patches {
 		switch patch.Patch.Path {
 		case "replicas":
-			if patch.Patch.Value != "3" {
-				t.Errorf("replicas value: expected '3', got %v", patch.Patch.Value)
+			if patch.Patch.Value != 3 {
+				t.Errorf("replicas value: expected 3, got %v (%T)", patch.Patch.Value, patch.Patch.Value)
 			}
 		case "image":
 			if patch.Patch.Value != "nginx:1.20" {
 				t.Errorf("image value: expected 'nginx:1.20', got %v", patch.Patch.Value)
 			}
 		case "debug":
-			if patch.Patch.Value != "true" {
-				t.Errorf("debug value: expected 'true', got %v", patch.Patch.Value)
+			if patch.Patch.Value != true {
+				t.Errorf("debug value: expected bool(true), got %v (%T)", patch.Patch.Value, patch.Patch.Value)
 			}
 		}
 	}

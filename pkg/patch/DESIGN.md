@@ -1,8 +1,8 @@
-# Kur8 Patch File Format — Specification
+# Kure Patch File Format — Specification
 
-This document describes the complete structure and semantics of `.patch` files used in Kur8 to define Kubernetes resource overrides.
+This document describes the complete structure and semantics of `.patch` files used in Kure to define Kubernetes resource overrides.
 
-Kur8 patches are:
+Kure patches are:
 
 - Flat, line-based
 - TOML-inspired, but **not** valid TOML
@@ -96,7 +96,7 @@ host: "${values.domain}"
 
 ## 4. Variables
 
-Kur8 patch files support scalar substitution using instance-level variables.
+Kure patch files support scalar substitution using instance-level variables.
 
 ### Syntax
 
@@ -127,7 +127,7 @@ hostname: "${values.name}.${values.domain}"
 
 ## 5. Lists and Selectors
 
-Kur8 supports patching into Kubernetes lists like `containers`, `env`, `ports`, `volumes`, `volumeMounts`, etc.
+Kure supports patching into Kubernetes lists like `containers`, `env`, `ports`, `volumes`, `volumeMounts`, etc.
 
 ### 5.1 List Selector Syntax
 
@@ -147,18 +147,36 @@ Note: You may omit brackets around `key=value` unless the key or value contains 
 
 ---
 
-## 6. Limitations
+## 6. Implementation Status
 
-- No logic, conditionals, templating
-- No map merging — field values are replaced
-- Only scalar values (arrays/objects not allowed)
-- Must match known OpenAPI fields of the base resource
+### Supported Features
+- Dual format support (YAML and TOML) with automatic detection
+- Advanced structure preservation maintaining comments and formatting
+- Intelligent path resolution with disambiguation
+- Variable substitution with `${values.key}` and `${features.flag}` syntax
+- Automatic type inference for Kubernetes compatibility
+- Comprehensive debug logging with `KURE_DEBUG=1`
+- Graceful error handling with warnings for missing targets
+
+### Current Limitations
+- No logic, conditionals, or templating expressions
+- No map merging — field values are completely replaced
+- Only scalar values supported (arrays/objects not allowed in patch values)
+- ✅ Pure index-based insertion (`[-3]`, `[+2]`) now implemented
+- Variable context must be provided programmatically (no instance.yaml integration)
+- No OpenAPI schema validation (planned for future implementation)
+
+### Future Enhancements
+- Integration with instance.yaml files for automatic variable context
+- OpenAPI schema validation for patch target verification
+- CLI interface for interactive patch editing
+- Extended insertion syntax for pure index-based operations
 
 ---
 
 ## 7. Purpose
 
-Kur8 patches are designed to:
+Kure patches are designed to:
 
 - Override Kubernetes manifests without templates
 - Enable reusable, modular package definitions
@@ -194,5 +212,5 @@ This file:
 
 ---
 
-This format is the foundation for declarative, schema-validated Kubernetes customization in Kur8.
+This format is the foundation for declarative, schema-validated Kubernetes customization in Kure.
 

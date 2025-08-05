@@ -52,8 +52,8 @@ port: 8888`
 
 	// Check that all patches have correct structure
 	for i, p := range patches {
-		if p.Target != "test-service" {
-			t.Errorf("Patch %d: expected target 'test-service', got '%s'", i, p.Target)
+		if p.Target != "service.test-service" {
+			t.Errorf("Patch %d: expected target 'service.test-service', got '%s'", i, p.Target)
 		}
 		if p.Patch.Path != "spec.ports" {
 			t.Errorf("Patch %d: expected path 'spec.ports', got '%s'", i, p.Patch.Path)
