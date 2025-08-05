@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kio "github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 type ManifestLayout struct {
@@ -66,7 +67,7 @@ func WritePackagesToDisk(packages map[string]*ManifestLayout, basePath string) e
 		packagePath := filepath.Join(basePath, packageDirName)
 		
 		if err := layout.WriteToDisk(packagePath); err != nil {
-			return fmt.Errorf("write package %s to disk: %w", packageKey, err)
+			return errors.Wrap(err, fmt.Sprintf("write package %s to disk", packageKey))
 		}
 	}
 	return nil
@@ -157,7 +158,7 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		fullPath = filepath.Join(basePath, ml.FullRepoPath())
 	}
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
-		return fmt.Errorf("create dir: %w", err)
+		return errors.NewFileError("create", fullPath, "directory creation failed", err)
 	}
 
 	fileGroups := map[string][]client.Object{}

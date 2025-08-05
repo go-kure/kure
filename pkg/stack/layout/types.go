@@ -2,7 +2,9 @@
 // Kubernetes manifests and Flux resources.
 package layout
 
-import "fmt"
+import (
+	"github.com/go-kure/kure/pkg/errors"
+)
 
 // FileExportMode determines how resources are written to disk.
 type FileExportMode string
@@ -125,34 +127,34 @@ func (lr LayoutRules) Validate() error {
 	}
 
 	if !validGrouping(lr.NodeGrouping) {
-		return fmt.Errorf("invalid node grouping: %s", lr.NodeGrouping)
+		return errors.NewValidationError("NodeGrouping", string(lr.NodeGrouping), "LayoutRules", []string{string(GroupByName), string(GroupFlat)})
 	}
 	if !validGrouping(lr.BundleGrouping) {
-		return fmt.Errorf("invalid bundle grouping: %s", lr.BundleGrouping)
+		return errors.NewValidationError("BundleGrouping", string(lr.BundleGrouping), "LayoutRules", []string{string(GroupByName), string(GroupFlat)})
 	}
 	if !validGrouping(lr.ApplicationGrouping) {
-		return fmt.Errorf("invalid application grouping: %s", lr.ApplicationGrouping)
+		return errors.NewValidationError("ApplicationGrouping", string(lr.ApplicationGrouping), "LayoutRules", []string{string(GroupByName), string(GroupFlat)})
 	}
 
 	switch lr.ApplicationFileMode {
 	case AppFilePerResource, AppFileSingle, AppFileUnset:
 		// valid
 	default:
-		return fmt.Errorf("invalid application file mode: %s", lr.ApplicationFileMode)
+		return errors.NewValidationError("ApplicationFileMode", string(lr.ApplicationFileMode), "LayoutRules", []string{string(AppFilePerResource), string(AppFileSingle)})
 	}
 
 	switch lr.FilePer {
 	case FilePerResource, FilePerKind, FilePerUnset:
 		// valid
 	default:
-		return fmt.Errorf("invalid file export mode: %s", lr.FilePer)
+		return errors.NewValidationError("FilePer", string(lr.FilePer), "LayoutRules", []string{string(FilePerResource), string(FilePerKind)})
 	}
 
 	switch lr.FluxPlacement {
 	case FluxSeparate, FluxIntegrated, FluxUnset:
 		// valid
 	default:
-		return fmt.Errorf("invalid flux placement: %s", lr.FluxPlacement)
+		return errors.NewValidationError("FluxPlacement", string(lr.FluxPlacement), "LayoutRules", []string{string(FluxSeparate), string(FluxIntegrated)})
 	}
 
 	return nil

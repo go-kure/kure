@@ -53,6 +53,6 @@ func ValidatePackageRef(p *schema.GroupVersionKind) error {
 	if IsGVKAllowed(*p, allowed) {
 		return nil
 	} else {
-		return errors.New(errors.ErrGVKNotAllowed, p.String())
+		return errors.ErrGVKNotAllowed
 	}
 }

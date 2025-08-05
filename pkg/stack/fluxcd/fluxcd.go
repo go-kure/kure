@@ -18,6 +18,7 @@ import (
 	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // Workflow implements the stack.Workflow interface for Flux.
@@ -594,7 +595,7 @@ func (w Workflow) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *sta
 		// Generate gotk-components.yaml
 		gotkObjs, err := w.generateGotkComponents(config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate gotk-components: %w", err)
+			return nil, errors.Wrap(err, "failed to generate gotk-components")
 		}
 		objects = append(objects, gotkObjs...)
 
@@ -612,7 +613,7 @@ func (w Workflow) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *sta
 		objects = append(objects, fluxInstance)
 	
 	default:
-		return nil, fmt.Errorf("unsupported flux mode: %s", config.FluxMode)
+		return nil, errors.NewValidationError("FluxMode", string(config.FluxMode), "WorkflowConfig", []string{"bootstrap", "GitOps"})
 	}
 
 	return objects, nil
@@ -646,13 +647,13 @@ func (w Workflow) generateGotkComponents(config *stack.BootstrapConfig) ([]clien
 	// Generate manifests
 	content, err := install.Generate(opts, "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate flux manifests: %w", err)
+		return nil, errors.Wrap(err, "failed to generate flux manifests")
 	}
 	
 	// Parse the generated YAML into client.Objects
 	objects, err := kio.ParseYAML([]byte(content.Content))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse generated manifests: %w", err)
+		return nil, errors.NewParseError("flux-manifests", "YAML parsing failed", 0, 0, err)
 	}
 	
 	return objects, nil

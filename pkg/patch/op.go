@@ -1,13 +1,14 @@
 package patch
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // PatchOp represents a single patch operation to apply to an object.
@@ -30,7 +31,13 @@ type ResourceWithPatches struct {
 func (r *ResourceWithPatches) Apply() error {
 	for _, patch := range r.Patches {
 		if err := applyPatchOp(r.Base.Object, patch); err != nil {
-			return fmt.Errorf("failed to apply patch %v: %w", patch, err)
+			return errors.NewPatchError(
+				patch.Op,
+				patch.Path,
+				r.Name,
+				"patch application failed",
+				err,
+			)
 		}
 	}
 	return nil
@@ -44,55 +51,73 @@ func applyPatchOp(obj map[string]interface{}, op PatchOp) error {
 			return applyArrayReplace(obj, op)
 		}
 		convertedValue := convertValueForUnstructured(op.Value)
-	return unstructured.SetNestedField(obj, convertedValue, parsePath(op.Path)...)
+		if err := unstructured.SetNestedField(obj, convertedValue, parsePath(op.Path)...); err != nil {
+			return errors.NewPatchError(op.Op, op.Path, "", "failed to set field", err)
+		}
+		return nil
 	case "delete":
 		if op.Selector == "" {
 			_, found, err := unstructured.NestedFieldNoCopy(obj, parsePath(op.Path)...)
-			if err != nil || !found {
-				return fmt.Errorf("path not found: %s", op.Path)
+			if err != nil {
+				return errors.NewPatchError(op.Op, op.Path, "", "failed to access field", err)
+			}
+			if !found {
+				return errors.NewPatchError(op.Op, op.Path, "", "path not found", nil)
 			}
 			unstructured.RemoveNestedField(obj, parsePath(op.Path)...)
 			return nil
 		}
 		path := parsePath(op.Path)
 		lst, found, err := unstructured.NestedSlice(obj, path...)
-		if err != nil || !found {
-			return fmt.Errorf("path not found for list delete: %s", op.Path)
+		if err != nil {
+			return errors.NewPatchError(op.Op, op.Path, "", "failed to access list", err)
+		}
+		if !found {
+			return errors.NewPatchError(op.Op, op.Path, "", "list not found", nil)
 		}
 		idx, err := resolveListIndex(lst, op.Selector)
 		if err != nil {
-			return err
+			return errors.NewPatchError(op.Op, op.Path, "", "failed to resolve list index", err)
 		}
 		if idx < 0 || idx >= len(lst) {
-			return fmt.Errorf("index out of bounds: %d", idx)
+			return errors.NewPatchError(op.Op, op.Path, "", fmt.Sprintf("index %d out of bounds for list of length %d", idx, len(lst)), nil)
 		}
 		lst = append(lst[:idx], lst[idx+1:]...)
 		return unstructured.SetNestedSlice(obj, lst, path...)
 	case "append":
 		lst, found, err := unstructured.NestedSlice(obj, parsePath(op.Path)...)
-		if err != nil || !found {
-			return fmt.Errorf("path not found: %s", op.Path)
+		if err != nil {
+			return errors.NewPatchError(op.Op, op.Path, "", "failed to access list", err)
+		}
+		if !found {
+			return errors.NewPatchError(op.Op, op.Path, "", "list not found", nil)
 		}
 		convertedValue := convertValueForUnstructured(op.Value)
 		lst = append(lst, convertedValue)
-		return unstructured.SetNestedSlice(obj, lst, parsePath(op.Path)...)
+		if err := unstructured.SetNestedSlice(obj, lst, parsePath(op.Path)...); err != nil {
+			return errors.NewPatchError(op.Op, op.Path, "", "failed to update list", err)
+		}
+		return nil
 	case "insertBefore", "insertAfter":
 		return applyListPatch(obj, op)
 	default:
-		return fmt.Errorf("unsupported op: %s", op.Op)
+		return errors.NewValidationError("operation", op.Op, "patch", []string{"replace", "delete", "append", "insertBefore", "insertAfter"})
 	}
 }
 
 func applyListPatch(obj map[string]interface{}, op PatchOp) error {
 	path := parsePath(op.Path)
 	lst, found, err := unstructured.NestedSlice(obj, path...)
-	if err != nil || !found {
-		return fmt.Errorf("path not found for list insert: %s", op.Path)
+	if err != nil {
+		return errors.NewPatchError(op.Op, op.Path, "", "failed to access list", err)
+	}
+	if !found {
+		return errors.NewPatchError(op.Op, op.Path, "", "list not found", nil)
 	}
 
 	idx, err := resolveListIndex(lst, op.Selector)
 	if err != nil {
-		return err
+		return errors.NewPatchError(op.Op, op.Path, "", "failed to resolve list index", err)
 	}
 
 	convertedValue := convertValueForUnstructured(op.Value)
@@ -103,7 +128,10 @@ func applyListPatch(obj map[string]interface{}, op PatchOp) error {
 		lst = append(lst[:idx+1], append([]interface{}{convertedValue}, lst[idx+1:]...)...)
 	}
 
-	return unstructured.SetNestedSlice(obj, lst, path...)
+	if err := unstructured.SetNestedSlice(obj, lst, path...); err != nil {
+		return errors.NewPatchError(op.Op, op.Path, "", "failed to update list", err)
+	}
+	return nil
 }
 
 func resolveListIndex(list []interface{}, selector string) (int, error) {
@@ -116,17 +144,17 @@ func resolveListIndex(list []interface{}, selector string) (int, error) {
 				return i, nil
 			}
 		}
-		return -1, errors.New("key match not found")
+		return -1, errors.NewPatchError("resolve", "", "", fmt.Sprintf("key-value match '%s=%s' not found in list", key, val), nil)
 	}
 	i, err := strconv.Atoi(selector)
 	if err != nil {
-		return -1, fmt.Errorf("invalid index: %s", selector)
+		return -1, errors.NewValidationError("selector", selector, "patch", []string{"integer index", "key=value pair"})
 	}
 	if i < 0 {
 		i = len(list) + i
 	}
 	if i < 0 || i > len(list) {
-		return -1, fmt.Errorf("index out of bounds: %d", i)
+		return -1, errors.NewPatchError("resolve", "", "", fmt.Sprintf("index %d out of bounds for list of length %d", i, len(list)), nil)
 	}
 	return i, nil
 }
@@ -135,17 +163,20 @@ func resolveListIndex(list []interface{}, selector string) (int, error) {
 func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
 	path := parsePath(op.Path)
 	lst, found, err := unstructured.NestedSlice(obj, path...)
-	if err != nil || !found {
-		return fmt.Errorf("path not found for array replace: %s", op.Path)
+	if err != nil {
+		return errors.NewPatchError(op.Op, op.Path, "", "failed to access array", err)
+	}
+	if !found {
+		return errors.NewPatchError(op.Op, op.Path, "", "array not found", nil)
 	}
 
 	idx, err := resolveListIndex(lst, op.Selector)
 	if err != nil {
-		return fmt.Errorf("failed to resolve array index: %w", err)
+		return errors.Wrap(err, "failed to resolve array index")
 	}
 
 	if idx < 0 || idx >= len(lst) {
-		return fmt.Errorf("array index out of bounds: %d", idx)
+		return errors.NewPatchError(op.Op, op.Path, "", fmt.Sprintf("array index %d out of bounds for array of length %d", idx, len(lst)), nil)
 	}
 
 	// Check if this is a nested field patch (value is a map with remaining path)
@@ -153,7 +184,7 @@ func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
 		// This is a nested patch - get the array item and patch it
 		item, ok := lst[idx].(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("array item at index %d is not an object", idx)
+			return errors.NewPatchError(op.Op, op.Path, "", fmt.Sprintf("array item at index %d is not an object", idx), nil)
 		}
 
 		// Apply the nested patch to the array item
@@ -161,7 +192,7 @@ func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
 			// Convert value to appropriate type for unstructured
 			convertedValue := convertValueForUnstructured(newValue)
 			if err := unstructured.SetNestedField(item, convertedValue, parsePath(remainingPath)...); err != nil {
-				return fmt.Errorf("failed to set nested field %s: %w", remainingPath, err)
+				return errors.NewPatchError(op.Op, op.Path+"."+remainingPath, "", "failed to set nested field", err)
 			}
 		}
 		
@@ -173,7 +204,10 @@ func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
 		lst[idx] = convertedValue
 	}
 
-	return unstructured.SetNestedSlice(obj, lst, path...)
+	if err := unstructured.SetNestedSlice(obj, lst, path...); err != nil {
+		return errors.NewPatchError(op.Op, op.Path, "", "failed to update array", err)
+	}
+	return nil
 }
 
 func parsePath(path string) []string {

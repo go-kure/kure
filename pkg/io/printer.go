@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/printers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // OutputFormat represents the supported output formats for printing resources
@@ -69,7 +71,7 @@ func (rp *ResourcePrinter) Print(resources []*client.Object, w io.Writer) error 
 	case OutputFormatName:
 		return rp.printNames(resources, w)
 	default:
-		return fmt.Errorf("unsupported output format: %s", rp.options.OutputFormat)
+		return errors.NewValidationError("OutputFormat", string(rp.options.OutputFormat), "ResourcePrinter", []string{"yaml", "json", "table", "wide", "name"})
 	}
 }
 
@@ -77,7 +79,7 @@ func (rp *ResourcePrinter) Print(resources []*client.Object, w io.Writer) error 
 func (rp *ResourcePrinter) printYAML(resources []*client.Object, w io.Writer) error {
 	data, err := EncodeObjectsToYAML(resources)
 	if err != nil {
-		return fmt.Errorf("encode to YAML: %w", err)
+		return errors.Wrap(err, "encode to YAML")
 	}
 	_, err = w.Write(data)
 	return err
@@ -87,7 +89,7 @@ func (rp *ResourcePrinter) printYAML(resources []*client.Object, w io.Writer) er
 func (rp *ResourcePrinter) printJSON(resources []*client.Object, w io.Writer) error {
 	data, err := EncodeObjectsToJSON(resources)
 	if err != nil {
-		return fmt.Errorf("encode to JSON: %w", err)
+		return errors.Wrap(err, "encode to JSON")
 	}
 	_, err = w.Write(data)
 	return err
@@ -146,7 +148,7 @@ func (rp *ResourcePrinter) printTable(resources []*client.Object, w io.Writer, w
 	// Print each resource
 	for _, obj := range runtimeObjects {
 		if err := printer.PrintObj(obj, w); err != nil {
-			return fmt.Errorf("print object: %w", err)
+			return errors.Wrap(err, "print object")
 		}
 	}
 
@@ -285,6 +287,6 @@ func ValidateOutputFormat(format string) (OutputFormat, error) {
 	case "name":
 		return OutputFormatName, nil
 	default:
-		return "", fmt.Errorf("unsupported output format: %s. Supported formats: yaml, json, table, wide, name", format)
+		return "", errors.NewValidationError("format", format, "ParseOutputFormat", []string{"yaml", "json", "table", "wide", "name"})
 	}
 }

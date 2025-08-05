@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kio "github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // WriteManifest writes a ManifestLayout to disk using the provided configuration.
@@ -39,7 +40,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		fullPath = filepath.Join(basePath, cfg.ManifestsDir, ml.FullRepoPath())
 	}
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
-		return fmt.Errorf("create dir: %w", err)
+		return errors.NewFileError("create", fullPath, "directory creation failed", err)
 	}
 
 	fileGroups := map[string][]client.Object{}
