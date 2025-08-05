@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-kure/kure/pkg/patch"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func main() {
