@@ -52,105 +52,118 @@ Kure prioritizes **type safety**, **composability**, and **simplicity** over tem
 
 ### Quick Example
 
-The repository includes an extensive example in [cmd/demo/main.go](cmd/demo/main.go) that constructs several resources and prints them as YAML. A short excerpt is shown below:
-
-```go
-y := printers.YAMLPrinter{}
-
-ns := kubernetes.CreateNamespace("demo")
-kubernetes.AddNamespaceLabel(ns, "env", "demo")
-
-if err := y.PrintObj(ns, os.Stdout); err != nil {
-    fmt.Fprintf(os.Stderr, "failed to print YAML: %v\n", err)
-}
-```
-
-### Running Examples
+### Installation
 
 ```bash
-# Run the comprehensive demo
-go run ./cmd/demo
-
-# Run with specific options
-go run ./cmd/demo -internals     # Internal package demos
-go run ./cmd/demo -app-workload  # AppWorkload example
-go run ./cmd/demo -cluster       # Cluster example
+go get github.com/go-kure/kure
 ```
 
 ### Using in Your Project
 
-To use the helpers in your own code, import the desired package from `github.com/go-kure/kure`:
+### Basic Usage
+
+To use Kure in your project, import the public API packages:
 
 ```go
-import "github.com/go-kure/kure/internal/kubernetes"
+import (
+    "github.com/go-kure/kure/pkg/stack"
+    "github.com/go-kure/kure/pkg/stack/layout"
+    "github.com/go-kure/kure/pkg/k8s/fluxcd"
+    "github.com/go-kure/kure/pkg/io"
+)
 ```
 
 ## Key Features
 
-### Strongly-Typed Resource Construction
+### Domain Model Usage
 
 ```go
-ns := kubernetes.CreateNamespace("demo")
-kubernetes.AddNamespaceLabel(ns, "env", "demo")
+// Create cluster structure
+cluster := stack.NewCluster("production")
+node := stack.NewNode("control-plane")
+bundle := stack.NewBundle("monitoring")
 
-dep := kubernetes.CreateDeployment("app", "demo")
-kubernetes.AddDeploymentContainer(dep, container)
+// Add to hierarchy
+cluster.AddNode(node)
+node.AddBundle(bundle)
+
+// Configure application
+app := stack.NewApplication("prometheus", appConfig)
+bundle.AddApplication(app)
 ```
 
 ### GitOps Workflow Integration
 
 ```go
-// Generate Flux Kustomizations
-wf := fluxcd.NewWorkflow()
-fluxObjs, err := wf.Cluster(cluster)
+// Create Flux resources using the public API
+ks := fluxcd.NewKustomization(&fluxcd.KustomizationConfig{
+    Name:      "app",
+    Namespace: "flux-system",
+    Interval:  "1m",
+    SourceRef: kustv1.CrossNamespaceSourceReference{
+        Kind: "GitRepository",
+        Name: "app-repo",
+    },
+})
 
-// Or ArgoCD Applications
-argoWf := argocd.NewWorkflow()
-argoObjs, err := argoWf.Cluster(cluster)
+repo := fluxcd.NewGitRepository(&fluxcd.GitRepositoryConfig{
+    Name:      "app-repo",
+    Namespace: "flux-system",
+    URL:       "https://github.com/example/app",
+    Interval:  "1m",
+    Ref:       "main",
+})
+
+// Write YAML output
+printer := io.NewYAMLPrinter()
+printer.PrintObj(ks, os.Stdout)
+printer.PrintObj(repo, os.Stdout)
 ```
 
-### Layout Rules and FluxCD Integration
+### Layout and Manifest Generation
 
-`LayoutRules` control how nodes, bundles and applications are grouped when writing manifests. The example below flattens bundles and applications under their parent node, writes the manifests to `./repo` and then generates Flux Kustomizations for the cluster:
+`LayoutRules` control how resources are organized on disk:
 
 ```go
+// Configure layout rules
 rules := layout.LayoutRules{
     BundleGrouping:      layout.GroupFlat,
     ApplicationGrouping: layout.GroupFlat,
 }
 
+// Generate manifest layout
 ml, err := layout.WalkCluster(cluster, rules)
 if err != nil {
-    // handle error
+    log.Fatal(err)
 }
 
+// Write manifests to disk
 cfg := layout.DefaultLayoutConfig()
 if err := layout.WriteManifest("./repo", cfg, ml); err != nil {
-    // handle error
-}
-
-wf := fluxcd.NewWorkflow()
-fluxObjs, err := wf.Cluster(cluster)
-if err != nil {
-    // handle error
+    log.Fatal(err)
 }
 ```
 
 ### Declarative Patching
 
-The `kure` CLI can patch a base manifest using a file of patch operations:
+The `kure` CLI provides patching functionality:
 
 ```bash
-kure patch --base examples/patch/base-config.yaml --patch examples/patch/patch.yaml
+kure patch --base examples/patches/cert-manager-simple.yaml --patch examples/patches/resources.kpatch
 ```
 
-The command reads the base resource(s) and applies the patches, printing the resulting YAML to stdout.
+The command applies JSONPath-based patches to Kubernetes manifests.
 
-Example patch file:
+Example patch file (`.kpatch` format):
 ```toml
 [[patches]]
 path = "spec.replicas"
 value = 5
+operation = "replace"
+
+[[patches]]
+path = "spec.template.spec.containers[0].resources.limits.memory"
+value = "512Mi"
 operation = "replace"
 ```
 
@@ -235,10 +248,10 @@ The `go test` command will discover and execute tests across all packages.
 - Built on controller-runtime for Kubernetes integration
 
 ### Examples & Documentation
-- Comprehensive demo in `cmd/demo/main.go` showcasing all features
 - Example cluster configurations in `examples/`
 - API documentation available at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure)
 - Design documents in `pkg/*/DESIGN.md` files
+- CLI reference via `kure --help`
 
 ## Use Cases
 
@@ -250,7 +263,15 @@ The `go test` command will discover and execute tests across all packages.
 
 ## Documentation
 
-API reference documentation is available at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure). Packages like `kubernetes`, `fluxcd`, `certmanager`, and `metallb` are located under the `internal/` directory and include helpers for constructing related resources.
+### API Reference
+
+Full API documentation is available at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure). The main public packages are:
+
+- `pkg/stack` - Core domain model and workflow interfaces
+- `pkg/stack/layout` - Manifest organization and file layout
+- `pkg/k8s/fluxcd` - Flux resource creation and management
+- `pkg/patch` - JSONPath-based patching system
+- `pkg/io` - YAML serialization and printing utilities
 
 ## License
 
