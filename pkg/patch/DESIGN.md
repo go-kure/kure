@@ -107,8 +107,8 @@ ${values.domain}
 
 ### Scope
 
-- `features.*`: booleans defined in `instance.yaml`
-- `values.*`: strings or numbers defined in `instance.yaml`
+- `features.*`: booleans provided programmatically
+- `values.*`: strings or numbers provided programmatically
 
 Variables must resolve to scalars. No objects or arrays allowed.
 
@@ -163,14 +163,11 @@ Note: You may omit brackets around `key=value` unless the key or value contains 
 - No map merging — field values are completely replaced
 - Only scalar values supported (arrays/objects not allowed in patch values)
 - ✅ Pure index-based insertion (`[-3]`, `[+2]`) now implemented
-- Variable context must be provided programmatically (no instance.yaml integration)
+- Variable context must be provided programmatically
 - No OpenAPI schema validation (planned for future implementation)
 
 ### Future Enhancements
-- Integration with instance.yaml files for automatic variable context
 - OpenAPI schema validation for patch target verification
-- CLI interface for interactive patch editing
-- Extended insertion syntax for pure index-based operations
 
 ---
 
