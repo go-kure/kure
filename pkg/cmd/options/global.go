@@ -42,13 +42,13 @@ func NewGlobalOptions() *GlobalOptions {
 // AddFlags adds global flags to the provided FlagSet
 func (o *GlobalOptions) AddFlags(flags *pflag.FlagSet) {
 	// Configuration flags
-	flags.StringVar(&o.ConfigFile, "config", o.ConfigFile, "config file (default is $HOME/.kure.yaml)")
+	flags.StringVarP(&o.ConfigFile, "config", "c", o.ConfigFile, "config file (default is $HOME/.kure.yaml)")
 	flags.BoolVarP(&o.Verbose, "verbose", "v", o.Verbose, "verbose output")
 	flags.BoolVar(&o.Debug, "debug", o.Debug, "debug output")
 
 	// Output flags
 	flags.StringVarP(&o.Output, "output", "o", o.Output, "output format (yaml|json|table|wide|name)")
-	flags.StringVar(&o.OutputFile, "output-file", o.OutputFile, "write output to file instead of stdout")
+	flags.StringVarP(&o.OutputFile, "output-file", "f", o.OutputFile, "write output to file instead of stdout")
 	flags.BoolVar(&o.NoHeaders, "no-headers", o.NoHeaders, "don't print headers (for table output)")
 	flags.BoolVar(&o.ShowLabels, "show-labels", o.ShowLabels, "show resource labels in table output")
 	flags.BoolVar(&o.Wide, "wide", o.Wide, "use wide output format")

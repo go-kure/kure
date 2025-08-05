@@ -89,8 +89,8 @@ Examples:
 
 // AddFlags adds flags to the command
 func (o *PatchOptions) AddFlags(flags *pflag.FlagSet) {
-	flags.StringVar(&o.PatchDir, "patch-dir", "", "directory containing patch files")
-	flags.StringVarP(&o.OutputFile, "output-file", "f", "", "output file for patched resources (stdout if not specified)")
+	flags.StringVarP(&o.PatchDir, "patch-dir", "p", "", "directory containing patch files")
+	flags.StringVar(&o.OutputFile, "output-file", "", "output file for patched resources (stdout if not specified)")
 	flags.StringVarP(&o.OutputDir, "output-dir", "d", "out/patches", "output directory for patched resources")
 	flags.BoolVar(&o.ValidateOnly, "validate-only", false, "validate patches without applying them")
 	flags.BoolVar(&o.Interactive, "interactive", false, "interactive patch mode")
@@ -99,6 +99,11 @@ func (o *PatchOptions) AddFlags(flags *pflag.FlagSet) {
 // Complete completes the options
 func (o *PatchOptions) Complete() error {
 	globalOpts := o.Factory.GlobalOptions()
+	
+	// Use global output file if specified
+	if globalOpts.OutputFile != "" {
+		o.OutputFile = globalOpts.OutputFile
+	}
 	
 	// Scan patch directory if specified
 	if o.PatchDir != "" {

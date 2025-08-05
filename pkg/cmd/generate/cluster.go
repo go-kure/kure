@@ -85,10 +85,10 @@ Examples:
 func (o *ClusterOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&o.OutputDir, "output-dir", "d", "out", "output directory for generated manifests")
 	flags.StringVar(&o.ManifestDir, "manifest-dir", "clusters", "manifests directory name in output")
-	flags.StringVar(&o.BundleGrouping, "bundle-grouping", "flat", "bundle grouping strategy (flat|nested)")
-	flags.StringVar(&o.ApplicationGrouping, "application-grouping", "flat", "application grouping strategy (flat|nested)")
+	flags.StringVarP(&o.BundleGrouping, "bundle-grouping", "b", "flat", "bundle grouping strategy (flat|nested)")
+	flags.StringVarP(&o.ApplicationGrouping, "application-grouping", "a", "flat", "application grouping strategy (flat|nested)")
 	flags.StringVar(&o.FluxPlacement, "flux-placement", "integrated", "flux placement strategy (integrated|separate)")
-	flags.StringVar(&o.InputDir, "input-dir", "", "input directory for loading app configs (defaults to config file directory)")
+	flags.StringVarP(&o.InputDir, "input-dir", "i", "", "input directory for loading app configs (defaults to config file directory)")
 }
 
 // Complete completes the options

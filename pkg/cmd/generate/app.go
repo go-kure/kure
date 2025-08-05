@@ -83,14 +83,19 @@ Examples:
 
 // AddFlags adds flags to the command
 func (o *AppOptions) AddFlags(flags *pflag.FlagSet) {
-	flags.StringVar(&o.InputDir, "input-dir", "", "input directory containing app config files")
+	flags.StringVarP(&o.InputDir, "input-dir", "i", "", "input directory containing app config files")
 	flags.StringVarP(&o.OutputDir, "output-dir", "d", "out/apps", "output directory for generated manifests")
-	flags.StringVarP(&o.OutputFile, "output-file", "f", "", "output file for generated manifests (stdout if not specified)")
+	flags.StringVar(&o.OutputFile, "output-file", "", "output file for generated manifests (stdout if not specified)")
 }
 
 // Complete completes the options
 func (o *AppOptions) Complete() error {
 	globalOpts := o.Factory.GlobalOptions()
+	
+	// Use global output file if specified
+	if globalOpts.OutputFile != "" {
+		o.OutputFile = globalOpts.OutputFile
+	}
 	
 	// If input directory is specified, scan for config files
 	if o.InputDir != "" {

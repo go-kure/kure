@@ -86,8 +86,8 @@ Examples:
 // AddFlags adds flags to the command
 func (o *BootstrapOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&o.OutputDir, "output-dir", "d", "out/bootstrap", "output directory for generated manifests")
-	flags.StringVar(&o.ManifestDir, "manifest-dir", "", "manifests directory name in output")
-	flags.StringVar(&o.GitOpsType, "gitops-type", "", "GitOps tool type (flux|argocd) - auto-detected if not specified")
+	flags.StringVarP(&o.ManifestDir, "manifest-dir", "m", "", "manifests directory name in output")
+	flags.StringVarP(&o.GitOpsType, "gitops-type", "g", "", "GitOps tool type (flux|argocd) - auto-detected if not specified")
 	flags.StringVar(&o.FluxMode, "flux-mode", "", "Flux installation mode (operator|toolkit) - auto-detected if not specified")
 }
 
