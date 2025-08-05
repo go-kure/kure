@@ -1,4 +1,4 @@
-package generate
+package cmd
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/go-kure/kure/pkg/cli"
+	"github.com/go-kure/kure/pkg/cmd/options"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/patch"
 )
@@ -34,8 +35,10 @@ type PatchOptions struct {
 	IOStreams cli.IOStreams
 }
 
-// NewPatchCommand creates the patch subcommand
-func NewPatchCommand(factory cli.Factory) *cobra.Command {
+// NewPatchCommand creates the top-level patch command
+func NewPatchCommand(globalOpts *options.GlobalOptions) *cobra.Command {
+	// Create factory for dependency injection
+	factory := cli.NewFactory(globalOpts)
 	o := &PatchOptions{
 		Factory:   factory,
 		IOStreams: factory.IOStreams(),
@@ -51,19 +54,19 @@ Kubernetes resources, supporting JSONPath-based modifications.
 
 Examples:
   # Apply single patch to base file
-  kure generate patch base.yaml patch.yaml
+  kure patch base.yaml patch.yaml
 
   # Apply multiple patches
-  kure generate patch base.yaml patch1.yaml patch2.yaml patch3.yaml
+  kure patch base.yaml patch1.yaml patch2.yaml patch3.yaml
 
   # Apply all patches from directory
-  kure generate patch --patch-dir ./patches base.yaml
+  kure patch --patch-dir ./patches base.yaml
 
   # Validate patches without applying
-  kure generate patch --validate-only base.yaml patch.yaml
+  kure patch --validate-only base.yaml patch.yaml
 
   # Apply patches interactively
-  kure generate patch --interactive base.yaml`,
+  kure patch --interactive base.yaml`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			o.BaseFile = args[0]

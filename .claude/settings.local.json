@@ -36,7 +36,9 @@
       "Bash(./kure generate:*)",
       "Bash(./kure version)",
       "Bash(./kure completion bash)",
-      "Bash(/dev/null)"
+      "Bash(/dev/null)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }

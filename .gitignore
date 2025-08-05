@@ -30,3 +30,7 @@ cmd/test/
 
 # Demo output files
 out/
+
+
+# build files
+kure

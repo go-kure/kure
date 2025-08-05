@@ -17,8 +17,7 @@ func NewGenerateCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 The generate command supports multiple subcommands for different types of resources:
 - cluster: Generate complete cluster manifests with GitOps configuration
 - app: Generate application workload manifests
-- bootstrap: Generate bootstrap configurations for GitOps tools
-- patch: Apply patches to existing manifests`,
+- bootstrap: Generate bootstrap configurations for GitOps tools`,
 		Aliases: []string{"gen"},
 	}
 
@@ -30,7 +29,6 @@ The generate command supports multiple subcommands for different types of resour
 		NewClusterCommand(factory),
 		NewAppCommand(factory),
 		NewBootstrapCommand(factory),
-		NewPatchCommand(factory),
 	)
 
 	return cmd

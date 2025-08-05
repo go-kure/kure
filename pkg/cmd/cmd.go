@@ -43,6 +43,7 @@ supporting both Flux and ArgoCD workflows for GitOps-native resource management.
 	// Add subcommands
 	cmd.AddCommand(
 		newGenerateCommand(globalOpts),
+		NewPatchCommand(globalOpts),
 		newValidateCommand(globalOpts),
 		newConfigCommand(globalOpts),
 		newCompletionCommand(),
