@@ -207,7 +207,7 @@ func (o *PatchOptions) scanPatchDirectory() ([]string, error) {
 		}
 		
 		name := entry.Name()
-		if strings.HasSuffix(name, ".patch") || strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
+		if strings.HasSuffix(name, ".kpatch") || strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
 			patchFiles = append(patchFiles, filepath.Join(o.PatchDir, name))
 		}
 	}

@@ -1,6 +1,6 @@
 # Kure Patch File Format — Specification
 
-This document describes the complete structure and semantics of `.patch` files used in Kure to define Kubernetes resource overrides.
+This document describes the complete structure and semantics of `.kpatch` files used in Kure to define Kubernetes resource overrides.
 
 Kure patches are:
 
@@ -13,13 +13,13 @@ Kure patches are:
 
 ## 1. File Extension
 
-All patch files must use the `.patch` extension. These are plain text files.
+All patch files must use the `.kpatch` extension. These are plain text files with Kure's custom patch format.
 
 Examples:
 
-- `deployment.app.patch`
-- `service.backend.patch`
-- `config.patch` (merged aggregate)
+- `deployment.app.kpatch`
+- `service.backend.kpatch`
+- `config.kpatch` (merged aggregate)
 
 ---
 

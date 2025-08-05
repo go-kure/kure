@@ -5,10 +5,10 @@ This directory demonstrates the new TOML-style patch system with cert-manager as
 ## Files
 
 - **`cert-manager-simple.yaml`** - Base cert-manager resources (simplified)
-- **`resources.patch`** - Resource limits using TOML container selectors
-- **`ingress.patch`** - Service configuration with port selectors
-- **`security.patch`** - Security contexts with deployment targeting
-- **`advanced.patch`** - Complex selectors and variable substitution
+- **`resources.kpatch`** - Resource limits using TOML container selectors
+- **`ingress.kpatch`** - Service configuration with port selectors
+- **`security.kpatch`** - Security contexts with deployment targeting
+- **`advanced.kpatch`** - Complex selectors and variable substitution
 
 ## Running the Demo
 

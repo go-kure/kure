@@ -453,10 +453,10 @@ func runPatchDemo() error {
 	examplesDir := "examples/patches"
 	baseYAML := filepath.Join(examplesDir, "cert-manager-simple.yaml")
 	patchFiles := []string{
-		filepath.Join(examplesDir, "resources.patch"),
-		filepath.Join(examplesDir, "ingress.patch"),
-		filepath.Join(examplesDir, "security.patch"),
-		filepath.Join(examplesDir, "advanced.patch"),
+		filepath.Join(examplesDir, "resources.kpatch"),
+		filepath.Join(examplesDir, "ingress.kpatch"),
+		filepath.Join(examplesDir, "security.kpatch"),
+		filepath.Join(examplesDir, "advanced.kpatch"),
 	}
 
 	// Check if files exist

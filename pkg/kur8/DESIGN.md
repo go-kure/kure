@@ -24,8 +24,8 @@ my-app.kur8/
 │   ├── deployment.yaml
 │   ├── service.yaml
 │   └── ingress.yaml
-├── parameters.patch         # Default patch set for a single resource (optional)
-├── config.patch             # Multi-resource patch set (optional)
+├── parameters.kpatch        # Default patch set for a single resource (optional)
+├── config.kpatch            # Multi-resource patch set (optional)
 ├── config.schema.json       # Generated JSONSchema for validation
 ├── instance.schema.json     # Schema for instance-level fields
 ├── instance.yaml            # Instance-level metadata (external to package)
@@ -40,7 +40,7 @@ my-app.kur8/
 
 Contains the base Kubernetes resources, one per file. These are raw YAMLs defining Deployments, Services, etc. Patches will apply on top of these.
 
-### 2. **parameters.patch**
+### 2. **parameters.kpatch**
 
 An optional file containing default patches for one resource. This uses Kure's single-line patch syntax, one `path: value` entry per line.
 
@@ -49,7 +49,7 @@ spec.replicas: 2
 spec.template.spec.containers[0].image: nginx:latest
 ```
 
-### 3. **config.patch**
+### 3. **config.kpatch**
 
 A structured patch file containing multiple resource-specific patch entries using `target:` blocks.
 
@@ -66,7 +66,7 @@ Patches use Kure’s validated path syntax and support operations including `rep
 
 ### 4. **config.schema.json**
 
-A JSONSchema file generated from `parameters.patch`, describing the valid structure of configurable fields. Used to validate user-supplied values.
+A JSONSchema file generated from `parameters.kpatch`, describing the valid structure of configurable fields. Used to validate user-supplied values.
 
 ### 5. **instance.schema.json**
 
@@ -121,7 +121,7 @@ Kure supports both map field and list field operations:
 
 ## Customization Flow
 
-1. Author defines `resources/` and optional `parameters.patch`
+1. Author defines `resources/` and optional `parameters.kpatch`
 2. Schema is generated from patch inputs
 3. End-user provides `instance.yaml` and optionally overrides patches
 4. Kur8 applies patches on base resources
