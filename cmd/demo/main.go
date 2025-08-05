@@ -236,8 +236,8 @@ func runClusterExample(clusterFile string) error {
 	rules.ClusterName = cl.Name
 	rules.FluxPlacement = layout.FluxIntegrated
 
-	wf := fluxstack.NewWorkflow()
-	ml, err := wf.ClusterWithLayout(&cl, rules)
+	wf := fluxstack.Engine()
+	ml, err := wf.CreateLayoutWithResources(&cl, rules)
 	if err != nil {
 		return err
 	}
@@ -409,7 +409,7 @@ func runBootstrapDemo() error {
 		
 		if cl.GitOps != nil && cl.GitOps.Type == "argocd" {
 			// For ArgoCD, generate bootstrap resources directly
-			wf := argocd.Workflow{}
+			wf := argocd.Engine()
 			bootstrapObjs, err := wf.GenerateBootstrap(cl.GitOps.Bootstrap, cl.Node)
 			if err != nil {
 				return err
@@ -423,8 +423,8 @@ func runBootstrapDemo() error {
 			}
 		} else {
 			// Default to Flux workflow
-			wf := fluxstack.NewWorkflow()
-			ml, err = wf.ClusterWithLayout(&cl, rules)
+			wf := fluxstack.Engine()
+			ml, err = wf.CreateLayoutWithResources(&cl, rules)
 		}
 		if err != nil {
 			return err

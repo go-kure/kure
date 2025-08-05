@@ -245,7 +245,7 @@ func (o *BootstrapOptions) generateBootstrap(cluster *stack.Cluster) (*layout.Ma
 
 // generateArgoCDBootstrap generates ArgoCD bootstrap manifests
 func (o *BootstrapOptions) generateArgoCDBootstrap(cluster *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
-	wf := argocd.Workflow{}
+	wf := argocd.Engine()
 	
 	// Generate bootstrap resources directly
 	bootstrapObjs, err := wf.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
@@ -265,8 +265,8 @@ func (o *BootstrapOptions) generateArgoCDBootstrap(cluster *stack.Cluster, rules
 
 // generateFluxBootstrap generates Flux bootstrap manifests
 func (o *BootstrapOptions) generateFluxBootstrap(cluster *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
-	wf := fluxstack.NewWorkflow()
-	return wf.ClusterWithLayout(cluster, rules)
+	wf := fluxstack.Engine()
+	return wf.CreateLayoutWithResources(cluster, rules)
 }
 
 // writeOutput writes the generated manifests to output

@@ -314,8 +314,8 @@ func (o *ClusterOptions) buildLayoutRules(cluster *stack.Cluster) layout.LayoutR
 
 // generateLayout generates the manifest layout
 func (o *ClusterOptions) generateLayout(cluster *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
-	wf := fluxstack.NewWorkflow()
-	return wf.ClusterWithLayout(cluster, rules)
+	wf := fluxstack.Engine()
+	return wf.CreateLayoutWithResources(cluster, rules)
 }
 
 // writeOutput writes the generated manifests to output

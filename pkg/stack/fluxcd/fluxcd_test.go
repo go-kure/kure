@@ -15,9 +15,8 @@ func TestWorkflowBundlePathMode(t *testing.T) {
 	child := &stack.Bundle{Name: "child"}
 	child.SetParent(parent)
 
-	wf := fluxstack.NewWorkflow()
-	wf.Mode = layout.KustomizationExplicit
-	objs, err := wf.Bundle(child)
+	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
+	objs, err := wf.GenerateFromBundle(child)
 	if err != nil {
 		t.Fatalf("bundle explicit: %v", err)
 	}
@@ -29,8 +28,8 @@ func TestWorkflowBundlePathMode(t *testing.T) {
 		t.Fatalf("explicit path mismatch: %s", k.Spec.Path)
 	}
 
-	wf.Mode = layout.KustomizationRecursive
-	objs, err = wf.Bundle(child)
+	wf.SetKustomizationMode(layout.KustomizationRecursive)
+	objs, err = wf.GenerateFromBundle(child)
 	if err != nil {
 		t.Fatalf("bundle recursive: %v", err)
 	}
@@ -55,8 +54,8 @@ func TestWorkflowBundleMetadata(t *testing.T) {
 	}
 	child.SetParent(parent)
 
-	wf := fluxstack.NewWorkflow()
-	objs, err := wf.Bundle(child)
+	wf := fluxstack.Engine()
+	objs, err := wf.GenerateFromBundle(child)
 	if err != nil {
 		t.Fatalf("bundle: %v", err)
 	}
