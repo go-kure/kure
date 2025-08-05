@@ -219,3 +219,7 @@ ml, err := layout.WalkCluster(cluster, rules)
 - [Design Documents](pkg/*/DESIGN.md)
 - [Examples](examples/)
 - [Demo Code](cmd/demo/main.go)
+
+## Claude Memories
+
+- kurel just generates YAML
