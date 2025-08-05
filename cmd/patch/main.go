@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/patch"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func main() {
@@ -20,9 +22,12 @@ func main() {
 		outputFile  = flag.String("output", "", "Output file for patched resources (default: stdout)")
 		validate    = flag.Bool("validate", false, "Validate patch syntax without applying")
 		debug       = flag.Bool("debug", false, "Enable debug logging")
-		format      = flag.String("format", "yaml", "Output format: yaml|json")
+		format      = flag.String("format", "yaml", "Output format: yaml|json|table|wide|name")
 		interactive = flag.Bool("interactive", false, "Interactive patch editor mode")
 		list        = flag.Bool("list", false, "List available resources in base file")
+		wide        = flag.Bool("wide", false, "Use wide output format (for table output)")
+		noHeaders   = flag.Bool("no-headers", false, "Suppress column headers (for table output)")
+		showLabels  = flag.Bool("show-labels", false, "Show resource labels in table output")
 	)
 	flag.Parse()
 
@@ -67,7 +72,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := applyPatch(*baseFile, *patchFile, *outputFile, *format); err != nil {
+	if err := applyPatch(*baseFile, *patchFile, *outputFile, *format, *wide, *noHeaders, *showLabels); err != nil {
 		log.Fatalf("Patch application failed: %v", err)
 	}
 }
@@ -91,7 +96,7 @@ func validatePatchFile(patchPath string) error {
 	return nil
 }
 
-func applyPatch(basePath, patchPath, outputPath, format string) error {
+func applyPatch(basePath, patchPath, outputPath, format string, wide, noHeaders, showLabels bool) error {
 	baseFile, err := os.Open(filepath.Clean(basePath))
 	if err != nil {
 		return fmt.Errorf("failed to open base file: %w", err)
@@ -134,14 +139,54 @@ func applyPatch(basePath, patchPath, outputPath, format string) error {
 		}
 	}
 
-	// Write output
+	// Write output with printer support
+	var outputWriter *os.File
 	if outputPath == "" {
-		// Write to stdout
-		return documentSet.WriteToFile("/dev/stdout")
+		outputWriter = os.Stdout
 	} else {
 		// Create output directory if needed
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
 			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+		outputWriter, err = os.Create(outputPath)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %w", err)
+		}
+		defer outputWriter.Close()
+	}
+
+	// Handle printer-based output formats
+	outputFormat, err := io.ValidateOutputFormat(format)
+	if err != nil {
+		return fmt.Errorf("invalid output format: %w", err)
+	}
+
+	// Convert to client.Object slice for printer
+	objects := make([]*client.Object, 0, len(documentSet.Documents))
+	for _, doc := range documentSet.Documents {
+		if doc.Resource != nil {
+			obj := client.Object(doc.Resource)
+			objects = append(objects, &obj)
+		}
+	}
+
+	// Use printer for supported formats
+	switch outputFormat {
+	case io.OutputFormatTable, io.OutputFormatWide, io.OutputFormatName:
+		printOptions := io.PrintOptions{
+			OutputFormat: outputFormat,
+			NoHeaders:    noHeaders,
+			ShowLabels:   showLabels,
+		}
+		return io.PrintObjects(objects, outputFormat, printOptions, outputWriter)
+	case io.OutputFormatYAML:
+		return io.PrintObjectsAsYAML(objects, outputWriter)
+	case io.OutputFormatJSON:
+		return io.PrintObjectsAsJSON(objects, outputWriter)
+	default:
+		// Fallback to document set writing for unsupported formats
+		if outputPath == "" {
+			return documentSet.WriteToFile("/dev/stdout")
 		}
 		return documentSet.WriteToFile(outputPath)
 	}
@@ -159,13 +204,26 @@ func listResources(basePath string) error {
 		return fmt.Errorf("failed to load resources: %w", err)
 	}
 
+	// Convert to client.Object slice for printer
+	objects := make([]*client.Object, 0, len(resources))
+	for _, resource := range resources {
+		obj := client.Object(resource)
+		objects = append(objects, &obj)
+	}
+
 	fmt.Printf("Found %d resources in %s:\n\n", len(resources), basePath)
-	for i, resource := range resources {
-		fmt.Printf("%d. %s/%s (kind: %s)\n", 
-			i+1, 
-			resource.GetNamespace(), 
-			resource.GetName(), 
-			resource.GetKind())
+
+	// Use table printer for better formatting
+	printer := io.NewSimpleTablePrinter(false, false)
+	if err := printer.Print(objects, os.Stdout); err != nil {
+		// Fallback to simple listing if printer fails
+		for i, resource := range resources {
+			fmt.Printf("%d. %s/%s (kind: %s)\n", 
+				i+1, 
+				resource.GetNamespace(), 
+				resource.GetName(), 
+				resource.GetKind())
+		}
 	}
 	
 	return nil

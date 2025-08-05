@@ -45,7 +45,37 @@
 //	    }
 //	}
 //
+// # Resource printing
+//
+// The io package includes comprehensive resource printing capabilities compatible
+// with kubectl output formats. The ResourcePrinter provides unified formatting
+// for YAML, JSON, table, wide, and name output modes:
+//
+//	printer := io.NewResourcePrinter(io.PrintOptions{
+//		OutputFormat: io.OutputFormatTable,
+//		NoHeaders:    false,
+//		ShowLabels:   true,
+//	})
+//	err := printer.Print(resources, os.Stdout)
+//
+// Table output includes resource-specific column formatting for different
+// Kubernetes kinds (Pod, Deployment, Service, ConfigMap) with appropriate
+// status indicators, age formatting, and wide-mode additional details.
+//
+// For simple table printing, use the SimpleTablePrinter which provides
+// kubectl-style table output without external dependencies:
+//
+//	printer := io.NewSimpleTablePrinter(wide, noHeaders)
+//	printer.Print(resources, os.Stdout)
+//
+// Convenience functions are available for common operations:
+//
+//	io.PrintObjectsAsYAML(resources, os.Stdout)
+//	io.PrintObjectsAsJSON(resources, os.Stdout)
+//	io.PrintObjectsAsTable(resources, wide, noHeaders, os.Stdout)
+//
 // The package forms the foundation for the other packages within this
 // repository but can be imported directly by any program that requires
-// lightweight YAML handling and runtime object parsing.
+// lightweight YAML handling, runtime object parsing, and kubectl-compatible
+// resource printing.
 package io

@@ -102,6 +102,45 @@ func EncodeObjectsTo(objects []*client.Object, yaml bool) ([]byte, error) {
 func EncodeObjectsToYAML(objects []*client.Object) ([]byte, error) {
 	return EncodeObjectsTo(objects, true)
 }
+
 func EncodeObjectsToJSON(objects []*client.Object) ([]byte, error) {
 	return EncodeObjectsTo(objects, false)
+}
+
+// PrintObjects prints objects using the specified output format and options
+func PrintObjects(objects []*client.Object, format OutputFormat, options PrintOptions, w io.Writer) error {
+	printer := NewResourcePrinter(PrintOptions{
+		OutputFormat:  format,
+		NoHeaders:     options.NoHeaders,
+		ShowLabels:    options.ShowLabels,
+		ColumnLabels:  options.ColumnLabels,
+		SortBy:        options.SortBy,
+	})
+	return printer.Print(objects, w)
+}
+
+// PrintObjectsAsTable prints objects in table format using the simple table printer
+func PrintObjectsAsTable(objects []*client.Object, wide, noHeaders bool, w io.Writer) error {
+	printer := NewSimpleTablePrinter(wide, noHeaders)
+	return printer.Print(objects, w)
+}
+
+// PrintObjectsAsYAML is a convenience function for YAML output
+func PrintObjectsAsYAML(objects []*client.Object, w io.Writer) error {
+	data, err := EncodeObjectsToYAML(objects)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+// PrintObjectsAsJSON is a convenience function for JSON output
+func PrintObjectsAsJSON(objects []*client.Object, w io.Writer) error {
+	data, err := EncodeObjectsToJSON(objects)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
 }
