@@ -222,7 +222,8 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	}
 
 	// Generate kustomization.yaml if there are resources or children
-	if (kMode == KustomizationExplicit && len(fileGroups) > 0) || len(ml.Children) > 0 {
+	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
+	if len(fileGroups) > 0 || len(ml.Children) > 0 {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -234,8 +235,8 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		_, _ = kf.WriteString("kind: Kustomization\n")
 		_, _ = kf.WriteString("resources:\n")
 		
-		// Add resource files if in explicit mode
-		if kMode == KustomizationExplicit {
+		// Add resource files if in explicit mode OR if it's a leaf directory with no children
+		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
 			for file := range fileGroups {
 				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
 			}

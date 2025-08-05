@@ -96,8 +96,8 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	isClusterRoot := strings.Count(ml.Namespace, string(filepath.Separator)) == 0 && ml.Name == ""
 	
 	// Generate kustomization.yaml if there are resources or children, but not at cluster root
-	// Also generate for explicit mode even if there are no children (for leaf applications)
-	if !isClusterRoot && ((kMode == KustomizationExplicit && len(fileGroups) > 0) || len(ml.Children) > 0) {
+	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
+	if !isClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -109,8 +109,8 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		_, _ = kf.WriteString("kind: Kustomization\n")
 		_, _ = kf.WriteString("resources:\n")
 		
-		// Add resource files if in explicit mode
-		if kMode == KustomizationExplicit {
+		// Add resource files if in explicit mode OR if it's a leaf directory with no children
+		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
 			for file := range fileGroups {
 				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
 			}
