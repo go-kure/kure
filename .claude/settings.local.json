@@ -43,7 +43,8 @@
       "Bash(go help:*)",
       "Bash(git restore:*)",
       "Bash(./kure --help)",
-      "Bash(./kurel --help)"
+      "Bash(./kurel --help)",
+      "WebFetch(domain:pkg.go.dev)"
     ],
     "deny": []
   }

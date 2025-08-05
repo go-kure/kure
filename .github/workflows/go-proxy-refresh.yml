@@ -1,0 +1,15 @@
+name: Refresh Go Proxy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  refresh-proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh Go module proxy
+        run: |
+          curl -s https://proxy.golang.org/github.com/go-kure/kure/@latest || true
+          echo "Go proxy refresh completed"
