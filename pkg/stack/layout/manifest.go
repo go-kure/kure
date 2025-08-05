@@ -78,23 +78,26 @@ func sanitizePackageKey(packageKey string) string {
 		return "default"
 	}
 	
-	// Replace problematic characters with safe alternatives
+	// Convert common GroupVersionKind strings to meaningful names
+	if strings.Contains(packageKey, "OCIRepository") {
+		return "oci-packages"
+	}
+	if strings.Contains(packageKey, "GitRepository") {
+		return "git-packages"  
+	}
+	if strings.Contains(packageKey, "Bucket") {
+		return "bucket-packages"
+	}
+	
+	// Fallback: sanitize the full string
 	sanitized := packageKey
 	
-	// Replace slashes and backslashes with dashes
+	// Replace problematic characters with safe alternatives
 	sanitized = strings.ReplaceAll(sanitized, "/", "-")
 	sanitized = strings.ReplaceAll(sanitized, "\\", "-")
-	
-	// Replace colons with dashes
 	sanitized = strings.ReplaceAll(sanitized, ":", "-")
-	
-	// Replace spaces with dashes
 	sanitized = strings.ReplaceAll(sanitized, " ", "-")
-	
-	// Replace commas with dashes
 	sanitized = strings.ReplaceAll(sanitized, ",", "-")
-	
-	// Remove or replace other problematic characters
 	sanitized = strings.ReplaceAll(sanitized, "=", "-")
 	sanitized = strings.ReplaceAll(sanitized, "&", "-")
 	sanitized = strings.ReplaceAll(sanitized, "?", "-")

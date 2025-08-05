@@ -7,8 +7,36 @@ import (
 // Cluster describes a cluster configuration.
 // A cluster configuration is a set of configurations that are packaged in one or more package units
 type Cluster struct {
-	Name string `yaml:"name"`
-	Node *Node  `yaml:"node,omitempty"`
+	Name   string        `yaml:"name"`
+	Node   *Node         `yaml:"node,omitempty"`
+	GitOps *GitOpsConfig `yaml:"gitops,omitempty"`
+}
+
+// GitOpsConfig defines the GitOps tool configuration for the cluster
+type GitOpsConfig struct {
+	Type      string           `yaml:"type"`               // "flux" or "argocd"
+	Bootstrap *BootstrapConfig `yaml:"bootstrap,omitempty"`
+}
+
+// BootstrapConfig defines the bootstrap configuration for GitOps tools
+type BootstrapConfig struct {
+	// Common fields
+	Enabled bool `yaml:"enabled"`
+	
+	// Flux-specific
+	FluxMode        string   `yaml:"fluxMode,omitempty"`        // "gitops-toolkit" or "flux-operator"
+	FluxVersion     string   `yaml:"fluxVersion,omitempty"`
+	Components      []string `yaml:"components,omitempty"`
+	Registry        string   `yaml:"registry,omitempty"`
+	ImagePullSecret string   `yaml:"imagePullSecret,omitempty"`
+	
+	// Source configuration 
+	SourceURL       string `yaml:"sourceURL,omitempty"`       // OCI/Git repository URL
+	SourceRef       string `yaml:"sourceRef,omitempty"`       // Tag/branch/ref
+	
+	// ArgoCD-specific (mock for now)
+	ArgoCDVersion   string `yaml:"argoCDVersion,omitempty"`
+	ArgoCDNamespace string `yaml:"argoCDNamespace,omitempty"`
 }
 
 // Node represents a hierarchic structure holding all deployment bundles
@@ -36,12 +64,14 @@ func NewCluster(name string, tree *Node) *Cluster {
 }
 
 // GetName Helper getters.
-func (c *Cluster) GetName() string { return c.Name }
-func (c *Cluster) GetNode() *Node  { return c.Node }
+func (c *Cluster) GetName() string       { return c.Name }
+func (c *Cluster) GetNode() *Node        { return c.Node }
+func (c *Cluster) GetGitOps() *GitOpsConfig { return c.GitOps }
 
 // SetName Setters for metadata fields.
-func (c *Cluster) SetName(n string) { c.Name = n }
-func (c *Cluster) SetNode(t *Node)  { c.Node = t }
+func (c *Cluster) SetName(n string)      { c.Name = n }
+func (c *Cluster) SetNode(t *Node)       { c.Node = t }
+func (c *Cluster) SetGitOps(g *GitOpsConfig) { c.GitOps = g }
 
 func (n *Node) GetName() string                         { return n.Name }
 func (n *Node) GetParent() *Node                        { return n.Parent }

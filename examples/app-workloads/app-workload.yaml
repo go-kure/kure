@@ -10,14 +10,18 @@ containers:
     image: nginx:1.21
     ports:
       - name: http
-        containerport: 80
-        hostport: 80
+        containerPort: 80
+        hostPort: 80
     env:
-      ENV: prod
+      - name: ENV
+        value: prod
     volumeMounts:
-      data: /usr/share/nginx/html
+      - name: data
+        mountPath: /usr/share/nginx/html
 volumes:
-  data: /data
+  - name: data
+    hostPath:
+      path: /data
 services:
   - name: web
     type: ClusterIP
@@ -43,14 +47,18 @@ containers:
     image: postgres:14
     ports:
       - name: psql
-        containerport: 5432
-        hostport: 5432
+        containerPort: 5432
+        hostPort: 5432
     env:
-      POSTGRES_DB: example
+      - name: POSTGRES_DB
+        value: example
     volumeMounts:
-      db-data: /var/lib/postgresql/data
+      - name: db-data
+        mountPath: /var/lib/postgresql/data
 volumes:
-  db-data: /var/lib/postgresql/data
+  - name: db-data
+    hostPath:
+      path: /var/lib/postgresql/data
 services:
   - name: db
     type: ClusterIP

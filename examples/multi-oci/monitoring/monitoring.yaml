@@ -1,0 +1,10 @@
+name: monitoring
+namespace: monitoring
+workload: Deployment
+replicas: 1
+containers:
+  - name: prometheus
+    image: prometheus:latest
+    ports:
+      - containerPort: 9090
+        protocol: TCP

@@ -1,0 +1,9 @@
+name: bootstrap-argocd-demo
+gitops:
+  type: argocd
+  bootstrap:
+    enabled: true
+    argoCDVersion: "v2.12.0"
+    argoCDNamespace: argocd
+node:
+  name: argocd-system

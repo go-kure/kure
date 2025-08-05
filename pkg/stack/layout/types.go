@@ -105,8 +105,8 @@ type LayoutRules struct {
 func DefaultLayoutRules() LayoutRules {
 	return LayoutRules{
 		NodeGrouping:        GroupByName,
-		BundleGrouping:      GroupByName,
-		ApplicationGrouping: GroupByName,
+		BundleGrouping:      GroupFlat,       // Avoid bundle/app/app nesting
+		ApplicationGrouping: GroupFlat,       // Avoid double nesting 
 		ApplicationFileMode: AppFilePerResource,
 		FilePer:             FilePerResource,
 		FluxPlacement:       FluxSeparate,

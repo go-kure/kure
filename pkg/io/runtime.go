@@ -99,6 +99,13 @@ func ParseFile(path string) ([]client.Object, error) {
 	return parse(data)
 }
 
+// ParseYAML parses YAML bytes and returns the runtime objects
+// defined within. Each object is decoded using the k8s scheme. An error is
+// returned if decoding any document fails.
+func ParseYAML(data []byte) ([]client.Object, error) {
+	return parse(data)
+}
+
 func checkType(obj runtime.Object) error {
 	if obj == nil {
 		return fmt.Errorf("nil runtime object provided")

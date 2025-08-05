@@ -1,0 +1,19 @@
+name: multi-oci-demo
+node:
+  name: cluster
+  children:
+    - name: web
+      packageref:
+        group: source.toolkit.fluxcd.io
+        version: v1beta2
+        kind: OCIRepository
+    - name: database  
+      packageref:
+        group: source.toolkit.fluxcd.io
+        version: v1beta2
+        kind: OCIRepository
+    - name: monitoring
+      packageref:
+        group: source.toolkit.fluxcd.io
+        version: v1
+        kind: GitRepository

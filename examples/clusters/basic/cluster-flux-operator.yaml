@@ -1,0 +1,20 @@
+name: demo-flux-operator
+gitops:
+  type: flux
+  bootstrap:
+    enabled: true
+    fluxMode: flux-operator
+    fluxVersion: "v2.6.4"
+    components:
+      - source-controller
+      - kustomize-controller
+      - helm-controller
+      - notification-controller
+    registry: ghcr.io/fluxcd
+    sourceURL: "oci://ghcr.io/example/flux-operator-manifests"
+    sourceRef: "main"
+node:
+  name: flux-system
+  children:
+    - name: apps
+    - name: infra

@@ -82,3 +82,18 @@ func bundlePath(b *stack.Bundle) string {
 	}
 	return filepath.ToSlash(filepath.Join(parts...))
 }
+
+// GenerateBootstrap generates ArgoCD bootstrap manifests (mock implementation)
+func (w Workflow) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
+	if config == nil || !config.Enabled {
+		return nil, nil
+	}
+	
+	// Mock implementation - returns empty for now
+	// TODO: Implement ArgoCD bootstrap with:
+	// - ArgoCD namespace
+	// - ArgoCD CRDs
+	// - ArgoCD deployment manifests
+	// - App-of-apps pattern
+	return []client.Object{}, nil
+}

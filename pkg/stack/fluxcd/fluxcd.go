@@ -1,16 +1,21 @@
 package fluxcd
 
 import (
+	"fmt"
 	"path/filepath"
 	"time"
 
+	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
+	"github.com/fluxcd/flux2/v2/pkg/manifestgen/install"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	metaapi "github.com/fluxcd/pkg/apis/meta"
+	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
+	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack/layout"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -41,6 +46,90 @@ func (w Workflow) ClusterWithLayout(c *stack.Cluster, rules layout.LayoutRules) 
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, err
+	}
+
+	// Handle GitOps bootstrap if configured
+	if c.GitOps != nil && c.GitOps.Bootstrap != nil && c.GitOps.Bootstrap.Enabled {
+		// Generate bootstrap manifests
+		bootstrapObjs, err := w.GenerateBootstrap(c.GitOps.Bootstrap, c.Node)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Add bootstrap manifests based on mode
+		if len(bootstrapObjs) > 0 {
+			// Find or create flux-system node in the layout
+			var fluxSystemLayout *layout.ManifestLayout
+			for _, child := range ml.Children {
+				if child.Name == "flux-system" || child.Name == c.Node.Name {
+					fluxSystemLayout = child
+					break
+				}
+			}
+			
+			// If not found, create flux-system layout
+			if fluxSystemLayout == nil {
+				if c.GitOps.Bootstrap.FluxMode == "flux-operator" {
+					// For flux-operator, put FluxInstance directly in the node directory
+					fluxSystemLayout = &layout.ManifestLayout{
+						Name:      c.Node.Name,
+						Namespace: filepath.Join(ml.Namespace, c.Node.Name),
+						FilePer:   layout.FilePerResource,
+					}
+					ml.Children = append(ml.Children, fluxSystemLayout)
+				} else {
+					// For gitops-toolkit, create proper flux-system subdirectory
+					fluxSystemLayout = &layout.ManifestLayout{
+						Name:      "flux-system",
+						Namespace: filepath.Join(ml.Namespace, c.Node.Name, "flux-system"),
+						FilePer:   layout.FilePerResource,
+					}
+					ml.Children = append(ml.Children, fluxSystemLayout)
+				}
+			}
+			
+			// Handle different bootstrap modes
+			switch c.GitOps.Bootstrap.FluxMode {
+			case "gitops-toolkit", "":
+				// Separate bootstrap objects: gotk-components vs main flux-system
+				var gotkObjs []client.Object
+				var fluxSystemObjs []client.Object
+				
+				for _, obj := range bootstrapObjs {
+					// OCI repository and main kustomization go to flux-system
+					if obj.GetObjectKind().GroupVersionKind().Kind == "OCIRepository" ||
+					   (obj.GetObjectKind().GroupVersionKind().Kind == "Kustomization" && obj.GetName() == "flux-system") {
+						fluxSystemObjs = append(fluxSystemObjs, obj)
+					} else {
+						// Everything else (controllers, CRDs, RBAC) goes to gotk-components
+						gotkObjs = append(gotkObjs, obj)
+					}
+				}
+				
+				// Add main objects directly to flux-system
+				fluxSystemLayout.Resources = append(fluxSystemLayout.Resources, fluxSystemObjs...)
+				
+				// Create gotk-components subdirectory for controller manifests
+				if len(gotkObjs) > 0 {
+					gotkLayout := &layout.ManifestLayout{
+						Name:      "gotk-components",
+						Namespace: filepath.Join(fluxSystemLayout.Namespace, "gotk-components"),
+						FilePer:   layout.FilePerResource,
+						Resources: gotkObjs,
+					}
+					
+					// Add gotk-components as a child of flux-system
+					fluxSystemLayout.Children = append(fluxSystemLayout.Children, gotkLayout)
+				}
+				
+			case "flux-operator":
+				// For flux-operator mode, put FluxInstance and other resources directly in flux-system
+				fluxSystemLayout.Resources = append(fluxSystemLayout.Resources, bootstrapObjs...)
+			}
+			
+			// Ensure flux-system uses explicit mode to include both resources and children
+			fluxSystemLayout.Mode = layout.KustomizationExplicit
+		}
 	}
 
 	// Handle Flux placement based on rules
@@ -490,4 +579,211 @@ func sourceRefFromPackageRef(packageRef *schema.GroupVersionKind) kustv1.CrossNa
 		Name:      "flux-system", // Could be enhanced to derive from PackageRef
 		Namespace: "flux-system",
 	}
+}
+
+// GenerateBootstrap generates Flux bootstrap manifests based on the configuration
+func (w Workflow) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
+	if config == nil || !config.Enabled {
+		return nil, nil
+	}
+
+	var objects []client.Object
+
+	switch config.FluxMode {
+	case "gitops-toolkit", "":
+		// Generate gotk-components.yaml
+		gotkObjs, err := w.generateGotkComponents(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate gotk-components: %w", err)
+		}
+		objects = append(objects, gotkObjs...)
+
+		// Generate OCIRepository for the root node
+		ociSource := w.generateOCISource(rootNode, config)
+		objects = append(objects, ociSource)
+
+		// Generate root flux-system Kustomization
+		rootKust := w.generateFluxSystemKustomization(rootNode)
+		objects = append(objects, rootKust)
+
+	case "flux-operator":
+		// Generate only FluxInstance CRD - the flux-operator will handle the rest
+		fluxInstance := w.generateFluxInstance(config, rootNode)
+		objects = append(objects, fluxInstance)
+	
+	default:
+		return nil, fmt.Errorf("unsupported flux mode: %s", config.FluxMode)
+	}
+
+	return objects, nil
+}
+
+// generateGotkComponents generates gotk-components.yaml using manifestgen
+func (w Workflow) generateGotkComponents(config *stack.BootstrapConfig) ([]client.Object, error) {
+	// Create install options
+	opts := install.MakeDefaultOptions()
+	
+	// Set version if specified
+	if config.FluxVersion != "" {
+		opts.Version = config.FluxVersion
+	}
+	
+	// Set registry if specified
+	if config.Registry != "" {
+		opts.Registry = config.Registry
+	}
+	
+	// Set image pull secret if specified
+	if config.ImagePullSecret != "" {
+		opts.ImagePullSecret = config.ImagePullSecret
+	}
+	
+	// Set components if specified
+	if len(config.Components) > 0 {
+		opts.Components = config.Components
+	}
+	
+	// Generate manifests
+	content, err := install.Generate(opts, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate flux manifests: %w", err)
+	}
+	
+	// Parse the generated YAML into client.Objects
+	objects, err := kio.ParseYAML([]byte(content.Content))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse generated manifests: %w", err)
+	}
+	
+	return objects, nil
+}
+
+// generateFluxSystemKustomization generates the root flux-system kustomization
+func (w Workflow) generateFluxSystemKustomization(node *stack.Node) client.Object {
+	// Use node name for the path if available
+	path := "./"
+	if node != nil && node.Name != "" {
+		path = "./" + node.Name
+	}
+	
+	spec := kustv1.KustomizationSpec{
+		Interval: metav1.Duration{Duration: 10 * time.Minute},
+		Path:     path,
+		Prune:    true,
+		SourceRef: kustv1.CrossNamespaceSourceReference{
+			Kind:      "OCIRepository",
+			Name:      "flux-system",
+			Namespace: "flux-system",
+		},
+	}
+	
+	return intfluxcd.CreateKustomization("flux-system", "flux-system", spec)
+}
+
+// generateOCISource generates the OCIRepository for the root node based on PackageRef and config
+func (w Workflow) generateOCISource(node *stack.Node, config *stack.BootstrapConfig) client.Object {
+	// Get the effective PackageRef (inherited from parent if not set)
+	packageRef := resolveNodePackageRef(node, nil)
+	
+	// Default values
+	url := "oci://registry.example.com/flux-system"
+	ref := "latest"
+	sourceName := "flux-system"
+	
+	// Use configuration from BootstrapConfig if available
+	if config != nil {
+		if config.SourceURL != "" {
+			url = config.SourceURL
+		}
+		if config.SourceRef != "" {
+			ref = config.SourceRef
+		}
+	}
+	
+	// If no explicit URL configured, derive from node and PackageRef
+	if config == nil || config.SourceURL == "" {
+		if node != nil && node.Name != "" {
+			if packageRef != nil && packageRef.Kind == "OCIRepository" {
+				url = fmt.Sprintf("oci://registry.example.com/%s", node.Name)
+			}
+		}
+	}
+	
+	// Create source name based on node
+	if node != nil && node.Name != "" {
+		sourceName = node.Name
+	}
+	
+	spec := sourcev1beta2.OCIRepositorySpec{
+		URL:      url,
+		Interval: metav1.Duration{Duration: 10 * time.Minute},
+		Reference: &sourcev1beta2.OCIRepositoryRef{
+			Tag: ref,
+		},
+	}
+	
+	return intfluxcd.CreateOCIRepository(sourceName, "flux-system", spec)
+}
+
+// generateFluxInstance generates a FluxInstance CRD for flux-operator mode
+func (w Workflow) generateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+	spec := fluxv1.FluxInstanceSpec{
+		Distribution: fluxv1.Distribution{
+			Version:  config.FluxVersion,
+			Registry: config.Registry,
+		},
+	}
+	
+	// Add components
+	for _, comp := range config.Components {
+		spec.Components = append(spec.Components, fluxv1.Component(comp))
+	}
+	
+	// Add sync configuration to tell flux-operator where to sync from
+	if rootNode != nil {
+		// Get the effective PackageRef (inherited from parent if not set)
+		packageRef := resolveNodePackageRef(rootNode, nil)
+		
+		// Default values
+		url := "oci://registry.example.com/flux-system"
+		ref := "latest"
+		kind := "OCIRepository"
+		
+		// Use configuration from BootstrapConfig if available
+		if config.SourceURL != "" {
+			url = config.SourceURL
+		}
+		if config.SourceRef != "" {
+			ref = config.SourceRef
+		}
+		
+		// If no explicit URL configured, derive from node and PackageRef
+		if config.SourceURL == "" {
+			if rootNode.Name != "" {
+				if packageRef != nil {
+					kind = packageRef.Kind
+					if packageRef.Kind == "OCIRepository" {
+						url = fmt.Sprintf("oci://registry.example.com/%s", rootNode.Name)
+					} else if packageRef.Kind == "GitRepository" {
+						url = fmt.Sprintf("https://github.com/example/%s.git", rootNode.Name)
+					}
+				}
+			}
+		}
+		
+		path := "./"
+		if rootNode.Name != "" {
+			path = "./" + rootNode.Name
+		}
+		
+		spec.Sync = &fluxv1.Sync{
+			Kind:     kind,
+			URL:      url,
+			Ref:      ref,
+			Path:     path,
+			Interval: &metav1.Duration{Duration: 10 * time.Minute},
+		}
+	}
+	
+	return intfluxcd.CreateFluxInstance("flux", "flux-system", spec)
 }

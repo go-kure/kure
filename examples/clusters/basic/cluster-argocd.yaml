@@ -1,0 +1,12 @@
+name: demo-argocd
+gitops:
+  type: argocd
+  bootstrap:
+    enabled: true
+    argoCDVersion: "v2.12.0"
+    argoCDNamespace: "argocd"
+node:
+  name: argocd-system
+  children:
+    - name: apps
+    - name: infra

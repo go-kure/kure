@@ -1,0 +1,20 @@
+name: demo
+gitops:
+  type: flux
+  bootstrap:
+    enabled: true
+    fluxMode: gitops-toolkit
+    fluxVersion: "v2.6.4"
+    components:
+      - source-controller
+      - kustomize-controller
+      - helm-controller
+      - notification-controller
+    registry: ghcr.io/fluxcd
+    sourceURL: "oci://ghcr.io/example/cluster-manifests"
+    sourceRef: "v1.0.0"
+node:
+  name: flux-system
+  children:
+    - name: apps
+    - name: infra

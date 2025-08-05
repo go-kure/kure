@@ -1,0 +1,10 @@
+name: web-app
+namespace: production
+workload: Deployment
+replicas: 3
+containers:
+  - name: nginx
+    image: nginx:latest
+    ports:
+      - containerPort: 80
+        protocol: TCP
