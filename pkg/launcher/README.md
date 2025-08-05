@@ -1,4 +1,6 @@
-# Kurel - Kubernetes Resources Launcher
+# Launcher - Kubernetes Resources Launcher
+
+This package provides the core functionality for Kurel, the Kubernetes Resources Launcher CLI tool.
 
 Kurel is a package system for creating reusable, customizable Kubernetes applications without the complexity of templating engines. It uses a declarative patch-based approach to customize base Kubernetes manifests, making it perfect for GitOps workflows.
 

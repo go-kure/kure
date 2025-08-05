@@ -1,4 +1,4 @@
-package k8s
+package kubernetes
 
 import (
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"

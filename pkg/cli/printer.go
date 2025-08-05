@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/go-kure/kure/pkg/cmd/options"
+	"github.com/go-kure/kure/pkg/cmd/shared/options"
 )
 
 // Printer interface for outputting resources

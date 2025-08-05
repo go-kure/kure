@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/go-kure/kure/pkg/cmd"
+	"github.com/go-kure/kure/pkg/cmd/kure"
 )
 
 func main() {
-	cmd.Execute()
+	kure.Execute()
 }

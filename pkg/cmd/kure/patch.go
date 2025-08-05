@@ -1,4 +1,4 @@
-package cmd
+package kure
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/go-kure/kure/pkg/cli"
-	"github.com/go-kure/kure/pkg/cmd/options"
+	"github.com/go-kure/kure/pkg/cmd/shared/options"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/patch"
 )

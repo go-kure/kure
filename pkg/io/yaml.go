@@ -9,7 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/go-kure/kure/pkg/k8s"
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 // Buffer is a simple in-memory buffer that implements io.Reader and io.Writer
@@ -84,7 +84,7 @@ func LoadFile(path string, obj interface{}) error {
 
 func EncodeObjectsTo(objects []*client.Object, yaml bool) ([]byte, error) {
 	serializer := kjson.NewSerializerWithOptions(
-		kjson.DefaultMetaFactory, k8s.Scheme, k8s.Scheme,
+		kjson.DefaultMetaFactory, kubernetes.Scheme, kubernetes.Scheme,
 		kjson.SerializerOptions{Yaml: yaml, Pretty: false, Strict: false},
 	)
 

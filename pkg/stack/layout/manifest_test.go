@@ -289,7 +289,7 @@ func TestManifestLayoutKustomizationFormat(t *testing.T) {
 	content := string(data)
 	
 	// Verify proper kustomization format
-	if !strings.Contains(content, "apiVersion: kustomize.config.k8s.io/v1beta1") {
+	if !strings.Contains(content, "apiVersion: kustomize.config.kubernetes.io/v1beta1") {
 		t.Errorf("Expected proper apiVersion, got: %s", content)
 	}
 	if !strings.Contains(content, "kind: Kustomization") {
@@ -477,7 +477,7 @@ func TestLeafDirectoryKustomizationGeneration(t *testing.T) {
 	content := string(data)
 	
 	// Verify kustomization.yaml contains the manifest files
-	if !strings.Contains(content, "apiVersion: kustomize.config.k8s.io/v1beta1") {
+	if !strings.Contains(content, "apiVersion: kustomize.config.kubernetes.io/v1beta1") {
 		t.Errorf("Expected proper apiVersion in leaf kustomization, got: %s", content)
 	}
 	if !strings.Contains(content, "kind: Kustomization") {

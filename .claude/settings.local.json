@@ -39,7 +39,11 @@
       "Bash(/dev/null)",
       "Bash(git commit:*)",
       "Bash(git reset:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(go help:*)",
+      "Bash(git restore:*)",
+      "Bash(./kure --help)",
+      "Bash(./kurel --help)"
     ],
     "deny": []
   }

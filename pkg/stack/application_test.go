@@ -6,7 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/pkg/k8s"
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 // TestNewApplicationAndSetters verifies constructor and setter behaviour.
@@ -40,7 +40,7 @@ func TestGenerate(t *testing.T) {
 		t.Fatalf("expected error when ApplicationConfig is nil")
 	}
 
-	pod := k8s.ToClientObject(&corev1.Pod{})
+	pod := kubernetes.ToClientObject(&corev1.Pod{})
 	objs := []*client.Object{pod}
 	cfg := &fakeConfig{objs: objs}
 	app.SetConfig(cfg)

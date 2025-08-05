@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
-	"github.com/go-kure/kure/pkg/k8s"
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 
@@ -24,10 +24,10 @@ func parse(yamlbytes []byte) ([]client.Object, error) {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlbytes), 4096)
 	retVal := make([]runtime.Object, 0)
 
-	if err := k8s.RegisterSchemes(); err != nil {
+	if err := kubernetes.RegisterSchemes(); err != nil {
 		return nil, errors.Wrapf(err, "register schemes")
 	}
-	decode := k8s.Codecs.UniversalDeserializer().Decode
+	decode := kubernetes.Codecs.UniversalDeserializer().Decode
 
 	var errs []error
 
@@ -89,10 +89,10 @@ func checkType(obj runtime.Object) error {
 	}
 
 	gvk := obj.GetObjectKind().GroupVersionKind()
-	if err := k8s.RegisterSchemes(); err != nil {
+	if err := kubernetes.RegisterSchemes(); err != nil {
 		return errors.Wrapf(err, "register schemes")
 	}
-	expected, ok := k8s.Scheme.AllKnownTypes()[gvk]
+	expected, ok := kubernetes.Scheme.AllKnownTypes()[gvk]
 	if !ok {
 		return errors.Wrapf(errors.ErrUnsupportedKind, "kind %s", gvk.String())
 	}

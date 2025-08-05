@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-kure/kure/internal/kubernetes"
 	"github.com/go-kure/kure/pkg/errors"
-	"github.com/go-kure/kure/pkg/k8s"
+	pkgkubernetes "github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/stack"
 )
 
@@ -406,7 +406,7 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 			}
 		}
 		_ = kubernetes.SetStatefulSetReplicas(sts, cfg.Replicas)
-		objs = append(objs, k8s.ToClientObject(sts))
+		objs = append(objs, pkgkubernetes.ToClientObject(sts))
 	case DaemonSetWorkload:
 		ds := kubernetes.CreateDaemonSet(app.Name, app.Namespace)
 		for _, c := range containers {
@@ -420,7 +420,7 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 				return nil, err
 			}
 		}
-		objs = append(objs, k8s.ToClientObject(ds))
+		objs = append(objs, pkgkubernetes.ToClientObject(ds))
 	case DeploymentWorkload:
 		dep := kubernetes.CreateDeployment(app.Name, app.Namespace)
 		for _, c := range containers {
@@ -435,7 +435,7 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 			}
 		}
 		_ = kubernetes.SetDeploymentReplicas(dep, cfg.Replicas)
-		objs = append(objs, k8s.ToClientObject(dep))
+		objs = append(objs, pkgkubernetes.ToClientObject(dep))
 	default:
 		return nil, errors.NewValidationError("workload", string(cfg.Workload), "AppWorkloadConfig", []string{"Deployment", "StatefulSet", "DaemonSet"})
 	}
@@ -452,7 +452,7 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 				TargetPort: intstr.FromInt32(p.ContainerPort),
 			})
 		}
-		objs = append(objs, k8s.ToClientObject(svc))
+		objs = append(objs, pkgkubernetes.ToClientObject(svc))
 	}
 
 	if cfg.Ingress != nil && svc != nil {
@@ -467,7 +467,7 @@ func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object
 		kubernetes.AddIngressRulePath(rule, kubernetes.CreateIngressPath(path, &pt, svc.Name, port))
 		kubernetes.AddIngressRule(ing, rule)
 		kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
-		objs = append(objs, k8s.ToClientObject(ing))
+		objs = append(objs, pkgkubernetes.ToClientObject(ing))
 	}
 
 	return objs, nil

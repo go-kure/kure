@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/go-kure/kure/pkg/cmd/options"
+	"github.com/go-kure/kure/pkg/cmd/shared/options"
 )
 
 // Factory provides access to common dependencies and configuration

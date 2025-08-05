@@ -231,7 +231,7 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		}
 		
 		// Write proper YAML header
-		_, _ = kf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
+		_, _ = kf.WriteString("apiVersion: kustomize.config.kubernetes.io/v1beta1\n")
 		_, _ = kf.WriteString("kind: Kustomization\n")
 		_, _ = kf.WriteString("resources:\n")
 		
