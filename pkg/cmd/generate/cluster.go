@@ -1,0 +1,369 @@
+package generate
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"gopkg.in/yaml.v3"
+
+	"github.com/go-kure/kure/pkg/cli"
+	"github.com/go-kure/kure/pkg/stack"
+	"github.com/go-kure/kure/pkg/stack/layout"
+	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/generators"
+)
+
+// ClusterOptions contains options for the cluster command
+type ClusterOptions struct {
+	// Input options
+	ConfigFile string
+	InputDir   string
+	
+	// Output options
+	OutputDir   string
+	ManifestDir string
+	
+	// Layout options
+	BundleGrouping      string
+	ApplicationGrouping string
+	FluxPlacement       string
+	
+	// Dependencies
+	Factory   cli.Factory
+	IOStreams cli.IOStreams
+}
+
+// NewClusterCommand creates the cluster subcommand
+func NewClusterCommand(factory cli.Factory) *cobra.Command {
+	o := &ClusterOptions{
+		Factory:   factory,
+		IOStreams: factory.IOStreams(),
+	}
+
+	cmd := &cobra.Command{
+		Use:   "cluster [flags] CONFIG_FILE",
+		Short: "Generate cluster manifests from configuration",
+		Long: `Generate complete cluster manifests with GitOps configuration.
+
+This command processes cluster configuration files and generates a complete
+directory structure with Kubernetes manifests organized for GitOps workflows.
+
+Examples:
+  # Generate cluster from config file
+  kure generate cluster examples/clusters/basic/cluster.yaml
+
+  # Generate with custom output directory
+  kure generate cluster --output-dir ./output cluster.yaml
+
+  # Generate with different layout options
+  kure generate cluster --bundle-grouping=nested --flux-placement=separate cluster.yaml`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			o.ConfigFile = args[0]
+			
+			if err := o.Complete(); err != nil {
+				return err
+			}
+			if err := o.Validate(); err != nil {
+				return err
+			}
+			return o.Run()
+		},
+	}
+
+	// Add flags
+	o.AddFlags(cmd.Flags())
+
+	return cmd
+}
+
+// AddFlags adds flags to the command
+func (o *ClusterOptions) AddFlags(flags *pflag.FlagSet) {
+	flags.StringVarP(&o.OutputDir, "output-dir", "d", "out", "output directory for generated manifests")
+	flags.StringVar(&o.ManifestDir, "manifest-dir", "clusters", "manifests directory name in output")
+	flags.StringVar(&o.BundleGrouping, "bundle-grouping", "flat", "bundle grouping strategy (flat|nested)")
+	flags.StringVar(&o.ApplicationGrouping, "application-grouping", "flat", "application grouping strategy (flat|nested)")
+	flags.StringVar(&o.FluxPlacement, "flux-placement", "integrated", "flux placement strategy (integrated|separate)")
+	flags.StringVar(&o.InputDir, "input-dir", "", "input directory for loading app configs (defaults to config file directory)")
+}
+
+// Complete completes the options
+func (o *ClusterOptions) Complete() error {
+	globalOpts := o.Factory.GlobalOptions()
+	
+	// Set input directory default
+	if o.InputDir == "" {
+		o.InputDir = filepath.Dir(o.ConfigFile)
+	}
+	
+	// Apply dry-run logic
+	if globalOpts.DryRun && o.OutputDir == "out" {
+		o.OutputDir = "/dev/stdout"
+	}
+	
+	return nil
+}
+
+// Validate validates the options
+func (o *ClusterOptions) Validate() error {
+	// Validate config file exists
+	if _, err := os.Stat(o.ConfigFile); os.IsNotExist(err) {
+		return fmt.Errorf("config file does not exist: %s", o.ConfigFile)
+	}
+	
+	// Validate grouping options
+	validGroupings := []string{"flat", "nested"}
+	if !contains(validGroupings, o.BundleGrouping) {
+		return fmt.Errorf("invalid bundle-grouping: %s. Valid options: %v", o.BundleGrouping, validGroupings)
+	}
+	if !contains(validGroupings, o.ApplicationGrouping) {
+		return fmt.Errorf("invalid application-grouping: %s. Valid options: %v", o.ApplicationGrouping, validGroupings)
+	}
+	
+	// Validate flux placement
+	validPlacements := []string{"integrated", "separate"}
+	if !contains(validPlacements, o.FluxPlacement) {
+		return fmt.Errorf("invalid flux-placement: %s. Valid options: %v", o.FluxPlacement, validPlacements)
+	}
+	
+	return nil
+}
+
+// Run executes the cluster command
+func (o *ClusterOptions) Run() error {
+	globalOpts := o.Factory.GlobalOptions()
+	
+	if globalOpts.Verbose {
+		fmt.Fprintf(o.IOStreams.ErrOut, "Processing cluster config: %s\n", o.ConfigFile)
+	}
+	
+	// Load cluster configuration
+	cluster, err := o.loadClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load cluster config: %w", err)
+	}
+	
+	// Load applications from input directory
+	if err := o.loadClusterApps(cluster); err != nil {
+		return fmt.Errorf("failed to load cluster apps: %w", err)
+	}
+	
+	// Generate layout
+	rules := o.buildLayoutRules(cluster)
+	ml, err := o.generateLayout(cluster, rules)
+	if err != nil {
+		return fmt.Errorf("failed to generate layout: %w", err)
+	}
+	
+	// Write output
+	if err := o.writeOutput(ml); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+	
+	if globalOpts.Verbose {
+		fmt.Fprintf(o.IOStreams.ErrOut, "Generated cluster manifests: %s\n", o.OutputDir)
+	}
+	
+	return nil
+}
+
+// loadClusterConfig loads and parses the cluster configuration file
+func (o *ClusterOptions) loadClusterConfig() (*stack.Cluster, error) {
+	file, err := os.Open(o.ConfigFile)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	dec := yaml.NewDecoder(file)
+	var cluster stack.Cluster
+	if err := dec.Decode(&cluster); err != nil {
+		return nil, err
+	}
+
+	return &cluster, nil
+}
+
+// loadClusterApps loads application configurations for the cluster
+func (o *ClusterOptions) loadClusterApps(cluster *stack.Cluster) error {
+	if cluster.Node == nil {
+		return fmt.Errorf("cluster node is nil")
+	}
+
+	// Create root bundle
+	rootBundle, err := stack.NewBundle(cluster.Node.Name, nil, nil)
+	if err != nil {
+		return err
+	}
+	cluster.Node.Bundle = rootBundle
+
+	// Process child nodes
+	for _, child := range cluster.Node.Children {
+		child.Parent = cluster.Node
+		childBundle, err := stack.NewBundle(child.Name, nil, nil)
+		if err != nil {
+			return err
+		}
+		child.Bundle = childBundle
+		childBundle.Parent = rootBundle
+
+		// Load apps for this node
+		if err := o.loadNodeApps(child); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// loadNodeApps loads application configs for a specific node
+func (o *ClusterOptions) loadNodeApps(node *stack.Node) error {
+	nodeDir := filepath.Join(o.InputDir, node.Name)
+	entries, err := os.ReadDir(nodeDir)
+	if err != nil {
+		// Directory might not exist for some nodes
+		return nil
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		
+		ext := filepath.Ext(entry.Name())
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+
+		appConfigPath := filepath.Join(nodeDir, entry.Name())
+		if err := o.loadAppConfig(node, appConfigPath); err != nil {
+			return fmt.Errorf("failed to load app config %s: %w", appConfigPath, err)
+		}
+	}
+
+	return nil
+}
+
+// loadAppConfig loads a single application configuration
+func (o *ClusterOptions) loadAppConfig(node *stack.Node, configPath string) error {
+	file, err := os.Open(configPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	dec := yaml.NewDecoder(file)
+	for {
+		var cfg generators.AppWorkloadConfig
+		if err := dec.Decode(&cfg); err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return err
+		}
+
+		app := stack.NewApplication(cfg.Name, cfg.Namespace, &cfg)
+		bundle, err := stack.NewBundle(cfg.Name, []*stack.Application{app}, nil)
+		if err != nil {
+			return err
+		}
+		bundle.Parent = node.Bundle
+		
+		childNode := &stack.Node{Name: cfg.Name, Parent: node, Bundle: bundle}
+		node.Children = append(node.Children, childNode)
+	}
+
+	return nil
+}
+
+// buildLayoutRules creates layout rules from options
+func (o *ClusterOptions) buildLayoutRules(cluster *stack.Cluster) layout.LayoutRules {
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = cluster.Name
+
+	// Set grouping strategies
+	switch o.BundleGrouping {
+	case "nested":
+		rules.BundleGrouping = layout.GroupByName
+	default:
+		rules.BundleGrouping = layout.GroupFlat
+	}
+
+	switch o.ApplicationGrouping {
+	case "nested":
+		rules.ApplicationGrouping = layout.GroupByName
+	default:
+		rules.ApplicationGrouping = layout.GroupFlat
+	}
+
+	// Set flux placement
+	switch o.FluxPlacement {
+	case "separate":
+		rules.FluxPlacement = layout.FluxSeparate
+	default:
+		rules.FluxPlacement = layout.FluxIntegrated
+	}
+
+	return rules
+}
+
+// generateLayout generates the manifest layout
+func (o *ClusterOptions) generateLayout(cluster *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
+	wf := fluxstack.NewWorkflow()
+	return wf.ClusterWithLayout(cluster, rules)
+}
+
+// writeOutput writes the generated manifests to output
+func (o *ClusterOptions) writeOutput(ml *layout.ManifestLayout) error {
+	globalOpts := o.Factory.GlobalOptions()
+	
+	if globalOpts.DryRun {
+		// For dry-run, print to stdout
+		return o.printToStdout(ml)
+	}
+
+	// Clean and create output directory
+	if err := os.RemoveAll(o.OutputDir); err != nil {
+		return err
+	}
+
+	// Write manifests
+	cfg := layout.Config{ManifestsDir: o.ManifestDir}
+	return layout.WriteManifest(o.OutputDir, cfg, ml)
+}
+
+// printToStdout prints the manifests to stdout for dry-run
+func (o *ClusterOptions) printToStdout(ml *layout.ManifestLayout) error {
+	// This is a simplified version - in a real implementation,
+	// you'd want to serialize all the resources in the layout
+	fmt.Fprintf(o.IOStreams.Out, "# Generated cluster manifests for: %s\n", ml.Name)
+	fmt.Fprintf(o.IOStreams.Out, "# Namespace: %s\n", ml.Namespace)
+	fmt.Fprintf(o.IOStreams.Out, "# Resources: %d\n", len(ml.Resources))
+	
+	// Print basic info about resources
+	for _, resource := range ml.Resources {
+		if namedObj, ok := resource.(interface {
+			GetKind() string
+			GetName() string
+			GetNamespace() string
+		}); ok {
+			fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n", 
+				namedObj.GetKind(), namedObj.GetName(), namedObj.GetNamespace())
+		}
+	}
+	
+	return nil
+}
+
+// Helper functions
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}

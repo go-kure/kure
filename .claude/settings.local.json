@@ -26,7 +26,16 @@
       "Bash(mv:*)",
       "Bash(git fetch:*)",
       "Bash(echo:*)",
-      "Bash(go doc:*)"
+      "Bash(go doc:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(go get:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(./kure --help)",
+      "Bash(./kure generate:*)",
+      "Bash(./kure version)",
+      "Bash(./kure completion bash)"
     ],
     "deny": []
   }
