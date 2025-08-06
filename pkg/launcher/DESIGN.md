@@ -102,7 +102,7 @@ persistence:
 
 ### 2. **resources/** - Base Kubernetes Manifests
 
-Contains the base Kubernetes resources, one GVK per file. These are standard Kubernetes YAML files without templating.
+Contains the base Kubernetes resources. These are standard Kubernetes YAML files without templating. Multi-document YAML files are supported and will be parsed into separate Resource objects during loading.
 
 ### 3. **patches/** - Modular Patch System
 
@@ -132,7 +132,7 @@ conflicts:
 
 ### 4. **GitOps Deployment Phases**
 
-Resources can be annotated for ordered deployment:
+Resources can be annotated for phase organization. Note that Kurel only generates YAML - actual deployment ordering is handled by GitOps tools.
 
 ```yaml
 apiVersion: v1
@@ -144,7 +144,7 @@ metadata:
     kurel.gokure.dev/wait-for-ready: "true"
 ```
 
-**Phases:**
+**Phases (for YAML organization):**
 - `pre-install` - CRDs, namespaces, RBAC
 - `main` - Primary application resources (default)
 - `post-install` - Monitoring, backups, optional components
@@ -213,7 +213,11 @@ my-app.local.kurel/
 2. Load metadata and evaluate conditions
 3. Build dependency graph and auto-enable required patches
 4. Validate no conflicts exist
-5. Apply patches in dependency order
+5. Apply patches in order:
+   - Package patches (by numeric prefix)
+   - Local patches (by numeric prefix, can override package patches)
+
+**Important**: Patches MUST apply successfully or return an error. There are no silent failures in patch application.
 
 ---
 
@@ -252,8 +256,14 @@ kurel validate my-app.kurel/ --values custom.yaml
 # Generate schemas from package
 kurel schema generate my-app.kurel/
 
-# Build final manifests
+# Build final manifests (dry-run to stdout by default)
+kurel build my-app.kurel/ --values custom.yaml
+
+# Build with output to files
 kurel build my-app.kurel/ --values custom.yaml --output ./manifests/
+
+# Build with verbose patch debugging
+kurel build my-app.kurel/ --values custom.yaml --verbose
 
 # Show package information
 kurel info my-app.kurel/
@@ -282,9 +292,11 @@ output/
 - ❌ No overlays or merging strategies (use patches)
 - ❌ No conditionals or loops in YAML
 - ❌ No complex package dependencies (handled at GitOps level)
+- ❌ No direct secret creation (use references to external-secrets instead)
 - ✅ Variable substitution allowed for keys in parameters.yaml
 - ✅ All patches are deterministic, declarative, and validated
-- ✅ Multi-namespace and multi-phase deployments supported
+- ✅ Multi-namespace and multi-phase organization supported
+- ✅ Dry-run mode via stdout output (default behavior)
 
 ---
 
@@ -305,3 +317,5 @@ output/
 - **Advanced Validation** - Integration with policy engines and security scanners
 - **IDE Integration** - Language servers and editor support
 - **Testing Framework** - Unit and integration testing for packages
+- **Plugin Architecture** - Custom validators and extensions (future consideration)
+- **Observability** - Metrics, logging, and debugging tools (future consideration)

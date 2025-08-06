@@ -12,10 +12,21 @@ This document provides a detailed implementation plan for the Kurel launcher mod
 - `pkg/launcher/interfaces.go` - Public interfaces
 - `pkg/launcher/errors.go` - Custom error types
 
+**Key Considerations:**
+- Resources will handle multi-document YAML (each document becomes separate Resource)
+- Need adapter pattern for existing patch.PatchableAppSet integration
+- Resource type must support conversion to/from unstructured.Unstructured
+
 **Implementation:**
 ```go
 // types.go
 package launcher
+
+import (
+    "sync"
+    "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 type KurelMetadata struct {
     Name        string   `yaml:"name"`
@@ -29,11 +40,25 @@ type KurelMetadata struct {
 
 type ParameterMap map[string]interface{}
 
+// Resource with thread-safe access and unstructured support
 type Resource struct {
-    APIVersion string            `yaml:"apiVersion"`
-    Kind       string            `yaml:"kind"`
-    Metadata   ResourceMetadata  `yaml:"metadata"`
-    Content    []byte            // Raw YAML content
+    APIVersion string                     `yaml:"apiVersion"`
+    Kind       string                     `yaml:"kind"`
+    Metadata   metav1.ObjectMeta          `yaml:"metadata"`
+    Raw        *unstructured.Unstructured // For patch system compatibility
+    mu         sync.RWMutex               // Protect concurrent access
+}
+
+func (r *Resource) GetName() string {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    return r.Metadata.Name
+}
+
+func (r *Resource) ToUnstructured() (*unstructured.Unstructured, error) {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    return r.Raw.DeepCopy(), nil
 }
 
 type Patch struct {
@@ -64,6 +89,24 @@ type PackageInstance struct {
     Resolved   ParameterMap
     LocalPath  string
 }
+
+// interfaces.go - Small, focused interfaces
+type DefinitionLoader interface {
+    LoadDefinition(ctx context.Context, path string) (*PackageDefinition, error)
+}
+
+type Resolver interface {
+    Resolve(ctx context.Context, base, overrides ParameterMap) (ParameterMap, error)
+}
+
+type Builder interface {
+    Build(ctx context.Context, inst *PackageInstance, opts BuildOptions) error
+}
+
+type Validator interface {
+    ValidateDefinition(ctx context.Context, def *PackageDefinition) ValidationResult
+    ValidateInstance(ctx context.Context, inst *PackageInstance) ValidationResult
+}
 ```
 
 **Tests to write:**
@@ -77,32 +120,57 @@ type PackageInstance struct {
 
 **Implementation details:**
 ```go
+const (
+    MaxPackageSize   = 50 * 1024 * 1024  // 50MB hard limit
+    WarnPackageSize  = 10 * 1024 * 1024  // 10MB warning
+    MaxResourceCount = 1000               // Max resources
+    MaxPatchCount    = 200                // Max patches
+)
+
 type defaultLoader struct {
-    fs afero.Fs  // For testing with mock filesystem
+    fs         afero.Fs  // For testing with mock filesystem
+    maxSize    int64
+    maxResources int
 }
 
-func (l *defaultLoader) LoadDefinition(path string) (*PackageDefinition, error) {
-    // 1. Validate package directory structure
-    if err := validatePackageStructure(path); err != nil {
+func (l *defaultLoader) LoadDefinition(ctx context.Context, path string) (*PackageDefinition, error) {
+    // 1. Check package size limits
+    if err := l.validatePackageSize(path); err != nil {
+        return nil, fmt.Errorf("package validation: %w", err)
+    }
+    
+    // 2. Validate package directory structure
+    if err := l.validatePackageStructure(path); err != nil {
         return nil, err
     }
     
-    // 2. Load parameters.yaml (critical)
-    params, err := l.loadParameters(filepath.Join(path, "parameters.yaml"))
+    // 3. Load parameters.yaml (critical)
+    params, err := l.loadParameters(ctx, filepath.Join(path, "parameters.yaml"))
     if err != nil {
         return nil, fmt.Errorf("critical: %w", err)
     }
     
-    // 3. Extract metadata from kurel: key
+    // 4. Extract metadata from kurel: key
     metadata, err := extractMetadata(params)
+    if err != nil {
+        return nil, fmt.Errorf("invalid metadata: %w", err)
+    }
     
-    // 4. Load resources (best effort)
-    resources, resourceErrs := l.loadResources(filepath.Join(path, "resources"))
+    // 5. Load resources with context (best effort)
+    resources, resourceErrs := l.loadResources(ctx, filepath.Join(path, "resources"))
     
-    // 5. Discover and load patches (best effort)
-    patches, patchErrs := l.loadPatches(filepath.Join(path, "patches"))
+    // 6. Discover and load patches (best effort)
+    patches, patchErrs := l.loadPatches(ctx, filepath.Join(path, "patches"))
     
-    // 6. Collect non-critical errors
+    // Check limits
+    if len(resources) > MaxResourceCount {
+        return nil, fmt.Errorf("too many resources: %d (max %d)", len(resources), MaxResourceCount)
+    }
+    if len(patches) > MaxPatchCount {
+        return nil, fmt.Errorf("too many patches: %d (max %d)", len(patches), MaxPatchCount)
+    }
+    
+    // 7. Collect non-critical errors
     var errs []error
     errs = append(errs, resourceErrs...)
     errs = append(errs, patchErrs...)
@@ -116,10 +184,41 @@ func (l *defaultLoader) LoadDefinition(path string) (*PackageDefinition, error) 
     }
     
     if len(errs) > 0 {
-        return def, &LoadErrors{Errors: errs}
+        return def, &LoadErrors{
+            PartialDefinition: def,
+            Issues:           errs,
+        }
     }
     
     return def, nil
+}
+
+func (l *defaultLoader) validatePackageSize(path string) error {
+    var totalSize int64
+    
+    err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        
+        totalSize += info.Size()
+        if totalSize > MaxPackageSize {
+            return fmt.Errorf("package exceeds %dMB limit", MaxPackageSize/(1024*1024))
+        }
+        
+        return nil
+    })
+    
+    if err != nil {
+        return err
+    }
+    
+    if totalSize > WarnPackageSize {
+        log.Warnf("Package size %dMB exceeds recommended %dMB",
+            totalSize/(1024*1024), WarnPackageSize/(1024*1024))
+    }
+    
+    return nil
 }
 ```
 
@@ -127,12 +226,14 @@ func (l *defaultLoader) LoadDefinition(path string) (*PackageDefinition, error) 
 - `validatePackageStructure()` - Check required directories exist
 - `loadParameters()` - Parse parameters.yaml with validation
 - `extractMetadata()` - Extract kurel: key from parameters
-- `loadResources()` - Discover and parse all resource YAML files
+- `loadResources()` - Discover and parse all resource YAML files (handle multi-document)
 - `loadPatches()` - Discover .kpatch files and metadata
 - `sortPatches()` - Sort by numeric prefix and path
+- `splitMultiDocument()` - Split multi-document YAML into separate Resources
 
 **Tests:**
 - Valid package loading
+- Multi-document YAML handling
 - Missing parameters.yaml handling
 - Malformed YAML handling
 - Patch discovery and ordering
@@ -167,35 +268,61 @@ func NewResolver(opts ...ResolverOption) Resolver {
     return r
 }
 
-func (r *defaultResolver) Resolve(base, overrides ParameterMap) (ParameterMap, error) {
-    // 1. Deep merge parameters
-    merged := deepMerge(base, overrides)
-    
-    // 2. Extract all variable references
-    refs := extractVariableRefs(merged)
-    
-    // 3. Build dependency graph
-    graph := buildDependencyGraph(refs)
-    
-    // 4. Detect circular dependencies
-    if cycles := detectCycles(graph); len(cycles) > 0 {
-        return nil, fmt.Errorf("circular dependencies: %v", cycles)
+func (r *defaultResolver) Resolve(ctx context.Context, base, overrides ParameterMap) (ParameterMap, error) {
+    // Apply timeout if not already set
+    if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+        var cancel context.CancelFunc
+        ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+        defer cancel()
     }
     
-    // 5. Topological sort for resolution order
-    order := topologicalSort(graph)
+    // Use goroutine for cancellation support
+    type result struct {
+        params ParameterMap
+        err    error
+    }
     
-    // 6. Resolve in order
-    resolved := make(ParameterMap)
-    for _, key := range order {
-        value, err := resolveValue(merged, key, resolved, 0, r.maxDepth)
-        if err != nil {
-            return nil, fmt.Errorf("failed to resolve %s: %w", key, err)
+    done := make(chan result, 1)
+    
+    go func() {
+        // 1. Deep merge parameters
+        merged := deepMerge(base, overrides)
+        
+        // 2. Extract all variable references
+        refs := extractVariableRefs(merged)
+        
+        // 3. Build dependency graph
+        graph := buildDependencyGraph(refs)
+        
+        // 4. Detect circular dependencies
+        if cycles := detectCycles(graph); len(cycles) > 0 {
+            done <- result{nil, fmt.Errorf("circular dependencies: %v", cycles)}
+            return
         }
-        resolved[key] = value
-    }
+        
+        // 5. Topological sort for resolution order
+        order := topologicalSort(graph)
+        
+        // 6. Resolve in order
+        resolved := make(ParameterMap)
+        for _, key := range order {
+            value, err := resolveValue(merged, key, resolved, 0, r.maxDepth)
+            if err != nil {
+                done <- result{nil, fmt.Errorf("failed to resolve %s: %w", key, err)}
+                return
+            }
+            resolved[key] = value
+        }
+        
+        done <- result{resolved, nil}
+    }()
     
-    return resolved, nil
+    select {
+    case res := <-done:
+        return res.params, res.err
+    case <-ctx.Done():
+        return nil, fmt.Errorf("variable resolution timeout: %w", ctx.Err())
+    }
 }
 ```
 
@@ -254,7 +381,14 @@ func (p *patchProcessor) DiscoverPatches(patchDir string) ([]Patch, error) {
     return patches, nil
 }
 
-func (p *patchProcessor) ResolveDependencies(patches []Patch, params ParameterMap) ([]Patch, error) {
+func (p *patchProcessor) ResolveDependencies(ctx context.Context, patches []Patch, params ParameterMap) ([]Patch, error) {
+    // Check context
+    select {
+    case <-ctx.Done():
+        return nil, ctx.Err()
+    default:
+    }
+    
     // 1. Evaluate enabled conditions
     enabled := make(map[string]bool)
     for _, patch := range patches {
@@ -268,17 +402,26 @@ func (p *patchProcessor) ResolveDependencies(patches []Patch, params ParameterMa
     // 2. Build dependency graph
     graph := buildPatchDependencyGraph(patches)
     
-    // 3. Auto-enable required patches
-    for _, patch := range patches {
-        if enabled[patch.Name] && patch.Metadata != nil {
-            for _, req := range patch.Metadata.Requires {
-                p.logger.Info("Auto-enabling %s (required by %s)", req, patch.Name)
-                enabled[req] = true
+    // 3. Auto-enable required patches (with verbose logging)
+    changed := true
+    for changed {
+        changed = false
+        for _, patch := range patches {
+            if enabled[patch.Name] && patch.Metadata != nil {
+                for _, req := range patch.Metadata.Requires {
+                    if !enabled[req] {
+                        if p.verbose {
+                            p.logger.Info("Auto-enabling %s (required by %s)", req, patch.Name)
+                        }
+                        enabled[req] = true
+                        changed = true
+                    }
+                }
             }
         }
     }
     
-    // 4. Check for conflicts
+    // 4. Check for conflicts (fail fast)
     for _, patch := range patches {
         if !enabled[patch.Name] {
             continue
@@ -301,6 +444,11 @@ func (p *patchProcessor) ResolveDependencies(patches []Patch, params ParameterMa
         }
     }
     
+    // Sort by numeric prefix for consistent ordering
+    sort.Slice(result, func(i, j int) bool {
+        return numericPrefixSort(result[i].Path, result[j].Path)
+    })
+    
     return result, nil
 }
 ```
@@ -314,33 +462,49 @@ func (p *patchProcessor) ResolveDependencies(patches []Patch, params ParameterMa
 
 ### Task 3.2: Integrate with Patch Engine
 **Files to modify:**
-- `pkg/launcher/patches.go` - Add apply functionality
+- `pkg/launcher/patches.go` - Add apply functionality with adapter
 
 **Implementation:**
 ```go
+// Adapter for existing patch system
+type patchEngineAdapter struct {
+    verbose bool
+    logger  Logger
+}
+
 func (p *patchProcessor) ApplyPatches(resources []Resource, patches []Patch, resolved ParameterMap) ([]Resource, error) {
-    engine := patch.NewEngine()
+    adapter := &patchEngineAdapter{verbose: p.verbose, logger: p.logger}
     
+    // Apply package patches first, then local patches
     for _, patchDef := range patches {
         // 1. Substitute variables in patch content
         substituted := substituteVariables(patchDef.Content, resolved)
         
-        // 2. Parse patch
-        patchOps, err := engine.Parse(substituted)
-        if err != nil {
-            return nil, fmt.Errorf("failed to parse patch %s: %w", patchDef.Name, err)
+        if p.verbose {
+            p.logger.Debug("Applying patch %s", patchDef.Name)
         }
         
-        // 3. Apply to matching resources
+        // 2. Convert resources and apply using existing patch system
         matched := false
         for i, resource := range resources {
-            if matches, err := engine.Matches(resource, patchOps); err != nil {
-                return nil, err
-            } else if matches {
+            unstructuredRes, err := resource.ToUnstructured()
+            if err != nil {
+                return nil, fmt.Errorf("failed to convert resource: %w", err)
+            }
+            
+            patched, wasPatched, err := adapter.ApplyPatch(unstructuredRes, substituted, patchDef.Name)
+            if err != nil {
+                // Patches MUST succeed or error - no silent failures
+                return nil, fmt.Errorf("failed to apply patch %s to %s/%s: %w",
+                    patchDef.Name, resource.Kind, resource.GetName(), err)
+            }
+            
+            if wasPatched {
                 matched = true
-                resources[i], err = engine.Apply(resource, patchOps)
-                if err != nil {
-                    return nil, fmt.Errorf("failed to apply patch %s: %w", patchDef.Name, err)
+                resources[i] = FromUnstructured(patched)
+                if p.verbose {
+                    p.logger.Debug("Successfully applied patch %s to %s/%s",
+                        patchDef.Name, resource.Kind, resource.GetName())
                 }
             }
         }
@@ -351,6 +515,13 @@ func (p *patchProcessor) ApplyPatches(resources []Resource, patches []Patch, res
     }
     
     return resources, nil
+}
+
+// Adapter method to work with existing patch.PatchableAppSet
+func (a *patchEngineAdapter) ApplyPatch(resource *unstructured.Unstructured, patchContent string, patchName string) (*unstructured.Unstructured, bool, error) {
+    // Implementation to bridge to existing patch system
+    // Will need to study patch.PatchableAppSet usage
+    return resource, false, nil
 }
 ```
 
@@ -422,7 +593,7 @@ type defaultValidator struct {
     logger    Logger
 }
 
-func (v *defaultValidator) ValidateDefinition(def *PackageDefinition) ValidationResult {
+func (v *defaultValidator) ValidateDefinition(ctx context.Context, def *PackageDefinition) ValidationResult {
     result := ValidationResult{}
     
     // 1. Validate package structure
@@ -461,11 +632,11 @@ func (v *defaultValidator) ValidateDefinition(def *PackageDefinition) Validation
     return result
 }
 
-func (v *defaultValidator) ValidateInstance(inst *PackageInstance) ValidationResult {
+func (v *defaultValidator) ValidateInstance(ctx context.Context, inst *PackageInstance) ValidationResult {
     result := ValidationResult{}
     
     // 1. Validate parameters against schema
-    schema, err := v.schemaGen.GenerateSchema(inst.Definition)
+    schema, err := v.schemaGen.GenerateSchema(ctx, inst.Definition)
     if err != nil {
         result.Warnings = append(result.Warnings, 
             fmt.Sprintf("Could not generate schema: %v", err))
@@ -483,14 +654,62 @@ func (v *defaultValidator) ValidateInstance(inst *PackageInstance) ValidationRes
         }
     }
     
-    // 3. Validate K8s resources
-    for _, resource := range inst.Definition.Resources {
-        if err := v.validateResource(resource); err != nil {
-            result.Errors = append(result.Errors, err)
-        }
-    }
+    // 3. Validate K8s resources concurrently for performance
+    errors := v.validateResourcesConcurrent(ctx, inst.Definition.Resources)
+    result.Errors = append(result.Errors, errors...)
     
     return result
+}
+
+func (v *defaultValidator) validateResourcesConcurrent(ctx context.Context, resources []Resource) []error {
+    // Use worker pool for concurrent validation
+    numWorkers := runtime.NumCPU()
+    if len(resources) < numWorkers {
+        numWorkers = len(resources)
+    }
+    
+    work := make(chan int, len(resources))
+    results := make(chan error, len(resources))
+    
+    // Start workers
+    var wg sync.WaitGroup
+    for i := 0; i < numWorkers; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for idx := range work {
+                select {
+                case <-ctx.Done():
+                    results <- ctx.Err()
+                    return
+                default:
+                    if err := v.validateResource(resources[idx]); err != nil {
+                        results <- fmt.Errorf("resource %s: %w", 
+                            resources[idx].GetName(), err)
+                    }
+                }
+            }
+        }()
+    }
+    
+    // Queue work
+    for i := range resources {
+        work <- i
+    }
+    close(work)
+    
+    // Collect results
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+    
+    var errors []error
+    for err := range results {
+        errors = append(errors, err)
+    }
+    
+    return errors
 }
 
 func (v *defaultValidator) validateResource(resource Resource) error {
@@ -532,25 +751,56 @@ type defaultBuilder struct {
     writer FileWriter
 }
 
-func (b *defaultBuilder) Build(inst *PackageInstance, opts BuildOptions) error {
-    // 1. Apply patches to resources
-    processor := newPatchProcessor()
-    resources, err := processor.ApplyPatches(
+const (
+    DefaultBuildTimeout = 30 * time.Second  // Similar to Helm
+    MaxBuildTimeout     = 5 * time.Minute
+)
+
+func (b *defaultBuilder) Build(ctx context.Context, inst *PackageInstance, opts BuildOptions) error {
+    // Apply timeout if not set
+    if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+        var cancel context.CancelFunc
+        ctx, cancel = context.WithTimeout(ctx, DefaultBuildTimeout)
+        defer cancel()
+    }
+    
+    // Progress indicator
+    var progress ProgressReporter
+    if opts.ShowProgress && !opts.Quiet {
+        progress = NewProgressBar("Building package...")
+        defer progress.Finish()
+    }
+    
+    // 1. Apply patches to resources (with transactional behavior)
+    processor := newPatchProcessor(WithVerbose(opts.Verbose))
+    
+    if progress != nil {
+        progress.Update("Applying patches...")
+    }
+    
+    resources, err := processor.ApplyPatches(ctx,
         inst.Definition.Resources,
         inst.Definition.Patches,
         inst.Resolved,
     )
     if err != nil {
-        return err
+        return fmt.Errorf("patch application failed: %w", err)
     }
     
     // 2. Sort resources by phase annotations
+    if progress != nil {
+        progress.Update("Organizing resources...")
+    }
     phased := organizeByPhase(resources)
     
     // 3. Output based on options
+    if progress != nil {
+        progress.Update("Writing output...")
+    }
+    
     switch opts.OutputPath {
     case "", "-":
-        // Write to stdout
+        // Write to stdout (dry-run mode)
         return b.writeToStdout(resources, opts.OutputType)
     default:
         // Write to files
@@ -664,15 +914,27 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
             // Setup logging
             logger := setupLogger(verbose)
             
+            // Setup context with timeout
+            ctx, cancel := context.WithTimeout(context.Background(), timeout)
+            defer cancel()
+            
+            // Progress indication
+            var progress launcher.ProgressReporter
+            if showProgress && !quiet {
+                progress = launcher.NewProgressBar("Loading package...")
+                defer progress.Finish()
+            }
+            
             // 1. Load package definition
             logger.Info("Loading package from %s", args[0])
             loader := launcher.NewLoader()
-            def, err := loader.LoadDefinition(args[0])
+            def, err := loader.LoadDefinition(ctx, args[0])
             if err != nil {
                 if loadErrs, ok := err.(*launcher.LoadErrors); ok {
-                    for _, e := range loadErrs.Errors {
+                    for _, e := range loadErrs.Issues {
                         logger.Warn("Load warning: %v", e)
                     }
+                    def = loadErrs.PartialDefinition
                 } else {
                     return fmt.Errorf("failed to load package: %w", err)
                 }
@@ -704,18 +966,27 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
                 LocalPath:  localPath,
             }
             
-            // 5. Resolve variables
+            // 5. Resolve variables with timeout
+            if progress != nil {
+                progress.Update("Resolving variables...")
+            }
             logger.Info("Resolving variables")
             resolver := launcher.NewResolver()
-            instance.Resolved, err = resolver.Resolve(def.Parameters, userValues)
+            instance.Resolved, err = resolver.Resolve(ctx, def.Parameters, userValues)
             if err != nil {
                 return fmt.Errorf("failed to resolve variables: %w", err)
             }
             
             // 6. Process patches
+            if progress != nil {
+                progress.Update("Processing patches...")
+            }
             logger.Info("Processing patches")
-            processor := launcher.NewPatchProcessor(launcher.WithLogger(logger))
-            enabledPatches, err := processor.ResolveDependencies(def.Patches, instance.Resolved)
+            processor := launcher.NewPatchProcessor(
+                launcher.WithLogger(logger),
+                launcher.WithVerbose(verbose),
+            )
+            enabledPatches, err := processor.ResolveDependencies(ctx, def.Patches, instance.Resolved)
             if err != nil {
                 return fmt.Errorf("failed to resolve patch dependencies: %w", err)
             }
@@ -727,10 +998,13 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
                 }
             }
             
-            // 7. Validate
+            // 7. Validate with concurrent processing
+            if progress != nil {
+                progress.Update("Validating configuration...")
+            }
             logger.Info("Validating configuration")
             validator := launcher.NewValidator()
-            result := validator.ValidateInstance(instance)
+            result := validator.ValidateInstance(ctx, instance)
             
             if result.HasErrors() {
                 for _, err := range result.Errors {
@@ -744,19 +1018,25 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
             }
             
             // 8. Build output
+            if progress != nil {
+                progress.Update("Building manifests...")
+            }
             logger.Info("Building manifests")
             builder := launcher.NewBuilder()
             opts := launcher.BuildOptions{
                 OutputPath:   outputPath,
                 OutputFormat: launcher.OutputFormat(outputFormat),
                 OutputType:   launcher.OutputType(outputType),
+                Verbose:      verbose,
+                ShowProgress: showProgress,
+                Quiet:        quiet,
             }
             
             if outputPath == "" {
-                opts.OutputPath = "-" // stdout
+                opts.OutputPath = "-" // stdout (dry-run)
             }
             
-            if err := builder.Build(instance, opts); err != nil {
+            if err := builder.Build(ctx, instance, opts); err != nil {
                 return fmt.Errorf("failed to build manifests: %w", err)
             }
             
@@ -766,12 +1046,20 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
     }
     
     cmd.Flags().StringVarP(&valuesFile, "values", "f", "", "Values file for overrides")
-    cmd.Flags().StringVarP(&outputPath, "output", "o", "", "Output path (default: stdout)")
+    cmd.Flags().StringVarP(&outputPath, "output", "o", "", "Output path (default: stdout for dry-run)")
     cmd.Flags().StringVar(&outputFormat, "format", "single", "Output format: single|by-kind|by-resource")
     cmd.Flags().StringVar(&outputType, "output-format", "yaml", "Output type: yaml|json")
     cmd.Flags().StringVar(&localPath, "local", "", "Path to .local.kurel directory")
-    cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
+    cmd.Flags().DurationVar(&timeout, "timeout", DefaultBuildTimeout, "Build timeout")
+    cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output with patch debugging")
     cmd.Flags().BoolVar(&showPatches, "show-patches", false, "Show enabled patches")
+    cmd.Flags().BoolVar(&showProgress, "progress", true, "Show progress bar")
+    cmd.Flags().BoolVar(&quiet, "quiet", false, "Suppress non-essential output")
+    cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print to stdout without writing files")
+    
+    // Mark file/directory flags
+    cmd.MarkFlagFilename("values", "yaml", "yml")
+    cmd.MarkFlagDirname("output")
     
     return cmd
 }
@@ -794,12 +1082,51 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 - Schema generation: 80%
 - Output generation: 90%
 
-**Key test scenarios:**
-1. **Loader tests:**
-   - Valid package loading
-   - Missing critical files
-   - Malformed YAML/TOML
-   - Patch discovery ordering
+**Key test scenarios with Go patterns:**
+
+1. **Loader tests (table-driven):**
+```go
+func TestLoader(t *testing.T) {
+    tests := []struct {
+        name    string
+        setup   func(afero.Fs)
+        wantErr string
+    }{
+        {
+            name: "valid_package",
+            setup: setupValidPackage,
+        },
+        {
+            name: "missing_parameters",
+            setup: setupMissingParams,
+            wantErr: "critical: parameters.yaml",
+        },
+        {
+            name: "package_too_large",
+            setup: setupLargePackage,
+            wantErr: "exceeds 50MB limit",
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            fs := afero.NewMemMapFs()
+            tt.setup(fs)
+            
+            loader := NewLoader(WithFilesystem(fs))
+            ctx := context.Background()
+            _, err := loader.LoadDefinition(ctx, "/test")
+            
+            if tt.wantErr != "" {
+                require.Error(t, err)
+                assert.Contains(t, err.Error(), tt.wantErr)
+            } else {
+                require.NoError(t, err)
+            }
+        })
+    }
+}
+```
 
 2. **Variable tests:**
    - Simple substitution
@@ -813,7 +1140,9 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
    - Auto-enabling
    - Conflict detection
    - Variable substitution in patches
-   - Patch application failures
+   - Patch application failures (must error, not silent)
+   - Package patch → local patch override behavior
+   - Verbose mode debugging output
 
 4. **Validation tests:**
    - Schema validation
@@ -821,11 +1150,61 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
    - Parameter compatibility
    - K8s resource constraints
 
-5. **Integration tests:**
-   - Full build pipeline
-   - Local extensions
-   - Multiple output formats
-   - Error handling
+5. **Integration tests with benchmarks:**
+```go
+func TestIntegrationBuild(t *testing.T) {
+    ctx := context.Background()
+    pkg := loadTestPackage(t, "testdata/packages/complex")
+    
+    instance := &PackageInstance{
+        Definition: pkg,
+        UserValues: ParameterMap{"env": "prod"},
+    }
+    
+    // Test full pipeline
+    resolver := NewResolver()
+    instance.Resolved, _ = resolver.Resolve(ctx, pkg.Parameters, instance.UserValues)
+    
+    validator := NewValidator()
+    result := validator.ValidateInstance(ctx, instance)
+    require.Empty(t, result.Errors)
+    
+    builder := NewBuilder()
+    err := builder.Build(ctx, instance, BuildOptions{})
+    require.NoError(t, err)
+}
+
+func BenchmarkBuildPerformance(b *testing.B) {
+    targets := []struct {
+        name      string
+        resources int
+        target    time.Duration
+    }{
+        {"small", 10, 100 * time.Millisecond},
+        {"medium", 50, 500 * time.Millisecond},
+        {"large", 200, 2 * time.Second},
+    }
+    
+    for _, tgt := range targets {
+        b.Run(tgt.name, func(b *testing.B) {
+            pkg := generatePackage(tgt.resources)
+            ctx := context.Background()
+            
+            b.ResetTimer()
+            for i := 0; i < b.N; i++ {
+                start := time.Now()
+                err := Build(ctx, pkg, BuildOptions{})
+                duration := time.Since(start)
+                
+                require.NoError(b, err)
+                if duration > tgt.target {
+                    b.Fatalf("exceeded target: %v > %v", duration, tgt.target)
+                }
+            }
+        })
+    }
+}
+```
 
 ## Implementation Timeline
 
@@ -878,6 +1257,30 @@ func newBuildCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 - Patch application: < 200ms for 50 patches
 - Schema generation: < 500ms (with caching)
 - Full build: < 1s for typical package
+
+## Key Implementation Notes
+
+### Security Considerations
+- No direct secret creation - only references (e.g., external-secrets)
+- Path traversal protection in package loading
+- URL validation for schema URLs
+- Sensitive parameter handling - avoid logging sensitive values
+
+### Patch Application Rules
+- Patches MUST succeed or return error (no silent failures)
+- Application order: Package patches first, then local patches
+- Local patches can override package patches
+- Verbose mode provides detailed debugging information
+
+### Resource Handling
+- Multi-document YAML files are supported
+- Each document becomes a separate Resource object
+- Resources need conversion to/from unstructured.Unstructured for patch engine
+
+### Output Modes
+- Default stdout output serves as dry-run mode
+- File output requires explicit -o flag
+- Verbose mode shows patch application details
 
 ## Documentation Requirements
 

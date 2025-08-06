@@ -41,57 +41,104 @@ type PackageInstance struct {
 
 ### 2. Interface Organization
 
-**Decision**: Separate `interfaces.go` file (Option C)
+**Decision**: Small, focused interfaces following Go idioms
 
 ```go
-// pkg/launcher/interfaces.go
-type Loader interface { ... }
-type Resolver interface { ... }
-type Builder interface { ... }
-type Validator interface { ... }
-type SchemaGenerator interface { ... }
+// pkg/launcher/interfaces.go - Small, composable interfaces
+type DefinitionLoader interface {
+    LoadDefinition(ctx context.Context, path string) (*PackageDefinition, error)
+}
 
-// pkg/launcher/types.go
-type PackageDefinition struct { ... }
-type PackageInstance struct { ... }
+type ResourceLoader interface {
+    LoadResources(ctx context.Context, path string) ([]Resource, error)
+}
+
+type PatchLoader interface {
+    LoadPatches(ctx context.Context, path string) ([]Patch, error)
+}
+
+// Compose when needed
+type PackageLoader interface {
+    DefinitionLoader
+    ResourceLoader
+    PatchLoader
+}
+
+type Resolver interface {
+    Resolve(ctx context.Context, base, overrides ParameterMap) (ParameterMap, error)
+}
+
+type Builder interface {
+    Build(ctx context.Context, inst *PackageInstance, opts BuildOptions) error
+}
 ```
 
 **Rationale**:
+- Follows Go's preference for small interfaces (like `io.Reader`, `io.Writer`)
+- Enables better testing through focused mocks
 - Clean separation of contracts from data types
-- Easy to see all capabilities at a glance
-- Follows Go stdlib patterns (like `io` package)
+- Supports interface composition
 
 ### 3. Package Loading Strategy
 
-**Decision**: Hybrid error handling approach
+**Decision**: Hybrid error handling with context support and size limits
 
 - **Critical files** (parameters.yaml): Must load successfully or fail immediately
 - **Other files** (resources, patches): Collect all errors, load what's possible
-- Return partial package with LoadErrors for non-critical failures
+- **Size limits**: Enforce maximum package size (50MB) and resource count (1000)
+- **Context cancellation**: Support timeout and cancellation
 
 ```go
-func LoadDefinition(path string) (*PackageDefinition, error) {
+const (
+    MaxPackageSize   = 50 * 1024 * 1024  // 50MB hard limit
+    WarnPackageSize  = 10 * 1024 * 1024  // 10MB warning
+    MaxResourceCount = 1000               // Max resources
+)
+
+func (l *defaultLoader) LoadDefinition(ctx context.Context, path string) (*PackageDefinition, error) {
+    // Check package size first
+    if err := l.validatePackageSize(path); err != nil {
+        return nil, err
+    }
+    
     // Critical: parameters.yaml MUST load
-    params, err := loadYAML("parameters.yaml")
+    params, err := l.loadParameters(ctx, filepath.Join(path, "parameters.yaml"))
     if err != nil {
         return nil, fmt.Errorf("critical: parameters.yaml: %w", err)
     }
     
-    // Best effort for others, collect errors
+    // Best effort for others with context
     var errs []error
-    resources, resourceErrs := loadAllResources()
-    patches, patchErrs := loadAllPatches()
+    resources, resourceErrs := l.loadAllResources(ctx, path)
+    patches, patchErrs := l.loadAllPatches(ctx, path)
+    
+    errs = append(errs, resourceErrs...)
+    errs = append(errs, patchErrs...)
+    
+    def := &PackageDefinition{
+        Path:       path,
+        Metadata:   extractMetadata(params),
+        Parameters: params,
+        Resources:  resources,
+        Patches:    patches,
+    }
     
     if len(errs) > 0 {
-        return &PackageDefinition{...}, &LoadErrors{Errors: errs}
+        return def, &LoadErrors{
+            PartialDefinition: def,
+            Issues:           errs,
+        }
     }
+    
+    return def, nil
 }
 ```
 
 **Rationale**:
 - Can't proceed without valid parameters.yaml
+- Size limits prevent memory issues (based on typical Helm chart sizes)
+- Context support enables cancellation
 - See all syntax errors at once for debugging
-- Allows partial inspection with `kurel info`
 
 ### 4. Variable Resolution
 
@@ -123,6 +170,8 @@ type variableResolver struct {
 - **Conflicts**: Hard error, refuse to continue
 - **Auto-enable**: Verbose logging to stderr
 - **Missing targets**: Error, patches must match something
+- **Application order**: Package patches first (by numeric prefix), then local patches (can override)
+- **Failure handling**: Patches MUST apply successfully or error - no silent failures
 
 ```go
 // Hard error on conflicts
@@ -130,13 +179,21 @@ if hasConflicts(enabledPatches) {
     return nil, fmt.Errorf("conflict: %s and %s cannot both be enabled", p1, p2)
 }
 
-// Verbose logging during build
+// Verbose logging during build (--verbose flag)
 INFO: Enabling patch 10-monitoring.kpatch (monitoring.enabled=true)
 INFO: Auto-enabling 05-metrics.kpatch (required by 10-monitoring)
+DEBUG: Applying patch 10-monitoring.kpatch to deployment/prometheus
+DEBUG: Successfully patched field spec.template.spec.containers[0].resources
 
 // Error if patch doesn't match
 if matchCount == 0 {
-    return error("patch targets non-existent resource: deployment.frontend")
+    return fmt.Errorf("patch %s targets non-existent resource: deployment.frontend", patchName)
+}
+
+// Detailed error on patch failure
+if err := applyPatch(resource, patch); err != nil {
+    return fmt.Errorf("failed to apply patch %s to %s/%s: %w", 
+        patch.Name, resource.Kind, resource.Name, err)
 }
 ```
 
@@ -144,6 +201,8 @@ if matchCount == 0 {
 - Ensures patches work as expected
 - Clear visibility into auto-enabled dependencies
 - No silent failures
+- Verbose mode provides debugging information
+- Local patches can customize package behavior
 
 ### 6. Schema Generation
 
@@ -169,7 +228,7 @@ kurel:
 
 ### 7. Validation System
 
-**Decision**: Errors block, warnings don't; best-effort K8s validation
+**Decision**: Errors block, warnings don't; concurrent validation for performance
 
 ```go
 type ValidationResult struct {
@@ -177,39 +236,73 @@ type ValidationResult struct {
     Warnings []ValidationWarning
 }
 
-// Errors prevent build
-if result.HasErrors() {
-    return nil, result.Errors()
+type ConcurrentValidator struct {
+    maxWorkers int
+    schemaGen  SchemaGenerator
 }
 
-// Warnings are logged but don't block
-if result.HasWarnings() {
-    logger.Warn(result.Warnings())
-}
-
-// Full validation when schemas available
-if schema := getK8sSchema(resource); schema != nil {
-    validateFull(resource, schema)
-} else {
-    validateMedium(resource)  // Basic constraints only
+func (v *ConcurrentValidator) ValidateInstance(ctx context.Context, inst *PackageInstance) ValidationResult {
+    // Validate resources concurrently for performance
+    numWorkers := runtime.NumCPU()
+    if len(inst.Definition.Resources) < numWorkers {
+        numWorkers = len(inst.Definition.Resources)
+    }
+    
+    work := make(chan Resource, len(inst.Definition.Resources))
+    results := make(chan ValidationError, len(inst.Definition.Resources))
+    
+    // Start workers
+    var wg sync.WaitGroup
+    for i := 0; i < numWorkers; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            for resource := range work {
+                if err := v.validateResource(ctx, resource); err != nil {
+                    results <- ValidationError{Resource: resource.GetName(), Error: err}
+                }
+            }
+        }()
+    }
+    
+    // Queue work
+    for _, r := range inst.Definition.Resources {
+        work <- r
+    }
+    close(work)
+    
+    // Collect results
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+    
+    var result ValidationResult
+    for err := range results {
+        result.Errors = append(result.Errors, err)
+    }
+    
+    return result
 }
 ```
 
 **Rationale**:
+- Concurrent validation for Helm-like performance
 - Clear distinction between blocking and non-blocking issues
 - Best-effort validation based on available information
-- Graceful degradation when schemas unavailable
+- Worker pool pattern prevents resource exhaustion
 
 ### 8. Output Generation
 
 **Decision**: No GitOps-specific support, configurable output format
 
-- Kurel only manages `kurel.gokure.dev/` annotations
-- GitOps integration handled elsewhere (e.g., stack/generators)
-- Configurable output: stdout (default), single file, by-kind, by-resource
+- Kurel only manages `kurel.gokure.dev/` annotations for phase organization
+- Actual deployment handled by GitOps tools (Flux/ArgoCD)
+- Configurable output: stdout (default/dry-run), single file, by-kind, by-resource
+- Multi-document YAML files are properly handled
 
 ```bash
-# Default: multi-doc YAML to stdout
+# Default: multi-doc YAML to stdout (dry-run mode)
 kurel build my-app.kurel/
 
 # Output to directory with by-kind grouping
@@ -220,12 +313,17 @@ kurel build my-app.kurel/ -o manifests.yaml --format=single
 
 # JSON output
 kurel build my-app.kurel/ --output-format=json
+
+# Verbose mode for debugging
+kurel build my-app.kurel/ --verbose
 ```
 
 **Rationale**:
-- Keeps kurel focused on YAML generation
+- Keeps kurel focused on YAML generation only
+- Default stdout output serves as dry-run mode
 - Flexible output for different workflows
 - Clean separation of concerns
+- Verbose mode aids in debugging patch application
 
 ### 9. Local Extensions
 
@@ -253,27 +351,67 @@ conflicts:
 
 ### 10. CLI Integration
 
-**Decision**: YAML to stdout, logs to stderr, multiple output options
+**Decision**: YAML to stdout, logs to stderr, with timeout and progress indication
 
 ```go
-// Build command flags
-cmd.Flags().StringVarP(&valuesFile, "values", "v", "", "Values file")
-cmd.Flags().StringVarP(&outputPath, "output", "o", "", "Output path (default: stdout)")
-cmd.Flags().StringVar(&outputFormat, "format", "single", "Output format: single|by-kind|by-resource")
-cmd.Flags().StringVar(&outputType, "output-format", "yaml", "Output type: yaml|json")
-cmd.Flags().BoolVar(&showPatches, "show-patches", false, "Show patch application details")
-cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output to stderr")
+const (
+    DefaultBuildTimeout = 30 * time.Second  // Similar to Helm
+    MaxBuildTimeout     = 5 * time.Minute
+)
+
+type buildOptions struct {
+    valuesFile   string
+    outputPath   string
+    outputFormat string
+    outputType   string
+    localPath    string
+    timeout      time.Duration
+    verbose      bool
+    dryRun       bool
+    quiet        bool
+    showProgress bool
+}
+
+// Build command with proper flag handling
+func newBuildCommand() *cobra.Command {
+    var opts buildOptions
+    
+    cmd := &cobra.Command{
+        Use:   "build <package>",
+        Short: "Build Kubernetes manifests from kurel package",
+        RunE: func(cmd *cobra.Command, args []string) error {
+            // Apply timeout
+            ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
+            defer cancel()
+            
+            // Progress indication for long operations
+            var progress ProgressReporter
+            if opts.showProgress && !opts.quiet {
+                progress = NewProgressBar("Building package...")
+                defer progress.Finish()
+            }
+            
+            return runBuild(ctx, args[0], opts, progress)
+        },
+    }
+    
+    flags := cmd.Flags()
+    flags.StringVarP(&opts.valuesFile, "values", "f", "", "Values file")
+    flags.StringVarP(&opts.outputPath, "output", "o", "", "Output path (default: stdout)")
+    flags.DurationVar(&opts.timeout, "timeout", DefaultBuildTimeout, "Build timeout")
+    flags.BoolVar(&opts.dryRun, "dry-run", false, "Print to stdout without writing")
+    flags.BoolVarP(&opts.verbose, "verbose", "v", false, "Verbose output")
+    flags.BoolVar(&opts.showProgress, "progress", true, "Show progress bar")
+    
+    return cmd
+}
 ```
 
-**Output behavior**:
-- YAML/JSON to stdout for piping
-- Progress/logs to stderr with -v flag
-- Default output directory: `out/` (project standard)
-
 **Rationale**:
+- Timeout prevents hanging builds
+- Progress indication for better UX
 - Unix philosophy: stdout for data, stderr for logs
-- Composable with other tools via piping
-- Consistent with project conventions
+- Matches Helm's performance characteristics
 
 ## Module Organization
 
@@ -296,24 +434,178 @@ pkg/launcher/
 ## Error Handling Philosophy
 
 1. **Fail fast** for critical errors (missing parameters.yaml)
-2. **Collect errors** for non-critical issues (malformed patches)
-3. **Clear error messages** with context and suggestions
-4. **Distinguish** between errors (blocking) and warnings (advisory)
+2. **Abort all** on patch failures (transactional behavior)
+3. **Use existing error patterns** from pkg/errors
+4. **Clear error messages** with context and suggestions
+5. **Distinguish** between errors (blocking) and warnings (advisory)
+6. **Context cancellation** respected throughout
+
+```go
+// Leverage existing Kure error patterns
+type LoadErrors struct {
+    errors.BaseError
+    PartialDefinition *PackageDefinition
+    Issues            []error
+}
+
+func (e *LoadErrors) Unwrap() []error {
+    return e.Issues
+}
+
+// Transactional patch application
+func (p *patchProcessor) ApplyPatches(ctx context.Context, resources []Resource, patches []Patch) ([]Resource, error) {
+    // Work on copy for rollback capability
+    working := make([]Resource, len(resources))
+    copy(working, resources)
+    
+    for i, patch := range patches {
+        select {
+        case <-ctx.Done():
+            return nil, fmt.Errorf("cancelled at patch %d/%d: %w", i+1, len(patches), ctx.Err())
+        default:
+        }
+        
+        result, err := p.applyPatch(working, patch)
+        if err != nil {
+            // Fail fast - abort all
+            return nil, fmt.Errorf("patch %s failed (aborting all): %w", patch.Name, err)
+        }
+        working = result
+    }
+    
+    return working, nil
+}
+```
 
 ## Testing Strategy
 
-- **Unit tests**: Each module tested in isolation
+- **Table-driven tests**: Following Go best practices with subtests
+- **Benchmarks**: Ensure performance matches Helm
+- **Mock filesystem**: Using afero for loader testing
 - **Integration tests**: Full package processing flows
-- **Table-driven tests**: For validators and resolvers
-- **Mock filesystem**: For loader testing
 - **Fixture packages**: Real-world package examples in testdata/
+- **Concurrent testing**: Validate thread safety
+
+```go
+// Table-driven test example
+func TestVariableResolver(t *testing.T) {
+    tests := []struct {
+        name      string
+        base      ParameterMap
+        overrides ParameterMap
+        want      ParameterMap
+        wantErr   string
+    }{
+        {
+            name: "simple_substitution",
+            base: ParameterMap{"app": "myapp", "image": "${app}:latest"},
+            want: ParameterMap{"app": "myapp", "image": "myapp:latest"},
+        },
+        {
+            name:    "circular_dependency",
+            base:    ParameterMap{"a": "${b}", "b": "${a}"},
+            wantErr: "circular dependency",
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            resolver := NewResolver()
+            ctx := context.Background()
+            got, err := resolver.Resolve(ctx, tt.base, tt.overrides)
+            
+            if tt.wantErr != "" {
+                require.Error(t, err)
+                assert.Contains(t, err.Error(), tt.wantErr)
+                return
+            }
+            
+            require.NoError(t, err)
+            assert.Equal(t, tt.want, got)
+        })
+    }
+}
+
+// Benchmark example
+func BenchmarkBuildPackage(b *testing.B) {
+    packages := []struct {
+        name      string
+        resources int
+        target    time.Duration
+    }{
+        {"small", 10, 100 * time.Millisecond},
+        {"medium", 50, 500 * time.Millisecond},
+        {"large", 200, 2 * time.Second},
+    }
+    
+    for _, pkg := range packages {
+        b.Run(pkg.name, func(b *testing.B) {
+            p := generateTestPackage(pkg.resources)
+            b.ResetTimer()
+            
+            for i := 0; i < b.N; i++ {
+                ctx := context.Background()
+                _, err := Build(ctx, p, BuildOptions{})
+                require.NoError(b, err)
+            }
+        })
+    }
+}
+```
 
 ## Performance Considerations
 
-1. **Lazy loading**: Load resources only when needed
-2. **Caching**: Cache schemas and resolved variables
-3. **Parallel processing**: Where safe (e.g., resource validation)
-4. **Streaming output**: For large manifest sets
+1. **Concurrent processing**: Use worker pools for CPU-intensive operations
+2. **Memory limits**: Enforce package size limits (50MB max, 10MB warning)
+3. **Streaming**: Stream large resource sets to avoid memory spikes
+4. **Caching**: Cache schemas with TTL for repeated operations
+5. **Context cancellation**: Support timeouts and early termination
+6. **Performance targets** (matching Helm):
+   - Small packages (1-20 resources): < 100ms
+   - Medium packages (21-100 resources): < 500ms
+   - Large packages (101-500 resources): < 2s
+   - X-Large packages (500+ resources): < 5s
+
+```go
+// Concurrent validation with worker pool
+func (v *Validator) ValidateConcurrent(ctx context.Context, resources []Resource) []error {
+    workers := runtime.NumCPU()
+    if len(resources) < workers {
+        workers = len(resources)
+    }
+    
+    sem := make(chan struct{}, workers)
+    errChan := make(chan error, len(resources))
+    
+    var wg sync.WaitGroup
+    for _, r := range resources {
+        wg.Add(1)
+        go func(resource Resource) {
+            defer wg.Done()
+            select {
+            case sem <- struct{}{}:
+                defer func() { <-sem }()
+                if err := v.validate(resource); err != nil {
+                    errChan <- err
+                }
+            case <-ctx.Done():
+                errChan <- ctx.Err()
+            }
+        }(r)
+    }
+    
+    go func() {
+        wg.Wait()
+        close(errChan)
+    }()
+    
+    var errors []error
+    for err := range errChan {
+        errors = append(errors, err)
+    }
+    return errors
+}
+```
 
 ## Security Considerations
 
@@ -321,14 +613,18 @@ pkg/launcher/
 2. **URL validation** for schema URLs
 3. **Variable injection prevention** in resolution
 4. **Resource validation** against schemas
+5. **No direct secret creation** - only references via external-secrets or similar patterns
+6. **Sensitive data handling** - parameters may contain references but not actual secrets
 
 ## Future Extensibility Points
 
-1. **Plugin system** for custom validators
+1. **Plugin system** for custom validators (future consideration)
 2. **Remote package loading** (git, https)
 3. **Package signing** and verification
 4. **Advanced patch operations** (JSONPatch, strategic merge)
 5. **Dependency resolution** between packages
+6. **Observability and metrics** (future consideration)
+7. **Enhanced debugging tools** for patch application
 
 ## Design Constraints
 
@@ -337,3 +633,6 @@ pkg/launcher/
 - No cluster connectivity required
 - No package registry dependency
 - Deterministic output (same input = same output)
+- No direct secret creation (use external references)
+- Patches must succeed or error (no silent failures)
+- Local patches can override package patches
