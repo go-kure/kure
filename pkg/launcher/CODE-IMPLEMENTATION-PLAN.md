@@ -220,6 +220,51 @@ func (l *defaultLoader) validatePackageSize(path string) error {
     
     return nil
 }
+
+// Load patches with uniqueness enforcement
+func (l *defaultLoader) loadPatchesWithUniqueness(ctx context.Context, path string) ([]Patch, []error) {
+    var patches []Patch
+    var errors []error
+    seen := make(map[string]string) // name -> file path
+    
+    err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+        if err != nil {
+            errors = append(errors, err)
+            return nil // Continue walking
+        }
+        
+        if !strings.HasSuffix(p, ".kpatch") {
+            return nil
+        }
+        
+        patch, err := l.loadSinglePatch(ctx, p)
+        if err != nil {
+            errors = append(errors, fmt.Errorf("loading %s: %w", p, err))
+            return nil
+        }
+        
+        // Check uniqueness
+        if existing, exists := seen[patch.Name]; exists {
+            return fmt.Errorf("duplicate patch name '%s' in %s and %s", 
+                patch.Name, existing, p)
+        }
+        seen[patch.Name] = p
+        
+        patches = append(patches, patch)
+        return nil
+    })
+    
+    if err != nil {
+        errors = append(errors, err)
+    }
+    
+    // Sort by numeric prefix
+    sort.Slice(patches, func(i, j int) bool {
+        return numericPrefixSort(patches[i].Path, patches[j].Path)
+    })
+    
+    return patches, errors
+}
 ```
 
 **Key functions to implement:**
