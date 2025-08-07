@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: extensible-app
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: extensible-app
+  ports:
+  - port: 80
+    targetPort: 8080

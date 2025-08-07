@@ -1,0 +1,6 @@
+name: simple-app
+version: 1.0.0
+description: A simple test application
+labels:
+  app: simple
+  environment: test

@@ -1,0 +1,22 @@
+type: merge
+metadata:
+  name: production-overrides
+  description: Production environment customizations
+
+parameters:
+  environment: production
+  replicas: 5
+  image:
+    tag: v1.2.3
+  features:
+    logging: true
+    metrics: true
+    tracing: true
+
+resources:
+  - selector:
+      kind: Service
+      name: extensible-app
+    merge:
+      spec:
+        type: LoadBalancer

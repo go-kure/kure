@@ -1,0 +1,11 @@
+app_name: extensible-app
+namespace: default
+environment: development
+replicas: 2
+image:
+  repository: myapp
+  tag: latest
+features:
+  logging: false
+  metrics: false
+  tracing: false

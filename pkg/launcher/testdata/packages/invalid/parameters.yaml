@@ -1,0 +1,5 @@
+# Parameters with validation issues
+app_name: ""  # Empty required field
+undefined_ref: "{{ .nonexistent }}"  # Reference to undefined variable
+circular1: "{{ .circular2 }}"  # Circular dependency
+circular2: "{{ .circular1 }}"  # Circular dependency

@@ -1,0 +1,12 @@
+# Missing required fields
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # Missing name
+  namespace: default
+spec:
+  # Missing replicas and selector
+  template:
+    metadata:
+      labels:
+        app: test

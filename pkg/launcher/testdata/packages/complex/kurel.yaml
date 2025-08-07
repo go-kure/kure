@@ -1,0 +1,9 @@
+name: complex-stack
+version: 2.1.0
+description: A complex application stack with multiple components
+annotations:
+  team: platform
+  cost-center: engineering
+labels:
+  stack: complex
+  tier: application

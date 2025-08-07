@@ -1,0 +1,3 @@
+name: invalid-package
+version: invalid-version  # Invalid semver
+description: Package with various errors

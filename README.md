@@ -242,7 +242,7 @@ The `go test` command will discover and execute tests across all packages.
 - gotestfmt for enhanced test output formatting
 
 ### Dependencies
-- **Go 1.24.5** with modern Kubernetes client libraries (v0.33.2)
+- **Go 1.24.6** with modern Kubernetes client libraries (v0.33.2)
 - Flux controller APIs (v1.x series)
 - cert-manager v1.16.2, External Secrets v0.18.2, MetalLB v0.15.2
 - Built on controller-runtime for Kubernetes integration

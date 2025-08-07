@@ -1,0 +1,44 @@
+# Global parameters
+environment: development
+region: us-west-2
+domain: example.com
+
+# Component toggles
+enable_cache: true
+enable_monitoring: true
+enable_tls: false
+
+# Application config
+app:
+  name: complex-app
+  namespace: development-apps
+  replicas: 2
+  image:
+    repository: myapp
+    tag: latest
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+# Database config
+database:
+  type: postgres
+  version: "14"
+  size: 10Gi
+  backup_enabled: false
+
+# Cache config
+cache:
+  type: redis
+  version: "7.0"
+  maxmemory: 1Gi
+
+# Monitoring
+monitoring:
+  prometheus_enabled: true
+  grafana_enabled: true
+  alert_email: ops-development@example.com

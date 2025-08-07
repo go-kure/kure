@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extensible-app
+  namespace: default
+  labels:
+    app: extensible-app
+    environment: development
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: extensible-app
+  template:
+    metadata:
+      labels:
+        app: extensible-app
+    spec:
+      containers:
+      - name: app
+        image: myapp:latest
+        ports:
+        - containerPort: 8080

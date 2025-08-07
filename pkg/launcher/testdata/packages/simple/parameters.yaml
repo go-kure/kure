@@ -1,0 +1,10 @@
+app_name: simple-app
+namespace: default
+replicas: 3
+image:
+  repository: nginx
+  tag: "1.21"
+service:
+  type: ClusterIP
+  port: 80
+environment: test

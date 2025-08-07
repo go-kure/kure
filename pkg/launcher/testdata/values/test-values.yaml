@@ -1,0 +1,11 @@
+environment: testing
+replicas: 4
+image:
+  repository: custom-repo/myapp
+  tag: v2.0.0
+features:
+  logging: true
+  metrics: true
+custom_labels:
+  team: platform
+  owner: devops

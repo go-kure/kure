@@ -1,0 +1,9 @@
+name = "production-resources"
+description = "Production resource limits"
+enabled = false  # Will be enabled when environment=production
+
+[deployment.complex-app.spec.template.spec.containers.0]
+resources.requests.memory = "1Gi"
+resources.requests.cpu = "1000m"
+resources.limits.memory = "2Gi"
+resources.limits.cpu = "2000m"

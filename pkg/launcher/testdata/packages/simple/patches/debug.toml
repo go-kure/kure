@@ -1,0 +1,8 @@
+name = "debug"
+description = "Enable debug mode"
+enabled = false
+
+[deployment.simple-app.spec.template.spec.containers.0]
+env = [
+  { name = "DEBUG", value = "true" }
+]

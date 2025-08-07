@@ -42,7 +42,7 @@ go test ./internal/kubernetes
 - Uses **Qodana** static analysis (configured in `qodana.yaml`)
 - **52 test files** with comprehensive coverage
 - GitHub Actions CI/CD pipeline
-- Go version: **1.24.5**
+- Go version: **1.24.6**
 
 #### Examples & Demos
 ```bash
@@ -199,7 +199,7 @@ ml, err := layout.WalkCluster(cluster, rules)
 - controller-runtime for Kubernetes integration
 
 ### Version Management
-- Go 1.24.5 required
+- Go 1.24.6 required
 - Use `go mod tidy` to clean dependencies
 - Pin specific versions for stability
 

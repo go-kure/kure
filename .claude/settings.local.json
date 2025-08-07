@@ -3,7 +3,14 @@
     "allow": [
       "Bash(/usr/bin/go build ./cmd/kurel)",
       "Bash(./kurel validate --help)",
-      "Bash(./kurel build:*)"
+      "Bash(./kurel build:*)",
+      "Bash(/usr/bin/go test -v ./pkg/launcher -run \"TestIntegration_\")",
+      "Bash(/usr/bin/go test -v ./pkg/launcher -run \"TestIntegration_SimplePackage\")",
+      "Bash(/usr/bin/go:*)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run TestIntegration_SimplePackage)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run TestIntegration)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run \"TestIntegration_SimplePackage|TestIntegration_InvalidPackage|TestIntegration_WithUserValues\")",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run TestPackageLoader)"
     ],
     "deny": []
   }

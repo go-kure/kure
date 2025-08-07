@@ -1,0 +1,13 @@
+name = "monitoring"
+description = "Enable Prometheus monitoring"
+enabled = true
+
+[servicemonitor]
+apiVersion = "monitoring.coreos.com/v1"
+kind = "ServiceMonitor"
+metadata.name = "complex-app"
+metadata.namespace = "development-apps"
+spec.selector.matchLabels.app = "complex-app"
+spec.endpoints = [
+  { port = "metrics", interval = "30s" }
+]

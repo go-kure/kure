@@ -195,6 +195,7 @@ func (l *packageLoader) LoadResources(ctx context.Context, path string, opts *La
 
 	// Look for resources in standard locations
 	var resources []Resource
+	seenResources := make(map[string]bool) // Track processed files to avoid duplicates
 	locations := []string{
 		filepath.Join(resourceDir, "resources"),
 		filepath.Join(resourceDir, "manifests"),
@@ -221,6 +222,18 @@ func (l *packageLoader) LoadResources(ctx context.Context, path string, opts *La
 			if strings.Contains(path, "patches/") || strings.HasSuffix(path, ".kpatch") {
 				return nil
 			}
+
+			// Skip package metadata and parameter files
+			filename := filepath.Base(path)
+			if filename == "kurel.yaml" || filename == "parameters.yaml" {
+				return nil
+			}
+
+			// Skip files we've already processed
+			if seenResources[path] {
+				return nil
+			}
+			seenResources[path] = true
 
 			// Parse the file for Kubernetes objects
 			objs, err := io.ParseFile(path)
