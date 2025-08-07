@@ -1,11 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(touch:*)",
-      "Bash(/usr/bin/go test -v ./pkg/launcher -run TestResolver/max_depth_exceeded)",
-      "Bash(/usr/bin/go test -cover ./pkg/launcher)",
-      "Bash(/usr/bin/go test -bench=. -benchmem -benchtime=1s ./pkg/launcher)",
-      "Bash(/usr/bin/go test -bench=BenchmarkPatchApplication -benchtime=1s ./pkg/launcher)"
+      "Bash(/usr/bin/go build ./cmd/kurel)",
+      "Bash(./kurel validate --help)",
+      "Bash(./kurel build:*)"
     ],
     "deny": []
   }

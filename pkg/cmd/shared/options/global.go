@@ -15,6 +15,7 @@ type GlobalOptions struct {
 	ConfigFile string
 	Verbose    bool
 	Debug      bool
+	Strict     bool
 
 	// Output options
 	Output     string
@@ -45,6 +46,7 @@ func (o *GlobalOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&o.ConfigFile, "config", "c", o.ConfigFile, "config file (default is $HOME/.kure.yaml)")
 	flags.BoolVarP(&o.Verbose, "verbose", "v", o.Verbose, "verbose output")
 	flags.BoolVar(&o.Debug, "debug", o.Debug, "debug output")
+	flags.BoolVar(&o.Strict, "strict", o.Strict, "treat warnings as errors")
 
 	// Output flags
 	flags.StringVarP(&o.Output, "output", "o", o.Output, "output format (yaml|json|table|wide|name)")
