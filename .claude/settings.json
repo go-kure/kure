@@ -11,12 +11,13 @@
   },
   "preferences": {
     "saveSettingsAutomatic": true,
-    "saveSettingsPath": ".claude/settings.json"
+    "saveSettingsPath": ".claude/settings.json",
+    "useLocalSettings": false
   },
   "currentWork": {
     "module": "launcher",
     "phase": "4 - Schema Generation and Validation",
-    "status": "fixing benchmark test compilation errors",
+    "status": "completed",
     "completedPhases": [
       "Phase 1: Types and Interfaces",
       "Phase 2: Variable Resolution",
@@ -32,8 +33,13 @@
   "todoListEnabled": true,
   "testCoverage": {
     "target": "80%",
-    "current": "74.1%"
+    "current": "74.0%"
   },
+  "memoryNotes": [
+    "Always save settings to .claude/settings.json (never .local variant)",
+    "Always use kure/errors package for error handling",
+    "Always use pkg/logger for logging"
+  ],
   "performanceTargets": {
     "fullBuild": "<1s",
     "validation": "<100ms",
