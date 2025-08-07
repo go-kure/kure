@@ -21,6 +21,7 @@ type outputBuilder struct {
 	writer   FileWriter
 	resolver Resolver
 	processor PatchProcessor
+	outputWriter io.Writer // configurable output writer
 }
 
 // NewBuilder creates a new output builder
@@ -29,10 +30,11 @@ func NewBuilder(log logger.Logger) Builder {
 		log = logger.Default()
 	}
 	return &outputBuilder{
-		logger:    log,
-		writer:    &defaultFileWriter{},
-		resolver:  NewResolver(log),
-		processor: NewPatchProcessor(log, nil),
+		logger:       log,
+		writer:       &defaultFileWriter{},
+		resolver:     NewResolver(log),
+		processor:    NewPatchProcessor(log, nil),
+		outputWriter: os.Stdout, // default to stdout
 	}
 }
 
@@ -86,6 +88,11 @@ func (b *outputBuilder) Build(ctx context.Context, inst *PackageInstance, buildO
 
 	b.logger.Info("Successfully built %d resources", len(resources))
 	return nil
+}
+
+// SetOutputWriter sets the output writer for stdout output
+func (b *outputBuilder) SetOutputWriter(w io.Writer) {
+	b.outputWriter = w
 }
 
 // buildResources converts package resources to final manifests
@@ -166,7 +173,7 @@ func (b *outputBuilder) writeOutput(ctx context.Context, resources []*unstructur
 
 	switch opts.Output {
 	case OutputStdout:
-		writer = os.Stdout
+		writer = b.outputWriter
 	case OutputFile:
 		if opts.OutputPath == "" {
 			return errors.New("output path required for file output")

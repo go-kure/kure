@@ -99,6 +99,9 @@ type Validator interface {
 type Builder interface {
 	// Build generates final manifests and writes them according to options
 	Build(ctx context.Context, inst *PackageInstance, buildOpts BuildOptions, opts *LauncherOptions) error
+	
+	// SetOutputWriter sets the output writer for stdout output
+	SetOutputWriter(w io.Writer)
 }
 
 // ExtensionLoader handles .local.kurel extensions

@@ -80,24 +80,17 @@ func TestIntegration_SimplePackage(t *testing.T) {
 		OutputPath: "", // Will write to buffer
 	}
 	
-	// Mock stdout for testing
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	// Use a buffer to capture output
+	var buf bytes.Buffer
+	builder.SetOutputWriter(&buf)
 	
 	err = builder.Build(ctx, instance, buildOpts, opts)
-	
-	w.Close()
-	os.Stdout = oldStdout
-	
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 	
-	// Read output
-	outputBuf := make([]byte, 4096)
-	n, _ := r.Read(outputBuf)
-	output := string(outputBuf[:n])
+	// Get output from buffer
+	output := buf.String()
 	
 	// Verify output contains expected resources
 	if !strings.Contains(output, "kind: Deployment") {

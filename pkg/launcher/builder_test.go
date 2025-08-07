@@ -91,9 +91,9 @@ func TestBuilder(t *testing.T) {
 
 	t.Run("build to stdout YAML", func(t *testing.T) {
 		var buf bytes.Buffer
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		
+		// Set the builder's output writer to our buffer
+		builder.SetOutputWriter(&buf)
 
 		buildOpts := BuildOptions{
 			Output: OutputStdout,
@@ -102,10 +102,6 @@ func TestBuilder(t *testing.T) {
 
 		err := builder.Build(ctx, instance, buildOpts, nil)
 		assert.NoError(t, err)
-
-		w.Close()
-		os.Stdout = oldStdout
-		_, _ = buf.ReadFrom(r)
 
 		// Check output contains both resources
 		output := buf.String()

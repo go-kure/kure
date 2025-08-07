@@ -16,25 +16,26 @@
   },
   "currentWork": {
     "module": "launcher",
-    "phase": "6 - CLI Commands",
+    "phase": "7 - Integration Tests",
     "status": "completed",
     "completedPhases": [
       "Phase 1: Types and Interfaces",
-      "Phase 2: Variable Resolution", 
+      "Phase 2: Variable Resolution",
       "Phase 3: Patch Processing",
       "Phase 4: Schema Generation and Validation",
       "Phase 5: Output Builder and Extensions",
-      "Phase 6: CLI Commands"
+      "Phase 6: CLI Commands",
+      "Phase 7: Integration Tests"
     ],
     "nextPhases": [
-      "Phase 7: Integration Tests",
-      "Documentation and Examples"
+      "Documentation and Examples",
+      "Performance Optimization"
     ]
   },
   "todoListEnabled": true,
   "testCoverage": {
     "target": "80%",
-    "current": "74.4%"
+    "current": "77.4%"
   },
   "memoryNotes": [
     "Always save settings to .claude/settings.json (never .local variant)",
@@ -103,7 +104,24 @@
       "Bash(/usr/bin/go test -cover ./pkg/launcher)",
       "Bash(/usr/bin/go test -bench=. -benchmem -benchtime=1s ./pkg/launcher)",
       "Bash(/usr/bin/go test -bench=BenchmarkPatchApplication -benchtime=1s ./pkg/launcher)",
-      "Bash(/usr/bin/go test ./pkg/launcher -run \"TestBuilder|TestExtension\")"
+      "Bash(/usr/bin/go test ./pkg/launcher -run \"TestBuilder|TestExtension\")",
+      "Bash(/usr/bin/go build ./cmd/kurel)",
+      "Bash(./kurel validate --help)",
+      "Bash(./kurel build:*)",
+      "Bash(/usr/bin/go test -v ./pkg/launcher -run \"TestIntegration_\")",
+      "Bash(/usr/bin/go test -v ./pkg/launcher -run \"TestIntegration_SimplePackage\")",
+      "Bash(/usr/bin/go:*)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run TestIntegration_SimplePackage)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run TestIntegration)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run \"TestIntegration_SimplePackage|TestIntegration_InvalidPackage|TestIntegration_WithUserValues\")",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -v ./pkg/launcher -run TestPackageLoader)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test ./pkg/launcher -run \"TestCLI_\" -v)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test ./pkg/launcher -run \"TestCLI_BuildCommand/build_simple_package\" -v)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test ./pkg/launcher -run \"TestCLI_ValidateCommand/validate_simple_package\" -v)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test -cover ./pkg/launcher)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test ./pkg/launcher -run \"TestBuilder/build_to_stdout_YAML\" -v)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test ./pkg/launcher -run \"TestIntegration_SimplePackage\" -v)",
+      "Bash(GOROOT=/usr/lib/go /usr/bin/go test ./pkg/launcher -run \"TestCLI_BuildCommand/build_with_values_file\" -v)"
     ],
     "deny": []
   }
