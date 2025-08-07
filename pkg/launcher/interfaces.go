@@ -3,6 +3,8 @@ package launcher
 import (
 	"context"
 	"io"
+	
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // DefinitionLoader loads package definitions from disk
@@ -48,25 +50,49 @@ type PatchProcessor interface {
 	DebugPatchGraph(patches []Patch) string
 }
 
-// SchemaGenerator generates and validates schemas
+// SchemaGenerator generates JSON schemas for validation
 type SchemaGenerator interface {
-	// GenerateSchema creates a JSON schema from package definition
-	GenerateSchema(ctx context.Context, def *PackageDefinition) (*Schema, error)
+	// GeneratePackageSchema generates a schema for package validation
+	GeneratePackageSchema(ctx context.Context) (*JSONSchema, error)
 	
-	// ValidateSchemaMerge checks for type conflicts across patches
-	ValidateSchemaMerge(patches []Patch) error
+	// GenerateResourceSchema generates a schema for a specific resource type
+	GenerateResourceSchema(ctx context.Context, gvk schema.GroupVersionKind) (*JSONSchema, error)
+	
+	// GenerateParameterSchema generates a schema for parameters
+	GenerateParameterSchema(ctx context.Context, params ParameterMap) (*JSONSchema, error)
+	
+	// TraceFieldUsage traces how fields are used across resources
+	TraceFieldUsage(resources []Resource) map[string][]string
+	
+	// ExportSchema exports a schema to JSON
+	ExportSchema(schema *JSONSchema) ([]byte, error)
+	
+	// DebugSchema generates a debug representation of a schema
+	DebugSchema(schema *JSONSchema) string
+	
+	// SetVerbose enables verbose mode
+	SetVerbose(verbose bool)
 }
 
-// Validator validates package definitions and instances
+// Validator validates package definitions
 type Validator interface {
-	// ValidateDefinition validates a package definition structure
-	ValidateDefinition(ctx context.Context, def *PackageDefinition) ValidationResult
+	// ValidatePackage validates an entire package definition
+	ValidatePackage(ctx context.Context, def *PackageDefinition) (*ValidationResult, error)
 	
-	// ValidateInstance validates a package instance with resolved parameters
-	ValidateInstance(ctx context.Context, inst *PackageInstance) ValidationResult
+	// ValidateResource validates a single resource
+	ValidateResource(ctx context.Context, resource Resource) (*ValidationResult, error)
 	
-	// ValidateParameters validates parameters against a schema
-	ValidateParameters(ctx context.Context, params ParameterMap, schema *Schema) ValidationResult
+	// ValidatePatch validates a patch definition
+	ValidatePatch(ctx context.Context, patch Patch) (*ValidationResult, error)
+	
+	// SetStrictMode enables or disables strict validation mode
+	SetStrictMode(strict bool)
+	
+	// SetMaxErrors sets the maximum number of errors before stopping
+	SetMaxErrors(max int)
+	
+	// SetVerbose enables verbose mode
+	SetVerbose(verbose bool)
 }
 
 // Builder builds final manifests from package instances
@@ -80,7 +106,6 @@ type ExtensionLoader interface {
 	// LoadWithExtensions loads a package with local extensions
 	LoadWithExtensions(ctx context.Context, def *PackageDefinition, localPath string, opts *LauncherOptions) (*PackageDefinition, error)
 }
-
 
 // ProgressReporter reports progress for long operations
 type ProgressReporter interface {

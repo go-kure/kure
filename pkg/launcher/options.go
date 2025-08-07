@@ -105,7 +105,9 @@ func (r ValidationResult) IsValid() bool {
 type ValidationError struct {
 	Resource string `json:"resource,omitempty"`
 	Field    string `json:"field,omitempty"`
+	Path     string `json:"path,omitempty"`     // JSON path to the field
 	Message  string `json:"message"`
+	Severity string `json:"severity,omitempty"` // "error" or "warning"
 }
 
 // Error implements the error interface
@@ -143,21 +145,3 @@ func (w ValidationWarning) String() string {
 	return w.Message
 }
 
-// Schema represents a JSON schema for validation
-type Schema struct {
-	Type       string                   `json:"type,omitempty"`
-	Properties map[string]SchemaProperty `json:"properties,omitempty"`
-	Required   []string                 `json:"required,omitempty"`
-}
-
-// SchemaProperty represents a property in a JSON schema
-type SchemaProperty struct {
-	Type        string      `json:"type,omitempty"`
-	Description string      `json:"description,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
-	Minimum     *float64    `json:"minimum,omitempty"`
-	Maximum     *float64    `json:"maximum,omitempty"`
-	Pattern     string      `json:"pattern,omitempty"`
-	Enum        []interface{} `json:"enum,omitempty"`
-	Items       *SchemaProperty `json:"items,omitempty"`
-}
