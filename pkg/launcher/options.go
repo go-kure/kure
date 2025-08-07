@@ -16,6 +16,7 @@ type LauncherOptions struct {
 	CacheDir     string           // Directory for caching schemas
 	Debug        bool             // Enable debug output
 	Verbose      bool             // Enable verbose logging
+	StrictMode   bool             // Treat warnings as errors
 	ProgressFunc func(string)     // Progress callback function
 }
 
@@ -58,10 +59,38 @@ func (o *LauncherOptions) WithVerbose(verbose bool) *LauncherOptions {
 
 // BuildOptions configures the build process
 type BuildOptions struct {
-	OutputPath   string       // Output path (default: stdout)
-	OutputFormat OutputFormat // Output format (single, by-kind, by-resource)
-	OutputType   OutputType   // Output type (yaml, json)
+	// Output configuration
+	Output       OutputDest   // Where to write (stdout, file, directory)
+	OutputPath   string       // Output path for file/directory
+	OutputFormat OutputFormat // How to organize files
+	
+	// Serialization
+	Format      SerializationFormat // YAML or JSON
+	PrettyPrint bool               // Pretty print JSON
+	
+	// File organization
+	SeparateFiles    bool // Write each resource to its own file
+	IncludeIndex     bool // Add numeric prefix to filenames
+	IncludeNamespace bool // Add namespace to filenames
+	
+	// Filtering
+	FilterKind      string // Only output resources of this kind
+	FilterName      string // Only output resources with this name
+	FilterNamespace string // Only output resources in this namespace
+	
+	// Transformations
+	AddLabels      map[string]string // Add these labels to all resources
+	AddAnnotations map[string]string // Add these annotations to all resources
 }
+
+// OutputDest defines where to write output
+type OutputDest string
+
+const (
+	OutputStdout    OutputDest = "stdout"    // Write to stdout
+	OutputFile      OutputDest = "file"      // Write to single file
+	OutputDirectory OutputDest = "directory"  // Write to directory
+)
 
 // OutputFormat defines how to organize output files
 type OutputFormat string
@@ -72,12 +101,20 @@ const (
 	OutputFormatByResource OutputFormat = "by-resource" // Separate file per resource
 )
 
-// OutputType defines the output serialization format
-type OutputType string
+// SerializationFormat defines the output serialization format
+type SerializationFormat string
 
 const (
-	OutputTypeYAML OutputType = "yaml" // YAML format
-	OutputTypeJSON OutputType = "json" // JSON format
+	FormatYAML SerializationFormat = "yaml" // YAML format
+	FormatJSON SerializationFormat = "json" // JSON format
+)
+
+// OutputType is deprecated, use SerializationFormat instead
+type OutputType = SerializationFormat
+
+const (
+	OutputTypeYAML OutputType = FormatYAML // Deprecated: use FormatYAML
+	OutputTypeJSON OutputType = FormatJSON // Deprecated: use FormatJSON
 )
 
 // ValidationResult contains validation errors and warnings

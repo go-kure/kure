@@ -146,11 +146,13 @@ func (pd *PackageDefinition) DeepCopy() *PackageDefinition {
 
 // PackageInstance represents a package with user customization
 type PackageInstance struct {
-	Definition *PackageDefinition      `json:"definition"`
-	UserValues ParameterMap            `json:"userValues"`
-	Resolved   ParameterMapWithSource  `json:"resolved"` // Final values with source tracking
-	LocalPath  string                  `json:"localPath,omitempty"`
+	Definition     *PackageDefinition      `json:"definition"`
+	UserValues     ParameterMap            `json:"userValues"`
+	Resolved       ParameterMapWithSource  `json:"resolved"` // Final values with source tracking
+	LocalPath      string                  `json:"localPath,omitempty"`
+	EnabledPatches []Patch                 `json:"enabledPatches,omitempty"` // Patches after dependency resolution
 }
+
 
 // Helper functions for deep copying
 
