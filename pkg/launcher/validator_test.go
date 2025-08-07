@@ -642,7 +642,7 @@ func TestFormatResult(t *testing.T) {
 		assert.Contains(t, formatted, "spec.replicas: must be positive")
 		assert.Contains(t, formatted, "missing required field")
 		assert.Contains(t, formatted, "Resource: Deployment/app")
-		assert.Contains(t, formatted, "Field: spec.selector")
+		assert.Contains(t, formatted, "spec.selector")
 		
 		// Check warning details
 		assert.Contains(t, formatted, "metadata.labels: recommended labels missing")

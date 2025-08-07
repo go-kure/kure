@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/logger"
 )
 
@@ -87,14 +88,21 @@ func (r *variableResolver) Resolve(ctx context.Context, base, overrides Paramete
 
 // resolveValue recursively resolves a single value
 func (r *variableResolver) resolveValue(ctx context.Context, path string, value interface{}, params ParameterMap, depth int) (interface{}, error) {
+	// Check context cancellation
+	select {
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "context cancelled during resolution")
+	default:
+	}
+	
 	// Check depth limit
 	if depth > r.maxDepth {
-		return nil, fmt.Errorf("maximum substitution depth %d exceeded", r.maxDepth)
+		return nil, errors.Errorf("maximum substitution depth %d exceeded", r.maxDepth)
 	}
 	
 	// Check if we're already resolving this variable (cycle detection)
 	if r.resolving[path] {
-		return nil, fmt.Errorf("cyclic reference detected for %s", path)
+		return nil, errors.Errorf("cyclic reference detected for %s", path)
 	}
 	
 	// Check cache
@@ -164,7 +172,7 @@ func (r *variableResolver) resolveString(ctx context.Context, s string, params P
 		varPath := matches[0][1]
 		value := r.lookupVariable(varPath, params)
 		if value == nil {
-			return nil, fmt.Errorf("undefined variable: %s", varPath)
+			return nil, errors.Errorf("undefined variable: %s", varPath)
 		}
 		
 		// Recursively resolve the value
@@ -179,7 +187,7 @@ func (r *variableResolver) resolveString(ctx context.Context, s string, params P
 		
 		value := r.lookupVariable(varPath, params)
 		if value == nil {
-			return nil, fmt.Errorf("undefined variable: %s", varPath)
+			return nil, errors.Errorf("undefined variable: %s", varPath)
 		}
 		
 		// Recursively resolve the value

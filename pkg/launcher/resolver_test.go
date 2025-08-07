@@ -124,9 +124,14 @@ func TestResolver(t *testing.T) {
 			Logger:   log,
 		}
 
-		_, err := resolver.Resolve(ctx, base, nil, opts)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "depth")
+		result, err := resolver.Resolve(ctx, base, nil, opts)
+		if err == nil {
+			t.Logf("Expected error but got result: %v", result)
+		}
+		assert.Error(t, err, "Expected error for deep variable chain exceeding max depth")
+		if err != nil {
+			assert.Contains(t, err.Error(), "depth")
+		}
 	})
 
 	t.Run("parameter merging", func(t *testing.T) {

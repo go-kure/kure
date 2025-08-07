@@ -1062,10 +1062,19 @@ func MergeSchemas(schemas ...*JSONSchema) *JSONSchema {
 		return schemas[0]
 	}
 	
-	// Start with first schema as base
-	result := &JSONSchema{
-		Type:       schemas[0].Type,
-		Properties: make(map[string]*JSONSchema),
+	// Start with first non-nil schema as base
+	var result *JSONSchema
+	for _, s := range schemas {
+		if s != nil {
+			result = &JSONSchema{
+				Type:       s.Type,
+				Properties: make(map[string]*JSONSchema),
+			}
+			break
+		}
+	}
+	if result == nil {
+		return nil
 	}
 	
 	// Merge all schemas

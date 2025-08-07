@@ -223,3 +223,4 @@ ml, err := layout.WalkCluster(cluster, rules)
 ## Claude Memories
 
 - kurel just generates YAML
+- always implement errors via the kure/errors package; fix this when encountering otherwise

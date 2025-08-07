@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,7 +37,7 @@ func NewValidator(log logger.Logger) Validator {
 // ValidatePackage validates an entire package definition
 func (v *validator) ValidatePackage(ctx context.Context, def *PackageDefinition) (*ValidationResult, error) {
 	if def == nil {
-		return nil, fmt.Errorf("package definition is nil")
+		return nil, errors.Errorf("package definition is nil")
 	}
 	
 	v.logger.Debug("Validating package %s", def.Metadata.Name)
@@ -49,7 +50,7 @@ func (v *validator) ValidatePackage(ctx context.Context, def *PackageDefinition)
 	// Generate package schema
 	schema, err := v.schemaGenerator.GeneratePackageSchema(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate schema: %w", err)
+		return nil, errors.Errorf("failed to generate schema: %w", err)
 	}
 	
 	// Convert package to unstructured for validation
@@ -491,7 +492,7 @@ func (v *validator) validatePatchContent(content string) error {
 	// Try to detect format and validate accordingly
 	lines := strings.Split(content, "\n")
 	if len(lines) == 0 {
-		return fmt.Errorf("empty patch content")
+		return errors.Errorf("empty patch content")
 	}
 	
 	// Simple validation for now - just check if it looks like valid TOML or YAML
@@ -512,7 +513,7 @@ func (v *validator) validatePatchContent(content string) error {
 	}
 	
 	if !hasColon && !hasBracket {
-		return fmt.Errorf("patch content does not appear to be valid TOML or YAML")
+		return errors.Errorf("patch content does not appear to be valid TOML or YAML")
 	}
 	
 	return nil
@@ -526,11 +527,11 @@ func (v *validator) validateCondition(condition string) error {
 		vars := extractVariables(condition)
 		for _, varName := range vars {
 			if varName == "" {
-				return fmt.Errorf("empty variable reference")
+				return errors.Errorf("empty variable reference")
 			}
 			// Check for valid variable name format
 			if !isValidVariableName(varName) {
-				return fmt.Errorf("invalid variable name: %s", varName)
+				return errors.Errorf("invalid variable name: %s", varName)
 			}
 		}
 	}

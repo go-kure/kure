@@ -2,7 +2,6 @@ package launcher
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -372,7 +371,7 @@ func (l *packageLoader) clientObjectToResource(obj client.Object) (Resource, err
 		// Try to convert through runtime
 		data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 		if err != nil {
-			return Resource{}, fmt.Errorf("failed to convert to unstructured: %w", err)
+			return Resource{}, errors.Wrap(err, "failed to convert to unstructured")
 		}
 		u = &unstructured.Unstructured{Object: data}
 	}

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/logger"
 	"github.com/go-kure/kure/pkg/patch"
 )
@@ -84,8 +85,15 @@ func (p *patchProcessor) ResolveDependencies(ctx context.Context, patches []Patc
 
 // ApplyPatches applies patches to a package definition (returns deep copy)
 func (p *patchProcessor) ApplyPatches(ctx context.Context, def *PackageDefinition, patches []Patch, params ParameterMap) (*PackageDefinition, error) {
+	// Check context cancellation
+	select {
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "context cancelled during patch application")
+	default:
+	}
+	
 	if def == nil {
-		return nil, fmt.Errorf("package definition is nil")
+		return nil, errors.Errorf("package definition is nil")
 	}
 	
 	if len(patches) == 0 {
@@ -101,7 +109,7 @@ func (p *patchProcessor) ApplyPatches(ctx context.Context, def *PackageDefinitio
 	// Resolve variables in parameters first
 	resolvedParams, err := p.resolver.Resolve(ctx, params, nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve parameters: %w", err)
+		return nil, errors.Errorf("failed to resolve parameters: %w", err)
 	}
 	
 	// Convert resolved params to VariableContext for patch engine
@@ -220,7 +228,7 @@ func (p *patchProcessor) toBool(value interface{}) bool {
 func (p *patchProcessor) checkDependencies(name string, patchMap map[string]*Patch, enabled map[string]bool) error {
 	patch, ok := patchMap[name]
 	if !ok {
-		return fmt.Errorf("patch %s not found", name)
+		return errors.Errorf("patch %s not found", name)
 	}
 	
 	if patch.Metadata == nil {
@@ -240,7 +248,7 @@ func (p *patchProcessor) checkDependencies(name string, patchMap map[string]*Pat
 func (p *patchProcessor) checkConflicts(name string, patchMap map[string]*Patch, enabled map[string]bool) error {
 	patch, ok := patchMap[name]
 	if !ok {
-		return fmt.Errorf("patch %s not found", name)
+		return errors.Errorf("patch %s not found", name)
 	}
 	
 	if patch.Metadata == nil {
@@ -649,7 +657,7 @@ func parsePath(path string) ([]patch.PathPart, error) {
 // applyOperation applies a patch operation at the specified path
 func applyOperation(obj map[string]interface{}, path []patch.PathPart, value interface{}, op string) error {
 	if len(path) == 0 {
-		return fmt.Errorf("empty path")
+		return errors.Errorf("empty path")
 	}
 	
 	// Navigate to the target location
@@ -661,22 +669,22 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 			// Array access by index
 			arr, ok := current[part.Field].([]interface{})
 			if !ok {
-				return fmt.Errorf("field %s is not an array", part.Field)
+				return errors.Errorf("field %s is not an array", part.Field)
 			}
 			index, _ := strconv.Atoi(part.MatchValue)
 			if index >= len(arr) {
-				return fmt.Errorf("index %d out of bounds for field %s", index, part.Field)
+				return errors.Errorf("index %d out of bounds for field %s", index, part.Field)
 			}
 			if m, ok := arr[index].(map[string]interface{}); ok {
 				current = m
 			} else {
-				return fmt.Errorf("array element at %s[%d] is not an object", part.Field, index)
+				return errors.Errorf("array element at %s[%d] is not an object", part.Field, index)
 			}
 		} else if part.MatchType == "key" {
 			// Selector-based array access
 			arr, ok := current[part.Field].([]interface{})
 			if !ok {
-				return fmt.Errorf("field %s is not an array", part.Field)
+				return errors.Errorf("field %s is not an array", part.Field)
 			}
 			
 			// Find matching element
@@ -691,7 +699,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 				}
 			}
 			if !found {
-				return fmt.Errorf("no element matching selector %s in field %s", part.MatchValue, part.Field)
+				return errors.Errorf("no element matching selector %s in field %s", part.MatchValue, part.Field)
 			}
 		} else {
 			// Regular field access
@@ -703,7 +711,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 					current[part.Field] = make(map[string]interface{})
 					current = current[part.Field].(map[string]interface{})
 				} else {
-					return fmt.Errorf("field %s is not an object", part.Field)
+					return errors.Errorf("field %s is not an object", part.Field)
 				}
 			}
 		}
@@ -724,7 +732,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 			current[lastPart.Field] = value
 		}
 	default:
-		return fmt.Errorf("unsupported operation: %s", op)
+		return errors.Errorf("unsupported operation: %s", op)
 	}
 	
 	return nil

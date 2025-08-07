@@ -1,6 +1,6 @@
 module github.com/go-kure/kure
 
-go 1.24.5
+go 1.24.6
 
 replace (
 	k8s.io/api => k8s.io/api v0.33.2

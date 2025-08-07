@@ -1,0 +1,97 @@
+{
+  "project": "go-kure/kure",
+  "description": "Kure - A Go library for programmatically building Kubernetes resources for GitOps tools",
+  "language": "go",
+  "goVersion": "1.24.6",
+  "codingStandards": {
+    "errorHandling": "always use kure/errors package; never use fmt.Errorf directly",
+    "logging": "always use pkg/logger package",
+    "testing": "comprehensive unit and integration tests required",
+    "documentation": "GoDoc comments required for all public functions"
+  },
+  "preferences": {
+    "saveSettingsAutomatic": true,
+    "saveSettingsPath": ".claude/settings.json"
+  },
+  "currentWork": {
+    "module": "launcher",
+    "phase": "4 - Schema Generation and Validation",
+    "status": "fixing benchmark test compilation errors",
+    "completedPhases": [
+      "Phase 1: Types and Interfaces",
+      "Phase 2: Variable Resolution",
+      "Phase 3: Patch Processing",
+      "Phase 4: Schema Generation and Validation"
+    ],
+    "nextPhases": [
+      "Phase 5: Output Builder and Extensions",
+      "Phase 6: CLI Commands",
+      "Phase 7: Integration Tests"
+    ]
+  },
+  "todoListEnabled": true,
+  "testCoverage": {
+    "target": "80%",
+    "current": "74.1%"
+  },
+  "performanceTargets": {
+    "fullBuild": "<1s",
+    "validation": "<100ms",
+    "schemaGeneration": "<500ms"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(/usr/bin/go test -bench=. -benchmem ./pkg/launcher)",
+      "Bash(export:*)",
+      "Bash(/usr/bin/go test -c ./pkg/launcher)",
+      "Bash(unset GOROOT)",
+      "Bash(find:*)",
+      "Bash(go test:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(go run:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(grep:*)",
+      "Bash(mv:*)",
+      "Bash(rmdir:*)",
+      "Bash(go mod:*)",
+      "Bash(ls:*)",
+      "Bash(go build:*)",
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(rm:*)",
+      "Bash(go list:*)",
+      "Bash(go mod list:*)",
+      "Bash(ls:*)",
+      "Bash(echo \"PATH: $PATH\")",
+      "Bash(helm repo add:*)",
+      "Bash(git add:*)",
+      "Bash(git rebase:*)",
+      "Bash(mv:*)",
+      "Bash(git fetch:*)",
+      "Bash(echo:*)",
+      "Bash(go doc:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(go get:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(./kure --help)",
+      "Bash(./kure generate:*)",
+      "Bash(./kure version)",
+      "Bash(./kure completion bash)",
+      "Bash(/dev/null)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(sed:*)",
+      "Bash(go help:*)",
+      "Bash(git restore:*)",
+      "Bash(./kure --help)",
+      "Bash(./kurel --help)",
+      "WebFetch(domain:pkg.go.dev)",
+      "Bash(go tool cover:*)",
+      "Bash(go:*)"
+    ],
+    "deny": []
+  }
+}

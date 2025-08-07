@@ -22,6 +22,16 @@ func Wrapf(err error, format string, args ...interface{}) error {
 	return fmt.Errorf(format+": %w", append(args, err)...)
 }
 
+// Errorf creates a new formatted error using Go's standard error formatting.
+func Errorf(format string, args ...interface{}) error {
+	return fmt.Errorf(format, args...)
+}
+
+// New creates a new error with the given message.
+func New(message string) error {
+	return errors.New(message)
+}
+
 // Standard error variables using the standard library
 var (
 	ErrGVKNotFound   = errors.New("could not determine GroupVersionKind")
