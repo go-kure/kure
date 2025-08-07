@@ -201,9 +201,15 @@ func (p *patchProcessor) toBool(value interface{}) bool {
 			return false
 		}
 		return true
-	case int, int32, int64:
+	case int:
 		return v != 0
-	case float32, float64:
+	case int32:
+		return v != 0
+	case int64:
+		return v != 0
+	case float32:
+		return v != 0
+	case float64:
 		return v != 0
 	default:
 		return value != nil
@@ -317,20 +323,50 @@ func (p *patchProcessor) orderByDependencies(enabled map[string]bool, patchMap m
 
 // createVariableContext converts resolved parameters to patch.VariableContext
 func (p *patchProcessor) createVariableContext(params ParameterMapWithSource) *patch.VariableContext {
-	vars := make(map[string]string)
+	// The patch engine expects variables under "values" namespace
+	values := make(map[string]interface{})
+	features := make(map[string]bool)
 	
 	for key, source := range params {
-		p.addToVariables(key, source.Value, vars)
-	}
-	
-	// Convert to Values map for VariableContext
-	values := make(map[string]interface{})
-	for k, v := range vars {
-		values[k] = v
+		// Add to values map (flattened)
+		p.addToValues(key, source.Value, values)
+		
+		// If it's a boolean and starts with "feature", also add to features map
+		if b, ok := source.Value.(bool); ok && strings.HasPrefix(key, "feature") {
+			// Remove "feature." prefix if present
+			featureKey := strings.TrimPrefix(key, "feature.")
+			features[featureKey] = b
+		}
 	}
 	
 	return &patch.VariableContext{
-		Values: values,
+		Values:   values,
+		Features: features,
+	}
+}
+
+// addToValues recursively adds parameters to values map
+func (p *patchProcessor) addToValues(prefix string, value interface{}, values map[string]interface{}) {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		// Add the map itself
+		values[prefix] = v
+		// Also add flattened keys
+		for k, val := range v {
+			key := prefix + "." + k
+			p.addToValues(key, val, values)
+		}
+	case []interface{}:
+		// Add the array itself
+		values[prefix] = v
+		// Also add individual elements
+		for i, val := range v {
+			key := fmt.Sprintf("%s[%d]", prefix, i)
+			values[key] = val
+		}
+	default:
+		// Add simple values directly
+		values[prefix] = value
 	}
 }
 

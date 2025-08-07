@@ -207,7 +207,7 @@ func TestPatchProcessor(t *testing.T) {
 			
 			// Check that the result has the patch applied
 			spec := result.Resources[0].Raw.Object["spec"].(map[string]interface{})
-			assert.Equal(t, float64(3), spec["replicas"])
+			assert.Equal(t, 3, spec["replicas"])
 		})
 
 		t.Run("targeted patch", func(t *testing.T) {
@@ -271,7 +271,7 @@ spec.replicas: 5`,
 			// Check that only app1 was patched
 			spec1 := result.Resources[0].Raw.Object["spec"].(map[string]interface{})
 			spec2 := result.Resources[1].Raw.Object["spec"].(map[string]interface{})
-			assert.Equal(t, float64(5), spec1["replicas"])
+			assert.Equal(t, 5, spec1["replicas"])
 			assert.Equal(t, float64(1), spec2["replicas"]) // Unchanged
 		})
 
@@ -301,8 +301,8 @@ spec.replicas: 5`,
 			patches := []Patch{
 				{
 					Name: "add-config",
-					Content: `data.environment: ${env}
-data.version: ${app.version}`,
+					Content: `data.environment: ${values.env}
+data.version: ${values.app.version}`,
 				},
 			}
 
@@ -618,9 +618,10 @@ func TestCreateVariableContext(t *testing.T) {
 	varCtx := p.createVariableContext(params)
 	
 	// Check that values are converted correctly
+	// The new implementation stores values directly, not as strings
 	assert.Equal(t, "test-app", varCtx.Values["app.name"])
-	assert.Equal(t, "8080", varCtx.Values["app.port"])
-	assert.Equal(t, "true", varCtx.Values["enabled"])
+	assert.Equal(t, 8080, varCtx.Values["app.port"])
+	assert.Equal(t, true, varCtx.Values["enabled"])
 	assert.Equal(t, "a", varCtx.Values["items[0]"])
 	assert.Equal(t, "b", varCtx.Values["items[1]"])
 	assert.Equal(t, "c", varCtx.Values["items[2]"])
