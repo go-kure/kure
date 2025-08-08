@@ -38,11 +38,12 @@ type ParameterMapWithSource map[string]ParameterSource
 
 // Resource represents a Kubernetes resource with thread-safe access
 type Resource struct {
-	APIVersion string               `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string               `yaml:"kind" json:"kind"`
-	Metadata   metav1.ObjectMeta    `yaml:"metadata" json:"metadata"`
-	Raw        *unstructured.Unstructured // For patch system compatibility
-	mu         sync.RWMutex         // Protect concurrent access
+	APIVersion   string               `yaml:"apiVersion" json:"apiVersion"`
+	Kind         string               `yaml:"kind" json:"kind"`
+	Metadata     metav1.ObjectMeta    `yaml:"metadata" json:"metadata"`
+	Raw          *unstructured.Unstructured // For patch system compatibility
+	TemplateData []byte               `json:"-"` // Raw template content before variable resolution
+	mu           sync.RWMutex         // Protect concurrent access
 }
 
 // GetName returns the resource name thread-safely
@@ -79,11 +80,19 @@ func (r *Resource) DeepCopy() Resource {
 		rawCopy = r.Raw.DeepCopy()
 	}
 	
+	// Deep copy template data
+	var templateCopy []byte
+	if r.TemplateData != nil {
+		templateCopy = make([]byte, len(r.TemplateData))
+		copy(templateCopy, r.TemplateData)
+	}
+	
 	return Resource{
-		APIVersion: r.APIVersion,
-		Kind:       r.Kind,
-		Metadata:   *r.Metadata.DeepCopy(),
-		Raw:        rawCopy,
+		APIVersion:   r.APIVersion,
+		Kind:         r.Kind,
+		Metadata:     *r.Metadata.DeepCopy(),
+		Raw:          rawCopy,
+		TemplateData: templateCopy,
 	}
 }
 

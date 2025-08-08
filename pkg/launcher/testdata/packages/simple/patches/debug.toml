@@ -1,8 +1,3 @@
-name = "debug"
-description = "Enable debug mode"
-enabled = false
-
+# Debug mode patch
 [deployment.simple-app.spec.template.spec.containers.0]
-env = [
-  { name = "DEBUG", value = "true" }
-]
+env: [{ name: "DEBUG", value: "true" }]

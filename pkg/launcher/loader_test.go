@@ -91,9 +91,13 @@ func TestPackageLoader(t *testing.T) {
 			opts := DefaultOptions()
 			resources, err := loader.LoadResources(ctx, tmpDir, opts)
 
-			// Should continue with valid resources
+			// Should load as template data since template loading is enabled
 			assert.NoError(t, err)
-			assert.Empty(t, resources) // No valid resources
+			assert.Len(t, resources, 1) // One resource loaded as template
+			
+			// Verify it has template data
+			assert.NotEmpty(t, resources[0].TemplateData)
+			assert.Contains(t, string(resources[0].TemplateData), "invalid: yaml: content:")
 		})
 	})
 

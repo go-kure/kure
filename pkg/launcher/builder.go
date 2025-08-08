@@ -7,12 +7,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/go-kure/kure/pkg/errors"
+	kurei "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/logger"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // outputBuilder implements the Builder interface
@@ -107,32 +111,57 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 		default:
 		}
 
-		// Skip if filtering is enabled and resource doesn't match
-		if opts.FilterKind != "" && resource.Kind != opts.FilterKind {
-			continue
-		}
-		if opts.FilterName != "" && resource.Metadata.Name != opts.FilterName {
-			continue
-		}
-		if opts.FilterNamespace != "" && resource.Metadata.Namespace != opts.FilterNamespace {
-			continue
-		}
-
 		// Convert to unstructured
 		obj := resource.Raw
 		if obj == nil {
-			// Create from metadata if Raw is nil
-			obj = &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": resource.APIVersion,
-					"kind":       resource.Kind,
-					"metadata": map[string]interface{}{
-						"name":        resource.Metadata.Name,
-						"namespace":   resource.Metadata.Namespace,
-						"labels":      resource.Metadata.Labels,
-						"annotations": resource.Metadata.Annotations,
+			// Check if we have template data that needs variable resolution
+			if len(resource.TemplateData) > 0 {
+				// Resolve variables in template data
+				resolvedTemplate, err := b.resolveTemplateVariables(string(resource.TemplateData), params)
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to resolve variables in template for %s/%s", 
+						resource.Kind, resource.Metadata.Name)
+				}
+				
+				// Parse the resolved template
+				objs, err := kurei.ParseYAML([]byte(resolvedTemplate))
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to parse resolved template for %s/%s", 
+						resource.Kind, resource.Metadata.Name)
+				}
+				
+				// Use the first object (templates should contain single resources)
+				if len(objs) > 0 {
+					if clientObj, ok := objs[0].(client.Object); ok {
+						// Convert client.Object to unstructured
+						objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(clientObj)
+						if err != nil {
+							return nil, errors.Wrapf(err, "failed to convert object to unstructured for %s/%s",
+								resource.Kind, resource.Metadata.Name)
+						}
+						obj = &unstructured.Unstructured{Object: objMap}
+						
+						// Update resource metadata with resolved values for filtering
+						resource.Metadata.Name = obj.GetName()
+						resource.Metadata.Namespace = obj.GetNamespace()
+					}
+				}
+			}
+			
+			// Fallback: create from metadata if still nil
+			if obj == nil {
+				obj = &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"apiVersion": resource.APIVersion,
+						"kind":       resource.Kind,
+						"metadata": map[string]interface{}{
+							"name":        resource.Metadata.Name,
+							"namespace":   resource.Metadata.Namespace,
+							"labels":      resource.Metadata.Labels,
+							"annotations": resource.Metadata.Annotations,
+						},
 					},
-				},
+				}
 			}
 		}
 
@@ -157,6 +186,17 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 				annotations[k] = v
 			}
 			obj.SetAnnotations(annotations)
+		}
+
+		// Apply filtering after the resource is fully resolved
+		if opts.FilterKind != "" && obj.GetKind() != opts.FilterKind {
+			continue
+		}
+		if opts.FilterName != "" && obj.GetName() != opts.FilterName {
+			continue
+		}
+		if opts.FilterNamespace != "" && obj.GetNamespace() != opts.FilterNamespace {
+			continue
 		}
 
 		result = append(result, obj)
@@ -217,9 +257,6 @@ func (b *outputBuilder) writeOutput(ctx context.Context, resources []*unstructur
 
 // writeYAML writes resources in YAML format
 func (b *outputBuilder) writeYAML(w io.Writer, resources []*unstructured.Unstructured, opts BuildOptions) error {
-	encoder := yaml.NewEncoder(w)
-	encoder.SetIndent(2)
-
 	for i, resource := range resources {
 		// Add document separator for multi-document YAML
 		if i > 0 && !opts.SeparateFiles {
@@ -230,6 +267,10 @@ func (b *outputBuilder) writeYAML(w io.Writer, resources []*unstructured.Unstruc
 
 		// Convert to YAML
 		data := resource.Object
+		
+		// Use a new encoder for each resource to avoid automatic document separators
+		encoder := yaml.NewEncoder(w)
+		encoder.SetIndent(2)
 		if err := encoder.Encode(data); err != nil {
 			return errors.Wrap(err, "failed to encode resource to YAML")
 		}
@@ -372,4 +413,82 @@ func (w *defaultFileWriter) WriteFile(path string, data []byte) error {
 
 func (w *defaultFileWriter) MkdirAll(path string) error {
 	return os.MkdirAll(path, 0755)
+}
+
+// resolveTemplateVariables replaces ${variable} patterns in template content
+func (b *outputBuilder) resolveTemplateVariables(template string, params ParameterMap) (string, error) {
+	// Use the same variable resolution pattern as the resolver
+	variablePattern := regexp.MustCompile(`\$\{([^}]+)\}`)
+	
+	result := template
+	matches := variablePattern.FindAllStringSubmatch(template, -1)
+	
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		
+		fullMatch := match[0]  // ${var.name}
+		varPath := match[1]    // var.name
+		
+		// Resolve the variable using the same logic as the resolver
+		value, err := b.resolveVariablePath(varPath, params)
+		if err != nil {
+			b.logger.Debug("Failed to resolve variable %s: %v", varPath, err)
+			continue // Skip unresolvable variables for now
+		}
+		
+		// Convert value to string
+		valueStr := b.convertToString(value)
+		
+		// Replace in result
+		result = strings.ReplaceAll(result, fullMatch, valueStr)
+	}
+	
+	return result, nil
+}
+
+// resolveVariablePath resolves a dot-notation variable path in parameters
+func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (interface{}, error) {
+	parts := strings.Split(path, ".")
+	var current interface{} = params
+	
+	for _, part := range parts {
+		switch v := current.(type) {
+		case ParameterMap:
+			if val, exists := v[part]; exists {
+				current = val
+			} else {
+				return nil, errors.Errorf("parameter %s not found", path)
+			}
+		case map[string]interface{}:
+			if val, exists := v[part]; exists {
+				current = val
+			} else {
+				return nil, errors.Errorf("parameter %s not found", path)
+			}
+		default:
+			return nil, errors.Errorf("cannot traverse %s in non-map value", path)
+		}
+	}
+	
+	return current, nil
+}
+
+// convertToString converts a parameter value to its string representation
+func (b *outputBuilder) convertToString(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case int, int8, int16, int32, int64:
+		return fmt.Sprintf("%d", v)
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", v)
+	case float32, float64:
+		return fmt.Sprintf("%g", v)
+	case bool:
+		return fmt.Sprintf("%t", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }

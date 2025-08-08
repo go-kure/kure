@@ -224,3 +224,4 @@ ml, err := layout.WalkCluster(cluster, rules)
 
 - kurel just generates YAML
 - always implement errors via the kure/errors package; fix this when encountering otherwise
+- allow running all possible test commands and file analysis commands (like grep, sed, ..) without asking

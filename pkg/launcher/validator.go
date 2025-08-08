@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/blang/semver/v4"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -240,6 +241,14 @@ func (v *validator) validateSemantics(ctx context.Context, def *PackageDefinitio
 						fmt.Sprintf("conflict '%s' does not exist", conflict))
 				}
 			}
+		}
+	}
+	
+	// Validate semantic version format
+	if def.Metadata.Version != "" {
+		if _, err := semver.Parse(def.Metadata.Version); err != nil {
+			v.addError(result, "metadata.version", 
+				fmt.Sprintf("invalid semantic version: %s", def.Metadata.Version))
 		}
 	}
 	

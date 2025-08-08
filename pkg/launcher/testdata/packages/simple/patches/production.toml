@@ -1,6 +1,3 @@
-name = "production"
-description = "Production configuration with more replicas"
-enabled = "{{ .environment == 'production' }}"
-
+# Production configuration with more replicas
 [deployment.simple-app]
-spec.replicas = 5
+spec.replicas: 5

@@ -413,6 +413,15 @@ func (c *CLI) runBuild(ctx context.Context, packagePath, valuesFile string, patc
 		return errors.Wrap(err, "failed to load package")
 	}
 
+	// Validate package before building
+	result, err := c.validator.ValidatePackage(ctx, def)
+	if err != nil {
+		return errors.Wrap(err, "validation failed")
+	}
+	if !result.IsValid() {
+		return errors.Errorf("package has validation errors: %d errors found", len(result.Errors))
+	}
+
 	// Load values file if provided
 	userValues := make(ParameterMap)
 	if valuesFile != "" {

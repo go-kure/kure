@@ -387,6 +387,11 @@ func IsTOMLFormat(content string) bool {
 			return true
 		}
 
+		// Look for TOML key = value pattern (but not in inline tables)
+		if strings.Contains(line, " = ") && !strings.Contains(line, "{") {
+			return true
+		}
+
 		// If we find non-comment, non-empty content that's not a TOML header
 		// but looks like YAML (starts with - or has :), it's probably YAML
 		if strings.HasPrefix(line, "-") || (strings.Contains(line, ":") && !strings.HasPrefix(line, "[")) {

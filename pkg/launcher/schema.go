@@ -36,6 +36,7 @@ type JSONSchema struct {
 	Maximum     *float64                  `json:"maximum,omitempty"`
 	Default     interface{}               `json:"default,omitempty"`
 	Examples    []interface{}             `json:"examples,omitempty"`
+	Schema      string                    `json:"$schema,omitempty"`
 	Ref         string                    `json:"$ref,omitempty"`
 	OneOf       []*JSONSchema                 `json:"oneOf,omitempty"`
 	AnyOf       []*JSONSchema                 `json:"anyOf,omitempty"`
@@ -67,6 +68,7 @@ func (g *schemaGenerator) GeneratePackageSchema(ctx context.Context) (*JSONSchem
 	
 	// Root schema for a Kurel package
 	schema := &JSONSchema{
+		Schema:      "https://json-schema.org/draft-07/schema#",
 		Type:        "object",
 		Description: "Kurel package definition",
 		Properties: map[string]*JSONSchema{

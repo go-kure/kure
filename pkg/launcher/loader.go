@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -235,20 +236,37 @@ func (l *packageLoader) LoadResources(ctx context.Context, path string, opts *La
 			}
 			seenResources[path] = true
 
-			// Parse the file for Kubernetes objects
-			objs, err := io.ParseFile(path)
+			// Read raw file content first (may contain templates)
+			rawData, err := os.ReadFile(path)
 			if err != nil {
-				l.logger.Warn("Failed to parse %s: %v", path, err)
-				return nil // Continue with other files
+				l.logger.Warn("Failed to read %s: %v", path, err)
+				return nil
 			}
 
-			// Convert to launcher Resources
+			// Try to parse as Kubernetes objects
+			// If it contains variables, this will fail and we'll store as template
+			objs, parseErr := io.ParseYAML(rawData)
+			if parseErr != nil {
+				// File likely contains template variables, store as template data
+				l.logger.Debug("File %s contains templates, deferring parsing: %v", path, parseErr)
+				
+				// Create a placeholder resource with template data
+				// We'll need basic metadata to identify it later
+				if err := l.loadTemplateResource(path, rawData, &resources); err != nil {
+					l.logger.Warn("Failed to load template resource %s: %v", path, err)
+				}
+				return nil
+			}
+
+			// Successfully parsed - convert to launcher Resources
 			for _, obj := range objs {
 				res, err := l.clientObjectToResource(obj)
 				if err != nil {
 					l.logger.Warn("Failed to convert object from %s: %v", path, err)
 					continue
 				}
+				// Also store the raw template data for later processing
+				res.TemplateData = rawData
 				resources = append(resources, res)
 			}
 
@@ -262,6 +280,51 @@ func (l *packageLoader) LoadResources(ctx context.Context, path string, opts *La
 
 	l.logger.Info("Loaded %d resources", len(resources))
 	return resources, nil
+}
+
+// loadTemplateResource creates a placeholder resource for template files
+func (l *packageLoader) loadTemplateResource(path string, rawData []byte, resources *[]Resource) error {
+	// Extract basic resource info from the template by looking for YAML structure
+	// This is a heuristic approach - we'll look for apiVersion, kind, metadata patterns
+	content := string(rawData)
+	
+	// Try to extract apiVersion and kind even with variable substitution
+	var apiVersion, kind, name, namespace string
+	
+	// Look for apiVersion (may contain variables)
+	if matches := regexp.MustCompile(`apiVersion:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
+		apiVersion = strings.TrimSpace(matches[1])
+	}
+	
+	// Look for kind (may contain variables)  
+	if matches := regexp.MustCompile(`kind:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
+		kind = strings.TrimSpace(matches[1])
+	}
+	
+	// Look for metadata.name (may contain variables)
+	if matches := regexp.MustCompile(`name:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
+		name = strings.TrimSpace(matches[1])
+	}
+	
+	// Look for metadata.namespace (may contain variables)
+	if matches := regexp.MustCompile(`namespace:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
+		namespace = strings.TrimSpace(matches[1])
+	}
+	
+	// Create a placeholder resource
+	resource := Resource{
+		APIVersion:   apiVersion,
+		Kind:         kind,
+		TemplateData: rawData,
+		Metadata: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	
+	*resources = append(*resources, resource)
+	l.logger.Debug("Loaded template resource: %s/%s from %s", kind, name, path)
+	return nil
 }
 
 // LoadPatches loads patch files from the package
@@ -435,6 +498,6 @@ func isYAMLFile(path string) bool {
 // isPatchFile checks if a file is a patch file
 func isPatchFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".kpatch" || ext == ".patch" || 
+	return ext == ".kpatch" || ext == ".patch" || ext == ".toml" ||
 		(isYAMLFile(path) && strings.Contains(path, "patches/"))
 }
