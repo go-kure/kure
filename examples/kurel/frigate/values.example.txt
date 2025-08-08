@@ -1,0 +1,82 @@
+# Example values file for Frigate deployment
+# Copy this file to values.yaml and customize for your environment
+
+# Production values example
+---
+environment: production
+app:
+  namespace: frigate-prod
+  replicas: 1
+  image:
+    tag: 0.12.0-stable
+
+service:
+  type: LoadBalancer
+  loadBalancerIP: 10.10.10.100
+
+ingress:
+  hostname: frigate.production.example.com
+  clusterIssuer: letsencrypt-prod
+
+storage:
+  size: 500Gi
+  storageClass: fast-ssd
+
+mqtt:
+  host: mqtt.production.example.com
+  user: frigate-prod
+
+---
+# Development values example
+environment: development
+app:
+  namespace: frigate-dev
+  replicas: 1
+  image:
+    tag: 0.12.0-beta
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+
+storage:
+  size: 20Gi
+  storageClass: standard
+
+mqtt:
+  host: mqtt.dev.local
+  user: frigate-dev
+
+environment:
+  timezone: UTC
+
+---
+# Home lab values example
+environment: homelab
+app:
+  namespace: frigate
+  image:
+    repository: ghcr.io/blakeblackshear/frigate
+    tag: 0.12.0
+
+service:
+  type: LoadBalancer
+  loadBalancerIP: 192.168.1.200
+
+ingress:
+  hostname: frigate.home.local
+  tlsEnabled: false
+
+storage:
+  size: 100Gi
+  storageClass: nfs-client
+
+mqtt:
+  host: homeassistant.local
+  port: 1883
+  user: frigate
+
+cameras:
+  username: admin

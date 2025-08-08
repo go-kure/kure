@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${app.name}-config
+  namespace: ${app.namespace}
+  labels:
+    app.kubernetes.io/name: ${app.name}
+    app.kubernetes.io/instance: ${app.name}
+    app.kubernetes.io/managed-by: kurel
+data:
+  config.yml: |
+    mqtt:
+      host: ${mqtt.host}
+      port: ${mqtt.port}
+      topic_prefix: ${mqtt.topicPrefix}
+      client_id: ${mqtt.clientId}
+      user: ${mqtt.user}
+      password: '{FRIGATE_MQTT_PASSWORD}'
+      stats_interval: ${mqtt.statsInterval}
+    
+    detectors:
+      coral:
+        type: ${detector.type}
+        device: ${detector.device}
+    
+    model:
+      path: ${detector.modelPath}
+    
+    # Camera configuration should be added here
+    # This is a basic template - actual camera config would be much more detailed
+    cameras: {}
+    
+    # Additional Frigate configuration
+    snapshots:
+      enabled: true
+      retain:
+        default: 10
+    
+    record:
+      enabled: true
+      retain:
+        days: 7
+    
+    events:
+      retain:
+        default: 10
+    
+    logger:
+      default: info

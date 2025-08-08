@@ -1,0 +1,12 @@
+# Development configuration overrides
+deployment.${app.name}.spec.replicas: 1
+deployment.${app.name}.spec.template.spec.containers.0.resources.requests.memory: "256Mi"
+deployment.${app.name}.spec.template.spec.containers.0.resources.requests.cpu: "250m"
+deployment.${app.name}.spec.template.spec.containers.0.resources.limits.memory: "1Gi"
+deployment.${app.name}.spec.template.spec.containers.0.resources.limits.cpu: "1000m"
+
+# Smaller storage for development
+persistentvolumeclaim.${app.name}.spec.resources.requests.storage: "10Gi"
+
+# Disable ingress TLS for development
+ingress.${app.name}.spec.tls: null

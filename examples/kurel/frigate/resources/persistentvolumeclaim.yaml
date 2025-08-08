@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${app.name}
+  namespace: ${app.namespace}
+  labels:
+    app.kubernetes.io/name: ${app.name}
+    app.kubernetes.io/instance: ${app.name}
+    app.kubernetes.io/managed-by: kurel
+spec:
+  accessModes:
+    - ${storage.accessMode}
+  resources:
+    requests:
+      storage: ${storage.size}
+  storageClassName: ${storage.storageClass}

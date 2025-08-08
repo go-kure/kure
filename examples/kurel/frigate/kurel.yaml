@@ -1,0 +1,12 @@
+name: frigate
+version: 0.12.0
+appVersion: 0.12.0
+description: A complete and local NVR designed for Home Assistant with AI object detection
+maintainer: frigate-team
+repository: https://github.com/blakeblackshear/frigate
+tags:
+  - nvr
+  - security
+  - camera
+  - object-detection
+  - ai

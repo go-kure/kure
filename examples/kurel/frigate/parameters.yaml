@@ -1,0 +1,73 @@
+# Application parameters
+app:
+  name: frigate
+  namespace: frigate
+  image:
+    repository: ghcr.io/blakeblackshear/frigate
+    tag: 0.12.0
+    pullPolicy: IfNotPresent
+  replicas: 1
+
+# Service configuration
+service:
+  type: LoadBalancer
+  loadBalancerIP: 172.32.104.0
+  ports:
+    http: 5000
+    rtmp: 1935
+    rtsp: 8554
+    webrtc: 8555
+
+# Ingress configuration
+ingress:
+  enabled: true
+  hostname: frigate.home.vanginderachter.be
+  tlsEnabled: true
+  clusterIssuer: acme-gandi
+  forceSSLRedirect: true
+
+# Storage configuration
+storage:
+  size: 100Gi
+  storageClass: local-path
+  accessMode: ReadWriteOnce
+
+# Environment configuration
+environment:
+  timezone: Europe/Brussels
+  plusApiKey: ""  # Set in production via secret
+  libvaDriver: i965
+
+# MQTT configuration
+mqtt:
+  host: mqtt-broker-home.mqttbroker
+  port: 1883
+  topicPrefix: frigate
+  clientId: frigate
+  user: frigate
+  # Password should be provided via secret
+  statsInterval: 60
+
+# Detector configuration
+detector:
+  type: edgetpu
+  device: usb
+  modelPath: /edgetpu_model.tflite
+
+# Resource limits
+resources:
+  dshm:
+    sizeLimit: 1Gi
+
+# Node selector for Coral USB
+nodeSelector:
+  coral-usb: "true"
+
+# Security context
+securityContext:
+  privileged: true
+
+# Camera credentials (should be overridden via secrets in production)
+cameras:
+  username: HeadAdmin
+  # Individual camera passwords should be provided via secrets

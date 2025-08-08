@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${app.name}
+  namespace: ${app.namespace}
+  labels:
+    app.kubernetes.io/name: ${app.name}
+    app.kubernetes.io/instance: ${app.name}
+    app.kubernetes.io/managed-by: kurel
+  annotations:
+    cert-manager.io/cluster-issuer: ${ingress.clusterIssuer}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "${ingress.forceSSLRedirect}"
+spec:
+  tls:
+    - hosts:
+        - ${ingress.hostname}
+      secretName: ${app.name}-ingress-cert
+  rules:
+    - host: ${ingress.hostname}
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: ${app.name}
+                port:
+                  name: http

@@ -1,0 +1,19 @@
+# High availability configuration (requires shared storage)
+deployment.${app.name}.spec.replicas: 3
+deployment.${app.name}.spec.strategy.type: "RollingUpdate"
+deployment.${app.name}.spec.strategy.rollingUpdate.maxSurge: 1
+deployment.${app.name}.spec.strategy.rollingUpdate.maxUnavailable: 0
+
+# Add pod anti-affinity for HA
+deployment.${app.name}.spec.template.spec.affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - ${app.name}
+          topologyKey: kubernetes.io/hostname

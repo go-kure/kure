@@ -1,0 +1,139 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${app.name}
+  namespace: ${app.namespace}
+  labels:
+    app.kubernetes.io/name: ${app.name}
+    app.kubernetes.io/instance: ${app.name}
+    app.kubernetes.io/managed-by: kurel
+spec:
+  replicas: ${app.replicas}
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ${app.name}
+      app.kubernetes.io/instance: ${app.name}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ${app.name}
+        app.kubernetes.io/instance: ${app.name}
+      annotations:
+        checksum/configmap: "{{ .ConfigMapChecksum }}"
+    spec:
+      containers:
+        - name: ${app.name}
+          image: "${app.image.repository}:${app.image.tag}"
+          imagePullPolicy: ${app.image.pullPolicy}
+          securityContext:
+            privileged: ${securityContext.privileged}
+          ports:
+            - name: http
+              containerPort: ${service.ports.http}
+              protocol: TCP
+            - name: rtmp
+              containerPort: ${service.ports.rtmp}
+              protocol: TCP
+            - name: rtsp
+              containerPort: ${service.ports.rtsp}
+              protocol: TCP
+            - name: webrtc
+              containerPort: ${service.ports.webrtc}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 30
+            failureThreshold: 5
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 30
+            failureThreshold: 5
+            timeoutSeconds: 10
+          env:
+            - name: TZ
+              value: ${environment.timezone}
+            - name: PLUS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${app.name}-secrets
+                  key: plus-api-key
+                  optional: true
+            - name: LIBVA_DRIVER_NAME
+              value: ${environment.libvaDriver}
+            - name: FRIGATE_CAM_USERNAME
+              value: ${cameras.username}
+            # Camera passwords should come from secrets
+            - name: FRIGATE_CAM0_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${app.name}-camera-secrets
+                  key: cam0-password
+                  optional: true
+            - name: FRIGATE_CAM1_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${app.name}-camera-secrets
+                  key: cam1-password
+                  optional: true
+            - name: FRIGATE_CAM2_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${app.name}-camera-secrets
+                  key: cam2-password
+                  optional: true
+            - name: FRIGATE_CAM3_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${app.name}-camera-secrets
+                  key: cam3-password
+                  optional: true
+            - name: FRIGATE_CAM360_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${app.name}-camera-secrets
+                  key: cam360-password
+                  optional: true
+          envFrom:
+            - secretRef:
+                name: mqttuser
+                optional: true
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /data
+              name: data
+            - name: dshm
+              mountPath: /dev/shm
+            - mountPath: /media
+              name: data
+              subPath: media
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+      volumes:
+        - name: config
+          configMap:
+            name: ${app.name}-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: ${app.name}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: ${resources.dshm.sizeLimit}
+      nodeSelector:
+        coral-usb: "${nodeSelector.coral-usb}"
