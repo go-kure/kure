@@ -1,5 +1,7 @@
 # ApplicationConfig Generators Design Document
 
+> **Note**: For implementation patterns and architectural conventions, see [ARCHITECTURE.md](ARCHITECTURE.md)
+
 ## Overview
 
 The ApplicationConfig system provides a pluggable architecture for generating Kubernetes resources from different configuration formats. This document describes the design for supporting multiple ApplicationConfig implementations with automatic type detection and versioning.

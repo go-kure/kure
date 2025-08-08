@@ -2,6 +2,13 @@
 // from different configuration formats. It implements a registry pattern with
 // Group, Version, Kind (GVK) identification following Kubernetes conventions.
 //
+// Documentation
+//
+// For detailed documentation, see:
+//   - DESIGN.md: High-level design and GVK system overview
+//   - ARCHITECTURE.md: Implementation patterns and conventions
+//   - STATUS.md: Current development status and roadmap
+//
 // Architecture
 //
 // The package uses a registry pattern where each generator type:

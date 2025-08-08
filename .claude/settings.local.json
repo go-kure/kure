@@ -47,7 +47,14 @@
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go list -f '{{.ImportPath}}: {{.Imports}}' ./pkg/stack/generators)",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v)",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v -run TestApplicationWrapper)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./internal/gvk -v)"
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./internal/gvk -v)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -v)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/... ./internal/gvk/...)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack ./pkg/stack/v1alpha1 ./pkg/stack/generators ./internal/gvk -v)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators/appworkload/internal -v)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go build ./cmd/demo ./pkg/cmd/kure/generate)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./...)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators/kurelpackage -v)"
     ],
     "deny": []
   }
