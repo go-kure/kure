@@ -1,5 +1,8 @@
 # Stack Module Design Document
 
+> **Last Updated**: 2025-08-08  
+> **Status**: Implemented - Phase 2 Complete
+
 ## Overview
 
 The Stack module provides the core domain model for Kure's hierarchical configuration system. It defines a tree structure (Cluster → Node → Bundle → Application) that represents complete Kubernetes deployments organized for GitOps workflows.
@@ -335,10 +338,48 @@ spec:
 
 ## Implementation Status
 
-- ✅ **ApplicationConfig GVK**: Complete
-- 🔄 **Shared GVK Infrastructure**: In Progress (Phase 1)
-- ⏳ **Stack Struct GVK**: Planned (Phase 2)
-- ⏳ **Schema Validation**: Planned (Phase 3)
+### Phase 1: Shared GVK Infrastructure ✅ COMPLETE
+
+Successfully created `internal/gvk` package with:
+- Generic registry using Go generics
+- Type-safe factory patterns
+- YAML unmarshaling with automatic type detection
+- Version conversion framework
+- Comprehensive test coverage
+
+**Files Created:**
+- `internal/gvk/types.go` - Core GVK types and interfaces
+- `internal/gvk/registry.go` - Generic registry implementation
+- `internal/gvk/wrapper.go` - TypedWrapper for YAML unmarshaling
+- `internal/gvk/parsing.go` - YAML parsing utilities
+- `internal/gvk/conversion.go` - Version conversion infrastructure
+
+### Phase 2: Stack Struct GVK ✅ COMPLETE
+
+Implemented versioned stack types in `pkg/stack/v1alpha1`:
+- **ClusterV1Alpha1**: Versioned cluster configuration with GitOps support
+- **NodeV1Alpha1**: Hierarchical node structure with bundles
+- **BundleV1Alpha1**: Application bundle with dependencies
+
+**Key Features:**
+- Full GVK support (apiVersion: stack.gokure.dev/v1alpha1)
+- Conversion to unversioned types for backward compatibility
+- Multi-document YAML parsing
+- Nested resource support (inline and references)
+- Comprehensive test coverage
+
+**Files Created:**
+- `pkg/stack/v1alpha1/types.go` - Versioned type definitions
+- `pkg/stack/v1alpha1/register.go` - Registration and factory
+- `pkg/stack/v1alpha1/parser.go` - YAML parsing utilities
+- `pkg/stack/v1alpha1/types_test.go` - Complete test suite
+
+### Phase 3: ApplicationConfig Refactoring ✅ COMPLETE
+
+- Refactored generators to use `internal/gvk` infrastructure
+- Updated ApplicationWrapper to eliminate circular dependencies
+- Maintained full backward compatibility
+- All tests passing
 
 ## Related Documentation
 
