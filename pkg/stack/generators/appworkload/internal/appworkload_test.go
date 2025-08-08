@@ -49,12 +49,10 @@ func TestAppWorkloadGenerate(t *testing.T) {
 	depCfg := newBase()
 	depCfg.Workload = DeploymentWorkload
 	depCfg.Services = []ServiceConfig{{
-		Name: "app",
-		Ports: []ServicePort{{
-			Name:       "http",
-			Port:       80,
-			TargetPort: "http",
-		}},
+		Name:       "app",
+		Port:       80,
+		TargetPort: 8080,
+		Protocol:   corev1.ProtocolTCP,
 	}}
 	depCfg.Ingress = &IngressConfig{
 		Host:            "example.com",
