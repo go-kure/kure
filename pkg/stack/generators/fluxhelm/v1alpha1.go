@@ -3,20 +3,29 @@ package fluxhelm
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	
+	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/generators/fluxhelm/internal"
 )
 
 func init() {
-	// Register the FluxHelm v1alpha1 generator
-	generators.Register(generators.GVK{
+	// Register the FluxHelm v1alpha1 generator with both registries
+	gvkObj := gvk.GVK{
 		Group:   "generators.gokure.dev",
 		Version: "v1alpha1",
 		Kind:    "FluxHelm",
-	}, func() interface{} {
+	}
+	
+	factory := func() stack.ApplicationConfig {
 		return &ConfigV1Alpha1{}
-	})
+	}
+	
+	// Register with generators package for backward compatibility
+	generators.Register(generators.GVK(gvkObj), factory)
+	
+	// Register with stack package for direct usage
+	stack.RegisterApplicationConfig(gvkObj, factory)
 }
 
 // ConfigV1Alpha1 generates Flux HelmRelease and source resources

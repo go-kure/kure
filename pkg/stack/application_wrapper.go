@@ -5,8 +5,22 @@ import (
 
 	"gopkg.in/yaml.v3"
 	
-	"github.com/go-kure/kure/pkg/stack/generators"
+	"github.com/go-kure/kure/internal/gvk"
 )
+
+// applicationConfigRegistry is the stack package's registry for ApplicationConfig types
+var applicationConfigRegistry = gvk.NewRegistry[ApplicationConfig]()
+
+// RegisterApplicationConfig registers an ApplicationConfig type with the stack registry
+func RegisterApplicationConfig(gvk gvk.GVK, factory func() ApplicationConfig) {
+	applicationConfigRegistry.Register(gvk, factory)
+}
+
+// CreateApplicationConfig creates a new ApplicationConfig instance for the given apiVersion and kind
+func CreateApplicationConfig(apiVersion, kind string) (ApplicationConfig, error) {
+	parsed := gvk.ParseAPIVersion(apiVersion, kind)
+	return applicationConfigRegistry.Create(parsed)
+}
 
 // ApplicationWrapper provides type detection and unmarshaling for ApplicationConfig
 type ApplicationWrapper struct {
@@ -25,10 +39,11 @@ type ApplicationMetadata struct {
 
 // UnmarshalYAML implements custom YAML unmarshaling with type detection
 func (w *ApplicationWrapper) UnmarshalYAML(node *yaml.Node) error {
-	// First pass: extract GVK
+	// First pass: extract GVK and metadata
 	var gvkDetect struct {
-		APIVersion string `yaml:"apiVersion"`
-		Kind       string `yaml:"kind"`
+		APIVersion string              `yaml:"apiVersion"`
+		Kind       string              `yaml:"kind"`
+		Metadata   ApplicationMetadata `yaml:"metadata"`
 	}
 	if err := node.Decode(&gvkDetect); err != nil {
 		return fmt.Errorf("failed to detect GVK: %w", err)
@@ -39,20 +54,13 @@ func (w *ApplicationWrapper) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	// Create appropriate config instance
-	configInterface, err := generators.Create(gvkDetect.APIVersion, gvkDetect.Kind)
+	config, err := CreateApplicationConfig(gvkDetect.APIVersion, gvkDetect.Kind)
 	if err != nil {
 		return fmt.Errorf("failed to create config for %s/%s: %w",
 			gvkDetect.APIVersion, gvkDetect.Kind, err)
 	}
-	
-	// Type assert to ApplicationConfig
-	config, ok := configInterface.(ApplicationConfig)
-	if !ok {
-		return fmt.Errorf("config for %s/%s does not implement ApplicationConfig interface",
-			gvkDetect.APIVersion, gvkDetect.Kind)
-	}
 
-	// Decode full content
+	// Decode full content with spec field
 	var raw struct {
 		APIVersion string              `yaml:"apiVersion"`
 		Kind       string              `yaml:"kind"`
@@ -76,10 +84,10 @@ func (w *ApplicationWrapper) UnmarshalYAML(node *yaml.Node) error {
 	w.Spec = config
 
 	// Apply metadata to the config if it supports it
-	if named, ok := config.(generators.NamedConfig); ok {
+	if named, ok := config.(gvk.NamedType); ok {
 		named.SetName(w.Metadata.Name)
 	}
-	if namespaced, ok := config.(generators.NamespacedConfig); ok {
+	if namespaced, ok := config.(gvk.NamespacedType); ok {
 		namespaced.SetNamespace(w.Metadata.Namespace)
 	}
 

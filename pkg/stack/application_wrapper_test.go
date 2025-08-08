@@ -6,7 +6,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/go-kure/kure/pkg/stack"
-	_ "github.com/go-kure/kure/pkg/stack/generators" // Register generators
+	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload" // Register AppWorkload
+	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"    // Register FluxHelm
 )
 
 func TestApplicationWrapper(t *testing.T) {

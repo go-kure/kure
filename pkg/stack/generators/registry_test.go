@@ -60,7 +60,7 @@ func TestRegistry(t *testing.T) {
 		}
 		
 		called := false
-		generators.Register(testGVK, func() interface{} {
+		generators.Register(testGVK, func() stack.ApplicationConfig {
 			called = true
 			return &mockConfig{}
 		})
