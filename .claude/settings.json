@@ -72,6 +72,13 @@
       "Bash(helm:*)",
       "Bash(./kure:*)",
       "Bash(./kurel:*)",
+      "Bash(mise:*)",
+      "Bash(env:*)",
+      "Bash(cat:*)",
+      "Bash($GOROOT:*)",
+      "Bash(GOROOT=/usr/lib/go:*)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/*:*)",
+      "Bash(/home/serge/.local/share/mise/installs/go/*/bin/go:*)",
       "WebFetch(domain:docs.anthropic.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:pkg.go.dev)"
