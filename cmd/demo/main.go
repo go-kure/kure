@@ -18,12 +18,15 @@ import (
 	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/patch"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/layout"
 
 	// Import implementations to register workflow factories
 	_ "github.com/go-kure/kure/pkg/stack/argocd"
 	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
+	
+	// Import generators to register them
+	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload"
+	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -118,14 +121,14 @@ func runAppWorkloads() error {
 		var apps []*stack.Application
 
 		for {
-			var cfg generators.AppWorkloadConfig
-			if err := dec.Decode(&cfg); err != nil {
+			var wrapper stack.ApplicationWrapper
+			if err := dec.Decode(&wrapper); err != nil {
 				if err == io.EOF {
 					break
 				}
 				return err
 			}
-			app := stack.NewApplication(cfg.Name, cfg.Namespace, &cfg)
+			app := wrapper.ToApplication()
 			apps = append(apps, app)
 		}
 
@@ -293,8 +296,8 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 
 		dec := yaml.NewDecoder(f)
 		for {
-			var cfg generators.AppWorkloadConfig
-			if err := dec.Decode(&cfg); err != nil {
+			var wrapper stack.ApplicationWrapper
+			if err := dec.Decode(&wrapper); err != nil {
 				if err == io.EOF {
 					break
 				}
@@ -302,14 +305,14 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 				return err
 			}
 
-			app := stack.NewApplication(cfg.Name, cfg.Namespace, &cfg)
-			bundle, err := stack.NewBundle(cfg.Name, []*stack.Application{app}, nil)
+			app := wrapper.ToApplication()
+			bundle, err := stack.NewBundle(wrapper.Metadata.Name, []*stack.Application{app}, nil)
 			if err != nil {
 				f.Close()
 				return err
 			}
 			bundle.SetParent(node.Bundle)
-			childNode := &stack.Node{Name: cfg.Name, Bundle: bundle}
+			childNode := &stack.Node{Name: wrapper.Metadata.Name, Bundle: bundle}
 			childNode.SetParent(node)
 			node.Children = append(node.Children, childNode)
 		}

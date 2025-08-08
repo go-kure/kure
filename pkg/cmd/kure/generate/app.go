@@ -16,7 +16,8 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
+	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload" // Register AppWorkload
+	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"    // Register FluxHelm
 )
 
 // AppOptions contains options for the app command
@@ -218,15 +219,15 @@ func (o *AppOptions) loadApplicationsFromFile(configFile string) ([]*stack.Appli
 	dec := yaml.NewDecoder(file)
 
 	for {
-		var cfg generators.AppWorkloadConfig
-		if err := dec.Decode(&cfg); err != nil {
+		var wrapper stack.ApplicationWrapper
+		if err := dec.Decode(&wrapper); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return nil, err
 		}
 
-		app := stack.NewApplication(cfg.Name, cfg.Namespace, &cfg)
+		app := wrapper.ToApplication()
 		apps = append(apps, app)
 	}
 

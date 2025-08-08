@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
-	_ "github.com/go-kure/kure/pkg/stack/generators" // Register all generators
+	"github.com/go-kure/kure/pkg/stack/generators"
+	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload" // Register AppWorkload
+	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"    // Register FluxHelm
 )
 
 // Example YAML configurations using GVK format
@@ -94,11 +96,11 @@ spec:
 
 // DemoGVKGenerators demonstrates the new GVK-based generator system
 func DemoGVKGenerators() {
-	fmt.Println("\n=== GVK-Based Generators Demo ===\n")
+	fmt.Println("\n=== GVK-Based Generators Demo ===")
 
 	// Demo 1: Parse and generate AppWorkload
 	fmt.Println("1. AppWorkload Generator:")
-	fmt.Println("-" * 40)
+	fmt.Println(strings.Repeat("-", 40))
 	
 	var appWrapper stack.ApplicationWrapper
 	if err := yaml.Unmarshal([]byte(appWorkloadYAML), &appWrapper); err != nil {
@@ -123,7 +125,7 @@ func DemoGVKGenerators() {
 
 	// Demo 2: Parse and generate FluxHelm with HelmRepository
 	fmt.Println("\n2. FluxHelm Generator (HelmRepository):")
-	fmt.Println("-" * 40)
+	fmt.Println(strings.Repeat("-", 40))
 
 	var helmWrapper stack.ApplicationWrapper
 	if err := yaml.Unmarshal([]byte(fluxHelmYAML), &helmWrapper); err != nil {
@@ -149,14 +151,14 @@ func DemoGVKGenerators() {
 	// Output first resource as YAML
 	if len(helmObjects) > 0 {
 		fmt.Println("\nSample HelmRepository YAML:")
-		fmt.Println("-" * 40)
-		yamlStr, _ := io.SerializeObject(*helmObjects[0])
-		fmt.Println(yamlStr)
+		fmt.Println(strings.Repeat("-", 40))
+		yamlBytes, _ := yaml.Marshal(*helmObjects[0])
+		fmt.Println(string(yamlBytes))
 	}
 
 	// Demo 3: Parse and generate FluxHelm with OCIRepository
 	fmt.Println("\n3. FluxHelm Generator (OCIRepository):")
-	fmt.Println("-" * 40)
+	fmt.Println(strings.Repeat("-", 40))
 
 	var ociWrapper stack.ApplicationWrapper
 	if err := yaml.Unmarshal([]byte(fluxHelmOCIYAML), &ociWrapper); err != nil {
@@ -181,12 +183,16 @@ func DemoGVKGenerators() {
 
 	// Demo 4: Show multiple applications in a bundle
 	fmt.Println("\n4. Bundle with Multiple Generator Types:")
-	fmt.Println("-" * 40)
+	fmt.Println(strings.Repeat("-", 40))
 
-	bundle := stack.NewBundle("mixed-apps")
-	bundle.AddApplication(appWrapper.ToApplication())
-	bundle.AddApplication(helmWrapper.ToApplication())
-	bundle.AddApplication(ociWrapper.ToApplication())
+	bundle, err := stack.NewBundle("mixed-apps", []*stack.Application{
+		appWrapper.ToApplication(),
+		helmWrapper.ToApplication(),
+		ociWrapper.ToApplication(),
+	}, nil)
+	if err != nil {
+		log.Fatalf("Failed to create bundle: %v", err)
+	}
 
 	bundleObjects, err := bundle.Generate()
 	if err != nil {
@@ -198,9 +204,9 @@ func DemoGVKGenerators() {
 
 	// Demo 5: List all registered generator types
 	fmt.Println("\n5. Registered Generator Types:")
-	fmt.Println("-" * 40)
+	fmt.Println(strings.Repeat("-", 40))
 	
-	registeredTypes := stack.generators.ListKinds()
+	registeredTypes := generators.ListKinds()
 	for _, gvk := range registeredTypes {
 		fmt.Printf("  - %s\n", gvk)
 	}
