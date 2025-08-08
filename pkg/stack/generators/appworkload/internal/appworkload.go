@@ -1,4 +1,4 @@
-package generators
+package internal
 
 import (
 	"fmt"
@@ -106,8 +106,8 @@ func (vct *VolumeClaimTemplate) ToKubernetesPVC() (*corev1.PersistentVolumeClaim
 	return pvc, nil
 }
 
-// AppWorkloadConfig describes a single deployable application.
-type AppWorkloadConfig struct {
+// Config describes a single deployable application.
+type Config struct {
 	Name      string            `json:"name" yaml:"name"`
 	Namespace string            `json:"namespace,omitempty" yaml:"namespace,omitempty"`
 	Workload  WorkloadType      `yaml:"workload,omitempty"`
@@ -368,7 +368,8 @@ type IngressConfig struct {
 }
 
 // Generate builds Kubernetes resources for the application workload.
-func (cfg *AppWorkloadConfig) Generate(app *stack.Application) ([]*client.Object, error) {
+// GenerateResources creates Kubernetes resources from the Config
+func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, error) {
 	var objs []*client.Object
 	var allports []corev1.ContainerPort
 

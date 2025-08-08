@@ -1,0 +1,33 @@
+apiVersion: generators.gokure.dev/v1alpha1
+kind: FluxHelm
+metadata:
+  name: postgresql
+  namespace: database
+spec:
+  chart:
+    name: postgresql
+    version: 12.0.0
+  source:
+    type: HelmRepository
+    url: https://charts.bitnami.com/bitnami
+    interval: 10m
+  values:
+    auth:
+      database: myapp
+      username: appuser
+      existingSecret: postgres-credentials
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: fast-ssd
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  release:
+    createNamespace: true
+    cleanupOnFail: true
+    disableWait: false
+  interval: 30m
+  timeout: 10m
+  maxHistory: 5

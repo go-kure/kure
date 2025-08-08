@@ -32,7 +32,17 @@
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -run \"TestPackageLoader/LoadResources/invalid_YAML|TestCLI_BuildCommand/build_invalid_package|TestCLI_InfoCommand/info_complex_package|TestCLI_BuildWithExtensions|TestCLI_CompleteFlow|TestIntegration_Filtering/Filter_by_Name\" -v)",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -v)",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/kubernetes/fluxcd)"
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/kubernetes/fluxcd)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -run \"TestCLI_OutputToFile|TestCLI_OutputToDirectory|TestCLI_CompleteFlow|TestIntegration_SimplePackage\" -v)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -cover)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ../../../cmd/kurel build .)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/kurel build examples/kurel/frigate)",
+      "Bash($GOROOT/bin/go run ./cmd/kurel build examples/kurel/frigate)",
+      "Bash(env:*)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators -v -run TestRegistry)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go build ./pkg/stack/generators/...)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go doc github.com/fluxcd/helm-controller/api/v2 Kustomize)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go doc github.com/fluxcd/pkg/apis/kustomize)"
     ],
     "deny": []
   }
