@@ -395,3 +395,26 @@ ml, err := layout.WalkCluster(cluster, rules)
 - Maintain backward compatibility with existing stack package
 - Allow mixing old and new approaches during transition
 - Provide migration guide and tooling if needed
+
+## UX Design Recommendations
+
+### Priority Adjustments
+1. **CLI-First Approach**: Implement CLI tooling before web UI (`kure init`, `kure template`, `kure validate`)
+2. **Simplified Helpers**: Add quick helper functions alongside full builder chains
+3. **IDE Integration**: Focus on VSCode/IDE extensions before visual builders
+4. **Template Versioning**: Implement version management from day one
+5. **GitHub-Based Sharing**: Start with GitHub repository for templates before marketplace
+
+### Technical Recommendations
+1. **Validation Enhancement**: Add "fix-it" capabilities and OPA integration
+2. **Performance**: Consider lighter UI frameworks (Preact/Svelte) for bundle size
+3. **Testing**: Implement property-based and snapshot testing
+4. **Migration Tools**: Create YAML-to-Kure converters and reverse engineering
+5. **API Versioning**: Define clear API stability guarantees for builders
+
+### Critical Gaps
+1. **Multi-tenancy Support**: Define patterns for multi-tenant configurations
+2. **Security Review Process**: Establish template certification workflow
+3. **Offline/Air-gapped**: Support for disconnected environments
+4. **GitOps UI Integration**: Detailed Flux/ArgoCD workflow in UI
+5. **Documentation Generation**: Auto-generate docs from code annotations
