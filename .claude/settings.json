@@ -1,6 +1,14 @@
 {
   "permissions": {
     "allow": [
+      "Bash(*)",
+      "WebFetch(*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(sed:*)",
+      "Bash(git add:*)",
+      "Bash(make test:*)",
+      "Bash(pandoc:*)",
       "Bash(go:*)",
       "Bash(/usr/bin/go:*)",
       "Bash(go*/bin/go:*)",
