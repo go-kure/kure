@@ -225,3 +225,173 @@ ml, err := layout.WalkCluster(cluster, rules)
 - kurel just generates YAML
 - always implement errors via the kure/errors package; fix this when encountering otherwise
 - allow running all possible test commands and file analysis commands (like grep, sed, ..) without asking
+
+## Configuration Management Design Decisions
+
+### Builder Pattern - Immutable
+- All configuration builders will follow an **immutable pattern**
+- Each `With*` method returns a new builder instance, leaving the original unchanged
+- Enables configuration branching and composition from common base configurations
+- Thread-safe and follows functional programming patterns
+- Example:
+  ```go
+  base := stack.NewClusterBuilder("prod").WithNode("shared")
+  dev := base.WithNode("dev-apps").Build()      // base unchanged
+  staging := base.WithNode("staging-apps").Build() // base unchanged
+  ```
+
+### Partial Configurations - TBD
+- Decision on handling partial/incomplete configurations is **deferred**
+- Open questions include: serialization of partial configs, validation timing, fragment composition
+- For now, builders must be completed in one flow
+
+### Strict Mode - Out of Scope
+- Kure will **not enforce** opinionated best practices or strict validation rules
+- Maintains library philosophy of being unopinionated and flexible
+- Organizations can implement their own validation layers on top of Kure
+- Users have full control over their Kubernetes patterns and practices
+
+### Configuration Management Features to Implement
+
+#### Phase 1: Fluent Builders (Priority)
+- Method chaining with immutable pattern for better UX
+- Example transformation:
+  ```go
+  // From: Manual step-by-step
+  cluster := stack.NewCluster("production", rootNode)
+  node := stack.NewNode("infrastructure")
+  bundle := stack.NewBundle("monitoring")
+  
+  // To: Fluent builder
+  cluster := stack.NewClusterBuilder("production").
+      WithNode("infrastructure").
+          WithBundle("monitoring").
+              WithApplication("prometheus", appConfig).
+          End().
+      End().
+      Build()
+  ```
+
+#### Phase 2: Preset Configurations
+- Common application patterns as starting points (not enforced)
+- Examples:
+  ```go
+  // Web app preset
+  appConfig := stack.NewWebAppConfig("frontend").
+      WithReplicas(3).
+      WithImage("nginx:latest").
+      WithPort(80).
+      WithIngress(true).
+      Build()
+  
+  // Monitoring stack preset
+  infraConfig := stack.NewMonitoringStackConfig().
+      WithPrometheus(true).
+      WithGrafana(true).
+      WithAlertManager(true).
+      Build()
+  
+  // Database preset
+  dbConfig := stack.NewDatabaseConfig("postgres").
+      WithReplicas(1).
+      WithStorage("10Gi").
+      WithBackup(true).
+      Build()
+  ```
+
+#### Phase 3: Templates & Inheritance
+- Reusable base configurations with inheritance
+- Example:
+  ```go
+  baseAppTemplate := stack.NewApplicationTemplate("base").
+      WithCommonLabels(map[string]string{
+          "managed-by": "kure",
+          "environment": "production",
+      }).
+      WithResourceLimits(corev1.ResourceRequirements{
+          Requests: corev1.ResourceList{
+              corev1.ResourceCPU:    resource.MustParse("100m"),
+              corev1.ResourceMemory: resource.MustParse("128Mi"),
+          },
+      }).
+      Build()
+  
+  // Inherit from template
+  frontendApp := stack.NewApplicationFromTemplate("frontend", baseAppTemplate).
+      WithImage("frontend:v1.0.0").
+      WithReplicas(3).
+      Build()
+  ```
+
+#### Phase 4: Configuration Mixins & Composition
+- Mix and match configuration components
+- Example:
+  ```go
+  monitoringMixin := stack.NewMixin("monitoring").
+      WithResources("prometheus", "grafana").
+      WithNamespace("monitoring").
+      Build()
+  
+  securityMixin := stack.NewMixin("security").
+      WithNetworkPolicies(true).
+      WithRBAC(true).
+      Build()
+  
+  cluster := stack.NewClusterBuilder("production").
+      WithMixin(monitoringMixin).
+      WithMixin(securityMixin).
+      Build()
+  ```
+
+#### Phase 5: Environment Profiles
+- Environment-specific configurations (dev/staging/prod)
+- Example:
+  ```go
+  devProfile := &EnvironmentProfile{
+      Name: "development",
+      Replicas: map[string]int32{
+          "frontend": 1,
+          "backend":  1,
+      },
+      Resources: map[string]corev1.ResourceRequirements{
+          "frontend": {Requests: corev1.ResourceList{
+              corev1.ResourceCPU: resource.MustParse("50m"),
+          }},
+      },
+  }
+  
+  cluster.ApplyProfile(devProfile)
+  ```
+
+### Additional Implementation Considerations
+
+#### Error Handling
+- Collect errors during building, return on Build()
+- Clear error messages with context about what failed
+- Example:
+  ```go
+  cluster, err := builder.
+      WithReplicas(-1).      // Stores error internally
+      WithNode("test").      // Continues building
+      Build()                // Returns nil, error with all issues
+  ```
+
+#### Configuration Discovery
+- Provide CLI helpers for listing available presets/templates
+- Generate documentation for all configuration options
+- Consider IDE autocomplete support through well-structured APIs
+
+#### Testing Strategy
+- Each configuration component should be independently testable
+- Provide test helpers for validating generated manifests
+- Mock builders for unit testing user code
+
+#### Performance Optimization
+- Lazy evaluation where possible
+- Consider caching for frequently used templates/mixins
+- Efficient memory usage with large configurations
+
+#### Migration Path
+- Maintain backward compatibility with existing stack package
+- Allow mixing old and new approaches during transition
+- Provide migration guide and tooling if needed
