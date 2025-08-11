@@ -55,14 +55,19 @@ func TestRunInternals(t *testing.T) {
 	os.Stdout = w
 	
 	var output bytes.Buffer
+	done := make(chan bool)
 	go func() {
 		io.Copy(&output, r)
+		done <- true
 	}()
 	
 	err := runInternals()
 	
 	w.Close()
 	os.Stdout = originalStdout
+	
+	// Wait for the goroutine to finish reading
+	<-done
 	
 	if err != nil {
 		t.Errorf("runInternals() error = %v", err)

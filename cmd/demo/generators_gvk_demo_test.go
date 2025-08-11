@@ -494,8 +494,10 @@ func TestDemoOutput_Formatting(t *testing.T) {
 	os.Stdout = w
 
 	var output bytes.Buffer
+	done := make(chan bool)
 	go func() {
 		io.Copy(&output, r)
+		done <- true
 	}()
 
 	// Generate a small demo to check formatting
@@ -514,6 +516,9 @@ func TestDemoOutput_Formatting(t *testing.T) {
 
 	w.Close()
 	os.Stdout = originalStdout
+	
+	// Wait for the goroutine to finish reading
+	<-done
 
 	outputStr := output.String()
 

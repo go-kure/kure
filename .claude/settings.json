@@ -57,7 +57,10 @@
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v -run \"TestDemoGVKGenerators|TestDemoOutput_Formatting|TestRunInternals\")",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run -c 'package main; import (\"\"fmt\"\"; \"\"os\"\"); func main() { DemoGVKGenerators() }')",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run test_gvk.go)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./... -timeout 30s)"
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./... -timeout 30s)",
+      "WebFetch(domain:productionresultssa19.blob.core.windows.net)",
+      "Bash(make:*)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/demo --internals)"
     ],
     "deny": []
   },
