@@ -46,7 +46,18 @@
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./internal/validation)",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/kubernetes/fluxcd -v)",
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go doc github.com/controlplaneio-fluxcd/flux-operator/api/v1 ResourceSetSpec)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -bench=. -run=^$)"
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -bench=. -run=^$)",
+      "WebFetch(domain:productionresultssa11.blob.core.windows.net)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v -run TestDemoOutput_Formatting)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v -run TestRunInternals)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./... -short)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run . --internals)",
+      "Bash(/home/serge/.local/share/mise/installs/go/1.24.6/bin/go run . --internals)",
+      "Bash(/home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/demo --internals)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v -run \"TestDemoGVKGenerators|TestDemoOutput_Formatting|TestRunInternals\")",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run -c 'package main; import (\"\"fmt\"\"; \"\"os\"\"); func main() { DemoGVKGenerators() }')",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run test_gvk.go)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./... -timeout 30s)"
     ],
     "deny": []
   },

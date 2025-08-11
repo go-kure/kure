@@ -519,12 +519,12 @@ func TestDemoOutput_Formatting(t *testing.T) {
 
 	// Check formatting patterns
 	if !strings.Contains(outputStr, "Generated") {
-		t.Error("Output missing 'Generated' keyword")
+		t.Errorf("Output missing 'Generated' keyword. Got: %q", outputStr)
 	}
 	if !strings.Contains(outputStr, "resources:") {
-		t.Error("Output missing 'resources:' label")
+		t.Errorf("Output missing 'resources:' label. Got: %q", outputStr)
 	}
 	if !strings.Contains(outputStr, "  - ") {
-		t.Error("Output missing resource list formatting")
+		t.Errorf("Output missing resource list formatting. Got: %q", outputStr)
 	}
 }

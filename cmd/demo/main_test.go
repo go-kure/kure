@@ -70,10 +70,10 @@ func TestRunInternals(t *testing.T) {
 	
 	outputStr := output.String()
 	if !strings.Contains(outputStr, "Demonstrating internal Kubernetes API builders") {
-		t.Error("runInternals did not output expected header")
+		t.Errorf("runInternals did not output expected header. Got: %q", outputStr)
 	}
 	if !strings.Contains(outputStr, "Generated 4 internal API examples") {
-		t.Error("runInternals did not output expected summary")
+		t.Errorf("runInternals did not output expected summary. Got: %q", outputStr)
 	}
 }
 
