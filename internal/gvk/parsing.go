@@ -45,7 +45,7 @@ func ParseMultiple[T any](data []byte, registry *Registry[T], options *ParseOpti
 
 	// Split by YAML documents
 	documents := splitYAMLDocuments(data)
-	
+
 	for i, doc := range documents {
 		if len(doc) == 0 {
 			continue // Skip empty documents
@@ -70,7 +70,7 @@ func ParseStream[T any](reader io.Reader, registry *Registry[T], options *ParseO
 
 	var wrappers []*TypedWrapper[T]
 	decoder := yaml.NewDecoder(reader)
-	
+
 	for {
 		var node yaml.Node
 		if err := decoder.Decode(&node); err != nil {
@@ -108,10 +108,10 @@ func splitYAMLDocuments(data []byte) [][]byte {
 	// This is a simple implementation - a more robust version would
 	// properly handle YAML document separators considering indentation
 	// and quoted strings
-	
+
 	documents := [][]byte{}
 	current := []byte{}
-	
+
 	lines := splitLines(data)
 	for _, line := range lines {
 		if string(line) == "---" || string(line) == "---\n" {
@@ -124,11 +124,11 @@ func splitYAMLDocuments(data []byte) [][]byte {
 		current = append(current, line...)
 		current = append(current, '\n')
 	}
-	
+
 	if len(current) > 0 {
 		documents = append(documents, current)
 	}
-	
+
 	return documents
 }
 
@@ -136,17 +136,17 @@ func splitYAMLDocuments(data []byte) [][]byte {
 func splitLines(data []byte) [][]byte {
 	var lines [][]byte
 	start := 0
-	
+
 	for i, b := range data {
 		if b == '\n' {
 			lines = append(lines, data[start:i])
 			start = i + 1
 		}
 	}
-	
+
 	if start < len(data) {
 		lines = append(lines, data[start:])
 	}
-	
+
 	return lines
 }

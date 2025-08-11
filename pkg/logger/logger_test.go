@@ -21,19 +21,19 @@ func TestLevel(t *testing.T) {
 
 func TestDefaultOptions(t *testing.T) {
 	opts := DefaultOptions()
-	
+
 	if opts.Output == nil {
 		t.Error("expected non-nil Output")
 	}
-	
+
 	if opts.Level != LevelInfo {
 		t.Errorf("expected default level to be LevelInfo, got %v", opts.Level)
 	}
-	
+
 	if opts.Prefix != "" {
 		t.Errorf("expected empty default prefix, got %s", opts.Prefix)
 	}
-	
+
 	if !opts.ShowTimestamp {
 		t.Error("expected ShowTimestamp to be true by default")
 	}
@@ -47,12 +47,12 @@ func TestNew(t *testing.T) {
 		Prefix:        "TEST",
 		ShowTimestamp: false,
 	}
-	
+
 	logger := New(opts)
 	if logger == nil {
 		t.Fatal("expected non-nil logger")
 	}
-	
+
 	// Test that it implements the Logger interface
 	var _ Logger = logger
 }
@@ -62,18 +62,18 @@ func TestDefault(t *testing.T) {
 	if logger == nil {
 		t.Fatal("expected non-nil default logger")
 	}
-	
+
 	// Test that it implements the Logger interface
 	var _ Logger = logger
 }
 
 func TestDefaultLogger_Debug(t *testing.T) {
 	tests := []struct {
-		name          string
-		level         Level
-		message       string
-		args          []interface{}
-		shouldLog     bool
+		name      string
+		level     Level
+		message   string
+		args      []interface{}
+		shouldLog bool
 	}{
 		{
 			name:      "debug level logs debug",
@@ -95,7 +95,7 @@ func TestDefaultLogger_Debug(t *testing.T) {
 			shouldLog: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -104,10 +104,10 @@ func TestDefaultLogger_Debug(t *testing.T) {
 				Level:         tt.level,
 				ShowTimestamp: false,
 			}
-			
+
 			logger := New(opts).(*defaultLogger)
 			logger.Debug(tt.message, tt.args...)
-			
+
 			output := buf.String()
 			if tt.shouldLog {
 				if output == "" {
@@ -130,10 +130,10 @@ func TestDefaultLogger_Debug(t *testing.T) {
 
 func TestDefaultLogger_Info(t *testing.T) {
 	tests := []struct {
-		name          string
-		level         Level
-		message       string
-		shouldLog     bool
+		name      string
+		level     Level
+		message   string
+		shouldLog bool
 	}{
 		{
 			name:      "debug level logs info",
@@ -154,7 +154,7 @@ func TestDefaultLogger_Info(t *testing.T) {
 			shouldLog: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -163,10 +163,10 @@ func TestDefaultLogger_Info(t *testing.T) {
 				Level:         tt.level,
 				ShowTimestamp: false,
 			}
-			
+
 			logger := New(opts).(*defaultLogger)
 			logger.Info(tt.message)
-			
+
 			output := buf.String()
 			if tt.shouldLog {
 				if output == "" {
@@ -186,10 +186,10 @@ func TestDefaultLogger_Info(t *testing.T) {
 
 func TestDefaultLogger_Warn(t *testing.T) {
 	tests := []struct {
-		name          string
-		level         Level
-		message       string
-		shouldLog     bool
+		name      string
+		level     Level
+		message   string
+		shouldLog bool
 	}{
 		{
 			name:      "debug level logs warn",
@@ -210,7 +210,7 @@ func TestDefaultLogger_Warn(t *testing.T) {
 			shouldLog: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -219,10 +219,10 @@ func TestDefaultLogger_Warn(t *testing.T) {
 				Level:         tt.level,
 				ShowTimestamp: false,
 			}
-			
+
 			logger := New(opts).(*defaultLogger)
 			logger.Warn(tt.message)
-			
+
 			output := buf.String()
 			if tt.shouldLog {
 				if output == "" {
@@ -242,10 +242,10 @@ func TestDefaultLogger_Warn(t *testing.T) {
 
 func TestDefaultLogger_Error(t *testing.T) {
 	tests := []struct {
-		name          string
-		level         Level
-		message       string
-		shouldLog     bool
+		name      string
+		level     Level
+		message   string
+		shouldLog bool
 	}{
 		{
 			name:      "debug level logs error",
@@ -261,7 +261,7 @@ func TestDefaultLogger_Error(t *testing.T) {
 		},
 		// All levels should log errors since error is the highest level
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -270,10 +270,10 @@ func TestDefaultLogger_Error(t *testing.T) {
 				Level:         tt.level,
 				ShowTimestamp: false,
 			}
-			
+
 			logger := New(opts).(*defaultLogger)
 			logger.Error(tt.message)
-			
+
 			output := buf.String()
 			if tt.shouldLog {
 				if output == "" {
@@ -295,12 +295,12 @@ func TestDefaultLogger_WithPrefix(t *testing.T) {
 		Prefix:        "BASE",
 		ShowTimestamp: false,
 	}
-	
+
 	logger := New(opts)
 	prefixedLogger := logger.WithPrefix("SUB")
-	
+
 	prefixedLogger.Info("test message")
-	
+
 	output := buf.String()
 	if !strings.Contains(output, "BASE SUB") {
 		t.Errorf("expected prefixed output to contain 'BASE SUB', got %q", output)
@@ -314,12 +314,12 @@ func TestDefaultLogger_WithPrefix_AutoSpace(t *testing.T) {
 		Level:         LevelInfo,
 		ShowTimestamp: false,
 	}
-	
+
 	logger := New(opts)
 	prefixedLogger := logger.WithPrefix("TEST")
-	
+
 	prefixedLogger.Info("message")
-	
+
 	output := buf.String()
 	if !strings.Contains(output, "TEST [INFO]") {
 		t.Errorf("expected output to contain 'TEST [INFO]', got %q", output)
@@ -333,19 +333,19 @@ func TestDefaultLogger_SetLevel(t *testing.T) {
 		Level:         LevelInfo,
 		ShowTimestamp: false,
 	}
-	
+
 	logger := New(opts).(*defaultLogger)
-	
+
 	// Initially should not log debug
 	logger.Debug("debug message 1")
 	if buf.String() != "" {
 		t.Error("expected no output for debug at info level")
 	}
-	
+
 	// Change level to debug
 	logger.SetLevel(LevelDebug)
 	logger.Debug("debug message 2")
-	
+
 	output := buf.String()
 	if !strings.Contains(output, "debug message 2") {
 		t.Error("expected debug message after setting level to debug")
@@ -374,7 +374,7 @@ func TestDefaultLogger_PrefixFormatting(t *testing.T) {
 			expectedPrefix: "TEST ",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -384,10 +384,10 @@ func TestDefaultLogger_PrefixFormatting(t *testing.T) {
 				Prefix:        tt.prefix,
 				ShowTimestamp: false,
 			}
-			
+
 			logger := New(opts).(*defaultLogger)
 			logger.Info("test")
-			
+
 			output := buf.String()
 			if tt.expectedPrefix == "" {
 				if strings.HasPrefix(output, " ") {
@@ -407,17 +407,17 @@ func TestNoopLogger(t *testing.T) {
 	if logger == nil {
 		t.Fatal("expected non-nil noop logger")
 	}
-	
+
 	// Test that it implements the Logger interface
 	var _ Logger = logger
-	
+
 	// Test that all methods can be called without panicking
 	logger.Debug("debug")
 	logger.Info("info")
 	logger.Warn("warn")
 	logger.Error("error")
 	logger.SetLevel(LevelDebug)
-	
+
 	prefixed := logger.WithPrefix("test")
 	if prefixed != logger {
 		t.Error("WithPrefix should return the same noop logger instance")
@@ -438,7 +438,7 @@ func TestFormatBytes(t *testing.T) {
 		{1073741824, "1.0 GB"},
 		{1099511627776, "1.0 TB"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
 			result := FormatBytes(tt.input)
@@ -460,7 +460,7 @@ func TestFormatDuration(t *testing.T) {
 		{1500000000, "1.50s"},
 		{2500000000, "2.50s"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
 			result := FormatDuration(tt.input)
@@ -478,16 +478,16 @@ func TestLoggerWithTimestamp(t *testing.T) {
 		Level:         LevelInfo,
 		ShowTimestamp: true,
 	}
-	
+
 	logger := New(opts)
 	logger.Info("test with timestamp")
-	
+
 	output := buf.String()
 	// Timestamp format will vary, but we can check it's not empty and has typical format
 	if len(output) < 20 {
 		t.Error("expected longer output with timestamp")
 	}
-	
+
 	// Should still contain the log level and message
 	if !strings.Contains(output, "[INFO]") {
 		t.Error("expected [INFO] in timestamped output")
@@ -501,11 +501,11 @@ func TestLoggerInterfaceCompliance(t *testing.T) {
 	// Test that both implementations satisfy the Logger interface
 	var logger1 Logger = Default()
 	var logger2 Logger = Noop()
-	
+
 	if logger1 == nil {
 		t.Error("default logger should not be nil")
 	}
-	
+
 	if logger2 == nil {
 		t.Error("noop logger should not be nil")
 	}

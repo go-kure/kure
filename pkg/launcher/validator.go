@@ -40,23 +40,23 @@ func (v *validator) ValidatePackage(ctx context.Context, def *PackageDefinition)
 	if def == nil {
 		return nil, errors.Errorf("package definition is nil")
 	}
-	
+
 	v.logger.Debug("Validating package %s", def.Metadata.Name)
-	
+
 	result := &ValidationResult{
 		Errors:   []ValidationError{},
 		Warnings: []ValidationWarning{},
 	}
-	
+
 	// Generate package schema
 	schema, err := v.schemaGenerator.GeneratePackageSchema(ctx)
 	if err != nil {
 		return nil, errors.Errorf("failed to generate schema: %w", err)
 	}
-	
+
 	// Convert package to unstructured for validation
 	pkgData := v.packageToMap(def)
-	
+
 	// Validate against schema
 	schemaErrors := ValidateWithSchema(pkgData, schema)
 	for _, err := range schemaErrors {
@@ -64,19 +64,19 @@ func (v *validator) ValidatePackage(ctx context.Context, def *PackageDefinition)
 		err.Severity = "error"
 		v.addValidationError(result, err)
 	}
-	
+
 	// Perform semantic validation
 	v.validateSemantics(ctx, def, result)
-	
+
 	// Validate resources
 	v.validateResources(ctx, def.Resources, result)
-	
+
 	// Validate patches
 	v.validatePatches(ctx, def.Patches, result)
-	
+
 	// Validate parameters
 	v.validateParameters(ctx, def.Parameters, result)
-	
+
 	// Check if we exceeded error limit
 	if len(result.Errors) >= v.maxErrors {
 		result.Errors = append(result.Errors, ValidationError{
@@ -84,7 +84,7 @@ func (v *validator) ValidatePackage(ctx context.Context, def *PackageDefinition)
 			Message: fmt.Sprintf("validation stopped after %d errors", v.maxErrors),
 		})
 	}
-	
+
 	// In strict mode, warnings become errors
 	if v.strictMode {
 		for _, w := range result.Warnings {
@@ -96,21 +96,21 @@ func (v *validator) ValidatePackage(ctx context.Context, def *PackageDefinition)
 		}
 		result.Warnings = []ValidationWarning{}
 	}
-	
+
 	v.logger.Info("Validation complete: %d errors, %d warnings", len(result.Errors), len(result.Warnings))
-	
+
 	return result, nil
 }
 
 // ValidateResource validates a single resource
 func (v *validator) ValidateResource(ctx context.Context, resource Resource) (*ValidationResult, error) {
 	v.logger.Debug("Validating resource %s/%s", resource.Kind, resource.GetName())
-	
+
 	result := &ValidationResult{
 		Errors:   []ValidationError{},
 		Warnings: []ValidationWarning{},
 	}
-	
+
 	// Basic validation
 	if resource.APIVersion == "" {
 		v.addError(result, "resource", "apiVersion is required")
@@ -121,7 +121,7 @@ func (v *validator) ValidateResource(ctx context.Context, resource Resource) (*V
 	if resource.GetName() == "" {
 		v.addError(result, "resource.metadata", "name is required")
 	}
-	
+
 	// Validate against Kubernetes schema if available
 	if resource.APIVersion != "" && resource.Kind != "" {
 		gv, err := schema.ParseGroupVersion(resource.APIVersion)
@@ -145,7 +145,7 @@ func (v *validator) ValidateResource(ctx context.Context, resource Resource) (*V
 			}
 		}
 	}
-	
+
 	// Resource-specific validation
 	v.validateResourceSpecific(&resource, result)
 	return result, nil
@@ -154,19 +154,19 @@ func (v *validator) ValidateResource(ctx context.Context, resource Resource) (*V
 // ValidatePatch validates a patch definition
 func (v *validator) ValidatePatch(ctx context.Context, patch Patch) (*ValidationResult, error) {
 	v.logger.Debug("Validating patch %s", patch.Name)
-	
+
 	result := &ValidationResult{
 		Errors:   []ValidationError{},
 		Warnings: []ValidationWarning{},
 	}
-	
+
 	// Name validation
 	if patch.Name == "" {
 		v.addError(result, "patch", "name is required")
 	} else if !isValidName(patch.Name) {
 		v.addError(result, "patch.name", fmt.Sprintf("invalid name format: %s", patch.Name))
 	}
-	
+
 	// Content validation
 	if patch.Content == "" {
 		v.addError(result, "patch", "content is required")
@@ -176,7 +176,7 @@ func (v *validator) ValidatePatch(ctx context.Context, patch Patch) (*Validation
 			v.addError(result, "patch.content", fmt.Sprintf("invalid patch content: %v", err))
 		}
 	}
-	
+
 	// Metadata validation
 	if patch.Metadata != nil {
 		// Validate dependencies
@@ -185,14 +185,14 @@ func (v *validator) ValidatePatch(ctx context.Context, patch Patch) (*Validation
 				v.addError(result, "patch.metadata.requires", "patch cannot depend on itself")
 			}
 		}
-		
+
 		// Validate conflicts
 		for _, conflict := range patch.Metadata.Conflicts {
 			if conflict == patch.Name {
 				v.addWarning(result, "patch.metadata.conflicts", "patch cannot conflict with itself")
 			}
 		}
-		
+
 		// Validate enabled condition
 		if patch.Metadata.Enabled != "" {
 			if err := v.validateCondition(patch.Metadata.Enabled); err != nil {
@@ -210,12 +210,12 @@ func (v *validator) validateSemantics(ctx context.Context, def *PackageDefinitio
 	for i, resource := range def.Resources {
 		key := fmt.Sprintf("%s/%s/%s", resource.Kind, resource.GetNamespace(), resource.GetName())
 		if resourceMap[key] {
-			v.addError(result, fmt.Sprintf("resources[%d]", i), 
+			v.addError(result, fmt.Sprintf("resources[%d]", i),
 				fmt.Sprintf("duplicate resource: %s", key))
 		}
 		resourceMap[key] = true
 	}
-	
+
 	// Check for patch name uniqueness (already enforced at load time, but double-check)
 	patchMap := make(map[string]bool)
 	for i, patch := range def.Patches {
@@ -225,7 +225,7 @@ func (v *validator) validateSemantics(ctx context.Context, def *PackageDefinitio
 		}
 		patchMap[patch.Name] = true
 	}
-	
+
 	// Validate patch dependencies exist
 	for _, patch := range def.Patches {
 		if patch.Metadata != nil {
@@ -243,15 +243,15 @@ func (v *validator) validateSemantics(ctx context.Context, def *PackageDefinitio
 			}
 		}
 	}
-	
+
 	// Validate semantic version format
 	if def.Metadata.Version != "" {
 		if _, err := semver.Parse(def.Metadata.Version); err != nil {
-			v.addError(result, "metadata.version", 
+			v.addError(result, "metadata.version",
 				fmt.Sprintf("invalid semantic version: %s", def.Metadata.Version))
 		}
 	}
-	
+
 	// Check for circular dependencies in patches
 	if cycles := v.findPatchCycles(def.Patches); len(cycles) > 0 {
 		for _, cycle := range cycles {
@@ -268,7 +268,7 @@ func (v *validator) validateResources(ctx context.Context, resources []Resource,
 			v.addError(result, fmt.Sprintf("resources[%d]", i), fmt.Sprintf("validation error: %v", err))
 			continue
 		}
-		
+
 		// Merge results
 		for _, e := range resResult.Errors {
 			e.Path = fmt.Sprintf("resources[%d].%s", i, e.Path)
@@ -278,7 +278,7 @@ func (v *validator) validateResources(ctx context.Context, resources []Resource,
 			w.Field = fmt.Sprintf("resources[%d].%s", i, w.Field)
 			result.Warnings = append(result.Warnings, w)
 		}
-		
+
 		if !resResult.IsValid() {
 		}
 	}
@@ -292,7 +292,7 @@ func (v *validator) validatePatches(ctx context.Context, patches []Patch, result
 			v.addError(result, fmt.Sprintf("patches[%d]", i), fmt.Sprintf("validation error: %v", err))
 			continue
 		}
-		
+
 		// Merge results
 		for _, e := range patchResult.Errors {
 			e.Path = fmt.Sprintf("patches[%d].%s", i, e.Path)
@@ -302,7 +302,7 @@ func (v *validator) validatePatches(ctx context.Context, patches []Patch, result
 			w.Field = fmt.Sprintf("patches[%d].%s", i, w.Field)
 			result.Warnings = append(result.Warnings, w)
 		}
-		
+
 		if !patchResult.IsValid() {
 		}
 	}
@@ -320,7 +320,7 @@ func (v *validator) validateParameters(ctx context.Context, params ParameterMap,
 			}
 		}
 	}
-	
+
 	// Check for circular references in parameters
 	if cycles := v.findParameterCycles(params); len(cycles) > 0 {
 		for _, cycle := range cycles {
@@ -348,40 +348,40 @@ func (v *validator) validateWorkload(resource *Resource, result *ValidationResul
 	if resource.Raw == nil {
 		return
 	}
-	
+
 	// Check for required fields
 	spec, found, _ := unstructured.NestedMap(resource.Raw.Object, "spec")
 	if !found {
 		v.addError(result, "spec", "spec is required for workload resources")
 		return
 	}
-	
+
 	// Check selector
 	_, found, _ = unstructured.NestedMap(spec, "selector")
 	if !found {
 		v.addError(result, "spec.selector", "selector is required")
 	}
-	
+
 	// Check template
 	template, found, _ := unstructured.NestedMap(spec, "template")
 	if !found {
 		v.addError(result, "spec.template", "template is required")
 		return
 	}
-	
+
 	// Check pod spec
 	podSpec, found, _ := unstructured.NestedMap(template, "spec")
 	if !found {
 		v.addError(result, "spec.template.spec", "pod spec is required")
 		return
 	}
-	
+
 	// Check containers
 	containers, found, _ := unstructured.NestedSlice(podSpec, "containers")
 	if !found || len(containers) == 0 {
 		v.addError(result, "spec.template.spec.containers", "at least one container is required")
 	}
-	
+
 	// Validate each container
 	for i, container := range containers {
 		if c, ok := container.(map[string]interface{}); ok {
@@ -390,7 +390,7 @@ func (v *validator) validateWorkload(resource *Resource, result *ValidationResul
 			if !found || name == "" {
 				v.addError(result, fmt.Sprintf("spec.template.spec.containers[%d].name", i), "container name is required")
 			}
-			
+
 			// Check image
 			image, found, _ := unstructured.NestedString(c, "image")
 			if !found || image == "" {
@@ -405,13 +405,13 @@ func (v *validator) validateService(resource *Resource, result *ValidationResult
 	if resource.Raw == nil {
 		return
 	}
-	
+
 	spec, found, _ := unstructured.NestedMap(resource.Raw.Object, "spec")
 	if !found {
 		v.addError(result, "spec", "spec is required for service resources")
 		return
 	}
-	
+
 	// Check ports
 	ports, found, _ := unstructured.NestedSlice(spec, "ports")
 	if found {
@@ -427,7 +427,7 @@ func (v *validator) validateService(resource *Resource, result *ValidationResult
 			}
 		}
 	}
-	
+
 	// Check selector for ClusterIP services
 	svcType, _, _ := unstructured.NestedString(spec, "type")
 	if svcType == "" || svcType == "ClusterIP" || svcType == "NodePort" || svcType == "LoadBalancer" {
@@ -443,22 +443,22 @@ func (v *validator) validateConfigMapSecret(resource *Resource, result *Validati
 	if resource.Raw == nil {
 		return
 	}
-	
+
 	// Check for either data or binaryData
 	_, dataFound, _ := unstructured.NestedMap(resource.Raw.Object, "data")
 	_, binaryFound, _ := unstructured.NestedMap(resource.Raw.Object, "binaryData")
-	
+
 	if !dataFound && !binaryFound {
 		v.addWarning(result, "", "neither data nor binaryData specified")
 	}
-	
+
 	// For Secrets, check stringData
 	if strings.ToLower(resource.Kind) == "secret" {
 		stringData, stringFound, _ := unstructured.NestedMap(resource.Raw.Object, "stringData")
 		if !dataFound && !binaryFound && !stringFound {
 			v.addWarning(result, "", "no data specified in secret")
 		}
-		
+
 		// Warn about sensitive data in plain text
 		if stringFound && len(stringData) > 0 {
 			v.addWarning(result, "stringData", "stringData is not encrypted and will be base64 encoded")
@@ -471,19 +471,19 @@ func (v *validator) validateIngress(resource *Resource, result *ValidationResult
 	if resource.Raw == nil {
 		return
 	}
-	
+
 	spec, found, _ := unstructured.NestedMap(resource.Raw.Object, "spec")
 	if !found {
 		v.addError(result, "spec", "spec is required for ingress resources")
 		return
 	}
-	
+
 	// Check rules
 	rules, found, _ := unstructured.NestedSlice(spec, "rules")
 	if !found || len(rules) == 0 {
 		v.addWarning(result, "spec.rules", "no ingress rules defined")
 	}
-	
+
 	// Validate each rule
 	for i, rule := range rules {
 		if r, ok := rule.(map[string]interface{}); ok {
@@ -503,11 +503,11 @@ func (v *validator) validatePatchContent(content string) error {
 	if len(lines) == 0 {
 		return errors.Errorf("empty patch content")
 	}
-	
+
 	// Simple validation for now - just check if it looks like valid TOML or YAML
 	hasColon := false
 	hasBracket := false
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -520,11 +520,11 @@ func (v *validator) validatePatchContent(content string) error {
 			hasBracket = true
 		}
 	}
-	
+
 	if !hasColon && !hasBracket {
 		return errors.Errorf("patch content does not appear to be valid TOML or YAML")
 	}
-	
+
 	return nil
 }
 
@@ -544,19 +544,19 @@ func (v *validator) validateCondition(condition string) error {
 			}
 		}
 	}
-	
+
 	// Check for simple boolean literals
 	if condition == "true" || condition == "false" {
 		return nil
 	}
-	
+
 	return nil
 }
 
 // findPatchCycles finds circular dependencies in patches
 func (v *validator) findPatchCycles(patches []Patch) [][]string {
 	var cycles [][]string
-	
+
 	// Build dependency graph
 	deps := make(map[string][]string)
 	for _, patch := range patches {
@@ -564,11 +564,11 @@ func (v *validator) findPatchCycles(patches []Patch) [][]string {
 			deps[patch.Name] = patch.Metadata.Requires
 		}
 	}
-	
+
 	// Find cycles using DFS
 	visited := make(map[string]int) // 0: unvisited, 1: visiting, 2: visited
 	var path []string
-	
+
 	var dfs func(node string) bool
 	dfs = func(node string) bool {
 		if visited[node] == 1 {
@@ -590,34 +590,34 @@ func (v *validator) findPatchCycles(patches []Patch) [][]string {
 		if visited[node] == 2 {
 			return false
 		}
-		
+
 		visited[node] = 1
 		path = append(path, node)
-		
+
 		for _, dep := range deps[node] {
 			if dfs(dep) {
 				// Don't return immediately to find all cycles
 			}
 		}
-		
+
 		path = path[:len(path)-1]
 		visited[node] = 2
 		return false
 	}
-	
+
 	for node := range deps {
 		if visited[node] == 0 {
 			dfs(node)
 		}
 	}
-	
+
 	return cycles
 }
 
 // findParameterCycles finds circular references in parameters
 func (v *validator) findParameterCycles(params ParameterMap) [][]string {
 	var cycles [][]string
-	
+
 	// Build dependency graph from variable references
 	deps := make(map[string][]string)
 	for key, value := range params {
@@ -631,11 +631,11 @@ func (v *validator) findParameterCycles(params ParameterMap) [][]string {
 			}
 		}
 	}
-	
+
 	// Use same cycle detection as patches
 	visited := make(map[string]int)
 	var path []string
-	
+
 	var dfs func(node string) bool
 	dfs = func(node string) bool {
 		if visited[node] == 1 {
@@ -657,25 +657,25 @@ func (v *validator) findParameterCycles(params ParameterMap) [][]string {
 		if visited[node] == 2 {
 			return false
 		}
-		
+
 		visited[node] = 1
 		path = append(path, node)
-		
+
 		for _, dep := range deps[node] {
 			dfs(dep)
 		}
-		
+
 		path = path[:len(path)-1]
 		visited[node] = 2
 		return false
 	}
-	
+
 	for node := range deps {
 		if visited[node] == 0 {
 			dfs(node)
 		}
 	}
-	
+
 	return cycles
 }
 
@@ -688,36 +688,36 @@ func (v *validator) packageToMap(def *PackageDefinition) map[string]interface{} 
 		"description": def.Metadata.Description,
 		"home":        def.Metadata.Home,
 	}
-	
+
 	// Only add arrays if they're not nil
 	if def.Metadata.Keywords != nil {
 		metadata["keywords"] = def.Metadata.Keywords
 	} else {
 		metadata["keywords"] = []string{}
 	}
-	
+
 	if def.Metadata.Schemas != nil {
 		metadata["schemas"] = def.Metadata.Schemas
 	} else {
 		metadata["schemas"] = []string{}
 	}
-	
+
 	if def.Metadata.Maintainers != nil {
 		metadata["maintainers"] = def.Metadata.Maintainers
 	}
-	
+
 	result := map[string]interface{}{
 		"path":     def.Path,
 		"metadata": metadata,
 	}
-	
+
 	// Only add parameters if not nil
 	if def.Parameters != nil {
 		result["parameters"] = def.Parameters
 	} else {
 		result["parameters"] = make(map[string]interface{})
 	}
-	
+
 	// Convert resources
 	var resources []interface{}
 	for _, r := range def.Resources {
@@ -728,7 +728,7 @@ func (v *validator) packageToMap(def *PackageDefinition) map[string]interface{} 
 	if len(resources) > 0 {
 		result["resources"] = resources
 	}
-	
+
 	// Convert patches
 	var patches []interface{}
 	for _, p := range def.Patches {
@@ -749,7 +749,7 @@ func (v *validator) packageToMap(def *PackageDefinition) map[string]interface{} 
 	if len(patches) > 0 {
 		result["patches"] = patches
 	}
-	
+
 	return result
 }
 
@@ -827,13 +827,13 @@ func (v *validator) SetVerbose(verbose bool) {
 // FormatResult formats a validation result for display
 func FormatResult(result *ValidationResult) string {
 	var b strings.Builder
-	
+
 	if result.IsValid() {
 		b.WriteString("✓ Package is valid\n")
 	} else {
 		b.WriteString("✗ Package validation failed\n")
 	}
-	
+
 	if len(result.Errors) > 0 {
 		b.WriteString(fmt.Sprintf("\nErrors (%d):\n", len(result.Errors)))
 		for _, err := range result.Errors {
@@ -851,7 +851,7 @@ func FormatResult(result *ValidationResult) string {
 			}
 		}
 	}
-	
+
 	if len(result.Warnings) > 0 {
 		b.WriteString(fmt.Sprintf("\nWarnings (%d):\n", len(result.Warnings)))
 		for _, warn := range result.Warnings {
@@ -862,6 +862,6 @@ func FormatResult(result *ValidationResult) string {
 			}
 		}
 	}
-	
+
 	return b.String()
 }

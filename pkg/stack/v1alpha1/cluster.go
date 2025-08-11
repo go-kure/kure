@@ -10,23 +10,23 @@ import (
 // +gvk:version=v1alpha1
 // +gvk:kind=Cluster
 type ClusterConfig struct {
-	APIVersion string              `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string              `yaml:"kind" json:"kind"`
-	Metadata   gvk.BaseMetadata    `yaml:"metadata" json:"metadata"`
-	Spec       ClusterSpec         `yaml:"spec" json:"spec"`
+	APIVersion string           `yaml:"apiVersion" json:"apiVersion"`
+	Kind       string           `yaml:"kind" json:"kind"`
+	Metadata   gvk.BaseMetadata `yaml:"metadata" json:"metadata"`
+	Spec       ClusterSpec      `yaml:"spec" json:"spec"`
 }
 
 // ClusterSpec defines the specification for a cluster
 type ClusterSpec struct {
 	// Node is the root node of the cluster configuration tree
 	Node *NodeReference `yaml:"node,omitempty" json:"node,omitempty"`
-	
+
 	// GitOps defines the GitOps tool configuration for the cluster
 	GitOps *GitOpsConfig `yaml:"gitops,omitempty" json:"gitops,omitempty"`
-	
+
 	// Description provides a human-readable description of the cluster
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	
+
 	// Labels are key-value pairs for cluster metadata
 	Labels map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 }
@@ -35,7 +35,7 @@ type ClusterSpec struct {
 type NodeReference struct {
 	// Name of the node
 	Name string `yaml:"name" json:"name"`
-	
+
 	// APIVersion of the referenced node (for future cross-version references)
 	APIVersion string `yaml:"apiVersion,omitempty" json:"apiVersion,omitempty"`
 }
@@ -44,7 +44,7 @@ type NodeReference struct {
 type GitOpsConfig struct {
 	// Type specifies the GitOps tool: "flux" or "argocd"
 	Type string `yaml:"type" json:"type"`
-	
+
 	// Bootstrap configuration for the GitOps tool
 	Bootstrap *BootstrapConfig `yaml:"bootstrap,omitempty" json:"bootstrap,omitempty"`
 }
@@ -53,18 +53,18 @@ type GitOpsConfig struct {
 type BootstrapConfig struct {
 	// Common fields
 	Enabled bool `yaml:"enabled" json:"enabled"`
-	
+
 	// Flux-specific
-	FluxMode        string   `yaml:"fluxMode,omitempty" json:"fluxMode,omitempty"`           // "gitops-toolkit" or "flux-operator"
+	FluxMode        string   `yaml:"fluxMode,omitempty" json:"fluxMode,omitempty"` // "gitops-toolkit" or "flux-operator"
 	FluxVersion     string   `yaml:"fluxVersion,omitempty" json:"fluxVersion,omitempty"`
 	Components      []string `yaml:"components,omitempty" json:"components,omitempty"`
 	Registry        string   `yaml:"registry,omitempty" json:"registry,omitempty"`
 	ImagePullSecret string   `yaml:"imagePullSecret,omitempty" json:"imagePullSecret,omitempty"`
-	
+
 	// Source configuration
 	SourceURL string `yaml:"sourceURL,omitempty" json:"sourceURL,omitempty"` // OCI/Git repository URL
 	SourceRef string `yaml:"sourceRef,omitempty" json:"sourceRef,omitempty"` // Tag/branch/ref
-	
+
 	// ArgoCD-specific
 	ArgoCDVersion   string `yaml:"argoCDVersion,omitempty" json:"argoCDVersion,omitempty"`
 	ArgoCDNamespace string `yaml:"argoCDNamespace,omitempty" json:"argoCDNamespace,omitempty"`
@@ -111,18 +111,18 @@ func (c *ClusterConfig) Validate() error {
 	if c == nil {
 		return errors.New("cluster config is nil")
 	}
-	
+
 	if c.Metadata.Name == "" {
 		return errors.NewValidationError("metadata.name", "", "Cluster", nil)
 	}
-	
+
 	if c.Spec.GitOps != nil {
 		if c.Spec.GitOps.Type != "flux" && c.Spec.GitOps.Type != "argocd" {
-			return errors.ResourceValidationError("Cluster", c.Metadata.Name, "spec.gitops.type", 
-				"must be 'flux' or 'argocd', got: " + c.Spec.GitOps.Type, nil)
+			return errors.ResourceValidationError("Cluster", c.Metadata.Name, "spec.gitops.type",
+				"must be 'flux' or 'argocd', got: "+c.Spec.GitOps.Type, nil)
 		}
 	}
-	
+
 	return nil
 }
 

@@ -32,20 +32,20 @@ func TestResourceDeepCopy(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Create a deep copy
 	copied := original.DeepCopy()
-	
+
 	// Verify the copy is equal but not the same object
 	assert.Equal(t, original.APIVersion, copied.APIVersion)
 	assert.Equal(t, original.Kind, copied.Kind)
 	assert.Equal(t, original.Metadata.Name, copied.Metadata.Name)
 	assert.Equal(t, original.Metadata.Namespace, copied.Metadata.Namespace)
-	
+
 	// Modify the copy
 	copied.Metadata.Name = "modified"
 	copied.Metadata.Labels["new"] = "label"
-	
+
 	// Verify original is unchanged
 	assert.Equal(t, "test-app", original.Metadata.Name)
 	assert.NotContains(t, original.Metadata.Labels, "new")
@@ -88,22 +88,22 @@ func TestPackageDefinitionDeepCopy(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Create a deep copy
 	copied := original.DeepCopy()
-	
+
 	// Verify the copy is equal but independent
 	assert.Equal(t, original.Path, copied.Path)
 	assert.Equal(t, original.Metadata.Name, copied.Metadata.Name)
 	assert.Equal(t, len(original.Resources), len(copied.Resources))
 	assert.Equal(t, len(original.Patches), len(copied.Patches))
-	
+
 	// Modify the copy
 	copied.Metadata.Name = "modified"
 	copied.Parameters["new"] = "param"
 	copied.Resources[0].Metadata.Name = "modified-service"
 	copied.Patches[0].Metadata.Requires = append(copied.Patches[0].Metadata.Requires, "new-req")
-	
+
 	// Verify original is unchanged
 	assert.Equal(t, "test-package", original.Metadata.Name)
 	assert.NotContains(t, original.Parameters, "new")
@@ -125,18 +125,18 @@ func TestParameterMapDeepCopy(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Deep copy
 	copied := deepCopyParameterMap(original)
-	
+
 	// Verify equality
 	assert.Equal(t, original, copied)
-	
+
 	// Modify nested values in copy
 	copied["string"] = "modified"
 	copied["array"].([]interface{})[0] = "modified"
 	copied["nested"].(map[string]interface{})["key1"] = "modified"
-	
+
 	// Verify original is unchanged
 	assert.Equal(t, "value", original["string"])
 	assert.Equal(t, "a", original["array"].([]interface{})[0])
@@ -149,14 +149,14 @@ func TestValidationResult(t *testing.T) {
 	assert.True(t, result.IsValid())
 	assert.False(t, result.HasErrors())
 	assert.False(t, result.HasWarnings())
-	
+
 	// Test with errors
 	result.Errors = []ValidationError{
 		{Message: "test error"},
 	}
 	assert.False(t, result.IsValid())
 	assert.True(t, result.HasErrors())
-	
+
 	// Test with warnings
 	result.Warnings = []ValidationWarning{
 		{Message: "test warning"},
@@ -191,7 +191,7 @@ func TestValidationError(t *testing.T) {
 			expected: "deployment.spec.replicas: must be positive",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, tt.err.Error())
@@ -206,7 +206,7 @@ func TestResourceGetters(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 	}
-	
+
 	assert.Equal(t, "test-resource", r.GetName())
 	assert.Equal(t, "test-namespace", r.GetNamespace())
 }
@@ -217,18 +217,18 @@ func TestResourceToUnstructured(t *testing.T) {
 	u, err := r.ToUnstructured()
 	require.NoError(t, err)
 	assert.Nil(t, u)
-	
+
 	// Test with Raw
 	r.Raw = &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"test": "value",
 		},
 	}
-	
+
 	u, err = r.ToUnstructured()
 	require.NoError(t, err)
 	require.NotNil(t, u)
-	
+
 	// Verify it's a copy
 	u.Object["modified"] = true
 	assert.NotContains(t, r.Raw.Object, "modified")

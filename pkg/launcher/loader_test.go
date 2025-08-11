@@ -71,7 +71,7 @@ func TestPackageLoader(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.NotEmpty(t, resources)
-			
+
 			// Check first resource
 			if len(resources) > 0 {
 				res := resources[0]
@@ -94,7 +94,7 @@ func TestPackageLoader(t *testing.T) {
 			// Should load as template data since template loading is enabled
 			assert.NoError(t, err)
 			assert.Len(t, resources, 1) // One resource loaded as template
-			
+
 			// Verify it has template data
 			assert.NotEmpty(t, resources[0].TemplateData)
 			assert.Contains(t, string(resources[0].TemplateData), "invalid: yaml: content:")
@@ -124,7 +124,7 @@ spec.replicas: 3`
 
 			require.NoError(t, err)
 			require.Len(t, patches, 1)
-			
+
 			patch := patches[0]
 			assert.Equal(t, "scale", patch.Name)
 			assert.NotNil(t, patch.Metadata)

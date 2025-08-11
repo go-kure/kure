@@ -381,8 +381,8 @@ func TestConfigV1Alpha1_Generate_WithPostRenderers(t *testing.T) {
 					},
 					Images: []internal.KustomizeImage{
 						{
-							Name:    "app",
-							NewTag:  "v1.2.3",
+							Name:   "app",
+							NewTag: "v1.2.3",
 						},
 					},
 				},

@@ -91,7 +91,7 @@ func TestBuilder(t *testing.T) {
 
 	t.Run("build to stdout YAML", func(t *testing.T) {
 		var buf bytes.Buffer
-		
+
 		// Set the builder's output writer to our buffer
 		builder.SetOutputWriter(&buf)
 
@@ -297,7 +297,7 @@ func TestBuilder(t *testing.T) {
 
 func TestBuilderDirectory(t *testing.T) {
 	log := logger.Noop()
-	
+
 	t.Run("write to directory", func(t *testing.T) {
 		// Create temp directory
 		tmpDir := t.TempDir()

@@ -29,7 +29,7 @@ func TestSetGitRepositorySpec(t *testing.T) {
 		URL:       "https://github.com/example/repo",
 		Interval:  "5m",
 	}
-	
+
 	repo := GitRepository(cfg)
 	if repo == nil {
 		t.Fatal("failed to create GitRepository")
@@ -696,7 +696,7 @@ func TestResourceSetInputProviderHelpers(t *testing.T) {
 		t.Errorf("SetResourceSetInputProviderType failed: %v", err)
 	}
 
-	// Test SetResourceSetInputProviderURL  
+	// Test SetResourceSetInputProviderURL
 	err = SetResourceSetInputProviderURL(provider, "oci://registry.example.com/config")
 	if err != nil {
 		t.Errorf("SetResourceSetInputProviderURL failed: %v", err)

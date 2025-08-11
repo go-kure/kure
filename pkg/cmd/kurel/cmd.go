@@ -109,7 +109,7 @@ configuration, and outputs phase-organized manifests ready for GitOps deployment
 			// Load package
 			ctx := context.Background()
 			packagePath := args[0]
-			
+
 			def, err := loader.LoadDefinition(ctx, packagePath, opts)
 			if err != nil {
 				return errors.Wrap(err, "failed to load package")
@@ -223,7 +223,7 @@ parameter validation, and patch consistency.`,
 			// Load package
 			ctx := context.Background()
 			packagePath := args[0]
-			
+
 			def, err := loader.LoadDefinition(ctx, packagePath, opts)
 			if err != nil {
 				return errors.Wrap(err, "failed to load package")
@@ -326,7 +326,7 @@ metadata, available patches, configurable parameters, and deployment phases.`,
 			// Load package
 			ctx := context.Background()
 			packagePath := args[0]
-			
+
 			def, err := loader.LoadDefinition(ctx, packagePath, opts)
 			if err != nil {
 				return errors.Wrap(err, "failed to load package")
@@ -338,12 +338,12 @@ metadata, available patches, configurable parameters, and deployment phases.`,
 				encoder := json.NewEncoder(os.Stdout)
 				encoder.SetIndent("", "  ")
 				return encoder.Encode(def)
-				
+
 			case "yaml":
 				encoder := yaml.NewEncoder(os.Stdout)
 				encoder.SetIndent(2)
 				return encoder.Encode(def)
-				
+
 			default: // text
 				fmt.Printf("Package: %s\n", def.Metadata.Name)
 				fmt.Printf("Version: %s\n", def.Metadata.Version)
@@ -368,7 +368,7 @@ metadata, available patches, configurable parameters, and deployment phases.`,
 					}
 					fmt.Println()
 				}
-				
+
 				if len(def.Patches) > 0 {
 					fmt.Printf("\nPatches (%d):\n", len(def.Patches))
 					for _, p := range def.Patches {
@@ -409,7 +409,7 @@ func newSchemaCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var (
-				outputPath  string
+				outputPath string
 				// includeK8s  bool // TODO: Use when implementing K8s schema inclusion
 				prettyPrint bool
 			)

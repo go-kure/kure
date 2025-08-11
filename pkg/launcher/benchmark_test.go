@@ -78,12 +78,12 @@ func BenchmarkPatchApplication(b *testing.B) {
 
 	patches := []Patch{
 		{
-			Name:    "scale",
+			Name: "scale",
 			Content: `[deployment.test-app]
 spec.replicas: 3`,
 		},
 		{
-			Name:    "labels",
+			Name: "labels",
 			Content: `[deployment.test-app]
 metadata.labels.app: test
 metadata.labels.env: prod`,
@@ -254,7 +254,7 @@ func BenchmarkCycleDetection(b *testing.B) {
 // BenchmarkFieldUsageTracing benchmarks field usage tracing in schema generation
 func BenchmarkFieldUsageTracing(b *testing.B) {
 	log := logger.Noop()
-	
+
 	// Create schema generator that implements field usage tracing
 	// Since TraceFieldUsage is part of the interface, we need to ensure
 	// the implementation exists

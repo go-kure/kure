@@ -101,7 +101,7 @@ func DemoGVKGenerators() {
 	// Demo 1: Parse and generate AppWorkload
 	fmt.Println("1. AppWorkload Generator:")
 	fmt.Println(strings.Repeat("-", 40))
-	
+
 	var appWrapper stack.ApplicationWrapper
 	if err := yaml.Unmarshal([]byte(appWorkloadYAML), &appWrapper); err != nil {
 		log.Fatalf("Failed to unmarshal AppWorkload: %v", err)
@@ -119,7 +119,7 @@ func DemoGVKGenerators() {
 	fmt.Printf("Generated %d resources:\n", len(objects))
 	for _, obj := range objects {
 		o := *obj
-		fmt.Printf("  - %s: %s/%s\n", o.GetObjectKind().GroupVersionKind().Kind, 
+		fmt.Printf("  - %s: %s/%s\n", o.GetObjectKind().GroupVersionKind().Kind,
 			o.GetNamespace(), o.GetName())
 	}
 
@@ -199,13 +199,13 @@ func DemoGVKGenerators() {
 		log.Fatalf("Failed to generate bundle resources: %v", err)
 	}
 
-	fmt.Printf("Bundle generated %d total resources from %d applications\n", 
+	fmt.Printf("Bundle generated %d total resources from %d applications\n",
 		len(bundleObjects), len(bundle.Applications))
 
 	// Demo 5: List all registered generator types
 	fmt.Println("\n5. Registered Generator Types:")
 	fmt.Println(strings.Repeat("-", 40))
-	
+
 	registeredTypes := generators.ListKinds()
 	for _, gvk := range registeredTypes {
 		fmt.Printf("  - %s\n", gvk)

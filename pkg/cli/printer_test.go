@@ -72,13 +72,13 @@ func TestNewPrinter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			globalOpts := options.NewGlobalOptions()
 			globalOpts.Output = tt.output
-			
+
 			printer := NewPrinter(globalOpts)
-			
+
 			if printer == nil {
 				t.Fatal("expected non-nil printer")
 			}
-			
+
 			// Note: We can't easily check the exact type due to Go's type system,
 			// but we can verify the printer implements the interface
 			var _ Printer = printer
@@ -88,7 +88,7 @@ func TestNewPrinter(t *testing.T) {
 
 func TestYAMLPrinter(t *testing.T) {
 	printer := &yamlPrinter{}
-	
+
 	tests := []struct {
 		name    string
 		objects []runtime.Object
@@ -120,11 +120,11 @@ func TestYAMLPrinter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
 			err := printer.Print(tt.objects, &buf)
-			
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			got := buf.String()
 			if got != tt.want {
 				t.Errorf("want:\n%s\ngot:\n%s", tt.want, got)
@@ -135,7 +135,7 @@ func TestYAMLPrinter(t *testing.T) {
 
 func TestJSONPrinter(t *testing.T) {
 	printer := &jsonPrinter{}
-	
+
 	tests := []struct {
 		name    string
 		objects []runtime.Object
@@ -167,17 +167,17 @@ func TestJSONPrinter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
 			err := printer.Print(tt.objects, &buf)
-			
+
 			if tt.wantErr && err == nil {
 				t.Error("expected error but got nil")
 				return
 			}
-			
+
 			if !tt.wantErr && err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			if !tt.wantErr {
 				// Verify it's valid JSON
 				var result interface{}
@@ -254,19 +254,19 @@ func TestTablePrinter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			printer := &tablePrinter{options: tt.options}
 			var buf strings.Builder
-			
+
 			err := printer.Print(tt.objects, &buf)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			output := buf.String()
 			for _, expected := range tt.contains {
 				if !strings.Contains(output, expected) {
 					t.Errorf("expected output to contain %q, got:\n%s", expected, output)
 				}
 			}
-			
+
 			// If NoHeaders is true, should not contain "NAME"
 			if tt.options.NoHeaders && strings.Contains(output, "NAME") {
 				t.Error("expected no headers but found 'NAME'")
@@ -277,22 +277,22 @@ func TestTablePrinter(t *testing.T) {
 
 func TestNamePrinter(t *testing.T) {
 	printer := &namePrinter{}
-	
+
 	objects := []runtime.Object{
 		newMockObject("test-pod", "Pod", "default", "v1", nil),
 		newMockObject("test-service", "Service", "default", "v1", nil),
 	}
-	
+
 	var buf strings.Builder
 	err := printer.Print(objects, &buf)
-	
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	output := buf.String()
 	expected := []string{"Pod/test-pod", "Service/test-service"}
-	
+
 	for _, exp := range expected {
 		if !strings.Contains(output, exp) {
 			t.Errorf("expected output to contain %q, got:\n%s", exp, output)
@@ -364,7 +364,7 @@ func TestFormatLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := formatLabels(tt.labels)
-			
+
 			if tt.name == "multiple labels" {
 				// Check that both labels are present
 				if !strings.Contains(result, "app=test") {
@@ -389,22 +389,22 @@ func TestPrintObjects(t *testing.T) {
 	objects := []runtime.Object{
 		newMockObject("test-pod", "Pod", "default", "v1", nil),
 	}
-	
+
 	globalOpts := options.NewGlobalOptions()
 	globalOpts.Output = "yaml"
-	
+
 	var buf strings.Builder
 	err := PrintObjects(objects, globalOpts, &buf)
-	
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	output := buf.String()
 	if !strings.Contains(output, "test-pod") {
 		t.Error("expected output to contain object name")
 	}
-	
+
 	if !strings.Contains(output, "Pod") {
 		t.Error("expected output to contain object kind")
 	}
@@ -414,14 +414,14 @@ func TestTablePrinterEmpty(t *testing.T) {
 	printer := &tablePrinter{
 		options: PrinterOptions{OutputFormat: "table"},
 	}
-	
+
 	var buf strings.Builder
 	err := printer.Print([]runtime.Object{}, &buf)
-	
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	if buf.String() != "" {
 		t.Errorf("expected empty output for no objects, got: %q", buf.String())
 	}
@@ -429,14 +429,14 @@ func TestTablePrinterEmpty(t *testing.T) {
 
 func TestJSONPrinterEmptyObjects(t *testing.T) {
 	printer := &jsonPrinter{}
-	
+
 	var buf strings.Builder
 	err := printer.Print([]runtime.Object{}, &buf)
-	
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	expected := "{}\n"
 	if buf.String() != expected {
 		t.Errorf("expected %q for empty objects, got %q", expected, buf.String())

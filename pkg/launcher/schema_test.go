@@ -8,9 +8,9 @@ import (
 	"github.com/go-kure/kure/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestSchemaGenerator(t *testing.T) {
@@ -43,11 +43,11 @@ func TestSchemaGenerator(t *testing.T) {
 		params := schema.Properties["parameters"]
 		assert.NotNil(t, params)
 		assert.Equal(t, "object", params.Type)
-		
+
 		resources := schema.Properties["resources"]
 		assert.NotNil(t, resources)
 		assert.Equal(t, "array", resources.Type)
-		
+
 		patches := schema.Properties["patches"]
 		assert.NotNil(t, patches)
 		assert.Equal(t, "array", patches.Type)
@@ -122,7 +122,7 @@ func TestSchemaGenerator(t *testing.T) {
 				"version": "1.0.0",
 				"port":    8080,
 			},
-			"enabled": true,
+			"enabled":  true,
 			"replicas": 3,
 			"features": []interface{}{"logging", "metrics"},
 		}
@@ -197,12 +197,12 @@ func TestSchemaGenerator(t *testing.T) {
 		}
 
 		usage := generator.TraceFieldUsage(resources)
-		
+
 		// Check that variables are traced
 		assert.Contains(t, usage, "replicas")
 		assert.Contains(t, usage, "app.image")
 		assert.Contains(t, usage, "app.port")
-		
+
 		// Check paths
 		assert.Contains(t, usage["replicas"][0], "Deployment:spec.replicas")
 		assert.Contains(t, usage["app.image"][0], "Deployment:spec.template.spec.containers[0].image")
@@ -223,12 +223,12 @@ func TestSchemaGenerator(t *testing.T) {
 
 		data, err := generator.ExportSchema(schema)
 		require.NoError(t, err)
-		
+
 		// Check JSON is valid
 		var parsed map[string]interface{}
 		err = json.Unmarshal(data, &parsed)
 		require.NoError(t, err)
-		
+
 		// Check content
 		assert.Equal(t, "object", parsed["type"])
 		assert.Equal(t, "Test schema", parsed["description"])
@@ -257,7 +257,7 @@ func TestSchemaGenerator(t *testing.T) {
 		}
 
 		debug := generator.DebugSchema(schema)
-		
+
 		// Check debug output contains expected information
 		assert.Contains(t, debug, "Type: object")
 		assert.Contains(t, debug, "Description: Test schema")
@@ -347,8 +347,8 @@ func TestValidateWithSchema(t *testing.T) {
 			value     string
 			shouldErr bool
 		}{
-			{"ab", true},       // too short
-			{"abc", false},     // min length
+			{"ab", true},          // too short
+			{"abc", false},        // min length
 			{"abcdefghij", false}, // max length
 			{"abcdefghijk", true}, // too long
 		}
@@ -540,7 +540,7 @@ func TestMergeSchemas(t *testing.T) {
 		}
 
 		merged := MergeSchemas(schema1, schema2)
-		
+
 		assert.Equal(t, "object", merged.Type)
 		assert.Contains(t, merged.Properties, "field1")
 		assert.Contains(t, merged.Properties, "field2")
@@ -574,7 +574,7 @@ func TestMergeSchemas(t *testing.T) {
 		}
 
 		merged := MergeSchemas(schema1, schema2)
-		
+
 		appSchema := merged.Properties["app"]
 		assert.NotNil(t, appSchema)
 		assert.Contains(t, appSchema.Properties, "name")
@@ -625,7 +625,7 @@ func TestInferSchema(t *testing.T) {
 			assert.Equal(t, tt.expected, schema.Type)
 			assert.Equal(t, "$", schema.KurelPath)
 			assert.Equal(t, "inferred", schema.KurelSource)
-			
+
 			// Check default value is set
 			if tt.value != nil {
 				assert.Equal(t, tt.value, schema.Default)
@@ -647,16 +647,16 @@ func TestInferSchema(t *testing.T) {
 				"port": 8080,
 			},
 		}
-		
+
 		schema := generator.inferSchema(value, "$")
 		assert.Equal(t, "object", schema.Type)
 		assert.Contains(t, schema.Properties, "app")
-		
+
 		appSchema := schema.Properties["app"]
 		assert.Equal(t, "object", appSchema.Type)
 		assert.Contains(t, appSchema.Properties, "name")
 		assert.Contains(t, appSchema.Properties, "port")
-		
+
 		// Check paths
 		assert.Equal(t, "$.app", appSchema.KurelPath)
 		assert.Equal(t, "$.app.name", appSchema.Properties["name"].KurelPath)

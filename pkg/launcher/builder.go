@@ -21,10 +21,10 @@ import (
 
 // outputBuilder implements the Builder interface
 type outputBuilder struct {
-	logger   logger.Logger
-	writer   FileWriter
-	resolver Resolver
-	processor PatchProcessor
+	logger       logger.Logger
+	writer       FileWriter
+	resolver     Resolver
+	processor    PatchProcessor
 	outputWriter io.Writer // configurable output writer
 }
 
@@ -119,17 +119,17 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 				// Resolve variables in template data
 				resolvedTemplate, err := b.resolveTemplateVariables(string(resource.TemplateData), params)
 				if err != nil {
-					return nil, errors.Wrapf(err, "failed to resolve variables in template for %s/%s", 
+					return nil, errors.Wrapf(err, "failed to resolve variables in template for %s/%s",
 						resource.Kind, resource.Metadata.Name)
 				}
-				
+
 				// Parse the resolved template
 				objs, err := kurei.ParseYAML([]byte(resolvedTemplate))
 				if err != nil {
-					return nil, errors.Wrapf(err, "failed to parse resolved template for %s/%s", 
+					return nil, errors.Wrapf(err, "failed to parse resolved template for %s/%s",
 						resource.Kind, resource.Metadata.Name)
 				}
-				
+
 				// Use the first object (templates should contain single resources)
 				if len(objs) > 0 {
 					if clientObj, ok := objs[0].(client.Object); ok {
@@ -140,14 +140,14 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 								resource.Kind, resource.Metadata.Name)
 						}
 						obj = &unstructured.Unstructured{Object: objMap}
-						
+
 						// Update resource metadata with resolved values for filtering
 						resource.Metadata.Name = obj.GetName()
 						resource.Metadata.Namespace = obj.GetNamespace()
 					}
 				}
 			}
-			
+
 			// Fallback: create from metadata if still nil
 			if obj == nil {
 				obj = &unstructured.Unstructured{
@@ -267,7 +267,7 @@ func (b *outputBuilder) writeYAML(w io.Writer, resources []*unstructured.Unstruc
 
 		// Convert to YAML
 		data := resource.Object
-		
+
 		// Use a new encoder for each resource to avoid automatic document separators
 		encoder := yaml.NewEncoder(w)
 		encoder.SetIndent(2)
@@ -419,32 +419,32 @@ func (w *defaultFileWriter) MkdirAll(path string) error {
 func (b *outputBuilder) resolveTemplateVariables(template string, params ParameterMap) (string, error) {
 	// Use the same variable resolution pattern as the resolver
 	variablePattern := regexp.MustCompile(`\$\{([^}]+)\}`)
-	
+
 	result := template
 	matches := variablePattern.FindAllStringSubmatch(template, -1)
-	
+
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
 		}
-		
-		fullMatch := match[0]  // ${var.name}
-		varPath := match[1]    // var.name
-		
+
+		fullMatch := match[0] // ${var.name}
+		varPath := match[1]   // var.name
+
 		// Resolve the variable using the same logic as the resolver
 		value, err := b.resolveVariablePath(varPath, params)
 		if err != nil {
 			b.logger.Debug("Failed to resolve variable %s: %v", varPath, err)
 			continue // Skip unresolvable variables for now
 		}
-		
+
 		// Convert value to string
 		valueStr := b.convertToString(value)
-		
+
 		// Replace in result
 		result = strings.ReplaceAll(result, fullMatch, valueStr)
 	}
-	
+
 	return result, nil
 }
 
@@ -452,7 +452,7 @@ func (b *outputBuilder) resolveTemplateVariables(template string, params Paramet
 func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (interface{}, error) {
 	parts := strings.Split(path, ".")
 	var current interface{} = params
-	
+
 	for _, part := range parts {
 		switch v := current.(type) {
 		case ParameterMap:
@@ -471,7 +471,7 @@ func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (i
 			return nil, errors.Errorf("cannot traverse %s in non-map value", path)
 		}
 	}
-	
+
 	return current, nil
 }
 

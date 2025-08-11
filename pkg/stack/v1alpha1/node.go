@@ -22,23 +22,23 @@ type NodeSpec struct {
 	// ParentPath is the hierarchical path to the parent node (e.g., "cluster/infrastructure")
 	// Empty for root nodes. This avoids circular references while maintaining hierarchy.
 	ParentPath string `yaml:"parentPath,omitempty" json:"parentPath,omitempty"`
-	
+
 	// Children list child nodes
 	Children []NodeReference `yaml:"children,omitempty" json:"children,omitempty"`
-	
+
 	// PackageRef identifies in which package the tree of resources get bundled together
 	// If undefined, the PackageRef of the parent is inherited
 	PackageRef *schema.GroupVersionKind `yaml:"packageRef,omitempty" json:"packageRef,omitempty"`
-	
+
 	// Bundle holds the applications that get deployed on this level
 	Bundle *BundleReference `yaml:"bundle,omitempty" json:"bundle,omitempty"`
-	
+
 	// Description provides a human-readable description of the node
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	
+
 	// Labels are key-value pairs for node metadata
 	Labels map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
-	
+
 	// Annotations are key-value pairs for node annotations
 	Annotations map[string]string `yaml:"annotations,omitempty" json:"annotations,omitempty"`
 }
@@ -47,7 +47,7 @@ type NodeSpec struct {
 type BundleReference struct {
 	// Name of the bundle
 	Name string `yaml:"name" json:"name"`
-	
+
 	// APIVersion of the referenced bundle (for future cross-version references)
 	APIVersion string `yaml:"apiVersion,omitempty" json:"apiVersion,omitempty"`
 }
@@ -101,33 +101,33 @@ func (n *NodeConfig) Validate() error {
 	if n == nil {
 		return errors.New("node config is nil")
 	}
-	
+
 	if n.Metadata.Name == "" {
 		return errors.NewValidationError("metadata.name", "", "Node", nil)
 	}
-	
+
 	// Validate PackageRef if present
 	if n.Spec.PackageRef != nil {
 		if n.Spec.PackageRef.Kind == "" {
-			return errors.ResourceValidationError("Node", n.Metadata.Name, "spec.packageRef.kind", 
+			return errors.ResourceValidationError("Node", n.Metadata.Name, "spec.packageRef.kind",
 				"packageRef kind cannot be empty", nil)
 		}
 	}
-	
+
 	// Check for circular references in children
 	childNames := make(map[string]bool)
 	for _, child := range n.Spec.Children {
 		if child.Name == "" {
-			return errors.ResourceValidationError("Node", n.Metadata.Name, "spec.children", 
+			return errors.ResourceValidationError("Node", n.Metadata.Name, "spec.children",
 				"child node name cannot be empty", nil)
 		}
 		if childNames[child.Name] {
-			return errors.ResourceValidationError("Node", n.Metadata.Name, "spec.children", 
-				"duplicate child node name: " + child.Name, nil)
+			return errors.ResourceValidationError("Node", n.Metadata.Name, "spec.children",
+				"duplicate child node name: "+child.Name, nil)
 		}
 		childNames[child.Name] = true
 	}
-	
+
 	return nil
 }
 

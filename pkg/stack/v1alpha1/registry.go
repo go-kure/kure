@@ -3,7 +3,7 @@ package v1alpha1
 import (
 	"fmt"
 	"sync"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 )
 
@@ -13,10 +13,10 @@ type StackConfigType string
 const (
 	// StackConfigTypeCluster represents a Cluster configuration
 	StackConfigTypeCluster StackConfigType = "Cluster"
-	
+
 	// StackConfigTypeNode represents a Node configuration
 	StackConfigTypeNode StackConfigType = "Node"
-	
+
 	// StackConfigTypeBundle represents a Bundle configuration
 	StackConfigTypeBundle StackConfigType = "Bundle"
 )
@@ -52,7 +52,7 @@ func init() {
 	}, func() StackConfig {
 		return &ClusterConfig{}
 	})
-	
+
 	// Register Node
 	RegisterStackConfig(gvk.GVK{
 		Group:   "stack.gokure.dev",
@@ -61,7 +61,7 @@ func init() {
 	}, func() StackConfig {
 		return &NodeConfig{}
 	})
-	
+
 	// Register Bundle
 	RegisterStackConfig(gvk.GVK{
 		Group:   "stack.gokure.dev",
@@ -76,7 +76,7 @@ func init() {
 func RegisterStackConfig(gvk gvk.GVK, factory StackConfigFactory) {
 	globalRegistry.mu.Lock()
 	defer globalRegistry.mu.Unlock()
-	
+
 	globalRegistry.factories[gvk] = factory
 }
 
@@ -84,12 +84,12 @@ func RegisterStackConfig(gvk gvk.GVK, factory StackConfigFactory) {
 func CreateStackConfig(gvk gvk.GVK) (StackConfig, error) {
 	globalRegistry.mu.RLock()
 	defer globalRegistry.mu.RUnlock()
-	
+
 	factory, exists := globalRegistry.factories[gvk]
 	if !exists {
 		return nil, fmt.Errorf("no factory registered for GVK: %s", gvk)
 	}
-	
+
 	return factory(), nil
 }
 
@@ -97,12 +97,12 @@ func CreateStackConfig(gvk gvk.GVK) (StackConfig, error) {
 func GetRegisteredStackGVKs() []gvk.GVK {
 	globalRegistry.mu.RLock()
 	defer globalRegistry.mu.RUnlock()
-	
+
 	gvks := make([]gvk.GVK, 0, len(globalRegistry.factories))
 	for gvk := range globalRegistry.factories {
 		gvks = append(gvks, gvk)
 	}
-	
+
 	return gvks
 }
 
@@ -110,7 +110,7 @@ func GetRegisteredStackGVKs() []gvk.GVK {
 func IsStackConfigRegistered(g gvk.GVK) bool {
 	globalRegistry.mu.RLock()
 	defer globalRegistry.mu.RUnlock()
-	
+
 	_, exists := globalRegistry.factories[g]
 	return exists
 }
@@ -135,7 +135,7 @@ func CreateStackWrapper(g gvk.GVK) (*StackWrapper, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &StackWrapper{
 		gvk:    g,
 		config: config,

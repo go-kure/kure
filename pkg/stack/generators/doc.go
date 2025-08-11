@@ -2,14 +2,14 @@
 // from different configuration formats. It implements a registry pattern with
 // Group, Version, Kind (GVK) identification following Kubernetes conventions.
 //
-// Documentation
+// # Documentation
 //
 // For detailed documentation, see:
 //   - DESIGN.md: High-level design and GVK system overview
 //   - ARCHITECTURE.md: Implementation patterns and conventions
 //   - STATUS.md: Current development status and roadmap
 //
-// Architecture
+// # Architecture
 //
 // The package uses a registry pattern where each generator type:
 //   - Is identified by a GVK (Group, Version, Kind)
@@ -17,7 +17,7 @@
 //   - Is organized in its own subpackage
 //   - Supports multiple versions (v1alpha1, v1beta1, v1, etc.)
 //
-// Generator Organization
+// # Generator Organization
 //
 // Each generator type is organized as:
 //
@@ -34,7 +34,7 @@
 //   - appworkload: Standard Kubernetes workloads (Deployments, StatefulSets, DaemonSets)
 //   - fluxhelm: Flux HelmRelease with various source types
 //
-// Registration
+// # Registration
 //
 // Generators self-register during package initialization:
 //
@@ -48,7 +48,7 @@
 //	    })
 //	}
 //
-// Usage
+// # Usage
 //
 // Generators are typically used through the ApplicationWrapper:
 //
@@ -57,11 +57,11 @@
 //	if err != nil {
 //	    // handle error
 //	}
-//	
+//
 //	app := wrapper.ToApplication()
 //	resources, err := app.Config.Generate(app)
 //
-// Creating New Generators
+// # Creating New Generators
 //
 // To create a new generator:
 //
@@ -71,7 +71,7 @@
 // 4. Register in init() function
 // 5. Add documentation
 //
-// Version Evolution
+// # Version Evolution
 //
 // Generators support version evolution:
 //   - v1alpha1: Initial implementation, API may change

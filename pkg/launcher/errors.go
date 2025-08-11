@@ -94,17 +94,17 @@ func NewPatchError(patchName, resourceKind, resourceName, targetPath, reason str
 // DependencyError represents a dependency resolution error
 type DependencyError struct {
 	*errors.ConfigError
-	DepType  string   // "circular", "missing", "conflict"
-	Source   string   // Source of the dependency
-	Target   string   // Target of the dependency
-	Chain    []string // Dependency chain for circular dependencies
+	DepType string   // "circular", "missing", "conflict"
+	Source  string   // Source of the dependency
+	Target  string   // Target of the dependency
+	Chain   []string // Dependency chain for circular dependencies
 }
 
 // NewDependencyError creates a dependency resolution error
 func NewDependencyError(depType, source, target string, chain []string) *DependencyError {
 	var message string
 	var help string
-	
+
 	switch depType {
 	case "circular":
 		message = fmt.Sprintf("circular dependency: %s", strings.Join(chain, " -> "))

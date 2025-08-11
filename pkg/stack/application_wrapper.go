@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"gopkg.in/yaml.v3"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 )
 
@@ -24,10 +24,10 @@ func CreateApplicationConfig(apiVersion, kind string) (ApplicationConfig, error)
 
 // ApplicationWrapper provides type detection and unmarshaling for ApplicationConfig
 type ApplicationWrapper struct {
-	APIVersion string                   `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string                   `yaml:"kind" json:"kind"`
-	Metadata   ApplicationMetadata      `yaml:"metadata" json:"metadata"`
-	Spec       ApplicationConfig        `yaml:"-" json:"-"`
+	APIVersion string              `yaml:"apiVersion" json:"apiVersion"`
+	Kind       string              `yaml:"kind" json:"kind"`
+	Metadata   ApplicationMetadata `yaml:"metadata" json:"metadata"`
+	Spec       ApplicationConfig   `yaml:"-" json:"-"`
 }
 
 // ApplicationMetadata contains common metadata fields
@@ -74,7 +74,7 @@ func (w *ApplicationWrapper) UnmarshalYAML(node *yaml.Node) error {
 
 	// Decode spec into the specific config type
 	if err := raw.Spec.Decode(config); err != nil {
-		return fmt.Errorf("failed to decode spec for %s/%s: %w", 
+		return fmt.Errorf("failed to decode spec for %s/%s: %w",
 			raw.APIVersion, raw.Kind, err)
 	}
 

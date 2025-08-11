@@ -108,38 +108,38 @@ func TestGlobalOptions_Validate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid yaml output",
-			opts: &GlobalOptions{Output: "yaml"},
+			name:    "valid yaml output",
+			opts:    &GlobalOptions{Output: "yaml"},
 			wantErr: false,
 		},
 		{
-			name: "valid json output",
-			opts: &GlobalOptions{Output: "json"},
+			name:    "valid json output",
+			opts:    &GlobalOptions{Output: "json"},
 			wantErr: false,
 		},
 		{
-			name: "valid table output",
-			opts: &GlobalOptions{Output: "table"},
+			name:    "valid table output",
+			opts:    &GlobalOptions{Output: "table"},
 			wantErr: false,
 		},
 		{
-			name: "valid wide output",
-			opts: &GlobalOptions{Output: "wide"},
+			name:    "valid wide output",
+			opts:    &GlobalOptions{Output: "wide"},
 			wantErr: false,
 		},
 		{
-			name: "valid name output",
-			opts: &GlobalOptions{Output: "name"},
+			name:    "valid name output",
+			opts:    &GlobalOptions{Output: "name"},
 			wantErr: false,
 		},
 		{
-			name: "invalid output format",
-			opts: &GlobalOptions{Output: "invalid"},
+			name:    "invalid output format",
+			opts:    &GlobalOptions{Output: "invalid"},
 			wantErr: true,
 		},
 		{
-			name: "empty output format",
-			opts: &GlobalOptions{Output: ""},
+			name:    "empty output format",
+			opts:    &GlobalOptions{Output: ""},
 			wantErr: true,
 		},
 	}
@@ -181,38 +181,38 @@ func TestGlobalOptions_Complete(t *testing.T) {
 		wantErr      bool
 	}{
 		{
-			name: "no viper values",
+			name:        "no viper values",
 			viperValues: map[string]interface{}{},
 			initialOpts: &GlobalOptions{
-				Output: "yaml",
+				Output:  "yaml",
 				Verbose: false,
-				Debug: false,
+				Debug:   false,
 			},
 			expectedOpts: &GlobalOptions{
-				Output: "yaml",
+				Output:  "yaml",
 				Verbose: false,
-				Debug: false,
+				Debug:   false,
 			},
 			wantErr: false,
 		},
 		{
 			name: "viper overrides",
 			viperValues: map[string]interface{}{
-				"verbose": true,
-				"debug": false,
-				"output": "json",
+				"verbose":   true,
+				"debug":     false,
+				"output":    "json",
 				"namespace": "test-ns",
 			},
 			initialOpts: &GlobalOptions{
-				Output: "yaml",
-				Verbose: false,
-				Debug: false,
+				Output:    "yaml",
+				Verbose:   false,
+				Debug:     false,
 				Namespace: "",
 			},
 			expectedOpts: &GlobalOptions{
-				Output: "json",
-				Verbose: true,
-				Debug: false,
+				Output:    "json",
+				Verbose:   true,
+				Debug:     false,
 				Namespace: "test-ns",
 			},
 			wantErr: false,
@@ -223,14 +223,14 @@ func TestGlobalOptions_Complete(t *testing.T) {
 				"debug": true,
 			},
 			initialOpts: &GlobalOptions{
-				Output: "yaml",
+				Output:  "yaml",
 				Verbose: false,
-				Debug: false,
+				Debug:   false,
 			},
 			expectedOpts: &GlobalOptions{
-				Output: "yaml",
+				Output:  "yaml",
 				Verbose: true,
-				Debug: true,
+				Debug:   true,
 			},
 			wantErr: false,
 		},
@@ -507,8 +507,8 @@ func TestGlobalOptions_EnvironmentIntegration(t *testing.T) {
 	defer os.Setenv("KURE_DEBUG", originalDebug)
 
 	opts := &GlobalOptions{
-		Output: "yaml",
-		Debug:  true,
+		Output:  "yaml",
+		Debug:   true,
 		Verbose: false,
 	}
 

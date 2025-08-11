@@ -17,7 +17,7 @@ import (
 	// Import implementations to register workflow factories
 	_ "github.com/go-kure/kure/pkg/stack/argocd"
 	_ "github.com/go-kure/kure/pkg/stack/fluxcd"
-	
+
 	// Import generators to register them
 	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload"
 	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"

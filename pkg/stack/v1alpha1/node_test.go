@@ -2,7 +2,7 @@ package v1alpha1
 
 import (
 	"testing"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -124,11 +124,11 @@ func TestNodeConfig(t *testing.T) {
 			errMsg:  "node config is nil",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.node.Validate()
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error but got nil")
@@ -146,28 +146,28 @@ func TestNodeConfig(t *testing.T) {
 
 func TestNodeConfig_GettersSetters(t *testing.T) {
 	node := NewNodeConfig("test-node")
-	
+
 	// Test initial values
 	if node.GetName() != "test-node" {
 		t.Errorf("expected name 'test-node', got %s", node.GetName())
 	}
-	
+
 	if node.GetPath() != "test-node" {
 		t.Errorf("expected path 'test-node', got %s", node.GetPath())
 	}
-	
+
 	// Test with parent path
 	node.Spec.ParentPath = "cluster/infrastructure"
 	if node.GetPath() != "cluster/infrastructure/test-node" {
 		t.Errorf("expected path 'cluster/infrastructure/test-node', got %s", node.GetPath())
 	}
-	
+
 	// Test setters
 	node.SetName("new-name")
 	if node.GetName() != "new-name" {
 		t.Errorf("expected name 'new-name', got %s", node.GetName())
 	}
-	
+
 	node.SetNamespace("test-namespace")
 	if node.GetNamespace() != "test-namespace" {
 		t.Errorf("expected namespace 'test-namespace', got %s", node.GetNamespace())
@@ -176,37 +176,37 @@ func TestNodeConfig_GettersSetters(t *testing.T) {
 
 func TestNodeConfig_Helpers(t *testing.T) {
 	node := NewNodeConfig("parent")
-	
+
 	// Test AddChild
 	node.AddChild("child1")
 	node.AddChild("child2")
-	
+
 	if len(node.Spec.Children) != 2 {
 		t.Errorf("expected 2 children, got %d", len(node.Spec.Children))
 	}
-	
+
 	if node.Spec.Children[0].Name != "child1" {
 		t.Errorf("expected first child 'child1', got %s", node.Spec.Children[0].Name)
 	}
-	
+
 	// Test SetBundle
 	node.SetBundle("test-bundle")
-	
+
 	if node.Spec.Bundle == nil {
 		t.Fatal("expected bundle to be set")
 	}
-	
+
 	if node.Spec.Bundle.Name != "test-bundle" {
 		t.Errorf("expected bundle name 'test-bundle', got %s", node.Spec.Bundle.Name)
 	}
-	
+
 	// Test SetPackageRef
 	node.SetPackageRef("packages.example.com", "v1", "TestPackage")
-	
+
 	if node.Spec.PackageRef == nil {
 		t.Fatal("expected package ref to be set")
 	}
-	
+
 	if node.Spec.PackageRef.Kind != "TestPackage" {
 		t.Errorf("expected package ref kind 'TestPackage', got %s", node.Spec.PackageRef.Kind)
 	}
@@ -217,34 +217,34 @@ func TestNodeConfig_Conversion(t *testing.T) {
 	node.Spec.ParentPath = "cluster"
 	node.AddChild("child1")
 	node.SetBundle("bundle1")
-	
+
 	// Test ConvertTo
 	converted, err := node.ConvertTo("v1alpha1")
 	if err != nil {
 		t.Errorf("unexpected error converting to v1alpha1: %v", err)
 	}
-	
+
 	if converted != node {
 		t.Error("expected same instance when converting to same version")
 	}
-	
+
 	// Test unsupported version
 	_, err = node.ConvertTo("v2")
 	if err == nil {
 		t.Error("expected error for unsupported version")
 	}
-	
+
 	// Test ConvertFrom
 	newNode := &NodeConfig{}
 	err = newNode.ConvertFrom(node)
 	if err != nil {
 		t.Errorf("unexpected error converting from NodeConfig: %v", err)
 	}
-	
+
 	if newNode.GetName() != node.GetName() {
 		t.Errorf("expected name %s, got %s", node.GetName(), newNode.GetName())
 	}
-	
+
 	if len(newNode.Spec.Children) != len(node.Spec.Children) {
 		t.Errorf("expected %d children, got %d", len(node.Spec.Children), len(newNode.Spec.Children))
 	}
@@ -276,12 +276,12 @@ func TestNodeConfig_HierarchicalPath(t *testing.T) {
 			wantPath:   "cluster/infrastructure/monitoring/prometheus",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node := NewNodeConfig(tt.nodeName)
 			node.Spec.ParentPath = tt.parentPath
-			
+
 			gotPath := node.GetPath()
 			if gotPath != tt.wantPath {
 				t.Errorf("expected path %q, got %q", tt.wantPath, gotPath)

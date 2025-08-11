@@ -368,7 +368,7 @@ func TestFluxReportConfig(t *testing.T) {
 
 func TestReceiverSecretRefConfig(t *testing.T) {
 	ref := meta.LocalObjectReference{Name: "webhook-secret"}
-	
+
 	cfg := &ReceiverSecretRefConfig{
 		Name:      "secret-ref",
 		Namespace: "default",
@@ -383,7 +383,7 @@ func TestReceiverSecretRefConfig(t *testing.T) {
 func TestConfigStructTags(t *testing.T) {
 	// Test that struct tags are properly defined for YAML serialization
 	// This is important for configuration file parsing
-	
+
 	tests := []struct {
 		name   string
 		config interface{}

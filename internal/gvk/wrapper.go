@@ -8,10 +8,10 @@ import (
 
 // TypedWrapper provides type detection and unmarshaling for GVK-based types
 type TypedWrapper[T any] struct {
-	APIVersion string            `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string            `yaml:"kind" json:"kind"`
-	Metadata   map[string]any    `yaml:"metadata" json:"metadata"`
-	Spec       T                 `yaml:"-" json:"-"`
+	APIVersion string         `yaml:"apiVersion" json:"apiVersion"`
+	Kind       string         `yaml:"kind" json:"kind"`
+	Metadata   map[string]any `yaml:"metadata" json:"metadata"`
+	Spec       T              `yaml:"-" json:"-"`
 	registry   *Registry[T]
 }
 
@@ -156,7 +156,7 @@ type TypedWrappers[T any] []TypedWrapper[T]
 
 // UnmarshalYAML implements custom YAML unmarshaling for slices
 func (ws *TypedWrappers[T]) UnmarshalYAML(node *yaml.Node) error {
-	// This requires the registry to be set somehow - 
+	// This requires the registry to be set somehow -
 	// typically this would be handled by a containing type
 	// that knows about the registry
 	return fmt.Errorf("TypedWrappers requires registry context - use a container type")

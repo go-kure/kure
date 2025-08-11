@@ -164,8 +164,8 @@ func TestConfigV1Alpha1_Generate_StatefulSet(t *testing.T) {
 					Name string `json:"name" yaml:"name"`
 				}{Name: "data"},
 				Spec: struct {
-					AccessModes      []string                     `json:"accessModes,omitempty" yaml:"accessModes,omitempty"`
-					StorageClassName *string                      `json:"storageClassName,omitempty" yaml:"storageClassName,omitempty"`
+					AccessModes      []string                       `json:"accessModes,omitempty" yaml:"accessModes,omitempty"`
+					StorageClassName *string                        `json:"storageClassName,omitempty" yaml:"storageClassName,omitempty"`
 					Resources        *internal.ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
 				}{
 					AccessModes: []string{"ReadWriteOnce"},

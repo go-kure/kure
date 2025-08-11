@@ -14,14 +14,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-
 // SourceType represents the type of Helm chart source
 type SourceType string
 
 const (
 	// HelmRepositorySource indicates a Helm repository source
 	HelmRepositorySource SourceType = "HelmRepository"
-	// GitRepositorySource indicates a Git repository source  
+	// GitRepositorySource indicates a Git repository source
 	GitRepositorySource SourceType = "GitRepository"
 	// BucketSource indicates an S3-compatible bucket source
 	BucketSource SourceType = "Bucket"
@@ -35,9 +34,9 @@ type Config struct {
 	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// Chart configuration
-	Chart   ChartConfig   `yaml:"chart" json:"chart"`
-	Version string        `yaml:"version,omitempty" json:"version,omitempty"`
-	Values  interface{}   `yaml:"values,omitempty" json:"values,omitempty"`
+	Chart   ChartConfig `yaml:"chart" json:"chart"`
+	Version string      `yaml:"version,omitempty" json:"version,omitempty"`
+	Values  interface{} `yaml:"values,omitempty" json:"values,omitempty"`
 
 	// Source configuration
 	Source SourceConfig `yaml:"source" json:"source"`
@@ -46,13 +45,13 @@ type Config struct {
 	Release ReleaseConfig `yaml:"release,omitempty" json:"release,omitempty"`
 
 	// Advanced options
-	Interval        string   `yaml:"interval,omitempty" json:"interval,omitempty"`
-	Timeout         string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	MaxHistory      int      `yaml:"maxHistory,omitempty" json:"maxHistory,omitempty"`
-	ServiceAccount  string   `yaml:"serviceAccount,omitempty" json:"serviceAccount,omitempty"`
-	Suspend         bool     `yaml:"suspend,omitempty" json:"suspend,omitempty"`
-	DependsOn       []string `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
-	PostRenderers   []PostRenderer `yaml:"postRenderers,omitempty" json:"postRenderers,omitempty"`
+	Interval       string         `yaml:"interval,omitempty" json:"interval,omitempty"`
+	Timeout        string         `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	MaxHistory     int            `yaml:"maxHistory,omitempty" json:"maxHistory,omitempty"`
+	ServiceAccount string         `yaml:"serviceAccount,omitempty" json:"serviceAccount,omitempty"`
+	Suspend        bool           `yaml:"suspend,omitempty" json:"suspend,omitempty"`
+	DependsOn      []string       `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
+	PostRenderers  []PostRenderer `yaml:"postRenderers,omitempty" json:"postRenderers,omitempty"`
 }
 
 // ChartConfig defines the Helm chart to deploy
@@ -64,42 +63,42 @@ type ChartConfig struct {
 // SourceConfig defines where to fetch the Helm chart from
 type SourceConfig struct {
 	Type SourceType `yaml:"type" json:"type"`
-	
+
 	// HelmRepository specific
-	URL      string `yaml:"url,omitempty" json:"url,omitempty"`
-	
-	// GitRepository specific  
-	GitURL   string `yaml:"gitUrl,omitempty" json:"gitUrl,omitempty"`
-	GitRef   string `yaml:"gitRef,omitempty" json:"gitRef,omitempty"`
-	GitPath  string `yaml:"gitPath,omitempty" json:"gitPath,omitempty"`
-	
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+
+	// GitRepository specific
+	GitURL  string `yaml:"gitUrl,omitempty" json:"gitUrl,omitempty"`
+	GitRef  string `yaml:"gitRef,omitempty" json:"gitRef,omitempty"`
+	GitPath string `yaml:"gitPath,omitempty" json:"gitPath,omitempty"`
+
 	// OCIRepository specific
-	OCIUrl   string `yaml:"ociUrl,omitempty" json:"ociUrl,omitempty"`
-	
+	OCIUrl string `yaml:"ociUrl,omitempty" json:"ociUrl,omitempty"`
+
 	// Bucket specific
 	BucketName string `yaml:"bucketName,omitempty" json:"bucketName,omitempty"`
 	Endpoint   string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
 	Region     string `yaml:"region,omitempty" json:"region,omitempty"`
-	
+
 	// Authentication
 	SecretRef string `yaml:"secretRef,omitempty" json:"secretRef,omitempty"`
-	
+
 	// Common
 	Interval string `yaml:"interval,omitempty" json:"interval,omitempty"`
 }
 
 // ReleaseConfig defines Helm release options
 type ReleaseConfig struct {
-	CreateNamespace     bool     `yaml:"createNamespace,omitempty" json:"createNamespace,omitempty"`
-	DisableWait         bool     `yaml:"disableWait,omitempty" json:"disableWait,omitempty"`
-	DisableWaitForJobs  bool     `yaml:"disableWaitForJobs,omitempty" json:"disableWaitForJobs,omitempty"`
-	DisableHooks        bool     `yaml:"disableHooks,omitempty" json:"disableHooks,omitempty"`
+	CreateNamespace          bool `yaml:"createNamespace,omitempty" json:"createNamespace,omitempty"`
+	DisableWait              bool `yaml:"disableWait,omitempty" json:"disableWait,omitempty"`
+	DisableWaitForJobs       bool `yaml:"disableWaitForJobs,omitempty" json:"disableWaitForJobs,omitempty"`
+	DisableHooks             bool `yaml:"disableHooks,omitempty" json:"disableHooks,omitempty"`
 	DisableOpenAPIValidation bool `yaml:"disableOpenAPIValidation,omitempty" json:"disableOpenAPIValidation,omitempty"`
-	ResetValues         bool     `yaml:"resetValues,omitempty" json:"resetValues,omitempty"`
-	ForceUpgrade        bool     `yaml:"forceUpgrade,omitempty" json:"forceUpgrade,omitempty"`
-	PreserveValues      bool     `yaml:"preserveValues,omitempty" json:"preserveValues,omitempty"`
-	CleanupOnFail       bool     `yaml:"cleanupOnFail,omitempty" json:"cleanupOnFail,omitempty"`
-	Replace             bool     `yaml:"replace,omitempty" json:"replace,omitempty"`
+	ResetValues              bool `yaml:"resetValues,omitempty" json:"resetValues,omitempty"`
+	ForceUpgrade             bool `yaml:"forceUpgrade,omitempty" json:"forceUpgrade,omitempty"`
+	PreserveValues           bool `yaml:"preserveValues,omitempty" json:"preserveValues,omitempty"`
+	CleanupOnFail            bool `yaml:"cleanupOnFail,omitempty" json:"cleanupOnFail,omitempty"`
+	Replace                  bool `yaml:"replace,omitempty" json:"replace,omitempty"`
 }
 
 // PostRenderer defines a post-renderer for the Helm release
@@ -179,7 +178,7 @@ func (c *Config) generateHelmRepository() (*client.Object, error) {
 	if interval == "" {
 		interval = "10m"
 	}
-	
+
 	duration, err := time.ParseDuration(interval)
 	if err != nil {
 		return nil, fmt.Errorf("invalid interval: %w", err)
@@ -216,7 +215,7 @@ func (c *Config) generateGitRepository() (*client.Object, error) {
 	if interval == "" {
 		interval = "10m"
 	}
-	
+
 	duration, err := time.ParseDuration(interval)
 	if err != nil {
 		return nil, fmt.Errorf("invalid interval: %w", err)
@@ -259,7 +258,7 @@ func (c *Config) generateOCIRepository() (*client.Object, error) {
 	if interval == "" {
 		interval = "10m"
 	}
-	
+
 	duration, err := time.ParseDuration(interval)
 	if err != nil {
 		return nil, fmt.Errorf("invalid interval: %w", err)
@@ -296,7 +295,7 @@ func (c *Config) generateBucket() (*client.Object, error) {
 	if interval == "" {
 		interval = "10m"
 	}
-	
+
 	duration, err := time.ParseDuration(interval)
 	if err != nil {
 		return nil, fmt.Errorf("invalid interval: %w", err)
@@ -335,7 +334,7 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 	if interval == "" {
 		interval = "10m"
 	}
-	
+
 	duration, err := time.ParseDuration(interval)
 	if err != nil {
 		return nil, fmt.Errorf("invalid interval: %w", err)
@@ -452,7 +451,7 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 		for _, pr := range c.PostRenderers {
 			if pr.Kustomize != nil {
 				kustomizeObj := &helmv2.Kustomize{}
-				
+
 				// Add patches
 				for _, patch := range pr.Kustomize.Patches {
 					kustomizeObj.Patches = append(kustomizeObj.Patches, kustomize.Patch{
@@ -460,7 +459,7 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 						Patch:  patch.Patch,
 					})
 				}
-				
+
 				// Add images
 				for _, img := range pr.Kustomize.Images {
 					kustomizeObj.Images = append(kustomizeObj.Images, kustomize.Image{
@@ -469,7 +468,7 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 						NewTag:  img.NewTag,
 					})
 				}
-				
+
 				hr.Spec.PostRenderers = append(hr.Spec.PostRenderers, helmv2.PostRenderer{
 					Kustomize: kustomizeObj,
 				})

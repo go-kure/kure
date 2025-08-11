@@ -125,7 +125,7 @@ func (l *packageLoader) LoadDefinition(ctx context.Context, path string, opts *L
 // loadMetadata loads the kurel.yaml file
 func (l *packageLoader) loadMetadata(ctx context.Context, def *PackageDefinition, pkgRoot string, opts *LauncherOptions) error {
 	metaPath := filepath.Join(pkgRoot, "kurel.yaml")
-	
+
 	// Check if file exists
 	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
 		// Metadata is optional, use defaults
@@ -156,7 +156,7 @@ func (l *packageLoader) loadMetadata(ctx context.Context, def *PackageDefinition
 // loadParameters loads the parameters.yaml file
 func (l *packageLoader) loadParameters(ctx context.Context, def *PackageDefinition, pkgRoot string, opts *LauncherOptions) error {
 	paramPath := filepath.Join(pkgRoot, "parameters.yaml")
-	
+
 	// Check if file exists
 	if _, err := os.Stat(paramPath); os.IsNotExist(err) {
 		// Parameters are optional
@@ -249,7 +249,7 @@ func (l *packageLoader) LoadResources(ctx context.Context, path string, opts *La
 			if parseErr != nil {
 				// File likely contains template variables, store as template data
 				l.logger.Debug("File %s contains templates, deferring parsing: %v", path, parseErr)
-				
+
 				// Create a placeholder resource with template data
 				// We'll need basic metadata to identify it later
 				if err := l.loadTemplateResource(path, rawData, &resources); err != nil {
@@ -287,30 +287,30 @@ func (l *packageLoader) loadTemplateResource(path string, rawData []byte, resour
 	// Extract basic resource info from the template by looking for YAML structure
 	// This is a heuristic approach - we'll look for apiVersion, kind, metadata patterns
 	content := string(rawData)
-	
+
 	// Try to extract apiVersion and kind even with variable substitution
 	var apiVersion, kind, name, namespace string
-	
+
 	// Look for apiVersion (may contain variables)
 	if matches := regexp.MustCompile(`apiVersion:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
 		apiVersion = strings.TrimSpace(matches[1])
 	}
-	
-	// Look for kind (may contain variables)  
+
+	// Look for kind (may contain variables)
 	if matches := regexp.MustCompile(`kind:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
 		kind = strings.TrimSpace(matches[1])
 	}
-	
+
 	// Look for metadata.name (may contain variables)
 	if matches := regexp.MustCompile(`name:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
 		name = strings.TrimSpace(matches[1])
 	}
-	
+
 	// Look for metadata.namespace (may contain variables)
 	if matches := regexp.MustCompile(`namespace:\s*(.+)`).FindStringSubmatch(content); len(matches) > 1 {
 		namespace = strings.TrimSpace(matches[1])
 	}
-	
+
 	// Create a placeholder resource
 	resource := Resource{
 		APIVersion:   apiVersion,
@@ -321,7 +321,7 @@ func (l *packageLoader) loadTemplateResource(path string, rawData []byte, resour
 			Namespace: namespace,
 		},
 	}
-	
+
 	*resources = append(*resources, resource)
 	l.logger.Debug("Loaded template resource: %s/%s from %s", kind, name, path)
 	return nil
@@ -348,7 +348,7 @@ func (l *packageLoader) LoadPatches(ctx context.Context, path string, opts *Laun
 	}
 
 	var patches []Patch
-	
+
 	// Find all patch files
 	err := filepath.Walk(patchDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -453,15 +453,15 @@ func (l *packageLoader) clientObjectToResource(obj client.Object) (Resource, err
 	}
 
 	gvk := u.GetObjectKind().GroupVersionKind()
-	
+
 	// Extract metadata
 	meta := metav1.ObjectMeta{
-		Name:      u.GetName(),
-		Namespace: u.GetNamespace(),
-		Labels:    u.GetLabels(),
+		Name:        u.GetName(),
+		Namespace:   u.GetNamespace(),
+		Labels:      u.GetLabels(),
 		Annotations: u.GetAnnotations(),
 	}
-	
+
 	return Resource{
 		APIVersion: gvk.GroupVersion().String(),
 		Kind:       gvk.Kind,

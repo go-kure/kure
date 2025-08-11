@@ -9,15 +9,15 @@ import (
 
 // LauncherOptions centralizes common configuration for all launcher components
 type LauncherOptions struct {
-	Logger       logger.Logger    // Logger instance
-	MaxDepth     int              // Maximum variable resolution depth
-	Timeout      time.Duration    // Operation timeout
-	MaxWorkers   int              // Number of concurrent workers
-	CacheDir     string           // Directory for caching schemas
-	Debug        bool             // Enable debug output
-	Verbose      bool             // Enable verbose logging
-	StrictMode   bool             // Treat warnings as errors
-	ProgressFunc func(string)     // Progress callback function
+	Logger       logger.Logger // Logger instance
+	MaxDepth     int           // Maximum variable resolution depth
+	Timeout      time.Duration // Operation timeout
+	MaxWorkers   int           // Number of concurrent workers
+	CacheDir     string        // Directory for caching schemas
+	Debug        bool          // Enable debug output
+	Verbose      bool          // Enable verbose logging
+	StrictMode   bool          // Treat warnings as errors
+	ProgressFunc func(string)  // Progress callback function
 }
 
 // DefaultOptions returns sensible default options
@@ -63,21 +63,21 @@ type BuildOptions struct {
 	Output       OutputDest   // Where to write (stdout, file, directory)
 	OutputPath   string       // Output path for file/directory
 	OutputFormat OutputFormat // How to organize files
-	
+
 	// Serialization
 	Format      SerializationFormat // YAML or JSON
-	PrettyPrint bool               // Pretty print JSON
-	
+	PrettyPrint bool                // Pretty print JSON
+
 	// File organization
 	SeparateFiles    bool // Write each resource to its own file
 	IncludeIndex     bool // Add numeric prefix to filenames
 	IncludeNamespace bool // Add namespace to filenames
-	
+
 	// Filtering
 	FilterKind      string // Only output resources of this kind
 	FilterName      string // Only output resources with this name
 	FilterNamespace string // Only output resources in this namespace
-	
+
 	// Transformations
 	AddLabels      map[string]string // Add these labels to all resources
 	AddAnnotations map[string]string // Add these annotations to all resources
@@ -89,7 +89,7 @@ type OutputDest string
 const (
 	OutputStdout    OutputDest = "stdout"    // Write to stdout
 	OutputFile      OutputDest = "file"      // Write to single file
-	OutputDirectory OutputDest = "directory"  // Write to directory
+	OutputDirectory OutputDest = "directory" // Write to directory
 )
 
 // OutputFormat defines how to organize output files
@@ -142,7 +142,7 @@ func (r ValidationResult) IsValid() bool {
 type ValidationError struct {
 	Resource string `json:"resource,omitempty"`
 	Field    string `json:"field,omitempty"`
-	Path     string `json:"path,omitempty"`     // JSON path to the field
+	Path     string `json:"path,omitempty"` // JSON path to the field
 	Message  string `json:"message"`
 	Severity string `json:"severity,omitempty"` // "error" or "warning"
 }
@@ -181,4 +181,3 @@ func (w ValidationWarning) String() string {
 	}
 	return w.Message
 }
-

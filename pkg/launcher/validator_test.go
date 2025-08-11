@@ -8,8 +8,8 @@ import (
 	"github.com/go-kure/kure/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestValidator(t *testing.T) {
@@ -82,7 +82,7 @@ func TestValidator(t *testing.T) {
 			result, err := validator.ValidatePackage(ctx, def)
 			require.NoError(t, err)
 			require.NotNil(t, result)
-			
+
 			assert.True(t, result.IsValid())
 			assert.Empty(t, result.Errors)
 		})
@@ -100,7 +100,7 @@ func TestValidator(t *testing.T) {
 			result, err := validator.ValidatePackage(ctx, def)
 			require.NoError(t, err)
 			require.NotNil(t, result)
-			
+
 			// Debug output
 			if len(result.Errors) == 0 {
 				t.Logf("No errors found but expected validation errors")
@@ -111,7 +111,7 @@ func TestValidator(t *testing.T) {
 			for _, w := range result.Warnings {
 				t.Logf("Warning: %s: %s", w.Field, w.Message)
 			}
-			
+
 			assert.False(t, result.IsValid())
 			assert.NotEmpty(t, result.Errors)
 		})
@@ -164,10 +164,10 @@ func TestValidator(t *testing.T) {
 
 			result, err := validator.ValidatePackage(ctx, def)
 			require.NoError(t, err)
-			
+
 			assert.False(t, result.IsValid())
 			assert.NotEmpty(t, result.Errors)
-			
+
 			// Check for duplicate error
 			found := false
 			for _, e := range result.Errors {
@@ -212,10 +212,10 @@ func TestValidator(t *testing.T) {
 
 			result, err := validator.ValidatePackage(ctx, def)
 			require.NoError(t, err)
-			
+
 			assert.False(t, result.IsValid())
 			assert.NotEmpty(t, result.Errors)
-			
+
 			// Check for circular dependency error
 			found := false
 			for _, e := range result.Errors {
@@ -246,10 +246,10 @@ func TestValidator(t *testing.T) {
 
 			result, err := validator.ValidatePackage(ctx, def)
 			require.NoError(t, err)
-			
+
 			assert.False(t, result.IsValid())
 			assert.NotEmpty(t, result.Errors)
-			
+
 			// Check for missing dependency error
 			found := false
 			for _, e := range result.Errors {
@@ -277,11 +277,11 @@ func TestValidator(t *testing.T) {
 
 			result, err := validator.ValidatePackage(ctx, def)
 			require.NoError(t, err)
-			
+
 			// Should have warnings, not errors
 			assert.True(t, result.IsValid())
 			assert.NotEmpty(t, result.Warnings)
-			
+
 			// Check for reserved name warnings
 			found := 0
 			for _, w := range result.Warnings {
@@ -392,7 +392,7 @@ func TestValidator(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, result.IsValid())
 			assert.NotEmpty(t, result.Errors)
-			
+
 			// Check for port range error
 			found := false
 			for _, e := range result.Errors {
@@ -433,7 +433,7 @@ func TestValidator(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, result.IsValid())
 			assert.NotEmpty(t, result.Errors)
-			
+
 			// Check for hostname error
 			found := false
 			for _, e := range result.Errors {
@@ -542,7 +542,7 @@ func TestValidator(t *testing.T) {
 
 		result, err := validator.ValidatePackage(ctx, def)
 		require.NoError(t, err)
-		
+
 		// In strict mode, warnings become errors
 		assert.False(t, result.IsValid())
 		assert.NotEmpty(t, result.Errors)
@@ -550,10 +550,10 @@ func TestValidator(t *testing.T) {
 
 		// Disable strict mode
 		validator.SetStrictMode(false)
-		
+
 		result, err = validator.ValidatePackage(ctx, def)
 		require.NoError(t, err)
-		
+
 		// Without strict mode, should be valid with warnings
 		assert.True(t, result.IsValid())
 		assert.Empty(t, result.Errors)
@@ -581,12 +581,12 @@ func TestValidator(t *testing.T) {
 
 		result, err := validator.ValidatePackage(ctx, def)
 		require.NoError(t, err)
-		
+
 		// Should stop after max errors
 		assert.False(t, result.IsValid())
 		// Should have at least max errors + 1 (for the stopping message)
 		assert.GreaterOrEqual(t, len(result.Errors), 3)
-		
+
 		// Check for stopping message
 		found := false
 		for _, e := range result.Errors {
@@ -632,18 +632,18 @@ func TestFormatResult(t *testing.T) {
 		}
 
 		formatted := FormatResult(result)
-		
+
 		// Check structure
 		assert.Contains(t, formatted, "✗ Package validation failed")
 		assert.Contains(t, formatted, "Errors (2):")
 		assert.Contains(t, formatted, "Warnings (1):")
-		
+
 		// Check error details
 		assert.Contains(t, formatted, "spec.replicas: must be positive")
 		assert.Contains(t, formatted, "missing required field")
 		assert.Contains(t, formatted, "Resource: Deployment/app")
 		assert.Contains(t, formatted, "spec.selector")
-		
+
 		// Check warning details
 		assert.Contains(t, formatted, "metadata.labels: recommended labels missing")
 	})

@@ -38,12 +38,12 @@ type ParameterMapWithSource map[string]ParameterSource
 
 // Resource represents a Kubernetes resource with thread-safe access
 type Resource struct {
-	APIVersion   string               `yaml:"apiVersion" json:"apiVersion"`
-	Kind         string               `yaml:"kind" json:"kind"`
-	Metadata     metav1.ObjectMeta    `yaml:"metadata" json:"metadata"`
+	APIVersion   string                     `yaml:"apiVersion" json:"apiVersion"`
+	Kind         string                     `yaml:"kind" json:"kind"`
+	Metadata     metav1.ObjectMeta          `yaml:"metadata" json:"metadata"`
 	Raw          *unstructured.Unstructured // For patch system compatibility
-	TemplateData []byte               `json:"-"` // Raw template content before variable resolution
-	mu           sync.RWMutex         // Protect concurrent access
+	TemplateData []byte                     `json:"-"` // Raw template content before variable resolution
+	mu           sync.RWMutex               // Protect concurrent access
 }
 
 // GetName returns the resource name thread-safely
@@ -74,19 +74,19 @@ func (r *Resource) ToUnstructured() (*unstructured.Unstructured, error) {
 func (r *Resource) DeepCopy() Resource {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	var rawCopy *unstructured.Unstructured
 	if r.Raw != nil {
 		rawCopy = r.Raw.DeepCopy()
 	}
-	
+
 	// Deep copy template data
 	var templateCopy []byte
 	if r.TemplateData != nil {
 		templateCopy = make([]byte, len(r.TemplateData))
 		copy(templateCopy, r.TemplateData)
 	}
-	
+
 	return Resource{
 		APIVersion:   r.APIVersion,
 		Kind:         r.Kind,
@@ -98,18 +98,18 @@ func (r *Resource) DeepCopy() Resource {
 
 // Patch represents a patch file with its metadata
 type Patch struct {
-	Name      string         `json:"name"`
-	Path      string         `json:"path"`
-	Content   string         `json:"-"` // TOML content
-	Metadata  *PatchMetadata `json:"metadata,omitempty"`
+	Name     string         `json:"name"`
+	Path     string         `json:"path"`
+	Content  string         `json:"-"` // TOML content
+	Metadata *PatchMetadata `json:"metadata,omitempty"`
 }
 
 // PatchMetadata contains patch configuration and dependencies
 type PatchMetadata struct {
-	Enabled     string   `yaml:"enabled,omitempty" json:"enabled,omitempty"`         // Variable expression
+	Enabled     string   `yaml:"enabled,omitempty" json:"enabled,omitempty"` // Variable expression
 	Description string   `yaml:"description,omitempty" json:"description,omitempty"`
-	Requires    []string `yaml:"requires,omitempty" json:"requires,omitempty"`       // Required patches
-	Conflicts   []string `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`     // Conflicting patches
+	Requires    []string `yaml:"requires,omitempty" json:"requires,omitempty"`   // Required patches
+	Conflicts   []string `yaml:"conflicts,omitempty" json:"conflicts,omitempty"` // Conflicting patches
 }
 
 // PackageDefinition represents an immutable kurel package
@@ -126,13 +126,13 @@ type PackageDefinition struct {
 func (pd *PackageDefinition) DeepCopy() *PackageDefinition {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	
+
 	// Deep copy resources
 	resources := make([]Resource, len(pd.Resources))
 	for i, r := range pd.Resources {
 		resources[i] = r.DeepCopy()
 	}
-	
+
 	// Deep copy patches
 	patches := make([]Patch, len(pd.Patches))
 	for i, p := range pd.Patches {
@@ -143,7 +143,7 @@ func (pd *PackageDefinition) DeepCopy() *PackageDefinition {
 			Metadata: deepCopyPatchMetadata(p.Metadata),
 		}
 	}
-	
+
 	return &PackageDefinition{
 		Path:       pd.Path,
 		Metadata:   pd.Metadata, // struct copy
@@ -155,13 +155,12 @@ func (pd *PackageDefinition) DeepCopy() *PackageDefinition {
 
 // PackageInstance represents a package with user customization
 type PackageInstance struct {
-	Definition     *PackageDefinition      `json:"definition"`
-	UserValues     ParameterMap            `json:"userValues"`
-	Resolved       ParameterMapWithSource  `json:"resolved"` // Final values with source tracking
-	LocalPath      string                  `json:"localPath,omitempty"`
-	EnabledPatches []Patch                 `json:"enabledPatches,omitempty"` // Patches after dependency resolution
+	Definition     *PackageDefinition     `json:"definition"`
+	UserValues     ParameterMap           `json:"userValues"`
+	Resolved       ParameterMapWithSource `json:"resolved"` // Final values with source tracking
+	LocalPath      string                 `json:"localPath,omitempty"`
+	EnabledPatches []Patch                `json:"enabledPatches,omitempty"` // Patches after dependency resolution
 }
-
 
 // Helper functions for deep copying
 
@@ -169,7 +168,7 @@ func deepCopyParameterMap(m ParameterMap) ParameterMap {
 	if m == nil {
 		return nil
 	}
-	
+
 	result := make(ParameterMap)
 	for k, v := range m {
 		result[k] = deepCopyValue(v)
@@ -201,13 +200,13 @@ func deepCopyPatchMetadata(pm *PatchMetadata) *PatchMetadata {
 	if pm == nil {
 		return nil
 	}
-	
+
 	requires := make([]string, len(pm.Requires))
 	copy(requires, pm.Requires)
-	
+
 	conflicts := make([]string, len(pm.Conflicts))
 	copy(conflicts, pm.Conflicts)
-	
+
 	return &PatchMetadata{
 		Enabled:     pm.Enabled,
 		Description: pm.Description,

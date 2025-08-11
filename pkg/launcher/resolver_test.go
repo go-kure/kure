@@ -57,8 +57,8 @@ func TestResolver(t *testing.T) {
 
 	t.Run("multiple variables", func(t *testing.T) {
 		base := ParameterMap{
-			"first":  "Hello",
-			"second": "World",
+			"first":   "Hello",
+			"second":  "World",
 			"message": "${first} ${second}!",
 		}
 
@@ -70,7 +70,7 @@ func TestResolver(t *testing.T) {
 
 	t.Run("array access", func(t *testing.T) {
 		base := ParameterMap{
-			"items": []interface{}{"first", "second", "third"},
+			"items":    []interface{}{"first", "second", "third"},
 			"selected": "${items[1]}",
 		}
 
@@ -105,15 +105,15 @@ func TestResolver(t *testing.T) {
 	t.Run("max depth exceeded", func(t *testing.T) {
 		// Create a deep chain of references
 		base := ParameterMap{
-			"v1": "${v2}",
-			"v2": "${v3}",
-			"v3": "${v4}",
-			"v4": "${v5}",
-			"v5": "${v6}",
-			"v6": "${v7}",
-			"v7": "${v8}",
-			"v8": "${v9}",
-			"v9": "${v10}",
+			"v1":  "${v2}",
+			"v2":  "${v3}",
+			"v3":  "${v4}",
+			"v4":  "${v5}",
+			"v5":  "${v6}",
+			"v6":  "${v7}",
+			"v7":  "${v8}",
+			"v8":  "${v9}",
+			"v9":  "${v10}",
 			"v10": "${v11}",
 			"v11": "${v12}",
 			"v12": "final",
@@ -158,10 +158,10 @@ func TestResolver(t *testing.T) {
 		app := result["app"].Value.(map[string]interface{})
 		assert.Equal(t, "override-app", app["name"])
 		assert.Equal(t, "local", result["app"].Location)
-		
+
 		assert.Equal(t, true, result["feature"].Value)
 		assert.Equal(t, "package", result["feature"].Location)
-		
+
 		assert.Equal(t, "value", result["new"].Value)
 		assert.Equal(t, "local", result["new"].Location)
 	})
@@ -230,7 +230,7 @@ func TestDebugVariableGraph(t *testing.T) {
 		}
 
 		graph := resolver.DebugVariableGraph(params)
-		
+
 		assert.Contains(t, graph, "Variable Dependency Graph")
 		assert.Contains(t, graph, "b:")
 		assert.Contains(t, graph, "-> a")
@@ -246,13 +246,13 @@ func TestDebugVariableGraph(t *testing.T) {
 		}
 
 		graph := resolver.DebugVariableGraph(params)
-		
+
 		assert.Contains(t, graph, "Cycles Detected")
 		// The graph should show the cycle
-		assert.True(t, 
+		assert.True(t,
 			strings.Contains(graph, "a -> b -> c -> a") ||
-			strings.Contains(graph, "b -> c -> a -> b") ||
-			strings.Contains(graph, "c -> a -> b -> c"),
+				strings.Contains(graph, "b -> c -> a -> b") ||
+				strings.Contains(graph, "c -> a -> b -> c"),
 		)
 	})
 
@@ -264,7 +264,7 @@ func TestDebugVariableGraph(t *testing.T) {
 		}
 
 		graph := resolver.DebugVariableGraph(params)
-		
+
 		assert.Contains(t, graph, "(no dependencies)")
 		assert.NotContains(t, graph, "Cycles Detected")
 	})
@@ -280,7 +280,7 @@ func TestDebugVariableGraph(t *testing.T) {
 		}
 
 		graph := resolver.DebugVariableGraph(params)
-		
+
 		assert.Contains(t, graph, "app.name:")
 		assert.Contains(t, graph, "-> base")
 		assert.Contains(t, graph, "url:")
@@ -306,14 +306,14 @@ func TestResolverHelpers(t *testing.T) {
 
 		// Simple lookup
 		assert.Equal(t, "value", resolver.lookupVariable("simple", params))
-		
+
 		// Nested lookup
 		assert.Equal(t, "nested-value", resolver.lookupVariable("nested.key", params))
 		assert.Equal(t, "deep-value", resolver.lookupVariable("nested.deep.field", params))
-		
+
 		// Array lookup
 		assert.Equal(t, "b", resolver.lookupVariable("array[1]", params))
-		
+
 		// Non-existent
 		assert.Nil(t, resolver.lookupVariable("missing", params))
 		assert.Nil(t, resolver.lookupVariable("nested.missing", params))
@@ -337,14 +337,14 @@ func TestResolverHelpers(t *testing.T) {
 		}
 
 		copied := resolver.deepCopyValue(original).(map[string]interface{})
-		
+
 		// Verify it's a copy
 		assert.Equal(t, original, copied)
-		
+
 		// Modify copy and ensure original is unchanged
 		copied["key"] = "modified"
 		assert.Equal(t, "value", original["key"])
-		
+
 		// Modify nested value
 		copied["nested"].(map[string]interface{})["field"] = "modified"
 		assert.Equal(t, "nested", original["nested"].(map[string]interface{})["field"])

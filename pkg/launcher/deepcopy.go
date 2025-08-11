@@ -7,7 +7,7 @@ func deepCopyResources(resources []Resource) []Resource {
 	if resources == nil {
 		return nil
 	}
-	
+
 	result := make([]Resource, len(resources))
 	for i, r := range resources {
 		result[i] = r.DeepCopy()
@@ -20,7 +20,7 @@ func deepCopyPatches(patches []Patch) []Patch {
 	if patches == nil {
 		return nil
 	}
-	
+
 	result := make([]Patch, len(patches))
 	for i, p := range patches {
 		result[i] = Patch{
@@ -38,7 +38,7 @@ func deepCopyParameterMapWithSource(m ParameterMapWithSource) ParameterMapWithSo
 	if m == nil {
 		return nil
 	}
-	
+
 	result := make(ParameterMapWithSource)
 	for k, v := range m {
 		result[k] = ParameterSource{
@@ -64,7 +64,7 @@ func deepCopyStringSlice(s []string) []string {
 	if s == nil {
 		return nil
 	}
-	
+
 	result := make([]string, len(s))
 	copy(result, s)
 	return result
@@ -75,7 +75,7 @@ func deepCopyInterfaceSlice(s []interface{}) []interface{} {
 	if s == nil {
 		return nil
 	}
-	
+
 	result := make([]interface{}, len(s))
 	for i, v := range s {
 		result[i] = deepCopyValue(v)
@@ -88,7 +88,7 @@ func deepCopyMap(m map[string]interface{}) map[string]interface{} {
 	if m == nil {
 		return nil
 	}
-	
+
 	result := make(map[string]interface{})
 	for k, v := range m {
 		result[k] = deepCopyValue(v)

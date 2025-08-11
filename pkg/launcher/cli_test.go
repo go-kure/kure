@@ -16,7 +16,7 @@ import (
 func TestCLI_BuildCommand(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tests := []struct {
 		name      string
 		args      []string
@@ -91,23 +91,23 @@ func TestCLI_BuildCommand(t *testing.T) {
 			wantError: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create command
 			cmd := cli.RootCommand()
-			
+
 			// Capture output
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-			
+
 			// Set args
 			cmd.SetArgs(tt.args)
-			
+
 			// Execute
 			err := cmd.Execute()
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -116,7 +116,7 @@ func TestCLI_BuildCommand(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
-				
+
 				if tt.checkFunc != nil {
 					tt.checkFunc(t, buf.String())
 				}
@@ -128,7 +128,7 @@ func TestCLI_BuildCommand(t *testing.T) {
 func TestCLI_ValidateCommand(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tests := []struct {
 		name      string
 		args      []string
@@ -181,23 +181,23 @@ func TestCLI_ValidateCommand(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create command
 			cmd := cli.RootCommand()
-			
+
 			// Capture output
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-			
+
 			// Set args
 			cmd.SetArgs(tt.args)
-			
+
 			// Execute
 			err := cmd.Execute()
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -216,7 +216,7 @@ func TestCLI_ValidateCommand(t *testing.T) {
 func TestCLI_InfoCommand(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tests := []struct {
 		name      string
 		args      []string
@@ -279,26 +279,26 @@ func TestCLI_InfoCommand(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create command
 			cmd := cli.RootCommand()
-			
+
 			// Capture output
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-			
+
 			// Set args
 			cmd.SetArgs(tt.args)
-			
+
 			// Execute
 			err := cmd.Execute()
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if tt.checkFunc != nil {
 				tt.checkFunc(t, buf.String())
 			}
@@ -309,7 +309,7 @@ func TestCLI_InfoCommand(t *testing.T) {
 func TestCLI_SchemaCommand(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tests := []struct {
 		name      string
 		args      []string
@@ -342,26 +342,26 @@ func TestCLI_SchemaCommand(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create command
 			cmd := cli.RootCommand()
-			
+
 			// Capture output
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-			
+
 			// Set args
 			cmd.SetArgs(tt.args)
-			
+
 			// Execute
 			err := cmd.Execute()
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if tt.checkFunc != nil {
 				tt.checkFunc(t, buf.String())
 			}
@@ -372,7 +372,7 @@ func TestCLI_SchemaCommand(t *testing.T) {
 func TestCLI_DebugCommands(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tests := []struct {
 		name      string
 		args      []string
@@ -411,26 +411,26 @@ func TestCLI_DebugCommands(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create command
 			cmd := cli.RootCommand()
-			
+
 			// Capture output
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-			
+
 			// Set args
 			cmd.SetArgs(tt.args)
-			
+
 			// Execute
 			err := cmd.Execute()
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if tt.checkFunc != nil {
 				tt.checkFunc(t, buf.String())
 			}
@@ -441,39 +441,39 @@ func TestCLI_DebugCommands(t *testing.T) {
 func TestCLI_BuildWithExtensions(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	// Build with extensions enabled (default)
 	cmd := cli.RootCommand()
-	
+
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	
+
 	cmd.SetArgs([]string{"build", "testdata/packages/extensions"})
-	
+
 	err := cmd.Execute()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
-	
+
 	output := buf.String()
-	
+
 	// Check that production overrides were applied
 	if !strings.Contains(output, "replicas: 5") {
 		t.Error("Should have production replicas from extension")
 	}
-	
+
 	// Test with extensions disabled
 	buf.Reset()
 	cmd.SetArgs([]string{"build", "testdata/packages/extensions", "--no-extensions"})
-	
+
 	err = cmd.Execute()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
-	
+
 	output = buf.String()
-	
+
 	// Should have original values
 	if !strings.Contains(output, "replicas: 2") {
 		t.Error("Should have original replicas without extensions")
@@ -483,34 +483,34 @@ func TestCLI_BuildWithExtensions(t *testing.T) {
 func TestCLI_OutputToFile(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tempDir := t.TempDir()
 	outputPath := filepath.Join(tempDir, "output.yaml")
-	
+
 	cmd := cli.RootCommand()
-	
+
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	
+
 	cmd.SetArgs([]string{"build", "testdata/packages/simple", "-o", outputPath})
-	
+
 	err := cmd.Execute()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
-	
+
 	// Check file was created
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		t.Error("Output file should be created")
 	}
-	
+
 	// Read and verify content
 	data, err := os.ReadFile(outputPath)
 	if err != nil {
 		t.Fatalf("Failed to read output file: %v", err)
 	}
-	
+
 	if !strings.Contains(string(data), "kind: Deployment") {
 		t.Error("Output file should contain Deployment")
 	}
@@ -519,32 +519,32 @@ func TestCLI_OutputToFile(t *testing.T) {
 func TestCLI_OutputToDirectory(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tempDir := t.TempDir()
-	
+
 	cmd := cli.RootCommand()
-	
+
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	
+
 	cmd.SetArgs([]string{"build", "testdata/packages/simple", "-o", tempDir, "--separate", "--index"})
-	
+
 	err := cmd.Execute()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
-	
+
 	// Check files were created
 	files, err := os.ReadDir(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to read directory: %v", err)
 	}
-	
+
 	if len(files) < 2 {
 		t.Errorf("Should have at least 2 files, got %d", len(files))
 	}
-	
+
 	// Check file naming
 	foundDeployment := false
 	foundService := false
@@ -561,7 +561,7 @@ func TestCLI_OutputToDirectory(t *testing.T) {
 			foundService = true
 		}
 	}
-	
+
 	if !foundDeployment {
 		t.Error("Should have deployment file")
 	}
@@ -574,56 +574,56 @@ func TestCLI_CompleteFlow(t *testing.T) {
 	// Test complete workflow: validate -> build -> verify output
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	packagePath := "testdata/packages/simple"
 	tempDir := t.TempDir()
 	outputPath := filepath.Join(tempDir, "manifests.yaml")
-	
+
 	// Step 1: Validate
 	cmd := cli.RootCommand()
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	
+
 	cmd.SetArgs([]string{"validate", packagePath})
-	
+
 	err := cmd.Execute()
 	if err != nil {
 		t.Fatalf("Validation failed: %v", err)
 	}
-	
+
 	if !strings.Contains(buf.String(), "✓ Package is valid") {
 		t.Error("Package should be valid")
 	}
-	
+
 	// Step 2: Get info
 	buf.Reset()
 	cmd.SetArgs([]string{"info", packagePath})
-	
+
 	err = cmd.Execute()
 	if err != nil {
 		t.Fatalf("Info failed: %v", err)
 	}
-	
+
 	if !strings.Contains(buf.String(), "simple-app") {
 		t.Error("Should show package info")
 	}
-	
+
 	// Step 3: Build
 	buf.Reset()
 	cmd.SetArgs([]string{"build", packagePath, "-o", outputPath})
-	
+
 	err = cmd.Execute()
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
-	
+
 	// Step 4: Verify output
 	data, err := os.ReadFile(outputPath)
 	if err != nil {
 		t.Fatalf("Failed to read output: %v", err)
 	}
-	
+
 	// Parse YAML to verify structure
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	resourceCount := 0
@@ -633,7 +633,7 @@ func TestCLI_CompleteFlow(t *testing.T) {
 			break
 		}
 		resourceCount++
-		
+
 		// Verify required fields
 		if doc["apiVersion"] == nil {
 			t.Error("Resource should have apiVersion")
@@ -645,7 +645,7 @@ func TestCLI_CompleteFlow(t *testing.T) {
 			t.Error("Resource should have metadata")
 		}
 	}
-	
+
 	if resourceCount < 2 {
 		t.Errorf("Should have at least 2 resources, got %d", resourceCount)
 	}
@@ -654,12 +654,12 @@ func TestCLI_CompleteFlow(t *testing.T) {
 // Helper function to execute CLI command and capture output
 func executeCLICommand(cli *launcher.CLI, args []string) (string, error) {
 	cmd := cli.RootCommand()
-	
+
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	cmd.SetArgs(args)
-	
+
 	err := cmd.Execute()
 	return buf.String(), err
 }
@@ -668,7 +668,7 @@ func executeCLICommand(cli *launcher.CLI, args []string) (string, error) {
 func TestCLI_EdgeCases(t *testing.T) {
 	log := logger.Noop()
 	cli := launcher.NewCLI(log)
-	
+
 	tests := []struct {
 		name      string
 		args      []string
@@ -700,11 +700,11 @@ func TestCLI_EdgeCases(t *testing.T) {
 			wantError: false, // Last one wins
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := executeCLICommand(cli, tt.args)
-			
+
 			if tt.wantError && err == nil {
 				t.Error("Expected error but got none")
 			}

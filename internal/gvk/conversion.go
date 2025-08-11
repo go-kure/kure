@@ -9,8 +9,8 @@ import (
 
 // ConversionPath represents a path from one version to another
 type ConversionPath struct {
-	From GVK
-	To   GVK
+	From      GVK
+	To        GVK
 	Converter Converter
 }
 
@@ -43,7 +43,7 @@ func NewConversionRegistry() *ConversionRegistry {
 func (r *ConversionRegistry) Register(from, to GVK, converter Converter) {
 	fromKey := from.String()
 	toKey := to.String()
-	
+
 	if r.conversions[fromKey] == nil {
 		r.conversions[fromKey] = make(map[string]Converter)
 	}

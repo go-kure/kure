@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	
+
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
 	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload" // Register AppWorkload
-	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"   // Register FluxHelm
+	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"    // Register FluxHelm
 )
 
 func TestRegistry(t *testing.T) {
@@ -58,7 +58,7 @@ func TestRegistry(t *testing.T) {
 			Version: "v1",
 			Kind:    "TestGeneratorRC", // Make unique
 		}
-		
+
 		called := false
 		generators.Register(testGVK, func() stack.ApplicationConfig {
 			called = true

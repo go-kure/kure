@@ -76,7 +76,6 @@ func TestVersionCommand_Execute(t *testing.T) {
 		t.Fatal("expected Run function to be set")
 	}
 
-
 	// Since the actual version command prints to stdout, we test the logic is correct
 	// by verifying the variables are set as expected
 	if Version != "v1.0.0" {
@@ -96,14 +95,14 @@ func TestVersionCommand_Execute(t *testing.T) {
 	if !strings.Contains(cmd.Long, appName) {
 		t.Errorf("expected Long to contain app name %s, got %s", appName, cmd.Long)
 	}
-	
+
 	// Test that we can call the run function without panic
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("version command Run function panicked: %v", r)
 		}
 	}()
-	
+
 	// Execute the run function (output goes to stdout, which is expected)
 	cmd.Run(cmd, []string{})
 }
@@ -130,7 +129,7 @@ func TestVersionCommand_ExecuteWithDefaultValues(t *testing.T) {
 			t.Errorf("version command Run function panicked with default values: %v", r)
 		}
 	}()
-	
+
 	cmd.Run(cmd, []string{})
 }
 
@@ -154,7 +153,7 @@ func TestVersionCommand_WithRootCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error finding version subcommand: %v", err)
 	}
-	
+
 	if foundCmd != versionCmd {
 		t.Error("expected to find the version command")
 	}
@@ -165,7 +164,7 @@ func TestVersionCommand_WithRootCommand(t *testing.T) {
 			t.Errorf("version subcommand panicked: %v", r)
 		}
 	}()
-	
+
 	versionCmd.Run(versionCmd, []string{})
 }
 
@@ -179,21 +178,21 @@ func TestVersionCommand_OutputFormat(t *testing.T) {
 			t.Errorf("version command panicked: %v", r)
 		}
 	}()
-	
+
 	// Execute command - output goes to stdout by design
 	cmd.Run(cmd, []string{})
-	
+
 	// Test that all expected format components are configured correctly
 	if appName != "formatapp" {
 		t.Errorf("expected app name to be formatapp, got %s", appName)
 	}
-	
+
 	// Verify runtime info functions work
 	goVersion := runtime.Version()
 	if goVersion == "" {
 		t.Error("expected non-empty Go version")
 	}
-	
+
 	osArch := runtime.GOOS + "/" + runtime.GOARCH
 	if osArch == "/" {
 		t.Error("expected non-empty OS/Arch")
@@ -208,11 +207,11 @@ func TestVersionCommand_EmptyAppName(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected non-nil command")
 	}
-	
+
 	if cmd.Use != "version" {
 		t.Errorf("expected Use to be 'version', got %s", cmd.Use)
 	}
-	
+
 	expectedLong := "Print the version number of "
 	if cmd.Long != expectedLong {
 		t.Errorf("expected Long to be %q for empty app name, got %q", expectedLong, cmd.Long)
@@ -224,7 +223,7 @@ func TestVersionCommand_EmptyAppName(t *testing.T) {
 			t.Errorf("version command panicked with empty app name: %v", r)
 		}
 	}()
-	
+
 	cmd.Run(cmd, []string{})
 }
 
@@ -244,7 +243,7 @@ func TestVersionCommand_LongSpecialCharacters(t *testing.T) {
 			t.Errorf("version command panicked with special characters: %v", r)
 		}
 	}()
-	
+
 	cmd.Run(cmd, []string{})
 }
 
@@ -273,7 +272,7 @@ func TestVersionCommand_RuntimeInfo(t *testing.T) {
 			t.Errorf("version command panicked: %v", r)
 		}
 	}()
-	
+
 	cmd.Run(cmd, []string{})
 }
 

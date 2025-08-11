@@ -36,17 +36,17 @@ func NewPatchProcessor(log logger.Logger, resolver Resolver) PatchProcessor {
 // ResolveDependencies determines which patches to enable based on conditions and dependencies
 func (p *patchProcessor) ResolveDependencies(ctx context.Context, patches []Patch, params ParameterMap) ([]Patch, error) {
 	p.logger.Debug("Resolving patch dependencies for %d patches", len(patches))
-	
+
 	// Build patch map for quick lookup
 	patchMap := make(map[string]*Patch)
 	for i := range patches {
 		patchMap[patches[i].Name] = &patches[i]
 	}
-	
+
 	// Track enabled patches
 	enabled := make(map[string]bool)
 	resolved := []Patch{}
-	
+
 	// First pass: evaluate conditions
 	for _, patch := range patches {
 		if p.shouldEnablePatch(patch, params) {
@@ -56,21 +56,21 @@ func (p *patchProcessor) ResolveDependencies(ctx context.Context, patches []Patc
 			p.logger.Debug("Patch %s disabled by condition", patch.Name)
 		}
 	}
-	
+
 	// Second pass: resolve dependencies
 	for name := range enabled {
 		if err := p.checkDependencies(name, patchMap, enabled); err != nil {
 			return nil, err
 		}
 	}
-	
+
 	// Third pass: check conflicts
 	for name := range enabled {
 		if err := p.checkConflicts(name, patchMap, enabled); err != nil {
 			return nil, err
 		}
 	}
-	
+
 	// Build final list of enabled patches in dependency order
 	ordered := p.orderByDependencies(enabled, patchMap)
 	for _, name := range ordered {
@@ -78,7 +78,7 @@ func (p *patchProcessor) ResolveDependencies(ctx context.Context, patches []Patc
 			resolved = append(resolved, *patch)
 		}
 	}
-	
+
 	p.logger.Info("Resolved %d patches from %d total", len(resolved), len(patches))
 	return resolved, nil
 }
@@ -91,44 +91,44 @@ func (p *patchProcessor) ApplyPatches(ctx context.Context, def *PackageDefinitio
 		return nil, errors.Wrap(ctx.Err(), "context cancelled during patch application")
 	default:
 	}
-	
+
 	if def == nil {
 		return nil, errors.Errorf("package definition is nil")
 	}
-	
+
 	if len(patches) == 0 {
 		p.logger.Debug("No patches to apply")
 		return def.DeepCopy(), nil
 	}
-	
+
 	p.logger.Info("Applying %d patches to package", len(patches))
-	
+
 	// Create deep copy to maintain immutability
 	result := def.DeepCopy()
-	
+
 	// Resolve variables in parameters first
 	resolvedParams, err := p.resolver.Resolve(ctx, params, nil, nil)
 	if err != nil {
 		return nil, errors.Errorf("failed to resolve parameters: %w", err)
 	}
-	
+
 	// Convert resolved params to VariableContext for patch engine
 	varCtx := p.createVariableContext(resolvedParams)
-	
+
 	// Apply each patch
 	for _, patch := range patches {
 		p.logger.Debug("Applying patch %s", patch.Name)
-		
+
 		if p.verbose {
 			p.logger.Info("Patch %s:\n%s", patch.Name, patch.Content)
 		}
-		
+
 		// Parse patch content
 		patchSpecs, err := p.parsePatch(patch, varCtx)
 		if err != nil {
 			return nil, NewPatchError(patch.Name, "", "", "", fmt.Sprintf("failed to parse patch: %v", err))
 		}
-		
+
 		// Apply patch to resources
 		for i, resource := range result.Resources {
 			applied, err := p.applyPatchToResource(&resource, patchSpecs, patch.Name)
@@ -141,7 +141,7 @@ func (p *patchProcessor) ApplyPatches(ctx context.Context, def *PackageDefinitio
 			}
 		}
 	}
-	
+
 	p.logger.Info("Successfully applied all patches")
 	return result, nil
 }
@@ -152,7 +152,7 @@ func (p *patchProcessor) shouldEnablePatch(patch Patch, params ParameterMap) boo
 		// No condition, patch is enabled by default
 		return true
 	}
-	
+
 	// Evaluate the enabled expression
 	enabled := p.evaluateExpression(patch.Metadata.Enabled, params)
 	return enabled
@@ -166,7 +166,7 @@ func (p *patchProcessor) evaluateExpression(expr string, params ParameterMap) bo
 		value := p.lookupVariable(varPath, params)
 		return p.toBool(value)
 	}
-	
+
 	// Handle literal values
 	return p.toBool(expr)
 }
@@ -175,17 +175,17 @@ func (p *patchProcessor) evaluateExpression(expr string, params ParameterMap) bo
 func (p *patchProcessor) lookupVariable(path string, params ParameterMap) interface{} {
 	parts := strings.Split(path, ".")
 	current := params
-	
+
 	for i, part := range parts {
 		val, ok := current[part]
 		if !ok {
 			return nil
 		}
-		
+
 		if i == len(parts)-1 {
 			return val
 		}
-		
+
 		if m, ok := val.(map[string]interface{}); ok {
 			current = m
 		} else if m, ok := val.(ParameterMap); ok {
@@ -194,7 +194,7 @@ func (p *patchProcessor) lookupVariable(path string, params ParameterMap) interf
 			return nil
 		}
 	}
-	
+
 	return nil
 }
 
@@ -230,17 +230,17 @@ func (p *patchProcessor) checkDependencies(name string, patchMap map[string]*Pat
 	if !ok {
 		return errors.Errorf("patch %s not found", name)
 	}
-	
+
 	if patch.Metadata == nil {
 		return nil
 	}
-	
+
 	for _, dep := range patch.Metadata.Requires {
 		if !enabled[dep] {
 			return NewDependencyError("missing", name, dep, nil)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -250,17 +250,17 @@ func (p *patchProcessor) checkConflicts(name string, patchMap map[string]*Patch,
 	if !ok {
 		return errors.Errorf("patch %s not found", name)
 	}
-	
+
 	if patch.Metadata == nil {
 		return nil
 	}
-	
+
 	for _, conflict := range patch.Metadata.Conflicts {
 		if enabled[conflict] {
 			return NewDependencyError("conflict", name, conflict, nil)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -269,12 +269,12 @@ func (p *patchProcessor) orderByDependencies(enabled map[string]bool, patchMap m
 	// Build dependency graph
 	graph := make(map[string][]string)
 	indegree := make(map[string]int)
-	
+
 	for name := range enabled {
 		if _, ok := indegree[name]; !ok {
 			indegree[name] = 0
 		}
-		
+
 		if patch, ok := patchMap[name]; ok && patch.Metadata != nil {
 			for _, dep := range patch.Metadata.Requires {
 				if enabled[dep] {
@@ -284,22 +284,22 @@ func (p *patchProcessor) orderByDependencies(enabled map[string]bool, patchMap m
 			}
 		}
 	}
-	
+
 	// Topological sort
 	var result []string
 	queue := []string{}
-	
+
 	for name, degree := range indegree {
 		if degree == 0 {
 			queue = append(queue, name)
 		}
 	}
-	
+
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
 		result = append(result, current)
-		
+
 		for _, next := range graph[current] {
 			indegree[next]--
 			if indegree[next] == 0 {
@@ -307,7 +307,7 @@ func (p *patchProcessor) orderByDependencies(enabled map[string]bool, patchMap m
 			}
 		}
 	}
-	
+
 	// If we couldn't order all patches, there's a cycle (shouldn't happen after dependency check)
 	if len(result) != len(enabled) {
 		// Fall back to alphabetical order
@@ -325,7 +325,7 @@ func (p *patchProcessor) orderByDependencies(enabled map[string]bool, patchMap m
 		}
 		sort.Strings(result)
 	}
-	
+
 	return result
 }
 
@@ -334,11 +334,11 @@ func (p *patchProcessor) createVariableContext(params ParameterMapWithSource) *p
 	// The patch engine expects variables under "values" namespace
 	values := make(map[string]interface{})
 	features := make(map[string]bool)
-	
+
 	for key, source := range params {
 		// Add to values map (flattened)
 		p.addToValues(key, source.Value, values)
-		
+
 		// If it's a boolean and starts with "feature", also add to features map
 		if b, ok := source.Value.(bool); ok && strings.HasPrefix(key, "feature") {
 			// Remove "feature." prefix if present
@@ -346,7 +346,7 @@ func (p *patchProcessor) createVariableContext(params ParameterMapWithSource) *p
 			features[featureKey] = b
 		}
 	}
-	
+
 	return &patch.VariableContext{
 		Values:   values,
 		Features: features,
@@ -413,15 +413,15 @@ func (p *patchProcessor) applyPatchToResource(resource *Resource, specs []patch.
 	if resource.Raw == nil {
 		return false, nil
 	}
-	
+
 	applied := false
-	
+
 	for _, spec := range specs {
 		// Check if this patch targets this resource
 		if !p.matchesTarget(resource, spec.Target) {
 			continue
 		}
-		
+
 		// Apply the patch operation directly
 		if err := applyPatchOp(resource.Raw.Object, spec.Patch); err != nil {
 			if p.verbose {
@@ -430,10 +430,10 @@ func (p *patchProcessor) applyPatchToResource(resource *Resource, specs []patch.
 			// Continue with other patches
 			continue
 		}
-		
+
 		applied = true
 	}
-	
+
 	return applied, nil
 }
 
@@ -443,23 +443,23 @@ func (p *patchProcessor) matchesTarget(resource *Resource, target string) bool {
 		// No target specified, applies to all resources
 		return true
 	}
-	
+
 	// Parse target format: kind.name or kind/name
 	parts := strings.Split(target, ".")
 	if len(parts) == 1 {
 		parts = strings.Split(target, "/")
 	}
-	
+
 	if len(parts) == 1 {
 		// Just kind specified
 		return strings.EqualFold(resource.Kind, parts[0])
 	}
-	
+
 	if len(parts) == 2 {
 		// Kind and name specified
 		return strings.EqualFold(resource.Kind, parts[0]) && resource.GetName() == parts[1]
 	}
-	
+
 	return false
 }
 
@@ -468,54 +468,54 @@ func (p *patchProcessor) DebugPatchGraph(patches []Patch) string {
 	graph := &strings.Builder{}
 	graph.WriteString("Patch Dependency Graph:\n")
 	graph.WriteString("======================\n\n")
-	
+
 	// Build patch map
 	patchMap := make(map[string]*Patch)
 	for i := range patches {
 		patchMap[patches[i].Name] = &patches[i]
 	}
-	
+
 	// Sort patch names for consistent output
 	var names []string
 	for name := range patchMap {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	
+
 	// Print each patch and its relationships
 	for _, name := range names {
 		patch := patchMap[name]
 		graph.WriteString(fmt.Sprintf("%s:\n", name))
-		
+
 		if patch.Metadata != nil {
 			if patch.Metadata.Enabled != "" {
 				graph.WriteString(fmt.Sprintf("  Condition: %s\n", patch.Metadata.Enabled))
 			}
-			
+
 			if len(patch.Metadata.Requires) > 0 {
 				graph.WriteString("  Requires:\n")
 				for _, req := range patch.Metadata.Requires {
 					graph.WriteString(fmt.Sprintf("    -> %s\n", req))
 				}
 			}
-			
+
 			if len(patch.Metadata.Conflicts) > 0 {
 				graph.WriteString("  Conflicts:\n")
 				for _, conf := range patch.Metadata.Conflicts {
 					graph.WriteString(fmt.Sprintf("    x %s\n", conf))
 				}
 			}
-			
+
 			if patch.Metadata.Description != "" {
 				graph.WriteString(fmt.Sprintf("  Description: %s\n", patch.Metadata.Description))
 			}
 		} else {
 			graph.WriteString("  (no metadata)\n")
 		}
-		
+
 		graph.WriteString("\n")
 	}
-	
+
 	// Check for issues
 	issues := p.findPatchIssues(patchMap)
 	if len(issues) > 0 {
@@ -525,26 +525,26 @@ func (p *patchProcessor) DebugPatchGraph(patches []Patch) string {
 			graph.WriteString(fmt.Sprintf("  - %s\n", issue))
 		}
 	}
-	
+
 	return graph.String()
 }
 
 // findPatchIssues detects potential problems in patch configuration
 func (p *patchProcessor) findPatchIssues(patchMap map[string]*Patch) []string {
 	var issues []string
-	
+
 	for name, patch := range patchMap {
 		if patch.Metadata == nil {
 			continue
 		}
-		
+
 		// Check for missing dependencies
 		for _, req := range patch.Metadata.Requires {
 			if _, ok := patchMap[req]; !ok {
 				issues = append(issues, fmt.Sprintf("Patch %s requires non-existent patch %s", name, req))
 			}
 		}
-		
+
 		// Check for mutual conflicts
 		for _, conf := range patch.Metadata.Conflicts {
 			if conflictPatch, ok := patchMap[conf]; ok && conflictPatch.Metadata != nil {
@@ -561,13 +561,13 @@ func (p *patchProcessor) findPatchIssues(patchMap map[string]*Patch) []string {
 				}
 			}
 		}
-		
+
 		// Check for circular dependencies
 		if p.hasCircularDependency(name, patchMap, make(map[string]bool)) {
 			issues = append(issues, fmt.Sprintf("Patch %s has circular dependencies", name))
 		}
 	}
-	
+
 	return issues
 }
 
@@ -576,21 +576,21 @@ func (p *patchProcessor) hasCircularDependency(name string, patchMap map[string]
 	if visited[name] {
 		return true
 	}
-	
+
 	visited[name] = true
 	defer delete(visited, name)
-	
+
 	patch, ok := patchMap[name]
 	if !ok || patch.Metadata == nil {
 		return false
 	}
-	
+
 	for _, req := range patch.Metadata.Requires {
 		if p.hasCircularDependency(req, patchMap, visited) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -610,7 +610,7 @@ func applyPatchOp(obj map[string]interface{}, op patch.PatchOp) error {
 		}
 		op.ParsedPath = parsed
 	}
-	
+
 	return applyOperation(obj, op.ParsedPath, op.Value, op.Op)
 }
 
@@ -619,16 +619,16 @@ func parsePath(path string) ([]patch.PathPart, error) {
 	if path == "" {
 		return nil, nil
 	}
-	
+
 	parts := strings.Split(path, ".")
 	var result []patch.PathPart
-	
+
 	for _, part := range parts {
 		// Check for array selector
 		if idx := strings.Index(part, "["); idx > 0 {
 			fieldName := part[:idx]
 			selectorStr := part[idx+1 : len(part)-1]
-			
+
 			// Try to parse as index
 			if _, err := strconv.Atoi(selectorStr); err == nil {
 				result = append(result, patch.PathPart{
@@ -650,7 +650,7 @@ func parsePath(path string) ([]patch.PathPart, error) {
 			})
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -659,12 +659,12 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 	if len(path) == 0 {
 		return errors.Errorf("empty path")
 	}
-	
+
 	// Navigate to the target location
 	current := obj
 	for i := 0; i < len(path)-1; i++ {
 		part := path[i]
-		
+
 		if part.MatchType == "index" {
 			// Array access by index
 			arr, ok := current[part.Field].([]interface{})
@@ -686,7 +686,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 			if !ok {
 				return errors.Errorf("field %s is not an array", part.Field)
 			}
-			
+
 			// Find matching element
 			found := false
 			for _, elem := range arr {
@@ -716,10 +716,10 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 			}
 		}
 	}
-	
+
 	// Apply the operation at the final location
 	lastPart := path[len(path)-1]
-	
+
 	switch op {
 	case "replace", "":
 		current[lastPart.Field] = value
@@ -734,7 +734,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 	default:
 		return errors.Errorf("unsupported operation: %s", op)
 	}
-	
+
 	return nil
 }
 
@@ -745,14 +745,14 @@ func matchesSelector(obj map[string]interface{}, selector string) bool {
 	if len(parts) != 2 {
 		return false
 	}
-	
+
 	key := parts[0]
 	expectedValue := parts[1]
-	
+
 	actualValue, ok := obj[key]
 	if !ok {
 		return false
 	}
-	
+
 	return fmt.Sprintf("%v", actualValue) == expectedValue
 }

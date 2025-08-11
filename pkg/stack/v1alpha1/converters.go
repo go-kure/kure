@@ -10,7 +10,7 @@ func ConvertClusterToV1Alpha1(c *stack.Cluster) *ClusterConfig {
 	if c == nil {
 		return nil
 	}
-	
+
 	config := &ClusterConfig{
 		APIVersion: "stack.gokure.dev/v1alpha1",
 		Kind:       "Cluster",
@@ -19,7 +19,7 @@ func ConvertClusterToV1Alpha1(c *stack.Cluster) *ClusterConfig {
 		},
 		Spec: ClusterSpec{},
 	}
-	
+
 	// Convert Node reference
 	if c.Node != nil {
 		config.Spec.Node = &NodeReference{
@@ -27,13 +27,13 @@ func ConvertClusterToV1Alpha1(c *stack.Cluster) *ClusterConfig {
 			APIVersion: "stack.gokure.dev/v1alpha1",
 		}
 	}
-	
+
 	// Convert GitOps config
 	if c.GitOps != nil {
 		config.Spec.GitOps = &GitOpsConfig{
 			Type: c.GitOps.Type,
 		}
-		
+
 		if c.GitOps.Bootstrap != nil {
 			config.Spec.GitOps.Bootstrap = &BootstrapConfig{
 				Enabled:         c.GitOps.Bootstrap.Enabled,
@@ -49,7 +49,7 @@ func ConvertClusterToV1Alpha1(c *stack.Cluster) *ClusterConfig {
 			}
 		}
 	}
-	
+
 	return config
 }
 
@@ -58,20 +58,20 @@ func ConvertV1Alpha1ToCluster(config *ClusterConfig) *stack.Cluster {
 	if config == nil {
 		return nil
 	}
-	
+
 	c := &stack.Cluster{
 		Name: config.Metadata.Name,
 	}
-	
+
 	// Note: We don't convert the Node here as it would require full tree traversal
 	// This should be handled at a higher level that has access to all nodes
-	
+
 	// Convert GitOps config
 	if config.Spec.GitOps != nil {
 		c.GitOps = &stack.GitOpsConfig{
 			Type: config.Spec.GitOps.Type,
 		}
-		
+
 		if config.Spec.GitOps.Bootstrap != nil {
 			c.GitOps.Bootstrap = &stack.BootstrapConfig{
 				Enabled:         config.Spec.GitOps.Bootstrap.Enabled,
@@ -87,7 +87,7 @@ func ConvertV1Alpha1ToCluster(config *ClusterConfig) *stack.Cluster {
 			}
 		}
 	}
-	
+
 	return c
 }
 
@@ -96,7 +96,7 @@ func ConvertNodeToV1Alpha1(n *stack.Node) *NodeConfig {
 	if n == nil {
 		return nil
 	}
-	
+
 	config := &NodeConfig{
 		APIVersion: "stack.gokure.dev/v1alpha1",
 		Kind:       "Node",
@@ -108,7 +108,7 @@ func ConvertNodeToV1Alpha1(n *stack.Node) *NodeConfig {
 			PackageRef: n.PackageRef,
 		},
 	}
-	
+
 	// Convert children references
 	for _, child := range n.Children {
 		if child != nil {
@@ -118,7 +118,7 @@ func ConvertNodeToV1Alpha1(n *stack.Node) *NodeConfig {
 			})
 		}
 	}
-	
+
 	// Convert bundle reference
 	if n.Bundle != nil {
 		config.Spec.Bundle = &BundleReference{
@@ -126,7 +126,7 @@ func ConvertNodeToV1Alpha1(n *stack.Node) *NodeConfig {
 			APIVersion: "stack.gokure.dev/v1alpha1",
 		}
 	}
-	
+
 	return config
 }
 
@@ -135,17 +135,17 @@ func ConvertV1Alpha1ToNode(config *NodeConfig) *stack.Node {
 	if config == nil {
 		return nil
 	}
-	
+
 	n := &stack.Node{
 		Name:       config.Metadata.Name,
 		ParentPath: config.Spec.ParentPath,
 		PackageRef: config.Spec.PackageRef,
 	}
-	
+
 	// Note: We don't convert children and bundle here as they would require
 	// access to the full set of nodes and bundles. This should be handled
 	// at a higher level that has access to all configurations
-	
+
 	return n
 }
 
@@ -154,7 +154,7 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 	if b == nil {
 		return nil
 	}
-	
+
 	config := &BundleConfig{
 		APIVersion: "stack.gokure.dev/v1alpha1",
 		Kind:       "Bundle",
@@ -167,7 +167,7 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 			Labels:     b.Labels,
 		},
 	}
-	
+
 	// Convert source ref
 	if b.SourceRef != nil {
 		config.Spec.SourceRef = &SourceRef{
@@ -176,7 +176,7 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 			Namespace: b.SourceRef.Namespace,
 		}
 	}
-	
+
 	// Convert dependencies
 	for _, dep := range b.DependsOn {
 		if dep != nil {
@@ -186,7 +186,7 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 			})
 		}
 	}
-	
+
 	// Convert applications
 	for _, app := range b.Applications {
 		if app != nil {
@@ -194,7 +194,7 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 			// In the future, we could enhance Application to track its GVK
 			apiVersion := "generators.gokure.dev/v1alpha1"
 			kind := "Application"
-			
+
 			config.Spec.Applications = append(config.Spec.Applications, ApplicationReference{
 				Name:       app.Name,
 				APIVersion: apiVersion,
@@ -202,7 +202,7 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 			})
 		}
 	}
-	
+
 	return config
 }
 
@@ -211,14 +211,14 @@ func ConvertV1Alpha1ToBundle(config *BundleConfig) *stack.Bundle {
 	if config == nil {
 		return nil
 	}
-	
+
 	b := &stack.Bundle{
 		Name:       config.Metadata.Name,
 		ParentPath: config.Spec.ParentPath,
 		Interval:   config.Spec.Interval,
 		Labels:     config.Spec.Labels,
 	}
-	
+
 	// Convert source ref
 	if config.Spec.SourceRef != nil {
 		b.SourceRef = &stack.SourceRef{
@@ -227,11 +227,11 @@ func ConvertV1Alpha1ToBundle(config *BundleConfig) *stack.Bundle {
 			Namespace: config.Spec.SourceRef.Namespace,
 		}
 	}
-	
+
 	// Note: We don't convert dependencies and applications here as they would require
 	// access to the full set of bundles and applications. This should be handled
 	// at a higher level that has access to all configurations
-	
+
 	return b
 }
 
@@ -239,10 +239,10 @@ func ConvertV1Alpha1ToBundle(config *BundleConfig) *stack.Bundle {
 type StackConverter struct {
 	// nodeMap maps node names to their configs for reconstruction
 	nodeMap map[string]*NodeConfig
-	
+
 	// bundleMap maps bundle names to their configs for reconstruction
 	bundleMap map[string]*BundleConfig
-	
+
 	// appMap maps application references to their actual applications
 	appMap map[string]*stack.Application
 }
@@ -261,18 +261,18 @@ func (c *StackConverter) ConvertClusterTreeToV1Alpha1(cluster *stack.Cluster) (*
 	if cluster == nil {
 		return nil, nil, nil
 	}
-	
+
 	// Convert cluster
 	clusterConfig := ConvertClusterToV1Alpha1(cluster)
-	
+
 	// Convert all nodes recursively
 	var nodes []*NodeConfig
 	var bundles []*BundleConfig
-	
+
 	if cluster.Node != nil {
 		c.convertNodeTreeToV1Alpha1(cluster.Node, &nodes, &bundles)
 	}
-	
+
 	return clusterConfig, nodes, bundles
 }
 
@@ -281,19 +281,19 @@ func (c *StackConverter) convertNodeTreeToV1Alpha1(node *stack.Node, nodes *[]*N
 	if node == nil {
 		return
 	}
-	
+
 	// Convert this node
 	nodeConfig := ConvertNodeToV1Alpha1(node)
 	*nodes = append(*nodes, nodeConfig)
 	c.nodeMap[node.Name] = nodeConfig
-	
+
 	// Convert bundle if present
 	if node.Bundle != nil {
 		bundleConfig := ConvertBundleToV1Alpha1(node.Bundle)
 		*bundles = append(*bundles, bundleConfig)
 		c.bundleMap[node.Bundle.Name] = bundleConfig
 	}
-	
+
 	// Recursively convert children
 	for _, child := range node.Children {
 		c.convertNodeTreeToV1Alpha1(child, nodes, bundles)
@@ -310,16 +310,16 @@ func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 	if clusterConfig == nil {
 		return nil
 	}
-	
+
 	// Build maps for lookup
 	nodeMap := make(map[string]*stack.Node)
 	bundleMap := make(map[string]*stack.Bundle)
-	
+
 	// Convert all bundles first
 	for _, bundleConfig := range bundleConfigs {
 		bundle := ConvertV1Alpha1ToBundle(bundleConfig)
 		bundleMap[bundleConfig.Metadata.Name] = bundle
-		
+
 		// Resolve applications
 		for _, appRef := range bundleConfig.Spec.Applications {
 			for _, app := range applications {
@@ -329,10 +329,10 @@ func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 				}
 			}
 		}
-		
+
 		// Dependencies will be resolved after all bundles are created
 	}
-	
+
 	// Resolve bundle dependencies
 	for _, bundleConfig := range bundleConfigs {
 		bundle := bundleMap[bundleConfig.Metadata.Name]
@@ -342,12 +342,12 @@ func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 			}
 		}
 	}
-	
+
 	// Convert all nodes
 	for _, nodeConfig := range nodeConfigs {
 		node := ConvertV1Alpha1ToNode(nodeConfig)
 		nodeMap[nodeConfig.Metadata.Name] = node
-		
+
 		// Resolve bundle reference
 		if nodeConfig.Spec.Bundle != nil {
 			if bundle, exists := bundleMap[nodeConfig.Spec.Bundle.Name]; exists {
@@ -355,11 +355,11 @@ func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 			}
 		}
 	}
-	
+
 	// Build node tree structure
 	for _, nodeConfig := range nodeConfigs {
 		node := nodeMap[nodeConfig.Metadata.Name]
-		
+
 		// Add children
 		for _, childRef := range nodeConfig.Spec.Children {
 			if child, exists := nodeMap[childRef.Name]; exists {
@@ -368,16 +368,16 @@ func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 			}
 		}
 	}
-	
+
 	// Convert cluster and attach root node
 	cluster := ConvertV1Alpha1ToCluster(clusterConfig)
-	
+
 	// Find and attach root node
 	if clusterConfig.Spec.Node != nil {
 		if rootNode, exists := nodeMap[clusterConfig.Spec.Node.Name]; exists {
 			cluster.Node = rootNode
 		}
 	}
-	
+
 	return cluster
 }

@@ -75,7 +75,7 @@ func New(opts Options) Logger {
 	if opts.ShowTimestamp {
 		flags = log.LstdFlags
 	}
-	
+
 	prefix := opts.Prefix
 	if prefix != "" && prefix[len(prefix)-1] != ' ' {
 		prefix += " "
@@ -127,7 +127,7 @@ func (l *defaultLogger) WithPrefix(prefix string) Logger {
 	if newPrefix != "" && newPrefix[len(newPrefix)-1] != ' ' {
 		newPrefix += " "
 	}
-	
+
 	return &defaultLogger{
 		logger: log.New(l.logger.Writer(), newPrefix, l.logger.Flags()),
 		level:  l.level,

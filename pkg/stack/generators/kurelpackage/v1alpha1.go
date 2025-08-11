@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
@@ -17,14 +17,14 @@ func init() {
 		Version: "v1alpha1",
 		Kind:    "KurelPackage",
 	}
-	
+
 	factory := func() stack.ApplicationConfig {
 		return &ConfigV1Alpha1{}
 	}
-	
+
 	// Register with generators package for backward compatibility
 	generators.Register(generators.GVK(gvkObj), factory)
-	
+
 	// Register with stack package for direct usage
 	stack.RegisterApplicationConfig(gvkObj, factory)
 }
@@ -32,25 +32,25 @@ func init() {
 // ConfigV1Alpha1 generates a kurel package structure
 type ConfigV1Alpha1 struct {
 	generators.BaseMetadata `yaml:",inline" json:",inline"`
-	
+
 	// Package metadata
 	Package PackageMetadata `yaml:"package" json:"package"`
-	
+
 	// Resources to include in the package
 	Resources []ResourceSource `yaml:"resources,omitempty" json:"resources,omitempty"`
-	
+
 	// Patches to apply to resources
 	Patches []PatchDefinition `yaml:"patches,omitempty" json:"patches,omitempty"`
-	
+
 	// Values configuration
 	Values *ValuesConfig `yaml:"values,omitempty" json:"values,omitempty"`
-	
+
 	// Extensions for conditional features
 	Extensions []Extension `yaml:"extensions,omitempty" json:"extensions,omitempty"`
-	
+
 	// Package dependencies
 	Dependencies []Dependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
-	
+
 	// Build configuration
 	Build *BuildConfig `yaml:"build,omitempty" json:"build,omitempty"`
 }
@@ -70,7 +70,7 @@ type PackageMetadata struct {
 
 // ResourceSource defines where to find resources
 type ResourceSource struct {
-	Source   string   `yaml:"source" json:"source"`                     // Directory or file path
+	Source   string   `yaml:"source" json:"source"`                         // Directory or file path
 	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"` // Include patterns
 	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"` // Exclude patterns
 	Recurse  bool     `yaml:"recurse,omitempty" json:"recurse,omitempty"`   // Recurse into subdirectories
@@ -79,7 +79,7 @@ type ResourceSource struct {
 // PatchDefinition defines a patch to apply
 type PatchDefinition struct {
 	Target PatchTarget `yaml:"target" json:"target"`
-	Patch  string      `yaml:"patch" json:"patch"` // JSONPatch or strategic merge patch
+	Patch  string      `yaml:"patch" json:"patch"`                   // JSONPatch or strategic merge patch
 	Type   string      `yaml:"type,omitempty" json:"type,omitempty"` // "json" or "strategic", default "json"
 }
 
@@ -101,27 +101,27 @@ type ValuesConfig struct {
 
 // Extension defines a conditional extension
 type Extension struct {
-	Name      string           `yaml:"name" json:"name"`
-	When      string           `yaml:"when,omitempty" json:"when,omitempty"`           // CEL expression
-	Resources []ResourceSource `yaml:"resources,omitempty" json:"resources,omitempty"` // Additional resources
-	Patches   []PatchDefinition `yaml:"patches,omitempty" json:"patches,omitempty"`    // Additional patches
+	Name      string            `yaml:"name" json:"name"`
+	When      string            `yaml:"when,omitempty" json:"when,omitempty"`           // CEL expression
+	Resources []ResourceSource  `yaml:"resources,omitempty" json:"resources,omitempty"` // Additional resources
+	Patches   []PatchDefinition `yaml:"patches,omitempty" json:"patches,omitempty"`     // Additional patches
 }
 
 // Dependency defines a package dependency
 type Dependency struct {
 	Name       string `yaml:"name" json:"name"`
-	Version    string `yaml:"version" json:"version"`                         // Semantic version constraint
+	Version    string `yaml:"version" json:"version"`                           // Semantic version constraint
 	Repository string `yaml:"repository,omitempty" json:"repository,omitempty"` // OCI repository
 	Optional   bool   `yaml:"optional,omitempty" json:"optional,omitempty"`
 }
 
 // BuildConfig defines build-time configuration
 type BuildConfig struct {
-	OutputDir  string            `yaml:"outputDir,omitempty" json:"outputDir,omitempty"`   // Output directory for built package
-	Format     string            `yaml:"format,omitempty" json:"format,omitempty"`         // "directory" or "oci"
-	Registry   string            `yaml:"registry,omitempty" json:"registry,omitempty"`     // OCI registry for push
-	Repository string            `yaml:"repository,omitempty" json:"repository,omitempty"` // OCI repository name
-	Tags       []string          `yaml:"tags,omitempty" json:"tags,omitempty"`             // Additional tags
+	OutputDir   string            `yaml:"outputDir,omitempty" json:"outputDir,omitempty"`     // Output directory for built package
+	Format      string            `yaml:"format,omitempty" json:"format,omitempty"`           // "directory" or "oci"
+	Registry    string            `yaml:"registry,omitempty" json:"registry,omitempty"`       // OCI registry for push
+	Repository  string            `yaml:"repository,omitempty" json:"repository,omitempty"`   // OCI repository name
+	Tags        []string          `yaml:"tags,omitempty" json:"tags,omitempty"`               // Additional tags
 	Annotations map[string]string `yaml:"annotations,omitempty" json:"annotations,omitempty"` // OCI annotations
 }
 
@@ -146,11 +146,11 @@ func (c *ConfigV1Alpha1) Generate(app *stack.Application) ([]*client.Object, err
 	// 5. Process extensions
 	// 6. Validate dependencies
 	// 7. Build the package according to BuildConfig
-	
+
 	// Since kurel packages aren't Kubernetes resources, we might need to
 	// rethink this interface or create a separate generation path for
 	// file-based outputs rather than client.Object outputs
-	
+
 	return nil, fmt.Errorf("KurelPackage generator not yet implemented")
 }
 
@@ -158,28 +158,28 @@ func (c *ConfigV1Alpha1) Generate(app *stack.Application) ([]*client.Object, err
 // This is a more appropriate interface for this generator type
 func (c *ConfigV1Alpha1) GeneratePackageFiles(app *stack.Application) (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	
+
 	// Generate kurel.yaml
 	kurelYAML := c.generateKurelYAML()
 	files["kurel.yaml"] = kurelYAML
-	
+
 	// Process resources
 	// TODO: Implement resource gathering
-	
+
 	// Generate patches
 	// TODO: Implement patch generation
-	
+
 	// Generate values files
 	if c.Values != nil {
 		// TODO: Implement values generation
 	}
-	
+
 	// Process extensions
 	for _, ext := range c.Extensions {
 		// TODO: Implement extension processing
 		_ = ext
 	}
-	
+
 	return files, nil
 }
 
@@ -205,13 +205,13 @@ func (c *ConfigV1Alpha1) Validate() error {
 	if c.Package.Version == "" {
 		return fmt.Errorf("package version is required")
 	}
-	
+
 	// TODO: Add more validation
 	// - Validate version format
 	// - Validate resource paths exist
 	// - Validate patch syntax
 	// - Validate CEL expressions in extensions
 	// - Validate dependency versions
-	
+
 	return nil
 }

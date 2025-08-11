@@ -2,7 +2,7 @@ package appworkload
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
@@ -16,14 +16,14 @@ func init() {
 		Version: "v1alpha1",
 		Kind:    "AppWorkload",
 	}
-	
+
 	factory := func() stack.ApplicationConfig {
 		return &ConfigV1Alpha1{}
 	}
-	
+
 	// Register with generators package for backward compatibility
 	generators.Register(generators.GVK(gvkObj), factory)
-	
+
 	// Register with stack package for direct usage
 	stack.RegisterApplicationConfig(gvkObj, factory)
 }
@@ -31,10 +31,10 @@ func init() {
 // ConfigV1Alpha1 describes a single deployable application with GVK support
 type ConfigV1Alpha1 struct {
 	generators.BaseMetadata `yaml:",inline" json:",inline"`
-	
-	Workload  internal.WorkloadType      `yaml:"workload,omitempty" json:"workload,omitempty"`
-	Replicas  int32                      `yaml:"replicas,omitempty" json:"replicas,omitempty"`
-	Labels    map[string]string          `yaml:"labels,omitempty" json:"labels,omitempty"`
+
+	Workload internal.WorkloadType `yaml:"workload,omitempty" json:"workload,omitempty"`
+	Replicas int32                 `yaml:"replicas,omitempty" json:"replicas,omitempty"`
+	Labels   map[string]string     `yaml:"labels,omitempty" json:"labels,omitempty"`
 
 	Containers           []internal.ContainerConfig     `yaml:"containers" json:"containers"`
 	Volumes              []internal.Volume              `yaml:"volumes,omitempty" json:"volumes,omitempty"`

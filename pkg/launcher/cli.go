@@ -18,14 +18,14 @@ import (
 
 // CLI provides command-line interface for the launcher
 type CLI struct {
-	logger    logger.Logger
-	loader    PackageLoader
-	resolver  Resolver
-	processor PatchProcessor
-	validator Validator
-	builder   Builder
-	extension ExtensionLoader
-	schema    SchemaGenerator
+	logger       logger.Logger
+	loader       PackageLoader
+	resolver     Resolver
+	processor    PatchProcessor
+	validator    Validator
+	builder      Builder
+	extension    ExtensionLoader
+	schema       SchemaGenerator
 	outputWriter io.Writer // configurable output writer
 }
 
@@ -57,7 +57,7 @@ func (c *CLI) SetOutputWriter(w io.Writer) {
 // RootCommand creates the root command for kurel
 func (c *CLI) RootCommand() *cobra.Command {
 	var opts LauncherOptions
-	
+
 	cmd := &cobra.Command{
 		Use:   "kurel",
 		Short: "Kurel package system for Kubernetes manifest generation",
@@ -104,7 +104,7 @@ It resolves variables, applies patches, and outputs the final manifests.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set CLI output writer from command
 			c.SetOutputWriter(cmd.OutOrStdout())
-			
+
 			// Determine package path
 			packagePath := "."
 			if len(args) > 0 {
@@ -137,18 +137,18 @@ It resolves variables, applies patches, and outputs the final manifests.`,
 	cmd.Flags().StringSliceVarP(&patches, "patch", "p", nil, "Enable specific patches")
 	cmd.Flags().StringVar(&localPath, "local", "", "Path to local extensions")
 	cmd.Flags().BoolVar(&noExtensions, "no-extensions", false, "Disable local extensions")
-	
+
 	// Output format flags
 	cmd.Flags().StringVar(&formatStr, "format", "yaml", "Output format (yaml, json)")
 	cmd.Flags().BoolVar(&buildOpts.PrettyPrint, "pretty", false, "Pretty print JSON output")
 	cmd.Flags().BoolVar(&buildOpts.SeparateFiles, "separate", false, "Write each resource to separate file")
 	cmd.Flags().BoolVar(&buildOpts.IncludeIndex, "index", false, "Include index prefix in filenames")
-	
+
 	// Filter flags
 	cmd.Flags().StringVar(&buildOpts.FilterKind, "kind", "", "Filter by resource kind")
 	cmd.Flags().StringVar(&buildOpts.FilterName, "name", "", "Filter by resource name")
 	cmd.Flags().StringVar(&buildOpts.FilterNamespace, "namespace", "", "Filter by namespace")
-	
+
 	// Transform flags
 	cmd.Flags().StringToStringVar(&buildOpts.AddLabels, "add-label", nil, "Add labels to all resources")
 	cmd.Flags().StringToStringVar(&buildOpts.AddAnnotations, "add-annotation", nil, "Add annotations to all resources")
@@ -172,7 +172,7 @@ func (c *CLI) ValidateCommand(opts *LauncherOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set CLI output writer from command
 			c.SetOutputWriter(cmd.OutOrStdout())
-			
+
 			packagePath := "."
 			if len(args) > 0 {
 				packagePath = args[0]
@@ -211,7 +211,7 @@ func (c *CLI) InfoCommand(opts *LauncherOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set CLI output writer from command
 			c.SetOutputWriter(cmd.OutOrStdout())
-			
+
 			packagePath := "."
 			if len(args) > 0 {
 				packagePath = args[0]
@@ -237,9 +237,9 @@ func (c *CLI) InfoCommand(opts *LauncherOptions) *cobra.Command {
 // SchemaCommand creates the schema command
 func (c *CLI) SchemaCommand(opts *LauncherOptions) *cobra.Command {
 	var (
-		outputPath   string
-		includeK8s   bool
-		prettyPrint  bool
+		outputPath  string
+		includeK8s  bool
+		prettyPrint bool
 	)
 
 	cmd := &cobra.Command{
@@ -250,7 +250,7 @@ func (c *CLI) SchemaCommand(opts *LauncherOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set CLI output writer from command
 			c.SetOutputWriter(cmd.OutOrStdout())
-			
+
 			packagePath := "."
 			if len(args) > 0 {
 				packagePath = args[0]
@@ -299,7 +299,7 @@ func (c *CLI) debugVariablesCommand(opts *LauncherOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set CLI output writer from command
 			c.SetOutputWriter(cmd.OutOrStdout())
-			
+
 			packagePath := "."
 			if len(args) > 0 {
 				packagePath = args[0]
@@ -307,7 +307,7 @@ func (c *CLI) debugVariablesCommand(opts *LauncherOptions) *cobra.Command {
 
 			opts.Logger = logger.Default() // Always verbose for debug
 			ctx := context.Background()
-			
+
 			// Load package
 			def, err := c.loader.LoadDefinition(ctx, packagePath, opts)
 			if err != nil {
@@ -318,7 +318,7 @@ func (c *CLI) debugVariablesCommand(opts *LauncherOptions) *cobra.Command {
 			resolver := c.resolver.(*variableResolver)
 			graph := resolver.DebugVariableGraph(def.Parameters)
 			fmt.Fprintln(c.outputWriter, graph)
-			
+
 			return nil
 		},
 	}
@@ -333,7 +333,7 @@ func (c *CLI) debugPatchesCommand(opts *LauncherOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set CLI output writer from command
 			c.SetOutputWriter(cmd.OutOrStdout())
-			
+
 			packagePath := "."
 			if len(args) > 0 {
 				packagePath = args[0]
@@ -341,7 +341,7 @@ func (c *CLI) debugPatchesCommand(opts *LauncherOptions) *cobra.Command {
 
 			opts.Logger = logger.Default()
 			ctx := context.Background()
-			
+
 			// Load package
 			def, err := c.loader.LoadDefinition(ctx, packagePath, opts)
 			if err != nil {
@@ -352,7 +352,7 @@ func (c *CLI) debugPatchesCommand(opts *LauncherOptions) *cobra.Command {
 			processor := c.processor.(*patchProcessor)
 			graph := processor.DebugPatchGraph(def.Patches)
 			fmt.Fprintln(c.outputWriter, graph)
-			
+
 			return nil
 		},
 	}
@@ -367,7 +367,7 @@ func (c *CLI) debugResourcesCommand(opts *LauncherOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set CLI output writer from command
 			c.SetOutputWriter(cmd.OutOrStdout())
-			
+
 			packagePath := "."
 			if len(args) > 0 {
 				packagePath = args[0]
@@ -375,7 +375,7 @@ func (c *CLI) debugResourcesCommand(opts *LauncherOptions) *cobra.Command {
 
 			opts.Logger = logger.Default()
 			ctx := context.Background()
-			
+
 			// Load package
 			def, err := c.loader.LoadDefinition(ctx, packagePath, opts)
 			if err != nil {
@@ -385,7 +385,7 @@ func (c *CLI) debugResourcesCommand(opts *LauncherOptions) *cobra.Command {
 			// Show resource details
 			fmt.Fprintf(c.outputWriter, "Package: %s\n", def.Metadata.Name)
 			fmt.Fprintf(c.outputWriter, "Resources: %d\n\n", len(def.Resources))
-			
+
 			for i, resource := range def.Resources {
 				fmt.Fprintf(c.outputWriter, "[%d] %s/%s\n", i+1, resource.Kind, resource.GetName())
 				fmt.Fprintf(c.outputWriter, "    Namespace: %s\n", resource.GetNamespace())
@@ -397,7 +397,7 @@ func (c *CLI) debugResourcesCommand(opts *LauncherOptions) *cobra.Command {
 				}
 				fmt.Fprintln(c.outputWriter)
 			}
-			
+
 			return nil
 		},
 	}
@@ -540,12 +540,12 @@ func (c *CLI) runInfo(ctx context.Context, packagePath, outputFormat string, sho
 		encoder := json.NewEncoder(c.outputWriter)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(def)
-		
+
 	case "yaml":
 		encoder := yaml.NewEncoder(c.outputWriter)
 		encoder.SetIndent(2)
 		return encoder.Encode(def)
-		
+
 	default: // text
 		fmt.Fprintf(c.outputWriter, "Package: %s\n", def.Metadata.Name)
 		fmt.Fprintf(c.outputWriter, "Version: %s\n", def.Metadata.Version)
@@ -570,7 +570,7 @@ func (c *CLI) runInfo(ctx context.Context, packagePath, outputFormat string, sho
 			}
 			fmt.Fprintln(c.outputWriter)
 		}
-		
+
 		if len(def.Patches) > 0 {
 			fmt.Fprintf(c.outputWriter, "\nPatches (%d):\n", len(def.Patches))
 			for _, p := range def.Patches {

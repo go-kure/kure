@@ -516,7 +516,7 @@ func TestDemoOutput_Formatting(t *testing.T) {
 
 	w.Close()
 	os.Stdout = originalStdout
-	
+
 	// Wait for the goroutine to finish reading
 	<-done
 

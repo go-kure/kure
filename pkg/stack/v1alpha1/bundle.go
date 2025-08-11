@@ -2,7 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/errors"
 )
@@ -23,37 +23,37 @@ type BundleSpec struct {
 	// ParentPath is the hierarchical path to the parent bundle (e.g., "cluster/infrastructure")
 	// Empty for root bundles. This avoids circular references while maintaining hierarchy.
 	ParentPath string `yaml:"parentPath,omitempty" json:"parentPath,omitempty"`
-	
+
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []BundleReference `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
-	
+
 	// Interval controls how often Flux reconciles the bundle
 	Interval string `yaml:"interval,omitempty" json:"interval,omitempty"`
-	
+
 	// SourceRef specifies the source for the bundle
 	SourceRef *SourceRef `yaml:"sourceRef,omitempty" json:"sourceRef,omitempty"`
-	
+
 	// Applications holds the application configurations that belong to the bundle
 	Applications []ApplicationReference `yaml:"applications,omitempty" json:"applications,omitempty"`
-	
+
 	// Description provides a human-readable description of the bundle
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	
+
 	// Labels are common labels that should be applied to each resource
 	Labels map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
-	
+
 	// Annotations are common annotations that should be applied to each resource
 	Annotations map[string]string `yaml:"annotations,omitempty" json:"annotations,omitempty"`
-	
+
 	// Prune specifies whether to prune resources when they are removed from the bundle
 	Prune bool `yaml:"prune,omitempty" json:"prune,omitempty"`
-	
+
 	// Wait specifies whether to wait for resources to be ready before considering the bundle reconciled
 	Wait bool `yaml:"wait,omitempty" json:"wait,omitempty"`
-	
+
 	// Timeout is the maximum time to wait for resources to be ready
 	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	
+
 	// RetryInterval is the interval to retry failed reconciliations
 	RetryInterval string `yaml:"retryInterval,omitempty" json:"retryInterval,omitempty"`
 }
@@ -62,13 +62,13 @@ type BundleSpec struct {
 type SourceRef struct {
 	// Kind of the source (e.g., GitRepository, OCIRepository, Bucket)
 	Kind string `yaml:"kind" json:"kind"`
-	
+
 	// Name of the source
 	Name string `yaml:"name" json:"name"`
-	
+
 	// Namespace of the source
 	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
-	
+
 	// APIVersion of the source (for future cross-version references)
 	APIVersion string `yaml:"apiVersion,omitempty" json:"apiVersion,omitempty"`
 }
@@ -77,10 +77,10 @@ type SourceRef struct {
 type ApplicationReference struct {
 	// Name of the application
 	Name string `yaml:"name" json:"name"`
-	
+
 	// APIVersion of the referenced application
 	APIVersion string `yaml:"apiVersion,omitempty" json:"apiVersion,omitempty"`
-	
+
 	// Kind of the referenced application (for supporting different app types)
 	Kind string `yaml:"kind,omitempty" json:"kind,omitempty"`
 }
@@ -134,61 +134,61 @@ func (b *BundleConfig) Validate() error {
 	if b == nil {
 		return errors.ErrNilBundle
 	}
-	
+
 	if b.Metadata.Name == "" {
 		return errors.NewValidationError("metadata.name", "", "Bundle", nil)
 	}
-	
+
 	// Validate interval format if specified
 	if b.Spec.Interval != "" {
 		// TODO: Add interval format validation (e.g., "5m", "1h")
 	}
-	
+
 	// Validate source ref if present
 	if b.Spec.SourceRef != nil {
 		if b.Spec.SourceRef.Kind == "" {
-			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.sourceRef.kind", 
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.sourceRef.kind",
 				"sourceRef kind cannot be empty", nil)
 		}
 		if b.Spec.SourceRef.Name == "" {
-			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.sourceRef.name", 
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.sourceRef.name",
 				"sourceRef name cannot be empty", nil)
 		}
 	}
-	
+
 	// Check for duplicate applications
 	appNames := make(map[string]bool)
 	for i, app := range b.Spec.Applications {
 		if app.Name == "" {
-			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.applications", 
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.applications",
 				fmt.Sprintf("application at index %d has empty name", i), nil)
 		}
 		key := fmt.Sprintf("%s:%s:%s", app.APIVersion, app.Kind, app.Name)
 		if appNames[key] {
-			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.applications", 
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.applications",
 				fmt.Sprintf("duplicate application reference: %s", app.Name), nil)
 		}
 		appNames[key] = true
 	}
-	
+
 	// Check for circular dependencies
 	depNames := make(map[string]bool)
 	for _, dep := range b.Spec.DependsOn {
 		if dep.Name == "" {
-			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.dependsOn", 
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.dependsOn",
 				"dependency name cannot be empty", nil)
 		}
 		if dep.Name == b.Metadata.Name {
-			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.dependsOn", 
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.dependsOn",
 				"bundle cannot depend on itself", nil)
 		}
 		if depNames[dep.Name] {
-			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.dependsOn", 
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.dependsOn",
 				fmt.Sprintf("duplicate dependency: %s", dep.Name), nil)
 		}
 		depNames[dep.Name] = true
 	}
-	
+
 	return nil
 }
 

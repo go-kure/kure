@@ -97,8 +97,8 @@ func TestExtensionLoader(t *testing.T) {
 			Type: ExtensionTypeMerge,
 			Parameters: ParameterMap{
 				"env": map[string]interface{}{
-					"debug":   true,  // Override
-					"verbose": true,  // New
+					"debug":   true, // Override
+					"verbose": true, // New
 				},
 			},
 		}
@@ -300,10 +300,10 @@ func TestExtensionLoader(t *testing.T) {
 		}
 
 		paths := extLoader.getSearchPaths("/package/path", "/local/path", nil)
-		
+
 		// Should include local path first
 		assert.Contains(t, paths, "/local/path")
-		
+
 		// Should include package path
 		found := false
 		for _, p := range paths {
@@ -318,12 +318,12 @@ func TestExtensionLoader(t *testing.T) {
 
 func TestExtensionFiles(t *testing.T) {
 	log := logger.Noop()
-	
+
 	t.Run("load extension from file", func(t *testing.T) {
 		// Create temp directory and extension file
 		tmpDir := t.TempDir()
 		extPath := filepath.Join(tmpDir, "override.local.kurel")
-		
+
 		extContent := `type: override
 parameters:
   replicas: 10
@@ -334,49 +334,49 @@ patches:
       [deployment.app]
       spec.securityContext.runAsNonRoot: true
 `
-		
+
 		err := os.WriteFile(extPath, []byte(extContent), 0644)
 		require.NoError(t, err)
-		
+
 		extLoader := &extensionLoader{
 			logger: log,
 		}
-		
+
 		ext, err := extLoader.loadExtension(extPath)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, ExtensionTypeOverride, ext.Type)
 		assert.Equal(t, 10, ext.Parameters["replicas"])
 		assert.Len(t, ext.Patches, 1)
 		assert.Equal(t, "security", ext.Patches[0].Name)
 	})
-	
+
 	t.Run("find extensions in directory", func(t *testing.T) {
 		// Create temp directory with multiple extension files
 		tmpDir := t.TempDir()
-		
+
 		// Create .local.kurel file
 		ext1Path := filepath.Join(tmpDir, "01-base.local.kurel")
 		err := os.WriteFile(ext1Path, []byte("type: merge\nparameters:\n  key1: value1"), 0644)
 		require.NoError(t, err)
-		
+
 		// Create .local.yaml file
 		ext2Path := filepath.Join(tmpDir, "02-override.local.yaml")
 		err = os.WriteFile(ext2Path, []byte("type: override\nparameters:\n  key2: value2"), 0644)
 		require.NoError(t, err)
-		
+
 		// Create regular file (should be ignored)
 		regularPath := filepath.Join(tmpDir, "regular.yaml")
 		err = os.WriteFile(regularPath, []byte("ignored: true"), 0644)
 		require.NoError(t, err)
-		
+
 		extLoader := &extensionLoader{
 			logger: log,
 		}
-		
+
 		extensions, err := extLoader.findExtensions(tmpDir, "", nil)
 		require.NoError(t, err)
-		
+
 		assert.Len(t, extensions, 2)
 		// Should be sorted alphabetically
 		assert.Equal(t, "01-base.local.kurel", filepath.Base(extensions[0].Path))
@@ -391,14 +391,14 @@ func TestNestedFieldOperations(t *testing.T) {
 				"name": "test",
 			},
 		}
-		
+
 		err := setNestedField(obj, "production", "metadata", "labels", "env")
 		require.NoError(t, err)
-		
+
 		labels := obj["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
 		assert.Equal(t, "production", labels["env"])
 	})
-	
+
 	t.Run("mergeNestedField", func(t *testing.T) {
 		obj := map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -416,19 +416,19 @@ func TestNestedFieldOperations(t *testing.T) {
 				},
 			},
 		}
-		
+
 		newEnv := map[string]interface{}{
 			"DEBUG":   "true",
 			"VERBOSE": "true",
 		}
-		
+
 		err := mergeNestedField(obj, newEnv, "spec", "template", "spec", "containers", "0", "env")
 		require.NoError(t, err)
-		
+
 		// Note: This simple implementation doesn't handle array indexing
 		// In production, you'd need more sophisticated path handling
 	})
-	
+
 	t.Run("removeNestedField", func(t *testing.T) {
 		obj := map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -438,9 +438,9 @@ func TestNestedFieldOperations(t *testing.T) {
 				},
 			},
 		}
-		
+
 		removeNestedField(obj, "metadata", "labels", "env")
-		
+
 		labels := obj["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
 		assert.Equal(t, "test", labels["app"])
 		_, exists := labels["env"]

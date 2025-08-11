@@ -329,7 +329,7 @@ func TestInitConfig_ConfigTypes(t *testing.T) {
 		},
 		{
 			name:        "yml config",
-			configFile:  "test.yml", 
+			configFile:  "test.yml",
 			content:     "debug: false\nnamespace: test",
 			expectedKey: "namespace",
 			expectedVal: "test",

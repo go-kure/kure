@@ -7,8 +7,8 @@ import (
 	"github.com/go-kure/kure/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestPatchProcessor(t *testing.T) {
@@ -39,10 +39,10 @@ func TestPatchProcessor(t *testing.T) {
 
 			params := ParameterMap{}
 			resolved, err := processor.ResolveDependencies(ctx, patches, params)
-			
+
 			require.NoError(t, err)
 			assert.Len(t, resolved, 2) // patch1 and patch3
-			
+
 			names := []string{}
 			for _, p := range resolved {
 				names = append(names, p.Name)
@@ -76,7 +76,7 @@ func TestPatchProcessor(t *testing.T) {
 			}
 
 			resolved, err := processor.ResolveDependencies(ctx, patches, params)
-			
+
 			require.NoError(t, err)
 			assert.Len(t, resolved, 2) // Both enabled
 		})
@@ -102,10 +102,10 @@ func TestPatchProcessor(t *testing.T) {
 
 			params := ParameterMap{}
 			resolved, err := processor.ResolveDependencies(ctx, patches, params)
-			
+
 			require.NoError(t, err)
 			assert.Len(t, resolved, 3)
-			
+
 			// Check order - base should come before middle, middle before top
 			var baseIdx, middleIdx, topIdx int
 			for i, p := range resolved {
@@ -134,7 +134,7 @@ func TestPatchProcessor(t *testing.T) {
 
 			params := ParameterMap{}
 			_, err := processor.ResolveDependencies(ctx, patches, params)
-			
+
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "missing")
 		})
@@ -154,7 +154,7 @@ func TestPatchProcessor(t *testing.T) {
 
 			params := ParameterMap{}
 			_, err := processor.ResolveDependencies(ctx, patches, params)
-			
+
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "conflict")
 		})
@@ -191,20 +191,20 @@ func TestPatchProcessor(t *testing.T) {
 
 			patches := []Patch{
 				{
-					Name: "scale",
+					Name:    "scale",
 					Content: `spec.replicas: 3`,
 				},
 			}
 
 			params := ParameterMap{}
 			result, err := processor.ApplyPatches(ctx, def, patches, params)
-			
+
 			require.NoError(t, err)
 			require.NotNil(t, result)
-			
+
 			// Check that the original is unchanged
 			assert.Equal(t, float64(1), def.Resources[0].Raw.Object["spec"].(map[string]interface{})["replicas"])
-			
+
 			// Check that the result has the patch applied
 			spec := result.Resources[0].Raw.Object["spec"].(map[string]interface{})
 			assert.Equal(t, 3, spec["replicas"])
@@ -265,9 +265,9 @@ spec.replicas: 5`,
 
 			params := ParameterMap{}
 			result, err := processor.ApplyPatches(ctx, def, patches, params)
-			
+
 			require.NoError(t, err)
-			
+
 			// Check that only app1 was patched
 			spec1 := result.Resources[0].Raw.Object["spec"].(map[string]interface{})
 			spec2 := result.Resources[1].Raw.Object["spec"].(map[string]interface{})
@@ -314,9 +314,9 @@ data.version: ${values.app.version}`,
 			}
 
 			result, err := processor.ApplyPatches(ctx, def, patches, params)
-			
+
 			require.NoError(t, err)
-			
+
 			data := result.Resources[0].Raw.Object["data"].(map[string]interface{})
 			assert.Equal(t, "production", data["environment"])
 			assert.Equal(t, "1.2.3", data["version"])
@@ -351,7 +351,7 @@ data.version: ${values.app.version}`,
 		}
 
 		graph := processor.DebugPatchGraph(patches)
-		
+
 		assert.Contains(t, graph, "Patch Dependency Graph")
 		assert.Contains(t, graph, "base:")
 		assert.Contains(t, graph, "Description: Base configuration")
@@ -369,19 +369,19 @@ data.version: ${values.app.version}`,
 
 		t.Run("evaluateExpression", func(t *testing.T) {
 			params := ParameterMap{
-				"enabled": true,
+				"enabled":  true,
 				"disabled": false,
-				"env": "prod",
-				"count": 5,
+				"env":      "prod",
+				"count":    5,
 			}
 
 			assert.True(t, p.evaluateExpression("${enabled}", params))
 			assert.False(t, p.evaluateExpression("${disabled}", params))
-			assert.True(t, p.evaluateExpression("${env}", params)) // Non-empty string
-			assert.True(t, p.evaluateExpression("${count}", params)) // Non-zero number
+			assert.True(t, p.evaluateExpression("${env}", params))      // Non-empty string
+			assert.True(t, p.evaluateExpression("${count}", params))    // Non-zero number
 			assert.False(t, p.evaluateExpression("${missing}", params)) // Missing variable
-			assert.True(t, p.evaluateExpression("true", params)) // Literal
-			assert.False(t, p.evaluateExpression("false", params)) // Literal
+			assert.True(t, p.evaluateExpression("true", params))        // Literal
+			assert.False(t, p.evaluateExpression("false", params))      // Literal
 		})
 
 		t.Run("toBool", func(t *testing.T) {
@@ -410,17 +410,17 @@ data.version: ${values.app.version}`,
 
 			// Empty target matches all
 			assert.True(t, p.matchesTarget(resource, ""))
-			
+
 			// Kind only
 			assert.True(t, p.matchesTarget(resource, "Deployment"))
 			assert.True(t, p.matchesTarget(resource, "deployment")) // Case insensitive
 			assert.False(t, p.matchesTarget(resource, "Service"))
-			
+
 			// Kind.Name format
 			assert.True(t, p.matchesTarget(resource, "Deployment.test-app"))
 			assert.True(t, p.matchesTarget(resource, "deployment.test-app"))
 			assert.False(t, p.matchesTarget(resource, "Deployment.other-app"))
-			
+
 			// Kind/Name format
 			assert.True(t, p.matchesTarget(resource, "Deployment/test-app"))
 			assert.False(t, p.matchesTarget(resource, "Service/test-app"))
@@ -482,7 +482,7 @@ func TestPatchIssueDetection(t *testing.T) {
 				},
 			},
 			"patch2": {
-				Name: "patch2",
+				Name:     "patch2",
 				Metadata: &PatchMetadata{
 					// patch2 doesn't declare conflict with patch1
 				},
@@ -521,7 +521,7 @@ func TestOrderByDependencies(t *testing.T) {
 			"b": true,
 			"c": true,
 		}
-		
+
 		patchMap := map[string]*Patch{
 			"a": {Name: "a"},
 			"b": {
@@ -544,11 +544,11 @@ func TestOrderByDependencies(t *testing.T) {
 
 	t.Run("parallel dependencies", func(t *testing.T) {
 		enabled := map[string]bool{
-			"base": true,
+			"base":  true,
 			"feat1": true,
 			"feat2": true,
 		}
-		
+
 		patchMap := map[string]*Patch{
 			"base": {Name: "base"},
 			"feat1": {
@@ -566,7 +566,7 @@ func TestOrderByDependencies(t *testing.T) {
 		}
 
 		order := p.orderByDependencies(enabled, patchMap)
-		
+
 		// base must come first
 		assert.Equal(t, "base", order[0])
 		// feat1 and feat2 can be in any order after base
@@ -580,7 +580,7 @@ func TestOrderByDependencies(t *testing.T) {
 			"patch2": true,
 			"patch3": true,
 		}
-		
+
 		patchMap := map[string]*Patch{
 			"patch1": {Name: "patch1"},
 			"patch2": {Name: "patch2"},
@@ -589,7 +589,7 @@ func TestOrderByDependencies(t *testing.T) {
 
 		order := p.orderByDependencies(enabled, patchMap)
 		assert.Len(t, order, 3)
-		
+
 		// Should contain all patches (order doesn't matter)
 		assert.Contains(t, order, "patch1")
 		assert.Contains(t, order, "patch2")
@@ -616,7 +616,7 @@ func TestCreateVariableContext(t *testing.T) {
 	}
 
 	varCtx := p.createVariableContext(params)
-	
+
 	// Check that values are converted correctly
 	// The new implementation stores values directly, not as strings
 	assert.Equal(t, "test-app", varCtx.Values["app.name"])

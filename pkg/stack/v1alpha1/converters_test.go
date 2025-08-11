@@ -3,9 +3,9 @@ package v1alpha1
 import (
 	"reflect"
 	"testing"
-	
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -130,11 +130,11 @@ func TestConvertClusterToV1Alpha1(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConvertClusterToV1Alpha1(tt.cluster)
-			
+
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("ConvertClusterToV1Alpha1() = %+v, want %+v", result, tt.expected)
 			}
@@ -194,11 +194,11 @@ func TestConvertV1Alpha1ToCluster(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConvertV1Alpha1ToCluster(tt.config)
-			
+
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("ConvertV1Alpha1ToCluster() = %+v, want %+v", result, tt.expected)
 			}
@@ -314,11 +314,11 @@ func TestConvertNodeToV1Alpha1(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConvertNodeToV1Alpha1(tt.node)
-			
+
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("ConvertNodeToV1Alpha1() = %+v, want %+v", result, tt.expected)
 			}
@@ -467,11 +467,11 @@ func TestConvertBundleToV1Alpha1(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConvertBundleToV1Alpha1(tt.bundle)
-			
+
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("ConvertBundleToV1Alpha1() = %+v, want %+v", result, tt.expected)
 			}
@@ -546,10 +546,10 @@ func TestStackConverter_ConvertClusterTreeToV1Alpha1(t *testing.T) {
 			},
 		},
 	}
-	
+
 	converter := NewStackConverter()
 	clusterConfig, nodeConfigs, bundleConfigs := converter.ConvertClusterTreeToV1Alpha1(cluster)
-	
+
 	// Verify cluster config
 	if clusterConfig == nil {
 		t.Fatal("expected non-nil cluster config")
@@ -560,19 +560,19 @@ func TestStackConverter_ConvertClusterTreeToV1Alpha1(t *testing.T) {
 	if clusterConfig.Spec.GitOps == nil || clusterConfig.Spec.GitOps.Type != "flux" {
 		t.Error("expected flux gitops config")
 	}
-	
+
 	// Verify node count
 	expectedNodeCount := 6 // root, infrastructure, monitoring, applications, frontend, backend
 	if len(nodeConfigs) != expectedNodeCount {
 		t.Errorf("expected %d nodes, got %d", expectedNodeCount, len(nodeConfigs))
 	}
-	
+
 	// Verify bundle count
 	expectedBundleCount := 4 // infra-bundle, monitoring-bundle, frontend-bundle, backend-bundle
 	if len(bundleConfigs) != expectedBundleCount {
 		t.Errorf("expected %d bundles, got %d", expectedBundleCount, len(bundleConfigs))
 	}
-	
+
 	// Verify node names
 	nodeNames := make(map[string]bool)
 	for _, node := range nodeConfigs {
@@ -584,13 +584,13 @@ func TestStackConverter_ConvertClusterTreeToV1Alpha1(t *testing.T) {
 			t.Errorf("missing expected node: %s", name)
 		}
 	}
-	
+
 	// Verify bundle names and applications
 	bundleApps := make(map[string]int)
 	for _, bundle := range bundleConfigs {
 		bundleApps[bundle.GetName()] = len(bundle.Spec.Applications)
 	}
-	
+
 	if bundleApps["infra-bundle"] != 2 {
 		t.Errorf("expected 2 apps in infra-bundle, got %d", bundleApps["infra-bundle"])
 	}
@@ -622,7 +622,7 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 			},
 		},
 	}
-	
+
 	nodeConfigs := []*NodeConfig{
 		{
 			Metadata: gvk.BaseMetadata{Name: "root"},
@@ -646,7 +646,7 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 			},
 		},
 	}
-	
+
 	bundleConfigs := []*BundleConfig{
 		{
 			Metadata: gvk.BaseMetadata{Name: "bundle1"},
@@ -669,16 +669,16 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 			},
 		},
 	}
-	
+
 	applications := []*stack.Application{
 		{Name: "app1"},
 		{Name: "app2"},
 		{Name: "app3"},
 	}
-	
+
 	converter := NewStackConverter()
 	cluster := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, applications)
-	
+
 	// Verify cluster
 	if cluster == nil {
 		t.Fatal("expected non-nil cluster")
@@ -689,7 +689,7 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 	if cluster.GitOps == nil || cluster.GitOps.Type != "argocd" {
 		t.Error("expected argocd gitops config")
 	}
-	
+
 	// Verify root node
 	if cluster.Node == nil {
 		t.Fatal("expected non-nil root node")
@@ -697,12 +697,12 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 	if cluster.Node.Name != "root" {
 		t.Errorf("expected root node name 'root', got %s", cluster.Node.Name)
 	}
-	
+
 	// Verify children
 	if len(cluster.Node.Children) != 2 {
 		t.Fatalf("expected 2 children, got %d", len(cluster.Node.Children))
 	}
-	
+
 	// Verify child1
 	child1 := cluster.Node.Children[0]
 	if child1.Name != "child1" {
@@ -714,7 +714,7 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 	if len(child1.Bundle.Applications) != 2 {
 		t.Errorf("expected 2 applications in bundle1, got %d", len(child1.Bundle.Applications))
 	}
-	
+
 	// Verify child2
 	child2 := cluster.Node.Children[1]
 	if child2.Name != "child2" {
@@ -726,7 +726,7 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 	if len(child2.Bundle.Applications) != 1 {
 		t.Errorf("expected 1 application in bundle2, got %d", len(child2.Bundle.Applications))
 	}
-	
+
 	// Verify bundle dependencies
 	if len(child2.Bundle.DependsOn) != 1 {
 		t.Fatalf("expected 1 dependency for bundle2, got %d", len(child2.Bundle.DependsOn))
@@ -738,27 +738,27 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 
 func TestStackConverter_HandleNilValues(t *testing.T) {
 	converter := NewStackConverter()
-	
+
 	t.Run("nil cluster", func(t *testing.T) {
 		clusterConfig, nodeConfigs, bundleConfigs := converter.ConvertClusterTreeToV1Alpha1(nil)
 		if clusterConfig != nil || nodeConfigs != nil || bundleConfigs != nil {
 			t.Error("expected all nil outputs for nil cluster")
 		}
 	})
-	
+
 	t.Run("nil cluster config", func(t *testing.T) {
 		cluster := converter.ConvertV1Alpha1ToClusterTree(nil, nil, nil, nil)
 		if cluster != nil {
 			t.Error("expected nil cluster for nil config")
 		}
 	})
-	
+
 	t.Run("empty configs", func(t *testing.T) {
 		clusterConfig := &ClusterConfig{
 			Metadata: gvk.BaseMetadata{Name: "empty"},
 		}
 		cluster := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, []*NodeConfig{}, []*BundleConfig{}, []*stack.Application{})
-		
+
 		if cluster == nil {
 			t.Fatal("expected non-nil cluster")
 		}
@@ -777,29 +777,29 @@ func TestStackConverter_ComplexScenarios(t *testing.T) {
 		depth := 10
 		root := &stack.Node{Name: "level0"}
 		current := root
-		
+
 		for i := 1; i < depth; i++ {
 			child := &stack.Node{
 				Name: string(rune('a' + i)),
 				Bundle: &stack.Bundle{
-					Name: string(rune('a' + i)) + "-bundle",
+					Name: string(rune('a'+i)) + "-bundle",
 					Applications: []*stack.Application{
-						{Name: string(rune('a' + i)) + "-app"},
+						{Name: string(rune('a'+i)) + "-app"},
 					},
 				},
 			}
 			current.Children = []*stack.Node{child}
 			current = child
 		}
-		
+
 		cluster := &stack.Cluster{
 			Name: "deep-cluster",
 			Node: root,
 		}
-		
+
 		converter := NewStackConverter()
 		clusterConfig, nodeConfigs, bundleConfigs := converter.ConvertClusterTreeToV1Alpha1(cluster)
-		
+
 		if clusterConfig == nil {
 			t.Fatal("expected non-nil cluster config")
 		}
@@ -810,19 +810,19 @@ func TestStackConverter_ComplexScenarios(t *testing.T) {
 			t.Errorf("expected %d bundles, got %d", depth-1, len(bundleConfigs))
 		}
 	})
-	
+
 	t.Run("circular dependency detection", func(t *testing.T) {
 		// Note: This test documents current behavior.
 		// The converter doesn't prevent circular dependencies during conversion.
 		// This would need to be handled at validation time.
-		
+
 		bundle1 := &stack.Bundle{Name: "bundle1"}
 		bundle2 := &stack.Bundle{Name: "bundle2"}
-		
+
 		// Create circular dependency
 		bundle1.DependsOn = []*stack.Bundle{bundle2}
 		bundle2.DependsOn = []*stack.Bundle{bundle1}
-		
+
 		cluster := &stack.Cluster{
 			Name: "circular-cluster",
 			Node: &stack.Node{
@@ -833,15 +833,15 @@ func TestStackConverter_ComplexScenarios(t *testing.T) {
 				},
 			},
 		}
-		
+
 		converter := NewStackConverter()
 		_, _, bundleConfigs := converter.ConvertClusterTreeToV1Alpha1(cluster)
-		
+
 		// The converter should still convert the structure
 		if len(bundleConfigs) != 2 {
 			t.Errorf("expected 2 bundles despite circular dependency, got %d", len(bundleConfigs))
 		}
-		
+
 		// Verify the circular dependency is preserved in the configs
 		var b1, b2 *BundleConfig
 		for _, b := range bundleConfigs {
@@ -851,11 +851,11 @@ func TestStackConverter_ComplexScenarios(t *testing.T) {
 				b2 = b
 			}
 		}
-		
+
 		if b1 == nil || b2 == nil {
 			t.Fatal("expected both bundles to be converted")
 		}
-		
+
 		if len(b1.Spec.DependsOn) != 1 || b1.Spec.DependsOn[0].Name != "bundle2" {
 			t.Error("expected bundle1 to depend on bundle2")
 		}
@@ -863,21 +863,21 @@ func TestStackConverter_ComplexScenarios(t *testing.T) {
 			t.Error("expected bundle2 to depend on bundle1")
 		}
 	})
-	
+
 	t.Run("wide tree", func(t *testing.T) {
 		// Create a tree with many siblings
 		width := 100
 		children := make([]*stack.Node, width)
-		
+
 		for i := 0; i < width; i++ {
 			children[i] = &stack.Node{
-				Name: string(rune('a' + (i % 26))) + string(rune('0' + (i / 26))),
+				Name: string(rune('a'+(i%26))) + string(rune('0'+(i/26))),
 				Bundle: &stack.Bundle{
-					Name: "bundle" + string(rune('0' + i)),
+					Name: "bundle" + string(rune('0'+i)),
 				},
 			}
 		}
-		
+
 		cluster := &stack.Cluster{
 			Name: "wide-cluster",
 			Node: &stack.Node{
@@ -885,10 +885,10 @@ func TestStackConverter_ComplexScenarios(t *testing.T) {
 				Children: children,
 			},
 		}
-		
+
 		converter := NewStackConverter()
 		_, nodeConfigs, bundleConfigs := converter.ConvertClusterTreeToV1Alpha1(cluster)
-		
+
 		if len(nodeConfigs) != width+1 { // +1 for root
 			t.Errorf("expected %d nodes, got %d", width+1, len(nodeConfigs))
 		}
@@ -929,9 +929,9 @@ func BenchmarkConvertClusterTreeToV1Alpha1(b *testing.B) {
 			},
 		},
 	}
-	
+
 	converter := NewStackConverter()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		converter.ConvertClusterTreeToV1Alpha1(cluster)
@@ -945,7 +945,7 @@ func BenchmarkConvertV1Alpha1ToClusterTree(b *testing.B) {
 			Node: &NodeReference{Name: "root"},
 		},
 	}
-	
+
 	nodeConfigs := []*NodeConfig{
 		{
 			Metadata: gvk.BaseMetadata{Name: "root"},
@@ -962,7 +962,7 @@ func BenchmarkConvertV1Alpha1ToClusterTree(b *testing.B) {
 			Spec:     NodeSpec{Bundle: &BundleReference{Name: "bundle2"}},
 		},
 	}
-	
+
 	bundleConfigs := []*BundleConfig{
 		{
 			Metadata: gvk.BaseMetadata{Name: "bundle1"},
@@ -973,11 +973,11 @@ func BenchmarkConvertV1Alpha1ToClusterTree(b *testing.B) {
 			Spec:     BundleSpec{Applications: []ApplicationReference{{Name: "app2"}}},
 		},
 	}
-	
+
 	applications := []*stack.Application{{Name: "app1"}, {Name: "app2"}}
-	
+
 	converter := NewStackConverter()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, applications)

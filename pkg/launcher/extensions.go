@@ -67,31 +67,31 @@ func (e *extensionLoader) LoadWithExtensions(ctx context.Context, def *PackageDe
 
 // LocalExtension represents a local customization file
 type LocalExtension struct {
-	Path       string                 `yaml:"-"`
-	Type       ExtensionType          `yaml:"type,omitempty"`
-	Metadata   KurelMetadata          `yaml:"metadata,omitempty"`
-	Parameters ParameterMap           `yaml:"parameters,omitempty"`
-	Patches    []LocalPatch           `yaml:"patches,omitempty"`
+	Path       string                  `yaml:"-"`
+	Type       ExtensionType           `yaml:"type,omitempty"`
+	Metadata   KurelMetadata           `yaml:"metadata,omitempty"`
+	Parameters ParameterMap            `yaml:"parameters,omitempty"`
+	Patches    []LocalPatch            `yaml:"patches,omitempty"`
 	Resources  []LocalResourceOverride `yaml:"resources,omitempty"`
-	Remove     []ResourceSelector     `yaml:"remove,omitempty"`
+	Remove     []ResourceSelector      `yaml:"remove,omitempty"`
 }
 
 // ExtensionType defines the type of extension
 type ExtensionType string
 
 const (
-	ExtensionTypeOverride ExtensionType = "override"  // Override existing values
-	ExtensionTypeMerge    ExtensionType = "merge"     // Merge with existing values
-	ExtensionTypeReplace  ExtensionType = "replace"   // Replace entirely
+	ExtensionTypeOverride ExtensionType = "override" // Override existing values
+	ExtensionTypeMerge    ExtensionType = "merge"    // Merge with existing values
+	ExtensionTypeReplace  ExtensionType = "replace"  // Replace entirely
 )
 
 // LocalPatch represents a patch definition in local extension
 type LocalPatch struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description,omitempty"`
-	Enabled     string            `yaml:"enabled,omitempty"`
-	Content     string            `yaml:"content"`
-	Metadata    *PatchMetadata    `yaml:"metadata,omitempty"`
+	Name        string         `yaml:"name"`
+	Description string         `yaml:"description,omitempty"`
+	Enabled     string         `yaml:"enabled,omitempty"`
+	Content     string         `yaml:"content"`
+	Metadata    *PatchMetadata `yaml:"metadata,omitempty"`
 }
 
 // LocalResourceOverride represents resource modifications
@@ -113,10 +113,10 @@ type ResourceSelector struct {
 // findExtensions locates all local extension files
 func (e *extensionLoader) findExtensions(packagePath, localPath string, opts *LauncherOptions) ([]LocalExtension, error) {
 	var extensions []LocalExtension
-	
+
 	// Determine search paths
 	searchPaths := e.getSearchPaths(packagePath, localPath, opts)
-	
+
 	for _, searchPath := range searchPaths {
 		// Look for .local.kurel files
 		pattern := filepath.Join(searchPath, "*.local.kurel")
@@ -125,7 +125,7 @@ func (e *extensionLoader) findExtensions(packagePath, localPath string, opts *La
 			e.logger.Warn("Failed to search for extensions in %s: %v", searchPath, err)
 			continue
 		}
-		
+
 		// Also check for .local.yaml files
 		yamlPattern := filepath.Join(searchPath, "*.local.yaml")
 		yamlMatches, err := filepath.Glob(yamlPattern)
@@ -134,7 +134,7 @@ func (e *extensionLoader) findExtensions(packagePath, localPath string, opts *La
 		} else {
 			matches = append(matches, yamlMatches...)
 		}
-		
+
 		// Load each extension file
 		for _, match := range matches {
 			ext, err := e.loadExtension(match)
@@ -145,44 +145,44 @@ func (e *extensionLoader) findExtensions(packagePath, localPath string, opts *La
 			extensions = append(extensions, *ext)
 		}
 	}
-	
+
 	// Sort by priority (alphabetical by filename)
 	e.sortExtensions(extensions)
-	
+
 	return extensions, nil
 }
 
 // getSearchPaths returns paths to search for extensions
 func (e *extensionLoader) getSearchPaths(packagePath, localPath string, opts *LauncherOptions) []string {
 	var paths []string
-	
+
 	// Priority 1: Explicit local path
 	if localPath != "" {
 		paths = append(paths, localPath)
 	}
-	
+
 	// Priority 2: Package directory
 	if packagePath != "" {
 		paths = append(paths, packagePath)
-		
+
 		// Also check parent directory for workspace-level extensions
 		parent := filepath.Dir(packagePath)
 		if parent != "." && parent != "/" {
 			paths = append(paths, parent)
 		}
 	}
-	
+
 	// Priority 3: Current working directory
 	if cwd, err := os.Getwd(); err == nil {
 		paths = append(paths, cwd)
 	}
-	
+
 	// Priority 4: Home directory .kurel folder
 	if home, err := os.UserHomeDir(); err == nil {
 		kurelDir := filepath.Join(home, ".kurel", "extensions")
 		paths = append(paths, kurelDir)
 	}
-	
+
 	// Remove duplicates
 	seen := make(map[string]bool)
 	var unique []string
@@ -196,7 +196,7 @@ func (e *extensionLoader) getSearchPaths(packagePath, localPath string, opts *La
 			unique = append(unique, abs)
 		}
 	}
-	
+
 	return unique
 }
 
@@ -206,48 +206,48 @@ func (e *extensionLoader) loadExtension(path string) (*LocalExtension, error) {
 	if err != nil {
 		return nil, errors.NewFileError("read", path, "failed to read extension file", err)
 	}
-	
+
 	var ext LocalExtension
 	if err := yaml.Unmarshal(data, &ext); err != nil {
 		return nil, errors.NewParseError(path, "invalid YAML syntax", 0, 0, err)
 	}
-	
+
 	ext.Path = path
-	
+
 	// Set default type if not specified
 	if ext.Type == "" {
 		ext.Type = ExtensionTypeMerge
 	}
-	
+
 	return &ext, nil
 }
 
 // applyExtension applies a single extension to the package
 func (e *extensionLoader) applyExtension(ctx context.Context, def *PackageDefinition, ext LocalExtension, opts *LauncherOptions) error {
 	e.logger.Debug("Applying extension from %s (type: %s)", ext.Path, ext.Type)
-	
+
 	// Apply parameter extensions
 	if len(ext.Parameters) > 0 {
 		e.applyParameterExtension(def, ext.Parameters, ext.Type)
 	}
-	
+
 	// Apply patch extensions
 	if len(ext.Patches) > 0 {
 		e.applyPatchExtension(def, ext.Patches, ext.Type)
 	}
-	
+
 	// Apply resource modifications
 	if len(ext.Resources) > 0 {
 		if err := e.applyResourceExtension(ctx, def, ext.Resources); err != nil {
 			return errors.Wrap(err, "failed to apply resource extensions")
 		}
 	}
-	
+
 	// Remove resources if specified
 	if len(ext.Remove) > 0 {
 		e.removeResources(def, ext.Remove)
 	}
-	
+
 	return nil
 }
 
@@ -286,7 +286,7 @@ func (e *extensionLoader) applyPatchExtension(def *PackageDefinition, patches []
 		for i := range def.Patches {
 			patchMap[def.Patches[i].Name] = i
 		}
-		
+
 		for _, p := range patches {
 			if idx, ok := patchMap[p.Name]; ok {
 				// Update existing patch in place
@@ -328,19 +328,19 @@ func (e *extensionLoader) matchesSelector(resource *Resource, selector ResourceS
 	if selector.Kind != "" && selector.Kind != resource.Kind {
 		return false
 	}
-	
+
 	// Check name (supports wildcards)
 	if selector.Name != "" {
 		if !e.matchesPattern(resource.Metadata.Name, selector.Name) {
 			return false
 		}
 	}
-	
+
 	// Check namespace
 	if selector.Namespace != "" && selector.Namespace != resource.Metadata.Namespace {
 		return false
 	}
-	
+
 	// Check labels
 	if len(selector.Labels) > 0 {
 		resourceLabels := resource.Metadata.Labels
@@ -350,7 +350,7 @@ func (e *extensionLoader) matchesSelector(resource *Resource, selector ResourceS
 			}
 		}
 	}
-	
+
 	return true
 }
 
@@ -374,9 +374,9 @@ func (e *extensionLoader) applyResourceOverride(resource *Resource, override Loc
 	if resource.Raw == nil {
 		return nil
 	}
-	
+
 	obj := resource.Raw.Object
-	
+
 	// Apply overrides (replace values)
 	if override.Override != nil {
 		for path, value := range override.Override {
@@ -385,7 +385,7 @@ func (e *extensionLoader) applyResourceOverride(resource *Resource, override Loc
 			}
 		}
 	}
-	
+
 	// Apply merges (deep merge)
 	if override.Merge != nil {
 		for path, value := range override.Merge {
@@ -394,19 +394,19 @@ func (e *extensionLoader) applyResourceOverride(resource *Resource, override Loc
 			}
 		}
 	}
-	
+
 	// Remove fields
 	for _, path := range override.Remove {
 		removeNestedField(obj, strings.Split(path, ".")...)
 	}
-	
+
 	return nil
 }
 
 // removeResources removes resources matching selectors
 func (e *extensionLoader) removeResources(def *PackageDefinition, selectors []ResourceSelector) {
 	var filtered []Resource
-	
+
 	for _, resource := range def.Resources {
 		remove := false
 		for _, selector := range selectors {
@@ -420,19 +420,19 @@ func (e *extensionLoader) removeResources(def *PackageDefinition, selectors []Re
 			filtered = append(filtered, resource)
 		}
 	}
-	
+
 	def.Resources = filtered
 }
 
 // mergeParameters performs deep merge of parameter maps
 func (e *extensionLoader) mergeParameters(base, overlay ParameterMap) ParameterMap {
 	result := make(ParameterMap)
-	
+
 	// Copy base
 	for k, v := range base {
 		result[k] = e.deepCopyValue(v)
 	}
-	
+
 	// Merge overlay
 	for k, v := range overlay {
 		if existing, ok := result[k]; ok {
@@ -447,19 +447,19 @@ func (e *extensionLoader) mergeParameters(base, overlay ParameterMap) ParameterM
 		// Otherwise replace
 		result[k] = e.deepCopyValue(v)
 	}
-	
+
 	return result
 }
 
 // mergeMaps performs deep merge of two maps
 func (e *extensionLoader) mergeMaps(base, overlay map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	// Copy base
 	for k, v := range base {
 		result[k] = e.deepCopyValue(v)
 	}
-	
+
 	// Merge overlay
 	for k, v := range overlay {
 		if existing, ok := result[k]; ok {
@@ -473,7 +473,7 @@ func (e *extensionLoader) mergeMaps(base, overlay map[string]interface{}) map[st
 		}
 		result[k] = e.deepCopyValue(v)
 	}
-	
+
 	return result
 }
 
@@ -515,7 +515,7 @@ func setNestedField(obj map[string]interface{}, value interface{}, path ...strin
 	if len(path) == 0 {
 		return errors.New("empty path")
 	}
-	
+
 	current := obj
 	for i := 0; i < len(path)-1; i++ {
 		if next, ok := current[path[i]].(map[string]interface{}); ok {
@@ -527,7 +527,7 @@ func setNestedField(obj map[string]interface{}, value interface{}, path ...strin
 			current = next
 		}
 	}
-	
+
 	current[path[len(path)-1]] = value
 	return nil
 }
@@ -536,7 +536,7 @@ func mergeNestedField(obj map[string]interface{}, value interface{}, path ...str
 	if len(path) == 0 {
 		return errors.New("empty path")
 	}
-	
+
 	current := obj
 	for i := 0; i < len(path)-1; i++ {
 		if next, ok := current[path[i]].(map[string]interface{}); ok {
@@ -548,7 +548,7 @@ func mergeNestedField(obj map[string]interface{}, value interface{}, path ...str
 			current = next
 		}
 	}
-	
+
 	key := path[len(path)-1]
 	if existing, ok := current[key]; ok {
 		// Merge if both are maps
@@ -561,7 +561,7 @@ func mergeNestedField(obj map[string]interface{}, value interface{}, path ...str
 			}
 		}
 	}
-	
+
 	// Otherwise set value
 	current[key] = value
 	return nil
@@ -571,7 +571,7 @@ func removeNestedField(obj map[string]interface{}, path ...string) {
 	if len(path) == 0 {
 		return
 	}
-	
+
 	current := obj
 	for i := 0; i < len(path)-1; i++ {
 		if next, ok := current[path[i]].(map[string]interface{}); ok {
@@ -580,6 +580,6 @@ func removeNestedField(obj map[string]interface{}, path ...string) {
 			return // Path doesn't exist
 		}
 	}
-	
+
 	delete(current, path[len(path)-1])
 }

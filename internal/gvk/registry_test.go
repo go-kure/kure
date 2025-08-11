@@ -102,7 +102,7 @@ func TestRegistry(t *testing.T) {
 
 	t.Run("ListGVKs", func(t *testing.T) {
 		registry := NewRegistry[testType]()
-		
+
 		gvks := []GVK{
 			{Group: "test1.example.com", Version: "v1", Kind: "Type1"},
 			{Group: "test2.example.com", Version: "v1", Kind: "Type2"},

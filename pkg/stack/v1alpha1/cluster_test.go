@@ -2,16 +2,16 @@ package v1alpha1
 
 import (
 	"testing"
-	
+
 	"github.com/go-kure/kure/internal/gvk"
 )
 
 func TestClusterConfig(t *testing.T) {
 	tests := []struct {
-		name      string
-		cluster   *ClusterConfig
-		wantErr   bool
-		errMsg    string
+		name    string
+		cluster *ClusterConfig
+		wantErr bool
+		errMsg  string
 	}{
 		{
 			name: "valid cluster config",
@@ -87,11 +87,11 @@ func TestClusterConfig(t *testing.T) {
 			errMsg:  "cluster config is nil",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.cluster.Validate()
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error but got nil")
@@ -109,26 +109,26 @@ func TestClusterConfig(t *testing.T) {
 
 func TestClusterConfig_GettersSetters(t *testing.T) {
 	cluster := NewClusterConfig("test-cluster")
-	
+
 	// Test initial values
 	if cluster.GetName() != "test-cluster" {
 		t.Errorf("expected name 'test-cluster', got %s", cluster.GetName())
 	}
-	
+
 	if cluster.GetAPIVersion() != "stack.gokure.dev/v1alpha1" {
 		t.Errorf("expected API version 'stack.gokure.dev/v1alpha1', got %s", cluster.GetAPIVersion())
 	}
-	
+
 	if cluster.GetKind() != "Cluster" {
 		t.Errorf("expected kind 'Cluster', got %s", cluster.GetKind())
 	}
-	
+
 	// Test setters
 	cluster.SetName("new-name")
 	if cluster.GetName() != "new-name" {
 		t.Errorf("expected name 'new-name', got %s", cluster.GetName())
 	}
-	
+
 	cluster.SetNamespace("test-namespace")
 	if cluster.GetNamespace() != "test-namespace" {
 		t.Errorf("expected namespace 'test-namespace', got %s", cluster.GetNamespace())
@@ -137,30 +137,30 @@ func TestClusterConfig_GettersSetters(t *testing.T) {
 
 func TestClusterConfig_Conversion(t *testing.T) {
 	cluster := NewClusterConfig("test-cluster")
-	
+
 	// Test ConvertTo
 	converted, err := cluster.ConvertTo("v1alpha1")
 	if err != nil {
 		t.Errorf("unexpected error converting to v1alpha1: %v", err)
 	}
-	
+
 	if converted != cluster {
 		t.Error("expected same instance when converting to same version")
 	}
-	
+
 	// Test unsupported version
 	_, err = cluster.ConvertTo("v2")
 	if err == nil {
 		t.Error("expected error for unsupported version")
 	}
-	
+
 	// Test ConvertFrom
 	newCluster := &ClusterConfig{}
 	err = newCluster.ConvertFrom(cluster)
 	if err != nil {
 		t.Errorf("unexpected error converting from ClusterConfig: %v", err)
 	}
-	
+
 	if newCluster.GetName() != cluster.GetName() {
 		t.Errorf("expected name %s, got %s", cluster.GetName(), newCluster.GetName())
 	}
@@ -189,22 +189,22 @@ func TestClusterConfig_FluxBootstrap(t *testing.T) {
 			},
 		},
 	}
-	
+
 	err := cluster.Validate()
 	if err != nil {
 		t.Errorf("unexpected validation error: %v", err)
 	}
-	
+
 	// Verify bootstrap config
 	bootstrap := cluster.Spec.GitOps.Bootstrap
 	if !bootstrap.Enabled {
 		t.Error("expected bootstrap to be enabled")
 	}
-	
+
 	if bootstrap.FluxMode != "flux-operator" {
 		t.Errorf("expected FluxMode 'flux-operator', got %s", bootstrap.FluxMode)
 	}
-	
+
 	if len(bootstrap.Components) != 2 {
 		t.Errorf("expected 2 components, got %d", len(bootstrap.Components))
 	}
@@ -216,13 +216,13 @@ func TestClusterConfig_EdgeCases(t *testing.T) {
 		cluster.Spec.GitOps = &GitOpsConfig{
 			Type: "",
 		}
-		
+
 		err := cluster.Validate()
 		if err == nil {
 			t.Error("expected validation error for empty gitops type")
 		}
 	})
-	
+
 	t.Run("flux with all fields", func(t *testing.T) {
 		cluster := &ClusterConfig{
 			APIVersion: "stack.gokure.dev/v1alpha1",
@@ -256,12 +256,12 @@ func TestClusterConfig_EdgeCases(t *testing.T) {
 				},
 			},
 		}
-		
+
 		err := cluster.Validate()
 		if err != nil {
 			t.Errorf("unexpected validation error: %v", err)
 		}
-		
+
 		// Verify all fields are accessible
 		if cluster.Spec.GitOps.Bootstrap.FluxMode != "gitops-toolkit" {
 			t.Error("flux mode not preserved")
@@ -273,7 +273,7 @@ func TestClusterConfig_EdgeCases(t *testing.T) {
 			t.Error("labels not preserved")
 		}
 	})
-	
+
 	t.Run("argocd with all fields", func(t *testing.T) {
 		cluster := &ClusterConfig{
 			APIVersion: "stack.gokure.dev/v1alpha1",
@@ -294,17 +294,17 @@ func TestClusterConfig_EdgeCases(t *testing.T) {
 				},
 			},
 		}
-		
+
 		err := cluster.Validate()
 		if err != nil {
 			t.Errorf("unexpected validation error: %v", err)
 		}
-		
+
 		if cluster.Spec.GitOps.Bootstrap.ArgoCDNamespace != "argocd" {
 			t.Error("argocd namespace not preserved")
 		}
 	})
-	
+
 	t.Run("convert from unsupported type", func(t *testing.T) {
 		cluster := &ClusterConfig{}
 		err := cluster.ConvertFrom("not a cluster config")
@@ -312,15 +312,15 @@ func TestClusterConfig_EdgeCases(t *testing.T) {
 			t.Error("expected error converting from unsupported type")
 		}
 	})
-	
+
 	t.Run("default values", func(t *testing.T) {
 		cluster := &ClusterConfig{}
-		
+
 		// Test default API version
 		if cluster.GetAPIVersion() != "stack.gokure.dev/v1alpha1" {
 			t.Errorf("expected default API version, got %s", cluster.GetAPIVersion())
 		}
-		
+
 		// Test default kind
 		if cluster.GetKind() != "Cluster" {
 			t.Errorf("expected default kind 'Cluster', got %s", cluster.GetKind())
@@ -338,21 +338,21 @@ func TestClusterConfig_ComplexScenarios(t *testing.T) {
 				GitOps: &GitOpsConfig{
 					Type: "flux", // Type is flux
 					Bootstrap: &BootstrapConfig{
-						FluxVersion:     "v2.0.0",      // Flux field
-						ArgoCDVersion:   "v2.8.0",      // ArgoCD field (should be ignored)
-						ArgoCDNamespace: "argocd",      // ArgoCD field (should be ignored)
+						FluxVersion:     "v2.0.0",        // Flux field
+						ArgoCDVersion:   "v2.8.0",        // ArgoCD field (should be ignored)
+						ArgoCDNamespace: "argocd",        // ArgoCD field (should be ignored)
 						Components:      []string{"all"}, // Flux field
 					},
 				},
 			},
 		}
-		
+
 		err := cluster.Validate()
 		if err != nil {
 			t.Errorf("validation should pass even with mixed fields: %v", err)
 		}
 	})
-	
+
 	t.Run("deep copy via conversion", func(t *testing.T) {
 		original := &ClusterConfig{
 			Metadata: gvk.BaseMetadata{
@@ -364,20 +364,20 @@ func TestClusterConfig_ComplexScenarios(t *testing.T) {
 				},
 			},
 		}
-		
+
 		// Use ConvertFrom to create a copy
 		copy := &ClusterConfig{}
 		err := copy.ConvertFrom(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		
+
 		// Modify the copy
 		copy.Metadata.Name = "modified"
 		if copy.Spec.Labels != nil {
 			copy.Spec.Labels["spec"] = "modified"
 		}
-		
+
 		// Verify original is unchanged
 		if original.Metadata.Name != "original" {
 			t.Error("original name was modified")
@@ -388,7 +388,7 @@ func TestClusterConfig_ComplexScenarios(t *testing.T) {
 			t.Skip("ConvertFrom currently does shallow copy for maps")
 		}
 	})
-	
+
 	t.Run("validation with special characters", func(t *testing.T) {
 		specialNames := []string{
 			"cluster-with-dash",
@@ -398,10 +398,10 @@ func TestClusterConfig_ComplexScenarios(t *testing.T) {
 			"123cluster",
 			"UPPERCASE",
 			"CamelCase",
-			"cluster/with/slash", // This might be invalid in k8s context
+			"cluster/with/slash",  // This might be invalid in k8s context
 			"cluster with spaces", // This might be invalid in k8s context
 		}
-		
+
 		for _, name := range specialNames {
 			cluster := NewClusterConfig(name)
 			err := cluster.Validate()
