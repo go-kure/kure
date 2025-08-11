@@ -1,0 +1,293 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+env:
+  GO_VERSION: '1.24.6'
+
+# Cancel previous runs for the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # =============================================================================
+  # Quick Validation
+  # =============================================================================
+  
+  quick-check:
+    name: Quick Validation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Quick checks
+      run: make check
+
+    - name: Check for sensitive files
+      run: |
+        # Check for common sensitive patterns
+        if grep -r -i "password\|secret\|token\|key" --include="*.go" --include="*.yaml" --include="*.yml" . | grep -v "test" | grep -E "(=|:)" | head -10; then
+          echo "::warning::Potential sensitive information found in code. Please review."
+        fi
+
+  # =============================================================================
+  # Dependency and Security Check
+  # =============================================================================
+  
+  security-check:
+    name: Security and Dependencies
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Check for outdated dependencies
+      run: make outdated
+
+    - name: Install govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Run vulnerability check
+      run: govulncheck ./...
+
+  # =============================================================================
+  # Test Coverage Check
+  # =============================================================================
+  
+  coverage-check:
+    name: Test Coverage Validation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run tests with coverage
+      run: make test-coverage
+
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+        THRESHOLD=80
+        echo "Current coverage: ${COVERAGE}%"
+        echo "Required threshold: ${THRESHOLD}%"
+        
+        if [ "${COVERAGE%.*}" -lt "$THRESHOLD" ]; then
+          echo "::error::Test coverage ${COVERAGE}% is below required threshold of ${THRESHOLD}%"
+          exit 1
+        else
+          echo "::notice::Test coverage ${COVERAGE}% meets required threshold"
+        fi
+
+    - name: Comment coverage on PR
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: coverage
+        message: |
+          ## 📊 Test Coverage Report
+          
+          ```
+          $(go tool cover -func=coverage/coverage.out | tail -10)
+          ```
+          
+          **Total Coverage:** $(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}')
+
+  # =============================================================================
+  # Changed Files Analysis
+  # =============================================================================
+  
+  analyze-changes:
+    name: Analyze Changed Files
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@v44
+      with:
+        files: |
+          **.go
+          go.mod
+          go.sum
+          Makefile
+          .github/workflows/**.yml
+
+    - name: Analyze Go changes
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: |
+        echo "Changed Go-related files:"
+        echo "${{ steps.changed-files.outputs.all_changed_files }}"
+        
+        # Count lines of code changes
+        ADDED_LINES=$(git diff --numstat origin/main...HEAD | awk '{added+=$1} END {print added+0}')
+        REMOVED_LINES=$(git diff --numstat origin/main...HEAD | awk '{removed+=$2} END {print removed+0}')
+        
+        echo "Lines added: $ADDED_LINES"
+        echo "Lines removed: $REMOVED_LINES"
+        
+        # Check if this is a major change
+        if [ "$ADDED_LINES" -gt 500 ] || [ "$REMOVED_LINES" -gt 500 ]; then
+          echo "::notice::This is a major change (500+ lines). Consider breaking it into smaller PRs."
+        fi
+
+    - name: Check for breaking changes
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: |
+        # Look for potential breaking changes in public APIs
+        if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -E "pkg/.*\.go$"; then
+          echo "::warning::Changes detected in pkg/ directory. Review for potential breaking changes to public API."
+        fi
+
+  # =============================================================================
+  # Performance Check (Optional)
+  # =============================================================================
+  
+  performance-check:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false && contains(github.event.pull_request.labels.*.name, 'performance')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run benchmarks
+      run: |
+        make test-benchmark | tee benchmark-results.txt
+        
+        echo "## 🚀 Benchmark Results" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat benchmark-results.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # =============================================================================
+  # Documentation Check
+  # =============================================================================
+  
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check for documentation updates
+      id: docs-changed
+      uses: tj-actions/changed-files@v44
+      with:
+        files: |
+          **.md
+          docs/**
+          examples/**
+          cmd/demo/**
+
+    - name: Validate documentation
+      if: steps.docs-changed.outputs.any_changed == 'true'
+      run: |
+        echo "Documentation files changed:"
+        echo "${{ steps.docs-changed.outputs.all_changed_files }}"
+        
+        # Check for broken links in markdown files (basic check)
+        for file in ${{ steps.docs-changed.outputs.all_changed_files }}; do
+          if [[ $file == *.md ]]; then
+            if grep -q "](http" "$file"; then
+              echo "External links found in $file - manual verification recommended"
+            fi
+          fi
+        done
+
+    - name: Check if public API changes need documentation
+      run: |
+        # Check if pkg/ changes exist but no documentation updates
+        if git diff --name-only origin/main...HEAD | grep -q "^pkg/"; then
+          if ! git diff --name-only origin/main...HEAD | grep -qE "\.(md|txt)$"; then
+            echo "::warning::Public API changes detected but no documentation updates found. Consider updating README.md or adding examples."
+          fi
+        fi

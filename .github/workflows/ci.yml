@@ -1,0 +1,396 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'release/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24.6'
+  GOLANGCI_LINT_VERSION: 'v1.62.2'
+
+jobs:
+  # =============================================================================
+  # Code Quality and Testing
+  # =============================================================================
+  
+  test:
+    name: Test and Code Quality
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        test-type: [unit, race, coverage]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run unit tests
+      if: matrix.test-type == 'unit'
+      run: make test
+
+    - name: Run race tests
+      if: matrix.test-type == 'race'
+      run: make test-race
+
+    - name: Run tests with coverage
+      if: matrix.test-type == 'coverage'
+      run: make test-coverage
+
+    - name: Upload coverage reports to Codecov
+      if: matrix.test-type == 'coverage'
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  # =============================================================================
+  # Linting and Code Quality
+  # =============================================================================
+
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Install golangci-lint
+      run: make tools
+
+    - name: Run linters
+      run: make lint
+
+    - name: Check formatting
+      run: |
+        make fmt
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "::error::Code is not properly formatted. Run 'make fmt' to fix."
+          git diff
+          exit 1
+        fi
+
+    - name: Run go vet
+      run: make vet
+
+    - name: Check go mod tidy
+      run: |
+        make tidy
+        if [ -n "$(git status --porcelain go.mod go.sum)" ]; then
+          echo "::error::go.mod or go.sum is not tidy. Run 'make tidy' to fix."
+          git diff go.mod go.sum
+          exit 1
+        fi
+
+  # =============================================================================
+  # Build and Demo
+  # =============================================================================
+
+  build:
+    name: Build Executables
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    
+    strategy:
+      matrix:
+        target: [kure, kurel, demo]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Build ${{ matrix.target }}
+      run: make build-${{ matrix.target }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.target }}-linux-amd64
+        path: bin/${{ matrix.target }}
+        retention-days: 7
+
+  # =============================================================================
+  # Demo and Examples
+  # =============================================================================
+
+  demo:
+    name: Generate Demo and Examples
+    runs-on: ubuntu-latest
+    needs: [build]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Create examples directory structure
+      run: |
+        mkdir -p examples/{app-workloads,clusters,multi-oci,bootstrap,patches}
+        echo 'apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: example-app
+  namespace: default
+spec:
+  workload: Deployment
+  replicas: 2
+  containers:
+    - name: app
+      image: nginx:1.21' > examples/app-workloads/example.yaml
+
+    - name: Run demo with internals
+      run: make demo-internals
+
+    - name: Run demo (main)
+      run: make demo || true  # Allow demo to fail if examples don't exist
+
+    - name: Upload demo outputs
+      uses: actions/upload-artifact@v4
+      with:
+        name: demo-outputs
+        path: out/
+        retention-days: 7
+
+  # =============================================================================
+  # Integration Tests (Optional)
+  # =============================================================================
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run integration tests
+      run: make test-integration || true  # Allow to fail if no integration tests exist
+
+  # =============================================================================
+  # Cross-platform Build Matrix
+  # =============================================================================
+
+  build-matrix:
+    name: Cross-Platform Build
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    
+    strategy:
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+        exclude:
+          - os: windows
+            arch: arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Build for ${{ matrix.os }}/${{ matrix.arch }}
+      env:
+        GOOS: ${{ matrix.os }}
+        GOARCH: ${{ matrix.arch }}
+      run: |
+        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+        
+        if [ "${{ matrix.os }}" = "windows" ]; then
+          EXT=".exe"
+        else
+          EXT=""
+        fi
+        
+        mkdir -p bin
+        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
+          -o bin/kure-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kure
+        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
+          -o bin/kurel-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kurel
+
+    - name: Upload cross-platform artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-${{ matrix.os }}-${{ matrix.arch }}
+        path: bin/*
+        retention-days: 30
+
+  # =============================================================================
+  # Security Scanning
+  # =============================================================================
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: './...'
+        format: sarif
+        output: gosec-results.sarif
+
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: gosec-results.sarif
+
+  # =============================================================================
+  # Dependency Check
+  # =============================================================================
+
+  dependency-check:
+    name: Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Install govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Run govulncheck
+      run: govulncheck ./...
