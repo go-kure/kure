@@ -46,7 +46,8 @@ Cluster                    # Top-level configuration
 - **Purpose**: Unit of deployment (maps to Flux Kustomization)
 - **Contains**: Multiple Applications
 - **Features**:
-  - Flux reconciliation settings (interval, source)
+  - Flux reconciliation settings (interval, timeout, retryInterval, source)
+  - Interval validation (1s to 24h, Go duration format)
   - Dependency management
   - Label propagation
 
@@ -143,6 +144,59 @@ spec:
         name: cert-manager
       spec:
         # ... application config
+```
+
+### Bundle Validation
+
+The Stack module includes comprehensive validation for Bundle configurations to ensure GitOps best practices and prevent deployment issues.
+
+#### Interval Field Validation
+
+All time-based fields in Bundle configurations are automatically validated:
+
+- **`interval`**: GitOps reconciliation frequency
+- **`timeout`**: Maximum wait time for resources to be ready  
+- **`retryInterval`**: Frequency for retrying failed reconciliations
+
+**Validation Rules:**
+- **Format**: Must follow Go `time.Duration` syntax
+- **Range**: 1 second minimum, 24 hours maximum
+- **Examples**: `"1s"`, `"5m"`, `"1h"`, `"1h30m45s"`, `"2.5m"`
+
+**Validation Examples:**
+
+```yaml
+# ✅ Valid Bundle with proper intervals
+apiVersion: stack.gokure.dev/v1alpha1
+kind: Bundle
+metadata:
+  name: web-app
+spec:
+  interval: "10m"        # Reconcile every 10 minutes
+  timeout: "15m"         # Wait up to 15 minutes 
+  retryInterval: "2m"    # Retry every 2 minutes
+  
+# ❌ Invalid Bundle - validation errors
+apiVersion: stack.gokure.dev/v1alpha1  
+kind: Bundle
+metadata:
+  name: invalid-bundle
+spec:
+  interval: "5 minutes"    # Error: spaces not allowed
+  timeout: "500ms"         # Error: too short (minimum 1s)
+  retryInterval: "48h"     # Error: too long (maximum 24h)
+```
+
+**Error Messages:**
+
+Validation failures provide clear, actionable error messages:
+
+```
+validation error in Bundle "web-app" at spec.interval: 
+invalid interval format: "5 minutes", expected format like '5m', '1h', '30s'
+
+validation error in Bundle "web-app" at spec.timeout:
+interval "500ms" is too short, minimum is 1s
 ```
 
 #### Version Evolution Strategy

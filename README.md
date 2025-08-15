@@ -223,6 +223,97 @@ spec:
 
 With this layout, each node or bundle is targeted individually. Pointing a Flux Kustomization to the parent directory (`./clusters/prod`) would combine the `cp` and `monitoring` manifests into a single deployment because it would auto-generate a `kustomization.yaml` for the entire tree. ArgoCD will only process the manifests under `clusters/prod` itself unless a `kustomization.yaml` aggregates the subdirectories, so each subfolder must be referenced separately.
 
+## Configuration Validation
+
+Kure provides built-in validation for common GitOps configuration fields to prevent deployment issues and ensure best practices.
+
+### Interval Format Validation
+
+Kure automatically validates time interval fields to ensure they follow Go's duration format and GitOps best practices:
+
+**Validated Fields:**
+- `Interval` - GitOps reconciliation frequency
+- `Timeout` - Maximum wait time for resources to be ready
+- `RetryInterval` - Frequency for retrying failed reconciliations
+
+**Supported Formats:**
+```go
+// Simple durations
+"1s"      // 1 second
+"30s"     // 30 seconds  
+"5m"      // 5 minutes
+"1h"      // 1 hour
+"24h"     // 24 hours (maximum)
+
+// Complex durations
+"1h30m"     // 1 hour 30 minutes
+"2h15m30s"  // 2 hours, 15 minutes, 30 seconds
+"1.5m"      // 1.5 minutes (90 seconds)
+```
+
+**Validation Rules:**
+- **Minimum**: 1 second (`1s`)
+- **Maximum**: 24 hours (`24h`)
+- **Format**: Must follow Go time.Duration syntax
+- **Empty Values**: Allowed (uses system defaults)
+
+**Common Validation Errors:**
+
+```go
+// ❌ Invalid - Missing unit
+bundle.Spec.Interval = "30"
+
+// ❌ Invalid - Wrong unit
+bundle.Spec.Interval = "5x"
+
+// ❌ Invalid - Too short
+bundle.Spec.Interval = "500ms"
+
+// ❌ Invalid - Too long  
+bundle.Spec.Interval = "48h"
+
+// ❌ Invalid - Spaces
+bundle.Spec.Interval = "5 minutes"
+
+// ✅ Valid examples
+bundle.Spec.Interval = "5m"
+bundle.Spec.Timeout = "10m"
+bundle.Spec.RetryInterval = "2m"
+```
+
+**Error Messages:**
+
+When validation fails, you'll see descriptive error messages:
+
+```
+validation error in Bundle "my-app" at spec.interval: 
+interval "500ms" is too short, minimum is 1s
+
+validation error in Bundle "my-app" at spec.timeout:
+invalid interval format: "5 minutes", expected format like '5m', '1h', '30s'
+```
+
+**Best Practices:**
+
+- **Reconciliation Intervals**: Use `5m` to `30m` for most applications
+- **Timeouts**: Set 2-3x longer than expected deployment time
+- **Retry Intervals**: Use shorter intervals (`1m`-`5m`) for faster failure recovery
+- **Production**: Avoid very short intervals (`<1m`) to reduce API load
+
+### Bundle Configuration Example
+
+```go
+bundle := v1alpha1.NewBundleConfig("web-app")
+bundle.Spec.Interval = "10m"        // Reconcile every 10 minutes
+bundle.Spec.Timeout = "15m"         // Wait up to 15 minutes for readiness
+bundle.Spec.RetryInterval = "2m"    // Retry failed deployments every 2 minutes
+
+// Validation happens automatically when calling Validate()
+if err := bundle.Validate(); err != nil {
+    log.Fatalf("Bundle validation failed: %v", err)
+}
+```
+
 ## Development & Testing
 
 ### Running Tests

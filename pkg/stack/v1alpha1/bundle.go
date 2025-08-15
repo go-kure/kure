@@ -2,6 +2,8 @@ package v1alpha1
 
 import (
 	"fmt"
+	"regexp"
+	"time"
 
 	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/errors"
@@ -28,6 +30,8 @@ type BundleSpec struct {
 	DependsOn []BundleReference `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
 
 	// Interval controls how often Flux reconciles the bundle
+	// Supports Go duration format (e.g., "5m", "1h", "30s", "1h30m")
+	// Valid range: 1s to 24h. Empty value uses system defaults.
 	Interval string `yaml:"interval,omitempty" json:"interval,omitempty"`
 
 	// SourceRef specifies the source for the bundle
@@ -52,9 +56,13 @@ type BundleSpec struct {
 	Wait bool `yaml:"wait,omitempty" json:"wait,omitempty"`
 
 	// Timeout is the maximum time to wait for resources to be ready
+	// Supports Go duration format (e.g., "10m", "1h", "30s")
+	// Valid range: 1s to 24h. Empty value uses system defaults.
 	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 
 	// RetryInterval is the interval to retry failed reconciliations
+	// Supports Go duration format (e.g., "2m", "30s", "5m")
+	// Valid range: 1s to 24h. Empty value uses system defaults.
 	RetryInterval string `yaml:"retryInterval,omitempty" json:"retryInterval,omitempty"`
 }
 
@@ -129,6 +137,43 @@ func (b *BundleConfig) GetPath() string {
 	return b.Spec.ParentPath + "/" + b.Metadata.Name
 }
 
+// validIntervalPattern defines the regex pattern for valid time intervals
+// Supports formats like: 1s, 30s, 1m, 5m, 1h, 24h, 1m30s, 1h30m, etc.
+var validIntervalPattern = regexp.MustCompile(`^(\d+(\.\d+)?[a-z]+)+$`)
+
+// validateInterval checks if an interval string is valid according to Go's time.Duration format
+// and GitOps best practices (minimum 1 second, maximum 24 hours)
+func validateInterval(interval string) error {
+	if interval == "" {
+		return nil // Empty intervals are allowed
+	}
+
+	// Check basic format with regex
+	if !validIntervalPattern.MatchString(interval) {
+		return fmt.Errorf("invalid interval format: %q, expected format like '5m', '1h', '30s'", interval)
+	}
+
+	// Parse using Go's time.Duration to ensure validity
+	duration, err := time.ParseDuration(interval)
+	if err != nil {
+		return fmt.Errorf("invalid interval format: %q, %w", interval, err)
+	}
+
+	// Validate range: minimum 1 second, maximum 24 hours
+	const minInterval = 1 * time.Second
+	const maxInterval = 24 * time.Hour
+
+	if duration < minInterval {
+		return fmt.Errorf("interval %q is too short, minimum is %v", interval, minInterval)
+	}
+
+	if duration > maxInterval {
+		return fmt.Errorf("interval %q is too long, maximum is %v", interval, maxInterval)
+	}
+
+	return nil
+}
+
 // Validate performs validation on the bundle configuration
 func (b *BundleConfig) Validate() error {
 	if b == nil {
@@ -140,8 +185,21 @@ func (b *BundleConfig) Validate() error {
 	}
 
 	// Validate interval format if specified
-	if b.Spec.Interval != "" {
-		// TODO: Add interval format validation (e.g., "5m", "1h")
+	if err := validateInterval(b.Spec.Interval); err != nil {
+		return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.interval",
+			err.Error(), nil)
+	}
+
+	// Validate timeout format if specified
+	if err := validateInterval(b.Spec.Timeout); err != nil {
+		return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.timeout",
+			err.Error(), nil)
+	}
+
+	// Validate retry interval format if specified
+	if err := validateInterval(b.Spec.RetryInterval); err != nil {
+		return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.retryInterval",
+			err.Error(), nil)
 	}
 
 	// Validate source ref if present

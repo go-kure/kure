@@ -1,0 +1,114 @@
+# Bundle Interval Validation Examples
+# This file demonstrates proper interval configuration and common validation errors
+
+---
+# ✅ VALID: Basic Bundle with recommended intervals
+apiVersion: stack.gokure.dev/v1alpha1
+kind: Bundle
+metadata:
+  name: web-application
+  namespace: apps
+spec:
+  # Reconcile every 10 minutes (recommended for most apps)
+  interval: "10m"
+  
+  # Wait up to 15 minutes for resources to be ready
+  timeout: "15m"
+  
+  # Retry failed deployments every 2 minutes
+  retryInterval: "2m"
+  
+  sourceRef:
+    kind: GitRepository
+    name: app-repo
+    namespace: flux-system
+
+---
+# ✅ VALID: Complex durations and edge cases
+apiVersion: stack.gokure.dev/v1alpha1
+kind: Bundle
+metadata:
+  name: complex-intervals
+  namespace: system
+spec:
+  # Complex duration format
+  interval: "1h30m"
+  
+  # Decimal minutes (90 seconds)
+  timeout: "1.5m"
+  
+  # Minimum allowed interval (1 second)
+  retryInterval: "1s"
+
+---
+# ✅ VALID: Maximum intervals
+apiVersion: stack.gokure.dev/v1alpha1
+kind: Bundle
+metadata:
+  name: long-intervals
+  namespace: batch
+spec:
+  # Maximum allowed interval (24 hours)
+  interval: "24h"
+  
+  # Long timeout for batch jobs
+  timeout: "12h"
+  
+  # Conservative retry interval
+  retryInterval: "30m"
+
+---
+# ✅ VALID: Empty intervals (uses system defaults)
+apiVersion: stack.gokure.dev/v1alpha1
+kind: Bundle
+metadata:
+  name: default-intervals
+  namespace: apps
+spec:
+  # Empty intervals are allowed - system will use defaults
+  sourceRef:
+    kind: GitRepository
+    name: app-repo
+
+---
+# ❌ INVALID EXAMPLES (for reference - these will fail validation)
+#
+# The following examples show common validation errors:
+
+# apiVersion: stack.gokure.dev/v1alpha1
+# kind: Bundle
+# metadata:
+#   name: invalid-formats
+# spec:
+#   interval: "5 minutes"     # ❌ Spaces not allowed
+#   timeout: "30"             # ❌ Missing unit
+#   retryInterval: "5x"       # ❌ Invalid unit
+
+# apiVersion: stack.gokure.dev/v1alpha1
+# kind: Bundle
+# metadata:
+#   name: invalid-ranges
+# spec:
+#   interval: "500ms"         # ❌ Too short (minimum 1s)
+#   timeout: "48h"            # ❌ Too long (maximum 24h)
+#   retryInterval: "0s"       # ❌ Zero duration not allowed
+
+# apiVersion: stack.gokure.dev/v1alpha1
+# kind: Bundle
+# metadata:
+#   name: invalid-syntax
+# spec:
+#   interval: "1h30"          # ❌ Missing unit for seconds part
+#   timeout: "-5m"            # ❌ Negative values not allowed
+#   retryInterval: "5M"       # ❌ Uppercase units not allowed
+
+# Validation Error Examples:
+#
+# validation error in Bundle "invalid-formats" at spec.interval: 
+# invalid interval format: "5 minutes", expected format like '5m', '1h', '30s'
+#
+# validation error in Bundle "invalid-ranges" at spec.timeout:
+# interval "500ms" is too short, minimum is 1s
+#
+# validation error in Bundle "invalid-ranges" at spec.interval:
+# interval "48h" is too long, maximum is 24h

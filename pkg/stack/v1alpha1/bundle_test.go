@@ -333,6 +333,329 @@ func TestBundleConfig_Conversion(t *testing.T) {
 	}
 }
 
+func TestValidateInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval string
+		wantErr  bool
+		errMsg   string
+	}{
+		// Valid intervals
+		{
+			name:     "empty interval",
+			interval: "",
+			wantErr:  false,
+		},
+		{
+			name:     "1 second",
+			interval: "1s",
+			wantErr:  false,
+		},
+		{
+			name:     "30 seconds",
+			interval: "30s",
+			wantErr:  false,
+		},
+		{
+			name:     "5 minutes",
+			interval: "5m",
+			wantErr:  false,
+		},
+		{
+			name:     "1 hour",
+			interval: "1h",
+			wantErr:  false,
+		},
+		{
+			name:     "24 hours",
+			interval: "24h",
+			wantErr:  false,
+		},
+		{
+			name:     "complex duration",
+			interval: "1h30m45s",
+			wantErr:  false,
+		},
+		{
+			name:     "decimal seconds",
+			interval: "1.5s",
+			wantErr:  false,
+		},
+		{
+			name:     "decimal minutes",
+			interval: "2.5m",
+			wantErr:  false,
+		},
+
+		// Invalid intervals
+		{
+			name:     "invalid format - no unit",
+			interval: "30",
+			wantErr:  true,
+			errMsg:   "invalid interval format",
+		},
+		{
+			name:     "invalid format - wrong unit",
+			interval: "5x",
+			wantErr:  true,
+			errMsg:   "invalid interval format",
+		},
+		{
+			name:     "invalid format - negative",
+			interval: "-5m",
+			wantErr:  true,
+			errMsg:   "invalid interval format",
+		},
+		{
+			name:     "invalid format - mixed case",
+			interval: "5M",
+			wantErr:  true,
+			errMsg:   "invalid interval format",
+		},
+		{
+			name:     "zero duration",
+			interval: "0s",
+			wantErr:  true,
+			errMsg:   "too short",
+		},
+		{
+			name:     "too short - nanoseconds",
+			interval: "500ns",
+			wantErr:  true,
+			errMsg:   "too short",
+		},
+		{
+			name:     "too short - microseconds",
+			interval: "500us",
+			wantErr:  true,
+			errMsg:   "too short",
+		},
+		{
+			name:     "too short - milliseconds",
+			interval: "500ms",
+			wantErr:  true,
+			errMsg:   "too short",
+		},
+		{
+			name:     "too long - over 24 hours",
+			interval: "25h",
+			wantErr:  true,
+			errMsg:   "too long",
+		},
+		{
+			name:     "too long - days",
+			interval: "48h",
+			wantErr:  true,
+			errMsg:   "too long",
+		},
+		{
+			name:     "invalid format - spaces",
+			interval: "5 m",
+			wantErr:  true,
+			errMsg:   "invalid interval format",
+		},
+		{
+			name:     "invalid format - empty string in complex",
+			interval: "1h30m45",
+			wantErr:  true,
+			errMsg:   "invalid interval format",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateInterval(tt.interval)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got nil")
+				} else if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestBundleConfig_IntervalValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		bundle  *BundleConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid interval",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Interval: "5m",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty interval",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Interval: "",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid interval format",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Interval: "5 minutes",
+				},
+			},
+			wantErr: true,
+			errMsg:  "spec.interval",
+		},
+		{
+			name: "too short interval",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Interval: "500ms",
+				},
+			},
+			wantErr: true,
+			errMsg:  "too short",
+		},
+		{
+			name: "too long interval",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Interval: "48h",
+				},
+			},
+			wantErr: true,
+			errMsg:  "too long",
+		},
+		{
+			name: "invalid timeout format",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Timeout: "invalid",
+				},
+			},
+			wantErr: true,
+			errMsg:  "spec.timeout",
+		},
+		{
+			name: "valid timeout",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Timeout: "10m",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid retry interval format",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					RetryInterval: "2 minutes",
+				},
+			},
+			wantErr: true,
+			errMsg:  "spec.retryInterval",
+		},
+		{
+			name: "valid retry interval",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					RetryInterval: "2m",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "all interval fields valid",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "test-bundle",
+				},
+				Spec: BundleSpec{
+					Interval:      "5m",
+					Timeout:       "10m",
+					RetryInterval: "1m",
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.bundle.Validate()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got nil")
+				} else if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestBundleConfig_FluxIntegration(t *testing.T) {
 	bundle := &BundleConfig{
 		APIVersion: "stack.gokure.dev/v1alpha1",
