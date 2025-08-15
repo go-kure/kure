@@ -75,9 +75,15 @@
       "Bash(bin/kurel:*)",
       "Bash(bin/kure:*)",
       "Bash(./bin/kurel:*)",
-      "Bash(./bin/kure:*)"
+      "Bash(./bin/kure:*)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v -run \"TestNew.*Builder|TestClusterBuilder|TestNodeBuilder|TestBundleBuilder|TestComplexFluentBuilder|TestBuilderImmutability|TestBuilderChainingSafety|TestPathInitialization\")",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v -run \"TestBundleBuilder_WithApplication\")",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./...)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -v -run \"TestResolver/max_depth_exceeded\")"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   },
   "project": "go-kure/kure",
   "description": "Kure - A Go library for programmatically building Kubernetes resources for GitOps tools",
