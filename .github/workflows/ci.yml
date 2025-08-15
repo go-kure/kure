@@ -209,17 +209,19 @@ jobs:
     - name: Create examples directory structure
       run: |
         mkdir -p examples/{app-workloads,clusters,multi-oci,bootstrap,patches}
-        echo 'apiVersion: generators.gokure.dev/v1alpha1
-kind: AppWorkload
-metadata:
-  name: example-app
-  namespace: default
-spec:
-  workload: Deployment
-  replicas: 2
-  containers:
-    - name: app
-      image: nginx:1.21' > examples/app-workloads/example.yaml
+        cat > examples/app-workloads/example.yaml << 'EOF'
+        apiVersion: generators.gokure.dev/v1alpha1
+        kind: AppWorkload
+        metadata:
+          name: example-app
+          namespace: default
+        spec:
+          workload: Deployment
+          replicas: 2
+          containers:
+            - name: app
+              image: nginx:1.21
+        EOF
 
     - name: Run demo with internals
       run: make demo-internals
