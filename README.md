@@ -68,7 +68,7 @@ To use Kure in your project, import the public API packages:
 import (
     "github.com/go-kure/kure/pkg/stack"
     "github.com/go-kure/kure/pkg/stack/layout"
-    "github.com/go-kure/kure/pkg/k8s/fluxcd"
+    "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
     "github.com/go-kure/kure/pkg/io"
 )
 ```
@@ -230,14 +230,27 @@ With this layout, each node or bundle is targeted individually. Pointing a Flux 
 All packages include unit tests. Run them with:
 
 ```bash
-go test ./...
+# Run all tests
+make test
+
+# Run tests with verbose output
+make test-verbose
+
+# Run tests with coverage
+make test-coverage
+
+# Run specific package tests
+go test ./pkg/stack/...
+
+# Run all development tasks
+make all
 ```
 
-The `go test` command will discover and execute tests across all packages.
+The `make test` command will discover and execute tests across all packages. Use `make help` to see all available development commands.
 
 ### Code Quality
-- **52 test files** with comprehensive unit test coverage
-- GitHub Actions CI/CD pipeline with Go 1.24.4
+- **105 test files** with comprehensive unit test coverage
+- GitHub Actions CI/CD pipeline with Go 1.24.6
 - Qodana static analysis with vulnerability scanning
 - gotestfmt for enhanced test output formatting
 
@@ -247,11 +260,49 @@ The `go test` command will discover and execute tests across all packages.
 - cert-manager v1.16.2, External Secrets v0.18.2, MetalLB v0.15.2
 - Built on controller-runtime for Kubernetes integration
 
+### CLI Tools
+
+Kure provides two complementary CLI tools:
+
+#### kure - Library CLI
+```bash
+# Generate Kubernetes manifests
+kure generate cluster --config cluster.yaml
+
+# Apply patches to manifests
+kure patch --file deployment.yaml --patch patches/
+
+# Show version and help
+kure version
+kure --help
+```
+
+#### kurel - Package Manager
+```bash
+# Build a kurel package
+kurel build ./my-package
+
+# Validate package structure
+kurel validate ./my-package
+
+# Show package information
+kurel info ./my-package
+
+# Generate JSON schemas (with Kubernetes support)
+kurel schema generate ./output --k8s
+
+# Show version and help
+kurel version
+kurel --help
+```
+
+The kurel CLI provides package-based resource management, allowing teams to create reusable, configurable Kubernetes applications without complex templating engines.
+
 ### Examples & Documentation
 - Example cluster configurations in `examples/`
 - API documentation available at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure)
 - Design documents in `pkg/*/DESIGN.md` files
-- CLI reference via `kure --help`
+- CLI reference via `kure --help` and `kurel --help`
 
 ## Use Cases
 
@@ -269,7 +320,7 @@ Full API documentation is available at [pkg.go.dev](https://pkg.go.dev/github.co
 
 - `pkg/stack` - Core domain model and workflow interfaces
 - `pkg/stack/layout` - Manifest organization and file layout
-- `pkg/k8s/fluxcd` - Flux resource creation and management
+- `pkg/kubernetes/fluxcd` - Flux resource creation and management
 - `pkg/patch` - JSONPath-based patching system
 - `pkg/io` - YAML serialization and printing utilities
 

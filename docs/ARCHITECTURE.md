@@ -1171,7 +1171,7 @@ func CreateResource(name, namespace string) (*Resource, error) {
 
 ### Test Organization
 
-Kure maintains **52 test files** with comprehensive coverage:
+Kure maintains **105 test files** with comprehensive coverage:
 
 ```
 internal/

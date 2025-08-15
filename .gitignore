@@ -35,3 +35,4 @@ out/
 # build files
 /kure
 /kurel
+bin/
