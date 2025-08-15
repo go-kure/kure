@@ -410,13 +410,13 @@ func newSchemaCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var (
 				outputPath string
-				// includeK8s  bool // TODO: Use when implementing K8s schema inclusion
+				includeK8s  bool
 				prettyPrint bool
 			)
 
 			// Get flags from command
 			outputPath, _ = cmd.Flags().GetString("output")
-			// includeK8s, _ = cmd.Flags().GetBool("k8s") // TODO: Use when implementing K8s schema inclusion
+			includeK8s, _ = cmd.Flags().GetBool("k8s")
 			prettyPrint, _ = cmd.Flags().GetBool("pretty")
 
 			// Setup logger
@@ -430,7 +430,9 @@ func newSchemaCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 
 			// Generate schema
 			ctx := context.Background()
-			schema, err := schemaGen.GeneratePackageSchema(ctx)
+			schema, err := schemaGen.GeneratePackageSchemaWithOptions(ctx, &launcher.SchemaOptions{
+				IncludeK8s: includeK8s,
+			})
 			if err != nil {
 				return errors.Wrap(err, "failed to generate schema")
 			}

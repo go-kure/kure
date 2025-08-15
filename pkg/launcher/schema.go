@@ -64,7 +64,16 @@ func NewSchemaGenerator(log logger.Logger) SchemaGenerator {
 
 // GeneratePackageSchema generates a schema for a package definition
 func (g *schemaGenerator) GeneratePackageSchema(ctx context.Context) (*JSONSchema, error) {
-	g.logger.Debug("Generating package schema")
+	return g.GeneratePackageSchemaWithOptions(ctx, &SchemaOptions{IncludeK8s: false})
+}
+
+// GeneratePackageSchemaWithOptions generates a schema for a package definition with options
+func (g *schemaGenerator) GeneratePackageSchemaWithOptions(ctx context.Context, opts *SchemaOptions) (*JSONSchema, error) {
+	if opts == nil {
+		opts = &SchemaOptions{IncludeK8s: false}
+	}
+
+	g.logger.Debug("Generating package schema", "includeK8s", opts.IncludeK8s)
 
 	// Root schema for a Kurel package
 	schema := &JSONSchema{
@@ -78,7 +87,7 @@ func (g *schemaGenerator) GeneratePackageSchema(ctx context.Context) (*JSONSchem
 			},
 			"metadata":   g.generateMetadataSchema(),
 			"parameters": g.generateParametersSchema(),
-			"resources":  g.generateResourcesSchema(),
+			"resources":  g.generateResourcesSchemaWithOptions(opts.IncludeK8s),
 			"patches":    g.generatePatchesSchema(),
 		},
 		Required: []string{"metadata"},
@@ -230,7 +239,12 @@ func (g *schemaGenerator) generateParametersSchema() *JSONSchema {
 
 // generateResourcesSchema generates schema for resources section
 func (g *schemaGenerator) generateResourcesSchema() *JSONSchema {
-	return &JSONSchema{
+	return g.generateResourcesSchemaWithOptions(false)
+}
+
+// generateResourcesSchemaWithOptions generates schema for resources section with K8s option
+func (g *schemaGenerator) generateResourcesSchemaWithOptions(includeK8s bool) *JSONSchema {
+	baseSchema := &JSONSchema{
 		Type:        "array",
 		Description: "Kubernetes resources defined by this package",
 		Items: &JSONSchema{
@@ -245,28 +259,7 @@ func (g *schemaGenerator) generateResourcesSchema() *JSONSchema {
 					Type:        "string",
 					Description: "Kind of the resource",
 				},
-				"metadata": {
-					Type:        "object",
-					Description: "Resource metadata",
-					Properties: map[string]*JSONSchema{
-						"name": {
-							Type:        "string",
-							Description: "Resource name",
-						},
-						"namespace": {
-							Type:        "string",
-							Description: "Resource namespace",
-						},
-						"labels": {
-							Type:        "object",
-							Description: "Resource labels",
-						},
-						"annotations": {
-							Type:        "object",
-							Description: "Resource annotations",
-						},
-					},
-				},
+				"metadata": g.generateK8sMetadataSchema(),
 				"spec": {
 					Type:        "object",
 					Description: "Resource specification",
@@ -279,6 +272,45 @@ func (g *schemaGenerator) generateResourcesSchema() *JSONSchema {
 			Required: []string{"apiVersion", "kind"},
 		},
 	}
+
+	// If K8s schemas are requested, enhance with additional validation
+	if includeK8s {
+		g.logger.Debug("Including Kubernetes resource schemas")
+		// Add common Kubernetes resource kinds to the schema
+		baseSchema.Items.Properties["apiVersion"] = &JSONSchema{
+			Type:        "string",
+			Description: "API version of the resource",
+			Enum: []interface{}{
+				"v1",
+				"apps/v1",
+				"networking.k8s.io/v1",
+				"batch/v1",
+				"batch/v1beta1",
+				"autoscaling/v1",
+				"autoscaling/v2",
+				"policy/v1",
+				"policy/v1beta1",
+				"rbac.authorization.k8s.io/v1",
+				"extensions/v1beta1",
+			},
+			KurelSource: "k8s",
+		}
+
+		baseSchema.Items.Properties["kind"] = &JSONSchema{
+			Type:        "string",
+			Description: "Kind of the resource",
+			Enum: []interface{}{
+				"Pod", "Service", "Deployment", "StatefulSet", "DaemonSet",
+				"ConfigMap", "Secret", "Ingress", "Job", "CronJob",
+				"HorizontalPodAutoscaler", "PodDisruptionBudget",
+				"Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding",
+				"ServiceAccount", "Namespace", "PersistentVolume", "PersistentVolumeClaim",
+			},
+			KurelSource: "k8s",
+		}
+	}
+
+	return baseSchema
 }
 
 // generatePatchesSchema generates schema for patches section

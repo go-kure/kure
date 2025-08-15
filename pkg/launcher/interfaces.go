@@ -7,6 +7,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// SchemaOptions configures schema generation
+type SchemaOptions struct {
+	IncludeK8s bool // Include Kubernetes resource schemas
+}
+
 // DefinitionLoader loads package definitions from disk
 type DefinitionLoader interface {
 	LoadDefinition(ctx context.Context, path string, opts *LauncherOptions) (*PackageDefinition, error)
@@ -54,6 +59,9 @@ type PatchProcessor interface {
 type SchemaGenerator interface {
 	// GeneratePackageSchema generates a schema for package validation
 	GeneratePackageSchema(ctx context.Context) (*JSONSchema, error)
+
+	// GeneratePackageSchemaWithOptions generates a schema for package validation with options
+	GeneratePackageSchemaWithOptions(ctx context.Context, opts *SchemaOptions) (*JSONSchema, error)
 
 	// GenerateResourceSchema generates a schema for a specific resource type
 	GenerateResourceSchema(ctx context.Context, gvk schema.GroupVersionKind) (*JSONSchema, error)

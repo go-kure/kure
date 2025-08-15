@@ -60,7 +60,15 @@
       "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./... -timeout 30s)",
       "WebFetch(domain:productionresultssa19.blob.core.windows.net)",
       "Bash(make:*)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/demo --internals)"
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/demo --internals)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators/kurelpackage -v)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go build ./pkg/cmd/kurel)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/kurel schema generate /tmp/test-kurel-k8s --pretty)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/kurel schema generate /tmp/test-kurel-k8s --k8s --pretty)",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -v -run \"*Schema*\")",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -v -run \".*Schema.*\")",
+      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/kurel schema generate --help)"
     ],
     "deny": []
   },
