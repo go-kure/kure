@@ -12,10 +12,10 @@ import (
 
 func TestGenerateResources(t *testing.T) {
 	tests := []struct {
-		name          string
-		config        *Config
-		wantObjects   int
-		wantSourceErr bool
+		name           string
+		config         *Config
+		wantObjects    int
+		wantSourceErr  bool
 		wantReleaseErr bool
 	}{
 		{

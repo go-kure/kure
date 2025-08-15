@@ -171,7 +171,7 @@ func (c *ConfigV1Alpha1) GeneratePackageFiles(app *stack.Application) (map[strin
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to gather resources")
 	}
-	
+
 	// Add resources to package under resources/ directory
 	for path, content := range resourceFiles {
 		files[filepath.Join("resources", path)] = content
@@ -182,7 +182,7 @@ func (c *ConfigV1Alpha1) GeneratePackageFiles(app *stack.Application) (map[strin
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate patches")
 	}
-	
+
 	// Add patches to package under patches/ directory
 	for path, content := range patchFiles {
 		files[filepath.Join("patches", path)] = content
@@ -194,7 +194,7 @@ func (c *ConfigV1Alpha1) GeneratePackageFiles(app *stack.Application) (map[strin
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to generate values")
 		}
-		
+
 		// Add values to package under values/ directory
 		for path, content := range valuesFiles {
 			files[filepath.Join("values", path)] = content
@@ -207,7 +207,7 @@ func (c *ConfigV1Alpha1) GeneratePackageFiles(app *stack.Application) (map[strin
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to process extension %s", ext.Name)
 		}
-		
+
 		// Add extension files under extensions/<name>/ directory
 		for path, content := range extFiles {
 			files[filepath.Join("extensions", ext.Name, path)] = content
@@ -227,13 +227,13 @@ func (c *ConfigV1Alpha1) GeneratePackageFiles(app *stack.Application) (map[strin
 // gatherResources collects resources from filesystem according to ResourceSource definitions
 func (c *ConfigV1Alpha1) gatherResources() (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	
+
 	for _, resource := range c.Resources {
 		resourceFiles, err := c.gatherResourcesFromSource(resource)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to gather resources from source %s", resource.Source)
 		}
-		
+
 		// Merge collected files, handling potential conflicts
 		for path, content := range resourceFiles {
 			if _, exists := files[path]; exists {
@@ -242,20 +242,20 @@ func (c *ConfigV1Alpha1) gatherResources() (map[string][]byte, error) {
 			files[path] = content
 		}
 	}
-	
+
 	return files, nil
 }
 
 // gatherResourcesFromSource collects resources from a single ResourceSource
 func (c *ConfigV1Alpha1) gatherResourcesFromSource(resource ResourceSource) (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	
+
 	// Check if source exists
 	info, err := os.Stat(resource.Source)
 	if err != nil {
 		return nil, errors.Wrapf(err, "resource source not found: %s", resource.Source)
 	}
-	
+
 	if info.IsDir() {
 		// Collect from directory
 		err = c.walkDirectory(resource.Source, resource, files)
@@ -269,7 +269,7 @@ func (c *ConfigV1Alpha1) gatherResourcesFromSource(resource ResourceSource) (map
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to read file %s", resource.Source)
 			}
-			
+
 			// Validate it's a Kubernetes resource
 			if c.isKubernetesResource(content) {
 				// Use relative path from source directory
@@ -278,7 +278,7 @@ func (c *ConfigV1Alpha1) gatherResourcesFromSource(resource ResourceSource) (map
 			}
 		}
 	}
-	
+
 	return files, nil
 }
 
@@ -288,7 +288,7 @@ func (c *ConfigV1Alpha1) walkDirectory(root string, resource ResourceSource, fil
 		if err != nil {
 			return err
 		}
-		
+
 		// Skip directories
 		if d.IsDir() {
 			// Check if we should recurse
@@ -297,29 +297,29 @@ func (c *ConfigV1Alpha1) walkDirectory(root string, resource ResourceSource, fil
 			}
 			return nil
 		}
-		
+
 		// Check if file should be included
 		if !c.shouldIncludeFile(path, resource) {
 			return nil
 		}
-		
+
 		// Read and validate file
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return errors.Wrapf(err, "failed to read file %s", path)
 		}
-		
+
 		// Validate it's a Kubernetes resource
 		if !c.isKubernetesResource(content) {
 			return nil // Skip non-Kubernetes files
 		}
-		
+
 		// Get relative path from root
 		relPath, err := filepath.Rel(root, path)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get relative path for %s", path)
 		}
-		
+
 		files[relPath] = content
 		return nil
 	})
@@ -328,26 +328,26 @@ func (c *ConfigV1Alpha1) walkDirectory(root string, resource ResourceSource, fil
 // shouldIncludeFile checks if a file matches include/exclude patterns
 func (c *ConfigV1Alpha1) shouldIncludeFile(path string, resource ResourceSource) bool {
 	fileName := filepath.Base(path)
-	
+
 	// Check excludes first
 	for _, exclude := range resource.Excludes {
 		if matched, _ := filepath.Match(exclude, fileName); matched {
 			return false
 		}
 	}
-	
+
 	// Check includes (if any specified)
 	if len(resource.Includes) == 0 {
 		// No includes specified, include by default (unless excluded)
 		return true
 	}
-	
+
 	for _, include := range resource.Includes {
 		if matched, _ := filepath.Match(include, fileName); matched {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -357,29 +357,29 @@ func (c *ConfigV1Alpha1) isKubernetesResource(content []byte) bool {
 		APIVersion string `yaml:"apiVersion"`
 		Kind       string `yaml:"kind"`
 	}
-	
+
 	err := yaml.Unmarshal(content, &resource)
 	if err != nil {
 		return false
 	}
-	
+
 	return resource.APIVersion != "" && resource.Kind != ""
 }
 
 // generatePatches creates patch files from PatchDefinitions
 func (c *ConfigV1Alpha1) generatePatches() (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	
+
 	for i, patch := range c.Patches {
 		patchContent, err := c.generatePatchFile(patch, i)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to generate patch %d", i)
 		}
-		
+
 		patchFile := fmt.Sprintf("patch-%03d.yaml", i)
 		files[patchFile] = patchContent
 	}
-	
+
 	return files, nil
 }
 
@@ -397,14 +397,14 @@ func (c *ConfigV1Alpha1) generatePatchFile(patch PatchDefinition, index int) ([]
 			"type":   patch.Type,
 		},
 	}
-	
+
 	return yaml.Marshal(patchDoc)
 }
 
 // generateValues creates values files from ValuesConfig
 func (c *ConfigV1Alpha1) generateValues() (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	
+
 	// Generate default values
 	if c.Values.Defaults != "" {
 		// Read defaults file
@@ -421,7 +421,7 @@ func (c *ConfigV1Alpha1) generateValues() (map[string][]byte, error) {
 		}
 		files["values.yaml"] = valuesContent
 	}
-	
+
 	// Generate schema
 	if c.Values.Schema != "" {
 		schemaContent, err := os.ReadFile(c.Values.Schema)
@@ -430,14 +430,14 @@ func (c *ConfigV1Alpha1) generateValues() (map[string][]byte, error) {
 		}
 		files["values.schema.json"] = schemaContent
 	}
-	
+
 	return files, nil
 }
 
 // processExtension processes a single extension
 func (c *ConfigV1Alpha1) processExtension(ext Extension, index int) (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	
+
 	// Process extension resources
 	if len(ext.Resources) > 0 {
 		for i, resource := range ext.Resources {
@@ -445,7 +445,7 @@ func (c *ConfigV1Alpha1) processExtension(ext Extension, index int) (map[string]
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to gather extension resources from source %s", resource.Source)
 			}
-			
+
 			// Add with prefix to avoid conflicts
 			for path, content := range resourceFiles {
 				prefixedPath := fmt.Sprintf("resources-%d/%s", i, path)
@@ -453,7 +453,7 @@ func (c *ConfigV1Alpha1) processExtension(ext Extension, index int) (map[string]
 			}
 		}
 	}
-	
+
 	// Process extension patches
 	if len(ext.Patches) > 0 {
 		for i, patch := range ext.Patches {
@@ -461,12 +461,12 @@ func (c *ConfigV1Alpha1) processExtension(ext Extension, index int) (map[string]
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to generate extension patch %d", i)
 			}
-			
+
 			patchFile := fmt.Sprintf("patches/patch-%03d.yaml", i)
 			files[patchFile] = patchContent
 		}
 	}
-	
+
 	// Generate extension manifest
 	extManifest := map[string]interface{}{
 		"apiVersion": "kurel.gokure.dev/v1alpha1",
@@ -478,13 +478,13 @@ func (c *ConfigV1Alpha1) processExtension(ext Extension, index int) (map[string]
 			"when": ext.When,
 		},
 	}
-	
+
 	manifestContent, err := yaml.Marshal(extManifest)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal extension manifest")
 	}
 	files["extension.yaml"] = manifestContent
-	
+
 	return files, nil
 }
 
@@ -492,7 +492,7 @@ func (c *ConfigV1Alpha1) processExtension(ext Extension, index int) (map[string]
 func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]byte, error) {
 	// Build file inventory
 	var resourceFiles, patchFiles, valueFiles, extensionDirs []string
-	
+
 	for path := range packageFiles {
 		switch {
 		case strings.HasPrefix(path, "resources/"):
@@ -518,7 +518,7 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 			}
 		}
 	}
-	
+
 	kurelDoc := map[string]interface{}{
 		"apiVersion": "kurel.gokure.dev/v1alpha1",
 		"kind":       "Package",
@@ -540,7 +540,7 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 			"extensions": extensionDirs,
 		},
 	}
-	
+
 	// Add dependencies if any
 	if len(c.Dependencies) > 0 {
 		deps := make([]map[string]interface{}, len(c.Dependencies))
@@ -554,7 +554,7 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 		}
 		kurelDoc["spec"].(map[string]interface{})["dependencies"] = deps
 	}
-	
+
 	// Add build config if any
 	if c.Build != nil {
 		kurelDoc["spec"].(map[string]interface{})["build"] = map[string]interface{}{
@@ -566,7 +566,7 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 			"annotations": c.Build.Annotations,
 		}
 	}
-	
+
 	return yaml.Marshal(kurelDoc)
 }
 

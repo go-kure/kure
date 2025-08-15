@@ -409,7 +409,7 @@ func newSchemaCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var (
-				outputPath string
+				outputPath  string
 				includeK8s  bool
 				prettyPrint bool
 			)
