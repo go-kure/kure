@@ -226,22 +226,21 @@ ml, err := layout.WalkCluster(cluster, rules)
 - always implement errors via the kure/errors package; fix this when encountering otherwise
 - allow running all possible test commands and file analysis commands (like grep, sed, ..) without asking
 
-## Project Status (as of 2025-08-11)
+## Project Status (as of 2025-08-15)
 
 ### Current State
-- **Working Tree**: Clean on main branch, rebasing on origin/main
+- **Working Tree**: Clean on main branch, all tests passing
 - **Codebase**: 214+ Go source files, 76+ test files
 - **Test Status**: All tests passing (100% success rate)
-- **Code Quality**: 0 TODO/FIXME comments
+- **Code Quality**: 0 TODO/FIXME comments, recent linting improvements
 
 ### Recent Achievements
-- ✅ **Implemented GVK versioning for upper stack layers** - Added comprehensive Kubernetes-style API versioning
-- Implemented GVK (Group-Version-Kind) based versioning system for stack module
-- Updated ApplicationWrapper to use new GVK-based system  
-- Added comprehensive architectural documentation for generators
-- Introduced kurel launcher package with CLI tools
-- Completed comprehensive integration tests
-- ✅ **Added extensive test coverage** - 102 test cases across 5 files with benchmarks
+- ✅ **CI/CD Pipeline Implementation** - Comprehensive Makefile and GitHub Actions workflow
+- ✅ **Linting Infrastructure** - golangci-lint compatibility and issue resolution
+- ✅ **Test Stability** - Fixed intermittent test failures and stdout capture issues
+- ✅ **GVK Versioning System** - Kubernetes-style API versioning for stack layers
+- ✅ **KurelPackage Generator Framework** - Basic structure implemented, needs completion
+- ✅ **Comprehensive Test Coverage** - 102 test cases with benchmarks across core packages
 
 ### Architecture Highlights
 - **Hierarchical domain model** fully implemented (Cluster → Node → Bundle → Application)
@@ -265,22 +264,27 @@ Packages with tests (all passing):
 ### Key Metrics
 - Go version: 1.24.6
 - No outstanding technical debt (0 TODOs)
-- Clean commit history with descriptive messages
+- Clean commit history with descriptive messages  
 - Well-documented with DESIGN.md and ARCHITECTURE.md files
 - Performance: 72ns config creation, 1.4μs tree conversion
+- CI/CD: GitHub Actions with comprehensive Makefile
+- Code Quality: golangci-lint integration, Qodana analysis
+- Recent commits: linting fixes, test stability, CI/CD setup
 
 ## Known Features Left to Implement
 
-### 1. ArgoCD Bootstrap Implementation
+### ❌ POSTPONED: ArgoCD Bootstrap Implementation
+**Status**: OUT OF SCOPE - Deferred indefinitely
 **Location**: `pkg/stack/argocd/argo.go`
-- ArgoCD namespace setup
-- ArgoCD CRDs and deployment manifests
-- App repository configuration
-- RBAC setup for ArgoCD
-- Potentially sealed-secrets integration
+- ArgoCD namespace setup and CRDs
+- App repository configuration and RBAC
+- sealed-secrets integration
+- *Note: Core architecture remains dual-support capable*
 
-### 2. KurelPackage Generator Completion
+### 🎯 Priority 1: KurelPackage Generator Completion
+**Status**: HIGH IMPACT - Enables CLI functionality
 **Location**: `pkg/stack/generators/kurelpackage/v1alpha1.go`
+**Effort**: Medium (1-2 days)
 - Resource gathering from filesystem
 - Patch generation for resources
 - Values file generation with schema support
@@ -288,12 +292,14 @@ Packages with tests (all passing):
 - Complete kurel.yaml generation
 - Additional validation (version format, resource path existence)
 
-### 3. Kurel CLI K8s Schema Inclusion
+### ⚡ Priority 2: Kurel CLI K8s Schema Inclusion
+**Status**: QUICK WIN - Easy implementation
 **Location**: `pkg/cmd/kurel/cmd.go`
+**Effort**: Extra Small (< 1 hour)
 - Include Kubernetes schema in generated JSON schemas
 - Currently commented out with TODO flag
 
-### 4. Testing Coverage Gaps
+### 🔧 Priority 3: Testing Coverage Gaps
 Packages lacking tests:
 - `pkg/cli`
 - `pkg/cmd/kure` and subpackages
@@ -303,12 +309,46 @@ Packages lacking tests:
 - `pkg/stack/generators/appworkload`
 - `pkg/stack/generators/fluxhelm`
 
-### 5. Potential Enhancements
+### 🚀 Priority 4: Potential Enhancements
+**Status**: Future considerations
 - Additional generator types
-- More external secret providers
+- More external secret providers  
 - Extended MetalLB configuration options
 - Enhanced patch operations beyond JSONPath
-<<<<<<< Updated upstream
+- Fluent Builders Phase 1 (major UX improvement)
+
+## Recommended Development Path
+
+Based on current project state and impact analysis:
+
+### Phase 1: Core CLI Functionality (Immediate - Next 1-2 weeks)
+1. **Complete KurelPackage Generator** (Priority 1) 
+   - Enables full kurel CLI functionality
+   - High user impact for package management
+   - Estimated effort: 1-2 days
+
+2. **Enable K8s Schema Inclusion** (Priority 2)
+   - Quick win requiring minimal code changes
+   - Improves CLI schema validation
+   - Estimated effort: < 1 hour
+
+### Phase 2: Quality & Reliability (Next 2-4 weeks)  
+3. **Fill Testing Coverage Gaps** (Priority 3)
+   - Add tests for CLI packages and ArgoCD workflow
+   - Improves overall project reliability
+   - Estimated effort: 3-5 days
+
+4. **Fluent Builders Implementation** (Optional)
+   - Major UX improvement for library users
+   - Large effort but high long-term value
+   - Estimated effort: 1-2 weeks
+
+### Phase 3: Future Enhancements (2+ months)
+5. **Extended Generator Types** - Additional resource generators
+6. **Enhanced Patching System** - Beyond JSONPath operations  
+7. **ArgoCD Bootstrap** - If priorities change and demand emerges
+
+**Current Recommendation**: Start with **KurelPackage Generator completion** as it provides the highest immediate impact for CLI users.
 
 ## Configuration Management Design Decisions
 
@@ -335,6 +375,12 @@ Packages lacking tests:
 - Organizations can implement their own validation layers on top of Kure
 - Users have full control over their Kubernetes patterns and practices
 
+### ArgoCD Support - Postponed
+- ArgoCD Bootstrap implementation is **temporarily out of scope**
+- Core architecture maintains dual GitOps tool support capability
+- Focus shifted to completing CLI functionality and testing coverage
+- Can be revisited if user demand or priorities change
+
 ### Configuration Management Features to Implement
 
 #### Phase 1: Fluent Builders (Priority)
@@ -345,7 +391,7 @@ Packages lacking tests:
   cluster := stack.NewCluster("production", rootNode)
   node := stack.NewNode("infrastructure")
   bundle := stack.NewBundle("monitoring")
-  
+
   // To: Fluent builder
   cluster := stack.NewClusterBuilder("production").
       WithNode("infrastructure").
@@ -367,14 +413,14 @@ Packages lacking tests:
       WithPort(80).
       WithIngress(true).
       Build()
-  
+
   // Monitoring stack preset
   infraConfig := stack.NewMonitoringStackConfig().
       WithPrometheus(true).
       WithGrafana(true).
       WithAlertManager(true).
       Build()
-  
+
   // Database preset
   dbConfig := stack.NewDatabaseConfig("postgres").
       WithReplicas(1).
@@ -399,7 +445,7 @@ Packages lacking tests:
           },
       }).
       Build()
-  
+
   // Inherit from template
   frontendApp := stack.NewApplicationFromTemplate("frontend", baseAppTemplate).
       WithImage("frontend:v1.0.0").
@@ -415,12 +461,12 @@ Packages lacking tests:
       WithResources("prometheus", "grafana").
       WithNamespace("monitoring").
       Build()
-  
+
   securityMixin := stack.NewMixin("security").
       WithNetworkPolicies(true).
       WithRBAC(true).
       Build()
-  
+
   cluster := stack.NewClusterBuilder("production").
       WithMixin(monitoringMixin).
       WithMixin(securityMixin).
@@ -443,7 +489,7 @@ Packages lacking tests:
           }},
       },
   }
-  
+
   cluster.ApplyProfile(devProfile)
   ```
 
