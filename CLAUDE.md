@@ -384,6 +384,34 @@ The codebase is now in excellent condition for **Priority 4: Future Enhancements
 #### Immediate Opportunities
 - **✅ Fluent Builders Phase 1** - **COMPLETED** - Major UX improvement with method chaining
 - **CEL Validation Enhancement** - Implement proper CEL validation using cel-go library
+  
+  **What is CEL Validation Enhancement?**
+  
+  CEL (Common Expression Language) is a mini programming language for writing validation rules in kurel packages. Currently, Kure accepts CEL expressions as plain text without validating their syntax.
+  
+  **The Problem**: 
+  ```yaml
+  # In kurel.yaml
+  validation:
+    - rule: "size >> invalid syntax"  # Invalid CEL
+      message: "Size must be positive"
+  ```
+  - **Current**: Kure accepts this ✅ → Deployment fails ❌ 
+  - **Enhanced**: Kure catches syntax errors immediately ❌ → Fix before deployment ✅
+  
+  **Real-World Example**:
+  ```yaml
+  validation:
+    rules:
+      - cel: "object.spec.replicas >= 1"           # ✅ Valid
+        message: "Need at least 1 replica"
+      - cel: "object.metadata.name.length() > 0"   # ✅ Valid  
+        message: "Name cannot be empty"
+      - cel: "invalid..syntax..here"               # ❌ Would catch this!
+        message: "This rule is broken"
+  ```
+  
+  **Benefits**: Early error detection, better developer experience, more reliable kurel packages
 - **✅ Interval Format Validation** - **COMPLETED** - Time interval validation with comprehensive documentation
 - **Additional Generator Types** - Expand resource generation capabilities
 - **Performance Optimizations** - Caching and parallel processing improvements
@@ -598,6 +626,23 @@ The codebase is now in excellent condition for **Priority 4: Future Enhancements
 3. **Offline/Air-gapped**: Support for disconnected environments
 4. **GitOps UI Integration**: Detailed Flux/ArgoCD workflow in UI
 5. **Documentation Generation**: Auto-generate docs from code annotations
+
+## Article Series Project
+
+### Kure/Kurel Introduction Article Series
+**Location**: `../articles/PROJECT_STATUS.md`
+
+A 4-part article series designed to gradually introduce Kure and Kurel principles to the Kubernetes community without naming them directly. The strategy focuses on problem identification and solution exploration to create natural demand for these tools.
+
+**Status**: 3/4 articles complete (75% done)
+- ✅ Article 1: YAML templating problems and production impact
+- ✅ Article 2: Type-safe infrastructure and builder patterns  
+- ✅ Article 3: Patch-based package management as Helm alternative
+- 🎯 Article 4: Hierarchical domain modeling and GitOps integration (pending)
+
+**Key Achievement**: Successfully translated all major Kure/Kurel concepts into compelling problem-solution narratives using real-world case studies and production examples.
+
+See `../articles/PROJECT_STATUS.md` for complete project details, content strategy, and publication planning.
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
