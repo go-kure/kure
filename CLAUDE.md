@@ -630,7 +630,10 @@ The codebase is now in excellent condition for **Priority 4: Future Enhancements
 ## Article Series Project
 
 ### Kure/Kurel Introduction Article Series
-**Location**: `../articles/PROJECT_STATUS.md`
+**Status**: DRAFT articles moved to Autops website
+**Location**: `/home/serge/src/autops/infra/website/hugo/content/drafts/kure-series/`
+
+⚠️ **IMPORTANT**: Articles are intentionally kept as drafts and should NOT be published without explicit approval. They are part of a stealth introduction strategy.
 
 A 4-part article series designed to gradually introduce Kure and Kurel principles to the Kubernetes community without naming them directly. The strategy focuses on problem identification and solution exploration to create natural demand for these tools.
 
@@ -642,7 +645,7 @@ A 4-part article series designed to gradually introduce Kure and Kurel principle
 
 **Key Achievement**: Successfully translated all major Kure/Kurel concepts into compelling problem-solution narratives using real-world case studies and production examples.
 
-See `../articles/PROJECT_STATUS.md` for complete project details, content strategy, and publication planning.
+**Content Management**: All articles centralized in Autops website project for better publication control and content management.
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
