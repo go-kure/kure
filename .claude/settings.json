@@ -1,104 +1,4 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(*)",
-      "WebFetch(*)",
-      "Bash(grep:*)",
-      "Bash(cat:*)",
-      "Bash(sed:*)",
-      "Bash(git add:*)",
-      "Bash(make test:*)",
-      "Bash(pandoc:*)",
-      "Bash(go:*)",
-      "Bash(/usr/bin/go:*)",
-      "Bash(go*/bin/go:*)",
-      "Bash(GOROOT=*:*)",
-      "Bash(export:*)",
-      "Bash(unset:*)",
-      "Bash(git:*)",
-      "Bash(find:*)",
-      "Bash(grep:*)",
-      "Bash(ls:*)",
-      "Bash(mkdir:*)",
-      "Bash(mv:*)",
-      "Bash(cp:*)",
-      "Bash(rm:*)",
-      "Bash(rmdir:*)",
-      "Bash(touch:*)",
-      "Bash(echo:*)",
-      "Bash(sed:*)",
-      "Bash(awk:*)",
-      "Bash(tree:*)",
-      "Bash(helm:*)",
-      "Bash(./kure:*)",
-      "Bash(./kurel:*)",
-      "Bash(mise:*)",
-      "Bash(env:*)",
-      "Bash(cat:*)",
-      "Bash($GOROOT:*)",
-      "Bash(GOROOT=/usr/lib/go:*)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/*:*)",
-      "Bash(/home/serge/.local/share/mise/installs/go/*/bin/go:*)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go list ./...)",
-      "WebFetch(domain:docs.anthropic.com)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:pkg.go.dev)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/kubernetes -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/argocd -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators/appworkload -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators/fluxhelm -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/kure -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/kurel -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./internal/validation)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/kubernetes/fluxcd -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go doc github.com/controlplaneio-fluxcd/flux-operator/api/v1 ResourceSetSpec)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -bench=. -run=^$)",
-      "WebFetch(domain:productionresultssa11.blob.core.windows.net)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v -run TestDemoOutput_Formatting)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v -run TestRunInternals)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./... -short)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run . --internals)",
-      "Bash(/home/serge/.local/share/mise/installs/go/1.24.6/bin/go run . --internals)",
-      "Bash(/home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/demo --internals)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./cmd/demo -v -run \"TestDemoGVKGenerators|TestDemoOutput_Formatting|TestRunInternals\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run -c 'package main; import (\"\"fmt\"\"; \"\"os\"\"); func main() { DemoGVKGenerators() }')",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run test_gvk.go)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./... -timeout 30s)",
-      "WebFetch(domain:productionresultssa19.blob.core.windows.net)",
-      "Bash(make:*)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/demo --internals)",
-      "mcp__sequential-thinking__sequentialthinking",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators/kurelpackage -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go build ./pkg/cmd/kurel)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/kurel schema generate /tmp/test-kurel-k8s --pretty)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/kurel schema generate /tmp/test-kurel-k8s --k8s --pretty)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -v -run \"*Schema*\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -v -run \".*Schema.*\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go run ./cmd/kurel schema generate --help)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/cli -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/cmd/kure -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/cmd/kurel -v)",
-      "Bash(bin/kurel:*)",
-      "Bash(bin/kure:*)",
-      "Bash(./bin/kurel:*)",
-      "Bash(./bin/kure:*)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v -run \"TestNew.*Builder|TestClusterBuilder|TestNodeBuilder|TestBundleBuilder|TestComplexFluentBuilder|TestBuilderImmutability|TestBuilderChainingSafety|TestPathInitialization\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v -run \"TestBundleBuilder_WithApplication\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./...)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/launcher -v -run \"TestResolver/max_depth_exceeded\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/generators/fluxhelm/internal -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -v -run \"TestValidateInterval|TestBundleConfig_IntervalValidation\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -v)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -v -run \"TestBundleConfig_IntervalValidation\")",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -short)",
-      "Bash(GOROOT=/home/serge/.local/share/mise/installs/go/1.24.6 /home/serge/.local/share/mise/installs/go/1.24.6/bin/go test ./pkg/stack/v1alpha1 -v -run \"TestValidateInterval|TestBundleConfig_IntervalValidation\" -short)"
-    ],
-    "deny": [],
-    "defaultMode": "acceptEdits"
-  },
   "project": "go-kure/kure",
   "description": "Kure - A Go library for programmatically building Kubernetes resources for GitOps tools",
   "language": "go",
@@ -112,12 +12,11 @@
   "preferences": {
     "saveSettingsAutomatic": true,
     "saveSettingsPath": ".claude/settings.json",
-    "useLocalSettings": false,
-    "alwaysWriteToMainSettings": true
+    "useLocalSettings": false
   },
   "currentWork": {
-    "module": "testing",
-    "phase": "Testing Coverage Implementation",
+    "module": "launcher",
+    "phase": "7 - Integration Tests",
     "status": "completed",
     "completedPhases": [
       "Phase 1: Types and Interfaces",
@@ -126,11 +25,9 @@
       "Phase 4: Schema Generation and Validation",
       "Phase 5: Output Builder and Extensions",
       "Phase 6: CLI Commands",
-      "Phase 7: Integration Tests",
-      "Phase 8: Testing Coverage Gaps - Added comprehensive tests for pkg/cli, pkg/cmd/kure, pkg/cmd/kurel, pkg/logger"
+      "Phase 7: Integration Tests"
     ],
     "nextPhases": [
-      "Complete remaining package tests (pkg/kubernetes, pkg/stack/argocd, generators)",
       "Documentation and Examples",
       "Performance Optimization"
     ]
@@ -138,19 +35,7 @@
   "todoListEnabled": true,
   "testCoverage": {
     "target": "80%",
-    "current": "82.1%",
-    "newlyTested": [
-      "pkg/cli",
-      "pkg/cmd/kure",
-      "pkg/cmd/kurel",
-      "pkg/logger"
-    ],
-    "remainingPackages": [
-      "internal/validation",
-      "pkg/kubernetes",
-      "pkg/stack/argocd",
-      "pkg/stack/generators/*"
-    ]
+    "current": "77.4%"
   },
   "memoryNotes": [
     "Always save settings to .claude/settings.json (never .local variant)",
@@ -161,5 +46,12 @@
     "fullBuild": "<1s",
     "validation": "<100ms",
     "schemaGeneration": "<500ms"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)"
+    ],
+    "deny": [],
+    "ask": []
   }
 }
