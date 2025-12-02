@@ -2,7 +2,8 @@
 
 **Priority:** 2 - Medium (1-2 months)
 **Category:** kurel
-**Status:** Not Started
+**Status:** ✅ Completed
+**Completed:** 2025-12-03 (commit 8bb7341 - --k8s flag)
 
 ---
 
