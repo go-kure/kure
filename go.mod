@@ -10,6 +10,7 @@ replace (
 )
 
 require (
+	github.com/blang/semver/v4 v4.0.0
 	github.com/cert-manager/cert-manager v1.16.2
 	github.com/controlplaneio-fluxcd/flux-operator v0.24.1
 	github.com/external-secrets/external-secrets v0.18.2
@@ -31,7 +32,7 @@ require (
 	k8s.io/api v0.33.2
 	k8s.io/apiextensions-apiserver v0.33.2
 	k8s.io/apimachinery v0.33.2
-	k8s.io/cli-runtime v0.33.0
+	k8s.io/cli-runtime v0.33.2
 	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/kustomize/api v0.20.0
 	sigs.k8s.io/yaml v1.5.0
@@ -40,7 +41,6 @@ require (
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/carapace-sh/carapace-shlex v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
