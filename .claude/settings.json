@@ -1,4 +1,12 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(gh repo view:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
   "project": "go-kure/kure",
   "description": "Kure - A Go library for programmatically building Kubernetes resources for GitOps tools",
   "language": "go",
@@ -46,12 +54,5 @@
     "fullBuild": "<1s",
     "validation": "<100ms",
     "schemaGeneration": "<500ms"
-  },
-  "permissions": {
-    "allow": [
-      "Bash(go test:*)"
-    ],
-    "deny": [],
-    "ask": []
   }
 }
