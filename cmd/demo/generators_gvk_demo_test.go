@@ -92,6 +92,11 @@ func TestDemoGVKGenerators(t *testing.T) {
 		t.Skip("Skipping demo test in short mode")
 	}
 
+	// Skip if not running from repo root with examples
+	if _, err := os.Stat("examples"); os.IsNotExist(err) {
+		t.Skip("Skipping demo test - examples directory not found (run from repo root)")
+	}
+
 	// Capture stdout
 	originalStdout := os.Stdout
 	r, w, _ := os.Pipe()
@@ -130,6 +135,11 @@ func TestDemoGVKGenerators(t *testing.T) {
 func TestRunGVKDemo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping demo test in short mode")
+	}
+
+	// Skip if not running from repo root with examples
+	if _, err := os.Stat("examples"); os.IsNotExist(err) {
+		t.Skip("Skipping demo test - examples directory not found (run from repo root)")
 	}
 
 	// Capture stdout

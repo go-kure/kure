@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(go test:*)",
-      "Bash(gh repo view:*)"
+      "Bash(gh repo view:*)",
+      "Bash(export PATH=\"$HOME/.cache/go/bin:$HOME/go/bin:$PATH\")",
+      "Bash(make check:*)",
+      "Bash(make lint:*)",
+      "Bash(export PATH=\"$HOME/.cache/go/bin:$HOME/go/bin:/usr/bin:/bin:$PATH\")",
+      "Bash(git commit:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []
