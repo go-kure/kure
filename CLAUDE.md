@@ -276,6 +276,7 @@ make build
 - kurel just generates YAML
 - always implement errors via the kure/errors package; fix this when encountering otherwise
 - allow running all possible test commands and file analysis commands (like grep, sed, ..) without asking
+- when updating GitHub workflows, also update docs/github-workflows.md
 
 ## Project Status (as of 2025-08-15)
 
