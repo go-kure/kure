@@ -31,7 +31,66 @@ Tasks are organized by:
 - **Subject**: Brief topic identifier
 - **Priority**: `1-high`, `2-medium`, `3-future`
 
-**File naming convention:** `tasks/{category}-{subject}-{priority}.md`
+**File naming convention:** `tasks/{NN}-{category}-{subject}-{priority}.md` (numbered prefix for ordering)
+
+---
+
+## Workflow Guidelines
+
+Follow these guidelines when working on tasks:
+
+### Task Execution
+1. **One task, one commit** - Each task should result in a single, atomic commit
+2. **Sequential work** - Finish and commit a task before starting the next one
+3. **No partial implementations** - Don't commit incomplete work to main branch
+
+### Quality Requirements
+1. **Testing required** - Every code change must include appropriate tests
+2. **Pre-commit validation** - Run `make precommit` before committing (runs tests, lint, fmt, vet)
+3. **All tests must pass** - Never commit code that breaks existing tests
+
+### Task Lifecycle
+1. **Update status** - Set task status to "In Progress" when starting
+2. **Complete the task** - Implement, test, and verify
+3. **Commit with convention** - Use conventional commit prefixes:
+   - `feat:` - New feature
+   - `fix:` - Bug fix
+   - `docs:` - Documentation only
+   - `refactor:` - Code refactoring
+   - `test:` - Adding/updating tests
+4. **Move to done** - Move completed task file to `tasks/done/`
+5. **Update index** - Update this file if task references change
+
+### Commit Message Format
+```
+<type>: <short description>
+
+[optional body with details]
+
+Implements task #<number>
+```
+
+### Example Workflow
+```bash
+# 1. Start task
+# Edit task file: set Status to "In Progress"
+
+# 2. Implement changes
+# Write code + tests
+
+# 3. Validate
+make precommit
+
+# 4. Commit
+git add .
+git commit -m "feat: implement CEL validation with cel-go
+
+Implements task #1"
+
+# 5. Move task to done
+git mv tasks/01-kurel-cel-validation-1-high.md tasks/done/
+git commit -m "docs: mark task #1 as completed"
+```
 
 ---
 
