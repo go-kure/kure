@@ -177,7 +177,7 @@ lint-go: ## Run Go linting with golangci-lint
 		echo "$(COLOR_RED)golangci-lint not found. Installing...$(COLOR_RESET)"; \
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
 	fi
-	golangci-lint run --timeout=10m ./...
+	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run --timeout=10m ./...
 	@echo "$(COLOR_GREEN)Go linting passed$(COLOR_RESET)"
 
 .PHONY: fmt
@@ -187,7 +187,7 @@ fmt: ## Format Go code
 	@if command -v goimports >/dev/null 2>&1; then \
 		goimports -w .; \
 	else \
-		echo "$(COLOR_RED)goimports not found, run 'make tools' to install$(COLOR_RESET)"; \
+		PATH="$$(go env GOPATH)/bin:$$PATH" goimports -w . || echo "$(COLOR_RED)goimports not found, run 'make tools' to install$(COLOR_RESET)"; \
 	fi
 	@echo "$(COLOR_GREEN)Code formatted$(COLOR_RESET)"
 
