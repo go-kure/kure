@@ -14,7 +14,32 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Build and Test](#build-and-test) | `build-test.yaml` | push (main), PR | Basic build and test with formatted output |
 | [PR Checks](#pr-checks) | `pr-checks.yml` | PR events | Comprehensive PR validation and analysis |
 | [Release](#release) | `release.yml` | version tags | GoReleaser-based release with validation |
-| [Qodana Code Quality](#qodana-code-quality) | `code_quality.yml` | push, PR, manual | JetBrains Qodana static analysis |
+
+---
+
+## Workflow Overview
+
+### Test Jobs in CI
+
+| Job | Matrix | Command | Uses Makefile? |
+|-----|--------|---------|----------------|
+| `test` | `unit` | `make test` | ✅ |
+| `test` | `race` | `make test-race` | ✅ |
+| `test` | `coverage` | `make test-coverage` | ✅ |
+| `integration` | - | `make test-integration` | ✅ |
+
+### Test Targets in Makefile
+
+| Target | Command | Used in CI? |
+|--------|---------|-------------|
+| `test` | `go test -timeout 30s ./...` | ✅ |
+| `test-verbose` | `go test -v -timeout 30s ./...` | ❌ |
+| `test-race` | `go test -race -timeout 30s ./...` | ✅ |
+| `test-short` | `go test -short -timeout 30s ./...` | ❌ |
+| `test-coverage` | `go test -coverprofile=... ./...` | ✅ |
+| `test-benchmark` | `go test -bench=. -benchmem ./...` | ❌ |
+| `test-integration` | `go test -tags=integration -timeout 5m ./...` | ✅ |
+| `vuln` | `govulncheck ./...` | ✅ |
 
 ---
 
@@ -43,7 +68,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 10. **Dependency Check** - Check for outdated dependencies
 
 **Configuration:**
-- Go Version: `1.24.6`
+- Go Version: `1.24.11`
 - Golangci-lint Version: `v1.62.2`
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`
 
@@ -62,7 +87,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 1. **Build** - Runs tests with gotestfmt formatter, builds project, runs demo
 
 **Configuration:**
-- Go Version: `1.24.6`
+- Go Version: `1.24.11`
 - Uses gotestfmt for formatted test output
 - Uploads test logs as artifacts
 
@@ -90,7 +115,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 6. **Docs Check** - Documentation validation
 
 **Configuration:**
-- Go Version: `1.24.6`
+- Go Version: `1.24.11`
 - Coverage Threshold: `80%`
 
 ---
@@ -126,27 +151,6 @@ make release-do TYPE=alpha
 # Push tag to trigger CI
 git push origin v0.1.0-alpha.0
 ```
-
----
-
-### Qodana Code Quality
-
-**File:** `.github/workflows/code_quality.yml`
-**Name:** `Qodana Code Quality`
-
-**Triggers:**
-- Push to: `main`, `develop`, `release/*`
-- Pull requests to: `main`, `develop`
-- Manual dispatch
-
-**Jobs:**
-1. **Qodana** - JetBrains Qodana static analysis
-
-**Configuration:**
-- Go Version: `1.24.11`
-- Qodana Version: `2025.1`
-- Baseline: `qodana.sarif.json`
-- Uploads results to Qodana Cloud and GitHub Security
 
 ---
 
@@ -189,7 +193,6 @@ Most workflows use Go module caching:
 - **When adding/modifying workflows:** Update this document with changes
 - **Version updates:** Ensure Go version consistency across all workflows
 - **Action versions:** Keep GitHub Actions up to date (currently using v4-v5)
-- **Security:** Review security-events permissions before modifying Qodana workflow
 
 ---
 

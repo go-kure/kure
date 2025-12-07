@@ -47,9 +47,6 @@ help: ## Display this help message
 	@echo ""
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "$(COLOR_GREEN)%-20s$(COLOR_RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-.PHONY: all
-all: clean deps build test lint ## Run all standard development tasks
-
 .PHONY: info
 info: ## Display project information
 	@echo "$(COLOR_BOLD)Project Information$(COLOR_RESET)"
@@ -104,14 +101,6 @@ build-demo: $(BUILD_DIR) ## Build the demo executable
 	$(GO) build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(DEMO_BIN) ./cmd/demo
 	@echo "$(COLOR_GREEN)Built $(DEMO_BIN)$(COLOR_RESET)"
 
-.PHONY: build-race
-build-race: $(BUILD_DIR) ## Build all executables with race detection
-	@echo "$(COLOR_YELLOW)Building with race detection...$(COLOR_RESET)"
-	$(GO) build -race -o $(KURE_BIN) ./cmd/kure
-	$(GO) build -race -o $(KUREL_BIN) ./cmd/kurel
-	$(GO) build -race -o $(DEMO_BIN) ./cmd/demo
-	@echo "$(COLOR_GREEN)Built all executables with race detection$(COLOR_RESET)"
-
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
@@ -125,22 +114,11 @@ test: ## Run all tests
 	$(GO) test -timeout $(TEST_TIMEOUT) $(TEST_PACKAGES)
 	@echo "$(COLOR_GREEN)All tests passed$(COLOR_RESET)"
 
-.PHONY: test-verbose
-test-verbose: ## Run all tests with verbose output
-	@echo "$(COLOR_YELLOW)Running tests with verbose output...$(COLOR_RESET)"
-	$(GO) test -v -timeout $(TEST_TIMEOUT) $(TEST_PACKAGES)
-
 .PHONY: test-race
 test-race: ## Run tests with race detection
 	@echo "$(COLOR_YELLOW)Running tests with race detection...$(COLOR_RESET)"
 	$(GO) test -race -timeout $(TEST_TIMEOUT) $(TEST_PACKAGES)
 	@echo "$(COLOR_GREEN)All race tests passed$(COLOR_RESET)"
-
-.PHONY: test-short
-test-short: ## Run short tests only
-	@echo "$(COLOR_YELLOW)Running short tests...$(COLOR_RESET)"
-	$(GO) test -short -timeout $(TEST_TIMEOUT) $(TEST_PACKAGES)
-	@echo "$(COLOR_GREEN)Short tests passed$(COLOR_RESET)"
 
 .PHONY: test-coverage
 test-coverage: $(COVERAGE_DIR) ## Run tests with coverage report
@@ -149,11 +127,6 @@ test-coverage: $(COVERAGE_DIR) ## Run tests with coverage report
 	$(GO) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 	$(GO) tool cover -func=$(COVERAGE_DIR)/coverage.out | tail -1
 	@echo "$(COLOR_GREEN)Coverage report generated: $(COVERAGE_DIR)/coverage.html$(COLOR_RESET)"
-
-.PHONY: test-benchmark
-test-benchmark: ## Run benchmark tests
-	@echo "$(COLOR_YELLOW)Running benchmark tests...$(COLOR_RESET)"
-	$(GO) test -bench=. -benchmem $(TEST_PACKAGES)
 
 .PHONY: test-integration
 test-integration: ## Run integration tests
@@ -168,17 +141,14 @@ $(COVERAGE_DIR):
 # =============================================================================
 
 .PHONY: lint
-lint: lint-go ## Run all linters
-
-.PHONY: lint-go
-lint-go: ## Run Go linting with golangci-lint
-	@echo "$(COLOR_YELLOW)Running Go linting...$(COLOR_RESET)"
+lint: ## Run linters with golangci-lint
+	@echo "$(COLOR_YELLOW)Running linting...$(COLOR_RESET)"
 	@if ! command -v golangci-lint >/dev/null 2>&1; then \
 		echo "$(COLOR_RED)golangci-lint not found. Installing...$(COLOR_RESET)"; \
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
 	fi
 	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run --timeout=10m ./...
-	@echo "$(COLOR_GREEN)Go linting passed$(COLOR_RESET)"
+	@echo "$(COLOR_GREEN)Linting passed$(COLOR_RESET)"
 
 .PHONY: fmt
 fmt: ## Format Go code
@@ -203,17 +173,15 @@ tidy: ## Tidy up go modules
 	$(GO) mod tidy
 	@echo "$(COLOR_GREEN)Modules tidied$(COLOR_RESET)"
 
-.PHONY: qodana
-qodana: ## Run Qodana static analysis (requires Docker)
-	@echo "$(COLOR_YELLOW)Running Qodana analysis...$(COLOR_RESET)"
-	@if ! command -v docker >/dev/null 2>&1; then \
-		echo "$(COLOR_RED)Docker not found. Qodana requires Docker to run.$(COLOR_RESET)"; \
-		exit 1; \
+.PHONY: vuln
+vuln: ## Run vulnerability check with govulncheck
+	@echo "$(COLOR_YELLOW)Running vulnerability check...$(COLOR_RESET)"
+	@if ! command -v govulncheck >/dev/null 2>&1; then \
+		echo "$(COLOR_YELLOW)Installing govulncheck...$(COLOR_RESET)"; \
+		$(GO) install golang.org/x/vuln/cmd/govulncheck@latest; \
 	fi
-	docker run --rm -it -p 8080:8080 \
-		-v $(PWD):/data/project:cached \
-		jetbrains/qodana-go:2025.1 --show-report
-	@echo "$(COLOR_GREEN)Qodana analysis completed$(COLOR_RESET)"
+	@PATH="$$(go env GOPATH)/bin:$$PATH" govulncheck ./...
+	@echo "$(COLOR_GREEN)Vulnerability check completed$(COLOR_RESET)"
 
 # =============================================================================
 # Demo and Examples
@@ -225,48 +193,8 @@ demo: build-demo $(OUTPUT_DIR) ## Run the comprehensive demo
 	$(DEMO_BIN)
 	@echo "$(COLOR_GREEN)Demo completed$(COLOR_RESET)"
 
-.PHONY: demo-internals
-demo-internals: build-demo $(OUTPUT_DIR) ## Run demo with internal API examples
-	@echo "$(COLOR_YELLOW)Running internal API demo...$(COLOR_RESET)"
-	$(DEMO_BIN) --internals
-	@echo "$(COLOR_GREEN)Internal API demo completed$(COLOR_RESET)"
-
-.PHONY: demo-gvk
-demo-gvk: build-demo $(OUTPUT_DIR) ## Run GVK generators demo
-	@echo "$(COLOR_YELLOW)Running GVK generators demo...$(COLOR_RESET)"
-	$(DEMO_BIN) --gvk
-	@echo "$(COLOR_GREEN)GVK demo completed$(COLOR_RESET)"
-
-.PHONY: examples
-examples: demo ## Generate all example outputs (alias for demo)
-
 $(OUTPUT_DIR):
 	@mkdir -p $(OUTPUT_DIR)
-
-# =============================================================================
-# Package Operations
-# =============================================================================
-
-.PHONY: kurel-build
-kurel-build: build-kurel ## Build a kurel package (requires PACKAGE_PATH)
-	@if [ -z "$(PACKAGE_PATH)" ]; then \
-		echo "$(COLOR_RED)Error: PACKAGE_PATH is required$(COLOR_RESET)"; \
-		echo "Usage: make kurel-build PACKAGE_PATH=path/to/package"; \
-		exit 1; \
-	fi
-	@echo "$(COLOR_YELLOW)Building kurel package: $(PACKAGE_PATH)$(COLOR_RESET)"
-	$(KUREL_BIN) build $(PACKAGE_PATH)
-	@echo "$(COLOR_GREEN)Package built successfully$(COLOR_RESET)"
-
-.PHONY: kurel-info
-kurel-info: build-kurel ## Show package information (requires PACKAGE_PATH)
-	@if [ -z "$(PACKAGE_PATH)" ]; then \
-		echo "$(COLOR_RED)Error: PACKAGE_PATH is required$(COLOR_RESET)"; \
-		echo "Usage: make kurel-info PACKAGE_PATH=path/to/package"; \
-		exit 1; \
-	fi
-	@echo "$(COLOR_YELLOW)Package information: $(PACKAGE_PATH)$(COLOR_RESET)"
-	$(KUREL_BIN) info $(PACKAGE_PATH)
 
 # =============================================================================
 # Development Utilities
@@ -287,13 +215,11 @@ tools: ## Install development tools
 		$(GO) install github.com/goreleaser/goreleaser/v2@latest; \
 		echo "Installed goreleaser v2"; \
 	fi
+	@if ! command -v govulncheck >/dev/null 2>&1; then \
+		$(GO) install golang.org/x/vuln/cmd/govulncheck@latest; \
+		echo "Installed govulncheck"; \
+	fi
 	@echo "$(COLOR_GREEN)Development tools installed$(COLOR_RESET)"
-
-.PHONY: generate
-generate: ## Run go generate for all packages
-	@echo "$(COLOR_YELLOW)Running go generate...$(COLOR_RESET)"
-	$(GO) generate ./...
-	@echo "$(COLOR_GREEN)Code generation completed$(COLOR_RESET)"
 
 .PHONY: sync-go-version
 sync-go-version: ## Sync Go version from mise.toml to all files
@@ -308,9 +234,9 @@ sync-go-version: ## Sync Go version from mise.toml to all files
 		exit 1; \
 	fi; \
 	echo "Syncing to Go version: $$GO_VER"; \
-	sed -i "s/GO_VERSION: '[^']*'/GO_VERSION: '$$GO_VER'/" .github/workflows/*.yml; \
-	sed -i "s/go-version: '[^']*'/go-version: '$$GO_VER'/" .github/workflows/*.yaml; \
-	sed -i "s/go-version: \$${{ env.GO_VERSION }}/go-version: \$${{ env.GO_VERSION }}/" .github/workflows/*.yaml; \
+	sed -i "s/GO_VERSION: '[^']*'/GO_VERSION: '$$GO_VER'/" .github/workflows/*.yml .github/workflows/*.yaml; \
+	sed -i "s/go-version: '[^']*'/go-version: '$$GO_VER'/" .github/workflows/*.yml .github/workflows/*.yaml; \
+	sed -i "s/go-version: \$${{ env.GO_VERSION }}/go-version: \$${{ env.GO_VERSION }}/" .github/workflows/*.yml .github/workflows/*.yaml; \
 	sed -i "3s/go .*/go $$GO_VER/" go.mod; \
 	if [ -f docs/github-workflows.md ]; then \
 		sed -i "s/Go Version: \`[0-9][^']*\`/Go Version: \`$$GO_VER\`/g" docs/github-workflows.md; \
@@ -359,7 +285,7 @@ check-go-version: ## Verify Go version consistency across all files
 		echo "$(COLOR_GREEN)✓ go.mod$(COLOR_RESET)"; \
 	fi; \
 	if [ -f docs/github-workflows.md ]; then \
-		DOC_VERS=$$(grep -o "Go Version: \`[^']*\`" docs/github-workflows.md | grep -o "[0-9][^']*" | sort -u); \
+		DOC_VERS=$$(grep -o "Go Version: \`[^\`]*\`" docs/github-workflows.md | grep -o "[0-9][^\`]*" | sort -u); \
 		for DOC_VER in $$DOC_VERS; do \
 			if [ "$$DOC_VER" != "$$GO_VER" ]; then \
 				echo "$(COLOR_RED)✗ docs/github-workflows.md has Go Version: $$DOC_VER (expected $$GO_VER)$(COLOR_RESET)"; \
@@ -378,39 +304,35 @@ check-go-version: ## Verify Go version consistency across all files
 		exit 1; \
 	fi
 
-.PHONY: mod-graph
-mod-graph: ## Display module dependency graph
-	@echo "$(COLOR_YELLOW)Module dependency graph:$(COLOR_RESET)"
-	$(GO) mod graph | head -20
+# =============================================================================
+# Development Environment
+# =============================================================================
 
-.PHONY: list-packages
-list-packages: ## List all packages in the module
-	@echo "$(COLOR_YELLOW)Module packages:$(COLOR_RESET)"
-	$(GO) list ./...
-
-.PHONY: outdated
-outdated: ## Check for outdated dependencies
-	@echo "$(COLOR_YELLOW)Checking for outdated dependencies...$(COLOR_RESET)"
-	$(GO) list -u -m all | grep '\[' || echo "$(COLOR_GREEN)All dependencies are up to date$(COLOR_RESET)"
+.PHONY: dev
+dev: tools ## Set up development environment (mise, deps, git hooks)
+	@echo "$(COLOR_YELLOW)Setting up mise...$(COLOR_RESET)"
+	@if ! command -v mise >/dev/null 2>&1; then \
+		echo "$(COLOR_RED)Warning: mise is not installed$(COLOR_RESET)"; \
+		echo "Install mise from: https://mise.jdx.dev/getting-started.html"; \
+	else \
+		mise trust 2>/dev/null || true; \
+		mise install; \
+		echo "$(COLOR_GREEN)mise configured$(COLOR_RESET)"; \
+	fi
+	@$(MAKE) check-go-version
+	@$(MAKE) deps
+	@echo "$(COLOR_YELLOW)Installing pre-commit hook...$(COLOR_RESET)"
+	@echo '#!/bin/bash' > .git/hooks/pre-commit
+	@echo 'make ci' >> .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "$(COLOR_GREEN)Development environment ready$(COLOR_RESET)"
 
 # =============================================================================
 # CI/CD
 # =============================================================================
 
 .PHONY: ci
-ci: deps lint test build ## Run CI pipeline tasks
-
-.PHONY: ci-coverage
-ci-coverage: deps lint test-coverage build ## Run CI pipeline with coverage
-
-.PHONY: ci-integration
-ci-integration: deps lint test test-integration build ## Run CI pipeline with integration tests
-
-.PHONY: check
-check: lint vet test-short ## Quick code quality check
-
-.PHONY: precommit
-precommit: fmt tidy lint vet test ## Run all pre-commit checks
+ci: deps fmt tidy lint vet test test-race test-coverage test-integration build vuln ## Run comprehensive CI pipeline
 
 # =============================================================================
 # Cleanup
@@ -422,55 +344,6 @@ clean: ## Clean build artifacts and caches
 	rm -rf $(BUILD_DIR) $(OUTPUT_DIR) $(COVERAGE_DIR)
 	$(GO) clean -cache -testcache -modcache
 	@echo "$(COLOR_GREEN)Cleanup completed$(COLOR_RESET)"
-
-.PHONY: clean-build
-clean-build: ## Clean only build artifacts
-	@echo "$(COLOR_YELLOW)Cleaning build directory...$(COLOR_RESET)"
-	rm -rf $(BUILD_DIR)
-	@echo "$(COLOR_GREEN)Build directory cleaned$(COLOR_RESET)"
-
-.PHONY: clean-output
-clean-output: ## Clean only output directory
-	@echo "$(COLOR_YELLOW)Cleaning output directory...$(COLOR_RESET)"
-	rm -rf $(OUTPUT_DIR)
-	@echo "$(COLOR_GREEN)Output directory cleaned$(COLOR_RESET)"
-
-.PHONY: clean-cache
-clean-cache: ## Clean Go caches
-	@echo "$(COLOR_YELLOW)Cleaning Go caches...$(COLOR_RESET)"
-	$(GO) clean -cache -testcache -modcache
-	@echo "$(COLOR_GREEN)Caches cleaned$(COLOR_RESET)"
-
-# =============================================================================
-# Release
-# =============================================================================
-
-.PHONY: release-check
-release-check: ## Check if ready for release
-	@echo "$(COLOR_YELLOW)Checking release readiness...$(COLOR_RESET)"
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "$(COLOR_RED)Error: Working directory is not clean$(COLOR_RESET)"; \
-		git status --porcelain; \
-		exit 1; \
-	fi
-	@if ! git diff --quiet HEAD~1; then \
-		echo "$(COLOR_GREEN)Changes detected since last commit$(COLOR_RESET)"; \
-	fi
-	@echo "$(COLOR_GREEN)Ready for release$(COLOR_RESET)"
-
-.PHONY: release-build
-release-build: clean deps ci ## Build release artifacts
-	@echo "$(COLOR_YELLOW)Building release artifacts...$(COLOR_RESET)"
-	GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kure-linux-amd64 ./cmd/kure
-	GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kurel-linux-amd64 ./cmd/kurel
-	GOOS=darwin GOARCH=amd64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kure-darwin-amd64 ./cmd/kure
-	GOOS=darwin GOARCH=amd64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kurel-darwin-amd64 ./cmd/kurel
-	GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kure-darwin-arm64 ./cmd/kure
-	GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kurel-darwin-arm64 ./cmd/kurel
-	GOOS=windows GOARCH=amd64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kure-windows-amd64.exe ./cmd/kure
-	GOOS=windows GOARCH=amd64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kurel-windows-amd64.exe ./cmd/kurel
-	@echo "$(COLOR_GREEN)Release artifacts built in $(BUILD_DIR)/$(COLOR_RESET)"
-	@ls -la $(BUILD_DIR)/
 
 # =============================================================================
 # Release Management (GoReleaser workflow)

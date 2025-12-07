@@ -30,6 +30,7 @@ cmd/test/
 
 # Demo output files
 out/
+coverage/
 
 
 # build files

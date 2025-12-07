@@ -27,7 +27,8 @@
       "Bash(mise exec:*)",
       "Bash(gh run download:*)",
       "Bash(gh api:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(make info:*)"
     ],
     "deny": [],
     "ask": []
