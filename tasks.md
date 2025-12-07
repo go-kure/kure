@@ -42,10 +42,10 @@ These tasks should be completed within 2-4 weeks:
 | # | Task | Category | File | Notes |
 |---|------|----------|------|-------|
 | 1 | **CEL Validation Enhancement** | kurel | 🆕 _New task - needs file creation_ | Validate CEL syntax with cel-go (from commit 3d1c75e) |
-| 2 | **Add combined-output mode to kure patch** | cli | [tasks/cli-patch-combined-output-1-high.md](tasks/cli-patch-combined-output-1-high.md) | |
-| 3 | **Fix doc-code drift** | docs | [tasks/docs-code-drift-fix-1-high.md](tasks/docs-code-drift-fix-1-high.md) | Check if commit 43901b2 resolved |
-| 4 | **Add quickstart guide** | docs | [tasks/docs-quickstart-guide-1-high.md](tasks/docs-quickstart-guide-1-high.md) | DEVELOPMENT.md may satisfy |
-| 5 | **Expand README** | docs | [tasks/docs-readme-expansion-1-high.md](tasks/docs-readme-expansion-1-high.md) | Partially done in commit 43901b2 |
+| 2 | **Add combined-output mode to kure patch** | cli | [tasks/02-cli-patch-combined-output-1-high.md](tasks/02-cli-patch-combined-output-1-high.md) | |
+| 3 | **Fix doc-code drift** | docs | [tasks/03-docs-code-drift-fix-1-high.md](tasks/03-docs-code-drift-fix-1-high.md) | Check if commit 43901b2 resolved |
+| 4 | **Add quickstart guide** | docs | [tasks/04-docs-quickstart-guide-1-high.md](tasks/04-docs-quickstart-guide-1-high.md) | DEVELOPMENT.md may satisfy |
+| 5 | **Expand README** | docs | [tasks/05-docs-readme-expansion-1-high.md](tasks/05-docs-readme-expansion-1-high.md) | Partially done in commit 43901b2 |
 
 ---
 
@@ -53,13 +53,13 @@ These tasks should be completed within 2-4 weeks:
 
 | # | Task | Category | File | Notes |
 |---|------|----------|------|-------|
-| 6 | **Standardize validation across packages** | library | [tasks/library-validation-standardize-2-medium.md](tasks/library-validation-standardize-2-medium.md) | Interval validation added (f29d3cb) |
-| 7 | **Add integration tests** | testing | [tasks/testing-integration-tests-2-medium.md](tasks/testing-integration-tests-2-medium.md) | 105 test files now (ceeb125) |
-| 8 | **Implement --diff option for patches** | cli | [tasks/cli-patch-diff-option-2-medium.md](tasks/cli-patch-diff-option-2-medium.md) | |
-| 9 | **Add kurel validate --strict** | kurel | [tasks/kurel-validate-strict-2-medium.md](tasks/kurel-validate-strict-2-medium.md) | |
-| 10 | **Add GoDoc documentation** | docs | [tasks/docs-godoc-api-2-medium.md](tasks/docs-godoc-api-2-medium.md) | |
-| 11 | **Fuzz tests for patch parser** | testing | [tasks/testing-fuzz-tests-2-medium.md](tasks/testing-fuzz-tests-2-medium.md) | |
-| 12 | **Matrix tests across K8s versions** | testing | [tasks/testing-k8s-matrix-2-medium.md](tasks/testing-k8s-matrix-2-medium.md) | |
+| 6 | **Standardize validation across packages** | library | [tasks/06-library-validation-standardize-2-medium.md](tasks/06-library-validation-standardize-2-medium.md) | Interval validation added (f29d3cb) |
+| 7 | **Add integration tests** | testing | [tasks/07-testing-integration-tests-2-medium.md](tasks/07-testing-integration-tests-2-medium.md) | 105 test files now (ceeb125) |
+| 8 | **Implement --diff option for patches** | cli | [tasks/08-cli-patch-diff-option-2-medium.md](tasks/08-cli-patch-diff-option-2-medium.md) | |
+| 9 | **Add kurel validate --strict** | kurel | [tasks/09-kurel-validate-strict-2-medium.md](tasks/09-kurel-validate-strict-2-medium.md) | |
+| 10 | **Add GoDoc documentation** | docs | [tasks/10-docs-godoc-api-2-medium.md](tasks/10-docs-godoc-api-2-medium.md) | |
+| 11 | **Fuzz tests for patch parser** | testing | [tasks/11-testing-fuzz-tests-2-medium.md](tasks/11-testing-fuzz-tests-2-medium.md) | |
+| 12 | **Matrix tests across K8s versions** | testing | [tasks/12-testing-k8s-matrix-2-medium.md](tasks/12-testing-k8s-matrix-2-medium.md) | |
 
 ---
 
@@ -68,15 +68,15 @@ These tasks should be completed within 2-4 weeks:
 | # | Task | Category | File | Notes |
 |---|------|----------|------|-------|
 | 13 | **Plugin Architecture Implementation** | library | 🆕 _New task - needs file creation_ | From commit 30364e7 design doc |
-| 14 | **OCI packaging + signing** | kurel | [tasks/kurel-oci-publishing-3-future.md](tasks/kurel-oci-publishing-3-future.md) | |
-| 15 | **Strategic-merge patches** | patch | [tasks/patch-strategic-merge-3-future.md](tasks/patch-strategic-merge-3-future.md) | |
-| 16 | **Blueprint scaffolds (kure init)** | cli | [tasks/cli-kure-init-3-future.md](tasks/cli-kure-init-3-future.md) | |
-| 17 | **Live diff (kurel diff)** | kurel | [tasks/kurel-diff-3-future.md](tasks/kurel-diff-3-future.md) | |
-| 18 | **Multi-env profiles** | library | [tasks/library-multienv-profiles-3-future.md](tasks/library-multienv-profiles-3-future.md) | |
-| 19 | **Fluent Builder Phase 2** | library | [tasks/library-fluent-builder-impl-3-future.md](tasks/library-fluent-builder-impl-3-future.md) | Phase 1 ✅ complete |
-| 20 | **Policy gating (kurel gate)** | kurel | [tasks/kurel-gate-policy-3-future.md](tasks/kurel-gate-policy-3-future.md) | |
-| 21 | **Package catalog (OCI index)** | kurel | [tasks/kurel-package-catalog-3-future.md](tasks/kurel-package-catalog-3-future.md) | |
-| 22 | **Migration tooling** | cli | [tasks/cli-yaml-to-kure-converter-3-future.md](tasks/cli-yaml-to-kure-converter-3-future.md) | |
+| 14 | **OCI packaging + signing** | kurel | [tasks/14-kurel-oci-publishing-3-future.md](tasks/14-kurel-oci-publishing-3-future.md) | |
+| 15 | **Strategic-merge patches** | patch | [tasks/15-patch-strategic-merge-3-future.md](tasks/15-patch-strategic-merge-3-future.md) | |
+| 16 | **Blueprint scaffolds (kure init)** | cli | [tasks/16-cli-kure-init-3-future.md](tasks/16-cli-kure-init-3-future.md) | |
+| 17 | **Live diff (kurel diff)** | kurel | [tasks/17-kurel-diff-3-future.md](tasks/17-kurel-diff-3-future.md) | |
+| 18 | **Multi-env profiles** | library | [tasks/18-library-multienv-profiles-3-future.md](tasks/18-library-multienv-profiles-3-future.md) | |
+| 19 | **Fluent Builder Phase 2** | library | [tasks/19-library-fluent-builder-impl-3-future.md](tasks/19-library-fluent-builder-impl-3-future.md) | Phase 1 ✅ complete |
+| 20 | **Policy gating (kurel gate)** | kurel | [tasks/20-kurel-gate-policy-3-future.md](tasks/20-kurel-gate-policy-3-future.md) | |
+| 21 | **Package catalog (OCI index)** | kurel | [tasks/21-kurel-package-catalog-3-future.md](tasks/21-kurel-package-catalog-3-future.md) | |
+| 22 | **Migration tooling** | cli | [tasks/22-cli-yaml-to-kure-converter-3-future.md](tasks/22-cli-yaml-to-kure-converter-3-future.md) | |
 
 ---
 
@@ -93,43 +93,43 @@ These tasks should be completed within 2-4 weeks:
 ## Quick Reference by Category
 
 ### Kurel (Package Tool)
-- [kurel-generator-mvp-1-high.md](tasks/kurel-generator-mvp-1-high.md) - **Priority 1**
-- [kurel-build-integration-1-high.md](tasks/kurel-build-integration-1-high.md) - **Priority 1**
-- [kurel-openapi-schema-2-medium.md](tasks/kurel-openapi-schema-2-medium.md) - Priority 2
-- [kurel-validate-strict-2-medium.md](tasks/kurel-validate-strict-2-medium.md) - Priority 2
-- [kurel-oci-publishing-3-future.md](tasks/kurel-oci-publishing-3-future.md) - Priority 3
-- [kurel-diff-3-future.md](tasks/kurel-diff-3-future.md) - Priority 3
-- [kurel-gate-policy-3-future.md](tasks/kurel-gate-policy-3-future.md) - Priority 3
-- [kurel-package-catalog-3-future.md](tasks/kurel-package-catalog-3-future.md) - Priority 3
+- [kurel-generator-mvp-1-high.md](tasks/done/kurel-generator-mvp-1-high.md) - **Priority 1** ✅ DONE
+- [kurel-build-integration-1-high.md](tasks/done/kurel-build-integration-1-high.md) - **Priority 1** ✅ DONE
+- [kurel-openapi-schema-2-medium.md](tasks/done/kurel-openapi-schema-2-medium.md) - Priority 2 ✅ DONE
+- [09-kurel-validate-strict-2-medium.md](tasks/09-kurel-validate-strict-2-medium.md) - Priority 2
+- [14-kurel-oci-publishing-3-future.md](tasks/14-kurel-oci-publishing-3-future.md) - Priority 3
+- [17-kurel-diff-3-future.md](tasks/17-kurel-diff-3-future.md) - Priority 3
+- [20-kurel-gate-policy-3-future.md](tasks/20-kurel-gate-policy-3-future.md) - Priority 3
+- [21-kurel-package-catalog-3-future.md](tasks/21-kurel-package-catalog-3-future.md) - Priority 3
 
 ### Library (Kure)
-- [library-validation-standardize-2-medium.md](tasks/library-validation-standardize-2-medium.md) - Priority 2
-- [library-multienv-profiles-3-future.md](tasks/library-multienv-profiles-3-future.md) - Priority 3
-- [library-fluent-builder-impl-3-future.md](tasks/library-fluent-builder-impl-3-future.md) - Priority 3
+- [06-library-validation-standardize-2-medium.md](tasks/06-library-validation-standardize-2-medium.md) - Priority 2
+- [18-library-multienv-profiles-3-future.md](tasks/18-library-multienv-profiles-3-future.md) - Priority 3
+- [19-library-fluent-builder-impl-3-future.md](tasks/19-library-fluent-builder-impl-3-future.md) - Priority 3
 
 ### Documentation
-- [docs-code-drift-fix-1-high.md](tasks/docs-code-drift-fix-1-high.md) - **Priority 1**
-- [docs-fluent-builder-pattern-1-high.md](tasks/docs-fluent-builder-pattern-1-high.md) - **Priority 1**
-- [docs-quickstart-guide-1-high.md](tasks/docs-quickstart-guide-1-high.md) - **Priority 1**
-- [docs-readme-expansion-1-high.md](tasks/docs-readme-expansion-1-high.md) - **Priority 1**
-- [docs-godoc-api-2-medium.md](tasks/docs-godoc-api-2-medium.md) - Priority 2
+- [03-docs-code-drift-fix-1-high.md](tasks/03-docs-code-drift-fix-1-high.md) - **Priority 1**
+- [docs-fluent-builder-pattern-1-high.md](tasks/done/docs-fluent-builder-pattern-1-high.md) - **Priority 1** ✅ DONE
+- [04-docs-quickstart-guide-1-high.md](tasks/04-docs-quickstart-guide-1-high.md) - **Priority 1**
+- [05-docs-readme-expansion-1-high.md](tasks/05-docs-readme-expansion-1-high.md) - **Priority 1**
+- [10-docs-godoc-api-2-medium.md](tasks/10-docs-godoc-api-2-medium.md) - Priority 2
 
 ### CLI
-- [cli-patch-combined-output-1-high.md](tasks/cli-patch-combined-output-1-high.md) - **Priority 1**
-- [cli-patch-diff-option-2-medium.md](tasks/cli-patch-diff-option-2-medium.md) - Priority 2
-- [cli-kure-init-3-future.md](tasks/cli-kure-init-3-future.md) - Priority 3
-- [cli-yaml-to-kure-converter-3-future.md](tasks/cli-yaml-to-kure-converter-3-future.md) - Priority 3
+- [02-cli-patch-combined-output-1-high.md](tasks/02-cli-patch-combined-output-1-high.md) - **Priority 1**
+- [08-cli-patch-diff-option-2-medium.md](tasks/08-cli-patch-diff-option-2-medium.md) - Priority 2
+- [16-cli-kure-init-3-future.md](tasks/16-cli-kure-init-3-future.md) - Priority 3
+- [22-cli-yaml-to-kure-converter-3-future.md](tasks/22-cli-yaml-to-kure-converter-3-future.md) - Priority 3
 
 ### Testing
-- [testing-integration-tests-2-medium.md](tasks/testing-integration-tests-2-medium.md) - Priority 2
-- [testing-fuzz-tests-2-medium.md](tasks/testing-fuzz-tests-2-medium.md) - Priority 2
-- [testing-k8s-matrix-2-medium.md](tasks/testing-k8s-matrix-2-medium.md) - Priority 2
+- [07-testing-integration-tests-2-medium.md](tasks/07-testing-integration-tests-2-medium.md) - Priority 2
+- [11-testing-fuzz-tests-2-medium.md](tasks/11-testing-fuzz-tests-2-medium.md) - Priority 2
+- [12-testing-k8s-matrix-2-medium.md](tasks/12-testing-k8s-matrix-2-medium.md) - Priority 2
 
 ### Dependencies
-- [deps-gomod-alignment-1-high.md](tasks/deps-gomod-alignment-1-high.md) - **Priority 1**
+- [deps-gomod-alignment-1-high.md](tasks/done/deps-gomod-alignment-1-high.md) - **Priority 1** ✅ DONE
 
 ### Patch System
-- [patch-strategic-merge-3-future.md](tasks/patch-strategic-merge-3-future.md) - Priority 3
+- [15-patch-strategic-merge-3-future.md](tasks/15-patch-strategic-merge-3-future.md) - Priority 3
 
 ---
 
