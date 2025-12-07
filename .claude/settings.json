@@ -26,7 +26,8 @@
       "Bash(go clean:*)",
       "Bash(mise exec:*)",
       "Bash(gh run download:*)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []
