@@ -15,7 +15,12 @@
       "Bash(mise trust:*)",
       "Bash(mise install:*)",
       "Bash(make check-go-version:*)",
-      "Bash(make help:*)"
+      "Bash(make help:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git log:*)",
+      "Bash(printf:*)",
+      "Bash(command -v:*)",
+      "Bash(go install:*)"
     ],
     "deny": [],
     "ask": []

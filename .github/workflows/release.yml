@@ -3,251 +3,74 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to release'
-        required: true
-        type: string
+      - 'v*'
 
 env:
-  GO_VERSION: '1.24.6'
+  GO_VERSION: '1.24.11'
 
 jobs:
-  # =============================================================================
-  # Pre-release Checks
-  # =============================================================================
-  
-  pre-release-check:
-    name: Pre-release Validation
+  validate:
+    name: Validate tag and changelog
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true
+      - name: Validate tag format and CHANGELOG
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF##*/}"
+          echo "Tag: $TAG"
 
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+          # Validate tag format
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$' \
+            || { echo "Invalid tag format: $TAG"; exit 1; }
 
-    - name: Install dependencies
-      run: make deps
+          # Validate CHANGELOG has section for this tag
+          test -f CHANGELOG.md && grep -q "^## $TAG" CHANGELOG.md \
+            || { echo "CHANGELOG.md missing section for $TAG"; exit 1; }
 
-    - name: Run all CI checks
-      run: make ci-coverage
+          # Ensure new tag is greater than previous tag
+          LAST=$(git tag --list 'v*' --sort=-v:refname | sed -n '2p' || true)
+          if [ -n "$LAST" ]; then
+            if [ "$(printf '%s\n%s\n' "$LAST" "$TAG" | sort -V | tail -n1)" != "$TAG" ]; then
+              echo "Tag $TAG is not greater than last $LAST"; exit 1;
+            fi
+          fi
 
-    - name: Check release readiness
-      run: make release-check
-
-  # =============================================================================
-  # Build Release Artifacts
-  # =============================================================================
-  
-  build-release:
-    name: Build Release Artifacts
+  goreleaser:
+    needs: validate
     runs-on: ubuntu-latest
-    needs: pre-release-check
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true
-
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Install dependencies
-      run: make deps
-
-    - name: Build release artifacts
-      run: make release-build
-
-    - name: Create checksums
-      run: |
-        cd bin
-        sha256sum * > checksums.txt
-        cat checksums.txt
-
-    - name: Upload release artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-artifacts
-        path: |
-          bin/*
-        retention-days: 30
-
-  # =============================================================================
-  # Create GitHub Release
-  # =============================================================================
-  
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: build-release
     permissions:
       contents: write
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Download release artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: release-artifacts
-        path: bin/
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Extract release notes
-      id: extract-release-notes
-      run: |
-        # Extract release notes from CHANGELOG.md if it exists, or generate from commits
-        if [ -f CHANGELOG.md ]; then
-          # Extract latest release notes from CHANGELOG.md
-          awk '/^## \[.*\]/{if(found) exit; found=1; next} found{print}' CHANGELOG.md > release-notes.txt
-        else
-          # Generate release notes from git commits since last tag
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
-          if [ -n "$PREVIOUS_TAG" ]; then
-            echo "## Changes since $PREVIOUS_TAG" > release-notes.txt
-            git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD >> release-notes.txt
-          else
-            echo "## Initial Release" > release-notes.txt
-            git log --pretty=format:"- %s (%h)" --max-count=20 >> release-notes.txt
-          fi
-        fi
-        
-        # Set output for use in release
-        cat release-notes.txt
-        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-        cat release-notes.txt >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Get tag name
-      id: get-tag
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "TAG_NAME=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-        else
-          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.get-tag.outputs.TAG_NAME }}
-        name: Release ${{ steps.get-tag.outputs.TAG_NAME }}
-        body: ${{ steps.extract-release-notes.outputs.RELEASE_NOTES }}
-        draft: false
-        prerelease: ${{ contains(steps.get-tag.outputs.TAG_NAME, 'rc') || contains(steps.get-tag.outputs.TAG_NAME, 'beta') || contains(steps.get-tag.outputs.TAG_NAME, 'alpha') }}
-        files: |
-          bin/kure-*
-          bin/kurel-*
-          bin/checksums.txt
-        generate_release_notes: true
-
-  # =============================================================================
-  # Post-release Tasks
-  # =============================================================================
-  
   post-release:
-    name: Post-release Tasks
+    needs: goreleaser
     runs-on: ubuntu-latest
-    needs: create-release
-    if: always() && needs.create-release.result == 'success'
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Refresh Go proxy
-      run: |
-        TAG_NAME=${GITHUB_REF#refs/tags/}
-        curl -s "https://proxy.golang.org/github.com/go-kure/kure/@v/$TAG_NAME.info" || true
-        curl -s "https://proxy.golang.org/github.com/go-kure/kure/@latest" || true
-        echo "Go proxy refresh completed for $TAG_NAME"
-
-    - name: Update latest release badge
-      run: |
-        echo "Release ${{ needs.create-release.outputs.tag-name }} published successfully"
-        echo "Artifacts available at: https://github.com/${{ github.repository }}/releases/latest"
-
-  # =============================================================================
-  # Container Image Build (Optional)
-  # =============================================================================
-  
-  build-container:
-    name: Build Container Images
-    runs-on: ubuntu-latest
-    needs: pre-release-check
-    if: false  # Disabled for now - enable when ready for container releases
-    
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ghcr.io/${{ github.repository }}
-        tags: |
-          type=ref,event=tag
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
-
-    - name: Build and push container images
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Refresh Go module proxy
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          curl -s "https://proxy.golang.org/github.com/go-kure/kure/@v/${TAG}.info" || true
+          echo "Refreshed proxy for $TAG"

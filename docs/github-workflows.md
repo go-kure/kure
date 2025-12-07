@@ -13,9 +13,8 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [CI/CD Pipeline](#cicd-pipeline) | `ci.yml` | push, PR, manual | Comprehensive testing, linting, building, security |
 | [Build and Test](#build-and-test) | `build-test.yaml` | push (main), PR | Basic build and test with formatted output |
 | [PR Checks](#pr-checks) | `pr-checks.yml` | PR events | Comprehensive PR validation and analysis |
-| [Release](#release) | `release.yml` | version tags, manual | Release automation and artifact creation |
+| [Release](#release) | `release.yml` | version tags | GoReleaser-based release with validation |
 | [Qodana Code Quality](#qodana-code-quality) | `code_quality.yml` | push, PR, manual | JetBrains Qodana static analysis |
-| [Refresh Go Proxy](#refresh-go-proxy) | `go-proxy-refresh.yml` | push (main) | Refresh Go module proxy cache |
 
 ---
 
@@ -102,19 +101,31 @@ This document provides an overview of all GitHub Actions workflows used in the k
 **Name:** `Release`
 
 **Triggers:**
-- Push tags: `v*.*.*` (e.g., v1.0.0)
-- Manual dispatch
+- Push tags: `v*` (e.g., v1.0.0, v0.1.0-alpha.0)
 
 **Jobs:**
-1. **Pre-release Check** - Validate version and changelog
-2. **Build Release** - Cross-platform binary builds
-3. **Create Release** - GitHub release with artifacts
-4. **Post-release** - Go proxy refresh
-5. **Build Container** - Docker images (currently disabled)
+1. **Validate** - Strict tag format, changelog, and version progression validation
+2. **GoReleaser** - Cross-platform builds using GoReleaser v2
+3. **Post-release** - Go proxy refresh
 
 **Configuration:**
-- Go Version: `1.24.6`
-- Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`
+- Go Version: `1.24.11`
+- Build Tool: GoReleaser v2
+- Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`, `windows/arm64`
+- Tag Format: `^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$`
+- Changelog: Required (must have `## v0.1.0` section)
+
+**Local Release Management:**
+```bash
+# Preview release plan
+make release TYPE=alpha
+
+# Execute release (creates commits + tag)
+make release-do TYPE=alpha
+
+# Push tag to trigger CI
+git push origin v0.1.0-alpha.0
+```
 
 ---
 
@@ -132,25 +143,10 @@ This document provides an overview of all GitHub Actions workflows used in the k
 1. **Qodana** - JetBrains Qodana static analysis
 
 **Configuration:**
-- Go Version: `1.24.6`
+- Go Version: `1.24.11`
 - Qodana Version: `2025.1`
 - Baseline: `qodana.sarif.json`
 - Uploads results to Qodana Cloud and GitHub Security
-
----
-
-### Refresh Go Proxy
-
-**File:** `.github/workflows/go-proxy-refresh.yml`
-**Name:** `Refresh Go Proxy`
-
-**Triggers:**
-- Push to: `main`
-
-**Jobs:**
-1. **Refresh Proxy** - Triggers proxy.golang.org to refresh module cache
-
-**Purpose:** Ensures Go proxy has the latest module version immediately after push to main.
 
 ---
 

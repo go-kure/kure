@@ -283,6 +283,10 @@ tools: ## Install development tools
 		$(GO) install golang.org/x/tools/cmd/goimports@latest; \
 		echo "Installed goimports"; \
 	fi
+	@if ! command -v goreleaser >/dev/null 2>&1; then \
+		$(GO) install github.com/goreleaser/goreleaser/v2@latest; \
+		echo "Installed goreleaser v2"; \
+	fi
 	@echo "$(COLOR_GREEN)Development tools installed$(COLOR_RESET)"
 
 .PHONY: generate
@@ -308,6 +312,9 @@ sync-go-version: ## Sync Go version from mise.toml to all files
 	sed -i "s/go-version: '[^']*'/go-version: '$$GO_VER'/" .github/workflows/*.yaml; \
 	sed -i "s/go-version: \$${{ env.GO_VERSION }}/go-version: \$${{ env.GO_VERSION }}/" .github/workflows/*.yaml; \
 	sed -i "3s/go .*/go $$GO_VER/" go.mod; \
+	if [ -f docs/github-workflows.md ]; then \
+		sed -i "s/Go Version: \`[0-9][^']*\`/Go Version: \`$$GO_VER\`/g" docs/github-workflows.md; \
+	fi; \
 	echo "$(COLOR_GREEN)Go version synced to $$GO_VER$(COLOR_RESET)"
 
 .PHONY: check-go-version
@@ -350,6 +357,19 @@ check-go-version: ## Verify Go version consistency across all files
 		ERRORS=$$((ERRORS + 1)); \
 	else \
 		echo "$(COLOR_GREEN)✓ go.mod$(COLOR_RESET)"; \
+	fi; \
+	if [ -f docs/github-workflows.md ]; then \
+		DOC_VERS=$$(grep -o "Go Version: \`[^']*\`" docs/github-workflows.md | grep -o "[0-9][^']*" | sort -u); \
+		for DOC_VER in $$DOC_VERS; do \
+			if [ "$$DOC_VER" != "$$GO_VER" ]; then \
+				echo "$(COLOR_RED)✗ docs/github-workflows.md has Go Version: $$DOC_VER (expected $$GO_VER)$(COLOR_RESET)"; \
+				ERRORS=$$((ERRORS + 1)); \
+				break; \
+			fi; \
+		done; \
+		if [ $$ERRORS -eq 0 ] || [ -z "$$DOC_VERS" ]; then \
+			echo "$(COLOR_GREEN)✓ docs/github-workflows.md$(COLOR_RESET)"; \
+		fi; \
 	fi; \
 	if [ $$ERRORS -eq 0 ]; then \
 		echo "$(COLOR_GREEN)All files have consistent Go version $$GO_VER$(COLOR_RESET)"; \
@@ -451,6 +471,28 @@ release-build: clean deps ci ## Build release artifacts
 	GOOS=windows GOARCH=amd64 $(GO) build -ldflags="-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(BUILD_DIR)/kurel-windows-amd64.exe ./cmd/kurel
 	@echo "$(COLOR_GREEN)Release artifacts built in $(BUILD_DIR)/$(COLOR_RESET)"
 	@ls -la $(BUILD_DIR)/
+
+# =============================================================================
+# Release Management (GoReleaser workflow)
+# =============================================================================
+
+.PHONY: release
+release: ## Show release plan (dry-run)
+	@if [ -z "$(TYPE)" ]; then \
+		echo "Usage: make release TYPE={alpha|beta|rc|stable}"; \
+		echo "       make release TYPE=bump SCOPE={minor|major}"; \
+		exit 1; \
+	fi
+	@DRY_RUN=1 ./scripts/semver.sh release $(TYPE) $(SCOPE)
+
+.PHONY: release-do
+release-do: ## Execute release (creates tag)
+	@if [ -z "$(TYPE)" ]; then \
+		echo "Usage: make release-do TYPE={alpha|beta|rc|stable}"; \
+		echo "       make release-do TYPE=bump SCOPE={minor|major}"; \
+		exit 1; \
+	fi
+	@./scripts/semver.sh release $(TYPE) $(SCOPE)
 
 # =============================================================================
 # Default target
