@@ -41,7 +41,7 @@ These tasks should be completed within 2-4 weeks:
 
 | # | Task | Category | File | Notes |
 |---|------|----------|------|-------|
-| 1 | **CEL Validation Enhancement** | kurel | 🆕 _New task - needs file creation_ | Validate CEL syntax with cel-go (from commit 3d1c75e) |
+| 1 | **CEL Validation Enhancement** | kurel | [tasks/01-kurel-cel-validation-1-high.md](tasks/01-kurel-cel-validation-1-high.md) | Validate CEL syntax with cel-go (from commit 3d1c75e) |
 | 2 | **Add combined-output mode to kure patch** | cli | [tasks/02-cli-patch-combined-output-1-high.md](tasks/02-cli-patch-combined-output-1-high.md) | |
 | 3 | **Fix doc-code drift** | docs | [tasks/03-docs-code-drift-fix-1-high.md](tasks/03-docs-code-drift-fix-1-high.md) | Check if commit 43901b2 resolved |
 | 4 | **Add quickstart guide** | docs | [tasks/04-docs-quickstart-guide-1-high.md](tasks/04-docs-quickstart-guide-1-high.md) | DEVELOPMENT.md may satisfy |
