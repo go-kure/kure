@@ -291,6 +291,73 @@ generate: ## Run go generate for all packages
 	$(GO) generate ./...
 	@echo "$(COLOR_GREEN)Code generation completed$(COLOR_RESET)"
 
+.PHONY: sync-go-version
+sync-go-version: ## Sync Go version from mise.toml to all files
+	@echo "$(COLOR_YELLOW)Syncing Go version from mise.toml...$(COLOR_RESET)"
+	@if [ ! -f mise.toml ]; then \
+		echo "$(COLOR_RED)Error: mise.toml not found$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@GO_VER=$$(grep '^go = ' mise.toml | cut -d'"' -f2); \
+	if [ -z "$$GO_VER" ]; then \
+		echo "$(COLOR_RED)Error: Could not extract Go version from mise.toml$(COLOR_RESET)"; \
+		exit 1; \
+	fi; \
+	echo "Syncing to Go version: $$GO_VER"; \
+	sed -i "s/GO_VERSION: '[^']*'/GO_VERSION: '$$GO_VER'/" .github/workflows/*.yml; \
+	sed -i "s/go-version: '[^']*'/go-version: '$$GO_VER'/" .github/workflows/*.yaml; \
+	sed -i "s/go-version: \$${{ env.GO_VERSION }}/go-version: \$${{ env.GO_VERSION }}/" .github/workflows/*.yaml; \
+	sed -i "3s/go .*/go $$GO_VER/" go.mod; \
+	echo "$(COLOR_GREEN)Go version synced to $$GO_VER$(COLOR_RESET)"
+
+.PHONY: check-go-version
+check-go-version: ## Verify Go version consistency across all files
+	@echo "$(COLOR_YELLOW)Checking Go version consistency...$(COLOR_RESET)"
+	@if [ ! -f mise.toml ]; then \
+		echo "$(COLOR_RED)Error: mise.toml not found$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@GO_VER=$$(grep '^go = ' mise.toml | cut -d'"' -f2); \
+	if [ -z "$$GO_VER" ]; then \
+		echo "$(COLOR_RED)Error: Could not extract Go version from mise.toml$(COLOR_RESET)"; \
+		exit 1; \
+	fi; \
+	echo "Expected Go version: $$GO_VER"; \
+	ERRORS=0; \
+	for file in .github/workflows/*.yml .github/workflows/*.yaml; do \
+		if [ -f "$$file" ]; then \
+			if grep -q "GO_VERSION:" "$$file"; then \
+				FILE_VER=$$(grep "GO_VERSION:" "$$file" | head -1 | cut -d"'" -f2); \
+				if [ "$$FILE_VER" != "$$GO_VER" ]; then \
+					echo "$(COLOR_RED)✗ $$file has GO_VERSION: $$FILE_VER (expected $$GO_VER)$(COLOR_RESET)"; \
+					ERRORS=$$((ERRORS + 1)); \
+				else \
+					echo "$(COLOR_GREEN)✓ $$file$(COLOR_RESET)"; \
+				fi; \
+			fi; \
+			if grep -q "go-version:" "$$file"; then \
+				FILE_VER=$$(grep "go-version:" "$$file" | grep -v "{{" | head -1 | sed "s/.*go-version: '\([^']*\)'.*/\1/"); \
+				if [ -n "$$FILE_VER" ] && [ "$$FILE_VER" != "$$GO_VER" ]; then \
+					echo "$(COLOR_RED)✗ $$file has go-version: $$FILE_VER (expected $$GO_VER)$(COLOR_RESET)"; \
+					ERRORS=$$((ERRORS + 1)); \
+				fi; \
+			fi; \
+		fi; \
+	done; \
+	GOMOD_VER=$$(sed -n '3p' go.mod | awk '{print $$2}'); \
+	if [ "$$GOMOD_VER" != "$$GO_VER" ]; then \
+		echo "$(COLOR_RED)✗ go.mod has go $$GOMOD_VER (expected $$GO_VER)$(COLOR_RESET)"; \
+		ERRORS=$$((ERRORS + 1)); \
+	else \
+		echo "$(COLOR_GREEN)✓ go.mod$(COLOR_RESET)"; \
+	fi; \
+	if [ $$ERRORS -eq 0 ]; then \
+		echo "$(COLOR_GREEN)All files have consistent Go version $$GO_VER$(COLOR_RESET)"; \
+	else \
+		echo "$(COLOR_RED)Found $$ERRORS version mismatches. Run 'make sync-go-version' to fix.$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+
 .PHONY: mod-graph
 mod-graph: ## Display module dependency graph
 	@echo "$(COLOR_YELLOW)Module dependency graph:$(COLOR_RESET)"
