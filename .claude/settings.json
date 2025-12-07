@@ -24,7 +24,9 @@
       "Bash(go version:*)",
       "Bash(export PATH=\"$HOME/.local/share/mise/shims:$PATH\")",
       "Bash(go clean:*)",
-      "Bash(mise exec:*)"
+      "Bash(mise exec:*)",
+      "Bash(gh run download:*)",
+      "Bash(gh api:*)"
     ],
     "deny": [],
     "ask": []
