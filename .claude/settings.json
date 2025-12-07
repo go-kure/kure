@@ -20,7 +20,11 @@
       "Bash(git log:*)",
       "Bash(printf:*)",
       "Bash(command -v:*)",
-      "Bash(go install:*)"
+      "Bash(go install:*)",
+      "Bash(go version:*)",
+      "Bash(export PATH=\"$HOME/.local/share/mise/shims:$PATH\")",
+      "Bash(go clean:*)",
+      "Bash(mise exec:*)"
     ],
     "deny": [],
     "ask": []

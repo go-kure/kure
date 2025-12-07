@@ -103,28 +103,31 @@ func TestResolver(t *testing.T) {
 	})
 
 	t.Run("max depth exceeded", func(t *testing.T) {
-		// Create a deep chain of references
+		//  Create a single parameter with a deeply nested reference chain.
+		// Note: Due to caching, multiple top-level variables won't trigger depth limits
+		// across their boundaries. This test uses a single entry point to force
+		// the full chain to be resolved in one go.
+		//
+		// Using a non-exact reference (prefix/suffix) ensures the resolver can't cache
+		// intermediate results and must traverse the full depth.
 		base := ParameterMap{
-			"v1":  "${v2}",
-			"v2":  "${v3}",
-			"v3":  "${v4}",
-			"v4":  "${v5}",
-			"v5":  "${v6}",
-			"v6":  "${v7}",
-			"v7":  "${v8}",
-			"v8":  "${v9}",
-			"v9":  "${v10}",
-			"v10": "${v11}",
-			"v11": "${v12}",
-			"v12": "final",
+			"deep": "start-${a}-end",
+		}
+		overrides := ParameterMap{
+			"a": "1-${b}-1",
+			"b": "2-${c}-2",
+			"c": "3-${d}-3",
+			"d": "4-${e}-4",
+			"e": "5-${f}-5",
+			"f": "final",
 		}
 
 		opts := &LauncherOptions{
-			MaxDepth: 5, // Set low max depth
+			MaxDepth: 5, // Depth when resolving "deep": 0->1->2->3->4->5->6 (exceeds limit)
 			Logger:   log,
 		}
 
-		result, err := resolver.Resolve(ctx, base, nil, opts)
+		result, err := resolver.Resolve(ctx, base, overrides, opts)
 		if err == nil {
 			t.Logf("Expected error but got result: %v", result)
 		}
