@@ -88,6 +88,10 @@ func TestFluxHelmOCIYAMLConstant(t *testing.T) {
 }
 
 func TestDemoGVKGenerators(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping demo test in short mode")
+	}
+
 	// Capture stdout
 	originalStdout := os.Stdout
 	r, w, _ := os.Pipe()
@@ -124,6 +128,10 @@ func TestDemoGVKGenerators(t *testing.T) {
 }
 
 func TestRunGVKDemo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping demo test in short mode")
+	}
+
 	// Capture stdout
 	originalStdout := os.Stdout
 	r, w, _ := os.Pipe()
