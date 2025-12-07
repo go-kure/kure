@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"sync"
+
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
@@ -23,7 +25,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"sync"
 )
 
 var (

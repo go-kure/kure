@@ -1,9 +1,10 @@
 package metallb
 
 import (
+	"testing"
+
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 )
 
 func TestCreateBGPPeer(t *testing.T) {

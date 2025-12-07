@@ -1,7 +1,7 @@
 package fluxcd
 
 import (
-	"github.com/fluxcd/notification-controller/api/v1"
+	v1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
 	"github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

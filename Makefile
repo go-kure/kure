@@ -184,6 +184,11 @@ lint-go: ## Run Go linting with golangci-lint
 fmt: ## Format Go code
 	@echo "$(COLOR_YELLOW)Formatting Go code...$(COLOR_RESET)"
 	$(GO) fmt ./...
+	@if command -v goimports >/dev/null 2>&1; then \
+		goimports -w .; \
+	else \
+		echo "$(COLOR_RED)goimports not found, run 'make tools' to install$(COLOR_RESET)"; \
+	fi
 	@echo "$(COLOR_GREEN)Code formatted$(COLOR_RESET)"
 
 .PHONY: vet
@@ -273,6 +278,10 @@ tools: ## Install development tools
 	@if ! command -v golangci-lint >/dev/null 2>&1; then \
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
 		echo "Installed golangci-lint $(GOLANGCI_LINT_VERSION)"; \
+	fi
+	@if ! command -v goimports >/dev/null 2>&1; then \
+		$(GO) install golang.org/x/tools/cmd/goimports@latest; \
+		echo "Installed goimports"; \
 	fi
 	@echo "$(COLOR_GREEN)Development tools installed$(COLOR_RESET)"
 

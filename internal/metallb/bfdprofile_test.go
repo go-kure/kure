@@ -1,8 +1,8 @@
 package metallb
 
-import "testing"
-
 import (
+	"testing"
+
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 )
 
