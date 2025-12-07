@@ -323,13 +323,20 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 	@$(MAKE) deps
 	@echo "$(COLOR_YELLOW)Installing pre-commit hook...$(COLOR_RESET)"
 	@echo '#!/bin/bash' > .git/hooks/pre-commit
-	@echo 'make ci' >> .git/hooks/pre-commit
+	@echo 'if command -v mise >/dev/null 2>&1; then' >> .git/hooks/pre-commit
+	@echo '  mise exec -- make precommit' >> .git/hooks/pre-commit
+	@echo 'else' >> .git/hooks/pre-commit
+	@echo '  make precommit' >> .git/hooks/pre-commit
+	@echo 'fi' >> .git/hooks/pre-commit
 	@chmod +x .git/hooks/pre-commit
 	@echo "$(COLOR_GREEN)Development environment ready$(COLOR_RESET)"
 
 # =============================================================================
 # CI/CD
 # =============================================================================
+
+.PHONY: precommit
+precommit: fmt tidy lint test ## Run fast pre-commit checks (fmt, tidy, lint, test)
 
 .PHONY: ci
 ci: deps fmt tidy lint vet test test-race test-coverage test-integration build vuln ## Run comprehensive CI pipeline

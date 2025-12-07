@@ -30,16 +30,20 @@ This document provides an overview of all GitHub Actions workflows used in the k
 
 ### Test Targets in Makefile
 
-| Target | Command | Used in CI? |
-|--------|---------|-------------|
-| `test` | `go test -timeout 30s ./...` | ✅ |
-| `test-verbose` | `go test -v -timeout 30s ./...` | ❌ |
-| `test-race` | `go test -race -timeout 30s ./...` | ✅ |
-| `test-short` | `go test -short -timeout 30s ./...` | ❌ |
-| `test-coverage` | `go test -coverprofile=... ./...` | ✅ |
-| `test-benchmark` | `go test -bench=. -benchmem ./...` | ❌ |
-| `test-integration` | `go test -tags=integration -timeout 5m ./...` | ✅ |
-| `vuln` | `govulncheck ./...` | ✅ |
+| Target | Command | Used in CI? | In precommit? |
+|--------|---------|-------------|---------------|
+| `test` | `go test -timeout 30s ./...` | ✅ | ✅ |
+| `test-race` | `go test -race -timeout 30s ./...` | ✅ | ❌ |
+| `test-coverage` | `go test -coverprofile=... ./...` | ✅ | ❌ |
+| `test-integration` | `go test -tags=integration -timeout 5m ./...` | ✅ | ❌ |
+| `vuln` | `govulncheck ./...` | ✅ | ❌ |
+
+### CI vs Pre-commit
+
+| Target | Tasks | Use Case |
+|--------|-------|----------|
+| `precommit` | fmt, tidy, lint, test | Fast local checks (~10s) |
+| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, build, vuln | Comprehensive CI pipeline (~2min) |
 
 ---
 
