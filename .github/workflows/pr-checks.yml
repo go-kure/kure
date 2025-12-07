@@ -48,6 +48,9 @@ jobs:
     - name: Install dependencies
       run: make deps
 
+    - name: Check Go version consistency
+      run: make check-go-version
+
     - name: Quick checks
       run: make check
 

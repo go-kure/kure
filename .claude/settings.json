@@ -13,7 +13,9 @@
       "Bash(git fetch:*)",
       "Bash(git mv:*)",
       "Bash(mise trust:*)",
-      "Bash(mise install:*)"
+      "Bash(mise install:*)",
+      "Bash(make check-go-version:*)",
+      "Bash(make help:*)"
     ],
     "deny": [],
     "ask": []

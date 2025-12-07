@@ -83,7 +83,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 **Concurrency:** Cancels previous runs for the same PR
 
 **Jobs:**
-1. **Quick Check** - Fast validation (format, lint, vet)
+1. **Quick Check** - Fast validation (Go version consistency, format, lint, vet)
 2. **Security Check** - Vulnerability scanning and dependency checks
 3. **Coverage Check** - Test coverage validation (80% threshold)
 4. **Analyze Changes** - Changed files analysis and impact assessment
