@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
-  GO_VERSION: '1.24.6'
+  GO_VERSION: '1.24.11'
 
 # Cancel previous runs for the same PR
 concurrency:
