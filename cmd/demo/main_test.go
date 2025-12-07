@@ -590,8 +590,10 @@ func TestMainFunction(t *testing.T) {
 	os.Stdout = w
 
 	var output bytes.Buffer
+	copyDone := make(chan bool)
 	go func() {
 		io.Copy(&output, r)
+		copyDone <- true
 	}()
 
 	// Run main in separate goroutine to avoid os.Exit
@@ -610,6 +612,9 @@ func TestMainFunction(t *testing.T) {
 
 	w.Close()
 	os.Stdout = originalStdout
+
+	// Wait for reader goroutine to finish
+	<-copyDone
 
 	outputStr := output.String()
 	if !strings.Contains(outputStr, "=== Kure Demo Suite ===") {
