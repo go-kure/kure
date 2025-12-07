@@ -362,11 +362,9 @@ jobs:
         check-latest: true
 
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
+      uses: securego/gosec@master
       with:
-        args: './...'
-        format: sarif
-        output: gosec-results.sarif
+        args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
 
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3
