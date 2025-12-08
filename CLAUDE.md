@@ -82,9 +82,6 @@ make qodana
 # Build and run comprehensive demo
 make demo
 
-# Run internal API demo
-make demo-internals
-
 # Run GVK generators demo
 make demo-gvk
 

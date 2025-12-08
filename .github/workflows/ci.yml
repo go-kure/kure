@@ -226,9 +226,6 @@ jobs:
               image: nginx:1.21
         EOF
 
-    - name: Run demo with internals
-      run: make demo-internals
-
     - name: Run demo (main)
       run: make demo || true  # Allow demo to fail if examples don't exist
 

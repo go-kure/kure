@@ -108,9 +108,6 @@ make qodana
 # Run comprehensive demo
 make demo
 
-# Run demo with internal API examples
-make demo-internals
-
 # Run GVK generators demo
 make demo-gvk
 
@@ -258,9 +255,6 @@ The demo system generates example YAML files showing Kure's capabilities:
 ```bash
 # Run all demos
 make demo
-
-# Just internal API examples
-make demo-internals
 
 # Generated files appear in out/ directory
 ls -la out/
