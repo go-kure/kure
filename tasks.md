@@ -1,6 +1,6 @@
 # Kure Development Tasks
 
-**Last Updated:** 2025-12-03 (after rebase on upstream)
+**Last Updated:** 2025-12-08 (added HPA and PDB builder tasks for Crane/OAM support)
 **Source:** Comprehensive repository review and alternate review analysis + upstream commits
 
 This document provides an index of all prioritized development tasks for the Kure library and Kurel package tool. Each task is detailed in a separate file in the `tasks/` directory.
@@ -105,6 +105,8 @@ These tasks should be completed within 2-4 weeks:
 | 3 | **Fix doc-code drift** | docs | [tasks/03-docs-code-drift-fix-1-high.md](tasks/03-docs-code-drift-fix-1-high.md) | Check if commit 43901b2 resolved |
 | 4 | **Add quickstart guide** | docs | [tasks/04-docs-quickstart-guide-1-high.md](tasks/04-docs-quickstart-guide-1-high.md) | DEVELOPMENT.md may satisfy |
 | 5 | **Expand README** | docs | [tasks/05-docs-readme-expansion-1-high.md](tasks/05-docs-readme-expansion-1-high.md) | Partially done in commit 43901b2 |
+| 23 | **HorizontalPodAutoscaler builder** | library | [tasks/23-library-hpa-builder-1-high.md](tasks/23-library-hpa-builder-1-high.md) | Required for Crane Scaler trait (ADR-006) |
+| 24 | **PodDisruptionBudget builder** | library | [tasks/24-library-pdb-builder-1-high.md](tasks/24-library-pdb-builder-1-high.md) | Required for Crane Scaler trait (ADR-006) |
 
 ---
 
@@ -162,6 +164,8 @@ These tasks should be completed within 2-4 weeks:
 - [21-kurel-package-catalog-3-future.md](tasks/21-kurel-package-catalog-3-future.md) - Priority 3
 
 ### Library (Kure)
+- [23-library-hpa-builder-1-high.md](tasks/23-library-hpa-builder-1-high.md) - **Priority 1** (Crane blocker)
+- [24-library-pdb-builder-1-high.md](tasks/24-library-pdb-builder-1-high.md) - **Priority 1** (Crane blocker)
 - [06-library-validation-standardize-2-medium.md](tasks/06-library-validation-standardize-2-medium.md) - Priority 2
 - [18-library-multienv-profiles-3-future.md](tasks/18-library-multienv-profiles-3-future.md) - Priority 3
 - [19-library-fluent-builder-impl-3-future.md](tasks/19-library-fluent-builder-impl-3-future.md) - Priority 3
