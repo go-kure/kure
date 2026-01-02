@@ -1,0 +1,793 @@
+# OAM-Based Helm Alternative: Design Overview
+
+> **Status:** Initial Design Draft
+> **Date:** January 2025
+
+## Executive Summary
+
+This document describes a Helm alternative built on OAM (Open Application Model) principles. The system separates concerns between application maintainers, application users, and platform administrators, using a layered architecture that renders declarative specifications to static Kubernetes YAML.
+
+**Key characteristics:**
+- Go library with CLI (no runtime operator required)
+- OAM-compatible Application model with extensions
+- Layered ComponentDefinitions for composition
+- Platform-aware trait resolution
+- Staged output for GitOps workflows
+
+---
+
+## Table of Contents
+
+1. [Core Architecture](#core-architecture)
+2. [The Three-Layer Input Model](#the-three-layer-input-model)
+3. [Layered OAM: Compositional ComponentDefinitions](#layered-oam-compositional-componentdefinitions)
+4. [Traits and Platform Capabilities](#traits-and-platform-capabilities)
+5. [Platform Bootstrap](#platform-bootstrap)
+6. [Staged Rendering for GitOps](#staged-rendering-for-gitops)
+7. [Component Libraries](#component-libraries)
+8. [CLI Interface](#cli-interface)
+9. [Design Principles](#design-principles)
+
+---
+
+## Core Architecture
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         INPUTS                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  application.oam.yaml     Written by: App Maintainer            │
+│  (Component definitions, traits, parameter schemas)             │
+│                                                                 │
+│  app-values.yaml          Written by: App User                  │
+│  (Image tags, replicas, feature flags, connection strings)      │
+│                                                                 │
+│  platform.yaml            Written by: Platform Admin            │
+│  (Cluster capabilities, trait implementations, defaults)        │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                       GO LIBRARY                                │
+│                                                                 │
+│  • Parses OAM Application                                       │
+│  • Resolves layered ComponentDefinitions                        │
+│  • Resolves traits based on platform capabilities               │
+│  • Renders to Kubernetes resources                              │
+│  • Organizes output by deployment stage                         │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                         OUTPUTS                                 │
+│                                                                 │
+│  Static Kubernetes YAML, organized by stage                     │
+│  Optional: FluxCD Kustomizations / ArgoCD Applications          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Components
+
+| Component | Description |
+|-----------|-------------|
+| **Go Library** | Core logic for parsing, resolving, and rendering. Embeds primitive ComponentDefinitions and TraitDefinitions. |
+| **CLI** | User-facing tool that invokes the library. Supports render, validate, diff, explain commands. |
+| **Operator** (optional) | Kubernetes controller that watches ApplicationInstance CRs and applies rendered manifests. For users who don't use GitOps. |
+
+---
+
+## The Three-Layer Input Model
+
+### Layer 1: Application Definition (Maintainer)
+
+Written once by the application maintainer. Describes the application's components, their relationships, required traits, and configurable parameters.
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: my-service
+spec:
+  components:
+    - name: api
+      type: webservice
+      properties:
+        port: 8080
+        healthPath: /healthz
+        resources:
+          cpu: { min: 100m, max: 1000m }
+          memory: { min: 128Mi, max: 512Mi }
+      traits:
+        - type: exposed
+        - type: observable
+        - type: scalable
+
+    - name: worker
+      type: worker
+      properties:
+        concurrency: 10
+      traits:
+        - type: observable
+        - type: scalable
+
+  # Parameters exposed to users
+  parameters:
+    - name: image
+      type: string
+      required: true
+    - name: replicas
+      type: integer
+      default: 2
+    - name: databaseUrl
+      type: string
+      required: true
+    - name: logLevel
+      type: string
+      enum: [debug, info, warn, error]
+      default: info
+```
+
+### Layer 2: Application Values (User)
+
+Simple, focused on application concerns only. No Kubernetes knowledge required.
+```yaml
+image: registry.example.com/my-service:v2.3.1
+replicas: 5
+databaseUrl: "postgres://db.prod.internal:5432/myapp"
+logLevel: info
+```
+
+### Layer 3: Platform Configuration (Platform Admin)
+
+Describes the cluster's capabilities and how traits should be implemented.
+```yaml
+apiVersion: platform.oam.dev/v1
+kind: Platform
+metadata:
+  name: production-cluster
+spec:
+  capabilities:
+    ingress:
+      type: nginx
+      className: nginx-public
+      defaultAnnotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+
+    tls:
+      type: cert-manager
+      defaultIssuer: letsencrypt-prod
+
+    observability:
+      metrics:
+        type: prometheus-operator
+        serviceMonitor: true
+      tracing:
+        type: none
+
+    secrets:
+      type: external-secrets
+      storeRef:
+        name: aws-secretsmanager
+        kind: ClusterSecretStore
+
+    scaling:
+      hpa: true
+      keda: false
+
+  defaults:
+    namespace: applications
+    imagePullSecrets: [registry-creds]
+```
+
+---
+
+## Layered OAM: Compositional ComponentDefinitions
+
+A key extension to OAM: ComponentDefinitions can reference other ComponentDefinitions, creating a layered composition model.
+
+### Layer Structure
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Layer N: Application                                           │
+│  User-facing. Selects component types and provides values.      │
+│  Example: type: redis-sentinel                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 2: Architectural Patterns                                │
+│  Complete deployment topologies.                                │
+│  Examples: redis-standalone, redis-sentinel, redis-cluster      │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 1: Building Blocks                                       │
+│  Reusable compositions of primitives.                           │
+│  Examples: redis-node, sentinel-node, web-backend               │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 0: Primitives (Terminal)                                 │
+│  Map directly to Kubernetes resources.                          │
+│  Examples: stateless→Deployment, stateful→StatefulSet           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Example: Redis Layers
+
+**Layer 0: Primitive (Terminal)**
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: stateful
+spec:
+  workload:
+    definition:
+      apiVersion: apps/v1
+      kind: StatefulSet
+  schematic:
+    cue:
+      template: |
+        output: {
+          apiVersion: "apps/v1"
+          kind:       "StatefulSet"
+          metadata: name: context.name
+          spec: {
+            replicas:    parameter.replicas
+            serviceName: context.name
+            selector: matchLabels: app: context.name
+            template: {
+              metadata: labels: app: context.name
+              spec: containers: [{
+                name:  context.name
+                image: parameter.image
+                ports: [{containerPort: parameter.port}]
+              }]
+            }
+          }
+        }
+        parameter: {
+          image:    string
+          replicas: *1 | int
+          port:     int
+        }
+```
+
+**Layer 1: Building Block**
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: redis-node
+  annotations:
+    oam.dev/layer: "1"
+spec:
+  schematic:
+    oam:
+      components:
+        - name: "{{context.name}}"
+          type: stateful
+          properties:
+            image: "redis:{{parameter.version}}"
+            port: 6379
+            replicas: parameter.replicas
+      traits:
+        - type: service-headless
+        - type: persistent-volume
+          properties:
+            size: parameter.persistence.size
+  parameters:
+    version: *"7.2" | string
+    replicas: *1 | int
+    password: string
+    persistence: size: *"10Gi" | string
+```
+
+**Layer 2: Architectural Pattern**
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: redis-sentinel
+  annotations:
+    oam.dev/layer: "2"
+spec:
+  schematic:
+    oam:
+      components:
+        - name: redis
+          type: redis-node
+          properties:
+            replicas: parameter.replicas
+            password: parameter.password
+            persistence:
+              size: parameter.persistence.size
+
+        - name: sentinel
+          type: sentinel-node
+          properties:
+            masterHost: "{{context.name}}-redis-0.{{context.name}}-redis"
+  parameters:
+    replicas: *3 | int
+    password: string
+    persistence: size: *"10Gi" | string
+```
+
+**Application Usage**
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: my-cache
+spec:
+  components:
+    - name: cache
+      type: redis-sentinel  # User just picks the pattern
+      properties:
+        password: "${REDIS_PASSWORD}"
+        replicas: 3
+```
+
+### Benefits of Layered Composition
+
+| Benefit | Description |
+|---------|-------------|
+| **No conditionals** | Variants become separate types, no `when:` clauses needed |
+| **Composable** | Build complex deployments from simple, tested pieces |
+| **Reusable** | `redis-node` is used by standalone, sentinel, and cluster |
+| **Encapsulated** | Complexity hidden inside definitions |
+| **Versionable** | Upgrade a building block, all patterns using it improve |
+| **Clean applications** | Users just pick a type and provide properties |
+
+---
+
+## Traits and Platform Capabilities
+
+Traits are behaviors attached to components. Their implementation depends on platform capabilities.
+
+### Trait Tiers
+```yaml
+# Tier 0: Always available (built into Kubernetes)
+builtin:
+  - stateless           # → Deployment
+  - stateful            # → StatefulSet
+  - daemonized          # → DaemonSet
+  - service             # → Service
+  - ingress             # → Ingress (resource always exists)
+  - configurable        # → ConfigMap
+  - secret              # → Secret
+  - persistent-volume   # → PVC
+  - rbac                # → ServiceAccount, Role, RoleBinding
+
+# Tier 1: Available when CRDs exist (resource valid, may not reconcile)
+crd-available:
+  - service-monitor     # → ServiceMonitor (prometheus-operator CRD)
+  - certificate         # → Certificate (cert-manager CRD)
+  - external-secret     # → ExternalSecret (external-secrets CRD)
+
+# Tier 2: Available when operators are running
+operator-backed:
+  - tls-managed         # → cert-manager controller reconciles Certificate
+  - observable          # → prometheus-operator reconciles ServiceMonitor
+  - credentialed        # → external-secrets operator syncs secrets
+```
+
+### Trait Resolution
+
+The library resolves traits based on platform capabilities:
+```go
+func (r *TraitRegistry) Resolve(traitType string, platform Platform) TraitImplementation {
+    switch traitType {
+    case "exposed":
+        switch platform.Capabilities.Ingress.Type {
+        case "nginx":
+            return &NginxIngressTrait{Config: platform.Capabilities.Ingress}
+        case "istio-gateway":
+            return &IstioGatewayTrait{Config: platform.Capabilities.Ingress}
+        case "gateway-api":
+            return &GatewayAPITrait{Config: platform.Capabilities.Ingress}
+        }
+    case "observable":
+        if platform.Capabilities.Observability.Metrics.Type == "prometheus-operator" {
+            return &ServiceMonitorTrait{Config: platform.Capabilities.Observability}
+        }
+        return &PrometheusAnnotationsTrait{}  // Fallback
+    }
+}
+```
+
+---
+
+## Platform Bootstrap
+
+The platform itself (ingress controllers, cert-manager, prometheus, etc.) can be deployed using the same model, but restricted to primitive traits only.
+
+### PlatformComponent Definition
+```yaml
+apiVersion: platform.oam.dev/v1
+kind: PlatformComponent
+metadata:
+  name: prometheus-operator
+  version: "0.75.0"
+spec:
+  components:
+    - name: operator
+      type: stateless
+      properties:
+        image: quay.io/prometheus-operator/prometheus-operator
+      traits:
+        - type: rbac-cluster
+        - type: crd-provider
+          properties:
+            crds:
+              - monitoring.coreos.com/v1/ServiceMonitor
+              - monitoring.coreos.com/v1/Prometheus
+
+  # What application-level traits this enables
+  enables:
+    - trait: observable
+      capabilities:
+        metrics:
+          type: prometheus-operator
+          features: [serviceMonitor, podMonitor]
+```
+
+### Platform Manifest
+```yaml
+apiVersion: platform.oam.dev/v1
+kind: Platform
+metadata:
+  name: production-cluster
+spec:
+  components:
+    - name: ingress
+      ref: ingress-nginx
+      version: "4.10.0"
+      values:
+        controller:
+          replicas: 3
+
+    - name: certificates
+      ref: cert-manager
+      version: "1.14.0"
+      values:
+        letsencrypt:
+          email: ops@example.com
+
+    - name: monitoring
+      ref: prometheus-stack
+      version: "0.75.0"
+      values:
+        prometheus:
+          retention: 30d
+
+  # Computed from components' `enables` sections
+  capabilities:
+    ingress:
+      type: nginx
+      className: nginx
+    tls:
+      type: cert-manager
+      defaultIssuer: letsencrypt-prod
+    observability:
+      metrics:
+        type: prometheus-operator
+```
+
+---
+
+## Staged Rendering for GitOps
+
+Rendering and applying are separate concerns:
+
+- **Render time:** Pure transformation, no cluster access needed
+- **Apply time:** Orchestration with dependency management
+
+### Stage Assignment
+```
+Stage 0: CRDs
+  - CustomResourceDefinitions
+  - Wait: CRDs Established
+
+Stage 1: Operators
+  - Deployments for controllers (cert-manager, prometheus-operator, etc.)
+  - Wait: Deployments Available
+
+Stage 2: Operator Resources
+  - CRs managed by operators (ClusterIssuer, Prometheus, etc.)
+  - Wait: Resources Ready
+
+Stage 3: Platform Services
+  - Services that depend on operators (Grafana with ServiceMonitor, etc.)
+
+Stage N: Applications
+  - User applications
+```
+
+### Output Structure
+```
+output/
+├── stage-0-crds/
+│   ├── kustomization.yaml
+│   └── *.yaml
+├── stage-1-operators/
+│   ├── kustomization.yaml
+│   └── */
+├── stage-2-operator-resources/
+│   ├── kustomization.yaml
+│   └── *.yaml
+├── stage-3-platform-services/
+│   ├── kustomization.yaml
+│   └── */
+└── flux-kustomizations/
+    ├── stage-0.yaml
+    ├── stage-1.yaml
+    ├── stage-2.yaml
+    └── stage-3.yaml
+```
+
+### Generated FluxCD Kustomization
+```yaml
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: platform-stage-1-operators
+spec:
+  interval: 10m
+  path: ./platform/stage-1-operators
+  sourceRef:
+    kind: GitRepository
+    name: platform
+  dependsOn:
+    - name: platform-stage-0-crds
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: cert-manager
+      namespace: cert-manager
+```
+
+### Key Insight: Render Before Deploy
+
+Applications can be rendered before the platform is deployed. The YAML is valid — CRs like ServiceMonitor will simply wait for their operators.
+```yaml
+# This YAML is always valid, even if prometheus-operator isn't installed yet
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: my-api
+spec:
+  selector:
+    matchLabels:
+      app: my-api
+  endpoints:
+    - port: http
+      path: /metrics
+```
+
+---
+
+## Component Libraries
+
+ComponentDefinitions can be packaged and distributed as libraries.
+
+### Library Structure
+```
+github.com/oam-components/redis/
+├── library.yaml              # Manifest
+├── layer-1/
+│   ├── redis-node.yaml
+│   └── sentinel-node.yaml
+├── layer-2/
+│   ├── redis-standalone.yaml
+│   ├── redis-sentinel.yaml
+│   └── redis-cluster.yaml
+└── README.md
+```
+
+### Library Manifest
+```yaml
+apiVersion: oam.pkg.dev/v1
+kind: ComponentLibrary
+metadata:
+  name: redis
+  version: 1.2.0
+spec:
+  description: "Redis deployment patterns for OAM"
+
+  dependencies:
+    - name: primitives
+      source: builtin
+      version: ">=1.0.0"
+
+  provides:
+    layer1: [redis-node, sentinel-node]
+    layer2: [redis-standalone, redis-sentinel, redis-cluster]
+```
+
+### Usage
+```bash
+# Add libraries
+oamctl components add github.com/oam-components/redis@v1.2.0
+oamctl components add github.com/oam-components/postgresql@v2.0.0
+
+# List available types
+oamctl components list
+
+# Output:
+# LAYER  SOURCE                         TYPE
+# 0      builtin                        stateless
+# 0      builtin                        stateful
+# 1      oam-components/redis@v1.2.0    redis-node
+# 2      oam-components/redis@v1.2.0    redis-sentinel
+# 2      oam-components/redis@v1.2.0    redis-cluster
+```
+
+### Ecosystem Vision
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Your Application                                               │
+│    type: my-company-stack                                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Internal Libraries                                             │
+│    my-company/internal-components                               │
+├─────────────────────────────────────────────────────────────────┤
+│  Open Source Libraries                                          │
+│    oam-components/redis                                         │
+│    oam-components/postgresql                                    │
+│    oam-components/web-patterns                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  Standard Library (builtin)                                     │
+│    stateless, stateful, job, cronjob, daemonset                 │
+│    service, ingress, configmap, secret, pvc                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## CLI Interface
+
+### Core Commands
+```bash
+# Render application to YAML
+oamctl render \
+  -a application.oam.yaml \
+  -v values.yaml \
+  -p platform.yaml \
+  -o ./output/
+
+# Render with staging for GitOps
+oamctl render \
+  -a application.oam.yaml \
+  -v values.yaml \
+  -p platform.yaml \
+  -o ./output/ \
+  --staged \
+  --flux
+
+# Validate without rendering
+oamctl validate \
+  -a application.oam.yaml \
+  -v values.yaml \
+  -p platform.yaml
+
+# Show what would be created
+oamctl explain \
+  -a application.oam.yaml \
+  -p platform.yaml
+
+# Diff against live cluster
+oamctl diff \
+  -a application.oam.yaml \
+  -v values.yaml \
+  -p platform.yaml
+```
+
+### Platform Commands
+```bash
+# Render platform
+oamctl platform render -p platform.yaml -o ./platform/ --staged --flux
+
+# Explain platform staging
+oamctl platform explain -p platform.yaml
+
+# Detect cluster capabilities
+oamctl platform detect --kubeconfig ~/.kube/config -o platform.yaml
+```
+
+### Component Library Commands
+```bash
+# Add a library
+oamctl components add github.com/oam-components/redis@v1.2.0
+
+# List available component types
+oamctl components list
+
+# Show component definition
+oamctl components show redis-sentinel
+
+# Update libraries
+oamctl components update
+```
+
+---
+
+## Design Principles
+
+### 1. Simple Things Should Be Simple
+
+The common case (web app with env vars and ingress) should be trivial:
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: my-api
+spec:
+  components:
+    - name: api
+      type: webservice
+      properties:
+        image: myapp:v1
+        port: 8080
+        env:
+          DATABASE_URL: "postgres://..."
+      traits:
+        - type: exposed
+          properties:
+            host: api.example.com
+```
+
+### 2. Complexity Is Opt-In
+
+Advanced features (variants, layered compositions, platform integration) are available but not required.
+
+### 3. Render-Time vs Apply-Time Separation
+
+- Rendering is a pure function: (app + values + platform) → YAML
+- Orchestration is a separate concern handled by GitOps tools
+- No cluster access needed to render
+
+### 4. Platform Is Explicit
+
+What traits are available and how they're implemented is declared in `platform.yaml`, not discovered at runtime.
+
+### 5. Layered Composition Over Conditionals
+
+Instead of `when:` clauses and complex conditionals, use different ComponentDefinition types for different architectures.
+
+### 6. OAM-Compatible Where Possible
+
+The Application kind follows OAM spec. Extensions (Platform, layered schematics) are clearly marked as additions.
+
+---
+
+## Open Questions
+
+1. **Templating Language:** CUE (OAM standard) vs Go templates (Helm familiar) vs something else?
+
+2. **Schema Validation:** How to validate user values against parameter schemas?
+
+3. **Secret Handling:** How to reference secrets in values without exposing them?
+
+4. **Trait Composition:** How do multiple traits that produce the same resource kind merge? (e.g., two traits both want to add annotations)
+
+5. **Upgrade Path:** How to handle breaking changes in ComponentDefinition libraries?
+
+6. **IDE Support:** How to provide autocomplete and validation in editors?
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **Application** | OAM resource declaring components, their properties, and traits |
+| **Component** | A deployable unit within an Application |
+| **ComponentDefinition** | Schema defining a component type and how it renders |
+| **Trait** | Behavior attached to a component (e.g., exposed, scalable) |
+| **TraitDefinition** | Schema defining a trait and how it renders |
+| **Platform** | Declaration of cluster capabilities and trait implementations |
+| **PlatformComponent** | Infrastructure component (cert-manager, prometheus, etc.) |
+| **Layer** | Level in the ComponentDefinition composition hierarchy |
+| **Primitive** | Layer 0 ComponentDefinition that renders directly to K8s |
+| **Stage** | Deployment phase based on dependencies |
+
+---
+
+## References
+
+- [OAM Spec](https://oam.dev/)
+- [KubeVela](https://kubevela.io/) - Reference OAM implementation
+- [CUE Language](https://cuelang.org/) - Configuration language used in OAM
+- [FluxCD](https://fluxcd.io/) - GitOps toolkit
+- [ArgoCD](https://argoproj.github.io/cd/) - GitOps continuous delivery
