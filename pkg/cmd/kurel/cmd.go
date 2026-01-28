@@ -213,6 +213,7 @@ parameter validation, and patch consistency.`,
 			// Create launcher components
 			loader := launcher.NewPackageLoader(log)
 			validator := launcher.NewValidator(log)
+			validator.SetStrictMode(globalOpts.Strict)
 
 			// Create launcher options
 			opts := launcher.DefaultOptions()
