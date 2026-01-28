@@ -180,6 +180,29 @@ The project uses several GitHub Actions workflows:
   - Performance benchmarks (when labeled)
   - Documentation validation
 
+## Dependabot Management
+
+### Handling PRs
+
+Use `@dependabot` commands in PR comments (not `gh pr close`):
+
+| Command | Effect |
+|---------|--------|
+| `@dependabot close` | Close PR, prevent recreation |
+| `@dependabot ignore this dependency` | Close PR, ignore dependency permanently |
+| `@dependabot ignore this major version` | Ignore major version updates |
+| `@dependabot ignore this minor version` | Ignore minor version updates |
+| `@dependabot rebase` | Rebase the PR |
+| `@dependabot recreate` | Recreate the PR from scratch |
+
+### Deferring Updates
+
+When an update requires a blocked dependency (e.g., newer Go version):
+1. Comment `@dependabot close` with explanation and link to blocking issue
+2. Do not use `gh pr close` directly - Dependabot will recreate the PR
+
+Reference: [GitHub Docs - Dependabot PR Commands](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-pull-request-comment-commands)
+
 ## Makefile Targets Reference
 
 ### Development

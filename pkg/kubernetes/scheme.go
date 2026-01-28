@@ -34,91 +34,51 @@ var (
 	registerErr  error
 )
 
+// addSchemeFunc is a function that adds types to a scheme
+type addSchemeFunc func(*runtime.Scheme) error
+
 // RegisterSchemes adds all Kubernetes and Flux custom resource schemes to Scheme.
 // The registration is performed only once. The first non-nil error returned by
 // any AddToScheme call is cached and returned on subsequent invocations.
 func RegisterSchemes() error {
 	registerOnce.Do(func() {
-		if err := corev1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := appsv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := rbacv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := batchv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := netv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := storv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := apiextensionsv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := cmacme.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := certv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := cmmeta.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := fluxv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := helmv2.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := imagev1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := kustv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := notificationv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := notificationv1beta2.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := sourcev1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := sourcev1beta2.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := esv1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
-		if err := metallbv1beta1.AddToScheme(Scheme); err != nil {
-			registerErr = err
-			return
-		}
+		registerErr = registerAllSchemes()
 	})
 	return registerErr
+}
+
+// registerAllSchemes registers all schemes and returns the first error encountered
+func registerAllSchemes() error {
+	// List of all AddToScheme functions to register
+	schemeFuncs := []addSchemeFunc{
+		corev1.AddToScheme,
+		appsv1.AddToScheme,
+		rbacv1.AddToScheme,
+		batchv1.AddToScheme,
+		netv1.AddToScheme,
+		storv1.AddToScheme,
+		apiextensionsv1.AddToScheme,
+		cmacme.AddToScheme,
+		certv1.AddToScheme,
+		cmmeta.AddToScheme,
+		fluxv1.AddToScheme,
+		helmv2.AddToScheme,
+		imagev1.AddToScheme,
+		kustv1.AddToScheme,
+		notificationv1.AddToScheme,
+		notificationv1beta2.AddToScheme,
+		sourcev1.AddToScheme,
+		sourcev1beta2.AddToScheme,
+		esv1.AddToScheme,
+		metallbv1beta1.AddToScheme,
+	}
+
+	// Register each scheme, returning the first error
+	for _, addScheme := range schemeFuncs {
+		if err := addScheme(Scheme); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

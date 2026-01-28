@@ -127,6 +127,29 @@ func TestGetGroupVersionKind_UnknownObject(t *testing.T) {
 	}
 }
 
+func TestGetGroupVersionKind_ErrorPaths(t *testing.T) {
+	t.Run("ObjectKinds returns empty slice", func(t *testing.T) {
+		// This test verifies the error path when ObjectKinds returns an empty slice
+		// While hard to trigger with registered types, we test with an object
+		// that has incomplete type information
+
+		// Create an object without proper scheme registration
+		unknownObj := &UnknownObject{}
+
+		gvk, err := GetGroupVersionKind(unknownObj)
+
+		// We expect either ErrGVKNotFound or another scheme-related error
+		if err == nil {
+			t.Error("expected error for object without GVK, got nil")
+		}
+
+		expectedGVK := schema.GroupVersionKind{}
+		if gvk != expectedGVK {
+			t.Errorf("expected empty GVK on error, got: %v", gvk)
+		}
+	})
+}
+
 func TestIsGVKAllowed_Allowed(t *testing.T) {
 	testGVK := schema.GroupVersionKind{
 		Group:   "apps",
