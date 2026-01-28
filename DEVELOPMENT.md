@@ -307,3 +307,25 @@ make outdated
 ```
 
 This development guide provides a comprehensive overview of the development workflow using the Makefile and CI/CD pipeline.
+
+## Crane Integration
+
+Kure is a dependency of the Crane project (`/home/serge/src/autops/wharf/crane`).
+
+### Relationship
+
+- **Crane** transforms OAM → Kure domain model → Kubernetes manifests
+- **Kure** provides the domain model and manifest generation engine
+- Both repos are **co-developed** with local replace directives
+
+### Key Files
+
+- Crane's requirements: `/home/serge/src/autops/wharf/crane/PLAN.md`
+- Crane's agent guide: `/home/serge/src/autops/wharf/crane/AGENTS.md`
+
+### When Making Changes
+
+1. Check if change affects Crane's integration
+2. Keep public API (`pkg/stack/`) stable when possible
+3. Update Crane if breaking changes are necessary
+4. Test with `go mod tidy` in Crane to verify compatibility

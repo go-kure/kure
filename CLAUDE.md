@@ -11,6 +11,44 @@ This is **Kure**, a Go library for programmatically building Kubernetes resource
 - **Testing**: 105 test files with 100% pass rate
 - **Build System**: Comprehensive Makefile with CI/CD pipeline
 
+## Crane Integration - CRITICAL
+
+**Kure is a dependency of Crane** (`/home/serge/src/autops/wharf/crane`).
+
+### Current Status
+
+Kure's current implementation is an **MVP that predates Crane's full architecture**:
+- PLAN.md in Crane defines the validated requirements
+- Kure APIs may need modification to support Crane
+- This is a co-development relationship
+
+### Before Modifying Kure APIs
+
+1. **Check Crane's PLAN.md** - Does the change align with Crane's needs?
+2. **Consider Crane impact** - Will this break or help Crane's integration?
+3. **Keep interfaces stable** - Crane depends on kure's public APIs
+4. **Update both repos** - Changes may require Crane updates
+
+### Key Interfaces Crane Depends On
+
+| Interface | Location | Crane Usage |
+|-----------|----------|-------------|
+| `Application` | `pkg/stack/application.go` | Workload container with ApplicationConfig |
+| `ApplicationConfig` | `pkg/stack/application.go` | Component handlers implement this |
+| `Bundle` | `pkg/stack/bundle.go` | Deployment unit with DependsOn |
+| `Cluster` | `pkg/stack/cluster.go` | Target cluster representation |
+| `Node` | `pkg/stack/cluster.go` | Organizational unit in hierarchy |
+
+### Development Priority
+
+When Crane needs something from Kure:
+1. Crane defines the requirement (what interface/behavior is needed)
+2. Kure implements it
+3. Crane consumes the new capability
+4. Both repos stay in sync
+
+**Reference**: `/home/serge/src/autops/wharf/crane/PLAN.md` - Authoritative requirements document
+
 ## Key Repository Information
 
 ### Architecture Overview
