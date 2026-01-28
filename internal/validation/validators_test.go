@@ -6,6 +6,7 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -733,6 +734,83 @@ func TestValidateServiceWithPort(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestValidateHorizontalPodAutoscaler(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateHorizontalPodAutoscaler(nil)
+	if err != errors.ErrNilHorizontalPodAutoscaler {
+		t.Errorf("expected ErrNilHorizontalPodAutoscaler, got %v", err)
+	}
+
+	err = validator.ValidateHorizontalPodAutoscaler(&autoscalingv2.HorizontalPodAutoscaler{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateCertificate(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateCertificate(nil)
+	if err != errors.ErrNilCertificate {
+		t.Errorf("expected ErrNilCertificate, got %v", err)
+	}
+}
+
+func TestValidateIssuer(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateIssuer(nil)
+	if err != errors.ErrNilIssuer {
+		t.Errorf("expected ErrNilIssuer, got %v", err)
+	}
+}
+
+func TestValidateClusterIssuer(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateClusterIssuer(nil)
+	if err != errors.ErrNilClusterIssuer {
+		t.Errorf("expected ErrNilClusterIssuer, got %v", err)
+	}
+}
+
+func TestValidateACMEIssuer(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateACMEIssuer(nil)
+	if err != errors.ErrNilACMEIssuer {
+		t.Errorf("expected ErrNilACMEIssuer, got %v", err)
+	}
+}
+
+func TestValidateSecretStore(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateSecretStore(nil)
+	if err != errors.ErrNilSecretStore {
+		t.Errorf("expected ErrNilSecretStore, got %v", err)
+	}
+}
+
+func TestValidateClusterSecretStore(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateClusterSecretStore(nil)
+	if err != errors.ErrNilClusterSecretStore {
+		t.Errorf("expected ErrNilClusterSecretStore, got %v", err)
+	}
+}
+
+func TestValidateExternalSecret(t *testing.T) {
+	validator := NewValidator()
+
+	err := validator.ValidateExternalSecret(nil)
+	if err != errors.ErrNilExternalSecret {
+		t.Errorf("expected ErrNilExternalSecret, got %v", err)
 	}
 }
 
