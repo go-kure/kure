@@ -23,7 +23,8 @@
       "Bash(go tool cover:*)",
       "Bash(for pkg in \"pkg/cmd/kurel\" \"pkg/kubernetes\" \"pkg/io\" \"pkg/patch\" \"pkg/stack/generators/appworkload/internal\" \"pkg/stack/generators/kurelpackage\" \"internal/fluxcd\" \"pkg/cmd/kure/generate\")",
       "Bash(do echo \"=== $pkg ===\" find /home/serge/src/autops/wharf/kure/$pkg -name \"*.go\" ! -name \"*_test.go\" -exec wc -l {} ;)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(govulncheck:*)"
     ]
   },
   "outputStyle": "default"
