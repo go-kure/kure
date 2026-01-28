@@ -364,3 +364,50 @@ jobs:
 
     - name: Run govulncheck
       run: govulncheck ./...
+
+  # =============================================================================
+  # Kubernetes API Compatibility
+  # =============================================================================
+
+  k8s-compat:
+    name: K8s API Compatibility
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+
+    strategy:
+      matrix:
+        k8s-version: ['0.31', '0.32', '0.33']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-k8s-${{ matrix.k8s-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-k8s-${{ matrix.k8s-version }}-
+          ${{ runner.os }}-go-
+
+    - name: Update k8s.io dependencies to v${{ matrix.k8s-version }}
+      run: |
+        go get k8s.io/api@v${{ matrix.k8s-version }}.0
+        go get k8s.io/apimachinery@v${{ matrix.k8s-version }}.0
+        go get k8s.io/client-go@v${{ matrix.k8s-version }}.0
+        go mod tidy
+
+    - name: Build with k8s.io v${{ matrix.k8s-version }}
+      run: go build ./...
+
+    - name: Test with k8s.io v${{ matrix.k8s-version }}
+      run: go test -short ./...
