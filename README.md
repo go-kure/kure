@@ -165,6 +165,122 @@ value = "512Mi"
 operation = "replace"
 ```
 
+## End-to-End Kurel Workflow Example
+
+This section demonstrates a complete workflow from package definition to GitOps deployment.
+
+### 1. Define a Kurel Package
+
+See the example package at `examples/kurel/frigate/`:
+
+```
+frigate/
+  kurel.yaml         # Package metadata
+  parameters.yaml    # Configurable parameters
+  resources/         # Base Kubernetes resources
+  patches/           # Environment-specific patches
+```
+
+Build and validate the package:
+
+```bash
+kurel validate examples/kurel/frigate
+kurel build examples/kurel/frigate -o out/
+```
+
+### 2. Generated Flux Kustomization
+
+When targeting Flux, Kure generates a Kustomization that references the package output:
+
+```yaml
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: frigate
+  namespace: flux-system
+spec:
+  interval: 10m
+  timeout: 5m
+  retryInterval: 2m
+  path: ./apps/frigate
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: frigate
+      namespace: default
+```
+
+### 3. Generated ArgoCD Application
+
+When targeting ArgoCD, Kure generates an Application with equivalent settings:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frigate
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example/gitops-repo
+    targetRevision: main
+    path: apps/frigate
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+### 4. Directory Structure
+
+The generated output follows GitOps conventions:
+
+```
+repo/
+  apps/
+    frigate/
+      deployment.yaml
+      service.yaml
+      configmap.yaml
+      kustomization.yaml
+  clusters/
+    production/
+      frigate-kustomization.yaml   # For Flux
+      # or
+      frigate-application.yaml     # For ArgoCD
+```
+
+### 5. Deploy
+
+For Flux:
+
+```bash
+git add . && git commit -m "Add frigate app" && git push
+flux reconcile source git flux-system
+```
+
+For ArgoCD:
+
+```bash
+git add . && git commit -m "Add frigate app" && git push
+argocd app sync frigate
+```
+
+See the `examples/` directory for more configurations:
+- `examples/kurel/` - Kurel package examples
+- `examples/clusters/` - Multi-cluster configurations
+- `examples/patches/` - Patching examples
+
 ## Security Features
 
 ### Certificate Management
