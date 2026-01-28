@@ -72,9 +72,9 @@ func TestBundleGenerate(t *testing.T) {
 
 func TestBundleGetParentPath(t *testing.T) {
 	tests := []struct {
-		name       string
-		bundle     *Bundle
-		expected   string
+		name     string
+		bundle   *Bundle
+		expected string
 	}{
 		{
 			name: "root bundle",
