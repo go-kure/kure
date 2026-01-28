@@ -329,3 +329,20 @@ Kure is a dependency of the Crane project (`~/src/autops/wharf/crane`).
 2. Keep public API (`pkg/stack/`) stable when possible
 3. Update Crane if breaking changes are necessary
 4. Test with `go mod tidy` in Crane to verify compatibility
+
+### Go Workspaces
+
+Crane uses Go workspaces for local development. The workspace file lives in the parent directory:
+
+```bash
+# From wharf/ directory
+go work init
+go work use ./crane ./kure
+```
+
+This allows Crane to use your local Kure changes without pushing.
+
+**Before pushing Kure changes that Crane depends on:**
+1. Push Kure changes first
+2. In Crane: `GOWORK=off go get github.com/go-kure/kure@main`
+3. Commit the updated go.mod/go.sum in Crane

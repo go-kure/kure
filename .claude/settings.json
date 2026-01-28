@@ -17,5 +17,6 @@
       "Bash(git push)",
       "Bash(gh:*)"
     ]
-  }
+  },
+  "outputStyle": "default"
 }
