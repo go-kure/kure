@@ -72,7 +72,8 @@ var (
 	ErrNilRoleBinding         = ResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
 	ErrNilClusterRoleBinding  = ResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
 	ErrNilServicePort         = ResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
-	ErrNilPodDisruptionBudget = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
+	ErrNilPodDisruptionBudget         = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
+	ErrNilHorizontalPodAutoscaler     = ResourceValidationError("HorizontalPodAutoscaler", "", "hpa", "horizontal pod autoscaler cannot be nil", nil)
 	ErrNilKustomization       = ResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
 
 	// Flux resources

@@ -6,6 +6,7 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -137,6 +138,10 @@ func (v *Validator) ValidateServicePort(port *corev1.ServicePort) error {
 
 func (v *Validator) ValidatePodDisruptionBudget(pdb *policyv1.PodDisruptionBudget) error {
 	return v.validateNotNil(pdb, errors.ErrNilPodDisruptionBudget)
+}
+
+func (v *Validator) ValidateHorizontalPodAutoscaler(hpa *autoscalingv2.HorizontalPodAutoscaler) error {
+	return v.validateNotNil(hpa, errors.ErrNilHorizontalPodAutoscaler)
 }
 
 // Other Resources Validation
