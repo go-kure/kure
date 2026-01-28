@@ -1,86 +1,38 @@
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
-    branches: [ main, develop, 'release/*' ]
+    branches: [main, develop, 'release/*']
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+  schedule:
+    - cron: '0 4 * * *'  # 4am UTC daily - catch external changes
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   GO_VERSION: '1.24.11'
-  GOLANGCI_LINT_VERSION: 'v1.62.2'
+  GOLANGCI_LINT_VERSION: 'v1.64.8'
+
+# Avoid duplicate runs on the same commit
+concurrency:
+  group: ci-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   # =============================================================================
-  # Code Quality and Testing
+  # Stage 1: Fast Validation
   # =============================================================================
-  
-  test:
-    name: Test and Code Quality
+
+  validate:
+    name: Validate
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        test-type: [unit, race, coverage]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+    timeout-minutes: 5
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true
-
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Install dependencies
-      run: make deps
-
-    - name: Run unit tests
-      if: matrix.test-type == 'unit'
-      run: make test
-
-    - name: Run race tests
-      if: matrix.test-type == 'race'
-      run: make test-race
-
-    - name: Run tests with coverage
-      if: matrix.test-type == 'coverage'
-      run: make test-coverage
-
-    - name: Upload coverage reports to Codecov
-      if: matrix.test-type == 'coverage'
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage/coverage.out
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
-
-  # =============================================================================
-  # Linting and Code Quality
-  # =============================================================================
-
-  lint:
-    name: Lint and Format Check
-    runs-on: ubuntu-latest
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -104,11 +56,8 @@ jobs:
     - name: Install dependencies
       run: make deps
 
-    - name: Install golangci-lint
-      run: make tools
-
-    - name: Run linters
-      run: make lint
+    - name: Check Go version consistency
+      run: make check-go-version
 
     - name: Check formatting
       run: |
@@ -119,9 +68,6 @@ jobs:
           exit 1
         fi
 
-    - name: Run go vet
-      run: make vet
-
     - name: Check go mod tidy
       run: |
         make tidy
@@ -131,19 +77,189 @@ jobs:
           exit 1
         fi
 
+    - name: Run go vet
+      run: make vet
+
+    - name: Run linters
+      run: make lint
+
   # =============================================================================
-  # Build and Demo
+  # Stage 2: Tests and Security (parallel)
+  # =============================================================================
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: validate
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Set up gotestfmt
+      uses: GoTestTools/gotestfmt-action@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        version: v2.2.0
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run unit tests
+      run: |
+        set -euo pipefail
+        go test -json -v -timeout 30s ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
+
+    - name: Upload test log
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-log
+        path: /tmp/gotest.log
+        if-no-files-found: error
+
+    - name: Run race tests
+      run: make test-race
+
+    - name: Run tests with coverage
+      run: make test-coverage
+
+    - name: Upload coverage artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: coverage/coverage.out
+        retention-days: 7
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Install govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Run govulncheck
+      run: govulncheck ./...
+
+    - name: Check for outdated dependencies
+      run: make outdated
+
+    - name: Check for sensitive files
+      run: |
+        # Check for common sensitive patterns
+        if grep -r -i "password\|secret\|token\|key" --include="*.go" --include="*.yaml" --include="*.yml" . | grep -v "test" | grep -v "_test.go" | grep -E "(=|:)" | head -10; then
+          echo "::warning::Potential sensitive information found in code. Please review."
+        fi
+
+  # =============================================================================
+  # Stage 3: Coverage Check
+  # =============================================================================
+
+  coverage-check:
+    name: Coverage Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: test
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Download coverage artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage
+        path: coverage/
+
+    - name: Check coverage threshold
+      id: coverage
+      run: |
+        COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+        THRESHOLD=80
+        echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+        echo "Current coverage: ${COVERAGE}%"
+        echo "Required threshold: ${THRESHOLD}%"
+
+        if [ "${COVERAGE%.*}" -lt "$THRESHOLD" ]; then
+          echo "::error::Test coverage ${COVERAGE}% is below required threshold of ${THRESHOLD}%"
+          exit 1
+        else
+          echo "::notice::Test coverage ${COVERAGE}% meets required threshold"
+        fi
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: coverage
+        message: |
+          ## Test Coverage Report
+
+          **Total Coverage:** ${{ steps.coverage.outputs.coverage }}%
+
+          Coverage threshold: 80%
+
+  # =============================================================================
+  # Stage 4: Build and K8s Compatibility (parallel)
   # =============================================================================
 
   build:
-    name: Build Executables
+    name: Build
     runs-on: ubuntu-latest
-    needs: [test, lint]
-    
+    timeout-minutes: 10
+    needs: coverage-check
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
     strategy:
       matrix:
         target: [kure, kurel, demo]
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -177,204 +293,15 @@ jobs:
         path: bin/${{ matrix.target }}
         retention-days: 7
 
-  # =============================================================================
-  # Demo and Examples
-  # =============================================================================
-
-  demo:
-    name: Generate Demo and Examples
-    runs-on: ubuntu-latest
-    needs: [build]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true
-
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Install dependencies
-      run: make deps
-
-    - name: Create examples directory structure
-      run: |
-        mkdir -p examples/{app-workloads,clusters,multi-oci,bootstrap,patches}
-        cat > examples/app-workloads/example.yaml << 'EOF'
-        apiVersion: generators.gokure.dev/v1alpha1
-        kind: AppWorkload
-        metadata:
-          name: example-app
-          namespace: default
-        spec:
-          workload: Deployment
-          replicas: 2
-          containers:
-            - name: app
-              image: nginx:1.21
-        EOF
-
-    - name: Run demo (main)
-      run: make demo || true  # Allow demo to fail if examples don't exist
-
-    - name: Upload demo outputs
-      uses: actions/upload-artifact@v4
-      with:
-        name: demo-outputs
-        path: out/
-        retention-days: 7
-
-  # =============================================================================
-  # Integration Tests (Optional)
-  # =============================================================================
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: [test, lint]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true
-
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Install dependencies
-      run: make deps
-
-    - name: Run integration tests
-      run: make test-integration || true  # Allow to fail if no integration tests exist
-
-  # =============================================================================
-  # Cross-platform Build Matrix
-  # =============================================================================
-
-  build-matrix:
-    name: Cross-Platform Build
-    runs-on: ubuntu-latest
-    needs: [test, lint]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
-    
-    strategy:
-      matrix:
-        os: [linux, darwin, windows]
-        arch: [amd64, arm64]
-        exclude:
-          - os: windows
-            arch: arm64
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true
-
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Install dependencies
-      run: make deps
-
-    - name: Build for ${{ matrix.os }}/${{ matrix.arch }}
-      env:
-        GOOS: ${{ matrix.os }}
-        GOARCH: ${{ matrix.arch }}
-      run: |
-        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-        
-        if [ "${{ matrix.os }}" = "windows" ]; then
-          EXT=".exe"
-        else
-          EXT=""
-        fi
-        
-        mkdir -p bin
-        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
-          -o bin/kure-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kure
-        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
-          -o bin/kurel-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kurel
-
-    - name: Upload cross-platform artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: binaries-${{ matrix.os }}-${{ matrix.arch }}
-        path: bin/*
-        retention-days: 30
-
-  # =============================================================================
-  # Dependency Check
-  # =============================================================================
-
-  dependency-check:
-    name: Dependency Vulnerability Check
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true
-
-    - name: Install govulncheck
-      run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-    - name: Run govulncheck
-      run: govulncheck ./...
-
-  # =============================================================================
-  # Kubernetes API Compatibility
-  # =============================================================================
-
   k8s-compat:
-    name: K8s API Compatibility
+    name: K8s Compatibility
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    timeout-minutes: 15
+    needs: coverage-check
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
     strategy:
+      fail-fast: false
       matrix:
         k8s-version: ['0.34', '0.35']
 
@@ -411,3 +338,175 @@ jobs:
 
     - name: Test with k8s.io v${{ matrix.k8s-version }}
       run: go test -short ./...
+
+  # =============================================================================
+  # Stage 5: Cross-Platform Build (main/release only)
+  # =============================================================================
+
+  cross-platform:
+    name: Cross-Platform Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
+    if: |
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+        exclude:
+          - os: windows
+            arch: arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Build for ${{ matrix.os }}/${{ matrix.arch }}
+      env:
+        GOOS: ${{ matrix.os }}
+        GOARCH: ${{ matrix.arch }}
+      run: |
+        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+
+        if [ "${{ matrix.os }}" = "windows" ]; then
+          EXT=".exe"
+        else
+          EXT=""
+        fi
+
+        mkdir -p bin
+        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
+          -o bin/kure-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kure
+        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
+          -o bin/kurel-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kurel
+
+    - name: Upload cross-platform artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-${{ matrix.os }}-${{ matrix.arch }}
+        path: bin/*
+        retention-days: 30
+
+  # =============================================================================
+  # PR-only Jobs (parallel, non-blocking)
+  # =============================================================================
+
+  analyze-changes:
+    name: Analyze Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@v46
+      with:
+        files: |
+          **.go
+          go.mod
+          go.sum
+          Makefile
+          .github/workflows/**.yml
+
+    - name: Analyze Go changes
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: |
+        echo "Changed Go-related files:"
+        echo "${{ steps.changed-files.outputs.all_changed_files }}"
+
+        # Count lines of code changes
+        ADDED_LINES=$(git diff --numstat origin/main...HEAD | awk '{added+=$1} END {print added+0}')
+        REMOVED_LINES=$(git diff --numstat origin/main...HEAD | awk '{removed+=$2} END {print removed+0}')
+
+        echo "Lines added: $ADDED_LINES"
+        echo "Lines removed: $REMOVED_LINES"
+
+        # Check if this is a major change
+        if [ "$ADDED_LINES" -gt 500 ] || [ "$REMOVED_LINES" -gt 500 ]; then
+          echo "::notice::This is a major change (500+ lines). Consider breaking it into smaller PRs."
+        fi
+
+    - name: Check for breaking changes
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: |
+        # Look for potential breaking changes in public APIs
+        if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -E "pkg/.*\.go$"; then
+          echo "::warning::Changes detected in pkg/ directory. Review for potential breaking changes to public API."
+        fi
+
+  docs-check:
+    name: Docs Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check for documentation updates
+      id: docs-changed
+      uses: tj-actions/changed-files@v46
+      with:
+        files: |
+          **.md
+          docs/**
+          examples/**
+          cmd/demo/**
+
+    - name: Validate documentation
+      if: steps.docs-changed.outputs.any_changed == 'true'
+      run: |
+        echo "Documentation files changed:"
+        echo "${{ steps.docs-changed.outputs.all_changed_files }}"
+
+        # Check for broken links in markdown files (basic check)
+        for file in ${{ steps.docs-changed.outputs.all_changed_files }}; do
+          if [[ $file == *.md ]]; then
+            if grep -q "](http" "$file"; then
+              echo "External links found in $file - manual verification recommended"
+            fi
+          fi
+        done
+
+    - name: Check if public API changes need documentation
+      run: |
+        # Check if pkg/ changes exist but no documentation updates
+        if git diff --name-only origin/main...HEAD | grep -q "^pkg/"; then
+          if ! git diff --name-only origin/main...HEAD | grep -qE "\.(md|txt)$"; then
+            echo "::warning::Public API changes detected but no documentation updates found. Consider updating README.md or adding examples."
+          fi
+        fi

@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2025-12-07
+**Last Updated:** 2026-01-28
 
 ---
 
@@ -10,141 +10,149 @@ This document provides an overview of all GitHub Actions workflows used in the k
 
 | Workflow | File | Triggers | Purpose |
 |----------|------|----------|---------|
-| [CI/CD Pipeline](#cicd-pipeline) | `ci.yml` | push, PR, manual | Comprehensive testing, linting, building, security |
-| [Build and Test](#build-and-test) | `build-test.yaml` | push (main), PR | Basic build and test with formatted output |
-| [PR Checks](#pr-checks) | `pr-checks.yml` | PR events | Comprehensive PR validation and analysis |
-| [Release](#release) | `release.yml` | version tags | GoReleaser-based release with validation |
+| [CI](#ci) | `ci.yml` | push, PR, schedule, manual | Comprehensive testing, linting, building, security |
+| [Release](#release) | `release.yml` | version tags | GoReleaser-based release with CI validation |
 
 ---
 
-## Workflow Overview
-
-### Test Jobs in CI
-
-| Job | Matrix | Command | Uses Makefile? |
-|-----|--------|---------|----------------|
-| `test` | `unit` | `make test` | ✅ |
-| `test` | `race` | `make test-race` | ✅ |
-| `test` | `coverage` | `make test-coverage` | ✅ |
-| `integration` | - | `make test-integration` | ✅ |
-
-### Test Targets in Makefile
-
-| Target | Command | Used in CI? | In precommit? |
-|--------|---------|-------------|---------------|
-| `test` | `go test -timeout 30s ./...` | ✅ | ✅ |
-| `test-race` | `go test -race -timeout 30s ./...` | ✅ | ❌ |
-| `test-coverage` | `go test -coverprofile=... ./...` | ✅ | ❌ |
-| `test-integration` | `go test -tags=integration -timeout 5m ./...` | ✅ | ❌ |
-| `vuln` | `govulncheck ./...` | ✅ | ❌ |
-
-### CI vs Pre-commit
-
-| Target | Tasks | Use Case |
-|--------|-------|----------|
-| `precommit` | fmt, tidy, lint, test | Fast local checks (~10s) |
-| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, build, vuln | Comprehensive CI pipeline (~2min) |
-
----
-
-## Workflow Details
-
-### CI/CD Pipeline
+## CI Workflow
 
 **File:** `.github/workflows/ci.yml`
-**Name:** `CI/CD Pipeline`
+**Name:** `CI`
 
-**Triggers:**
+### Triggers
+
 - Push to: `main`, `develop`, `release/*`
 - Pull requests to: `main`, `develop`
+- Schedule: 4am UTC daily (catch external changes)
 - Manual dispatch
 
-**Jobs:**
-1. **Test (unit)** - Unit tests with race detection
-2. **Test (race)** - Full race condition detection tests
-3. **Test (coverage)** - Code coverage analysis
-4. **Lint** - Code quality checks with golangci-lint
-5. **Build** - Build all binaries
-6. **Demo** - Run demo executable
-7. **Integration** - Integration tests
-8. **Build Matrix** - Cross-platform builds (Linux, macOS, Windows)
-9. **Security** - Security vulnerability scanning
-10. **Dependency Check** - Check for outdated dependencies
+### Concurrency
 
-**Configuration:**
+Uses `github.sha` to avoid duplicate runs:
+- Same commit won't run CI twice (e.g., PR merge → push to main)
+- Different commits run independently
+
+```yaml
+concurrency:
+  group: ci-${{ github.sha }}
+  cancel-in-progress: false
+```
+
+### Job Dependency Graph
+
+```
+┌─────────────────┐
+│   validate      │  ← Fast checks: go-version, fmt, tidy, vet, lint
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+┌───────┐ ┌───────────┐
+│ test  │ │ security  │  ← Tests + govulncheck (parallel)
+└───┬───┘ └───────────┘
+    │
+    ▼
+┌───────────────────┐
+│ coverage-check    │  ← 80% threshold enforcement
+└─────────┬─────────┘
+          │
+    ┌─────┴─────┐
+    ▼           ▼
+┌───────┐  ┌────────────┐
+│ build │  │ k8s-compat │  ← Build artifacts + K8s matrix
+└───┬───┘  └────────────┘
+    │
+    ▼
+┌─────────────────────┐
+│ cross-platform      │  ← Only on main/release branches
+└─────────────────────┘
+
+PR-only jobs (parallel, no blocking):
+┌─────────────────┐  ┌────────────┐
+│ analyze-changes │  │ docs-check │
+└─────────────────┘  └────────────┘
+```
+
+### Jobs Detail
+
+| Job | Timeout | Dependencies | Purpose |
+|-----|---------|--------------|---------|
+| `validate` | 5 min | - | Go version check, fmt, tidy, vet, lint |
+| `test` | 15 min | validate | Unit tests, race tests, coverage |
+| `security` | 10 min | validate | govulncheck, outdated deps, sensitive file check |
+| `coverage-check` | 5 min | test | 80% threshold, Codecov upload, PR comment |
+| `build` | 10 min | coverage-check | Build kure, kurel, demo |
+| `k8s-compat` | 15 min | coverage-check | K8s 0.34, 0.35 compatibility matrix |
+| `cross-platform` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
+| `analyze-changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
+| `docs-check` | 5 min | - | API changes need docs check (PR only) |
+
+### Configuration
+
 - Go Version: `1.24.11`
-- Golangci-lint Version: `v1.62.2`
+- Golangci-lint Version: `v1.64.8`
+- Coverage Threshold: `80%`
+- K8s Versions: `0.34`, `0.35`
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`
 
----
+### Features
 
-### Build and Test
-
-**File:** `.github/workflows/build-test.yaml`
-**Name:** `Build and Test`
-
-**Triggers:**
-- Push to: `main`
-- Pull requests to: `main`
-
-**Jobs:**
-1. **Build** - Runs tests with gotestfmt formatter, builds project, runs demo
-
-**Configuration:**
-- Go Version: `1.24.11`
-- Uses gotestfmt for formatted test output
-- Uploads test logs as artifacts
-
-**Purpose:** Provides a quick, formatted test output for main branch changes.
+- **gotestfmt** - Nice formatted test output
+- **Fail fast** - Jobs depend on validate, so lint failure stops everything
+- **Artifact sharing** - Coverage uploaded as artifact, reused by coverage-check
+- **PR comments** - Coverage report comment on PRs
+- **Skip draft PRs** - `if: github.event.pull_request.draft == false`
+- **Sensitive file check** - Warn about potential secrets in code
+- **Matrix fail-fast: false** - K8s and cross-platform continue if one fails
 
 ---
 
-### PR Checks
-
-**File:** `.github/workflows/pr-checks.yml`
-**Name:** `PR Checks`
-
-**Triggers:**
-- Pull requests to: `main`, `develop`
-- Events: `opened`, `synchronize`, `reopened`, `ready_for_review`
-
-**Concurrency:** Cancels previous runs for the same PR
-
-**Jobs:**
-1. **Quick Check** - Fast validation (Go version consistency, format, lint, vet)
-2. **Security Check** - Vulnerability scanning and dependency checks
-3. **Coverage Check** - Test coverage validation (80% threshold)
-4. **Analyze Changes** - Changed files analysis and impact assessment
-5. **Performance Check** - Benchmarks (only if `performance` label present)
-6. **Docs Check** - Documentation validation
-
-**Configuration:**
-- Go Version: `1.24.11`
-- Coverage Threshold: `80%`
-
----
-
-### Release
+## Release Workflow
 
 **File:** `.github/workflows/release.yml`
 **Name:** `Release`
 
-**Triggers:**
+### Triggers
+
 - Push tags: `v*` (e.g., v1.0.0, v0.1.0-alpha.0)
 
-**Jobs:**
-1. **Validate** - Strict tag format, changelog, and version progression validation
-2. **GoReleaser** - Cross-platform builds using GoReleaser v2
-3. **Post-release** - Go proxy refresh
+### Jobs
 
-**Configuration:**
+1. **check-ci** - Verify CI passed for this commit (waits up to 5 min)
+2. **validate** - Strict tag format, changelog, and version progression validation
+3. **goreleaser** - Cross-platform builds using GoReleaser v2
+4. **post-release** - Go proxy refresh
+
+### Configuration
+
 - Go Version: `1.24.11`
 - Build Tool: GoReleaser v2
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`, `windows/arm64`
 - Tag Format: `^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$`
 - Changelog: Required (must have `## v0.1.0` section)
 
-**Local Release Management:**
+### CI Status Check
+
+Release workflow verifies CI passed before releasing:
+
+```yaml
+check-ci:
+  name: Verify CI passed
+  steps:
+    - name: Check CI status for this commit
+      run: |
+        # Wait up to 5 minutes for CI to complete
+        for i in {1..30}; do
+          STATUS=$(gh api repos/.../commits/$COMMIT_SHA/status --jq '.state')
+          if [ "$STATUS" = "success" ]; then exit 0; fi
+          if [ "$STATUS" = "failure" ]; then exit 1; fi
+          sleep 10
+        done
+```
+
+### Local Release Management
+
 ```bash
 # Preview release plan
 make release TYPE=alpha
@@ -158,15 +166,42 @@ git push origin v0.1.0-alpha.0
 
 ---
 
+## Test Jobs in CI
+
+| Job | Matrix | Command | Uses Makefile? |
+|-----|--------|---------|----------------|
+| `test` | - | `go test -json -v ./...` | ✅ (deps) |
+| `test` | - | `make test-race` | ✅ |
+| `test` | - | `make test-coverage` | ✅ |
+
+## Test Targets in Makefile
+
+| Target | Command | Used in CI? | In precommit? |
+|--------|---------|-------------|---------------|
+| `test` | `go test -timeout 30s ./...` | ✅ | ✅ |
+| `test-race` | `go test -race -timeout 30s ./...` | ✅ | - |
+| `test-coverage` | `go test -coverprofile=... ./...` | ✅ | - |
+| `test-integration` | `go test -tags=integration -timeout 5m ./...` | - | - |
+| `vuln` | `govulncheck ./...` | ✅ | - |
+
+## CI vs Pre-commit
+
+| Target | Tasks | Use Case |
+|--------|-------|----------|
+| `precommit` | fmt, tidy, lint, test | Fast local checks (~10s) |
+| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, build, vuln | Comprehensive CI pipeline (~2min) |
+
+---
+
 ## Configuration Standards
 
 ### Go Version
 
-All workflows use Go **1.24.6** consistently, defined via environment variable:
+All workflows use Go **1.24.11** consistently, defined via environment variable:
 
 ```yaml
 env:
-  GO_VERSION: '1.24.6'
+  GO_VERSION: '1.24.11'
 ```
 
 ### Caching
@@ -192,11 +227,22 @@ Most workflows use Go module caching:
 
 ---
 
+## Estimated CI Time
+
+| Scenario | Before (4 workflows) | After (2 workflows) |
+|----------|---------------------|---------------------|
+| PR opened | ~8 min (duplicate work) | ~4 min |
+| Push to main | ~5 min | ~4 min |
+| PR merge | ~5 min (full re-run) | ~0 min (same SHA, skipped) |
+
+---
+
 ## Maintenance Notes
 
 - **When adding/modifying workflows:** Update this document with changes
-- **Version updates:** Ensure Go version consistency across all workflows
-- **Action versions:** Keep GitHub Actions up to date (currently using v4-v5)
+- **Version updates:** Run `make sync-go-version` to update Go version in all files
+- **Version check:** Run `make check-go-version` to verify consistency
+- **Action versions:** Keep GitHub Actions up to date (currently using v4-v6)
 
 ---
 

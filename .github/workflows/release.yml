@@ -13,9 +13,40 @@ env:
   GO_VERSION: '1.24.11'
 
 jobs:
+  check-ci:
+    name: Verify CI passed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check CI status for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMIT_SHA="${{ github.sha }}"
+          echo "Checking CI status for $COMMIT_SHA"
+
+          # Wait up to 5 minutes for CI to complete
+          for i in {1..30}; do
+            STATUS=$(gh api repos/${{ github.repository }}/commits/$COMMIT_SHA/status --jq '.state')
+            echo "Attempt $i: CI status = $STATUS"
+
+            if [ "$STATUS" = "success" ]; then
+              echo "CI passed!"
+              exit 0
+            elif [ "$STATUS" = "failure" ] || [ "$STATUS" = "error" ]; then
+              echo "::error::CI failed for this commit. Cannot release."
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::CI did not complete in time"
+          exit 1
+
   validate:
     name: Validate tag and changelog
     runs-on: ubuntu-latest
+    needs: check-ci
     steps:
       - name: Check out code
         uses: actions/checkout@v4
