@@ -402,3 +402,139 @@ func TestBaseErrorInterface(t *testing.T) {
 		t.Error("Expected non-nil context")
 	}
 }
+
+func TestErrorf(t *testing.T) {
+	tests := []struct {
+		name     string
+		format   string
+		args     []interface{}
+		expected string
+	}{
+		{
+			name:     "simple message",
+			format:   "test error",
+			args:     nil,
+			expected: "test error",
+		},
+		{
+			name:     "formatted message",
+			format:   "error: %s at line %d",
+			args:     []interface{}{"syntax error", 42},
+			expected: "error: syntax error at line 42",
+		},
+		{
+			name:     "multiple args",
+			format:   "%s %s %d",
+			args:     []interface{}{"foo", "bar", 123},
+			expected: "foo bar 123",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := kerrors.Errorf(test.format, test.args...)
+			if err == nil {
+				t.Fatal("Expected non-nil error")
+			}
+			if err.Error() != test.expected {
+				t.Errorf("Expected %q, got %q", test.expected, err.Error())
+			}
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+	}{
+		{
+			name:    "simple message",
+			message: "test error",
+		},
+		{
+			name:    "empty message",
+			message: "",
+		},
+		{
+			name:    "multiline message",
+			message: "line 1\nline 2\nline 3",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := kerrors.New(test.message)
+			if err == nil {
+				t.Fatal("Expected non-nil error")
+			}
+			if err.Error() != test.message {
+				t.Errorf("Expected %q, got %q", test.message, err.Error())
+			}
+		})
+	}
+}
+
+func TestParseErrors_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		errors   []error
+		expected string
+	}{
+		{
+			name:     "empty errors",
+			errors:   []error{},
+			expected: "",
+		},
+		{
+			name:     "single error",
+			errors:   []error{errors.New("error 1")},
+			expected: "error 1",
+		},
+		{
+			name:     "multiple errors",
+			errors:   []error{errors.New("error 1"), errors.New("error 2"), errors.New("error 3")},
+			expected: "multiple parse errors: error 1; error 2; error 3",
+		},
+		{
+			name:     "two errors",
+			errors:   []error{errors.New("first"), errors.New("second")},
+			expected: "multiple parse errors: first; second",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pe := &kerrors.ParseErrors{Errors: test.errors}
+			result := pe.Error()
+			if result != test.expected {
+				t.Errorf("Expected %q, got %q", test.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseErrors_Unwrap(t *testing.T) {
+	err1 := errors.New("error 1")
+	err2 := errors.New("error 2")
+	err3 := errors.New("error 3")
+
+	pe := &kerrors.ParseErrors{
+		Errors: []error{err1, err2, err3},
+	}
+
+	unwrapped := pe.Unwrap()
+	if len(unwrapped) != 3 {
+		t.Fatalf("Expected 3 errors, got %d", len(unwrapped))
+	}
+
+	if unwrapped[0] != err1 {
+		t.Errorf("Expected first error to be err1")
+	}
+	if unwrapped[1] != err2 {
+		t.Errorf("Expected second error to be err2")
+	}
+	if unwrapped[2] != err3 {
+		t.Errorf("Expected third error to be err3")
+	}
+}

@@ -74,3 +74,50 @@ func TestWorkflowBundleMetadata(t *testing.T) {
 		t.Fatalf("dependsOn mismatch: %#v", k.Spec.DependsOn)
 	}
 }
+
+func TestWorkflowEngine_GetName(t *testing.T) {
+	wf := fluxstack.Engine()
+	name := wf.GetName()
+	if name == "" {
+		t.Fatal("expected non-empty name")
+	}
+	if name != "FluxCD Workflow Engine" {
+		t.Errorf("expected 'FluxCD Workflow Engine', got %q", name)
+	}
+}
+
+func TestWorkflowEngine_GetVersion(t *testing.T) {
+	wf := fluxstack.Engine()
+	version := wf.GetVersion()
+	if version == "" {
+		t.Fatal("expected non-empty version")
+	}
+	// Version should follow semantic versioning
+	if version[0] != 'v' {
+		t.Errorf("expected version to start with 'v', got %q", version)
+	}
+}
+
+func TestWorkflowEngine_GetResourceGenerator(t *testing.T) {
+	wf := fluxstack.Engine()
+	gen := wf.GetResourceGenerator()
+	if gen == nil {
+		t.Fatal("expected non-nil resource generator")
+	}
+}
+
+func TestWorkflowEngine_GetLayoutIntegrator(t *testing.T) {
+	wf := fluxstack.Engine()
+	integ := wf.GetLayoutIntegrator()
+	if integ == nil {
+		t.Fatal("expected non-nil layout integrator")
+	}
+}
+
+func TestWorkflowEngine_GetBootstrapGenerator(t *testing.T) {
+	wf := fluxstack.Engine()
+	gen := wf.GetBootstrapGenerator()
+	if gen == nil {
+		t.Fatal("expected non-nil bootstrap generator")
+	}
+}
