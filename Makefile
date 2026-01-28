@@ -153,6 +153,12 @@ test-integration: ## Run integration tests
 	@echo "$(COLOR_YELLOW)Running integration tests...$(COLOR_RESET)"
 	$(GO) test -tags=integration -timeout 5m $(TEST_PACKAGES)
 
+.PHONY: test-fuzz
+test-fuzz: ## Run fuzz tests for patch parser
+	@echo "$(COLOR_YELLOW)Running fuzz tests...$(COLOR_RESET)"
+	$(GO) test -fuzz=Fuzz -fuzztime=30s ./pkg/patch/...
+	@echo "$(COLOR_GREEN)Fuzz tests completed$(COLOR_RESET)"
+
 $(COVERAGE_DIR):
 	@mkdir -p $(COVERAGE_DIR)
 
