@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -29,6 +30,8 @@ type PatchOptions struct {
 	// Patch options
 	ValidateOnly bool
 	Interactive  bool
+	Combined     bool
+	GroupBy      string
 
 	// Dependencies
 	Factory   cli.Factory
@@ -97,6 +100,8 @@ func (o *PatchOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&o.OutputDir, "output-dir", "d", "out/patches", "output directory for patched resources")
 	flags.BoolVar(&o.ValidateOnly, "validate-only", false, "validate patches without applying them")
 	flags.BoolVar(&o.Interactive, "interactive", false, "interactive patch mode")
+	flags.BoolVar(&o.Combined, "combined", false, "apply all patches and write a single combined output")
+	flags.StringVar(&o.GroupBy, "group-by", "none", "group resources in combined output (none|file|kind)")
 }
 
 // Complete completes the options
@@ -164,6 +169,10 @@ func (o *PatchOptions) Run() error {
 		return o.runValidation()
 	}
 
+	if o.Combined {
+		return o.runCombined()
+	}
+
 	if globalOpts.Verbose {
 		fmt.Fprintf(o.IOStreams.ErrOut, "Applying %d patches to %s\n", len(o.PatchFiles), o.BaseFile)
 	}
@@ -190,6 +199,100 @@ func (o *PatchOptions) Run() error {
 	}
 
 	return nil
+}
+
+// runCombined loads the base, applies all patches sequentially, and writes a single combined output.
+func (o *PatchOptions) runCombined() error {
+	globalOpts := o.Factory.GlobalOptions()
+
+	if globalOpts.Verbose {
+		fmt.Fprintf(o.IOStreams.ErrOut, "Combined mode: applying %d patches to %s\n", len(o.PatchFiles), o.BaseFile)
+	}
+
+	// Validate group-by value
+	switch o.GroupBy {
+	case "none", "file", "kind":
+		// valid
+	default:
+		return errors.NewValidationError("group-by", o.GroupBy, "PatchOptions", []string{"none", "file", "kind"})
+	}
+
+	// Load base resources
+	documentSet, err := o.loadBaseResources()
+	if err != nil {
+		return fmt.Errorf("failed to load base resources: %w", err)
+	}
+
+	// Apply each patch file sequentially to the same document set
+	for _, patchFile := range o.PatchFiles {
+		if globalOpts.Verbose {
+			fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
+		}
+
+		file, err := os.Open(patchFile)
+		if err != nil {
+			return fmt.Errorf("failed to open patch file %s: %w", patchFile, err)
+		}
+
+		patchSpecs, err := patch.LoadPatchFile(file)
+		file.Close()
+		if err != nil {
+			return fmt.Errorf("failed to load patch file %s: %w", patchFile, err)
+		}
+
+		// Convert PatchSpec slice to PatchOp slice
+		var ops []patch.PatchOp
+		for _, spec := range patchSpecs {
+			ops = append(ops, spec.Patch)
+		}
+
+		// Apply patches to each document
+		for _, doc := range documentSet.Documents {
+			if err := doc.ApplyPatchesToDocument(ops); err != nil {
+				// Skip documents that don't match the patch target
+				continue
+			}
+		}
+	}
+
+	// Sort documents within groups if requested
+	if o.GroupBy == "kind" {
+		o.sortDocumentsByKind(documentSet)
+	}
+
+	// Write combined output
+	if o.OutputFile != "" {
+		return o.writeCombinedToFile(documentSet)
+	}
+
+	return documentSet.WriteToFile("/dev/stdout")
+}
+
+// sortDocumentsByKind sorts documents deterministically by kind then name.
+func (o *PatchOptions) sortDocumentsByKind(docSet *patch.YAMLDocumentSet) {
+	docs := docSet.Documents
+	sort.SliceStable(docs, func(i, j int) bool {
+		ki := docs[i].Resource.GetKind()
+		kj := docs[j].Resource.GetKind()
+		if ki != kj {
+			return ki < kj
+		}
+		return docs[i].Resource.GetName() < docs[j].Resource.GetName()
+	})
+}
+
+// writeCombinedToFile writes the combined document set to a file.
+func (o *PatchOptions) writeCombinedToFile(docSet *patch.YAMLDocumentSet) error {
+	if o.OutputFile == "/dev/stdout" {
+		return docSet.WriteToFile("/dev/stdout")
+	}
+
+	dir := filepath.Dir(o.OutputFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	return docSet.WriteToFile(o.OutputFile)
 }
 
 // scanPatchDirectory scans directory for patch files

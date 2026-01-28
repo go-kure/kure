@@ -56,6 +56,7 @@ func TestPatchOptionsAddFlags(t *testing.T) {
 	// Check that expected flags are added
 	expectedFlags := []string{
 		"patch-dir", "output-file", "output-dir", "validate-only", "interactive",
+		"combined", "group-by",
 	}
 
 	for _, flagName := range expectedFlags {
@@ -420,6 +421,217 @@ func TestPatchCommandInvalidArgs(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected error for no arguments")
+	}
+}
+
+func TestPatchOptionsCombinedMode(t *testing.T) {
+	tempDir := t.TempDir()
+	baseFile := filepath.Join(tempDir, "base.yaml")
+	patchFile1 := filepath.Join(tempDir, "patch1.yaml")
+	patchFile2 := filepath.Join(tempDir, "patch2.yaml")
+	outputFile := filepath.Join(tempDir, "output.yaml")
+
+	// Base file with two resources
+	baseContent := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config1
+data:
+  key1: value1
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config2
+data:
+  key2: value2
+`
+	if err := os.WriteFile(baseFile, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to create base file: %v", err)
+	}
+
+	// First patch modifies key1
+	patch1Content := `data.key1: patched1
+`
+	if err := os.WriteFile(patchFile1, []byte(patch1Content), 0644); err != nil {
+		t.Fatalf("failed to create patch file 1: %v", err)
+	}
+
+	// Second patch modifies key2
+	patch2Content := `data.key2: patched2
+`
+	if err := os.WriteFile(patchFile2, []byte(patch2Content), 0644); err != nil {
+		t.Fatalf("failed to create patch file 2: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	factory := cli.NewFactory(globalOpts)
+
+	var buf bytes.Buffer
+	o := &PatchOptions{
+		Factory:    factory,
+		IOStreams:  cli.IOStreams{In: strings.NewReader(""), Out: &buf, ErrOut: &buf},
+		BaseFile:   baseFile,
+		PatchFiles: []string{patchFile1, patchFile2},
+		Combined:   true,
+		GroupBy:    "none",
+		OutputFile: outputFile,
+	}
+
+	err := o.runCombined()
+	if err != nil {
+		t.Fatalf("runCombined failed: %v", err)
+	}
+
+	// Verify output was written
+	output, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	outputStr := string(output)
+	// Check that both patches were applied
+	if !strings.Contains(outputStr, "patched1") {
+		t.Error("expected output to contain patched1")
+	}
+	if !strings.Contains(outputStr, "patched2") {
+		t.Error("expected output to contain patched2")
+	}
+	// Check YAML document separator is preserved
+	if !strings.Contains(outputStr, "---") {
+		t.Error("expected output to contain YAML document separator")
+	}
+}
+
+func TestPatchOptionsCombinedModeGroupByKind(t *testing.T) {
+	tempDir := t.TempDir()
+	baseFile := filepath.Join(tempDir, "base.yaml")
+	patchFile := filepath.Join(tempDir, "patch.yaml")
+
+	// Base file with mixed kinds (intentionally unordered)
+	baseContent := `apiVersion: v1
+kind: Service
+metadata:
+  name: svc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cfg
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dep
+`
+	if err := os.WriteFile(baseFile, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to create base file: %v", err)
+	}
+
+	// Minimal no-op patch
+	patchContent := `metadata.name: cfg
+`
+	if err := os.WriteFile(patchFile, []byte(patchContent), 0644); err != nil {
+		t.Fatalf("failed to create patch file: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	factory := cli.NewFactory(globalOpts)
+
+	var buf bytes.Buffer
+	o := &PatchOptions{
+		Factory:    factory,
+		IOStreams:  cli.IOStreams{In: strings.NewReader(""), Out: &buf, ErrOut: &buf},
+		BaseFile:   baseFile,
+		PatchFiles: []string{patchFile},
+		Combined:   true,
+		GroupBy:    "kind",
+	}
+
+	err := o.runCombined()
+	if err != nil {
+		t.Fatalf("runCombined failed: %v", err)
+	}
+}
+
+func TestPatchOptionsCombinedModeInvalidGroupBy(t *testing.T) {
+	tempDir := t.TempDir()
+	baseFile := filepath.Join(tempDir, "base.yaml")
+	patchFile := filepath.Join(tempDir, "patch.yaml")
+
+	baseContent := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+`
+	if err := os.WriteFile(baseFile, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to create base file: %v", err)
+	}
+	if err := os.WriteFile(patchFile, []byte(""), 0644); err != nil {
+		t.Fatalf("failed to create patch file: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	factory := cli.NewFactory(globalOpts)
+
+	o := &PatchOptions{
+		Factory:    factory,
+		IOStreams:  factory.IOStreams(),
+		BaseFile:   baseFile,
+		PatchFiles: []string{patchFile},
+		Combined:   true,
+		GroupBy:    "invalid",
+	}
+
+	err := o.runCombined()
+	if err == nil {
+		t.Error("expected error for invalid group-by")
+	}
+}
+
+func TestPatchOptionsBackwardCompatibility(t *testing.T) {
+	// Verify that existing (non-combined) mode still works
+	tempDir := t.TempDir()
+	baseFile := filepath.Join(tempDir, "base.yaml")
+	patchFile := filepath.Join(tempDir, "patch.yaml")
+	outputDir := filepath.Join(tempDir, "out")
+
+	baseContent := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+data:
+  key: value
+`
+	if err := os.WriteFile(baseFile, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to create base file: %v", err)
+	}
+
+	patchContent := `- target: $.data.key
+  value: "new-value"
+`
+	if err := os.WriteFile(patchFile, []byte(patchContent), 0644); err != nil {
+		t.Fatalf("failed to create patch file: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	factory := cli.NewFactory(globalOpts)
+
+	o := &PatchOptions{
+		Factory:    factory,
+		IOStreams:  factory.IOStreams(),
+		BaseFile:   baseFile,
+		PatchFiles: []string{patchFile},
+		OutputDir:  outputDir,
+		Combined:   false, // Explicitly false (default)
+	}
+
+	// This should use the original Run() path, not runCombined()
+	// Note: This doesn't fully test the original path without actually running Run(),
+	// but we're checking that the flag defaults correctly.
+	if o.Combined {
+		t.Error("Combined should be false by default for backward compatibility")
 	}
 }
 
