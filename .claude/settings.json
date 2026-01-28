@@ -15,7 +15,11 @@
       "Bash(git log:*)",
       "Bash(git rev-parse:*)",
       "Bash(git push)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(glab:*)"
     ]
   },
   "outputStyle": "default"
