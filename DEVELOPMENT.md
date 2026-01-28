@@ -310,7 +310,7 @@ This development guide provides a comprehensive overview of the development work
 
 ## Crane Integration
 
-Kure is a dependency of the Crane project (`/home/serge/src/autops/wharf/crane`).
+Kure is a dependency of the Crane project (`~/src/autops/wharf/crane`).
 
 ### Relationship
 
@@ -320,8 +320,8 @@ Kure is a dependency of the Crane project (`/home/serge/src/autops/wharf/crane`)
 
 ### Key Files
 
-- Crane's requirements: `/home/serge/src/autops/wharf/crane/PLAN.md`
-- Crane's agent guide: `/home/serge/src/autops/wharf/crane/AGENTS.md`
+- Crane's requirements: `~/src/autops/wharf/crane/PLAN.md`
+- Crane's agent guide: `~/src/autops/wharf/crane/AGENTS.md`
 
 ### When Making Changes
 

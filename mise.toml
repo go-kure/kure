@@ -1,2 +1,31 @@
 [tools]
-go = "1.24.11"
+go = "1.24"
+golangci-lint = "1.64"
+
+[env]
+GOBIN = "{{config_root}}/.bin"
+PATH = "{{config_root}}/.bin:{{env.PATH}}"
+
+[tasks.build]
+description = "Build all executables"
+run = "make build"
+
+[tasks.test]
+description = "Run all tests"
+run = "make test"
+
+[tasks.lint]
+description = "Run linter"
+run = "make lint"
+
+[tasks.tidy]
+description = "Tidy go modules"
+run = "make tidy"
+
+[tasks.check]
+description = "Quick pre-commit check"
+run = "make check"
+
+[tasks.verify]
+description = "Run all checks (tidy, lint, test)"
+depends = ["tidy", "lint", "test"]

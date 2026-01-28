@@ -114,6 +114,12 @@ test: ## Run all tests
 	$(GO) test -timeout $(TEST_TIMEOUT) $(TEST_PACKAGES)
 	@echo "$(COLOR_GREEN)All tests passed$(COLOR_RESET)"
 
+.PHONY: test-short
+test-short: ## Run short tests only (quick feedback)
+	@echo "$(COLOR_YELLOW)Running short tests...$(COLOR_RESET)"
+	$(GO) test -short -timeout $(TEST_TIMEOUT) $(TEST_PACKAGES)
+	@echo "$(COLOR_GREEN)Short tests passed$(COLOR_RESET)"
+
 .PHONY: test-race
 test-race: ## Run tests with race detection
 	@echo "$(COLOR_YELLOW)Running tests with race detection...$(COLOR_RESET)"
@@ -334,6 +340,9 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 # =============================================================================
 # CI/CD
 # =============================================================================
+
+.PHONY: check
+check: lint vet test-short ## Quick code quality check (lint, vet, short tests)
 
 .PHONY: precommit
 precommit: fmt tidy lint test ## Run fast pre-commit checks (fmt, tidy, lint, test)

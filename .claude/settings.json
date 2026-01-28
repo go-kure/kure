@@ -2,84 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(go test:*)",
-      "Bash(gh repo view:*)",
-      "Bash(export PATH=\"$HOME/.cache/go/bin:$HOME/go/bin:$PATH\")",
-      "Bash(make check:*)",
-      "Bash(make lint:*)",
-      "Bash(export PATH=\"$HOME/.cache/go/bin:$HOME/go/bin:/usr/bin:/bin:$PATH\")",
+      "Bash(go mod tidy:*)",
+      "Bash(go build:*)",
+      "Bash(go version:*)",
+      "Bash(go install:*)",
+      "Bash(go clean:*)",
+      "Bash(make:*)",
+      "Bash(mise:*)",
       "Bash(git commit:*)",
-      "Bash(gh run list:*)",
-      "Bash(gh run view:*)",
       "Bash(git fetch:*)",
       "Bash(git mv:*)",
-      "Bash(mise trust:*)",
-      "Bash(mise install:*)",
-      "Bash(make check-go-version:*)",
-      "Bash(make help:*)",
-      "Bash(git rev-parse:*)",
       "Bash(git log:*)",
-      "Bash(printf:*)",
-      "Bash(command -v:*)",
-      "Bash(go install:*)",
-      "Bash(go version:*)",
-      "Bash(export PATH=\"$HOME/.local/share/mise/shims:$PATH\")",
-      "Bash(go clean:*)",
-      "Bash(mise exec:*)",
-      "Bash(gh run download:*)",
-      "Bash(gh api:*)",
+      "Bash(git rev-parse:*)",
       "Bash(git push)",
-      "Bash(make info:*)",
-      "Bash(time mise exec:*)"
-    ],
-    "deny": [],
-    "ask": []
-  },
-  "project": "go-kure/kure",
-  "description": "Kure - A Go library for programmatically building Kubernetes resources for GitOps tools",
-  "language": "go",
-  "goVersion": "1.24.6",
-  "codingStandards": {
-    "errorHandling": "always use kure/errors package; never use fmt.Errorf directly",
-    "logging": "always use pkg/logger package",
-    "testing": "comprehensive unit and integration tests required",
-    "documentation": "GoDoc comments required for all public functions"
-  },
-  "preferences": {
-    "saveSettingsAutomatic": true,
-    "saveSettingsPath": ".claude/settings.json",
-    "useLocalSettings": false
-  },
-  "currentWork": {
-    "module": "launcher",
-    "phase": "7 - Integration Tests",
-    "status": "completed",
-    "completedPhases": [
-      "Phase 1: Types and Interfaces",
-      "Phase 2: Variable Resolution",
-      "Phase 3: Patch Processing",
-      "Phase 4: Schema Generation and Validation",
-      "Phase 5: Output Builder and Extensions",
-      "Phase 6: CLI Commands",
-      "Phase 7: Integration Tests"
-    ],
-    "nextPhases": [
-      "Documentation and Examples",
-      "Performance Optimization"
+      "Bash(gh:*)"
     ]
-  },
-  "todoListEnabled": true,
-  "testCoverage": {
-    "target": "80%",
-    "current": "77.4%"
-  },
-  "memoryNotes": [
-    "Always save settings to .claude/settings.json (never .local variant)",
-    "Always use kure/errors package for error handling",
-    "Always use pkg/logger for logging"
-  ],
-  "performanceTargets": {
-    "fullBuild": "<1s",
-    "validation": "<100ms",
-    "schemaGeneration": "<500ms"
   }
 }
