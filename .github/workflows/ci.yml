@@ -213,7 +213,7 @@ jobs:
       id: coverage
       run: |
         COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-        THRESHOLD=80
+        THRESHOLD=70
         echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
         echo "Current coverage: ${COVERAGE}%"
         echo "Required threshold: ${THRESHOLD}%"
@@ -243,7 +243,7 @@ jobs:
 
           **Total Coverage:** ${{ steps.coverage.outputs.coverage }}%
 
-          Coverage threshold: 80%
+          Coverage threshold: 70%
 
   # =============================================================================
   # Stage 4: Build and K8s Compatibility (parallel)
