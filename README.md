@@ -50,6 +50,8 @@ Kure prioritizes **type safety**, **composability**, and **simplicity** over tem
 
 ## Getting Started
 
+> **Quick Start**: See [docs/quickstart.md](docs/quickstart.md) for a step-by-step tutorial.
+
 ### Installation
 
 ```bash
