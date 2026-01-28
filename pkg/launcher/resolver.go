@@ -46,7 +46,7 @@ func (r *variableResolver) Resolve(ctx context.Context, base, overrides Paramete
 	}
 
 	// Set max depth from options
-	if opts.MaxDepth > 0 {
+	if opts.MaxDepth >= 0 {
 		r.maxDepth = opts.MaxDepth
 	}
 
@@ -105,8 +105,9 @@ func (r *variableResolver) resolveValue(ctx context.Context, path string, value 
 		return nil, errors.Errorf("cyclic reference detected for %s", path)
 	}
 
-	// Check cache
-	if cached, ok := r.cache[path]; ok {
+	// Check cache (include depth to prevent bypassing depth limits)
+	cacheKey := fmt.Sprintf("%s@%d", path, depth)
+	if cached, ok := r.cache[cacheKey]; ok {
 		return cached, nil
 	}
 
@@ -121,7 +122,7 @@ func (r *variableResolver) resolveValue(ctx context.Context, path string, value 
 		if err != nil {
 			return nil, err
 		}
-		r.cache[path] = resolved
+		r.cache[cacheKey] = resolved
 		return resolved, nil
 
 	case map[string]interface{}:
@@ -135,7 +136,7 @@ func (r *variableResolver) resolveValue(ctx context.Context, path string, value 
 			}
 			resolved[k] = resolvedVal
 		}
-		r.cache[path] = resolved
+		r.cache[cacheKey] = resolved
 		return resolved, nil
 
 	case []interface{}:
@@ -149,12 +150,12 @@ func (r *variableResolver) resolveValue(ctx context.Context, path string, value 
 			}
 			resolved[i] = resolvedVal
 		}
-		r.cache[path] = resolved
+		r.cache[cacheKey] = resolved
 		return resolved, nil
 
 	default:
 		// Primitive values don't need resolution
-		r.cache[path] = value
+		r.cache[cacheKey] = value
 		return value, nil
 	}
 }

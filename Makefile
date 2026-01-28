@@ -69,6 +69,14 @@ deps: ## Download and tidy Go modules
 	$(GO) mod tidy
 	@echo "$(COLOR_GREEN)Dependencies updated$(COLOR_RESET)"
 
+.PHONY: outdated
+outdated: ## List outdated Go dependencies
+	@echo "$(COLOR_YELLOW)Checking for outdated dependencies...$(COLOR_RESET)"
+	$(GO) list -m -u -json all 2>/dev/null | \
+		python3 -c "import sys,json; [print(f\"{m['Path']}: {m['Version']} -> {m['Update']['Version']}\") for line in sys.stdin.read().split('}\n{') for m in [json.loads('{' + line.strip().strip('{}').strip() + '}')] if 'Update' in m]" 2>/dev/null || \
+		$(GO) list -m -u all 2>/dev/null | grep '\[' || echo "All dependencies are up to date"
+	@echo "$(COLOR_GREEN)Dependency check completed$(COLOR_RESET)"
+
 .PHONY: deps-upgrade
 deps-upgrade: ## Upgrade all dependencies to latest versions
 	@echo "$(COLOR_YELLOW)Upgrading dependencies...$(COLOR_RESET)"
@@ -133,6 +141,12 @@ test-coverage: $(COVERAGE_DIR) ## Run tests with coverage report
 	$(GO) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 	$(GO) tool cover -func=$(COVERAGE_DIR)/coverage.out | tail -1
 	@echo "$(COLOR_GREEN)Coverage report generated: $(COVERAGE_DIR)/coverage.html$(COLOR_RESET)"
+
+.PHONY: test-benchmark
+test-benchmark: ## Run benchmark tests
+	@echo "$(COLOR_YELLOW)Running benchmarks...$(COLOR_RESET)"
+	$(GO) test -bench=. -benchmem -run=^$$ -timeout 5m $(TEST_PACKAGES)
+	@echo "$(COLOR_GREEN)Benchmarks completed$(COLOR_RESET)"
 
 .PHONY: test-integration
 test-integration: ## Run integration tests

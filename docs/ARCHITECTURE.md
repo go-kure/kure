@@ -79,7 +79,7 @@ graph TB
 The system is organized around four primary architectural layers:
 
 1. **Domain Model** (`pkg/stack/`): Hierarchical abstractions for cluster configuration
-2. **Workflow Engines** (`pkg/workflow/`, `pkg/stack/*/`): GitOps-specific implementations
+2. **Workflow Engines** (`pkg/stack/workflow.go`, `pkg/stack/fluxcd/`, `pkg/stack/argocd/`): GitOps-specific implementations
 3. **Resource Builders** (`internal/`): Strongly-typed Kubernetes resource factories
 4. **Support Systems**: Error handling, patching, layout, and I/O utilities
 
@@ -223,7 +223,7 @@ This design enables:
 The workflow architecture implements **Interface Segregation Principle** by splitting monolithic interfaces into focused components:
 
 ```go
-// pkg/workflow/interfaces.go
+// pkg/stack/workflow.go
 
 type ResourceGenerator interface {
     GenerateFromCluster(*stack.Cluster) ([]client.Object, error)
@@ -722,7 +722,7 @@ pkg/                          # Public APIs and interfaces
 │   ├── fluxcd/             # FluxCD workflow implementation  
 │   ├── argocd/             # ArgoCD workflow implementation
 │   └── layout/             # Layout generation utilities
-├── workflow/               # Workflow interfaces (public)
+├── stack/workflow.go       # Workflow interfaces (public)
 ├── errors/                 # Error handling utilities (public)
 └── patch/                  # Patch system (public)
 
@@ -1417,7 +1417,7 @@ Additional design documentation available in the repository:
 - `pkg/patch/PATCH_ENGINE_DESIGN.md`: Patch engine implementation details
 - `pkg/patch/PATH_RESOLUTION.md`: JSONPath resolution algorithms
 - `pkg/stack/layout/README.md`: Layout system overview
-- `pkg/workflow/README.md`: Workflow interface design rationale
+- `pkg/stack/workflow.go`: Workflow interface definitions
 
 ### Appendix D: Migration Guide
 

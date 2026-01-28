@@ -45,20 +45,16 @@ Kure prioritizes **type safety**, **composability**, and **simplicity** over tem
 
 #### 5. Utilities
 - **pkg/io/**: YAML serialization and multi-document parsing
-- **pkg/fluxcd/**: Public API facade over internal Flux builders
+- **pkg/kubernetes/fluxcd/**: Public API facade over internal Flux builders
 - **pkg/k8s/**: Kubernetes scheme and utility functions
 
 ## Getting Started
-
-### Quick Example
 
 ### Installation
 
 ```bash
 go get github.com/go-kure/kure
 ```
-
-### Using in Your Project
 
 ### Basic Usage
 

@@ -103,24 +103,17 @@ func TestResolver(t *testing.T) {
 	})
 
 	t.Run("max depth exceeded", func(t *testing.T) {
-		// SKIP: The resolver's depth limiting has two issues that prevent reliable testing:
-		//
-		// 1. Cache bypass (resolver.go:109-111): When a variable is cached during
-		//    resolution of one top-level key, subsequent accesses return the cached
-		//    value without checking the current depth.
-		//
-		// 2. MaxDepth=0 ignored (resolver.go:49-51): The check `if opts.MaxDepth > 0`
-		//    means MaxDepth=0 is not applied, keeping the default of 10.
-		//
-		// Combined, these issues mean depth limits only apply to completely fresh
-		// resolution chains, which is impossible to guarantee due to Go map iteration
-		// order randomization.
-		//
-		// TODO: Fix the resolver to either:
-		//   - Include depth in cache key: fmt.Sprintf("%s@%d", path, depth)
-		//   - Check depth on cache hit: if depth > r.maxDepth { return error }
-		//   - Fix MaxDepth=0 handling: if opts.MaxDepth >= 0 { r.maxDepth = opts.MaxDepth }
-		t.Skip("Depth limits not enforced with caching - see resolver.go:49-51 and resolver.go:109-111")
+		// Create a chain that exceeds depth 0
+		base := ParameterMap{
+			"a": "${b}",
+			"b": "${c}",
+			"c": "final",
+		}
+
+		depthOpts := &LauncherOptions{MaxDepth: 0}
+		_, err := resolver.Resolve(ctx, base, nil, depthOpts)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "depth")
 	})
 
 	t.Run("parameter merging", func(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/cel-go/cel"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -848,23 +849,29 @@ func (c *ConfigV1Alpha1) validateExtension(ext Extension) error {
 	return nil
 }
 
-// validateCELExpression performs basic CEL expression validation
+// validateCELExpression validates a CEL expression using the cel-go parser
 func (c *ConfigV1Alpha1) validateCELExpression(expr string) error {
-	// Basic validation - should not be empty and should contain valid identifiers
 	if strings.TrimSpace(expr) == "" {
 		return errors.New("CEL expression cannot be empty")
 	}
 
-	// Check for common CEL patterns (.Values, operators, etc.)
 	if !strings.Contains(expr, ".Values") {
 		return errors.New("CEL expression should reference .Values")
 	}
 
-	// TODO: Add proper CEL validation using cel-go library
-	// For now, just do basic syntax checks
-	invalidChars := regexp.MustCompile(`[^a-zA-Z0-9_.()[\]<>=!&|+\-*/%\s"']`)
-	if invalidChars.MatchString(expr) {
-		return errors.New("CEL expression contains invalid characters")
+	// Rewrite .Values accessors to a CEL-compatible variable for parsing
+	celExpr := regexp.MustCompile(`\.Values\b`).ReplaceAllString(expr, "Values")
+
+	env, err := cel.NewEnv(
+		cel.Variable("Values", cel.DynType),
+	)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create CEL environment")
+	}
+
+	_, iss := env.Parse(celExpr)
+	if iss != nil && iss.Err() != nil {
+		return errors.Wrapf(iss.Err(), "invalid CEL expression %q", expr)
 	}
 
 	return nil
