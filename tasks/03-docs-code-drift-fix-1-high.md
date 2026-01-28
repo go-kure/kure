@@ -2,7 +2,7 @@
 
 **Priority:** 1 - High (Short Term: 1-2 days)
 **Category:** docs
-**Status:** Not Started
+**Status:** In Progress (demo-internals fixed, pkg/workflow references remain in docs/ARCHITECTURE.md)
 **Dependencies:** None
 **Blocked By:** None
 
