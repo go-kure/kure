@@ -1,26 +1,38 @@
 # Kure Development Tasks
 
-**Last Updated:** 2025-12-08 (added HPA and PDB builder tasks for Crane/OAM support)
+**Last Updated:** 2026-01-28 (marked high-priority tasks 1-5, 23, 24 as completed)
 **Source:** Comprehensive repository review and alternate review analysis + upstream commits
 
 This document provides an index of all prioritized development tasks for the Kure library and Kurel package tool. Each task is detailed in a separate file in the `tasks/` directory.
 
-**Recent Changes:** 6 tasks marked as completed after rebasing on upstream commits that implemented them.
+**Recent Changes:** All 7 high-priority tasks completed and moved to `tasks/done/`.
 
 ---
 
-## ✅ Recently Completed (from upstream)
+## ✅ Recently Completed
+
+| # | Task | Category | Completion |
+|---|------|----------|-----------|
+| 1 | **CEL Validation Enhancement** | kurel | commit a2b2376 |
+| 2 | **Add combined-output mode to kure patch** | cli | commit 4b34b30 |
+| 3 | **Fix doc-code drift** | docs | commit a2b2376 |
+| 4 | **Add quickstart guide** | docs | commit 577f6ab |
+| 5 | **Expand README** | docs | commit 7d65a23 |
+| 23 | **HorizontalPodAutoscaler builder** | library | commit 296dc88 |
+| 24 | **PodDisruptionBudget builder** | library | commit 37bb321 |
+
+### Previously Completed (from upstream)
 
 These tasks were completed in upstream commits before our task list was created:
 
 | # | Task | Category | Completion |
 |---|------|----------|-----------|
-| 1 | **KurelPackage Generator MVP** | kurel | commit 9453a52 |
-| 2 | **Wire generator into kurel build** | kurel | commit 9453a52 |
-| 3 | **Fluent Builder Pattern (Phase 1)** | library | commit 28d2ed8 |
-| 4 | **K8s OpenAPI Schema Integration** | kurel | commit 8bb7341 |
-| 5 | **Document Fluent Builder Pattern** | docs | commit 28d2ed8 |
-| 6 | **Align go.mod versions** | deps | commit 6cfdbde |
+| - | **KurelPackage Generator MVP** | kurel | commit 9453a52 |
+| - | **Wire generator into kurel build** | kurel | commit 9453a52 |
+| - | **Fluent Builder Pattern (Phase 1)** | library | commit 28d2ed8 |
+| - | **K8s OpenAPI Schema Integration** | kurel | commit 8bb7341 |
+| - | **Document Fluent Builder Pattern** | docs | commit 28d2ed8 |
+| - | **Align go.mod versions** | deps | commit 6cfdbde |
 
 ---
 
@@ -96,17 +108,9 @@ git commit -m "docs: mark task #1 as completed"
 
 ## Short Term (High Priority)
 
-These tasks should be completed within 2-4 weeks:
+All high-priority tasks completed! See "Recently Completed" section above.
 
-| # | Task | Category | File | Notes |
-|---|------|----------|------|-------|
-| 1 | **CEL Validation Enhancement** | kurel | [tasks/01-kurel-cel-validation-1-high.md](tasks/01-kurel-cel-validation-1-high.md) | Validate CEL syntax with cel-go (from commit 3d1c75e) |
-| 2 | **Add combined-output mode to kure patch** | cli | [tasks/02-cli-patch-combined-output-1-high.md](tasks/02-cli-patch-combined-output-1-high.md) | |
-| 3 | **Fix doc-code drift** | docs | [tasks/03-docs-code-drift-fix-1-high.md](tasks/03-docs-code-drift-fix-1-high.md) | Check if commit 43901b2 resolved |
-| 4 | **Add quickstart guide** | docs | [tasks/04-docs-quickstart-guide-1-high.md](tasks/04-docs-quickstart-guide-1-high.md) | DEVELOPMENT.md may satisfy |
-| 5 | **Expand README** | docs | [tasks/05-docs-readme-expansion-1-high.md](tasks/05-docs-readme-expansion-1-high.md) | Partially done in commit 43901b2 |
-| 23 | **HorizontalPodAutoscaler builder** | library | [tasks/23-library-hpa-builder-1-high.md](tasks/23-library-hpa-builder-1-high.md) | Required for Crane Scaler trait (ADR-006) |
-| 24 | **PodDisruptionBudget builder** | library | [tasks/24-library-pdb-builder-1-high.md](tasks/24-library-pdb-builder-1-high.md) | Required for Crane Scaler trait (ADR-006) |
+No remaining high-priority tasks. Promote medium-term tasks as needed.
 
 ---
 
@@ -154,6 +158,7 @@ These tasks should be completed within 2-4 weeks:
 ## Quick Reference by Category
 
 ### Kurel (Package Tool)
+- [01-kurel-cel-validation-1-high.md](tasks/done/01-kurel-cel-validation-1-high.md) - **Priority 1** ✅ DONE
 - [kurel-generator-mvp-1-high.md](tasks/done/kurel-generator-mvp-1-high.md) - **Priority 1** ✅ DONE
 - [kurel-build-integration-1-high.md](tasks/done/kurel-build-integration-1-high.md) - **Priority 1** ✅ DONE
 - [kurel-openapi-schema-2-medium.md](tasks/done/kurel-openapi-schema-2-medium.md) - Priority 2 ✅ DONE
@@ -164,21 +169,21 @@ These tasks should be completed within 2-4 weeks:
 - [21-kurel-package-catalog-3-future.md](tasks/21-kurel-package-catalog-3-future.md) - Priority 3
 
 ### Library (Kure)
-- [23-library-hpa-builder-1-high.md](tasks/23-library-hpa-builder-1-high.md) - **Priority 1** (Crane blocker)
-- [24-library-pdb-builder-1-high.md](tasks/24-library-pdb-builder-1-high.md) - **Priority 1** (Crane blocker)
+- [23-library-hpa-builder-1-high.md](tasks/done/23-library-hpa-builder-1-high.md) - **Priority 1** ✅ DONE
+- [24-library-pdb-builder-1-high.md](tasks/done/24-library-pdb-builder-1-high.md) - **Priority 1** ✅ DONE
 - [06-library-validation-standardize-2-medium.md](tasks/06-library-validation-standardize-2-medium.md) - Priority 2
 - [18-library-multienv-profiles-3-future.md](tasks/18-library-multienv-profiles-3-future.md) - Priority 3
 - [19-library-fluent-builder-impl-3-future.md](tasks/19-library-fluent-builder-impl-3-future.md) - Priority 3
 
 ### Documentation
-- [03-docs-code-drift-fix-1-high.md](tasks/03-docs-code-drift-fix-1-high.md) - **Priority 1**
+- [03-docs-code-drift-fix-1-high.md](tasks/done/03-docs-code-drift-fix-1-high.md) - **Priority 1** ✅ DONE
 - [docs-fluent-builder-pattern-1-high.md](tasks/done/docs-fluent-builder-pattern-1-high.md) - **Priority 1** ✅ DONE
-- [04-docs-quickstart-guide-1-high.md](tasks/04-docs-quickstart-guide-1-high.md) - **Priority 1**
-- [05-docs-readme-expansion-1-high.md](tasks/05-docs-readme-expansion-1-high.md) - **Priority 1**
+- [04-docs-quickstart-guide-1-high.md](tasks/done/04-docs-quickstart-guide-1-high.md) - **Priority 1** ✅ DONE
+- [05-docs-readme-expansion-1-high.md](tasks/done/05-docs-readme-expansion-1-high.md) - **Priority 1** ✅ DONE
 - [10-docs-godoc-api-2-medium.md](tasks/10-docs-godoc-api-2-medium.md) - Priority 2
 
 ### CLI
-- [02-cli-patch-combined-output-1-high.md](tasks/02-cli-patch-combined-output-1-high.md) - **Priority 1**
+- [02-cli-patch-combined-output-1-high.md](tasks/done/02-cli-patch-combined-output-1-high.md) - **Priority 1** ✅ DONE
 - [08-cli-patch-diff-option-2-medium.md](tasks/08-cli-patch-diff-option-2-medium.md) - Priority 2
 - [16-cli-kure-init-3-future.md](tasks/16-cli-kure-init-3-future.md) - Priority 3
 - [22-cli-yaml-to-kure-converter-3-future.md](tasks/22-cli-yaml-to-kure-converter-3-future.md) - Priority 3

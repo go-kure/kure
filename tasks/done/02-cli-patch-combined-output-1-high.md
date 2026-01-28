@@ -2,7 +2,7 @@
 
 **Priority:** 1 - High (Short Term: 2-3 days)
 **Category:** cli
-**Status:** Not Started
+**Status:** Completed (4b34b30)
 **Dependencies:** None
 **Blocked By:** None
 

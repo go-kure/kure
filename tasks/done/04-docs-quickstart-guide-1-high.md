@@ -2,7 +2,7 @@
 
 **Priority:** 1 - High (Short Term: 1 day)
 **Category:** docs
-**Status:** Not Started
+**Status:** Completed (577f6ab)
 **Dependencies:** None
 **Blocked By:** None
 

@@ -2,7 +2,7 @@
 
 **Priority:** 1 - High (Short Term: 1 day)
 **Category:** docs
-**Status:** Not Started
+**Status:** Completed (7d65a23)
 **Dependencies:** None
 **Blocked By:** None
 
