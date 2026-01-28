@@ -376,7 +376,7 @@ jobs:
 
     strategy:
       matrix:
-        k8s-version: ['0.33', '0.34', '0.35']
+        k8s-version: ['0.34', '0.35']
 
     steps:
     - name: Checkout code
