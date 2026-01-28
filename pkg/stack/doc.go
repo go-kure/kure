@@ -13,16 +13,16 @@
 //
 // The core types form a hierarchical structure:
 //
-//	Cluster
-//	  └── Node (tree structure)
-//	        ├── Bundle
-//	        │     └── Applications
-//	        └── Children (nested Nodes)
+//		Cluster
+//		  └── Node (tree structure)
+//		        ├── Bundle
+//		        │     └── Applications
+//		        └── Children (nested Nodes)
 //
-//   - [Cluster]: Top-level configuration including GitOps settings
-//   - [Node]: Hierarchical structure for organizing deployment units
-//   - [Bundle]: Collection of applications deployed together
-//   - [Application]: Individual Kubernetes workload or component
+//	  - [Cluster]: Top-level configuration including GitOps settings
+//	  - [Node]: Hierarchical structure for organizing deployment units
+//	  - [Bundle]: Collection of applications deployed together
+//	  - [Application]: Individual Kubernetes workload or component
 //
 // # Fluent Builder API
 //

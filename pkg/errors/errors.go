@@ -85,6 +85,17 @@ var (
 	ErrNilBGPAdvertisement = ResourceValidationError("BGPAdvertisement", "", "bgpadvertisement", "bgp advertisement cannot be nil", nil)
 	ErrNilL2Advertisement  = ResourceValidationError("L2Advertisement", "", "l2advertisement", "l2 advertisement cannot be nil", nil)
 	ErrNilBFDProfile       = ResourceValidationError("BFDProfile", "", "bfdprofile", "bfd profile cannot be nil", nil)
+
+	// cert-manager resources
+	ErrNilCertificate   = ResourceValidationError("Certificate", "", "certificate", "certificate cannot be nil", nil)
+	ErrNilIssuer        = ResourceValidationError("Issuer", "", "issuer", "issuer cannot be nil", nil)
+	ErrNilClusterIssuer = ResourceValidationError("ClusterIssuer", "", "clusterissuer", "cluster issuer cannot be nil", nil)
+	ErrNilACMEIssuer    = ResourceValidationError("ACMEIssuer", "", "acmeissuer", "acme issuer cannot be nil", nil)
+
+	// external-secrets resources
+	ErrNilSecretStore        = ResourceValidationError("SecretStore", "", "secretstore", "secret store cannot be nil", nil)
+	ErrNilClusterSecretStore = ResourceValidationError("ClusterSecretStore", "", "clustersecretstore", "cluster secret store cannot be nil", nil)
+	ErrNilExternalSecret     = ResourceValidationError("ExternalSecret", "", "externalsecret", "external secret cannot be nil", nil)
 )
 
 // Common file operation errors

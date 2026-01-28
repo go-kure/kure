@@ -14,7 +14,10 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/kustomize/api/types"
 
+	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
+	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
+	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 )
 
@@ -176,6 +179,38 @@ func (v *Validator) ValidateL2Advertisement(adv *metallbv1beta1.L2Advertisement)
 
 func (v *Validator) ValidateBFDProfile(profile *metallbv1beta1.BFDProfile) error {
 	return v.validateNotNil(profile, errors.ErrNilBFDProfile)
+}
+
+// cert-manager Resources Validation
+
+func (v *Validator) ValidateCertificate(cert *certv1.Certificate) error {
+	return v.validateNotNil(cert, errors.ErrNilCertificate)
+}
+
+func (v *Validator) ValidateIssuer(issuer *certv1.Issuer) error {
+	return v.validateNotNil(issuer, errors.ErrNilIssuer)
+}
+
+func (v *Validator) ValidateClusterIssuer(issuer *certv1.ClusterIssuer) error {
+	return v.validateNotNil(issuer, errors.ErrNilClusterIssuer)
+}
+
+func (v *Validator) ValidateACMEIssuer(acme *cmacme.ACMEIssuer) error {
+	return v.validateNotNil(acme, errors.ErrNilACMEIssuer)
+}
+
+// external-secrets Resources Validation
+
+func (v *Validator) ValidateSecretStore(ss *esv1beta1.SecretStore) error {
+	return v.validateNotNil(ss, errors.ErrNilSecretStore)
+}
+
+func (v *Validator) ValidateClusterSecretStore(css *esv1beta1.ClusterSecretStore) error {
+	return v.validateNotNil(css, errors.ErrNilClusterSecretStore)
+}
+
+func (v *Validator) ValidateExternalSecret(es *esv1beta1.ExternalSecret) error {
+	return v.validateNotNil(es, errors.ErrNilExternalSecret)
 }
 
 // Compound validation methods for common patterns

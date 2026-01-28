@@ -19,35 +19,69 @@ func TestCertificateFunctions(t *testing.T) {
 		t.Errorf("unexpected kind %q", crt.Kind)
 	}
 
-	AddCertificateLabel(crt, "app", "demo")
+	if err := AddCertificateLabel(crt, "app", "demo"); err != nil {
+		t.Errorf("AddCertificateLabel failed: %v", err)
+	}
 	if crt.Labels["app"] != "demo" {
 		t.Errorf("label not set")
 	}
 
-	AddCertificateAnnotation(crt, "team", "dev")
+	if err := AddCertificateAnnotation(crt, "team", "dev"); err != nil {
+		t.Errorf("AddCertificateAnnotation failed: %v", err)
+	}
 	if crt.Annotations["team"] != "dev" {
 		t.Errorf("annotation not set")
 	}
 
-	AddCertificateDNSName(crt, "example.com")
+	if err := AddCertificateDNSName(crt, "example.com"); err != nil {
+		t.Errorf("AddCertificateDNSName failed: %v", err)
+	}
 	if len(crt.Spec.DNSNames) != 1 || crt.Spec.DNSNames[0] != "example.com" {
 		t.Errorf("dns name not added")
 	}
 
 	ref := cmmeta.ObjectReference{Name: "issuer"}
-	SetCertificateIssuerRef(crt, ref)
+	if err := SetCertificateIssuerRef(crt, ref); err != nil {
+		t.Errorf("SetCertificateIssuerRef failed: %v", err)
+	}
 	if crt.Spec.IssuerRef.Name != "issuer" {
 		t.Errorf("issuerRef not set")
 	}
 
 	dur := metav1.Duration{Duration: 0}
-	SetCertificateDuration(crt, &dur)
+	if err := SetCertificateDuration(crt, &dur); err != nil {
+		t.Errorf("SetCertificateDuration failed: %v", err)
+	}
 	if crt.Spec.Duration == nil {
 		t.Errorf("duration not set")
 	}
 
-	SetCertificateRenewBefore(crt, &dur)
+	if err := SetCertificateRenewBefore(crt, &dur); err != nil {
+		t.Errorf("SetCertificateRenewBefore failed: %v", err)
+	}
 	if crt.Spec.RenewBefore == nil {
 		t.Errorf("renewBefore not set")
+	}
+}
+
+func TestCertificateFunctionsWithNil(t *testing.T) {
+	// Test that functions return errors when given nil Certificate
+	if err := AddCertificateLabel(nil, "key", "value"); err == nil {
+		t.Error("expected error for nil Certificate")
+	}
+	if err := AddCertificateAnnotation(nil, "key", "value"); err == nil {
+		t.Error("expected error for nil Certificate")
+	}
+	if err := AddCertificateDNSName(nil, "example.com"); err == nil {
+		t.Error("expected error for nil Certificate")
+	}
+	if err := SetCertificateIssuerRef(nil, cmmeta.ObjectReference{}); err == nil {
+		t.Error("expected error for nil Certificate")
+	}
+	if err := SetCertificateDuration(nil, nil); err == nil {
+		t.Error("expected error for nil Certificate")
+	}
+	if err := SetCertificateRenewBefore(nil, nil); err == nil {
+		t.Error("expected error for nil Certificate")
 	}
 }
