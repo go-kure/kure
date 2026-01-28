@@ -2,7 +2,7 @@
 
 **Priority:** 2 - Medium (1-2 months)
 **Category:** cli
-**Status:** Not Started
+**Status:** Completed
 
 ---
 

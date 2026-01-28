@@ -66,15 +66,15 @@ var (
 	ErrNilToleration         = ResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
 
 	// Additional resource errors
-	ErrNilNamespace           = ResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
-	ErrNilRole                = ResourceValidationError("Role", "", "role", "role cannot be nil", nil)
-	ErrNilClusterRole         = ResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
-	ErrNilRoleBinding         = ResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
-	ErrNilClusterRoleBinding  = ResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
-	ErrNilServicePort         = ResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
-	ErrNilPodDisruptionBudget         = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
-	ErrNilHorizontalPodAutoscaler     = ResourceValidationError("HorizontalPodAutoscaler", "", "hpa", "horizontal pod autoscaler cannot be nil", nil)
-	ErrNilKustomization       = ResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
+	ErrNilNamespace               = ResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
+	ErrNilRole                    = ResourceValidationError("Role", "", "role", "role cannot be nil", nil)
+	ErrNilClusterRole             = ResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
+	ErrNilRoleBinding             = ResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
+	ErrNilClusterRoleBinding      = ResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
+	ErrNilServicePort             = ResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
+	ErrNilPodDisruptionBudget     = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
+	ErrNilHorizontalPodAutoscaler = ResourceValidationError("HorizontalPodAutoscaler", "", "hpa", "horizontal pod autoscaler cannot be nil", nil)
+	ErrNilKustomization           = ResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
 
 	// Flux resources
 	ErrNilFluxInstance = ResourceValidationError("FluxInstance", "", "fluxinstance", "flux instance cannot be nil", nil)

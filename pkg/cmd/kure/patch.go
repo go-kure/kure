@@ -1,14 +1,17 @@
 package kure
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"gopkg.in/yaml.v3"
 
 	"github.com/go-kure/kure/pkg/cli"
 	"github.com/go-kure/kure/pkg/cmd/shared/options"
@@ -31,6 +34,7 @@ type PatchOptions struct {
 	ValidateOnly bool
 	Interactive  bool
 	Combined     bool
+	Diff         bool
 	GroupBy      string
 
 	// Dependencies
@@ -69,7 +73,10 @@ Examples:
   kure patch --validate-only base.yaml patch.yaml
 
   # Apply patches interactively
-  kure patch --interactive base.yaml`,
+  kure patch --interactive base.yaml
+
+  # Preview changes without applying (diff mode)
+  kure patch --diff base.yaml patch.yaml`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			o.BaseFile = args[0]
@@ -101,6 +108,7 @@ func (o *PatchOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&o.ValidateOnly, "validate-only", false, "validate patches without applying them")
 	flags.BoolVar(&o.Interactive, "interactive", false, "interactive patch mode")
 	flags.BoolVar(&o.Combined, "combined", false, "apply all patches and write a single combined output")
+	flags.BoolVar(&o.Diff, "diff", false, "show unified diff of changes without applying")
 	flags.StringVar(&o.GroupBy, "group-by", "none", "group resources in combined output (none|file|kind)")
 }
 
@@ -167,6 +175,10 @@ func (o *PatchOptions) Run() error {
 
 	if o.ValidateOnly {
 		return o.runValidation()
+	}
+
+	if o.Diff {
+		return o.runDiff()
 	}
 
 	if o.Combined {
@@ -293,6 +305,161 @@ func (o *PatchOptions) writeCombinedToFile(docSet *patch.YAMLDocumentSet) error 
 	}
 
 	return docSet.WriteToFile(o.OutputFile)
+}
+
+// runDiff shows a unified diff of changes without applying them.
+func (o *PatchOptions) runDiff() error {
+	globalOpts := o.Factory.GlobalOptions()
+
+	if globalOpts.Verbose {
+		fmt.Fprintf(o.IOStreams.ErrOut, "Diff mode: comparing %d patches against %s\n", len(o.PatchFiles), o.BaseFile)
+	}
+
+	// Load base resources
+	originalSet, err := o.loadBaseResources()
+	if err != nil {
+		return fmt.Errorf("failed to load base resources: %w", err)
+	}
+
+	// Create a deep copy to apply patches to
+	patchedSet, err := originalSet.Copy()
+	if err != nil {
+		return fmt.Errorf("failed to copy document set: %w", err)
+	}
+
+	// Apply each patch file sequentially to the copied set
+	for _, patchFile := range o.PatchFiles {
+		if globalOpts.Verbose {
+			fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
+		}
+
+		file, err := os.Open(patchFile)
+		if err != nil {
+			return fmt.Errorf("failed to open patch file %s: %w", patchFile, err)
+		}
+
+		patchSpecs, err := patch.LoadPatchFile(file)
+		file.Close()
+		if err != nil {
+			return fmt.Errorf("failed to load patch file %s: %w", patchFile, err)
+		}
+
+		// Convert PatchSpec slice to PatchOp slice
+		var ops []patch.PatchOp
+		for _, spec := range patchSpecs {
+			ops = append(ops, spec.Patch)
+		}
+
+		// Apply patches to each document
+		for _, doc := range patchedSet.Documents {
+			if err := doc.ApplyPatchesToDocument(ops); err != nil {
+				// Skip documents that don't match the patch target
+				continue
+			}
+		}
+	}
+
+	// Generate original YAML content
+	var originalBuf bytes.Buffer
+	for i, doc := range originalSet.Documents {
+		if i > 0 {
+			originalBuf.WriteString("---\n")
+		}
+		originalBuf.WriteString(doc.Original)
+		if !strings.HasSuffix(doc.Original, "\n") {
+			originalBuf.WriteString("\n")
+		}
+	}
+
+	// Generate patched YAML content
+	var patchedBuf bytes.Buffer
+	if err := o.writeDocumentSetToBuffer(patchedSet, &patchedBuf); err != nil {
+		return fmt.Errorf("failed to generate patched output: %w", err)
+	}
+
+	// Generate unified diff
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(originalBuf.String()),
+		B:        difflib.SplitLines(patchedBuf.String()),
+		FromFile: o.BaseFile,
+		ToFile:   o.BaseFile + " (patched)",
+		Context:  3,
+	}
+
+	diffText, err := difflib.GetUnifiedDiffString(diff)
+	if err != nil {
+		return fmt.Errorf("failed to generate diff: %w", err)
+	}
+
+	if diffText == "" {
+		fmt.Fprintf(o.IOStreams.Out, "No changes detected.\n")
+		return nil
+	}
+
+	// Output diff with optional coloring
+	o.printColoredDiff(diffText)
+
+	return nil
+}
+
+// writeDocumentSetToBuffer writes a YAMLDocumentSet to a buffer.
+func (o *PatchOptions) writeDocumentSetToBuffer(docSet *patch.YAMLDocumentSet, buf *bytes.Buffer) error {
+	for i, doc := range docSet.Documents {
+		if i > 0 {
+			buf.WriteString("---\n")
+		}
+
+		// Marshal the YAML node to get the patched content
+		docBuf := new(bytes.Buffer)
+		encoder := yaml.NewEncoder(docBuf)
+		encoder.SetIndent(2)
+		if err := encoder.Encode(doc.Node); err != nil {
+			return fmt.Errorf("failed to encode document %d: %w", i, err)
+		}
+		encoder.Close()
+
+		content := docBuf.String()
+		content = strings.TrimSuffix(content, "\n")
+		buf.WriteString(content)
+		buf.WriteString("\n")
+	}
+	return nil
+}
+
+// printColoredDiff prints the diff with ANSI colors if output is a terminal.
+func (o *PatchOptions) printColoredDiff(diffText string) {
+	// Check if we should use colors (simple heuristic: non-empty TERM env var)
+	useColor := os.Getenv("TERM") != "" && os.Getenv("NO_COLOR") == ""
+
+	if !useColor {
+		fmt.Fprint(o.IOStreams.Out, diffText)
+		return
+	}
+
+	// ANSI color codes
+	const (
+		colorReset  = "\033[0m"
+		colorRed    = "\033[31m"
+		colorGreen  = "\033[32m"
+		colorCyan   = "\033[36m"
+		colorYellow = "\033[33m"
+	)
+
+	lines := strings.Split(diffText, "\n")
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++"):
+			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorYellow, line, colorReset)
+		case strings.HasPrefix(line, "@@"):
+			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorCyan, line, colorReset)
+		case strings.HasPrefix(line, "-"):
+			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorRed, line, colorReset)
+		case strings.HasPrefix(line, "+"):
+			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorGreen, line, colorReset)
+		default:
+			fmt.Fprintf(o.IOStreams.Out, "%s\n", line)
+		}
+	}
 }
 
 // scanPatchDirectory scans directory for patch files
