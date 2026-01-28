@@ -445,4 +445,343 @@ spec:
 			}
 		}
 	})
+
+	t.Run("GetAPIVersion and GetKind", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		if config.GetAPIVersion() != "generators.gokure.dev/v1alpha1" {
+			t.Errorf("GetAPIVersion() = %q, want %q", config.GetAPIVersion(), "generators.gokure.dev/v1alpha1")
+		}
+
+		if config.GetKind() != "KurelPackage" {
+			t.Errorf("GetKind() = %q, want %q", config.GetKind(), "KurelPackage")
+		}
+	})
+
+	t.Run("Generate returns not implemented", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+		app := &stack.Application{}
+
+		_, err := config.Generate(app)
+		if err == nil {
+			t.Error("Generate() should return not implemented error")
+		}
+	})
+
+	t.Run("Validate with resources", func(t *testing.T) {
+		config := &ConfigV1Alpha1{
+			Package: PackageMetadata{
+				Name:    "test-package",
+				Version: "1.0.0",
+			},
+			Resources: []ResourceSource{
+				{Source: ""},
+			},
+		}
+
+		if err := config.Validate(); err == nil {
+			t.Error("Should fail validation with empty resource source")
+		}
+	})
+
+	t.Run("Validate with patches", func(t *testing.T) {
+		config := &ConfigV1Alpha1{
+			Package: PackageMetadata{
+				Name:    "test-package",
+				Version: "1.0.0",
+			},
+			Patches: []PatchDefinition{
+				{
+					Target: PatchTarget{Kind: "", Name: "test"},
+					Patch:  "test",
+				},
+			},
+		}
+
+		if err := config.Validate(); err == nil {
+			t.Error("Should fail validation with empty patch kind")
+		}
+	})
+
+	t.Run("Validate with dependencies", func(t *testing.T) {
+		config := &ConfigV1Alpha1{
+			Package: PackageMetadata{
+				Name:    "test-package",
+				Version: "1.0.0",
+			},
+			Dependencies: []Dependency{
+				{Name: "", Version: "1.0.0"},
+			},
+		}
+
+		if err := config.Validate(); err == nil {
+			t.Error("Should fail validation with empty dependency name")
+		}
+	})
+
+	t.Run("Validate dependency version constraint", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		validConstraints := []string{
+			"1.0.0",
+			">=1.0.0",
+			"^1.0.0",
+			"~1.2.0",
+			"<2.0.0",
+		}
+
+		for _, constraint := range validConstraints {
+			if err := config.validateVersionConstraint(constraint); err != nil {
+				t.Errorf("Version constraint %s should be valid: %v", constraint, err)
+			}
+		}
+
+		invalidConstraints := []string{
+			"invalid",
+			"1.0",
+			"v1.0.0",
+		}
+
+		for _, constraint := range invalidConstraints {
+			if err := config.validateVersionConstraint(constraint); err == nil {
+				t.Errorf("Version constraint %s should be invalid", constraint)
+			}
+		}
+	})
+
+	t.Run("Validate build config", func(t *testing.T) {
+		config := &ConfigV1Alpha1{
+			Package: PackageMetadata{
+				Name:    "test-package",
+				Version: "1.0.0",
+			},
+			Build: &BuildConfig{
+				Format: "invalid",
+			},
+		}
+
+		if err := config.Validate(); err == nil {
+			t.Error("Should fail validation with invalid build format")
+		}
+
+		config.Build.Format = "oci"
+		config.Build.Registry = ""
+		if err := config.Validate(); err == nil {
+			t.Error("Should fail validation with OCI format but no registry")
+		}
+
+		config.Build.Registry = "registry.example.com"
+		config.Build.Repository = ""
+		if err := config.Validate(); err == nil {
+			t.Error("Should fail validation with OCI format but no repository")
+		}
+
+		config.Build.Repository = "my-repo"
+		if err := config.Validate(); err != nil {
+			t.Errorf("Valid OCI build config should pass: %v", err)
+		}
+	})
+
+	t.Run("isKubernetesResource", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		validResource := []byte(`apiVersion: v1
+kind: Pod
+metadata:
+  name: test`)
+
+		if !config.isKubernetesResource(validResource) {
+			t.Error("Should identify valid Kubernetes resource")
+		}
+
+		invalidResource := []byte(`name: not-k8s`)
+		if config.isKubernetesResource(invalidResource) {
+			t.Error("Should not identify non-Kubernetes content as resource")
+		}
+
+		invalidYAML := []byte(`{invalid: yaml:`)
+		if config.isKubernetesResource(invalidYAML) {
+			t.Error("Should not identify invalid YAML as resource")
+		}
+	})
+
+	t.Run("shouldIncludeFile", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		// No includes/excludes - should include all
+		resource := ResourceSource{}
+		if !config.shouldIncludeFile("test.yaml", resource) {
+			t.Error("Should include file when no patterns specified")
+		}
+
+		// With exclude pattern
+		resource = ResourceSource{Excludes: []string{"*-test.yaml"}}
+		if config.shouldIncludeFile("app-test.yaml", resource) {
+			t.Error("Should exclude file matching exclude pattern")
+		}
+		if !config.shouldIncludeFile("app.yaml", resource) {
+			t.Error("Should include file not matching exclude pattern")
+		}
+
+		// With include pattern
+		resource = ResourceSource{Includes: []string{"*.yaml"}}
+		if !config.shouldIncludeFile("test.yaml", resource) {
+			t.Error("Should include file matching include pattern")
+		}
+		if config.shouldIncludeFile("test.txt", resource) {
+			t.Error("Should not include file not matching include pattern")
+		}
+	})
+
+	t.Run("validateJSONPatch", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		validPatch := `- op: replace
+  path: /spec/replicas
+  value: 3`
+		if err := config.validateJSONPatch(validPatch); err != nil {
+			t.Errorf("Valid JSON patch should pass: %v", err)
+		}
+
+		// Missing op
+		invalidPatch := `- path: /spec/replicas
+  value: 3`
+		if err := config.validateJSONPatch(invalidPatch); err == nil {
+			t.Error("Should fail for missing op")
+		}
+
+		// Missing path
+		invalidPatch = `- op: replace
+  value: 3`
+		if err := config.validateJSONPatch(invalidPatch); err == nil {
+			t.Error("Should fail for missing path")
+		}
+
+		// Invalid op
+		invalidPatch = `- op: invalid
+  path: /spec
+  value: 3`
+		if err := config.validateJSONPatch(invalidPatch); err == nil {
+			t.Error("Should fail for invalid op")
+		}
+
+		// add without value
+		invalidPatch = `- op: add
+  path: /spec`
+		if err := config.validateJSONPatch(invalidPatch); err == nil {
+			t.Error("Should fail for add without value")
+		}
+
+		// move without from
+		invalidPatch = `- op: move
+  path: /spec/new`
+		if err := config.validateJSONPatch(invalidPatch); err == nil {
+			t.Error("Should fail for move without from")
+		}
+
+		// path not starting with /
+		invalidPatch = `- op: replace
+  path: spec/replicas
+  value: 3`
+		if err := config.validateJSONPatch(invalidPatch); err == nil {
+			t.Error("Should fail for path not starting with /")
+		}
+
+		// remove is valid without value
+		validRemove := `- op: remove
+  path: /spec/field`
+		if err := config.validateJSONPatch(validRemove); err != nil {
+			t.Errorf("Valid remove patch should pass: %v", err)
+		}
+	})
+
+	t.Run("validateStrategicMergePatch", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		validPatch := `spec:
+  replicas: 3`
+		if err := config.validateStrategicMergePatch(validPatch); err != nil {
+			t.Errorf("Valid strategic merge patch should pass: %v", err)
+		}
+
+		emptyPatch := ``
+		if err := config.validateStrategicMergePatch(emptyPatch); err == nil {
+			t.Error("Should fail for empty patch")
+		}
+
+		invalidYAML := `{invalid: yaml:`
+		if err := config.validateStrategicMergePatch(invalidYAML); err == nil {
+			t.Error("Should fail for invalid YAML")
+		}
+	})
+
+	t.Run("validateValuesConfig", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		// Empty values config
+		emptyValues := ValuesConfig{}
+		if err := config.validateValuesConfig(emptyValues); err == nil {
+			t.Error("Should fail for empty values config")
+		}
+
+		// With inline values
+		withInline := ValuesConfig{Values: map[string]interface{}{"key": "value"}}
+		if err := config.validateValuesConfig(withInline); err != nil {
+			t.Errorf("Valid inline values should pass: %v", err)
+		}
+	})
+
+	t.Run("validateExtension", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		// Empty name
+		ext := Extension{Name: ""}
+		if err := config.validateExtension(ext); err == nil {
+			t.Error("Should fail for empty extension name")
+		}
+
+		// Invalid name format
+		ext = Extension{Name: "Invalid_Name"}
+		if err := config.validateExtension(ext); err == nil {
+			t.Error("Should fail for invalid extension name")
+		}
+
+		// Valid extension
+		ext = Extension{Name: "valid-ext"}
+		if err := config.validateExtension(ext); err != nil {
+			t.Errorf("Valid extension should pass: %v", err)
+		}
+	})
+
+	t.Run("validatePackageName", func(t *testing.T) {
+		config := &ConfigV1Alpha1{}
+
+		validNames := []string{
+			"valid-name",
+			"valid123",
+			"a",
+			"abc-def-ghi",
+		}
+
+		for _, name := range validNames {
+			if err := config.validatePackageName(name); err != nil {
+				t.Errorf("Package name %q should be valid: %v", name, err)
+			}
+		}
+
+		invalidNames := []string{
+			"",
+			"-invalid",
+			"invalid-",
+			"Invalid",
+			"invalid_name",
+			"invalid.name",
+		}
+
+		for _, name := range invalidNames {
+			if err := config.validatePackageName(name); err == nil {
+				t.Errorf("Package name %q should be invalid", name)
+			}
+		}
+	})
 }
