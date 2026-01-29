@@ -11,7 +11,7 @@ replace (
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/cert-manager/cert-manager v1.16.2
+	github.com/cert-manager/cert-manager v1.16.5
 	github.com/controlplaneio-fluxcd/flux-operator v0.24.1
 	github.com/external-secrets/external-secrets v0.19.2
 	github.com/fluxcd/flux2/v2 v2.6.4
