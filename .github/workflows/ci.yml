@@ -14,7 +14,8 @@ permissions:
   pull-requests: write
 
 env:
-  GO_VERSION: '1.24.12'
+  # Go version is read from mise.toml (single source of truth)
+  # GO_VERSION is set dynamically in each job that needs it
   GOLANGCI_LINT_VERSION: 'v1.64.8'
 
 # Avoid duplicate runs on the same commit
@@ -37,10 +38,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Cache Go modules
@@ -58,6 +66,14 @@ jobs:
 
     - name: Check Go version consistency
       run: make check-go-version
+
+    - name: Install yq for version validation
+      run: |
+        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        sudo chmod +x /usr/local/bin/yq
+
+    - name: Validate version consistency
+      run: ./scripts/sync-versions.sh check
 
     - name: Check formatting
       run: |
@@ -98,10 +114,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Cache Go modules
@@ -160,10 +183,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Install govulncheck
@@ -197,10 +227,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Download coverage artifact
@@ -264,10 +301,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Cache Go modules
@@ -309,10 +353,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Cache Go modules
@@ -365,10 +416,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Cache Go modules

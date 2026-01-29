@@ -15,14 +15,47 @@ updates:
       - "go"
     commit-message:
       prefix: "chore(deps)"
+
+    # Separate groups for different coordination needs
     groups:
-      # Group minor and patch updates together to reduce PR noise
-      go-minor:
+      # Safe updates that don't require Go 1.25
+      go-safe:
         patterns:
-          - "*"
+          - "github.com/spf13/*"
+          - "github.com/stretchr/*"
+          - "gopkg.in/*"
+          - "github.com/pmezard/*"
+          - "github.com/blang/*"
         update-types:
           - "minor"
           - "patch"
+
+      # Kubernetes ecosystem - only patch updates
+      k8s-ecosystem:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+        update-types:
+          - "patch"
+
+    # Ignore dependencies that require Go 1.25 (until #133 is done)
+    ignore:
+      # FluxCD ecosystem - blocked by #128 and Go 1.25 requirement
+      - dependency-name: "github.com/fluxcd/*"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "github.com/controlplaneio-fluxcd/*"
+        update-types: ["version-update:semver-minor"]
+
+      # Infrastructure tools - need to match deployed versions or require Go 1.25
+      - dependency-name: "github.com/cert-manager/cert-manager"
+        versions: [">= 1.17"]  # Pin to 1.16.x until Go 1.25 ready
+      - dependency-name: "go.universe.tf/metallb"
+        versions: [">= 0.16"]  # Pin to 0.15.x to match deployed version
+
+      # Controller runtime - blocked by Go 1.25
+      - dependency-name: "sigs.k8s.io/controller-runtime"
+        versions: [">= 0.22"]
+
     open-pull-requests-limit: 10
 
   - package-ecosystem: "github-actions"
