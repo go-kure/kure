@@ -129,11 +129,34 @@ validate_dependabot() {
         max_version=$(yq ".infrastructure.${dep}.max_dependabot" "$VERSIONS_FILE")
 
         # Check if dependency appears in dependabot ignore section
-        if ! grep -q "$go_module" "$DEPENDABOT_FILE" 2>/dev/null; then
-            warning "Dependency $go_module (max: $max_version) not found in dependabot ignore rules"
-            ((errors++))
+        # Match both exact names and wildcard patterns (e.g., github.com/fluxcd/*)
+        # We check multiple wildcard levels to catch patterns like github.com/org/*
+        local matched=false
+
+        # Check exact match (look for dependency-name: "module")
+        if grep -qE "dependency-name:.*\"$go_module\"" "$DEPENDABOT_FILE" 2>/dev/null; then
+            matched=true
         else
+            # Check wildcard patterns by iteratively removing path components
+            local module_path="$go_module"
+            while [[ "$module_path" == */* ]]; do
+                # Remove last component and add wildcard (escape * for grep)
+                local parent_pattern
+                parent_pattern=$(echo "$module_path" | sed 's|/[^/]*$|/\\*|')
+                if grep -qE "dependency-name:.*\"$parent_pattern\"" "$DEPENDABOT_FILE" 2>/dev/null; then
+                    matched=true
+                    break
+                fi
+                # Move up one level
+                module_path=$(echo "$module_path" | sed 's|/[^/]*$||')
+            done
+        fi
+
+        if [[ "$matched" == "true" ]]; then
             success "$dep: ignore rule present"
+        else
+            warning "Dependency $go_module (max: $max_version) not found in dependabot ignore rules"
+            errors=$((errors + 1))
         fi
     done <<< "$deps"
 
