@@ -42,9 +42,9 @@ updates:
     ignore:
       # FluxCD ecosystem - blocked by #128 and Go 1.25 requirement
       - dependency-name: "github.com/fluxcd/*"
-        update-types: ["version-update:semver-minor"]
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "github.com/controlplaneio-fluxcd/*"
-        update-types: ["version-update:semver-minor"]
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
       # Infrastructure tools - need to match deployed versions or require Go 1.25
       - dependency-name: "github.com/cert-manager/cert-manager"
