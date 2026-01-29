@@ -17,7 +17,7 @@ Kure maintains two version concepts for each dependency:
 
 | Tool | Build Version | Deployment Compatibility | Notes |
 |------|---------------|-------------------------|-------|
-| cert-manager | 1.16.2 | 1.14 - 1.16 | 1.17+ requires Go 1.25 |
+| cert-manager | 1.16.5 | 1.14 - 1.16 | 1.17+ requires Go 1.25 |
 | fluxcd | 2.6.4 | 2.4 - 2.6 | 2.7+ requires Go 1.25, tracked in #128 |
 | flux-operator | 0.24.1 | 0.23 - 0.24 | 0.25+ requires Go 1.25 |
 | metallb | 0.15.2 | 0.14 - 0.15 | Version pinned to match deployed infrastructure |

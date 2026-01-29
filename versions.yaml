@@ -12,8 +12,8 @@ go:
 # Infrastructure dependencies
 infrastructure:
   cert-manager:
-    # go.mod MUST have: github.com/cert-manager/cert-manager v1.16.2
-    current: "1.16.2"
+    # go.mod MUST have: github.com/cert-manager/cert-manager v1.16.5
+    current: "1.16.5"
     go_module: "github.com/cert-manager/cert-manager"
     # Kure generates YAML compatible with these deployed versions
     supported_range: "1.14 - 1.16"
