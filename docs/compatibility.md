@@ -18,9 +18,11 @@ Kure maintains two version concepts for each dependency:
 | Tool | Build Version | Deployment Compatibility | Notes |
 |------|---------------|-------------------------|-------|
 | cert-manager | 1.16.2 | 1.14 - 1.16 | 1.17+ requires Go 1.25 |
-| fluxcd | 2.6.4 | 2.4 - 2.6 | 2.7+ requires Go 1.25, tracked in #128 |
+| fluxcd | 2.6.4 | 2.4 - 2.6 | 2.7+ requires Go 1.25, tracked in #128
+image-automation-controller 1.0+ requires Go 1.25 (#171)
+All github.com/fluxcd/* packages blocked from minor/major updates |
 | flux-operator | 0.24.1 | 0.23 - 0.24 | 0.25+ requires Go 1.25 |
-| metallb | 0.15.2 | 0.14 - 0.15 | Version pinned to match deployed infrastructure |
+| metallb | 0.15.2 | 0.14 - 0.15 | 0.15.3+ requires Go 1.25 and triggers k8s.io upgrade to 0.34+ (#169) |
 | external-secrets | 0.19.2 | 0.18 - 0.19 | Compatible with current Go version |
 | controller-runtime | 0.21.0 | 0.19 - 0.21 | 0.22+ requires Go 1.25 |
 | kubernetes | 0.33.2 | 1.28 - 1.33 | Tested in CI matrix |

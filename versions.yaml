@@ -25,7 +25,10 @@ infrastructure:
     go_module: "github.com/fluxcd/flux2/v2"
     supported_range: "2.4 - 2.6"
     max_dependabot: "< 2.7"
-    notes: "2.7+ requires Go 1.25, tracked in #128"
+    notes: |
+      2.7+ requires Go 1.25, tracked in #128
+      image-automation-controller 1.0+ requires Go 1.25 (#171)
+      All github.com/fluxcd/* packages blocked from minor/major updates
     # Additional packages in this ecosystem (same version constraint)
     related_packages:
       - "github.com/fluxcd/*"
@@ -42,8 +45,8 @@ infrastructure:
     current: "0.15.2"
     go_module: "go.universe.tf/metallb"
     supported_range: "0.14 - 0.15"
-    max_dependabot: "< 0.16"
-    notes: "Version pinned to match deployed infrastructure"
+    max_dependabot: "< 0.15.3"
+    notes: "0.15.3+ requires Go 1.25 and triggers k8s.io upgrade to 0.34+ (#169)"
 
   external-secrets:
     current: "0.19.2"

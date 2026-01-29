@@ -50,7 +50,7 @@ updates:
       - dependency-name: "github.com/cert-manager/cert-manager"
         versions: [">= 1.17"]  # Pin to 1.16.x until Go 1.25 ready
       - dependency-name: "go.universe.tf/metallb"
-        versions: [">= 0.16"]  # Pin to 0.15.x to match deployed version
+        versions: [">= 0.15.3"]  # 0.15.3+ requires Go 1.25 (#169)
 
       # Controller runtime - blocked by Go 1.25
       - dependency-name: "sigs.k8s.io/controller-runtime"
