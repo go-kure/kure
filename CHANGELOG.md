@@ -1,19 +1,13 @@
-## v0.1.0-alpha.2 - 2026-01-30
-
-- Summary: (fill in)
-
-## v0.1.0-alpha.1 - 2026-01-30
-
-- Summary: (fill in)
-
-## v0.1.0-alpha.0 - 2026-01-30
-
-- Summary: (fill in)
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
-## [Unreleased]
+## [0.1.0-alpha.1] - 2026-01-30
+
+### Fixed
+
+- Run tests directly in release workflow instead of checking CI status
+
+## [0.1.0-alpha.0] - 2026-01-30
 
 ### Added
 
@@ -58,6 +52,7 @@ All notable changes to this project will be documented in this file.
 ### Build
 
 - Update Go to 1.24.12 to fix govulncheck vulnerabilities
+- Automate changelog generation with git-cliff
 
 ### CI
 
@@ -201,5 +196,9 @@ All notable changes to this project will be documented in this file.
 - Add setter function tests for internal packages
 - Add comprehensive IO table and printer tests
 - Add comprehensive appworkload internal tests
+
+### Release
+
+- V0.1.0-alpha.0
 
 

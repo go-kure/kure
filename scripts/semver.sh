@@ -70,26 +70,12 @@ bump_prerelease() {
   echo "$(echo "$v" | sed -E "s/(-${type}\.)[0-9]+/\1${n}/")"
 }
 
-need_changelog_header() {
-  v="$1"
-  [ -f "$CHANGELOG" ] || { echo 0; return; }
-  if grep -q "^## $v" "$CHANGELOG" 2>/dev/null; then echo 0; else echo 1; fi
-}
-
-add_changelog_header_real() {
-  v="$1"
-  [ -f "$CHANGELOG" ] || return 0
-  date=$(date +%Y-%m-%d)
-  if ! grep -q "^## $v" "$CHANGELOG" 2>/dev/null; then
-    tmp=$(mktemp)
-    {
-      echo "## $v - $date"
-      echo
-      echo "- Summary: (fill in)"
-      echo
-      cat "$CHANGELOG"
-    } > "$tmp"
-    mv "$tmp" "$CHANGELOG"
+generate_changelog() {
+  tag="$1"
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "generate CHANGELOG with git-cliff --tag $tag"
+  else
+    git-cliff --tag "$tag" -o "$CHANGELOG"
   fi
 }
 
@@ -119,18 +105,9 @@ plan_write_version_if_needed() {
   return 0
 }
 
-plan_add_changelog_header() {
-  v="$1"
-  need=$(need_changelog_header "$v")
-  if [ "$need" = "1" ]; then
-    if [ "$DRY_RUN" = "1" ]; then
-      echo "prepend CHANGELOG section: $v"
-    else
-      add_changelog_header_real "$v"
-    fi
-    return 0
-  fi
-  return 1
+plan_generate_changelog() {
+  tag="$1"
+  generate_changelog "$tag"
 }
 
 plan_tag() {
@@ -163,7 +140,6 @@ case "${1:-}" in
         echo "current VERSION: $curr"
       fi
       if plan_write_version_if_needed "$curr" "$next_dev"; then changed=1; else changed=0; fi
-      if plan_add_changelog_header "$next_dev"; then :; fi
       commit_if_any "$changed" "chore: start next cycle: $next_dev"
       exit 0
     fi
@@ -187,14 +163,13 @@ case "${1:-}" in
         if [ "$release_v" != "$curr" ]; then
           if plan_write_version_if_needed "$curr" "$release_v"; then changed1=1; else changed1=0; fi
         fi
-        if plan_add_changelog_header "$release_v"; then changed2=1; else changed2=0; fi
-        if [ ${changed1:-0} -eq 1 ] || [ ${changed2:-0} -eq 1 ]; then changed=1; else changed=0; fi
+        plan_generate_changelog "$release_v"
+        changed=1  # changelog always changes
         commit_if_any "$changed" "release: $release_v"
         plan_tag "$release_v"
 
         next_dev=$(bump_prerelease "$release_v" "$kind")
         if plan_write_version_if_needed "$release_v" "$next_dev"; then changed3=1; else changed3=0; fi
-        if plan_add_changelog_header "$next_dev"; then :; fi
         commit_if_any "$changed3" "chore: bump version: $release_v -> $next_dev"
         echo "Prepared release $release_v. Review and push tag:"
         echo "  git push origin $release_v"
@@ -207,9 +182,9 @@ case "${1:-}" in
           echo "Plan (dry-run): release stable"
           echo "current VERSION: $curr"
         fi
-        if plan_write_version_if_needed "$curr" "$release_v"; then changed1=1; else changed1=0; fi
-        if plan_add_changelog_header "$release_v"; then changed2=1; else changed2=0; fi
-        if [ ${changed1:-0} -eq 1 ] || [ ${changed2:-0} -eq 1 ]; then changed=1; else changed=0; fi
+        if plan_write_version_if_needed "$curr" "$release_v"; then :; fi
+        plan_generate_changelog "$release_v"
+        changed=1  # changelog always changes
         commit_if_any "$changed" "release: $release_v"
         plan_tag "$release_v"
 
@@ -217,7 +192,6 @@ case "${1:-}" in
         next_base=$(bump_patch "$release_v")
         next_dev=$(start_prerelease "$next_base" "alpha")
         if plan_write_version_if_needed "$release_v" "$next_dev"; then changed3=1; else changed3=0; fi
-        if plan_add_changelog_header "$next_dev"; then :; fi
         commit_if_any "$changed3" "chore: start next cycle: $next_dev"
         echo "Prepared release $release_v. Review and push tag:"
         echo "  git push origin $release_v"
