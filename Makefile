@@ -382,6 +382,21 @@ clean: ## Clean build artifacts and caches
 	@echo "$(COLOR_GREEN)Cleanup completed$(COLOR_RESET)"
 
 # =============================================================================
+# Changelog
+# =============================================================================
+
+.PHONY: changelog
+changelog: ## Generate changelog from git history
+	@echo "$(COLOR_YELLOW)Generating changelog...$(COLOR_RESET)"
+	git cliff -o CHANGELOG.md
+	@echo "$(COLOR_GREEN)Changelog generated$(COLOR_RESET)"
+
+.PHONY: changelog-preview
+changelog-preview: ## Preview unreleased changelog entries
+	@echo "$(COLOR_YELLOW)Previewing unreleased changes...$(COLOR_RESET)"
+	git cliff --unreleased
+
+# =============================================================================
 # Release Management (GoReleaser workflow)
 # =============================================================================
 

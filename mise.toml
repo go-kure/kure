@@ -1,6 +1,7 @@
 [tools]
 go = "1.24.12"
 golangci-lint = "1.64"
+git-cliff = "2"
 
 [env]
 GOBIN = "{{config_root}}/.bin"
@@ -29,3 +30,11 @@ run = "make check"
 [tasks.verify]
 description = "Run all checks (tidy, lint, test)"
 depends = ["tidy", "lint", "test"]
+
+[tasks.changelog]
+description = "Generate changelog from git history"
+run = "git cliff -o CHANGELOG.md"
+
+[tasks.changelog-preview]
+description = "Preview changelog changes"
+run = "git cliff --unreleased"

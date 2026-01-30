@@ -25,7 +25,10 @@
       "Bash(do echo \"=== $pkg ===\" find /home/serge/src/autops/wharf/kure/$pkg -name \"*.go\" ! -name \"*_test.go\" -exec wc -l {} ;)",
       "Bash(xargs:*)",
       "Bash(govulncheck:*)",
-      "Bash(bc:*)"
+      "Bash(bc:*)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure mv:*)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure mv changelogs/20251202-TASK-IMPROVEMENTS-APPLIED.md docs/reviews/)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure status)"
     ]
   },
   "outputStyle": "default"
