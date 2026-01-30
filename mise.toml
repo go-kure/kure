@@ -1,7 +1,11 @@
 [tools]
+# Use exact versions for reproducibility across environments
 go = "1.24.12"
-golangci-lint = "1.64"
-git-cliff = "2"
+golangci-lint = "1.64.8"
+git-cliff = "2.7.0"
+# Required for GoReleaser SBOM generation and signing
+syft = "1.21.0"
+cosign = "2.4.3"
 
 [env]
 GOBIN = "{{config_root}}/.bin"

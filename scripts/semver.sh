@@ -4,8 +4,34 @@ set -eu
 VERSION_FILE="VERSION"
 CHANGELOG="CHANGELOG.md"
 DRY_RUN="${DRY_RUN:-0}"
+SKIP_GIT_CHECK="${SKIP_GIT_CHECK:-0}"
 
 die() { echo "error: $*" >&2; exit 1; }
+
+# Validate git state before making changes
+validate_git_state() {
+  if [ "$SKIP_GIT_CHECK" = "1" ]; then
+    return 0
+  fi
+
+  # Check for uncommitted changes
+  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+    die "working directory has uncommitted changes. Commit or stash them first."
+  fi
+
+  # Check for untracked files (excluding common patterns)
+  untracked=$(git ls-files --others --exclude-standard 2>/dev/null | head -5)
+  if [ -n "$untracked" ]; then
+    echo "warning: untracked files present (will not be included in release):" >&2
+    echo "$untracked" | sed 's/^/  /' >&2
+  fi
+
+  # Warn if not on main branch (but don't block)
+  current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+  if [ "$current_branch" != "main" ] && [ "$current_branch" != "master" ]; then
+    echo "warning: releasing from branch '$current_branch' (not main/master)" >&2
+  fi
+}
 
 read_version() {
   [ -f "$VERSION_FILE" ] || die "VERSION file not found"
@@ -123,6 +149,12 @@ case "${1:-}" in
   release)
     kind="${2:-}" # alpha|beta|stable
     [ -n "$kind" ] || die "usage: semver.sh release {alpha|beta|stable|bump} [...]"
+
+    # Validate git state before proceeding (skip in dry-run mode)
+    if [ "$DRY_RUN" != "1" ]; then
+      validate_git_state
+    fi
+
     if [ "$kind" = "bump" ]; then
       scope="${3:-}"
       [ -n "$scope" ] || die "usage: semver.sh release bump {minor|major}"

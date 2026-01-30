@@ -9,6 +9,8 @@ builds:
   - id: kure
     main: ./cmd/kure
     binary: kure
+    flags:
+      - -trimpath
     ldflags:
       - -s -w
       - -X github.com/go-kure/kure/pkg/cmd/shared.Version={{.Version}}
@@ -22,6 +24,8 @@ builds:
   - id: kurel
     main: ./cmd/kurel
     binary: kurel
+    flags:
+      - -trimpath
     ldflags:
       - -s -w
       - -X github.com/go-kure/kure/pkg/cmd/shared.Version={{.Version}}
@@ -36,14 +40,41 @@ archives:
   - id: kure-archive
     ids: [kure]
     formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "kure_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   - id: kurel-archive
     ids: [kurel]
     formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "kurel_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
+
+# Generate Software Bill of Materials for supply chain security
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+
+# Sign checksums with cosign for artifact verification
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
 
 release:
   github:
@@ -52,11 +83,6 @@ release:
   draft: false
   prerelease: auto
 
+# Disable built-in changelog - we use git-cliff for CHANGELOG.md
 changelog:
-  use: git
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
+  disable: true

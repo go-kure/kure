@@ -28,7 +28,8 @@
       "Bash(bc:*)",
       "Bash(git -C /home/serge/src/autops/wharf/kure mv:*)",
       "Bash(git -C /home/serge/src/autops/wharf/kure mv changelogs/20251202-TASK-IMPROVEMENTS-APPLIED.md docs/reviews/)",
-      "Bash(git -C /home/serge/src/autops/wharf/kure status)"
+      "Bash(git -C /home/serge/src/autops/wharf/kure status)",
+      "Bash(goreleaser release:*)"
     ]
   },
   "outputStyle": "default"

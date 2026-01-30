@@ -91,22 +91,31 @@ deps-upgrade: ## Upgrade all dependencies to latest versions
 .PHONY: build
 build: build-kure build-kurel build-demo ## Build all executables
 
+# Build ldflags - must match .goreleaser.yml for consistent version info
+LDFLAGS := -s -w \
+	-X $(MODULE)/pkg/cmd/shared.Version=$(VERSION) \
+	-X $(MODULE)/pkg/cmd/shared.GitCommit=$(GIT_COMMIT) \
+	-X $(MODULE)/pkg/cmd/shared.BuildDate=$(BUILD_TIME)
+
+# Build flags for reproducible builds
+BUILD_FLAGS := -trimpath
+
 .PHONY: build-kure
 build-kure: $(BUILD_DIR) ## Build the kure executable
 	@echo "$(COLOR_YELLOW)Building kure...$(COLOR_RESET)"
-	$(GO) build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(KURE_BIN) ./cmd/kure
+	$(GO) build $(BUILD_FLAGS) -ldflags="$(LDFLAGS)" -o $(KURE_BIN) ./cmd/kure
 	@echo "$(COLOR_GREEN)Built $(KURE_BIN)$(COLOR_RESET)"
 
 .PHONY: build-kurel
 build-kurel: $(BUILD_DIR) ## Build the kurel executable
 	@echo "$(COLOR_YELLOW)Building kurel...$(COLOR_RESET)"
-	$(GO) build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(KUREL_BIN) ./cmd/kurel
+	$(GO) build $(BUILD_FLAGS) -ldflags="$(LDFLAGS)" -o $(KUREL_BIN) ./cmd/kurel
 	@echo "$(COLOR_GREEN)Built $(KUREL_BIN)$(COLOR_RESET)"
 
 .PHONY: build-demo
 build-demo: $(BUILD_DIR) ## Build the demo executable
 	@echo "$(COLOR_YELLOW)Building demo...$(COLOR_RESET)"
-	$(GO) build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)" -o $(DEMO_BIN) ./cmd/demo
+	$(GO) build $(BUILD_FLAGS) -ldflags="$(LDFLAGS)" -o $(DEMO_BIN) ./cmd/demo
 	@echo "$(COLOR_GREEN)Built $(DEMO_BIN)$(COLOR_RESET)"
 
 $(BUILD_DIR):
@@ -417,6 +426,16 @@ release-do: ## Execute release (creates tag)
 		exit 1; \
 	fi
 	@./scripts/semver.sh release $(TYPE) $(SCOPE)
+
+.PHONY: release-snapshot
+release-snapshot: ## Test GoReleaser locally (no tag, no publish)
+	@echo "$(COLOR_YELLOW)Running GoReleaser snapshot...$(COLOR_RESET)"
+	@if ! command -v goreleaser >/dev/null 2>&1; then \
+		echo "$(COLOR_RED)goreleaser not found. Run 'make tools' to install.$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	goreleaser release --snapshot --clean
+	@echo "$(COLOR_GREEN)Snapshot build completed. Artifacts in dist/$(COLOR_RESET)"
 
 # =============================================================================
 # Default target
