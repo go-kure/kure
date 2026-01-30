@@ -1,3 +1,7 @@
+## v0.1.0-alpha.2 - 2026-01-30
+
+- Summary: (fill in)
+
 ## v0.1.0-alpha.1 - 2026-01-30
 
 - Summary: (fill in)
