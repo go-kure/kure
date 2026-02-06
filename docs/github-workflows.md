@@ -90,7 +90,7 @@ PR-only jobs (parallel, no blocking):
 
 ### Configuration
 
-- Go Version: `1.24.12`
+- Go Version: `1.24.13`
 - Golangci-lint Version: `v1.64.8`
 - Coverage Threshold: `80%`
 - K8s Versions: `0.34`, `0.35`
@@ -126,7 +126,7 @@ PR-only jobs (parallel, no blocking):
 
 ### Configuration
 
-- Go Version: `1.24.12`
+- Go Version: `1.24.13`
 - Build Tool: GoReleaser v2
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`, `windows/arm64`
 - Tag Format: `^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$`
@@ -197,11 +197,11 @@ git push origin v0.1.0-alpha.0
 
 ### Go Version
 
-All workflows use Go **1.24.12** consistently, defined via environment variable:
+All workflows use Go **1.24.13** consistently, defined via environment variable:
 
 ```yaml
 env:
-  GO_VERSION: '1.24.12'
+  GO_VERSION: '1.24.13'
 ```
 
 ### Caching
