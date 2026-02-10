@@ -71,9 +71,11 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 }
 
 // processNodeForIntegratedFlux recursively processes nodes to add integrated Flux resources.
-func (li *LayoutIntegrator) processNodeForIntegratedFlux(ml *layout.ManifestLayout, node *stack.Node, clusterName string) error {
+// The root parameter is always the top-level layout so that path-based lookups
+// resolve against the full tree (node paths are absolute).
+func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLayout, node *stack.Node, clusterName string) error {
 	// Find the corresponding layout node
-	layoutNode := li.findLayoutNode(ml, node)
+	layoutNode := li.findLayoutNode(root, node)
 	if layoutNode == nil {
 		return errors.ResourceValidationError("Node", node.Name, "layout",
 			"corresponding layout node not found", nil)
@@ -91,9 +93,9 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(ml *layout.ManifestLayo
 		layoutNode.Resources = append(layoutNode.Resources, fluxResources...)
 	}
 
-	// Process child nodes
+	// Process child nodes — always search from root for path-based matching
 	for _, child := range node.Children {
-		if err := li.processNodeForIntegratedFlux(layoutNode, child, clusterName); err != nil {
+		if err := li.processNodeForIntegratedFlux(root, child, clusterName); err != nil {
 			return err
 		}
 	}
@@ -129,16 +131,32 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	return nil
 }
 
-// findLayoutNode finds the layout node corresponding to a stack node.
+// findLayoutNode finds the layout node corresponding to a stack node using path-based matching.
+// It computes the layout's full path and compares against the node's path to avoid
+// ambiguity when nodes at different hierarchy levels share the same name.
 func (li *LayoutIntegrator) findLayoutNode(ml *layout.ManifestLayout, node *stack.Node) *layout.ManifestLayout {
-	// Check if this is the target node
-	if ml.Name == node.Name {
+	targetPath := node.GetPath()
+	return li.findLayoutNodeByPath(ml, targetPath, "")
+}
+
+// findLayoutNodeByPath recursively searches the layout tree for a node whose
+// accumulated path matches the target path.
+func (li *LayoutIntegrator) findLayoutNodeByPath(ml *layout.ManifestLayout, targetPath string, parentPath string) *layout.ManifestLayout {
+	// Build the current layout node's path
+	currentPath := ml.Name
+	if parentPath != "" && ml.Name != "" {
+		currentPath = parentPath + "/" + ml.Name
+	} else if parentPath != "" {
+		currentPath = parentPath
+	}
+
+	if currentPath == targetPath {
 		return ml
 	}
 
 	// Search in children
 	for _, child := range ml.Children {
-		if found := li.findLayoutNode(child, node); found != nil {
+		if found := li.findLayoutNodeByPath(child, targetPath, currentPath); found != nil {
 			return found
 		}
 	}

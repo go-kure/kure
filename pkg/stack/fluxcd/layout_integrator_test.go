@@ -241,8 +241,9 @@ func TestLayoutIntegrator_IntegrateWithNestedNodes(t *testing.T) {
 	}
 
 	grandchild := &stack.Node{
-		Name:   "grandchild",
-		Bundle: grandchildBundle,
+		Name:       "grandchild",
+		ParentPath: "root/child",
+		Bundle:     grandchildBundle,
 	}
 
 	childBundle := &stack.Bundle{
@@ -255,9 +256,10 @@ func TestLayoutIntegrator_IntegrateWithNestedNodes(t *testing.T) {
 	}
 
 	child := &stack.Node{
-		Name:     "child",
-		Bundle:   childBundle,
-		Children: []*stack.Node{grandchild},
+		Name:       "child",
+		ParentPath: "root",
+		Bundle:     childBundle,
+		Children:   []*stack.Node{grandchild},
 	}
 
 	rootBundle := &stack.Bundle{
