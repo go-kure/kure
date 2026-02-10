@@ -108,21 +108,47 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		}
 	}
 
+	// Default prune to true if not explicitly set
+	prune := true
+	if b.Prune != nil {
+		prune = *b.Prune
+	}
+
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
 			Kind:       "Kustomization",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      b.Name,
-			Namespace: g.DefaultNamespace,
-			Labels:    b.Labels,
+			Name:        b.Name,
+			Namespace:   g.DefaultNamespace,
+			Labels:      b.Labels,
+			Annotations: b.Annotations,
 		},
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: interval},
 			Path:     g.generatePath(b),
-			Prune:    true,
+			Prune:    prune,
 		},
+	}
+
+	// Set wait if specified
+	if b.Wait != nil && *b.Wait {
+		kust.Spec.Wait = true
+	}
+
+	// Set timeout if specified
+	if b.Timeout != "" {
+		if d, err := time.ParseDuration(b.Timeout); err == nil {
+			kust.Spec.Timeout = &metav1.Duration{Duration: d}
+		}
+	}
+
+	// Set retry interval if specified
+	if b.RetryInterval != "" {
+		if d, err := time.ParseDuration(b.RetryInterval); err == nil {
+			kust.Spec.RetryInterval = &metav1.Duration{Duration: d}
+		}
 	}
 
 	// Set source reference

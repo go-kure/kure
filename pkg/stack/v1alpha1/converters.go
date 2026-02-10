@@ -162,10 +162,22 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 			Name: b.Name,
 		},
 		Spec: BundleSpec{
-			ParentPath: b.ParentPath,
-			Interval:   b.Interval,
-			Labels:     b.Labels,
+			ParentPath:    b.ParentPath,
+			Interval:      b.Interval,
+			Labels:        b.Labels,
+			Annotations:   b.Annotations,
+			Description:   b.Description,
+			Timeout:       b.Timeout,
+			RetryInterval: b.RetryInterval,
 		},
+	}
+
+	// Convert bool pointers
+	if b.Prune != nil {
+		config.Spec.Prune = *b.Prune
+	}
+	if b.Wait != nil {
+		config.Spec.Wait = *b.Wait
 	}
 
 	// Convert source ref
@@ -212,11 +224,19 @@ func ConvertV1Alpha1ToBundle(config *BundleConfig) *stack.Bundle {
 		return nil
 	}
 
+	prune := config.Spec.Prune
+	wait := config.Spec.Wait
 	b := &stack.Bundle{
-		Name:       config.Metadata.Name,
-		ParentPath: config.Spec.ParentPath,
-		Interval:   config.Spec.Interval,
-		Labels:     config.Spec.Labels,
+		Name:          config.Metadata.Name,
+		ParentPath:    config.Spec.ParentPath,
+		Interval:      config.Spec.Interval,
+		Labels:        config.Spec.Labels,
+		Annotations:   config.Spec.Annotations,
+		Description:   config.Spec.Description,
+		Prune:         &prune,
+		Wait:          &wait,
+		Timeout:       config.Spec.Timeout,
+		RetryInterval: config.Spec.RetryInterval,
 	}
 
 	// Convert source ref

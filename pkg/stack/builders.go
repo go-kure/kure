@@ -152,9 +152,17 @@ func (cb *ClusterBuilderImpl) copyNode(node *Node) *Node {
 // copyBundle creates a deep copy of a bundle
 func (cb *ClusterBuilderImpl) copyBundle(bundle *Bundle) *Bundle {
 	newBundle := &Bundle{
-		Name:       bundle.Name,
-		ParentPath: bundle.ParentPath,
-		SourceRef:  bundle.SourceRef,
+		Name:          bundle.Name,
+		ParentPath:    bundle.ParentPath,
+		SourceRef:     bundle.SourceRef,
+		Interval:      bundle.Interval,
+		Labels:        bundle.Labels,
+		Annotations:   bundle.Annotations,
+		Description:   bundle.Description,
+		Prune:         bundle.Prune,
+		Wait:          bundle.Wait,
+		Timeout:       bundle.Timeout,
+		RetryInterval: bundle.RetryInterval,
 	}
 
 	if bundle.Applications != nil {

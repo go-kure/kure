@@ -26,6 +26,18 @@ type Bundle struct {
 	Applications []*Application
 	// Labels are common labels that should be applied to each resource.
 	Labels map[string]string
+	// Annotations are common annotations applied to the generated Kustomization resource.
+	Annotations map[string]string
+	// Description provides a human-readable description of the bundle.
+	Description string
+	// Prune enables garbage collection of resources removed from the bundle.
+	Prune *bool
+	// Wait causes the Kustomization to wait for resources to become ready.
+	Wait *bool
+	// Timeout is the maximum duration to wait for resources to be ready (e.g. "5m").
+	Timeout string
+	// RetryInterval is the interval between retry attempts for failed reconciliations (e.g. "2m").
+	RetryInterval string
 
 	// Internal fields for runtime hierarchy navigation (not serialized)
 	parent  *Bundle            `yaml:"-"` // Runtime parent reference for efficient traversal
@@ -33,10 +45,19 @@ type Bundle struct {
 }
 
 // SourceRef defines a reference to a Flux source.
+// When Kind, Name and Namespace are set, the Kustomization will reference an existing source.
+// When URL is also set, the resource generator will create the source CRD.
 type SourceRef struct {
 	Kind      string
 	Name      string
 	Namespace string
+	// URL is the repository URL (OCI or Git). When set, the resource generator
+	// creates the source CRD in addition to referencing it.
+	URL string
+	// Tag is the tag or semver reference for OCI sources.
+	Tag string
+	// Branch is the branch reference for Git sources.
+	Branch string
 }
 
 // NewBundle constructs a Bundle with the given name, resources and labels.
