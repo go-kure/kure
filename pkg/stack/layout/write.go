@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -62,7 +63,15 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		fileGroups[fileName] = append(fileGroups[fileName], obj)
 	}
 
-	for fileName, objs := range fileGroups {
+	// Sort file names for deterministic output
+	sortedFileNames := make([]string, 0, len(fileGroups))
+	for fileName := range fileGroups {
+		sortedFileNames = append(sortedFileNames, fileName)
+	}
+	sort.Strings(sortedFileNames)
+
+	for _, fileName := range sortedFileNames {
+		objs := fileGroups[fileName]
 		f, err := os.Create(filepath.Join(fullPath, fileName))
 		if err != nil {
 			return err
@@ -111,7 +120,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 
 		// Add resource files if in explicit mode OR if it's a leaf directory with no children
 		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
-			for file := range fileGroups {
+			for _, file := range sortedFileNames {
 				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
 			}
 		}
