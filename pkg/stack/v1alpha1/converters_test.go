@@ -388,6 +388,35 @@ func TestConvertBundleToV1Alpha1(t *testing.T) {
 			},
 		},
 		{
+			name: "bundle with source ref URL/Tag/Branch",
+			bundle: &stack.Bundle{
+				Name: "oci-bundle",
+				SourceRef: &stack.SourceRef{
+					Kind:      "OCIRepository",
+					Name:      "oci-source",
+					Namespace: "flux-system",
+					URL:       "oci://registry.example.com/manifests",
+					Tag:       "v1.0.0",
+				},
+			},
+			expected: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "oci-bundle",
+				},
+				Spec: BundleSpec{
+					SourceRef: &SourceRef{
+						Kind:      "OCIRepository",
+						Name:      "oci-source",
+						Namespace: "flux-system",
+						URL:       "oci://registry.example.com/manifests",
+						Tag:       "v1.0.0",
+					},
+				},
+			},
+		},
+		{
 			name: "bundle with dependencies",
 			bundle: &stack.Bundle{
 				Name: "dependent-bundle",
@@ -981,5 +1010,66 @@ func BenchmarkConvertV1Alpha1ToClusterTree(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, applications)
+	}
+}
+
+func TestSourceRefRoundTrip(t *testing.T) {
+	original := &stack.Bundle{
+		Name: "roundtrip-bundle",
+		SourceRef: &stack.SourceRef{
+			Kind:      "GitRepository",
+			Name:      "my-repo",
+			Namespace: "flux-system",
+			URL:       "https://github.com/example/repo",
+			Tag:       "v2.0.0",
+			Branch:    "main",
+		},
+	}
+
+	// Convert to v1alpha1
+	v1alpha1Config := ConvertBundleToV1Alpha1(original)
+	if v1alpha1Config == nil {
+		t.Fatal("expected non-nil v1alpha1 config")
+	}
+
+	// Verify v1alpha1 SourceRef has URL/Tag/Branch
+	sr := v1alpha1Config.Spec.SourceRef
+	if sr == nil {
+		t.Fatal("expected non-nil source ref in v1alpha1")
+	}
+	if sr.URL != "https://github.com/example/repo" {
+		t.Errorf("expected URL to be preserved, got %q", sr.URL)
+	}
+	if sr.Tag != "v2.0.0" {
+		t.Errorf("expected Tag to be preserved, got %q", sr.Tag)
+	}
+	if sr.Branch != "main" {
+		t.Errorf("expected Branch to be preserved, got %q", sr.Branch)
+	}
+
+	// Convert back
+	roundTripped := ConvertV1Alpha1ToBundle(v1alpha1Config)
+	if roundTripped == nil {
+		t.Fatal("expected non-nil bundle after round-trip")
+	}
+
+	// Verify all SourceRef fields survived the round-trip
+	if roundTripped.SourceRef.Kind != original.SourceRef.Kind {
+		t.Errorf("Kind mismatch: %q vs %q", roundTripped.SourceRef.Kind, original.SourceRef.Kind)
+	}
+	if roundTripped.SourceRef.Name != original.SourceRef.Name {
+		t.Errorf("Name mismatch: %q vs %q", roundTripped.SourceRef.Name, original.SourceRef.Name)
+	}
+	if roundTripped.SourceRef.Namespace != original.SourceRef.Namespace {
+		t.Errorf("Namespace mismatch: %q vs %q", roundTripped.SourceRef.Namespace, original.SourceRef.Namespace)
+	}
+	if roundTripped.SourceRef.URL != original.SourceRef.URL {
+		t.Errorf("URL mismatch: %q vs %q", roundTripped.SourceRef.URL, original.SourceRef.URL)
+	}
+	if roundTripped.SourceRef.Tag != original.SourceRef.Tag {
+		t.Errorf("Tag mismatch: %q vs %q", roundTripped.SourceRef.Tag, original.SourceRef.Tag)
+	}
+	if roundTripped.SourceRef.Branch != original.SourceRef.Branch {
+		t.Errorf("Branch mismatch: %q vs %q", roundTripped.SourceRef.Branch, original.SourceRef.Branch)
 	}
 }

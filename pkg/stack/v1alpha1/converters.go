@@ -186,6 +186,9 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 			Kind:      b.SourceRef.Kind,
 			Name:      b.SourceRef.Name,
 			Namespace: b.SourceRef.Namespace,
+			URL:       b.SourceRef.URL,
+			Tag:       b.SourceRef.Tag,
+			Branch:    b.SourceRef.Branch,
 		}
 	}
 
@@ -245,6 +248,9 @@ func ConvertV1Alpha1ToBundle(config *BundleConfig) *stack.Bundle {
 			Kind:      config.Spec.SourceRef.Kind,
 			Name:      config.Spec.SourceRef.Name,
 			Namespace: config.Spec.SourceRef.Namespace,
+			URL:       config.Spec.SourceRef.URL,
+			Tag:       config.Spec.SourceRef.Tag,
+			Branch:    config.Spec.SourceRef.Branch,
 		}
 	}
 

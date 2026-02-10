@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -119,5 +121,159 @@ func TestWorkflowEngine_GetBootstrapGenerator(t *testing.T) {
 	gen := wf.GetBootstrapGenerator()
 	if gen == nil {
 		t.Fatal("expected non-nil bootstrap generator")
+	}
+}
+
+func TestCreateSource_EmptyURL(t *testing.T) {
+	// When URL is empty, createSource should return nil (reference-only mode)
+	bundle := &stack.Bundle{
+		Name: "test",
+		SourceRef: &stack.SourceRef{
+			Kind:      "GitRepository",
+			Name:      "test-source",
+			Namespace: "flux-system",
+		},
+	}
+
+	wf := fluxstack.Engine()
+	objs, err := wf.GenerateFromBundle(bundle)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should only have the Kustomization, no source CRD
+	if len(objs) != 1 {
+		t.Fatalf("expected 1 object (Kustomization only), got %d", len(objs))
+	}
+	if _, ok := objs[0].(*kustv1.Kustomization); !ok {
+		t.Fatalf("expected Kustomization, got %T", objs[0])
+	}
+}
+
+func TestCreateSource_OCIRepository(t *testing.T) {
+	bundle := &stack.Bundle{
+		Name: "test",
+		SourceRef: &stack.SourceRef{
+			Kind:      "OCIRepository",
+			Name:      "my-oci-source",
+			Namespace: "flux-system",
+			URL:       "oci://registry.example.com/manifests",
+			Tag:       "v1.0.0",
+		},
+	}
+
+	wf := fluxstack.Engine()
+	objs, err := wf.GenerateFromBundle(bundle)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objs) != 2 {
+		t.Fatalf("expected 2 objects (Kustomization + OCIRepository), got %d", len(objs))
+	}
+
+	// First object is the Kustomization
+	kust, ok := objs[0].(*kustv1.Kustomization)
+	if !ok {
+		t.Fatalf("expected Kustomization, got %T", objs[0])
+	}
+	if kust.Spec.SourceRef.Kind != "OCIRepository" {
+		t.Errorf("expected sourceRef kind OCIRepository, got %s", kust.Spec.SourceRef.Kind)
+	}
+
+	// Second object is the OCIRepository
+	oci, ok := objs[1].(*sourcev1beta2.OCIRepository)
+	if !ok {
+		t.Fatalf("expected OCIRepository, got %T", objs[1])
+	}
+	if oci.Name != "my-oci-source" {
+		t.Errorf("expected name my-oci-source, got %s", oci.Name)
+	}
+	if oci.Namespace != "flux-system" {
+		t.Errorf("expected namespace flux-system, got %s", oci.Namespace)
+	}
+	if oci.Spec.URL != "oci://registry.example.com/manifests" {
+		t.Errorf("expected URL oci://registry.example.com/manifests, got %s", oci.Spec.URL)
+	}
+	if oci.Spec.Reference == nil || oci.Spec.Reference.Tag != "v1.0.0" {
+		t.Errorf("expected tag v1.0.0, got %v", oci.Spec.Reference)
+	}
+}
+
+func TestCreateSource_GitRepository(t *testing.T) {
+	bundle := &stack.Bundle{
+		Name: "test",
+		SourceRef: &stack.SourceRef{
+			Kind:      "GitRepository",
+			Name:      "my-git-source",
+			Namespace: "flux-system",
+			URL:       "https://github.com/example/repo",
+			Branch:    "main",
+		},
+	}
+
+	wf := fluxstack.Engine()
+	objs, err := wf.GenerateFromBundle(bundle)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objs) != 2 {
+		t.Fatalf("expected 2 objects (Kustomization + GitRepository), got %d", len(objs))
+	}
+
+	git, ok := objs[1].(*sourcev1.GitRepository)
+	if !ok {
+		t.Fatalf("expected GitRepository, got %T", objs[1])
+	}
+	if git.Name != "my-git-source" {
+		t.Errorf("expected name my-git-source, got %s", git.Name)
+	}
+	if git.Spec.URL != "https://github.com/example/repo" {
+		t.Errorf("expected URL https://github.com/example/repo, got %s", git.Spec.URL)
+	}
+	if git.Spec.Reference == nil || git.Spec.Reference.Branch != "main" {
+		t.Errorf("expected branch main, got %v", git.Spec.Reference)
+	}
+}
+
+func TestCreateSource_GitRepositoryWithTag(t *testing.T) {
+	bundle := &stack.Bundle{
+		Name: "test",
+		SourceRef: &stack.SourceRef{
+			Kind:      "GitRepository",
+			Name:      "my-git-source",
+			Namespace: "flux-system",
+			URL:       "https://github.com/example/repo",
+			Tag:       "v2.0.0",
+		},
+	}
+
+	wf := fluxstack.Engine()
+	objs, err := wf.GenerateFromBundle(bundle)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objs) != 2 {
+		t.Fatalf("expected 2 objects, got %d", len(objs))
+	}
+
+	git := objs[1].(*sourcev1.GitRepository)
+	if git.Spec.Reference == nil || git.Spec.Reference.Tag != "v2.0.0" {
+		t.Errorf("expected tag v2.0.0, got %v", git.Spec.Reference)
+	}
+}
+
+func TestCreateSource_InvalidKind(t *testing.T) {
+	bundle := &stack.Bundle{
+		Name: "test",
+		SourceRef: &stack.SourceRef{
+			Kind: "InvalidKind",
+			Name: "test-source",
+			URL:  "https://example.com",
+		},
+	}
+
+	wf := fluxstack.Engine()
+	_, err := wf.GenerateFromBundle(bundle)
+	if err == nil {
+		t.Fatal("expected error for invalid source kind")
 	}
 }

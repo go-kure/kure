@@ -79,6 +79,16 @@ type SourceRef struct {
 
 	// APIVersion of the source (for future cross-version references)
 	APIVersion string `yaml:"apiVersion,omitempty" json:"apiVersion,omitempty"`
+
+	// URL is the repository URL (OCI or Git). When set, the resource generator
+	// creates the source CRD in addition to referencing it.
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+
+	// Tag is the tag or semver reference for OCI/Git sources.
+	Tag string `yaml:"tag,omitempty" json:"tag,omitempty"`
+
+	// Branch is the branch reference for Git sources.
+	Branch string `yaml:"branch,omitempty" json:"branch,omitempty"`
 }
 
 // ApplicationReference references an Application configuration

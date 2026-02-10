@@ -7,9 +7,12 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	metaapi "github.com/fluxcd/pkg/apis/meta"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -173,15 +176,45 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 }
 
 // createSource creates a Flux source resource based on the source reference.
+// When the SourceRef has a URL, the corresponding source CRD is created.
+// When URL is empty, only a reference is used (the source already exists in the cluster).
 func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (client.Object, error) {
+	if ref.URL == "" {
+		return nil, nil
+	}
+
+	namespace := ref.Namespace
+	if namespace == "" {
+		namespace = g.DefaultNamespace
+	}
+
 	switch ref.Kind {
 	case "GitRepository":
-		// For now, return nil - GitRepository creation would need additional parameters
-		// This could be extended to create actual GitRepository resources
-		return nil, nil
+		spec := sourcev1.GitRepositorySpec{
+			URL:      ref.URL,
+			Interval: metav1.Duration{Duration: g.DefaultInterval},
+		}
+		if ref.Branch != "" {
+			spec.Reference = &sourcev1.GitRepositoryRef{
+				Branch: ref.Branch,
+			}
+		} else if ref.Tag != "" {
+			spec.Reference = &sourcev1.GitRepositoryRef{
+				Tag: ref.Tag,
+			}
+		}
+		return intfluxcd.CreateGitRepository(ref.Name, namespace, spec), nil
 	case "OCIRepository":
-		// For now, return nil - OCIRepository creation would need additional parameters
-		return nil, nil
+		spec := sourcev1beta2.OCIRepositorySpec{
+			URL:      ref.URL,
+			Interval: metav1.Duration{Duration: g.DefaultInterval},
+		}
+		if ref.Tag != "" {
+			spec.Reference = &sourcev1beta2.OCIRepositoryRef{
+				Tag: ref.Tag,
+			}
+		}
+		return intfluxcd.CreateOCIRepository(ref.Name, namespace, spec), nil
 	default:
 		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef",
 			[]string{"GitRepository", "OCIRepository"})
