@@ -2,6 +2,8 @@ package io
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 
@@ -82,10 +84,10 @@ func LoadFile(path string, obj interface{}) error {
 	return Unmarshal(f, obj)
 }
 
-func EncodeObjectsTo(objects []*client.Object, yaml bool) ([]byte, error) {
+func EncodeObjectsTo(objects []*client.Object, yamlOutput bool) ([]byte, error) {
 	serializer := kjson.NewSerializerWithOptions(
 		kjson.DefaultMetaFactory, kubernetes.Scheme, kubernetes.Scheme,
-		kjson.SerializerOptions{Yaml: yaml, Pretty: false, Strict: false},
+		kjson.SerializerOptions{Yaml: yamlOutput, Pretty: false, Strict: false},
 	)
 
 	var buf bytes.Buffer
@@ -99,12 +101,125 @@ func EncodeObjectsTo(objects []*client.Object, yaml bool) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// EncodeObjectsToYAML encodes Kubernetes objects to clean YAML, stripping
+// server-managed fields that should not appear in client-generated manifests
+// (null creationTimestamp, empty status objects).
 func EncodeObjectsToYAML(objects []*client.Object) ([]byte, error) {
-	return EncodeObjectsTo(objects, true)
+	var buf bytes.Buffer
+	for i, obj := range objects {
+		cleaned, err := marshalCleanResource(*obj)
+		if err != nil {
+			return nil, err
+		}
+		if i > 0 {
+			buf.WriteString("---\n")
+		}
+		buf.Write(cleaned)
+	}
+	return buf.Bytes(), nil
 }
 
 func EncodeObjectsToJSON(objects []*client.Object) ([]byte, error) {
 	return EncodeObjectsTo(objects, false)
+}
+
+// marshalCleanResource serializes a single Kubernetes resource to clean YAML,
+// stripping server-managed fields that are artifacts of K8s API machinery:
+// - metadata.creationTimestamp (zero Time marshals as null)
+// - status (zero-value structs marshal as {})
+// These fields are not actual resource data and tools like kubectl, Helm,
+// and Kustomize strip them too.
+func marshalCleanResource(obj client.Object) ([]byte, error) {
+	jsonBytes, err := json.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal resource to JSON: %w", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON for cleanup: %w", err)
+	}
+
+	cleanResourceMap(raw)
+
+	out, err := yaml.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal cleaned resource to YAML: %w", err)
+	}
+
+	return out, nil
+}
+
+// cleanResourceMap removes server-managed fields from a resource map.
+func cleanResourceMap(m map[string]interface{}) {
+	removeEmptyStatus(m)
+	cleanMetadata(m, "metadata")
+
+	// spec.template.metadata (Deployments, Jobs, etc.)
+	if spec, ok := m["spec"].(map[string]interface{}); ok {
+		cleanMetadata(spec, "template")
+
+		// spec.jobTemplate.metadata and spec.jobTemplate.spec.template.metadata (CronJobs)
+		if jobTemplate, ok := spec["jobTemplate"].(map[string]interface{}); ok {
+			cleanMetadata(jobTemplate, "metadata")
+			if jtSpec, ok := jobTemplate["spec"].(map[string]interface{}); ok {
+				cleanMetadata(jtSpec, "template")
+			}
+		}
+	}
+}
+
+// cleanMetadata removes creationTimestamp from a metadata block.
+func cleanMetadata(parent map[string]interface{}, parentKey string) {
+	child, ok := parent[parentKey].(map[string]interface{})
+	if !ok {
+		return
+	}
+	if parentKey == "metadata" {
+		removeNullCreationTimestamp(child)
+	} else {
+		if md, ok := child["metadata"].(map[string]interface{}); ok {
+			removeNullCreationTimestamp(md)
+		}
+	}
+}
+
+// removeNullCreationTimestamp deletes creationTimestamp if its value is nil.
+func removeNullCreationTimestamp(metadata map[string]interface{}) {
+	if v, exists := metadata["creationTimestamp"]; exists && v == nil {
+		delete(metadata, "creationTimestamp")
+	}
+}
+
+// removeEmptyStatus deletes the top-level "status" key if it is nil or an empty map.
+func removeEmptyStatus(m map[string]interface{}) {
+	v, exists := m["status"]
+	if !exists {
+		return
+	}
+	switch s := v.(type) {
+	case nil:
+		delete(m, "status")
+	case map[string]interface{}:
+		if isDeepEmpty(s) {
+			delete(m, "status")
+		}
+	}
+}
+
+// isDeepEmpty returns true if a map is empty or contains only empty maps recursively.
+func isDeepEmpty(m map[string]interface{}) bool {
+	for _, v := range m {
+		switch val := v.(type) {
+		case map[string]interface{}:
+			if !isDeepEmpty(val) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // PrintObjects prints objects using the specified output format and options
