@@ -3,6 +3,7 @@
 go = "1.24.13"
 golangci-lint = "1.64.8"
 git-cliff = "2.7.0"
+hugo = "0.155.3"
 # Required for GoReleaser SBOM generation and signing
 syft = "1.21.0"
 cosign = "2.4.3"
@@ -42,3 +43,26 @@ run = "git cliff -o CHANGELOG.md"
 [tasks.changelog-preview]
 description = "Preview changelog changes"
 run = "git cliff --unreleased"
+
+[tasks."site:dev"]
+description = "Start local docs dev server"
+dir = "site"
+run = """
+bash scripts/inject-frontmatter.sh
+hugo server --buildDrafts --navigateToChanged
+"""
+
+[tasks."site:build"]
+description = "Build the docs site"
+run = "bash site/scripts/build.sh"
+
+[tasks."site:check"]
+description = "Check docs site health (mounts + unmapped)"
+run = """
+bash site/scripts/check-mounts.sh
+bash site/scripts/check-unmapped-docs.sh
+"""
+
+[tasks."site:clean"]
+description = "Remove generated site artifacts"
+run = "rm -rf site/.generated site/public site/resources"

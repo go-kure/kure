@@ -1,0 +1,12 @@
+{{- $url := .Destination -}}
+{{- $isExternal := or (hasPrefix $url "http://") (hasPrefix $url "https://") (hasPrefix $url "//") -}}
+{{- if not $isExternal -}}
+  {{- /* Strip .md suffix from relative links so Hugo resolves them correctly */ -}}
+  {{- $url = replaceRE `\.md$` "/" $url -}}
+  {{- $url = replaceRE `\.md#` "/#" $url -}}
+  {{- $url = replaceRE `\.md\?` "/?" $url -}}
+{{- end -}}
+<a href="{{ $url | safeURL }}"
+  {{- with .Title }} title="{{ . }}"{{ end -}}
+  {{- if $isExternal }} target="_blank" rel="noopener"{{ end -}}
+>{{ .Text | safeHTML }}</a>

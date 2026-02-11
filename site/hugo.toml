@@ -1,0 +1,131 @@
+baseURL = 'https://www.gokure.dev/'
+languageCode = 'en-us'
+title = 'Go Kure'
+
+[params]
+  disableInlineCopyToClipBoard = true
+  customHeaderPartial = "custom-header.html"
+  themeVariant = "relearn-dark"
+
+[module]
+  [[module.imports]]
+    path = 'github.com/McShelby/hugo-theme-relearn'
+
+  # === Generated content (from inject-frontmatter.sh) ===
+
+  # Main documentation
+  [[module.mounts]]
+    source = ".generated/overview/readme.md"
+    target = "content/overview/readme.md"
+
+  [[module.mounts]]
+    source = ".generated/architecture/details.md"
+    target = "content/architecture/details.md"
+
+  # Launcher package
+  [[module.mounts]]
+    source = ".generated/packages/launcher/readme.md"
+    target = "content/packages/launcher/readme.md"
+  [[module.mounts]]
+    source = ".generated/packages/launcher/design.md"
+    target = "content/packages/launcher/design.md"
+  [[module.mounts]]
+    source = ".generated/packages/launcher/design-details.md"
+    target = "content/packages/launcher/design-details.md"
+  [[module.mounts]]
+    source = ".generated/packages/launcher/code-design.md"
+    target = "content/packages/launcher/code-design.md"
+  [[module.mounts]]
+    source = ".generated/packages/launcher/code-implementation-plan.md"
+    target = "content/packages/launcher/code-implementation-plan.md"
+  [[module.mounts]]
+    source = ".generated/packages/launcher/architecture.md"
+    target = "content/packages/launcher/architecture.md"
+
+  # Patch package
+  [[module.mounts]]
+    source = ".generated/packages/patch/design.md"
+    target = "content/packages/patch/design.md"
+  [[module.mounts]]
+    source = ".generated/packages/patch/error-handling.md"
+    target = "content/packages/patch/error-handling.md"
+  [[module.mounts]]
+    source = ".generated/packages/patch/patch-engine-design.md"
+    target = "content/packages/patch/patch-engine-design.md"
+  [[module.mounts]]
+    source = ".generated/packages/patch/path-resolution.md"
+    target = "content/packages/patch/path-resolution.md"
+
+  # Stack package
+  [[module.mounts]]
+    source = ".generated/packages/stack/design.md"
+    target = "content/packages/stack/design.md"
+  [[module.mounts]]
+    source = ".generated/packages/stack/status.md"
+    target = "content/packages/stack/status.md"
+
+  # Stack generators
+  [[module.mounts]]
+    source = ".generated/packages/stack/generators/design.md"
+    target = "content/packages/stack/generators/design.md"
+  [[module.mounts]]
+    source = ".generated/packages/stack/generators/architecture.md"
+    target = "content/packages/stack/generators/architecture.md"
+
+  # Layout package
+  [[module.mounts]]
+    source = ".generated/packages/layout/readme.md"
+    target = "content/packages/layout/readme.md"
+
+  # Getting started
+  [[module.mounts]]
+    source = ".generated/getting-started/quickstart.md"
+    target = "content/getting-started/quickstart.md"
+
+  # Architecture
+  [[module.mounts]]
+    source = ".generated/architecture/plugin-design.md"
+    target = "content/architecture/plugin-design.md"
+  [[module.mounts]]
+    source = ".generated/architecture/ux-design.md"
+    target = "content/architecture/ux-design.md"
+
+  # Reference
+  [[module.mounts]]
+    source = ".generated/reference/compatibility.md"
+    target = "content/reference/compatibility.md"
+
+  # Examples
+  [[module.mounts]]
+    source = ".generated/examples/patches.md"
+    target = "content/examples/patches.md"
+  [[module.mounts]]
+    source = ".generated/examples/generators.md"
+    target = "content/examples/generators.md"
+  [[module.mounts]]
+    source = ".generated/examples/kurel-frigate.md"
+    target = "content/examples/kurel-frigate.md"
+  [[module.mounts]]
+    source = ".generated/examples/validation.md"
+    target = "content/examples/validation.md"
+
+  # Development
+  [[module.mounts]]
+    source = ".generated/development/guide.md"
+    target = "content/development/guide.md"
+  [[module.mounts]]
+    source = ".generated/development/github-workflows.md"
+    target = "content/development/github-workflows.md"
+
+  # Changelog
+  [[module.mounts]]
+    source = ".generated/changelog/releases.md"
+    target = "content/changelog/releases.md"
+
+  # === Hand-authored content ===
+  [[module.mounts]]
+    source = "content"
+    target = "content"
+  [[module.mounts]]
+    source = "static"
+    target = "static"
