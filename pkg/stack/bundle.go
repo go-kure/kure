@@ -95,6 +95,25 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 		}
 		resources = append(resources, addresources...)
 	}
+
+	// Propagate bundle labels to all generated resources.
+	// Application-specific labels take precedence.
+	if len(a.Labels) > 0 {
+		for _, r := range resources {
+			obj := *r
+			labels := obj.GetLabels()
+			if labels == nil {
+				labels = make(map[string]string, len(a.Labels))
+			}
+			for k, v := range a.Labels {
+				if _, exists := labels[k]; !exists {
+					labels[k] = v
+				}
+			}
+			obj.SetLabels(labels)
+		}
+	}
+
 	return resources, nil
 }
 

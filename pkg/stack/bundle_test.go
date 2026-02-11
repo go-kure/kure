@@ -70,6 +70,135 @@ func TestBundleGenerate(t *testing.T) {
 	}
 }
 
+func TestBundleGenerateLabelPropagation(t *testing.T) {
+	t.Run("labels merged into resources with no labels", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Labels:       map[string]string{"env": "prod", "team": "platform"},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		labels := (*resources[0]).GetLabels()
+		if labels["env"] != "prod" || labels["team"] != "platform" {
+			t.Fatalf("expected bundle labels to be applied, got %v", labels)
+		}
+	})
+
+	t.Run("labels merged into resources with existing labels", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name:   "pod1",
+			Labels: map[string]string{"existing": "value"},
+		}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Labels:       map[string]string{"env": "prod"},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		labels := (*resources[0]).GetLabels()
+		if labels["existing"] != "value" {
+			t.Fatalf("existing label lost, got %v", labels)
+		}
+		if labels["env"] != "prod" {
+			t.Fatalf("bundle label not applied, got %v", labels)
+		}
+	})
+
+	t.Run("app labels take precedence over bundle labels", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name:   "pod1",
+			Labels: map[string]string{"env": "staging"},
+		}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Labels:       map[string]string{"env": "prod"},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		labels := (*resources[0]).GetLabels()
+		if labels["env"] != "staging" {
+			t.Fatalf("expected app label 'staging' to take precedence, got %q", labels["env"])
+		}
+	})
+
+	t.Run("nil bundle labels do not modify resources", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name:   "pod1",
+			Labels: map[string]string{"existing": "value"},
+		}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Labels:       nil,
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		labels := (*resources[0]).GetLabels()
+		if len(labels) != 1 || labels["existing"] != "value" {
+			t.Fatalf("expected labels unchanged, got %v", labels)
+		}
+	})
+
+	t.Run("empty bundle labels do not modify resources", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Labels:       map[string]string{},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		labels := (*resources[0]).GetLabels()
+		if len(labels) != 0 {
+			t.Fatalf("expected no labels, got %v", labels)
+		}
+	})
+
+	t.Run("labels propagate to resources from multiple applications", func(t *testing.T) {
+		obj1 := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		obj2 := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}})
+		app1 := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj1}})
+		app2 := NewApplication("app2", "ns2", &fakeConfig{objs: []*client.Object{&obj2}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app1, app2},
+			Labels:       map[string]string{"env": "prod"},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(resources) != 2 {
+			t.Fatalf("expected 2 resources, got %d", len(resources))
+		}
+		for i, r := range resources {
+			labels := (*r).GetLabels()
+			if labels["env"] != "prod" {
+				t.Fatalf("resource %d: expected env=prod, got %v", i, labels)
+			}
+		}
+	})
+}
+
 func TestBundleGetParentPath(t *testing.T) {
 	tests := []struct {
 		name     string
