@@ -43,7 +43,7 @@ concurrency:
 
 ```
 ┌─────────────────┐
-│   validate      │  ← Fast checks: go-version, fmt, tidy, vet, lint
+│   lint          │  ← Fast checks: go-version, fmt, tidy, vet, lint
 └────────┬────────┘
          │
     ┌────┴────┐
@@ -76,17 +76,17 @@ PR-only jobs (parallel, no blocking):
 
 ### Jobs Detail
 
-| Job | Timeout | Dependencies | Purpose |
-|-----|---------|--------------|---------|
-| `validate` | 5 min | - | Go version check, fmt, tidy, vet, lint |
-| `test` | 15 min | validate | Unit tests, race tests, coverage |
-| `security` | 10 min | validate | govulncheck, outdated deps, sensitive file check |
-| `coverage-check` | 5 min | test | 80% threshold, Codecov upload, PR comment |
-| `build` | 10 min | coverage-check | Build kure, kurel, demo |
-| `k8s-compat` | 15 min | coverage-check | K8s 0.34, 0.35 compatibility matrix |
-| `cross-platform` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
-| `analyze-changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-check` | 5 min | - | API changes need docs check (PR only) |
+| Job | Check Name | Timeout | Dependencies | Purpose |
+|-----|------------|---------|--------------|---------|
+| `validate` | `lint` | 5 min | - | Go version check, fmt, tidy, vet, lint |
+| `test` | `test` | 15 min | validate | Unit tests, race tests, coverage |
+| `security` | `Security` | 10 min | validate | govulncheck, outdated deps, sensitive file check |
+| `coverage-check` | `Coverage Check` | 5 min | test | 80% threshold, Codecov upload, PR comment |
+| `build` | `build` | 10 min | coverage-check | Build kure, kurel, demo |
+| `k8s-compat` | `K8s Compatibility` | 15 min | coverage-check | K8s 0.34, 0.35 compatibility matrix |
+| `cross-platform` | `Cross-Platform Build` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
+| `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
+| `docs-check` | `Docs Check` | 5 min | - | API changes need docs check (PR only) |
 
 ### Configuration
 
