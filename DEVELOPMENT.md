@@ -48,7 +48,8 @@ The `main` branch is protected — all changes must go through pull requests.
 
 ### Branch Protection Rules
 
-- **Required status checks** (strict): `lint`, `test`, `build`
+- **Required status checks** (strict): `lint`, `test`, `build`, `rebase-check`
+- **Auto-rebase**: open PRs are automatically rebased when main is updated (via `auto-rebase.yml`)
 - **Required reviews**: 1 approving review
 - **Linear history**: enforced (rebase only, no merge commits)
 - **Conversation resolution**: all conversations must be resolved
@@ -201,6 +202,13 @@ The project uses several GitHub Actions workflows:
 - **Triggers**: Push, PRs
 - **Purpose**: Static analysis with JetBrains Qodana
 - **Uses**: `make deps` for setup
+
+### Auto-Rebase (`.github/workflows/auto-rebase.yml`)
+- **Triggers**: Push to main
+- **Purpose**: Automatically rebases all open PRs targeting main
+- **Uses**: `peter-evans/rebase@v4`
+- **Excludes**: Dependabot PRs (`dependencies` label), draft PRs
+- **Auth**: Requires `AUTO_REBASE_PAT` secret (PAT needed to trigger CI on rebased branches)
 
 ### Release Pipeline (`.github/workflows/release.yml`)
 - **Triggers**: Version tags (`v*.*.*`)
