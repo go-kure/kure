@@ -32,7 +32,8 @@
       "Bash(goreleaser release:*)",
       "Bash(bash:*)",
       "Bash(yq:*)",
-      "Bash(./scripts/github-settings.sh:*)"
+      "Bash(./scripts/github-settings.sh:*)",
+      "Bash(python3:*)"
     ]
   },
   "outputStyle": "default"
