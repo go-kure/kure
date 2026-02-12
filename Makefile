@@ -8,6 +8,9 @@ GOPATH ?= $(shell go env GOPATH)
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
+# Ignore parent workspace files — Makefile targets test this module in isolation
+export GOWORK ?= off
+
 # Project configuration
 MODULE := $(shell head -1 go.mod | awk '{print $$2}')
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -269,7 +272,7 @@ sync-go-version: ## Sync Go version from mise.toml to all files
 		exit 1; \
 	fi; \
 	echo "Syncing to Go version: $$GO_VER"; \
-	sed -i "s/GO_VERSION: '[^']*'/GO_VERSION: '$$GO_VER'/" .github/workflows/*.yml .github/workflows/*.yaml; \
+	sed -i -E "s/^([[:space:]]*)GO_VERSION: '[^']*'/\1GO_VERSION: '$$GO_VER'/" .github/workflows/*.yml .github/workflows/*.yaml; \
 	sed -i "s/go-version: '[^']*'/go-version: '$$GO_VER'/" .github/workflows/*.yml .github/workflows/*.yaml; \
 	sed -i "s/go-version: \$${{ env.GO_VERSION }}/go-version: \$${{ env.GO_VERSION }}/" .github/workflows/*.yml .github/workflows/*.yaml; \
 	sed -i "3s/go .*/go $$GO_VER/" go.mod; \
@@ -294,8 +297,8 @@ check-go-version: ## Verify Go version consistency across all files
 	ERRORS=0; \
 	for file in .github/workflows/*.yml .github/workflows/*.yaml; do \
 		if [ -f "$$file" ]; then \
-			if grep -q "GO_VERSION:" "$$file"; then \
-				FILE_VER=$$(grep "GO_VERSION:" "$$file" | head -1 | cut -d"'" -f2); \
+			if grep -qE '^\s*GO_VERSION:' "$$file"; then \
+				FILE_VER=$$(grep -E '^\s*GO_VERSION:' "$$file" | head -1 | cut -d"'" -f2); \
 				if [ "$$FILE_VER" != "$$GO_VER" ]; then \
 					echo "$(COLOR_RED)✗ $$file has GO_VERSION: $$FILE_VER (expected $$GO_VER)$(COLOR_RESET)"; \
 					ERRORS=$$((ERRORS + 1)); \
