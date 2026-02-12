@@ -11,6 +11,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | Workflow | File | Triggers | Purpose |
 |----------|------|----------|---------|
 | [CI](#ci) | `ci.yml` | push, PR, schedule, manual | Comprehensive testing, linting, building, security |
+| [Auto-Rebase](#auto-rebase-workflow) | `auto-rebase.yml` | push to main | Rebase all open PRs when main is updated |
 | [Release](#release) | `release.yml` | version tags | GoReleaser-based release with CI validation |
 
 ---
@@ -69,9 +70,9 @@ concurrency:
 └─────────────────────┘
 
 PR-only jobs (parallel, no blocking):
-┌─────────────────┐  ┌────────────┐
-│ analyze-changes │  │ docs-check │
-└─────────────────┘  └────────────┘
+┌──────────────┐  ┌─────────────────┐  ┌────────────┐
+│ rebase-check │  │ analyze-changes │  │ docs-check │
+└──────────────┘  └─────────────────┘  └────────────┘
 ```
 
 ### Jobs Detail
@@ -85,6 +86,7 @@ PR-only jobs (parallel, no blocking):
 | `build` | `build` | 10 min | coverage-check | Build kure, kurel, demo |
 | `k8s-compat` | `K8s Compatibility` | 15 min | coverage-check | K8s 0.34, 0.35 compatibility matrix |
 | `cross-platform` | `Cross-Platform Build` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
+| `rebase-check` | `rebase-check` | 2 min | - | Verify PR branch is rebased on main (PR only) |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-check` | `Docs Check` | 5 min | - | API changes need docs check (PR only) |
 
@@ -163,6 +165,44 @@ make release-do TYPE=alpha
 # Push tag to trigger CI
 git push origin v0.1.0-alpha.0
 ```
+
+---
+
+## Auto-Rebase Workflow
+
+**File:** `.github/workflows/auto-rebase.yml`
+**Name:** `Auto-Rebase`
+
+### Triggers
+
+- Push to `main` (runs after every merge to main)
+
+### Purpose
+
+Automatically rebases all open PRs targeting main when main is updated. This mirrors the GitLab auto-rebase CI template used in other Wharf repositories.
+
+### How It Works
+
+Uses [`peter-evans/rebase@v4`](https://github.com/peter-evans/rebase) to:
+1. Find all open PRs targeting `main`
+2. Rebase each PR branch onto the latest `main`
+3. Force-push the rebased branch (triggers CI re-run)
+4. Skip PRs with conflicts (reports them without failing)
+
+### Configuration
+
+- **Excluded labels:** `dependencies` (Dependabot manages its own branches)
+- **Excluded drafts:** yes (no point rebasing work-in-progress)
+- **Fork protection:** only runs on `go-kure/kure` (forks lack the required secret)
+- **Concurrency:** `cancel-in-progress: true` (newer main state supersedes)
+
+### Authentication
+
+Requires `AUTO_REBASE_PAT` repository secret — a fine-grained PAT with:
+- Repository: `go-kure/kure` only
+- Permissions: `Contents: Read+Write`, `Pull requests: Read`
+
+A PAT is required because pushes made with `GITHUB_TOKEN` do not trigger subsequent workflow runs. The PAT ensures CI re-runs on rebased branches.
 
 ---
 

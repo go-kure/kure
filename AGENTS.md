@@ -153,7 +153,8 @@ make precommit
   git checkout -b <type>/<description> main
   ```
 - **Branch prefixes**: `feat/`, `fix/`, `docs/`, `chore/`
-- **Required CI checks** that must pass: `lint`, `test`, `build`
+- **Required CI checks** that must pass: `lint`, `test`, `build`, `rebase-check`
+- **Auto-rebase**: open PRs are automatically rebased when main is updated
 - **1 approving review** required
 - **Linear history** enforced — rebase only, no merge commits
 - **All conversations** must be resolved before merge

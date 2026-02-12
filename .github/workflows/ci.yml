@@ -25,6 +25,32 @@ concurrency:
 
 jobs:
   # =============================================================================
+  # Pre-flight: Rebase Freshness Check
+  # =============================================================================
+
+  rebase-check:
+    name: rebase-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+
+    - name: Check branch is rebased on main
+      run: |
+        git fetch origin main
+        if ! git merge-base --is-ancestor origin/main HEAD; then
+          echo "::error::Branch is not rebased on latest main. Please run: git rebase origin/main"
+          exit 1
+        fi
+        echo "Branch is up to date with main."
+
+  # =============================================================================
   # Stage 1: Fast Validation
   # =============================================================================
 
