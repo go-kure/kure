@@ -380,6 +380,24 @@ make outdated
 
 This development guide provides a comprehensive overview of the development workflow using the Makefile and CI/CD pipeline.
 
+## Documentation Updates
+
+When modifying a package's public API, update documentation in the same PR:
+
+1. **Package README** — Update the `README.md` in the package directory (e.g., `pkg/stack/README.md`)
+2. **Guides** — Check the reverse mapping in `AGENTS.md` for guides that reference the changed package
+3. **CLI reference** — Regenerated automatically by `make docs-cli` (no manual updates needed)
+
+To verify the docs site builds correctly:
+
+```bash
+# Check all mounted files exist
+bash site/scripts/check-mounts.sh
+
+# Generate CLI reference + build site
+mise run site:build
+```
+
 ## Crane Integration
 
 Kure is a dependency of the Crane project (`~/src/autops/wharf/crane`).

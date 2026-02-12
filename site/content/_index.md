@@ -6,10 +6,10 @@ type = "home"
 # Kure: Type-Safe Kubernetes Resource Generation
 
 {{< notice warning >}}
-Work in Progress: Kure is currently under active development and has not been released yet. APIs and features are subject to change.
+Work in Progress: Kure is currently under active development (v0.1.0-alpha.2). APIs and features are subject to change.
 {{< /notice >}}
 
-**Kure** is a powerful Go library for programmatically building Kubernetes resources, designed specifically for GitOps workflows. Say goodbye to complex templating engines and hello to strongly-typed, composable resource generation.
+**Kure** is a Go library for programmatically building Kubernetes resources, designed for GitOps workflows with FluxCD. Instead of complex templating engines, Kure provides strongly-typed, composable resource generation in native Go.
 
 ## Why Kure?
 
@@ -22,29 +22,9 @@ Kure solves these problems by providing:
 - **Type-safe builders** that catch errors at compile time
 - **Composable patterns** for reusable resource generation
 - **Native Go code** instead of template syntax
-- **GitOps-ready output** for Flux and ArgoCD
+- **GitOps-ready output** for Flux
 
-## Features
-
-- **Comprehensive Resource Support**
-  - Core Kubernetes resources (Deployments, Services, ConfigMaps, etc.)
-  - FluxCD resources (Kustomizations, HelmReleases, Sources)
-  - cert-manager integration
-  - External Secrets Operator
-  - MetalLB configuration
-
-- **Hierarchical Organization**
-  - Cluster → Node → Bundle → Application structure
-  - Logical grouping of related resources
-  - Clean directory layout generation
-
-- **Advanced Capabilities**
-  - JSONPath-based patching system
-  - Multi-environment support
-  - OCI registry integration
-  - Validation and error handling
-
-## Quick Start
+## Quick Example
 
 ```go
 import (
@@ -71,13 +51,22 @@ ks := fluxcd.Kustomization(&fluxcd.KustomizationConfig{
 io.Marshal(os.Stdout, ks)
 ```
 
+## Features
+
+- **Comprehensive Resource Support**: Core Kubernetes, FluxCD, cert-manager, External Secrets, MetalLB
+- **Hierarchical Organization**: Cluster, Node, Bundle, Application structure for clean GitOps layouts
+- **Declarative Patching**: JSONPath-based patching system for resource customization
+- **Kurel Package System**: Reusable application packages with patch-based customization
+
+ArgoCD support is planned but not yet production-ready.
+
 ## Learn More
 
-- [Overview](/overview) - Introduction and design philosophy
 - [Getting Started](/getting-started) - Installation and quickstart guide
-- [Architecture](/architecture) - Deep dive into Kure's design
-- [Packages](/packages) - Core library packages
+- [Concepts](/concepts) - Architecture and design philosophy
+- [Guides](/guides) - How-to guides for common workflows
 - [Examples](/examples) - See Kure in action
+- [API Reference](/api-reference) - Package documentation
 
 ## Get Involved
 

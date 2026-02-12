@@ -52,8 +52,12 @@ bash scripts/inject-frontmatter.sh
 hugo server --buildDrafts --navigateToChanged
 """
 
+[tasks."docs-cli"]
+description = "Generate CLI reference from cobra commands"
+run = "make docs-cli"
+
 [tasks."site:build"]
-description = "Build the docs site"
+description = "Build the docs site (includes CLI reference generation)"
 run = "bash site/scripts/build.sh"
 
 [tasks."site:check"]

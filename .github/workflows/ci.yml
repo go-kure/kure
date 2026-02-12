@@ -386,13 +386,17 @@ jobs:
     name: build
     runs-on: ubuntu-latest
     timeout-minutes: 1
-    needs: build-binaries
+    needs: [build-binaries, docs-build]
     if: always()
     steps:
     - name: Check build results
       run: |
         if [ "${{ needs.build-binaries.result }}" != "success" ]; then
           echo "Build matrix failed or was cancelled"
+          exit 1
+        fi
+        if [ "${{ needs.docs-build.result }}" != "success" ]; then
+          echo "Docs build failed or was cancelled"
           exit 1
         fi
 
@@ -546,6 +550,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: ${{ steps.go-version.outputs.version }}
+        check-latest: true
+
     - name: Install Hugo CLI
       run: |
         wget -q -O ${{ runner.temp }}/hugo.deb \
@@ -557,6 +574,9 @@ jobs:
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
+
+    - name: Generate CLI reference
+      run: make docs-cli
 
     - name: Check for unmapped docs
       run: bash site/scripts/check-unmapped-docs.sh

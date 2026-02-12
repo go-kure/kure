@@ -9,7 +9,7 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 ### Technology Stack
 
 - **Language**: Go 1.24
-- **Core Dependencies**: Kubernetes APIs (v0.33.2), Flux v2.6.4, cert-manager v1.16.2, MetalLB v0.15.2
+- **Core Dependencies**: Kubernetes APIs (v0.33.2), Flux v2.6.4, cert-manager v1.16.5, MetalLB v0.15.2
 - **CLI Tools**: kure (main CLI), kurel (package system), demo (comprehensive examples)
 - **Testing**: 105 test files with 100% pass rate
 - **Build System**: Comprehensive Makefile with 40+ targets, mise for cross-repo consistency
@@ -43,7 +43,6 @@ kure/
 │   │   ├── kure/     # kure command
 │   │   └── kurel/    # kurel command
 │   ├── errors/       # Error handling (use this, not fmt.Errorf)
-│   ├── fluxcd/       # Public Flux API
 │   ├── io/           # YAML serialization
 │   ├── kubernetes/   # Public K8s utilities
 │   ├── launcher/     # Package launcher
@@ -358,7 +357,7 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 - Kubernetes client libraries (v0.33.2)
 - Flux controller APIs (v1.x)
 - cert-manager (v1.16.2)
-- External Secrets (v0.18.2)
+- External Secrets (v0.19.2)
 - MetalLB (v0.15.2)
 - controller-runtime for Kubernetes integration
 
@@ -367,6 +366,48 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 - Go version pinned via mise.toml
 - Use `go mod tidy` to clean dependencies
 - Pin specific versions for stability
+
+## Documentation Synchronization
+
+Kure uses a 4-layer documentation model designed so that most content stays in sync automatically.
+
+### Layer 1: Package READMEs (auto-synced)
+
+Each `pkg/` package has a `README.md` that lives alongside the code. These are automatically mounted to the documentation site via `inject-frontmatter.sh`. When you change a package, update its README in the same PR.
+
+### Layer 2: Cross-cutting guides (manually synced)
+
+Hand-authored guides in `site/content/guides/` describe multi-package workflows. They focus on the flow (which steps, in what order) and link to package READMEs for specifics. Use the reverse mapping table below to know which guides to review.
+
+### Layer 3: CLI reference (auto-generated)
+
+Generated from cobra command definitions by `cmd/gendocs/main.go`. Run `make docs-cli` to regenerate.
+
+### Layer 4: API reference (external)
+
+Links to pkg.go.dev. Updated automatically when the module is published.
+
+### Rule
+
+**Code and documentation changes must be in the same PR.** If you modify a package's public API, update its README and check the guides listed in the reverse mapping.
+
+### Reverse Mapping: Code to Docs
+
+| Package Changed | Auto-Synced (README) | Guides to Review |
+|-----------------|---------------------|------------------|
+| `pkg/stack/` | `api-reference/stack` | `guides/flux-workflow`, `concepts/domain-model` |
+| `pkg/stack/fluxcd/` | `api-reference/flux-engine` | `guides/flux-workflow` |
+| `pkg/stack/generators/` | `api-reference/generators` | `guides/generators` |
+| `pkg/stack/layout/` | `api-reference/layout` | `guides/flux-workflow` |
+| `pkg/launcher/` | `api-reference/launcher` | `guides/kurel-packages` |
+| `pkg/patch/` | `api-reference/patch` | `guides/patching` |
+| `pkg/io/` | `api-reference/io` | `guides/library-usage` |
+| `pkg/errors/` | `api-reference/errors` | — |
+| `pkg/cli/` | `api-reference/cli` | — |
+| `pkg/kubernetes/fluxcd/` | `api-reference/fluxcd-builders` | `guides/library-usage` |
+| `pkg/logger/` | `api-reference/logger` | — |
+| `cmd/kure/` | CLI ref (auto-generated) | — |
+| `cmd/kurel/` | CLI ref (auto-generated) | — |
 
 ## Questions?
 

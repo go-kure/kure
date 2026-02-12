@@ -128,6 +128,10 @@ mise run verify
 - Always implement errors via the kure/errors package
 - When updating GitHub workflows, also update docs/github-workflows.md
 - Always use pkg/logger for logging
+- Each pkg/ package has a README.md mounted to the docs site — update it when changing public APIs
+- Code and documentation changes must be in the same PR
+- See AGENTS.md "Reverse Mapping" table to know which guides to review when changing a package
+- CLI reference is auto-generated from cobra commands via `make docs-cli`
 
 ## Crane Integration
 

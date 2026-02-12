@@ -441,6 +441,16 @@ release-snapshot: ## Test GoReleaser locally (no tag, no publish)
 	@echo "$(COLOR_GREEN)Snapshot build completed. Artifacts in dist/$(COLOR_RESET)"
 
 # =============================================================================
+# Documentation
+# =============================================================================
+
+.PHONY: docs-cli
+docs-cli: ## Generate CLI reference documentation from cobra commands
+	@echo "$(COLOR_YELLOW)Generating CLI reference docs...$(COLOR_RESET)"
+	$(GO) run ./cmd/gendocs
+	@echo "$(COLOR_GREEN)CLI reference generated$(COLOR_RESET)"
+
+# =============================================================================
 # Default target
 # =============================================================================
 
