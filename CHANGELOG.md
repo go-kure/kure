@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-alpha.3] - 2026-02-12
+
+### Fixed
+
+- Install syft in release workflow for SBOM generation
+
 ## [0.1.0-alpha.2] - 2026-02-12
 
 ### Added
