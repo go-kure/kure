@@ -695,10 +695,47 @@ jobs:
       env:
         GITLAB_DEPLOY_KEY: ${{ secrets.GITLAB_DEPLOY_KEY }}
       run: |
+        set -euo pipefail
+
+        # SSH setup
         mkdir -p ~/.ssh
         echo "$GITLAB_DEPLOY_KEY" > ~/.ssh/id_ed25519
         chmod 600 ~/.ssh/id_ed25519
         ssh-keyscan -t ed25519 gitlab.com >> ~/.ssh/known_hosts 2>/dev/null
 
+        # Add GitLab remote
         git remote add gitlab git@gitlab.com:autops/wharf/kure.git
+
+        # Divergence detection
+        echo "Fetching GitLab main branch for comparison..."
+        if git fetch gitlab main 2>/dev/null; then
+          GITLAB_SHA=$(git rev-parse FETCH_HEAD)
+          GITHUB_SHA=$(git rev-parse HEAD)
+
+          if [ "$GITLAB_SHA" = "$GITHUB_SHA" ]; then
+            echo "GitLab main is already up to date (${GITHUB_SHA:0:7})"
+          elif git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "GitLab main is behind GitHub main (fast-forward)"
+            echo "  GitLab: ${GITLAB_SHA:0:7}"
+            echo "  GitHub: ${GITHUB_SHA:0:7}"
+          else
+            echo "::error::GitLab main has diverged from GitHub main — manual intervention required"
+            echo "  GitHub main: ${GITHUB_SHA:0:7}"
+            echo "  GitLab main: ${GITLAB_SHA:0:7}"
+            MERGE_BASE=$(git merge-base FETCH_HEAD HEAD 2>/dev/null || echo "none")
+            echo "  Common ancestor: ${MERGE_BASE:0:7}"
+            exit 1
+          fi
+        else
+          echo "Could not fetch GitLab main (first push or empty repository)"
+        fi
+
+        # Push main branch
+        echo "Pushing main branch to GitLab..."
         git push gitlab HEAD:main
+
+        # Push tags (force to ensure GitHub is source of truth)
+        echo "Pushing tags to GitLab..."
+        git push --force gitlab 'refs/tags/*:refs/tags/*'
+
+        echo "Mirror sync complete"

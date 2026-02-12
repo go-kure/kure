@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-02-12
 
 ---
 
@@ -67,7 +67,12 @@ concurrency:
     ▼
 ┌─────────────────────┐
 │ cross-platform      │  ← Only on main/release branches
-└─────────────────────┘
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────┐
+│ mirror-to-gitlab (main push only, after all checks)         │
+└─────────────────────────────────────────────────────────────┘
 
 PR-only jobs (parallel, no blocking):
 ┌──────────────┐  ┌─────────────────┐  ┌────────────┐
@@ -89,6 +94,7 @@ PR-only jobs (parallel, no blocking):
 | `rebase-check` | `rebase-check` | 2 min | - | Verify PR branch is rebased on main (PR only) |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-check` | `Docs Check` | 5 min | - | API changes need docs check (PR only) |
+| `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, k8s-compat, cross-platform, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
 ### Configuration
 
