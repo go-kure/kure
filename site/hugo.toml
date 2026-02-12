@@ -13,87 +13,15 @@ title = 'Go Kure'
 
   # === Generated content (from inject-frontmatter.sh) ===
 
-  # Main documentation
-  [[module.mounts]]
-    source = ".generated/overview/readme.md"
-    target = "content/overview/readme.md"
-
-  [[module.mounts]]
-    source = ".generated/architecture/details.md"
-    target = "content/architecture/details.md"
-
-  # Launcher package
-  [[module.mounts]]
-    source = ".generated/packages/launcher/readme.md"
-    target = "content/packages/launcher/readme.md"
-  [[module.mounts]]
-    source = ".generated/packages/launcher/design.md"
-    target = "content/packages/launcher/design.md"
-  [[module.mounts]]
-    source = ".generated/packages/launcher/design-details.md"
-    target = "content/packages/launcher/design-details.md"
-  [[module.mounts]]
-    source = ".generated/packages/launcher/code-design.md"
-    target = "content/packages/launcher/code-design.md"
-  [[module.mounts]]
-    source = ".generated/packages/launcher/code-implementation-plan.md"
-    target = "content/packages/launcher/code-implementation-plan.md"
-  [[module.mounts]]
-    source = ".generated/packages/launcher/architecture.md"
-    target = "content/packages/launcher/architecture.md"
-
-  # Patch package
-  [[module.mounts]]
-    source = ".generated/packages/patch/design.md"
-    target = "content/packages/patch/design.md"
-  [[module.mounts]]
-    source = ".generated/packages/patch/error-handling.md"
-    target = "content/packages/patch/error-handling.md"
-  [[module.mounts]]
-    source = ".generated/packages/patch/patch-engine-design.md"
-    target = "content/packages/patch/patch-engine-design.md"
-  [[module.mounts]]
-    source = ".generated/packages/patch/path-resolution.md"
-    target = "content/packages/patch/path-resolution.md"
-
-  # Stack package
-  [[module.mounts]]
-    source = ".generated/packages/stack/design.md"
-    target = "content/packages/stack/design.md"
-  [[module.mounts]]
-    source = ".generated/packages/stack/status.md"
-    target = "content/packages/stack/status.md"
-
-  # Stack generators
-  [[module.mounts]]
-    source = ".generated/packages/stack/generators/design.md"
-    target = "content/packages/stack/generators/design.md"
-  [[module.mounts]]
-    source = ".generated/packages/stack/generators/architecture.md"
-    target = "content/packages/stack/generators/architecture.md"
-
-  # Layout package
-  [[module.mounts]]
-    source = ".generated/packages/layout/readme.md"
-    target = "content/packages/layout/readme.md"
-
   # Getting started
   [[module.mounts]]
     source = ".generated/getting-started/quickstart.md"
     target = "content/getting-started/quickstart.md"
 
-  # Architecture
+  # Concepts
   [[module.mounts]]
-    source = ".generated/architecture/plugin-design.md"
-    target = "content/architecture/plugin-design.md"
-  [[module.mounts]]
-    source = ".generated/architecture/ux-design.md"
-    target = "content/architecture/ux-design.md"
-
-  # Reference
-  [[module.mounts]]
-    source = ".generated/reference/compatibility.md"
-    target = "content/reference/compatibility.md"
+    source = ".generated/concepts/architecture.md"
+    target = "content/concepts/architecture.md"
 
   # Examples
   [[module.mounts]]
@@ -109,13 +37,56 @@ title = 'Go Kure'
     source = ".generated/examples/validation.md"
     target = "content/examples/validation.md"
 
-  # Development
+  # API Reference — package READMEs
   [[module.mounts]]
-    source = ".generated/development/guide.md"
-    target = "content/development/guide.md"
+    source = ".generated/api-reference/stack.md"
+    target = "content/api-reference/stack.md"
   [[module.mounts]]
-    source = ".generated/development/github-workflows.md"
-    target = "content/development/github-workflows.md"
+    source = ".generated/api-reference/flux-engine.md"
+    target = "content/api-reference/flux-engine.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/generators.md"
+    target = "content/api-reference/generators.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/layout.md"
+    target = "content/api-reference/layout.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/launcher.md"
+    target = "content/api-reference/launcher.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/patch.md"
+    target = "content/api-reference/patch.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/io.md"
+    target = "content/api-reference/io.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/errors.md"
+    target = "content/api-reference/errors.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/cli.md"
+    target = "content/api-reference/cli.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/fluxcd-builders.md"
+    target = "content/api-reference/fluxcd-builders.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/logger.md"
+    target = "content/api-reference/logger.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/compatibility.md"
+    target = "content/api-reference/compatibility.md"
+
+  # CLI Reference (auto-generated from cobra/doc)
+  [[module.mounts]]
+    source = ".generated/cli-reference"
+    target = "content/cli-reference"
+
+  # Contributing
+  [[module.mounts]]
+    source = ".generated/contributing/guide.md"
+    target = "content/contributing/guide.md"
+  [[module.mounts]]
+    source = ".generated/contributing/github-workflows.md"
+    target = "content/contributing/github-workflows.md"
 
   # Changelog
   [[module.mounts]]

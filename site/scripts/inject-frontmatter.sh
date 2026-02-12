@@ -40,54 +40,35 @@ inject_fm() {
 
 # ─── Mapping: source_path → target_path | title | weight ───
 
-# Main documentation
-inject_fm "$KURE_ROOT/README.md"                          "overview/readme.md"                          "Project README"               10
-inject_fm "$KURE_ROOT/docs/ARCHITECTURE.md"                "architecture/details.md"                     "Architecture Details"          10
-
-# Launcher package
-inject_fm "$KURE_ROOT/pkg/launcher/README.md"              "packages/launcher/readme.md"                 "Overview"                     10
-inject_fm "$KURE_ROOT/pkg/launcher/DESIGN.md"              "packages/launcher/design.md"                 "Design"                       20
-inject_fm "$KURE_ROOT/pkg/launcher/DESIGN-DETAILS.md"      "packages/launcher/design-details.md"         "Design Details"               30
-inject_fm "$KURE_ROOT/pkg/launcher/CODE-DESIGN.md"         "packages/launcher/code-design.md"            "Code Design"                  40
-inject_fm "$KURE_ROOT/pkg/launcher/CODE-IMPLEMENTATION-PLAN.md" "packages/launcher/code-implementation-plan.md" "Implementation Plan"    50
-inject_fm "$KURE_ROOT/pkg/launcher/ARCHITECTURE.md"        "packages/launcher/architecture.md"           "Architecture"                 60
-
-# Patch package
-inject_fm "$KURE_ROOT/pkg/patch/DESIGN.md"                 "packages/patch/design.md"                    "Design"                       10
-inject_fm "$KURE_ROOT/pkg/patch/ERROR_HANDLING.md"          "packages/patch/error-handling.md"            "Error Handling"               20
-inject_fm "$KURE_ROOT/pkg/patch/PATCH_ENGINE_DESIGN.md"     "packages/patch/patch-engine-design.md"       "Patch Engine Design"          30
-inject_fm "$KURE_ROOT/pkg/patch/PATH_RESOLUTION.md"         "packages/patch/path-resolution.md"           "Path Resolution"              40
-
-# Stack package
-inject_fm "$KURE_ROOT/pkg/stack/DESIGN.md"                 "packages/stack/design.md"                    "Design"                       10
-inject_fm "$KURE_ROOT/pkg/stack/STATUS.md"                  "packages/stack/status.md"                    "Status"                       20
-
-# Stack generators
-inject_fm "$KURE_ROOT/pkg/stack/generators/DESIGN.md"      "packages/stack/generators/design.md"         "Design"                       10
-inject_fm "$KURE_ROOT/pkg/stack/generators/ARCHITECTURE.md" "packages/stack/generators/architecture.md"  "Architecture"                 20
-
-# Layout package
-inject_fm "$KURE_ROOT/pkg/stack/layout/README.md"          "packages/layout/readme.md"                   "Overview"                     10
-
 # Getting started
 inject_fm "$KURE_ROOT/docs/quickstart.md"                  "getting-started/quickstart.md"               "Quickstart"                   10
 
-# Architecture
-inject_fm "$KURE_ROOT/docs/plugin-architecture-design.md"  "architecture/plugin-design.md"               "Plugin Architecture"          20
-inject_fm "$KURE_ROOT/docs/ux-design.md"                   "architecture/ux-design.md"                   "UX Design"                    30
-
-# Reference
-inject_fm "$KURE_ROOT/docs/compatibility.md"               "reference/compatibility.md"                  "Compatibility Matrix"         10
+# Concepts
+inject_fm "$KURE_ROOT/docs/ARCHITECTURE.md"                 "concepts/architecture.md"                    "Architecture"                 10
 
 # Examples
-inject_fm "$KURE_ROOT/examples/patches/README.md"          "examples/patches.md"                         "Patches"                      10
-inject_fm "$KURE_ROOT/examples/generators/README.md"        "examples/generators.md"                     "Generators"                   20
-inject_fm "$KURE_ROOT/examples/kurel/frigate/README.md"     "examples/kurel-frigate.md"                  "Kurel Frigate"                30
-inject_fm "$KURE_ROOT/examples/validation/README.md"        "examples/validation.md"                     "Validation"                   40
+inject_fm "$KURE_ROOT/examples/patches/README.md"           "examples/patches.md"                         "Patches"                      10
+inject_fm "$KURE_ROOT/examples/generators/README.md"        "examples/generators.md"                      "Generators"                   20
+inject_fm "$KURE_ROOT/examples/kurel/frigate/README.md"     "examples/kurel-frigate.md"                   "Kurel Frigate"                30
+inject_fm "$KURE_ROOT/examples/validation/README.md"        "examples/validation.md"                      "Validation"                   40
 
-# Development
-inject_fm "$KURE_ROOT/DEVELOPMENT.md"                      "development/guide.md"                        "Development Guide"            10
-inject_fm "$KURE_ROOT/docs/github-workflows.md"            "development/github-workflows.md"             "GitHub Workflows"             20
+# API Reference — package READMEs
+inject_fm "$KURE_ROOT/pkg/stack/README.md"                  "api-reference/stack.md"                      "Stack"                        10
+inject_fm "$KURE_ROOT/pkg/stack/fluxcd/README.md"           "api-reference/flux-engine.md"                "Flux Engine"                  20
+inject_fm "$KURE_ROOT/pkg/stack/generators/README.md"       "api-reference/generators.md"                 "Generators"                   30
+inject_fm "$KURE_ROOT/pkg/stack/layout/README.md"           "api-reference/layout.md"                     "Layout Engine"                40
+inject_fm "$KURE_ROOT/pkg/launcher/README.md"               "api-reference/launcher.md"                   "Launcher"                     50
+inject_fm "$KURE_ROOT/pkg/patch/README.md"                  "api-reference/patch.md"                      "Patch"                        60
+inject_fm "$KURE_ROOT/pkg/io/README.md"                     "api-reference/io.md"                         "IO"                           70
+inject_fm "$KURE_ROOT/pkg/errors/README.md"                 "api-reference/errors.md"                     "Errors"                       80
+inject_fm "$KURE_ROOT/pkg/cli/README.md"                    "api-reference/cli.md"                        "CLI Utilities"                90
+inject_fm "$KURE_ROOT/pkg/kubernetes/fluxcd/README.md"      "api-reference/fluxcd-builders.md"            "FluxCD Builders"              100
+inject_fm "$KURE_ROOT/pkg/logger/README.md"                 "api-reference/logger.md"                     "Logger"                       110
+inject_fm "$KURE_ROOT/docs/compatibility.md"                "api-reference/compatibility.md"              "Compatibility Matrix"         120
+
+# Contributing
+inject_fm "$KURE_ROOT/DEVELOPMENT.md"                      "contributing/guide.md"                       "Development Guide"            10
+inject_fm "$KURE_ROOT/docs/github-workflows.md"            "contributing/github-workflows.md"            "GitHub Workflows"             20
 
 # Changelog
 inject_fm "$KURE_ROOT/CHANGELOG.md"                        "changelog/releases.md"                       "Releases"                     10
