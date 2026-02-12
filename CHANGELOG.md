@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 ## [0.1.0-alpha.3] - 2026-02-12
 
+### Documentation
+
+- Add changelog entry for v0.1.0-alpha.3
+
 ### Fixed
 
 - Install syft in release workflow for SBOM generation
@@ -48,6 +52,10 @@ All notable changes to this project will be documented in this file.
 - Use path-based matching in findLayoutNode()
 - Anchor GO_VERSION patterns to avoid matching HUGO_VERSION
 - Add rollup build gate job to satisfy branch protection check
+
+### Release
+
+- V0.1.0-alpha.2
 
 ## [0.1.0-alpha.1] - 2026-01-30
 
