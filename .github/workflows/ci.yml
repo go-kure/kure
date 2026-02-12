@@ -673,3 +673,32 @@ jobs:
             echo "::warning::Public API changes detected but no documentation updates found. Consider updating README.md or adding examples."
           fi
         fi
+
+  # =============================================================================
+  # Stage 6: Mirror to GitLab (main only, after all checks pass)
+  # =============================================================================
+
+  mirror-to-gitlab:
+    name: Mirror to GitLab
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build, security, k8s-compat, cross-platform, docs-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Push to GitLab mirror
+      env:
+        GITLAB_DEPLOY_KEY: ${{ secrets.GITLAB_DEPLOY_KEY }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "$GITLAB_DEPLOY_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -t ed25519 gitlab.com >> ~/.ssh/known_hosts 2>/dev/null
+
+        git remote add gitlab git@gitlab.com:autops/wharf/kure.git
+        git push gitlab HEAD:main
