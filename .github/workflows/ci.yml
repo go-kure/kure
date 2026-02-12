@@ -305,8 +305,8 @@ jobs:
   # Stage 4: Build and K8s Compatibility (parallel)
   # =============================================================================
 
-  build:
-    name: build
+  build-binaries:
+    name: Build ${{ matrix.target }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: coverage-check
@@ -355,6 +355,20 @@ jobs:
         name: ${{ matrix.target }}-linux-amd64
         path: bin/${{ matrix.target }}
         retention-days: 7
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    needs: build-binaries
+    if: always()
+    steps:
+    - name: Check build results
+      run: |
+        if [ "${{ needs.build-binaries.result }}" != "success" ]; then
+          echo "Build matrix failed or was cancelled"
+          exit 1
+        fi
 
   k8s-compat:
     name: K8s Compatibility
@@ -417,7 +431,7 @@ jobs:
     name: Cross-Platform Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: build
+    needs: build-binaries
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
