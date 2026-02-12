@@ -145,6 +145,21 @@ make check
 make precommit
 ```
 
+## Git Workflow
+
+- **`main` is protected** — never commit directly to `main`
+- Always create a feature branch from `main` before making changes:
+  ```bash
+  git checkout -b <type>/<description> main
+  ```
+- **Branch prefixes**: `feat/`, `fix/`, `docs/`, `chore/`
+- **Required CI checks** that must pass: `lint`, `test`, `build`
+- **1 approving review** required
+- **Linear history** enforced — rebase only, no merge commits
+- **All conversations** must be resolved before merge
+- Use `gh pr create` to open pull requests
+- PR template: `.github/PULL_REQUEST_TEMPLATE.md`
+
 ## Code Conventions
 
 ### Function Naming

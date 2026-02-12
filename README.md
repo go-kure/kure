@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/go-kure/kure/actions/workflows/ci.yml/badge.svg)](https://github.com/go-kure/kure/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/go-kure/kure/branch/main/graph/badge.svg)](https://codecov.io/gh/go-kure/kure)
-[![Go Report Card](https://goreportcard.com/badge/github.com/go-kure/kure)](https://goreportcard.com/report/github.com/go-kure/kure)
+[![Go Report Card](https://img.shields.io/badge/go%20report-A+-brightgreen)](https://goreportcard.com/report/github.com/go-kure/kure)
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure.svg)](https://pkg.go.dev/github.com/go-kure/kure)
 [![License](https://img.shields.io/github/license/go-kure/kure)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/go-kure/kure)](https://github.com/go-kure/kure/releases/latest)

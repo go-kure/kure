@@ -15,6 +15,47 @@ make all
 make check
 ```
 
+## Contributing Workflow
+
+The `main` branch is protected — all changes must go through pull requests.
+
+### Branch Workflow
+
+1. **Create a feature branch** from `main`:
+   ```bash
+   git checkout -b feat/my-feature main
+   ```
+   Use branch prefixes: `feat/`, `fix/`, `docs/`, `chore/`
+
+2. **Develop and test locally**:
+   ```bash
+   make check       # Quick validation
+   make precommit   # Full pre-commit checks
+   ```
+
+3. **Push and create a pull request**:
+   ```bash
+   git push -u origin feat/my-feature
+   gh pr create
+   ```
+   Fill out the PR template (`.github/PULL_REQUEST_TEMPLATE.md`).
+
+4. **Pass required CI checks**: `lint`, `test`, `build`
+
+5. **Get 1 approving review**, resolve all conversations
+
+6. **Merge** (linear history required — rebase, no merge commits)
+
+### Branch Protection Rules
+
+- **Required status checks** (strict): `lint`, `test`, `build`
+- **Required reviews**: 1 approving review
+- **Linear history**: enforced (rebase only, no merge commits)
+- **Conversation resolution**: all conversations must be resolved
+- **Force pushes**: disabled
+- **Branch deletion**: disabled
+- **Enforced for admins**: yes
+
 ## Development Workflow
 
 ### 1. Initial Setup
