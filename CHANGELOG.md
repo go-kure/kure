@@ -1,6 +1,48 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-alpha.2] - 2026-02-12
+
+### Added
+
+- Deterministic kustomization.yaml ordering
+- Add missing Bundle fields (Prune, Wait, Timeout, etc.)
+- Clean YAML output in EncodeObjectsToYAML by default
+- Implement createSource() for OCIRepository/GitRepository
+- Add WriteToTar(io.Writer) for in-memory layout generation
+- Propagate Bundle.Labels to all generated resources
+- Rename CI job names to match branch protection check names
+- Add Hugo documentation site with CI/CD and mise tasks
+- Add auto-rebase workflow and rebase-check job
+
+### Build
+
+- Improve release workflow security and reproducibility
+
+### CI
+
+- Add GitLab mirror push after all checks pass
+- Add divergence detection and tag sync to GitLab mirror
+
+### Dependencies
+
+- Bump github.com/google/cel-go from 0.26.1 to 0.27.0
+
+### Documentation
+
+- Archive completed PLAN.md to docs/history/
+- Streamline README as landing page with badges
+- Use shields.io badge for Go Report Card
+- Restructure site around user needs with code-synced READMEs
+
+### Fixed
+
+- Use git-cliff for changelog generation in release script
+- Bump Go 1.24.12 → 1.24.13, add govulncheck summary to CI
+- Use path-based matching in findLayoutNode()
+- Anchor GO_VERSION patterns to avoid matching HUGO_VERSION
+- Add rollup build gate job to satisfy branch protection check
+
 ## [0.1.0-alpha.1] - 2026-01-30
 
 ### Fixed
