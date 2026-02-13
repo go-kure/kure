@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 ## [0.1.0-alpha.3] - 2026-02-12
 
+### Breaking Changes
+
+- **`Application.Config`** field changed from `*ApplicationConfig` (pointer-to-interface) to `ApplicationConfig` (interface directly). Update usages: `Config: &myConfig` → `Config: myConfig`
+
 ### Documentation
 
 - Add changelog entry for v0.1.0-alpha.3
