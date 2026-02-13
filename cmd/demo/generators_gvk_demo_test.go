@@ -11,7 +11,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 
 	// Import generators to register them
 	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload"
@@ -357,7 +356,7 @@ func TestBundleWithMultipleGenerators(t *testing.T) {
 }
 
 func TestRegisteredGeneratorTypes(t *testing.T) {
-	registeredTypes := generators.ListKinds()
+	registeredTypes := stack.ListApplicationConfigGVKs()
 
 	if len(registeredTypes) == 0 {
 		t.Error("No generator types are registered")

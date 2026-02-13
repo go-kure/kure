@@ -4,7 +4,7 @@ The `generators` package provides a type-safe system for creating Kubernetes app
 
 ## Overview
 
-Generators use the GroupVersionKind (GVK) type system to identify and instantiate application configurations. Each generator is registered in a global registry and can be referenced by its GVK identifier.
+Generators use the GroupVersionKind (GVK) type system to identify and instantiate application configurations. Each generator is registered in the `stack` package's global registry and can be referenced by its GVK identifier.
 
 ## Available Generators
 
@@ -19,13 +19,10 @@ Generators use the GroupVersionKind (GVK) type system to identify and instantiat
 ### Creating a Generator from GVK
 
 ```go
-import "github.com/go-kure/kure/pkg/stack/generators"
+import "github.com/go-kure/kure/pkg/stack"
 
-// Look up generator by GVK
-factory, err := generators.GetGenerator("generators/AppWorkload")
-
-// Create application config from YAML configuration
-config, err := factory.FromConfig(yamlData)
+// Create application config by apiVersion and kind
+config, err := stack.CreateApplicationConfig("generators.gokure.dev/v1alpha1", "AppWorkload")
 
 // Use in domain model
 app := stack.NewApplication("my-app", "default", config)
@@ -56,14 +53,20 @@ spec:
 Register custom generators:
 
 ```go
-generators.Register("mycompany/CustomApp", &MyGeneratorFactory{})
+stack.RegisterApplicationConfig(gvk.GVK{
+    Group:   "mycompany.dev",
+    Version: "v1",
+    Kind:    "CustomApp",
+}, func() stack.ApplicationConfig {
+    return &MyCustomConfig{}
+})
 ```
 
 Query available generators:
 
 ```go
 // List all registered generator GVKs
-gvks := generators.ListRegistered()
+gvks := stack.ListApplicationConfigGVKs()
 ```
 
 ## Sub-packages

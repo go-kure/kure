@@ -8,7 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 	_ "github.com/go-kure/kure/pkg/stack/generators/appworkload" // Register AppWorkload
 	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"    // Register FluxHelm
 )
@@ -206,7 +205,7 @@ func DemoGVKGenerators() {
 	fmt.Println("\n5. Registered Generator Types:")
 	fmt.Println(strings.Repeat("-", 40))
 
-	registeredTypes := generators.ListKinds()
+	registeredTypes := stack.ListApplicationConfigGVKs()
 	for _, gvk := range registeredTypes {
 		fmt.Printf("  - %s\n", gvk)
 	}

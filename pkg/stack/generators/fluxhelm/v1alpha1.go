@@ -10,22 +10,14 @@ import (
 )
 
 func init() {
-	// Register the FluxHelm v1alpha1 generator with both registries
-	gvkObj := gvk.GVK{
+	// Register the FluxHelm v1alpha1 generator
+	stack.RegisterApplicationConfig(gvk.GVK{
 		Group:   "generators.gokure.dev",
 		Version: "v1alpha1",
 		Kind:    "FluxHelm",
-	}
-
-	factory := func() stack.ApplicationConfig {
+	}, func() stack.ApplicationConfig {
 		return &ConfigV1Alpha1{}
-	}
-
-	// Register with generators package for backward compatibility
-	generators.Register(generators.GVK(gvkObj), factory)
-
-	// Register with stack package for direct usage
-	stack.RegisterApplicationConfig(gvkObj, factory)
+	})
 }
 
 // ConfigV1Alpha1 generates Flux HelmRelease and source resources

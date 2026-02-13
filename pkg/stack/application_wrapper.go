@@ -22,6 +22,16 @@ func CreateApplicationConfig(apiVersion, kind string) (ApplicationConfig, error)
 	return applicationConfigRegistry.Create(parsed)
 }
 
+// ListApplicationConfigGVKs returns all registered ApplicationConfig GVKs
+func ListApplicationConfigGVKs() []gvk.GVK {
+	return applicationConfigRegistry.ListGVKs()
+}
+
+// HasApplicationConfigGVK checks if an ApplicationConfig is registered for the given apiVersion and kind
+func HasApplicationConfigGVK(apiVersion, kind string) bool {
+	return applicationConfigRegistry.HasAPIVersion(apiVersion, kind)
+}
+
 // ApplicationWrapper provides type detection and unmarshaling for ApplicationConfig
 type ApplicationWrapper struct {
 	APIVersion string              `yaml:"apiVersion" json:"apiVersion"`

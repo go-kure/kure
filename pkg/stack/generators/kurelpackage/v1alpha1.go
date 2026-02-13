@@ -20,21 +20,13 @@ import (
 
 func init() {
 	// Register the KurelPackage v1alpha1 generator
-	gvkObj := gvk.GVK{
+	stack.RegisterApplicationConfig(gvk.GVK{
 		Group:   "generators.gokure.dev",
 		Version: "v1alpha1",
 		Kind:    "KurelPackage",
-	}
-
-	factory := func() stack.ApplicationConfig {
+	}, func() stack.ApplicationConfig {
 		return &ConfigV1Alpha1{}
-	}
-
-	// Register with generators package for backward compatibility
-	generators.Register(generators.GVK(gvkObj), factory)
-
-	// Register with stack package for direct usage
-	stack.RegisterApplicationConfig(gvkObj, factory)
+	})
 }
 
 // ConfigV1Alpha1 generates a kurel package structure
