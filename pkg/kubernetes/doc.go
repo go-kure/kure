@@ -40,4 +40,50 @@
 //
 // All setter functions return an error when passed a nil PDB pointer,
 // using [github.com/go-kure/kure/pkg/errors.ErrNilPodDisruptionBudget].
+//
+// # Deployment Builders
+//
+// [CreateDeployment] allocates a fully initialised apps/v1 Deployment.
+// The remaining helpers follow the Add*/Set* convention:
+//
+//   - [SetDeploymentPodSpec], [SetDeploymentReplicas], [SetDeploymentStrategy]
+//   - [AddDeploymentContainer], [AddDeploymentInitContainer], [AddDeploymentVolume]
+//   - [SetDeploymentServiceAccountName], [SetDeploymentSecurityContext]
+//   - [SetDeploymentAffinity], [SetDeploymentNodeSelector]
+//   - [AddDeploymentToleration], [AddDeploymentTopologySpreadConstraints]
+//   - [AddDeploymentImagePullSecret]
+//   - [SetDeploymentRevisionHistoryLimit], [SetDeploymentMinReadySeconds], [SetDeploymentProgressDeadlineSeconds]
+//
+// All setter/adder functions return an error when passed a nil Deployment pointer,
+// using [github.com/go-kure/kure/pkg/errors.ErrNilDeployment].
+//
+// # Service Builders
+//
+// [CreateService] allocates a fully initialised v1 Service.
+// The remaining helpers follow the Add*/Set* convention:
+//
+//   - [AddServicePort], [SetServiceSelector], [SetServiceType]
+//   - [SetServiceClusterIP], [AddServiceExternalIP], [SetServiceLoadBalancerIP]
+//   - [SetServiceExternalTrafficPolicy], [SetServiceSessionAffinity]
+//   - [SetServiceLoadBalancerClass], [SetServicePublishNotReadyAddresses]
+//   - [AddServiceLabel], [AddServiceAnnotation], [SetServiceLabels], [SetServiceAnnotations]
+//   - [AddServiceLoadBalancerSourceRange], [SetServiceLoadBalancerSourceRanges]
+//   - [SetServiceIPFamilies], [SetServiceIPFamilyPolicy], [SetServiceInternalTrafficPolicy]
+//   - [SetServiceAllocateLoadBalancerNodePorts], [SetServiceExternalName]
+//   - [SetServiceHealthCheckNodePort], [SetServiceSessionAffinityConfig]
+//
+// All setter/adder functions return an error when passed a nil Service pointer,
+// using [github.com/go-kure/kure/pkg/errors.ErrNilService].
+//
+// # Ingress Builders
+//
+// [CreateIngress] allocates a fully initialised networking/v1 Ingress.
+// [CreateIngressRule] and [CreateIngressPath] create building blocks for rules.
+// The remaining helpers follow the Add*/Set* convention:
+//
+//   - [AddIngressRule], [AddIngressRulePath], [AddIngressTLS]
+//   - [SetIngressDefaultBackend], [SetIngressClassName]
+//
+// All setter/adder functions return an error when passed a nil Ingress pointer,
+// using [github.com/go-kure/kure/pkg/errors.ErrNilIngress].
 package kubernetes
