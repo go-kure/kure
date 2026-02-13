@@ -53,6 +53,15 @@ yamlData, err := io.EncodeObjectsToYAML(objects)
 jsonData, err := io.EncodeObjectsToJSON(objects)
 ```
 
+### Deterministic Field Ordering
+
+```go
+// Encode with Kubernetes-conventional field ordering
+opts := io.EncodeOptions{KubernetesFieldOrder: true}
+yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
+// Output: apiVersion, kind, metadata, spec, ... status (last)
+```
+
 ## Printing
 
 ### Output Formats

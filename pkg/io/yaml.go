@@ -105,9 +105,17 @@ func EncodeObjectsTo(objects []*client.Object, yamlOutput bool) ([]byte, error) 
 // server-managed fields that should not appear in client-generated manifests
 // (null creationTimestamp, empty status objects).
 func EncodeObjectsToYAML(objects []*client.Object) ([]byte, error) {
+	return EncodeObjectsToYAMLWithOptions(objects, EncodeOptions{})
+}
+
+// EncodeObjectsToYAMLWithOptions encodes Kubernetes objects to clean YAML with
+// configurable output options. When opts.KubernetesFieldOrder is true,
+// top-level fields are emitted in the conventional order used by kubectl,
+// Helm, and Kustomize (apiVersion, kind, metadata, spec, ..., status last).
+func EncodeObjectsToYAMLWithOptions(objects []*client.Object, opts EncodeOptions) ([]byte, error) {
 	var buf bytes.Buffer
 	for i, obj := range objects {
-		cleaned, err := marshalCleanResource(*obj)
+		cleaned, err := marshalCleanResource(*obj, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +137,7 @@ func EncodeObjectsToJSON(objects []*client.Object) ([]byte, error) {
 // - status (zero-value structs marshal as {})
 // These fields are not actual resource data and tools like kubectl, Helm,
 // and Kustomize strip them too.
-func marshalCleanResource(obj client.Object) ([]byte, error) {
+func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error) {
 	jsonBytes, err := json.Marshal(obj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal resource to JSON: %w", err)
@@ -141,6 +149,10 @@ func marshalCleanResource(obj client.Object) ([]byte, error) {
 	}
 
 	cleanResourceMap(raw)
+
+	if opts.KubernetesFieldOrder {
+		return marshalOrderedYAML(raw)
+	}
 
 	out, err := yaml.Marshal(raw)
 	if err != nil {
