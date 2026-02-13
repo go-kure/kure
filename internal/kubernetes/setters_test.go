@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -1076,54 +1075,6 @@ func TestSetStatefulSetPodManagementPolicy_Success(t *testing.T) {
 	}
 }
 
-// HPA setter tests
-func TestSetHPAMinMaxReplicas_Success(t *testing.T) {
-	hpa := CreateHorizontalPodAutoscaler("test", "default")
-	err := SetHPAMinMaxReplicas(hpa, 2, 10)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if hpa.Spec.MinReplicas == nil || *hpa.Spec.MinReplicas != 2 {
-		t.Fatal("expected MinReplicas to be 2")
-	}
-	if hpa.Spec.MaxReplicas != 10 {
-		t.Fatal("expected MaxReplicas to be 10")
-	}
-}
-
-func TestAddHPACustomMetric_Success(t *testing.T) {
-	hpa := CreateHorizontalPodAutoscaler("test", "default")
-	metric := autoscalingv2.MetricSpec{
-		Type: autoscalingv2.ResourceMetricSourceType,
-		Resource: &autoscalingv2.ResourceMetricSource{
-			Name: corev1.ResourceCPU,
-			Target: autoscalingv2.MetricTarget{
-				Type:               autoscalingv2.UtilizationMetricType,
-				AverageUtilization: ptrInt32(80),
-			},
-		},
-	}
-	err := AddHPACustomMetric(hpa, metric)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if len(hpa.Spec.Metrics) != 1 {
-		t.Fatal("expected Metric to be added")
-	}
-}
-
-func TestSetHPABehavior_Success(t *testing.T) {
-	hpa := CreateHorizontalPodAutoscaler("test", "default")
-	behavior := &autoscalingv2.HorizontalPodAutoscalerBehavior{}
-	err := SetHPABehavior(hpa, behavior)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if hpa.Spec.Behavior == nil {
-		t.Fatal("expected Behavior to be set")
-	}
-}
-
 // PDB setter tests
 func TestSetPDBMinAvailable_Success(t *testing.T) {
 	pdb := CreatePodDisruptionBudget("test", "default")
@@ -1338,9 +1289,4 @@ func TestSetServiceSessionAffinity_Success(t *testing.T) {
 	if svc.Spec.SessionAffinity != corev1.ServiceAffinityClientIP {
 		t.Fatal("expected SessionAffinity to be set")
 	}
-}
-
-// Helper function
-func ptrInt32(i int32) *int32 {
-	return &i
 }
