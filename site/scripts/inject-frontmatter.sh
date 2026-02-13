@@ -62,6 +62,7 @@ inject_fm "$KURE_ROOT/pkg/patch/README.md"                  "api-reference/patch
 inject_fm "$KURE_ROOT/pkg/io/README.md"                     "api-reference/io.md"                         "IO"                           70
 inject_fm "$KURE_ROOT/pkg/errors/README.md"                 "api-reference/errors.md"                     "Errors"                       80
 inject_fm "$KURE_ROOT/pkg/cli/README.md"                    "api-reference/cli.md"                        "CLI Utilities"                90
+inject_fm "$KURE_ROOT/pkg/kubernetes/README.md"             "api-reference/kubernetes-builders.md"        "Kubernetes Builders"           95
 inject_fm "$KURE_ROOT/pkg/kubernetes/fluxcd/README.md"      "api-reference/fluxcd-builders.md"            "FluxCD Builders"              100
 inject_fm "$KURE_ROOT/pkg/logger/README.md"                 "api-reference/logger.md"                     "Logger"                       110
 inject_fm "$KURE_ROOT/docs/compatibility.md"                "api-reference/compatibility.md"              "Compatibility Matrix"         120

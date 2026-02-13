@@ -66,6 +66,9 @@ title = 'Go Kure'
     source = ".generated/api-reference/cli.md"
     target = "content/api-reference/cli.md"
   [[module.mounts]]
+    source = ".generated/api-reference/kubernetes-builders.md"
+    target = "content/api-reference/kubernetes-builders.md"
+  [[module.mounts]]
     source = ".generated/api-reference/fluxcd-builders.md"
     target = "content/api-reference/fluxcd-builders.md"
   [[module.mounts]]
