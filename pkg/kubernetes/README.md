@@ -100,6 +100,27 @@ err = kubernetes.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"}
 err = kubernetes.AddDeploymentToleration(dep, &corev1.Toleration{Key: "dedicated", Value: "web"})
 ```
 
+## CronJob Builders
+
+```go
+// Create a CronJob
+cj := kubernetes.CreateCronJob("my-job", "default", "*/5 * * * *")
+
+// Add a container
+container := &corev1.Container{Name: "worker", Image: "busybox:1.36"}
+err := kubernetes.AddCronJobContainer(cj, container)
+
+// Configure schedule and policies
+err = kubernetes.SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent)
+err = kubernetes.SetCronJobSuccessfulJobsHistoryLimit(cj, 3)
+err = kubernetes.SetCronJobFailedJobsHistoryLimit(cj, 1)
+
+// Configure pod template
+err = kubernetes.SetCronJobServiceAccountName(cj, "my-sa")
+err = kubernetes.SetCronJobNodeSelector(cj, map[string]string{"role": "batch"})
+err = kubernetes.AddCronJobToleration(cj, &corev1.Toleration{Key: "dedicated", Value: "batch"})
+```
+
 ## Service Builders
 
 ```go
