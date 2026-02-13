@@ -1075,31 +1075,6 @@ func TestSetStatefulSetPodManagementPolicy_Success(t *testing.T) {
 	}
 }
 
-// PDB setter tests
-func TestSetPDBMinAvailable_Success(t *testing.T) {
-	pdb := CreatePodDisruptionBudget("test", "default")
-	minAvailable := intstr.FromInt(2)
-	err := SetPDBMinAvailable(pdb, minAvailable)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if pdb.Spec.MinAvailable == nil {
-		t.Fatal("expected MinAvailable to be set")
-	}
-}
-
-func TestSetPDBMaxUnavailable_Success(t *testing.T) {
-	pdb := CreatePodDisruptionBudget("test", "default")
-	maxUnavailable := intstr.FromInt(1)
-	err := SetPDBMaxUnavailable(pdb, maxUnavailable)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if pdb.Spec.MaxUnavailable == nil {
-		t.Fatal("expected MaxUnavailable to be set")
-	}
-}
-
 // PVC setter tests
 func TestSetPVCStorageClassName_Success(t *testing.T) {
 	pvc := CreatePersistentVolumeClaim("test", "default")

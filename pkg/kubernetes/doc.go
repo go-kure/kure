@@ -28,4 +28,16 @@
 //
 // All setter/adder functions return an error when passed a nil HPA pointer,
 // using [github.com/go-kure/kure/pkg/errors.ErrNilHorizontalPodAutoscaler].
+//
+// # PDB Builders
+//
+// [CreatePodDisruptionBudget] allocates a fully initialised policy/v1
+// PodDisruptionBudget.  The remaining PDB helpers follow the Set* convention:
+//
+//   - [SetPDBMinAvailable], [SetPDBMaxUnavailable] — disruption budget (mutually exclusive)
+//   - [SetPDBSelector] — label selector
+//   - [SetPDBLabels], [SetPDBAnnotations] — metadata
+//
+// All setter functions return an error when passed a nil PDB pointer,
+// using [github.com/go-kure/kure/pkg/errors.ErrNilPodDisruptionBudget].
 package kubernetes

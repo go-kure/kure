@@ -5,7 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/go-kure/kure/internal/validation"
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // CreatePodDisruptionBudget creates a new PodDisruptionBudget with the given name and namespace.
@@ -30,9 +30,8 @@ func CreatePodDisruptionBudget(name, namespace string) *policyv1.PodDisruptionBu
 
 // SetPDBMinAvailable sets MinAvailable and clears MaxUnavailable (mutually exclusive).
 func SetPDBMinAvailable(pdb *policyv1.PodDisruptionBudget, val intstr.IntOrString) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodDisruptionBudget(pdb); err != nil {
-		return err
+	if pdb == nil {
+		return errors.ErrNilPodDisruptionBudget
 	}
 	pdb.Spec.MinAvailable = &val
 	pdb.Spec.MaxUnavailable = nil
@@ -41,9 +40,8 @@ func SetPDBMinAvailable(pdb *policyv1.PodDisruptionBudget, val intstr.IntOrStrin
 
 // SetPDBMaxUnavailable sets MaxUnavailable and clears MinAvailable (mutually exclusive).
 func SetPDBMaxUnavailable(pdb *policyv1.PodDisruptionBudget, val intstr.IntOrString) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodDisruptionBudget(pdb); err != nil {
-		return err
+	if pdb == nil {
+		return errors.ErrNilPodDisruptionBudget
 	}
 	pdb.Spec.MaxUnavailable = &val
 	pdb.Spec.MinAvailable = nil
@@ -52,9 +50,8 @@ func SetPDBMaxUnavailable(pdb *policyv1.PodDisruptionBudget, val intstr.IntOrStr
 
 // SetPDBSelector sets the label selector for the PDB.
 func SetPDBSelector(pdb *policyv1.PodDisruptionBudget, selector *metav1.LabelSelector) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodDisruptionBudget(pdb); err != nil {
-		return err
+	if pdb == nil {
+		return errors.ErrNilPodDisruptionBudget
 	}
 	pdb.Spec.Selector = selector
 	return nil
@@ -62,9 +59,8 @@ func SetPDBSelector(pdb *policyv1.PodDisruptionBudget, selector *metav1.LabelSel
 
 // SetPDBLabels sets the labels on the PDB.
 func SetPDBLabels(pdb *policyv1.PodDisruptionBudget, labels map[string]string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodDisruptionBudget(pdb); err != nil {
-		return err
+	if pdb == nil {
+		return errors.ErrNilPodDisruptionBudget
 	}
 	pdb.Labels = labels
 	return nil
@@ -72,9 +68,8 @@ func SetPDBLabels(pdb *policyv1.PodDisruptionBudget, labels map[string]string) e
 
 // SetPDBAnnotations sets the annotations on the PDB.
 func SetPDBAnnotations(pdb *policyv1.PodDisruptionBudget, annotations map[string]string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodDisruptionBudget(pdb); err != nil {
-		return err
+	if pdb == nil {
+		return errors.ErrNilPodDisruptionBudget
 	}
 	pdb.Annotations = annotations
 	return nil

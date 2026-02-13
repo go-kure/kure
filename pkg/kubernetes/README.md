@@ -58,6 +58,26 @@ err = kubernetes.SetHPALabels(hpa, map[string]string{"env": "prod"})
 err = kubernetes.SetHPAAnnotations(hpa, map[string]string{"owner": "platform"})
 ```
 
+## PDB Builders
+
+```go
+// Create a PodDisruptionBudget
+pdb := kubernetes.CreatePodDisruptionBudget("my-app", "default")
+
+// Set disruption budget (MinAvailable and MaxUnavailable are mutually exclusive)
+err := kubernetes.SetPDBMinAvailable(pdb, intstr.FromInt32(2))
+// or: err = kubernetes.SetPDBMaxUnavailable(pdb, intstr.FromString("25%"))
+
+// Set the label selector
+err = kubernetes.SetPDBSelector(pdb, &metav1.LabelSelector{
+    MatchLabels: map[string]string{"app": "my-app"},
+})
+
+// Update metadata
+err = kubernetes.SetPDBLabels(pdb, map[string]string{"env": "prod"})
+err = kubernetes.SetPDBAnnotations(pdb, map[string]string{"owner": "platform"})
+```
+
 ## Related Packages
 
 - [fluxcd](fluxcd/) - FluxCD resource constructors
