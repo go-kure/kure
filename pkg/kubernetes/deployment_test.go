@@ -9,7 +9,93 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestAddDeploymentTopologySpreadConstraints(t *testing.T) {
+func TestCreateDeployment(t *testing.T) {
+	dep := CreateDeployment("my-app", "default")
+	if dep.Name != "my-app" || dep.Namespace != "default" {
+		t.Fatalf("metadata mismatch: %s/%s", dep.Namespace, dep.Name)
+	}
+	if dep.Kind != "Deployment" {
+		t.Errorf("unexpected kind %q", dep.Kind)
+	}
+	if dep.Labels["app"] != "my-app" {
+		t.Errorf("expected label app=my-app, got %v", dep.Labels)
+	}
+}
+
+func TestDeploymentNilErrors(t *testing.T) {
+	if err := SetDeploymentPodSpec(nil, &corev1.PodSpec{}); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentPodSpec")
+	}
+	if err := AddDeploymentContainer(nil, &corev1.Container{Name: "c"}); err == nil {
+		t.Error("expected error for nil Deployment on AddDeploymentContainer")
+	}
+	if err := AddDeploymentInitContainer(nil, &corev1.Container{Name: "c"}); err == nil {
+		t.Error("expected error for nil Deployment on AddDeploymentInitContainer")
+	}
+	if err := AddDeploymentVolume(nil, &corev1.Volume{Name: "v"}); err == nil {
+		t.Error("expected error for nil Deployment on AddDeploymentVolume")
+	}
+	if err := AddDeploymentImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}); err == nil {
+		t.Error("expected error for nil Deployment on AddDeploymentImagePullSecret")
+	}
+	if err := AddDeploymentToleration(nil, &corev1.Toleration{Key: "k"}); err == nil {
+		t.Error("expected error for nil Deployment on AddDeploymentToleration")
+	}
+	if err := AddDeploymentTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{}); err == nil {
+		t.Error("expected error for nil Deployment on AddDeploymentTopologySpreadConstraints")
+	}
+	if err := SetDeploymentServiceAccountName(nil, "sa"); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentServiceAccountName")
+	}
+	if err := SetDeploymentSecurityContext(nil, &corev1.PodSecurityContext{}); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentSecurityContext")
+	}
+	if err := SetDeploymentAffinity(nil, &corev1.Affinity{}); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentAffinity")
+	}
+	if err := SetDeploymentNodeSelector(nil, map[string]string{}); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentNodeSelector")
+	}
+	if err := SetDeploymentReplicas(nil, 3); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentReplicas")
+	}
+	if err := SetDeploymentStrategy(nil, appsv1.DeploymentStrategy{}); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentStrategy")
+	}
+	if err := SetDeploymentRevisionHistoryLimit(nil, 5); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentRevisionHistoryLimit")
+	}
+	if err := SetDeploymentMinReadySeconds(nil, 10); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentMinReadySeconds")
+	}
+	if err := SetDeploymentProgressDeadlineSeconds(nil, 60); err == nil {
+		t.Error("expected error for nil Deployment on SetDeploymentProgressDeadlineSeconds")
+	}
+}
+
+func TestDeploymentNilArgErrors(t *testing.T) {
+	dep := CreateDeployment("test", "default")
+	if err := SetDeploymentPodSpec(dep, nil); err == nil {
+		t.Error("expected error for nil PodSpec")
+	}
+	if err := AddDeploymentContainer(dep, nil); err == nil {
+		t.Error("expected error for nil Container")
+	}
+	if err := AddDeploymentInitContainer(dep, nil); err == nil {
+		t.Error("expected error for nil InitContainer")
+	}
+	if err := AddDeploymentVolume(dep, nil); err == nil {
+		t.Error("expected error for nil Volume")
+	}
+	if err := AddDeploymentImagePullSecret(dep, nil); err == nil {
+		t.Error("expected error for nil ImagePullSecret")
+	}
+	if err := AddDeploymentToleration(dep, nil); err == nil {
+		t.Error("expected error for nil Toleration")
+	}
+}
+
+func TestDeploymentTopologySpreadConstraints(t *testing.T) {
 	t.Run("nil constraint", func(t *testing.T) {
 		dep := CreateDeployment("test", "default")
 		if err := AddDeploymentTopologySpreadConstraints(dep, nil); err != nil {
@@ -69,13 +155,14 @@ func TestAddDeploymentTopologySpreadConstraints(t *testing.T) {
 			t.Fatalf("expected 2 constraints, got %d", len(dep.Spec.Template.Spec.TopologySpreadConstraints))
 		}
 		if !reflect.DeepEqual(dep.Spec.Template.Spec.TopologySpreadConstraints[0], first) {
-			t.Errorf("first constraint mismatch: got %+v, want %+v", dep.Spec.Template.Spec.TopologySpreadConstraints[0], first)
+			t.Errorf("first constraint mismatch")
 		}
 		if !reflect.DeepEqual(dep.Spec.Template.Spec.TopologySpreadConstraints[1], second) {
-			t.Errorf("second constraint mismatch: got %+v, want %+v", dep.Spec.Template.Spec.TopologySpreadConstraints[1], second)
+			t.Errorf("second constraint mismatch")
 		}
 	})
 }
+
 func TestDeploymentFunctions(t *testing.T) {
 	dep := CreateDeployment("app", "ns")
 	if dep.Name != "app" || dep.Namespace != "ns" {
@@ -198,5 +285,20 @@ func TestDeploymentFunctions(t *testing.T) {
 	}
 	if dep.Spec.ProgressDeadlineSeconds == nil || *dep.Spec.ProgressDeadlineSeconds != 60 {
 		t.Errorf("progress deadline seconds not set")
+	}
+}
+
+func TestSetDeploymentPodSpec(t *testing.T) {
+	dep := CreateDeployment("test", "default")
+	spec := &corev1.PodSpec{
+		Containers: []corev1.Container{
+			{Name: "test", Image: "nginx"},
+		},
+	}
+	if err := SetDeploymentPodSpec(dep, spec); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(dep.Spec.Template.Spec.Containers) != 1 {
+		t.Fatal("expected PodSpec to be assigned")
 	}
 }

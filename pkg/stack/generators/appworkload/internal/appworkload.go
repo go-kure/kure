@@ -423,19 +423,19 @@ func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, e
 		}
 		objs = append(objs, pkgkubernetes.ToClientObject(ds))
 	case DeploymentWorkload:
-		dep := kubernetes.CreateDeployment(app.Name, app.Namespace)
+		dep := pkgkubernetes.CreateDeployment(app.Name, app.Namespace)
 		for _, c := range containers {
-			if err := kubernetes.AddDeploymentContainer(dep, c); err != nil {
+			if err := pkgkubernetes.AddDeploymentContainer(dep, c); err != nil {
 				return nil, err
 			}
 		}
 		for _, v := range cfg.Volumes {
 			k8sVol := v.ToKubernetesVolume()
-			if err := kubernetes.AddDeploymentVolume(dep, &k8sVol); err != nil {
+			if err := pkgkubernetes.AddDeploymentVolume(dep, &k8sVol); err != nil {
 				return nil, err
 			}
 		}
-		_ = kubernetes.SetDeploymentReplicas(dep, cfg.Replicas)
+		_ = pkgkubernetes.SetDeploymentReplicas(dep, cfg.Replicas)
 		objs = append(objs, pkgkubernetes.ToClientObject(dep))
 	default:
 		return nil, errors.NewValidationError("workload", string(cfg.Workload), "AppWorkloadConfig", []string{"Deployment", "StatefulSet", "DaemonSet"})
@@ -444,10 +444,10 @@ func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, e
 	// Service creation when ports are specified
 	var svc *corev1.Service
 	if len(allports) > 0 {
-		svc = kubernetes.CreateService(app.Name, app.Namespace)
-		_ = kubernetes.SetServiceSelector(svc, map[string]string{"app": app.Name})
+		svc = pkgkubernetes.CreateService(app.Name, app.Namespace)
+		_ = pkgkubernetes.SetServiceSelector(svc, map[string]string{"app": app.Name})
 		for _, p := range allports {
-			_ = kubernetes.AddServicePort(svc, corev1.ServicePort{
+			_ = pkgkubernetes.AddServicePort(svc, corev1.ServicePort{
 				Name:       p.Name,
 				Port:       p.ContainerPort,
 				TargetPort: intstr.FromInt32(p.ContainerPort),
@@ -457,17 +457,17 @@ func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, e
 	}
 
 	if cfg.Ingress != nil && svc != nil {
-		ing := kubernetes.CreateIngress(app.Name, app.Namespace, "")
-		rule := kubernetes.CreateIngressRule(cfg.Ingress.Host)
+		ing := pkgkubernetes.CreateIngress(app.Name, app.Namespace, "")
+		rule := pkgkubernetes.CreateIngressRule(cfg.Ingress.Host)
 		pt := netv1.PathTypeImplementationSpecific
 		path := cfg.Ingress.Path
 		if path == "" {
 			path = "/"
 		}
 		port := cfg.Ingress.ServicePortName
-		kubernetes.AddIngressRulePath(rule, kubernetes.CreateIngressPath(path, &pt, svc.Name, port))
-		kubernetes.AddIngressRule(ing, rule)
-		kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
+		pkgkubernetes.AddIngressRulePath(rule, pkgkubernetes.CreateIngressPath(path, &pt, svc.Name, port))
+		_ = pkgkubernetes.AddIngressRule(ing, rule)
+		_ = pkgkubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
 		objs = append(objs, pkgkubernetes.ToClientObject(ing))
 	}
 

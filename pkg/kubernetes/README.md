@@ -78,6 +78,68 @@ err = kubernetes.SetPDBLabels(pdb, map[string]string{"env": "prod"})
 err = kubernetes.SetPDBAnnotations(pdb, map[string]string{"owner": "platform"})
 ```
 
+## Deployment Builders
+
+```go
+// Create a Deployment
+dep := kubernetes.CreateDeployment("my-app", "default")
+
+// Add a container
+container := &corev1.Container{Name: "app", Image: "nginx:1.25"}
+err := kubernetes.AddDeploymentContainer(dep, container)
+
+// Set replicas and strategy
+err = kubernetes.SetDeploymentReplicas(dep, 3)
+err = kubernetes.SetDeploymentStrategy(dep, appsv1.DeploymentStrategy{
+    Type: appsv1.RollingUpdateDeploymentStrategyType,
+})
+
+// Configure pod template
+err = kubernetes.SetDeploymentServiceAccountName(dep, "my-sa")
+err = kubernetes.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"})
+err = kubernetes.AddDeploymentToleration(dep, &corev1.Toleration{Key: "dedicated", Value: "web"})
+```
+
+## Service Builders
+
+```go
+// Create a Service
+svc := kubernetes.CreateService("my-app", "default")
+
+// Configure the service
+err := kubernetes.SetServiceSelector(svc, map[string]string{"app": "my-app"})
+err = kubernetes.AddServicePort(svc, corev1.ServicePort{
+    Name:       "http",
+    Port:       80,
+    TargetPort: intstr.FromInt32(8080),
+})
+err = kubernetes.SetServiceType(svc, corev1.ServiceTypeLoadBalancer)
+
+// Update metadata
+err = kubernetes.AddServiceLabel(svc, "env", "prod")
+err = kubernetes.AddServiceAnnotation(svc, "external-dns.alpha.kubernetes.io/hostname", "app.example.com")
+```
+
+## Ingress Builders
+
+```go
+// Create an Ingress
+ing := kubernetes.CreateIngress("my-app", "default", "nginx")
+
+// Build a rule with paths
+rule := kubernetes.CreateIngressRule("app.example.com")
+pt := netv1.PathTypePrefix
+path := kubernetes.CreateIngressPath("/", &pt, "my-app", "http")
+kubernetes.AddIngressRulePath(rule, path)
+err := kubernetes.AddIngressRule(ing, rule)
+
+// Add TLS
+err = kubernetes.AddIngressTLS(ing, netv1.IngressTLS{
+    Hosts:      []string{"app.example.com"},
+    SecretName: "my-app-tls",
+})
+```
+
 ## Related Packages
 
 - [fluxcd](fluxcd/) - FluxCD resource constructors
