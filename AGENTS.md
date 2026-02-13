@@ -404,10 +404,24 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 | `pkg/io/` | `api-reference/io` | `guides/library-usage` |
 | `pkg/errors/` | `api-reference/errors` | — |
 | `pkg/cli/` | `api-reference/cli` | — |
+| `pkg/kubernetes/` | `api-reference/kubernetes-builders` | `guides/library-usage` |
 | `pkg/kubernetes/fluxcd/` | `api-reference/fluxcd-builders` | `guides/library-usage` |
 | `pkg/logger/` | `api-reference/logger` | — |
 | `cmd/kure/` | CLI ref (auto-generated) | — |
 | `cmd/kurel/` | CLI ref (auto-generated) | — |
+
+## Implementation Workflow
+
+When implementing a GitHub issue, follow this checklist in order:
+
+1. **Branch** — create a feature branch from latest `main` before writing any code.
+2. **Validate the issue** — compare the issue description against project standards (naming conventions, error handling, package placement). Question anything that conflicts before implementing.
+3. **Implement with tests** — write or update tests next to every new or changed function.
+4. **Update documentation** — update package READMEs, the reverse-mapping table, and any affected guides in the same changeset.
+5. **Run all checks** — execute `make precommit` and fix any failures. When all checks pass, stop and ask for a user review.
+6. **Iterate on review feedback** — address every comment, then return to step 5.
+7. **Verify the diff** — before committing, review the full working-tree diff. If there are more changes than expected, ask the user what should be committed.
+8. **Commit, push, PR** — commit with a conventional-commit message, push, and open a PR with `gh pr create`.
 
 ## Questions?
 
