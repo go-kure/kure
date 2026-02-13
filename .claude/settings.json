@@ -34,19 +34,15 @@
       "Bash(yq:*)",
       "Bash(./scripts/github-settings.sh:*)",
       "Bash(python3:*)",
-      "Bash(for issue in 173 174 176 177)",
-      "Bash(do echo \"Assigning issue #$issue to milestone 1...\")",
-      "Bash(done)",
-      "Bash(for issue in 175 178 179 180)",
-      "Bash(do echo \"Assigning issue #$issue to milestone 2...\")",
-      "Bash(for issue in 128 129 133)",
-      "Bash(do echo \"Assigning issue #$issue to milestone 3...\")",
-      "Bash(for issue in 128 129 133 134 135 136 137 138 139 140 141 142 143 144 145 146 173 174 175 176 177 178 179 180)",
-      "Bash(do)",
-      "Bash(for issue in 173 174)",
-      "Bash(__NEW_LINE_02ad66f24dece53b__ echo \"\")",
-      "Bash(for issue in 176 177)",
-      "Bash(go doc:*)"
+      "Bash(git -C /home/serge/src/autops/wharf/kure log --oneline -10)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure log --oneline --all)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure rebase main)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure push --force-with-lease)",
+      "Bash(go list:*)",
+      "Bash(go run:*)",
+      "Bash(go env:*)",
+      "Bash(git pull:*)",
+      "Bash(go vet:*)"
     ]
   },
   "outputStyle": "default"

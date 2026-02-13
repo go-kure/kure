@@ -74,6 +74,14 @@
 //	io.PrintObjectsAsJSON(resources, os.Stdout)
 //	io.PrintObjectsAsTable(resources, wide, noHeaders, os.Stdout)
 //
+// # Deterministic field ordering
+//
+// [EncodeObjectsToYAMLWithOptions] accepts [EncodeOptions] to control YAML
+// output. When KubernetesFieldOrder is true, top-level fields are emitted in
+// the conventional order used by kubectl, Helm, and Kustomize:
+// apiVersion, kind, metadata, spec, data, stringData, then remaining fields
+// alphabetically, with status last.
+//
 // The package forms the foundation for the other packages within this
 // repository but can be imported directly by any program that requires
 // lightweight YAML handling, runtime object parsing, and kubectl-compatible
