@@ -57,6 +57,23 @@
 // All setter/adder functions return an error when passed a nil Deployment pointer,
 // using [github.com/go-kure/kure/pkg/errors.ErrNilDeployment].
 //
+// # CronJob Builders
+//
+// [CreateCronJob] allocates a fully initialised batch/v1 CronJob.
+// The remaining helpers follow the Add*/Set* convention:
+//
+//   - [SetCronJobPodSpec], [SetCronJobSchedule], [SetCronJobConcurrencyPolicy]
+//   - [AddCronJobContainer], [AddCronJobInitContainer], [AddCronJobVolume]
+//   - [SetCronJobServiceAccountName], [SetCronJobSecurityContext]
+//   - [SetCronJobAffinity], [SetCronJobNodeSelector]
+//   - [AddCronJobToleration], [AddCronJobTopologySpreadConstraint]
+//   - [AddCronJobImagePullSecret]
+//   - [SetCronJobSuspend], [SetCronJobSuccessfulJobsHistoryLimit], [SetCronJobFailedJobsHistoryLimit]
+//   - [SetCronJobStartingDeadlineSeconds], [SetCronJobTimeZone]
+//
+// All setter/adder functions return an error when passed a nil CronJob pointer,
+// using [github.com/go-kure/kure/pkg/errors.ErrNilCronJob].
+//
 // # Service Builders
 //
 // [CreateService] allocates a fully initialised v1 Service.
