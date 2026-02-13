@@ -7,7 +7,6 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/generators/fluxhelm/internal"
@@ -615,29 +614,19 @@ func TestConfigV1Alpha1_Generate_InferSourceFromOCIUrl(t *testing.T) {
 }
 
 func TestRegistration(t *testing.T) {
-	// Test that the FluxHelm generator is properly registered
-	expectedGVK := gvk.GVK{
-		Group:   "generators.gokure.dev",
-		Version: "v1alpha1",
-		Kind:    "FluxHelm",
-	}
-
-	// Test generators package registration
-	config, err := generators.CreateFromGVK(generators.GVK(expectedGVK))
+	// Test that the FluxHelm generator is properly registered in the stack registry
+	config, err := stack.CreateApplicationConfig("generators.gokure.dev/v1alpha1", "FluxHelm")
 	if err != nil {
-		t.Errorf("FluxHelm generator not registered in generators package: %v", err)
-		return
+		t.Fatalf("FluxHelm generator not registered in stack package: %v", err)
 	}
 
 	if config == nil {
-		t.Error("CreateFromGVK returned nil config")
-		return
+		t.Fatal("CreateApplicationConfig returned nil config")
 	}
 
 	fluxHelmConfig, ok := config.(*ConfigV1Alpha1)
 	if !ok {
-		t.Errorf("CreateFromGVK returned wrong type: %T, want *ConfigV1Alpha1", config)
-		return
+		t.Fatalf("CreateApplicationConfig returned wrong type: %T, want *ConfigV1Alpha1", config)
 	}
 
 	if fluxHelmConfig.GetAPIVersion() != "generators.gokure.dev/v1alpha1" {
@@ -646,23 +635,6 @@ func TestRegistration(t *testing.T) {
 
 	if fluxHelmConfig.GetKind() != "FluxHelm" {
 		t.Errorf("Config Kind = %s, want FluxHelm", fluxHelmConfig.GetKind())
-	}
-
-	// Test stack package registration
-	stackConfig, err := stack.CreateApplicationConfig("generators.gokure.dev/v1alpha1", "FluxHelm")
-	if err != nil {
-		t.Errorf("FluxHelm generator not registered in stack package: %v", err)
-		return
-	}
-
-	if stackConfig == nil {
-		t.Error("CreateApplicationConfig returned nil config")
-		return
-	}
-
-	_, ok = stackConfig.(*ConfigV1Alpha1)
-	if !ok {
-		t.Errorf("CreateApplicationConfig returned wrong type: %T, want *ConfigV1Alpha1", stackConfig)
 	}
 }
 

@@ -36,14 +36,14 @@
 //
 // # Registration
 //
-// Generators self-register during package initialization:
+// Generators self-register with the stack registry during package initialization:
 //
 //	func init() {
-//	    generators.Register(generators.GVK{
+//	    stack.RegisterApplicationConfig(gvk.GVK{
 //	        Group:   "generators.gokure.dev",
 //	        Version: "v1alpha1",
 //	        Kind:    "MyGenerator",
-//	    }, func() interface{} {
+//	    }, func() stack.ApplicationConfig {
 //	        return &MyGeneratorV1Alpha1{}
 //	    })
 //	}

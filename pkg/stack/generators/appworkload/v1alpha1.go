@@ -10,22 +10,14 @@ import (
 )
 
 func init() {
-	// Register the AppWorkload v1alpha1 generator with both registries
-	gvkObj := gvk.GVK{
+	// Register the AppWorkload v1alpha1 generator
+	stack.RegisterApplicationConfig(gvk.GVK{
 		Group:   "generators.gokure.dev",
 		Version: "v1alpha1",
 		Kind:    "AppWorkload",
-	}
-
-	factory := func() stack.ApplicationConfig {
+	}, func() stack.ApplicationConfig {
 		return &ConfigV1Alpha1{}
-	}
-
-	// Register with generators package for backward compatibility
-	generators.Register(generators.GVK(gvkObj), factory)
-
-	// Register with stack package for direct usage
-	stack.RegisterApplicationConfig(gvkObj, factory)
+	})
 }
 
 // ConfigV1Alpha1 describes a single deployable application with GVK support
