@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -195,6 +196,61 @@ func TestBundleGenerateLabelPropagation(t *testing.T) {
 			if labels["env"] != "prod" {
 				t.Fatalf("resource %d: expected env=prod, got %v", i, labels)
 			}
+		}
+	})
+}
+
+func TestBundleGenerateWithValidation(t *testing.T) {
+	t.Run("bundle with validating app that passes", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		cfg := &validatingConfig{objs: []*client.Object{&obj}}
+		app := NewApplication("app1", "ns1", cfg)
+		b := &Bundle{Name: "test", Applications: []*Application{app}}
+
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(resources) != 1 {
+			t.Fatalf("expected 1 resource, got %d", len(resources))
+		}
+		if !cfg.generateCalled {
+			t.Error("expected Generate to be called")
+		}
+	})
+
+	t.Run("bundle with validating app that fails", func(t *testing.T) {
+		cfg := &validatingConfig{validateErr: errors.New("invalid config")}
+		app := NewApplication("bad-app", "ns1", cfg)
+		b := &Bundle{Name: "test", Applications: []*Application{app}}
+
+		_, err := b.Generate()
+		if err == nil {
+			t.Fatal("expected error from validation")
+		}
+		if cfg.generateCalled {
+			t.Error("Generate should not be called when validation fails")
+		}
+	})
+
+	t.Run("bundle with mixed validating and non-validating apps", func(t *testing.T) {
+		obj1 := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		obj2 := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}})
+		plainCfg := &fakeConfig{objs: []*client.Object{&obj1}}
+		validCfg := &validatingConfig{objs: []*client.Object{&obj2}}
+		app1 := NewApplication("plain", "ns1", plainCfg)
+		app2 := NewApplication("validated", "ns2", validCfg)
+		b := &Bundle{Name: "mixed", Applications: []*Application{app1, app2}}
+
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(resources) != 2 {
+			t.Fatalf("expected 2 resources, got %d", len(resources))
+		}
+		if !validCfg.generateCalled {
+			t.Error("expected Generate to be called on validating config")
 		}
 	})
 }

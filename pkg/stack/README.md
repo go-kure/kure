@@ -76,6 +76,42 @@ type ApplicationConfig interface {
 }
 ```
 
+### Optional Validation
+
+`ApplicationConfig` implementations can optionally implement the `Validator` interface to validate configuration before resource generation:
+
+```go
+type Validator interface {
+    Validate() error
+}
+```
+
+When present, `Application.Generate()` calls `Validate()` automatically before `Generate()`. If validation fails, generation stops and the error is returned with application context:
+
+```go
+type myConfig struct { Port int }
+
+func (c *myConfig) Validate() error {
+    if c.Port <= 0 {
+        return errors.New("port must be positive")
+    }
+    return nil
+}
+
+func (c *myConfig) Generate(app *stack.Application) ([]*client.Object, error) {
+    // Only called if Validate() passes (or is not implemented)
+    ...
+}
+```
+
+Validation errors are wrapped with application name and namespace:
+
+```
+validation failed for application "web" in namespace "prod": port must be positive
+```
+
+Configs that do not implement `Validator` continue to work without changes.
+
 ## Fluent Builder API
 
 For ergonomic cluster construction, use the fluent builder:
