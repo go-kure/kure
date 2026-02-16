@@ -102,8 +102,7 @@ func EncodeObjectsTo(objects []*client.Object, yamlOutput bool) ([]byte, error) 
 }
 
 // EncodeObjectsToYAML encodes Kubernetes objects to clean YAML, stripping
-// server-managed fields that should not appear in client-generated manifests
-// (null creationTimestamp, empty status objects).
+// all known server-managed metadata fields by default (see [StripServerFieldsFull]).
 func EncodeObjectsToYAML(objects []*client.Object) ([]byte, error) {
 	return EncodeObjectsToYAMLWithOptions(objects, EncodeOptions{})
 }
@@ -132,11 +131,13 @@ func EncodeObjectsToJSON(objects []*client.Object) ([]byte, error) {
 }
 
 // marshalCleanResource serializes a single Kubernetes resource to clean YAML,
-// stripping server-managed fields that are artifacts of K8s API machinery:
-// - metadata.creationTimestamp (zero Time marshals as null)
-// - status (zero-value structs marshal as {})
-// These fields are not actual resource data and tools like kubectl, Helm,
-// and Kustomize strip them too.
+// stripping server-managed fields that are artifacts of K8s API machinery.
+// The set of stripped fields is controlled by opts.ServerFieldStripping:
+//   - Full (default): managedFields, resourceVersion, uid, generation, selfLink,
+//     kubectl.kubernetes.io/last-applied-configuration annotation,
+//     null creationTimestamp, and empty status
+//   - Basic: null creationTimestamp and empty status only
+//   - None: no stripping
 func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error) {
 	jsonBytes, err := json.Marshal(obj)
 	if err != nil {
@@ -148,7 +149,7 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 		return nil, fmt.Errorf("failed to unmarshal JSON for cleanup: %w", err)
 	}
 
-	cleanResourceMap(raw)
+	cleanResourceMap(raw, opts.ServerFieldStripping)
 
 	if opts.KubernetesFieldOrder {
 		return marshalOrderedYAML(raw)
@@ -163,35 +164,73 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 }
 
 // cleanResourceMap removes server-managed fields from a resource map.
-func cleanResourceMap(m map[string]interface{}) {
+// The level parameter controls which fields are removed.
+func cleanResourceMap(m map[string]interface{}, level ServerFieldStripping) {
+	if level == StripServerFieldsNone {
+		return
+	}
 	removeEmptyStatus(m)
-	cleanMetadata(m, "metadata")
+	cleanMetadata(m, "metadata", level)
 
 	// spec.template.metadata (Deployments, Jobs, etc.)
 	if spec, ok := m["spec"].(map[string]interface{}); ok {
-		cleanMetadata(spec, "template")
+		cleanMetadata(spec, "template", level)
 
 		// spec.jobTemplate.metadata and spec.jobTemplate.spec.template.metadata (CronJobs)
 		if jobTemplate, ok := spec["jobTemplate"].(map[string]interface{}); ok {
-			cleanMetadata(jobTemplate, "metadata")
+			cleanMetadata(jobTemplate, "metadata", level)
 			if jtSpec, ok := jobTemplate["spec"].(map[string]interface{}); ok {
-				cleanMetadata(jtSpec, "template")
+				cleanMetadata(jtSpec, "template", level)
 			}
 		}
 	}
 }
 
-// cleanMetadata removes creationTimestamp from a metadata block.
-func cleanMetadata(parent map[string]interface{}, parentKey string) {
-	child, ok := parent[parentKey].(map[string]interface{})
-	if !ok {
-		return
-	}
+// cleanMetadata removes server-managed fields from a metadata block.
+// When parentKey is "metadata", parent[parentKey] is the metadata map directly.
+// Otherwise, parent[parentKey] is a container (e.g. template) whose "metadata"
+// child is cleaned.
+func cleanMetadata(parent map[string]interface{}, parentKey string, level ServerFieldStripping) {
+	var metadata map[string]interface{}
 	if parentKey == "metadata" {
-		removeNullCreationTimestamp(child)
+		md, ok := parent[parentKey].(map[string]interface{})
+		if !ok {
+			return
+		}
+		metadata = md
 	} else {
-		if md, ok := child["metadata"].(map[string]interface{}); ok {
-			removeNullCreationTimestamp(md)
+		child, ok := parent[parentKey].(map[string]interface{})
+		if !ok {
+			return
+		}
+		md, ok := child["metadata"].(map[string]interface{})
+		if !ok {
+			return
+		}
+		metadata = md
+	}
+
+	removeNullCreationTimestamp(metadata)
+
+	if level == StripServerFieldsFull {
+		stripServerSetFields(metadata)
+	}
+}
+
+// stripServerSetFields removes well-known server-set metadata fields:
+// managedFields, resourceVersion, uid, generation, selfLink, and the
+// kubectl.kubernetes.io/last-applied-configuration annotation.
+func stripServerSetFields(metadata map[string]interface{}) {
+	delete(metadata, "managedFields")
+	delete(metadata, "resourceVersion")
+	delete(metadata, "uid")
+	delete(metadata, "generation")
+	delete(metadata, "selfLink")
+
+	if annotations, ok := metadata["annotations"].(map[string]interface{}); ok {
+		delete(annotations, "kubectl.kubernetes.io/last-applied-configuration")
+		if len(annotations) == 0 {
+			delete(metadata, "annotations")
 		}
 	}
 }

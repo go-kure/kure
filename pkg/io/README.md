@@ -75,6 +75,34 @@ yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
 // Output: apiVersion, kind, metadata, spec, ... status (last)
 ```
 
+### Server-Set Field Stripping
+
+By default, encoding strips server-managed metadata fields that should not appear in client-generated manifests: `managedFields`, `resourceVersion`, `uid`, `generation`, `selfLink`, the `kubectl.kubernetes.io/last-applied-configuration` annotation, null `creationTimestamp`, and empty `status`.
+
+```go
+// Default behavior — full stripping (zero value of ServerFieldStripping)
+yamlData, err := io.EncodeObjectsToYAML(objects)
+
+// Explicit full stripping with field ordering
+opts := io.EncodeOptions{
+    KubernetesFieldOrder: true,
+    ServerFieldStripping: io.StripServerFieldsFull,
+}
+yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
+
+// Basic stripping (only null creationTimestamp and empty status)
+opts := io.EncodeOptions{
+    ServerFieldStripping: io.StripServerFieldsBasic,
+}
+yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
+
+// No stripping — preserve all fields as-is
+opts := io.EncodeOptions{
+    ServerFieldStripping: io.StripServerFieldsNone,
+}
+yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
+```
+
 ## Printing
 
 ### Output Formats

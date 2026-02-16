@@ -100,6 +100,26 @@
 // apiVersion, kind, metadata, spec, data, stringData, then remaining fields
 // alphabetically, with status last.
 //
+// # Server-set field stripping
+//
+// Resources exported from a cluster via `kubectl get -o yaml` include
+// server-managed metadata fields (managedFields, resourceVersion, uid,
+// generation, selfLink, and the kubectl.kubernetes.io/last-applied-configuration
+// annotation) that should not appear in client-generated manifests.
+//
+// The [ServerFieldStripping] option on [EncodeOptions] controls which of these
+// fields are removed during encoding:
+//
+//   - [StripServerFieldsFull] (default, zero value): removes all known
+//     server-set fields, null creationTimestamp, and empty status.
+//   - [StripServerFieldsBasic]: removes only null creationTimestamp and
+//     empty status.
+//   - [StripServerFieldsNone]: disables all stripping.
+//
+// Because the zero value of [ServerFieldStripping] is [StripServerFieldsFull],
+// all existing callers of [EncodeObjectsToYAML] benefit from enhanced stripping
+// without code changes.
+//
 // The package forms the foundation for the other packages within this
 // repository but can be imported directly by any program that requires
 // lightweight YAML handling, runtime object parsing, and kubectl-compatible
