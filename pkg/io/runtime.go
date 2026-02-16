@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,7 +16,15 @@ import (
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
-func parse(yamlbytes []byte) ([]client.Object, error) {
+// ParseOptions controls how Kubernetes YAML documents are decoded.
+type ParseOptions struct {
+	// AllowUnstructured enables fallback decoding for GVKs not registered
+	// in the kure scheme. When true, unknown objects are returned as
+	// *unstructured.Unstructured instead of producing an error.
+	AllowUnstructured bool
+}
+
+func parse(yamlbytes []byte, opts ParseOptions) ([]client.Object, error) {
 
 	// Parsing approach adapted from
 	// https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
@@ -44,6 +53,15 @@ func parse(yamlbytes []byte) ([]client.Object, error) {
 		}
 		obj, _, err := decode(raw.Raw, nil, nil)
 		if err != nil {
+			if opts.AllowUnstructured && runtime.IsNotRegisteredError(err) {
+				unstObj, _, unstErr := unstructured.UnstructuredJSONScheme.Decode(raw.Raw, nil, nil)
+				if unstErr != nil {
+					errs = append(errs, errors.NewParseError("Kubernetes object", "failed to decode unstructured object", 0, 0, unstErr))
+					continue
+				}
+				retVal = append(retVal, unstObj)
+				continue
+			}
 			errs = append(errs, errors.NewParseError("Kubernetes object", "failed to decode object", 0, 0, err))
 			continue
 		}
@@ -68,18 +86,30 @@ func parse(yamlbytes []byte) ([]client.Object, error) {
 // defined within. Each object is decoded using the k8s scheme. An error is
 // returned if the file cannot be read or if decoding any document fails.
 func ParseFile(path string) ([]client.Object, error) {
+	return ParseFileWithOptions(path, ParseOptions{})
+}
+
+// ParseFileWithOptions reads the YAML file at path and returns the runtime
+// objects defined within. Behavior is controlled by opts; see [ParseOptions].
+func ParseFileWithOptions(path string, opts ParseOptions) ([]client.Object, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	return parse(data)
+	return parse(data, opts)
 }
 
 // ParseYAML parses YAML bytes and returns the runtime objects
 // defined within. Each object is decoded using the k8s scheme. An error is
 // returned if decoding any document fails.
 func ParseYAML(data []byte) ([]client.Object, error) {
-	return parse(data)
+	return ParseYAMLWithOptions(data, ParseOptions{})
+}
+
+// ParseYAMLWithOptions parses YAML bytes and returns the runtime objects
+// defined within. Behavior is controlled by opts; see [ParseOptions].
+func ParseYAMLWithOptions(data []byte, opts ParseOptions) ([]client.Object, error) {
+	return parse(data, opts)
 }
 
 func checkType(obj runtime.Object) error {

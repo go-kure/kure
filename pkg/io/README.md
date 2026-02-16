@@ -20,6 +20,19 @@ objects, err := io.ParseFile("manifests/deployment.yaml")
 objects, err := io.ParseYAML(yamlData)
 ```
 
+### Unstructured Fallback
+
+By default, only GVKs registered in the kure scheme are accepted. To parse
+arbitrary Kubernetes YAML (CRDs, custom operators, etc.) use
+`ParseYAMLWithOptions` or `ParseFileWithOptions` with `AllowUnstructured`:
+
+```go
+opts := io.ParseOptions{AllowUnstructured: true}
+objects, err := io.ParseYAMLWithOptions(yamlData, opts)
+// Known types are returned as typed objects (e.g. *corev1.Pod).
+// Unknown types are returned as *unstructured.Unstructured.
+```
+
 ### Load and Save
 
 ```go
