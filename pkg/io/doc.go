@@ -45,6 +45,24 @@
 //	    }
 //	}
 //
+// # Unstructured fallback
+//
+// By default the parser rejects objects whose GroupVersionKind is not
+// registered in the kure scheme. [ParseYAMLWithOptions] and
+// [ParseFileWithOptions] accept a [ParseOptions] value. When
+// AllowUnstructured is true, unknown GVKs are decoded as
+// *unstructured.Unstructured instead of returning an error, making it
+// possible to process arbitrary Kubernetes YAML including CRDs that are
+// not compiled into the binary:
+//
+//	opts := io.ParseOptions{AllowUnstructured: true}
+//	objs, err := io.ParseYAMLWithOptions(data, opts)
+//	for _, obj := range objs {
+//	    if u, ok := obj.(*unstructured.Unstructured); ok {
+//	        fmt.Println("unstructured:", u.GetKind(), u.GetName())
+//	    }
+//	}
+//
 // # Resource printing
 //
 // The io package includes comprehensive resource printing capabilities compatible
