@@ -1,12 +1,31 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-alpha.4] - 2026-02-16
+
+### Added
+
+- Expose HPA helpers in pkg/kubernetes
+- Expose PDB helpers in pkg/kubernetes
+- Add deterministic YAML serialization option
+- Expose Deployment, Service, Ingress helpers in pkg/kubernetes
+- Expose CronJob helpers in pkg/kubernetes
+- Add optional Validator interface for ApplicationConfig
+
+### Changed
+
+- Consolidate generator registries into pkg/stack (#179)
+
+### Dependencies
+
+- Bump sigs.k8s.io/kustomize/api in the k8s-ecosystem group
+
+### Documentation
+
+- Add implementation workflow checklist
+- Document ApplicationConfig breaking change (#178)
+
 ## [0.1.0-alpha.3] - 2026-02-12
-
-### Breaking Changes
-
-- **`Application.Config`** field changed from `*ApplicationConfig` (pointer-to-interface) to `ApplicationConfig` (interface directly). Update usages: `Config: &myConfig` → `Config: myConfig`
-- **`generators` package registry removed** — `generators.Register()`, `generators.Create()`, `generators.CreateFromGVK()`, `generators.ListKinds()`, `generators.HasKind()`, and `generators.ApplicationConfigFactory` have been removed. Use `stack.RegisterApplicationConfig()`, `stack.CreateApplicationConfig()`, `stack.ListApplicationConfigGVKs()`, and `stack.HasApplicationConfigGVK()` instead. GVK type re-exports (`generators.GVK`, `generators.ParseAPIVersion`) are preserved.
 
 ### Documentation
 
@@ -15,6 +34,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Install syft in release workflow for SBOM generation
+
+### Release
+
+- V0.1.0-alpha.3
 
 ## [0.1.0-alpha.2] - 2026-02-12
 
