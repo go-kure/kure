@@ -37,6 +37,10 @@ These examples demonstrate:
 - Release configuration options
 - Flux-specific settings (interval, timeout, suspend)
 
+### KurelPackage (generators.gokure.dev/v1alpha1)
+
+Generates Kubernetes resource objects from kurel packages. `Generate()` collects resources from the package structure and returns them as typed objects, making kurel packages usable in the stack generation pipeline.
+
 ## Usage
 
 To parse and generate resources from these examples:
@@ -52,6 +56,7 @@ import (
     "github.com/go-kure/kure/pkg/stack"
     _ "github.com/go-kure/kure/pkg/stack/generators/appworkload"
     _ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"
+    _ "github.com/go-kure/kure/pkg/stack/generators/kurelpackage"
 )
 
 func main() {

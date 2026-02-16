@@ -15,7 +15,7 @@ Each generator is registered with a GVK identifier that uniquely identifies its 
 |-----|-----------|--------|
 | `generators/AppWorkload` | AppWorkload | Deployment, Service, ConfigMap |
 | `generators/FluxHelm` | FluxHelm | HelmRelease, HelmRepository |
-| `generators/KurelPackage` | KurelPackage | Kurel package reference |
+| `generators/KurelPackage` | KurelPackage | Kubernetes resources from kurel packages |
 
 ## Using Generators
 
@@ -79,7 +79,7 @@ Generates Flux HelmRelease resources:
 
 ### KurelPackage
 
-References kurel packages within the stack hierarchy, enabling package-based deployments alongside code-generated resources.
+Generates Kubernetes resource objects from kurel packages. `Generate()` delegates to `GeneratePackageFiles()`, extracts the resource files from the package, and parses them into typed objects. Non-resource metadata (kurel.yaml, patches, values, extensions) is excluded from the output. This allows kurel packages to participate in the stack generation pipeline alongside code-generated resources.
 
 ## Custom Generators
 

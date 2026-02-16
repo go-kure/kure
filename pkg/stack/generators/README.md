@@ -88,7 +88,7 @@ Generates Flux HelmRelease resources for Helm-based applications:
 
 ### kurelpackage
 
-References kurel packages as applications within the stack hierarchy, enabling package-based deployments in cluster definitions.
+Generates Kubernetes resource objects from kurel packages. The `Generate()` method delegates to `GeneratePackageFiles()`, extracts files under the `resources/` prefix, and parses each one into typed `client.Object` values. Non-resource files (kurel.yaml, patches, values, extensions) are excluded — they are package metadata. This makes KurelPackage configs usable in the stack generation pipeline alongside other generators.
 
 ## Related Packages
 
