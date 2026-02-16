@@ -7,6 +7,23 @@ weight = 30
 
 Generators provide a type-safe way to create application workloads from configuration. They implement the `ApplicationConfig` interface and are identified by GroupVersionKind (GVK) strings.
 
+## Getting Started
+
+The fastest way to start a new project is with `kure init`:
+
+```bash
+kure init my-cluster
+```
+
+This creates a ready-to-use directory structure with `cluster.yaml` and an
+example application under `apps/`. You can then generate manifests with:
+
+```bash
+kure generate cluster cluster.yaml
+```
+
+See `kure init --help` for options like `--gitops argocd`.
+
 ## The GVK System
 
 Each generator is registered with a GVK identifier that uniquely identifies its type:

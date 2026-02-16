@@ -42,7 +42,15 @@
       "Bash(go run:*)",
       "Bash(go env:*)",
       "Bash(git pull:*)",
-      "Bash(go vet:*)"
+      "Bash(go vet:*)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure diff)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure add internal/kubernetes/job.go internal/kubernetes/job_test.go internal/kubernetes/setters_test.go pkg/kubernetes/cronjob.go pkg/kubernetes/cronjob_test.go pkg/kubernetes/doc.go pkg/kubernetes/README.md)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure commit -m \"$\\(cat <<''EOF''\nfeat\\(kubernetes\\): expose CronJob helpers in pkg/kubernetes\n\nMove CronJob builder functions from internal/kubernetes to\npkg/kubernetes so external consumers \\(Crane\\) can generate CronJob\nresources. The public API uses inline implementations with explicit\nnil checks, matching the Deployment helper pattern. The constructor\ndefaults restartPolicy to Never to produce valid manifests out of\nthe box.\n\nCloses #177\nEOF\n\\)\")",
+      "Bash(git -C /home/serge/src/autops/wharf/kure push -u origin feat/expose-cronjob-helpers)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure checkout main)",
+      "Bash(git -C /home/serge/src/autops/wharf/kure pull)",
+      "Bash(git stash:*)",
+      "Bash(git rebase:*)"
     ]
   },
   "outputStyle": "default"
