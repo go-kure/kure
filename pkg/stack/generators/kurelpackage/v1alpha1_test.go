@@ -1,9 +1,13 @@
 package kurelpackage
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -93,11 +97,8 @@ spec:
 			t.Fatal("ToApplication returned nil")
 		}
 
-		// Try to generate (will fail with not implemented error for now)
-		_, err := app.Config.Generate(app)
-		if err == nil {
-			t.Error("Expected not implemented error")
-		}
+		// Generate() requires real resource files on disk, so we don't
+		// call it here — this test validates YAML parsing only.
 	})
 
 	t.Run("Minimal KurelPackage", func(t *testing.T) {
@@ -458,13 +459,41 @@ spec:
 		}
 	})
 
-	t.Run("Generate returns not implemented", func(t *testing.T) {
-		config := &ConfigV1Alpha1{}
-		app := &stack.Application{}
+	t.Run("Generate returns resources from package", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		resDir := filepath.Join(tmpDir, "manifests")
+		if err := os.MkdirAll(resDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		podYAML := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-cm
+  namespace: default
+data:
+  key: value
+`
+		if err := os.WriteFile(filepath.Join(resDir, "cm.yaml"), []byte(podYAML), 0o644); err != nil {
+			t.Fatal(err)
+		}
 
-		_, err := config.Generate(app)
-		if err == nil {
-			t.Error("Generate() should return not implemented error")
+		config := &ConfigV1Alpha1{
+			Package: PackageMetadata{
+				Name:    "test-pkg",
+				Version: "1.0.0",
+			},
+			Resources: []ResourceSource{
+				{Source: resDir},
+			},
+		}
+		app := &stack.Application{Config: config}
+
+		objs, err := config.Generate(app)
+		if err != nil {
+			t.Fatalf("Generate() returned unexpected error: %v", err)
+		}
+		if len(objs) != 1 {
+			t.Fatalf("Generate() returned %d objects, want 1", len(objs))
 		}
 	})
 
@@ -784,4 +813,221 @@ metadata:
 			}
 		}
 	})
+}
+
+func TestGenerateBasicResources(t *testing.T) {
+	tmpDir := t.TempDir()
+	resDir := filepath.Join(tmpDir, "resources")
+	if err := os.MkdirAll(resDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	podYAML := `apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: default
+spec:
+  containers:
+    - name: nginx
+      image: nginx:latest
+`
+	if err := os.WriteFile(filepath.Join(resDir, "pod.yaml"), []byte(podYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &ConfigV1Alpha1{
+		Package: PackageMetadata{
+			Name:    "basic-pkg",
+			Version: "1.0.0",
+		},
+		Resources: []ResourceSource{
+			{Source: resDir},
+		},
+	}
+	app := &stack.Application{Config: config}
+
+	objs, err := config.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error: %v", err)
+	}
+	if len(objs) != 1 {
+		t.Fatalf("Generate() returned %d objects, want 1", len(objs))
+	}
+
+	pod, ok := (*objs[0]).(*corev1.Pod)
+	if !ok {
+		t.Fatalf("expected *corev1.Pod, got %T", *objs[0])
+	}
+	if pod.Name != "test-pod" {
+		t.Errorf("pod name = %q, want %q", pod.Name, "test-pod")
+	}
+}
+
+func TestGenerateMultipleResources(t *testing.T) {
+	tmpDir := t.TempDir()
+	resDir := filepath.Join(tmpDir, "resources")
+	if err := os.MkdirAll(resDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmYAML := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-cm
+  namespace: default
+data:
+  key: value
+`
+	svcYAML := `apiVersion: v1
+kind: Service
+metadata:
+  name: test-svc
+  namespace: default
+spec:
+  ports:
+    - port: 80
+  selector:
+    app: test
+`
+	if err := os.WriteFile(filepath.Join(resDir, "cm.yaml"), []byte(cmYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(resDir, "svc.yaml"), []byte(svcYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &ConfigV1Alpha1{
+		Package: PackageMetadata{
+			Name:    "multi-pkg",
+			Version: "1.0.0",
+		},
+		Resources: []ResourceSource{
+			{Source: resDir},
+		},
+	}
+	app := &stack.Application{Config: config}
+
+	objs, err := config.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error: %v", err)
+	}
+	if len(objs) != 2 {
+		t.Fatalf("Generate() returned %d objects, want 2", len(objs))
+	}
+
+	// Verify types — order is non-deterministic (map iteration), so collect by kind
+	kinds := make(map[string]bool)
+	for _, obj := range objs {
+		kinds[(*obj).GetObjectKind().GroupVersionKind().Kind] = true
+	}
+	if !kinds["ConfigMap"] {
+		t.Error("expected ConfigMap in results")
+	}
+	if !kinds["Service"] {
+		t.Error("expected Service in results")
+	}
+}
+
+func TestGenerateNoResources(t *testing.T) {
+	config := &ConfigV1Alpha1{
+		Package: PackageMetadata{
+			Name:    "empty-pkg",
+			Version: "1.0.0",
+		},
+	}
+	app := &stack.Application{Config: config}
+
+	objs, err := config.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error: %v", err)
+	}
+	if len(objs) != 0 {
+		t.Fatalf("Generate() returned %d objects, want 0", len(objs))
+	}
+}
+
+func TestGenerateExcludesNonResourceFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	resDir := filepath.Join(tmpDir, "resources")
+	if err := os.MkdirAll(resDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmYAML := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-cm
+  namespace: default
+data:
+  key: value
+`
+	if err := os.WriteFile(filepath.Join(resDir, "cm.yaml"), []byte(cmYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &ConfigV1Alpha1{
+		Package: PackageMetadata{
+			Name:    "with-patches",
+			Version: "1.0.0",
+		},
+		Resources: []ResourceSource{
+			{Source: resDir},
+		},
+		Patches: []PatchDefinition{
+			{
+				Target: PatchTarget{Kind: "ConfigMap", Name: "test-cm"},
+				Patch: `- op: replace
+  path: /data/key
+  value: patched`,
+				Type: "json",
+			},
+		},
+	}
+	app := &stack.Application{Config: config}
+
+	files, err := config.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles() error: %v", err)
+	}
+
+	// Verify patches/ and kurel.yaml exist in the file map
+	hasPatch := false
+	hasKurelYAML := false
+	for path := range files {
+		if filepath.Dir(path) == "patches" {
+			hasPatch = true
+		}
+		if path == "kurel.yaml" {
+			hasKurelYAML = true
+		}
+	}
+	if !hasPatch {
+		t.Fatal("expected patch files in GeneratePackageFiles output")
+	}
+	if !hasKurelYAML {
+		t.Fatal("expected kurel.yaml in GeneratePackageFiles output")
+	}
+
+	// Generate() should only return the ConfigMap, not patches or kurel.yaml
+	objs, err := config.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error: %v", err)
+	}
+	if len(objs) != 1 {
+		t.Fatalf("Generate() returned %d objects, want 1", len(objs))
+	}
+
+	// Verify the returned object is the ConfigMap, not a patch
+	obj := *objs[0]
+	if obj.GetObjectKind().GroupVersionKind().Kind != "ConfigMap" {
+		t.Errorf("expected ConfigMap, got %s", obj.GetObjectKind().GroupVersionKind().Kind)
+	}
+	co, ok := obj.(client.Object)
+	if !ok {
+		t.Fatal("expected client.Object")
+	}
+	if co.GetName() != "test-cm" {
+		t.Errorf("object name = %q, want %q", co.GetName(), "test-cm")
+	}
 }

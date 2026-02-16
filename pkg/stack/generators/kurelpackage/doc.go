@@ -75,6 +75,13 @@
 //	    excludes: ["*test*"]     # Exclusion patterns
 //	    recurse: true            # Recurse into subdirectories
 //
+// # Generate
+//
+// The [ConfigV1Alpha1.Generate] method collects Kubernetes resource files from
+// the package structure produced by [ConfigV1Alpha1.GeneratePackageFiles] and
+// returns them as []*client.Object, making KurelPackage configs usable in the
+// stack generation pipeline alongside other ApplicationConfig implementations.
+//
 // # GVK Registration
 //
 // The generator is automatically registered during package initialization:

@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/errors"
+	kureio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
 )
@@ -135,23 +136,32 @@ func (c *ConfigV1Alpha1) GetKind() string {
 	return "KurelPackage"
 }
 
-// Generate creates the kurel package structure
+// Generate produces Kubernetes resource objects from the package structure.
+// It delegates to [ConfigV1Alpha1.GeneratePackageFiles], extracts files under
+// the resources/ prefix, and parses each one into typed client.Object values.
+// Non-resource files (kurel.yaml, patches, values, extensions) are excluded
+// because they are package metadata, not Kubernetes objects.
 func (c *ConfigV1Alpha1) Generate(app *stack.Application) ([]*client.Object, error) {
-	// For now, this is a placeholder implementation
-	// The actual implementation would:
-	// 1. Generate kurel.yaml with package metadata
-	// 2. Copy/process resources according to ResourceSource definitions
-	// 3. Generate patches in the appropriate format
-	// 4. Create values schema and defaults
-	// 5. Process extensions
-	// 6. Validate dependencies
-	// 7. Build the package according to BuildConfig
+	files, err := c.GeneratePackageFiles(app)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate package files")
+	}
 
-	// Since kurel packages aren't Kubernetes resources, we might need to
-	// rethink this interface or create a separate generation path for
-	// file-based outputs rather than client.Object outputs
-
-	return nil, fmt.Errorf("KurelPackage generator not yet implemented")
+	var result []*client.Object
+	for path, data := range files {
+		if !strings.HasPrefix(path, "resources/") {
+			continue
+		}
+		objs, err := kureio.ParseYAML(data)
+		if err != nil {
+			return nil, errors.Wrapf(err, "parse resource file %s", path)
+		}
+		for i := range objs {
+			obj := objs[i]
+			result = append(result, &obj)
+		}
+	}
+	return result, nil
 }
 
 // GeneratePackageFiles generates the kurel package file structure
