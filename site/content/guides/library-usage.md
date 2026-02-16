@@ -64,7 +64,27 @@ err := io.PrintObjectsAsYAML(objects, os.Stdout)
 err := io.SaveFile("output.yaml", deployment)
 ```
 
-See the [IO reference](/api-reference/io) for all output formats.
+### Clean YAML encoding
+
+When encoding resources exported from a cluster, server-managed metadata fields (`managedFields`, `resourceVersion`, `uid`, etc.) clutter the output. The default encoding strips all of these automatically:
+
+```go
+// Default: strips all server-set fields and uses standard key order
+data, err := io.EncodeObjectsToYAMLWithOptions(objects, io.EncodeOptions{
+    KubernetesFieldOrder: true,
+})
+```
+
+Use `ServerFieldStripping` to control the level of stripping:
+
+```go
+// Preserve server fields (e.g. for debugging)
+data, err := io.EncodeObjectsToYAMLWithOptions(objects, io.EncodeOptions{
+    ServerFieldStripping: io.StripServerFieldsNone,
+})
+```
+
+See the [IO reference](/api-reference/io) for all output formats and stripping options.
 
 ## Working with the Domain Model
 

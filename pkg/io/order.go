@@ -10,6 +10,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ServerFieldStripping controls which server-managed metadata fields are
+// removed during YAML encoding.
+type ServerFieldStripping int
+
+const (
+	// StripServerFieldsFull removes all known server-set metadata fields:
+	// managedFields, resourceVersion, uid, generation, selfLink,
+	// the kubectl.kubernetes.io/last-applied-configuration annotation,
+	// null creationTimestamp, and empty status.
+	StripServerFieldsFull ServerFieldStripping = iota
+
+	// StripServerFieldsBasic removes only null creationTimestamp and
+	// empty status (the pre-v0.1 behavior).
+	StripServerFieldsBasic
+
+	// StripServerFieldsNone disables all server-field stripping.
+	StripServerFieldsNone
+)
+
 // EncodeOptions controls how Kubernetes objects are serialized to YAML.
 type EncodeOptions struct {
 	// KubernetesFieldOrder emits top-level resource keys in the
@@ -18,6 +37,11 @@ type EncodeOptions struct {
 	// then remaining keys alphabetically, with status last.
 	// Nested maps remain alphabetically sorted.
 	KubernetesFieldOrder bool
+
+	// ServerFieldStripping controls removal of server-managed metadata
+	// fields during encoding. The zero value (StripServerFieldsFull)
+	// strips all known server-set fields by default.
+	ServerFieldStripping ServerFieldStripping
 }
 
 // kubernetesKeyPriority maps well-known top-level Kubernetes resource
