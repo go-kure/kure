@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/go-kure/kure/pkg/cmd/kure/generate"
+	"github.com/go-kure/kure/pkg/cmd/kure/initialize"
 	"github.com/go-kure/kure/pkg/cmd/shared"
 	"github.com/go-kure/kure/pkg/cmd/shared/options"
 )
@@ -38,6 +39,7 @@ supporting both Flux and ArgoCD workflows for GitOps-native resource management.
 	// Add subcommands
 	cmd.AddCommand(
 		newGenerateCommand(globalOpts),
+		initialize.NewInitCommand(globalOpts),
 		NewPatchCommand(globalOpts),
 		newValidateCommand(globalOpts),
 		newConfigCommand(globalOpts),
