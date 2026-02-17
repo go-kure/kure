@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-## [0.1.0-alpha.4] - 2026-02-16
+## [0.1.0-beta.0] - 2026-02-17
 
 ### Added
 
@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 - Expose Deployment, Service, Ingress helpers in pkg/kubernetes
 - Expose CronJob helpers in pkg/kubernetes
 - Add optional Validator interface for ApplicationConfig
+- Add unstructured fallback for unknown GVKs
+- Implement Generate() for stack pipeline integration
+- Add comprehensive server-set field stripping (#196)
+- Add kure init scaffolding command (#136)
+- Rewrite fluent builders with immutable copy semantics (#139)
+- Migrate release automation from semver.sh to CI-driven release.sh
 
 ### Changed
 
@@ -24,6 +30,10 @@ All notable changes to this project will be documented in this file.
 
 - Add implementation workflow checklist
 - Document ApplicationConfig breaking change (#178)
+
+### Release
+
+- V0.1.0-alpha.4
 
 ## [0.1.0-alpha.3] - 2026-02-12
 
