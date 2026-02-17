@@ -16,13 +16,16 @@ type RawPatchMap map[string]interface{}
 
 type TargetedPatch struct {
 	Target string                 `yaml:"target"`
+	Type   string                 `yaml:"type,omitempty"` // "" (field-level) or "strategic"
 	Patch  map[string]interface{} `yaml:"patch"`
 }
 
 // PatchSpec ties a parsed PatchOp to an optional explicit target.
+// For strategic merge patches, Strategic is non-nil and Patch is zero-value.
 type PatchSpec struct {
-	Target string
-	Patch  PatchOp
+	Target    string
+	Patch     PatchOp         // field-level patch (zero value when Strategic is set)
+	Strategic *StrategicPatch // non-nil for strategic merge patches
 }
 
 var Debug = os.Getenv("KURE_DEBUG") == "1"
@@ -90,6 +93,28 @@ func LoadYAMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 			return nil, fmt.Errorf("invalid patch list: %w", err)
 		}
 		for _, entry := range list {
+			if entry.Type != "" && entry.Type != "strategic" {
+				return nil, fmt.Errorf("unknown patch type %q for target %q: must be \"\" or \"strategic\"", entry.Type, entry.Target)
+			}
+			if entry.Type == "strategic" {
+				if len(entry.Patch) == 0 {
+					return nil, fmt.Errorf("strategic patch targeting '%s' has no patch payload", entry.Target)
+				}
+				substitutedPatch, err := substituteVariablesInMap(entry.Patch, varCtx)
+				if err != nil {
+					return nil, fmt.Errorf("variable substitution failed for strategic patch targeting '%s': %w", entry.Target, err)
+				}
+				inferTypesInMap(substitutedPatch)
+				if Debug {
+					log.Printf("Strategic patch loaded: target=%s", entry.Target)
+				}
+				patches = append(patches, PatchSpec{
+					Target:    entry.Target,
+					Strategic: &StrategicPatch{Patch: substitutedPatch},
+				})
+				continue
+			}
+
 			for k, v := range entry.Patch {
 				// Apply variable substitution
 				substitutedValue, err := SubstituteVariables(fmt.Sprintf("%v", v), varCtx)
@@ -299,6 +324,76 @@ func extractResourceName(resources []*unstructured.Unstructured, target string) 
 	return target // fallback to original target if no match
 }
 
+// CanonicalResourceKey returns the unique key for a resource.
+// For namespaced resources: "namespace/kind.name"
+// For cluster-scoped resources: "kind.name"
+func CanonicalResourceKey(r *unstructured.Unstructured) string {
+	kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
+	if ns := r.GetNamespace(); ns != "" {
+		return fmt.Sprintf("%s/%s", ns, kindName)
+	}
+	return kindName
+}
+
+// ResolveTargetKey resolves a patch target to its canonical resource key.
+// Accepts short names ("my-app"), kind-qualified names ("deployment.my-app"),
+// and namespace-qualified names ("staging/deployment.my-app").
+// Returns an error if the target matches no resource or is ambiguous.
+func ResolveTargetKey(resources []*unstructured.Unstructured, target string) (string, error) {
+	// Check for namespace/kind.name format
+	if idx := strings.Index(target, "/"); idx > 0 {
+		ns := target[:idx]
+		rest := target[idx+1:]
+		lowRest := strings.ToLower(rest)
+		for _, r := range resources {
+			kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
+			if lowRest == kindName && r.GetNamespace() == ns {
+				return CanonicalResourceKey(r), nil
+			}
+		}
+		return "", fmt.Errorf("target %q not found in base resources", target)
+	}
+
+	// Try kind.name match first (case-insensitive)
+	lowTarget := strings.ToLower(target)
+	var kindNameMatches []*unstructured.Unstructured
+	for _, r := range resources {
+		kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
+		if lowTarget == kindName {
+			kindNameMatches = append(kindNameMatches, r)
+		}
+	}
+	if len(kindNameMatches) == 1 {
+		return CanonicalResourceKey(kindNameMatches[0]), nil
+	}
+	if len(kindNameMatches) > 1 {
+		return "", fmt.Errorf("target %q is ambiguous, matches %d resources; use namespace/kind.name to disambiguate",
+			target, len(kindNameMatches))
+	}
+
+	// Try short name match
+	var shortMatches []*unstructured.Unstructured
+	for _, r := range resources {
+		if r.GetName() == target {
+			shortMatches = append(shortMatches, r)
+		}
+	}
+
+	switch len(shortMatches) {
+	case 0:
+		return "", fmt.Errorf("target %q not found in base resources", target)
+	case 1:
+		return CanonicalResourceKey(shortMatches[0]), nil
+	default:
+		names := make([]string, len(shortMatches))
+		for i, r := range shortMatches {
+			names[i] = fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
+		}
+		return "", fmt.Errorf("target %q is ambiguous, matches: %s; use kind.name format",
+			target, strings.Join(names, ", "))
+	}
+}
+
 // preserveTargetForDisambiguation returns the target string, preserving kind.name format
 // when there are multiple resources with the same name but different kinds
 func preserveTargetForDisambiguation(resources []*unstructured.Unstructured, target string) string {
@@ -351,11 +446,35 @@ func smartTarget(resources []*unstructured.Unstructured, p PatchOp) []string {
 // and parsed patch specifications.
 func NewPatchableAppSet(resources []*unstructured.Unstructured, patches []PatchSpec) (*PatchableAppSet, error) {
 	var wrapped []struct {
-		Target string
-		Patch  PatchOp
+		Target    string
+		Patch     PatchOp
+		Strategic *StrategicPatch
 	}
 
 	for _, spec := range patches {
+		// Handle strategic merge patches
+		if spec.Strategic != nil {
+			target := spec.Target
+			if target == "" {
+				return nil, fmt.Errorf("strategic merge patch requires an explicit target")
+			}
+			resolved, err := ResolveTargetKey(resources, target)
+			if err != nil {
+				return nil, fmt.Errorf("strategic merge patch: %w", err)
+			}
+			target = resolved
+
+			if Debug {
+				log.Printf("Strategic patch resolved: target=%s", target)
+			}
+			wrapped = append(wrapped, struct {
+				Target    string
+				Patch     PatchOp
+				Strategic *StrategicPatch
+			}{Target: target, Strategic: spec.Strategic})
+			continue
+		}
+
 		p := spec.Patch
 		if err := p.NormalizePath(); err != nil {
 			return nil, fmt.Errorf("invalid patch path syntax: %s: %w", p.Path, err)
@@ -364,11 +483,14 @@ func NewPatchableAppSet(resources []*unstructured.Unstructured, patches []PatchS
 		var target string
 		var trimmed string
 		if spec.Target != "" {
-			if !resourceExists(resources, spec.Target) {
-				return nil, fmt.Errorf("explicit target not found: %s", spec.Target)
+			resolved, err := ResolveTargetKey(resources, spec.Target)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found in base resources") {
+					return nil, fmt.Errorf("explicit target not found: %s", spec.Target)
+				}
+				return nil, fmt.Errorf("explicit target %q: %w", spec.Target, err)
 			}
-			// Extract actual resource name from kind.name format if needed
-			target = extractResourceName(resources, spec.Target)
+			target = resolved
 		} else {
 			target, trimmed = resolvePatchTarget(resources, p.Path)
 			if target == "" {
@@ -391,8 +513,9 @@ func NewPatchableAppSet(resources []*unstructured.Unstructured, patches []PatchS
 			log.Printf("Patch resolved: target=%s op=%s path=%s value=%v", target, p.Op, p.Path, p.Value)
 		}
 		wrapped = append(wrapped, struct {
-			Target string
-			Patch  PatchOp
+			Target    string
+			Patch     PatchOp
+			Strategic *StrategicPatch
 		}{Target: target, Patch: p})
 	}
 
@@ -407,11 +530,35 @@ func NewPatchableAppSetWithStructure(documentSet *YAMLDocumentSet, patches []Pat
 	resources := documentSet.GetResources()
 
 	var wrapped []struct {
-		Target string
-		Patch  PatchOp
+		Target    string
+		Patch     PatchOp
+		Strategic *StrategicPatch
 	}
 
 	for _, spec := range patches {
+		// Handle strategic merge patches
+		if spec.Strategic != nil {
+			target := spec.Target
+			if target == "" {
+				return nil, fmt.Errorf("strategic merge patch requires an explicit target")
+			}
+			resolved, err := ResolveTargetKey(resources, target)
+			if err != nil {
+				return nil, fmt.Errorf("strategic merge patch: %w", err)
+			}
+			target = resolved
+
+			if Debug {
+				log.Printf("Strategic patch resolved: target=%s", target)
+			}
+			wrapped = append(wrapped, struct {
+				Target    string
+				Patch     PatchOp
+				Strategic *StrategicPatch
+			}{Target: target, Strategic: spec.Strategic})
+			continue
+		}
+
 		p := spec.Patch
 		if err := p.NormalizePath(); err != nil {
 			return nil, fmt.Errorf("invalid patch path syntax: %s: %w", p.Path, err)
@@ -420,11 +567,14 @@ func NewPatchableAppSetWithStructure(documentSet *YAMLDocumentSet, patches []Pat
 		var target string
 		var trimmed string
 		if spec.Target != "" {
-			if !resourceExists(resources, spec.Target) {
-				return nil, fmt.Errorf("explicit target not found: %s", spec.Target)
+			resolved, err := ResolveTargetKey(resources, spec.Target)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found in base resources") {
+					return nil, fmt.Errorf("explicit target not found: %s", spec.Target)
+				}
+				return nil, fmt.Errorf("explicit target %q: %w", spec.Target, err)
 			}
-			// Preserve kind.name format when needed for disambiguation
-			target = preserveTargetForDisambiguation(resources, spec.Target)
+			target = resolved
 		} else {
 			target, trimmed = resolvePatchTarget(resources, p.Path)
 			if target == "" {
@@ -447,8 +597,9 @@ func NewPatchableAppSetWithStructure(documentSet *YAMLDocumentSet, patches []Pat
 			log.Printf("Patch resolved: target=%s op=%s path=%s value=%v", target, p.Op, p.Path, p.Value)
 		}
 		wrapped = append(wrapped, struct {
-			Target string
-			Patch  PatchOp
+			Target    string
+			Patch     PatchOp
+			Strategic *StrategicPatch
 		}{Target: target, Patch: p})
 	}
 
@@ -457,4 +608,68 @@ func NewPatchableAppSetWithStructure(documentSet *YAMLDocumentSet, patches []Pat
 		DocumentSet: documentSet,
 		Patches:     wrapped,
 	}, nil
+}
+
+// substituteVariablesInMap recursively applies variable substitution to all
+// string leaf values in a map[string]interface{}.
+func substituteVariablesInMap(m map[string]interface{}, ctx *VariableContext) (map[string]interface{}, error) {
+	if ctx == nil {
+		return m, nil
+	}
+	result := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		substituted, err := substituteVariablesInValue(v, ctx)
+		if err != nil {
+			return nil, err
+		}
+		result[k] = substituted
+	}
+	return result, nil
+}
+
+func substituteVariablesInValue(v interface{}, ctx *VariableContext) (interface{}, error) {
+	switch val := v.(type) {
+	case string:
+		return SubstituteVariables(val, ctx)
+	case map[string]interface{}:
+		return substituteVariablesInMap(val, ctx)
+	case []interface{}:
+		result := make([]interface{}, len(val))
+		for i, item := range val {
+			s, err := substituteVariablesInValue(item, ctx)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = s
+		}
+		return result, nil
+	default:
+		return v, nil
+	}
+}
+
+// inferTypesInMap recursively applies type inference to string leaf values
+// in a map, converting numeric and boolean strings to their typed equivalents.
+// This matches the type inference applied to field-level patch values.
+func inferTypesInMap(m map[string]interface{}) {
+	for k, v := range m {
+		m[k] = inferTypesInValue(k, v)
+	}
+}
+
+func inferTypesInValue(key string, v interface{}) interface{} {
+	switch val := v.(type) {
+	case string:
+		return inferValueType(key, val)
+	case map[string]interface{}:
+		inferTypesInMap(val)
+		return val
+	case []interface{}:
+		for i, item := range val {
+			val[i] = inferTypesInValue(key, item)
+		}
+		return val
+	default:
+		return v
+	}
 }

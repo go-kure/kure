@@ -16,9 +16,11 @@ import (
 type PatchableAppSet struct {
 	Resources   []*unstructured.Unstructured
 	DocumentSet *YAMLDocumentSet // Preserves original YAML structure
+	KindLookup  KindLookup       // Used for strategic merge patches (may be nil)
 	Patches     []struct {
-		Target string
-		Patch  PatchOp
+		Target    string
+		Patch     PatchOp
+		Strategic *StrategicPatch
 	}
 }
 
@@ -29,38 +31,59 @@ func (s *PatchableAppSet) Resolve() ([]*ResourceWithPatches, error) {
 	resourceMap := make(map[string]*unstructured.Unstructured)
 	resourceKeys := make([]string, 0)
 
+	// Count occurrences of kind.name and short name to detect ambiguity
+	kindNameCount := make(map[string]int)
+	nameCount := make(map[string]int)
+	for _, r := range s.Resources {
+		kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
+		kindNameCount[kindName]++
+		nameCount[r.GetName()]++
+	}
+
 	for _, r := range s.Resources {
 		name := r.GetName()
 		kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), name)
+		canonical := CanonicalResourceKey(r)
 
-		// Use kind.name as the primary key to ensure uniqueness
-		resourceMap[kindName] = r
-		resourceKeys = append(resourceKeys, kindName)
+		// Primary key: canonical (namespace-aware, always unique)
+		resourceMap[canonical] = r
+		resourceKeys = append(resourceKeys, canonical)
 
-		// Also allow lookup by name alone if it's unique
-		if _, exists := resourceMap[name]; !exists {
+		// Secondary: kind.name without namespace (if unambiguous)
+		if kindNameCount[kindName] == 1 && canonical != kindName {
+			resourceMap[kindName] = r
+		}
+
+		// Tertiary: short name (if unambiguous)
+		if nameCount[name] == 1 {
 			resourceMap[name] = r
 		}
 	}
 
-	// Group patches by target, using the unique resource key for grouping
+	// Group patches by target, using the canonical resource key for grouping
 	out := make(map[string]*ResourceWithPatches)
 	for _, p := range s.Patches {
-		if resource, ok := resourceMap[p.Target]; ok {
-			// Use the resource's unique key (kind.name) as the map key for grouping
-			resourceKey := fmt.Sprintf("%s.%s", strings.ToLower(resource.GetKind()), resource.GetName())
-
-			if rw, exists := out[resourceKey]; exists {
-				rw.Patches = append(rw.Patches, p.Patch)
-			} else {
-				out[resourceKey] = &ResourceWithPatches{
-					Name:    resource.GetName(),
-					Base:    resource.DeepCopy(),
-					Patches: []PatchOp{p.Patch},
-				}
-			}
-		} else {
+		resource, ok := resourceMap[p.Target]
+		if !ok {
 			return nil, errors.ResourceNotFoundError("patch target", p.Target, "", nil)
+		}
+
+		resourceKey := CanonicalResourceKey(resource)
+
+		rw, exists := out[resourceKey]
+		if !exists {
+			rw = &ResourceWithPatches{
+				Name:       resource.GetName(),
+				Base:       resource.DeepCopy(),
+				KindLookup: s.KindLookup,
+			}
+			out[resourceKey] = rw
+		}
+
+		if p.Strategic != nil {
+			rw.StrategicPatches = append(rw.StrategicPatches, *p.Strategic)
+		} else {
+			rw.Patches = append(rw.Patches, p.Patch)
 		}
 	}
 
@@ -75,6 +98,41 @@ func (s *PatchableAppSet) Resolve() ([]*ResourceWithPatches, error) {
 	return result, nil
 }
 
+// ResolveWithConflictCheck resolves patches and additionally checks for
+// conflicts among strategic merge patches targeting the same resource.
+func (s *PatchableAppSet) ResolveWithConflictCheck() ([]*ResourceWithPatches, []*ConflictReport, error) {
+	resolved, err := s.Resolve()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var reports []*ConflictReport
+	for _, rw := range resolved {
+		if len(rw.StrategicPatches) < 2 {
+			continue
+		}
+
+		// Collect patch maps for conflict detection
+		patchMaps := make([]map[string]interface{}, len(rw.StrategicPatches))
+		for i, sp := range rw.StrategicPatches {
+			patchMaps[i] = sp.Patch
+		}
+
+		gvk := rw.Base.GroupVersionKind()
+		report, err := DetectSMPConflicts(patchMaps, s.KindLookup, gvk)
+		if err != nil {
+			return nil, nil, fmt.Errorf("conflict detection failed for resource %s: %w", rw.Name, err)
+		}
+		if report.HasConflicts() {
+			report.ResourceName = rw.Name
+			report.ResourceKind = gvk.Kind
+			reports = append(reports, report)
+		}
+	}
+
+	return resolved, reports, nil
+}
+
 // WriteToFile writes the patched resources to a file while preserving structure
 func (s *PatchableAppSet) WriteToFile(filename string) error {
 	if s.DocumentSet == nil {
@@ -87,18 +145,29 @@ func (s *PatchableAppSet) WriteToFile(filename string) error {
 		return fmt.Errorf("failed to resolve patches: %w", err)
 	}
 
-	// Group patches by target for efficient application
+	// Build maps for both patch types, keyed by canonical resource key to avoid
+	// cross-kind and cross-namespace collisions.
 	patchesByTarget := make(map[string][]PatchOp)
+	strategicByTarget := make(map[string]*ResourceWithPatches)
 	for _, r := range resolved {
-		patchesByTarget[r.Name] = r.Patches
+		key := CanonicalResourceKey(r.Base)
+		patchesByTarget[key] = r.Patches
+		if len(r.StrategicPatches) > 0 {
+			strategicByTarget[key] = r
+		}
 	}
 
-	// Apply patches to documents while preserving structure
+	// Apply strategic patches first, then field-level patches
 	for _, doc := range s.DocumentSet.Documents {
-		resourceName := doc.Resource.GetName()
-		if patches, exists := patchesByTarget[resourceName]; exists {
+		docKey := CanonicalResourceKey(doc.Resource)
+		if rw, exists := strategicByTarget[docKey]; exists {
+			if err := doc.ApplyStrategicPatchesToDocument(rw.StrategicPatches, s.KindLookup); err != nil {
+				return fmt.Errorf("failed to apply strategic patches to document %s: %w", docKey, err)
+			}
+		}
+		if patches, exists := patchesByTarget[docKey]; exists {
 			if err := doc.ApplyPatchesToDocument(patches); err != nil {
-				return fmt.Errorf("failed to apply patches to document %s: %w", resourceName, err)
+				return fmt.Errorf("failed to apply patches to document %s: %w", docKey, err)
 			}
 		}
 	}
@@ -133,9 +202,9 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 		if err != nil {
 			return fmt.Errorf("failed to open patch file %s: %w", patchFile, err)
 		}
-		defer patchReader.Close()
 
 		patches, err := LoadPatchFile(patchReader)
+		patchReader.Close()
 		if err != nil {
 			return fmt.Errorf("failed to load patches from %s: %w", patchFile, err)
 		}
@@ -144,7 +213,7 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 		patchableSet, err := NewPatchableAppSetWithStructure(docSetCopy, patches)
 		if err != nil {
 			// If the error is about a missing target, skip this patch file with a warning
-			if strings.Contains(err.Error(), "explicit target not found") {
+			if strings.Contains(err.Error(), "explicit target not found") || strings.Contains(err.Error(), "not found in base resources") {
 				fmt.Printf("⚠️  Skipping %s: contains patches for resources not present in base YAML\n", patchFile)
 				if Debug {
 					fmt.Printf("   Details: %v\n", err)
@@ -153,6 +222,9 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 			}
 			return fmt.Errorf("failed to create patchable set for %s: %w", patchFile, err)
 		}
+
+		// Propagate KindLookup so strategic merge patches use schema-aware merging
+		patchableSet.KindLookup = s.KindLookup
 
 		// Resolve and apply patches
 		resolved, err := patchableSet.Resolve()
@@ -169,10 +241,15 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 
 		// Update the document set resources with the patched versions
 		for _, r := range resolved {
-			// Use kind and name to find the correct document when there are duplicates
-			doc := docSetCopy.FindDocumentByKindAndName(r.Base.GetKind(), r.Name)
+			// Prefer namespace-aware lookup to avoid cross-namespace mismatches
+			var doc *YAMLDocument
+			if ns := r.Base.GetNamespace(); ns != "" {
+				doc = docSetCopy.FindDocumentByKindNameAndNamespace(r.Base.GetKind(), r.Name, ns)
+			}
 			if doc == nil {
-				// Fallback to name-only search if kind-specific search fails
+				doc = docSetCopy.FindDocumentByKindAndName(r.Base.GetKind(), r.Name)
+			}
+			if doc == nil {
 				doc = docSetCopy.FindDocumentByName(r.Name)
 			}
 			if doc != nil {

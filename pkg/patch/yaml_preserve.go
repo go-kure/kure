@@ -172,6 +172,35 @@ func (doc *YAMLDocument) ApplyPatchesToDocument(patches []PatchOp) error {
 	return nil
 }
 
+// ApplyStrategicPatchesToDocument applies strategic merge patches to a YAML
+// document while preserving structure. The resource is mutated in place via
+// ApplyStrategicMergePatch, then the YAML node is updated to reflect the
+// new state while preserving comments.
+func (doc *YAMLDocument) ApplyStrategicPatchesToDocument(patches []StrategicPatch, lookup KindLookup) error {
+	for _, smp := range patches {
+		if err := ApplyStrategicMergePatch(doc.Resource, smp.Patch, lookup); err != nil {
+			return fmt.Errorf("failed to apply strategic patch: %w", err)
+		}
+	}
+
+	// Re-marshal the patched resource and merge into the existing YAML node
+	patchedYAML, err := yaml.Marshal(doc.Resource.Object)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patched resource: %w", err)
+	}
+
+	var patchedNode yaml.Node
+	if err := yaml.Unmarshal(patchedYAML, &patchedNode); err != nil {
+		return fmt.Errorf("failed to parse patched YAML: %w", err)
+	}
+
+	if err := mergeYAMLNodes(doc.Node, &patchedNode); err != nil {
+		doc.Node = &patchedNode
+	}
+
+	return nil
+}
+
 // mergeYAMLNodes attempts to merge patched values into original node structure
 // This is a best-effort attempt to preserve comments and formatting
 func mergeYAMLNodes(original, patched *yaml.Node) error {
@@ -239,12 +268,174 @@ func mergeMappingNodes(original, patched *yaml.Node) error {
 	return nil
 }
 
-// mergeSequenceNodes merges sequence (array) nodes
+// mergeSequenceNodes replaces the original sequence with the patched sequence
+// while preserving comments from matched items. This is NOT a true merge:
+// items present in the original but absent in the patched set are dropped.
+// Callers are expected to provide a patched set that already contains all
+// surviving items (e.g. the output of a strategic merge patch).
+// When items can be matched by a well-known merge key (e.g. "name"), comments
+// and formatting are preserved on existing items. Items without a match key
+// fall back to full replacement.
 func mergeSequenceNodes(original, patched *yaml.Node) error {
-	// For sequences, we generally replace the entire content
-	// as it's difficult to meaningfully merge arrays while preserving order
-	original.Content = patched.Content
+	mergeKey := detectMergeKey(original)
+	if mergeKey == "" {
+		// No recognizable merge key — replace the entire sequence
+		original.Content = patched.Content
+		return nil
+	}
+
+	// Build index of original items by merge key value
+	origIndex := buildMergeKeyIndex(original, mergeKey)
+
+	// Process patched items: merge into existing or append
+	var merged []*yaml.Node
+	seen := make(map[string]bool)
+
+	for _, patchedItem := range patched.Content {
+		keyVal := extractMergeKeyValue(patchedItem, mergeKey)
+		if keyVal != "" {
+			seen[keyVal] = true
+			if origItem, exists := origIndex[keyVal]; exists {
+				// Use patched item as the base (correct field set),
+				// but preserve comments from the original item.
+				preserveComments(origItem, patchedItem)
+				merged = append(merged, patchedItem)
+				continue
+			}
+		}
+		merged = append(merged, patchedItem)
+	}
+
+	original.Content = merged
 	return nil
+}
+
+// commonMergeKeys are the well-known keys used by Kubernetes strategic merge
+// patch to identify list items.
+var commonMergeKeys = []string{
+	"name",
+	"containerPort",
+	"port",
+	"mountPath",
+	"key",
+	"ip",
+}
+
+// detectMergeKey examines the first mapping item in a sequence to find a
+// recognized merge key. Returns "" if none found.
+func detectMergeKey(seq *yaml.Node) string {
+	if len(seq.Content) == 0 {
+		return ""
+	}
+	first := seq.Content[0]
+	if first.Kind != yaml.MappingNode {
+		return ""
+	}
+	keys := make(map[string]bool)
+	for i := 0; i < len(first.Content); i += 2 {
+		if first.Content[i].Kind == yaml.ScalarNode {
+			keys[first.Content[i].Value] = true
+		}
+	}
+	for _, mk := range commonMergeKeys {
+		if keys[mk] {
+			return mk
+		}
+	}
+	return ""
+}
+
+// buildMergeKeyIndex builds a map from merge-key value to the original node.
+func buildMergeKeyIndex(seq *yaml.Node, mergeKey string) map[string]*yaml.Node {
+	index := make(map[string]*yaml.Node)
+	for _, item := range seq.Content {
+		if val := extractMergeKeyValue(item, mergeKey); val != "" {
+			index[val] = item
+		}
+	}
+	return index
+}
+
+// extractMergeKeyValue extracts the value of the merge key from a mapping node.
+func extractMergeKeyValue(node *yaml.Node, mergeKey string) string {
+	if node.Kind != yaml.MappingNode {
+		return ""
+	}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		if node.Content[i].Kind == yaml.ScalarNode && node.Content[i].Value == mergeKey {
+			if node.Content[i+1].Kind == yaml.ScalarNode {
+				return node.Content[i+1].Value
+			}
+		}
+	}
+	return ""
+}
+
+// preserveComments copies comments from src (original) to dst (patched) by
+// walking both mapping nodes in parallel and matching keys. Only comments on
+// keys that exist in dst are transferred.
+func preserveComments(src, dst *yaml.Node) {
+	if src == nil || dst == nil {
+		return
+	}
+
+	// Copy top-level comments
+	if dst.HeadComment == "" {
+		dst.HeadComment = src.HeadComment
+	}
+	if dst.LineComment == "" {
+		dst.LineComment = src.LineComment
+	}
+	if dst.FootComment == "" {
+		dst.FootComment = src.FootComment
+	}
+
+	if src.Kind != yaml.MappingNode || dst.Kind != yaml.MappingNode {
+		return
+	}
+
+	// Build index of src keys -> (keyNode, valueNode)
+	type kvPair struct {
+		key   *yaml.Node
+		value *yaml.Node
+	}
+	srcMap := make(map[string]kvPair)
+	for i := 0; i < len(src.Content)-1; i += 2 {
+		if src.Content[i].Kind == yaml.ScalarNode {
+			srcMap[src.Content[i].Value] = kvPair{src.Content[i], src.Content[i+1]}
+		}
+	}
+
+	for i := 0; i < len(dst.Content)-1; i += 2 {
+		dstKey := dst.Content[i]
+		dstVal := dst.Content[i+1]
+		if dstKey.Kind != yaml.ScalarNode {
+			continue
+		}
+		if srcKV, ok := srcMap[dstKey.Value]; ok {
+			// Copy comments from source key and value nodes
+			if dstKey.HeadComment == "" {
+				dstKey.HeadComment = srcKV.key.HeadComment
+			}
+			if dstKey.LineComment == "" {
+				dstKey.LineComment = srcKV.key.LineComment
+			}
+			if dstKey.FootComment == "" {
+				dstKey.FootComment = srcKV.key.FootComment
+			}
+			if dstVal.HeadComment == "" {
+				dstVal.HeadComment = srcKV.value.HeadComment
+			}
+			if dstVal.LineComment == "" {
+				dstVal.LineComment = srcKV.value.LineComment
+			}
+			if dstVal.FootComment == "" {
+				dstVal.FootComment = srcKV.value.FootComment
+			}
+			// Recurse into nested structures
+			preserveComments(srcKV.value, dstVal)
+		}
+	}
 }
 
 // WriteToFile writes the document set to a file with preserved structure
@@ -308,6 +499,19 @@ func (set *YAMLDocumentSet) FindDocumentByKindAndName(kind, name string) *YAMLDo
 	for _, doc := range set.Documents {
 		if strings.ToLower(doc.Resource.GetKind()) == strings.ToLower(kind) &&
 			doc.Resource.GetName() == name {
+			return doc
+		}
+	}
+	return nil
+}
+
+// FindDocumentByKindNameAndNamespace finds a document by kind, name, and namespace.
+// All three must match for a result.
+func (set *YAMLDocumentSet) FindDocumentByKindNameAndNamespace(kind, name, namespace string) *YAMLDocument {
+	for _, doc := range set.Documents {
+		if strings.ToLower(doc.Resource.GetKind()) == strings.ToLower(kind) &&
+			doc.Resource.GetName() == name &&
+			doc.Resource.GetNamespace() == namespace {
 			return doc
 		}
 	}

@@ -22,13 +22,28 @@ type PatchOp struct {
 
 // ResourceWithPatches ties a base object with the patches that should be applied to it.
 type ResourceWithPatches struct {
-	Name    string
-	Base    *unstructured.Unstructured
-	Patches []PatchOp
+	Name             string
+	Base             *unstructured.Unstructured
+	Patches          []PatchOp
+	StrategicPatches []StrategicPatch // applied before field-level patches
+	KindLookup       KindLookup       // may be nil; used for strategic merge
 }
 
-// Apply executes all patches on the base object.
+// Apply executes all patches on the base object. Strategic merge patches are
+// applied first (setting broad document shape), then field-level patches make
+// precise tweaks on top.
 func (r *ResourceWithPatches) Apply() error {
+	for _, smp := range r.StrategicPatches {
+		if err := ApplyStrategicMergePatch(r.Base, smp.Patch, r.KindLookup); err != nil {
+			return errors.NewPatchError(
+				"strategic-merge",
+				"",
+				r.Name,
+				"strategic merge patch failed",
+				err,
+			)
+		}
+	}
 	for _, patch := range r.Patches {
 		if err := applyPatchOp(r.Base.Object, patch); err != nil {
 			return errors.NewPatchError(

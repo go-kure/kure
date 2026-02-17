@@ -107,6 +107,37 @@ image = "updated:latest"
 
 When using `NewPatchableAppSetWithStructure`, the original YAML document structure is preserved through patching, maintaining comments, key ordering, and formatting.
 
+### Strategic Merge Patch
+
+For broad document-level changes, strategic merge patch (SMP) deep-merges a partial YAML document into the target resource. Known Kubernetes kinds merge lists by key (e.g. containers by `name`); unknown kinds fall back to JSON merge patch (RFC 7386).
+
+```yaml
+- target: deployment.my-app
+  type: strategic
+  patch:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: main
+            resources:
+              limits:
+                cpu: "500m"
+          - name: sidecar
+            image: envoy:v1.28
+```
+
+```go
+// Enable kind-aware merging
+lookup, _ := patch.DefaultKindLookup()
+patchSet.KindLookup = lookup
+
+// Detect conflicts before applying
+resolved, reports, err := patchSet.ResolveWithConflictCheck()
+```
+
+SMP patches are applied before field-level patches. See [DESIGN.md](DESIGN.md) for full specification.
+
 ## API Reference
 
 ### Loading Patches
@@ -125,6 +156,15 @@ When using `NewPatchableAppSetWithStructure`, the original YAML document structu
 | `NewPatchableAppSet(resources, patches)` | Create patchable set |
 | `NewPatchableAppSetWithStructure(docSet, patches)` | Create with structure preservation |
 | `ParsePatchLine(path, value)` | Parse a single patch operation |
+
+### Strategic Merge Patch
+
+| Function | Description |
+|----------|-------------|
+| `ApplyStrategicMergePatch(resource, patch, lookup)` | Apply SMP to a single resource |
+| `DefaultKindLookup()` | Create a KindLookup from the built-in scheme |
+| `DetectSMPConflicts(patches, lookup, gvk)` | Check pairwise conflicts among patches |
+| `ResolveWithConflictCheck()` | Resolve patches with conflict detection |
 
 ## Related Packages
 

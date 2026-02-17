@@ -414,6 +414,66 @@ metadata:
 	}
 }
 
+// TestMergeSequenceNodes_StaleFieldRemoval verifies that when a keyed list
+// item is merged, fields present in the original but absent in the patched
+// version are removed (i.e. the patched node is used as the base).
+func TestMergeSequenceNodes_StaleFieldRemoval(t *testing.T) {
+	originalYAML := `
+- name: main
+  image: nginx:1.24
+  resources:
+    limits:
+      cpu: "1"
+- name: sidecar
+  image: envoy:latest
+`
+	patchedYAML := `
+- name: main
+  image: nginx:1.25
+`
+
+	var origNode, patchedNode yaml.Node
+	if err := yaml.Unmarshal([]byte(originalYAML), &origNode); err != nil {
+		t.Fatalf("unmarshal original: %v", err)
+	}
+	if err := yaml.Unmarshal([]byte(patchedYAML), &patchedNode); err != nil {
+		t.Fatalf("unmarshal patched: %v", err)
+	}
+
+	// Get the sequence nodes (inside document nodes)
+	origSeq := origNode.Content[0]
+	patchedSeq := patchedNode.Content[0]
+
+	if err := mergeSequenceNodes(origSeq, patchedSeq); err != nil {
+		t.Fatalf("mergeSequenceNodes: %v", err)
+	}
+
+	// The result should have only the "main" item (the patched set),
+	// and the "main" item should NOT have "resources".
+	if len(origSeq.Content) != 1 {
+		t.Fatalf("expected 1 item in merged sequence, got %d", len(origSeq.Content))
+	}
+
+	// Check that "resources" is gone from the merged "main" item
+	mainItem := origSeq.Content[0]
+	for i := 0; i < len(mainItem.Content)-1; i += 2 {
+		if mainItem.Content[i].Value == "resources" {
+			t.Fatal("stale 'resources' field was not removed from merged item")
+		}
+	}
+
+	// Check that "image" was updated
+	for i := 0; i < len(mainItem.Content)-1; i += 2 {
+		if mainItem.Content[i].Value == "image" {
+			if mainItem.Content[i+1].Value != "nginx:1.25" {
+				t.Errorf("expected image nginx:1.25, got %s", mainItem.Content[i+1].Value)
+			}
+			return
+		}
+	}
+	t.Error("image field not found in merged item")
+}
+
 // extractAllComments recursively extracts all comments from a YAML node
 func extractAllComments(node *yaml.Node) []string {
 	var comments []string

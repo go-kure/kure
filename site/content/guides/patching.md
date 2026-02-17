@@ -108,6 +108,81 @@ image = "envoy:latest"
 image = "updated:latest"
 ```
 
+## Strategic Merge Patch
+
+For broad document-level changes, use strategic merge patch (SMP). Instead of targeting individual fields, SMP deep-merges a partial YAML document into the target resource.
+
+### How It Works
+
+Known Kubernetes kinds (Deployment, Service, etc.) are merged using struct tags — lists like `containers` are merged by `name`, not replaced. Unknown kinds (CRDs) fall back to JSON merge patch (RFC 7386), where lists are replaced entirely.
+
+### YAML Syntax
+
+```yaml
+# Add a sidecar and update the main container's resources
+- target: deployment.my-app
+  type: strategic
+  patch:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: main
+            resources:
+              limits:
+                cpu: "500m"
+                memory: "256Mi"
+          - name: sidecar
+            image: envoy:v1.28
+```
+
+### Mixing with Field-Level Patches
+
+SMP and field-level patches can coexist in the same file. SMP patches are applied first (setting the document shape), then field-level patches make precise tweaks:
+
+```yaml
+# Strategic merge: add a sidecar container
+- target: deployment.my-app
+  type: strategic
+  patch:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: sidecar
+            image: envoy:v1.28
+
+# Field-level: set replica count precisely
+- target: deployment.my-app
+  patch:
+    spec.replicas: 3
+```
+
+### Enabling Kind-Aware Merging
+
+```go
+import "github.com/go-kure/kure/pkg/patch"
+
+// Create a kind lookup for schema-aware merging
+lookup, err := patch.DefaultKindLookup()
+patchSet.KindLookup = lookup
+```
+
+### Conflict Detection
+
+When multiple SMP patches target the same resource, check for conflicts:
+
+```go
+resolved, reports, err := patchSet.ResolveWithConflictCheck()
+for _, r := range reports {
+    if r.HasConflicts() {
+        for _, c := range r.Conflicts {
+            log.Printf("conflict on %s: %s", r.ResourceName, c.Description)
+        }
+    }
+}
+```
+
 ## Further Reading
 
 - [Patch reference](/api-reference/patch) for API details

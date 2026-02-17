@@ -50,6 +50,17 @@
       "Bash(git -C /home/serge/src/autops/wharf/kure checkout main)",
       "Bash(git -C /home/serge/src/autops/wharf/kure pull)",
       "Bash(git stash:*)",
+      "Bash(curl:*)",
+      "Bash(GOWORK=off go test:*)",
+      "Bash(GOWORK=off make lint:*)",
+      "Bash(GOWORK=off gofmt:*)",
+      "Bash(GOWORK=off make test:*)",
+      "Bash(GOWORK=off make check:*)",
+      "Bash(GOWORK=off go doc:*)",
+      "Bash(GOWORK=off go build:*)",
+      "Bash(GOWORK=off go mod tidy:*)",
+      "Bash(GOWORK=off make precommit:*)",
+      "Bash(GOWORK=off go vet:*)",
       "Bash(git rebase:*)"
     ]
   },

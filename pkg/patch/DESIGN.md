@@ -157,21 +157,82 @@ Note: You may omit brackets around `key=value` unless the key or value contains 
 - Automatic type inference for Kubernetes compatibility
 - Comprehensive debug logging with `KURE_DEBUG=1`
 - Graceful error handling with warnings for missing targets
+- Strategic merge patch (SMP) for deep-merging partial YAML documents
+- JSON merge patch fallback (RFC 7386) for CRDs without Go struct tags
+- SMP conflict detection for overlapping patches
 
 ### Current Limitations
 - No logic, conditionals, or templating expressions
-- No map merging — field values are completely replaced
-- Only scalar values supported (arrays/objects not allowed in patch values)
+- Field-level patches only support scalar values (arrays/objects not allowed)
 - ✅ Pure index-based insertion (`[-3]`, `[+2]`) now implemented
 - Variable context must be provided programmatically
 - No OpenAPI schema validation (planned for future implementation)
+- SMP is YAML-only (not available in TOML format)
+- CRD list merging uses replace semantics (no merge-by-key without struct tags)
 
 ### Future Enhancements
 - OpenAPI schema validation for patch target verification
 
 ---
 
-## 7. Purpose
+## 7. Strategic Merge Patch
+
+Strategic merge patch (SMP) is a Kubernetes-native patching strategy where a partial YAML document is deep-merged into a target resource. Unlike JSON merge patch, SMP is schema-aware: it knows that `spec.containers` should be merged by `name`, not replaced entirely.
+
+### 7.1 YAML Syntax
+
+SMP patches use `type: strategic` in the targeted patch list format:
+
+```yaml
+# Field-level patches (unchanged)
+- target: deployment.my-app
+  patch:
+    spec.replicas: 3
+
+# Strategic merge patch
+- target: deployment.my-app
+  type: strategic
+  patch:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: main
+            resources:
+              limits:
+                cpu: "500m"
+          - name: sidecar
+            image: envoy:v1.28
+```
+
+### 7.2 Behavior
+
+- **Known Kubernetes kinds** (Deployment, Service, etc.): Uses `StrategicMergeMapPatch` with Go struct tags for list-merge-by-key semantics.
+- **Unknown kinds** (CRDs): Falls back to RFC 7386 JSON merge patch. Lists are replaced, not merged.
+- **Application order**: SMP patches are applied before field-level patches. SMP sets the broad document shape; field patches make precise tweaks on top.
+
+### 7.3 Conflict Detection
+
+When multiple SMP patches target the same resource, conflicts can be detected before application:
+
+```go
+resolved, reports, err := patchSet.ResolveWithConflictCheck()
+for _, r := range reports {
+    if r.HasConflicts() {
+        // handle conflict
+    }
+}
+```
+
+### 7.4 Limitations
+
+- SMP is YAML-only — TOML format does not support strategic merge patches.
+- CRD fallback loses list merge semantics. Use field-level patches for precise CRD list manipulation.
+- Patch maps are deep-copied before application to prevent mutation.
+
+---
+
+## 8. Purpose
 
 Kure patches are designed to:
 
@@ -182,7 +243,7 @@ Kure patches are designed to:
 
 ---
 
-## 8. Example
+## 9. Example
 
 ```toml
 [deployment.app]
