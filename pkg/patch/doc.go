@@ -66,17 +66,18 @@
 //
 // SMP patches are specified in YAML with type: strategic:
 //
-//   - target: deployment.my-app
-//     type: strategic
-//     patch:
-//       spec:
-//         template:
-//           spec:
-//             containers:
-//             - name: main
-//               resources:
-//                 limits:
-//                   cpu: "500m"
+//	patches:
+//	  - target: deployment.my-app
+//	    type: strategic
+//	    patch:
+//	      spec:
+//	        template:
+//	          spec:
+//	            containers:
+//	              - name: main
+//	                resources:
+//	                  limits:
+//	                    cpu: "500m"
 //
 // SMP patches are applied before field-level patches (SMP sets the broad
 // document shape; field patches make precise tweaks on top).
