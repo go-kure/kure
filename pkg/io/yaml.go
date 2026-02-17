@@ -56,31 +56,30 @@ func Unmarshal(r io.Reader, obj interface{}) error {
 }
 
 // SaveFile marshals obj as YAML and writes it to the given file path.
-func SaveFile(path string, obj interface{}) error {
+func SaveFile(path string, obj interface{}) (retErr error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
+	defer func() {
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = cerr
 		}
-	}(f)
+	}()
 	return Marshal(f, obj)
 }
 
 // LoadFile reads YAML from the given path and unmarshals it into obj.
-func LoadFile(path string, obj interface{}) error {
+func LoadFile(path string, obj interface{}) (retErr error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-
+	defer func() {
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = cerr
 		}
-	}(f)
+	}()
 	return Unmarshal(f, obj)
 }
 

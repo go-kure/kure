@@ -1,10 +1,12 @@
 package gvk
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // ConversionPath represents a path from one version to another
@@ -27,8 +29,10 @@ func (f ConversionFunc) Convert(from interface{}) (interface{}, error) {
 	return f(from)
 }
 
-// ConversionRegistry manages version conversion paths
+// ConversionRegistry manages version conversion paths.
+// It is safe for concurrent use.
 type ConversionRegistry struct {
+	mu          sync.RWMutex
 	conversions map[string]map[string]Converter // [fromGVK][toGVK] -> Converter
 }
 
@@ -39,8 +43,11 @@ func NewConversionRegistry() *ConversionRegistry {
 	}
 }
 
-// Register registers a conversion path
+// Register registers a conversion path.
 func (r *ConversionRegistry) Register(from, to GVK, converter Converter) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	fromKey := from.String()
 	toKey := to.String()
 
@@ -55,29 +62,37 @@ func (r *ConversionRegistry) RegisterFunc(from, to GVK, converter ConversionFunc
 	r.Register(from, to, converter)
 }
 
-// Convert converts from one GVK to another
+// Convert converts from one GVK to another.
 func (r *ConversionRegistry) Convert(from, to GVK, obj interface{}) (interface{}, error) {
 	if from == to {
 		return obj, nil // No conversion needed
 	}
 
+	r.mu.RLock()
 	fromKey := from.String()
 	toKey := to.String()
 
+	var converter Converter
 	if fromConverters, exists := r.conversions[fromKey]; exists {
-		if converter, exists := fromConverters[toKey]; exists {
-			return converter.Convert(obj)
-		}
+		converter = fromConverters[toKey]
+	}
+	r.mu.RUnlock()
+
+	if converter != nil {
+		return converter.Convert(obj)
 	}
 
-	return nil, fmt.Errorf("no conversion path from %s to %s", from, to)
+	return nil, errors.Errorf("no conversion path from %s to %s", from, to)
 }
 
-// HasConversion checks if a conversion path exists
+// HasConversion checks if a conversion path exists.
 func (r *ConversionRegistry) HasConversion(from, to GVK) bool {
 	if from == to {
 		return true
 	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	fromKey := from.String()
 	toKey := to.String()
@@ -90,8 +105,11 @@ func (r *ConversionRegistry) HasConversion(from, to GVK) bool {
 	return false
 }
 
-// ListConversions returns all available conversion paths for a given GVK
+// ListConversions returns all available conversion paths for a given GVK.
 func (r *ConversionRegistry) ListConversions(from GVK) []GVK {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	fromKey := from.String()
 	var targets []GVK
 
@@ -204,14 +222,14 @@ func (vc *VersionComparator) comparePrerelease(p1, p2 int) int {
 // GetLatestVersion returns the latest version from a list of GVKs with the same group/kind
 func (vc *VersionComparator) GetLatestVersion(gvks []GVK) (GVK, error) {
 	if len(gvks) == 0 {
-		return GVK{}, fmt.Errorf("no GVKs provided")
+		return GVK{}, errors.Errorf("no GVKs provided")
 	}
 
 	// Verify all have same group/kind
 	first := gvks[0]
 	for _, gvk := range gvks[1:] {
 		if gvk.Group != first.Group || gvk.Kind != first.Kind {
-			return GVK{}, fmt.Errorf("all GVKs must have same group and kind")
+			return GVK{}, errors.Errorf("all GVKs must have same group and kind")
 		}
 	}
 

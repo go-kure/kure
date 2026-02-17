@@ -287,6 +287,8 @@ func TestHelperFunctions(t *testing.T) {
 		assert.True(t, isPatchFile("test.kpatch"))
 		assert.True(t, isPatchFile("test.patch"))
 		assert.True(t, isPatchFile("patches/test.yaml"))
+		assert.True(t, isPatchFile(`patches\test.yaml`))         // Windows backslash
+		assert.True(t, isPatchFile(`pkg\patches\override.yaml`)) // Windows nested
 		assert.False(t, isPatchFile("resources/test.yaml"))
 		assert.False(t, isPatchFile("test.json"))
 	})

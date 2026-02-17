@@ -1,8 +1,9 @@
 package gvk
 
 import (
-	"fmt"
 	"sync"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // Factory is a function that creates a new instance of type T
@@ -36,7 +37,7 @@ func (r *Registry[T]) Create(gvk GVK) (T, error) {
 	factory, exists := r.factories[gvk]
 	if !exists {
 		var zero T
-		return zero, fmt.Errorf("unknown type: %s", gvk)
+		return zero, errors.Errorf("unknown type: %s", gvk)
 	}
 	return factory(), nil
 }

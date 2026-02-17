@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -171,18 +172,12 @@ func (w *WorkflowEngine) GenerateBootstrap(config *stack.BootstrapConfig, rootNo
 		return nil, nil
 	}
 
-	// Mock implementation - returns empty for now
-	// TODO: Implement ArgoCD bootstrap with:
-	// - ArgoCD namespace
-	// - ArgoCD CRDs and deployment manifests
-	// - App-of-apps pattern setup
-	// - Root application pointing to the cluster manifests
-	return []client.Object{}, nil
+	return nil, errors.New("ArgoCD bootstrap is not yet implemented")
 }
 
 // SupportedBootstrapModes returns the bootstrap modes supported by ArgoCD.
 func (w *WorkflowEngine) SupportedBootstrapModes() []string {
-	return []string{"argocd", "app-of-apps"}
+	return nil
 }
 
 // WorkflowEngine interface implementation

@@ -380,9 +380,13 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 
 	// Set values if provided
 	if c.Values != nil {
-		// Convert values to JSON
+		// Convert values to YAML for the JSON raw field
 		valuesJSON := &apiextensionsv1.JSON{}
-		valuesJSON.Raw, _ = yaml.Marshal(c.Values)
+		raw, err := yaml.Marshal(c.Values)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal Helm values: %w", err)
+		}
+		valuesJSON.Raw = raw
 		hr.Spec.Values = valuesJSON
 	}
 

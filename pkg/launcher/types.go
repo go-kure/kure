@@ -36,45 +36,36 @@ type ParameterSource struct {
 // ParameterMapWithSource maps parameter names to their values with source tracking
 type ParameterMapWithSource map[string]ParameterSource
 
-// Resource represents a Kubernetes resource with thread-safe access
+// Resource represents a Kubernetes resource.
+// Resource is not safe for concurrent use. Use DeepCopy for independent copies.
 type Resource struct {
 	APIVersion   string                     `yaml:"apiVersion" json:"apiVersion"`
 	Kind         string                     `yaml:"kind" json:"kind"`
 	Metadata     metav1.ObjectMeta          `yaml:"metadata" json:"metadata"`
 	Raw          *unstructured.Unstructured // For patch system compatibility
 	TemplateData []byte                     `json:"-"` // Raw template content before variable resolution
-	mu           sync.RWMutex               // Protect concurrent access
 }
 
-// GetName returns the resource name thread-safely
+// GetName returns the resource name.
 func (r *Resource) GetName() string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	return r.Metadata.Name
 }
 
-// GetNamespace returns the resource namespace thread-safely
+// GetNamespace returns the resource namespace.
 func (r *Resource) GetNamespace() string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	return r.Metadata.Namespace
 }
 
-// ToUnstructured converts the resource to unstructured format
+// ToUnstructured converts the resource to unstructured format.
 func (r *Resource) ToUnstructured() (*unstructured.Unstructured, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	if r.Raw == nil {
 		return nil, nil
 	}
 	return r.Raw.DeepCopy(), nil
 }
 
-// DeepCopy creates an independent copy of the resource
+// DeepCopy creates an independent copy of the resource.
 func (r *Resource) DeepCopy() Resource {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	var rawCopy *unstructured.Unstructured
 	if r.Raw != nil {
 		rawCopy = r.Raw.DeepCopy()

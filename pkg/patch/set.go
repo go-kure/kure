@@ -176,16 +176,18 @@ func (s *PatchableAppSet) WriteToFile(filename string) error {
 	return s.DocumentSet.WriteToFile(filename)
 }
 
-// WritePatchedFiles writes separate files for each patch set applied
+// WritePatchedFiles writes separate files for each patch set applied.
+// Debug output is enabled based on the current value of the Debug flag.
 func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []string, outputDir string) error {
+	return s.WritePatchedFilesWithOptions(originalPath, patchFiles, outputDir, Debug)
+}
+
+// WritePatchedFilesWithOptions writes separate files for each patch set applied
+// with explicit debug control, avoiding mutation of the global Debug flag.
+func (s *PatchableAppSet) WritePatchedFilesWithOptions(originalPath string, patchFiles []string, outputDir string, debug bool) error {
 	if s.DocumentSet == nil {
 		return fmt.Errorf("no document set available for structure preservation")
 	}
-
-	// Enable debug for this operation
-	oldDebug := Debug
-	Debug = true
-	defer func() { Debug = oldDebug }()
 
 	for _, patchFile := range patchFiles {
 		// Generate output filename
@@ -215,7 +217,7 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 			// If the error is about a missing target, skip this patch file with a warning
 			if strings.Contains(err.Error(), "explicit target not found") || strings.Contains(err.Error(), "not found in base resources") {
 				fmt.Printf("⚠️  Skipping %s: contains patches for resources not present in base YAML\n", patchFile)
-				if Debug {
+				if debug {
 					fmt.Printf("   Details: %v\n", err)
 				}
 				continue
@@ -273,7 +275,7 @@ func (s *PatchableAppSet) WritePatchedFiles(originalPath string, patchFiles []st
 			return fmt.Errorf("failed to write patched file %s: %w", outputFile, err)
 		}
 
-		if Debug {
+		if debug {
 			fmt.Printf("Wrote patched resources to: %s\n", outputFile)
 		}
 	}

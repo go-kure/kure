@@ -1,7 +1,7 @@
 package fluxcd
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	"github.com/fluxcd/pkg/apis/meta"
