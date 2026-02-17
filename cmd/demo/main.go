@@ -516,8 +516,9 @@ func runPatchDemo() error {
 		Resources:   documentSet.GetResources(),
 		DocumentSet: documentSet,
 		Patches: make([]struct {
-			Target string
-			Patch  patch.PatchOp
+			Target    string
+			Patch     patch.PatchOp
+			Strategic *patch.StrategicPatch
 		}, 0),
 	}
 

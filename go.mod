@@ -13,6 +13,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cert-manager/cert-manager v1.16.5
 	github.com/controlplaneio-fluxcd/flux-operator v0.24.1
+	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/external-secrets/external-secrets v0.19.2
 	github.com/fluxcd/flux2/v2 v2.6.4
 	github.com/fluxcd/helm-controller/api v1.3.0
@@ -50,7 +51,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
-	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fluxcd/pkg/kustomize v1.18.0 // indirect
 	github.com/fluxcd/pkg/tar v0.12.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect

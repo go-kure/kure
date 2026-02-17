@@ -235,6 +235,12 @@ func (o *PatchOptions) runCombined() error {
 		return fmt.Errorf("failed to load base resources: %w", err)
 	}
 
+	// Initialize KindLookup for strategic merge patches
+	lookup, err := patch.DefaultKindLookup()
+	if err != nil {
+		return fmt.Errorf("failed to initialize kind lookup: %w", err)
+	}
+
 	// Apply each patch file sequentially to the same document set
 	for _, patchFile := range o.PatchFiles {
 		if globalOpts.Verbose {
@@ -252,17 +258,45 @@ func (o *PatchOptions) runCombined() error {
 			return fmt.Errorf("failed to load patch file %s: %w", patchFile, err)
 		}
 
-		// Convert PatchSpec slice to PatchOp slice
+		// Separate strategic patches from field-level patches
 		var ops []patch.PatchOp
+		strategicByTarget := make(map[string][]patch.StrategicPatch)
+		resources := documentSet.GetResources()
 		for _, spec := range patchSpecs {
-			ops = append(ops, spec.Patch)
+			if spec.Strategic != nil {
+				key, err := patch.ResolveTargetKey(resources, spec.Target)
+				if err != nil {
+					return fmt.Errorf("strategic patch in %s: %w", patchFile, err)
+				}
+				strategicByTarget[key] = append(strategicByTarget[key], *spec.Strategic)
+			} else {
+				ops = append(ops, spec.Patch)
+			}
 		}
 
 		// Apply patches to each document
 		for _, doc := range documentSet.Documents {
-			if err := doc.ApplyPatchesToDocument(ops); err != nil {
-				// Skip documents that don't match the patch target
-				continue
+			// Apply strategic patches that target this document
+			docKey := patch.CanonicalResourceKey(doc.Resource)
+
+			var strategicPatches []patch.StrategicPatch
+			if sp, ok := strategicByTarget[docKey]; ok {
+				strategicPatches = append(strategicPatches, sp...)
+			}
+
+			if len(strategicPatches) > 0 {
+				if err := doc.ApplyStrategicPatchesToDocument(strategicPatches, lookup); err != nil {
+					return fmt.Errorf("failed to apply strategic patches to %s %s: %w",
+						doc.Resource.GetKind(), doc.Resource.GetName(), err)
+				}
+			}
+
+			// Apply field-level patches
+			if len(ops) > 0 {
+				if err := doc.ApplyPatchesToDocument(ops); err != nil {
+					// Skip documents that don't match the patch target
+					continue
+				}
 			}
 		}
 	}
@@ -327,6 +361,12 @@ func (o *PatchOptions) runDiff() error {
 		return fmt.Errorf("failed to copy document set: %w", err)
 	}
 
+	// Initialize KindLookup for strategic merge patches
+	lookup, err := patch.DefaultKindLookup()
+	if err != nil {
+		return fmt.Errorf("failed to initialize kind lookup: %w", err)
+	}
+
 	// Apply each patch file sequentially to the copied set
 	for _, patchFile := range o.PatchFiles {
 		if globalOpts.Verbose {
@@ -344,17 +384,45 @@ func (o *PatchOptions) runDiff() error {
 			return fmt.Errorf("failed to load patch file %s: %w", patchFile, err)
 		}
 
-		// Convert PatchSpec slice to PatchOp slice
+		// Separate strategic patches from field-level patches
 		var ops []patch.PatchOp
+		strategicByTarget := make(map[string][]patch.StrategicPatch)
+		resources := patchedSet.GetResources()
 		for _, spec := range patchSpecs {
-			ops = append(ops, spec.Patch)
+			if spec.Strategic != nil {
+				key, err := patch.ResolveTargetKey(resources, spec.Target)
+				if err != nil {
+					return fmt.Errorf("strategic patch in %s: %w", patchFile, err)
+				}
+				strategicByTarget[key] = append(strategicByTarget[key], *spec.Strategic)
+			} else {
+				ops = append(ops, spec.Patch)
+			}
 		}
 
 		// Apply patches to each document
 		for _, doc := range patchedSet.Documents {
-			if err := doc.ApplyPatchesToDocument(ops); err != nil {
-				// Skip documents that don't match the patch target
-				continue
+			// Apply strategic patches that target this document
+			docKey := patch.CanonicalResourceKey(doc.Resource)
+
+			var strategicPatches []patch.StrategicPatch
+			if sp, ok := strategicByTarget[docKey]; ok {
+				strategicPatches = append(strategicPatches, sp...)
+			}
+
+			if len(strategicPatches) > 0 {
+				if err := doc.ApplyStrategicPatchesToDocument(strategicPatches, lookup); err != nil {
+					return fmt.Errorf("failed to apply strategic patches to %s %s: %w",
+						doc.Resource.GetKind(), doc.Resource.GetName(), err)
+				}
+			}
+
+			// Apply field-level patches
+			if len(ops) > 0 {
+				if err := doc.ApplyPatchesToDocument(ops); err != nil {
+					// Skip documents that don't match the patch target
+					continue
+				}
 			}
 		}
 	}
@@ -555,13 +623,21 @@ func (o *PatchOptions) loadBaseResources() (*patch.YAMLDocumentSet, error) {
 
 // applyPatches applies all patch files to the document set
 func (o *PatchOptions) applyPatches(documentSet *patch.YAMLDocumentSet) (*patch.PatchableAppSet, error) {
+	// Initialize KindLookup for strategic merge patches
+	lookup, err := patch.DefaultKindLookup()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize kind lookup: %w", err)
+	}
+
 	// Create patchable set
 	patchableSet := &patch.PatchableAppSet{
 		Resources:   documentSet.GetResources(),
 		DocumentSet: documentSet,
+		KindLookup:  lookup,
 		Patches: make([]struct {
-			Target string
-			Patch  patch.PatchOp
+			Target    string
+			Patch     patch.PatchOp
+			Strategic *patch.StrategicPatch
 		}, 0),
 	}
 

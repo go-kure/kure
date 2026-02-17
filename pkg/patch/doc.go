@@ -55,12 +55,44 @@
 //	image: nginx:latest
 //	resources.requests.cpu: 100m
 //
+// # Strategic Merge Patch
+//
+// In addition to field-level patches, this package supports Kubernetes
+// strategic merge patch (SMP) semantics. SMP patches are partial YAML
+// documents that are deep-merged into target resources. For known
+// Kubernetes kinds, list items are merged by key (e.g. containers by name).
+// For unknown kinds (CRDs), the package falls back to RFC 7386 JSON merge
+// patch.
+//
+// SMP patches are specified in YAML with type: strategic:
+//
+//   - target: deployment.my-app
+//     type: strategic
+//     patch:
+//       spec:
+//         template:
+//           spec:
+//             containers:
+//             - name: main
+//               resources:
+//                 limits:
+//                   cpu: "500m"
+//
+// SMP patches are applied before field-level patches (SMP sets the broad
+// document shape; field patches make precise tweaks on top).
+//
+// Use [PatchableAppSet.ResolveWithConflictCheck] to detect conflicting SMP
+// patches targeting the same resource before applying them.
+//
 // # Core Types
 //
-//	PatchableAppSet - Manages resources and their patches
-//	PatchOp         - Individual patch operation
-//	PathPart        - Structured path component
-//	TOMLHeader      - Parsed TOML section header
+//	PatchableAppSet  - Manages resources and their patches
+//	PatchOp          - Individual field-level patch operation
+//	StrategicPatch   - Strategic merge patch document
+//	KindLookup       - GVK-to-struct resolution for SMP
+//	ConflictReport   - SMP conflict detection results
+//	PathPart         - Structured path component
+//	TOMLHeader       - Parsed TOML section header
 //
 // # Detailed Documentation
 //
