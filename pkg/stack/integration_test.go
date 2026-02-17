@@ -58,7 +58,7 @@ func TestFullPipelineFlux(t *testing.T) {
 	// production-cluster
 	//   └── infrastructure
 	//       └── monitoring (bundle: prometheus)
-	cluster := stack.NewClusterBuilder("production-cluster").
+	cluster, err := stack.NewClusterBuilder("production-cluster").
 		WithGitOps(gitOpsConfig).
 		WithNode("infrastructure").
 		WithBundle("platform-services").
@@ -72,6 +72,9 @@ func TestFullPipelineFlux(t *testing.T) {
 		End().
 		End().
 		Build()
+	if err != nil {
+		t.Fatalf("failed to build cluster: %v", err)
+	}
 
 	// Verify cluster structure
 	if cluster.Name != "production-cluster" {
@@ -149,7 +152,7 @@ func TestFullPipelineArgoCD(t *testing.T) {
 	}
 
 	// Build cluster with ArgoCD configuration
-	cluster := stack.NewClusterBuilder("staging-cluster").
+	cluster, err := stack.NewClusterBuilder("staging-cluster").
 		WithGitOps(gitOpsConfig).
 		WithNode("applications").
 		WithBundle("web-services").
@@ -159,6 +162,9 @@ func TestFullPipelineArgoCD(t *testing.T) {
 		End().
 		End().
 		Build()
+	if err != nil {
+		t.Fatalf("failed to build cluster: %v", err)
+	}
 
 	// Create ArgoCD workflow
 	workflow, err := stack.NewWorkflow("argocd")
@@ -219,7 +225,7 @@ func TestLayoutGeneration(t *testing.T) {
 	}
 
 	// Build cluster
-	cluster := stack.NewClusterBuilder("test-cluster").
+	cluster, err := stack.NewClusterBuilder("test-cluster").
 		WithGitOps(&stack.GitOpsConfig{Type: "flux"}).
 		WithNode("apps").
 		WithBundle("my-app").
@@ -228,6 +234,9 @@ func TestLayoutGeneration(t *testing.T) {
 		End().
 		End().
 		Build()
+	if err != nil {
+		t.Fatalf("failed to build cluster: %v", err)
+	}
 
 	// Create workflow and generate layout
 	workflow, err := stack.NewWorkflow("flux")
@@ -308,7 +317,7 @@ func TestMultiNodeClusterGeneration(t *testing.T) {
 	// Build a cluster with multiple nodes at the same level
 	// root
 	//   └── infrastructure (bundle: cert-manager)
-	cluster := stack.NewClusterBuilder("multi-env-cluster").
+	cluster, err := stack.NewClusterBuilder("multi-env-cluster").
 		WithGitOps(gitOpsConfig).
 		WithNode("root").
 		WithChild("infrastructure").
@@ -318,6 +327,9 @@ func TestMultiNodeClusterGeneration(t *testing.T) {
 		End().
 		End().
 		Build()
+	if err != nil {
+		t.Fatalf("failed to build cluster: %v", err)
+	}
 
 	// Verify multi-node structure
 	if cluster.Node == nil {
@@ -375,7 +387,7 @@ func TestWorkflowSwitching(t *testing.T) {
 	}
 
 	// Create cluster without specific GitOps config
-	cluster := stack.NewClusterBuilder("flexible-cluster").
+	cluster, err := stack.NewClusterBuilder("flexible-cluster").
 		WithNode("apps").
 		WithBundle("test-bundle").
 		WithApplication("test-app", appConfig).
@@ -383,6 +395,9 @@ func TestWorkflowSwitching(t *testing.T) {
 		End().
 		End().
 		Build()
+	if err != nil {
+		t.Fatalf("failed to build cluster: %v", err)
+	}
 
 	providers := []string{"flux", "argocd"}
 
@@ -508,7 +523,7 @@ func TestClusterBuilderChaining(t *testing.T) {
 	}
 
 	// Test basic chaining
-	cluster := stack.NewClusterBuilder("test").
+	cluster, err := stack.NewClusterBuilder("test").
 		WithNode("root").
 		WithBundle("bundle1").
 		WithApplication("app1", appConfig).
@@ -516,6 +531,9 @@ func TestClusterBuilderChaining(t *testing.T) {
 		End(). // Back to NodeBuilder
 		End(). // Back to ClusterBuilder
 		Build()
+	if err != nil {
+		t.Fatalf("failed to build cluster: %v", err)
+	}
 
 	if cluster == nil {
 		t.Fatal("cluster should not be nil")

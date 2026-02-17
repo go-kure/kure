@@ -1,108 +1,234 @@
 package stack
 
 import (
+	"errors"
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// FluentBuilder interfaces for method chaining with immutable pattern
+// FluentBuilder interfaces for method chaining with copy-on-write pattern
 
-// ClusterBuilder provides fluent interface for building Cluster configurations
+// ClusterBuilder provides fluent interface for building Cluster configurations.
 type ClusterBuilder interface {
 	WithNode(name string) NodeBuilder
 	WithGitOps(gitops *GitOpsConfig) ClusterBuilder
-	Build() *Cluster
+	Build() (*Cluster, error)
 }
 
-// NodeBuilder provides fluent interface for building Node configurations
+// NodeBuilder provides fluent interface for building Node configurations.
 type NodeBuilder interface {
 	WithChild(name string) NodeBuilder
 	WithBundle(name string) BundleBuilder
 	WithPackageRef(ref *schema.GroupVersionKind) NodeBuilder
 	End() ClusterBuilder
-	Build() *Cluster
+	Build() (*Cluster, error)
 }
 
-// BundleBuilder provides fluent interface for building Bundle configurations
+// BundleBuilder provides fluent interface for building Bundle configurations.
 type BundleBuilder interface {
 	WithApplication(name string, appConfig ApplicationConfig) BundleBuilder
 	WithDependency(bundle *Bundle) BundleBuilder
 	WithSourceRef(sourceRef *SourceRef) BundleBuilder
 	End() NodeBuilder
-	Build() *Cluster
+	Build() (*Cluster, error)
 }
 
-// ApplicationConfig is already defined in application.go - using existing interface
+// --- implementation structs ---
 
-// ClusterBuilderImpl implements ClusterBuilder with immutable pattern
-type ClusterBuilderImpl struct {
+type clusterBuilderImpl struct {
 	cluster *Cluster
 	errors  []error
 }
 
-// NodeBuilderImpl implements NodeBuilder with immutable pattern
-type NodeBuilderImpl struct {
-	cluster       *Cluster
-	currentNode   *Node
-	parentBuilder ClusterBuilder
-	errors        []error
+type nodeBuilderImpl struct {
+	cluster  *Cluster
+	nodePath string // re-derived via findNodeByPath after copy
+	errors   []error
 }
 
-// BundleBuilderImpl implements BundleBuilder with immutable pattern
-type BundleBuilderImpl struct {
-	cluster       *Cluster
-	currentNode   *Node
-	currentBundle *Bundle
-	parentBuilder NodeBuilder
-	errors        []error
+type bundleBuilderImpl struct {
+	cluster  *Cluster
+	nodePath string // node that owns the bundle
+	errors   []error
 }
 
-// NewClusterBuilder creates a new fluent cluster builder
+// --- package-level helpers ---
+
+// findNodeByPath locates a node within the tree by its full path.
+func findNodeByPath(root *Node, path string) *Node {
+	if root == nil {
+		return nil
+	}
+	if root.GetPath() == path {
+		return root
+	}
+	for _, child := range root.Children {
+		if found := findNodeByPath(child, path); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// deepCopyCluster creates a deep copy of a Cluster.
+func deepCopyCluster(c *Cluster) *Cluster {
+	if c == nil {
+		return nil
+	}
+	newCluster := &Cluster{
+		Name:   c.Name,
+		GitOps: c.GitOps, // shared; GitOps is set-once, not mutated
+	}
+	if c.Node != nil {
+		newCluster.Node = deepCopyNode(c.Node)
+	}
+	return newCluster
+}
+
+// deepCopyNode creates a deep copy of a Node and its subtree.
+func deepCopyNode(n *Node) *Node {
+	if n == nil {
+		return nil
+	}
+	newNode := &Node{
+		Name:       n.Name,
+		ParentPath: n.ParentPath,
+		PackageRef: n.PackageRef, // GVK is effectively immutable
+	}
+	if n.Bundle != nil {
+		newNode.Bundle = deepCopyBundle(n.Bundle)
+	}
+	if n.Children != nil {
+		newNode.Children = make([]*Node, len(n.Children))
+		for i, child := range n.Children {
+			newNode.Children[i] = deepCopyNode(child)
+		}
+	}
+	return newNode
+}
+
+// deepCopyBundle creates a deep copy of a Bundle.
+func deepCopyBundle(b *Bundle) *Bundle {
+	if b == nil {
+		return nil
+	}
+	newBundle := &Bundle{
+		Name:          b.Name,
+		ParentPath:    b.ParentPath,
+		SourceRef:     b.SourceRef,
+		Interval:      b.Interval,
+		Labels:        b.Labels,
+		Annotations:   b.Annotations,
+		Description:   b.Description,
+		Prune:         b.Prune,
+		Wait:          b.Wait,
+		Timeout:       b.Timeout,
+		RetryInterval: b.RetryInterval,
+	}
+	if b.Applications != nil {
+		newBundle.Applications = make([]*Application, len(b.Applications))
+		copy(newBundle.Applications, b.Applications)
+	}
+	if b.DependsOn != nil {
+		newBundle.DependsOn = make([]*Bundle, len(b.DependsOn))
+		copy(newBundle.DependsOn, b.DependsOn)
+	}
+	return newBundle
+}
+
+// copyErrors returns a fresh copy of an error slice.
+func copyErrors(errs []error) []error {
+	if len(errs) == 0 {
+		return nil
+	}
+	out := make([]error, len(errs))
+	copy(out, errs)
+	return out
+}
+
+// --- ensureOwned helpers ---
+
+// ensureOwned returns a deep-copied cluster and error slice that are safe to
+// mutate without affecting the original builder's state.
+func (cb *clusterBuilderImpl) ensureOwned() (*Cluster, []error) {
+	return deepCopyCluster(cb.cluster), copyErrors(cb.errors)
+}
+
+// ensureOwned returns a deep-copied cluster, the target node within that copy,
+// and a copied error slice. Returns nil node if the node path cannot be resolved.
+func (nb *nodeBuilderImpl) ensureOwned() (*Cluster, *Node, []error) {
+	cluster := deepCopyCluster(nb.cluster)
+	errs := copyErrors(nb.errors)
+	node := findNodeByPath(cluster.Node, nb.nodePath)
+	return cluster, node, errs
+}
+
+// ensureOwned returns a deep-copied cluster, the target node, the target bundle,
+// and a copied error slice.
+func (bb *bundleBuilderImpl) ensureOwned() (*Cluster, *Node, *Bundle, []error) {
+	cluster := deepCopyCluster(bb.cluster)
+	errs := copyErrors(bb.errors)
+	node := findNodeByPath(cluster.Node, bb.nodePath)
+	var bundle *Bundle
+	if node != nil {
+		bundle = node.Bundle
+	}
+	return cluster, node, bundle, errs
+}
+
+// --- ClusterBuilder ---
+
+// NewClusterBuilder creates a new fluent cluster builder.
 func NewClusterBuilder(name string) ClusterBuilder {
-	cluster := &Cluster{
-		Name: name,
-	}
-	return &ClusterBuilderImpl{
-		cluster: cluster,
-		errors:  []error{},
+	return &clusterBuilderImpl{
+		cluster: &Cluster{Name: name},
 	}
 }
 
-// WithNode adds a child node and returns a NodeBuilder for chaining
-func (cb *ClusterBuilderImpl) WithNode(name string) NodeBuilder {
-	// Create immutable copy
-	newCluster := cb.copyCluster()
+// WithNode sets the root node and returns a NodeBuilder for chaining.
+func (cb *clusterBuilderImpl) WithNode(name string) NodeBuilder {
+	cluster, errs := cb.ensureOwned()
+
+	if name == "" {
+		errs = append(errs, fmt.Errorf("node name must not be empty"))
+		return &nodeBuilderImpl{cluster: cluster, errors: errs}
+	}
 
 	node := &Node{
 		Name:     name,
 		Children: []*Node{},
 	}
+	cluster.Node = node
 
-	newCluster.Node = node
-
-	return &NodeBuilderImpl{
-		cluster:       newCluster,
-		currentNode:   node,
-		parentBuilder: &ClusterBuilderImpl{cluster: newCluster, errors: cb.errors},
-		errors:        cb.errors,
+	return &nodeBuilderImpl{
+		cluster:  cluster,
+		nodePath: node.GetPath(),
+		errors:   errs,
 	}
 }
 
-// WithGitOps sets GitOps configuration
-func (cb *ClusterBuilderImpl) WithGitOps(gitops *GitOpsConfig) ClusterBuilder {
-	newCluster := cb.copyCluster()
-	newCluster.GitOps = gitops
-
-	return &ClusterBuilderImpl{
-		cluster: newCluster,
-		errors:  cb.errors,
+// WithGitOps sets GitOps configuration.
+func (cb *clusterBuilderImpl) WithGitOps(gitops *GitOpsConfig) ClusterBuilder {
+	cluster, errs := cb.ensureOwned()
+	cluster.GitOps = gitops
+	return &clusterBuilderImpl{
+		cluster: cluster,
+		errors:  errs,
 	}
 }
 
-// Build finalizes the cluster construction
-func (cb *ClusterBuilderImpl) Build() *Cluster {
-	if len(cb.errors) > 0 {
-		// In a real implementation, you'd want to handle errors appropriately
-		// For now, we'll return the cluster even with errors
+// Build finalizes the cluster construction.
+func (cb *clusterBuilderImpl) Build() (*Cluster, error) {
+	errs := cb.errors
+
+	// Final validations
+	if cb.cluster.Name == "" {
+		errs = append(errs, fmt.Errorf("cluster name must not be empty"))
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 
 	// Initialize path maps if we have a root node
@@ -110,329 +236,181 @@ func (cb *ClusterBuilderImpl) Build() *Cluster {
 		cb.cluster.Node.InitializePathMap()
 	}
 
-	return cb.cluster
+	return cb.cluster, nil
 }
 
-// copyCluster creates a deep copy of the cluster
-func (cb *ClusterBuilderImpl) copyCluster() *Cluster {
-	newCluster := &Cluster{
-		Name:   cb.cluster.Name,
-		GitOps: cb.cluster.GitOps,
+// --- NodeBuilder ---
+
+// WithChild adds a child node to the current node.
+func (nb *nodeBuilderImpl) WithChild(name string) NodeBuilder {
+	cluster, currentNode, errs := nb.ensureOwned()
+
+	if name == "" {
+		errs = append(errs, fmt.Errorf("child node name must not be empty"))
+		return &nodeBuilderImpl{cluster: cluster, nodePath: nb.nodePath, errors: errs}
 	}
 
-	if cb.cluster.Node != nil {
-		newCluster.Node = cb.copyNode(cb.cluster.Node)
+	if currentNode == nil {
+		errs = append(errs, fmt.Errorf("cannot add child %q: parent node not found", name))
+		return &nodeBuilderImpl{cluster: cluster, errors: errs}
 	}
 
-	return newCluster
-}
-
-// copyNode creates a deep copy of a node
-func (cb *ClusterBuilderImpl) copyNode(node *Node) *Node {
-	newNode := &Node{
-		Name:       node.Name,
-		ParentPath: node.ParentPath,
-		PackageRef: node.PackageRef,
-	}
-
-	if node.Bundle != nil {
-		newNode.Bundle = cb.copyBundle(node.Bundle)
-	}
-
-	if node.Children != nil {
-		newNode.Children = make([]*Node, len(node.Children))
-		for i, child := range node.Children {
-			newNode.Children[i] = cb.copyNode(child)
-		}
-	}
-
-	return newNode
-}
-
-// copyBundle creates a deep copy of a bundle
-func (cb *ClusterBuilderImpl) copyBundle(bundle *Bundle) *Bundle {
-	newBundle := &Bundle{
-		Name:          bundle.Name,
-		ParentPath:    bundle.ParentPath,
-		SourceRef:     bundle.SourceRef,
-		Interval:      bundle.Interval,
-		Labels:        bundle.Labels,
-		Annotations:   bundle.Annotations,
-		Description:   bundle.Description,
-		Prune:         bundle.Prune,
-		Wait:          bundle.Wait,
-		Timeout:       bundle.Timeout,
-		RetryInterval: bundle.RetryInterval,
-	}
-
-	if bundle.Applications != nil {
-		newBundle.Applications = make([]*Application, len(bundle.Applications))
-		copy(newBundle.Applications, bundle.Applications)
-	}
-
-	if bundle.DependsOn != nil {
-		newBundle.DependsOn = make([]*Bundle, len(bundle.DependsOn))
-		copy(newBundle.DependsOn, bundle.DependsOn)
-	}
-
-	return newBundle
-}
-
-// NodeBuilder implementation
-
-// WithChild adds a child node
-func (nb *NodeBuilderImpl) WithChild(name string) NodeBuilder {
-	newCluster := nb.copyClusterFromNode()
-
-	// Create the child with proper parent path
-	parentPath := nb.currentNode.GetPath()
 	childNode := &Node{
 		Name:       name,
-		ParentPath: parentPath,
+		ParentPath: currentNode.GetPath(),
 		Children:   []*Node{},
 	}
+	currentNode.Children = append(currentNode.Children, childNode)
 
-	// Find the current node in the new cluster and add child
-	if newCluster.Node != nil {
-		currentNodeInCopy := nb.findNodeByPath(newCluster.Node, parentPath)
-		if currentNodeInCopy != nil {
-			currentNodeInCopy.Children = append(currentNodeInCopy.Children, childNode)
-		}
-	}
-
-	return &NodeBuilderImpl{
-		cluster:       newCluster,
-		currentNode:   childNode,
-		parentBuilder: &ClusterBuilderImpl{cluster: newCluster, errors: nb.errors},
-		errors:        nb.errors,
+	return &nodeBuilderImpl{
+		cluster:  cluster,
+		nodePath: childNode.GetPath(),
+		errors:   errs,
 	}
 }
 
-// WithBundle adds a bundle to the current node
-func (nb *NodeBuilderImpl) WithBundle(name string) BundleBuilder {
-	newCluster := nb.copyClusterFromNode()
+// WithBundle adds a bundle to the current node.
+func (nb *nodeBuilderImpl) WithBundle(name string) BundleBuilder {
+	cluster, currentNode, errs := nb.ensureOwned()
+
+	if name == "" {
+		errs = append(errs, fmt.Errorf("bundle name must not be empty"))
+		return &bundleBuilderImpl{cluster: cluster, nodePath: nb.nodePath, errors: errs}
+	}
+
+	if currentNode == nil {
+		errs = append(errs, fmt.Errorf("cannot add bundle %q: node not found", name))
+		return &bundleBuilderImpl{cluster: cluster, errors: errs}
+	}
 
 	bundle := &Bundle{
 		Name:         name,
-		ParentPath:   nb.currentNode.GetPath(),
+		ParentPath:   currentNode.GetPath(),
 		Applications: []*Application{},
 		DependsOn:    []*Bundle{},
 	}
+	currentNode.Bundle = bundle
 
-	// Find the current node in the new cluster and set bundle
-	if newCluster.Node != nil {
-		currentNodeInCopy := nb.findNodeByPath(newCluster.Node, nb.currentNode.GetPath())
-		if currentNodeInCopy != nil {
-			currentNodeInCopy.Bundle = bundle
-		}
-	}
-
-	// Find the current node in the new cluster to keep references consistent
-	currentNodeInCopy := nb.findNodeByPath(newCluster.Node, nb.currentNode.GetPath())
-
-	return &BundleBuilderImpl{
-		cluster:       newCluster,
-		currentNode:   currentNodeInCopy, // Use the node from the new cluster
-		currentBundle: bundle,
-		parentBuilder: &NodeBuilderImpl{
-			cluster:       newCluster,
-			currentNode:   currentNodeInCopy, // Use the node from the new cluster
-			parentBuilder: &ClusterBuilderImpl{cluster: newCluster, errors: nb.errors},
-			errors:        nb.errors,
-		},
-		errors: nb.errors,
+	return &bundleBuilderImpl{
+		cluster:  cluster,
+		nodePath: currentNode.GetPath(),
+		errors:   errs,
 	}
 }
 
-// WithPackageRef sets the package reference
-func (nb *NodeBuilderImpl) WithPackageRef(ref *schema.GroupVersionKind) NodeBuilder {
-	newCluster := nb.copyClusterFromNode()
+// WithPackageRef sets the package reference on the current node.
+func (nb *nodeBuilderImpl) WithPackageRef(ref *schema.GroupVersionKind) NodeBuilder {
+	cluster, currentNode, errs := nb.ensureOwned()
 
-	// Find the current node in the new cluster and set package ref
-	if newCluster.Node != nil {
-		currentNodeInCopy := nb.findNodeByPath(newCluster.Node, nb.currentNode.GetPath())
-		if currentNodeInCopy != nil {
-			currentNodeInCopy.PackageRef = ref
-		}
+	if currentNode != nil {
+		currentNode.PackageRef = ref
+	} else {
+		errs = append(errs, fmt.Errorf("cannot set package ref: node not found"))
 	}
 
-	return &NodeBuilderImpl{
-		cluster:       newCluster,
-		currentNode:   nb.currentNode,
-		parentBuilder: &ClusterBuilderImpl{cluster: newCluster, errors: nb.errors},
-		errors:        nb.errors,
+	return &nodeBuilderImpl{
+		cluster:  cluster,
+		nodePath: nb.nodePath,
+		errors:   errs,
 	}
 }
 
-// End returns to the parent ClusterBuilder
-func (nb *NodeBuilderImpl) End() ClusterBuilder {
-	// Return a parent builder with the updated cluster state
-	return &ClusterBuilderImpl{
+// End returns to the parent ClusterBuilder.
+func (nb *nodeBuilderImpl) End() ClusterBuilder {
+	return &clusterBuilderImpl{
 		cluster: nb.cluster,
 		errors:  nb.errors,
 	}
 }
 
-// Build finalizes the cluster construction
-func (nb *NodeBuilderImpl) Build() *Cluster {
-	// Use the updated cluster state
-	clusterBuilder := &ClusterBuilderImpl{cluster: nb.cluster, errors: nb.errors}
-	return clusterBuilder.Build()
+// Build finalizes the cluster construction from a NodeBuilder.
+func (nb *nodeBuilderImpl) Build() (*Cluster, error) {
+	return (&clusterBuilderImpl{cluster: nb.cluster, errors: nb.errors}).Build()
 }
 
-// Helper methods for NodeBuilder
+// --- BundleBuilder ---
 
-func (nb *NodeBuilderImpl) copyClusterFromNode() *Cluster {
-	cb := &ClusterBuilderImpl{cluster: nb.cluster, errors: nb.errors}
-	return cb.copyCluster()
-}
+// WithApplication adds an application to the bundle.
+func (bb *bundleBuilderImpl) WithApplication(name string, appConfig ApplicationConfig) BundleBuilder {
+	cluster, _, bundle, errs := bb.ensureOwned()
 
-func (nb *NodeBuilderImpl) findNodeByPath(root *Node, path string) *Node {
-	if root.GetPath() == path {
-		return root
+	if name == "" {
+		errs = append(errs, fmt.Errorf("application name must not be empty"))
+		return &bundleBuilderImpl{cluster: cluster, nodePath: bb.nodePath, errors: errs}
+	}
+	if appConfig == nil {
+		errs = append(errs, fmt.Errorf("application config for %q must not be nil", name))
+		return &bundleBuilderImpl{cluster: cluster, nodePath: bb.nodePath, errors: errs}
 	}
 
-	for _, child := range root.Children {
-		if found := nb.findNodeByPath(child, path); found != nil {
-			return found
-		}
+	if bundle == nil {
+		errs = append(errs, fmt.Errorf("cannot add application %q: bundle not found", name))
+		return &bundleBuilderImpl{cluster: cluster, nodePath: bb.nodePath, errors: errs}
 	}
 
-	return nil
-}
-
-// BundleBuilder implementation
-
-// WithApplication adds an application to the bundle
-func (bb *BundleBuilderImpl) WithApplication(name string, appConfig ApplicationConfig) BundleBuilder {
-	// Create deep copy of cluster
-	newCluster := bb.copyClusterFromBundle()
-
-	// Create the application
 	app := &Application{
 		Name:   name,
 		Config: appConfig,
 	}
+	bundle.Applications = append(bundle.Applications, app)
 
-	// Create new bundle with the application added
-	newCurrentBundle := &Bundle{
-		Name:         bb.currentBundle.Name,
-		ParentPath:   bb.currentBundle.ParentPath,
-		SourceRef:    bb.currentBundle.SourceRef,
-		Applications: make([]*Application, 0, len(bb.currentBundle.Applications)+1),
-		DependsOn:    bb.currentBundle.DependsOn,
-	}
-
-	// Copy existing applications and add the new one
-	copy(newCurrentBundle.Applications, bb.currentBundle.Applications)
-	newCurrentBundle.Applications = append(newCurrentBundle.Applications, app)
-
-	// Update the bundle in the cluster
-	if newCluster.Node != nil {
-		targetPath := bb.currentNode.GetPath()
-		currentNodeInCopy := bb.findNodeByPath(newCluster.Node, targetPath)
-		if currentNodeInCopy != nil {
-			currentNodeInCopy.Bundle = newCurrentBundle
-		}
-	}
-
-	return &BundleBuilderImpl{
-		cluster:       newCluster,
-		currentNode:   bb.currentNode,
-		currentBundle: newCurrentBundle,
-		parentBuilder: bb.parentBuilder,
-		errors:        bb.errors,
+	return &bundleBuilderImpl{
+		cluster:  cluster,
+		nodePath: bb.nodePath,
+		errors:   errs,
 	}
 }
 
-// WithDependency adds a bundle dependency
-func (bb *BundleBuilderImpl) WithDependency(bundle *Bundle) BundleBuilder {
-	newCluster := bb.copyClusterFromBundle()
+// WithDependency adds a bundle dependency.
+func (bb *bundleBuilderImpl) WithDependency(dep *Bundle) BundleBuilder {
+	cluster, _, bundle, errs := bb.ensureOwned()
 
-	// Find the current bundle in the new cluster and add dependency
-	if newCluster.Node != nil {
-		currentNodeInCopy := bb.findNodeByPath(newCluster.Node, bb.currentNode.GetPath())
-		if currentNodeInCopy != nil && currentNodeInCopy.Bundle != nil {
-			currentNodeInCopy.Bundle.DependsOn = append(currentNodeInCopy.Bundle.DependsOn, bundle)
-		}
+	if dep == nil {
+		errs = append(errs, fmt.Errorf("dependency must not be nil"))
+		return &bundleBuilderImpl{cluster: cluster, nodePath: bb.nodePath, errors: errs}
 	}
 
-	return &BundleBuilderImpl{
-		cluster:       newCluster,
-		currentNode:   bb.currentNode,
-		currentBundle: bb.currentBundle,
-		parentBuilder: bb.parentBuilder,
-		errors:        bb.errors,
-	}
-}
-
-// WithSourceRef sets the source reference
-func (bb *BundleBuilderImpl) WithSourceRef(sourceRef *SourceRef) BundleBuilder {
-	// Create deep copy of cluster
-	newCluster := bb.copyClusterFromBundle()
-
-	// Create new bundle with the source ref set
-	newCurrentBundle := &Bundle{
-		Name:         bb.currentBundle.Name,
-		ParentPath:   bb.currentBundle.ParentPath,
-		SourceRef:    sourceRef, // Set the new source ref
-		Applications: bb.currentBundle.Applications,
-		DependsOn:    bb.currentBundle.DependsOn,
+	if bundle == nil {
+		errs = append(errs, fmt.Errorf("cannot add dependency: bundle not found"))
+		return &bundleBuilderImpl{cluster: cluster, nodePath: bb.nodePath, errors: errs}
 	}
 
-	// Update the bundle in the cluster
-	if newCluster.Node != nil {
-		targetPath := bb.currentNode.GetPath()
-		currentNodeInCopy := bb.findNodeByPath(newCluster.Node, targetPath)
-		if currentNodeInCopy != nil {
-			currentNodeInCopy.Bundle = newCurrentBundle
-		}
-	}
+	bundle.DependsOn = append(bundle.DependsOn, dep)
 
-	return &BundleBuilderImpl{
-		cluster:       newCluster,
-		currentNode:   bb.currentNode,
-		currentBundle: newCurrentBundle,
-		parentBuilder: bb.parentBuilder,
-		errors:        bb.errors,
+	return &bundleBuilderImpl{
+		cluster:  cluster,
+		nodePath: bb.nodePath,
+		errors:   errs,
 	}
 }
 
-// End returns to the parent NodeBuilder
-func (bb *BundleBuilderImpl) End() NodeBuilder {
-	// Return a parent builder with the updated cluster state
-	return &NodeBuilderImpl{
-		cluster:       bb.cluster,
-		currentNode:   bb.currentNode,
-		parentBuilder: &ClusterBuilderImpl{cluster: bb.cluster, errors: bb.errors},
-		errors:        bb.errors,
+// WithSourceRef sets the source reference on the bundle.
+func (bb *bundleBuilderImpl) WithSourceRef(sourceRef *SourceRef) BundleBuilder {
+	cluster, _, bundle, errs := bb.ensureOwned()
+
+	if bundle != nil {
+		bundle.SourceRef = sourceRef
+	} else {
+		errs = append(errs, fmt.Errorf("cannot set source ref: bundle not found"))
+	}
+
+	return &bundleBuilderImpl{
+		cluster:  cluster,
+		nodePath: bb.nodePath,
+		errors:   errs,
 	}
 }
 
-// Build finalizes the cluster construction
-func (bb *BundleBuilderImpl) Build() *Cluster {
-	// Use the updated cluster state
-	clusterBuilder := &ClusterBuilderImpl{cluster: bb.cluster, errors: bb.errors}
-	return clusterBuilder.Build()
+// End returns to the parent NodeBuilder.
+func (bb *bundleBuilderImpl) End() NodeBuilder {
+	return &nodeBuilderImpl{
+		cluster:  bb.cluster,
+		nodePath: bb.nodePath,
+		errors:   bb.errors,
+	}
 }
 
-// Helper methods for BundleBuilder
-
-func (bb *BundleBuilderImpl) copyClusterFromBundle() *Cluster {
-	cb := &ClusterBuilderImpl{cluster: bb.cluster, errors: bb.errors}
-	return cb.copyCluster()
-}
-
-func (bb *BundleBuilderImpl) findNodeByPath(root *Node, path string) *Node {
-	if root.GetPath() == path {
-		return root
-	}
-
-	for _, child := range root.Children {
-		if found := bb.findNodeByPath(child, path); found != nil {
-			return found
-		}
-	}
-
-	return nil
+// Build finalizes the cluster construction from a BundleBuilder.
+func (bb *bundleBuilderImpl) Build() (*Cluster, error) {
+	return (&clusterBuilderImpl{cluster: bb.cluster, errors: bb.errors}).Build()
 }
