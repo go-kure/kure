@@ -48,14 +48,16 @@ The `main` branch is protected — all changes must go through pull requests.
 
 ### Branch Protection Rules
 
+Enforced via the `main-protection` [repository ruleset](https://github.com/go-kure/kure/rules/12903081):
+
 - **Required status checks** (strict): `lint`, `test`, `build`, `rebase-check`
 - **Auto-rebase**: open PRs are automatically rebased when main is updated (via `auto-rebase.yml`)
-- **Required reviews**: 1 approving review
+- **Pull requests required**: all changes must go through a PR
+- **Conversation resolution**: all review threads must be resolved
 - **Linear history**: enforced (rebase only, no merge commits)
-- **Conversation resolution**: all conversations must be resolved
 - **Force pushes**: disabled
 - **Branch deletion**: disabled
-- **Enforced for admins**: yes
+- **Bypass actors**: `kure-release-bot` (GitHub App) — allowed to push release commits directly
 
 ## Development Workflow
 
@@ -214,7 +216,7 @@ The project uses several GitHub Actions workflows:
 - **Triggers**: Manual (`workflow_dispatch`)
 - **Inputs**: Release type (alpha/beta/rc/stable/bump), scope, dry-run
 - **Purpose**: Creates release commits and tags on `main`, pushes atomically
-- **Auth**: Uses GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`) to push past branch protection
+- **Auth**: Uses GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`); the `kure-release-bot` App is listed as a bypass actor in the `main-protection` repository ruleset, allowing it to push release commits directly to `main`
 - **Concurrency**: Only one release at a time (`release-create` group)
 
 To create a release:
