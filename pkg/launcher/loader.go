@@ -181,11 +181,7 @@ func (l *packageLoader) loadParameters(ctx context.Context, def *PackageDefiniti
 }
 
 // LoadResources loads Kubernetes resources from the package
-func (l *packageLoader) LoadResources(ctx context.Context, path string, opts *LauncherOptions) ([]Resource, error) {
-	if opts == nil {
-		opts = DefaultOptions()
-	}
-
+func (l *packageLoader) LoadResources(ctx context.Context, path string, _ *LauncherOptions) ([]Resource, error) {
 	l.logger.Debug("Loading resources from %s", path)
 
 	// Determine resource directory
@@ -329,11 +325,7 @@ func (l *packageLoader) loadTemplateResource(path string, rawData []byte, resour
 }
 
 // LoadPatches loads patch files from the package
-func (l *packageLoader) LoadPatches(ctx context.Context, path string, opts *LauncherOptions) ([]Patch, error) {
-	if opts == nil {
-		opts = DefaultOptions()
-	}
-
+func (l *packageLoader) LoadPatches(ctx context.Context, path string, _ *LauncherOptions) ([]Patch, error) {
 	l.logger.Debug("Loading patches from %s", path)
 
 	// Determine patch directory

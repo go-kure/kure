@@ -111,9 +111,6 @@ issues:
   # Maximum count of issues with the same text
   max-same-issues: 10
 
-  # Show only new issues created in the last 30 days
-  new-from-rev: HEAD~30
-
   exclude-rules:
     # Exclude test files from some checks
     - path: _test\.go
@@ -122,6 +119,12 @@ issues:
         - funlen
         - gocognit
         - maintidx
+
+    # unusedwrite is noisy in tests where structs are built for setup/fixture purposes
+    - path: _test\.go
+      text: "unusedwrite"
+      linters:
+        - govet
 
     # Exclude generated files
     - path: ".*\\.pb\\.go"

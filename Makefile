@@ -185,7 +185,7 @@ lint: ## Run linters with golangci-lint
 		echo "$(COLOR_RED)golangci-lint not found. Installing...$(COLOR_RESET)"; \
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
 	fi
-	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run --timeout=10m ./...
+	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run --timeout=10m $(LINT_FLAGS) ./...
 	@echo "$(COLOR_GREEN)Linting passed$(COLOR_RESET)"
 
 .PHONY: fmt
