@@ -59,7 +59,13 @@ func parse(yamlbytes []byte, opts ParseOptions) ([]client.Object, error) {
 					errs = append(errs, errors.NewParseError("Kubernetes object", "failed to decode unstructured object", 0, 0, unstErr))
 					continue
 				}
-				retVal = append(retVal, unstObj)
+				if list, ok := unstObj.(*unstructured.UnstructuredList); ok {
+					for i := range list.Items {
+						retVal = append(retVal, &list.Items[i])
+					}
+				} else {
+					retVal = append(retVal, unstObj)
+				}
 				continue
 			}
 			errs = append(errs, errors.NewParseError("Kubernetes object", "failed to decode object", 0, 0, err))
@@ -72,9 +78,16 @@ func parse(yamlbytes []byte, opts ParseOptions) ([]client.Object, error) {
 		retVal = append(retVal, obj)
 	}
 
-	retValCO := make([]client.Object, len(retVal))
-	for i, obj := range retVal {
-		retValCO[i] = obj.(client.Object)
+	retValCO := make([]client.Object, 0, len(retVal))
+	for _, obj := range retVal {
+		co, ok := obj.(client.Object)
+		if !ok {
+			errs = append(errs, errors.NewParseError("Kubernetes object",
+				fmt.Sprintf("object of type %T does not implement client.Object", obj),
+				0, 0, nil))
+			continue
+		}
+		retValCO = append(retValCO, co)
 	}
 	if len(errs) > 0 {
 		return retValCO, &errors.ParseErrors{Errors: errs}
