@@ -1,0 +1,68 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - alpha
+          - beta
+          - rc
+          - stable
+          - bump
+      scope:
+        description: 'Bump scope (only used when type=bump)'
+        required: false
+        type: choice
+        default: minor
+        options:
+          - minor
+          - major
+      dry_run:
+        description: 'Dry run (preview only, no changes)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-create
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        run: |
+          CLIFF_VERSION="2.7.0"
+          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/v${CLIFF_VERSION}/git-cliff-${CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xzf - -C /tmp
+          sudo install /tmp/git-cliff-${CLIFF_VERSION}/git-cliff /usr/local/bin/
+
+      - name: Run release script
+        env:
+          RELEASE_TYPE: ${{ inputs.type }}
+          RELEASE_SCOPE: ${{ inputs.scope }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          CI: 'true'
+        run: ./scripts/release.sh

@@ -159,17 +159,14 @@ check-ci:
         done
 ```
 
-### Local Release Management
+### Release Management
 
 ```bash
-# Preview release plan
+# Preview release plan locally (dry-run)
 make release TYPE=alpha
 
-# Execute release (creates commits + tag)
-make release-do TYPE=alpha
-
-# Push tag to trigger CI
-git push origin v0.1.0-alpha.0
+# Create release via CI:
+#   Actions > "Create Release" > type=alpha > Run workflow
 ```
 
 ---

@@ -413,22 +413,13 @@ changelog-preview: ## Preview unreleased changelog entries
 # =============================================================================
 
 .PHONY: release
-release: ## Show release plan (dry-run)
+release: ## Preview release (dry-run)
 	@if [ -z "$(TYPE)" ]; then \
 		echo "Usage: make release TYPE={alpha|beta|rc|stable}"; \
 		echo "       make release TYPE=bump SCOPE={minor|major}"; \
 		exit 1; \
 	fi
-	@DRY_RUN=1 ./scripts/semver.sh release $(TYPE) $(SCOPE)
-
-.PHONY: release-do
-release-do: ## Execute release (creates tag)
-	@if [ -z "$(TYPE)" ]; then \
-		echo "Usage: make release-do TYPE={alpha|beta|rc|stable}"; \
-		echo "       make release-do TYPE=bump SCOPE={minor|major}"; \
-		exit 1; \
-	fi
-	@./scripts/semver.sh release $(TYPE) $(SCOPE)
+	@DRY_RUN=1 ./scripts/release.sh $(TYPE) $(SCOPE)
 
 .PHONY: release-snapshot
 release-snapshot: ## Test GoReleaser locally (no tag, no publish)
