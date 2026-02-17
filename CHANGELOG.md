@@ -1,6 +1,24 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-beta.1] - 2026-02-17
+
+### Added
+
+- Add strategic merge patch support with namespace-aware target resolution
+
+### Documentation
+
+- Update branch protection docs to reflect ruleset migration
+
+### Fixed
+
+- Add release notes extraction to release workflow
+- Use tab-indented code block for YAML example in doc comment
+- Guard unstructured fallback from list decode panics
+- Release read lock before invoking converter callback
+- Fix CI lint baseline and resolve pre-existing lint issues
+
 ## [0.1.0-beta.0] - 2026-02-17
 
 ### Added
@@ -34,6 +52,7 @@ All notable changes to this project will be documented in this file.
 ### Release
 
 - V0.1.0-alpha.4
+- V0.1.0-beta.0
 
 ## [0.1.0-alpha.3] - 2026-02-12
 
