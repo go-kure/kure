@@ -200,9 +200,9 @@ fmt: ## Format Go code
 	@echo "$(COLOR_GREEN)Code formatted$(COLOR_RESET)"
 
 .PHONY: vet
-vet: ## Run go vet (excluding copylocks for existing code)
+vet: ## Run go vet
 	@echo "$(COLOR_YELLOW)Running go vet...$(COLOR_RESET)"
-	$(GO) vet -copylocks=false ./...
+	$(GO) vet ./...
 	@echo "$(COLOR_GREEN)Go vet completed$(COLOR_RESET)"
 
 .PHONY: tidy

@@ -1,9 +1,9 @@
 package stack
 
 import (
-	"fmt"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // Workflow defines the core interface for GitOps workflow implementations.
@@ -32,13 +32,17 @@ type Workflow interface {
 func NewWorkflow(provider string) (Workflow, error) {
 	switch provider {
 	case "flux", "fluxcd":
-		// Import cycle prevention: use a factory function
+		if newFluxWorkflow == nil {
+			return nil, errors.New("workflow provider 'flux' not registered — import github.com/go-kure/kure/pkg/stack/fluxcd")
+		}
 		return newFluxWorkflow(), nil
 	case "argo", "argocd":
-		// Import cycle prevention: use a factory function
+		if newArgoWorkflow == nil {
+			return nil, errors.New("workflow provider 'argocd' not registered — import github.com/go-kure/kure/pkg/stack/argocd")
+		}
 		return newArgoWorkflow(), nil
 	default:
-		return nil, fmt.Errorf("unsupported GitOps provider: %s", provider)
+		return nil, errors.Errorf("unsupported GitOps provider: %s", provider)
 	}
 }
 

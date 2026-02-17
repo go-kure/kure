@@ -1,9 +1,11 @@
 package gvk
 
 import (
-	"fmt"
+	"reflect"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // TypedWrapper provides type detection and unmarshaling for GVK-based types
@@ -26,7 +28,7 @@ func NewTypedWrapper[T any](registry *Registry[T]) *TypedWrapper[T] {
 // UnmarshalYAML implements custom YAML unmarshaling with type detection
 func (w *TypedWrapper[T]) UnmarshalYAML(node *yaml.Node) error {
 	if w.registry == nil {
-		return fmt.Errorf("registry not set - use NewTypedWrapper to create instances")
+		return errors.Errorf("registry not set - use NewTypedWrapper to create instances")
 	}
 
 	// First pass: extract GVK
@@ -35,17 +37,17 @@ func (w *TypedWrapper[T]) UnmarshalYAML(node *yaml.Node) error {
 		Kind       string `yaml:"kind"`
 	}
 	if err := node.Decode(&gvkDetect); err != nil {
-		return fmt.Errorf("failed to detect GVK: %w", err)
+		return errors.Errorf("failed to detect GVK: %w", err)
 	}
 
 	if gvkDetect.APIVersion == "" || gvkDetect.Kind == "" {
-		return fmt.Errorf("apiVersion and kind are required fields")
+		return errors.Errorf("apiVersion and kind are required fields")
 	}
 
 	// Create appropriate instance
 	instance, err := w.registry.CreateFromAPIVersion(gvkDetect.APIVersion, gvkDetect.Kind)
 	if err != nil {
-		return fmt.Errorf("failed to create instance for %s/%s: %w",
+		return errors.Errorf("failed to create instance for %s/%s: %w",
 			gvkDetect.APIVersion, gvkDetect.Kind, err)
 	}
 
@@ -58,12 +60,12 @@ func (w *TypedWrapper[T]) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	if err := node.Decode(&raw); err != nil {
-		return fmt.Errorf("failed to decode wrapper: %w", err)
+		return errors.Errorf("failed to decode wrapper: %w", err)
 	}
 
 	// Decode spec into the specific type
 	if err := raw.Spec.Decode(&instance); err != nil {
-		return fmt.Errorf("failed to decode spec for %s/%s: %w",
+		return errors.Errorf("failed to decode spec for %s/%s: %w",
 			raw.APIVersion, raw.Kind, err)
 	}
 
@@ -145,10 +147,10 @@ func (w *TypedWrapper[T]) SetNamespace(namespace string) {
 	w.Metadata["namespace"] = namespace
 }
 
-// isZero checks if a value is the zero value for its type
+// isZero checks if a value is the zero value for its type.
 func isZero[T any](v T) bool {
 	var zero T
-	return fmt.Sprintf("%v", v) == fmt.Sprintf("%v", zero)
+	return reflect.DeepEqual(v, zero)
 }
 
 // TypedWrappers is a slice of TypedWrapper for unmarshaling multiple configs
@@ -159,5 +161,5 @@ func (ws *TypedWrappers[T]) UnmarshalYAML(node *yaml.Node) error {
 	// This requires the registry to be set somehow -
 	// typically this would be handled by a containing type
 	// that knows about the registry
-	return fmt.Errorf("TypedWrappers requires registry context - use a container type")
+	return errors.Errorf("TypedWrappers requires registry context - use a container type")
 }

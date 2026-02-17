@@ -4,13 +4,28 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/go-kure/kure/pkg/logger"
 )
+
+// patchLogger is a package-level logger for debug messages.
+var patchLogger = logger.New(logger.Options{
+	Output: os.Stderr,
+	Level:  logger.LevelDebug,
+	Prefix: "patch",
+})
+
+// debugLog logs a debug message when the Debug flag is set.
+func debugLog(format string, args ...interface{}) {
+	if Debug {
+		patchLogger.Debug(format, args...)
+	}
+}
 
 type RawPatchMap map[string]interface{}
 
@@ -105,9 +120,7 @@ func LoadYAMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 					return nil, fmt.Errorf("variable substitution failed for strategic patch targeting '%s': %w", entry.Target, err)
 				}
 				inferTypesInMap(substitutedPatch)
-				if Debug {
-					log.Printf("Strategic patch loaded: target=%s", entry.Target)
-				}
+				debugLog("Strategic patch loaded: target=%s", entry.Target)
 				patches = append(patches, PatchSpec{
 					Target:    entry.Target,
 					Strategic: &StrategicPatch{Patch: substitutedPatch},
@@ -134,9 +147,7 @@ func LoadYAMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 				if err := op.NormalizePath(); err != nil {
 					return nil, fmt.Errorf("invalid patch path syntax: %s: %w", op.Path, err)
 				}
-				if Debug {
-					log.Printf("Targeted patch loaded: target=%s op=%s path=%s value=%v", entry.Target, op.Op, op.Path, substitutedValue)
-				}
+				debugLog("Targeted patch loaded: target=%s op=%s path=%s value=%v", entry.Target, op.Op, op.Path, substitutedValue)
 				patches = append(patches, PatchSpec{Target: entry.Target, Patch: op})
 			}
 		}
@@ -221,10 +232,8 @@ func LoadTOMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 			return nil, fmt.Errorf("invalid patch path syntax: %s: %w", op.Path, err)
 		}
 
-		if Debug {
-			log.Printf("TOML patch loaded: header=%s target=%s op=%s path=%s value=%v",
-				currentHeader.String(), resourceTarget, op.Op, op.Path, value)
-		}
+		debugLog("TOML patch loaded: header=%s target=%s op=%s path=%s value=%v",
+			currentHeader.String(), resourceTarget, op.Op, op.Path, value)
 
 		patches = append(patches, PatchSpec{Target: resourceTarget, Patch: op})
 	}
@@ -250,9 +259,7 @@ func LoadResourcesFromMultiYAML(r io.Reader) ([]*unstructured.Unstructured, erro
 		}
 		if len(raw) > 0 {
 			u := &unstructured.Unstructured{Object: raw}
-			if Debug {
-				log.Printf("Loaded resource: kind=%s name=%s", u.GetKind(), u.GetName())
-			}
+			debugLog("Loaded resource: kind=%s name=%s", u.GetKind(), u.GetName())
 			resources = append(resources, u)
 		}
 	}
@@ -442,171 +449,123 @@ func smartTarget(resources []*unstructured.Unstructured, p PatchOp) []string {
 	return matches
 }
 
+// resolvedPatch is the internal type used by resolvePatches.
+type resolvedPatch struct {
+	Patch     PatchOp
+	Strategic *StrategicPatch
+	Target    string
+}
+
+// resolvePatches is the shared resolution logic for NewPatchableAppSet and
+// NewPatchableAppSetWithStructure. It normalizes paths, resolves targets,
+// and returns wrapped patches ready for inclusion in a PatchableAppSet.
+func resolvePatches(resources []*unstructured.Unstructured, patches []PatchSpec) ([]resolvedPatch, error) {
+	var wrapped []resolvedPatch
+
+	for _, spec := range patches {
+		// Handle strategic merge patches
+		if spec.Strategic != nil {
+			target := spec.Target
+			if target == "" {
+				return nil, fmt.Errorf("strategic merge patch requires an explicit target")
+			}
+			resolved, err := ResolveTargetKey(resources, target)
+			if err != nil {
+				return nil, fmt.Errorf("strategic merge patch: %w", err)
+			}
+			target = resolved
+
+			debugLog("Strategic patch resolved: target=%s", target)
+			wrapped = append(wrapped, resolvedPatch{Target: target, Strategic: spec.Strategic})
+			continue
+		}
+
+		p := spec.Patch
+		if err := p.NormalizePath(); err != nil {
+			return nil, fmt.Errorf("invalid patch path syntax: %s: %w", p.Path, err)
+		}
+
+		var target string
+		var trimmed string
+		if spec.Target != "" {
+			resolved, err := ResolveTargetKey(resources, spec.Target)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found in base resources") {
+					return nil, fmt.Errorf("explicit target not found: %s", spec.Target)
+				}
+				return nil, fmt.Errorf("explicit target %q: %w", spec.Target, err)
+			}
+			target = resolved
+		} else {
+			target, trimmed = resolvePatchTarget(resources, p.Path)
+			if target == "" {
+				cands := smartTarget(resources, p)
+				if len(cands) == 1 {
+					target = cands[0]
+				}
+			}
+		}
+
+		if target == "" {
+			return nil, fmt.Errorf("could not determine target resource for patch path: %s", p.Path)
+		}
+
+		if trimmed != "" {
+			p.Path = trimmed
+		}
+
+		debugLog("Patch resolved: target=%s op=%s path=%s value=%v", target, p.Op, p.Path, p.Value)
+		wrapped = append(wrapped, resolvedPatch{Target: target, Patch: p})
+	}
+
+	return wrapped, nil
+}
+
+// toAppSetPatches converts resolvedPatch slice to the PatchableAppSet.Patches type.
+func toAppSetPatches(resolved []resolvedPatch) []struct {
+	Target    string
+	Patch     PatchOp
+	Strategic *StrategicPatch
+} {
+	out := make([]struct {
+		Target    string
+		Patch     PatchOp
+		Strategic *StrategicPatch
+	}, len(resolved))
+	for i, r := range resolved {
+		out[i] = struct {
+			Target    string
+			Patch     PatchOp
+			Strategic *StrategicPatch
+		}{Target: r.Target, Patch: r.Patch, Strategic: r.Strategic}
+	}
+	return out
+}
+
 // NewPatchableAppSet constructs a PatchableAppSet from already loaded resources
 // and parsed patch specifications.
 func NewPatchableAppSet(resources []*unstructured.Unstructured, patches []PatchSpec) (*PatchableAppSet, error) {
-	var wrapped []struct {
-		Target    string
-		Patch     PatchOp
-		Strategic *StrategicPatch
+	resolved, err := resolvePatches(resources, patches)
+	if err != nil {
+		return nil, err
 	}
-
-	for _, spec := range patches {
-		// Handle strategic merge patches
-		if spec.Strategic != nil {
-			target := spec.Target
-			if target == "" {
-				return nil, fmt.Errorf("strategic merge patch requires an explicit target")
-			}
-			resolved, err := ResolveTargetKey(resources, target)
-			if err != nil {
-				return nil, fmt.Errorf("strategic merge patch: %w", err)
-			}
-			target = resolved
-
-			if Debug {
-				log.Printf("Strategic patch resolved: target=%s", target)
-			}
-			wrapped = append(wrapped, struct {
-				Target    string
-				Patch     PatchOp
-				Strategic *StrategicPatch
-			}{Target: target, Strategic: spec.Strategic})
-			continue
-		}
-
-		p := spec.Patch
-		if err := p.NormalizePath(); err != nil {
-			return nil, fmt.Errorf("invalid patch path syntax: %s: %w", p.Path, err)
-		}
-
-		var target string
-		var trimmed string
-		if spec.Target != "" {
-			resolved, err := ResolveTargetKey(resources, spec.Target)
-			if err != nil {
-				if strings.Contains(err.Error(), "not found in base resources") {
-					return nil, fmt.Errorf("explicit target not found: %s", spec.Target)
-				}
-				return nil, fmt.Errorf("explicit target %q: %w", spec.Target, err)
-			}
-			target = resolved
-		} else {
-			target, trimmed = resolvePatchTarget(resources, p.Path)
-			if target == "" {
-				cands := smartTarget(resources, p)
-				if len(cands) == 1 {
-					target = cands[0]
-				}
-			}
-		}
-
-		if target == "" {
-			return nil, fmt.Errorf("could not determine target resource for patch path: %s", p.Path)
-		}
-
-		if trimmed != "" {
-			p.Path = trimmed
-		}
-
-		if Debug {
-			log.Printf("Patch resolved: target=%s op=%s path=%s value=%v", target, p.Op, p.Path, p.Value)
-		}
-		wrapped = append(wrapped, struct {
-			Target    string
-			Patch     PatchOp
-			Strategic *StrategicPatch
-		}{Target: target, Patch: p})
-	}
-
 	return &PatchableAppSet{
 		Resources: resources,
-		Patches:   wrapped,
+		Patches:   toAppSetPatches(resolved),
 	}, nil
 }
 
-// NewPatchableAppSetWithStructure constructs a PatchableAppSet with YAML structure preservation
+// NewPatchableAppSetWithStructure constructs a PatchableAppSet with YAML structure preservation.
 func NewPatchableAppSetWithStructure(documentSet *YAMLDocumentSet, patches []PatchSpec) (*PatchableAppSet, error) {
 	resources := documentSet.GetResources()
-
-	var wrapped []struct {
-		Target    string
-		Patch     PatchOp
-		Strategic *StrategicPatch
+	resolved, err := resolvePatches(resources, patches)
+	if err != nil {
+		return nil, err
 	}
-
-	for _, spec := range patches {
-		// Handle strategic merge patches
-		if spec.Strategic != nil {
-			target := spec.Target
-			if target == "" {
-				return nil, fmt.Errorf("strategic merge patch requires an explicit target")
-			}
-			resolved, err := ResolveTargetKey(resources, target)
-			if err != nil {
-				return nil, fmt.Errorf("strategic merge patch: %w", err)
-			}
-			target = resolved
-
-			if Debug {
-				log.Printf("Strategic patch resolved: target=%s", target)
-			}
-			wrapped = append(wrapped, struct {
-				Target    string
-				Patch     PatchOp
-				Strategic *StrategicPatch
-			}{Target: target, Strategic: spec.Strategic})
-			continue
-		}
-
-		p := spec.Patch
-		if err := p.NormalizePath(); err != nil {
-			return nil, fmt.Errorf("invalid patch path syntax: %s: %w", p.Path, err)
-		}
-
-		var target string
-		var trimmed string
-		if spec.Target != "" {
-			resolved, err := ResolveTargetKey(resources, spec.Target)
-			if err != nil {
-				if strings.Contains(err.Error(), "not found in base resources") {
-					return nil, fmt.Errorf("explicit target not found: %s", spec.Target)
-				}
-				return nil, fmt.Errorf("explicit target %q: %w", spec.Target, err)
-			}
-			target = resolved
-		} else {
-			target, trimmed = resolvePatchTarget(resources, p.Path)
-			if target == "" {
-				cands := smartTarget(resources, p)
-				if len(cands) == 1 {
-					target = cands[0]
-				}
-			}
-		}
-
-		if target == "" {
-			return nil, fmt.Errorf("could not determine target resource for patch path: %s", p.Path)
-		}
-
-		if trimmed != "" {
-			p.Path = trimmed
-		}
-
-		if Debug {
-			log.Printf("Patch resolved: target=%s op=%s path=%s value=%v", target, p.Op, p.Path, p.Value)
-		}
-		wrapped = append(wrapped, struct {
-			Target    string
-			Patch     PatchOp
-			Strategic *StrategicPatch
-		}{Target: target, Patch: p})
-	}
-
 	return &PatchableAppSet{
 		Resources:   resources,
 		DocumentSet: documentSet,
-		Patches:     wrapped,
+		Patches:     toAppSetPatches(resolved),
 	}, nil
 }
 

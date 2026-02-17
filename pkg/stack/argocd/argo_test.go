@@ -77,16 +77,8 @@ func TestSupportedBootstrapModes(t *testing.T) {
 	engine := Engine()
 	modes := engine.SupportedBootstrapModes()
 
-	expectedModes := []string{"argocd", "app-of-apps"}
-	if len(modes) != len(expectedModes) {
-		t.Errorf("expected %d modes, got %d", len(expectedModes), len(modes))
-		return
-	}
-
-	for i, expected := range expectedModes {
-		if modes[i] != expected {
-			t.Errorf("expected mode[%d] '%s', got '%s'", i, expected, modes[i])
-		}
+	if modes != nil {
+		t.Errorf("expected nil bootstrap modes (not implemented), got %v", modes)
 	}
 }
 
@@ -444,16 +436,11 @@ func TestGenerateBootstrap_Enabled(t *testing.T) {
 	node := &stack.Node{}
 
 	objs, err := engine.GenerateBootstrap(config, node)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err == nil {
+		t.Error("expected error for unimplemented ArgoCD bootstrap")
 	}
-
-	// Current implementation returns empty slice
-	if objs == nil {
-		t.Error("expected non-nil objects slice")
-	}
-	if len(objs) != 0 {
-		t.Errorf("expected 0 objects (mock implementation), got %d", len(objs))
+	if objs != nil {
+		t.Errorf("expected nil objects for unimplemented bootstrap, got %d", len(objs))
 	}
 }
 

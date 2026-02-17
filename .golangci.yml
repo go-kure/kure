@@ -23,9 +23,10 @@ linters-settings:
       - (*os.File).Close
 
   govet:
-    # Disable copylocks check temporarily as it requires significant refactoring
+    enable-all: true
     disable:
-      - copylocks
+      - fieldalignment  # Stylistic; not a correctness issue
+      - shadow          # Too many pre-existing shadows in tests
 
   staticcheck:
     # Enable all checks except ones that require major refactoring
@@ -71,8 +72,6 @@ linters:
     - errcheck          # Too many unchecked errors in existing code
     - unused            # Many utility functions are kept for future use
     - ineffassign       # Some assignments are intentional for readability
-    - govet             # Copylocks issue requires major refactoring
-    - staticcheck       # Some checks are too strict for existing patterns
     - gosec             # Security linter can be overly strict for development code
     - exhaustive        # Enum exhaustiveness not critical for this codebase
     - exhaustruct       # Struct exhaustiveness too strict
@@ -93,11 +92,13 @@ linters:
     - unparam           # Unused parameters might be needed for interfaces
     - whitespace        # Whitespace style is handled by gofmt
     - wsl               # Whitespace linting too strict
-    
+
   enable:
     # Enable essential linters that catch real bugs and enforce basic standards
     - gofmt
     - goimports
+    - govet
+    - staticcheck
     - nakedret
     - typecheck
 

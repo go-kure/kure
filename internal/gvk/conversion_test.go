@@ -1,7 +1,9 @@
 package gvk
 
 import (
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestConversionFuncConvert(t *testing.T) {
@@ -232,4 +234,77 @@ func TestVersionComparatorGetLatestVersion(t *testing.T) {
 			t.Error("expected error for mismatched groups")
 		}
 	})
+}
+
+func TestConversionRegistryConvertCallbackCanRegister(t *testing.T) {
+	registry := NewConversionRegistry()
+
+	fromGVK := GVK{Group: "test", Version: "v1", Kind: "Foo"}
+	toGVK := GVK{Group: "test", Version: "v2", Kind: "Foo"}
+	lazyGVK := GVK{Group: "test", Version: "v3", Kind: "Foo"}
+
+	// Register a converter that calls Register on the same registry (lazy registration).
+	// Before the fix this would deadlock because Convert held a read-lock
+	// while the callback attempted a write-lock.
+	registry.RegisterFunc(fromGVK, toGVK, func(from interface{}) (interface{}, error) {
+		registry.RegisterFunc(toGVK, lazyGVK, func(from interface{}) (interface{}, error) {
+			return from, nil
+		})
+		return from, nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := registry.Convert(fromGVK, toGVK, "data"); err != nil {
+			t.Errorf("Convert() error = %v", err)
+		}
+	}()
+
+	select {
+	case <-done:
+		// success — no deadlock
+	case <-time.After(2 * time.Second):
+		t.Fatal("Convert() deadlocked: callback that calls Register on the same registry blocked")
+	}
+
+	// Verify the lazy registration actually happened.
+	if !registry.HasConversion(toGVK, lazyGVK) {
+		t.Error("expected lazy conversion to be registered by callback")
+	}
+}
+
+func TestConversionRegistryConcurrentAccess(t *testing.T) {
+	registry := NewConversionRegistry()
+	converter := ConversionFunc(func(from interface{}) (interface{}, error) {
+		return from, nil
+	})
+
+	var wg sync.WaitGroup
+
+	// Concurrent writers
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			from := GVK{Group: "test", Version: "v1", Kind: "Foo"}
+			to := GVK{Group: "test", Version: "v2", Kind: "Foo"}
+			registry.Register(from, to, converter)
+		}(i)
+	}
+
+	// Concurrent readers
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			from := GVK{Group: "test", Version: "v1", Kind: "Foo"}
+			to := GVK{Group: "test", Version: "v2", Kind: "Foo"}
+			registry.HasConversion(from, to)
+			registry.ListConversions(from)
+			registry.Convert(from, to, "data")
+		}()
+	}
+
+	wg.Wait()
 }

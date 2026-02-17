@@ -219,8 +219,9 @@ func (l *packageLoader) LoadResources(ctx context.Context, path string, opts *La
 				return nil
 			}
 
-			// Skip patch files
-			if strings.Contains(path, "patches/") || strings.HasSuffix(path, ".kpatch") {
+			// Skip patch files (normalize path separators for cross-platform support)
+			normalized := strings.ReplaceAll(path, "\\", "/")
+			if strings.Contains(normalized, "patches/") || strings.HasSuffix(path, ".kpatch") {
 				return nil
 			}
 
@@ -498,6 +499,7 @@ func isYAMLFile(path string) bool {
 // isPatchFile checks if a file is a patch file
 func isPatchFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
+	normalized := strings.ReplaceAll(path, "\\", "/")
 	return ext == ".kpatch" || ext == ".patch" || ext == ".toml" ||
-		(isYAMLFile(path) && strings.Contains(path, "patches/"))
+		(isYAMLFile(path) && strings.Contains(normalized, "patches/"))
 }

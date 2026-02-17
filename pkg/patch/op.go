@@ -140,7 +140,11 @@ func applyListPatch(obj map[string]interface{}, op PatchOp) error {
 	case "insertBefore":
 		lst = append(lst[:idx], append([]interface{}{convertedValue}, lst[idx:]...)...)
 	case "insertAfter":
-		lst = append(lst[:idx+1], append([]interface{}{convertedValue}, lst[idx+1:]...)...)
+		if idx >= len(lst) {
+			lst = append(lst, convertedValue)
+		} else {
+			lst = append(lst[:idx+1], append([]interface{}{convertedValue}, lst[idx+1:]...)...)
+		}
 	}
 
 	if err := unstructured.SetNestedSlice(obj, lst, path...); err != nil {

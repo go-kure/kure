@@ -113,15 +113,23 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 			return err
 		}
 
+		var writeErr error
+		writeStr := func(s string) {
+			if writeErr != nil {
+				return
+			}
+			_, writeErr = kf.WriteString(s)
+		}
+
 		// Write proper YAML header
-		_, _ = kf.WriteString("apiVersion: kustomize.config.kubernetes.io/v1beta1\n")
-		_, _ = kf.WriteString("kind: Kustomization\n")
-		_, _ = kf.WriteString("resources:\n")
+		writeStr("apiVersion: kustomize.config.kubernetes.io/v1beta1\n")
+		writeStr("kind: Kustomization\n")
+		writeStr("resources:\n")
 
 		// Add resource files if in explicit mode OR if it's a leaf directory with no children
 		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
 			for _, file := range sortedFileNames {
-				_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", file))
+				writeStr(fmt.Sprintf("  - %s\n", file))
 			}
 		}
 		// In recursive mode, only reference child directories, not files
@@ -129,16 +137,21 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		// Add child references
 		for _, child := range ml.Children {
 			if child.ApplicationFileMode == AppFileSingle {
-				_, _ = kf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else {
 				// For FluxIntegrated mode, reference Flux Kustomization YAML files instead of directories
 				if ml.FluxPlacement == FluxIntegrated {
 					fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
-					_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", fluxKustName))
+					writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
 				} else {
-					_, _ = kf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
+					writeStr(fmt.Sprintf("  - %s\n", child.Name))
 				}
 			}
+		}
+
+		if writeErr != nil {
+			_ = kf.Close()
+			return errors.Wrapf(writeErr, "writing kustomization.yaml at %s", kustomPath)
 		}
 
 		if err := kf.Close(); err != nil {

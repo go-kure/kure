@@ -108,10 +108,14 @@ func TestWorkflowInterface(t *testing.T) {
 
 			// Test GenerateBootstrap
 			_, err = wf.GenerateBootstrap(cluster.GitOps.Bootstrap, cluster.Node)
-			if err != nil {
+			if provider == "argocd" {
+				// ArgoCD bootstrap is not yet implemented, expect error
+				if err == nil {
+					t.Error("GenerateBootstrap() expected error for unimplemented ArgoCD bootstrap")
+				}
+			} else if err != nil {
 				t.Errorf("GenerateBootstrap() error = %v", err)
 			}
-			// Bootstrap resources can be nil for ArgoCD (mock implementation)
 		})
 	}
 }

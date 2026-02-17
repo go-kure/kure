@@ -1,10 +1,11 @@
 package gvk
 
 import (
-	"fmt"
 	"io"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // ParseOptions configures how GVK parsing behaves
@@ -29,7 +30,7 @@ func ParseSingle[T any](data []byte, registry *Registry[T], options *ParseOption
 
 	wrapper := NewTypedWrapper(registry)
 	if err := yaml.Unmarshal(data, wrapper); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+		return nil, errors.Errorf("failed to unmarshal: %w", err)
 	}
 
 	return wrapper, nil
@@ -53,7 +54,7 @@ func ParseMultiple[T any](data []byte, registry *Registry[T], options *ParseOpti
 
 		wrapper := NewTypedWrapper(registry)
 		if err := yaml.Unmarshal(doc, wrapper); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal document %d: %w", i, err)
+			return nil, errors.Errorf("failed to unmarshal document %d: %w", i, err)
 		}
 
 		wrappers = append(wrappers, wrapper)
@@ -77,12 +78,12 @@ func ParseStream[T any](reader io.Reader, registry *Registry[T], options *ParseO
 			if err == io.EOF {
 				break
 			}
-			return nil, fmt.Errorf("failed to decode YAML document: %w", err)
+			return nil, errors.Errorf("failed to decode YAML document: %w", err)
 		}
 
 		wrapper := NewTypedWrapper(registry)
 		if err := node.Decode(wrapper); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal wrapper: %w", err)
+			return nil, errors.Errorf("failed to unmarshal wrapper: %w", err)
 		}
 
 		wrappers = append(wrappers, wrapper)
@@ -94,10 +95,10 @@ func ParseStream[T any](reader io.Reader, registry *Registry[T], options *ParseO
 // ValidateGVK validates that a GVK is properly formed
 func ValidateGVK(gvk GVK) error {
 	if gvk.Kind == "" {
-		return fmt.Errorf("kind is required")
+		return errors.Errorf("kind is required")
 	}
 	if gvk.Version == "" {
-		return fmt.Errorf("version is required")
+		return errors.Errorf("version is required")
 	}
 	// Group can be empty for core types
 	return nil
