@@ -312,6 +312,111 @@ spec:
 	}
 }
 
+func TestParseYAMLWithOptionsUnstructuredList(t *testing.T) {
+	data := []byte(`apiVersion: custom.example.com/v1
+kind: WidgetList
+items:
+- apiVersion: custom.example.com/v1
+  kind: Widget
+  metadata:
+    name: mon-a
+    namespace: monitoring
+  spec: {}
+- apiVersion: custom.example.com/v1
+  kind: Widget
+  metadata:
+    name: mon-b
+    namespace: monitoring
+  spec: {}
+`)
+	objs, err := ParseYAMLWithOptions(data, ParseOptions{AllowUnstructured: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objs) != 2 {
+		t.Fatalf("expected 2 objects, got %d", len(objs))
+	}
+	for i, obj := range objs {
+		u, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			t.Fatalf("object %d: expected *unstructured.Unstructured, got %T", i, obj)
+		}
+		if u.GetNamespace() != "monitoring" {
+			t.Fatalf("object %d: expected namespace 'monitoring', got %q", i, u.GetNamespace())
+		}
+	}
+	if objs[0].GetName() != "mon-a" {
+		t.Fatalf("expected first object name 'mon-a', got %q", objs[0].GetName())
+	}
+	if objs[1].GetName() != "mon-b" {
+		t.Fatalf("expected second object name 'mon-b', got %q", objs[1].GetName())
+	}
+}
+
+func TestParseYAMLWithOptionsUnstructuredEmptyList(t *testing.T) {
+	data := []byte(`apiVersion: custom.example.com/v1
+kind: WidgetList
+items: []
+`)
+	objs, err := ParseYAMLWithOptions(data, ParseOptions{AllowUnstructured: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objs) != 0 {
+		t.Fatalf("expected 0 objects, got %d", len(objs))
+	}
+}
+
+func TestParseYAMLWithOptionsMixedWithUnstructuredList(t *testing.T) {
+	data := []byte(`apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa
+---
+apiVersion: custom.example.com/v1
+kind: WidgetList
+items:
+- apiVersion: custom.example.com/v1
+  kind: Widget
+  metadata:
+    name: w1
+    namespace: default
+  spec: {}
+- apiVersion: custom.example.com/v1
+  kind: Widget
+  metadata:
+    name: w2
+    namespace: default
+  spec: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod
+spec:
+  containers: []
+`)
+	objs, err := ParseYAMLWithOptions(data, ParseOptions{AllowUnstructured: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objs) != 4 {
+		t.Fatalf("expected 4 objects, got %d", len(objs))
+	}
+	if _, ok := objs[0].(*corev1.ServiceAccount); !ok {
+		t.Fatalf("expected ServiceAccount, got %T", objs[0])
+	}
+	if _, ok := objs[1].(*unstructured.Unstructured); !ok {
+		t.Fatalf("expected *unstructured.Unstructured for item 1, got %T", objs[1])
+	}
+	if _, ok := objs[2].(*unstructured.Unstructured); !ok {
+		t.Fatalf("expected *unstructured.Unstructured for item 2, got %T", objs[2])
+	}
+	if _, ok := objs[3].(*corev1.Pod); !ok {
+		t.Fatalf("expected Pod, got %T", objs[3])
+	}
+}
+
 func TestParseYAMLWithOptionsInvalidYAMLNotCaught(t *testing.T) {
 	data := []byte(`apiVersion: v1
 kind: ServiceAccount
