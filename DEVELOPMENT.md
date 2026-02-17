@@ -210,6 +210,21 @@ The project uses several GitHub Actions workflows:
 - **Excludes**: Dependabot PRs (`dependencies` label), draft PRs
 - **Auth**: Requires `AUTO_REBASE_PAT` secret (PAT needed to trigger CI on rebased branches)
 
+### Create Release (`.github/workflows/release-create.yml`)
+- **Triggers**: Manual (`workflow_dispatch`)
+- **Inputs**: Release type (alpha/beta/rc/stable/bump), scope, dry-run
+- **Purpose**: Creates release commits and tags on `main`, pushes atomically
+- **Auth**: Uses GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`) to push past branch protection
+- **Concurrency**: Only one release at a time (`release-create` group)
+
+To create a release:
+1. Go to Actions > "Create Release" > Run workflow
+2. Select release type and optional scope
+3. Optionally enable dry-run for preview
+4. Click "Run workflow"
+
+The pushed tag triggers the release pipeline below.
+
 ### Release Pipeline (`.github/workflows/release.yml`)
 - **Triggers**: Version tags (`v*.*.*`)
 - **Jobs**:
@@ -298,8 +313,10 @@ Reference: [GitHub Docs - Dependabot PR Commands](https://docs.github.com/en/cod
 - `precommit` - Run all pre-commit checks
 
 ### Release
+- `release TYPE=<type>` - Preview release (dry-run); types: alpha, beta, rc, stable, bump
 - `release-check` - Check if ready for release
 - `release-build` - Build release artifacts for multiple platforms
+- `release-snapshot` - Test GoReleaser locally (no tag, no publish)
 
 ### Utilities
 - `generate` - Run go generate
