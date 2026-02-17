@@ -29,19 +29,18 @@
 // The package provides a fluent builder API for constructing cluster
 // configurations in a type-safe, readable manner:
 //
-//	cluster := stack.NewClusterBuilder("production").
+//	cluster, err := stack.NewClusterBuilder("production").
 //		WithGitOps(&stack.GitOpsConfig{Type: "flux"}).
 //		WithNode("infrastructure").
 //			WithBundle("monitoring").
-//				WithApplication("prometheus", stack.ApplicationConfig{
-//					Namespace: "monitoring",
-//				}).
+//				WithApplication("prometheus", prometheusConfig).
 //				End().
 //			End().
 //		Build()
 //
-// The fluent API uses an immutable pattern where each method returns a new
-// builder instance, allowing safe concurrent construction.
+// The fluent API uses a copy-on-write pattern where each method returns a new
+// builder instance, allowing safe branching and concurrent construction.
+// Build() returns (*Cluster, error) to surface any validation errors.
 //
 // # Workflow Integration
 //
@@ -75,7 +74,7 @@
 // Complete example creating a cluster with infrastructure and applications:
 //
 //	// Define the cluster structure
-//	cluster := stack.NewClusterBuilder("prod-cluster").
+//	cluster, err := stack.NewClusterBuilder("prod-cluster").
 //		WithGitOps(&stack.GitOpsConfig{
 //			Type: "flux",
 //			Bootstrap: &stack.BootstrapConfig{
@@ -85,19 +84,13 @@
 //		}).
 //		WithNode("infrastructure").
 //			WithBundle("cert-manager").
-//				WithApplication("cert-manager", stack.ApplicationConfig{
-//					Namespace: "cert-manager",
-//				}).
+//				WithApplication("cert-manager", certManagerConfig).
 //				End().
-//			End().
-//		WithNode("applications").
-//			WithBundle("web-app").
-//				WithApplication("frontend", stack.ApplicationConfig{
-//					Namespace: "web",
-//				}).
-//				WithApplication("backend", stack.ApplicationConfig{
-//					Namespace: "web",
-//				}).
+//			WithChild("applications").
+//				WithBundle("web-app").
+//					WithApplication("frontend", frontendConfig).
+//					WithApplication("backend", backendConfig).
+//					End().
 //				End().
 //			End().
 //		Build()
