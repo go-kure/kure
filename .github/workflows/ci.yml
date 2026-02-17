@@ -122,8 +122,17 @@ jobs:
     - name: Run go vet
       run: make vet
 
+    - name: Fetch base branch for diff-based lint
+      if: github.event_name == 'pull_request'
+      run: git fetch origin ${{ github.base_ref }} --depth=1
+
     - name: Run linters
-      run: make lint
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          make lint LINT_FLAGS="--new-from-rev=origin/${{ github.base_ref }}"
+        else
+          make lint
+        fi
 
   # =============================================================================
   # Stage 2: Tests and Security (parallel)

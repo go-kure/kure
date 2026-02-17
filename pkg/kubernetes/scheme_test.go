@@ -441,7 +441,7 @@ func TestScheme_AllTypesRegistered(t *testing.T) {
 		{"PersistentVolume", &corev1.PersistentVolume{}},
 		{"PersistentVolumeClaim", &corev1.PersistentVolumeClaim{}},
 		{"Node", &corev1.Node{}},
-		{"Endpoints", &corev1.Endpoints{}},
+		{"Endpoints", &corev1.Endpoints{}}, //nolint:staticcheck // testing scheme registration of deprecated type
 
 		// Apps v1
 		{"Deployment", &appsv1.Deployment{}},

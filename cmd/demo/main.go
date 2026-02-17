@@ -458,9 +458,6 @@ func runBootstrapDemo() error {
 				return fmt.Errorf("unexpected result type from CreateLayoutWithResources")
 			}
 		}
-		if err != nil {
-			return err
-		}
 
 		// Output to separate directory per config
 		baseName := strings.TrimSuffix(filepath.Base(path), ".yaml")

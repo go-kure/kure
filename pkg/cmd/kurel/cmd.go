@@ -87,7 +87,7 @@ configuration, and outputs phase-organized manifests ready for GitOps deployment
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Setup logger
-			log := logger.Default()
+			var log logger.Logger
 			if globalOpts.Verbose {
 				log = logger.Default()
 			} else {
