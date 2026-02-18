@@ -137,4 +137,4 @@ err := printer.Print(objects, os.Stdout)
 ## Related Packages
 
 - [errors](../errors/) - Error types for parse failures
-- [kubernetes](../kubernetes/) - Scheme registration for type-aware parsing
+- [kubernetes](/api-reference/kubernetes-builders/) - Scheme registration for type-aware parsing

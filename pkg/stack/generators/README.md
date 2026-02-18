@@ -93,4 +93,4 @@ Generates Kubernetes resource objects from kurel packages. The `Generate()` meth
 ## Related Packages
 
 - [stack](../) - Core domain model and ApplicationConfig interface
-- [stack/fluxcd](../fluxcd/) - Flux workflow engine
+- [stack/fluxcd](/api-reference/flux-engine/) - Flux workflow engine

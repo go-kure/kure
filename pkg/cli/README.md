@@ -57,6 +57,6 @@ config, err := cli.LoadConfig("~/.kure/config.yaml")
 
 ## Related Packages
 
-- [pkg/cmd/kure](../cmd/kure/) - kure CLI command implementation
-- [pkg/cmd/kurel](../cmd/kurel/) - kurel CLI command implementation
+- [pkg/cmd/kure](/api-reference/cli/) - kure CLI command implementation
+- [pkg/cmd/kurel](https://pkg.go.dev/github.com/go-kure/kure/pkg/cmd/kurel) - kurel CLI command implementation
 - [io](../io/) - Resource printing and serialization

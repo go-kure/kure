@@ -85,4 +85,4 @@ The [Layout Engine](/api-reference/layout) handles this mapping, and the [Flux E
 
 - [Stack package reference](/api-reference/stack) for API details
 - [Flux workflow guide](/guides/flux-workflow) for end-to-end usage
-- [Architecture](architecture) for system-level design
+- [Architecture](/concepts/architecture/) for system-level design

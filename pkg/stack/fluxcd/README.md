@@ -116,4 +116,4 @@ Controls where Flux Kustomization resources are placed:
 
 - [stack](../) - Core domain model
 - [stack/layout](../layout/) - Manifest directory organization
-- [kubernetes/fluxcd](../../kubernetes/fluxcd/) - Low-level Flux resource builders
+- [kubernetes/fluxcd](/api-reference/fluxcd-builders/) - Low-level Flux resource builders

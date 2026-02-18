@@ -37,4 +37,4 @@ kure validate examples/validation/bundle-intervals.yaml
 go run examples/validation/test-validation.go
 ```
 
-For more information, see the main [README.md](../../README.md#configuration-validation) validation section.
+For more information, see the main [README.md](https://github.com/go-kure/kure#configuration-validation) validation section.

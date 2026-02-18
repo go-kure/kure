@@ -136,5 +136,5 @@ err := fluxcd.AddKustomizationDependency(ks, kustv1.Dependency{
 
 ## Related Packages
 
-- [stack/fluxcd](../../stack/fluxcd/) - High-level Flux workflow engine
-- [stack](../../stack/) - Domain model that produces Flux resources
+- [stack/fluxcd](/api-reference/flux-engine/) - High-level Flux workflow engine
+- [stack](/api-reference/stack/) - Domain model that produces Flux resources

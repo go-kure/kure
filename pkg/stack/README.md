@@ -156,7 +156,6 @@ node.SetPackageRef(&stack.SourceRef{
 
 ## Related Packages
 
-- [stack/fluxcd](fluxcd/) - FluxCD workflow engine implementation
-- [stack/generators](generators/) - Application generator system
-- [stack/layout](layout/) - Manifest directory organization
-- [stack/argocd](argocd/) - ArgoCD workflow (deferred)
+- [stack/fluxcd](/api-reference/flux-engine/) - FluxCD workflow engine implementation
+- [stack/generators](/api-reference/generators/) - Application generator system
+- [stack/layout](/api-reference/layout/) - Manifest directory organization

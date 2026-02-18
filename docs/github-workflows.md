@@ -291,6 +291,5 @@ Most workflows use Go module caching:
 
 ## See Also
 
-- [Makefile](../Makefile) - Local development commands
-- [CLAUDE.md](../CLAUDE.md) - Development guidelines
-- [mise.toml](../mise.toml) - Local tool version management
+- [Makefile](https://github.com/go-kure/kure/blob/main/Makefile) - Local development commands
+- [mise.toml](https://github.com/go-kure/kure/blob/main/mise.toml) - Local tool version management

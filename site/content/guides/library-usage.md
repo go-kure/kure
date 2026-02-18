@@ -102,7 +102,7 @@ cluster := stack.NewClusterBuilder("production").
     Build()
 ```
 
-Then use the [Flux Engine](/api-reference/flux-engine) and [Layout Engine](/api-reference/layout) to generate a complete GitOps repository structure. See the [Generating Flux Manifests](flux-workflow) guide for the full workflow.
+Then use the [Flux Engine](/api-reference/flux-engine) and [Layout Engine](/api-reference/layout) to generate a complete GitOps repository structure. See the [Generating Flux Manifests](/guides/flux-workflow/) guide for the full workflow.
 
 ## Error Handling
 
@@ -118,6 +118,6 @@ if err != nil {
 
 ## Next Steps
 
-- [Generating Flux Manifests](flux-workflow) for the complete workflow
+- [Generating Flux Manifests](/guides/flux-workflow/) for the complete workflow
 - [API Reference](/api-reference) for all package documentation
 - [Examples](/examples) for working code samples

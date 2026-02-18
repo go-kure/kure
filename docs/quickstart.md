@@ -134,8 +134,8 @@ flux reconcile kustomization flux-system --with-source
 
 ## Next Steps
 
-- **Architecture**: Read [ARCHITECTURE.md](ARCHITECTURE.md) for a deep dive into Kure's design
+- **Architecture**: Read the [Architecture](/concepts/architecture/) page for a deep dive into Kure's design
 - **Examples**: Explore the `examples/` directory for more complex configurations
 - **API Reference**: See the full API at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure)
-- **Patching**: Learn about declarative patching in the [README](../README.md#declarative-patching)
+- **Patching**: Learn about declarative patching in the [README](https://github.com/go-kure/kure#declarative-patching)
 - **CLI Reference**: Run `kure --help` and `kurel --help` for all available commands

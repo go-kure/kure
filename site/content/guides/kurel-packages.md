@@ -54,7 +54,7 @@ Place standard Kubernetes manifests in `resources/`. These are the starting poin
 
 ### 3. Write Patches
 
-Patches customize the base resources. See the [Patching guide](patching) for the TOML patch format.
+Patches customize the base resources. See the [Patching guide](/guides/patching/) for the TOML patch format.
 
 ### 4. Add Conditional Patches
 
@@ -110,4 +110,4 @@ my-app.local.kurel/
 
 - [Launcher reference](/api-reference/launcher) for the package system API
 - [Kurel Frigate example](/examples/kurel-frigate) for a complete package
-- [Patching guide](patching) for the patch format
+- [Patching guide](/guides/patching/) for the patch format

@@ -135,4 +135,4 @@ objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
 - [Stack](/api-reference/stack) - Domain model reference
 - [Flux Engine](/api-reference/flux-engine) - Workflow engine reference
 - [Layout Engine](/api-reference/layout) - Directory organization reference
-- [Generators](generators) - Application generator guide
+- [Generators](/guides/generators/) - Application generator guide
