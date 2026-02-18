@@ -15,7 +15,7 @@ Kure uses a Group, Version, Kind (GVK) pattern similar to Kubernetes for identif
 
 Creates standard Kubernetes workloads (Deployments, StatefulSets, DaemonSets) with associated resources.
 
-**Example:** [`appworkload.yaml`](appworkload.yaml)
+**Example:** [`appworkload.yaml`](https://github.com/go-kure/kure/blob/main/examples/generators/appworkload.yaml)
 
 This example creates:
 - A Deployment with 3 replicas
@@ -28,8 +28,8 @@ This example creates:
 Creates Flux HelmRelease resources with their source configurations.
 
 **Examples:**
-- [`fluxhelm.yaml`](fluxhelm.yaml) - Traditional Helm repository source
-- [`fluxhelm-oci.yaml`](fluxhelm-oci.yaml) - OCI registry source
+- [`fluxhelm.yaml`](https://github.com/go-kure/kure/blob/main/examples/generators/fluxhelm.yaml) - Traditional Helm repository source
+- [`fluxhelm-oci.yaml`](https://github.com/go-kure/kure/blob/main/examples/generators/fluxhelm-oci.yaml) - OCI registry source
 
 These examples demonstrate:
 - HelmRepository and OCIRepository sources

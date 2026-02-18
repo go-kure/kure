@@ -112,4 +112,4 @@ The factory must implement the generator interface, providing a `FromConfig` met
 
 - [Generators reference](/api-reference/generators) for API details
 - [Generator examples](/examples/generators) for working samples
-- [Flux workflow](flux-workflow) for using generators in clusters
+- [Flux workflow](/guides/flux-workflow/) for using generators in clusters

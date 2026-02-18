@@ -163,5 +163,5 @@ err = kubernetes.AddIngressTLS(ing, netv1.IngressTLS{
 
 ## Related Packages
 
-- [fluxcd](fluxcd/) - FluxCD resource constructors
+- [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors
 - [errors](../errors/) - Structured error types used for nil-check sentinels

@@ -334,9 +334,9 @@ Kurel is part of the [Kure](https://github.com/go-kure/kure) project. See the ma
 
 ## 📚 Documentation
 
-- [Design Specification](DESIGN.md) - Technical design and architecture
-- [Detailed Design Document](DESIGN-DETAILS.md) - Complete design discussion and decisions
-- [Kure Documentation](../../../README.md) - Main project documentation
+- [Design Specification](https://github.com/go-kure/kure/blob/main/pkg/launcher/DESIGN.md) - Technical design and architecture
+- [Detailed Design Document](https://github.com/go-kure/kure/blob/main/pkg/launcher/DESIGN-DETAILS.md) - Complete design discussion and decisions
+- [Kure Documentation](https://github.com/go-kure/kure#readme) - Main project documentation
 
 ## 🎯 Philosophy
 

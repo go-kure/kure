@@ -187,4 +187,4 @@ for _, r := range reports {
 
 - [Patch reference](/api-reference/patch) for API details
 - [Patch examples](/examples/patches) for working samples
-- [Kurel packages](kurel-packages) for patch-based package customization
+- [Kurel packages](/guides/kurel-packages/) for patch-based package customization

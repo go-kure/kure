@@ -136,7 +136,7 @@ patchSet.KindLookup = lookup
 resolved, reports, err := patchSet.ResolveWithConflictCheck()
 ```
 
-SMP patches are applied before field-level patches. See [DESIGN.md](DESIGN.md) for full specification.
+SMP patches are applied before field-level patches. See [DESIGN.md](https://github.com/go-kure/kure/blob/main/pkg/patch/DESIGN.md) for full specification.
 
 ## API Reference
 
