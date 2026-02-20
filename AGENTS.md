@@ -409,6 +409,8 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 | `pkg/logger/` | `api-reference/logger` | — |
 | `cmd/kure/` | CLI ref (auto-generated) | — |
 | `cmd/kurel/` | CLI ref (auto-generated) | — |
+| `.github/workflows/` | — | `contributing/github-workflows` |
+| `scripts/gen-versions-toml.sh` | — | `contributing/github-workflows` |
 
 ## Implementation Workflow
 

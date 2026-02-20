@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-20
 
 ---
 
@@ -10,9 +10,11 @@ This document provides an overview of all GitHub Actions workflows used in the k
 
 | Workflow | File | Triggers | Purpose |
 |----------|------|----------|---------|
-| [CI](#ci) | `ci.yml` | push, PR, schedule, manual | Comprehensive testing, linting, building, security |
+| [CI](#ci-workflow) | `ci.yml` | push, PR, schedule, manual | Comprehensive testing, linting, building, security |
+| [Deploy Docs](#deploy-docs-workflow) | `deploy-docs.yml` | push to main (docs paths), `workflow_dispatch` | Multi-version docs deployment |
+| [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
 | [Auto-Rebase](#auto-rebase-workflow) | `auto-rebase.yml` | push to main | Rebase all open PRs when main is updated |
-| [Release](#release) | `release.yml` | version tags | GoReleaser-based release with CI validation |
+| [Release](#release-workflow) | `release.yml` | version tags | GoReleaser-based release with versioned docs deploy |
 
 ---
 
@@ -93,6 +95,7 @@ PR-only jobs (parallel, no blocking):
 | `cross-platform` | `Cross-Platform Build` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
 | `rebase-check` | `rebase-check` | 2 min | - | Verify PR branch is rebased on main (PR only) |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
+| `docs-build` | `docs-build` | 10 min | - | Hugo build validation with versioned config overlay |
 | `docs-check` | `Docs Check` | 5 min | - | API changes need docs check (PR only) |
 | `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, k8s-compat, cross-platform, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
@@ -127,10 +130,11 @@ PR-only jobs (parallel, no blocking):
 
 ### Jobs
 
-1. **check-ci** - Verify CI passed for this commit (waits up to 5 min)
+1. **test** - Full test run with race detection
 2. **validate** - Strict tag format, changelog, and version progression validation
 3. **goreleaser** - Cross-platform builds using GoReleaser v2
-4. **post-release** - Go proxy refresh
+4. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
+5. **post-release** - Go proxy refresh
 
 ### Configuration
 
@@ -206,6 +210,111 @@ Requires `AUTO_REBASE_PAT` repository secret — a fine-grained PAT with:
 - Permissions: `Contents: Read+Write`, `Pull requests: Read`
 
 A PAT is required because pushes made with `GITHUB_TOKEN` do not trigger subsequent workflow runs. The PAT ensures CI re-runs on rebased branches.
+
+---
+
+## Deploy Docs Workflow
+
+**File:** `.github/workflows/deploy-docs.yml`
+**Name:** `Deploy Docs`
+
+### Triggers
+
+- **Push to main** (paths: `site/**`, `docs/**`, `pkg/**/*.md`, `examples/**/*.md`, `README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`)
+- **Manual dispatch** with inputs: `version_slot`, `version_label`, `set_latest`
+
+### How It Works
+
+1. Runs `scripts/gen-versions-toml.sh` to generate a versioned Hugo config overlay
+2. Builds the Hugo site with `--config hugo.toml,versions.toml`
+3. Deploys the built site to a subdirectory of `go-kure.github.io`
+
+### Trigger Matrix
+
+| Event | What Deploys | Path | BaseURL |
+|-------|-------------|------|---------|
+| Push to `main` (docs paths) | Dev docs | `/dev/` | `www.gokure.dev/dev/` |
+| `workflow_dispatch` | Versioned | `/vX.Y/` | `www.gokure.dev/vX.Y/` |
+| `workflow_dispatch` + `set_latest=true` | Versioned + root | `/vX.Y/` + `/` | Both |
+
+### Concurrency
+
+Per-slot concurrency group (`deploy-docs-<slot>`) prevents race conditions when deploying different versions simultaneously.
+
+### Preservation
+
+During deployment, existing version subdirectories (`dev/`, `v*/`), `CNAME`, and `.nojekyll` are preserved. Only the target slot is replaced.
+
+---
+
+## Manage Docs Workflow
+
+**File:** `.github/workflows/manage-docs.yml`
+**Name:** `Manage Docs`
+
+### Triggers
+
+- **Manual dispatch only** with inputs: `action`, `version_slot`
+
+### Actions
+
+| Action | Description | Implementation |
+|--------|-------------|----------------|
+| `remove-version` | Delete a version's docs | Removes `/vX.Y/` directory from deploy target |
+| `set-latest` | Change root `/` to a specific version | Triggers `deploy-docs.yml` with `set_latest=true` |
+| `rebuild-version` | Re-trigger a docs build | Triggers `deploy-docs.yml` for the specified version |
+
+### Common Scenarios
+
+```bash
+# Roll back latest to an older version:
+#   Actions > "Manage Docs" > action=set-latest > version_slot=v0.1
+
+# Remove a yanked version:
+#   Actions > "Manage Docs" > action=remove-version > version_slot=v0.2
+
+# Rebuild after theme or script changes:
+#   Actions > "Manage Docs" > action=rebuild-version > version_slot=dev
+```
+
+---
+
+## Versioned Documentation
+
+The docs site supports multiple documentation versions at different URL paths.
+
+### URL Structure
+
+| Path | Content | Updated By |
+|------|---------|------------|
+| `/` | Latest stable release | Release workflow (`set_latest=true`) |
+| `/vX.Y/` | Specific stable version | Release workflow or manual dispatch |
+| `/dev/` | Development (from `main`) | Every push to `main` that touches docs |
+
+### Version Switcher
+
+The [Relearn theme](https://mcshelby.github.io/hugo-theme-relearn/) provides a native version dropdown in the sidebar. It is configured via `params.versions` entries in `versions.toml`, which `gen-versions-toml.sh` generates from git tags.
+
+### How `gen-versions-toml.sh` Works
+
+```bash
+# Generate config overlay for a dev build:
+./scripts/gen-versions-toml.sh --version dev
+
+# Generate for a stable release:
+./scripts/gen-versions-toml.sh --version v0.1.0 --latest v0.1.0
+```
+
+The script:
+1. Reads all stable tags (`vX.Y.Z` without pre-release suffix) from git
+2. Deduplicates to minor level (keeps highest patch per `vX.Y`)
+3. Generates `site/versions.toml` with `[params]` section and `[[params.versions]]` entries
+4. Marks the latest version with `isLatest = true` and root `baseURL`
+5. Always includes a "Development" entry pointing to `/dev/`
+
+### WIP Banner
+
+The development version shows a warning banner linking to the latest stable version (if one exists). Stable versions show no banner.
 
 ---
 
@@ -291,5 +400,6 @@ Most workflows use Go module caching:
 
 ## See Also
 
-- [Makefile](https://github.com/go-kure/kure/blob/main/Makefile) - Local development commands
-- [mise.toml](https://github.com/go-kure/kure/blob/main/mise.toml) - Local tool version management
+- [Makefile](../Makefile) - Local development commands
+- [mise.toml](../mise.toml) - Local tool version management
+- [gen-versions-toml.sh](../scripts/gen-versions-toml.sh) - Versioned docs config generator
