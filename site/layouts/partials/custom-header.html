@@ -3,9 +3,11 @@
     <div class="label">⚠️ Work in Progress</div>
     <div class="content">
         You are viewing <strong>development</strong> documentation built from the latest commit on <code>main</code>. APIs and features are subject to change.
-        {{- with where site.Params.versions "isLatest" true -}}
-            {{- range . }}
-            <br><a href="{{ .baseURL }}">View the latest stable release ({{ .title }})</a>.
+        {{- with site.Params.versions -}}
+            {{- with where . "isLatest" true -}}
+                {{- range . }}
+                <br><a href="{{ .baseURL }}">View the latest stable release ({{ .title }})</a>.
+                {{- end -}}
             {{- end -}}
         {{- end -}}
     </div>
