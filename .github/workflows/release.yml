@@ -108,6 +108,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  deploy-docs:
+    name: Deploy versioned docs
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: "!contains(github.ref_name, '-')"
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Trigger versioned docs deployment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          # Extract minor version: v0.1.0 → v0.1
+          MINOR="${TAG%.*}"
+          echo "Triggering docs deployment: tag=${TAG}, slot=${MINOR}"
+          gh workflow run deploy-docs.yml \
+            --repo "${{ github.repository }}" \
+            --ref "${TAG}" \
+            -f version_slot="${MINOR}" \
+            -f version_label="${TAG}" \
+            -f set_latest=true
+
   post-release:
     needs: goreleaser
     runs-on: ubuntu-latest
