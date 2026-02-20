@@ -61,7 +61,8 @@
       "Bash(GOWORK=off go mod tidy:*)",
       "Bash(GOWORK=off make precommit:*)",
       "Bash(GOWORK=off go vet:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(hugo build:*)"
     ]
   },
   "outputStyle": "default"
