@@ -143,6 +143,27 @@ jobs:
         rm -rf "${SLOT}"
         cp -r ../site/public-slot "${SLOT}"
 
+        # --- Clean stale root content (dev deploys only) ---
+        if [[ "$SLOT" == "dev" && "$SET_LATEST" != "true" ]]; then
+          echo "Cleaning stale root content..."
+          find . -maxdepth 1 \
+            -not -name '.' \
+            -not -name '.git' \
+            -not -name 'CNAME' \
+            -not -name '.nojekyll' \
+            -not -name 'dev' \
+            -not -name 'v*' \
+            -exec rm -rf {} +
+          # Redirect root to /dev/
+          cat > index.html <<'REDIR'
+        <!DOCTYPE html>
+        <html>
+        <head><meta http-equiv="refresh" content="0; url=/dev/"></head>
+        <body><p>Redirecting to <a href="/dev/">development documentation</a>...</p></body>
+        </html>
+        REDIR
+        fi
+
         # --- Deploy to root (latest stable) ---
         if [[ "$SET_LATEST" == "true" ]]; then
           echo "Deploying to / (latest stable)..."
