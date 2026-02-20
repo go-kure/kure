@@ -1,5 +1,7 @@
 # Launcher - Kubernetes Resources Launcher
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/launcher.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/launcher)
+
 This package provides the core functionality for Kurel, the Kubernetes Resources Launcher CLI tool.
 
 Kurel is a package system for creating reusable, customizable Kubernetes applications without the complexity of templating engines. It uses a declarative patch-based approach to customize base Kubernetes manifests, making it perfect for GitOps workflows.

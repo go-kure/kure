@@ -1,5 +1,7 @@
 # CLI - Command-Line Interface Utilities
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/cli.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/cli)
+
 The `cli` package provides foundational components for Kure's CLI tools (`kure` and `kurel`). It implements the Factory pattern for dependency injection, I/O stream abstraction, and output formatting.
 
 ## Overview

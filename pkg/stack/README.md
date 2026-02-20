@@ -1,5 +1,7 @@
 # Stack - Core Domain Model
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/stack.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack)
+
 The `stack` package defines the hierarchical domain model at the heart of Kure. It provides the Cluster, Node, Bundle, and Application abstractions used to describe a complete Kubernetes deployment topology.
 
 ## Overview

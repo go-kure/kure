@@ -1,5 +1,7 @@
 # FluxCD Builders - Flux Resource Constructors
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/kubernetes/fluxcd.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/fluxcd)
+
 The `fluxcd` package provides strongly-typed constructor functions for creating FluxCD Kubernetes resources. These are the low-level building blocks used by Kure's higher-level stack and workflow packages.
 
 ## Overview
