@@ -6,6 +6,9 @@ title = 'Go Kure'
   disableInlineCopyToClipBoard = true
   customHeaderPartial = "custom-header.html"
   themeVariant = "relearn-dark"
+  # Version is overridden at build time via versions.toml config overlay.
+  # Default to "dev" so local builds and CI validation show the WIP banner.
+  version = "dev"
 
 [module]
   [[module.imports]]
