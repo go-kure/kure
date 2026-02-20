@@ -11,13 +11,29 @@ on:
       - 'README.md'
       - 'CHANGELOG.md'
       - 'DEVELOPMENT.md'
+      - 'scripts/gen-versions-toml.sh'
   workflow_dispatch:
+    inputs:
+      version_slot:
+        description: 'Target subdirectory (e.g., dev, v0.1)'
+        required: true
+        type: string
+      version_label:
+        description: 'Version label for Hugo params (e.g., v0.1.0, dev)'
+        required: true
+        type: string
+      set_latest:
+        description: 'Also deploy to root / as the latest stable'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# One deploy per version slot at a time
 concurrency:
-  group: deploy-docs
+  group: deploy-docs-${{ inputs.version_slot || 'dev' }}
   cancel-in-progress: false
 
 env:
@@ -35,11 +51,37 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Determine version parameters
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "slot=${{ inputs.version_slot }}" >> $GITHUB_OUTPUT
+          echo "label=${{ inputs.version_label }}" >> $GITHUB_OUTPUT
+          echo "set_latest=${{ inputs.set_latest }}" >> $GITHUB_OUTPUT
+        else
+          # Push to main → dev build
+          echo "slot=dev" >> $GITHUB_OUTPUT
+          echo "label=dev" >> $GITHUB_OUTPUT
+          echo "set_latest=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Install Hugo CLI
       run: |
         wget -q -O ${{ runner.temp }}/hugo.deb \
           https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb \
           && sudo dpkg -i ${{ runner.temp }}/hugo.deb
+
+    - name: Read Go version from mise.toml
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: ${{ steps.go-version.outputs.version }}
+        check-latest: true
 
     - name: Check mounted files exist
       run: bash site/scripts/check-mounts.sh
@@ -47,12 +89,37 @@ jobs:
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
 
-    - name: Build Hugo site
+    - name: Generate CLI reference
+      run: make docs-cli
+
+    - name: Generate versions config overlay
+      run: bash scripts/gen-versions-toml.sh --version "${{ steps.version.outputs.label }}"
+
+    - name: Build Hugo site (versioned slot)
       working-directory: site
       env:
         HUGO_CACHEDIR: ${{ runner.temp }}/hugo_cache
         HUGO_ENVIRONMENT: production
-      run: hugo --minify --baseURL "https://www.gokure.dev/"
+      run: |
+        SLOT="${{ steps.version.outputs.slot }}"
+        if [[ "$SLOT" == "dev" ]]; then
+          BASE_URL="https://www.gokure.dev/dev/"
+        else
+          BASE_URL="https://www.gokure.dev/${SLOT}/"
+        fi
+        hugo --config hugo.toml,versions.toml --minify --baseURL "$BASE_URL"
+        # Save for deploy
+        mv public public-slot
+
+    - name: Build Hugo site (root — latest)
+      if: steps.version.outputs.set_latest == 'true'
+      working-directory: site
+      env:
+        HUGO_CACHEDIR: ${{ runner.temp }}/hugo_cache
+        HUGO_ENVIRONMENT: production
+      run: |
+        hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/"
+        mv public public-root
 
     - name: Checkout go-kure.github.io
       uses: actions/checkout@v6
@@ -64,32 +131,48 @@ jobs:
     - name: Deploy to go-kure.github.io
       run: |
         cd deploy-target
+        SLOT="${{ steps.version.outputs.slot }}"
+        SET_LATEST="${{ steps.version.outputs.set_latest }}"
 
-        # Preserve CNAME and .nojekyll
-        cp CNAME /tmp/CNAME 2>/dev/null || echo "www.gokure.dev" > /tmp/CNAME
-
-        # Clear existing content (except .git)
-        find . -maxdepth 1 -not -name '.git' -not -name '.' -exec rm -rf {} +
-
-        # Copy built site
-        cp -r ../site/public/* .
-
-        # Restore deployment files
-        cp /tmp/CNAME CNAME
+        # Ensure deployment infrastructure files exist
+        echo "www.gokure.dev" > CNAME
         touch .nojekyll
 
-        # Get kure commit info for the commit message
-        KURE_SHA=$(cd .. && git rev-parse --short HEAD)
-        KURE_DATE=$(cd .. && git log -1 --format=%ci)
+        # --- Deploy versioned slot ---
+        echo "Deploying to /${SLOT}/..."
+        rm -rf "${SLOT}"
+        cp -r ../site/public-slot "${SLOT}"
 
-        # Commit and push
+        # --- Deploy to root (latest stable) ---
+        if [[ "$SET_LATEST" == "true" ]]; then
+          echo "Deploying to / (latest stable)..."
+          # Remove root content but preserve version subdirectories and infra files
+          find . -maxdepth 1 \
+            -not -name '.' \
+            -not -name '.git' \
+            -not -name 'CNAME' \
+            -not -name '.nojekyll' \
+            -not -name 'dev' \
+            -not -name 'v*' \
+            -exec rm -rf {} +
+          cp -r ../site/public-root/* .
+        fi
+
+        # Get kure commit info for the deploy message
+        KURE_SHA=$(cd .. && git rev-parse --short HEAD)
+
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add -A
         if git diff --staged --quiet; then
           echo "No changes to deploy"
         else
-          git commit -m "deploy: update docs from kure@${KURE_SHA}" \
-            -m "Source commit: ${KURE_SHA} (${KURE_DATE})"
+          LABEL="${{ steps.version.outputs.label }}"
+          if [[ "$SET_LATEST" == "true" ]]; then
+            MSG="deploy: ${LABEL} → /${SLOT}/ + / (latest) from kure@${KURE_SHA}"
+          else
+            MSG="deploy: ${LABEL} → /${SLOT}/ from kure@${KURE_SHA}"
+          fi
+          git commit -m "$MSG"
           git push
         fi
