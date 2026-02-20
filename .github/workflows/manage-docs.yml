@@ -1,0 +1,94 @@
+name: Manage Docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - remove-version
+          - set-latest
+          - rebuild-version
+      version_slot:
+        description: 'Target version slot (e.g., v0.1, dev)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: manage-docs
+  cancel-in-progress: false
+
+jobs:
+  remove-version:
+    name: Remove version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: inputs.action == 'remove-version'
+
+    steps:
+    - name: Checkout go-kure.github.io
+      uses: actions/checkout@v6
+      with:
+        repository: go-kure/go-kure.github.io
+        token: ${{ secrets.DEPLOY_TOKEN }}
+
+    - name: Remove version directory
+      run: |
+        SLOT="${{ inputs.version_slot }}"
+        if [[ ! -d "$SLOT" ]]; then
+          echo "::error::Directory /${SLOT}/ does not exist"
+          exit 1
+        fi
+        echo "Removing /${SLOT}/..."
+        rm -rf "$SLOT"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add -A
+        git commit -m "docs: remove /${SLOT}/ version"
+        git push
+
+  set-latest:
+    name: Set latest version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: inputs.action == 'set-latest'
+
+    steps:
+    - name: Trigger deploy-docs with set_latest
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        SLOT="${{ inputs.version_slot }}"
+        # For set-latest, use the slot as the version label
+        echo "Setting /${SLOT}/ as latest (deploying to root)..."
+        gh workflow run deploy-docs.yml \
+          --repo "${{ github.repository }}" \
+          -f version_slot="${SLOT}" \
+          -f version_label="${SLOT}" \
+          -f set_latest=true
+
+  rebuild-version:
+    name: Rebuild version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: inputs.action == 'rebuild-version'
+
+    steps:
+    - name: Trigger deploy-docs rebuild
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        SLOT="${{ inputs.version_slot }}"
+        echo "Rebuilding /${SLOT}/..."
+        gh workflow run deploy-docs.yml \
+          --repo "${{ github.repository }}" \
+          -f version_slot="${SLOT}" \
+          -f version_label="${SLOT}" \
+          -f set_latest=false
