@@ -590,12 +590,15 @@ jobs:
     - name: Check for unmapped docs
       run: bash site/scripts/check-unmapped-docs.sh
 
+    - name: Generate versions config overlay
+      run: bash scripts/gen-versions-toml.sh --version dev
+
     - name: Build Hugo site
       working-directory: site
       env:
         HUGO_CACHEDIR: ${{ runner.temp }}/hugo_cache
         HUGO_ENVIRONMENT: production
-      run: hugo --minify --baseURL "https://www.gokure.dev/"
+      run: hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/"
 
     - name: Upload docs artifact
       uses: actions/upload-artifact@v6
