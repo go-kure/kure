@@ -1,5 +1,7 @@
 # Errors - Structured Error Handling
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/errors.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/errors)
+
 The `errors` package provides structured error types with contextual information for Kubernetes resource operations. All Kure packages use this instead of `fmt.Errorf`.
 
 ## Overview

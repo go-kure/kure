@@ -1,5 +1,7 @@
 # Logger - Logging Utilities
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/logger.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/logger)
+
 The `logger` package provides structured logging for Kure. All logging in the project should use this package instead of `fmt.Print` or the standard `log` package.
 
 ## Overview

@@ -1,5 +1,7 @@
 # Patch - Declarative Resource Patching
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/patch.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/patch)
+
 The `patch` package provides a JSONPath-based system for declaratively modifying Kubernetes resources. It supports both TOML and YAML patch file formats with structure-preserving modifications and variable substitution.
 
 ## Overview

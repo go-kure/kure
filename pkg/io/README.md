@@ -1,5 +1,7 @@
 # IO - YAML Serialization and Resource Printing
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/io.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/io)
+
 The `io` package provides utilities for parsing, serializing, and printing Kubernetes resources. It supports multiple output formats including YAML, JSON, and kubectl-compatible table views.
 
 ## Overview

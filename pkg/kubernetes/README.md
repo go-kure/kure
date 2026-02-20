@@ -1,5 +1,7 @@
 # Kubernetes Builders - Core Resource Helpers
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/kubernetes.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes)
+
 The `kubernetes` package provides GVK utilities, scheme registration, and strongly-typed builder functions for core Kubernetes resources.
 
 ## Overview

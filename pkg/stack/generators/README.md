@@ -1,5 +1,7 @@
 # Generators - Application Generator System
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/stack/generators.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/generators)
+
 The `generators` package provides a type-safe system for creating Kubernetes application workloads from configuration. Generators implement the `stack.ApplicationConfig` interface, allowing them to be used as applications within the domain model.
 
 ## Overview
