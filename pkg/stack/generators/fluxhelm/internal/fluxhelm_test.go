@@ -7,7 +7,6 @@ import (
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"gopkg.in/yaml.v3"
 )
 
 func TestGenerateResources(t *testing.T) {
@@ -405,7 +404,7 @@ func TestGenerateHelmRelease(t *testing.T) {
 		t.Errorf("SourceRef kind = %s, want HelmRepository", release.Spec.Chart.Spec.SourceRef.Kind)
 	}
 
-	// Test values - the values are stored as YAML in the Raw field
+	// Test values - the values are stored as JSON in the Raw field
 	if release.Spec.Values == nil {
 		t.Fatal("Values is nil")
 	}
@@ -413,7 +412,7 @@ func TestGenerateHelmRelease(t *testing.T) {
 		t.Fatal("Values Raw data is empty")
 	}
 	// Just verify the values were set - detailed parsing isn't crucial for this test
-	// since the values are YAML marshaled in the implementation
+	// since the values are JSON marshaled in the implementation
 
 	// Test timeout
 	if release.Spec.Timeout == nil || release.Spec.Timeout.Duration != 10*time.Minute {
@@ -753,8 +752,8 @@ func TestComplexValues(t *testing.T) {
 	}
 
 	var parsedValues map[string]interface{}
-	if err := yaml.Unmarshal(release.Spec.Values.Raw, &parsedValues); err != nil {
-		t.Fatalf("Failed to parse values YAML: %v", err)
+	if err := json.Unmarshal(release.Spec.Values.Raw, &parsedValues); err != nil {
+		t.Fatalf("Failed to parse values JSON: %v", err)
 	}
 
 	// Check nested values
