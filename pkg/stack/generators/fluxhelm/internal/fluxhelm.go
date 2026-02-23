@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -380,9 +380,9 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 
 	// Set values if provided
 	if c.Values != nil {
-		// Convert values to YAML for the JSON raw field
+		// Convert values to JSON for the apiextensionsv1.JSON raw field
 		valuesJSON := &apiextensionsv1.JSON{}
-		raw, err := yaml.Marshal(c.Values)
+		raw, err := json.Marshal(c.Values)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal Helm values: %w", err)
 		}
