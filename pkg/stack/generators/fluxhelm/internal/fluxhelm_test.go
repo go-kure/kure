@@ -617,6 +617,89 @@ func TestGenerateHelmReleaseValuesFrom(t *testing.T) {
 	}
 }
 
+func TestGenerateResourcesSourceNameOverride(t *testing.T) {
+	config := &Config{
+		Name:      "trust-manager",
+		Namespace: "flux-system",
+		Chart: ChartConfig{
+			Name:    "trust-manager",
+			Version: "0.9.0",
+		},
+		Source: SourceConfig{
+			Type:    HelmRepositorySource,
+			URL:     "https://charts.jetstack.io",
+			RefName: "jetstack-repo",
+		},
+	}
+
+	objects, err := GenerateResources(config)
+	if err != nil {
+		t.Fatalf("GenerateResources() error = %v", err)
+	}
+
+	if len(objects) != 2 {
+		t.Fatalf("Expected 2 objects, got %d", len(objects))
+	}
+
+	// Verify source name is custom
+	source, ok := (*objects[0]).(*sourcev1.HelmRepository)
+	if !ok {
+		t.Fatalf("Expected HelmRepository, got %T", *objects[0])
+	}
+	if source.Name != "jetstack-repo" {
+		t.Errorf("Source name = %q, want %q", source.Name, "jetstack-repo")
+	}
+
+	// Verify HelmRelease sourceRef uses same custom name
+	release, ok := (*objects[1]).(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Expected HelmRelease, got %T", *objects[1])
+	}
+	if release.Spec.Chart.Spec.SourceRef.Name != "jetstack-repo" {
+		t.Errorf("SourceRef.Name = %q, want %q", release.Spec.Chart.Spec.SourceRef.Name, "jetstack-repo")
+	}
+}
+
+func TestGenerateResourcesSkipSourceGeneration(t *testing.T) {
+	config := &Config{
+		Name:      "trust-manager",
+		Namespace: "flux-system",
+		Chart: ChartConfig{
+			Name:    "trust-manager",
+			Version: "0.9.0",
+		},
+		Source: SourceConfig{
+			Type:           HelmRepositorySource,
+			URL:            "https://charts.jetstack.io",
+			RefName:        "jetstack-repo",
+			SkipGeneration: true,
+		},
+	}
+
+	objects, err := GenerateResources(config)
+	if err != nil {
+		t.Fatalf("GenerateResources() error = %v", err)
+	}
+
+	// Only HelmRelease — no source resource generated
+	if len(objects) != 1 {
+		t.Fatalf("Expected 1 object (HelmRelease only), got %d", len(objects))
+	}
+
+	release, ok := (*objects[0]).(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Expected HelmRelease, got %T", *objects[0])
+	}
+
+	// SourceRef should still reference the custom name
+	if release.Spec.Chart.Spec.SourceRef.Name != "jetstack-repo" {
+		t.Errorf("SourceRef.Name = %q, want %q", release.Spec.Chart.Spec.SourceRef.Name, "jetstack-repo")
+	}
+	if release.Spec.Chart.Spec.SourceRef.Kind != "HelmRepository" {
+		t.Errorf("SourceRef.Kind = %q, want %q", release.Spec.Chart.Spec.SourceRef.Kind, "HelmRepository")
+	}
+}
+
 func TestGenerateHelmReleaseDefaults(t *testing.T) {
 	config := &Config{
 		Name:      "minimal-release",
