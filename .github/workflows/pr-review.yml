@@ -50,6 +50,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup tools
+        run: |
+          for cmd in curl jq; do
+            if ! command -v "$cmd" &>/dev/null; then
+              sudo apt-get update -qq && sudo apt-get install -y -qq curl jq && break
+            fi
+          done
+
       - name: Guard against fork PRs
         if: github.event.pull_request.head.repo.full_name != github.repository
         run: |
@@ -76,7 +84,10 @@ jobs:
 
           # --- Fetch PR diff ---
           echo "Fetching PR diff for #${PR_NUMBER}..."
-          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY")
+          DIFF=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github.diff" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
 
           if [ -z "$DIFF" ]; then
             echo "No diff found, skipping review."
@@ -84,7 +95,10 @@ jobs:
           fi
 
           # --- Fetch PR metadata ---
-          PR_DATA=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
+          PR_DATA=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
           PR_TITLE=$(echo "$PR_DATA" | jq -r '.title // "Untitled"')
           PR_DESC=$(echo "$PR_DATA" | jq -r '.body // ""')
 
