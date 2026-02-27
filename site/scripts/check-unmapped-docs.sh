@@ -21,6 +21,7 @@ EXCLUDED_PATTERNS=(
   "changelogs/"
   "docs/history/"
   "docs/reviews/"
+  "docs/development/"
   "docs/puzl-cloud-kubesdk-review.md"
   "docs/plugin-architecture-design.md"
   "docs/ux-design.md"
