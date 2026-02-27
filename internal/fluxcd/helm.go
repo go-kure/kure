@@ -109,6 +109,21 @@ func SetHelmReleaseDriftDetection(obj *helmv2.HelmRelease, dd *helmv2.DriftDetec
 	obj.Spec.DriftDetection = dd
 }
 
+// CreateDriftDetection returns a DriftDetection with the given mode.
+func CreateDriftDetection(mode helmv2.DriftDetectionMode) *helmv2.DriftDetection {
+	return &helmv2.DriftDetection{Mode: mode}
+}
+
+// AddDriftDetectionIgnoreRule appends an ignore rule.
+func AddDriftDetectionIgnoreRule(dd *helmv2.DriftDetection, rule helmv2.IgnoreRule) {
+	dd.Ignore = append(dd.Ignore, rule)
+}
+
+// CreateIgnoreRule constructs an IgnoreRule with the given paths and optional target selector.
+func CreateIgnoreRule(paths []string, target *kustomize.Selector) helmv2.IgnoreRule {
+	return helmv2.IgnoreRule{Paths: paths, Target: target}
+}
+
 // SetHelmReleaseInstall sets the install configuration.
 func SetHelmReleaseInstall(obj *helmv2.HelmRelease, install *helmv2.Install) {
 	obj.Spec.Install = install

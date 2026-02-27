@@ -1064,6 +1064,42 @@ func TestSetPostRendererKustomizeImage(t *testing.T) {
 	}
 }
 
+// DriftDetection builder setter tests
+func TestSetDriftDetectionMode(t *testing.T) {
+	dd := CreateDriftDetection(helmv2.DriftDetectionEnabled)
+	if dd.Mode != helmv2.DriftDetectionEnabled {
+		t.Fatalf("expected mode 'enabled', got %s", dd.Mode)
+	}
+}
+
+func TestSetDriftDetectionIgnoreRule(t *testing.T) {
+	dd := CreateDriftDetection(helmv2.DriftDetectionWarn)
+	rule := CreateIgnoreRule([]string{"/spec/replicas"}, nil)
+	AddDriftDetectionIgnoreRule(dd, rule)
+	if len(dd.Ignore) != 1 {
+		t.Fatal("expected ignore rule to be appended")
+	}
+	if dd.Ignore[0].Paths[0] != "/spec/replicas" {
+		t.Fatal("expected path to match")
+	}
+}
+
+func TestSetDriftDetectionIgnoreRuleWithTarget(t *testing.T) {
+	dd := CreateDriftDetection(helmv2.DriftDetectionEnabled)
+	target := &kustomize.Selector{Kind: "Deployment", Name: "my-app"}
+	rule := CreateIgnoreRule([]string{"/metadata/annotations"}, target)
+	AddDriftDetectionIgnoreRule(dd, rule)
+	if len(dd.Ignore) != 1 {
+		t.Fatal("expected ignore rule to be appended")
+	}
+	if dd.Ignore[0].Target == nil {
+		t.Fatal("expected target to be set")
+	}
+	if dd.Ignore[0].Target.Kind != "Deployment" {
+		t.Fatalf("expected target kind 'Deployment', got %s", dd.Ignore[0].Target.Kind)
+	}
+}
+
 // Test nil cases for error handling
 func TestAddResourceSetResource_NilResource(t *testing.T) {
 	rs := CreateResourceSet("test", "default", fluxv1.ResourceSetSpec{})
