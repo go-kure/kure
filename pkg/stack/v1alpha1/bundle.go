@@ -64,6 +64,22 @@ type BundleSpec struct {
 	// Supports Go duration format (e.g., "2m", "30s", "5m")
 	// Valid range: 1s to 24h. Empty value uses system defaults.
 	RetryInterval string `yaml:"retryInterval,omitempty" json:"retryInterval,omitempty"`
+
+	// HealthChecks lists resources whose health is monitored during reconciliation.
+	// When specified, the Kustomization waits for these resources to become ready.
+	HealthChecks []HealthCheckReference `yaml:"healthChecks,omitempty" json:"healthChecks,omitempty"`
+}
+
+// HealthCheckReference defines a resource to be monitored for health during reconciliation.
+type HealthCheckReference struct {
+	// APIVersion of the resource (e.g. "apps/v1", "helm.toolkit.fluxcd.io/v2").
+	APIVersion string `yaml:"apiVersion,omitempty" json:"apiVersion,omitempty"`
+	// Kind of the resource (e.g. "Deployment", "HelmRelease").
+	Kind string `yaml:"kind" json:"kind"`
+	// Name of the resource.
+	Name string `yaml:"name" json:"name"`
+	// Namespace of the resource. Defaults to the Kustomization namespace.
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // SourceRef defines a reference to a Flux source

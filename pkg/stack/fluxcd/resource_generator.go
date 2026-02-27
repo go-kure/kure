@@ -165,6 +165,19 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		}
 	}
 
+	// Set health checks if specified
+	if len(b.HealthChecks) > 0 {
+		kust.Spec.HealthChecks = make([]metaapi.NamespacedObjectKindReference, 0, len(b.HealthChecks))
+		for _, hc := range b.HealthChecks {
+			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
+				APIVersion: hc.APIVersion,
+				Kind:       hc.Kind,
+				Name:       hc.Name,
+				Namespace:  hc.Namespace,
+			})
+		}
+	}
+
 	// Add dependencies
 	for _, dep := range b.DependsOn {
 		kust.Spec.DependsOn = append(kust.Spec.DependsOn, metaapi.NamespacedObjectReference{
