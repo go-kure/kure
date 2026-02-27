@@ -617,6 +617,77 @@ func TestGenerateHelmReleaseValuesFrom(t *testing.T) {
 	}
 }
 
+func TestGenerateHelmReleaseCRDsPolicy(t *testing.T) {
+	config := &Config{
+		Name:      "cert-manager",
+		Namespace: "flux-system",
+		Chart: ChartConfig{
+			Name:    "cert-manager",
+			Version: "1.16.0",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+			URL:  "https://charts.jetstack.io",
+		},
+		Release: ReleaseConfig{
+			InstallCRDs: CRDsPolicyCreateReplace,
+			UpgradeCRDs: CRDsPolicyCreateReplace,
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release := hr.(*helmv2.HelmRelease)
+
+	if release.Spec.Install.CRDs != helmv2.CreateReplace {
+		t.Errorf("Install.CRDs = %q, want %q", release.Spec.Install.CRDs, helmv2.CreateReplace)
+	}
+	if release.Spec.Upgrade.CRDs != helmv2.CreateReplace {
+		t.Errorf("Upgrade.CRDs = %q, want %q", release.Spec.Upgrade.CRDs, helmv2.CreateReplace)
+	}
+
+	// Test with Skip policy
+	config.Release.InstallCRDs = CRDsPolicySkip
+	config.Release.UpgradeCRDs = CRDsPolicySkip
+
+	hr2, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release2 := hr2.(*helmv2.HelmRelease)
+	if release2.Spec.Install.CRDs != helmv2.Skip {
+		t.Errorf("Install.CRDs = %q, want %q", release2.Spec.Install.CRDs, helmv2.Skip)
+	}
+	if release2.Spec.Upgrade.CRDs != helmv2.Skip {
+		t.Errorf("Upgrade.CRDs = %q, want %q", release2.Spec.Upgrade.CRDs, helmv2.Skip)
+	}
+
+	// Test default (empty) — should result in zero-value CRDsPolicy
+	configDefault := &Config{
+		Name:      "default-release",
+		Namespace: "default",
+		Chart:     ChartConfig{Name: "nginx"},
+		Source:    SourceConfig{Type: HelmRepositorySource},
+	}
+
+	hr3, err := configDefault.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release3 := hr3.(*helmv2.HelmRelease)
+	if release3.Spec.Install.CRDs != "" {
+		t.Errorf("Default Install.CRDs = %q, want empty", release3.Spec.Install.CRDs)
+	}
+	if release3.Spec.Upgrade.CRDs != "" {
+		t.Errorf("Default Upgrade.CRDs = %q, want empty", release3.Spec.Upgrade.CRDs)
+	}
+}
+
 func TestGenerateHelmReleaseDefaults(t *testing.T) {
 	config := &Config{
 		Name:      "minimal-release",

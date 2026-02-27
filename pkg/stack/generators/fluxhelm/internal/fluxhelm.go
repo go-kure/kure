@@ -92,6 +92,18 @@ type SourceConfig struct {
 	Interval string `yaml:"interval,omitempty" json:"interval,omitempty"`
 }
 
+// CRDsPolicy defines the install/upgrade approach for CRDs bundled with a Helm chart.
+type CRDsPolicy string
+
+const (
+	// CRDsPolicySkip skips CRD installation and updates.
+	CRDsPolicySkip CRDsPolicy = "Skip"
+	// CRDsPolicyCreate creates new CRDs but does not update existing ones.
+	CRDsPolicyCreate CRDsPolicy = "Create"
+	// CRDsPolicyCreateReplace creates new CRDs and replaces (updates) existing ones.
+	CRDsPolicyCreateReplace CRDsPolicy = "CreateReplace"
+)
+
 // ReleaseConfig defines Helm release options
 type ReleaseConfig struct {
 	CreateNamespace          bool `yaml:"createNamespace,omitempty" json:"createNamespace,omitempty"`
@@ -104,6 +116,10 @@ type ReleaseConfig struct {
 	PreserveValues           bool `yaml:"preserveValues,omitempty" json:"preserveValues,omitempty"`
 	CleanupOnFail            bool `yaml:"cleanupOnFail,omitempty" json:"cleanupOnFail,omitempty"`
 	Replace                  bool `yaml:"replace,omitempty" json:"replace,omitempty"`
+
+	// CRD lifecycle policies
+	InstallCRDs CRDsPolicy `yaml:"installCRDs,omitempty" json:"installCRDs,omitempty"`
+	UpgradeCRDs CRDsPolicy `yaml:"upgradeCRDs,omitempty" json:"upgradeCRDs,omitempty"`
 }
 
 // ValuesReference defines a reference to a resource from which Helm values are sourced.
@@ -468,6 +484,7 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 		DisableHooks:             c.Release.DisableHooks,
 		DisableOpenAPIValidation: c.Release.DisableOpenAPIValidation,
 		Replace:                  c.Release.Replace,
+		CRDs:                     helmv2.CRDsPolicy(c.Release.InstallCRDs),
 	}
 
 	hr.Spec.Upgrade = &helmv2.Upgrade{
@@ -477,6 +494,7 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 		DisableOpenAPIValidation: c.Release.DisableOpenAPIValidation,
 		Force:                    c.Release.ForceUpgrade,
 		PreserveValues:           c.Release.PreserveValues,
+		CRDs:                     helmv2.CRDsPolicy(c.Release.UpgradeCRDs),
 		CleanupOnFail:            c.Release.CleanupOnFail,
 	}
 
