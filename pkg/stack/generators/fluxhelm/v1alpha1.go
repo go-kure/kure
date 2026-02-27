@@ -40,6 +40,9 @@ type ConfigV1Alpha1 struct {
 	// Release configuration
 	Release internal.ReleaseConfig `yaml:"release,omitempty" json:"release,omitempty"`
 
+	// ChartRef references an existing OCIRepository or HelmChart (mutually exclusive with Chart)
+	ChartRef *internal.ChartRefConfig `yaml:"chartRef,omitempty" json:"chartRef,omitempty"`
+
 	// Advanced options
 	Interval       string                  `yaml:"interval,omitempty" json:"interval,omitempty"`
 	Timeout        string                  `yaml:"timeout,omitempty" json:"timeout,omitempty"`
@@ -74,6 +77,7 @@ func (c *ConfigV1Alpha1) Generate(app *stack.Application) ([]*client.Object, err
 		ValuesFrom:      c.ValuesFrom,
 		Source:          c.Source,
 		Release:         c.Release,
+		ChartRef:        c.ChartRef,
 		Interval:        c.Interval,
 		Timeout:         c.Timeout,
 		MaxHistory:      c.MaxHistory,

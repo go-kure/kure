@@ -726,6 +726,9 @@ func TestGenerateHelmReleaseDefaults(t *testing.T) {
 	if release.Spec.Suspend != false {
 		t.Errorf("Suspend should be false by default, got %v", release.Spec.Suspend)
 	}
+	if release.Spec.ChartRef != nil {
+		t.Errorf("ChartRef should be nil by default, got %v", release.Spec.ChartRef)
+	}
 }
 
 func TestGenerateSourceInferred(t *testing.T) {
@@ -974,6 +977,132 @@ func TestComplexValues(t *testing.T) {
 	}
 	if global["imageRegistry"] != "my-registry.com" {
 		t.Errorf("global.imageRegistry = %v, want my-registry.com", global["imageRegistry"])
+	}
+}
+
+func TestGenerateHelmReleaseWithChartRef(t *testing.T) {
+	config := &Config{
+		Name:      "test-release",
+		Namespace: "test-namespace",
+		ChartRef: &ChartRefConfig{
+			Kind: "OCIRepository",
+			Name: "my-oci-repo",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+			URL:  "https://charts.bitnami.com/bitnami",
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release, ok := hr.(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Expected HelmRelease, got %T", hr)
+	}
+
+	// ChartRef should be set
+	if release.Spec.ChartRef == nil {
+		t.Fatal("ChartRef should be set")
+	}
+	if release.Spec.ChartRef.Kind != "OCIRepository" {
+		t.Errorf("ChartRef.Kind = %s, want OCIRepository", release.Spec.ChartRef.Kind)
+	}
+	if release.Spec.ChartRef.Name != "my-oci-repo" {
+		t.Errorf("ChartRef.Name = %s, want my-oci-repo", release.Spec.ChartRef.Name)
+	}
+	if release.Spec.ChartRef.Namespace != "" {
+		t.Errorf("ChartRef.Namespace = %s, want empty", release.Spec.ChartRef.Namespace)
+	}
+
+	// Chart should be nil (mutually exclusive)
+	if release.Spec.Chart != nil {
+		t.Error("Chart should be nil when ChartRef is set")
+	}
+}
+
+func TestGenerateHelmReleaseChartRefWithNamespace(t *testing.T) {
+	config := &Config{
+		Name:      "test-release",
+		Namespace: "test-namespace",
+		ChartRef: &ChartRefConfig{
+			Kind:      "HelmChart",
+			Name:      "shared-chart",
+			Namespace: "flux-system",
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release, ok := hr.(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Expected HelmRelease, got %T", hr)
+	}
+
+	if release.Spec.ChartRef == nil {
+		t.Fatal("ChartRef should be set")
+	}
+	if release.Spec.ChartRef.Kind != "HelmChart" {
+		t.Errorf("ChartRef.Kind = %s, want HelmChart", release.Spec.ChartRef.Kind)
+	}
+	if release.Spec.ChartRef.Name != "shared-chart" {
+		t.Errorf("ChartRef.Name = %s, want shared-chart", release.Spec.ChartRef.Name)
+	}
+	if release.Spec.ChartRef.Namespace != "flux-system" {
+		t.Errorf("ChartRef.Namespace = %s, want flux-system", release.Spec.ChartRef.Namespace)
+	}
+
+	// Chart should be nil
+	if release.Spec.Chart != nil {
+		t.Error("Chart should be nil when ChartRef is set")
+	}
+}
+
+func TestGenerateResources_ChartRef(t *testing.T) {
+	config := &Config{
+		Name:      "test-release",
+		Namespace: "test-namespace",
+		ChartRef: &ChartRefConfig{
+			Kind: "OCIRepository",
+			Name: "my-oci-repo",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+			URL:  "https://charts.bitnami.com/bitnami",
+		},
+	}
+
+	objects, err := GenerateResources(config)
+	if err != nil {
+		t.Fatalf("GenerateResources() error = %v", err)
+	}
+
+	// Should have 2 objects: source + HelmRelease (source is still generated)
+	if len(objects) != 2 {
+		t.Fatalf("GenerateResources() got %d objects, want 2", len(objects))
+	}
+
+	// Last object should be HelmRelease with chartRef
+	lastObj := *objects[len(objects)-1]
+	hr, ok := lastObj.(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Last object is not a HelmRelease: %T", lastObj)
+	}
+
+	if hr.Spec.ChartRef == nil {
+		t.Fatal("HelmRelease should have ChartRef set")
+	}
+	if hr.Spec.ChartRef.Kind != "OCIRepository" {
+		t.Errorf("ChartRef.Kind = %s, want OCIRepository", hr.Spec.ChartRef.Kind)
+	}
+	if hr.Spec.Chart != nil {
+		t.Error("HelmRelease should not have Chart set when using ChartRef")
 	}
 }
 
