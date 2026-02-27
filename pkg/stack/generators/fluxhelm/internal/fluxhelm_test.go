@@ -534,6 +534,89 @@ func TestGenerateHelmReleaseTargetNamespaceAndReleaseName(t *testing.T) {
 	}
 }
 
+func TestGenerateHelmReleaseValuesFrom(t *testing.T) {
+	config := &Config{
+		Name:      "app-release",
+		Namespace: "default",
+		Chart: ChartConfig{
+			Name: "app",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+			URL:  "https://charts.example.com",
+		},
+		ValuesFrom: []ValuesReference{
+			{
+				Kind: "ConfigMap",
+				Name: "app-values",
+			},
+			{
+				Kind:       "Secret",
+				Name:       "app-secrets",
+				ValuesKey:  "db-password",
+				TargetPath: "global.database.password",
+				Optional:   true,
+			},
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release := hr.(*helmv2.HelmRelease)
+
+	if len(release.Spec.ValuesFrom) != 2 {
+		t.Fatalf("ValuesFrom length = %d, want 2", len(release.Spec.ValuesFrom))
+	}
+
+	// First ref: ConfigMap with defaults
+	vf0 := release.Spec.ValuesFrom[0]
+	if vf0.Kind != "ConfigMap" {
+		t.Errorf("ValuesFrom[0].Kind = %q, want %q", vf0.Kind, "ConfigMap")
+	}
+	if vf0.Name != "app-values" {
+		t.Errorf("ValuesFrom[0].Name = %q, want %q", vf0.Name, "app-values")
+	}
+
+	// Second ref: Secret with all fields
+	vf1 := release.Spec.ValuesFrom[1]
+	if vf1.Kind != "Secret" {
+		t.Errorf("ValuesFrom[1].Kind = %q, want %q", vf1.Kind, "Secret")
+	}
+	if vf1.Name != "app-secrets" {
+		t.Errorf("ValuesFrom[1].Name = %q, want %q", vf1.Name, "app-secrets")
+	}
+	if vf1.ValuesKey != "db-password" {
+		t.Errorf("ValuesFrom[1].ValuesKey = %q, want %q", vf1.ValuesKey, "db-password")
+	}
+	if vf1.TargetPath != "global.database.password" {
+		t.Errorf("ValuesFrom[1].TargetPath = %q, want %q", vf1.TargetPath, "global.database.password")
+	}
+	if !vf1.Optional {
+		t.Error("ValuesFrom[1].Optional should be true")
+	}
+
+	// Test nil ValuesFrom
+	configEmpty := &Config{
+		Name:      "empty",
+		Namespace: "default",
+		Chart:     ChartConfig{Name: "nginx"},
+		Source:    SourceConfig{Type: HelmRepositorySource},
+	}
+
+	hr2, err := configEmpty.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release2 := hr2.(*helmv2.HelmRelease)
+	if len(release2.Spec.ValuesFrom) != 0 {
+		t.Errorf("Default ValuesFrom length = %d, want 0", len(release2.Spec.ValuesFrom))
+	}
+}
+
 func TestGenerateHelmReleaseDefaults(t *testing.T) {
 	config := &Config{
 		Name:      "minimal-release",

@@ -29,9 +29,10 @@ type ConfigV1Alpha1 struct {
 	ReleaseName     string `yaml:"releaseName,omitempty" json:"releaseName,omitempty"`
 
 	// Chart configuration
-	Chart   internal.ChartConfig `yaml:"chart" json:"chart"`
-	Version string               `yaml:"version,omitempty" json:"version,omitempty"`
-	Values  interface{}          `yaml:"values,omitempty" json:"values,omitempty"`
+	Chart      internal.ChartConfig       `yaml:"chart" json:"chart"`
+	Version    string                     `yaml:"version,omitempty" json:"version,omitempty"`
+	Values     interface{}                `yaml:"values,omitempty" json:"values,omitempty"`
+	ValuesFrom []internal.ValuesReference `yaml:"valuesFrom,omitempty" json:"valuesFrom,omitempty"`
 
 	// Source configuration
 	Source internal.SourceConfig `yaml:"source" json:"source"`
@@ -70,6 +71,7 @@ func (c *ConfigV1Alpha1) Generate(app *stack.Application) ([]*client.Object, err
 		Chart:           c.Chart,
 		Version:         c.Version,
 		Values:          c.Values,
+		ValuesFrom:      c.ValuesFrom,
 		Source:          c.Source,
 		Release:         c.Release,
 		Interval:        c.Interval,

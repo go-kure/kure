@@ -550,6 +550,47 @@ func TestConfigV1Alpha1_Generate_WithTargetNamespaceAndReleaseName(t *testing.T)
 	}
 }
 
+func TestConfigV1Alpha1_Generate_WithValuesFrom(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		BaseMetadata: generators.BaseMetadata{
+			Name:      "app",
+			Namespace: "default",
+		},
+		Chart: internal.ChartConfig{
+			Name: "app-chart",
+		},
+		Source: internal.SourceConfig{
+			Type: internal.HelmRepositorySource,
+			URL:  "https://charts.example.com",
+		},
+		ValuesFrom: []internal.ValuesReference{
+			{Kind: "ConfigMap", Name: "common-values"},
+			{Kind: "Secret", Name: "secret-values", ValuesKey: "password", TargetPath: "auth.password"},
+		},
+	}
+
+	app := stack.NewApplication("app", "default", cfg)
+	objs, err := cfg.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	helmRelease := findHelmRelease(objs)
+	if helmRelease == nil {
+		t.Fatal("Expected HelmRelease object")
+	}
+
+	if len(helmRelease.Spec.ValuesFrom) != 2 {
+		t.Fatalf("ValuesFrom length = %d, want 2", len(helmRelease.Spec.ValuesFrom))
+	}
+	if helmRelease.Spec.ValuesFrom[0].Kind != "ConfigMap" {
+		t.Errorf("ValuesFrom[0].Kind = %q, want %q", helmRelease.Spec.ValuesFrom[0].Kind, "ConfigMap")
+	}
+	if helmRelease.Spec.ValuesFrom[1].TargetPath != "auth.password" {
+		t.Errorf("ValuesFrom[1].TargetPath = %q, want %q", helmRelease.Spec.ValuesFrom[1].TargetPath, "auth.password")
+	}
+}
+
 func TestConfigV1Alpha1_Generate_NoExplicitSource(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
 		BaseMetadata: generators.BaseMetadata{
