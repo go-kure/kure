@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -146,4 +147,19 @@ func SetHelmReleaseValues(obj *helmv2.HelmRelease, values *apiextensionsv1.JSON)
 // AddHelmReleasePostRenderer appends a post renderer.
 func AddHelmReleasePostRenderer(obj *helmv2.HelmRelease, pr helmv2.PostRenderer) {
 	obj.Spec.PostRenderers = append(obj.Spec.PostRenderers, pr)
+}
+
+// CreatePostRendererKustomize returns a Kustomize post-renderer with initialized slices.
+func CreatePostRendererKustomize() *helmv2.Kustomize {
+	return &helmv2.Kustomize{}
+}
+
+// AddPostRendererKustomizePatch appends a strategic merge or JSON patch.
+func AddPostRendererKustomizePatch(k *helmv2.Kustomize, patch kustomize.Patch) {
+	k.Patches = append(k.Patches, patch)
+}
+
+// AddPostRendererKustomizeImage appends an image transformation.
+func AddPostRendererKustomizeImage(k *helmv2.Kustomize, img kustomize.Image) {
+	k.Images = append(k.Images, img)
 }
