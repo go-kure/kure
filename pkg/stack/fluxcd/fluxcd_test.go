@@ -77,6 +77,66 @@ func TestWorkflowBundleMetadata(t *testing.T) {
 	}
 }
 
+func TestWorkflowBundleHealthChecks(t *testing.T) {
+	b := &stack.Bundle{
+		Name: "infra",
+		HealthChecks: []stack.HealthCheck{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "my-app",
+				Namespace:  "default",
+			},
+			{
+				APIVersion: "helm.toolkit.fluxcd.io/v2",
+				Kind:       "HelmRelease",
+				Name:       "cert-manager",
+				Namespace:  "flux-system",
+			},
+		},
+	}
+
+	wf := fluxstack.Engine()
+	objs, err := wf.GenerateFromBundle(b)
+	if err != nil {
+		t.Fatalf("GenerateFromBundle() error = %v", err)
+	}
+
+	if len(objs) != 1 {
+		t.Fatalf("expected 1 object, got %d", len(objs))
+	}
+
+	k := objs[0].(*kustv1.Kustomization)
+	if len(k.Spec.HealthChecks) != 2 {
+		t.Fatalf("HealthChecks length = %d, want 2", len(k.Spec.HealthChecks))
+	}
+
+	hc0 := k.Spec.HealthChecks[0]
+	if hc0.APIVersion != "apps/v1" || hc0.Kind != "Deployment" || hc0.Name != "my-app" || hc0.Namespace != "default" {
+		t.Errorf("HealthChecks[0] = %+v, want apps/v1 Deployment my-app default", hc0)
+	}
+
+	hc1 := k.Spec.HealthChecks[1]
+	if hc1.Kind != "HelmRelease" || hc1.Name != "cert-manager" {
+		t.Errorf("HealthChecks[1] = %+v, want HelmRelease cert-manager", hc1)
+	}
+}
+
+func TestWorkflowBundleHealthChecksEmpty(t *testing.T) {
+	b := &stack.Bundle{Name: "simple"}
+
+	wf := fluxstack.Engine()
+	objs, err := wf.GenerateFromBundle(b)
+	if err != nil {
+		t.Fatalf("GenerateFromBundle() error = %v", err)
+	}
+
+	k := objs[0].(*kustv1.Kustomization)
+	if len(k.Spec.HealthChecks) != 0 {
+		t.Errorf("HealthChecks should be empty, got %d", len(k.Spec.HealthChecks))
+	}
+}
+
 func TestWorkflowEngine_GetName(t *testing.T) {
 	wf := fluxstack.Engine()
 	name := wf.GetName()
