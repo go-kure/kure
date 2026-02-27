@@ -829,6 +829,99 @@ func TestConfigV1Alpha1_Generate_EmptyValues(t *testing.T) {
 	}
 }
 
+func TestConfigV1Alpha1_Generate_WithChartRef(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		BaseMetadata: generators.BaseMetadata{
+			Name:      "podinfo",
+			Namespace: "apps",
+		},
+		ChartRef: &internal.ChartRefConfig{
+			Kind: "OCIRepository",
+			Name: "podinfo-oci",
+		},
+		Source: internal.SourceConfig{
+			Type:   internal.OCIRepositorySource,
+			OCIUrl: "oci://ghcr.io/stefanprodan/charts/podinfo",
+		},
+		Values: map[string]interface{}{
+			"replicaCount": 2,
+		},
+	}
+
+	app := stack.NewApplication("podinfo", "apps", cfg)
+	objs, err := cfg.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Should have 2 objects: OCIRepository source + HelmRelease
+	if len(objs) != 2 {
+		t.Errorf("Generate() returned %d objects, want 2", len(objs))
+	}
+
+	helmRelease := findHelmRelease(objs)
+	if helmRelease == nil {
+		t.Fatal("Expected HelmRelease object")
+	}
+
+	// ChartRef should be set
+	if helmRelease.Spec.ChartRef == nil {
+		t.Fatal("HelmRelease should have ChartRef set")
+	}
+	if helmRelease.Spec.ChartRef.Kind != "OCIRepository" {
+		t.Errorf("ChartRef.Kind = %s, want OCIRepository", helmRelease.Spec.ChartRef.Kind)
+	}
+	if helmRelease.Spec.ChartRef.Name != "podinfo-oci" {
+		t.Errorf("ChartRef.Name = %s, want podinfo-oci", helmRelease.Spec.ChartRef.Name)
+	}
+
+	// Chart should be nil (mutually exclusive)
+	if helmRelease.Spec.Chart != nil {
+		t.Error("HelmRelease should not have Chart set when using ChartRef")
+	}
+
+	// Values should still be set
+	if helmRelease.Spec.Values == nil {
+		t.Error("HelmRelease values should be set")
+	}
+}
+
+func TestConfigV1Alpha1_Generate_WithChartRefCrossNamespace(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		BaseMetadata: generators.BaseMetadata{
+			Name:      "shared-app",
+			Namespace: "apps",
+		},
+		ChartRef: &internal.ChartRefConfig{
+			Kind:      "HelmChart",
+			Name:      "shared-chart",
+			Namespace: "flux-system",
+		},
+		Source: internal.SourceConfig{
+			Type: internal.HelmRepositorySource,
+			URL:  "https://charts.example.com",
+		},
+	}
+
+	app := stack.NewApplication("shared-app", "apps", cfg)
+	objs, err := cfg.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	helmRelease := findHelmRelease(objs)
+	if helmRelease == nil {
+		t.Fatal("Expected HelmRelease object")
+	}
+
+	if helmRelease.Spec.ChartRef == nil {
+		t.Fatal("HelmRelease should have ChartRef set")
+	}
+	if helmRelease.Spec.ChartRef.Namespace != "flux-system" {
+		t.Errorf("ChartRef.Namespace = %s, want flux-system", helmRelease.Spec.ChartRef.Namespace)
+	}
+}
+
 func TestSourceTypeValidation(t *testing.T) {
 	tests := []struct {
 		name       string
