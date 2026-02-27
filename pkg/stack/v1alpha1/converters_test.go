@@ -1073,3 +1073,64 @@ func TestSourceRefRoundTrip(t *testing.T) {
 		t.Errorf("Branch mismatch: %q vs %q", roundTripped.SourceRef.Branch, original.SourceRef.Branch)
 	}
 }
+
+func TestHealthChecksRoundTrip(t *testing.T) {
+	original := &stack.Bundle{
+		Name: "hc-bundle",
+		HealthChecks: []stack.HealthCheck{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "my-app",
+				Namespace:  "default",
+			},
+			{
+				APIVersion: "helm.toolkit.fluxcd.io/v2",
+				Kind:       "HelmRelease",
+				Name:       "cert-manager",
+				Namespace:  "flux-system",
+			},
+		},
+	}
+
+	// Convert to v1alpha1
+	v1alpha1Config := ConvertBundleToV1Alpha1(original)
+	if v1alpha1Config == nil {
+		t.Fatal("expected non-nil v1alpha1 config")
+	}
+	if len(v1alpha1Config.Spec.HealthChecks) != 2 {
+		t.Fatalf("expected 2 health checks in v1alpha1, got %d", len(v1alpha1Config.Spec.HealthChecks))
+	}
+
+	// Verify v1alpha1 fields
+	hc0 := v1alpha1Config.Spec.HealthChecks[0]
+	if hc0.APIVersion != "apps/v1" || hc0.Kind != "Deployment" || hc0.Name != "my-app" || hc0.Namespace != "default" {
+		t.Errorf("HealthChecks[0] mismatch: %+v", hc0)
+	}
+
+	// Convert back
+	roundTripped := ConvertV1Alpha1ToBundle(v1alpha1Config)
+	if roundTripped == nil {
+		t.Fatal("expected non-nil bundle after round-trip")
+	}
+	if len(roundTripped.HealthChecks) != 2 {
+		t.Fatalf("expected 2 health checks after round-trip, got %d", len(roundTripped.HealthChecks))
+	}
+
+	// Verify all fields survived round-trip
+	for i, orig := range original.HealthChecks {
+		rt := roundTripped.HealthChecks[i]
+		if rt.APIVersion != orig.APIVersion {
+			t.Errorf("HealthChecks[%d].APIVersion mismatch: %q vs %q", i, rt.APIVersion, orig.APIVersion)
+		}
+		if rt.Kind != orig.Kind {
+			t.Errorf("HealthChecks[%d].Kind mismatch: %q vs %q", i, rt.Kind, orig.Kind)
+		}
+		if rt.Name != orig.Name {
+			t.Errorf("HealthChecks[%d].Name mismatch: %q vs %q", i, rt.Name, orig.Name)
+		}
+		if rt.Namespace != orig.Namespace {
+			t.Errorf("HealthChecks[%d].Namespace mismatch: %q vs %q", i, rt.Namespace, orig.Namespace)
+		}
+	}
+}

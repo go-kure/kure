@@ -192,6 +192,16 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 		}
 	}
 
+	// Convert health checks
+	for _, hc := range b.HealthChecks {
+		config.Spec.HealthChecks = append(config.Spec.HealthChecks, HealthCheckReference{
+			APIVersion: hc.APIVersion,
+			Kind:       hc.Kind,
+			Name:       hc.Name,
+			Namespace:  hc.Namespace,
+		})
+	}
+
 	// Convert dependencies
 	for _, dep := range b.DependsOn {
 		if dep != nil {
@@ -252,6 +262,16 @@ func ConvertV1Alpha1ToBundle(config *BundleConfig) *stack.Bundle {
 			Tag:       config.Spec.SourceRef.Tag,
 			Branch:    config.Spec.SourceRef.Branch,
 		}
+	}
+
+	// Convert health checks
+	for _, hc := range config.Spec.HealthChecks {
+		b.HealthChecks = append(b.HealthChecks, stack.HealthCheck{
+			APIVersion: hc.APIVersion,
+			Kind:       hc.Kind,
+			Name:       hc.Name,
+			Namespace:  hc.Namespace,
+		})
 	}
 
 	// Note: We don't convert dependencies and applications here as they would require
