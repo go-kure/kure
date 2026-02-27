@@ -38,6 +38,9 @@ type Bundle struct {
 	Timeout string
 	// RetryInterval is the interval between retry attempts for failed reconciliations (e.g. "2m").
 	RetryInterval string
+	// HealthChecks lists resources whose health is monitored during reconciliation.
+	// When specified, the Kustomization waits for these resources to become ready.
+	HealthChecks []HealthCheck
 
 	// Internal fields for runtime hierarchy navigation (not serialized)
 	parent  *Bundle            `yaml:"-"` // Runtime parent reference for efficient traversal
@@ -58,6 +61,18 @@ type SourceRef struct {
 	Tag string
 	// Branch is the branch reference for Git sources.
 	Branch string
+}
+
+// HealthCheck defines a resource to be monitored for health during reconciliation.
+type HealthCheck struct {
+	// APIVersion of the resource (e.g. "apps/v1", "helm.toolkit.fluxcd.io/v2").
+	APIVersion string
+	// Kind of the resource (e.g. "Deployment", "HelmRelease").
+	Kind string
+	// Name of the resource.
+	Name string
+	// Namespace of the resource. When empty, defaults to the Kustomization namespace.
+	Namespace string
 }
 
 // NewBundle constructs a Bundle with the given name, resources and labels.
