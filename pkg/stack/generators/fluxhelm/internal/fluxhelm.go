@@ -38,9 +38,10 @@ type Config struct {
 	ReleaseName     string `yaml:"releaseName,omitempty" json:"releaseName,omitempty"`
 
 	// Chart configuration
-	Chart   ChartConfig `yaml:"chart" json:"chart"`
-	Version string      `yaml:"version,omitempty" json:"version,omitempty"`
-	Values  interface{} `yaml:"values,omitempty" json:"values,omitempty"`
+	Chart      ChartConfig       `yaml:"chart" json:"chart"`
+	Version    string            `yaml:"version,omitempty" json:"version,omitempty"`
+	Values     interface{}       `yaml:"values,omitempty" json:"values,omitempty"`
+	ValuesFrom []ValuesReference `yaml:"valuesFrom,omitempty" json:"valuesFrom,omitempty"`
 
 	// Source configuration
 	Source SourceConfig `yaml:"source" json:"source"`
@@ -103,6 +104,20 @@ type ReleaseConfig struct {
 	PreserveValues           bool `yaml:"preserveValues,omitempty" json:"preserveValues,omitempty"`
 	CleanupOnFail            bool `yaml:"cleanupOnFail,omitempty" json:"cleanupOnFail,omitempty"`
 	Replace                  bool `yaml:"replace,omitempty" json:"replace,omitempty"`
+}
+
+// ValuesReference defines a reference to a resource from which Helm values are sourced.
+type ValuesReference struct {
+	// Kind of the values referent (ConfigMap or Secret).
+	Kind string `yaml:"kind" json:"kind"`
+	// Name of the values referent.
+	Name string `yaml:"name" json:"name"`
+	// ValuesKey is the data key where values.yaml can be found. Defaults to "values.yaml".
+	ValuesKey string `yaml:"valuesKey,omitempty" json:"valuesKey,omitempty"`
+	// TargetPath is the YAML dot notation path at which the value should be merged.
+	TargetPath string `yaml:"targetPath,omitempty" json:"targetPath,omitempty"`
+	// Optional marks the reference as optional — missing referent does not cause failure.
+	Optional bool `yaml:"optional,omitempty" json:"optional,omitempty"`
 }
 
 // PostRenderer defines a post-renderer for the Helm release
@@ -392,6 +407,20 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 		}
 		valuesJSON.Raw = raw
 		hr.Spec.Values = valuesJSON
+	}
+
+	// Set valuesFrom references
+	if len(c.ValuesFrom) > 0 {
+		hr.Spec.ValuesFrom = make([]helmv2.ValuesReference, 0, len(c.ValuesFrom))
+		for _, vf := range c.ValuesFrom {
+			hr.Spec.ValuesFrom = append(hr.Spec.ValuesFrom, helmv2.ValuesReference{
+				Kind:       vf.Kind,
+				Name:       vf.Name,
+				ValuesKey:  vf.ValuesKey,
+				TargetPath: vf.TargetPath,
+				Optional:   vf.Optional,
+			})
+		}
 	}
 
 	// Set timeout if provided
