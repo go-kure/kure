@@ -29,7 +29,9 @@ jobs:
   pr-review:
     name: AI Code Review
     runs-on: autops-kube
-    if: github.event.pull_request.draft == false
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
     continue-on-error: true
     permissions:
       contents: read
@@ -54,15 +56,14 @@ jobs:
         run: |
           for cmd in curl jq; do
             if ! command -v "$cmd" &>/dev/null; then
-              sudo apt-get update -qq && sudo apt-get install -y -qq curl jq && break
+              if command -v sudo &>/dev/null; then
+                sudo apt-get update -qq && sudo apt-get install -y -qq curl jq
+              else
+                apt-get update -qq && apt-get install -y -qq curl jq
+              fi
+              break
             fi
           done
-
-      - name: Guard against fork PRs
-        if: github.event.pull_request.head.repo.full_name != github.repository
-        run: |
-          echo "::warning::Skipping PR review for fork PR (self-hosted runner security)."
-          exit 0
 
       - name: Run review
         id: review
@@ -345,13 +346,14 @@ jobs:
               printf '%s' "$ASSESSMENT"
               printf '\n\n---\n*Automated assessment of the AI review above — advisory only.*'
             } > /tmp/assess_comment.md
+            echo "has_comment=true" >> "$GITHUB_OUTPUT"
           else
             echo "WARNING: Empty assessment response, skipping."
             exit 0
           fi
 
       - name: Post assessment comment
-        if: steps.assessment.outcome == 'success'
+        if: steps.assessment.outputs.has_comment == 'true'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: ai-review-assessment
