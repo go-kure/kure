@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/go-kure/kure/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 func TestPackageLoader(t *testing.T) {

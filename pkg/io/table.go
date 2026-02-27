@@ -258,7 +258,7 @@ func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) er
 
 	// Create tabwriter for aligned output
 	tw := tabwriter.NewWriter(w, 0, 8, 2, ' ', 0)
-	defer tw.Flush()
+	defer func() { _ = tw.Flush() }()
 
 	// Print headers
 	if !stp.noHeaders {
@@ -266,7 +266,7 @@ func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) er
 		for i, col := range visibleColumns {
 			headers[i] = col.Header
 		}
-		fmt.Fprintln(tw, strings.Join(headers, "\t"))
+		_, _ = fmt.Fprintln(tw, strings.Join(headers, "\t"))
 	}
 
 	// Sort resources by name for consistent output
@@ -299,7 +299,7 @@ func (stp *SimpleTablePrinter) Print(resources []*client.Object, w io.Writer) er
 			row[i] = col.Accessor(obj)
 		}
 
-		fmt.Fprintln(tw, strings.Join(row, "\t"))
+		_, _ = fmt.Fprintln(tw, strings.Join(row, "\t"))
 	}
 
 	return nil

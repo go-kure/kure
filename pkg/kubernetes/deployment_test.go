@@ -258,8 +258,8 @@ func TestDeploymentFunctions(t *testing.T) {
 		t.Errorf("replicas not set")
 	}
 
-	strat := appsv1.DeploymentStrategy{Type: appsv1.RollingUpdateDeploymentStrategyType}
-	if err := SetDeploymentStrategy(dep, strat); err != nil {
+	strategy := appsv1.DeploymentStrategy{Type: appsv1.RollingUpdateDeploymentStrategyType}
+	if err := SetDeploymentStrategy(dep, strategy); err != nil {
 		t.Fatalf("SetDeploymentStrategy returned error: %v", err)
 	}
 	if dep.Spec.Strategy.Type != appsv1.RollingUpdateDeploymentStrategyType {

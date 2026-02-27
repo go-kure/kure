@@ -588,6 +588,8 @@ func TestGenerateSourceInferred(t *testing.T) {
 				if _, ok := (*obj).(*sourcev1.OCIRepository); !ok {
 					t.Errorf("Expected OCIRepository, got %T", *obj)
 				}
+			default:
+				t.Errorf("Unexpected source type: %s", tt.wantType)
 			}
 		})
 	}

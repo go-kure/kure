@@ -3,8 +3,9 @@ package v1alpha1
 import (
 	"testing"
 
-	"github.com/go-kure/kure/internal/gvk"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/go-kure/kure/internal/gvk"
 )
 
 func TestNodeConfig(t *testing.T) {

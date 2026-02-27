@@ -1,6 +1,7 @@
 package generate
 
 import (
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -136,7 +137,7 @@ func (o *AppOptions) Run() error {
 	globalOpts := o.Factory.GlobalOptions()
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Processing %d app config files\n", len(o.ConfigFiles))
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Processing %d app config files\n", len(o.ConfigFiles))
 	}
 
 	// Load all applications
@@ -146,7 +147,7 @@ func (o *AppOptions) Run() error {
 	}
 
 	if len(apps) == 0 {
-		fmt.Fprintf(o.IOStreams.ErrOut, "No applications found in config files\n")
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "No applications found in config files\n")
 		return nil
 	}
 
@@ -162,7 +163,7 @@ func (o *AppOptions) Run() error {
 	}
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Generated %d resources for %d applications\n", len(resources), len(apps))
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Generated %d resources for %d applications\n", len(resources), len(apps))
 	}
 
 	return nil
@@ -213,7 +214,7 @@ func (o *AppOptions) loadApplicationsFromFile(configFile string) ([]*stack.Appli
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var apps []*stack.Application
 	dec := yaml.NewDecoder(file)
@@ -221,7 +222,7 @@ func (o *AppOptions) loadApplicationsFromFile(configFile string) ([]*stack.Appli
 	for {
 		var wrapper stack.ApplicationWrapper
 		if err := dec.Decode(&wrapper); err != nil {
-			if err == io.EOF {
+			if stderrors.Is(err, io.EOF) {
 				break
 			}
 			return nil, err

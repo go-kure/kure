@@ -188,16 +188,20 @@ func ResourceSet(cfg *ResourceSetConfig) *fluxv1.ResourceSet {
 }
 
 // ResourceSetInputProvider converts the config to a ResourceSetInputProvider object.
-func ResourceSetInputProvider(cfg *ResourceSetInputProviderConfig) *fluxv1.ResourceSetInputProvider {
+func ResourceSetInputProvider(cfg *ResourceSetInputProviderConfig) (*fluxv1.ResourceSetInputProvider, error) {
 	if cfg == nil {
-		return nil
+		return nil, nil
 	}
 	obj := intfluxcd.CreateResourceSetInputProvider(cfg.Name, cfg.Namespace, fluxv1.ResourceSetInputProviderSpec{})
-	intfluxcd.SetResourceSetInputProviderType(obj, cfg.Type)
-	if cfg.URL != "" {
-		intfluxcd.SetResourceSetInputProviderURL(obj, cfg.URL)
+	if err := intfluxcd.SetResourceSetInputProviderType(obj, cfg.Type); err != nil {
+		return nil, err
 	}
-	return obj
+	if cfg.URL != "" {
+		if err := intfluxcd.SetResourceSetInputProviderURL(obj, cfg.URL); err != nil {
+			return nil, err
+		}
+	}
+	return obj, nil
 }
 
 // FluxInstance converts the config to a FluxInstance object.

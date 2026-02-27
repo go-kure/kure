@@ -1,157 +1,49 @@
-# golangci-lint configuration for Kure project
-# This configuration is tailored to be practical while maintaining code quality
+# golangci-lint configuration for Kure
+# Aligned with Wharf standard (meta/standards/golangci-lint.md)
 
 run:
-  timeout: 10m
-  tests: true
+  timeout: 5m
   modules-download-mode: readonly
+
+linters:
+  enable:
+    # Default linters (always enabled)
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    # Additional linters
+    - bodyclose
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - gofmt
+    - goimports
+    - misspell
+    - nilerr
+    - unconvert
+    - whitespace
 
 linters-settings:
   errcheck:
-    # Don't check error returns in defer statements or test files
     check-type-assertions: false
     check-blank: false
-    exclude-functions:
-      - io.Copy
-      - io.WriteString
-      - fmt.Print
-      - fmt.Printf
-      - fmt.Println
-      - fmt.Fprint
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - (*os.File).Close
 
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment  # Stylistic; not a correctness issue
-      - shadow          # Too many pre-existing shadows in tests
+  exhaustive:
+    default-signifies-exhaustive: true
 
-  staticcheck:
-    # Enable all checks except ones that require major refactoring
-    checks: ["all", "-SA6005", "-SA9003", "-SA5011"]
-
-  unused:
-    # Allow unused functions in certain directories (like deepcopy utilities)
-    go: "1.24"
-    
-  gocyclo:
-    # Increase complexity threshold to be more lenient
-    min-complexity: 15
-
-  funlen:
-    lines: 100
-    statements: 50
-
-  gocognit:
-    min-complexity: 15
-
-  maintidx:
-    threshold: 20
-
-  nestif:
-    min-complexity: 5
-
-  misspell:
-    locale: US
-
-  revive:
-    confidence: 0.8
-    rules:
-      - name: exported-function-comment
-        disabled: true
-      - name: exported-type-comment
-        disabled: true
-      - name: exported-var-comment
-        disabled: true
-
-linters:
-  disable:
-    # Disable linters that require major refactoring or are too strict for existing code
-    - errcheck          # Too many unchecked errors in existing code
-    - unused            # Many utility functions are kept for future use
-    - ineffassign       # Some assignments are intentional for readability
-    - gosec             # Security linter can be overly strict for development code
-    - exhaustive        # Enum exhaustiveness not critical for this codebase
-    - exhaustruct       # Struct exhaustiveness too strict
-    - forbidigo         # No forbidden identifiers needed
-    - forcetypeassert   # Type assertions are carefully used
-    - gochecknoglobals  # Some globals are necessary
-    - gochecknoinits    # Init functions are used appropriately
-    - gocritic          # Too many opinionated suggestions
-    - godox             # TODO comments are acceptable during development
-    - goconst           # String constants can be overly strict
-    - unconvert         # Some conversions are for clarity
-    - misspell          # Spelling preferences (cancelled vs canceled)
-    - gomoddirectives   # Module directives are managed carefully
-    - gomodguard        # No module restrictions needed
-    - goprintffuncname  # Printf function names are fine
-    - gosimple          # Some simplifications reduce readability
-    - prealloc          # Preallocation not always beneficial
-    - unparam           # Unused parameters might be needed for interfaces
-    - whitespace        # Whitespace style is handled by gofmt
-    - wsl               # Whitespace linting too strict
-
-  enable:
-    # Enable essential linters that catch real bugs and enforce basic standards
-    - gofmt
-    - goimports
-    - govet
-    - staticcheck
-    - nakedret
-    - typecheck
-
-  fast: false
+  goimports:
+    local-prefixes: github.com/go-kure/kure
 
 issues:
-  # Maximum issues count per one linter
-  max-issues-per-linter: 50
-  
-  # Maximum count of issues with the same text
-  max-same-issues: 10
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
   exclude-rules:
-    # Exclude test files from some checks
+    # Test files have relaxed rules
     - path: _test\.go
       linters:
-        - gocyclo
-        - funlen
-        - gocognit
-        - maintidx
-
-    # unusedwrite is noisy in tests where structs are built for setup/fixture purposes
-    - path: _test\.go
-      text: "unusedwrite"
-      linters:
-        - govet
-
-    # Exclude generated files
-    - path: ".*\\.pb\\.go"
-      linters:
-        - all
-
-    # Exclude vendor directories
-    - path: vendor/
-      linters:
-        - all
-
-    # Allow long lines in certain contexts
-    - linters:
-        - lll
-      source: "^//go:generate "
-
-  # Exclude specific issue text patterns
-  exclude:
-    # Ignore common false positives
-    - "Error return value of .*(Close|Log|Print).*is not checked"
-    - "exported .* should have comment or be unexported"
-    - "should have comment or be unexported"
-    - "comment on exported .* should be of the form"
-
-severity:
-  default-severity: warning
-  rules:
-    - linters:
-        - typecheck
-      severity: error
+        - errcheck

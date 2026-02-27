@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-kure/kure/pkg/errors"
-	"github.com/go-kure/kure/pkg/logger"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 // CLI provides command-line interface for the launcher
@@ -317,7 +318,7 @@ func (c *CLI) debugVariablesCommand(opts *LauncherOptions) *cobra.Command {
 			// Show variable graph
 			resolver := c.resolver.(*variableResolver)
 			graph := resolver.DebugVariableGraph(def.Parameters)
-			fmt.Fprintln(c.outputWriter, graph)
+			_, _ = fmt.Fprintln(c.outputWriter, graph)
 
 			return nil
 		},
@@ -351,7 +352,7 @@ func (c *CLI) debugPatchesCommand(opts *LauncherOptions) *cobra.Command {
 			// Show patch graph
 			processor := c.processor.(*patchProcessor)
 			graph := processor.DebugPatchGraph(def.Patches)
-			fmt.Fprintln(c.outputWriter, graph)
+			_, _ = fmt.Fprintln(c.outputWriter, graph)
 
 			return nil
 		},
@@ -383,19 +384,19 @@ func (c *CLI) debugResourcesCommand(opts *LauncherOptions) *cobra.Command {
 			}
 
 			// Show resource details
-			fmt.Fprintf(c.outputWriter, "Package: %s\n", def.Metadata.Name)
-			fmt.Fprintf(c.outputWriter, "Resources: %d\n\n", len(def.Resources))
+			_, _ = fmt.Fprintf(c.outputWriter, "Package: %s\n", def.Metadata.Name)
+			_, _ = fmt.Fprintf(c.outputWriter, "Resources: %d\n\n", len(def.Resources))
 
 			for i, resource := range def.Resources {
-				fmt.Fprintf(c.outputWriter, "[%d] %s/%s\n", i+1, resource.Kind, resource.GetName())
-				fmt.Fprintf(c.outputWriter, "    Namespace: %s\n", resource.GetNamespace())
+				_, _ = fmt.Fprintf(c.outputWriter, "[%d] %s/%s\n", i+1, resource.Kind, resource.GetName())
+				_, _ = fmt.Fprintf(c.outputWriter, "    Namespace: %s\n", resource.GetNamespace())
 				if len(resource.Metadata.Labels) > 0 {
-					fmt.Fprintf(c.outputWriter, "    Labels:\n")
+					_, _ = fmt.Fprintf(c.outputWriter, "    Labels:\n")
 					for k, v := range resource.Metadata.Labels {
-						fmt.Fprintf(c.outputWriter, "      %s: %s\n", k, v)
+						_, _ = fmt.Fprintf(c.outputWriter, "      %s: %s\n", k, v)
 					}
 				}
-				fmt.Fprintln(c.outputWriter)
+				_, _ = fmt.Fprintln(c.outputWriter)
 			}
 
 			return nil
@@ -501,25 +502,25 @@ func (c *CLI) runValidate(ctx context.Context, packagePath, valuesFile, schemaFi
 
 	// Text output
 	if len(result.Errors) > 0 {
-		fmt.Fprintf(c.outputWriter, "Errors (%d):\n", len(result.Errors))
+		_, _ = fmt.Fprintf(c.outputWriter, "Errors (%d):\n", len(result.Errors))
 		for _, e := range result.Errors {
-			fmt.Fprintf(c.outputWriter, "  ✗ %s\n", e.Error())
+			_, _ = fmt.Fprintf(c.outputWriter, "  ✗ %s\n", e.Error())
 		}
-		fmt.Fprintln(c.outputWriter)
+		_, _ = fmt.Fprintln(c.outputWriter)
 	}
 
 	if len(result.Warnings) > 0 {
-		fmt.Fprintf(c.outputWriter, "Warnings (%d):\n", len(result.Warnings))
+		_, _ = fmt.Fprintf(c.outputWriter, "Warnings (%d):\n", len(result.Warnings))
 		for _, w := range result.Warnings {
-			fmt.Fprintf(c.outputWriter, "  ⚠ %s\n", w.String())
+			_, _ = fmt.Fprintf(c.outputWriter, "  ⚠ %s\n", w.String())
 		}
-		fmt.Fprintln(c.outputWriter)
+		_, _ = fmt.Fprintln(c.outputWriter)
 	}
 
 	if result.IsValid() {
-		fmt.Fprintln(c.outputWriter, "✓ Package is valid")
+		_, _ = fmt.Fprintln(c.outputWriter, "✓ Package is valid")
 	} else {
-		fmt.Fprintln(c.outputWriter, "✗ Package has errors")
+		_, _ = fmt.Fprintln(c.outputWriter, "✗ Package has errors")
 		if opts.StrictMode {
 			return errors.New("validation failed")
 		}
@@ -547,38 +548,38 @@ func (c *CLI) runInfo(ctx context.Context, packagePath, outputFormat string, sho
 		return encoder.Encode(def)
 
 	default: // text
-		fmt.Fprintf(c.outputWriter, "Package: %s\n", def.Metadata.Name)
-		fmt.Fprintf(c.outputWriter, "Version: %s\n", def.Metadata.Version)
+		_, _ = fmt.Fprintf(c.outputWriter, "Package: %s\n", def.Metadata.Name)
+		_, _ = fmt.Fprintf(c.outputWriter, "Version: %s\n", def.Metadata.Version)
 		if def.Metadata.Description != "" {
-			fmt.Fprintf(c.outputWriter, "Description: %s\n", def.Metadata.Description)
+			_, _ = fmt.Fprintf(c.outputWriter, "Description: %s\n", def.Metadata.Description)
 		}
-		fmt.Fprintln(c.outputWriter)
+		_, _ = fmt.Fprintln(c.outputWriter)
 
 		if len(def.Parameters) > 0 {
-			fmt.Fprintf(c.outputWriter, "Parameters (%d):\n", len(def.Parameters))
+			_, _ = fmt.Fprintf(c.outputWriter, "Parameters (%d):\n", len(def.Parameters))
 			for k, v := range def.Parameters {
-				fmt.Fprintf(c.outputWriter, "  %s: %v\n", k, formatValue(v))
+				_, _ = fmt.Fprintf(c.outputWriter, "  %s: %v\n", k, formatValue(v))
 			}
-			fmt.Fprintln(c.outputWriter)
+			_, _ = fmt.Fprintln(c.outputWriter)
 		}
 
-		fmt.Fprintf(c.outputWriter, "Resources (%d):\n", len(def.Resources))
+		_, _ = fmt.Fprintf(c.outputWriter, "Resources (%d):\n", len(def.Resources))
 		for _, r := range def.Resources {
-			fmt.Fprintf(c.outputWriter, "  - %s/%s", r.Kind, r.GetName())
+			_, _ = fmt.Fprintf(c.outputWriter, "  - %s/%s", r.Kind, r.GetName())
 			if ns := r.GetNamespace(); ns != "" {
-				fmt.Fprintf(c.outputWriter, " (namespace: %s)", ns)
+				_, _ = fmt.Fprintf(c.outputWriter, " (namespace: %s)", ns)
 			}
-			fmt.Fprintln(c.outputWriter)
+			_, _ = fmt.Fprintln(c.outputWriter)
 		}
 
 		if len(def.Patches) > 0 {
-			fmt.Fprintf(c.outputWriter, "\nPatches (%d):\n", len(def.Patches))
+			_, _ = fmt.Fprintf(c.outputWriter, "\nPatches (%d):\n", len(def.Patches))
 			for _, p := range def.Patches {
-				fmt.Fprintf(c.outputWriter, "  - %s", p.Name)
+				_, _ = fmt.Fprintf(c.outputWriter, "  - %s", p.Name)
 				if p.Metadata != nil && p.Metadata.Description != "" {
-					fmt.Fprintf(c.outputWriter, ": %s", p.Metadata.Description)
+					_, _ = fmt.Fprintf(c.outputWriter, ": %s", p.Metadata.Description)
 				}
-				fmt.Fprintln(c.outputWriter)
+				_, _ = fmt.Fprintln(c.outputWriter)
 			}
 		}
 	}

@@ -528,13 +528,13 @@ func TestParseErrors_Unwrap(t *testing.T) {
 		t.Fatalf("Expected 3 errors, got %d", len(unwrapped))
 	}
 
-	if unwrapped[0] != err1 {
+	if !errors.Is(unwrapped[0], err1) {
 		t.Errorf("Expected first error to be err1")
 	}
-	if unwrapped[1] != err2 {
+	if !errors.Is(unwrapped[1], err2) {
 		t.Errorf("Expected second error to be err2")
 	}
-	if unwrapped[2] != err3 {
+	if !errors.Is(unwrapped[2], err3) {
 		t.Errorf("Expected third error to be err3")
 	}
 }

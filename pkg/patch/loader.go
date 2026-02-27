@@ -2,6 +2,7 @@ package patch
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -252,7 +253,7 @@ func LoadResourcesFromMultiYAML(r io.Reader) ([]*unstructured.Unstructured, erro
 		var raw map[string]interface{}
 		err := dec.Decode(&raw)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, fmt.Errorf("failed to decode resource document: %w", err)
@@ -299,36 +300,6 @@ func resolvePatchTarget(resources []*unstructured.Unstructured, path string) (st
 		}
 	}
 	return "", ""
-}
-
-func resourceExists(resources []*unstructured.Unstructured, name string) bool {
-	for _, r := range resources {
-		// Check direct name match
-		if r.GetName() == name {
-			return true
-		}
-		// Check kind.name format match
-		kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
-		if strings.ToLower(name) == kindName {
-			return true
-		}
-	}
-	return false
-}
-
-func extractResourceName(resources []*unstructured.Unstructured, target string) string {
-	for _, r := range resources {
-		// Check direct name match
-		if r.GetName() == target {
-			return target
-		}
-		// Check kind.name format match
-		kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
-		if strings.ToLower(target) == kindName {
-			return r.GetName()
-		}
-	}
-	return target // fallback to original target if no match
 }
 
 // CanonicalResourceKey returns the unique key for a resource.
@@ -399,43 +370,6 @@ func ResolveTargetKey(resources []*unstructured.Unstructured, target string) (st
 		return "", fmt.Errorf("target %q is ambiguous, matches: %s; use kind.name format",
 			target, strings.Join(names, ", "))
 	}
-}
-
-// preserveTargetForDisambiguation returns the target string, preserving kind.name format
-// when there are multiple resources with the same name but different kinds
-func preserveTargetForDisambiguation(resources []*unstructured.Unstructured, target string) string {
-	// If it's already a kind.name format and exists, keep it as-is
-	if strings.Contains(target, ".") && resourceExists(resources, target) {
-		return target
-	}
-
-	// If it's just a name, check if there are multiple resources with this name
-	nameCount := 0
-	for _, r := range resources {
-		if r.GetName() == target {
-			nameCount++
-		}
-	}
-
-	// If there's only one resource with this name, we can use the short name
-	if nameCount <= 1 {
-		return target
-	}
-
-	// Multiple resources with same name - we need to keep the kind.name format
-	// Try to find the original kind.name format that matches this target
-	for _, r := range resources {
-		kindName := fmt.Sprintf("%s.%s", strings.ToLower(r.GetKind()), r.GetName())
-		if strings.ToLower(target) == strings.ToLower(r.GetName()) {
-			// This could be ambiguous, but we need to keep the original target if possible
-			continue
-		}
-		if strings.ToLower(target) == kindName {
-			return kindName
-		}
-	}
-
-	return target
 }
 
 // smartTarget attempts to match a patch to a resource based on field presence.

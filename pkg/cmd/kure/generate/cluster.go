@@ -144,7 +144,7 @@ func (o *ClusterOptions) Run() error {
 	globalOpts := o.Factory.GlobalOptions()
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Processing cluster config: %s\n", o.ConfigFile)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Processing cluster config: %s\n", o.ConfigFile)
 	}
 
 	// Load cluster configuration
@@ -171,7 +171,7 @@ func (o *ClusterOptions) Run() error {
 	}
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Generated cluster manifests: %s\n", o.OutputDir)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Generated cluster manifests: %s\n", o.OutputDir)
 	}
 
 	return nil
@@ -183,7 +183,7 @@ func (o *ClusterOptions) loadClusterConfig() (*stack.Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	dec := yaml.NewDecoder(file)
 	var cluster stack.Cluster
@@ -232,7 +232,10 @@ func (o *ClusterOptions) loadNodeApps(node *stack.Node) error {
 	entries, err := os.ReadDir(nodeDir)
 	if err != nil {
 		// Directory might not exist for some nodes
-		return nil
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
 	}
 
 	for _, entry := range entries {
@@ -260,7 +263,7 @@ func (o *ClusterOptions) loadAppConfig(node *stack.Node, configPath string) erro
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	dec := yaml.NewDecoder(file)
 	for {
@@ -368,9 +371,9 @@ func (o *ClusterOptions) writeOutput(ml *layout.ManifestLayout) error {
 func (o *ClusterOptions) printToStdout(ml *layout.ManifestLayout) error {
 	// This is a simplified version - in a real implementation,
 	// you'd want to serialize all the resources in the layout
-	fmt.Fprintf(o.IOStreams.Out, "# Generated cluster manifests for: %s\n", ml.Name)
-	fmt.Fprintf(o.IOStreams.Out, "# Namespace: %s\n", ml.Namespace)
-	fmt.Fprintf(o.IOStreams.Out, "# Resources: %d\n", len(ml.Resources))
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "# Generated cluster manifests for: %s\n", ml.Name)
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "# Namespace: %s\n", ml.Namespace)
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "# Resources: %d\n", len(ml.Resources))
 
 	// Print basic info about resources
 	for _, resource := range ml.Resources {
@@ -379,7 +382,7 @@ func (o *ClusterOptions) printToStdout(ml *layout.ManifestLayout) error {
 			GetName() string
 			GetNamespace() string
 		}); ok {
-			fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n",
+			_, _ = fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n",
 				namedObj.GetKind(), namedObj.GetName(), namedObj.GetNamespace())
 		}
 	}

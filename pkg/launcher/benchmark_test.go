@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/go-kure/kure/pkg/logger"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 // BenchmarkVariableResolution benchmarks variable resolution performance

@@ -167,8 +167,8 @@ func TestStatefulSetFunctions(t *testing.T) {
 		t.Errorf("node selector not set")
 	}
 
-	strat := appsv1.StatefulSetUpdateStrategy{Type: appsv1.RollingUpdateStatefulSetStrategyType}
-	if err := SetStatefulSetUpdateStrategy(sts, strat); err != nil {
+	strategy := appsv1.StatefulSetUpdateStrategy{Type: appsv1.RollingUpdateStatefulSetStrategyType}
+	if err := SetStatefulSetUpdateStrategy(sts, strategy); err != nil {
 		t.Fatalf("SetStatefulSetUpdateStrategy returned error: %v", err)
 	}
 	if sts.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {

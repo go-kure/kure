@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/go-kure/kure/pkg/cmd/shared/options"
 	"github.com/spf13/viper"
+
+	"github.com/go-kure/kure/pkg/cmd/shared/options"
 )
 
 // InitConfig initializes Viper configuration for any CLI

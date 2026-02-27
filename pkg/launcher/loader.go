@@ -6,22 +6,21 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 
-	"github.com/go-kure/kure/pkg/errors"
-	"github.com/go-kure/kure/pkg/io"
-	"github.com/go-kure/kure/pkg/logger"
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 // packageLoader implements the PackageLoader interface
 type packageLoader struct {
 	logger logger.Logger
-	mu     sync.RWMutex
 }
 
 // NewPackageLoader creates a new package loader
@@ -207,7 +206,7 @@ func (l *packageLoader) LoadResources(ctx context.Context, path string, _ *Launc
 		// Find all YAML files
 		err := filepath.Walk(loc, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return nil // Skip files with errors
+				return err
 			}
 
 			// Skip directories and non-YAML files
@@ -345,7 +344,7 @@ func (l *packageLoader) LoadPatches(ctx context.Context, path string, _ *Launche
 	// Find all patch files
 	err := filepath.Walk(patchDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Skip files with errors
+			return err
 		}
 
 		// Skip directories and non-patch files

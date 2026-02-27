@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	stderrors "errors"
 	"sync"
 	"testing"
 
@@ -142,7 +143,7 @@ func TestGetGroupVersionKind_EdgeCases(t *testing.T) {
 func TestGetGroupVersionKind_ErrorScenarios(t *testing.T) {
 	t.Run("nil object", func(t *testing.T) {
 		gvk, err := GetGroupVersionKind(nil)
-		if err != errors.ErrNilObject {
+		if !stderrors.Is(err, errors.ErrNilObject) {
 			t.Errorf("expected ErrNilObject, got %v", err)
 		}
 		if gvk != (schema.GroupVersionKind{}) {
@@ -342,7 +343,7 @@ func TestValidatePackageRef_EdgeCases(t *testing.T) {
 		}
 
 		err := ValidatePackageRef(gvk)
-		if err != errors.ErrGVKNotAllowed {
+		if !stderrors.Is(err, errors.ErrGVKNotAllowed) {
 			t.Errorf("expected ErrGVKNotAllowed, got %v", err)
 		}
 	})
@@ -355,7 +356,7 @@ func TestValidatePackageRef_EdgeCases(t *testing.T) {
 		}
 
 		err := ValidatePackageRef(gvk)
-		if err != errors.ErrGVKNotAllowed {
+		if !stderrors.Is(err, errors.ErrGVKNotAllowed) {
 			t.Errorf("expected ErrGVKNotAllowed, got %v", err)
 		}
 	})
@@ -364,7 +365,7 @@ func TestValidatePackageRef_EdgeCases(t *testing.T) {
 		gvk := &schema.GroupVersionKind{}
 
 		err := ValidatePackageRef(gvk)
-		if err != errors.ErrGVKNotAllowed {
+		if !stderrors.Is(err, errors.ErrGVKNotAllowed) {
 			t.Errorf("expected ErrGVKNotAllowed for empty GVK, got %v", err)
 		}
 	})

@@ -9,9 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/go-kure/kure/pkg/launcher"
 	"github.com/go-kure/kure/pkg/logger"
-	"gopkg.in/yaml.v3"
 )
 
 // Integration tests for the complete launcher workflow

@@ -7,7 +7,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -1023,11 +1022,7 @@ data:
 	if obj.GetObjectKind().GroupVersionKind().Kind != "ConfigMap" {
 		t.Errorf("expected ConfigMap, got %s", obj.GetObjectKind().GroupVersionKind().Kind)
 	}
-	co, ok := obj.(client.Object)
-	if !ok {
-		t.Fatal("expected client.Object")
-	}
-	if co.GetName() != "test-cm" {
-		t.Errorf("object name = %q, want %q", co.GetName(), "test-cm")
+	if obj.GetName() != "test-cm" {
+		t.Errorf("object name = %q, want %q", obj.GetName(), "test-cm")
 	}
 }

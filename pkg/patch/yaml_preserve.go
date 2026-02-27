@@ -221,6 +221,8 @@ func mergeYAMLNodes(original, patched *yaml.Node) error {
 		// Update scalar value while preserving style and comments
 		original.Value = patched.Value
 		// Keep original style and comments
+	case yaml.AliasNode:
+		// Alias nodes reference other nodes; no merge needed
 	}
 
 	return nil
@@ -247,7 +249,9 @@ func mergeMappingNodes(original, patched *yaml.Node) error {
 			// Recursively merge if both are objects/arrays, otherwise replace
 			if original.Content[i+1].Kind == patchedValue.Kind &&
 				(patchedValue.Kind == yaml.MappingNode || patchedValue.Kind == yaml.SequenceNode) {
-				mergeYAMLNodes(original.Content[i+1], patchedValue)
+				if err := mergeYAMLNodes(original.Content[i+1], patchedValue); err != nil {
+					return err
+				}
 			} else {
 				// Replace the value node but keep the key node (preserves comments on key)
 				original.Content[i+1] = patchedValue
@@ -455,7 +459,7 @@ func (set *YAMLDocumentSet) WriteToFile(filename string) error {
 			return fmt.Errorf("failed to encode document %d: %w", i, err)
 		}
 
-		encoder.Close()
+		_ = encoder.Close()
 	}
 
 	// Write to file
@@ -497,7 +501,7 @@ func (set *YAMLDocumentSet) FindDocumentByName(name string) *YAMLDocument {
 // FindDocumentByKindAndName finds a document by resource kind and name
 func (set *YAMLDocumentSet) FindDocumentByKindAndName(kind, name string) *YAMLDocument {
 	for _, doc := range set.Documents {
-		if strings.ToLower(doc.Resource.GetKind()) == strings.ToLower(kind) &&
+		if strings.EqualFold(doc.Resource.GetKind(), kind) &&
 			doc.Resource.GetName() == name {
 			return doc
 		}
@@ -509,7 +513,7 @@ func (set *YAMLDocumentSet) FindDocumentByKindAndName(kind, name string) *YAMLDo
 // All three must match for a result.
 func (set *YAMLDocumentSet) FindDocumentByKindNameAndNamespace(kind, name, namespace string) *YAMLDocument {
 	for _, doc := range set.Documents {
-		if strings.ToLower(doc.Resource.GetKind()) == strings.ToLower(kind) &&
+		if strings.EqualFold(doc.Resource.GetKind(), kind) &&
 			doc.Resource.GetName() == name &&
 			doc.Resource.GetNamespace() == namespace {
 			return doc
@@ -752,6 +756,9 @@ func convertYAMLNodeTypes(node *yaml.Node) error {
 	case yaml.ScalarNode:
 		// Scalar nodes are handled by their parent mapping node
 		// No additional processing needed here
+
+	case yaml.AliasNode:
+		// Alias nodes reference other nodes; no conversion needed
 	}
 
 	return nil

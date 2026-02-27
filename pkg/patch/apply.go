@@ -15,13 +15,13 @@ func ApplyPatch(basePath, patchPath string) ([]*unstructured.Unstructured, error
 	if err != nil {
 		return nil, err
 	}
-	defer baseFile.Close()
+	defer func() { _ = baseFile.Close() }()
 
 	patchFile, err := os.Open(filepath.Clean(patchPath))
 	if err != nil {
 		return nil, err
 	}
-	defer patchFile.Close()
+	defer func() { _ = patchFile.Close() }()
 
 	set, err := LoadPatchableAppSet([]io.Reader{baseFile}, patchFile)
 	if err != nil {

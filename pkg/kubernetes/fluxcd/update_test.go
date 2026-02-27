@@ -400,7 +400,10 @@ func TestSetResourceSetInputProviderSpec(t *testing.T) {
 		Type:      "http",
 	}
 
-	provider := ResourceSetInputProvider(cfg)
+	provider, err := ResourceSetInputProvider(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if provider == nil {
 		t.Fatal("failed to create ResourceSetInputProvider")
 	}
@@ -685,13 +688,16 @@ func TestResourceSetInputProviderHelpers(t *testing.T) {
 		Type:      "http",
 	}
 
-	provider := ResourceSetInputProvider(cfg)
+	provider, err := ResourceSetInputProvider(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if provider == nil {
 		t.Fatal("failed to create ResourceSetInputProvider")
 	}
 
 	// Test SetResourceSetInputProviderType (via the function that delegates)
-	err := SetResourceSetInputProviderType(provider, "oci")
+	err = SetResourceSetInputProviderType(provider, "oci")
 	if err != nil {
 		t.Errorf("SetResourceSetInputProviderType failed: %v", err)
 	}

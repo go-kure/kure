@@ -19,13 +19,13 @@ See each sub-command's help for details on how to use the generated script.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			switch args[0] {
 			case "bash":
-				cmd.Root().GenBashCompletion(os.Stdout)
+				_ = cmd.Root().GenBashCompletion(os.Stdout)
 			case "zsh":
-				cmd.Root().GenZshCompletion(os.Stdout)
+				_ = cmd.Root().GenZshCompletion(os.Stdout)
 			case "fish":
-				cmd.Root().GenFishCompletion(os.Stdout, true)
+				_ = cmd.Root().GenFishCompletion(os.Stdout, true)
 			case "powershell":
-				cmd.Root().GenPowerShellCompletion(os.Stdout)
+				_ = cmd.Root().GenPowerShellCompletion(os.Stdout)
 			}
 		},
 	}

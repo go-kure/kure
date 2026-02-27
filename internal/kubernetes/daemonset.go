@@ -130,11 +130,11 @@ func SetDaemonSetNodeSelector(ds *appsv1.DaemonSet, ns map[string]string) error 
 }
 
 // SetDaemonSetUpdateStrategy sets the update strategy.
-func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strat appsv1.DaemonSetUpdateStrategy) error {
+func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strategy appsv1.DaemonSetUpdateStrategy) error {
 	if ds == nil {
 		return errors.ErrNilDaemonSet
 	}
-	ds.Spec.UpdateStrategy = strat
+	ds.Spec.UpdateStrategy = strategy
 	return nil
 }
 

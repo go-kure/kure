@@ -143,11 +143,11 @@ func SetStatefulSetNodeSelector(sts *appsv1.StatefulSet, ns map[string]string) e
 }
 
 // SetStatefulSetUpdateStrategy sets the update strategy for the StatefulSet.
-func SetStatefulSetUpdateStrategy(sts *appsv1.StatefulSet, strat appsv1.StatefulSetUpdateStrategy) error {
+func SetStatefulSetUpdateStrategy(sts *appsv1.StatefulSet, strategy appsv1.StatefulSetUpdateStrategy) error {
 	if sts == nil {
 		return errors.ErrNilStatefulSet
 	}
-	sts.Spec.UpdateStrategy = strat
+	sts.Spec.UpdateStrategy = strategy
 	return nil
 }
 

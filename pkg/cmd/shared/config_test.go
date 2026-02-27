@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/go-kure/kure/pkg/cmd/shared/options"
 	"github.com/spf13/viper"
+
+	"github.com/go-kure/kure/pkg/cmd/shared/options"
 )
 
 func TestInitConfig_WithConfigFile(t *testing.T) {

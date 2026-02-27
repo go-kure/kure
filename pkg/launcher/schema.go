@@ -8,8 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-kure/kure/pkg/logger"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 // SchemaGenerator generates JSON schemas for package validation
@@ -235,11 +236,6 @@ func (g *schemaGenerator) generateParametersSchema() *JSONSchema {
 		Properties:  map[string]*JSONSchema{},
 		// Allow additional properties for flexibility
 	}
-}
-
-// generateResourcesSchema generates schema for resources section
-func (g *schemaGenerator) generateResourcesSchema() *JSONSchema {
-	return g.generateResourcesSchemaWithOptions(false)
 }
 
 // generateResourcesSchemaWithOptions generates schema for resources section with K8s option
@@ -977,10 +973,7 @@ func validateRecursive(data interface{}, schema *JSONSchema, path string, errors
 
 	case "string":
 		if str, ok := data.(string); ok {
-			// Check pattern
-			if schema.Pattern != "" {
-				// Pattern validation would go here
-			}
+			// TODO: pattern validation (schema.Pattern)
 
 			// Check length
 			if schema.MinLength != nil && len(str) < *schema.MinLength {

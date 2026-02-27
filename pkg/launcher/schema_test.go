@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/go-kure/kure/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 func TestSchemaGenerator(t *testing.T) {
