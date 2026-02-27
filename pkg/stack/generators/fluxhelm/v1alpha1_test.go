@@ -839,10 +839,6 @@ func TestConfigV1Alpha1_Generate_WithChartRef(t *testing.T) {
 			Kind: "OCIRepository",
 			Name: "podinfo-oci",
 		},
-		Source: internal.SourceConfig{
-			Type:   internal.OCIRepositorySource,
-			OCIUrl: "oci://ghcr.io/stefanprodan/charts/podinfo",
-		},
 		Values: map[string]interface{}{
 			"replicaCount": 2,
 		},
@@ -854,9 +850,9 @@ func TestConfigV1Alpha1_Generate_WithChartRef(t *testing.T) {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
-	// Should have 2 objects: OCIRepository source + HelmRelease
-	if len(objs) != 2 {
-		t.Errorf("Generate() returned %d objects, want 2", len(objs))
+	// Should have 1 object: HelmRelease only (source generation is skipped with ChartRef)
+	if len(objs) != 1 {
+		t.Errorf("Generate() returned %d objects, want 1", len(objs))
 	}
 
 	helmRelease := findHelmRelease(objs)
@@ -896,10 +892,6 @@ func TestConfigV1Alpha1_Generate_WithChartRefCrossNamespace(t *testing.T) {
 			Kind:      "HelmChart",
 			Name:      "shared-chart",
 			Namespace: "flux-system",
-		},
-		Source: internal.SourceConfig{
-			Type: internal.HelmRepositorySource,
-			URL:  "https://charts.example.com",
 		},
 	}
 
