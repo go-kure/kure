@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -726,6 +727,9 @@ func TestGenerateHelmReleaseDefaults(t *testing.T) {
 	if release.Spec.Suspend != false {
 		t.Errorf("Suspend should be false by default, got %v", release.Spec.Suspend)
 	}
+	if release.Spec.ChartRef != nil {
+		t.Errorf("ChartRef should be nil by default, got %v", release.Spec.ChartRef)
+	}
 }
 
 func TestGenerateSourceInferred(t *testing.T) {
@@ -977,6 +981,124 @@ func TestComplexValues(t *testing.T) {
 	}
 }
 
+func TestGenerateHelmReleaseWithChartRef(t *testing.T) {
+	config := &Config{
+		Name:      "test-release",
+		Namespace: "test-namespace",
+		ChartRef: &ChartRefConfig{
+			Kind: "OCIRepository",
+			Name: "my-oci-repo",
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release, ok := hr.(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Expected HelmRelease, got %T", hr)
+	}
+
+	// ChartRef should be set
+	if release.Spec.ChartRef == nil {
+		t.Fatal("ChartRef should be set")
+	}
+	if release.Spec.ChartRef.Kind != "OCIRepository" {
+		t.Errorf("ChartRef.Kind = %s, want OCIRepository", release.Spec.ChartRef.Kind)
+	}
+	if release.Spec.ChartRef.Name != "my-oci-repo" {
+		t.Errorf("ChartRef.Name = %s, want my-oci-repo", release.Spec.ChartRef.Name)
+	}
+	if release.Spec.ChartRef.Namespace != "" {
+		t.Errorf("ChartRef.Namespace = %s, want empty", release.Spec.ChartRef.Namespace)
+	}
+
+	// Chart should be nil (mutually exclusive)
+	if release.Spec.Chart != nil {
+		t.Error("Chart should be nil when ChartRef is set")
+	}
+}
+
+func TestGenerateHelmReleaseChartRefWithNamespace(t *testing.T) {
+	config := &Config{
+		Name:      "test-release",
+		Namespace: "test-namespace",
+		ChartRef: &ChartRefConfig{
+			Kind:      "HelmChart",
+			Name:      "shared-chart",
+			Namespace: "flux-system",
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release, ok := hr.(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Expected HelmRelease, got %T", hr)
+	}
+
+	if release.Spec.ChartRef == nil {
+		t.Fatal("ChartRef should be set")
+	}
+	if release.Spec.ChartRef.Kind != "HelmChart" {
+		t.Errorf("ChartRef.Kind = %s, want HelmChart", release.Spec.ChartRef.Kind)
+	}
+	if release.Spec.ChartRef.Name != "shared-chart" {
+		t.Errorf("ChartRef.Name = %s, want shared-chart", release.Spec.ChartRef.Name)
+	}
+	if release.Spec.ChartRef.Namespace != "flux-system" {
+		t.Errorf("ChartRef.Namespace = %s, want flux-system", release.Spec.ChartRef.Namespace)
+	}
+
+	// Chart should be nil
+	if release.Spec.Chart != nil {
+		t.Error("Chart should be nil when ChartRef is set")
+	}
+}
+
+func TestGenerateResources_ChartRef(t *testing.T) {
+	config := &Config{
+		Name:      "test-release",
+		Namespace: "test-namespace",
+		ChartRef: &ChartRefConfig{
+			Kind: "OCIRepository",
+			Name: "my-oci-repo",
+		},
+	}
+
+	objects, err := GenerateResources(config)
+	if err != nil {
+		t.Fatalf("GenerateResources() error = %v", err)
+	}
+
+	// Should have 1 object: HelmRelease only (source generation is skipped with ChartRef)
+	if len(objects) != 1 {
+		t.Fatalf("GenerateResources() got %d objects, want 1", len(objects))
+	}
+
+	// Only object should be HelmRelease with chartRef
+	obj := *objects[0]
+	hr, ok := obj.(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Object is not a HelmRelease: %T", obj)
+	}
+
+	if hr.Spec.ChartRef == nil {
+		t.Fatal("HelmRelease should have ChartRef set")
+	}
+	if hr.Spec.ChartRef.Kind != "OCIRepository" {
+		t.Errorf("ChartRef.Kind = %s, want OCIRepository", hr.Spec.ChartRef.Kind)
+	}
+	if hr.Spec.Chart != nil {
+		t.Error("HelmRelease should not have Chart set when using ChartRef")
+	}
+}
+
 func TestPostRenderersEdgeCases(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -1050,6 +1172,80 @@ func TestPostRenderersEdgeCases(t *testing.T) {
 			}
 			if actualImages != tt.expectImages {
 				t.Errorf("Expected %d images, got %d", tt.expectImages, actualImages)
+			}
+		})
+	}
+}
+
+func TestGenerateResources_ChartRefAndChartMutualExclusion(t *testing.T) {
+	config := &Config{
+		Name:      "test-release",
+		Namespace: "test-namespace",
+		ChartRef: &ChartRefConfig{
+			Kind: "OCIRepository",
+			Name: "my-oci-repo",
+		},
+		Chart: ChartConfig{
+			Name: "nginx",
+		},
+	}
+
+	_, err := GenerateResources(config)
+	if err == nil {
+		t.Fatal("GenerateResources() expected error when both chartRef and chart are set")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error = %q, want message containing 'mutually exclusive'", err.Error())
+	}
+}
+
+func TestGenerateResources_ChartRefValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		ref     *ChartRefConfig
+		wantErr bool
+	}{
+		{
+			name:    "valid OCIRepository",
+			ref:     &ChartRefConfig{Kind: "OCIRepository", Name: "my-repo"},
+			wantErr: false,
+		},
+		{
+			name:    "valid HelmChart",
+			ref:     &ChartRefConfig{Kind: "HelmChart", Name: "my-chart"},
+			wantErr: false,
+		},
+		{
+			name:    "empty kind",
+			ref:     &ChartRefConfig{Kind: "", Name: "my-repo"},
+			wantErr: true,
+		},
+		{
+			name:    "unsupported kind",
+			ref:     &ChartRefConfig{Kind: "GitRepository", Name: "my-repo"},
+			wantErr: true,
+		},
+		{
+			name:    "empty name",
+			ref:     &ChartRefConfig{Kind: "OCIRepository", Name: ""},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Name:      "test-release",
+				Namespace: "test-namespace",
+				ChartRef:  tt.ref,
+			}
+
+			_, err := GenerateResources(config)
+			if tt.wantErr && err == nil {
+				t.Error("GenerateResources() expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("GenerateResources() unexpected error: %v", err)
 			}
 		})
 	}
