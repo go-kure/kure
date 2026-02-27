@@ -56,8 +56,8 @@ func TestAutomationHelperFunctions(t *testing.T) {
 		t.Errorf("selector not set")
 	}
 
-	strat := CreateUpdateStrategy(imagev1.UpdateStrategySetters, "./manifests")
-	SetImageUpdateAutomationUpdateStrategy(auto, strat)
+	strategy := CreateUpdateStrategy(imagev1.UpdateStrategySetters, "./manifests")
+	SetImageUpdateAutomationUpdateStrategy(auto, strategy)
 	if auto.Spec.Update == nil || auto.Spec.Update.Path != "./manifests" {
 		t.Errorf("update strategy not set")
 	}

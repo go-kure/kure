@@ -2,6 +2,7 @@ package io
 
 import (
 	"bytes"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -25,7 +26,6 @@ type ParseOptions struct {
 }
 
 func parse(yamlbytes []byte, opts ParseOptions) ([]client.Object, error) {
-
 	// Parsing approach adapted from
 	// https://dx13.co.uk/articles/2021/01/15/kubernetes-types-using-go/
 
@@ -42,7 +42,7 @@ func parse(yamlbytes []byte, opts ParseOptions) ([]client.Object, error) {
 	for {
 		var raw runtime.RawExtension
 		if err := decoder.Decode(&raw); err != nil {
-			if err == io.EOF {
+			if stderrors.Is(err, io.EOF) {
 				break
 			}
 			errs = append(errs, errors.NewParseError("YAML document", "failed to decode document", 0, 0, err))

@@ -51,10 +51,10 @@ func TestParseErrors(t *testing.T) {
 			t.Errorf("Expected 2 unwrapped errors, got %d", len(unwrapped))
 		}
 
-		if unwrapped[0] != err1 {
+		if !errors.Is(unwrapped[0], err1) {
 			t.Errorf("First unwrapped error doesn't match")
 		}
-		if unwrapped[1] != err2 {
+		if !errors.Is(unwrapped[1], err2) {
 			t.Errorf("Second unwrapped error doesn't match")
 		}
 	})

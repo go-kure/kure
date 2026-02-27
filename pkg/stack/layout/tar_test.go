@@ -3,6 +3,7 @@ package layout
 import (
 	"archive/tar"
 	"bytes"
+	"errors"
 	"io"
 	"sort"
 	"testing"
@@ -145,7 +146,7 @@ func extractTarFiles(t *testing.T, buf *bytes.Buffer) map[string][]byte {
 	tr := tar.NewReader(buf)
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

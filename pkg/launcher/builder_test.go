@@ -4,18 +4,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/go-kure/kure/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 func TestBuilder(t *testing.T) {
@@ -134,7 +136,7 @@ func TestBuilder(t *testing.T) {
 		for {
 			var doc map[string]interface{}
 			if err := decoder.Decode(&doc); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				t.Fatalf("Failed to decode YAML: %v", err)

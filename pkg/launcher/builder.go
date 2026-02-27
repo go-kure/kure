@@ -10,13 +10,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/go-kure/kure/pkg/errors"
-	kurei "github.com/go-kure/kure/pkg/io"
-	"github.com/go-kure/kure/pkg/logger"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/errors"
+	kurei "github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 // outputBuilder implements the Builder interface
@@ -132,19 +132,17 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 
 				// Use the first object (templates should contain single resources)
 				if len(objs) > 0 {
-					if clientObj, ok := objs[0].(client.Object); ok {
-						// Convert client.Object to unstructured
-						objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(clientObj)
-						if err != nil {
-							return nil, errors.Wrapf(err, "failed to convert object to unstructured for %s/%s",
-								resource.Kind, resource.Metadata.Name)
-						}
-						obj = &unstructured.Unstructured{Object: objMap}
-
-						// Update resource metadata with resolved values for filtering
-						resource.Metadata.Name = obj.GetName()
-						resource.Metadata.Namespace = obj.GetNamespace()
+					// Convert client.Object to unstructured
+					objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(objs[0])
+					if err != nil {
+						return nil, errors.Wrapf(err, "failed to convert object to unstructured for %s/%s",
+							resource.Kind, resource.Metadata.Name)
 					}
+					obj = &unstructured.Unstructured{Object: objMap}
+
+					// Update resource metadata with resolved values for filtering
+					resource.Metadata.Name = obj.GetName()
+					resource.Metadata.Namespace = obj.GetNamespace()
 				}
 			}
 
@@ -241,7 +239,7 @@ func (b *outputBuilder) writeOutput(ctx context.Context, resources []*unstructur
 
 	// Ensure file is closed if needed
 	if closeFunc != nil {
-		defer closeFunc()
+		defer func() { _ = closeFunc() }()
 	}
 
 	// Write resources

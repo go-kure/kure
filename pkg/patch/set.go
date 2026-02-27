@@ -206,7 +206,7 @@ func (s *PatchableAppSet) WritePatchedFilesWithOptions(originalPath string, patc
 		}
 
 		patches, err := LoadPatchFile(patchReader)
-		patchReader.Close()
+		_ = patchReader.Close()
 		if err != nil {
 			return fmt.Errorf("failed to load patches from %s: %w", patchFile, err)
 		}

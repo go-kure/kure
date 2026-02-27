@@ -136,7 +136,7 @@ func (o *BootstrapOptions) Run() error {
 	globalOpts := o.Factory.GlobalOptions()
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Processing bootstrap config: %s\n", o.ConfigFile)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Processing bootstrap config: %s\n", o.ConfigFile)
 	}
 
 	// Load cluster configuration
@@ -162,11 +162,11 @@ func (o *BootstrapOptions) Run() error {
 	}
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Generated bootstrap manifests: %s\n", o.OutputDir)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Generated bootstrap manifests: %s\n", o.OutputDir)
 		if cluster.GitOps != nil && cluster.GitOps.Bootstrap != nil {
-			fmt.Fprintf(o.IOStreams.ErrOut, "GitOps type: %s\n", o.GitOpsType)
+			_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "GitOps type: %s\n", o.GitOpsType)
 			if o.GitOpsType == "flux" {
-				fmt.Fprintf(o.IOStreams.ErrOut, "Flux mode: %s\n", cluster.GitOps.Bootstrap.FluxMode)
+				_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Flux mode: %s\n", cluster.GitOps.Bootstrap.FluxMode)
 			}
 		}
 	}
@@ -180,7 +180,7 @@ func (o *BootstrapOptions) loadClusterConfig() (*stack.Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	dec := yaml.NewDecoder(file)
 	var cluster stack.Cluster
@@ -318,13 +318,13 @@ func (o *BootstrapOptions) writeOutput(ml *layout.ManifestLayout, cluster *stack
 
 // printToStdout prints the manifests to stdout for dry-run
 func (o *BootstrapOptions) printToStdout(ml *layout.ManifestLayout) error {
-	fmt.Fprintf(o.IOStreams.Out, "# Generated bootstrap manifests for: %s\n", ml.Name)
-	fmt.Fprintf(o.IOStreams.Out, "# GitOps type: %s\n", o.GitOpsType)
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "# Generated bootstrap manifests for: %s\n", ml.Name)
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "# GitOps type: %s\n", o.GitOpsType)
 	if o.GitOpsType == "flux" {
-		fmt.Fprintf(o.IOStreams.Out, "# Flux mode: %s\n", o.FluxMode)
+		_, _ = fmt.Fprintf(o.IOStreams.Out, "# Flux mode: %s\n", o.FluxMode)
 	}
-	fmt.Fprintf(o.IOStreams.Out, "# Namespace: %s\n", ml.Namespace)
-	fmt.Fprintf(o.IOStreams.Out, "# Resources: %d\n", len(ml.Resources))
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "# Namespace: %s\n", ml.Namespace)
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "# Resources: %d\n", len(ml.Resources))
 
 	// Print basic info about resources
 	for _, resource := range ml.Resources {
@@ -333,7 +333,7 @@ func (o *BootstrapOptions) printToStdout(ml *layout.ManifestLayout) error {
 			GetName() string
 			GetNamespace() string
 		}); ok {
-			fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n",
+			_, _ = fmt.Fprintf(o.IOStreams.Out, "# - %s/%s (%s)\n",
 				namedObj.GetKind(), namedObj.GetName(), namedObj.GetNamespace())
 		}
 	}

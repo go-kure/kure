@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -115,7 +116,7 @@ func runAppWorkloads() error {
 		if err != nil {
 			return err
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		dec := yaml.NewDecoder(file)
 		var apps []*stack.Application
@@ -123,7 +124,7 @@ func runAppWorkloads() error {
 		for {
 			var wrapper stack.ApplicationWrapper
 			if err := dec.Decode(&wrapper); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				return err
@@ -158,7 +159,7 @@ func runAppWorkloads() error {
 		if err != nil {
 			return err
 		}
-		defer outFile.Close()
+		defer func() { _ = outFile.Close() }()
 
 		out, err := kio.EncodeObjectsToYAML(resources)
 		if err != nil {
@@ -194,7 +195,7 @@ func runClusterExample(clusterFile string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	dec := yaml.NewDecoder(file)
 	var cl stack.Cluster
@@ -298,17 +299,17 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 		for {
 			var wrapper stack.ApplicationWrapper
 			if err := dec.Decode(&wrapper); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
-				f.Close()
+				_ = f.Close()
 				return err
 			}
 
 			app := wrapper.ToApplication()
 			bundle, err := stack.NewBundle(wrapper.Metadata.Name, []*stack.Application{app}, nil)
 			if err != nil {
-				f.Close()
+				_ = f.Close()
 				return err
 			}
 			bundle.SetParent(node.Bundle)
@@ -316,7 +317,7 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 			childNode.SetParent(node)
 			node.Children = append(node.Children, childNode)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 
 	return nil
@@ -331,7 +332,7 @@ func runMultiOCIDemo() error {
 	if err != nil {
 		return fmt.Errorf("open multi-oci cluster config: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	dec := yaml.NewDecoder(file)
 	var cl stack.Cluster
@@ -351,9 +352,7 @@ func runMultiOCIDemo() error {
 		child.SetParent(cl.Node)
 
 		// Parse packageRef from cluster.yaml
-		if child.PackageRef == nil && len(cl.Node.Children) > 0 {
-			// This would be set from the YAML parsing, but let me check the structure
-		}
+		// PackageRef is set from the YAML parsing
 
 		if err := loadNodeApps(child, baseDir); err != nil {
 			log.Printf("Warning: could not load apps for node %s: %v", child.Name, err)
@@ -399,7 +398,7 @@ func runBootstrapDemo() error {
 		if err != nil {
 			return err
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		dec := yaml.NewDecoder(file)
 		var cl stack.Cluster
@@ -499,7 +498,7 @@ func runPatchDemo() error {
 	if err != nil {
 		return fmt.Errorf("failed to open base YAML: %w", err)
 	}
-	defer baseFile.Close()
+	defer func() { _ = baseFile.Close() }()
 
 	documentSet, err := patch.LoadResourcesWithStructure(baseFile)
 	if err != nil {

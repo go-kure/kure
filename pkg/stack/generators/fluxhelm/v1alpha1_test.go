@@ -673,15 +673,6 @@ func findHelmRelease(objs []*client.Object) *helmv2.HelmRelease {
 	return nil
 }
 
-func findHelmRepository(objs []*client.Object) *sourcev1.HelmRepository {
-	for _, obj := range objs {
-		if hr, ok := (*obj).(*sourcev1.HelmRepository); ok {
-			return hr
-		}
-	}
-	return nil
-}
-
 func TestConfigV1Alpha1_Generate_EmptyValues(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
 		BaseMetadata: generators.BaseMetadata{

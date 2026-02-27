@@ -186,7 +186,7 @@ func (o *PatchOptions) Run() error {
 	}
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Applying %d patches to %s\n", len(o.PatchFiles), o.BaseFile)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Applying %d patches to %s\n", len(o.PatchFiles), o.BaseFile)
 	}
 
 	// Load base resources
@@ -207,7 +207,7 @@ func (o *PatchOptions) Run() error {
 	}
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Successfully applied patches to %d resources\n", len(documentSet.Documents))
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Successfully applied patches to %d resources\n", len(documentSet.Documents))
 	}
 
 	return nil
@@ -218,7 +218,7 @@ func (o *PatchOptions) runCombined() error {
 	globalOpts := o.Factory.GlobalOptions()
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Combined mode: applying %d patches to %s\n", len(o.PatchFiles), o.BaseFile)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Combined mode: applying %d patches to %s\n", len(o.PatchFiles), o.BaseFile)
 	}
 
 	// Validate group-by value
@@ -244,7 +244,7 @@ func (o *PatchOptions) runCombined() error {
 	// Apply each patch file sequentially to the same document set
 	for _, patchFile := range o.PatchFiles {
 		if globalOpts.Verbose {
-			fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
+			_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
 		}
 
 		file, err := os.Open(patchFile)
@@ -253,7 +253,7 @@ func (o *PatchOptions) runCombined() error {
 		}
 
 		patchSpecs, err := patch.LoadPatchFile(file)
-		file.Close()
+		_ = file.Close()
 		if err != nil {
 			return fmt.Errorf("failed to load patch file %s: %w", patchFile, err)
 		}
@@ -346,7 +346,7 @@ func (o *PatchOptions) runDiff() error {
 	globalOpts := o.Factory.GlobalOptions()
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Diff mode: comparing %d patches against %s\n", len(o.PatchFiles), o.BaseFile)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Diff mode: comparing %d patches against %s\n", len(o.PatchFiles), o.BaseFile)
 	}
 
 	// Load base resources
@@ -370,7 +370,7 @@ func (o *PatchOptions) runDiff() error {
 	// Apply each patch file sequentially to the copied set
 	for _, patchFile := range o.PatchFiles {
 		if globalOpts.Verbose {
-			fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
+			_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
 		}
 
 		file, err := os.Open(patchFile)
@@ -379,7 +379,7 @@ func (o *PatchOptions) runDiff() error {
 		}
 
 		patchSpecs, err := patch.LoadPatchFile(file)
-		file.Close()
+		_ = file.Close()
 		if err != nil {
 			return fmt.Errorf("failed to load patch file %s: %w", patchFile, err)
 		}
@@ -460,7 +460,7 @@ func (o *PatchOptions) runDiff() error {
 	}
 
 	if diffText == "" {
-		fmt.Fprintf(o.IOStreams.Out, "No changes detected.\n")
+		_, _ = fmt.Fprintf(o.IOStreams.Out, "No changes detected.\n")
 		return nil
 	}
 
@@ -484,7 +484,7 @@ func (o *PatchOptions) writeDocumentSetToBuffer(docSet *patch.YAMLDocumentSet, b
 		if err := encoder.Encode(doc.Node); err != nil {
 			return fmt.Errorf("failed to encode document %d: %w", i, err)
 		}
-		encoder.Close()
+		_ = encoder.Close()
 
 		content := docBuf.String()
 		content = strings.TrimSuffix(content, "\n")
@@ -500,7 +500,7 @@ func (o *PatchOptions) printColoredDiff(diffText string) {
 	useColor := os.Getenv("TERM") != "" && os.Getenv("NO_COLOR") == ""
 
 	if !useColor {
-		fmt.Fprint(o.IOStreams.Out, diffText)
+		_, _ = fmt.Fprint(o.IOStreams.Out, diffText)
 		return
 	}
 
@@ -517,15 +517,15 @@ func (o *PatchOptions) printColoredDiff(diffText string) {
 	for _, line := range lines {
 		switch {
 		case strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++"):
-			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorYellow, line, colorReset)
+			_, _ = fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorYellow, line, colorReset)
 		case strings.HasPrefix(line, "@@"):
-			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorCyan, line, colorReset)
+			_, _ = fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorCyan, line, colorReset)
 		case strings.HasPrefix(line, "-"):
-			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorRed, line, colorReset)
+			_, _ = fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorRed, line, colorReset)
 		case strings.HasPrefix(line, "+"):
-			fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorGreen, line, colorReset)
+			_, _ = fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorGreen, line, colorReset)
 		default:
-			fmt.Fprintf(o.IOStreams.Out, "%s\n", line)
+			_, _ = fmt.Fprintf(o.IOStreams.Out, "%s\n", line)
 		}
 	}
 }
@@ -558,7 +558,7 @@ func (o *PatchOptions) runValidation() error {
 	globalOpts := o.Factory.GlobalOptions()
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Validating %d patch files\n", len(o.PatchFiles))
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Validating %d patch files\n", len(o.PatchFiles))
 	}
 
 	for _, patchFile := range o.PatchFiles {
@@ -567,11 +567,11 @@ func (o *PatchOptions) runValidation() error {
 		}
 
 		if globalOpts.Verbose {
-			fmt.Fprintf(o.IOStreams.ErrOut, "✓ %s\n", patchFile)
+			_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "✓ %s\n", patchFile)
 		}
 	}
 
-	fmt.Fprintf(o.IOStreams.Out, "All patch files are valid\n")
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "All patch files are valid\n")
 	return nil
 }
 
@@ -581,7 +581,7 @@ func (o *PatchOptions) validatePatchFile(patchFile string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	_, err = patch.LoadPatchFile(file)
 	return err
@@ -594,16 +594,16 @@ func (o *PatchOptions) runInteractive() error {
 	if err != nil {
 		return fmt.Errorf("failed to open base file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	resources, err := patch.LoadResourcesFromMultiYAML(file)
 	if err != nil {
 		return fmt.Errorf("failed to load base resources: %w", err)
 	}
 
-	fmt.Fprintf(o.IOStreams.Out, "=== Interactive Patch Mode ===\n")
-	fmt.Fprintf(o.IOStreams.Out, "Loaded %d resources from %s\n", len(resources), o.BaseFile)
-	fmt.Fprintf(o.IOStreams.Out, "Type 'help' for available commands\n\n")
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "=== Interactive Patch Mode ===\n")
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "Loaded %d resources from %s\n", len(resources), o.BaseFile)
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "Type 'help' for available commands\n\n")
 
 	// This would implement the interactive loop similar to the existing main.go
 	// For now, returning a placeholder
@@ -616,7 +616,7 @@ func (o *PatchOptions) loadBaseResources() (*patch.YAMLDocumentSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return patch.LoadResourcesWithStructure(file)
 }
@@ -656,7 +656,7 @@ func (o *PatchOptions) applyPatchFile(patchableSet *patch.PatchableAppSet, patch
 	globalOpts := o.Factory.GlobalOptions()
 
 	if globalOpts.Verbose {
-		fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
+		_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Applying patch: %s\n", patchFile)
 	}
 
 	// For now, use the WritePatchedFiles method from the existing patch system

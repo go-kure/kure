@@ -149,14 +149,14 @@ func (o *InitOptions) Run() error {
 	}
 
 	// Print summary
-	fmt.Fprintf(o.IOStreams.ErrOut, "Initialized kure project %q in %s\n", o.ProjectName, o.OutputDir)
-	fmt.Fprintf(o.IOStreams.ErrOut, "  created cluster.yaml\n")
-	fmt.Fprintf(o.IOStreams.ErrOut, "  created apps/example.yaml\n")
-	fmt.Fprintf(o.IOStreams.ErrOut, "  created apps/\n")
-	fmt.Fprintf(o.IOStreams.ErrOut, "  created infra/\n")
-	fmt.Fprintf(o.IOStreams.ErrOut, "\nNext steps:\n")
-	fmt.Fprintf(o.IOStreams.ErrOut, "  Edit apps/example.yaml or add more app configs under apps/\n")
-	fmt.Fprintf(o.IOStreams.ErrOut, "  Run: kure generate cluster cluster.yaml\n")
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "Initialized kure project %q in %s\n", o.ProjectName, o.OutputDir)
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "  created cluster.yaml\n")
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "  created apps/example.yaml\n")
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "  created apps/\n")
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "  created infra/\n")
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "\nNext steps:\n")
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "  Edit apps/example.yaml or add more app configs under apps/\n")
+	_, _ = fmt.Fprintf(o.IOStreams.ErrOut, "  Run: kure generate cluster cluster.yaml\n")
 
 	return nil
 }

@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/go-kure/kure/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 func TestPatchProcessor(t *testing.T) {

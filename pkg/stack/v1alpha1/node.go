@@ -1,9 +1,10 @@
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // NodeConfig represents a versioned node configuration

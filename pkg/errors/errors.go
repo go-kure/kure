@@ -458,8 +458,8 @@ func NewConfigError(source, field, value, reason string, validValues []string) *
 
 // IsKureError checks if an error is a Kure-specific error
 func IsKureError(err error) bool {
-	_, ok := err.(KureError)
-	return ok
+	var target KureError
+	return errors.As(err, &target)
 }
 
 // GetKureError extracts a KureError from an error chain

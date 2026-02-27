@@ -1,6 +1,7 @@
 package gvk
 
 import (
+	stderrors "errors"
 	"io"
 
 	"gopkg.in/yaml.v3"
@@ -24,9 +25,7 @@ var DefaultParseOptions = ParseOptions{
 
 // ParseSingle parses a single GVK-enabled type from YAML data
 func ParseSingle[T any](data []byte, registry *Registry[T], options *ParseOptions) (*TypedWrapper[T], error) {
-	if options == nil {
-		options = &DefaultParseOptions
-	}
+	_ = options // reserved for future use
 
 	wrapper := NewTypedWrapper(registry)
 	if err := yaml.Unmarshal(data, wrapper); err != nil {
@@ -38,9 +37,7 @@ func ParseSingle[T any](data []byte, registry *Registry[T], options *ParseOption
 
 // ParseMultiple parses multiple GVK-enabled types from YAML data (separated by ---)
 func ParseMultiple[T any](data []byte, registry *Registry[T], options *ParseOptions) ([]*TypedWrapper[T], error) {
-	if options == nil {
-		options = &DefaultParseOptions
-	}
+	_ = options // reserved for future use
 
 	var wrappers []*TypedWrapper[T]
 
@@ -65,9 +62,7 @@ func ParseMultiple[T any](data []byte, registry *Registry[T], options *ParseOpti
 
 // ParseStream parses a stream of YAML documents
 func ParseStream[T any](reader io.Reader, registry *Registry[T], options *ParseOptions) ([]*TypedWrapper[T], error) {
-	if options == nil {
-		options = &DefaultParseOptions
-	}
+	_ = options // reserved for future use
 
 	var wrappers []*TypedWrapper[T]
 	decoder := yaml.NewDecoder(reader)
@@ -75,7 +70,7 @@ func ParseStream[T any](reader io.Reader, registry *Registry[T], options *ParseO
 	for {
 		var node yaml.Node
 		if err := decoder.Decode(&node); err != nil {
-			if err == io.EOF {
+			if stderrors.Is(err, io.EOF) {
 				break
 			}
 			return nil, errors.Errorf("failed to decode YAML document: %w", err)

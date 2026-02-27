@@ -276,7 +276,8 @@ func IsCriticalError(err error) bool {
 	}
 
 	// Check for specific critical error patterns
-	if fileErr, ok := err.(*errors.FileError); ok {
+	var fileErr *errors.FileError
+	if stderrors.As(err, &fileErr) {
 		if fileErr.Operation == "read" || fileErr.Operation == "load" {
 			return true
 		}

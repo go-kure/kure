@@ -23,7 +23,6 @@ func CreateGitRepository(name string, namespace string, spec sourcev1.GitReposit
 		Spec: spec,
 	}
 	return obj
-
 }
 
 // CreateHelmRepository returns a new HelmRepository resource using the given

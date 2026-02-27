@@ -78,7 +78,7 @@ func (o *GlobalOptions) Complete() error {
 
 	// Set debug logging if requested
 	if o.Debug {
-		os.Setenv("KURE_DEBUG", "1")
+		_ = os.Setenv("KURE_DEBUG", "1")
 		o.Verbose = true
 	}
 

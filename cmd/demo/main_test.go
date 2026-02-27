@@ -28,7 +28,7 @@ func TestPtr(t *testing.T) {
 	result := ptr(value)
 
 	if result == nil {
-		t.Error("ptr() returned nil")
+		t.Fatal("ptr() returned nil")
 	}
 
 	if *result != value {
@@ -600,9 +600,7 @@ func TestMainFunction(t *testing.T) {
 	done := make(chan bool)
 	go func() {
 		defer func() {
-			if r := recover(); r != nil {
-				// Expected if some demos fail due to missing files
-			}
+			recover() // Expected if some demos fail due to missing files
 			done <- true
 		}()
 		main()

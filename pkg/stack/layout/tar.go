@@ -19,7 +19,7 @@ import (
 // forward slashes and output is deterministic (sorted file names).
 func (ml *ManifestLayout) WriteToTar(w io.Writer) error {
 	tw := tar.NewWriter(w)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 	return ml.writeToTarRecursive(tw, "")
 }
 

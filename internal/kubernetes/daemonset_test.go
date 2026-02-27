@@ -159,8 +159,8 @@ func TestDaemonSetFunctions(t *testing.T) {
 		t.Errorf("node selector not set")
 	}
 
-	strat := appsv1.DaemonSetUpdateStrategy{Type: appsv1.RollingUpdateDaemonSetStrategyType}
-	if err := SetDaemonSetUpdateStrategy(ds, strat); err != nil {
+	strategy := appsv1.DaemonSetUpdateStrategy{Type: appsv1.RollingUpdateDaemonSetStrategyType}
+	if err := SetDaemonSetUpdateStrategy(ds, strategy); err != nil {
 		t.Fatalf("SetDaemonSetUpdateStrategy returned error: %v", err)
 	}
 	if ds.Spec.UpdateStrategy.Type != appsv1.RollingUpdateDaemonSetStrategyType {

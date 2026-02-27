@@ -114,9 +114,9 @@ func (rp *ResourcePrinter) printNames(resources []*client.Object, w io.Writer) e
 
 		resourceName := fmt.Sprintf("%s/%s", kind, name)
 		if namespace != "" {
-			fmt.Fprintf(w, "%s (namespace: %s)\n", resourceName, namespace)
+			_, _ = fmt.Fprintf(w, "%s (namespace: %s)\n", resourceName, namespace)
 		} else {
-			fmt.Fprintf(w, "%s\n", resourceName)
+			_, _ = fmt.Fprintf(w, "%s\n", resourceName)
 		}
 	}
 	return nil

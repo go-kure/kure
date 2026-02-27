@@ -40,8 +40,7 @@ func IsGVKAllowed(gvk schema.GroupVersionKind, allowed []schema.GroupVersionKind
 
 // Helper function to convert to client.Object
 func ToClientObject(obj client.Object) *client.Object {
-	// iThis is not a Redundant type conversion
-	clientObj := client.Object(obj)
+	clientObj := obj
 	return &clientObj
 }
 

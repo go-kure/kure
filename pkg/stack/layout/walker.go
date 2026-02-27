@@ -3,9 +3,10 @@ package layout
 import (
 	"path/filepath"
 
-	"github.com/go-kure/kure/pkg/stack"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/stack"
 )
 
 // WalkCluster traverses a stack.Cluster and builds a ManifestLayout tree that

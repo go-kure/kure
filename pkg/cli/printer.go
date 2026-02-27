@@ -56,7 +56,7 @@ func (p *yamlPrinter) Print(objects []runtime.Object, writer io.Writer) error {
 
 	for i, obj := range objects {
 		if i > 0 {
-			fmt.Fprintln(writer, "---")
+			_, _ = fmt.Fprintln(writer, "---")
 		}
 
 		data, err := yaml.Marshal(obj)
@@ -77,7 +77,7 @@ type jsonPrinter struct{}
 
 func (p *jsonPrinter) Print(objects []runtime.Object, writer io.Writer) error {
 	if len(objects) == 0 {
-		fmt.Fprint(writer, "{}\n")
+		_, _ = fmt.Fprint(writer, "{}\n")
 		return nil
 	}
 
@@ -100,7 +100,7 @@ func (p *tablePrinter) Print(objects []runtime.Object, writer io.Writer) error {
 	}
 
 	w := tabwriter.NewWriter(writer, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() { _ = w.Flush() }()
 
 	// Print headers
 	if !p.options.NoHeaders {
@@ -111,7 +111,7 @@ func (p *tablePrinter) Print(objects []runtime.Object, writer io.Writer) error {
 		if p.options.ShowLabels {
 			headers = append(headers, "LABELS")
 		}
-		fmt.Fprintln(w, joinTabs(headers))
+		_, _ = fmt.Fprintln(w, joinTabs(headers))
 	}
 
 	// Print objects
@@ -138,7 +138,7 @@ func (p *tablePrinter) Print(objects []runtime.Object, writer io.Writer) error {
 				row = append(row, labels)
 			}
 
-			fmt.Fprintln(w, joinTabs(row))
+			_, _ = fmt.Fprintln(w, joinTabs(row))
 		}
 	}
 
@@ -154,7 +154,7 @@ func (p *namePrinter) Print(objects []runtime.Object, writer io.Writer) error {
 			GetName() string
 			GetKind() string
 		}); ok {
-			fmt.Fprintf(writer, "%s/%s\n", namedObj.GetKind(), namedObj.GetName())
+			_, _ = fmt.Fprintf(writer, "%s/%s\n", namedObj.GetKind(), namedObj.GetName())
 		}
 	}
 	return nil

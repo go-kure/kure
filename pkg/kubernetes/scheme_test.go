@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	stderrors "errors"
 	"testing"
 
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
@@ -614,10 +615,10 @@ func TestRegisterSchemes_ErrorCaching(t *testing.T) {
 	err3 := RegisterSchemes()
 
 	// All errors should be identical (either all nil or all the same error)
-	if err1 != err2 {
+	if !stderrors.Is(err1, err2) {
 		t.Errorf("RegisterSchemes returned different errors: first=%v, second=%v", err1, err2)
 	}
-	if err2 != err3 {
+	if !stderrors.Is(err2, err3) {
 		t.Errorf("RegisterSchemes returned different errors: second=%v, third=%v", err2, err3)
 	}
 }

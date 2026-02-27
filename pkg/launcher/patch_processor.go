@@ -378,30 +378,6 @@ func (p *patchProcessor) addToValues(prefix string, value interface{}, values ma
 	}
 }
 
-// addToVariables recursively adds parameters to variable map
-func (p *patchProcessor) addToVariables(prefix string, value interface{}, vars map[string]string) {
-	switch v := value.(type) {
-	case string:
-		vars[prefix] = v
-	case bool:
-		vars[prefix] = strconv.FormatBool(v)
-	case int, int32, int64:
-		vars[prefix] = fmt.Sprintf("%d", v)
-	case float32, float64:
-		vars[prefix] = fmt.Sprintf("%v", v)
-	case map[string]interface{}:
-		for k, val := range v {
-			key := prefix + "." + k
-			p.addToVariables(key, val, vars)
-		}
-	case []interface{}:
-		for i, val := range v {
-			key := fmt.Sprintf("%s[%d]", prefix, i)
-			p.addToVariables(key, val, vars)
-		}
-	}
-}
-
 // parsePatch parses patch content into PatchSpecs
 func (p *patchProcessor) parsePatch(patchDef Patch, varCtx *patch.VariableContext) ([]patch.PatchSpec, error) {
 	reader := strings.NewReader(patchDef.Content)

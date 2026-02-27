@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"io"
 	"os"
 	"strings"
 	"testing"
@@ -142,28 +141,15 @@ func TestIOStreamsUsage(t *testing.T) {
 	factory := NewFactory(globalOpts)
 	streams := factory.IOStreams()
 
-	// Test writing to Out
-	if writer, ok := streams.Out.(io.Writer); ok {
-		// For testing, we can't actually write to stdout, but we can verify the interface
-		_ = writer
-	} else {
-		t.Error("Out stream doesn't implement io.Writer")
+	// Verify streams are non-nil (they are already the correct types: io.Writer, io.Reader)
+	if streams.Out == nil {
+		t.Error("Out stream is nil")
 	}
-
-	// Test reading from In
-	if reader, ok := streams.In.(io.Reader); ok {
-		// For testing, we can't actually read from stdin, but we can verify the interface
-		_ = reader
-	} else {
-		t.Error("In stream doesn't implement io.Reader")
+	if streams.In == nil {
+		t.Error("In stream is nil")
 	}
-
-	// Test writing to ErrOut
-	if writer, ok := streams.ErrOut.(io.Writer); ok {
-		// For testing, we can't actually write to stderr, but we can verify the interface
-		_ = writer
-	} else {
-		t.Error("ErrOut stream doesn't implement io.Writer")
+	if streams.ErrOut == nil {
+		t.Error("ErrOut stream is nil")
 	}
 }
 

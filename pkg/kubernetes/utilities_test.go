@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	stderrors "errors"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,7 +76,7 @@ func TestGetGroupVersionKind_Success(t *testing.T) {
 func TestGetGroupVersionKind_NilObject(t *testing.T) {
 	gvk, err := GetGroupVersionKind(nil)
 
-	if err != errors.ErrNilObject {
+	if !stderrors.Is(err, errors.ErrNilObject) {
 		t.Errorf("expected ErrNilObject, got: %v", err)
 	}
 
@@ -369,7 +370,7 @@ func TestValidatePackageRef_InvalidGVK(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidatePackageRef(tt.gvk)
-			if err != errors.ErrGVKNotAllowed {
+			if !stderrors.Is(err, errors.ErrGVKNotAllowed) {
 				t.Errorf("expected ErrGVKNotAllowed, got: %v", err)
 			}
 		})
@@ -438,7 +439,7 @@ func TestUtilities_Integration(t *testing.T) {
 	// Convert to client object
 	clientObjPtr := ToClientObject(pod)
 	if clientObjPtr == nil {
-		t.Error("expected non-nil client object pointer")
+		t.Fatal("expected non-nil client object pointer")
 	}
 
 	clientObj := *clientObjPtr

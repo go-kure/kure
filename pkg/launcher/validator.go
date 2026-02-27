@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	"github.com/blang/semver/v4"
-	"github.com/go-kure/kure/pkg/errors"
-	"github.com/go-kure/kure/pkg/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/logger"
 )
 
 // validator implements the Validator interface
@@ -278,9 +279,6 @@ func (v *validator) validateResources(ctx context.Context, resources []Resource,
 			w.Field = fmt.Sprintf("resources[%d].%s", i, w.Field)
 			result.Warnings = append(result.Warnings, w)
 		}
-
-		if !resResult.IsValid() {
-		}
 	}
 }
 
@@ -301,9 +299,6 @@ func (v *validator) validatePatches(ctx context.Context, patches []Patch, result
 		for _, w := range patchResult.Warnings {
 			w.Field = fmt.Sprintf("patches[%d].%s", i, w.Field)
 			result.Warnings = append(result.Warnings, w)
-		}
-
-		if !patchResult.IsValid() {
 		}
 	}
 }
@@ -595,9 +590,7 @@ func (v *validator) findPatchCycles(patches []Patch) [][]string {
 		path = append(path, node)
 
 		for _, dep := range deps[node] {
-			if dfs(dep) {
-				// Don't return immediately to find all cycles
-			}
+			dfs(dep) // Don't return immediately to find all cycles
 		}
 
 		path = path[:len(path)-1]

@@ -1,6 +1,7 @@
 package validation
 
 import (
+	stderrors "errors"
 	"testing"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -73,7 +74,7 @@ func TestValidateNotNil(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 
-			if tt.wantErr && err != tt.errType {
+			if tt.wantErr && !stderrors.Is(err, tt.errType) {
 				t.Errorf("expected error %v, got %v", tt.errType, err)
 			}
 		})
@@ -141,7 +142,7 @@ func TestValidateDeployment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validator.ValidateDeployment(tt.deployment)
 
-			if tt.wantErr && err != errors.ErrNilDeployment {
+			if tt.wantErr && !stderrors.Is(err, errors.ErrNilDeployment) {
 				t.Errorf("expected ErrNilDeployment, got %v", err)
 			}
 
@@ -176,7 +177,7 @@ func TestValidateService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validator.ValidateService(tt.service)
 
-			if tt.wantErr && err != errors.ErrNilService {
+			if tt.wantErr && !stderrors.Is(err, errors.ErrNilService) {
 				t.Errorf("expected ErrNilService, got %v", err)
 			}
 
@@ -191,7 +192,7 @@ func TestValidateConfigMap(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateConfigMap(nil)
-	if err != errors.ErrNilConfigMap {
+	if !stderrors.Is(err, errors.ErrNilConfigMap) {
 		t.Errorf("expected ErrNilConfigMap, got %v", err)
 	}
 
@@ -205,7 +206,7 @@ func TestValidateSecret(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateSecret(nil)
-	if err != errors.ErrNilSecret {
+	if !stderrors.Is(err, errors.ErrNilSecret) {
 		t.Errorf("expected ErrNilSecret, got %v", err)
 	}
 
@@ -219,7 +220,7 @@ func TestValidateServiceAccount(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateServiceAccount(nil)
-	if err != errors.ErrNilServiceAccount {
+	if !stderrors.Is(err, errors.ErrNilServiceAccount) {
 		t.Errorf("expected ErrNilServiceAccount, got %v", err)
 	}
 
@@ -233,7 +234,7 @@ func TestValidateNamespace(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateNamespace(nil)
-	if err != errors.ErrNilNamespace {
+	if !stderrors.Is(err, errors.ErrNilNamespace) {
 		t.Errorf("expected ErrNilNamespace, got %v", err)
 	}
 
@@ -247,7 +248,7 @@ func TestValidateIngress(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateIngress(nil)
-	if err != errors.ErrNilIngress {
+	if !stderrors.Is(err, errors.ErrNilIngress) {
 		t.Errorf("expected ErrNilIngress, got %v", err)
 	}
 
@@ -261,7 +262,7 @@ func TestValidateStatefulSet(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateStatefulSet(nil)
-	if err != errors.ErrNilStatefulSet {
+	if !stderrors.Is(err, errors.ErrNilStatefulSet) {
 		t.Errorf("expected ErrNilStatefulSet, got %v", err)
 	}
 
@@ -275,7 +276,7 @@ func TestValidateDaemonSet(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateDaemonSet(nil)
-	if err != errors.ErrNilDaemonSet {
+	if !stderrors.Is(err, errors.ErrNilDaemonSet) {
 		t.Errorf("expected ErrNilDaemonSet, got %v", err)
 	}
 
@@ -289,7 +290,7 @@ func TestValidateJob(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateJob(nil)
-	if err != errors.ErrNilJob {
+	if !stderrors.Is(err, errors.ErrNilJob) {
 		t.Errorf("expected ErrNilJob, got %v", err)
 	}
 
@@ -303,7 +304,7 @@ func TestValidateCronJob(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateCronJob(nil)
-	if err != errors.ErrNilCronJob {
+	if !stderrors.Is(err, errors.ErrNilCronJob) {
 		t.Errorf("expected ErrNilCronJob, got %v", err)
 	}
 
@@ -319,7 +320,7 @@ func TestValidateRole(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateRole(nil)
-	if err != errors.ErrNilRole {
+	if !stderrors.Is(err, errors.ErrNilRole) {
 		t.Errorf("expected ErrNilRole, got %v", err)
 	}
 
@@ -333,7 +334,7 @@ func TestValidateClusterRole(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateClusterRole(nil)
-	if err != errors.ErrNilClusterRole {
+	if !stderrors.Is(err, errors.ErrNilClusterRole) {
 		t.Errorf("expected ErrNilClusterRole, got %v", err)
 	}
 
@@ -347,7 +348,7 @@ func TestValidateRoleBinding(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateRoleBinding(nil)
-	if err != errors.ErrNilRoleBinding {
+	if !stderrors.Is(err, errors.ErrNilRoleBinding) {
 		t.Errorf("expected ErrNilRoleBinding, got %v", err)
 	}
 
@@ -361,7 +362,7 @@ func TestValidateClusterRoleBinding(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateClusterRoleBinding(nil)
-	if err != errors.ErrNilClusterRoleBinding {
+	if !stderrors.Is(err, errors.ErrNilClusterRoleBinding) {
 		t.Errorf("expected ErrNilClusterRoleBinding, got %v", err)
 	}
 
@@ -377,7 +378,7 @@ func TestValidatePodSpec(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidatePodSpec(nil)
-	if err != errors.ErrNilPodSpec {
+	if !stderrors.Is(err, errors.ErrNilPodSpec) {
 		t.Errorf("expected ErrNilPodSpec, got %v", err)
 	}
 
@@ -391,7 +392,7 @@ func TestValidateContainer(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateContainer(nil)
-	if err != errors.ErrNilContainer {
+	if !stderrors.Is(err, errors.ErrNilContainer) {
 		t.Errorf("expected ErrNilContainer, got %v", err)
 	}
 
@@ -405,7 +406,7 @@ func TestValidateInitContainer(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateInitContainer(nil)
-	if err != errors.ErrNilInitContainer {
+	if !stderrors.Is(err, errors.ErrNilInitContainer) {
 		t.Errorf("expected ErrNilInitContainer, got %v", err)
 	}
 
@@ -419,7 +420,7 @@ func TestValidateEphemeralContainer(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateEphemeralContainer(nil)
-	if err != errors.ErrNilEphemeralContainer {
+	if !stderrors.Is(err, errors.ErrNilEphemeralContainer) {
 		t.Errorf("expected ErrNilEphemeralContainer, got %v", err)
 	}
 
@@ -433,7 +434,7 @@ func TestValidateVolume(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateVolume(nil)
-	if err != errors.ErrNilVolume {
+	if !stderrors.Is(err, errors.ErrNilVolume) {
 		t.Errorf("expected ErrNilVolume, got %v", err)
 	}
 
@@ -447,7 +448,7 @@ func TestValidateImagePullSecret(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateImagePullSecret(nil)
-	if err != errors.ErrNilImagePullSecret {
+	if !stderrors.Is(err, errors.ErrNilImagePullSecret) {
 		t.Errorf("expected ErrNilImagePullSecret, got %v", err)
 	}
 
@@ -461,7 +462,7 @@ func TestValidateToleration(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateToleration(nil)
-	if err != errors.ErrNilToleration {
+	if !stderrors.Is(err, errors.ErrNilToleration) {
 		t.Errorf("expected ErrNilToleration, got %v", err)
 	}
 
@@ -475,7 +476,7 @@ func TestValidateServicePort(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateServicePort(nil)
-	if err != errors.ErrNilServicePort {
+	if !stderrors.Is(err, errors.ErrNilServicePort) {
 		t.Errorf("expected ErrNilServicePort, got %v", err)
 	}
 
@@ -489,7 +490,7 @@ func TestValidatePodDisruptionBudget(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidatePodDisruptionBudget(nil)
-	if err != errors.ErrNilPodDisruptionBudget {
+	if !stderrors.Is(err, errors.ErrNilPodDisruptionBudget) {
 		t.Errorf("expected ErrNilPodDisruptionBudget, got %v", err)
 	}
 
@@ -503,7 +504,7 @@ func TestValidateKustomization(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateKustomization(nil)
-	if err != errors.ErrNilKustomization {
+	if !stderrors.Is(err, errors.ErrNilKustomization) {
 		t.Errorf("expected ErrNilKustomization, got %v", err)
 	}
 
@@ -517,7 +518,7 @@ func TestValidateFluxInstance(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateFluxInstance(nil)
-	if err != errors.ErrNilFluxInstance {
+	if !stderrors.Is(err, errors.ErrNilFluxInstance) {
 		t.Errorf("expected ErrNilFluxInstance, got %v", err)
 	}
 
@@ -531,7 +532,7 @@ func TestValidateIPAddressPool(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateIPAddressPool(nil)
-	if err != errors.ErrNilIPAddressPool {
+	if !stderrors.Is(err, errors.ErrNilIPAddressPool) {
 		t.Errorf("expected ErrNilIPAddressPool, got %v", err)
 	}
 
@@ -545,7 +546,7 @@ func TestValidateBGPPeer(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateBGPPeer(nil)
-	if err != errors.ErrNilBGPPeer {
+	if !stderrors.Is(err, errors.ErrNilBGPPeer) {
 		t.Errorf("expected ErrNilBGPPeer, got %v", err)
 	}
 
@@ -559,7 +560,7 @@ func TestValidateBGPAdvertisement(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateBGPAdvertisement(nil)
-	if err != errors.ErrNilBGPAdvertisement {
+	if !stderrors.Is(err, errors.ErrNilBGPAdvertisement) {
 		t.Errorf("expected ErrNilBGPAdvertisement, got %v", err)
 	}
 
@@ -573,7 +574,7 @@ func TestValidateL2Advertisement(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateL2Advertisement(nil)
-	if err != errors.ErrNilL2Advertisement {
+	if !stderrors.Is(err, errors.ErrNilL2Advertisement) {
 		t.Errorf("expected ErrNilL2Advertisement, got %v", err)
 	}
 
@@ -587,7 +588,7 @@ func TestValidateBFDProfile(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateBFDProfile(nil)
-	if err != errors.ErrNilBFDProfile {
+	if !stderrors.Is(err, errors.ErrNilBFDProfile) {
 		t.Errorf("expected ErrNilBFDProfile, got %v", err)
 	}
 
@@ -741,7 +742,7 @@ func TestValidateHorizontalPodAutoscaler(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateHorizontalPodAutoscaler(nil)
-	if err != errors.ErrNilHorizontalPodAutoscaler {
+	if !stderrors.Is(err, errors.ErrNilHorizontalPodAutoscaler) {
 		t.Errorf("expected ErrNilHorizontalPodAutoscaler, got %v", err)
 	}
 
@@ -755,7 +756,7 @@ func TestValidateCertificate(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateCertificate(nil)
-	if err != errors.ErrNilCertificate {
+	if !stderrors.Is(err, errors.ErrNilCertificate) {
 		t.Errorf("expected ErrNilCertificate, got %v", err)
 	}
 }
@@ -764,7 +765,7 @@ func TestValidateIssuer(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateIssuer(nil)
-	if err != errors.ErrNilIssuer {
+	if !stderrors.Is(err, errors.ErrNilIssuer) {
 		t.Errorf("expected ErrNilIssuer, got %v", err)
 	}
 }
@@ -773,7 +774,7 @@ func TestValidateClusterIssuer(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateClusterIssuer(nil)
-	if err != errors.ErrNilClusterIssuer {
+	if !stderrors.Is(err, errors.ErrNilClusterIssuer) {
 		t.Errorf("expected ErrNilClusterIssuer, got %v", err)
 	}
 }
@@ -782,7 +783,7 @@ func TestValidateACMEIssuer(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateACMEIssuer(nil)
-	if err != errors.ErrNilACMEIssuer {
+	if !stderrors.Is(err, errors.ErrNilACMEIssuer) {
 		t.Errorf("expected ErrNilACMEIssuer, got %v", err)
 	}
 }
@@ -791,7 +792,7 @@ func TestValidateSecretStore(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateSecretStore(nil)
-	if err != errors.ErrNilSecretStore {
+	if !stderrors.Is(err, errors.ErrNilSecretStore) {
 		t.Errorf("expected ErrNilSecretStore, got %v", err)
 	}
 }
@@ -800,7 +801,7 @@ func TestValidateClusterSecretStore(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateClusterSecretStore(nil)
-	if err != errors.ErrNilClusterSecretStore {
+	if !stderrors.Is(err, errors.ErrNilClusterSecretStore) {
 		t.Errorf("expected ErrNilClusterSecretStore, got %v", err)
 	}
 }
@@ -809,7 +810,7 @@ func TestValidateExternalSecret(t *testing.T) {
 	validator := NewValidator()
 
 	err := validator.ValidateExternalSecret(nil)
-	if err != errors.ErrNilExternalSecret {
+	if !stderrors.Is(err, errors.ErrNilExternalSecret) {
 		t.Errorf("expected ErrNilExternalSecret, got %v", err)
 	}
 }

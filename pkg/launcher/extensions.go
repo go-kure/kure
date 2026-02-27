@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/logger"
-	"gopkg.in/yaml.v3"
 )
 
 // extensionLoader implements the ExtensionLoader interface
