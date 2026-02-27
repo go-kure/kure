@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-02-20
+**Last Updated:** 2026-02-27
 
 ---
 
@@ -15,6 +15,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
 | [Auto-Rebase](#auto-rebase-workflow) | `auto-rebase.yml` | push to main | Rebase all open PRs when main is updated |
 | [Release](#release-workflow) | `release.yml` | version tags | GoReleaser-based release with versioned docs deploy |
+| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via ccproxy |
 
 ---
 
@@ -210,6 +211,51 @@ Requires `AUTO_REBASE_PAT` repository secret — a fine-grained PAT with:
 - Permissions: `Contents: Read+Write`, `Pull requests: Read`
 
 A PAT is required because pushes made with `GITHUB_TOKEN` do not trigger subsequent workflow runs. The PAT ensures CI re-runs on rebased branches.
+
+---
+
+## PR Review Workflow
+
+**File:** `.github/workflows/pr-review.yml`
+**Name:** `PR Review`
+
+### Triggers
+
+- Pull requests: `opened`, `synchronize`, `ready_for_review`, `reopened`
+- Skips draft PRs and fork PRs (self-hosted runner security)
+
+### How It Works
+
+Uses a two-pass AI review system via ccproxy (ported from the GitLab `mr-review.yml` template):
+
+1. **Pass 1 — Review:** Sends the PR diff + project context (`AGENTS.md`) to the review model (default: `gpt-5.3-codex`). The model returns up to 3 findings ranked by severity in a structured table. Posted as a sticky PR comment.
+
+2. **Pass 2 — Assessment:** If the review found issues (not LGTM), sends the review + diff to an assessment model (default: `claude-sonnet-4-6`) which fact-checks each finding against the actual diff. Catches hallucinations and false positives. Posted as a second sticky PR comment.
+
+### Requirements
+
+- **Self-hosted runner:** Runs on `autops-kube` label (ARC runner with in-cluster access)
+- **ccproxy:** Reachable at `http://openclaw-ccproxy.openclaw.svc:8000` from the runner pod
+- **No API keys needed:** ccproxy handles model authentication
+
+### Configuration
+
+Configurable via repository variables or workflow env defaults:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PR_REVIEW_MODEL` | `gpt-5.3-codex` | Model for code review pass |
+| `PR_REVIEW_MAX_DIFF_CHARS` | `50000` | Truncation threshold for large diffs |
+| `PR_REVIEW_MAX_TOKENS` | `1500` | Max response tokens for review |
+| `PR_REVIEW_CONTEXT` | kure project description | Additional system prompt context |
+| `PR_REVIEW_ASSESS_ENABLED` | `true` | Enable/disable assessment pass |
+| `PR_REVIEW_ASSESS_MODEL` | `claude-sonnet-4-6` | Model for hallucination checking |
+| `PR_REVIEW_ASSESS_MAX_TOKENS` | `4096` | Max response tokens for assessment |
+| `PR_REVIEW_AGENTS_FILE` | `AGENTS.md` | Project context file path |
+
+### Non-Blocking
+
+The workflow uses `continue-on-error: true` so review failures never block PR merges.
 
 ---
 
