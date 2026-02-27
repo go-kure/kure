@@ -479,6 +479,61 @@ func TestGenerateHelmRelease(t *testing.T) {
 	}
 }
 
+func TestGenerateHelmReleaseTargetNamespaceAndReleaseName(t *testing.T) {
+	config := &Config{
+		Name:            "test-release",
+		Namespace:       "flux-system",
+		TargetNamespace: "target-ns",
+		ReleaseName:     "custom-release",
+		Chart: ChartConfig{
+			Name:    "nginx",
+			Version: "1.0.0",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+			URL:  "https://charts.bitnami.com/bitnami",
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release, ok := hr.(*helmv2.HelmRelease)
+	if !ok {
+		t.Fatalf("Expected HelmRelease, got %T", hr)
+	}
+
+	if release.Spec.TargetNamespace != "target-ns" {
+		t.Errorf("TargetNamespace = %q, want %q", release.Spec.TargetNamespace, "target-ns")
+	}
+	if release.Spec.ReleaseName != "custom-release" {
+		t.Errorf("ReleaseName = %q, want %q", release.Spec.ReleaseName, "custom-release")
+	}
+
+	// Test defaults: omitted fields should be empty
+	configDefault := &Config{
+		Name:      "default-release",
+		Namespace: "default",
+		Chart:     ChartConfig{Name: "nginx"},
+		Source:    SourceConfig{Type: HelmRepositorySource},
+	}
+
+	hrDefault, err := configDefault.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	releaseDefault := hrDefault.(*helmv2.HelmRelease)
+	if releaseDefault.Spec.TargetNamespace != "" {
+		t.Errorf("Default TargetNamespace = %q, want empty", releaseDefault.Spec.TargetNamespace)
+	}
+	if releaseDefault.Spec.ReleaseName != "" {
+		t.Errorf("Default ReleaseName = %q, want empty", releaseDefault.Spec.ReleaseName)
+	}
+}
+
 func TestGenerateHelmReleaseDefaults(t *testing.T) {
 	config := &Config{
 		Name:      "minimal-release",

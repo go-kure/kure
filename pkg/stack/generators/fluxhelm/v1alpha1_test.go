@@ -508,6 +508,48 @@ func TestConfigV1Alpha1_Generate_WithAdvancedReleaseOptions(t *testing.T) {
 	}
 }
 
+func TestConfigV1Alpha1_Generate_WithTargetNamespaceAndReleaseName(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		BaseMetadata: generators.BaseMetadata{
+			Name:      "cert-manager",
+			Namespace: "flux-system",
+		},
+		TargetNamespace: "cert-manager",
+		ReleaseName:     "cert-manager",
+		Chart: internal.ChartConfig{
+			Name:    "cert-manager",
+			Version: "1.16.0",
+		},
+		Source: internal.SourceConfig{
+			Type: internal.HelmRepositorySource,
+			URL:  "https://charts.jetstack.io",
+		},
+	}
+
+	app := stack.NewApplication("cert-manager", "flux-system", cfg)
+	objs, err := cfg.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	helmRelease := findHelmRelease(objs)
+	if helmRelease == nil {
+		t.Fatal("Expected HelmRelease object")
+	}
+
+	if helmRelease.Spec.TargetNamespace != "cert-manager" {
+		t.Errorf("TargetNamespace = %q, want %q", helmRelease.Spec.TargetNamespace, "cert-manager")
+	}
+	if helmRelease.Spec.ReleaseName != "cert-manager" {
+		t.Errorf("ReleaseName = %q, want %q", helmRelease.Spec.ReleaseName, "cert-manager")
+	}
+
+	// Verify the HelmRelease itself is in flux-system namespace
+	if helmRelease.Namespace != "flux-system" {
+		t.Errorf("Namespace = %q, want %q", helmRelease.Namespace, "flux-system")
+	}
+}
+
 func TestConfigV1Alpha1_Generate_NoExplicitSource(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
 		BaseMetadata: generators.BaseMetadata{
