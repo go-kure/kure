@@ -8,6 +8,7 @@ import (
 	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
@@ -1036,6 +1037,30 @@ func TestSetOCIRepositorySuspend(t *testing.T) {
 	SetOCIRepositorySuspend(or, true)
 	if !or.Spec.Suspend {
 		t.Fatal("expected Suspend to be true")
+	}
+}
+
+// PostRenderer Kustomize setter tests
+func TestSetPostRendererKustomize(t *testing.T) {
+	k := CreatePostRendererKustomize()
+	if k == nil {
+		t.Fatal("expected non-nil Kustomize")
+	}
+}
+
+func TestSetPostRendererKustomizePatch(t *testing.T) {
+	k := CreatePostRendererKustomize()
+	AddPostRendererKustomizePatch(k, kustomize.Patch{Patch: "test-patch"})
+	if len(k.Patches) != 1 {
+		t.Fatal("expected patch to be appended")
+	}
+}
+
+func TestSetPostRendererKustomizeImage(t *testing.T) {
+	k := CreatePostRendererKustomize()
+	AddPostRendererKustomizeImage(k, kustomize.Image{Name: "nginx", NewTag: "latest"})
+	if len(k.Images) != 1 {
+		t.Fatal("expected image to be appended")
 	}
 }
 

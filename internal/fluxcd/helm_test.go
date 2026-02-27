@@ -5,6 +5,7 @@ import (
 	"time"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -169,5 +170,90 @@ func TestHelmReleaseHelpers(t *testing.T) {
 	}
 	if len(hr.Spec.PostRenderers) != 1 {
 		t.Errorf("postRenderer not added")
+	}
+}
+
+func TestCreatePostRendererKustomize(t *testing.T) {
+	k := CreatePostRendererKustomize()
+	if k == nil {
+		t.Fatal("expected non-nil Kustomize")
+	}
+}
+
+func TestAddPostRendererKustomizePatch(t *testing.T) {
+	k := CreatePostRendererKustomize()
+	patch1 := kustomize.Patch{Patch: `{"op":"add","path":"/metadata/labels/env","value":"test"}`}
+	patch2 := kustomize.Patch{
+		Patch: "- op: replace\n  path: /spec/replicas\n  value: 3",
+		Target: &kustomize.Selector{
+			Kind: "Deployment",
+			Name: "my-app",
+		},
+	}
+	AddPostRendererKustomizePatch(k, patch1)
+	AddPostRendererKustomizePatch(k, patch2)
+
+	if len(k.Patches) != 2 {
+		t.Fatalf("expected 2 patches, got %d", len(k.Patches))
+	}
+	if k.Patches[0].Patch != patch1.Patch {
+		t.Errorf("first patch content mismatch")
+	}
+	if k.Patches[1].Target == nil || k.Patches[1].Target.Kind != "Deployment" {
+		t.Errorf("second patch target mismatch")
+	}
+}
+
+func TestAddPostRendererKustomizeImage(t *testing.T) {
+	k := CreatePostRendererKustomize()
+	img1 := kustomize.Image{Name: "nginx", NewName: "my-registry/nginx", NewTag: "1.25"}
+	img2 := kustomize.Image{Name: "redis", Digest: "sha256:abc123"}
+	AddPostRendererKustomizeImage(k, img1)
+	AddPostRendererKustomizeImage(k, img2)
+
+	if len(k.Images) != 2 {
+		t.Fatalf("expected 2 images, got %d", len(k.Images))
+	}
+	if k.Images[0].NewName != "my-registry/nginx" {
+		t.Errorf("first image NewName mismatch")
+	}
+	if k.Images[0].NewTag != "1.25" {
+		t.Errorf("first image NewTag mismatch")
+	}
+	if k.Images[1].Digest != "sha256:abc123" {
+		t.Errorf("second image Digest mismatch")
+	}
+}
+
+func TestHelmReleasePostRendererIntegration(t *testing.T) {
+	hr := CreateHelmRelease("my-release", "default", helmv2.HelmReleaseSpec{})
+
+	k := CreatePostRendererKustomize()
+	AddPostRendererKustomizePatch(k, kustomize.Patch{
+		Patch: `{"op":"add","path":"/metadata/labels/env","value":"prod"}`,
+	})
+	AddPostRendererKustomizeImage(k, kustomize.Image{
+		Name:    "nginx",
+		NewName: "my-registry/nginx",
+		NewTag:  "stable",
+	})
+
+	AddHelmReleasePostRenderer(hr, helmv2.PostRenderer{Kustomize: k})
+
+	if len(hr.Spec.PostRenderers) != 1 {
+		t.Fatalf("expected 1 post renderer, got %d", len(hr.Spec.PostRenderers))
+	}
+	pr := hr.Spec.PostRenderers[0]
+	if pr.Kustomize == nil {
+		t.Fatal("expected Kustomize post renderer to be set")
+	}
+	if len(pr.Kustomize.Patches) != 1 {
+		t.Fatalf("expected 1 patch, got %d", len(pr.Kustomize.Patches))
+	}
+	if len(pr.Kustomize.Images) != 1 {
+		t.Fatalf("expected 1 image, got %d", len(pr.Kustomize.Images))
+	}
+	if pr.Kustomize.Images[0].NewTag != "stable" {
+		t.Errorf("image NewTag mismatch: got %s, want stable", pr.Kustomize.Images[0].NewTag)
 	}
 }
