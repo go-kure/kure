@@ -172,15 +172,22 @@ type ChartRefConfig struct {
 
 // GenerateResources creates Flux HelmRelease and source resources
 func GenerateResources(c *Config) ([]*client.Object, error) {
+	if err := c.validateChartRef(); err != nil {
+		return nil, err
+	}
+
 	var objects []*client.Object
 
-	// Generate the source resource
-	source, err := c.generateSource()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate source: %w", err)
-	}
-	if source != nil {
-		objects = append(objects, source)
+	// Skip source generation when ChartRef is used — ChartRef references an
+	// existing source, so generating a new one would create an orphan.
+	if c.ChartRef == nil {
+		source, err := c.generateSource()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate source: %w", err)
+		}
+		if source != nil {
+			objects = append(objects, source)
+		}
 	}
 
 	// Generate the HelmRelease
@@ -191,6 +198,24 @@ func GenerateResources(c *Config) ([]*client.Object, error) {
 	objects = append(objects, &release)
 
 	return objects, nil
+}
+
+func (c *Config) validateChartRef() error {
+	if c.ChartRef == nil {
+		return nil
+	}
+	if c.Chart.Name != "" {
+		return fmt.Errorf("chartRef and chart are mutually exclusive: remove either chartRef or chart.name (%q)", c.Chart.Name)
+	}
+	if c.ChartRef.Name == "" {
+		return fmt.Errorf("chartRef.name is required")
+	}
+	switch c.ChartRef.Kind {
+	case "OCIRepository", "HelmChart":
+	default:
+		return fmt.Errorf("chartRef.kind must be OCIRepository or HelmChart, got %q", c.ChartRef.Kind)
+	}
+	return nil
 }
 
 // generateSource creates the appropriate source resource based on type
