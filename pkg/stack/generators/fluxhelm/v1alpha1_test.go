@@ -591,6 +591,45 @@ func TestConfigV1Alpha1_Generate_WithValuesFrom(t *testing.T) {
 	}
 }
 
+func TestConfigV1Alpha1_Generate_WithSourceRefNameOverride(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		BaseMetadata: generators.BaseMetadata{
+			Name:      "trust-manager",
+			Namespace: "flux-system",
+		},
+		Chart: internal.ChartConfig{
+			Name:    "trust-manager",
+			Version: "0.9.0",
+		},
+		Source: internal.SourceConfig{
+			Type:           internal.HelmRepositorySource,
+			URL:            "https://charts.jetstack.io",
+			RefName:        "jetstack-repo",
+			SkipGeneration: true,
+		},
+	}
+
+	app := stack.NewApplication("trust-manager", "flux-system", cfg)
+	objs, err := cfg.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Only HelmRelease, no source
+	if len(objs) != 1 {
+		t.Fatalf("Expected 1 object, got %d", len(objs))
+	}
+
+	helmRelease := findHelmRelease(objs)
+	if helmRelease == nil {
+		t.Fatal("Expected HelmRelease object")
+	}
+
+	if helmRelease.Spec.Chart.Spec.SourceRef.Name != "jetstack-repo" {
+		t.Errorf("SourceRef.Name = %q, want %q", helmRelease.Spec.Chart.Spec.SourceRef.Name, "jetstack-repo")
+	}
+}
+
 func TestConfigV1Alpha1_Generate_NoExplicitSource(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
 		BaseMetadata: generators.BaseMetadata{

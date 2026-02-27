@@ -90,6 +90,13 @@ type SourceConfig struct {
 
 	// Common
 	Interval string `yaml:"interval,omitempty" json:"interval,omitempty"`
+
+	// RefName overrides the default source resource name ("{config.Name}-source").
+	// When set, the source resource and HelmRelease sourceRef use this name instead.
+	RefName string `yaml:"refName,omitempty" json:"refName,omitempty"`
+	// SkipGeneration prevents creation of the source resource (reference-only mode).
+	// The HelmRelease sourceRef still points to RefName (or the default name).
+	SkipGeneration bool `yaml:"skipGeneration,omitempty" json:"skipGeneration,omitempty"`
 }
 
 // ReleaseConfig defines Helm release options
@@ -167,8 +174,21 @@ func GenerateResources(c *Config) ([]*client.Object, error) {
 	return objects, nil
 }
 
+// sourceName returns the name for the source resource, using RefName if set
+// or falling back to the default "{config.Name}-source" convention.
+func (c *Config) sourceName() string {
+	if c.Source.RefName != "" {
+		return c.Source.RefName
+	}
+	return c.Name + "-source"
+}
+
 // generateSource creates the appropriate source resource based on type
 func (c *Config) generateSource() (*client.Object, error) {
+	if c.Source.SkipGeneration {
+		return nil, nil
+	}
+
 	switch c.Source.Type {
 	case HelmRepositorySource:
 		return c.generateHelmRepository()
@@ -209,7 +229,7 @@ func (c *Config) generateHelmRepository() (*client.Object, error) {
 			Kind:       "HelmRepository",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.Name + "-source",
+			Name:      c.sourceName(),
 			Namespace: c.Namespace,
 		},
 		Spec: sourcev1.HelmRepositorySpec{
@@ -246,7 +266,7 @@ func (c *Config) generateGitRepository() (*client.Object, error) {
 			Kind:       "GitRepository",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.Name + "-source",
+			Name:      c.sourceName(),
 			Namespace: c.Namespace,
 		},
 		Spec: sourcev1.GitRepositorySpec{
@@ -289,7 +309,7 @@ func (c *Config) generateOCIRepository() (*client.Object, error) {
 			Kind:       "OCIRepository",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.Name + "-source",
+			Name:      c.sourceName(),
 			Namespace: c.Namespace,
 		},
 		Spec: sourcev1.OCIRepositorySpec{
@@ -326,7 +346,7 @@ func (c *Config) generateBucket() (*client.Object, error) {
 			Kind:       "Bucket",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.Name + "-source",
+			Name:      c.sourceName(),
 			Namespace: c.Namespace,
 		},
 		Spec: sourcev1.BucketSpec{
@@ -375,7 +395,7 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 					Chart:   c.Chart.Name,
 					Version: c.Chart.Version,
 					SourceRef: helmv2.CrossNamespaceObjectReference{
-						Name: c.Name + "-source",
+						Name: c.sourceName(),
 					},
 				},
 			},
