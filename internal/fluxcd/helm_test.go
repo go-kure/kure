@@ -257,3 +257,108 @@ func TestHelmReleasePostRendererIntegration(t *testing.T) {
 		t.Errorf("image NewTag mismatch: got %s, want stable", pr.Kustomize.Images[0].NewTag)
 	}
 }
+
+func TestCreateDriftDetection(t *testing.T) {
+	modes := []helmv2.DriftDetectionMode{
+		helmv2.DriftDetectionEnabled,
+		helmv2.DriftDetectionWarn,
+		helmv2.DriftDetectionDisabled,
+	}
+	for _, mode := range modes {
+		t.Run(string(mode), func(t *testing.T) {
+			dd := CreateDriftDetection(mode)
+			if dd == nil {
+				t.Fatal("expected non-nil DriftDetection")
+			}
+			if dd.Mode != mode {
+				t.Errorf("mode mismatch: got %s, want %s", dd.Mode, mode)
+			}
+		})
+	}
+}
+
+func TestAddDriftDetectionIgnoreRule(t *testing.T) {
+	dd := CreateDriftDetection(helmv2.DriftDetectionEnabled)
+
+	rule1 := CreateIgnoreRule([]string{"/spec/replicas"}, nil)
+	AddDriftDetectionIgnoreRule(dd, rule1)
+	if len(dd.Ignore) != 1 {
+		t.Fatalf("expected 1 ignore rule, got %d", len(dd.Ignore))
+	}
+
+	rule2 := CreateIgnoreRule(
+		[]string{"/metadata/annotations", "/metadata/labels"},
+		&kustomize.Selector{Kind: "Deployment", Name: "my-app"},
+	)
+	AddDriftDetectionIgnoreRule(dd, rule2)
+	if len(dd.Ignore) != 2 {
+		t.Fatalf("expected 2 ignore rules, got %d", len(dd.Ignore))
+	}
+	if dd.Ignore[1].Target == nil || dd.Ignore[1].Target.Kind != "Deployment" {
+		t.Errorf("second rule target mismatch")
+	}
+	if len(dd.Ignore[1].Paths) != 2 {
+		t.Errorf("expected 2 paths in second rule, got %d", len(dd.Ignore[1].Paths))
+	}
+}
+
+func TestCreateIgnoreRule(t *testing.T) {
+	t.Run("without target", func(t *testing.T) {
+		rule := CreateIgnoreRule([]string{"/spec/replicas"}, nil)
+		if len(rule.Paths) != 1 || rule.Paths[0] != "/spec/replicas" {
+			t.Errorf("paths mismatch: got %v", rule.Paths)
+		}
+		if rule.Target != nil {
+			t.Errorf("expected nil target")
+		}
+	})
+	t.Run("with target", func(t *testing.T) {
+		target := &kustomize.Selector{Kind: "ConfigMap", Name: "my-config"}
+		rule := CreateIgnoreRule([]string{"/data"}, target)
+		if rule.Target == nil {
+			t.Fatal("expected non-nil target")
+		}
+		if rule.Target.Kind != "ConfigMap" {
+			t.Errorf("target kind mismatch: got %s", rule.Target.Kind)
+		}
+		if rule.Target.Name != "my-config" {
+			t.Errorf("target name mismatch: got %s", rule.Target.Name)
+		}
+	})
+}
+
+func TestHelmReleaseDriftDetectionIntegration(t *testing.T) {
+	hr := CreateHelmRelease("my-release", "default", helmv2.HelmReleaseSpec{})
+
+	dd := CreateDriftDetection(helmv2.DriftDetectionWarn)
+
+	AddDriftDetectionIgnoreRule(dd, CreateIgnoreRule([]string{"/spec/replicas"}, nil))
+	AddDriftDetectionIgnoreRule(dd, CreateIgnoreRule(
+		[]string{"/metadata/annotations", "/metadata/labels"},
+		&kustomize.Selector{Kind: "Deployment", Name: "my-app"},
+	))
+
+	SetHelmReleaseDriftDetection(hr, dd)
+
+	if hr.Spec.DriftDetection == nil {
+		t.Fatal("expected DriftDetection to be set")
+	}
+	if hr.Spec.DriftDetection.Mode != helmv2.DriftDetectionWarn {
+		t.Errorf("mode mismatch: got %s, want warn", hr.Spec.DriftDetection.Mode)
+	}
+	if len(hr.Spec.DriftDetection.Ignore) != 2 {
+		t.Fatalf("expected 2 ignore rules, got %d", len(hr.Spec.DriftDetection.Ignore))
+	}
+	if hr.Spec.DriftDetection.Ignore[0].Target != nil {
+		t.Errorf("first rule should have nil target")
+	}
+	if hr.Spec.DriftDetection.Ignore[0].Paths[0] != "/spec/replicas" {
+		t.Errorf("first rule path mismatch")
+	}
+	if hr.Spec.DriftDetection.Ignore[1].Target == nil {
+		t.Fatal("second rule should have a target")
+	}
+	if hr.Spec.DriftDetection.Ignore[1].Target.Kind != "Deployment" {
+		t.Errorf("second rule target kind mismatch")
+	}
+}
