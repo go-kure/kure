@@ -184,7 +184,12 @@ validate_git_state() {
 
 check_tag_exists() {
     if git rev-parse "refs/tags/$1" >/dev/null 2>&1; then
-        die "Tag $1 already exists"
+        die "Tag $1 already exists locally"
+    fi
+    remote_tags=$(git ls-remote --tags origin "refs/tags/$1") \
+        || die "Failed to query remote tags — check network connectivity"
+    if [ -n "$remote_tags" ]; then
+        die "Tag $1 already exists on remote"
     fi
 }
 
