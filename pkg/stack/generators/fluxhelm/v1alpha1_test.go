@@ -591,6 +591,46 @@ func TestConfigV1Alpha1_Generate_WithValuesFrom(t *testing.T) {
 	}
 }
 
+func TestConfigV1Alpha1_Generate_WithCRDsPolicy(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		BaseMetadata: generators.BaseMetadata{
+			Name:      "cert-manager",
+			Namespace: "flux-system",
+		},
+		Chart: internal.ChartConfig{
+			Name:    "cert-manager",
+			Version: "1.16.0",
+		},
+		Source: internal.SourceConfig{
+			Type: internal.HelmRepositorySource,
+			URL:  "https://charts.jetstack.io",
+		},
+		Release: internal.ReleaseConfig{
+			CreateNamespace: true,
+			InstallCRDs:     internal.CRDsPolicyCreateReplace,
+			UpgradeCRDs:     internal.CRDsPolicyCreateReplace,
+		},
+	}
+
+	app := stack.NewApplication("cert-manager", "flux-system", cfg)
+	objs, err := cfg.Generate(app)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	helmRelease := findHelmRelease(objs)
+	if helmRelease == nil {
+		t.Fatal("Expected HelmRelease object")
+	}
+
+	if helmRelease.Spec.Install.CRDs != "CreateReplace" {
+		t.Errorf("Install.CRDs = %q, want %q", helmRelease.Spec.Install.CRDs, "CreateReplace")
+	}
+	if helmRelease.Spec.Upgrade.CRDs != "CreateReplace" {
+		t.Errorf("Upgrade.CRDs = %q, want %q", helmRelease.Spec.Upgrade.CRDs, "CreateReplace")
+	}
+}
+
 func TestConfigV1Alpha1_Generate_NoExplicitSource(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
 		BaseMetadata: generators.BaseMetadata{
