@@ -49,6 +49,9 @@ type Config struct {
 	// Release configuration
 	Release ReleaseConfig `yaml:"release,omitempty" json:"release,omitempty"`
 
+	// ChartRef references an existing OCIRepository or HelmChart (mutually exclusive with Chart)
+	ChartRef *ChartRefConfig `yaml:"chartRef,omitempty" json:"chartRef,omitempty"`
+
 	// Advanced options
 	Interval       string         `yaml:"interval,omitempty" json:"interval,omitempty"`
 	Timeout        string         `yaml:"timeout,omitempty" json:"timeout,omitempty"`
@@ -158,6 +161,13 @@ type KustomizeImage struct {
 	Name    string `yaml:"name" json:"name"`
 	NewName string `yaml:"newName,omitempty" json:"newName,omitempty"`
 	NewTag  string `yaml:"newTag,omitempty" json:"newTag,omitempty"`
+}
+
+// ChartRefConfig defines a reference to an existing OCIRepository or HelmChart resource
+type ChartRefConfig struct {
+	Kind      string `yaml:"kind" json:"kind"`
+	Name      string `yaml:"name" json:"name"`
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GenerateResources creates Flux HelmRelease and source resources
@@ -386,31 +396,44 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 		},
 		Spec: helmv2.HelmReleaseSpec{
 			Interval: metav1.Duration{Duration: duration},
-			Chart: &helmv2.HelmChartTemplate{
-				Spec: helmv2.HelmChartTemplateSpec{
-					Chart:   c.Chart.Name,
-					Version: c.Chart.Version,
-					SourceRef: helmv2.CrossNamespaceObjectReference{
-						Name: c.Name + "-source",
-					},
-				},
-			},
 		},
 	}
 
-	// Set source reference kind based on source type
-	switch c.Source.Type {
-	case HelmRepositorySource:
-		hr.Spec.Chart.Spec.SourceRef.Kind = "HelmRepository"
-	case GitRepositorySource:
-		hr.Spec.Chart.Spec.SourceRef.Kind = "GitRepository"
-	case OCIRepositorySource:
-		hr.Spec.Chart.Spec.SourceRef.Kind = "OCIRepository"
-	case BucketSource:
-		hr.Spec.Chart.Spec.SourceRef.Kind = "Bucket"
-	default:
-		// Default to HelmRepository if not specified
-		hr.Spec.Chart.Spec.SourceRef.Kind = "HelmRepository"
+	// Set either ChartRef or Chart (mutually exclusive)
+	if c.ChartRef != nil {
+		hr.Spec.ChartRef = &helmv2.CrossNamespaceSourceReference{
+			Kind: c.ChartRef.Kind,
+			Name: c.ChartRef.Name,
+		}
+		if c.ChartRef.Namespace != "" {
+			hr.Spec.ChartRef.Namespace = c.ChartRef.Namespace
+		}
+	} else {
+		sourceName := c.Name + "-source"
+		hr.Spec.Chart = &helmv2.HelmChartTemplate{
+			Spec: helmv2.HelmChartTemplateSpec{
+				Chart:   c.Chart.Name,
+				Version: c.Chart.Version,
+				SourceRef: helmv2.CrossNamespaceObjectReference{
+					Name: sourceName,
+				},
+			},
+		}
+
+		// Set source reference kind based on source type
+		switch c.Source.Type {
+		case HelmRepositorySource:
+			hr.Spec.Chart.Spec.SourceRef.Kind = "HelmRepository"
+		case GitRepositorySource:
+			hr.Spec.Chart.Spec.SourceRef.Kind = "GitRepository"
+		case OCIRepositorySource:
+			hr.Spec.Chart.Spec.SourceRef.Kind = "OCIRepository"
+		case BucketSource:
+			hr.Spec.Chart.Spec.SourceRef.Kind = "Bucket"
+		default:
+			// Default to HelmRepository if not specified
+			hr.Spec.Chart.Spec.SourceRef.Kind = "HelmRepository"
+		}
 	}
 
 	// Set values if provided
