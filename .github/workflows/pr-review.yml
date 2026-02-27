@@ -1,0 +1,344 @@
+# Automated PR review for Kure
+# Posts AI-generated code review comments on pull requests via ccproxy.
+# Ported from the GitLab mr-review.yml template (meta/ci-templates/mr-review.yml).
+#
+# Two-pass review:
+#   Pass 1: Review model analyzes the diff and posts findings
+#   Pass 2: Assessment model fact-checks the review for hallucinations
+#
+# Requires a self-hosted runner (autops-kube) with in-cluster access to ccproxy.
+# No API key secrets needed — ccproxy handles model authentication.
+#
+# Optional overrides (repository variables):
+#   PR_REVIEW_MODEL             - Model for review (default: gpt-5.3-codex)
+#   PR_REVIEW_MAX_DIFF_CHARS    - Max diff size in chars (default: 50000)
+#   PR_REVIEW_MAX_TOKENS        - Max response tokens (default: 1500)
+#   PR_REVIEW_CONTEXT           - Additional project context for system prompt
+#   PR_REVIEW_ASSESS_ENABLED    - Enable assessment pass (default: true)
+#   PR_REVIEW_ASSESS_MODEL      - Model for assessment (default: claude-sonnet-4-6)
+#   PR_REVIEW_ASSESS_MAX_TOKENS - Max tokens for assessment (default: 4096)
+#   PR_REVIEW_AGENTS_FILE       - Path to project context file (default: AGENTS.md)
+
+name: PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  pr-review:
+    name: AI Code Review
+    runs-on: autops-kube
+    if: github.event.pull_request.draft == false
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      CCPROXY_URL: "http://openclaw-ccproxy.openclaw.svc:8000"
+      PR_REVIEW_MODEL: "gpt-5.3-codex"
+      PR_REVIEW_MAX_DIFF_CHARS: "50000"
+      PR_REVIEW_MAX_TOKENS: "1500"
+      PR_REVIEW_CONTEXT: "Go library for programmatically building Kubernetes resources. Uses typed builders instead of templates. Part of the Wharf platform."
+      PR_REVIEW_ASSESS_ENABLED: "true"
+      PR_REVIEW_ASSESS_MODEL: "claude-sonnet-4-6"
+      PR_REVIEW_ASSESS_MAX_TOKENS: "4096"
+      PR_REVIEW_AGENTS_FILE: "AGENTS.md"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Guard against fork PRs
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::warning::Skipping PR review for fork PR (self-hosted runner security)."
+          exit 0
+
+      - name: Run review
+        id: review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eu
+
+          # --- Load project context (AGENTS.md) ---
+          PROJECT_AGENTS=""
+          if [ -n "${PR_REVIEW_AGENTS_FILE}" ] && [ -f "${PR_REVIEW_AGENTS_FILE}" ]; then
+            PROJECT_AGENTS=$(cat "${PR_REVIEW_AGENTS_FILE}")
+            AGENTS_LEN=$(printf '%s' "$PROJECT_AGENTS" | wc -c)
+            echo "Loaded project context from ${PR_REVIEW_AGENTS_FILE} (${AGENTS_LEN} chars)."
+          else
+            echo "No ${PR_REVIEW_AGENTS_FILE:-AGENTS.md} found, proceeding without project context."
+          fi
+
+          # --- Fetch PR diff ---
+          echo "Fetching PR diff for #${PR_NUMBER}..."
+          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY")
+
+          if [ -z "$DIFF" ]; then
+            echo "No diff found, skipping review."
+            exit 0
+          fi
+
+          # --- Fetch PR metadata ---
+          PR_DATA=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
+          PR_TITLE=$(echo "$PR_DATA" | jq -r '.title // "Untitled"')
+          PR_DESC=$(echo "$PR_DATA" | jq -r '.body // ""')
+
+          # --- Truncate if too large ---
+          DIFF_LEN=$(printf '%s' "$DIFF" | wc -c)
+          if [ "$DIFF_LEN" -gt "$PR_REVIEW_MAX_DIFF_CHARS" ]; then
+            echo "Diff is ${DIFF_LEN} chars, truncating to ${PR_REVIEW_MAX_DIFF_CHARS}..."
+            DIFF=$(printf '%s' "$DIFF" | head -c "$PR_REVIEW_MAX_DIFF_CHARS")
+            DIFF="${DIFF}
+          ... (diff truncated at ${PR_REVIEW_MAX_DIFF_CHARS} chars)"
+          fi
+
+          # --- Build system prompt ---
+          echo "Requesting review from ${PR_REVIEW_MODEL}..."
+
+          SYSTEM_PROMPT=$(cat <<'PROMPT'
+          You review GitHub pull requests for the Kure project (Go library for Kubernetes resource building).
+
+          RULES:
+          - Report ONLY: bugs, security issues, incorrect error handling, logic errors, standards violations.
+          - Do NOT comment on: style preferences, naming opinions, missing tests, documentation,
+            code organization, or performance unless it causes a bug.
+          - Do NOT suggest adding complexity (interfaces, abstractions, design patterns) unless
+            the current code has a concrete defect.
+          - Do NOT duplicate what linters already enforce.
+          - Max 3 findings, ranked by severity (Critical > High > Medium).
+          - If no significant issues, output only the LGTM header line from the OUTPUT FORMAT below.
+
+          OUTPUT FORMAT:
+          Start with a one-line conclusion: "### N issue(s) found" (or "### LGTM -- no issues found" if clean).
+          Then list findings in a markdown table:
+
+          | # | Severity | Location | Issue | Fix |
+          |---|----------|----------|-------|-----|
+          | 1 | Critical | `file:line` | summary | fix |
+
+          If no issues, output only the LGTM header line. Nothing else.
+          No explanations, no reasoning, no verbose context.
+          PROMPT
+          )
+
+          if [ -n "${PR_REVIEW_CONTEXT}" ]; then
+            SYSTEM_PROMPT="${SYSTEM_PROMPT}
+
+          ADDITIONAL PROJECT CONTEXT:
+          ${PR_REVIEW_CONTEXT}"
+          fi
+
+          if [ -n "$PROJECT_AGENTS" ]; then
+            SYSTEM_PROMPT="${SYSTEM_PROMPT}
+
+          PROJECT DOCUMENTATION (AGENTS.md):
+          ${PROJECT_AGENTS}"
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg model "$PR_REVIEW_MODEL" \
+            --arg diff "$DIFF" \
+            --arg title "$PR_TITLE" \
+            --arg desc "$PR_DESC" \
+            --arg system "$SYSTEM_PROMPT" \
+            --argjson max_tokens "${PR_REVIEW_MAX_TOKENS}" \
+            '{
+              model: $model,
+              max_tokens: $max_tokens,
+              messages: [
+                {
+                  role: "system",
+                  content: $system
+                },
+                {
+                  role: "user",
+                  content: ("Review this pull request.\n\nTitle: " + $title + "\nDescription: " + $desc + "\n\nDiff:\n```\n" + $diff + "\n```")
+                }
+              ]
+            }')
+
+          HTTP_CODE=$(curl -s -o /tmp/review_response.json -w '%{http_code}' \
+            -X POST "${CCPROXY_URL}/codex/v1/chat/completions" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          RESPONSE=$(cat /tmp/review_response.json)
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "ERROR: ccproxy returned HTTP ${HTTP_CODE}"
+            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+            exit 1
+          fi
+
+          REVIEW=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+
+          # Strip model reasoning traces (e.g. <thinking>...</thinking>)
+          REVIEW=$(printf '%s' "$REVIEW" | awk '
+            /<thinking>.*<\/thinking>/ { gsub(/<thinking>.*<\/thinking>/, ""); if (length($0) > 0) print; next }
+            /<thinking>/ { skip=1; next }
+            /<\/thinking>/ { sub(/.*<\/thinking>/, ""); skip=0; if (length($0) > 0) print; next }
+            skip==0 { print }
+          ')
+          # Trim leading blank lines
+          REVIEW=$(printf '%s' "$REVIEW" | sed '/./,$!d')
+
+          if [ -z "$REVIEW" ]; then
+            echo "ERROR: Empty response from model"
+            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+            exit 1
+          fi
+
+          echo "Review received ($(printf '%s' "$REVIEW" | wc -c) chars)."
+
+          # --- Save review for comment and assessment steps ---
+          printf '%s' "$REVIEW" > /tmp/review_body.txt
+          printf '%s' "$DIFF" > /tmp/pr_diff.txt
+          printf '%s' "$PR_TITLE" > /tmp/pr_title.txt
+          printf '%s' "$PROJECT_AGENTS" > /tmp/project_agents.txt
+
+          # --- Build comment body ---
+          {
+            printf '## AI Code Review (%s)\n\n' "$PR_REVIEW_MODEL"
+            cat /tmp/review_body.txt
+            printf '\n\n---\n*Automated review — this is advisory only.*'
+          } > /tmp/review_comment.md
+
+          # --- Check if LGTM ---
+          if printf '%s' "$REVIEW" | grep -qi 'LGTM'; then
+            echo "is_lgtm=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_lgtm=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post review comment
+        if: steps.review.outcome == 'success'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ai-review
+          path: /tmp/review_comment.md
+
+      - name: Run assessment
+        if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm != 'true' && env.PR_REVIEW_ASSESS_ENABLED == 'true'
+        id: assessment
+        run: |
+          set -eu
+
+          echo "Requesting review assessment from ${PR_REVIEW_ASSESS_MODEL}..."
+
+          REVIEW=$(cat /tmp/review_body.txt)
+          DIFF=$(cat /tmp/pr_diff.txt)
+          PR_TITLE=$(cat /tmp/pr_title.txt)
+          PROJECT_AGENTS=$(cat /tmp/project_agents.txt)
+
+          ASSESS_SYSTEM=$(cat <<'ASSESS_PROMPT'
+          You fact-check AI-generated code reviews against the actual pull request diff
+          and the full project context provided below.
+
+          The review was produced by an automated system that sometimes hallucinates —
+          it may reference code that does not exist in the diff, misunderstand language
+          idioms, or flag correct patterns as bugs.
+
+          Use the PROJECT CONTEXT (if provided) to understand the project's architecture,
+          design decisions, coding patterns, and interfaces. This context describes the
+          codebase beyond what is visible in the diff alone — use it to determine whether
+          a reviewer's concern is valid given the broader project design.
+
+          For each finding in the review:
+          1. Verify the referenced file, line range, and code actually exist in the diff.
+          2. Cross-reference claims against the project context — does the reviewer
+             misunderstand a deliberate design pattern or architectural decision?
+          3. Determine if the claimed issue is a real bug or a false positive.
+          4. Classify as: VALID (real issue, should be fixed), FALSE POSITIVE (incorrect
+             claim or hallucination), or PARTIALLY VALID (core concern has merit but
+             details are wrong or overstated).
+
+          If a finding references code not present in the diff, flag it as a hallucination.
+
+          OUTPUT FORMAT:
+          Start with: "### Assessment: N of M findings are actionable"
+          Then a table:
+
+          | # | Verdict | Reasoning |
+          |---|---------|-----------|
+          | 1 | FALSE POSITIVE | brief explanation |
+
+          No other text. No suggestions. No re-review of the code itself.
+          ASSESS_PROMPT
+          )
+
+          # Inject project context into assessment prompt
+          if [ -n "$PROJECT_AGENTS" ]; then
+            ASSESS_SYSTEM="${ASSESS_SYSTEM}
+
+          PROJECT CONTEXT:
+          ${PROJECT_AGENTS}"
+          fi
+
+          ASSESS_PAYLOAD=$(jq -n \
+            --arg model "$PR_REVIEW_ASSESS_MODEL" \
+            --arg diff "$DIFF" \
+            --arg review "$REVIEW" \
+            --arg title "$PR_TITLE" \
+            --arg system "$ASSESS_SYSTEM" \
+            --argjson max_tokens "${PR_REVIEW_ASSESS_MAX_TOKENS}" \
+            '{
+              model: $model,
+              max_tokens: $max_tokens,
+              messages: [
+                {
+                  role: "system",
+                  content: $system
+                },
+                {
+                  role: "user",
+                  content: ("Assess this AI-generated review against the actual diff and project context.\n\nPR Title: " + $title + "\n\n--- REVIEW ---\n" + $review + "\n\n--- DIFF ---\n```\n" + $diff + "\n```")
+                }
+              ]
+            }')
+
+          ASSESS_HTTP=$(curl -s -o /tmp/assess_response.json -w '%{http_code}' \
+            -X POST "${CCPROXY_URL}/codex/v1/chat/completions" \
+            -H "Content-Type: application/json" \
+            -d "$ASSESS_PAYLOAD")
+          ASSESS_RESP=$(cat /tmp/assess_response.json)
+
+          if [ "$ASSESS_HTTP" -lt 200 ] || [ "$ASSESS_HTTP" -ge 300 ]; then
+            echo "WARNING: Assessment request failed (HTTP ${ASSESS_HTTP}), skipping."
+            echo "$ASSESS_RESP" | jq . 2>/dev/null || echo "$ASSESS_RESP"
+            exit 0
+          fi
+
+          ASSESSMENT=$(echo "$ASSESS_RESP" | jq -r '.choices[0].message.content // empty')
+
+          # Strip reasoning traces
+          ASSESSMENT=$(printf '%s' "$ASSESSMENT" | awk '
+            /<thinking>.*<\/thinking>/ { gsub(/<thinking>.*<\/thinking>/, ""); if (length($0) > 0) print; next }
+            /<thinking>/ { skip=1; next }
+            /<\/thinking>/ { sub(/.*<\/thinking>/, ""); skip=0; if (length($0) > 0) print; next }
+            skip==0 { print }
+          ')
+          ASSESSMENT=$(printf '%s' "$ASSESSMENT" | sed '/./,$!d')
+
+          if [ -n "$ASSESSMENT" ]; then
+            echo "Assessment received ($(printf '%s' "$ASSESSMENT" | wc -c) chars)."
+
+            {
+              printf '## Review Assessment (%s)\n\n' "$PR_REVIEW_ASSESS_MODEL"
+              printf '%s' "$ASSESSMENT"
+              printf '\n\n---\n*Automated assessment of the AI review above — advisory only.*'
+            } > /tmp/assess_comment.md
+          else
+            echo "WARNING: Empty assessment response, skipping."
+            exit 0
+          fi
+
+      - name: Post assessment comment
+        if: steps.assessment.outcome == 'success'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ai-review-assessment
+          path: /tmp/assess_comment.md
