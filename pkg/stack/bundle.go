@@ -8,6 +8,15 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
+const (
+	// AnnotationFluxPruneKey is the Flux kustomize-controller annotation key
+	// used to control pruning behavior on individual resources.
+	AnnotationFluxPruneKey = "kustomize.toolkit.fluxcd.io/prune"
+	// AnnotationFluxPruneDisabled is the value that prevents a resource from
+	// being pruned during Flux garbage collection.
+	AnnotationFluxPruneDisabled = "disabled"
+)
+
 // Bundle represents a unit of deployment, typically the resources that
 // are reconciled by a single Flux Kustomization.
 type Bundle struct {
@@ -26,7 +35,8 @@ type Bundle struct {
 	Applications []*Application
 	// Labels are common labels that should be applied to each resource.
 	Labels map[string]string
-	// Annotations are common annotations applied to the generated Kustomization resource.
+	// Annotations are common annotations propagated to all generated resources and
+	// the generated Kustomization resource. Application-specific annotations take precedence.
 	Annotations map[string]string
 	// Description provides a human-readable description of the bundle.
 	Description string
@@ -111,6 +121,24 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 				}
 			}
 			obj.SetLabels(labels)
+		}
+	}
+
+	// Propagate bundle annotations to all generated resources.
+	// Application-specific annotations take precedence.
+	if len(a.Annotations) > 0 {
+		for _, r := range resources {
+			obj := *r
+			annotations := obj.GetAnnotations()
+			if annotations == nil {
+				annotations = make(map[string]string, len(a.Annotations))
+			}
+			for k, v := range a.Annotations {
+				if _, exists := annotations[k]; !exists {
+					annotations[k] = v
+				}
+			}
+			obj.SetAnnotations(annotations)
 		}
 	}
 

@@ -200,6 +200,135 @@ func TestBundleGenerateLabelPropagation(t *testing.T) {
 	})
 }
 
+func TestBundleGenerateAnnotationPropagation(t *testing.T) {
+	t.Run("annotations merged into resources with no annotations", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Annotations:  map[string]string{AnnotationFluxPruneKey: AnnotationFluxPruneDisabled},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		annotations := (*resources[0]).GetAnnotations()
+		if annotations[AnnotationFluxPruneKey] != AnnotationFluxPruneDisabled {
+			t.Fatalf("expected prune annotation, got %v", annotations)
+		}
+	})
+
+	t.Run("annotations merged into resources with existing annotations", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name:        "pod1",
+			Annotations: map[string]string{"existing": "value"},
+		}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Annotations:  map[string]string{"new-key": "new-value"},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		annotations := (*resources[0]).GetAnnotations()
+		if annotations["existing"] != "value" {
+			t.Fatalf("existing annotation lost, got %v", annotations)
+		}
+		if annotations["new-key"] != "new-value" {
+			t.Fatalf("bundle annotation not applied, got %v", annotations)
+		}
+	})
+
+	t.Run("app annotations take precedence over bundle annotations", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name:        "pod1",
+			Annotations: map[string]string{"env": "staging"},
+		}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Annotations:  map[string]string{"env": "prod"},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		annotations := (*resources[0]).GetAnnotations()
+		if annotations["env"] != "staging" {
+			t.Fatalf("expected app annotation 'staging' to take precedence, got %q", annotations["env"])
+		}
+	})
+
+	t.Run("nil bundle annotations do not modify resources", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name:        "pod1",
+			Annotations: map[string]string{"existing": "value"},
+		}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Annotations:  nil,
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		annotations := (*resources[0]).GetAnnotations()
+		if len(annotations) != 1 || annotations["existing"] != "value" {
+			t.Fatalf("expected annotations unchanged, got %v", annotations)
+		}
+	})
+
+	t.Run("empty bundle annotations do not modify resources", func(t *testing.T) {
+		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		app := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app},
+			Annotations:  map[string]string{},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		annotations := (*resources[0]).GetAnnotations()
+		if len(annotations) != 0 {
+			t.Fatalf("expected no annotations, got %v", annotations)
+		}
+	})
+
+	t.Run("annotations propagate to resources from multiple applications", func(t *testing.T) {
+		obj1 := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
+		obj2 := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}})
+		app1 := NewApplication("app1", "ns1", &fakeConfig{objs: []*client.Object{&obj1}})
+		app2 := NewApplication("app2", "ns2", &fakeConfig{objs: []*client.Object{&obj2}})
+		b := &Bundle{
+			Name:         "test",
+			Applications: []*Application{app1, app2},
+			Annotations:  map[string]string{AnnotationFluxPruneKey: AnnotationFluxPruneDisabled},
+		}
+		resources, err := b.Generate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(resources) != 2 {
+			t.Fatalf("expected 2 resources, got %d", len(resources))
+		}
+		for i, r := range resources {
+			annotations := (*r).GetAnnotations()
+			if annotations[AnnotationFluxPruneKey] != AnnotationFluxPruneDisabled {
+				t.Fatalf("resource %d: expected prune annotation, got %v", i, annotations)
+			}
+		}
+	})
+}
+
 func TestBundleGenerateWithValidation(t *testing.T) {
 	t.Run("bundle with validating app that passes", func(t *testing.T) {
 		obj := client.Object(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}})
