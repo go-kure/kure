@@ -24,6 +24,10 @@ func init() {
 type ConfigV1Alpha1 struct {
 	generators.BaseMetadata `yaml:",inline" json:",inline"`
 
+	// HelmRelease metadata overrides
+	TargetNamespace string `yaml:"targetNamespace,omitempty" json:"targetNamespace,omitempty"`
+	ReleaseName     string `yaml:"releaseName,omitempty" json:"releaseName,omitempty"`
+
 	// Chart configuration
 	Chart   internal.ChartConfig `yaml:"chart" json:"chart"`
 	Version string               `yaml:"version,omitempty" json:"version,omitempty"`
@@ -59,19 +63,21 @@ func (c *ConfigV1Alpha1) GetKind() string {
 func (c *ConfigV1Alpha1) Generate(app *stack.Application) ([]*client.Object, error) {
 	// Delegate to the internal implementation
 	return internal.GenerateResources(&internal.Config{
-		Name:           c.Name,
-		Namespace:      c.Namespace,
-		Chart:          c.Chart,
-		Version:        c.Version,
-		Values:         c.Values,
-		Source:         c.Source,
-		Release:        c.Release,
-		Interval:       c.Interval,
-		Timeout:        c.Timeout,
-		MaxHistory:     c.MaxHistory,
-		ServiceAccount: c.ServiceAccount,
-		Suspend:        c.Suspend,
-		DependsOn:      c.DependsOn,
-		PostRenderers:  c.PostRenderers,
+		Name:            c.Name,
+		Namespace:       c.Namespace,
+		TargetNamespace: c.TargetNamespace,
+		ReleaseName:     c.ReleaseName,
+		Chart:           c.Chart,
+		Version:         c.Version,
+		Values:          c.Values,
+		Source:          c.Source,
+		Release:         c.Release,
+		Interval:        c.Interval,
+		Timeout:         c.Timeout,
+		MaxHistory:      c.MaxHistory,
+		ServiceAccount:  c.ServiceAccount,
+		Suspend:         c.Suspend,
+		DependsOn:       c.DependsOn,
+		PostRenderers:   c.PostRenderers,
 	})
 }

@@ -33,6 +33,10 @@ type Config struct {
 	Name      string `yaml:"name" json:"name"`
 	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 
+	// HelmRelease metadata overrides
+	TargetNamespace string `yaml:"targetNamespace,omitempty" json:"targetNamespace,omitempty"`
+	ReleaseName     string `yaml:"releaseName,omitempty" json:"releaseName,omitempty"`
+
 	// Chart configuration
 	Chart   ChartConfig `yaml:"chart" json:"chart"`
 	Version string      `yaml:"version,omitempty" json:"version,omitempty"`
@@ -411,6 +415,14 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 
 	// Set suspend
 	hr.Spec.Suspend = c.Suspend
+
+	// Set target namespace and release name overrides
+	if c.TargetNamespace != "" {
+		hr.Spec.TargetNamespace = c.TargetNamespace
+	}
+	if c.ReleaseName != "" {
+		hr.Spec.ReleaseName = c.ReleaseName
+	}
 
 	// Set release options
 	if c.Release.CreateNamespace {
