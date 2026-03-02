@@ -187,7 +187,7 @@ jobs:
         go test -json -v -timeout 30s ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
 
     - name: Upload test log
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-log
@@ -201,7 +201,7 @@ jobs:
       run: make test-coverage
 
     - name: Upload coverage artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: coverage
         path: coverage/coverage.out
@@ -295,7 +295,7 @@ jobs:
         check-latest: true
 
     - name: Download coverage artifact
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: coverage
         path: coverage/
@@ -385,7 +385,7 @@ jobs:
       run: make build-${{ matrix.target }}
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.target }}-linux-amd64
         path: bin/${{ matrix.target }}
@@ -536,7 +536,7 @@ jobs:
           -o bin/kurel-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kurel
 
     - name: Upload cross-platform artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: binaries-${{ matrix.os }}-${{ matrix.arch }}
         path: bin/*
@@ -601,7 +601,7 @@ jobs:
       run: hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/"
 
     - name: Upload docs artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: docs-site
         path: site/public/
