@@ -438,3 +438,285 @@ func TestAppCompleteWithInputDir(t *testing.T) {
 		t.Errorf("ConfigFiles count = %d, want 2", len(opts.ConfigFiles))
 	}
 }
+
+func TestNewAppCommandRunE(t *testing.T) {
+	t.Run("missing config files returns error", func(t *testing.T) {
+		globalOpts := options.NewGlobalOptions()
+		factory := cli.NewFactory(globalOpts)
+		cmd := NewAppCommand(factory)
+
+		// Execute with no args should fail validation (no config files)
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+		if err == nil {
+			t.Error("expected error when no config files specified")
+		}
+	})
+
+	t.Run("nonexistent config file returns error", func(t *testing.T) {
+		globalOpts := options.NewGlobalOptions()
+		factory := cli.NewFactory(globalOpts)
+		cmd := NewAppCommand(factory)
+
+		cmd.SetArgs([]string{"/nonexistent/file.yaml"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Error("expected error for nonexistent config file")
+		}
+	})
+
+	t.Run("valid config file runs successfully", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		appConfig := `
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: test-app
+  namespace: default
+spec:
+  workload: Deployment
+  replicas: 1
+  containers:
+    - name: nginx
+      image: nginx:latest
+`
+		configFile := filepath.Join(tmpDir, "app.yaml")
+		if err := os.WriteFile(configFile, []byte(appConfig), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		globalOpts := options.NewGlobalOptions()
+		globalOpts.DryRun = true
+		factory := cli.NewFactory(globalOpts)
+		cmd := NewAppCommand(factory)
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+
+		cmd.SetArgs([]string{configFile})
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+}
+
+func TestAppWriteToDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputDir := filepath.Join(tmpDir, "out", "apps")
+
+	globalOpts := &options.GlobalOptions{}
+	factory := cli.NewFactory(globalOpts)
+
+	var stdout bytes.Buffer
+	ioStreams := cli.IOStreams{
+		Out:    &stdout,
+		ErrOut: &bytes.Buffer{},
+	}
+
+	opts := &AppOptions{
+		OutputDir: outputDir,
+		Factory:   factory,
+		IOStreams: ioStreams,
+	}
+
+	// Test with empty resources (still exercises the directory cleanup and creation)
+	err := opts.writeToDirectory(nil)
+	if err != nil {
+		t.Fatalf("writeToDirectory(nil) error = %v", err)
+	}
+
+	// Output directory should not exist since no resources were written
+	// (the function removes the output dir then only creates subdirs for resources)
+}
+
+func TestAppWriteOutputToDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	appConfig := `
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: test-app
+  namespace: default
+spec:
+  workload: Deployment
+  replicas: 1
+  containers:
+    - name: nginx
+      image: nginx:latest
+`
+	configFile := filepath.Join(tmpDir, "app.yaml")
+	if err := os.WriteFile(configFile, []byte(appConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	globalOpts := &options.GlobalOptions{DryRun: false}
+	factory := cli.NewFactory(globalOpts)
+
+	var stdout, stderr bytes.Buffer
+	ioStreams := cli.IOStreams{
+		Out:    &stdout,
+		ErrOut: &stderr,
+	}
+
+	outputDir := filepath.Join(tmpDir, "out", "apps")
+	opts := &AppOptions{
+		ConfigFiles: []string{configFile},
+		OutputDir:   outputDir,
+		OutputFile:  "", // no output file, should write to directory
+		Factory:     factory,
+		IOStreams:   ioStreams,
+	}
+
+	// Load applications and generate manifests, then write to directory
+	apps, err := opts.loadApplications()
+	if err != nil {
+		t.Fatalf("loadApplications() error = %v", err)
+	}
+	if len(apps) == 0 {
+		t.Fatal("expected at least one application")
+	}
+
+	resources, err := opts.generateManifests(apps)
+	if err != nil {
+		t.Fatalf("generateManifests() error = %v", err)
+	}
+
+	// Write output using the directory path (not dry-run, no output file)
+	err = opts.writeOutput(resources)
+	if err != nil {
+		t.Fatalf("writeOutput() error = %v", err)
+	}
+
+	// Verify output directory was created
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		t.Errorf("expected output directory %q to exist", outputDir)
+	}
+}
+
+func TestAppRunWithOutputFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	appConfig := `
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: test-app
+  namespace: default
+spec:
+  workload: Deployment
+  replicas: 1
+  containers:
+    - name: nginx
+      image: nginx:latest
+`
+	configFile := filepath.Join(tmpDir, "app.yaml")
+	if err := os.WriteFile(configFile, []byte(appConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outputFile := filepath.Join(tmpDir, "output", "manifests.yaml")
+	globalOpts := &options.GlobalOptions{DryRun: false, Verbose: true}
+	factory := cli.NewFactory(globalOpts)
+
+	var stdout, stderr bytes.Buffer
+	ioStreams := cli.IOStreams{
+		Out:    &stdout,
+		ErrOut: &stderr,
+	}
+
+	opts := &AppOptions{
+		ConfigFiles: []string{configFile},
+		OutputDir:   filepath.Join(tmpDir, "out"),
+		OutputFile:  outputFile,
+		Factory:     factory,
+		IOStreams:   ioStreams,
+	}
+
+	err := opts.Run()
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	// Verify the file was created
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	if len(content) == 0 {
+		t.Error("expected non-empty output file")
+	}
+}
+
+func TestAppFlagDefaults(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	factory := cli.NewFactory(globalOpts)
+	cmd := NewAppCommand(factory)
+
+	// Check default values
+	outputDir, err := cmd.Flags().GetString("output-dir")
+	if err != nil {
+		t.Fatalf("GetString(output-dir) error = %v", err)
+	}
+	if outputDir != "out/apps" {
+		t.Errorf("output-dir default = %q, want %q", outputDir, "out/apps")
+	}
+
+	inputDir, err := cmd.Flags().GetString("input-dir")
+	if err != nil {
+		t.Fatalf("GetString(input-dir) error = %v", err)
+	}
+	if inputDir != "" {
+		t.Errorf("input-dir default = %q, want %q", inputDir, "")
+	}
+
+	outputFile, err := cmd.Flags().GetString("output-file")
+	if err != nil {
+		t.Fatalf("GetString(output-file) error = %v", err)
+	}
+	if outputFile != "" {
+		t.Errorf("output-file default = %q, want %q", outputFile, "")
+	}
+}
+
+func TestAppLoadApplicationsFromFile_InvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "bad.yaml")
+	if err := os.WriteFile(configFile, []byte("not: valid: yaml: {{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	globalOpts := &options.GlobalOptions{}
+	factory := cli.NewFactory(globalOpts)
+
+	opts := &AppOptions{
+		ConfigFiles: []string{configFile},
+		Factory:     factory,
+		IOStreams:   factory.IOStreams(),
+	}
+
+	_, err := opts.loadApplications()
+	if err == nil {
+		t.Error("expected error for invalid YAML config file")
+	}
+}
+
+func TestAppLoadApplicationsFromFile_NonexistentFile(t *testing.T) {
+	globalOpts := &options.GlobalOptions{}
+	factory := cli.NewFactory(globalOpts)
+
+	opts := &AppOptions{
+		ConfigFiles: []string{"/nonexistent/path/file.yaml"},
+		Factory:     factory,
+		IOStreams:   factory.IOStreams(),
+	}
+
+	_, err := opts.loadApplications()
+	if err == nil {
+		t.Error("expected error for nonexistent config file")
+	}
+}

@@ -118,3 +118,38 @@ func TestStorageClassFunctions(t *testing.T) {
 		t.Errorf("pvc storage class not set")
 	}
 }
+
+func TestStorageClassNilMapGuards(t *testing.T) {
+	// Use bare StorageClass objects with nil maps to exercise nil-map branches.
+	t.Run("AddStorageClassParameter/nil-map", func(t *testing.T) {
+		sc := &storagev1.StorageClass{}
+		AddStorageClassParameter(sc, "fstype", "ext4")
+		if sc.Parameters["fstype"] != "ext4" {
+			t.Errorf("parameter not added on nil map")
+		}
+	})
+
+	t.Run("AddStorageClassParameters/nil-map", func(t *testing.T) {
+		sc := &storagev1.StorageClass{}
+		AddStorageClassParameters(sc, map[string]string{"a": "b"})
+		if sc.Parameters["a"] != "b" {
+			t.Errorf("parameters not merged on nil map")
+		}
+	})
+
+	t.Run("SetStorageClassAllowVolumeExpansion/nil-ptr", func(t *testing.T) {
+		sc := &storagev1.StorageClass{}
+		SetStorageClassAllowVolumeExpansion(sc, true)
+		if sc.AllowVolumeExpansion == nil || !*sc.AllowVolumeExpansion {
+			t.Errorf("allow volume expansion not set on nil pointer")
+		}
+	})
+
+	t.Run("SetPVCStorageClass/nil-sc", func(t *testing.T) {
+		pvc := CreatePersistentVolumeClaim("pvc", "ns")
+		SetPVCStorageClass(pvc, nil)
+		if pvc.Spec.StorageClassName != nil {
+			t.Errorf("expected storage class name to remain nil when sc is nil")
+		}
+	})
+}

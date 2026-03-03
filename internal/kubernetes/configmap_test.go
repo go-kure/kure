@@ -126,3 +126,29 @@ func TestConfigMapMetadataFunctions(t *testing.T) {
 		t.Errorf("annotations not set")
 	}
 }
+
+func TestConfigMapNilGuards(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"AddConfigMapData", func() error { return AddConfigMapData(nil, "k", "v") }},
+		{"AddConfigMapDataMap", func() error { return AddConfigMapDataMap(nil, map[string]string{"k": "v"}) }},
+		{"AddConfigMapBinaryData", func() error { return AddConfigMapBinaryData(nil, "k", []byte{1}) }},
+		{"AddConfigMapBinaryDataMap", func() error { return AddConfigMapBinaryDataMap(nil, map[string][]byte{"k": {1}}) }},
+		{"SetConfigMapData", func() error { return SetConfigMapData(nil, map[string]string{"k": "v"}) }},
+		{"SetConfigMapBinaryData", func() error { return SetConfigMapBinaryData(nil, map[string][]byte{"k": {1}}) }},
+		{"SetConfigMapImmutable", func() error { return SetConfigMapImmutable(nil, true) }},
+		{"AddConfigMapLabel", func() error { return AddConfigMapLabel(nil, "k", "v") }},
+		{"AddConfigMapAnnotation", func() error { return AddConfigMapAnnotation(nil, "k", "v") }},
+		{"SetConfigMapLabels", func() error { return SetConfigMapLabels(nil, map[string]string{"k": "v"}) }},
+		{"SetConfigMapAnnotations", func() error { return SetConfigMapAnnotations(nil, map[string]string{"k": "v"}) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

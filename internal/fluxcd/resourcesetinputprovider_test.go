@@ -17,6 +17,33 @@ func TestCreateResourceSetInputProvider(t *testing.T) {
 	}
 }
 
+func TestResourceSetInputProviderNilGuards(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"SetResourceSetInputProviderType", func() error { return SetResourceSetInputProviderType(nil, "") }},
+		{"SetResourceSetInputProviderURL", func() error { return SetResourceSetInputProviderURL(nil, "") }},
+		{"SetResourceSetInputProviderServiceAccountName", func() error {
+			return SetResourceSetInputProviderServiceAccountName(nil, "")
+		}},
+		{"SetResourceSetInputProviderSecretRef", func() error { return SetResourceSetInputProviderSecretRef(nil, nil) }},
+		{"SetResourceSetInputProviderCertSecretRef", func() error {
+			return SetResourceSetInputProviderCertSecretRef(nil, nil)
+		}},
+		{"AddResourceSetInputProviderSchedule", func() error {
+			return AddResourceSetInputProviderSchedule(nil, fluxv1.Schedule{})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}
+
 func TestResourceSetInputProviderHelpers(t *testing.T) {
 	rsip := CreateResourceSetInputProvider("prov", "ns", fluxv1.ResourceSetInputProviderSpec{})
 	if err := SetResourceSetInputProviderType(rsip, fluxv1.InputProviderGitHubBranch); err != nil {

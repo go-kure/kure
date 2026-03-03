@@ -583,6 +583,32 @@ func TestContainerMiscFunctions(t *testing.T) {
 	}
 }
 
+func TestContainerNilGuards(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"AddContainerPort", func() error { return AddContainerPort(nil, corev1.ContainerPort{}) }},
+		{"AddContainerEnv", func() error { return AddContainerEnv(nil, corev1.EnvVar{}) }},
+		{"AddContainerEnvFrom", func() error { return AddContainerEnvFrom(nil, corev1.EnvFromSource{}) }},
+		{"AddContainerVolumeMount", func() error { return AddContainerVolumeMount(nil, corev1.VolumeMount{}) }},
+		{"AddContainerVolumeDevice", func() error { return AddContainerVolumeDevice(nil, corev1.VolumeDevice{}) }},
+		{"SetContainerLivenessProbe", func() error { return SetContainerLivenessProbe(nil, corev1.Probe{}) }},
+		{"SetContainerReadinessProbe", func() error { return SetContainerReadinessProbe(nil, corev1.Probe{}) }},
+		{"SetContainerStartupProbe", func() error { return SetContainerStartupProbe(nil, corev1.Probe{}) }},
+		{"SetContainerResources", func() error { return SetContainerResources(nil, corev1.ResourceRequirements{}) }},
+		{"SetContainerImagePullPolicy", func() error { return SetContainerImagePullPolicy(nil, corev1.PullAlways) }},
+		{"SetContainerSecurityContext", func() error { return SetContainerSecurityContext(nil, corev1.SecurityContext{}) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}
+
 func TestContainerSetters(t *testing.T) {
 	c := &corev1.Container{}
 

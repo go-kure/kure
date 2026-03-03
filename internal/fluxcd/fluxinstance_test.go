@@ -141,3 +141,28 @@ func TestSetFluxInstanceSync(t *testing.T) {
 		t.Errorf("sync not set")
 	}
 }
+
+func TestFluxInstanceNilGuards(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"AddFluxInstanceComponent", func() error { return AddFluxInstanceComponent(nil, "") }},
+		{"SetFluxInstanceDistribution", func() error { return SetFluxInstanceDistribution(nil, fluxv1.Distribution{}) }},
+		{"SetFluxInstanceCommonMetadata", func() error { return SetFluxInstanceCommonMetadata(nil, nil) }},
+		{"SetFluxInstanceCluster", func() error { return SetFluxInstanceCluster(nil, nil) }},
+		{"SetFluxInstanceSharding", func() error { return SetFluxInstanceSharding(nil, nil) }},
+		{"SetFluxInstanceStorage", func() error { return SetFluxInstanceStorage(nil, nil) }},
+		{"SetFluxInstanceKustomize", func() error { return SetFluxInstanceKustomize(nil, nil) }},
+		{"SetFluxInstanceWait", func() error { return SetFluxInstanceWait(nil, true) }},
+		{"SetFluxInstanceMigrateResources", func() error { return SetFluxInstanceMigrateResources(nil, true) }},
+		{"SetFluxInstanceSync", func() error { return SetFluxInstanceSync(nil, nil) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

@@ -156,3 +156,26 @@ func TestPostBuildAndCommonMetadataHelpers(t *testing.T) {
 		t.Errorf("decryption not created")
 	}
 }
+
+func TestKustomizeNilMapGuards(t *testing.T) {
+	// PostBuild with nil Substitute map — should initialize it
+	pb := &kustv1.PostBuild{}
+	AddPostBuildSubstitute(pb, "key", "val")
+	if pb.Substitute == nil || pb.Substitute["key"] != "val" {
+		t.Error("AddPostBuildSubstitute should initialize nil map")
+	}
+
+	// CommonMetadata with nil Labels map
+	cm := &kustv1.CommonMetadata{}
+	AddCommonMetadataLabel(cm, "k", "v")
+	if cm.Labels == nil || cm.Labels["k"] != "v" {
+		t.Error("AddCommonMetadataLabel should initialize nil map")
+	}
+
+	// CommonMetadata with nil Annotations map
+	cm2 := &kustv1.CommonMetadata{}
+	AddCommonMetadataAnnotation(cm2, "a", "b")
+	if cm2.Annotations == nil || cm2.Annotations["a"] != "b" {
+		t.Error("AddCommonMetadataAnnotation should initialize nil map")
+	}
+}

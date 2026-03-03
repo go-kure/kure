@@ -663,3 +663,125 @@ func TestInferSchema(t *testing.T) {
 		assert.Equal(t, "$.app.name", appSchema.Properties["name"].KurelPath)
 	})
 }
+
+func TestGetJSONType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected string
+	}{
+		{name: "nil", input: nil, expected: "null"},
+		{name: "bool", input: true, expected: "boolean"},
+		{name: "int", input: 42, expected: "integer"},
+		{name: "int32", input: int32(42), expected: "integer"},
+		{name: "int64", input: int64(42), expected: "integer"},
+		{name: "float32", input: float32(3.14), expected: "number"},
+		{name: "float64", input: float64(3.14), expected: "number"},
+		{name: "string", input: "hello", expected: "string"},
+		{name: "slice interface", input: []interface{}{1, 2}, expected: "array"},
+		{name: "slice string", input: []string{"a", "b"}, expected: "array"},
+		{name: "map", input: map[string]interface{}{"a": 1}, expected: "object"},
+		{name: "ParameterMap", input: ParameterMap{"a": 1}, expected: "object"},
+		{name: "slice int via reflect", input: []int{1, 2}, expected: "array"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getJSONType(tt.input)
+			if got != tt.expected {
+				t.Errorf("getJSONType(%v) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetNumber(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected float64
+		ok       bool
+	}{
+		{name: "int", input: 42, expected: 42.0, ok: true},
+		{name: "int32", input: int32(100), expected: 100.0, ok: true},
+		{name: "int64", input: int64(200), expected: 200.0, ok: true},
+		{name: "float32", input: float32(3.14), expected: float64(float32(3.14)), ok: true},
+		{name: "float64", input: float64(2.718), expected: 2.718, ok: true},
+		{name: "string", input: "not a number", expected: 0, ok: false},
+		{name: "bool", input: true, expected: 0, ok: false},
+		{name: "nil", input: nil, expected: 0, ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := getNumber(tt.input)
+			if ok != tt.ok {
+				t.Errorf("getNumber(%v) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && got != tt.expected {
+				t.Errorf("getNumber(%v) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSchemaGeneratorSetVerbose(t *testing.T) {
+	log := logger.Noop()
+	gen := NewSchemaGenerator(log).(*schemaGenerator)
+
+	gen.SetVerbose(true)
+	if !gen.verbose {
+		t.Error("expected verbose to be true")
+	}
+
+	gen.SetVerbose(false)
+	if gen.verbose {
+		t.Error("expected verbose to be false")
+	}
+}
+
+func TestGeneratePackageSchemaWithOptions(t *testing.T) {
+	log := logger.Noop()
+	gen := NewSchemaGenerator(log)
+	ctx := context.Background()
+
+	t.Run("with k8s schemas", func(t *testing.T) {
+		schema, err := gen.GeneratePackageSchemaWithOptions(ctx, &SchemaOptions{IncludeK8s: true})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if schema == nil {
+			t.Fatal("expected non-nil schema")
+		}
+		if schema.Type != "object" {
+			t.Errorf("expected type 'object', got %q", schema.Type)
+		}
+	})
+
+	t.Run("without k8s schemas", func(t *testing.T) {
+		schema, err := gen.GeneratePackageSchemaWithOptions(ctx, &SchemaOptions{IncludeK8s: false})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if schema == nil {
+			t.Fatal("expected non-nil schema")
+		}
+	})
+
+	t.Run("nil options", func(t *testing.T) {
+		schema, err := gen.GeneratePackageSchemaWithOptions(ctx, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if schema == nil {
+			t.Fatal("expected non-nil schema")
+		}
+	})
+}
+
+func TestNewSchemaGeneratorNilLogger(t *testing.T) {
+	gen := NewSchemaGenerator(nil)
+	if gen == nil {
+		t.Fatal("expected non-nil schema generator with nil logger")
+	}
+}

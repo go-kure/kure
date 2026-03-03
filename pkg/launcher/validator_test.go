@@ -719,6 +719,220 @@ func TestValidatorHelpers(t *testing.T) {
 	})
 }
 
+func TestValidateCondition(t *testing.T) {
+	log := logger.Noop()
+	v := NewValidator(log).(*validator)
+
+	tests := []struct {
+		name      string
+		condition string
+		wantErr   bool
+	}{
+		{name: "simple true", condition: "true", wantErr: false},
+		{name: "simple false", condition: "false", wantErr: false},
+		{name: "variable ref", condition: "${myVar}", wantErr: false},
+		{name: "nested variable ref", condition: "${config.enabled}", wantErr: false},
+		{name: "empty variable ref", condition: "${}", wantErr: true},
+		{name: "invalid variable name", condition: "${123-invalid}", wantErr: true},
+		{name: "plain string", condition: "some-condition", wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.validateCondition(tt.condition)
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error for condition %q", tt.condition)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error for condition %q: %v", tt.condition, err)
+			}
+		})
+	}
+}
+
+func TestFindParameterCycles(t *testing.T) {
+	log := logger.Noop()
+	v := NewValidator(log).(*validator)
+
+	t.Run("no cycles", func(t *testing.T) {
+		params := ParameterMap{
+			"a": "${b}",
+			"b": "value",
+		}
+		cycles := v.findParameterCycles(params)
+		if len(cycles) != 0 {
+			t.Errorf("expected no cycles, got %d", len(cycles))
+		}
+	})
+
+	t.Run("direct cycle", func(t *testing.T) {
+		params := ParameterMap{
+			"a": "${b}",
+			"b": "${a}",
+		}
+		cycles := v.findParameterCycles(params)
+		if len(cycles) == 0 {
+			t.Error("expected at least one cycle")
+		}
+	})
+
+	t.Run("indirect cycle", func(t *testing.T) {
+		params := ParameterMap{
+			"a": "${b}",
+			"b": "${c}",
+			"c": "${a}",
+		}
+		cycles := v.findParameterCycles(params)
+		if len(cycles) == 0 {
+			t.Error("expected at least one cycle")
+		}
+	})
+
+	t.Run("no variable references", func(t *testing.T) {
+		params := ParameterMap{
+			"a": "plain",
+			"b": 42,
+		}
+		cycles := v.findParameterCycles(params)
+		if len(cycles) != 0 {
+			t.Errorf("expected no cycles, got %d", len(cycles))
+		}
+	})
+
+	t.Run("reference to non-existent param", func(t *testing.T) {
+		params := ParameterMap{
+			"a": "${external}",
+		}
+		cycles := v.findParameterCycles(params)
+		if len(cycles) != 0 {
+			t.Errorf("expected no cycles for external reference, got %d", len(cycles))
+		}
+	})
+}
+
+func TestValidatorSetVerbose(t *testing.T) {
+	log := logger.Noop()
+	v := NewValidator(log).(*validator)
+
+	v.SetVerbose(true)
+	if !v.verbose {
+		t.Error("expected verbose to be true")
+	}
+
+	v.SetVerbose(false)
+	if v.verbose {
+		t.Error("expected verbose to be false")
+	}
+}
+
+func TestNewValidatorNilLogger(t *testing.T) {
+	v := NewValidator(nil)
+	if v == nil {
+		t.Fatal("expected non-nil validator with nil logger")
+	}
+}
+
+func TestAddValidationError(t *testing.T) {
+	log := logger.Noop()
+
+	t.Run("non-strict mode severity error", func(t *testing.T) {
+		v := NewValidator(log).(*validator)
+		result := &ValidationResult{}
+
+		v.addValidationError(result, ValidationError{
+			Field:    "test",
+			Message:  "error message",
+			Severity: "error",
+		})
+
+		if len(result.Errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(result.Errors))
+		}
+		if len(result.Warnings) != 0 {
+			t.Errorf("expected 0 warnings, got %d", len(result.Warnings))
+		}
+	})
+
+	t.Run("non-strict mode severity warning", func(t *testing.T) {
+		v := NewValidator(log).(*validator)
+		result := &ValidationResult{}
+
+		v.addValidationError(result, ValidationError{
+			Field:    "test",
+			Message:  "warning message",
+			Severity: "warning",
+		})
+
+		if len(result.Errors) != 0 {
+			t.Errorf("expected 0 errors, got %d", len(result.Errors))
+		}
+		if len(result.Warnings) != 1 {
+			t.Errorf("expected 1 warning, got %d", len(result.Warnings))
+		}
+	})
+
+	t.Run("strict mode promotes to error", func(t *testing.T) {
+		v := NewValidator(log).(*validator)
+		v.SetStrictMode(true)
+		result := &ValidationResult{}
+
+		v.addValidationError(result, ValidationError{
+			Field:    "test",
+			Message:  "warning in strict",
+			Severity: "warning",
+		})
+
+		if len(result.Errors) != 1 {
+			t.Errorf("expected 1 error in strict mode, got %d", len(result.Errors))
+		}
+		if len(result.Warnings) != 0 {
+			t.Errorf("expected 0 warnings in strict mode, got %d", len(result.Warnings))
+		}
+	})
+}
+
+func TestValidatePatchWithCondition(t *testing.T) {
+	log := logger.Noop()
+	v := NewValidator(log)
+	ctx := context.Background()
+
+	t.Run("patch with valid enabled condition", func(t *testing.T) {
+		patch := Patch{
+			Name:    "feature-gate",
+			Content: "spec.feature: enabled",
+			Metadata: &PatchMetadata{
+				Enabled: "true",
+			},
+		}
+
+		result, err := v.ValidatePatch(ctx, patch)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsValid() {
+			t.Error("expected valid result for patch with valid condition")
+		}
+	})
+
+	t.Run("patch with variable condition", func(t *testing.T) {
+		patch := Patch{
+			Name:    "conditional-patch",
+			Content: "spec.feature: enabled",
+			Metadata: &PatchMetadata{
+				Enabled: "${features.security}",
+			},
+		}
+
+		result, err := v.ValidatePatch(ctx, patch)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsValid() {
+			t.Error("expected valid result for patch with variable condition")
+		}
+	})
+}
+
 // Helper function for string contains check
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)

@@ -478,3 +478,432 @@ func TestBootstrapPrintToStdout(t *testing.T) {
 		t.Errorf("expected output to contain 'Resources:', got: %s", output)
 	}
 }
+
+func TestNewBootstrapCommandRunE(t *testing.T) {
+	t.Run("missing args returns error", func(t *testing.T) {
+		globalOpts := options.NewGlobalOptions()
+		factory := cli.NewFactory(globalOpts)
+		cmd := NewBootstrapCommand(factory)
+
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+		if err == nil {
+			t.Error("expected error when no args provided")
+		}
+	})
+
+	t.Run("nonexistent config file returns error", func(t *testing.T) {
+		globalOpts := options.NewGlobalOptions()
+		factory := cli.NewFactory(globalOpts)
+		cmd := NewBootstrapCommand(factory)
+
+		cmd.SetArgs([]string{"/nonexistent/file.yaml"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Error("expected error for nonexistent config file")
+		}
+	})
+
+	t.Run("valid config file runs in dry-run", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		configContent := `
+name: test-cluster
+node:
+  name: flux-system
+gitops:
+  type: flux
+  bootstrap:
+    enabled: true
+    fluxMode: flux-operator
+`
+		configFile := filepath.Join(tmpDir, "bootstrap.yaml")
+		if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		globalOpts := options.NewGlobalOptions()
+		globalOpts.DryRun = true
+		factory := cli.NewFactory(globalOpts)
+		cmd := NewBootstrapCommand(factory)
+
+		var stdout, stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+
+		cmd.SetArgs([]string{configFile})
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	})
+}
+
+func TestBootstrapGenerateArgoCDBootstrap(t *testing.T) {
+	t.Run("argocd bootstrap with nil config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		configContent := `
+name: test-cluster
+node:
+  name: argocd-system
+gitops:
+  type: argocd
+`
+		configFile := filepath.Join(tmpDir, "argocd.yaml")
+		if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		globalOpts := &options.GlobalOptions{}
+		factory := cli.NewFactory(globalOpts)
+
+		opts := &BootstrapOptions{
+			ConfigFile: configFile,
+			GitOpsType: "argocd",
+			Factory:    factory,
+			IOStreams:  factory.IOStreams(),
+		}
+
+		cluster, err := opts.loadClusterConfig()
+		if err != nil {
+			t.Fatalf("loadClusterConfig() error = %v", err)
+		}
+
+		rules := layout.DefaultLayoutRules()
+		rules.FluxPlacement = layout.FluxSeparate
+
+		// generateArgoCDBootstrap should succeed when GitOps.Bootstrap is nil
+		// because GenerateBootstrap returns nil, nil for nil config
+		ml, err := opts.generateArgoCDBootstrap(cluster, rules)
+		if err != nil {
+			t.Fatalf("generateArgoCDBootstrap() error = %v", err)
+		}
+
+		if ml == nil {
+			t.Fatal("expected non-nil manifest layout")
+		}
+
+		if ml.Name != "argocd-system" {
+			t.Errorf("ml.Name = %q, want %q", ml.Name, "argocd-system")
+		}
+	})
+
+	t.Run("argocd bootstrap with enabled config returns error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		configContent := `
+name: test-cluster
+node:
+  name: argocd-system
+gitops:
+  type: argocd
+  bootstrap:
+    enabled: true
+`
+		configFile := filepath.Join(tmpDir, "argocd-enabled.yaml")
+		if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		globalOpts := &options.GlobalOptions{}
+		factory := cli.NewFactory(globalOpts)
+
+		opts := &BootstrapOptions{
+			ConfigFile: configFile,
+			GitOpsType: "argocd",
+			Factory:    factory,
+			IOStreams:  factory.IOStreams(),
+		}
+
+		cluster, err := opts.loadClusterConfig()
+		if err != nil {
+			t.Fatalf("loadClusterConfig() error = %v", err)
+		}
+
+		rules := layout.DefaultLayoutRules()
+
+		// ArgoCD bootstrap is not yet implemented, so this should error
+		_, err = opts.generateArgoCDBootstrap(cluster, rules)
+		if err == nil {
+			t.Error("expected error for ArgoCD bootstrap with enabled=true")
+		}
+	})
+}
+
+func TestBootstrapWriteOutputNonDryRun(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configFile := filepath.Join(tmpDir, "bootstrap.yaml")
+	configContent := `
+name: test-cluster
+node:
+  name: flux-system
+gitops:
+  type: flux
+  bootstrap:
+    enabled: true
+    fluxMode: flux-operator
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outputDir := filepath.Join(tmpDir, "out", "bootstrap")
+	globalOpts := &options.GlobalOptions{DryRun: false}
+	factory := cli.NewFactory(globalOpts)
+
+	var stdout, stderr bytes.Buffer
+	ioStreams := cli.IOStreams{
+		Out:    &stdout,
+		ErrOut: &stderr,
+	}
+
+	opts := &BootstrapOptions{
+		ConfigFile: configFile,
+		OutputDir:  outputDir,
+		GitOpsType: "flux",
+		FluxMode:   "operator",
+		Factory:    factory,
+		IOStreams:  ioStreams,
+	}
+
+	cluster, err := opts.loadClusterConfig()
+	if err != nil {
+		t.Fatalf("loadClusterConfig() error = %v", err)
+	}
+
+	// Create a minimal manifest layout for testing writeOutput
+	ml := &layout.ManifestLayout{
+		Name:      cluster.Node.Name,
+		Namespace: cluster.Name,
+	}
+
+	err = opts.writeOutput(ml, cluster)
+	if err != nil {
+		t.Fatalf("writeOutput() error = %v", err)
+	}
+}
+
+func TestBootstrapGenerateBootstrapSwitch(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `
+name: test-cluster
+node:
+  name: flux-system
+gitops:
+  type: flux
+  bootstrap:
+    enabled: true
+    fluxMode: flux-operator
+`
+	configFile := filepath.Join(tmpDir, "cluster.yaml")
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	globalOpts := &options.GlobalOptions{}
+	factory := cli.NewFactory(globalOpts)
+
+	t.Run("invalid gitops type", func(t *testing.T) {
+		opts := &BootstrapOptions{
+			ConfigFile: configFile,
+			GitOpsType: "invalid",
+			Factory:    factory,
+			IOStreams:  factory.IOStreams(),
+		}
+
+		cluster, err := opts.loadClusterConfig()
+		if err != nil {
+			t.Fatalf("loadClusterConfig() error = %v", err)
+		}
+
+		_, err = opts.generateBootstrap(cluster)
+		if err == nil {
+			t.Error("expected error for invalid gitops type")
+		}
+	})
+
+	t.Run("argocd type", func(t *testing.T) {
+		opts := &BootstrapOptions{
+			ConfigFile: configFile,
+			GitOpsType: "argocd",
+			Factory:    factory,
+			IOStreams:  factory.IOStreams(),
+		}
+
+		cluster, err := opts.loadClusterConfig()
+		if err != nil {
+			t.Fatalf("loadClusterConfig() error = %v", err)
+		}
+
+		// ArgoCD with enabled bootstrap is not implemented
+		_, err = opts.generateBootstrap(cluster)
+		if err == nil {
+			t.Error("expected error for ArgoCD bootstrap with enabled=true")
+		}
+	})
+
+	t.Run("flux type", func(t *testing.T) {
+		opts := &BootstrapOptions{
+			ConfigFile: configFile,
+			GitOpsType: "flux",
+			Factory:    factory,
+			IOStreams:  factory.IOStreams(),
+		}
+
+		cluster, err := opts.loadClusterConfig()
+		if err != nil {
+			t.Fatalf("loadClusterConfig() error = %v", err)
+		}
+
+		ml, err := opts.generateBootstrap(cluster)
+		if err != nil {
+			t.Fatalf("generateBootstrap(flux) error = %v", err)
+		}
+		if ml == nil {
+			t.Fatal("expected non-nil manifest layout")
+		}
+	})
+}
+
+func TestBootstrapPrintToStdoutArgoCD(t *testing.T) {
+	globalOpts := &options.GlobalOptions{}
+	factory := cli.NewFactory(globalOpts)
+
+	var stdout bytes.Buffer
+	ioStreams := cli.IOStreams{
+		Out:    &stdout,
+		ErrOut: &bytes.Buffer{},
+	}
+
+	opts := &BootstrapOptions{
+		GitOpsType: "argocd",
+		Factory:    factory,
+		IOStreams:  ioStreams,
+	}
+
+	ml := &layout.ManifestLayout{
+		Name:      "test-cluster",
+		Namespace: "argocd",
+		Resources: nil,
+	}
+
+	err := opts.printToStdout(ml)
+	if err != nil {
+		t.Fatalf("printToStdout() error = %v", err)
+	}
+
+	output := stdout.String()
+
+	// Should contain argocd type
+	if !bytes.Contains(stdout.Bytes(), []byte("argocd")) {
+		t.Errorf("expected output to contain 'argocd', got: %s", output)
+	}
+
+	// Should NOT contain "Flux mode" since type is argocd
+	if bytes.Contains(stdout.Bytes(), []byte("Flux mode")) {
+		t.Errorf("did not expect output to contain 'Flux mode' for argocd, got: %s", output)
+	}
+}
+
+func TestBootstrapFlagDefaults(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	factory := cli.NewFactory(globalOpts)
+	cmd := NewBootstrapCommand(factory)
+
+	outputDir, err := cmd.Flags().GetString("output-dir")
+	if err != nil {
+		t.Fatalf("GetString(output-dir) error = %v", err)
+	}
+	if outputDir != "out/bootstrap" {
+		t.Errorf("output-dir default = %q, want %q", outputDir, "out/bootstrap")
+	}
+
+	manifestDir, err := cmd.Flags().GetString("manifest-dir")
+	if err != nil {
+		t.Fatalf("GetString(manifest-dir) error = %v", err)
+	}
+	if manifestDir != "" {
+		t.Errorf("manifest-dir default = %q, want %q", manifestDir, "")
+	}
+
+	gitopsType, err := cmd.Flags().GetString("gitops-type")
+	if err != nil {
+		t.Fatalf("GetString(gitops-type) error = %v", err)
+	}
+	if gitopsType != "" {
+		t.Errorf("gitops-type default = %q, want %q", gitopsType, "")
+	}
+
+	fluxMode, err := cmd.Flags().GetString("flux-mode")
+	if err != nil {
+		t.Fatalf("GetString(flux-mode) error = %v", err)
+	}
+	if fluxMode != "" {
+		t.Errorf("flux-mode default = %q, want %q", fluxMode, "")
+	}
+}
+
+func TestBootstrapRunVerboseOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `
+name: test-cluster
+node:
+  name: flux-system
+gitops:
+  type: flux
+  bootstrap:
+    enabled: true
+    fluxMode: flux-operator
+`
+	configFile := filepath.Join(tmpDir, "bootstrap.yaml")
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	globalOpts := &options.GlobalOptions{DryRun: true, Verbose: true}
+	factory := cli.NewFactory(globalOpts)
+
+	var stdout, stderr bytes.Buffer
+	ioStreams := cli.IOStreams{
+		Out:    &stdout,
+		ErrOut: &stderr,
+	}
+
+	opts := &BootstrapOptions{
+		ConfigFile: configFile,
+		OutputDir:  "/dev/stdout",
+		Factory:    factory,
+		IOStreams:  ioStreams,
+	}
+
+	if err := opts.Complete(); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if err := opts.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	err := opts.Run()
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	// Verbose output should contain processing message
+	if !bytes.Contains(stderr.Bytes(), []byte("Processing bootstrap config")) {
+		t.Error("expected verbose processing message in stderr")
+	}
+
+	// Verbose output should contain generated message
+	if !bytes.Contains(stderr.Bytes(), []byte("Generated bootstrap manifests")) {
+		t.Error("expected verbose generated message in stderr")
+	}
+
+	// Verbose output should contain GitOps type
+	if !bytes.Contains(stderr.Bytes(), []byte("GitOps type:")) {
+		t.Error("expected verbose GitOps type message in stderr")
+	}
+}
