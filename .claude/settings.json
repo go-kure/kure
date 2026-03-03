@@ -62,7 +62,10 @@
       "Bash(GOWORK=off make precommit:*)",
       "Bash(GOWORK=off go vet:*)",
       "Bash(git rebase:*)",
-      "Bash(hugo build:*)"
+      "Bash(hugo build:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(read commit:*)",
+      "Bash(gofmt:*)"
     ]
   },
   "outputStyle": "default"
