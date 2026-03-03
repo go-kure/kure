@@ -44,6 +44,11 @@ run = "git cliff -o CHANGELOG.md"
 description = "Preview changelog changes"
 run = "git cliff --unreleased"
 
+[tasks.release]
+description = "Release workflow (dry-run by default, --do-it to trigger CI)"
+run = "./scripts/release-trigger.sh"
+raw = true
+
 [tasks."site:dev"]
 description = "Start local docs dev server"
 dir = "site"
