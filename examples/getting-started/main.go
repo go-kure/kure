@@ -10,8 +10,6 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -20,14 +18,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/logger"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
+var log = logger.Default()
+
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("error: %v", err)
+		log.Error("error: %v", err)
+		os.Exit(1)
 	}
 }
 
@@ -42,7 +45,7 @@ func run() error {
 	//         application "redis"   (RedisConfig)
 	//         application "web-app" (WebAppConfig)
 	// ---------------------------------------------------------------
-	fmt.Println("Step 1: Building cluster with ClusterBuilder...")
+	log.Info("Step 1: Building cluster with ClusterBuilder...")
 
 	sourceRef := &stack.SourceRef{
 		Kind:      "OCIRepository",
@@ -69,10 +72,10 @@ func run() error {
 		End(). // end node -> back to cluster builder
 		Build()
 	if err != nil {
-		return fmt.Errorf("build cluster: %w", err)
+		return errors.Wrap(err, "build cluster")
 	}
 
-	fmt.Printf("  Cluster %q built with root node %q\n", cluster.Name, cluster.Node.Name)
+	log.Info("Cluster %q built with root node %q", cluster.Name, cluster.Node.Name)
 
 	// ---------------------------------------------------------------
 	// Step 2: Create the FluxCD workflow engine.
@@ -81,7 +84,7 @@ func run() error {
 	// and Flux placement strategy. FluxSeparate places Flux resources
 	// in a dedicated directory rather than alongside manifests.
 	// ---------------------------------------------------------------
-	fmt.Println("Step 2: Creating FluxCD workflow engine...")
+	log.Info("Step 2: Creating FluxCD workflow engine...")
 
 	wf := fluxcd.NewWorkflowEngineWithConfig(
 		layout.KustomizationExplicit,
@@ -95,22 +98,22 @@ func run() error {
 	// Kubernetes resources from each ApplicationConfig, adds Flux
 	// Kustomization resources, and returns a ManifestLayout tree.
 	// ---------------------------------------------------------------
-	fmt.Println("Step 3: Running workflow to produce layout...")
+	log.Info("Step 3: Running workflow to produce layout...")
 
 	rules := layout.DefaultLayoutRules()
 	rules.ClusterName = cluster.Name
 
 	result, err := wf.CreateLayoutWithResources(cluster, rules)
 	if err != nil {
-		return fmt.Errorf("create layout: %w", err)
+		return errors.Wrap(err, "create layout")
 	}
 
 	ml, ok := result.(*layout.ManifestLayout)
 	if !ok {
-		return fmt.Errorf("unexpected result type from CreateLayoutWithResources")
+		return errors.Errorf("unexpected result type from CreateLayoutWithResources")
 	}
 
-	fmt.Printf("  Layout produced with %d top-level children\n", len(ml.Children))
+	log.Info("Layout produced with %d top-level children", len(ml.Children))
 
 	// ---------------------------------------------------------------
 	// Step 4: Write the layout to disk.
@@ -118,21 +121,20 @@ func run() error {
 	// WriteManifest serialises each resource as YAML and creates
 	// kustomization.yaml files so Flux can reconcile the directory.
 	// ---------------------------------------------------------------
-	fmt.Println("Step 4: Writing manifests to disk...")
+	log.Info("Step 4: Writing manifests to disk...")
 
 	outputDir, err := outputDirectory()
 	if err != nil {
-		return fmt.Errorf("prepare output directory: %w", err)
+		return errors.Wrap(err, "prepare output directory")
 	}
 
 	cfg := layout.DefaultLayoutConfig()
 	if err := layout.WriteManifest(outputDir, cfg, ml); err != nil {
-		return fmt.Errorf("write manifests: %w", err)
+		return errors.Wrap(err, "write manifests")
 	}
 
-	fmt.Printf("  Manifests written to: %s\n", outputDir)
-	fmt.Println()
-	fmt.Println("Done! Inspect the output directory to see the generated manifests.")
+	log.Info("Manifests written to: %s", outputDir)
+	log.Info("Done! Inspect the output directory to see the generated manifests.")
 
 	return nil
 }
@@ -272,7 +274,10 @@ func outputDirectory() (string, error) {
 	}
 
 	// Print the temp dir path so users know where to find the output.
-	abs, _ := filepath.Abs(dir)
-	fmt.Printf("  (using temp directory: %s)\n", abs)
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = dir
+	}
+	log.Info("(using temp directory: %s)", abs)
 	return dir, nil
 }
