@@ -235,11 +235,10 @@ func TestGetConfigPath(t *testing.T) {
 }
 
 func TestEnsureConfigDir(t *testing.T) {
-	// This test is tricky because it affects the real home directory
-	// We'll just verify it doesn't error when the directory is accessible
+	t.Setenv("HOME", t.TempDir())
+	viper.Reset()
 	err := EnsureConfigDir()
-	// Only fail if it's not a permission error (which is expected in some test environments)
-	if err != nil && !os.IsPermission(err) {
+	if err != nil {
 		t.Errorf("EnsureConfigDir failed: %v", err)
 	}
 }
