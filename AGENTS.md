@@ -42,7 +42,7 @@ kure/
 │   ├── cmd/          # Command implementations
 │   │   ├── kure/     # kure command
 │   │   └── kurel/    # kurel command
-│   ├── errors/       # Error handling (use this, not fmt.Errorf)
+│   ├── errors/       # Error handling (use in app code instead of fmt.Errorf)
 │   ├── io/           # YAML serialization
 │   ├── kubernetes/   # Public K8s utilities
 │   ├── launcher/     # Package launcher
@@ -171,19 +171,21 @@ make precommit
 
 ### Error Handling
 
-Always use the kure/errors package:
+Always use `github.com/go-kure/kure/pkg/errors` in application code — never call `fmt.Errorf` directly outside of `pkg/errors` itself. The `pkg/errors` package wraps `fmt.Errorf` internally; this is correct and expected.
 
 ```go
 import "github.com/go-kure/kure/pkg/errors"
 
-// Wrapping errors
+// Preferred: use the errors package
 return errors.Wrap(err, "context about what failed")
-
-// Creating new errors
+return errors.Wrapf(err, "failed to process %s", name)
 return errors.New("description of error")
-```
+return errors.Errorf("invalid value: %s", val)
 
-**Never use `fmt.Errorf` directly** - always use the errors package.
+// Discouraged: raw fmt.Errorf in application code
+// return fmt.Errorf("context: %w", err)   // use errors.Wrap instead
+// return fmt.Errorf("invalid value: %s", val) // use errors.Errorf instead
+```
 
 ### Logging
 
