@@ -108,7 +108,18 @@ func deepCopyNode(n *Node) *Node {
 	return newNode
 }
 
-// deepCopyBundle creates a deep copy of a Bundle.
+// deepCopyBundle creates a copy of a Bundle with a new slice header for each
+// slice field, but shallow-copies the slice contents. In particular,
+// *Application and *Bundle pointers are shared between the original and the
+// copy.
+//
+// This is safe for the builder's copy-on-write / append-only pattern: each
+// builder method calls ensureOwned to get a new slice header, then appends to
+// it, so the original slice is never modified. Existing elements (the pointed-to
+// Application and Bundle objects) are never mutated after creation.
+//
+// Invariant: callers must not mutate existing Application or Bundle objects
+// after branching; they may only append new entries to the copied slices.
 func deepCopyBundle(b *Bundle) *Bundle {
 	if b == nil {
 		return nil
@@ -126,10 +137,14 @@ func deepCopyBundle(b *Bundle) *Bundle {
 		Timeout:       b.Timeout,
 		RetryInterval: b.RetryInterval,
 	}
+	// Shallow copy: allocate a new slice so appends in the copy do not affect
+	// the original, but the *Application pointers themselves are shared.
+	// This is intentional — see function doc above.
 	if b.Applications != nil {
 		newBundle.Applications = make([]*Application, len(b.Applications))
 		copy(newBundle.Applications, b.Applications)
 	}
+	// Same shallow-copy strategy for DependsOn bundle references.
 	if b.DependsOn != nil {
 		newBundle.DependsOn = make([]*Bundle, len(b.DependsOn))
 		copy(newBundle.DependsOn, b.DependsOn)
