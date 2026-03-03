@@ -33,7 +33,7 @@ TEST_PACKAGES := ./...
 COVERAGE_THRESHOLD := 80
 
 # Linting configuration
-GOLANGCI_LINT_VERSION := v1.64.8
+GOLANGCI_LINT_VERSION := v2.10.1
 
 # Colors for output
 COLOR_RESET := \033[0m
