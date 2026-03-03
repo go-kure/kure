@@ -1,49 +1,60 @@
 # golangci-lint configuration for Kure
 # Aligned with Wharf standard (meta/standards/golangci-lint.md)
 
+version: "2"
+
 run:
-  timeout: 5m
   modules-download-mode: readonly
 
 linters:
   enable:
-    # Default linters (always enabled)
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    # Additional linters
+    # Additional linters (default linters are enabled automatically in v2)
     - bodyclose
     - durationcheck
     - errorlint
     - exhaustive
-    - gofmt
-    - goimports
     - misspell
     - nilerr
     - unconvert
     - whitespace
-
-linters-settings:
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-
-  exhaustive:
-    default-signifies-exhaustive: true
-
-  goimports:
-    local-prefixes: github.com/go-kure/kure
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    exhaustive:
+      default-signifies-exhaustive: true
+    staticcheck:
+      checks:
+        - "all"
+        - "-QF*"
+        - "-ST*"
+  exclusions:
+    generated: lax
+    rules:
+      # Test files have relaxed rules
+      - linters:
+          - errcheck
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
 
-  exclude-rules:
-    # Test files have relaxed rules
-    - path: _test\.go
-      linters:
-        - errcheck
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/go-kure/kure
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
