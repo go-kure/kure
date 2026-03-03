@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
+	pkgkubernetes "github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/logger"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -186,8 +187,7 @@ func (c *RedisConfig) Generate(app *stack.Application) ([]*client.Object, error)
 		},
 	}
 
-	obj := client.Object(dep)
-	return []*client.Object{&obj}, nil
+	return []*client.Object{pkgkubernetes.ToClientObject(dep)}, nil
 }
 
 // WebAppConfig generates a Deployment and a Service for a web application.
@@ -252,9 +252,10 @@ func (c *WebAppConfig) Generate(app *stack.Application) ([]*client.Object, error
 		},
 	}
 
-	depObj := client.Object(dep)
-	svcObj := client.Object(svc)
-	return []*client.Object{&depObj, &svcObj}, nil
+	return []*client.Object{
+		pkgkubernetes.ToClientObject(dep),
+		pkgkubernetes.ToClientObject(svc),
+	}, nil
 }
 
 // outputDirectory returns the path where manifests will be written.
