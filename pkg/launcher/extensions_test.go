@@ -385,6 +385,198 @@ patches:
 	})
 }
 
+func TestNewExtensionLoaderNilLogger(t *testing.T) {
+	loader := NewExtensionLoader(nil)
+	if loader == nil {
+		t.Fatal("expected non-nil extension loader with nil logger")
+	}
+}
+
+func TestLoadWithExtensionsNilDef(t *testing.T) {
+	log := logger.Noop()
+	loader := NewExtensionLoader(log)
+	ctx := context.Background()
+
+	_, err := loader.LoadWithExtensions(ctx, nil, "", nil)
+	if err == nil {
+		t.Fatal("expected error for nil definition")
+	}
+}
+
+func TestLoadWithExtensionsStrictMode(t *testing.T) {
+	log := logger.Noop()
+	ctx := context.Background()
+
+	// Create a temp dir with a malformed extension file
+	tmpDir := t.TempDir()
+	extPath := filepath.Join(tmpDir, "bad.local.kurel")
+	err := os.WriteFile(extPath, []byte("type: merge\nresources:\n  - selector:\n      kind: Deployment\n    override:\n      nonexistent.path: value\n"), 0644)
+	require.NoError(t, err)
+
+	def := &PackageDefinition{
+		Path: tmpDir,
+		Metadata: KurelMetadata{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Parameters: ParameterMap{},
+		Resources:  []Resource{},
+	}
+
+	// In non-strict mode, should continue
+	loader := NewExtensionLoader(log)
+	result, err := loader.LoadWithExtensions(ctx, def, tmpDir, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestApplyPatchExtensionReplace(t *testing.T) {
+	log := logger.Noop()
+	extLoader := &extensionLoader{logger: log}
+
+	def := &PackageDefinition{
+		Patches: []Patch{
+			{Name: "old-patch", Content: "old-content"},
+		},
+	}
+
+	ext := LocalExtension{
+		Type: ExtensionTypeReplace,
+		Patches: []LocalPatch{
+			{Name: "new-patch", Content: "new-content"},
+		},
+	}
+
+	err := extLoader.applyExtension(context.Background(), def, ext, nil)
+	require.NoError(t, err)
+
+	assert.Len(t, def.Patches, 1)
+	assert.Equal(t, "new-patch", def.Patches[0].Name)
+	assert.Equal(t, "new-content", def.Patches[0].Content)
+}
+
+func TestApplyParameterExtensionReplace(t *testing.T) {
+	log := logger.Noop()
+	extLoader := &extensionLoader{logger: log}
+
+	def := &PackageDefinition{
+		Parameters: ParameterMap{
+			"old": "value",
+		},
+	}
+
+	extLoader.applyParameterExtension(def, ParameterMap{
+		"new": "value",
+	}, ExtensionTypeReplace)
+
+	if _, ok := def.Parameters["old"]; ok {
+		t.Error("old parameter should have been replaced")
+	}
+	if def.Parameters["new"] != "value" {
+		t.Error("new parameter should be present")
+	}
+}
+
+func TestDeepCopyValueSlice(t *testing.T) {
+	log := logger.Noop()
+	extLoader := &extensionLoader{logger: log}
+
+	original := []interface{}{"a", "b", map[string]interface{}{"key": "val"}}
+	copied := extLoader.deepCopyValue(original)
+
+	copiedSlice, ok := copied.([]interface{})
+	if !ok {
+		t.Fatal("expected []interface{}")
+	}
+	if len(copiedSlice) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(copiedSlice))
+	}
+
+	// Verify deep copy - modifying original shouldn't affect copy
+	originalSlice := original
+	innerMap := originalSlice[2].(map[string]interface{})
+	innerMap["key"] = "modified"
+
+	copiedInner := copiedSlice[2].(map[string]interface{})
+	if copiedInner["key"] != "val" {
+		t.Error("deep copy should be independent of original")
+	}
+}
+
+func TestSortExtensions(t *testing.T) {
+	log := logger.Noop()
+	extLoader := &extensionLoader{logger: log}
+
+	extensions := []LocalExtension{
+		{Path: "/path/to/c.local.kurel"},
+		{Path: "/path/to/a.local.kurel"},
+		{Path: "/path/to/b.local.kurel"},
+	}
+
+	extLoader.sortExtensions(extensions)
+
+	if filepath.Base(extensions[0].Path) != "a.local.kurel" {
+		t.Errorf("expected first to be a.local.kurel, got %s", filepath.Base(extensions[0].Path))
+	}
+	if filepath.Base(extensions[1].Path) != "b.local.kurel" {
+		t.Errorf("expected second to be b.local.kurel, got %s", filepath.Base(extensions[1].Path))
+	}
+	if filepath.Base(extensions[2].Path) != "c.local.kurel" {
+		t.Errorf("expected third to be c.local.kurel, got %s", filepath.Base(extensions[2].Path))
+	}
+}
+
+func TestMergeNestedFieldMerge(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]interface{}{
+				"existing": "value",
+			},
+		},
+	}
+
+	newLabels := map[string]interface{}{
+		"new": "label",
+	}
+
+	err := mergeNestedField(obj, newLabels, "metadata", "labels")
+	require.NoError(t, err)
+
+	labels := obj["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
+	assert.Equal(t, "value", labels["existing"])
+	assert.Equal(t, "label", labels["new"])
+}
+
+func TestSetNestedFieldEmptyPath(t *testing.T) {
+	obj := map[string]interface{}{}
+	err := setNestedField(obj, "value")
+	if err == nil {
+		t.Fatal("expected error for empty path")
+	}
+}
+
+func TestMergeNestedFieldEmptyPath(t *testing.T) {
+	obj := map[string]interface{}{}
+	err := mergeNestedField(obj, "value")
+	if err == nil {
+		t.Fatal("expected error for empty path")
+	}
+}
+
+func TestRemoveNestedFieldEmptyPath(t *testing.T) {
+	obj := map[string]interface{}{"key": "value"}
+	removeNestedField(obj) // Should not panic
+	assert.Equal(t, "value", obj["key"])
+}
+
+func TestRemoveNestedFieldMissingPath(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": "not-a-map",
+	}
+	// Should not panic when path doesn't exist
+	removeNestedField(obj, "metadata", "labels", "env")
+}
+
 func TestNestedFieldOperations(t *testing.T) {
 	t.Run("setNestedField", func(t *testing.T) {
 		obj := map[string]interface{}{

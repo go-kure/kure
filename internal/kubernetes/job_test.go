@@ -142,3 +142,37 @@ func TestJobFunctions(t *testing.T) {
 		t.Errorf("active deadline not set")
 	}
 }
+
+func TestJobNilGuards(t *testing.T) {
+	ad := int64(1)
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"SetJobPodSpec", func() error { return SetJobPodSpec(nil, &corev1.PodSpec{}) }},
+		{"AddJobContainer", func() error { return AddJobContainer(nil, &corev1.Container{}) }},
+		{"AddJobInitContainer", func() error { return AddJobInitContainer(nil, &corev1.Container{}) }},
+		{"AddJobVolume", func() error { return AddJobVolume(nil, &corev1.Volume{}) }},
+		{"AddJobImagePullSecret", func() error { return AddJobImagePullSecret(nil, &corev1.LocalObjectReference{}) }},
+		{"AddJobToleration", func() error { return AddJobToleration(nil, &corev1.Toleration{}) }},
+		{"AddJobTopologySpreadConstraint", func() error {
+			return AddJobTopologySpreadConstraint(nil, &corev1.TopologySpreadConstraint{})
+		}},
+		{"SetJobServiceAccountName", func() error { return SetJobServiceAccountName(nil, "sa") }},
+		{"SetJobSecurityContext", func() error { return SetJobSecurityContext(nil, nil) }},
+		{"SetJobAffinity", func() error { return SetJobAffinity(nil, nil) }},
+		{"SetJobNodeSelector", func() error { return SetJobNodeSelector(nil, nil) }},
+		{"SetJobCompletions", func() error { return SetJobCompletions(nil, 1) }},
+		{"SetJobParallelism", func() error { return SetJobParallelism(nil, 1) }},
+		{"SetJobBackoffLimit", func() error { return SetJobBackoffLimit(nil, 1) }},
+		{"SetJobTTLSecondsAfterFinished", func() error { return SetJobTTLSecondsAfterFinished(nil, 1) }},
+		{"SetJobActiveDeadlineSeconds", func() error { return SetJobActiveDeadlineSeconds(nil, &ad) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

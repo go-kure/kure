@@ -108,3 +108,26 @@ func TestSecretAnnotationFunctions(t *testing.T) {
 		t.Errorf("annotations not set correctly")
 	}
 }
+
+func TestSecretNilGuards(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"AddSecretData", func() error { return AddSecretData(nil, "k", []byte("v")) }},
+		{"AddSecretStringData", func() error { return AddSecretStringData(nil, "k", "v") }},
+		{"SetSecretType", func() error { return SetSecretType(nil, corev1.SecretTypeOpaque) }},
+		{"SetSecretImmutable", func() error { return SetSecretImmutable(nil, true) }},
+		{"AddSecretLabel", func() error { return AddSecretLabel(nil, "k", "v") }},
+		{"AddSecretAnnotation", func() error { return AddSecretAnnotation(nil, "k", "v") }},
+		{"SetSecretLabels", func() error { return SetSecretLabels(nil, map[string]string{"k": "v"}) }},
+		{"SetSecretAnnotations", func() error { return SetSecretAnnotations(nil, map[string]string{"k": "v"}) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

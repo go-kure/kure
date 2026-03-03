@@ -427,3 +427,11 @@ func TestOCIRepositoryHelpers(t *testing.T) {
 		t.Errorf("secret not set")
 	}
 }
+
+func TestSetHelmRepositoryAccessFrom(t *testing.T) {
+	hr := CreateHelmRepository("test", "default", sourcev1.HelmRepositorySpec{})
+	SetHelmRepositoryAccessFrom(hr, nil)
+	if hr.Spec.AccessFrom != nil {
+		t.Error("expected nil AccessFrom")
+	}
+}

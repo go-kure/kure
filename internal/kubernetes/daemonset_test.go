@@ -175,3 +175,38 @@ func TestDaemonSetFunctions(t *testing.T) {
 		t.Errorf("revision history limit not set")
 	}
 }
+
+func TestDaemonSetNilGuards(t *testing.T) {
+	rhl := int32(1)
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"SetDaemonSetPodSpec", func() error { return SetDaemonSetPodSpec(nil, &corev1.PodSpec{}) }},
+		{"AddDaemonSetContainer", func() error { return AddDaemonSetContainer(nil, &corev1.Container{}) }},
+		{"AddDaemonSetInitContainer", func() error { return AddDaemonSetInitContainer(nil, &corev1.Container{}) }},
+		{"AddDaemonSetVolume", func() error { return AddDaemonSetVolume(nil, &corev1.Volume{}) }},
+		{"AddDaemonSetImagePullSecret", func() error {
+			return AddDaemonSetImagePullSecret(nil, &corev1.LocalObjectReference{})
+		}},
+		{"AddDaemonSetToleration", func() error { return AddDaemonSetToleration(nil, &corev1.Toleration{}) }},
+		{"AddDaemonSetTopologySpreadConstraints", func() error {
+			return AddDaemonSetTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{})
+		}},
+		{"SetDaemonSetServiceAccountName", func() error { return SetDaemonSetServiceAccountName(nil, "sa") }},
+		{"SetDaemonSetSecurityContext", func() error { return SetDaemonSetSecurityContext(nil, nil) }},
+		{"SetDaemonSetAffinity", func() error { return SetDaemonSetAffinity(nil, nil) }},
+		{"SetDaemonSetNodeSelector", func() error { return SetDaemonSetNodeSelector(nil, nil) }},
+		{"SetDaemonSetUpdateStrategy", func() error {
+			return SetDaemonSetUpdateStrategy(nil, appsv1.DaemonSetUpdateStrategy{})
+		}},
+		{"SetDaemonSetRevisionHistoryLimit", func() error { return SetDaemonSetRevisionHistoryLimit(nil, &rhl) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

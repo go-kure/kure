@@ -112,3 +112,25 @@ func TestServiceAccountMetadataFunctions(t *testing.T) {
 		t.Errorf("annotations not set")
 	}
 }
+
+func TestServiceAccountNilGuards(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"AddServiceAccountSecret", func() error { return AddServiceAccountSecret(nil, corev1.ObjectReference{}) }},
+		{"AddServiceAccountImagePullSecret", func() error {
+			return AddServiceAccountImagePullSecret(nil, corev1.LocalObjectReference{})
+		}},
+		{"SetServiceAccountSecrets", func() error { return SetServiceAccountSecrets(nil, nil) }},
+		{"SetServiceAccountImagePullSecrets", func() error { return SetServiceAccountImagePullSecrets(nil, nil) }},
+		{"SetServiceAccountAutomountToken", func() error { return SetServiceAccountAutomountToken(nil, true) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

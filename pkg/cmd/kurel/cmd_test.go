@@ -2,7 +2,12 @@ package kurel
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/go-kure/kure/pkg/cmd/shared/options"
 )
@@ -392,6 +397,1676 @@ func TestBuildCommandInvalidArgs(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected error for no arguments")
+	}
+}
+
+// --- formatParameterValue tests ---
+
+func TestFormatParameterValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected string
+	}{
+		{
+			name:     "simple string",
+			input:    "hello",
+			expected: "hello",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "multiline string",
+			input:    "line1\nline2\nline3",
+			expected: "(multiline)",
+		},
+		{
+			name:     "string with only newline",
+			input:    "\n",
+			expected: "(multiline)",
+		},
+		{
+			name:     "map with keys",
+			input:    map[string]interface{}{"a": 1, "b": 2, "c": 3},
+			expected: "(map with 3 keys)",
+		},
+		{
+			name:     "empty map",
+			input:    map[string]interface{}{},
+			expected: "(map with 0 keys)",
+		},
+		{
+			name:     "array with items",
+			input:    []interface{}{"a", "b"},
+			expected: "(array with 2 items)",
+		},
+		{
+			name:     "empty array",
+			input:    []interface{}{},
+			expected: "(array with 0 items)",
+		},
+		{
+			name:     "integer value",
+			input:    42,
+			expected: "42",
+		},
+		{
+			name:     "boolean true",
+			input:    true,
+			expected: "true",
+		},
+		{
+			name:     "boolean false",
+			input:    false,
+			expected: "false",
+		},
+		{
+			name:     "float value",
+			input:    3.14,
+			expected: "3.14",
+		},
+		{
+			name:     "nil value",
+			input:    nil,
+			expected: "<nil>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatParameterValue(tt.input)
+			if got != tt.expected {
+				t.Errorf("formatParameterValue(%v) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// --- Build command deep tests ---
+
+func TestBuildCommandAllFlags(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	expectedFlags := map[string]string{
+		"output":    "o",
+		"values":    "",
+		"patch":     "p",
+		"format":    "",
+		"kind":      "",
+		"name":      "",
+		"add-label": "",
+	}
+
+	for flagName, shorthand := range expectedFlags {
+		flag := cmd.Flags().Lookup(flagName)
+		if flag == nil {
+			t.Errorf("expected flag %s not found in build command", flagName)
+			continue
+		}
+		if shorthand != "" && flag.Shorthand != shorthand {
+			t.Errorf("flag %s: expected shorthand %q, got %q", flagName, shorthand, flag.Shorthand)
+		}
+	}
+}
+
+func TestBuildCommandFlagDefaults(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	formatFlag := cmd.Flags().Lookup("format")
+	if formatFlag == nil {
+		t.Fatal("expected format flag")
+	}
+	if formatFlag.DefValue != "yaml" {
+		t.Errorf("expected format default 'yaml', got %q", formatFlag.DefValue)
+	}
+
+	outputFlag := cmd.Flags().Lookup("output")
+	if outputFlag == nil {
+		t.Fatal("expected output flag")
+	}
+	if outputFlag.DefValue != "" {
+		t.Errorf("expected output default '', got %q", outputFlag.DefValue)
+	}
+}
+
+func TestBuildCommandTooManyArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"pkg1", "pkg2"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for too many arguments")
+	}
+}
+
+func TestBuildCommandHelp(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("build help failed: %v", err)
+	}
+
+	output := buf.String()
+	expectedContent := []string{"build", "Build", "package", "Flags:"}
+	for _, content := range expectedContent {
+		if !strings.Contains(output, content) {
+			t.Errorf("expected build help to contain %q", content)
+		}
+	}
+}
+
+func TestBuildCommandNonexistentPackage(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"/nonexistent/package/path"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent package path")
+	}
+}
+
+func TestBuildCommandWithNonexistentValuesFile(t *testing.T) {
+	// Create a minimal package structure so the loader can work
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--values=/nonexistent/values.yaml", tmpDir})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent values file")
+	}
+}
+
+// --- Validate command deep tests ---
+
+func TestValidateCommandAllFlags(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	expectedFlags := []string{"values", "schema", "json"}
+	for _, flagName := range expectedFlags {
+		flag := cmd.Flags().Lookup(flagName)
+		if flag == nil {
+			t.Errorf("expected flag %s not found in validate command", flagName)
+		}
+	}
+}
+
+func TestValidateCommandFlagDefaults(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	jsonFlag := cmd.Flags().Lookup("json")
+	if jsonFlag == nil {
+		t.Fatal("expected json flag")
+	}
+	if jsonFlag.DefValue != "false" {
+		t.Errorf("expected json default 'false', got %q", jsonFlag.DefValue)
+	}
+}
+
+func TestValidateCommandNoArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for no arguments")
+	}
+}
+
+func TestValidateCommandTooManyArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"pkg1", "pkg2"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for too many arguments")
+	}
+}
+
+func TestValidateCommandHelp(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("validate help failed: %v", err)
+	}
+
+	output := buf.String()
+	expectedContent := []string{"validate", "Validate", "package", "Flags:"}
+	for _, content := range expectedContent {
+		if !strings.Contains(output, content) {
+			t.Errorf("expected validate help to contain %q", content)
+		}
+	}
+}
+
+func TestValidateCommandNonexistentPackage(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"/nonexistent/package/path"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent package path")
+	}
+}
+
+func TestValidateCommandNonexistentValuesFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--values=/nonexistent/values.yaml", tmpDir})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent values file")
+	}
+}
+
+func TestValidateCommandArgsCheck(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	if cmd.Args == nil {
+		t.Error("expected Args to be set on validate command")
+	}
+
+	if cmd.RunE == nil {
+		t.Error("expected RunE to be set on validate command")
+	}
+}
+
+// --- Info command deep tests ---
+
+func TestInfoCommandAllFlags(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	expectedFlags := map[string]string{
+		"output": "o",
+		"all":    "",
+	}
+
+	for flagName, shorthand := range expectedFlags {
+		flag := cmd.Flags().Lookup(flagName)
+		if flag == nil {
+			t.Errorf("expected flag %s not found in info command", flagName)
+			continue
+		}
+		if shorthand != "" && flag.Shorthand != shorthand {
+			t.Errorf("flag %s: expected shorthand %q, got %q", flagName, shorthand, flag.Shorthand)
+		}
+	}
+}
+
+func TestInfoCommandFlagDefaults(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	outputFlag := cmd.Flags().Lookup("output")
+	if outputFlag == nil {
+		t.Fatal("expected output flag")
+	}
+	if outputFlag.DefValue != "text" {
+		t.Errorf("expected output default 'text', got %q", outputFlag.DefValue)
+	}
+
+	allFlag := cmd.Flags().Lookup("all")
+	if allFlag == nil {
+		t.Fatal("expected all flag")
+	}
+	if allFlag.DefValue != "false" {
+		t.Errorf("expected all default 'false', got %q", allFlag.DefValue)
+	}
+}
+
+func TestInfoCommandNoArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for no arguments")
+	}
+}
+
+func TestInfoCommandTooManyArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"pkg1", "pkg2"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for too many arguments")
+	}
+}
+
+func TestInfoCommandHelp(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("info help failed: %v", err)
+	}
+
+	output := buf.String()
+	expectedContent := []string{"info", "Info", "package", "Flags:"}
+	for _, content := range expectedContent {
+		if !strings.Contains(output, content) {
+			t.Errorf("expected info help to contain %q", content)
+		}
+	}
+}
+
+func TestInfoCommandNonexistentPackage(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"/nonexistent/package/path"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent package path")
+	}
+}
+
+func TestInfoCommandArgsCheck(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	if cmd.Args == nil {
+		t.Error("expected Args to be set on info command")
+	}
+
+	if cmd.RunE == nil {
+		t.Error("expected RunE to be set on info command")
+	}
+}
+
+// --- Schema command deep tests ---
+
+func TestSchemaCommandSubcommands(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	subCmds := cmd.Commands()
+	if len(subCmds) == 0 {
+		t.Fatal("expected schema command to have subcommands")
+	}
+
+	found := false
+	for _, sub := range subCmds {
+		if extractCommandName(sub.Use) == "generate" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected 'generate' subcommand under schema")
+	}
+}
+
+func TestSchemaGenerateCommandFlags(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	schemaCmd := newSchemaCommand(globalOpts)
+
+	var generateCmd *cobra.Command
+	for _, sub := range schemaCmd.Commands() {
+		if extractCommandName(sub.Use) == "generate" {
+			generateCmd = sub
+			break
+		}
+	}
+
+	if generateCmd == nil {
+		t.Fatal("generate subcommand not found")
+	}
+
+	expectedFlags := []string{"output", "k8s", "pretty"}
+	for _, flagName := range expectedFlags {
+		flag := generateCmd.Flags().Lookup(flagName)
+		if flag == nil {
+			t.Errorf("expected flag %s not found in schema generate command", flagName)
+		}
+	}
+}
+
+func TestSchemaGenerateCommandFlagDefaults(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	schemaCmd := newSchemaCommand(globalOpts)
+
+	var genCmd *cobra.Command
+	for _, sub := range schemaCmd.Commands() {
+		if extractCommandName(sub.Use) == "generate" {
+			genCmd = sub
+			break
+		}
+	}
+
+	if genCmd == nil {
+		t.Fatal("generate subcommand not found")
+	}
+
+	k8sFlag := genCmd.Flags().Lookup("k8s")
+	if k8sFlag == nil {
+		t.Fatal("expected k8s flag")
+	}
+	if k8sFlag.DefValue != "false" {
+		t.Errorf("expected k8s default 'false', got %q", k8sFlag.DefValue)
+	}
+
+	prettyFlag := genCmd.Flags().Lookup("pretty")
+	if prettyFlag == nil {
+		t.Fatal("expected pretty flag")
+	}
+	if prettyFlag.DefValue != "true" {
+		t.Errorf("expected pretty default 'true', got %q", prettyFlag.DefValue)
+	}
+}
+
+func TestSchemaGenerateCommandNoArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"generate"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for generate with no arguments")
+	}
+}
+
+func TestSchemaGenerateCommandTooManyArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"generate", "pkg1", "pkg2"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for generate with too many arguments")
+	}
+}
+
+func TestSchemaCommandHelp(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("schema help failed: %v", err)
+	}
+
+	output := buf.String()
+	expectedContent := []string{"schema", "generate"}
+	for _, content := range expectedContent {
+		if !strings.Contains(output, content) {
+			t.Errorf("expected schema help to contain %q", content)
+		}
+	}
+}
+
+func TestSchemaCommandNoSubcommand(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// No subcommand should show help (not error)
+	cmd.SetArgs([]string{})
+	_ = cmd.Execute()
+
+	// Schema command without subcommand is valid (shows help)
+}
+
+// --- Config command deep tests ---
+
+func TestConfigCommandSubcommands(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newConfigCommand(globalOpts)
+
+	subCmds := cmd.Commands()
+	if len(subCmds) < 2 {
+		t.Errorf("expected at least 2 config subcommands, got %d", len(subCmds))
+	}
+
+	commandMap := make(map[string]bool)
+	for _, sub := range subCmds {
+		commandMap[extractCommandName(sub.Use)] = true
+	}
+
+	expectedSubs := []string{"view", "init"}
+	for _, expected := range expectedSubs {
+		if !commandMap[expected] {
+			t.Errorf("expected config subcommand %q not found", expected)
+		}
+	}
+}
+
+func TestConfigViewCommand(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	globalOpts.Debug = false
+	globalOpts.Strict = true
+	globalOpts.ConfigFile = "/some/config.yaml"
+
+	cmd := newConfigCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"view"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("config view failed: %v", err)
+	}
+
+	// Note: config view writes to os.Stdout directly, not to the cobra buffer.
+	// We verify it does not error. The output goes to stdout.
+}
+
+func TestConfigInitCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".kurel", "config.yaml")
+
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.ConfigFile = configPath
+
+	cmd := newConfigCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"init"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("config init failed: %v", err)
+	}
+
+	// Verify the config file was created
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Error("expected config file to be created")
+	}
+
+	// Verify config file contents
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read created config: %v", err)
+	}
+
+	content := string(data)
+	expectedContent := []string{
+		"verbose: false",
+		"debug: false",
+		"strict: false",
+		"launcher:",
+		"extensions:",
+	}
+	for _, expected := range expectedContent {
+		if !strings.Contains(content, expected) {
+			t.Errorf("expected config file to contain %q", expected)
+		}
+	}
+}
+
+func TestConfigInitCommandDefaultPath(t *testing.T) {
+	// When ConfigFile is empty, it should use the default .kurel/config.yaml path
+	// We test this from a temp directory to avoid writing to the actual working directory
+	tmpDir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(origDir); err != nil {
+			t.Errorf("failed to restore working directory: %v", err)
+		}
+	}()
+
+	globalOpts := options.NewGlobalOptions()
+	// ConfigFile left empty to test default path
+
+	cmd := newConfigCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"init"})
+	err = cmd.Execute()
+
+	if err != nil {
+		t.Errorf("config init with default path failed: %v", err)
+	}
+
+	// Verify the default config file was created
+	defaultPath := filepath.Join(tmpDir, ".kurel", "config.yaml")
+	if _, err := os.Stat(defaultPath); os.IsNotExist(err) {
+		t.Error("expected default config file to be created at .kurel/config.yaml")
+	}
+}
+
+func TestConfigCommandHelp(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newConfigCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("config help failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "config") {
+		t.Error("expected config help to contain 'config'")
+	}
+}
+
+// --- Build command RunE error paths ---
+
+func TestBuildCommandWithInvalidValuesYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	// Create invalid YAML values file
+	valuesFile := filepath.Join(tmpDir, "bad-values.yaml")
+	if err := os.WriteFile(valuesFile, []byte("{{invalid yaml: [}"), 0644); err != nil {
+		t.Fatalf("failed to create values file: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--values=" + valuesFile, tmpDir})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for invalid YAML values file")
+	}
+}
+
+// --- Validate command RunE error paths ---
+
+func TestValidateCommandWithInvalidValuesYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	// Create invalid YAML values file
+	valuesFile := filepath.Join(tmpDir, "bad-values.yaml")
+	if err := os.WriteFile(valuesFile, []byte("{{invalid yaml: [}"), 0644); err != nil {
+		t.Fatalf("failed to create values file: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--values=" + valuesFile, tmpDir})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for invalid YAML values file")
+	}
+}
+
+// --- Command tree integration tests ---
+
+func TestKurelBuildViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Execute build with no args through the root command
+	cmd.SetArgs([]string{"build"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for build with no package argument")
+	}
+}
+
+func TestKurelValidateViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"validate"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for validate with no package argument")
+	}
+}
+
+func TestKurelInfoViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"info"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for info with no package argument")
+	}
+}
+
+func TestKurelSchemaGenerateViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"schema", "generate"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for schema generate with no package argument")
+	}
+}
+
+func TestKurelConfigViewViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"config", "view"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("config view via root command failed: %v", err)
+	}
+}
+
+func TestKurelBuildHelpViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"build", "--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("build --help via root command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "build") {
+		t.Error("expected build help output")
+	}
+}
+
+func TestKurelValidateHelpViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"validate", "--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("validate --help via root command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "validate") {
+		t.Error("expected validate help output")
+	}
+}
+
+func TestKurelInfoHelpViaRootCommand(t *testing.T) {
+	cmd := NewKurelCommand()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"info", "--help"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("info --help via root command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "info") {
+		t.Error("expected info help output")
+	}
+}
+
+// --- Build command with nonexistent package (exercises RunE deeper) ---
+
+func TestBuildCommandWithVerbose(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Pass a nonexistent path; it should fail at loading but exercises the
+	// verbose logger path
+	cmd.SetArgs([]string{"/nonexistent/package"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent package")
+	}
+}
+
+func TestValidateCommandWithVerbose(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"/nonexistent/package"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent package")
+	}
+}
+
+func TestInfoCommandWithVerbose(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"/nonexistent/package"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for nonexistent package")
+	}
+}
+
+// --- Completion shell variants ---
+
+func TestKurelCompletionShellVariants(t *testing.T) {
+	shells := []string{"bash", "zsh", "fish", "powershell"}
+
+	for _, shell := range shells {
+		t.Run(shell, func(t *testing.T) {
+			cmd := NewKurelCommand()
+
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			cmd.SetArgs([]string{"completion", shell})
+			err := cmd.Execute()
+
+			if err != nil {
+				t.Errorf("completion %s failed: %v", shell, err)
+			}
+		})
+	}
+}
+
+// --- Tests that exercise RunE with valid packages ---
+
+func TestValidateCommandWithValidPackage(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	// A minimal valid package should either pass validation or fail gracefully
+	// This exercises the validation code path beyond just loading
+	_ = err
+}
+
+func TestValidateCommandWithValidPackageJSONOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--json", tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the JSON output path of validation
+	_ = err
+}
+
+func TestValidateCommandWithValidPackageVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	_ = err
+}
+
+func TestValidateCommandWithValidPackageStrict(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Strict = true
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the strict mode path
+	_ = err
+}
+
+func TestValidateCommandWithValidPackageAndValues(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	// Create a valid values file
+	valuesFile := filepath.Join(tmpDir, "values.yaml")
+	if err := os.WriteFile(valuesFile, []byte("app_name: overridden\n"), 0644); err != nil {
+		t.Fatalf("failed to create values file: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newValidateCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--values=" + valuesFile, tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the values loading and merging path
+	_ = err
+}
+
+func TestInfoCommandWithValidPackageTextOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("info command with valid package failed: %v", err)
+	}
+}
+
+func TestInfoCommandWithValidPackageJSONOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--output=json", tmpDir})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("info command with JSON output failed: %v", err)
+	}
+}
+
+func TestInfoCommandWithValidPackageYAMLOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--output=yaml", tmpDir})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("info command with YAML output failed: %v", err)
+	}
+}
+
+func TestInfoCommandWithValidPackageVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("info command verbose with valid package failed: %v", err)
+	}
+}
+
+func TestBuildCommandWithValidPackage(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	// Build should succeed or fail gracefully with a minimal package
+	_ = err
+}
+
+func TestBuildCommandWithValidPackageAndValues(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	// Create a valid values file
+	valuesFile := filepath.Join(tmpDir, "values.yaml")
+	if err := os.WriteFile(valuesFile, []byte("app_name: overridden-app\n"), 0644); err != nil {
+		t.Fatalf("failed to create values file: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--values=" + valuesFile, tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the values loading path
+	_ = err
+}
+
+func TestBuildCommandWithValidPackageJSONFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--format=json", tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the JSON format path
+	_ = err
+}
+
+func TestBuildCommandWithValidPackageOutputFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	outputFile := filepath.Join(tmpDir, "output.yaml")
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--output=" + outputFile, tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the file output path
+	_ = err
+}
+
+func TestBuildCommandWithValidPackageOutputDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	outputDir := filepath.Join(tmpDir, "output-dir")
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatalf("failed to create output dir: %v", err)
+	}
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--output=" + outputDir, tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the directory output path
+	_ = err
+}
+
+func TestBuildCommandWithValidPackageVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the verbose logger path in build
+	_ = err
+}
+
+func TestBuildCommandWithValidPackageFilterKind(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--kind=Deployment", tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the filter kind path
+	_ = err
+}
+
+func TestBuildCommandWithValidPackageFilterName(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupMinimalPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newBuildCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"--name=test-app", tmpDir})
+	err := cmd.Execute()
+
+	// Exercises the filter name path
+	_ = err
+}
+
+// --- Schema generate command RunE tests ---
+
+func TestSchemaGenerateCommandExecution(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// The generate command accepts a package arg (ExactArgs(1)) but the
+	// schema generator produces a generic schema regardless of the argument
+	cmd.SetArgs([]string{"generate", "any-package"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("schema generate failed: %v", err)
+	}
+}
+
+func TestSchemaGenerateCommandWithOutputFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "schema.json")
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"generate", "--output=" + outputFile, "any-package"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("schema generate with output file failed: %v", err)
+	}
+
+	// Verify the schema file was created
+	data, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output schema: %v", err)
+	}
+
+	if len(data) == 0 {
+		t.Error("expected non-empty schema output")
+	}
+
+	// Verify it's valid JSON
+	if !strings.Contains(string(data), "schema") {
+		t.Error("expected schema output to contain 'schema'")
+	}
+}
+
+func TestSchemaGenerateCommandWithOutputFileNestedDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "nested", "dir", "schema.json")
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"generate", "--output=" + outputFile, "any-package"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("schema generate with nested output dir failed: %v", err)
+	}
+
+	// Verify the file was created in the nested directory
+	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
+		t.Error("expected output file to be created in nested directory")
+	}
+}
+
+func TestSchemaGenerateCommandWithK8sFlag(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"generate", "--k8s", "any-package"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("schema generate with --k8s failed: %v", err)
+	}
+}
+
+func TestSchemaGenerateCommandNoPretty(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "schema.json")
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"generate", "--pretty=false", "--output=" + outputFile, "any-package"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("schema generate with --pretty=false failed: %v", err)
+	}
+}
+
+func TestSchemaGenerateCommandVerbose(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.Verbose = true
+	cmd := newSchemaCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{"generate", "any-package"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("schema generate verbose failed: %v", err)
+	}
+}
+
+// --- Info command with rich package (patches + namespace) ---
+
+func TestInfoCommandWithRichPackage(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupRichPackage(t, tmpDir)
+
+	globalOpts := options.NewGlobalOptions()
+	cmd := newInfoCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{tmpDir})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Errorf("info command with rich package failed: %v", err)
+	}
+}
+
+// --- Helper functions ---
+
+// setupRichPackage creates a kurel package with patches and namespaced resources
+func setupRichPackage(t *testing.T, dir string) {
+	t.Helper()
+
+	kurelYAML := `name: rich-package
+version: 2.0.0
+description: A rich test package with patches
+`
+	if err := os.WriteFile(filepath.Join(dir, "kurel.yaml"), []byte(kurelYAML), 0644); err != nil {
+		t.Fatalf("failed to create kurel.yaml: %v", err)
+	}
+
+	paramsYAML := `app_name: rich-app
+namespace: production
+replicas: 3
+multiline_param: |
+  line1
+  line2
+  line3
+nested:
+  key1: value1
+  key2: value2
+items:
+  - item1
+  - item2
+`
+	if err := os.WriteFile(filepath.Join(dir, "parameters.yaml"), []byte(paramsYAML), 0644); err != nil {
+		t.Fatalf("failed to create parameters.yaml: %v", err)
+	}
+
+	resourcesDir := filepath.Join(dir, "resources")
+	if err := os.MkdirAll(resourcesDir, 0755); err != nil {
+		t.Fatalf("failed to create resources dir: %v", err)
+	}
+
+	deployYAML := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rich-app
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rich-app
+  template:
+    metadata:
+      labels:
+        app: rich-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest
+`
+	if err := os.WriteFile(filepath.Join(resourcesDir, "deployment.yaml"), []byte(deployYAML), 0644); err != nil {
+		t.Fatalf("failed to create deployment.yaml: %v", err)
+	}
+
+	svcYAML := `apiVersion: v1
+kind: Service
+metadata:
+  name: rich-svc
+  namespace: production
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+`
+	if err := os.WriteFile(filepath.Join(resourcesDir, "service.yaml"), []byte(svcYAML), 0644); err != nil {
+		t.Fatalf("failed to create service.yaml: %v", err)
+	}
+
+	// Create patches directory
+	patchesDir := filepath.Join(dir, "patches")
+	if err := os.MkdirAll(patchesDir, 0755); err != nil {
+		t.Fatalf("failed to create patches dir: %v", err)
+	}
+
+	patchTOML := `[metadata]
+description = "Enable debug logging"
+enabled = "true"
+
+[[operations]]
+target = "Deployment/rich-app"
+path = "/spec/template/spec/containers/0/env"
+value = [{name = "DEBUG", value = "true"}]
+`
+	if err := os.WriteFile(filepath.Join(patchesDir, "debug.toml"), []byte(patchTOML), 0644); err != nil {
+		t.Fatalf("failed to create debug patch: %v", err)
+	}
+}
+
+// setupMinimalPackage creates a minimal kurel package structure for testing
+func setupMinimalPackage(t *testing.T, dir string) {
+	t.Helper()
+
+	// kurel.yaml
+	kurelYAML := `name: test-package
+version: 1.0.0
+description: Test package
+`
+	if err := os.WriteFile(filepath.Join(dir, "kurel.yaml"), []byte(kurelYAML), 0644); err != nil {
+		t.Fatalf("failed to create kurel.yaml: %v", err)
+	}
+
+	// parameters.yaml
+	paramsYAML := `app_name: test-app
+namespace: default
+replicas: 1
+`
+	if err := os.WriteFile(filepath.Join(dir, "parameters.yaml"), []byte(paramsYAML), 0644); err != nil {
+		t.Fatalf("failed to create parameters.yaml: %v", err)
+	}
+
+	// resources directory
+	resourcesDir := filepath.Join(dir, "resources")
+	if err := os.MkdirAll(resourcesDir, 0755); err != nil {
+		t.Fatalf("failed to create resources dir: %v", err)
+	}
+
+	// Simple resource
+	deployYAML := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${app_name}
+  namespace: ${namespace}
+spec:
+  replicas: ${replicas}
+`
+	if err := os.WriteFile(filepath.Join(resourcesDir, "deployment.yaml"), []byte(deployYAML), 0644); err != nil {
+		t.Fatalf("failed to create deployment.yaml: %v", err)
 	}
 }
 

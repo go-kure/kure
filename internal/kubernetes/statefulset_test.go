@@ -211,3 +211,47 @@ func TestStatefulSetFunctions(t *testing.T) {
 		t.Errorf("min ready seconds not set")
 	}
 }
+
+func TestStatefulSetNilGuards(t *testing.T) {
+	rhl := int32(1)
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"SetStatefulSetPodSpec", func() error { return SetStatefulSetPodSpec(nil, &corev1.PodSpec{}) }},
+		{"AddStatefulSetContainer", func() error { return AddStatefulSetContainer(nil, &corev1.Container{}) }},
+		{"AddStatefulSetInitContainer", func() error { return AddStatefulSetInitContainer(nil, &corev1.Container{}) }},
+		{"AddStatefulSetVolume", func() error { return AddStatefulSetVolume(nil, &corev1.Volume{}) }},
+		{"AddStatefulSetImagePullSecret", func() error {
+			return AddStatefulSetImagePullSecret(nil, &corev1.LocalObjectReference{})
+		}},
+		{"AddStatefulSetToleration", func() error { return AddStatefulSetToleration(nil, &corev1.Toleration{}) }},
+		{"AddStatefulSetTopologySpreadConstraints", func() error {
+			return AddStatefulSetTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{})
+		}},
+		{"AddStatefulSetVolumeClaimTemplate", func() error {
+			return AddStatefulSetVolumeClaimTemplate(nil, corev1.PersistentVolumeClaim{})
+		}},
+		{"SetStatefulSetServiceAccountName", func() error { return SetStatefulSetServiceAccountName(nil, "sa") }},
+		{"SetStatefulSetSecurityContext", func() error { return SetStatefulSetSecurityContext(nil, nil) }},
+		{"SetStatefulSetAffinity", func() error { return SetStatefulSetAffinity(nil, nil) }},
+		{"SetStatefulSetNodeSelector", func() error { return SetStatefulSetNodeSelector(nil, nil) }},
+		{"SetStatefulSetUpdateStrategy", func() error {
+			return SetStatefulSetUpdateStrategy(nil, appsv1.StatefulSetUpdateStrategy{})
+		}},
+		{"SetStatefulSetReplicas", func() error { return SetStatefulSetReplicas(nil, 1) }},
+		{"SetStatefulSetServiceName", func() error { return SetStatefulSetServiceName(nil, "svc") }},
+		{"SetStatefulSetPodManagementPolicy", func() error {
+			return SetStatefulSetPodManagementPolicy(nil, appsv1.OrderedReadyPodManagement)
+		}},
+		{"SetStatefulSetRevisionHistoryLimit", func() error { return SetStatefulSetRevisionHistoryLimit(nil, &rhl) }},
+		{"SetStatefulSetMinReadySeconds", func() error { return SetStatefulSetMinReadySeconds(nil, 1) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

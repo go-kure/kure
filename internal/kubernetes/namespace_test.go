@@ -64,3 +64,21 @@ func TestNamespaceFinalizerFunctions(t *testing.T) {
 		t.Errorf("finalizers not set correctly")
 	}
 }
+
+func TestNamespaceNilMapGuards(t *testing.T) {
+	t.Run("AddNamespaceLabel/nil-map", func(t *testing.T) {
+		ns := &corev1.Namespace{}
+		AddNamespaceLabel(ns, "env", "prod")
+		if ns.Labels["env"] != "prod" {
+			t.Errorf("label not added on nil map")
+		}
+	})
+
+	t.Run("AddNamespaceAnnotation/nil-map", func(t *testing.T) {
+		ns := &corev1.Namespace{}
+		AddNamespaceAnnotation(ns, "team", "dev")
+		if ns.Annotations["team"] != "dev" {
+			t.Errorf("annotation not added on nil map")
+		}
+	})
+}

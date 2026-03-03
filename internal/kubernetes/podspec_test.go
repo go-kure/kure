@@ -190,3 +190,44 @@ func TestPodSpecFunctions(t *testing.T) {
 		t.Errorf("scheduler name not set")
 	}
 }
+
+func TestPodSpecNilGuards(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"AddPodSpecContainer", func() error { return AddPodSpecContainer(nil, &corev1.Container{Name: "c"}) }},
+		{"AddPodSpecInitContainer", func() error { return AddPodSpecInitContainer(nil, &corev1.Container{Name: "c"}) }},
+		{"AddPodSpecEphemeralContainer", func() error {
+			return AddPodSpecEphemeralContainer(nil, &corev1.EphemeralContainer{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "e"}})
+		}},
+		{"AddPodSpecVolume", func() error { return AddPodSpecVolume(nil, &corev1.Volume{Name: "v"}) }},
+		{"AddPodSpecImagePullSecret", func() error { return AddPodSpecImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}) }},
+		{"AddPodSpecToleration", func() error { return AddPodSpecToleration(nil, &corev1.Toleration{Key: "k"}) }},
+		{"AddPodSpecTopologySpreadConstraints", func() error {
+			return AddPodSpecTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}})
+		}},
+		{"SetPodSpecServiceAccountName", func() error { return SetPodSpecServiceAccountName(nil, "sa") }},
+		{"SetPodSpecSecurityContext", func() error { return SetPodSpecSecurityContext(nil, &corev1.PodSecurityContext{}) }},
+		{"SetPodSpecAffinity", func() error { return SetPodSpecAffinity(nil, &corev1.Affinity{}) }},
+		{"SetPodSpecNodeSelector", func() error { return SetPodSpecNodeSelector(nil, map[string]string{"k": "v"}) }},
+		{"SetPodSpecPriorityClassName", func() error { return SetPodSpecPriorityClassName(nil, "high") }},
+		{"SetPodSpecHostNetwork", func() error { return SetPodSpecHostNetwork(nil, true) }},
+		{"SetPodSpecHostPID", func() error { return SetPodSpecHostPID(nil, true) }},
+		{"SetPodSpecHostIPC", func() error { return SetPodSpecHostIPC(nil, true) }},
+		{"SetPodSpecDNSPolicy", func() error { return SetPodSpecDNSPolicy(nil, corev1.DNSClusterFirst) }},
+		{"SetPodSpecDNSConfig", func() error { return SetPodSpecDNSConfig(nil, &corev1.PodDNSConfig{}) }},
+		{"SetPodSpecHostname", func() error { return SetPodSpecHostname(nil, "host") }},
+		{"SetPodSpecSubdomain", func() error { return SetPodSpecSubdomain(nil, "sub") }},
+		{"SetPodSpecRestartPolicy", func() error { return SetPodSpecRestartPolicy(nil, corev1.RestartPolicyAlways) }},
+		{"SetPodSpecTerminationGracePeriod", func() error { return SetPodSpecTerminationGracePeriod(nil, 30) }},
+		{"SetPodSpecSchedulerName", func() error { return SetPodSpecSchedulerName(nil, "sched") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Errorf("%s(nil) should return error", tt.name)
+			}
+		})
+	}
+}

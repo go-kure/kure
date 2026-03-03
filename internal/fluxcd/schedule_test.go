@@ -6,6 +6,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func TestScheduleNilGuards(t *testing.T) {
+	if err := SetScheduleTimeZone(nil, "UTC"); err == nil {
+		t.Error("SetScheduleTimeZone(nil) should return error")
+	}
+	if err := SetScheduleWindow(nil, metav1.Duration{}); err == nil {
+		t.Error("SetScheduleWindow(nil) should return error")
+	}
+}
+
 func TestScheduleHelpers(t *testing.T) {
 	sc := CreateSchedule("@hourly")
 	if err := SetScheduleTimeZone(&sc, "UTC"); err != nil {

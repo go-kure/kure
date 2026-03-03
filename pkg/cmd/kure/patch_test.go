@@ -2,6 +2,7 @@ package kure
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -903,5 +904,1400 @@ func TestPrintColoredDiff(t *testing.T) {
 	// Without colors, output should match input
 	if output != diffText {
 		t.Errorf("expected output to match input without colors\ngot: %q\nwant: %q", output, diffText)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Helper: create a minimal base YAML file with a single ConfigMap and return
+// the path.  The caller owns the directory via t.TempDir().
+// ---------------------------------------------------------------------------
+
+func writeTestBaseFile(t *testing.T, dir string) string {
+	t.Helper()
+	base := filepath.Join(dir, "base.yaml")
+	content := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config
+data:
+  key1: value1
+  key2: value2
+`
+	if err := os.WriteFile(base, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write base file: %v", err)
+	}
+	return base
+}
+
+// writeTestPatchFile creates a simple field-level patch file.
+func writeTestPatchFile(t *testing.T, dir, name string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	content := `data.key1: patched-value
+`
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write patch file: %v", err)
+	}
+	return p
+}
+
+// newTestPatchOptions creates PatchOptions with captured IO and the given
+// global option tweaks.
+func newTestPatchOptions(t *testing.T, tweakGlobal func(*options.GlobalOptions)) (*PatchOptions, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+	globalOpts := options.NewGlobalOptions()
+	if tweakGlobal != nil {
+		tweakGlobal(globalOpts)
+	}
+	factory := cli.NewFactory(globalOpts)
+
+	var stdout, stderr bytes.Buffer
+	return &PatchOptions{
+		Factory:   factory,
+		IOStreams: cli.IOStreams{In: strings.NewReader(""), Out: &stdout, ErrOut: &stderr},
+	}, &stdout, &stderr
+}
+
+// ---------------------------------------------------------------------------
+// Tests for NewPatchCommand RunE path (covers arg-to-field mapping)
+// ---------------------------------------------------------------------------
+
+func TestNewPatchCommandRunE_ArgsMapping(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p1.yaml")
+
+	globalOpts := options.NewGlobalOptions()
+	globalOpts.DryRun = true // forces stdout output so no dir creation needed
+	cmd := NewPatchCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{baseFile, patchFile})
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("expected command to succeed, got: %v", err)
+	}
+}
+
+func TestNewPatchCommandRunE_NoArgs(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := NewPatchCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error with no arguments")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for NewPatchCommand flag defaults
+// ---------------------------------------------------------------------------
+
+func TestNewPatchCommandFlagDefaults(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := NewPatchCommand(globalOpts)
+
+	tests := []struct {
+		flag     string
+		expected string
+	}{
+		{"patch-dir", ""},
+		{"output-file", ""},
+		{"output-dir", "out/patches"},
+		{"validate-only", "false"},
+		{"interactive", "false"},
+		{"combined", "false"},
+		{"diff", "false"},
+		{"group-by", "none"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.flag, func(t *testing.T) {
+			f := cmd.Flags().Lookup(tt.flag)
+			if f == nil {
+				t.Fatalf("flag %s not found", tt.flag)
+			}
+			if f.DefValue != tt.expected {
+				t.Errorf("flag %s: default = %q, want %q", tt.flag, f.DefValue, tt.expected)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for patch-dir short flag
+// ---------------------------------------------------------------------------
+
+func TestNewPatchCommandShortFlags(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := NewPatchCommand(globalOpts)
+
+	// -p is shorthand for --patch-dir
+	f := cmd.Flags().ShorthandLookup("p")
+	if f == nil {
+		t.Fatal("expected -p shorthand for patch-dir")
+	}
+	if f.Name != "patch-dir" {
+		t.Errorf("expected -p to map to patch-dir, got %s", f.Name)
+	}
+
+	// -d is shorthand for --output-dir
+	f = cmd.Flags().ShorthandLookup("d")
+	if f == nil {
+		t.Fatal("expected -d shorthand for output-dir")
+	}
+	if f.Name != "output-dir" {
+		t.Errorf("expected -d to map to output-dir, got %s", f.Name)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for Complete with PatchDir
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsCompleteWithPatchDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a few patch files inside the dir
+	writeTestPatchFile(t, tmpDir, "a.yaml")
+	writeTestPatchFile(t, tmpDir, "b.yml")
+	writeTestPatchFile(t, tmpDir, "c.kpatch")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.PatchDir = tmpDir
+
+	if err := o.Complete(); err != nil {
+		t.Fatalf("Complete() failed: %v", err)
+	}
+
+	if len(o.PatchFiles) != 3 {
+		t.Errorf("expected 3 patch files from dir scan, got %d", len(o.PatchFiles))
+	}
+}
+
+func TestPatchOptionsCompleteWithPatchDirAndExistingFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	writeTestPatchFile(t, tmpDir, "dir-patch.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.PatchFiles = []string{"/some/existing.yaml"}
+	o.PatchDir = tmpDir
+
+	if err := o.Complete(); err != nil {
+		t.Fatalf("Complete() failed: %v", err)
+	}
+
+	// Should have the pre-existing file plus the one from the directory
+	if len(o.PatchFiles) != 2 {
+		t.Errorf("expected 2 patch files, got %d: %v", len(o.PatchFiles), o.PatchFiles)
+	}
+}
+
+func TestPatchOptionsCompleteWithNonexistentPatchDir(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.PatchDir = "/nonexistent/patch/dir"
+
+	err := o.Complete()
+	if err == nil {
+		t.Error("expected error for nonexistent patch dir")
+	}
+}
+
+func TestPatchOptionsCompleteGlobalOutputFileOverride(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.OutputFile = "/tmp/custom-output.yaml"
+	})
+
+	if err := o.Complete(); err != nil {
+		t.Fatalf("Complete() failed: %v", err)
+	}
+
+	if o.OutputFile != "/tmp/custom-output.yaml" {
+		t.Errorf("expected OutputFile = /tmp/custom-output.yaml, got %s", o.OutputFile)
+	}
+}
+
+func TestPatchOptionsCompleteDryRunSetsStdout(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.DryRun = true
+	})
+
+	if err := o.Complete(); err != nil {
+		t.Fatalf("Complete() failed: %v", err)
+	}
+
+	if o.OutputFile != "/dev/stdout" {
+		t.Errorf("expected OutputFile = /dev/stdout for dry run, got %s", o.OutputFile)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for scanPatchDirectory with nonexistent directory
+// ---------------------------------------------------------------------------
+
+func TestScanPatchDirectoryNonexistent(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.PatchDir = "/nonexistent/dir"
+
+	_, err := o.scanPatchDirectory()
+	if err == nil {
+		t.Error("expected error for nonexistent directory")
+	}
+}
+
+func TestScanPatchDirectoryEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.PatchDir = tmpDir
+
+	files, err := o.scanPatchDirectory()
+	if err != nil {
+		t.Fatalf("scanPatchDirectory failed: %v", err)
+	}
+
+	if len(files) != 0 {
+		t.Errorf("expected 0 patch files in empty dir, got %d", len(files))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for Run() dispatch paths
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsRunInteractive(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.Interactive = true
+
+	err := o.runInteractive()
+	if err == nil {
+		t.Fatal("expected ErrInteractiveMode error")
+	}
+
+	if err.Error() != "interactive mode not yet implemented" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestPatchOptionsRunDispatchesInteractive(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.Interactive = true
+
+	err := o.Run()
+	if err == nil {
+		t.Fatal("expected error from Run() in interactive mode")
+	}
+	if err.Error() != "interactive mode not yet implemented" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestPatchOptionsRunDispatchesValidateOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, stdout, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.ValidateOnly = true
+
+	err := o.Run()
+	if err != nil {
+		t.Fatalf("Run() validate-only failed: %v", err)
+	}
+
+	if !strings.Contains(stdout.String(), "valid") {
+		t.Error("expected validation success message in output")
+	}
+}
+
+func TestPatchOptionsRunDispatchesDiff(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, stdout, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Diff = true
+
+	// Ensure no color output for easy checking
+	oldNoColor := os.Getenv("NO_COLOR")
+	os.Setenv("NO_COLOR", "1")
+	defer func() {
+		if oldNoColor != "" {
+			os.Setenv("NO_COLOR", oldNoColor)
+		} else {
+			os.Unsetenv("NO_COLOR")
+		}
+	}()
+
+	err := o.Run()
+	if err != nil {
+		t.Fatalf("Run() diff mode failed: %v", err)
+	}
+
+	output := stdout.String()
+	// Should contain diff output or "No changes" message
+	if output == "" {
+		t.Error("expected non-empty output from diff mode")
+	}
+}
+
+func TestPatchOptionsRunDispatchesCombined(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputFile := filepath.Join(tmpDir, "combined-out.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Combined = true
+	o.GroupBy = "none"
+	o.OutputFile = outputFile
+
+	err := o.Run()
+	if err != nil {
+		t.Fatalf("Run() combined mode failed: %v", err)
+	}
+
+	data, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+	if !strings.Contains(string(data), "patched-value") {
+		t.Error("expected patched value in combined output")
+	}
+}
+
+func TestPatchOptionsRunNormalPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputDir := filepath.Join(tmpDir, "output")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputDir = outputDir
+
+	err := o.Run()
+	if err != nil {
+		t.Fatalf("Run() normal path failed: %v", err)
+	}
+
+	// Verify output directory was created
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		t.Error("expected output directory to be created")
+	}
+}
+
+func TestPatchOptionsRunNormalPathVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputDir := filepath.Join(tmpDir, "output")
+
+	o, _, stderr := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.Verbose = true
+	})
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputDir = outputDir
+
+	err := o.Run()
+	if err != nil {
+		t.Fatalf("Run() normal path failed: %v", err)
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Applying") {
+		t.Error("expected verbose output to contain 'Applying'")
+	}
+	if !strings.Contains(errOutput, "Successfully") {
+		t.Error("expected verbose output to contain 'Successfully'")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for writeOutput routing
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsWriteOutputToFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputFile := filepath.Join(tmpDir, "out.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputFile = outputFile
+	o.OutputDir = filepath.Join(tmpDir, "outdir")
+
+	// Load and apply to get a PatchableAppSet
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+	patchableSet, err := o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	if err := o.writeOutput(patchableSet); err != nil {
+		t.Fatalf("writeOutput failed: %v", err)
+	}
+
+	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
+		t.Error("expected output file to be created")
+	}
+}
+
+func TestPatchOptionsWriteOutputDryRun(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, _, _ := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.DryRun = true
+	})
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputDir = filepath.Join(tmpDir, "outdir")
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+	patchableSet, err := o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	// writeOutput with DryRun should call writeToStdout
+	err = o.writeOutput(patchableSet)
+	if err != nil {
+		t.Fatalf("writeOutput with DryRun failed: %v", err)
+	}
+}
+
+func TestPatchOptionsWriteOutputToDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputDir := filepath.Join(tmpDir, "output-dir")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputDir = outputDir
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+	patchableSet, err := o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	if err := o.writeOutput(patchableSet); err != nil {
+		t.Fatalf("writeOutput to directory failed: %v", err)
+	}
+
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		t.Error("expected output directory to be created")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for writeToFile
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsWriteToFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputFile := filepath.Join(tmpDir, "subdir", "nested", "out.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputFile = outputFile
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+	patchableSet, err := o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	if err := o.writeToFile(patchableSet); err != nil {
+		t.Fatalf("writeToFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("expected non-empty output file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for writeToDirectory
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsWriteToDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputDir := filepath.Join(tmpDir, "my-output")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputDir = outputDir
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+	patchableSet, err := o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	if err := o.writeToDirectory(patchableSet); err != nil {
+		t.Fatalf("writeToDirectory failed: %v", err)
+	}
+
+	// Should create outputDir and a file named base-patched.yaml inside
+	expectedFile := filepath.Join(outputDir, "base-patched.yaml")
+	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+		t.Errorf("expected output file %s to exist", expectedFile)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for applyPatches and applyPatchFile
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsApplyPatches(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputDir = filepath.Join(tmpDir, "out")
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	patchableSet, err := o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	if patchableSet == nil {
+		t.Fatal("expected non-nil PatchableAppSet")
+	}
+
+	if patchableSet.DocumentSet == nil {
+		t.Error("expected non-nil DocumentSet in PatchableAppSet")
+	}
+
+	if len(patchableSet.Resources) == 0 {
+		t.Error("expected at least one resource in PatchableAppSet")
+	}
+}
+
+func TestPatchOptionsApplyPatchesVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, _, stderr := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.Verbose = true
+	})
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputDir = filepath.Join(tmpDir, "out")
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	_, err = o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	if !strings.Contains(stderr.String(), "Applying patch") {
+		t.Error("expected verbose output to contain 'Applying patch'")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for loadBaseResources
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsLoadBaseResources(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	if docSet == nil {
+		t.Fatal("expected non-nil document set")
+	}
+
+	if len(docSet.Documents) != 1 {
+		t.Errorf("expected 1 document, got %d", len(docSet.Documents))
+	}
+
+	if docSet.Documents[0].Resource.GetName() != "test-config" {
+		t.Errorf("expected resource name 'test-config', got %s", docSet.Documents[0].Resource.GetName())
+	}
+}
+
+func TestPatchOptionsLoadBaseResourcesNonexistent(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = "/nonexistent/base.yaml"
+
+	_, err := o.loadBaseResources()
+	if err == nil {
+		t.Error("expected error for nonexistent base file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for writeCombinedToFile
+// ---------------------------------------------------------------------------
+
+func TestWriteCombinedToFileNonStdout(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	outputFile := filepath.Join(tmpDir, "subdir", "combined.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.OutputFile = outputFile
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	if err := o.writeCombinedToFile(docSet); err != nil {
+		t.Fatalf("writeCombinedToFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	if !strings.Contains(string(data), "test-config") {
+		t.Error("expected output to contain resource name")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for sortDocumentsByKind
+// ---------------------------------------------------------------------------
+
+func TestSortDocumentsByKind(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := filepath.Join(tmpDir, "base.yaml")
+
+	// Create a multi-resource file with different kinds in unsorted order
+	baseContent := `apiVersion: v1
+kind: Service
+metadata:
+  name: svc-b
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cfg-a
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-a
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cfg-b
+`
+	if err := os.WriteFile(baseFile, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to write base file: %v", err)
+	}
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	o.sortDocumentsByKind(docSet)
+
+	// After sorting: ConfigMap cfg-a, ConfigMap cfg-b, Service svc-a, Service svc-b
+	expected := []struct {
+		kind string
+		name string
+	}{
+		{"ConfigMap", "cfg-a"},
+		{"ConfigMap", "cfg-b"},
+		{"Service", "svc-a"},
+		{"Service", "svc-b"},
+	}
+
+	if len(docSet.Documents) != len(expected) {
+		t.Fatalf("expected %d documents, got %d", len(expected), len(docSet.Documents))
+	}
+
+	for i, exp := range expected {
+		doc := docSet.Documents[i]
+		if doc.Resource.GetKind() != exp.kind || doc.Resource.GetName() != exp.name {
+			t.Errorf("doc[%d]: expected %s/%s, got %s/%s",
+				i, exp.kind, exp.name,
+				doc.Resource.GetKind(), doc.Resource.GetName())
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for printColoredDiff with colors enabled
+// ---------------------------------------------------------------------------
+
+func TestPrintColoredDiffWithColors(t *testing.T) {
+	o, stdout, _ := newTestPatchOptions(t, nil)
+
+	// Set TERM and unset NO_COLOR to trigger colored output
+	oldTerm := os.Getenv("TERM")
+	oldNoColor := os.Getenv("NO_COLOR")
+	os.Setenv("TERM", "xterm")
+	os.Unsetenv("NO_COLOR")
+	defer func() {
+		if oldTerm != "" {
+			os.Setenv("TERM", oldTerm)
+		} else {
+			os.Unsetenv("TERM")
+		}
+		if oldNoColor != "" {
+			os.Setenv("NO_COLOR", oldNoColor)
+		}
+	}()
+
+	diffText := `--- a/test.yaml
++++ b/test.yaml
+@@ -1,3 +1,3 @@
+ unchanged
+-removed
++added
+`
+
+	o.printColoredDiff(diffText)
+	output := stdout.String()
+
+	// With colors enabled, ANSI escape codes should be present
+	if !strings.Contains(output, "\033[") {
+		t.Error("expected ANSI color codes in output when TERM is set and NO_COLOR is unset")
+	}
+	// Verify the content is still present
+	if !strings.Contains(output, "removed") {
+		t.Error("expected 'removed' in colored diff output")
+	}
+	if !strings.Contains(output, "added") {
+		t.Error("expected 'added' in colored diff output")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for writeDocumentSetToBuffer
+// ---------------------------------------------------------------------------
+
+func TestWriteDocumentSetToBuffer(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := o.writeDocumentSetToBuffer(docSet, &buf); err != nil {
+		t.Fatalf("writeDocumentSetToBuffer failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "test-config") {
+		t.Error("expected buffer to contain resource name")
+	}
+	if !strings.Contains(output, "key1") {
+		t.Error("expected buffer to contain data key")
+	}
+}
+
+func TestWriteDocumentSetToBufferMultiDoc(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := filepath.Join(tmpDir, "multi.yaml")
+	content := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cfg1
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cfg2
+`
+	if err := os.WriteFile(baseFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := o.writeDocumentSetToBuffer(docSet, &buf); err != nil {
+		t.Fatalf("writeDocumentSetToBuffer failed: %v", err)
+	}
+
+	output := buf.String()
+	// Multi-doc should have separator
+	if !strings.Contains(output, "---") {
+		t.Error("expected YAML document separator in multi-doc output")
+	}
+	if !strings.Contains(output, "cfg1") || !strings.Contains(output, "cfg2") {
+		t.Error("expected both documents in output")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for validatePatchFile with nonexistent file
+// ---------------------------------------------------------------------------
+
+func TestValidatePatchFileNonexistent(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, nil)
+
+	err := o.validatePatchFile("/nonexistent/patch.yaml")
+	if err == nil {
+		t.Error("expected error for nonexistent patch file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for runValidation with verbose and invalid file
+// ---------------------------------------------------------------------------
+
+func TestRunValidationInvalidFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	patchFile := filepath.Join(tmpDir, "invalid.yaml")
+	if err := os.WriteFile(patchFile, []byte(""), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.PatchFiles = []string{patchFile}
+
+	err := o.runValidation()
+	if err == nil {
+		t.Error("expected error for invalid/empty patch file")
+	}
+}
+
+func TestRunValidationVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	patchFile := writeTestPatchFile(t, tmpDir, "valid.yaml")
+
+	o, stdout, stderr := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.Verbose = true
+	})
+	o.PatchFiles = []string{patchFile}
+
+	err := o.runValidation()
+	if err != nil {
+		t.Fatalf("runValidation failed: %v", err)
+	}
+
+	if !strings.Contains(stdout.String(), "valid") {
+		t.Error("expected success message in stdout")
+	}
+	if !strings.Contains(stderr.String(), "Validating") {
+		t.Error("expected verbose validation message in stderr")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for Validate with multiple patch files where one is invalid
+// ---------------------------------------------------------------------------
+
+func TestPatchOptionsValidateMultiplePatchFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	goodPatch := writeTestPatchFile(t, tmpDir, "good.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{goodPatch, "/nonexistent/bad.yaml"}
+
+	err := o.Validate()
+	if err == nil {
+		t.Error("expected error when one patch file does not exist")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runCombined verbose output
+// ---------------------------------------------------------------------------
+
+func TestRunCombinedVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputFile := filepath.Join(tmpDir, "out.yaml")
+
+	o, _, stderr := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.Verbose = true
+	})
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Combined = true
+	o.GroupBy = "none"
+	o.OutputFile = outputFile
+
+	err := o.runCombined()
+	if err != nil {
+		t.Fatalf("runCombined failed: %v", err)
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Combined mode") {
+		t.Error("expected verbose output to contain 'Combined mode'")
+	}
+	if !strings.Contains(errOutput, "Applying patch") {
+		t.Error("expected verbose output to contain 'Applying patch'")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runCombined with group-by "file"
+// ---------------------------------------------------------------------------
+
+func TestRunCombinedGroupByFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+	outputFile := filepath.Join(tmpDir, "out.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Combined = true
+	o.GroupBy = "file"
+	o.OutputFile = outputFile
+
+	err := o.runCombined()
+	if err != nil {
+		t.Fatalf("runCombined with group-by=file failed: %v", err)
+	}
+
+	// Verify output was written
+	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
+		t.Error("expected output file to exist")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runDiff with verbose output
+// ---------------------------------------------------------------------------
+
+func TestRunDiffVerbose(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, _, stderr := newTestPatchOptions(t, func(g *options.GlobalOptions) {
+		g.Verbose = true
+	})
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Diff = true
+
+	// Suppress colors
+	oldNoColor := os.Getenv("NO_COLOR")
+	os.Setenv("NO_COLOR", "1")
+	defer func() {
+		if oldNoColor != "" {
+			os.Setenv("NO_COLOR", oldNoColor)
+		} else {
+			os.Unsetenv("NO_COLOR")
+		}
+	}()
+
+	err := o.runDiff()
+	if err != nil {
+		t.Fatalf("runDiff failed: %v", err)
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Diff mode") {
+		t.Error("expected verbose 'Diff mode' message in stderr")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runCombined writing to stdout (no OutputFile)
+// ---------------------------------------------------------------------------
+
+func TestRunCombinedStdout(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Combined = true
+	o.GroupBy = "none"
+	o.OutputFile = "" // No output file -> writes to /dev/stdout
+
+	// runCombined falls through to documentSet.WriteToFile("/dev/stdout")
+	// which writes to actual stdout. We can't capture that easily, but we
+	// can verify it does not error.
+	err := o.runCombined()
+	if err != nil {
+		t.Fatalf("runCombined to stdout failed: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runCombined with nonexistent base file
+// ---------------------------------------------------------------------------
+
+func TestRunCombinedNonexistentBase(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = "/nonexistent/base.yaml"
+	o.PatchFiles = []string{"/nonexistent/patch.yaml"}
+	o.Combined = true
+	o.GroupBy = "none"
+
+	err := o.runCombined()
+	if err == nil {
+		t.Error("expected error for nonexistent base file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runCombined with nonexistent patch file
+// ---------------------------------------------------------------------------
+
+func TestRunCombinedNonexistentPatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{"/nonexistent/patch.yaml"}
+	o.Combined = true
+	o.GroupBy = "none"
+
+	err := o.runCombined()
+	if err == nil {
+		t.Error("expected error for nonexistent patch file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runDiff nonexistent base
+// ---------------------------------------------------------------------------
+
+func TestRunDiffNonexistentBase(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = "/nonexistent/base.yaml"
+	o.PatchFiles = []string{"/nonexistent/patch.yaml"}
+	o.Diff = true
+
+	err := o.runDiff()
+	if err == nil {
+		t.Error("expected error for nonexistent base file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runDiff nonexistent patch
+// ---------------------------------------------------------------------------
+
+func TestRunDiffNonexistentPatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{"/nonexistent/patch.yaml"}
+	o.Diff = true
+
+	err := o.runDiff()
+	if err == nil {
+		t.Error("expected error for nonexistent patch file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for strategic merge patches in runCombined and runDiff
+// ---------------------------------------------------------------------------
+
+// writeStrategicPatchFile creates a strategic merge patch file targeting a resource.
+func writeStrategicPatchFile(t *testing.T, dir, name, target string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	content := fmt.Sprintf(`- target: %s
+  type: strategic
+  patch:
+    metadata:
+      labels:
+        patched: "true"
+`, target)
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write strategic patch file: %v", err)
+	}
+	return p
+}
+
+func TestRunCombinedStrategicPatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := filepath.Join(tmpDir, "base.yaml")
+	outputFile := filepath.Join(tmpDir, "out.yaml")
+
+	baseContent := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config
+data:
+  key1: value1
+`
+	if err := os.WriteFile(baseFile, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to write base: %v", err)
+	}
+
+	patchFile := writeStrategicPatchFile(t, tmpDir, "strategic.yaml", "test-config")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Combined = true
+	o.GroupBy = "none"
+	o.OutputFile = outputFile
+
+	err := o.runCombined()
+	if err != nil {
+		t.Fatalf("runCombined with strategic patch failed: %v", err)
+	}
+
+	data, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	if !strings.Contains(string(data), "patched") {
+		t.Error("expected strategic patch label in output")
+	}
+}
+
+func TestRunDiffStrategicPatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := filepath.Join(tmpDir, "base.yaml")
+
+	baseContent := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config
+data:
+  key1: value1
+`
+	if err := os.WriteFile(baseFile, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to write base: %v", err)
+	}
+
+	patchFile := writeStrategicPatchFile(t, tmpDir, "strategic.yaml", "test-config")
+
+	// Suppress colors
+	oldNoColor := os.Getenv("NO_COLOR")
+	os.Setenv("NO_COLOR", "1")
+	defer func() {
+		if oldNoColor != "" {
+			os.Setenv("NO_COLOR", oldNoColor)
+		} else {
+			os.Unsetenv("NO_COLOR")
+		}
+	}()
+
+	o, stdout, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.Diff = true
+
+	err := o.runDiff()
+	if err != nil {
+		t.Fatalf("runDiff with strategic patch failed: %v", err)
+	}
+
+	output := stdout.String()
+	// Diff should show the added label
+	if !strings.Contains(output, "patched") {
+		t.Error("expected diff output to show the strategic patch change")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for NewPatchCommand RunE error paths
+// ---------------------------------------------------------------------------
+
+func TestNewPatchCommandRunE_CompleteError(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := NewPatchCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Pass a nonexistent patch-dir to trigger Complete() error
+	cmd.SetArgs([]string{"--patch-dir=/nonexistent/dir", "base.yaml"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error from Complete() with invalid patch-dir")
+	}
+}
+
+func TestNewPatchCommandRunE_ValidateError(t *testing.T) {
+	globalOpts := options.NewGlobalOptions()
+	cmd := NewPatchCommand(globalOpts)
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// base file doesn't exist -> Validate() should fail
+	cmd.SetArgs([]string{"/nonexistent/base.yaml", "/nonexistent/patch.yaml"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error from Validate() with nonexistent base file")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for writeCombinedToFile with /dev/stdout
+// ---------------------------------------------------------------------------
+
+func TestWriteCombinedToFileStdout(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.OutputFile = "/dev/stdout"
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+
+	// Should not error even though output goes to stdout
+	err = o.writeCombinedToFile(docSet)
+	if err != nil {
+		t.Fatalf("writeCombinedToFile to /dev/stdout failed: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for runInteractive with nonexistent base file
+// ---------------------------------------------------------------------------
+
+func TestRunInteractiveNonexistentBase(t *testing.T) {
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = "/nonexistent/base.yaml"
+	o.Interactive = true
+
+	err := o.runInteractive()
+	if err == nil {
+		t.Error("expected error for nonexistent base file in interactive mode")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test for writeToFile with /dev/stdout path (routes through writeToStdout)
+// ---------------------------------------------------------------------------
+
+func TestWriteToFileStdoutPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := writeTestBaseFile(t, tmpDir)
+	patchFile := writeTestPatchFile(t, tmpDir, "p.yaml")
+
+	o, _, _ := newTestPatchOptions(t, nil)
+	o.BaseFile = baseFile
+	o.PatchFiles = []string{patchFile}
+	o.OutputFile = "/dev/stdout"
+	o.OutputDir = filepath.Join(tmpDir, "outdir")
+
+	docSet, err := o.loadBaseResources()
+	if err != nil {
+		t.Fatalf("loadBaseResources failed: %v", err)
+	}
+	patchableSet, err := o.applyPatches(docSet)
+	if err != nil {
+		t.Fatalf("applyPatches failed: %v", err)
+	}
+
+	err = o.writeToFile(patchableSet)
+	if err != nil {
+		t.Fatalf("writeToFile with /dev/stdout failed: %v", err)
 	}
 }
