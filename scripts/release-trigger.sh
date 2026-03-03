@@ -67,7 +67,7 @@ echo ""
 if [ "$DO_IT" != "1" ]; then
     echo "---"
     if [ "$TYPE" = "bump" ]; then
-        CMD="mise run release bump $SCOPE"
+        CMD="mise run release bump${SCOPE:+ $SCOPE}"
     else
         # Show type only if it differs from auto-detected
         AUTO_TYPE=$(sed -n 's/.*-\(alpha\|beta\|rc\).*/\1/p' VERSION 2>/dev/null || true)
@@ -78,7 +78,7 @@ if [ "$DO_IT" != "1" ]; then
         fi
     fi
     echo "To execute, run:"
-    echo "  $CMD --do-it"
+    echo "  $CMD -- --do-it"
     exit 0
 fi
 
@@ -87,20 +87,28 @@ fi
 echo "=== Triggering CI ==="
 echo ""
 
-if git remote get-url origin 2>/dev/null | grep -q github.com; then
-    ARGS="--field type=${TYPE}"
-    [ -n "$SCOPE" ] && ARGS="$ARGS --field scope=${SCOPE}"
+REMOTE=$(git remote get-url origin 2>/dev/null || true)
+if echo "$REMOTE" | grep -q github.com; then
     echo "Dispatching GitHub workflow: release-create.yml (type=${TYPE})"
-    gh workflow run release-create.yml $ARGS
+    if [ -n "$SCOPE" ]; then
+        gh workflow run release-create.yml --field "type=${TYPE}" --field "scope=${SCOPE}"
+    else
+        gh workflow run release-create.yml --field "type=${TYPE}"
+    fi
     echo ""
     echo "Watch progress:"
     echo "  gh run list --workflow=release-create.yml"
-else
-    VARS="RELEASE_TYPE:${TYPE}"
-    [ -n "$SCOPE" ] && VARS="${VARS},RELEASE_SCOPE:${SCOPE}"
+elif echo "$REMOTE" | grep -q gitlab; then
     echo "Creating GitLab pipeline on main (RELEASE_TYPE=${TYPE})"
-    glab ci run --branch main --variables-env "$VARS"
+    if [ -n "$SCOPE" ]; then
+        glab ci run --branch main --variables-env "RELEASE_TYPE:${TYPE},RELEASE_SCOPE:${SCOPE}"
+    else
+        glab ci run --branch main --variables-env "RELEASE_TYPE:${TYPE}"
+    fi
     echo ""
     echo "Watch progress:"
     echo "  glab ci status"
+else
+    echo "ERROR: unsupported remote: $REMOTE"
+    exit 1
 fi
