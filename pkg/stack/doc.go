@@ -101,4 +101,24 @@
 //
 //	// Write to disk using layout package
 //	layout.WriteCluster(cluster, "./clusters/prod", manifests)
+//
+// # Dual Access Pattern (Exported Fields and Getter/Setter Methods)
+//
+// Several types in this package, notably [Cluster] and [Node], expose their
+// data both as exported struct fields and through getter/setter methods.
+// The methods are intentionally thin wrappers without additional validation,
+// meaning both access paths are functionally equivalent.
+//
+// This design serves two audiences:
+//
+//   - Internal and test code benefits from direct field access, which is
+//     concise and idiomatic in Go.
+//   - External library consumers (e.g. Crane) can use getter/setter methods
+//     to decouple from the concrete field layout, making it easier to
+//     introduce validation or indirection in a future version without
+//     breaking callers.
+//
+// When writing new code inside the kure repository, prefer direct field
+// access. When consuming the stack package as a library, prefer the
+// getter/setter methods. See the [Cluster] type documentation for details.
 package stack

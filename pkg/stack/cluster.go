@@ -5,7 +5,40 @@ import (
 )
 
 // Cluster describes a cluster configuration.
-// A cluster configuration is a set of configurations that are packaged in one or more package units
+// A cluster configuration is a set of configurations that are packaged in one
+// or more package units.
+//
+// # Dual Access Pattern
+//
+// Cluster exposes its fields (Name, Node, GitOps) as exported struct fields
+// and also provides getter/setter methods (GetName/SetName, GetNode/SetNode,
+// GetGitOps/SetGitOps). The getters and setters are thin wrappers that do not
+// add validation; both access paths read and write the same underlying fields.
+//
+// This dual access pattern exists intentionally:
+//
+//   - Exported fields allow direct, concise access that is idiomatic in Go,
+//     particularly useful in tests, internal code, and YAML
+//     serialization/deserialization (struct tags operate on exported fields).
+//   - Getter/setter methods provide an encapsulated API surface for library
+//     consumers (e.g. Crane) who may prefer method-based access or who want
+//     to program against a future interface without depending on concrete
+//     field layout.
+//
+// # Guidance for New Code
+//
+// Within the kure codebase (tests, internal packages, CLI commands), prefer
+// direct field access for brevity:
+//
+//	c.Name = "prod"
+//	fmt.Println(c.Node)
+//
+// When writing code that consumes the stack package as an external library,
+// prefer the getter/setter methods so that any future validation or
+// indirection can be introduced without breaking callers:
+//
+//	c.SetName("prod")
+//	node := c.GetNode()
 type Cluster struct {
 	Name   string        `yaml:"name"`
 	Node   *Node         `yaml:"node,omitempty"`
