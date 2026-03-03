@@ -70,7 +70,7 @@ func TestPatchProcessor(t *testing.T) {
 			}
 
 			params := ParameterMap{
-				"feature": map[string]interface{}{
+				"feature": map[string]any{
 					"enabled": true,
 				},
 				"env": "prod",
@@ -174,14 +174,14 @@ func TestPatchProcessor(t *testing.T) {
 							Namespace: "default",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "apps/v1",
 								"kind":       "Deployment",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name":      "test-app",
 									"namespace": "default",
 								},
-								"spec": map[string]interface{}{
+								"spec": map[string]any{
 									"replicas": float64(1),
 								},
 							},
@@ -204,10 +204,10 @@ func TestPatchProcessor(t *testing.T) {
 			require.NotNil(t, result)
 
 			// Check that the original is unchanged
-			assert.Equal(t, float64(1), def.Resources[0].Raw.Object["spec"].(map[string]interface{})["replicas"])
+			assert.Equal(t, float64(1), def.Resources[0].Raw.Object["spec"].(map[string]any)["replicas"])
 
 			// Check that the result has the patch applied
-			spec := result.Resources[0].Raw.Object["spec"].(map[string]interface{})
+			spec := result.Resources[0].Raw.Object["spec"].(map[string]any)
 			assert.Equal(t, 3, spec["replicas"])
 		})
 
@@ -221,13 +221,13 @@ func TestPatchProcessor(t *testing.T) {
 							Name: "app1",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "apps/v1",
 								"kind":       "Deployment",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name": "app1",
 								},
-								"spec": map[string]interface{}{
+								"spec": map[string]any{
 									"replicas": float64(1),
 								},
 							},
@@ -240,13 +240,13 @@ func TestPatchProcessor(t *testing.T) {
 							Name: "app2",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "apps/v1",
 								"kind":       "Deployment",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name": "app2",
 								},
-								"spec": map[string]interface{}{
+								"spec": map[string]any{
 									"replicas": float64(1),
 								},
 							},
@@ -270,8 +270,8 @@ spec.replicas: 5`,
 			require.NoError(t, err)
 
 			// Check that only app1 was patched
-			spec1 := result.Resources[0].Raw.Object["spec"].(map[string]interface{})
-			spec2 := result.Resources[1].Raw.Object["spec"].(map[string]interface{})
+			spec1 := result.Resources[0].Raw.Object["spec"].(map[string]any)
+			spec2 := result.Resources[1].Raw.Object["spec"].(map[string]any)
 			assert.Equal(t, 5, spec1["replicas"])
 			assert.Equal(t, float64(1), spec2["replicas"]) // Unchanged
 		})
@@ -286,13 +286,13 @@ spec.replicas: 5`,
 							Name: "config",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "v1",
 								"kind":       "ConfigMap",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name": "config",
 								},
-								"data": map[string]interface{}{},
+								"data": map[string]any{},
 							},
 						},
 					},
@@ -309,7 +309,7 @@ data.version: ${values.app.version}`,
 
 			params := ParameterMap{
 				"env": "production",
-				"app": map[string]interface{}{
+				"app": map[string]any{
 					"version": "1.2.3",
 				},
 			}
@@ -318,7 +318,7 @@ data.version: ${values.app.version}`,
 
 			require.NoError(t, err)
 
-			data := result.Resources[0].Raw.Object["data"].(map[string]interface{})
+			data := result.Resources[0].Raw.Object["data"].(map[string]any)
 			assert.Equal(t, "production", data["environment"])
 			assert.Equal(t, "1.2.3", data["version"])
 		})
@@ -603,7 +603,7 @@ func TestCreateVariableContext(t *testing.T) {
 
 	params := ParameterMapWithSource{
 		"app": ParameterSource{
-			Value: map[string]interface{}{
+			Value: map[string]any{
 				"name": "test-app",
 				"port": 8080,
 			},
@@ -612,7 +612,7 @@ func TestCreateVariableContext(t *testing.T) {
 			Value: true,
 		},
 		"items": ParameterSource{
-			Value: []interface{}{"a", "b", "c"},
+			Value: []any{"a", "b", "c"},
 		},
 	}
 

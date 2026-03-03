@@ -175,14 +175,14 @@ func TestGlobalOptions_Complete(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		viperValues  map[string]interface{}
+		viperValues  map[string]any
 		initialOpts  *GlobalOptions
 		expectedOpts *GlobalOptions
 		wantErr      bool
 	}{
 		{
 			name:        "no viper values",
-			viperValues: map[string]interface{}{},
+			viperValues: map[string]any{},
 			initialOpts: &GlobalOptions{
 				Output:  "yaml",
 				Verbose: false,
@@ -197,7 +197,7 @@ func TestGlobalOptions_Complete(t *testing.T) {
 		},
 		{
 			name: "viper overrides",
-			viperValues: map[string]interface{}{
+			viperValues: map[string]any{
 				"verbose":   true,
 				"debug":     false,
 				"output":    "json",
@@ -219,7 +219,7 @@ func TestGlobalOptions_Complete(t *testing.T) {
 		},
 		{
 			name: "debug enables verbose",
-			viperValues: map[string]interface{}{
+			viperValues: map[string]any{
 				"debug": true,
 			},
 			initialOpts: &GlobalOptions{
@@ -236,7 +236,7 @@ func TestGlobalOptions_Complete(t *testing.T) {
 		},
 		{
 			name: "invalid output format from viper",
-			viperValues: map[string]interface{}{
+			viperValues: map[string]any{
 				"output": "invalid",
 			},
 			initialOpts: &GlobalOptions{

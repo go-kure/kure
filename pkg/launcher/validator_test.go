@@ -38,29 +38,29 @@ func TestValidator(t *testing.T) {
 							Namespace: "default",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "apps/v1",
 								"kind":       "Deployment",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name":      "test-app",
 									"namespace": "default",
 								},
-								"spec": map[string]interface{}{
+								"spec": map[string]any{
 									"replicas": int64(3),
-									"selector": map[string]interface{}{
-										"matchLabels": map[string]interface{}{
+									"selector": map[string]any{
+										"matchLabels": map[string]any{
 											"app": "test",
 										},
 									},
-									"template": map[string]interface{}{
-										"metadata": map[string]interface{}{
-											"labels": map[string]interface{}{
+									"template": map[string]any{
+										"metadata": map[string]any{
+											"labels": map[string]any{
 												"app": "test",
 											},
 										},
-										"spec": map[string]interface{}{
-											"containers": []interface{}{
-												map[string]interface{}{
+										"spec": map[string]any{
+											"containers": []any{
+												map[string]any{
 													"name":  "app",
 													"image": "nginx:latest",
 												},
@@ -132,10 +132,10 @@ func TestValidator(t *testing.T) {
 							Namespace: "default",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "v1",
 								"kind":       "ConfigMap",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name":      "config",
 									"namespace": "default",
 								},
@@ -150,10 +150,10 @@ func TestValidator(t *testing.T) {
 							Namespace: "default",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "v1",
 								"kind":       "ConfigMap",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name":      "config",
 									"namespace": "default",
 								},
@@ -304,24 +304,24 @@ func TestValidator(t *testing.T) {
 					Namespace: "default",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "apps/v1",
 						"kind":       "Deployment",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name":      "test-app",
 							"namespace": "default",
 						},
-						"spec": map[string]interface{}{
+						"spec": map[string]any{
 							"replicas": int64(3),
-							"selector": map[string]interface{}{
-								"matchLabels": map[string]interface{}{
+							"selector": map[string]any{
+								"matchLabels": map[string]any{
 									"app": "test",
 								},
 							},
-							"template": map[string]interface{}{
-								"spec": map[string]interface{}{
-									"containers": []interface{}{
-										map[string]interface{}{
+							"template": map[string]any{
+								"spec": map[string]any{
+									"containers": []any{
+										map[string]any{
 											"name":  "app",
 											"image": "nginx:latest",
 										},
@@ -347,10 +347,10 @@ func TestValidator(t *testing.T) {
 					Name: "test-app",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "apps/v1",
 						"kind":       "Deployment",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name": "test-app",
 						},
 						// Missing spec
@@ -372,15 +372,15 @@ func TestValidator(t *testing.T) {
 					Name: "test-svc",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "v1",
 						"kind":       "Service",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name": "test-svc",
 						},
-						"spec": map[string]interface{}{
-							"ports": []interface{}{
-								map[string]interface{}{
+						"spec": map[string]any{
+							"ports": []any{
+								map[string]any{
 									"port": int64(70000), // Invalid port > 65535
 								},
 							},
@@ -413,15 +413,15 @@ func TestValidator(t *testing.T) {
 					Name: "test-ingress",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "networking.k8s.io/v1",
 						"kind":       "Ingress",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name": "test-ingress",
 						},
-						"spec": map[string]interface{}{
-							"rules": []interface{}{
-								map[string]interface{}{
+						"spec": map[string]any{
+							"rules": []any{
+								map[string]any{
 									"host": "invalid_hostname!", // Invalid chars
 								},
 							},

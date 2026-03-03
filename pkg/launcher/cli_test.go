@@ -41,7 +41,7 @@ func TestCLI_BuildCommand(t *testing.T) {
 			args: []string{"build", "testdata/packages/simple", "--format", "json"},
 			checkFunc: func(t *testing.T, output string) {
 				// Should be valid JSON
-				var data interface{}
+				var data any
 				if err := json.Unmarshal([]byte(output), &data); err != nil {
 					t.Errorf("Output should be valid JSON: %v", err)
 				}
@@ -320,7 +320,7 @@ func TestCLI_SchemaCommand(t *testing.T) {
 			name: "generate schema",
 			args: []string{"schema"},
 			checkFunc: func(t *testing.T, output string) {
-				var schema map[string]interface{}
+				var schema map[string]any
 				if err := json.Unmarshal([]byte(output), &schema); err != nil {
 					t.Errorf("Output should be valid JSON: %v", err)
 				}
@@ -629,7 +629,7 @@ func TestCLI_CompleteFlow(t *testing.T) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	resourceCount := 0
 	for {
-		var doc map[string]interface{}
+		var doc map[string]any
 		if err := decoder.Decode(&doc); err != nil {
 			break
 		}

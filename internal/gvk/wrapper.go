@@ -92,9 +92,9 @@ func (w *TypedWrapper[T]) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // MarshalYAML implements custom YAML marshaling
-func (w *TypedWrapper[T]) MarshalYAML() (interface{}, error) {
+func (w *TypedWrapper[T]) MarshalYAML() (any, error) {
 	// Create a map representation for clean YAML output
-	result := map[string]interface{}{
+	result := map[string]any{
 		"apiVersion": w.APIVersion,
 		"kind":       w.Kind,
 	}

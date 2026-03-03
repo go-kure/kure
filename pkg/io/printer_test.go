@@ -237,7 +237,7 @@ func TestGetResourceStatus(t *testing.T) {
 	objWithStatus.SetKind("Pod")
 	objWithStatus.SetName("test-pod")
 	objWithStatus.SetNamespace("default")
-	objWithStatus.Object["status"] = map[string]interface{}{
+	objWithStatus.Object["status"] = map[string]any{
 		"phase": "Running",
 	}
 
@@ -252,9 +252,9 @@ func TestGetResourceStatus(t *testing.T) {
 	objWithCondition.SetKind("Deployment")
 	objWithCondition.SetName("test-deployment")
 	objWithCondition.SetNamespace("default")
-	objWithCondition.Object["status"] = map[string]interface{}{
-		"conditions": []interface{}{
-			map[string]interface{}{
+	objWithCondition.Object["status"] = map[string]any{
+		"conditions": []any{
+			map[string]any{
 				"type":   "Ready",
 				"status": "True",
 			},
@@ -559,7 +559,7 @@ func TestGetResourceStatus_EdgeCases(t *testing.T) {
 			obj: func() client.Object {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Pod")
-				obj.Object["status"] = map[string]interface{}{
+				obj.Object["status"] = map[string]any{
 					"phase": "Running",
 				}
 				return obj
@@ -571,7 +571,7 @@ func TestGetResourceStatus_EdgeCases(t *testing.T) {
 			obj: func() client.Object {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("CustomResource")
-				obj.Object["status"] = map[string]interface{}{
+				obj.Object["status"] = map[string]any{
 					"ready": true,
 				}
 				return obj
@@ -583,7 +583,7 @@ func TestGetResourceStatus_EdgeCases(t *testing.T) {
 			obj: func() client.Object {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("CustomResource")
-				obj.Object["status"] = map[string]interface{}{
+				obj.Object["status"] = map[string]any{
 					"ready": false,
 				}
 				return obj
@@ -595,13 +595,13 @@ func TestGetResourceStatus_EdgeCases(t *testing.T) {
 			obj: func() client.Object {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Deployment")
-				obj.Object["status"] = map[string]interface{}{
-					"conditions": []interface{}{
-						map[string]interface{}{
+				obj.Object["status"] = map[string]any{
+					"conditions": []any{
+						map[string]any{
 							"type":   "Progressing",
 							"status": "True",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type":   "Ready",
 							"status": "True",
 						},
@@ -616,9 +616,9 @@ func TestGetResourceStatus_EdgeCases(t *testing.T) {
 			obj: func() client.Object {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Deployment")
-				obj.Object["status"] = map[string]interface{}{
-					"conditions": []interface{}{
-						map[string]interface{}{
+				obj.Object["status"] = map[string]any{
+					"conditions": []any{
+						map[string]any{
 							"type":   "Ready",
 							"status": "False",
 						},
@@ -633,9 +633,9 @@ func TestGetResourceStatus_EdgeCases(t *testing.T) {
 			obj: func() client.Object {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Deployment")
-				obj.Object["status"] = map[string]interface{}{
-					"conditions": []interface{}{
-						map[string]interface{}{
+				obj.Object["status"] = map[string]any{
+					"conditions": []any{
+						map[string]any{
 							"type":   "Progressing",
 							"status": "True",
 						},
@@ -872,7 +872,7 @@ func createTestConfigMap(name, namespace string) client.Object {
 	obj.SetKind("ConfigMap")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["data"] = map[string]interface{}{
+	obj.Object["data"] = map[string]any{
 		"key1": "value1",
 		"key2": "value2",
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 func TestConversionFuncConvert(t *testing.T) {
-	converter := ConversionFunc(func(from interface{}) (interface{}, error) {
+	converter := ConversionFunc(func(from any) (any, error) {
 		// Simple passthrough converter
 		return from, nil
 	})
@@ -37,7 +37,7 @@ func TestConversionRegistryRegister(t *testing.T) {
 	fromGVK := GVK{Group: "test", Version: "v1", Kind: "Foo"}
 	toGVK := GVK{Group: "test", Version: "v2", Kind: "Foo"}
 
-	converter := ConversionFunc(func(from interface{}) (interface{}, error) {
+	converter := ConversionFunc(func(from any) (any, error) {
 		return from, nil
 	})
 
@@ -54,7 +54,7 @@ func TestConversionRegistryRegisterFunc(t *testing.T) {
 	fromGVK := GVK{Group: "test", Version: "v1", Kind: "Foo"}
 	toGVK := GVK{Group: "test", Version: "v2", Kind: "Foo"}
 
-	registry.RegisterFunc(fromGVK, toGVK, func(from interface{}) (interface{}, error) {
+	registry.RegisterFunc(fromGVK, toGVK, func(from any) (any, error) {
 		return from, nil
 	})
 
@@ -69,7 +69,7 @@ func TestConversionRegistryConvert(t *testing.T) {
 	fromGVK := GVK{Group: "test", Version: "v1", Kind: "Foo"}
 	toGVK := GVK{Group: "test", Version: "v2", Kind: "Foo"}
 
-	registry.RegisterFunc(fromGVK, toGVK, func(from interface{}) (interface{}, error) {
+	registry.RegisterFunc(fromGVK, toGVK, func(from any) (any, error) {
 		// Double the input (if string)
 		if s, ok := from.(string); ok {
 			return s + s, nil
@@ -113,7 +113,7 @@ func TestConversionRegistryHasConversion(t *testing.T) {
 	toGVK := GVK{Group: "test", Version: "v2", Kind: "Foo"}
 	unknownGVK := GVK{Group: "unknown", Version: "v1", Kind: "Unknown"}
 
-	registry.RegisterFunc(fromGVK, toGVK, func(from interface{}) (interface{}, error) {
+	registry.RegisterFunc(fromGVK, toGVK, func(from any) (any, error) {
 		return from, nil
 	})
 
@@ -149,10 +149,10 @@ func TestConversionRegistryListConversions(t *testing.T) {
 	toGVKv2 := GVK{Group: "test", Version: "v2", Kind: "Foo"}
 	toGVKv3 := GVK{Group: "test", Version: "v3", Kind: "Foo"}
 
-	registry.RegisterFunc(fromGVK, toGVKv2, func(from interface{}) (interface{}, error) {
+	registry.RegisterFunc(fromGVK, toGVKv2, func(from any) (any, error) {
 		return from, nil
 	})
-	registry.RegisterFunc(fromGVK, toGVKv3, func(from interface{}) (interface{}, error) {
+	registry.RegisterFunc(fromGVK, toGVKv3, func(from any) (any, error) {
 		return from, nil
 	})
 
@@ -246,8 +246,8 @@ func TestConversionRegistryConvertCallbackCanRegister(t *testing.T) {
 	// Register a converter that calls Register on the same registry (lazy registration).
 	// Before the fix this would deadlock because Convert held a read-lock
 	// while the callback attempted a write-lock.
-	registry.RegisterFunc(fromGVK, toGVK, func(from interface{}) (interface{}, error) {
-		registry.RegisterFunc(toGVK, lazyGVK, func(from interface{}) (interface{}, error) {
+	registry.RegisterFunc(fromGVK, toGVK, func(from any) (any, error) {
+		registry.RegisterFunc(toGVK, lazyGVK, func(from any) (any, error) {
 			return from, nil
 		})
 		return from, nil
@@ -276,14 +276,14 @@ func TestConversionRegistryConvertCallbackCanRegister(t *testing.T) {
 
 func TestConversionRegistryConcurrentAccess(t *testing.T) {
 	registry := NewConversionRegistry()
-	converter := ConversionFunc(func(from interface{}) (interface{}, error) {
+	converter := ConversionFunc(func(from any) (any, error) {
 		return from, nil
 	})
 
 	var wg sync.WaitGroup
 
 	// Concurrent writers
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -294,16 +294,14 @@ func TestConversionRegistryConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent readers
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			from := GVK{Group: "test", Version: "v1", Kind: "Foo"}
 			to := GVK{Group: "test", Version: "v2", Kind: "Foo"}
 			registry.HasConversion(from, to)
 			registry.ListConversions(from)
 			registry.Convert(from, to, "data")
-		}()
+		})
 	}
 
 	wg.Wait()

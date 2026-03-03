@@ -277,7 +277,7 @@ func (b *BundleConfig) Validate() error {
 }
 
 // ConvertTo converts this bundle config to another version
-func (b *BundleConfig) ConvertTo(version string) (interface{}, error) {
+func (b *BundleConfig) ConvertTo(version string) (any, error) {
 	switch version {
 	case "v1alpha1":
 		return b, nil
@@ -287,7 +287,7 @@ func (b *BundleConfig) ConvertTo(version string) (interface{}, error) {
 }
 
 // ConvertFrom converts from another version to this bundle config
-func (b *BundleConfig) ConvertFrom(from interface{}) error {
+func (b *BundleConfig) ConvertFrom(from any) error {
 	switch src := from.(type) {
 	case *BundleConfig:
 		*b = *src

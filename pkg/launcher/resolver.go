@@ -17,7 +17,7 @@ type variableResolver struct {
 	maxDepth int
 
 	// Memoization for resolved values
-	cache map[string]interface{}
+	cache map[string]any
 
 	// Track variables being resolved to detect cycles
 	resolving map[string]bool
@@ -31,7 +31,7 @@ func NewResolver(log logger.Logger) Resolver {
 	return &variableResolver{
 		logger:    log,
 		maxDepth:  10,
-		cache:     make(map[string]interface{}),
+		cache:     make(map[string]any),
 		resolving: make(map[string]bool),
 	}
 }
@@ -51,7 +51,7 @@ func (r *variableResolver) Resolve(ctx context.Context, base, overrides Paramete
 	}
 
 	// Clear cache for new resolution
-	r.cache = make(map[string]interface{})
+	r.cache = make(map[string]any)
 	r.resolving = make(map[string]bool)
 
 	r.logger.Debug("Starting variable resolution with max depth %d", r.maxDepth)
@@ -87,7 +87,7 @@ func (r *variableResolver) Resolve(ctx context.Context, base, overrides Paramete
 }
 
 // resolveValue recursively resolves a single value
-func (r *variableResolver) resolveValue(ctx context.Context, path string, value interface{}, params ParameterMap, depth int) (interface{}, error) {
+func (r *variableResolver) resolveValue(ctx context.Context, path string, value any, params ParameterMap, depth int) (any, error) {
 	// Check context cancellation
 	select {
 	case <-ctx.Done():
@@ -125,9 +125,9 @@ func (r *variableResolver) resolveValue(ctx context.Context, path string, value 
 		r.cache[cacheKey] = resolved
 		return resolved, nil
 
-	case map[string]interface{}:
+	case map[string]any:
 		// Recursively resolve map values
-		resolved := make(map[string]interface{})
+		resolved := make(map[string]any)
 		for k, val := range v {
 			childPath := fmt.Sprintf("%s.%s", path, k)
 			resolvedVal, err := r.resolveValue(ctx, childPath, val, params, depth)
@@ -139,9 +139,9 @@ func (r *variableResolver) resolveValue(ctx context.Context, path string, value 
 		r.cache[cacheKey] = resolved
 		return resolved, nil
 
-	case []interface{}:
+	case []any:
 		// Recursively resolve array values
-		resolved := make([]interface{}, len(v))
+		resolved := make([]any, len(v))
 		for i, val := range v {
 			childPath := fmt.Sprintf("%s[%d]", path, i)
 			resolvedVal, err := r.resolveValue(ctx, childPath, val, params, depth)
@@ -161,7 +161,7 @@ func (r *variableResolver) resolveValue(ctx context.Context, path string, value 
 }
 
 // resolveString resolves variable references in a string
-func (r *variableResolver) resolveString(ctx context.Context, s string, params ParameterMap, depth int) (interface{}, error) {
+func (r *variableResolver) resolveString(ctx context.Context, s string, params ParameterMap, depth int) (any, error) {
 	// Find all variable references
 	matches := varPattern.FindAllStringSubmatch(s, -1)
 	if len(matches) == 0 {
@@ -206,7 +206,7 @@ func (r *variableResolver) resolveString(ctx context.Context, s string, params P
 }
 
 // lookupVariable looks up a variable by path (e.g., "app.name" or "feature.enabled")
-func (r *variableResolver) lookupVariable(path string, params ParameterMap) interface{} {
+func (r *variableResolver) lookupVariable(path string, params ParameterMap) any {
 	parts := strings.Split(path, ".")
 	current := params
 
@@ -223,7 +223,7 @@ func (r *variableResolver) lookupVariable(path string, params ParameterMap) inte
 			}
 
 			// Convert to array
-			arr, ok := val.([]interface{})
+			arr, ok := val.([]any)
 			if !ok {
 				return nil
 			}
@@ -245,7 +245,7 @@ func (r *variableResolver) lookupVariable(path string, params ParameterMap) inte
 			}
 
 			// Otherwise, continue traversing
-			if m, ok := arr[index].(map[string]interface{}); ok {
+			if m, ok := arr[index].(map[string]any); ok {
 				current = m
 			} else {
 				return nil
@@ -263,7 +263,7 @@ func (r *variableResolver) lookupVariable(path string, params ParameterMap) inte
 			}
 
 			// Otherwise, continue traversing
-			if m, ok := val.(map[string]interface{}); ok {
+			if m, ok := val.(map[string]any); ok {
 				current = m
 			} else if m, ok := val.(ParameterMap); ok {
 				current = m
@@ -277,7 +277,7 @@ func (r *variableResolver) lookupVariable(path string, params ParameterMap) inte
 }
 
 // valueToString converts a value to string for substitution
-func (r *variableResolver) valueToString(value interface{}) string {
+func (r *variableResolver) valueToString(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v
@@ -309,10 +309,10 @@ func (r *variableResolver) mergeParameters(base, overrides ParameterMap) Paramet
 }
 
 // deepCopyValue creates a deep copy of a value
-func (r *variableResolver) deepCopyValue(value interface{}) interface{} {
+func (r *variableResolver) deepCopyValue(value any) any {
 	switch v := value.(type) {
-	case map[string]interface{}:
-		result := make(map[string]interface{})
+	case map[string]any:
+		result := make(map[string]any)
 		for k, val := range v {
 			result[k] = r.deepCopyValue(val)
 		}
@@ -323,8 +323,8 @@ func (r *variableResolver) deepCopyValue(value interface{}) interface{} {
 			result[k] = r.deepCopyValue(val)
 		}
 		return result
-	case []interface{}:
-		result := make([]interface{}, len(v))
+	case []any:
+		result := make([]any, len(v))
 		for i, val := range v {
 			result[i] = r.deepCopyValue(val)
 		}
@@ -402,8 +402,8 @@ func (r *variableResolver) DebugVariableGraph(params ParameterMap) string {
 func (r *variableResolver) findDependencies(params ParameterMap) map[string][]string {
 	deps := make(map[string][]string)
 
-	var findDepsInValue func(path string, value interface{})
-	findDepsInValue = func(path string, value interface{}) {
+	var findDepsInValue func(path string, value any)
+	findDepsInValue = func(path string, value any) {
 		// Initialize the path in deps map even if no dependencies
 		if path != "" && deps[path] == nil {
 			deps[path] = []string{}
@@ -419,7 +419,7 @@ func (r *variableResolver) findDependencies(params ParameterMap) map[string][]st
 					deps[path] = append(deps[path], varPath)
 				}
 			}
-		case map[string]interface{}:
+		case map[string]any:
 			for k, val := range v {
 				childPath := k
 				if path != "" {
@@ -435,7 +435,7 @@ func (r *variableResolver) findDependencies(params ParameterMap) map[string][]st
 				}
 				findDepsInValue(childPath, val)
 			}
-		case []interface{}:
+		case []any:
 			for i, val := range v {
 				childPath := fmt.Sprintf("%s[%d]", path, i)
 				if path == "" {

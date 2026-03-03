@@ -89,7 +89,7 @@ func TestGetGroupVersionKind_NilObject(t *testing.T) {
 // UnknownObject is a test type that's not registered in the scheme
 type UnknownObject struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata"`
 }
 
 // Implement runtime.Object interface

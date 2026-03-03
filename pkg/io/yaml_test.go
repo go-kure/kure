@@ -37,10 +37,10 @@ func TestEncodeObjectsToYAMLWithOptions(t *testing.T) {
 	obj.SetKind("Deployment")
 	obj.SetName("test-deploy")
 	obj.SetNamespace("default")
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"replicas": int64(3),
-		"selector": map[string]interface{}{
-			"matchLabels": map[string]interface{}{
+		"selector": map[string]any{
+			"matchLabels": map[string]any{
 				"app": "test",
 			},
 		},
@@ -97,7 +97,7 @@ func TestEncodeObjectsToYAML_BackwardCompatible(t *testing.T) {
 	obj.SetAnnotations(map[string]string{
 		"kubectl.kubernetes.io/last-applied-configuration": `{"some":"config"}`,
 	})
-	obj.Object["data"] = map[string]interface{}{
+	obj.Object["data"] = map[string]any{
 		"key": "value",
 	}
 
@@ -170,7 +170,7 @@ func newServerFieldObj() *unstructured.Unstructured {
 		"kubectl.kubernetes.io/last-applied-configuration": `{"some":"config"}`,
 		"app.kubernetes.io/name":                           "myapp",
 	})
-	obj.Object["data"] = map[string]interface{}{
+	obj.Object["data"] = map[string]any{
 		"key": "value",
 	}
 	return obj
@@ -219,14 +219,14 @@ func TestCleanResourceMap_NestedMetadata(t *testing.T) {
 	obj.SetNamespace("default")
 	obj.SetUID("deploy-uid")
 	obj.SetResourceVersion("42")
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"replicas": int64(1),
-		"template": map[string]interface{}{
-			"metadata": map[string]interface{}{
+		"template": map[string]any{
+			"metadata": map[string]any{
 				"creationTimestamp": nil,
 				"uid":               "pod-uid",
 				"resourceVersion":   "11",
-				"labels": map[string]interface{}{
+				"labels": map[string]any{
 					"app": "test",
 				},
 			},
@@ -265,20 +265,20 @@ func TestCleanResourceMap_CronJobNested(t *testing.T) {
 	obj.SetKind("CronJob")
 	obj.SetName("test-cj")
 	obj.SetNamespace("default")
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"schedule": "*/5 * * * *",
-		"jobTemplate": map[string]interface{}{
-			"metadata": map[string]interface{}{
+		"jobTemplate": map[string]any{
+			"metadata": map[string]any{
 				"uid":               "job-uid",
 				"creationTimestamp": nil,
 			},
-			"spec": map[string]interface{}{
-				"template": map[string]interface{}{
-					"metadata": map[string]interface{}{
+			"spec": map[string]any{
+				"template": map[string]any{
+					"metadata": map[string]any{
 						"uid":               "pod-uid",
 						"resourceVersion":   "33",
 						"creationTimestamp": nil,
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							"job": "cron",
 						},
 					},
@@ -338,8 +338,8 @@ func TestCleanResourceMap_BasicLevel(t *testing.T) {
 func TestCleanResourceMap_NoneLevel(t *testing.T) {
 	obj := newServerFieldObj()
 	// Set a non-null creationTimestamp so it appears in output
-	obj.Object["metadata"].(map[string]interface{})["creationTimestamp"] = "2024-01-01T00:00:00Z"
-	obj.Object["status"] = map[string]interface{}{}
+	obj.Object["metadata"].(map[string]any)["creationTimestamp"] = "2024-01-01T00:00:00Z"
+	obj.Object["status"] = map[string]any{}
 
 	co := client.Object(obj)
 	objects := []*client.Object{&co}

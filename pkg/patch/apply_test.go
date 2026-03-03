@@ -57,8 +57,8 @@ data:
 }
 
 func TestInsertAfterAtListBoundary(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{"a", "b", "c"},
+	obj := map[string]any{
+		"items": []any{"a", "b", "c"},
 	}
 
 	op := PatchOp{
@@ -81,8 +81,8 @@ func TestInsertAfterAtListBoundary(t *testing.T) {
 	}
 
 	// Test insertAfter with index == len(list) (boundary case that previously panicked)
-	obj2 := map[string]interface{}{
-		"items": []interface{}{"a", "b", "c"},
+	obj2 := map[string]any{
+		"items": []any{"a", "b", "c"},
 	}
 
 	op2 := PatchOp{

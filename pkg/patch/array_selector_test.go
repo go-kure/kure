@@ -67,26 +67,26 @@ port: 8888`
 	}
 
 	// Create a test resource with proper types (avoiding deep copy issues)
-	serviceData := map[string]interface{}{
+	serviceData := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Service",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name": "test-service",
 		},
-		"spec": map[string]interface{}{
-			"ports": []interface{}{
-				map[string]interface{}{
+		"spec": map[string]any{
+			"ports": []any{
+				map[string]any{
 					"name":       "https",
 					"port":       float64(443),
 					"targetPort": float64(10250),
 				},
-				map[string]interface{}{
+				map[string]any{
 					"name":       "http",
 					"port":       float64(80),
 					"targetPort": float64(8080),
 				},
 			},
-			"selector": map[string]interface{}{
+			"selector": map[string]any{
 				"app": "test-app",
 			},
 		},
@@ -113,7 +113,7 @@ port: 8888`
 	}
 
 	// Check HTTPS port was updated
-	httpsPort := ports[0].(map[string]interface{})
+	httpsPort := ports[0].(map[string]any)
 	if httpsPort["name"] != "https" {
 		t.Errorf("Expected first port to be 'https', got %v", httpsPort["name"])
 	}
@@ -125,7 +125,7 @@ port: 8888`
 	}
 
 	// Check HTTP port was updated
-	httpPort := ports[1].(map[string]interface{})
+	httpPort := ports[1].(map[string]any)
 	if httpPort["name"] != "http" {
 		t.Errorf("Expected second port to be 'http', got %v", httpPort["name"])
 	}
@@ -143,28 +143,28 @@ func TestParsePatchLineWithMidSelectors(t *testing.T) {
 		input         string
 		expectedPath  string
 		expectedSel   string
-		expectedValue interface{}
+		expectedValue any
 	}{
 		{
 			name:          "service port selector",
 			input:         "spec.ports[name=https].port",
 			expectedPath:  "spec.ports",
 			expectedSel:   "name=https",
-			expectedValue: map[string]interface{}{"port": "test-value"},
+			expectedValue: map[string]any{"port": "test-value"},
 		},
 		{
 			name:          "container image selector",
 			input:         "spec.template.spec.containers[name=main].image",
 			expectedPath:  "spec.template.spec.containers",
 			expectedSel:   "name=main",
-			expectedValue: map[string]interface{}{"image": "test-value"},
+			expectedValue: map[string]any{"image": "test-value"},
 		},
 		{
 			name:          "ingress path selector",
 			input:         "spec.rules[0].paths[path=/api].backend.service.name",
 			expectedPath:  "spec.rules[0].paths",
 			expectedSel:   "path=/api",
-			expectedValue: map[string]interface{}{"backend.service.name": "test-value"},
+			expectedValue: map[string]any{"backend.service.name": "test-value"},
 		},
 	}
 
@@ -184,8 +184,8 @@ func TestParsePatchLineWithMidSelectors(t *testing.T) {
 			}
 
 			// For complex paths, check that the value is a map with the remaining path
-			if valueMap, ok := tc.expectedValue.(map[string]interface{}); ok {
-				opValueMap, ok := op.Value.(map[string]interface{})
+			if valueMap, ok := tc.expectedValue.(map[string]any); ok {
+				opValueMap, ok := op.Value.(map[string]any)
 				if !ok {
 					t.Errorf("Expected value to be a map, got %T", op.Value)
 				} else {

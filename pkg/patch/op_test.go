@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func testObj(fields map[string]interface{}) *unstructured.Unstructured {
+func testObj(fields map[string]any) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: fields}
 }
 
@@ -15,9 +15,9 @@ func testObj(fields map[string]interface{}) *unstructured.Unstructured {
 // ---------------------------------------------------------------------------
 
 func TestApply_Replace(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{
 				"app": "old",
 			},
 		},
@@ -42,11 +42,11 @@ func TestApply_Replace(t *testing.T) {
 }
 
 func TestApply_ReplaceWithSelector(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"containers": []interface{}{
-				map[string]interface{}{"name": "main", "image": "nginx:1.24"},
-				map[string]interface{}{"name": "sidecar", "image": "envoy:1.0"},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{
+			"containers": []any{
+				map[string]any{"name": "main", "image": "nginx:1.24"},
+				map[string]any{"name": "sidecar", "image": "envoy:1.0"},
 			},
 		},
 	})
@@ -54,14 +54,14 @@ func TestApply_ReplaceWithSelector(t *testing.T) {
 		Name: "test",
 		Base: obj,
 		Patches: []PatchOp{
-			{Op: "replace", Path: "spec.containers", Selector: "name=main", Value: map[string]interface{}{"image": "nginx:1.25"}},
+			{Op: "replace", Path: "spec.containers", Selector: "name=main", Value: map[string]any{"image": "nginx:1.25"}},
 		},
 	}
 	if err := r.Apply(); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	containers, _, _ := unstructured.NestedSlice(obj.Object, "spec", "containers")
-	item, ok := containers[0].(map[string]interface{})
+	item, ok := containers[0].(map[string]any)
 	if !ok {
 		t.Fatalf("expected map at index 0")
 	}
@@ -71,9 +71,9 @@ func TestApply_ReplaceWithSelector(t *testing.T) {
 }
 
 func TestApply_Delete(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{
 				"app": "demo",
 				"env": "prod",
 			},
@@ -96,11 +96,11 @@ func TestApply_Delete(t *testing.T) {
 }
 
 func TestApply_DeleteWithSelector(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"containers": []interface{}{
-				map[string]interface{}{"name": "main", "image": "nginx"},
-				map[string]interface{}{"name": "sidecar", "image": "envoy"},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{
+			"containers": []any{
+				map[string]any{"name": "main", "image": "nginx"},
+				map[string]any{"name": "sidecar", "image": "envoy"},
 			},
 		},
 	})
@@ -118,16 +118,16 @@ func TestApply_DeleteWithSelector(t *testing.T) {
 	if len(containers) != 1 {
 		t.Fatalf("expected 1 container, got %d", len(containers))
 	}
-	item := containers[0].(map[string]interface{})
+	item := containers[0].(map[string]any)
 	if item["name"] != "main" {
 		t.Fatalf("expected 'main' to remain, got %v", item["name"])
 	}
 }
 
 func TestApply_Append(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"items": []interface{}{"a", "b"},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{
+			"items": []any{"a", "b"},
 		},
 	})
 	r := &ResourceWithPatches{
@@ -150,17 +150,17 @@ func TestApply_Append(t *testing.T) {
 }
 
 func TestApply_InsertBefore(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"items": []interface{}{
-			map[string]interface{}{"name": "a"},
-			map[string]interface{}{"name": "b"},
+	obj := testObj(map[string]any{
+		"items": []any{
+			map[string]any{"name": "a"},
+			map[string]any{"name": "b"},
 		},
 	})
 	r := &ResourceWithPatches{
 		Name: "test",
 		Base: obj,
 		Patches: []PatchOp{
-			{Op: "insertBefore", Path: "items", Selector: "name=b", Value: map[string]interface{}{"name": "inserted"}},
+			{Op: "insertBefore", Path: "items", Selector: "name=b", Value: map[string]any{"name": "inserted"}},
 		},
 	}
 	if err := r.Apply(); err != nil {
@@ -170,24 +170,24 @@ func TestApply_InsertBefore(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
-	mid := items[1].(map[string]interface{})
+	mid := items[1].(map[string]any)
 	if mid["name"] != "inserted" {
 		t.Fatalf("expected 'inserted' at index 1, got %v", mid["name"])
 	}
 }
 
 func TestApply_InsertAfter(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"items": []interface{}{
-			map[string]interface{}{"name": "a"},
-			map[string]interface{}{"name": "b"},
+	obj := testObj(map[string]any{
+		"items": []any{
+			map[string]any{"name": "a"},
+			map[string]any{"name": "b"},
 		},
 	})
 	r := &ResourceWithPatches{
 		Name: "test",
 		Base: obj,
 		Patches: []PatchOp{
-			{Op: "insertAfter", Path: "items", Selector: "name=a", Value: map[string]interface{}{"name": "inserted"}},
+			{Op: "insertAfter", Path: "items", Selector: "name=a", Value: map[string]any{"name": "inserted"}},
 		},
 	}
 	if err := r.Apply(); err != nil {
@@ -197,14 +197,14 @@ func TestApply_InsertAfter(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
-	mid := items[1].(map[string]interface{})
+	mid := items[1].(map[string]any)
 	if mid["name"] != "inserted" {
 		t.Fatalf("expected 'inserted' at index 1, got %v", mid["name"])
 	}
 }
 
 func TestApply_InvalidOp(t *testing.T) {
-	obj := testObj(map[string]interface{}{"foo": "bar"})
+	obj := testObj(map[string]any{"foo": "bar"})
 	r := &ResourceWithPatches{
 		Name: "test",
 		Base: obj,
@@ -218,8 +218,8 @@ func TestApply_InvalidOp(t *testing.T) {
 }
 
 func TestApply_DeleteNotFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{},
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{},
 	})
 	r := &ResourceWithPatches{
 		Name: "test",
@@ -234,8 +234,8 @@ func TestApply_DeleteNotFound(t *testing.T) {
 }
 
 func TestApply_AppendNotFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{},
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{},
 	})
 	r := &ResourceWithPatches{
 		Name: "test",
@@ -254,9 +254,9 @@ func TestApply_AppendNotFound(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveListIndex_KeyValue(t *testing.T) {
-	list := []interface{}{
-		map[string]interface{}{"name": "alpha"},
-		map[string]interface{}{"name": "beta"},
+	list := []any{
+		map[string]any{"name": "alpha"},
+		map[string]any{"name": "beta"},
 	}
 	idx, err := resolveListIndex(list, "name=beta")
 	if err != nil {
@@ -268,7 +268,7 @@ func TestResolveListIndex_KeyValue(t *testing.T) {
 }
 
 func TestResolveListIndex_NumericIndex(t *testing.T) {
-	list := []interface{}{"a", "b", "c"}
+	list := []any{"a", "b", "c"}
 	idx, err := resolveListIndex(list, "2")
 	if err != nil {
 		t.Fatalf("resolveListIndex: %v", err)
@@ -279,7 +279,7 @@ func TestResolveListIndex_NumericIndex(t *testing.T) {
 }
 
 func TestResolveListIndex_NegativeIndex(t *testing.T) {
-	list := []interface{}{"a", "b", "c"}
+	list := []any{"a", "b", "c"}
 	idx, err := resolveListIndex(list, "-1")
 	if err != nil {
 		t.Fatalf("resolveListIndex: %v", err)
@@ -290,7 +290,7 @@ func TestResolveListIndex_NegativeIndex(t *testing.T) {
 }
 
 func TestResolveListIndex_OutOfBounds(t *testing.T) {
-	list := []interface{}{"a", "b"}
+	list := []any{"a", "b"}
 	_, err := resolveListIndex(list, "10")
 	if err == nil {
 		t.Fatalf("expected error for out-of-bounds index")
@@ -298,7 +298,7 @@ func TestResolveListIndex_OutOfBounds(t *testing.T) {
 }
 
 func TestResolveListIndex_InvalidSelector(t *testing.T) {
-	list := []interface{}{"a"}
+	list := []any{"a"}
 	_, err := resolveListIndex(list, "notanumber")
 	if err == nil {
 		t.Fatalf("expected error for invalid selector")
@@ -306,8 +306,8 @@ func TestResolveListIndex_InvalidSelector(t *testing.T) {
 }
 
 func TestResolveListIndex_KeyValueNotFound(t *testing.T) {
-	list := []interface{}{
-		map[string]interface{}{"name": "alpha"},
+	list := []any{
+		map[string]any{"name": "alpha"},
 	}
 	_, err := resolveListIndex(list, "name=missing")
 	if err == nil {
@@ -320,22 +320,22 @@ func TestResolveListIndex_KeyValueNotFound(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestApplyArrayReplace_NestedPatch(t *testing.T) {
-	obj := map[string]interface{}{
-		"containers": []interface{}{
-			map[string]interface{}{"name": "main", "image": "nginx:1.24"},
+	obj := map[string]any{
+		"containers": []any{
+			map[string]any{"name": "main", "image": "nginx:1.24"},
 		},
 	}
 	op := PatchOp{
 		Op:       "replace",
 		Path:     "containers",
 		Selector: "name=main",
-		Value:    map[string]interface{}{"image": "nginx:1.25"},
+		Value:    map[string]any{"image": "nginx:1.25"},
 	}
 	if err := applyArrayReplace(obj, op); err != nil {
 		t.Fatalf("applyArrayReplace: %v", err)
 	}
-	containers := obj["containers"].([]interface{})
-	item := containers[0].(map[string]interface{})
+	containers := obj["containers"].([]any)
+	item := containers[0].(map[string]any)
 	if item["image"] != "nginx:1.25" {
 		t.Fatalf("expected 'nginx:1.25', got %v", item["image"])
 	}
@@ -346,8 +346,8 @@ func TestApplyArrayReplace_NestedPatch(t *testing.T) {
 }
 
 func TestApplyArrayReplace_DirectReplace(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{"a", "b", "c"},
+	obj := map[string]any{
+		"items": []any{"a", "b", "c"},
 	}
 	op := PatchOp{
 		Op:       "replace",
@@ -358,15 +358,15 @@ func TestApplyArrayReplace_DirectReplace(t *testing.T) {
 	if err := applyArrayReplace(obj, op); err != nil {
 		t.Fatalf("applyArrayReplace: %v", err)
 	}
-	items := obj["items"].([]interface{})
+	items := obj["items"].([]any)
 	if items[1] != "replaced" {
 		t.Fatalf("expected 'replaced', got %v", items[1])
 	}
 }
 
 func TestApplyArrayReplace_NonObjectItem(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{"a", "b"},
+	obj := map[string]any{
+		"items": []any{"a", "b"},
 	}
 	// A single-key map value triggers the nested-patch branch; item at index
 	// is a string, not a map, so it should error.
@@ -374,7 +374,7 @@ func TestApplyArrayReplace_NonObjectItem(t *testing.T) {
 		Op:       "replace",
 		Path:     "items",
 		Selector: "0",
-		Value:    map[string]interface{}{"field": "val"},
+		Value:    map[string]any{"field": "val"},
 	}
 	if err := applyArrayReplace(obj, op); err == nil {
 		t.Fatalf("expected error when array item is not a map")
@@ -431,7 +431,7 @@ func TestParsePatchLine_DeleteWithSelector(t *testing.T) {
 }
 
 func TestParsePatchLine_InsertBefore(t *testing.T) {
-	op, err := ParsePatchLine("spec.containers[-name=foo]", map[string]interface{}{"image": "nginx"})
+	op, err := ParsePatchLine("spec.containers[-name=foo]", map[string]any{"image": "nginx"})
 	if err != nil {
 		t.Fatalf("ParsePatchLine: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestParsePatchLine_InsertBefore(t *testing.T) {
 }
 
 func TestParsePatchLine_InsertAfter(t *testing.T) {
-	op, err := ParsePatchLine("spec.containers[+name=foo]", map[string]interface{}{"image": "nginx"})
+	op, err := ParsePatchLine("spec.containers[+name=foo]", map[string]any{"image": "nginx"})
 	if err != nil {
 		t.Fatalf("ParsePatchLine: %v", err)
 	}
@@ -460,7 +460,7 @@ func TestParsePatchLine_InsertAfter(t *testing.T) {
 }
 
 func TestParsePatchLine_InsertBeforeIndex(t *testing.T) {
-	op, err := ParsePatchLine("spec.containers[-3]", map[string]interface{}{"name": "x"})
+	op, err := ParsePatchLine("spec.containers[-3]", map[string]any{"name": "x"})
 	if err != nil {
 		t.Fatalf("ParsePatchLine: %v", err)
 	}
@@ -473,7 +473,7 @@ func TestParsePatchLine_InsertBeforeIndex(t *testing.T) {
 }
 
 func TestParsePatchLine_InsertAfterIndex(t *testing.T) {
-	op, err := ParsePatchLine("spec.containers[+2]", map[string]interface{}{"name": "x"})
+	op, err := ParsePatchLine("spec.containers[+2]", map[string]any{"name": "x"})
 	if err != nil {
 		t.Fatalf("ParsePatchLine: %v", err)
 	}
@@ -486,7 +486,7 @@ func TestParsePatchLine_InsertAfterIndex(t *testing.T) {
 }
 
 func TestParsePatchLine_ReplaceWithSelector(t *testing.T) {
-	op, err := ParsePatchLine("spec.containers[name=main]", map[string]interface{}{"image": "nginx"})
+	op, err := ParsePatchLine("spec.containers[name=main]", map[string]any{"image": "nginx"})
 	if err != nil {
 		t.Fatalf("ParsePatchLine: %v", err)
 	}
@@ -512,7 +512,7 @@ func TestParsePatchLine_MidSelector(t *testing.T) {
 	if op.Path != "spec.containers" {
 		t.Fatalf("expected path 'spec.containers', got %q", op.Path)
 	}
-	valueMap, ok := op.Value.(map[string]interface{})
+	valueMap, ok := op.Value.(map[string]any)
 	if !ok {
 		t.Fatalf("expected Value to be map, got %T", op.Value)
 	}
@@ -662,8 +662,8 @@ func TestParsePatchPath_InvalidIndex(t *testing.T) {
 func TestConvertValueForUnstructured(t *testing.T) {
 	tests := []struct {
 		name  string
-		input interface{}
-		want  interface{}
+		input any
+		want  any
 	}{
 		{name: "int to int64", input: int(42), want: int64(42)},
 		{name: "int32 to int64", input: int32(7), want: int64(7)},
@@ -691,12 +691,12 @@ func TestConvertValueForUnstructured(t *testing.T) {
 }
 
 func TestConvertValueForUnstructured_MapRecursion(t *testing.T) {
-	input := map[string]interface{}{
+	input := map[string]any{
 		"count": int(5),
 		"name":  "test",
 	}
 	got := convertValueForUnstructured(input)
-	m, ok := got.(map[string]interface{})
+	m, ok := got.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map, got %T", got)
 	}
@@ -709,9 +709,9 @@ func TestConvertValueForUnstructured_MapRecursion(t *testing.T) {
 }
 
 func TestConvertValueForUnstructured_SliceRecursion(t *testing.T) {
-	input := []interface{}{int(1), int32(2), "three"}
+	input := []any{int(1), int32(2), "three"}
 	got := convertValueForUnstructured(input)
-	s, ok := got.([]interface{})
+	s, ok := got.([]any)
 	if !ok {
 		t.Fatalf("expected slice, got %T", got)
 	}
@@ -734,9 +734,9 @@ func TestConvertValueForUnstructured_SliceRecursion(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestValidateAgainst_ReplaceFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{"app": "demo"},
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{"app": "demo"},
 		},
 	})
 	p := &PatchOp{Op: "replace", Path: "metadata.labels.app", Value: "new"}
@@ -746,8 +746,8 @@ func TestValidateAgainst_ReplaceFound(t *testing.T) {
 }
 
 func TestValidateAgainst_ReplaceNotFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{},
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{},
 	})
 	p := &PatchOp{Op: "replace", Path: "metadata.labels.app", Value: "new"}
 	if err := p.ValidateAgainst(obj); err == nil {
@@ -756,9 +756,9 @@ func TestValidateAgainst_ReplaceNotFound(t *testing.T) {
 }
 
 func TestValidateAgainst_DeleteFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{"app": "demo"},
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{"app": "demo"},
 		},
 	})
 	p := &PatchOp{Op: "delete", Path: "metadata.labels.app"}
@@ -768,8 +768,8 @@ func TestValidateAgainst_DeleteFound(t *testing.T) {
 }
 
 func TestValidateAgainst_DeleteNotFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"metadata": map[string]interface{}{},
+	obj := testObj(map[string]any{
+		"metadata": map[string]any{},
 	})
 	p := &PatchOp{Op: "delete", Path: "metadata.nonexistent"}
 	if err := p.ValidateAgainst(obj); err == nil {
@@ -778,10 +778,10 @@ func TestValidateAgainst_DeleteNotFound(t *testing.T) {
 }
 
 func TestValidateAgainst_DeleteWithSelector(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"containers": []interface{}{
-				map[string]interface{}{"name": "main"},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{
+			"containers": []any{
+				map[string]any{"name": "main"},
 			},
 		},
 	})
@@ -792,9 +792,9 @@ func TestValidateAgainst_DeleteWithSelector(t *testing.T) {
 }
 
 func TestValidateAgainst_AppendFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"items": []interface{}{"a"},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{
+			"items": []any{"a"},
 		},
 	})
 	p := &PatchOp{Op: "append", Path: "spec.items", Value: "b"}
@@ -804,8 +804,8 @@ func TestValidateAgainst_AppendFound(t *testing.T) {
 }
 
 func TestValidateAgainst_AppendNotFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{},
 	})
 	p := &PatchOp{Op: "append", Path: "spec.missing", Value: "b"}
 	if err := p.ValidateAgainst(obj); err == nil {
@@ -814,9 +814,9 @@ func TestValidateAgainst_AppendNotFound(t *testing.T) {
 }
 
 func TestValidateAgainst_InsertFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"items": []interface{}{"a", "b"},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{
+			"items": []any{"a", "b"},
 		},
 	})
 	for _, op := range []string{"insertBefore", "insertAfter"} {

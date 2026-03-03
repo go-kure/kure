@@ -133,7 +133,7 @@ func (n *NodeConfig) Validate() error {
 }
 
 // ConvertTo converts this node config to another version
-func (n *NodeConfig) ConvertTo(version string) (interface{}, error) {
+func (n *NodeConfig) ConvertTo(version string) (any, error) {
 	switch version {
 	case "v1alpha1":
 		return n, nil
@@ -143,7 +143,7 @@ func (n *NodeConfig) ConvertTo(version string) (interface{}, error) {
 }
 
 // ConvertFrom converts from another version to this node config
-func (n *NodeConfig) ConvertFrom(from interface{}) error {
+func (n *NodeConfig) ConvertFrom(from any) error {
 	switch src := from.(type) {
 	case *NodeConfig:
 		*n = *src

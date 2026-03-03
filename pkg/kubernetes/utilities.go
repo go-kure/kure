@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"slices"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,12 +32,7 @@ func GetGroupVersionKind(obj runtime.Object) (schema.GroupVersionKind, error) {
 
 // IsGVKAllowed checks if a given GVK is present in a user-defined allowed set.
 func IsGVKAllowed(gvk schema.GroupVersionKind, allowed []schema.GroupVersionKind) bool {
-	for _, allowedGVK := range allowed {
-		if gvk == allowedGVK {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, gvk)
 }
 
 // Helper function to convert to client.Object

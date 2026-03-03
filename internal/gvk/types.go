@@ -69,8 +69,8 @@ type MetadataType interface {
 
 // Convertible allows for version migration between different versions of the same kind
 type Convertible interface {
-	ConvertTo(version string) (interface{}, error)
-	ConvertFrom(from interface{}) error
+	ConvertTo(version string) (any, error)
+	ConvertFrom(from any) error
 }
 
 // BaseMetadata provides common metadata fields for GVK types

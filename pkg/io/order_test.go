@@ -9,10 +9,10 @@ import (
 )
 
 func TestSortedKeysKubernetesOrder(t *testing.T) {
-	m := map[string]interface{}{
-		"status":     map[string]interface{}{},
-		"spec":       map[string]interface{}{},
-		"metadata":   map[string]interface{}{},
+	m := map[string]any{
+		"status":     map[string]any{},
+		"spec":       map[string]any{},
+		"metadata":   map[string]any{},
 		"kind":       "Deployment",
 		"apiVersion": "apps/v1",
 		"extra":      "value",
@@ -33,7 +33,7 @@ func TestSortedKeysKubernetesOrder(t *testing.T) {
 }
 
 func TestSortedKeysAlphabetical(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"zebra":  1,
 		"alpha":  2,
 		"middle": 3,
@@ -55,7 +55,7 @@ func TestSortedKeysAlphabetical(t *testing.T) {
 func TestValueToNode(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		wantTag  string
 		wantVal  string
 		wantKind int
@@ -83,7 +83,7 @@ func TestValueToNode(t *testing.T) {
 
 	// Test slice
 	t.Run("slice", func(t *testing.T) {
-		node := valueToNode([]interface{}{"a", "b"})
+		node := valueToNode([]any{"a", "b"})
 		if node.Kind != yaml.SequenceNode {
 			t.Errorf("expected SequenceNode (%d), got kind %d", yaml.SequenceNode, node.Kind)
 		}
@@ -94,7 +94,7 @@ func TestValueToNode(t *testing.T) {
 
 	// Test nested map
 	t.Run("nested map", func(t *testing.T) {
-		node := valueToNode(map[string]interface{}{"key": "val"})
+		node := valueToNode(map[string]any{"key": "val"})
 		if node.Kind != yaml.MappingNode {
 			t.Errorf("expected MappingNode (%d), got kind %d", yaml.MappingNode, node.Kind)
 		}
@@ -102,10 +102,10 @@ func TestValueToNode(t *testing.T) {
 }
 
 func TestMarshalOrderedYAML_Deployment(t *testing.T) {
-	m := map[string]interface{}{
-		"status":     map[string]interface{}{},
-		"spec":       map[string]interface{}{"replicas": float64(3)},
-		"metadata":   map[string]interface{}{"name": "test", "namespace": "default"},
+	m := map[string]any{
+		"status":     map[string]any{},
+		"spec":       map[string]any{"replicas": float64(3)},
+		"metadata":   map[string]any{"name": "test", "namespace": "default"},
 		"kind":       "Deployment",
 		"apiVersion": "apps/v1",
 	}
@@ -132,12 +132,12 @@ func TestMarshalOrderedYAML_Deployment(t *testing.T) {
 }
 
 func TestMarshalOrderedYAML_ConfigMap(t *testing.T) {
-	m := map[string]interface{}{
-		"data":       map[string]interface{}{"key": "value"},
-		"metadata":   map[string]interface{}{"name": "cm"},
+	m := map[string]any{
+		"data":       map[string]any{"key": "value"},
+		"metadata":   map[string]any{"name": "cm"},
 		"kind":       "ConfigMap",
 		"apiVersion": "v1",
-		"status":     map[string]interface{}{"phase": "Active"},
+		"status":     map[string]any{"phase": "Active"},
 	}
 
 	out, err := marshalOrderedYAML(m)
@@ -161,13 +161,13 @@ func TestMarshalOrderedYAML_ConfigMap(t *testing.T) {
 }
 
 func TestMarshalOrderedYAML_NestedAlphabetical(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "ConfigMap",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"namespace": "default",
 			"name":      "test",
-			"labels": map[string]interface{}{
+			"labels": map[string]any{
 				"zebra": "z",
 				"alpha": "a",
 			},
@@ -202,26 +202,26 @@ func TestMarshalOrderedYAML_NestedAlphabetical(t *testing.T) {
 }
 
 func TestMarshalOrderedYAML_Deterministic(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "test",
 			"namespace": "default",
-			"labels": map[string]interface{}{
+			"labels": map[string]any{
 				"app":     "test",
 				"version": "v1",
 			},
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"replicas": float64(3),
-			"selector": map[string]interface{}{
-				"matchLabels": map[string]interface{}{
+			"selector": map[string]any{
+				"matchLabels": map[string]any{
 					"app": "test",
 				},
 			},
 		},
-		"status": map[string]interface{}{},
+		"status": map[string]any{},
 	}
 
 	first, err := marshalOrderedYAML(m)
@@ -229,7 +229,7 @@ func TestMarshalOrderedYAML_Deterministic(t *testing.T) {
 		t.Fatalf("first marshal: %v", err)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		out, err := marshalOrderedYAML(m)
 		if err != nil {
 			t.Fatalf("marshal iteration %d: %v", i, err)
@@ -241,23 +241,23 @@ func TestMarshalOrderedYAML_Deterministic(t *testing.T) {
 }
 
 func TestMarshalOrderedYAML_RoundTrip(t *testing.T) {
-	original := map[string]interface{}{
+	original := map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "test",
 			"namespace": "default",
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"replicas": float64(3),
-			"template": map[string]interface{}{
-				"spec": map[string]interface{}{
-					"containers": []interface{}{
-						map[string]interface{}{
+			"template": map[string]any{
+				"spec": map[string]any{
+					"containers": []any{
+						map[string]any{
 							"name":  "app",
 							"image": "nginx:latest",
-							"ports": []interface{}{
-								map[string]interface{}{
+							"ports": []any{
+								map[string]any{
 									"containerPort": float64(8080),
 								},
 							},
@@ -273,7 +273,7 @@ func TestMarshalOrderedYAML_RoundTrip(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var roundTripped map[string]interface{}
+	var roundTripped map[string]any
 	if err := sigsyaml.Unmarshal(out, &roundTripped); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestMarshalOrderedYAML_RoundTrip(t *testing.T) {
 		t.Errorf("kind lost: got %v", roundTripped["kind"])
 	}
 
-	meta, ok := roundTripped["metadata"].(map[string]interface{})
+	meta, ok := roundTripped["metadata"].(map[string]any)
 	if !ok {
 		t.Fatal("metadata not a map")
 	}
@@ -294,7 +294,7 @@ func TestMarshalOrderedYAML_RoundTrip(t *testing.T) {
 		t.Errorf("metadata.name lost: got %v", meta["name"])
 	}
 
-	spec, ok := roundTripped["spec"].(map[string]interface{})
+	spec, ok := roundTripped["spec"].(map[string]any)
 	if !ok {
 		t.Fatal("spec not a map")
 	}
@@ -313,19 +313,19 @@ func TestMarshalOrderedYAML_RoundTrip(t *testing.T) {
 	}
 
 	// Verify containers survived
-	tmpl, ok := spec["template"].(map[string]interface{})
+	tmpl, ok := spec["template"].(map[string]any)
 	if !ok {
 		t.Fatal("spec.template not a map")
 	}
-	tmplSpec, ok := tmpl["spec"].(map[string]interface{})
+	tmplSpec, ok := tmpl["spec"].(map[string]any)
 	if !ok {
 		t.Fatal("spec.template.spec not a map")
 	}
-	containers, ok := tmplSpec["containers"].([]interface{})
+	containers, ok := tmplSpec["containers"].([]any)
 	if !ok || len(containers) != 1 {
 		t.Fatal("containers not preserved")
 	}
-	container, ok := containers[0].(map[string]interface{})
+	container, ok := containers[0].(map[string]any)
 	if !ok {
 		t.Fatal("container not a map")
 	}

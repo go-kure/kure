@@ -71,12 +71,12 @@ func deepCopyStringSlice(s []string) []string {
 }
 
 // deepCopyInterfaceSlice creates a deep copy of an interface slice
-func deepCopyInterfaceSlice(s []interface{}) []interface{} {
+func deepCopyInterfaceSlice(s []any) []any {
 	if s == nil {
 		return nil
 	}
 
-	result := make([]interface{}, len(s))
+	result := make([]any, len(s))
 	for i, v := range s {
 		result[i] = deepCopyValue(v)
 	}
@@ -84,12 +84,12 @@ func deepCopyInterfaceSlice(s []interface{}) []interface{} {
 }
 
 // deepCopyMap creates a deep copy of a map[string]interface{}
-func deepCopyMap(m map[string]interface{}) map[string]interface{} {
+func deepCopyMap(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
 	}
 
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 	for k, v := range m {
 		result[k] = deepCopyValue(v)
 	}

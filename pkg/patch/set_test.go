@@ -12,7 +12,7 @@ import (
 )
 
 func TestParsePatchLine(t *testing.T) {
-	op, err := ParsePatchLine("spec.template.spec.containers[+name=main]", map[string]interface{}{"image": "nginx"})
+	op, err := ParsePatchLine("spec.template.spec.containers[+name=main]", map[string]any{"image": "nginx"})
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestParsePatchLineIndexBased(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			op, err := ParsePatchLine(tt.input, map[string]interface{}{"name": "test"})
+			op, err := ParsePatchLine(tt.input, map[string]any{"name": "test"})
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
@@ -124,7 +124,7 @@ metadata:
   labels:
     app: demo
 `
-	var m map[string]interface{}
+	var m map[string]any
 	if err := yaml.Unmarshal([]byte(yamlStr), &m); err != nil {
 		t.Fatalf("yaml decode: %v", err)
 	}
@@ -151,7 +151,7 @@ metadata:
 data:
   foo: bar
 `
-	var rm map[string]interface{}
+	var rm map[string]any
 	if err := yaml.Unmarshal([]byte(resYaml), &rm); err != nil {
 		t.Fatalf("yaml decode: %v", err)
 	}
@@ -204,8 +204,8 @@ spec:
 	}
 
 	strategicPatch := StrategicPatch{
-		Patch: map[string]interface{}{
-			"spec": map[string]interface{}{
+		Patch: map[string]any{
+			"spec": map[string]any{
 				"replicas": int64(3),
 			},
 		},
@@ -268,8 +268,8 @@ spec:
 
 	// Strategic patch targets deployment.my-app only
 	strategicPatch := StrategicPatch{
-		Patch: map[string]interface{}{
-			"spec": map[string]interface{}{
+		Patch: map[string]any{
+			"spec": map[string]any{
 				"replicas": int64(5),
 			},
 		},
@@ -307,8 +307,8 @@ spec:
 
 	// The Service should NOT have replicas at all
 	// Split on --- and check each document
-	docs := strings.Split(out, "---")
-	for _, doc := range docs {
+	docs := strings.SplitSeq(out, "---")
+	for doc := range docs {
 		if strings.Contains(doc, "kind: Service") && strings.Contains(doc, "replicas") {
 			t.Errorf("Service should not have replicas field, but got:\n%s", doc)
 		}
@@ -330,27 +330,27 @@ func mustOpen(t *testing.T, path string) io.Reader {
 // Deployment, not a Service with the same name.
 func TestNewPatchableAppSet_StrategicDoesNotCrossKinds(t *testing.T) {
 	deployment := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "apps/v1",
 			"kind":       "Deployment",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "my-app",
 				"namespace": "default",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(1),
 			},
 		},
 	}
 	service := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       "Service",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "my-app",
 				"namespace": "default",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"type": "ClusterIP",
 			},
 		},
@@ -362,8 +362,8 @@ func TestNewPatchableAppSet_StrategicDoesNotCrossKinds(t *testing.T) {
 		{
 			Target: "deployment.my-app",
 			Strategic: &StrategicPatch{
-				Patch: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Patch: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(5),
 					},
 				},
@@ -443,12 +443,12 @@ spec:
 
 	// Build a strategic patch that merges containers by name (requires KindLookup)
 	strategicPatch := StrategicPatch{
-		Patch: map[string]interface{}{
-			"spec": map[string]interface{}{
-				"template": map[string]interface{}{
-					"spec": map[string]interface{}{
-						"containers": []interface{}{
-							map[string]interface{}{
+		Patch: map[string]any{
+			"spec": map[string]any{
+				"template": map[string]any{
+					"spec": map[string]any{
+						"containers": []any{
+							map[string]any{
 								"name":  "main",
 								"image": "nginx:1.25",
 							},
@@ -633,8 +633,8 @@ spec:
 	}
 
 	// The Service should NOT have any container fields
-	docs := strings.Split(out, "---")
-	for _, doc := range docs {
+	docs := strings.SplitSeq(out, "---")
+	for doc := range docs {
 		if strings.Contains(doc, "kind: Service") {
 			if strings.Contains(doc, "containers") {
 				t.Errorf("Service should not have containers field, but got:\n%s", doc)
@@ -655,7 +655,7 @@ metadata:
 data:
   foo: bar
 `
-	var rm map[string]interface{}
+	var rm map[string]any
 	if err := yaml.Unmarshal([]byte(resYaml), &rm); err != nil {
 		t.Fatalf("yaml decode: %v", err)
 	}
@@ -690,25 +690,25 @@ data:
 // applies correctly even when another resource shares the same short name.
 func TestNewPatchableAppSet_FieldPatchKindQualifiedWithNameCollision(t *testing.T) {
 	deployment := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "apps/v1",
 			"kind":       "Deployment",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "my-app",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(1),
 			},
 		},
 	}
 	service := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       "Service",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "my-app",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"type": "ClusterIP",
 			},
 		},

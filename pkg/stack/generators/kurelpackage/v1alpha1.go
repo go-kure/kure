@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/google/cel-go/cel"
@@ -95,9 +96,9 @@ type PatchTarget struct {
 
 // ValuesConfig defines values schema and defaults
 type ValuesConfig struct {
-	Schema   string      `yaml:"schema,omitempty" json:"schema,omitempty"`     // Path to JSON schema
-	Defaults string      `yaml:"defaults,omitempty" json:"defaults,omitempty"` // Path to default values
-	Values   interface{} `yaml:"values,omitempty" json:"values,omitempty"`     // Inline default values
+	Schema   string `yaml:"schema,omitempty" json:"schema,omitempty"`     // Path to JSON schema
+	Defaults string `yaml:"defaults,omitempty" json:"defaults,omitempty"` // Path to default values
+	Values   any    `yaml:"values,omitempty" json:"values,omitempty"`     // Inline default values
 }
 
 // Extension defines a conditional extension
@@ -388,13 +389,13 @@ func (c *ConfigV1Alpha1) generatePatches() (map[string][]byte, error) {
 
 // generatePatchFile creates a single patch file from PatchDefinition
 func (c *ConfigV1Alpha1) generatePatchFile(patch PatchDefinition, index int) ([]byte, error) {
-	patchDoc := map[string]interface{}{
+	patchDoc := map[string]any{
 		"apiVersion": "kurel.gokure.dev/v1alpha1",
 		"kind":       "Patch",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name": fmt.Sprintf("patch-%03d", index),
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"target": patch.Target,
 			"patch":  patch.Patch,
 			"type":   patch.Type,
@@ -471,13 +472,13 @@ func (c *ConfigV1Alpha1) processExtension(ext Extension, index int) (map[string]
 	}
 
 	// Generate extension manifest
-	extManifest := map[string]interface{}{
+	extManifest := map[string]any{
 		"apiVersion": "kurel.gokure.dev/v1alpha1",
 		"kind":       "Extension",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name": ext.Name,
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"when": ext.When,
 		},
 	}
@@ -508,13 +509,7 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 			parts := strings.Split(strings.TrimPrefix(path, "extensions/"), "/")
 			if len(parts) > 0 {
 				extDir := parts[0]
-				found := false
-				for _, existing := range extensionDirs {
-					if existing == extDir {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(extensionDirs, extDir)
 				if !found {
 					extensionDirs = append(extensionDirs, extDir)
 				}
@@ -522,10 +517,10 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 		}
 	}
 
-	kurelDoc := map[string]interface{}{
+	kurelDoc := map[string]any{
 		"apiVersion": "kurel.gokure.dev/v1alpha1",
 		"kind":       "Package",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":        c.Package.Name,
 			"version":     c.Package.Version,
 			"description": c.Package.Description,
@@ -536,7 +531,7 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 			"keywords":    c.Package.Keywords,
 			"labels":      c.Package.Labels,
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"resources":  resourceFiles,
 			"patches":    patchFiles,
 			"values":     valueFiles,
@@ -546,21 +541,21 @@ func (c *ConfigV1Alpha1) generateKurelYAML(packageFiles map[string][]byte) ([]by
 
 	// Add dependencies if any
 	if len(c.Dependencies) > 0 {
-		deps := make([]map[string]interface{}, len(c.Dependencies))
+		deps := make([]map[string]any, len(c.Dependencies))
 		for i, dep := range c.Dependencies {
-			deps[i] = map[string]interface{}{
+			deps[i] = map[string]any{
 				"name":       dep.Name,
 				"version":    dep.Version,
 				"repository": dep.Repository,
 				"optional":   dep.Optional,
 			}
 		}
-		kurelDoc["spec"].(map[string]interface{})["dependencies"] = deps
+		kurelDoc["spec"].(map[string]any)["dependencies"] = deps
 	}
 
 	// Add build config if any
 	if c.Build != nil {
-		kurelDoc["spec"].(map[string]interface{})["build"] = map[string]interface{}{
+		kurelDoc["spec"].(map[string]any)["build"] = map[string]any{
 			"outputDir":   c.Build.OutputDir,
 			"format":      c.Build.Format,
 			"registry":    c.Build.Registry,
@@ -734,7 +729,7 @@ func (c *ConfigV1Alpha1) validatePatchDefinition(patch PatchDefinition) error {
 // validateJSONPatch validates JSON patch syntax
 func (c *ConfigV1Alpha1) validateJSONPatch(patchContent string) error {
 	// Try to parse as YAML first (since patches are often written in YAML)
-	var jsonPatch []map[string]interface{}
+	var jsonPatch []map[string]any
 	if err := yaml.Unmarshal([]byte(patchContent), &jsonPatch); err != nil {
 		return errors.Wrap(err, "patch content is not valid YAML/JSON")
 	}
@@ -779,7 +774,7 @@ func (c *ConfigV1Alpha1) validateJSONPatch(patchContent string) error {
 // validateStrategicMergePatch validates strategic merge patch syntax
 func (c *ConfigV1Alpha1) validateStrategicMergePatch(patchContent string) error {
 	// Strategic merge patches are just YAML documents
-	var patch map[string]interface{}
+	var patch map[string]any
 	if err := yaml.Unmarshal([]byte(patchContent), &patch); err != nil {
 		return errors.Wrap(err, "patch content is not valid YAML")
 	}

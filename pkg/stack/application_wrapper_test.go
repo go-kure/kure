@@ -178,7 +178,7 @@ spec:
 		}
 
 		// Unmarshal back to verify
-		var result map[string]interface{}
+		var result map[string]any
 		err = yaml.Unmarshal(data, &result)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal result: %v", err)
@@ -192,7 +192,7 @@ spec:
 			t.Error("kind not preserved in marshaling")
 		}
 
-		metadata, ok := result["metadata"].(map[string]interface{})
+		metadata, ok := result["metadata"].(map[string]any)
 		if !ok {
 			t.Fatal("metadata not found or wrong type")
 		}

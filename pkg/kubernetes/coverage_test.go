@@ -382,7 +382,7 @@ func TestConcurrentOperations(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 4) // 4 operations per goroutine
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		// Test GetGroupVersionKind concurrency
 		go func() {
 			defer wg.Done()

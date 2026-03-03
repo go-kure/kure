@@ -58,7 +58,7 @@ func LoadResourcesWithStructure(r io.Reader) (*YAMLDocumentSet, error) {
 		}
 
 		// Also parse into unstructured for patching
-		var raw map[string]interface{}
+		var raw map[string]any
 		if err := yaml.Unmarshal([]byte(docContent), &raw); err != nil {
 			return nil, fmt.Errorf("failed to parse document %d into unstructured: %w", i, err)
 		}
@@ -71,7 +71,7 @@ func LoadResourcesWithStructure(r io.Reader) (*YAMLDocumentSet, error) {
 		// First convert the raw data for the unstructured object
 		convertedRaw := convertBaseYAMLTypes(raw)
 		var resource *unstructured.Unstructured
-		if convertedMap, ok := convertedRaw.(map[string]interface{}); ok {
+		if convertedMap, ok := convertedRaw.(map[string]any); ok {
 			resource = &unstructured.Unstructured{Object: convertedMap}
 		} else {
 			// Fallback to original if conversion failed
@@ -643,10 +643,10 @@ func extractBaseName(filePath string) string {
 
 // convertBaseYAMLTypes recursively converts string values in base YAML to appropriate types
 // This fixes issues where Kubernetes YAML files have numeric fields as strings
-func convertBaseYAMLTypes(obj interface{}) interface{} {
+func convertBaseYAMLTypes(obj any) any {
 	switch v := obj.(type) {
-	case map[string]interface{}:
-		converted := make(map[string]interface{})
+	case map[string]any:
+		converted := make(map[string]any)
 		for key, value := range v {
 			// Apply type inference based on field name and value
 			if strValue, ok := value.(string); ok {
@@ -667,8 +667,8 @@ func convertBaseYAMLTypes(obj interface{}) interface{} {
 			converted[key] = convertBaseYAMLTypes(value)
 		}
 		return converted
-	case []interface{}:
-		converted := make([]interface{}, len(v))
+	case []any:
+		converted := make([]any, len(v))
 		for i, item := range v {
 			converted[i] = convertBaseYAMLTypes(item)
 		}

@@ -237,14 +237,14 @@ func TestGetDetailedStatus(t *testing.T) {
 		},
 		{
 			name: "object with message in status",
-			obj: *createTestResourceWithStatus("Pod", "test", "default", map[string]interface{}{
+			obj: *createTestResourceWithStatus("Pod", "test", "default", map[string]any{
 				"message": "Pod is running",
 			}),
 			expected: "Pod is running",
 		},
 		{
 			name: "object with reason in status",
-			obj: *createTestResourceWithStatus("Pod", "test", "default", map[string]interface{}{
+			obj: *createTestResourceWithStatus("Pod", "test", "default", map[string]any{
 				"reason": "ImagePullBackOff",
 			}),
 			expected: "ImagePullBackOff",
@@ -987,7 +987,7 @@ func createTestResource(kind, name, namespace string) *client.Object {
 	return &clientObj
 }
 
-func createTestResourceWithStatus(kind, name, namespace string, status map[string]interface{}) *client.Object {
+func createTestResourceWithStatus(kind, name, namespace string, status map[string]any) *client.Object {
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("v1")
 	obj.SetKind(kind)
@@ -1005,17 +1005,17 @@ func createTestPod(name, namespace string) client.Object {
 	obj.SetKind("Pod")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"nodeName": "node-1",
 	}
-	obj.Object["status"] = map[string]interface{}{
-		"containerStatuses": []interface{}{
-			map[string]interface{}{
+	obj.Object["status"] = map[string]any{
+		"containerStatuses": []any{
+			map[string]any{
 				"name":         "main",
 				"ready":        true,
 				"restartCount": float64(1),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"name":         "sidecar",
 				"ready":        true,
 				"restartCount": float64(0),
@@ -1031,10 +1031,10 @@ func createTestDeployment(name, namespace string) client.Object {
 	obj.SetKind("Deployment")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"replicas": float64(3),
 	}
-	obj.Object["status"] = map[string]interface{}{
+	obj.Object["status"] = map[string]any{
 		"replicas":      float64(3),
 		"readyReplicas": float64(2),
 	}
@@ -1047,7 +1047,7 @@ func createTestService(name, namespace string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      "ClusterIP",
 		"clusterIP": "10.96.0.1",
 	}
@@ -1060,7 +1060,7 @@ func createTestConfigMapWithData(name, namespace string) client.Object {
 	obj.SetKind("ConfigMap")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["data"] = map[string]interface{}{
+	obj.Object["data"] = map[string]any{
 		"key1": "value1",
 		"key2": "value2",
 		"key3": "value3",
@@ -1084,17 +1084,17 @@ func getPodReadyStatusForTest(obj client.Object) string {
 		return "0/0"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "0/0"
 	}
 
-	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
+	if containerStatuses, ok := statusMap["containerStatuses"].([]any); ok {
 		ready := 0
 		total := len(containerStatuses)
 
 		for _, cs := range containerStatuses {
-			if csMap, ok := cs.(map[string]interface{}); ok {
+			if csMap, ok := cs.(map[string]any); ok {
 				if isReady, ok := csMap["ready"].(bool); ok && isReady {
 					ready++
 				}
@@ -1118,16 +1118,16 @@ func getPodRestartsForTest(obj client.Object) string {
 		return "0"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "0"
 	}
 
-	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
+	if containerStatuses, ok := statusMap["containerStatuses"].([]any); ok {
 		totalRestarts := 0
 
 		for _, cs := range containerStatuses {
-			if csMap, ok := cs.(map[string]interface{}); ok {
+			if csMap, ok := cs.(map[string]any); ok {
 				if restartCount, ok := csMap["restartCount"].(float64); ok {
 					totalRestarts += int(restartCount)
 				}
@@ -1151,7 +1151,7 @@ func getDeploymentReadyStatusForTest(obj client.Object) string {
 		return "0/0"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "0/0"
 	}
@@ -1180,7 +1180,7 @@ func getServiceTypeForTest(obj client.Object) string {
 		return "ClusterIP"
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "ClusterIP"
 	}
@@ -1203,7 +1203,7 @@ func getServiceClusterIPForTest(obj client.Object) string {
 		return "<none>"
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "<none>"
 	}
@@ -1226,7 +1226,7 @@ func getConfigDataCountForTest(obj client.Object) string {
 		return "0"
 	}
 
-	if dataMap, ok := dataVal.(map[string]interface{}); ok {
+	if dataMap, ok := dataVal.(map[string]any); ok {
 		return fmt.Sprintf("%d", len(dataMap))
 	}
 
@@ -1244,7 +1244,7 @@ func getPodNodeForTest(obj client.Object) string {
 		return "<none>"
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "<none>"
 	}
@@ -1267,7 +1267,7 @@ func getDeploymentReplicasForTest(obj client.Object) string {
 		return "0"
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "0"
 	}
@@ -1287,10 +1287,10 @@ func getServiceExternalIPForTest(obj client.Object) string {
 
 	statusVal, found := unstructured.UnstructuredContent()["status"]
 	if found {
-		if statusMap, ok := statusVal.(map[string]interface{}); ok {
-			if lb, ok := statusMap["loadBalancer"].(map[string]interface{}); ok {
-				if ingress, ok := lb["ingress"].([]interface{}); ok && len(ingress) > 0 {
-					if ingressMap, ok := ingress[0].(map[string]interface{}); ok {
+		if statusMap, ok := statusVal.(map[string]any); ok {
+			if lb, ok := statusMap["loadBalancer"].(map[string]any); ok {
+				if ingress, ok := lb["ingress"].([]any); ok && len(ingress) > 0 {
+					if ingressMap, ok := ingress[0].(map[string]any); ok {
 						if ip, ok := ingressMap["ip"].(string); ok && ip != "" {
 							return ip
 						}
@@ -1306,8 +1306,8 @@ func getServiceExternalIPForTest(obj client.Object) string {
 	// Check spec for external IPs
 	specVal, found := unstructured.UnstructuredContent()["spec"]
 	if found {
-		if specMap, ok := specVal.(map[string]interface{}); ok {
-			if externalIPs, ok := specMap["externalIPs"].([]interface{}); ok && len(externalIPs) > 0 {
+		if specMap, ok := specVal.(map[string]any); ok {
+			if externalIPs, ok := specMap["externalIPs"].([]any); ok && len(externalIPs) > 0 {
 				if ip, ok := externalIPs[0].(string); ok {
 					return ip
 				}
@@ -1335,9 +1335,9 @@ func createTestPodNoContainers(name, namespace string) client.Object {
 	obj.SetKind("Pod")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{}
-	obj.Object["status"] = map[string]interface{}{
-		"containerStatuses": []interface{}{},
+	obj.Object["spec"] = map[string]any{}
+	obj.Object["status"] = map[string]any{
+		"containerStatuses": []any{},
 	}
 	return obj
 }
@@ -1348,22 +1348,22 @@ func createTestPodMixedReady(name, namespace string) client.Object {
 	obj.SetKind("Pod")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"nodeName": "node-2",
 	}
-	obj.Object["status"] = map[string]interface{}{
-		"containerStatuses": []interface{}{
-			map[string]interface{}{
+	obj.Object["status"] = map[string]any{
+		"containerStatuses": []any{
+			map[string]any{
 				"name":         "main",
 				"ready":        true,
 				"restartCount": float64(3),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"name":         "sidecar",
 				"ready":        false,
 				"restartCount": float64(2),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"name":         "init-proxy",
 				"ready":        false,
 				"restartCount": float64(0),
@@ -1379,7 +1379,7 @@ func createTestDeploymentNoSpec(name, namespace string) client.Object {
 	obj.SetKind("Deployment")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["status"] = map[string]interface{}{}
+	obj.Object["status"] = map[string]any{}
 	return obj
 }
 
@@ -1389,10 +1389,10 @@ func createTestDeploymentNoReplicas(name, namespace string) client.Object {
 	obj.SetKind("Deployment")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		// spec exists but no replicas field
 	}
-	obj.Object["status"] = map[string]interface{}{}
+	obj.Object["status"] = map[string]any{}
 	return obj
 }
 
@@ -1402,10 +1402,10 @@ func createTestDeploymentScaling(name, namespace string, replicas, readyReplicas
 	obj.SetKind("Deployment")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"replicas": float64(replicas),
 	}
-	obj.Object["status"] = map[string]interface{}{
+	obj.Object["status"] = map[string]any{
 		"replicas":      float64(replicas),
 		"readyReplicas": float64(readyReplicas),
 	}
@@ -1418,7 +1418,7 @@ func createTestServiceType(name, namespace, serviceType string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      serviceType,
 		"clusterIP": "10.96.0.10",
 	}
@@ -1431,14 +1431,14 @@ func createTestServiceWithExternalIP(name, namespace string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      "LoadBalancer",
 		"clusterIP": "10.96.0.5",
 	}
-	obj.Object["status"] = map[string]interface{}{
-		"loadBalancer": map[string]interface{}{
-			"ingress": []interface{}{
-				map[string]interface{}{
+	obj.Object["status"] = map[string]any{
+		"loadBalancer": map[string]any{
+			"ingress": []any{
+				map[string]any{
 					"ip": "203.0.113.1",
 				},
 			},
@@ -1453,14 +1453,14 @@ func createTestServiceWithHostname(name, namespace string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      "LoadBalancer",
 		"clusterIP": "10.96.0.20",
 	}
-	obj.Object["status"] = map[string]interface{}{
-		"loadBalancer": map[string]interface{}{
-			"ingress": []interface{}{
-				map[string]interface{}{
+	obj.Object["status"] = map[string]any{
+		"loadBalancer": map[string]any{
+			"ingress": []any{
+				map[string]any{
 					"hostname": "lb.example.com",
 				},
 			},
@@ -1475,10 +1475,10 @@ func createTestServiceWithExternalIPs(name, namespace string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      "ClusterIP",
 		"clusterIP": "10.96.0.30",
-		"externalIPs": []interface{}{
+		"externalIPs": []any{
 			"198.51.100.1",
 			"198.51.100.2",
 		},
@@ -1492,7 +1492,7 @@ func createTestServiceHeadless(name, namespace string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      "ClusterIP",
 		"clusterIP": "None",
 	}
@@ -1505,7 +1505,7 @@ func createTestConfigMapEmptyData(name, namespace string) client.Object {
 	obj.SetKind("ConfigMap")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["data"] = map[string]interface{}{}
+	obj.Object["data"] = map[string]any{}
 	return obj
 }
 
@@ -1515,8 +1515,8 @@ func createTestConfigMapWithCount(name, namespace string, count int) client.Obje
 	obj.SetKind("ConfigMap")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	data := make(map[string]interface{})
-	for i := 0; i < count; i++ {
+	data := make(map[string]any)
+	for i := range count {
 		data[fmt.Sprintf("key%d", i)] = fmt.Sprintf("value%d", i)
 	}
 	obj.Object["data"] = data
@@ -1529,13 +1529,13 @@ func createTestServiceEmptyIngress(name, namespace string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      "LoadBalancer",
 		"clusterIP": "10.96.0.50",
 	}
-	obj.Object["status"] = map[string]interface{}{
-		"loadBalancer": map[string]interface{}{
-			"ingress": []interface{}{}, // Empty ingress list
+	obj.Object["status"] = map[string]any{
+		"loadBalancer": map[string]any{
+			"ingress": []any{}, // Empty ingress list
 		},
 	}
 	return obj
@@ -1547,7 +1547,7 @@ func createTestServiceInvalidStatus(name, namespace string) client.Object {
 	obj.SetKind("Service")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"type":      "LoadBalancer",
 		"clusterIP": "10.96.0.60",
 	}
@@ -1561,7 +1561,7 @@ func createTestPodNoNode(name, namespace string) client.Object {
 	obj.SetKind("Pod")
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
-	obj.Object["spec"] = map[string]interface{}{
+	obj.Object["spec"] = map[string]any{
 		"nodeName": "", // Empty node name
 	}
 	return obj

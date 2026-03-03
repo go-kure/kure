@@ -602,7 +602,7 @@ func (c *CLI) runSchema(ctx context.Context, packagePath, outputPath string, inc
 
 	// Pretty print if requested
 	if prettyPrint {
-		var obj interface{}
+		var obj any
 		if err := json.Unmarshal(data, &obj); err == nil {
 			if pretty, err := json.MarshalIndent(obj, "", "  "); err == nil {
 				data = pretty
@@ -638,16 +638,16 @@ func (c *CLI) filterPatches(patches []Patch, names []string) []Patch {
 	return filtered
 }
 
-func formatValue(v interface{}) string {
+func formatValue(v any) string {
 	switch val := v.(type) {
 	case string:
 		if strings.Contains(val, "\n") {
 			return "(multiline)"
 		}
 		return val
-	case map[string]interface{}:
+	case map[string]any:
 		return fmt.Sprintf("(map with %d keys)", len(val))
-	case []interface{}:
+	case []any:
 		return fmt.Sprintf("(array with %d items)", len(val))
 	default:
 		return fmt.Sprintf("%v", val)

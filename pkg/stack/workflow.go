@@ -19,7 +19,7 @@ type Workflow interface {
 	// deploy them. This combines manifest generation with GitOps resource
 	// generation in a single operation.
 	// The rules parameter is expected to be of type layout.LayoutRules
-	CreateLayoutWithResources(*Cluster, interface{}) (interface{}, error)
+	CreateLayoutWithResources(*Cluster, any) (any, error)
 
 	// GenerateBootstrap creates bootstrap resources for initializing the
 	// GitOps system itself. This is used to set up the GitOps controller

@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"maps"
+
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,9 +50,7 @@ func AddStorageClassParameters(sc *storagev1.StorageClass, params map[string]str
 	if sc.Parameters == nil {
 		sc.Parameters = make(map[string]string)
 	}
-	for k, v := range params {
-		sc.Parameters[k] = v
-	}
+	maps.Copy(sc.Parameters, params)
 }
 
 // SetStorageClassParameters replaces the parameters map entirely.

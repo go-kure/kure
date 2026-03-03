@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"maps"
+
 	"github.com/go-kure/kure/pkg/errors"
 
 	corev1 "k8s.io/api/core/v1"
@@ -50,9 +52,7 @@ func AddConfigMapDataMap(cm *corev1.ConfigMap, data map[string]string) error {
 	if cm.Data == nil {
 		cm.Data = make(map[string]string)
 	}
-	for k, v := range data {
-		cm.Data[k] = v
-	}
+	maps.Copy(cm.Data, data)
 	return nil
 }
 
@@ -76,9 +76,7 @@ func AddConfigMapBinaryDataMap(cm *corev1.ConfigMap, data map[string][]byte) err
 	if cm.BinaryData == nil {
 		cm.BinaryData = make(map[string][]byte)
 	}
-	for k, v := range data {
-		cm.BinaryData[k] = v
-	}
+	maps.Copy(cm.BinaryData, data)
 	return nil
 }
 

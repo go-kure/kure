@@ -30,8 +30,8 @@ func NewValidator() *Validator {
 }
 
 // validateNotNil is a generic helper for nil validation
-func (v *Validator) validateNotNil(obj interface{}, errType error) error {
-	if obj == nil || (reflect.ValueOf(obj).Kind() == reflect.Ptr && reflect.ValueOf(obj).IsNil()) {
+func (v *Validator) validateNotNil(obj any, errType error) error {
+	if obj == nil || (reflect.ValueOf(obj).Kind() == reflect.Pointer && reflect.ValueOf(obj).IsNil()) {
 		return errType
 	}
 	return nil

@@ -23,14 +23,14 @@ type KurelMetadata struct {
 }
 
 // ParameterMap holds configuration parameters
-type ParameterMap map[string]interface{}
+type ParameterMap map[string]any
 
 // ParameterSource tracks where a parameter value came from for debugging
 type ParameterSource struct {
-	Value    interface{} `json:"value"`
-	Location string      `json:"location"` // "package", "local", "default"
-	File     string      `json:"file"`     // Which file it came from
-	Line     int         `json:"line"`     // Line number if applicable
+	Value    any    `json:"value"`
+	Location string `json:"location"` // "package", "local", "default"
+	File     string `json:"file"`     // Which file it came from
+	Line     int    `json:"line"`     // Line number if applicable
 }
 
 // ParameterMapWithSource maps parameter names to their values with source tracking
@@ -167,16 +167,16 @@ func deepCopyParameterMap(m ParameterMap) ParameterMap {
 	return result
 }
 
-func deepCopyValue(v interface{}) interface{} {
+func deepCopyValue(v any) any {
 	switch val := v.(type) {
-	case map[string]interface{}:
-		result := make(map[string]interface{})
+	case map[string]any:
+		result := make(map[string]any)
 		for k, v := range val {
 			result[k] = deepCopyValue(v)
 		}
 		return result
-	case []interface{}:
-		result := make([]interface{}, len(val))
+	case []any:
+		result := make([]any, len(val))
 		for i, v := range val {
 			result[i] = deepCopyValue(v)
 		}

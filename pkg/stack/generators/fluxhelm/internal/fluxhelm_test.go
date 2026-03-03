@@ -313,9 +313,9 @@ func TestGenerateBucket(t *testing.T) {
 }
 
 func TestGenerateHelmRelease(t *testing.T) {
-	values := map[string]interface{}{
+	values := map[string]any{
 		"replicaCount": 3,
-		"image": map[string]interface{}{
+		"image": map[string]any{
 			"repository": "nginx",
 			"tag":        "1.21.0",
 		},
@@ -950,7 +950,7 @@ func TestConfigStructTags(t *testing.T) {
 			Name:    "nginx",
 			Version: "1.0.0",
 		},
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"test": "value",
 		},
 		Source: SourceConfig{
@@ -1006,22 +1006,22 @@ func TestEmptyValues(t *testing.T) {
 }
 
 func TestComplexValues(t *testing.T) {
-	complexValues := map[string]interface{}{
-		"global": map[string]interface{}{
+	complexValues := map[string]any{
+		"global": map[string]any{
 			"imageRegistry": "my-registry.com",
 		},
-		"nginx": map[string]interface{}{
+		"nginx": map[string]any{
 			"replicaCount": 3,
-			"resources": map[string]interface{}{
-				"limits": map[string]interface{}{
+			"resources": map[string]any{
+				"limits": map[string]any{
 					"cpu":    "500m",
 					"memory": "512Mi",
 				},
 			},
 		},
-		"ingress": map[string]interface{}{
+		"ingress": map[string]any{
 			"enabled": true,
-			"annotations": map[string]interface{}{
+			"annotations": map[string]any{
 				"kubernetes.io/ingress.class": "nginx",
 			},
 		},
@@ -1049,13 +1049,13 @@ func TestComplexValues(t *testing.T) {
 		t.Fatal("Values should not be nil")
 	}
 
-	var parsedValues map[string]interface{}
+	var parsedValues map[string]any
 	if err := json.Unmarshal(release.Spec.Values.Raw, &parsedValues); err != nil {
 		t.Fatalf("Failed to parse values JSON: %v", err)
 	}
 
 	// Check nested values
-	global, ok := parsedValues["global"].(map[string]interface{})
+	global, ok := parsedValues["global"].(map[string]any)
 	if !ok {
 		t.Fatal("global values not found or not a map")
 	}

@@ -15,23 +15,23 @@ func TestApplyStrategicMergePatch_DeploymentContainersMergedByName(t *testing.T)
 	}
 
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "apps/v1",
 			"kind":       "Deployment",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "my-app",
 				"namespace": "default",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(1),
-				"template": map[string]interface{}{
-					"spec": map[string]interface{}{
-						"containers": []interface{}{
-							map[string]interface{}{
+				"template": map[string]any{
+					"spec": map[string]any{
+						"containers": []any{
+							map[string]any{
 								"name":  "main",
 								"image": "nginx:1.24",
 							},
-							map[string]interface{}{
+							map[string]any{
 								"name":  "logger",
 								"image": "fluentd:latest",
 							},
@@ -42,16 +42,16 @@ func TestApplyStrategicMergePatch_DeploymentContainersMergedByName(t *testing.T)
 		},
 	}
 
-	patch := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"template": map[string]interface{}{
-				"spec": map[string]interface{}{
-					"containers": []interface{}{
-						map[string]interface{}{
+	patch := map[string]any{
+		"spec": map[string]any{
+			"template": map[string]any{
+				"spec": map[string]any{
+					"containers": []any{
+						map[string]any{
 							"name":  "main",
 							"image": "nginx:1.25",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":  "sidecar",
 							"image": "envoy:v1.28",
 						},
@@ -78,7 +78,7 @@ func TestApplyStrategicMergePatch_DeploymentContainersMergedByName(t *testing.T)
 
 	containerNames := make(map[string]string)
 	for _, c := range containers {
-		cm := c.(map[string]interface{})
+		cm := c.(map[string]any)
 		containerNames[cm["name"].(string)] = cm["image"].(string)
 	}
 
@@ -100,22 +100,22 @@ func TestApplyStrategicMergePatch_ConfigMapDataMerged(t *testing.T) {
 	}
 
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       "ConfigMap",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "my-config",
 				"namespace": "default",
 			},
-			"data": map[string]interface{}{
+			"data": map[string]any{
 				"key1": "value1",
 				"key2": "value2",
 			},
 		},
 	}
 
-	patch := map[string]interface{}{
-		"data": map[string]interface{}{
+	patch := map[string]any{
+		"data": map[string]any{
 			"key2": "updated",
 			"key3": "new-value",
 		},
@@ -148,27 +148,27 @@ func TestApplyStrategicMergePatch_UnknownCRDFallback(t *testing.T) {
 	}
 
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "example.com/v1",
 			"kind":       "MyCRD",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "test",
 				"namespace": "default",
 			},
-			"spec": map[string]interface{}{
-				"items": []interface{}{
-					map[string]interface{}{"name": "a"},
-					map[string]interface{}{"name": "b"},
+			"spec": map[string]any{
+				"items": []any{
+					map[string]any{"name": "a"},
+					map[string]any{"name": "b"},
 				},
 				"replicas": int64(1),
 			},
 		},
 	}
 
-	patch := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"items": []interface{}{
-				map[string]interface{}{"name": "c"},
+	patch := map[string]any{
+		"spec": map[string]any{
+			"items": []any{
+				map[string]any{"name": "c"},
 			},
 			"replicas": int64(3),
 		},
@@ -208,20 +208,20 @@ func TestApplyStrategicMergePatch_UnknownCRDFallback(t *testing.T) {
 
 func TestApplyStrategicMergePatch_NilLookup(t *testing.T) {
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "apps/v1",
 			"kind":       "Deployment",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "test",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(1),
 			},
 		},
 	}
 
-	patch := map[string]interface{}{
-		"spec": map[string]interface{}{
+	patch := map[string]any{
+		"spec": map[string]any{
 			"replicas": int64(5),
 		},
 	}
@@ -261,7 +261,7 @@ func TestStrategicPatch_VariableSubstitution(t *testing.T) {
             image: "${values.image}"
 `
 	varCtx := &VariableContext{
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"replicas": "5",
 			"image":    "nginx:1.25",
 		},
@@ -282,7 +282,7 @@ func TestStrategicPatch_VariableSubstitution(t *testing.T) {
 	smpPatch := patches[0].Strategic.Patch
 
 	// Verify nested substitution worked
-	spec, ok := smpPatch["spec"].(map[string]interface{})
+	spec, ok := smpPatch["spec"].(map[string]any)
 	if !ok {
 		t.Fatalf("spec not a map: %T", smpPatch["spec"])
 	}
@@ -291,19 +291,19 @@ func TestStrategicPatch_VariableSubstitution(t *testing.T) {
 		t.Errorf("expected replicas value 5, got %v", spec["replicas"])
 	}
 
-	tmpl, ok := spec["template"].(map[string]interface{})
+	tmpl, ok := spec["template"].(map[string]any)
 	if !ok {
 		t.Fatalf("template not a map: %T", spec["template"])
 	}
-	tmplSpec, ok := tmpl["spec"].(map[string]interface{})
+	tmplSpec, ok := tmpl["spec"].(map[string]any)
 	if !ok {
 		t.Fatalf("template.spec not a map: %T", tmpl["spec"])
 	}
-	containers, ok := tmplSpec["containers"].([]interface{})
+	containers, ok := tmplSpec["containers"].([]any)
 	if !ok || len(containers) == 0 {
 		t.Fatal("containers not found or empty")
 	}
-	container, ok := containers[0].(map[string]interface{})
+	container, ok := containers[0].(map[string]any)
 	if !ok {
 		t.Fatal("container is not a map")
 	}
@@ -323,7 +323,7 @@ func TestStrategicPatch_VariableSubstitutionInfersTypes(t *testing.T) {
       replicas: "${values.replicas}"
 `
 	varCtx := &VariableContext{
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"replicas": "3",
 		},
 	}
@@ -337,7 +337,7 @@ func TestStrategicPatch_VariableSubstitutionInfersTypes(t *testing.T) {
 		t.Fatal("expected 1 strategic patch")
 	}
 
-	spec, ok := patches[0].Strategic.Patch["spec"].(map[string]interface{})
+	spec, ok := patches[0].Strategic.Patch["spec"].(map[string]any)
 	if !ok {
 		t.Fatalf("spec not a map: %T", patches[0].Strategic.Patch["spec"])
 	}
@@ -399,14 +399,14 @@ func TestApplyTypedSMP_OriginalMapNotMutated(t *testing.T) {
 	}
 
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "apps/v1",
 			"kind":       "Deployment",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "test",
 				"namespace": "default",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(1),
 			},
 		},
@@ -415,8 +415,8 @@ func TestApplyTypedSMP_OriginalMapNotMutated(t *testing.T) {
 	// Capture a reference to the original map
 	origMap := resource.Object
 
-	patch := map[string]interface{}{
-		"spec": map[string]interface{}{
+	patch := map[string]any{
+		"spec": map[string]any{
 			"replicas": int64(5),
 		},
 	}
@@ -431,7 +431,7 @@ func TestApplyTypedSMP_OriginalMapNotMutated(t *testing.T) {
 	}
 
 	// The original map should still have replicas=1
-	origSpec, ok := origMap["spec"].(map[string]interface{})
+	origSpec, ok := origMap["spec"].(map[string]any)
 	if !ok {
 		t.Fatal("original spec not a map")
 	}
@@ -450,10 +450,10 @@ func TestApplyTypedSMP_OriginalMapNotMutated(t *testing.T) {
 }
 
 func TestDeepCopyMap(t *testing.T) {
-	original := map[string]interface{}{
+	original := map[string]any{
 		"a": "hello",
-		"b": map[string]interface{}{
-			"c": []interface{}{int64(1), int64(2)},
+		"b": map[string]any{
+			"c": []any{int64(1), int64(2)},
 		},
 	}
 
@@ -461,15 +461,15 @@ func TestDeepCopyMap(t *testing.T) {
 
 	// Mutate the copy
 	copied["a"] = "world"
-	innerCopy := copied["b"].(map[string]interface{})
-	innerCopy["c"] = []interface{}{int64(3)}
+	innerCopy := copied["b"].(map[string]any)
+	innerCopy["c"] = []any{int64(3)}
 
 	// Original should be unchanged
 	if original["a"] != "hello" {
 		t.Error("original was mutated")
 	}
-	innerOrig := original["b"].(map[string]interface{})
-	origSlice := innerOrig["c"].([]interface{})
+	innerOrig := original["b"].(map[string]any)
+	origSlice := innerOrig["c"].([]any)
 	if len(origSlice) != 2 {
 		t.Error("original nested slice was mutated")
 	}

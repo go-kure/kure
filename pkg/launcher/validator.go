@@ -379,7 +379,7 @@ func (v *validator) validateWorkload(resource *Resource, result *ValidationResul
 
 	// Validate each container
 	for i, container := range containers {
-		if c, ok := container.(map[string]interface{}); ok {
+		if c, ok := container.(map[string]any); ok {
 			// Check name
 			name, found, _ := unstructured.NestedString(c, "name")
 			if !found || name == "" {
@@ -411,7 +411,7 @@ func (v *validator) validateService(resource *Resource, result *ValidationResult
 	ports, found, _ := unstructured.NestedSlice(spec, "ports")
 	if found {
 		for i, port := range ports {
-			if p, ok := port.(map[string]interface{}); ok {
+			if p, ok := port.(map[string]any); ok {
 				// Check port number
 				portNum, found, _ := unstructured.NestedInt64(p, "port")
 				if !found {
@@ -481,7 +481,7 @@ func (v *validator) validateIngress(resource *Resource, result *ValidationResult
 
 	// Validate each rule
 	for i, rule := range rules {
-		if r, ok := rule.(map[string]interface{}); ok {
+		if r, ok := rule.(map[string]any); ok {
 			// Check host
 			host, _, _ := unstructured.NestedString(r, "host")
 			if host != "" && !isValidHostname(host) {
@@ -673,8 +673,8 @@ func (v *validator) findParameterCycles(params ParameterMap) [][]string {
 }
 
 // packageToMap converts a PackageDefinition to a map for validation
-func (v *validator) packageToMap(def *PackageDefinition) map[string]interface{} {
-	metadata := map[string]interface{}{
+func (v *validator) packageToMap(def *PackageDefinition) map[string]any {
+	metadata := map[string]any{
 		"name":        def.Metadata.Name,
 		"version":     def.Metadata.Version,
 		"appVersion":  def.Metadata.AppVersion,
@@ -699,7 +699,7 @@ func (v *validator) packageToMap(def *PackageDefinition) map[string]interface{} 
 		metadata["maintainers"] = def.Metadata.Maintainers
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"path":     def.Path,
 		"metadata": metadata,
 	}
@@ -708,11 +708,11 @@ func (v *validator) packageToMap(def *PackageDefinition) map[string]interface{} 
 	if def.Parameters != nil {
 		result["parameters"] = def.Parameters
 	} else {
-		result["parameters"] = make(map[string]interface{})
+		result["parameters"] = make(map[string]any)
 	}
 
 	// Convert resources
-	var resources []interface{}
+	var resources []any
 	for _, r := range def.Resources {
 		if r.Raw != nil {
 			resources = append(resources, r.Raw.Object)
@@ -723,14 +723,14 @@ func (v *validator) packageToMap(def *PackageDefinition) map[string]interface{} 
 	}
 
 	// Convert patches
-	var patches []interface{}
+	var patches []any
 	for _, p := range def.Patches {
-		patchMap := map[string]interface{}{
+		patchMap := map[string]any{
 			"name":    p.Name,
 			"content": p.Content,
 		}
 		if p.Metadata != nil {
-			patchMap["metadata"] = map[string]interface{}{
+			patchMap["metadata"] = map[string]any{
 				"description": p.Metadata.Description,
 				"enabled":     p.Metadata.Enabled,
 				"requires":    p.Metadata.Requires,

@@ -180,7 +180,7 @@ func TestJSONPrinter(t *testing.T) {
 
 			if !tt.wantErr {
 				// Verify it's valid JSON
-				var result interface{}
+				var result any
 				if err := json.Unmarshal([]byte(buf.String()), &result); err != nil {
 					t.Errorf("invalid JSON output: %v", err)
 				}

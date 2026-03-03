@@ -30,8 +30,6 @@ import (
 	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"
 )
 
-func ptr[T any](v T) *T { return &v }
-
 func logError(msg string, err error) {
 	if err != nil {
 		log.Printf("%s: %v", msg, err)

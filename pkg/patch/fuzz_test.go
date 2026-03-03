@@ -297,7 +297,7 @@ func FuzzSubstituteVariables(f *testing.F) {
 	f.Fuzz(func(t *testing.T, value string) {
 		// Create a context with some values
 		ctx := &VariableContext{
-			Values: map[string]interface{}{
+			Values: map[string]any{
 				"name":       "test",
 				"replicas":   3,
 				"enabled":    true,

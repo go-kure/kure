@@ -8,7 +8,7 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 
 ### Technology Stack
 
-- **Language**: Go 1.24
+- **Language**: Go 1.26
 - **Core Dependencies**: Kubernetes APIs (v0.33.2), Flux v2.6.4, cert-manager v1.16.5, MetalLB v0.15.2
 - **CLI Tools**: kure (main CLI), kurel (package system), demo (comprehensive examples)
 - **Testing**: 105 test files with 100% pass rate

@@ -103,20 +103,18 @@ func TestStackRegistry_Concurrency(t *testing.T) {
 	errors := make(chan error, 100)
 
 	// Concurrent creates
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			gvk := gvk.GVK{Group: "stack.gokure.dev", Version: "v1alpha1", Kind: "Cluster"}
 			_, err := CreateStackConfig(gvk)
 			if err != nil {
 				errors <- err
 			}
-		}()
+		})
 	}
 
 	// Concurrent registrations
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

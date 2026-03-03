@@ -386,7 +386,7 @@ func TestConfigStructTags(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		config interface{}
+		config any
 	}{
 		{"OCIRepositoryConfig", &OCIRepositoryConfig{}},
 		{"GitRepositoryConfig", &GitRepositoryConfig{}},

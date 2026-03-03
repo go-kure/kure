@@ -3,6 +3,7 @@ package patch
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -26,7 +27,7 @@ type Selector struct {
 
 // VariableContext holds variables for substitution
 type VariableContext struct {
-	Values   map[string]interface{}
+	Values   map[string]any
 	Features map[string]bool
 }
 
@@ -320,16 +321,11 @@ func isWorkloadKind(kind string) bool {
 		"deployment", "replicaset", "statefulset", "daemonset", "job", "cronjob",
 	}
 
-	for _, wk := range workloadKinds {
-		if strings.ToLower(kind) == wk {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(workloadKinds, strings.ToLower(kind))
 }
 
 // SubstituteVariables replaces ${values.key} and ${features.flag} patterns with actual values
-func SubstituteVariables(value string, ctx *VariableContext) (interface{}, error) {
+func SubstituteVariables(value string, ctx *VariableContext) (any, error) {
 	if ctx == nil {
 		return value, nil
 	}
@@ -372,9 +368,9 @@ func SubstituteVariables(value string, ctx *VariableContext) (interface{}, error
 
 // IsTOMLFormat detects if the content appears to be TOML-style patch format
 func IsTOMLFormat(content string) bool {
-	lines := strings.Split(content, "\n")
+	lines := strings.SplitSeq(content, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		line = strings.TrimSpace(line)
 
 		// Skip empty lines and comments
@@ -425,7 +421,7 @@ func (h *TOMLHeader) String() string {
 
 // inferValueType attempts to convert string values to appropriate Go types
 // This is important for Kubernetes fields that expect specific types (e.g., ports as integers)
-func inferValueType(key, value string) interface{} {
+func inferValueType(key, value string) any {
 	// Handle boolean values
 	switch strings.ToLower(value) {
 	case "true":

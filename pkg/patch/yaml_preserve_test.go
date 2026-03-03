@@ -340,7 +340,7 @@ spec:
 		t.Fatalf("Expected 1 port, got %d", len(ports))
 	}
 
-	portMap, ok := ports[0].(map[string]interface{})
+	portMap, ok := ports[0].(map[string]any)
 	if !ok {
 		t.Fatal("Port is not a map")
 	}

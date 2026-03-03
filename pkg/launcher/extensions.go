@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,10 +98,10 @@ type LocalPatch struct {
 
 // LocalResourceOverride represents resource modifications
 type LocalResourceOverride struct {
-	Selector ResourceSelector       `yaml:"selector"`
-	Override map[string]interface{} `yaml:"override,omitempty"`
-	Merge    map[string]interface{} `yaml:"merge,omitempty"`
-	Remove   []string               `yaml:"remove,omitempty"`
+	Selector ResourceSelector `yaml:"selector"`
+	Override map[string]any   `yaml:"override,omitempty"`
+	Merge    map[string]any   `yaml:"merge,omitempty"`
+	Remove   []string         `yaml:"remove,omitempty"`
 }
 
 // ResourceSelector identifies resources to modify
@@ -259,9 +260,7 @@ func (e *extensionLoader) applyParameterExtension(def *PackageDefinition, params
 		def.Parameters = params
 	case ExtensionTypeOverride:
 		// Override only specified keys
-		for k, v := range params {
-			def.Parameters[k] = v
-		}
+		maps.Copy(def.Parameters, params)
 	case ExtensionTypeMerge:
 		// Deep merge parameters
 		def.Parameters = e.mergeParameters(def.Parameters, params)
@@ -438,8 +437,8 @@ func (e *extensionLoader) mergeParameters(base, overlay ParameterMap) ParameterM
 	for k, v := range overlay {
 		if existing, ok := result[k]; ok {
 			// Merge if both are maps
-			if baseMap, ok1 := existing.(map[string]interface{}); ok1 {
-				if overlayMap, ok2 := v.(map[string]interface{}); ok2 {
+			if baseMap, ok1 := existing.(map[string]any); ok1 {
+				if overlayMap, ok2 := v.(map[string]any); ok2 {
 					result[k] = e.mergeMaps(baseMap, overlayMap)
 					continue
 				}
@@ -453,8 +452,8 @@ func (e *extensionLoader) mergeParameters(base, overlay ParameterMap) ParameterM
 }
 
 // mergeMaps performs deep merge of two maps
-func (e *extensionLoader) mergeMaps(base, overlay map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func (e *extensionLoader) mergeMaps(base, overlay map[string]any) map[string]any {
+	result := make(map[string]any)
 
 	// Copy base
 	for k, v := range base {
@@ -465,8 +464,8 @@ func (e *extensionLoader) mergeMaps(base, overlay map[string]interface{}) map[st
 	for k, v := range overlay {
 		if existing, ok := result[k]; ok {
 			// Recursively merge if both are maps
-			if baseMap, ok1 := existing.(map[string]interface{}); ok1 {
-				if overlayMap, ok2 := v.(map[string]interface{}); ok2 {
+			if baseMap, ok1 := existing.(map[string]any); ok1 {
+				if overlayMap, ok2 := v.(map[string]any); ok2 {
 					result[k] = e.mergeMaps(baseMap, overlayMap)
 					continue
 				}
@@ -479,16 +478,16 @@ func (e *extensionLoader) mergeMaps(base, overlay map[string]interface{}) map[st
 }
 
 // deepCopyValue creates a deep copy of a value
-func (e *extensionLoader) deepCopyValue(value interface{}) interface{} {
+func (e *extensionLoader) deepCopyValue(value any) any {
 	switch v := value.(type) {
-	case map[string]interface{}:
-		result := make(map[string]interface{})
+	case map[string]any:
+		result := make(map[string]any)
 		for k, val := range v {
 			result[k] = e.deepCopyValue(val)
 		}
 		return result
-	case []interface{}:
-		result := make([]interface{}, len(v))
+	case []any:
+		result := make([]any, len(v))
 		for i, val := range v {
 			result[i] = e.deepCopyValue(val)
 		}
@@ -512,18 +511,18 @@ func (e *extensionLoader) sortExtensions(extensions []LocalExtension) {
 
 // Helper functions for nested field operations
 
-func setNestedField(obj map[string]interface{}, value interface{}, path ...string) error {
+func setNestedField(obj map[string]any, value any, path ...string) error {
 	if len(path) == 0 {
 		return errors.New("empty path")
 	}
 
 	current := obj
 	for i := 0; i < len(path)-1; i++ {
-		if next, ok := current[path[i]].(map[string]interface{}); ok {
+		if next, ok := current[path[i]].(map[string]any); ok {
 			current = next
 		} else {
 			// Create intermediate maps if needed
-			next := make(map[string]interface{})
+			next := make(map[string]any)
 			current[path[i]] = next
 			current = next
 		}
@@ -533,18 +532,18 @@ func setNestedField(obj map[string]interface{}, value interface{}, path ...strin
 	return nil
 }
 
-func mergeNestedField(obj map[string]interface{}, value interface{}, path ...string) error {
+func mergeNestedField(obj map[string]any, value any, path ...string) error {
 	if len(path) == 0 {
 		return errors.New("empty path")
 	}
 
 	current := obj
 	for i := 0; i < len(path)-1; i++ {
-		if next, ok := current[path[i]].(map[string]interface{}); ok {
+		if next, ok := current[path[i]].(map[string]any); ok {
 			current = next
 		} else {
 			// Create intermediate maps if needed
-			next := make(map[string]interface{})
+			next := make(map[string]any)
 			current[path[i]] = next
 			current = next
 		}
@@ -553,11 +552,9 @@ func mergeNestedField(obj map[string]interface{}, value interface{}, path ...str
 	key := path[len(path)-1]
 	if existing, ok := current[key]; ok {
 		// Merge if both are maps
-		if existingMap, ok1 := existing.(map[string]interface{}); ok1 {
-			if valueMap, ok2 := value.(map[string]interface{}); ok2 {
-				for k, v := range valueMap {
-					existingMap[k] = v
-				}
+		if existingMap, ok1 := existing.(map[string]any); ok1 {
+			if valueMap, ok2 := value.(map[string]any); ok2 {
+				maps.Copy(existingMap, valueMap)
 				return nil
 			}
 		}
@@ -568,14 +565,14 @@ func mergeNestedField(obj map[string]interface{}, value interface{}, path ...str
 	return nil
 }
 
-func removeNestedField(obj map[string]interface{}, path ...string) {
+func removeNestedField(obj map[string]any, path ...string) {
 	if len(path) == 0 {
 		return
 	}
 
 	current := obj
 	for i := 0; i < len(path)-1; i++ {
-		if next, ok := current[path[i]].(map[string]interface{}); ok {
+		if next, ok := current[path[i]].(map[string]any); ok {
 			current = next
 		} else {
 			return // Path doesn't exist

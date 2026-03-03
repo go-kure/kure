@@ -57,7 +57,7 @@ func TestRegisterSchemes_Success(t *testing.T) {
 
 func TestRegisterSchemes_Idempotent(t *testing.T) {
 	// Test that RegisterSchemes can be called multiple times safely
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		err := RegisterSchemes()
 		if err != nil {
 			t.Fatalf("RegisterSchemes failed on call %d: %v", i+1, err)
@@ -400,7 +400,7 @@ func TestRegisterSchemes_ThreadSafety(t *testing.T) {
 	const goroutines = 10
 	done := make(chan error, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			done <- RegisterSchemes()
 		}()
@@ -408,7 +408,7 @@ func TestRegisterSchemes_ThreadSafety(t *testing.T) {
 
 	// Collect all results
 	var errors []error
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		if err := <-done; err != nil {
 			errors = append(errors, err)
 		}
@@ -539,7 +539,7 @@ func TestScheme_MultipleRegistrationSafety(t *testing.T) {
 	// This tests the sync.Once behavior more thoroughly
 
 	// Call RegisterSchemes many times in sequence
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		err := RegisterSchemes()
 		if err != nil {
 			t.Fatalf("RegisterSchemes failed on iteration %d: %v", i, err)

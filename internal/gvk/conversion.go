@@ -18,14 +18,14 @@ type ConversionPath struct {
 
 // Converter defines the interface for converting between versions
 type Converter interface {
-	Convert(from interface{}) (interface{}, error)
+	Convert(from any) (any, error)
 }
 
 // ConversionFunc is a function-based converter
-type ConversionFunc func(from interface{}) (interface{}, error)
+type ConversionFunc func(from any) (any, error)
 
 // Convert implements the Converter interface
-func (f ConversionFunc) Convert(from interface{}) (interface{}, error) {
+func (f ConversionFunc) Convert(from any) (any, error) {
 	return f(from)
 }
 
@@ -63,7 +63,7 @@ func (r *ConversionRegistry) RegisterFunc(from, to GVK, converter ConversionFunc
 }
 
 // Convert converts from one GVK to another.
-func (r *ConversionRegistry) Convert(from, to GVK, obj interface{}) (interface{}, error) {
+func (r *ConversionRegistry) Convert(from, to GVK, obj any) (any, error) {
 	if from == to {
 		return obj, nil // No conversion needed
 	}
@@ -143,7 +143,7 @@ func (vc *VersionComparator) Compare(v1, v2 string) int {
 	v2Parts := vc.parseVersion(v2Normalized)
 
 	// Compare major, minor, patch
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if v1Parts[i] < v2Parts[i] {
 			return -1
 		}

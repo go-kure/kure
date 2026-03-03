@@ -9,10 +9,10 @@ import (
 
 func makeResource(kind, name string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       kind,
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": name,
 			},
 		},
@@ -27,9 +27,9 @@ func TestNewPatchableAppSetStrategicTarget(t *testing.T) {
 	}
 
 	strategicPatch := &StrategicPatch{
-		Patch: map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"labels": map[string]interface{}{
+		Patch: map[string]any{
+			"metadata": map[string]any{
+				"labels": map[string]any{
 					"env": "prod",
 				},
 			},
@@ -172,10 +172,10 @@ func TestResolveTargetKey(t *testing.T) {
 
 func makeNamespacedResource(kind, name, namespace string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       kind,
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      name,
 				"namespace": namespace,
 			},
@@ -293,9 +293,9 @@ func TestNewPatchableAppSetStrategicNamespaceTarget(t *testing.T) {
 	}
 
 	strategicPatch := &StrategicPatch{
-		Patch: map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"labels": map[string]interface{}{
+		Patch: map[string]any{
+			"metadata": map[string]any{
+				"labels": map[string]any{
 					"env": "staging",
 				},
 			},

@@ -22,18 +22,18 @@ var patchLogger = logger.New(logger.Options{
 })
 
 // debugLog logs a debug message when the Debug flag is set.
-func debugLog(format string, args ...interface{}) {
+func debugLog(format string, args ...any) {
 	if Debug {
 		patchLogger.Debug(format, args...)
 	}
 }
 
-type RawPatchMap map[string]interface{}
+type RawPatchMap map[string]any
 
 type TargetedPatch struct {
-	Target string                 `yaml:"target"`
-	Type   string                 `yaml:"type,omitempty"` // "" (field-level) or "strategic"
-	Patch  map[string]interface{} `yaml:"patch"`
+	Target string         `yaml:"target"`
+	Type   string         `yaml:"type,omitempty"` // "" (field-level) or "strategic"
+	Patch  map[string]any `yaml:"patch"`
 }
 
 // PatchSpec ties a parsed PatchOp to an optional explicit target.
@@ -250,7 +250,7 @@ func LoadResourcesFromMultiYAML(r io.Reader) ([]*unstructured.Unstructured, erro
 	dec := yaml.NewDecoder(r)
 	var resources []*unstructured.Unstructured
 	for {
-		var raw map[string]interface{}
+		var raw map[string]any
 		err := dec.Decode(&raw)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -505,11 +505,11 @@ func NewPatchableAppSetWithStructure(documentSet *YAMLDocumentSet, patches []Pat
 
 // substituteVariablesInMap recursively applies variable substitution to all
 // string leaf values in a map[string]interface{}.
-func substituteVariablesInMap(m map[string]interface{}, ctx *VariableContext) (map[string]interface{}, error) {
+func substituteVariablesInMap(m map[string]any, ctx *VariableContext) (map[string]any, error) {
 	if ctx == nil {
 		return m, nil
 	}
-	result := make(map[string]interface{}, len(m))
+	result := make(map[string]any, len(m))
 	for k, v := range m {
 		substituted, err := substituteVariablesInValue(v, ctx)
 		if err != nil {
@@ -520,14 +520,14 @@ func substituteVariablesInMap(m map[string]interface{}, ctx *VariableContext) (m
 	return result, nil
 }
 
-func substituteVariablesInValue(v interface{}, ctx *VariableContext) (interface{}, error) {
+func substituteVariablesInValue(v any, ctx *VariableContext) (any, error) {
 	switch val := v.(type) {
 	case string:
 		return SubstituteVariables(val, ctx)
-	case map[string]interface{}:
+	case map[string]any:
 		return substituteVariablesInMap(val, ctx)
-	case []interface{}:
-		result := make([]interface{}, len(val))
+	case []any:
+		result := make([]any, len(val))
 		for i, item := range val {
 			s, err := substituteVariablesInValue(item, ctx)
 			if err != nil {
@@ -544,20 +544,20 @@ func substituteVariablesInValue(v interface{}, ctx *VariableContext) (interface{
 // inferTypesInMap recursively applies type inference to string leaf values
 // in a map, converting numeric and boolean strings to their typed equivalents.
 // This matches the type inference applied to field-level patch values.
-func inferTypesInMap(m map[string]interface{}) {
+func inferTypesInMap(m map[string]any) {
 	for k, v := range m {
 		m[k] = inferTypesInValue(k, v)
 	}
 }
 
-func inferTypesInValue(key string, v interface{}) interface{} {
+func inferTypesInValue(key string, v any) any {
 	switch val := v.(type) {
 	case string:
 		return inferValueType(key, val)
-	case map[string]interface{}:
+	case map[string]any:
 		inferTypesInMap(val)
 		return val
-	case []interface{}:
+	case []any:
 		for i, item := range val {
 			val[i] = inferTypesInValue(key, item)
 		}

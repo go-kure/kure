@@ -30,7 +30,7 @@ func TestExtensionLoader(t *testing.T) {
 		Parameters: ParameterMap{
 			"replicas": 2,
 			"image":    "nginx:1.19",
-			"env": map[string]interface{}{
+			"env": map[string]any{
 				"debug": false,
 			},
 		},
@@ -43,14 +43,14 @@ func TestExtensionLoader(t *testing.T) {
 					Namespace: "default",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "apps/v1",
 						"kind":       "Deployment",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name":      "test-app",
 							"namespace": "default",
 						},
-						"spec": map[string]interface{}{
+						"spec": map[string]any{
 							"replicas": int64(2),
 						},
 					},
@@ -97,7 +97,7 @@ func TestExtensionLoader(t *testing.T) {
 		ext := LocalExtension{
 			Type: ExtensionTypeMerge,
 			Parameters: ParameterMap{
-				"env": map[string]interface{}{
+				"env": map[string]any{
 					"debug":   true, // Override
 					"verbose": true, // New
 				},
@@ -112,7 +112,7 @@ func TestExtensionLoader(t *testing.T) {
 		err := extLoader.applyExtension(ctx, def, ext, nil)
 		require.NoError(t, err)
 
-		env := def.Parameters["env"].(map[string]interface{})
+		env := def.Parameters["env"].(map[string]any)
 		assert.Equal(t, true, env["debug"])   // Changed
 		assert.Equal(t, true, env["verbose"]) // Added
 	})
@@ -228,10 +228,10 @@ func TestExtensionLoader(t *testing.T) {
 					Selector: ResourceSelector{
 						Kind: "Deployment",
 					},
-					Override: map[string]interface{}{
+					Override: map[string]any{
 						"spec.replicas": int64(10),
 					},
-					Merge: map[string]interface{}{
+					Merge: map[string]any{
 						"metadata.labels.managed-by": "kurel",
 					},
 				},
@@ -247,7 +247,7 @@ func TestExtensionLoader(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check replicas was overridden
-		replicas := def.Resources[0].Raw.Object["spec"].(map[string]interface{})["replicas"]
+		replicas := def.Resources[0].Raw.Object["spec"].(map[string]any)["replicas"]
 		assert.Equal(t, int64(10), replicas)
 	})
 
@@ -481,10 +481,10 @@ func TestDeepCopyValueSlice(t *testing.T) {
 	log := logger.Noop()
 	extLoader := &extensionLoader{logger: log}
 
-	original := []interface{}{"a", "b", map[string]interface{}{"key": "val"}}
+	original := []any{"a", "b", map[string]any{"key": "val"}}
 	copied := extLoader.deepCopyValue(original)
 
-	copiedSlice, ok := copied.([]interface{})
+	copiedSlice, ok := copied.([]any)
 	if !ok {
 		t.Fatal("expected []interface{}")
 	}
@@ -494,10 +494,10 @@ func TestDeepCopyValueSlice(t *testing.T) {
 
 	// Verify deep copy - modifying original shouldn't affect copy
 	originalSlice := original
-	innerMap := originalSlice[2].(map[string]interface{})
+	innerMap := originalSlice[2].(map[string]any)
 	innerMap["key"] = "modified"
 
-	copiedInner := copiedSlice[2].(map[string]interface{})
+	copiedInner := copiedSlice[2].(map[string]any)
 	if copiedInner["key"] != "val" {
 		t.Error("deep copy should be independent of original")
 	}
@@ -527,28 +527,28 @@ func TestSortExtensions(t *testing.T) {
 }
 
 func TestMergeNestedFieldMerge(t *testing.T) {
-	obj := map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
+	obj := map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{
 				"existing": "value",
 			},
 		},
 	}
 
-	newLabels := map[string]interface{}{
+	newLabels := map[string]any{
 		"new": "label",
 	}
 
 	err := mergeNestedField(obj, newLabels, "metadata", "labels")
 	require.NoError(t, err)
 
-	labels := obj["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
+	labels := obj["metadata"].(map[string]any)["labels"].(map[string]any)
 	assert.Equal(t, "value", labels["existing"])
 	assert.Equal(t, "label", labels["new"])
 }
 
 func TestSetNestedFieldEmptyPath(t *testing.T) {
-	obj := map[string]interface{}{}
+	obj := map[string]any{}
 	err := setNestedField(obj, "value")
 	if err == nil {
 		t.Fatal("expected error for empty path")
@@ -556,7 +556,7 @@ func TestSetNestedFieldEmptyPath(t *testing.T) {
 }
 
 func TestMergeNestedFieldEmptyPath(t *testing.T) {
-	obj := map[string]interface{}{}
+	obj := map[string]any{}
 	err := mergeNestedField(obj, "value")
 	if err == nil {
 		t.Fatal("expected error for empty path")
@@ -564,13 +564,13 @@ func TestMergeNestedFieldEmptyPath(t *testing.T) {
 }
 
 func TestRemoveNestedFieldEmptyPath(t *testing.T) {
-	obj := map[string]interface{}{"key": "value"}
+	obj := map[string]any{"key": "value"}
 	removeNestedField(obj) // Should not panic
 	assert.Equal(t, "value", obj["key"])
 }
 
 func TestRemoveNestedFieldMissingPath(t *testing.T) {
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"metadata": "not-a-map",
 	}
 	// Should not panic when path doesn't exist
@@ -579,8 +579,8 @@ func TestRemoveNestedFieldMissingPath(t *testing.T) {
 
 func TestNestedFieldOperations(t *testing.T) {
 	t.Run("setNestedField", func(t *testing.T) {
-		obj := map[string]interface{}{
-			"metadata": map[string]interface{}{
+		obj := map[string]any{
+			"metadata": map[string]any{
 				"name": "test",
 			},
 		}
@@ -588,19 +588,19 @@ func TestNestedFieldOperations(t *testing.T) {
 		err := setNestedField(obj, "production", "metadata", "labels", "env")
 		require.NoError(t, err)
 
-		labels := obj["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
+		labels := obj["metadata"].(map[string]any)["labels"].(map[string]any)
 		assert.Equal(t, "production", labels["env"])
 	})
 
 	t.Run("mergeNestedField", func(t *testing.T) {
-		obj := map[string]interface{}{
-			"spec": map[string]interface{}{
-				"template": map[string]interface{}{
-					"spec": map[string]interface{}{
-						"containers": []interface{}{
-							map[string]interface{}{
+		obj := map[string]any{
+			"spec": map[string]any{
+				"template": map[string]any{
+					"spec": map[string]any{
+						"containers": []any{
+							map[string]any{
 								"name": "app",
-								"env": map[string]interface{}{
+								"env": map[string]any{
 									"DEBUG": "false",
 								},
 							},
@@ -610,7 +610,7 @@ func TestNestedFieldOperations(t *testing.T) {
 			},
 		}
 
-		newEnv := map[string]interface{}{
+		newEnv := map[string]any{
 			"DEBUG":   "true",
 			"VERBOSE": "true",
 		}
@@ -623,9 +623,9 @@ func TestNestedFieldOperations(t *testing.T) {
 	})
 
 	t.Run("removeNestedField", func(t *testing.T) {
-		obj := map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"labels": map[string]interface{}{
+		obj := map[string]any{
+			"metadata": map[string]any{
+				"labels": map[string]any{
 					"app": "test",
 					"env": "prod",
 				},
@@ -634,7 +634,7 @@ func TestNestedFieldOperations(t *testing.T) {
 
 		removeNestedField(obj, "metadata", "labels", "env")
 
-		labels := obj["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
+		labels := obj["metadata"].(map[string]any)["labels"].(map[string]any)
 		assert.Equal(t, "test", labels["app"])
 		_, exists := labels["env"]
 		assert.False(t, exists)

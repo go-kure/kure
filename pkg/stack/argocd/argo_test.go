@@ -25,7 +25,7 @@ func TestEngine(t *testing.T) {
 }
 
 func TestWorkflowEngineInterface(t *testing.T) {
-	var engine interface{} = Engine()
+	var engine any = Engine()
 
 	// Test that it implements stack.Workflow interface
 	if _, ok := engine.(stack.Workflow); !ok {

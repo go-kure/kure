@@ -16,11 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Helper function to create a pointer to a boolean
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 func TestSetGitRepositorySpec(t *testing.T) {
 	// Create a GitRepository using the constructor first
 	cfg := &GitRepositoryConfig{
@@ -442,7 +437,7 @@ func TestSetFluxInstanceSpec(t *testing.T) {
 			Version:  "v2.2.0",
 			Registry: "quay.io/fluxcd",
 		},
-		Wait: boolPtr(true),
+		Wait: new(true),
 	}
 
 	SetFluxInstanceSpec(instance, newSpec)
