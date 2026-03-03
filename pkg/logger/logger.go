@@ -27,13 +27,13 @@ const (
 // Logger is the interface for structured logging in Kure
 type Logger interface {
 	// Debug logs a debug message (only shown in verbose/debug mode)
-	Debug(format string, args ...interface{})
+	Debug(format string, args ...any)
 	// Info logs an informational message
-	Info(format string, args ...interface{})
+	Info(format string, args ...any)
 	// Warn logs a warning message
-	Warn(format string, args ...interface{})
+	Warn(format string, args ...any)
 	// Error logs an error message
-	Error(format string, args ...interface{})
+	Error(format string, args ...any)
 	// WithPrefix returns a new logger with an additional prefix
 	WithPrefix(prefix string) Logger
 	// SetLevel sets the minimum log level
@@ -94,28 +94,28 @@ func Default() Logger {
 }
 
 // Debug logs a debug message
-func (l *defaultLogger) Debug(format string, args ...interface{}) {
+func (l *defaultLogger) Debug(format string, args ...any) {
 	if l.level <= LevelDebug {
 		l.logger.Printf("[DEBUG] "+format, args...)
 	}
 }
 
 // Info logs an info message
-func (l *defaultLogger) Info(format string, args ...interface{}) {
+func (l *defaultLogger) Info(format string, args ...any) {
 	if l.level <= LevelInfo {
 		l.logger.Printf("[INFO] "+format, args...)
 	}
 }
 
 // Warn logs a warning message
-func (l *defaultLogger) Warn(format string, args ...interface{}) {
+func (l *defaultLogger) Warn(format string, args ...any) {
 	if l.level <= LevelWarn {
 		l.logger.Printf("[WARN] "+format, args...)
 	}
 }
 
 // Error logs an error message
-func (l *defaultLogger) Error(format string, args ...interface{}) {
+func (l *defaultLogger) Error(format string, args ...any) {
 	if l.level <= LevelError {
 		l.logger.Printf("[ERROR] "+format, args...)
 	}
@@ -148,12 +148,12 @@ func Noop() Logger {
 	return &noopLogger{}
 }
 
-func (l *noopLogger) Debug(format string, args ...interface{}) {}
-func (l *noopLogger) Info(format string, args ...interface{})  {}
-func (l *noopLogger) Warn(format string, args ...interface{})  {}
-func (l *noopLogger) Error(format string, args ...interface{}) {}
-func (l *noopLogger) WithPrefix(prefix string) Logger          { return l }
-func (l *noopLogger) SetLevel(level Level)                     {}
+func (l *noopLogger) Debug(format string, args ...any) {}
+func (l *noopLogger) Info(format string, args ...any)  {}
+func (l *noopLogger) Warn(format string, args ...any)  {}
+func (l *noopLogger) Error(format string, args ...any) {}
+func (l *noopLogger) WithPrefix(prefix string) Logger  { return l }
+func (l *noopLogger) SetLevel(level Level)             {}
 
 // Helper function for formatting byte sizes
 func FormatBytes(bytes int64) string {

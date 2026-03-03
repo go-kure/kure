@@ -250,7 +250,7 @@ func TestResolveTOMLPath(t *testing.T) {
 
 func TestSubstituteVariables(t *testing.T) {
 	ctx := &VariableContext{
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"version":   "1.2.3",
 			"replicas":  3,
 			"cpu_limit": "500m",
@@ -263,8 +263,8 @@ func TestSubstituteVariables(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		input    interface{}
-		expected interface{}
+		input    any
+		expected any
 	}{
 		{
 			name:     "simple string value",
@@ -416,7 +416,7 @@ image: nginx:${values.version}
 debug: ${features.enable_debug}`
 
 	ctx := &VariableContext{
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"replica_count": 3,
 			"version":       "1.20",
 		},

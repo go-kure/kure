@@ -16,36 +16,36 @@ import (
 func TestIsDeepEmpty(t *testing.T) {
 	tests := []struct {
 		name string
-		m    map[string]interface{}
+		m    map[string]any
 		want bool
 	}{
 		{
 			name: "empty map",
-			m:    map[string]interface{}{},
+			m:    map[string]any{},
 			want: true,
 		},
 		{
 			name: "nested empty maps",
-			m: map[string]interface{}{
-				"a": map[string]interface{}{},
-				"b": map[string]interface{}{
-					"c": map[string]interface{}{},
+			m: map[string]any{
+				"a": map[string]any{},
+				"b": map[string]any{
+					"c": map[string]any{},
 				},
 			},
 			want: true,
 		},
 		{
 			name: "map with string value",
-			m: map[string]interface{}{
+			m: map[string]any{
 				"key": "value",
 			},
 			want: false,
 		},
 		{
 			name: "nested map with deep non-empty value",
-			m: map[string]interface{}{
-				"a": map[string]interface{}{
-					"b": map[string]interface{}{
+			m: map[string]any{
+				"a": map[string]any{
+					"b": map[string]any{
 						"c": "value",
 					},
 				},
@@ -54,23 +54,23 @@ func TestIsDeepEmpty(t *testing.T) {
 		},
 		{
 			name: "map with nil value",
-			m: map[string]interface{}{
+			m: map[string]any{
 				"key": nil,
 			},
 			want: false,
 		},
 		{
 			name: "map with int value",
-			m: map[string]interface{}{
+			m: map[string]any{
 				"key": 42,
 			},
 			want: false,
 		},
 		{
 			name: "mixed empty and non-empty nested maps",
-			m: map[string]interface{}{
-				"empty":    map[string]interface{}{},
-				"notempty": map[string]interface{}{"k": "v"},
+			m: map[string]any{
+				"empty":    map[string]any{},
+				"notempty": map[string]any{"k": "v"},
 			},
 			want: false,
 		},
@@ -91,37 +91,37 @@ func TestIsDeepEmpty(t *testing.T) {
 func TestRemoveEmptyStatus(t *testing.T) {
 	tests := []struct {
 		name       string
-		m          map[string]interface{}
+		m          map[string]any
 		wantStatus bool // whether "status" key should remain
 	}{
 		{
 			name:       "no status key",
-			m:          map[string]interface{}{"apiVersion": "v1"},
+			m:          map[string]any{"apiVersion": "v1"},
 			wantStatus: false,
 		},
 		{
 			name:       "nil status",
-			m:          map[string]interface{}{"status": nil},
+			m:          map[string]any{"status": nil},
 			wantStatus: false,
 		},
 		{
 			name:       "empty map status",
-			m:          map[string]interface{}{"status": map[string]interface{}{}},
+			m:          map[string]any{"status": map[string]any{}},
 			wantStatus: false,
 		},
 		{
 			name: "deep empty map status",
-			m: map[string]interface{}{
-				"status": map[string]interface{}{
-					"nested": map[string]interface{}{},
+			m: map[string]any{
+				"status": map[string]any{
+					"nested": map[string]any{},
 				},
 			},
 			wantStatus: false,
 		},
 		{
 			name: "non-empty status",
-			m: map[string]interface{}{
-				"status": map[string]interface{}{
+			m: map[string]any{
+				"status": map[string]any{
 					"phase": "Running",
 				},
 			},
@@ -129,12 +129,12 @@ func TestRemoveEmptyStatus(t *testing.T) {
 		},
 		{
 			name:       "string status (non-map, non-nil)",
-			m:          map[string]interface{}{"status": "active"},
+			m:          map[string]any{"status": "active"},
 			wantStatus: true,
 		},
 		{
 			name:       "int status (non-map, non-nil)",
-			m:          map[string]interface{}{"status": 42},
+			m:          map[string]any{"status": 42},
 			wantStatus: true,
 		},
 	}
@@ -314,10 +314,10 @@ func TestEncodeObjectsToYAMLWithOptions_MultipleObjects(t *testing.T) {
 // ---------- cleanResourceMap edge cases ----------
 
 func TestCleanResourceMap_NoSpecKey(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "ConfigMap",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":              "test",
 			"creationTimestamp": nil,
 		},
@@ -326,21 +326,21 @@ func TestCleanResourceMap_NoSpecKey(t *testing.T) {
 	cleanResourceMap(m, StripServerFieldsFull)
 
 	// creationTimestamp should be removed
-	md := m["metadata"].(map[string]interface{})
+	md := m["metadata"].(map[string]any)
 	if _, exists := md["creationTimestamp"]; exists {
 		t.Errorf("expected creationTimestamp to be removed")
 	}
 }
 
 func TestCleanResourceMap_SpecWithoutTemplate(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Service",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":              "test",
 			"creationTimestamp": nil,
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"type": "ClusterIP",
 		},
 	}
@@ -348,14 +348,14 @@ func TestCleanResourceMap_SpecWithoutTemplate(t *testing.T) {
 	cleanResourceMap(m, StripServerFieldsFull)
 
 	// Should not panic or error when spec has no template
-	md := m["metadata"].(map[string]interface{})
+	md := m["metadata"].(map[string]any)
 	if _, exists := md["creationTimestamp"]; exists {
 		t.Errorf("expected creationTimestamp to be removed")
 	}
 }
 
 func TestCleanResourceMap_MetadataNotAMap(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "ConfigMap",
 		"metadata":   "not-a-map",
@@ -366,10 +366,10 @@ func TestCleanResourceMap_MetadataNotAMap(t *testing.T) {
 }
 
 func TestCleanResourceMap_SpecNotAMap(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "ConfigMap",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name": "test",
 		},
 		"spec": "not-a-map",
@@ -382,7 +382,7 @@ func TestCleanResourceMap_SpecNotAMap(t *testing.T) {
 // ---------- cleanMetadata edge cases ----------
 
 func TestCleanMetadata_TemplateNotAMap(t *testing.T) {
-	parent := map[string]interface{}{
+	parent := map[string]any{
 		"template": "not-a-map",
 	}
 
@@ -391,9 +391,9 @@ func TestCleanMetadata_TemplateNotAMap(t *testing.T) {
 }
 
 func TestCleanMetadata_TemplateWithoutMetadata(t *testing.T) {
-	parent := map[string]interface{}{
-		"template": map[string]interface{}{
-			"spec": map[string]interface{}{},
+	parent := map[string]any{
+		"template": map[string]any{
+			"spec": map[string]any{},
 		},
 	}
 
@@ -402,8 +402,8 @@ func TestCleanMetadata_TemplateWithoutMetadata(t *testing.T) {
 }
 
 func TestCleanMetadata_MetadataDirectly(t *testing.T) {
-	parent := map[string]interface{}{
-		"metadata": map[string]interface{}{
+	parent := map[string]any{
+		"metadata": map[string]any{
 			"name":              "test",
 			"creationTimestamp": nil,
 			"uid":               "abc-123",
@@ -412,7 +412,7 @@ func TestCleanMetadata_MetadataDirectly(t *testing.T) {
 
 	cleanMetadata(parent, "metadata", StripServerFieldsFull)
 
-	md := parent["metadata"].(map[string]interface{})
+	md := parent["metadata"].(map[string]any)
 	if _, exists := md["creationTimestamp"]; exists {
 		t.Errorf("expected creationTimestamp to be removed")
 	}

@@ -407,7 +407,7 @@ func TestErrorf(t *testing.T) {
 	tests := []struct {
 		name     string
 		format   string
-		args     []interface{}
+		args     []any
 		expected string
 	}{
 		{
@@ -419,13 +419,13 @@ func TestErrorf(t *testing.T) {
 		{
 			name:     "formatted message",
 			format:   "error: %s at line %d",
-			args:     []interface{}{"syntax error", 42},
+			args:     []any{"syntax error", 42},
 			expected: "error: syntax error at line 42",
 		},
 		{
 			name:     "multiple args",
 			format:   "%s %s %d",
-			args:     []interface{}{"foo", "bar", 123},
+			args:     []any{"foo", "bar", 123},
 			expected: "foo bar 123",
 		},
 	}

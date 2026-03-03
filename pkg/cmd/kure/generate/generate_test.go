@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/go-kure/kure/pkg/cli"
@@ -28,13 +29,7 @@ func TestNewGenerateCommand(t *testing.T) {
 	}
 
 	// Check aliases
-	foundGen := false
-	for _, alias := range cmd.Aliases {
-		if alias == "gen" {
-			foundGen = true
-			break
-		}
-	}
+	foundGen := slices.Contains(cmd.Aliases, "gen")
 	if !foundGen {
 		t.Error("expected 'gen' alias not found")
 	}

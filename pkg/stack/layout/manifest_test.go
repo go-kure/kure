@@ -209,7 +209,7 @@ func TestManifestLayoutYAMLFormat(t *testing.T) {
 	obj.SetKind("ConfigMap")
 	obj.SetName("test-config")
 	obj.SetNamespace("test-ns")
-	obj.Object["data"] = map[string]interface{}{
+	obj.Object["data"] = map[string]any{
 		"key": "value",
 	}
 

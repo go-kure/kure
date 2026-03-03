@@ -31,14 +31,14 @@ type ConfigV1Alpha1 struct {
 	// Chart configuration
 	Chart      internal.ChartConfig       `yaml:"chart" json:"chart"`
 	Version    string                     `yaml:"version,omitempty" json:"version,omitempty"`
-	Values     interface{}                `yaml:"values,omitempty" json:"values,omitempty"`
+	Values     any                        `yaml:"values,omitempty" json:"values,omitempty"`
 	ValuesFrom []internal.ValuesReference `yaml:"valuesFrom,omitempty" json:"valuesFrom,omitempty"`
 
 	// Source configuration
 	Source internal.SourceConfig `yaml:"source" json:"source"`
 
 	// Release configuration
-	Release internal.ReleaseConfig `yaml:"release,omitempty" json:"release,omitempty"`
+	Release internal.ReleaseConfig `yaml:"release,omitempty" json:"release"`
 
 	// ChartRef references an existing OCIRepository or HelmChart (mutually exclusive with Chart)
 	ChartRef *internal.ChartRefConfig `yaml:"chartRef,omitempty" json:"chartRef,omitempty"`

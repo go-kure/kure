@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
@@ -29,14 +30,14 @@ type JSONSchema struct {
 	Properties  map[string]*JSONSchema `json:"properties,omitempty"`
 	Items       *JSONSchema            `json:"items,omitempty"`
 	Required    []string               `json:"required,omitempty"`
-	Enum        []interface{}          `json:"enum,omitempty"`
+	Enum        []any                  `json:"enum,omitempty"`
 	Pattern     string                 `json:"pattern,omitempty"`
 	MinLength   *int                   `json:"minLength,omitempty"`
 	MaxLength   *int                   `json:"maxLength,omitempty"`
 	Minimum     *float64               `json:"minimum,omitempty"`
 	Maximum     *float64               `json:"maximum,omitempty"`
-	Default     interface{}            `json:"default,omitempty"`
-	Examples    []interface{}          `json:"examples,omitempty"`
+	Default     any                    `json:"default,omitempty"`
+	Examples    []any                  `json:"examples,omitempty"`
 	Schema      string                 `json:"$schema,omitempty"`
 	Ref         string                 `json:"$ref,omitempty"`
 	OneOf       []*JSONSchema          `json:"oneOf,omitempty"`
@@ -167,14 +168,14 @@ func (g *schemaGenerator) generateMetadataSchema() *JSONSchema {
 				Type:        "string",
 				Description: "Package name",
 				Pattern:     "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-				MinLength:   intPtr(1),
-				MaxLength:   intPtr(63),
+				MinLength:   new(1),
+				MaxLength:   new(63),
 			},
 			"version": {
 				Type:        "string",
 				Description: "Package version (semantic versioning)",
 				Pattern:     "^v?\\d+\\.\\d+\\.\\d+(-[a-z0-9]+)?(\\+[a-z0-9]+)?$",
-				Examples:    []interface{}{"1.0.0", "v2.1.0-beta", "3.0.0+build123"},
+				Examples:    []any{"1.0.0", "v2.1.0-beta", "3.0.0+build123"},
 			},
 			"appVersion": {
 				Type:        "string",
@@ -276,7 +277,7 @@ func (g *schemaGenerator) generateResourcesSchemaWithOptions(includeK8s bool) *J
 		baseSchema.Items.Properties["apiVersion"] = &JSONSchema{
 			Type:        "string",
 			Description: "API version of the resource",
-			Enum: []interface{}{
+			Enum: []any{
 				"v1",
 				"apps/v1",
 				"networking.k8s.io/v1",
@@ -295,7 +296,7 @@ func (g *schemaGenerator) generateResourcesSchemaWithOptions(includeK8s bool) *J
 		baseSchema.Items.Properties["kind"] = &JSONSchema{
 			Type:        "string",
 			Description: "Kind of the resource",
-			Enum: []interface{}{
+			Enum: []any{
 				"Pod", "Service", "Deployment", "StatefulSet", "DaemonSet",
 				"ConfigMap", "Secret", "Ingress", "Job", "CronJob",
 				"HorizontalPodAutoscaler", "PodDisruptionBudget",
@@ -338,7 +339,7 @@ func (g *schemaGenerator) generatePatchesSchema() *JSONSchema {
 						"enabled": {
 							Type:        "string",
 							Description: "Condition for enabling the patch",
-							Examples:    []interface{}{"true", "${feature.enabled}", "${env == 'prod'}"},
+							Examples:    []any{"true", "${feature.enabled}", "${env == 'prod'}"},
 						},
 						"requires": {
 							Type:        "array",
@@ -426,13 +427,13 @@ func (g *schemaGenerator) generateK8sMetadataSchema() *JSONSchema {
 				Type:        "string",
 				Description: "Resource name",
 				Pattern:     "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$",
-				MaxLength:   intPtr(253),
+				MaxLength:   new(253),
 			},
 			"namespace": {
 				Type:        "string",
 				Description: "Resource namespace",
 				Pattern:     "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-				MaxLength:   intPtr(63),
+				MaxLength:   new(63),
 			},
 			"labels": {
 				Type:        "object",
@@ -495,7 +496,7 @@ func (g *schemaGenerator) generatePodSpecSchema() *JSONSchema {
 				Type:        "array",
 				Description: "List of containers",
 				Items:       g.generateContainerSchema(),
-				MinLength:   intPtr(1),
+				MinLength:   new(1),
 			},
 			"initContainers": {
 				Type:        "array",
@@ -578,7 +579,7 @@ func (g *schemaGenerator) generateContainerSchema() *JSONSchema {
 						"protocol": {
 							Type:        "string",
 							Description: "Protocol",
-							Enum:        []interface{}{"TCP", "UDP", "SCTP"},
+							Enum:        []any{"TCP", "UDP", "SCTP"},
 							Default:     "TCP",
 						},
 					},
@@ -598,7 +599,7 @@ func (g *schemaGenerator) generateServiceSpecSchema() *JSONSchema {
 			"type": {
 				Type:        "string",
 				Description: "Service type",
-				Enum:        []interface{}{"ClusterIP", "NodePort", "LoadBalancer", "ExternalName"},
+				Enum:        []any{"ClusterIP", "NodePort", "LoadBalancer", "ExternalName"},
 				Default:     "ClusterIP",
 			},
 			"selector": {
@@ -627,7 +628,7 @@ func (g *schemaGenerator) generateServiceSpecSchema() *JSONSchema {
 						"protocol": {
 							Type:        "string",
 							Description: "Protocol",
-							Enum:        []interface{}{"TCP", "UDP", "SCTP"},
+							Enum:        []any{"TCP", "UDP", "SCTP"},
 							Default:     "TCP",
 						},
 					},
@@ -687,7 +688,7 @@ func (g *schemaGenerator) generateIngressSpecSchema() *JSONSchema {
 }
 
 // inferSchema infers a schema from a value
-func (g *schemaGenerator) inferSchema(value interface{}, path string) *JSONSchema {
+func (g *schemaGenerator) inferSchema(value any, path string) *JSONSchema {
 	if value == nil {
 		return &JSONSchema{
 			Type:        "null",
@@ -731,7 +732,7 @@ func (g *schemaGenerator) inferSchema(value interface{}, path string) *JSONSchem
 			schema.Pattern = ".*\\$\\{[^}]+\\}.*"
 		}
 		return schema
-	case []interface{}:
+	case []any:
 		var itemSchema *JSONSchema
 		if len(v) > 0 {
 			itemSchema = g.inferSchema(v[0], fmt.Sprintf("%s[0]", path))
@@ -745,7 +746,7 @@ func (g *schemaGenerator) inferSchema(value interface{}, path string) *JSONSchem
 			KurelPath:   path,
 			KurelSource: "inferred",
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		properties := make(map[string]*JSONSchema)
 		for key, val := range v {
 			properties[key] = g.inferSchema(val, fmt.Sprintf("%s.%s", path, key))
@@ -768,7 +769,7 @@ func (g *schemaGenerator) inferSchema(value interface{}, path string) *JSONSchem
 }
 
 // traceObject traces field usage in an object
-func (g *schemaGenerator) traceObject(obj map[string]interface{}, kind, path string, usage map[string][]string) {
+func (g *schemaGenerator) traceObject(obj map[string]any, kind, path string, usage map[string][]string) {
 	for key, value := range obj {
 		fieldPath := key
 		if path != "" {
@@ -789,11 +790,11 @@ func (g *schemaGenerator) traceObject(obj map[string]interface{}, kind, path str
 
 		// Recurse into nested objects
 		switch v := value.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			g.traceObject(v, kind, fieldPath, usage)
-		case []interface{}:
+		case []any:
 			for i, item := range v {
-				if m, ok := item.(map[string]interface{}); ok {
+				if m, ok := item.(map[string]any); ok {
 					g.traceObject(m, kind, fmt.Sprintf("%s[%d]", fieldPath, i), usage)
 				}
 			}
@@ -888,23 +889,21 @@ func (g *schemaGenerator) SetVerbose(verbose bool) {
 }
 
 // Helper functions
-func intPtr(i int) *int {
-	return &i
-}
-
+//
+//go:fix inline
 func float64Ptr(f float64) *float64 {
-	return &f
+	return new(f)
 }
 
 // ValidateWithSchema validates data against a schema
-func ValidateWithSchema(data interface{}, schema *JSONSchema) []ValidationError {
+func ValidateWithSchema(data any, schema *JSONSchema) []ValidationError {
 	var errors []ValidationError
 	validateRecursive(data, schema, "$", &errors)
 	return errors
 }
 
 // validateRecursive recursively validates data against schema
-func validateRecursive(data interface{}, schema *JSONSchema, path string, errors *[]ValidationError) {
+func validateRecursive(data any, schema *JSONSchema, path string, errors *[]ValidationError) {
 	if schema == nil {
 		return
 	}
@@ -927,7 +926,7 @@ func validateRecursive(data interface{}, schema *JSONSchema, path string, errors
 	// Validate based on type
 	switch schema.Type {
 	case "object":
-		if obj, ok := data.(map[string]interface{}); ok {
+		if obj, ok := data.(map[string]any); ok {
 			// Check required fields
 			for _, req := range schema.Required {
 				val, exists := obj[req]
@@ -954,7 +953,7 @@ func validateRecursive(data interface{}, schema *JSONSchema, path string, errors
 		}
 
 	case "array":
-		if arr, ok := data.([]interface{}); ok {
+		if arr, ok := data.([]any); ok {
 			// Check length constraints
 			if schema.MinLength != nil && len(arr) < *schema.MinLength {
 				*errors = append(*errors, ValidationError{
@@ -1027,7 +1026,7 @@ func validateRecursive(data interface{}, schema *JSONSchema, path string, errors
 }
 
 // getJSONType returns the JSON type of a value
-func getJSONType(v interface{}) string {
+func getJSONType(v any) string {
 	if v == nil {
 		return "null"
 	}
@@ -1040,11 +1039,11 @@ func getJSONType(v interface{}) string {
 		return "number"
 	case string:
 		return "string"
-	case []interface{}:
+	case []any:
 		return "array"
 	case []string:
 		return "array"
-	case map[string]interface{}:
+	case map[string]any:
 		return "object"
 	case ParameterMap:
 		return "object"
@@ -1063,7 +1062,7 @@ func getJSONType(v interface{}) string {
 }
 
 // getNumber converts various numeric types to float64
-func getNumber(v interface{}) (float64, bool) {
+func getNumber(v any) (float64, bool) {
 	switch n := v.(type) {
 	case int:
 		return float64(n), true
@@ -1127,13 +1126,7 @@ func MergeSchemas(schemas ...*JSONSchema) *JSONSchema {
 
 		// Merge required fields (union)
 		for _, req := range schema.Required {
-			found := false
-			for _, existing := range result.Required {
-				if existing == req {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(result.Required, req)
 			if !found {
 				result.Required = append(result.Required, req)
 			}

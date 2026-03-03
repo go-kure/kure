@@ -32,7 +32,7 @@ func TestValidateNotNil(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		obj     interface{}
+		obj     any
 		errType error
 		wantErr bool
 	}{

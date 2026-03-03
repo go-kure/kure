@@ -214,7 +214,7 @@ func GetResourceStatus(obj client.Object) string {
 		return "Unknown"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "Unknown"
 	}
@@ -237,9 +237,9 @@ func GetResourceStatus(obj client.Object) string {
 
 	// Check conditions for Ready status
 	if conditions, ok := statusMap["conditions"]; ok {
-		if conditionsSlice, ok := conditions.([]interface{}); ok {
+		if conditionsSlice, ok := conditions.([]any); ok {
 			for _, condition := range conditionsSlice {
-				if condMap, ok := condition.(map[string]interface{}); ok {
+				if condMap, ok := condition.(map[string]any); ok {
 					if condType, ok := condMap["type"].(string); ok && condType == "Ready" {
 						if statusVal, ok := condMap["status"].(string); ok {
 							if statusVal == "True" {

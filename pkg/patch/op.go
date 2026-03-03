@@ -13,11 +13,11 @@ import (
 
 // PatchOp represents a single patch operation to apply to an object.
 type PatchOp struct {
-	Op         string      `json:"op"`
-	Path       string      `json:"path"`
-	ParsedPath []PathPart  `json:"patsedpath,omitempty"`
-	Selector   string      `json:"selector,omitempty"`
-	Value      interface{} `json:"value"`
+	Op         string     `json:"op"`
+	Path       string     `json:"path"`
+	ParsedPath []PathPart `json:"patsedpath,omitempty"`
+	Selector   string     `json:"selector,omitempty"`
+	Value      any        `json:"value"`
 }
 
 // ResourceWithPatches ties a base object with the patches that should be applied to it.
@@ -58,7 +58,7 @@ func (r *ResourceWithPatches) Apply() error {
 	return nil
 }
 
-func applyPatchOp(obj map[string]interface{}, op PatchOp) error {
+func applyPatchOp(obj map[string]any, op PatchOp) error {
 	switch op.Op {
 	case "replace":
 		// Handle array selector patches
@@ -120,7 +120,7 @@ func applyPatchOp(obj map[string]interface{}, op PatchOp) error {
 	}
 }
 
-func applyListPatch(obj map[string]interface{}, op PatchOp) error {
+func applyListPatch(obj map[string]any, op PatchOp) error {
 	path := parsePath(op.Path)
 	lst, found, err := unstructured.NestedSlice(obj, path...)
 	if err != nil {
@@ -138,12 +138,12 @@ func applyListPatch(obj map[string]interface{}, op PatchOp) error {
 	convertedValue := convertValueForUnstructured(op.Value)
 	switch op.Op {
 	case "insertBefore":
-		lst = append(lst[:idx], append([]interface{}{convertedValue}, lst[idx:]...)...)
+		lst = append(lst[:idx], append([]any{convertedValue}, lst[idx:]...)...)
 	case "insertAfter":
 		if idx >= len(lst) {
 			lst = append(lst, convertedValue)
 		} else {
-			lst = append(lst[:idx+1], append([]interface{}{convertedValue}, lst[idx+1:]...)...)
+			lst = append(lst[:idx+1], append([]any{convertedValue}, lst[idx+1:]...)...)
 		}
 	}
 
@@ -153,12 +153,12 @@ func applyListPatch(obj map[string]interface{}, op PatchOp) error {
 	return nil
 }
 
-func resolveListIndex(list []interface{}, selector string) (int, error) {
+func resolveListIndex(list []any, selector string) (int, error) {
 	if strings.Contains(selector, "=") {
 		parts := strings.SplitN(selector, "=", 2)
 		key, val := parts[0], parts[1]
 		for i, item := range list {
-			m, ok := item.(map[string]interface{})
+			m, ok := item.(map[string]any)
 			if ok && fmt.Sprintf("%v", m[key]) == val {
 				return i, nil
 			}
@@ -179,7 +179,7 @@ func resolveListIndex(list []interface{}, selector string) (int, error) {
 }
 
 // applyArrayReplace handles replace operations on array elements using selectors
-func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
+func applyArrayReplace(obj map[string]any, op PatchOp) error {
 	path := parsePath(op.Path)
 	lst, found, err := unstructured.NestedSlice(obj, path...)
 	if err != nil {
@@ -199,9 +199,9 @@ func applyArrayReplace(obj map[string]interface{}, op PatchOp) error {
 	}
 
 	// Check if this is a nested field patch (value is a map with remaining path)
-	if valueMap, ok := op.Value.(map[string]interface{}); ok && len(valueMap) == 1 {
+	if valueMap, ok := op.Value.(map[string]any); ok && len(valueMap) == 1 {
 		// This is a nested patch - get the array item and patch it
-		item, ok := lst[idx].(map[string]interface{})
+		item, ok := lst[idx].(map[string]any)
 		if !ok {
 			return errors.NewPatchError(op.Op, op.Path, "", fmt.Sprintf("array item at index %d is not an object", idx), nil)
 		}
@@ -238,7 +238,7 @@ func parsePath(path string) []string {
 }
 
 // ParsePatchLine converts a YAML patch line of form "path[selector]" into a PatchOp.
-func ParsePatchLine(key string, value interface{}) (PatchOp, error) {
+func ParsePatchLine(key string, value any) (PatchOp, error) {
 	var op PatchOp
 	if strings.HasSuffix(key, "[-]") {
 		op.Op = "append"
@@ -317,7 +317,7 @@ func ParsePatchLine(key string, value interface{}) (PatchOp, error) {
 		op.Path = basePath
 		// Store the remaining path after the selector as part of the operation
 		// We'll need to modify the patch application logic to handle this
-		op.Value = map[string]interface{}{remainingPath: value}
+		op.Value = map[string]any{remainingPath: value}
 		return op, nil
 	}
 
@@ -475,7 +475,7 @@ func isNumeric(s string) bool {
 
 // convertValueForUnstructured converts values to types compatible with unstructured.SetNestedField
 // The unstructured package expects specific types and doesn't handle raw int types well
-func convertValueForUnstructured(value interface{}) interface{} {
+func convertValueForUnstructured(value any) any {
 	switch v := value.(type) {
 	case int:
 		return int64(v) // Convert int to int64 for unstructured compatibility
@@ -491,16 +491,16 @@ func convertValueForUnstructured(value interface{}) interface{} {
 		return v
 	case string:
 		return v
-	case map[string]interface{}:
+	case map[string]any:
 		// Recursively convert map values
-		converted := make(map[string]interface{})
+		converted := make(map[string]any)
 		for k, val := range v {
 			converted[k] = convertValueForUnstructured(val)
 		}
 		return converted
-	case []interface{}:
+	case []any:
 		// Recursively convert slice values
-		converted := make([]interface{}, len(v))
+		converted := make([]any, len(v))
 		for i, val := range v {
 			converted[i] = convertValueForUnstructured(val)
 		}

@@ -98,7 +98,7 @@ func TestTypedWrapper_MarshalYAML(t *testing.T) {
 			}
 
 			// Unmarshal to verify structure
-			var result map[string]interface{}
+			var result map[string]any
 			if err := yaml.Unmarshal(data, &result); err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
@@ -110,7 +110,7 @@ func TestTypedWrapper_MarshalYAML(t *testing.T) {
 				t.Errorf("expected kind %s, got %v", test.wrapper.Kind, result["kind"])
 			}
 
-			if metadata, ok := result["metadata"].(map[string]interface{}); ok {
+			if metadata, ok := result["metadata"].(map[string]any); ok {
 				if name, ok := metadata["name"].(string); ok && name != test.wrapper.GetName() {
 					t.Errorf("expected name %s, got %s", test.wrapper.GetName(), name)
 				}
@@ -363,7 +363,7 @@ func TestTypedWrapper_MarshalYAML_EmptySpec(t *testing.T) {
 		t.Fatalf("failed to marshal: %v", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := yaml.Unmarshal(data, &result); err != nil {
 		t.Fatalf("failed to unmarshal result: %v", err)
 	}

@@ -21,7 +21,7 @@ func TestGetConfigDataCount(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("ConfigMap")
 				obj.SetName("cm")
-				obj.Object["data"] = map[string]interface{}{
+				obj.Object["data"] = map[string]any{
 					"k1": "v1",
 					"k2": "v2",
 				}
@@ -76,7 +76,7 @@ func TestGetDeploymentReplicas(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Deployment")
 				obj.SetName("deploy")
-				obj.Object["spec"] = map[string]interface{}{
+				obj.Object["spec"] = map[string]any{
 					"replicas": float64(5),
 				}
 				return obj
@@ -99,8 +99,8 @@ func TestGetDeploymentReplicas(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Deployment")
 				obj.SetName("deploy")
-				obj.Object["spec"] = map[string]interface{}{
-					"selector": map[string]interface{}{},
+				obj.Object["spec"] = map[string]any{
+					"selector": map[string]any{},
 				}
 				return obj
 			}(),
@@ -143,7 +143,7 @@ func TestGetServiceType(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["spec"] = map[string]interface{}{
+				obj.Object["spec"] = map[string]any{
 					"type": "LoadBalancer",
 				}
 				return obj
@@ -166,7 +166,7 @@ func TestGetServiceType(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["spec"] = map[string]interface{}{
+				obj.Object["spec"] = map[string]any{
 					"clusterIP": "10.0.0.1",
 				}
 				return obj
@@ -210,7 +210,7 @@ func TestGetServiceClusterIP(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["spec"] = map[string]interface{}{
+				obj.Object["spec"] = map[string]any{
 					"clusterIP": "10.96.0.1",
 				}
 				return obj
@@ -233,7 +233,7 @@ func TestGetServiceClusterIP(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["spec"] = map[string]interface{}{
+				obj.Object["spec"] = map[string]any{
 					"clusterIP": "",
 				}
 				return obj
@@ -257,7 +257,7 @@ func TestGetServiceClusterIP(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["spec"] = map[string]interface{}{
+				obj.Object["spec"] = map[string]any{
 					"type": "ClusterIP",
 				}
 				return obj
@@ -290,7 +290,7 @@ func TestGetDeploymentReadyStatus(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Deployment")
 				obj.SetName("deploy")
-				obj.Object["status"] = map[string]interface{}{
+				obj.Object["status"] = map[string]any{
 					"replicas":      float64(3),
 					"readyReplicas": float64(2),
 				}
@@ -345,10 +345,10 @@ func TestGetPodReadyStatus(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Pod")
 				obj.SetName("pod")
-				obj.Object["status"] = map[string]interface{}{
-					"containerStatuses": []interface{}{
-						map[string]interface{}{"ready": true},
-						map[string]interface{}{"ready": false},
+				obj.Object["status"] = map[string]any{
+					"containerStatuses": []any{
+						map[string]any{"ready": true},
+						map[string]any{"ready": false},
 					},
 				}
 				return obj
@@ -402,10 +402,10 @@ func TestGetPodRestarts(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Pod")
 				obj.SetName("pod")
-				obj.Object["status"] = map[string]interface{}{
-					"containerStatuses": []interface{}{
-						map[string]interface{}{"restartCount": float64(3)},
-						map[string]interface{}{"restartCount": float64(2)},
+				obj.Object["status"] = map[string]any{
+					"containerStatuses": []any{
+						map[string]any{"restartCount": float64(3)},
+						map[string]any{"restartCount": float64(2)},
 					},
 				}
 				return obj
@@ -459,7 +459,7 @@ func TestGetPodNode(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Pod")
 				obj.SetName("pod")
-				obj.Object["spec"] = map[string]interface{}{
+				obj.Object["spec"] = map[string]any{
 					"nodeName": "node-1",
 				}
 				return obj
@@ -518,7 +518,7 @@ func TestGetDetailedStatus(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Pod")
 				obj.SetName("pod")
-				obj.Object["status"] = map[string]interface{}{
+				obj.Object["status"] = map[string]any{
 					"message": "OOMKilled",
 				}
 				return obj
@@ -531,7 +531,7 @@ func TestGetDetailedStatus(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Pod")
 				obj.SetName("pod")
-				obj.Object["status"] = map[string]interface{}{
+				obj.Object["status"] = map[string]any{
 					"reason": "Evicted",
 				}
 				return obj
@@ -544,7 +544,7 @@ func TestGetDetailedStatus(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Pod")
 				obj.SetName("pod")
-				obj.Object["status"] = map[string]interface{}{
+				obj.Object["status"] = map[string]any{
 					"message": "Container failed",
 					"reason":  "CrashLoopBackOff",
 				}
@@ -599,10 +599,10 @@ func TestGetServiceExternalIP(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["status"] = map[string]interface{}{
-					"loadBalancer": map[string]interface{}{
-						"ingress": []interface{}{
-							map[string]interface{}{"ip": "1.2.3.4"},
+				obj.Object["status"] = map[string]any{
+					"loadBalancer": map[string]any{
+						"ingress": []any{
+							map[string]any{"ip": "1.2.3.4"},
 						},
 					},
 				}
@@ -616,10 +616,10 @@ func TestGetServiceExternalIP(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["status"] = map[string]interface{}{
-					"loadBalancer": map[string]interface{}{
-						"ingress": []interface{}{
-							map[string]interface{}{"hostname": "lb.example.com"},
+				obj.Object["status"] = map[string]any{
+					"loadBalancer": map[string]any{
+						"ingress": []any{
+							map[string]any{"hostname": "lb.example.com"},
 						},
 					},
 				}
@@ -633,8 +633,8 @@ func TestGetServiceExternalIP(t *testing.T) {
 				obj := &unstructured.Unstructured{}
 				obj.SetKind("Service")
 				obj.SetName("svc")
-				obj.Object["spec"] = map[string]interface{}{
-					"externalIPs": []interface{}{"5.6.7.8"},
+				obj.Object["spec"] = map[string]any{
+					"externalIPs": []any{"5.6.7.8"},
 				}
 				return obj
 			}(),

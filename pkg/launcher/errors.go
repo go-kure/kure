@@ -3,6 +3,7 @@ package launcher
 import (
 	stderrors "errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -33,7 +34,7 @@ func NewLoadErrors(partial *PackageDefinition, issues []error) *LoadErrors {
 			ErrType: errors.ErrorTypeParse,
 			Message: message,
 			Help:    "Fix the reported issues to fully load the package",
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"issueCount": len(issues),
 			},
 		},
@@ -49,12 +50,7 @@ func (e *LoadErrors) Unwrap() []error {
 
 // HasCriticalErrors returns true if any critical errors prevent usage
 func (e *LoadErrors) HasCriticalErrors() bool {
-	for _, err := range e.Issues {
-		if IsCriticalError(err) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(e.Issues, IsCriticalError)
 }
 
 // PatchError represents an error during patch processing
@@ -126,7 +122,7 @@ func NewDependencyError(depType, source, target string, chain []string) *Depende
 				ErrType: errors.ErrorTypeConfiguration,
 				Message: message,
 				Help:    help,
-				ErrContext: map[string]interface{}{
+				ErrContext: map[string]any{
 					"type":   depType,
 					"source": source,
 					"target": target,
@@ -165,7 +161,7 @@ func NewVariableError(variable, expression, reason string) *VariableError {
 				ErrType: errors.ErrorTypeValidation,
 				Message: message,
 				Help:    "Check variable definition and expression syntax",
-				ErrContext: map[string]interface{}{
+				ErrContext: map[string]any{
 					"variable":   variable,
 					"expression": expression,
 					"reason":     reason,
@@ -184,14 +180,14 @@ func NewVariableError(variable, expression, reason string) *VariableError {
 // SchemaError represents a schema validation error
 type SchemaError struct {
 	*errors.ValidationError
-	Path     string      // JSON path to the field
-	Value    interface{} // Actual value
-	Expected string      // Expected type or constraint
-	Message  string      // Error message
+	Path     string // JSON path to the field
+	Value    any    // Actual value
+	Expected string // Expected type or constraint
+	Message  string // Error message
 }
 
 // NewSchemaError creates a schema validation error
-func NewSchemaError(path string, value interface{}, expected, message string) *SchemaError {
+func NewSchemaError(path string, value any, expected, message string) *SchemaError {
 	fullMessage := fmt.Sprintf("schema validation: %s", message)
 	if path != "" {
 		fullMessage = fmt.Sprintf("schema validation at %s: %s (got %v, expected %s)",
@@ -204,7 +200,7 @@ func NewSchemaError(path string, value interface{}, expected, message string) *S
 				ErrType: errors.ErrorTypeValidation,
 				Message: fullMessage,
 				Help:    fmt.Sprintf("Expected %s", expected),
-				ErrContext: map[string]interface{}{
+				ErrContext: map[string]any{
 					"path":     path,
 					"value":    value,
 					"expected": expected,
@@ -238,7 +234,7 @@ func NewSizeError(sizeType string, actualSize, maxSize int64) *SizeError {
 				Message: fmt.Sprintf("%s size %d exceeds maximum %d bytes",
 					sizeType, actualSize, maxSize),
 				Help: fmt.Sprintf("Reduce %s size below %d bytes", sizeType, maxSize),
-				ErrContext: map[string]interface{}{
+				ErrContext: map[string]any{
 					"type":       sizeType,
 					"actualSize": actualSize,
 					"maxSize":    maxSize,
@@ -302,7 +298,7 @@ func IsWarning(err error) bool {
 }
 
 // Helper function to wrap standard errors.As for local use
-func As(err error, target interface{}) bool {
+func As(err error, target any) bool {
 	if err == nil {
 		return false
 	}

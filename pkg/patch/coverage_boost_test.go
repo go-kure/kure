@@ -47,13 +47,13 @@ func TestResolveWithConflictCheck_NoStrategicPatches(t *testing.T) {
 func TestResolveWithConflictCheck_WithConflicts(t *testing.T) {
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "example.com/v1",
 				"kind":       "MyCRD",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name": "test-resource",
 				},
-				"spec": map[string]interface{}{
+				"spec": map[string]any{
 					"foo": "bar",
 				},
 			},
@@ -65,16 +65,16 @@ func TestResolveWithConflictCheck_WithConflicts(t *testing.T) {
 		{
 			Target: "test-resource",
 			Strategic: &StrategicPatch{
-				Patch: map[string]interface{}{
-					"spec": map[string]interface{}{"foo": "value-a"},
+				Patch: map[string]any{
+					"spec": map[string]any{"foo": "value-a"},
 				},
 			},
 		},
 		{
 			Target: "test-resource",
 			Strategic: &StrategicPatch{
-				Patch: map[string]interface{}{
-					"spec": map[string]interface{}{"foo": "value-b"},
+				Patch: map[string]any{
+					"spec": map[string]any{"foo": "value-b"},
 				},
 			},
 		},
@@ -106,13 +106,13 @@ func TestResolveWithConflictCheck_WithConflicts(t *testing.T) {
 func TestResolveWithConflictCheck_NoConflicts(t *testing.T) {
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "example.com/v1",
 				"kind":       "MyCRD",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name": "test-resource",
 				},
-				"spec": map[string]interface{}{
+				"spec": map[string]any{
 					"fieldA": "a",
 					"fieldB": "b",
 				},
@@ -125,17 +125,17 @@ func TestResolveWithConflictCheck_NoConflicts(t *testing.T) {
 		{
 			Target: "test-resource",
 			Strategic: &StrategicPatch{
-				Patch: map[string]interface{}{
-					"spec": map[string]interface{}{"fieldA": "new-a"},
+				Patch: map[string]any{
+					"spec": map[string]any{"fieldA": "new-a"},
 				},
 			},
 		},
 		{
 			Target: "test-resource",
 			Strategic: &StrategicPatch{
-				Patch: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"labels": map[string]interface{}{"env": "prod"},
+				Patch: map[string]any{
+					"metadata": map[string]any{
+						"labels": map[string]any{"env": "prod"},
 					},
 				},
 			},
@@ -183,13 +183,13 @@ func TestResolveWithConflictCheck_ResolveError(t *testing.T) {
 func TestResolveWithConflictCheck_SingleStrategicPatch(t *testing.T) {
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "example.com/v1",
 				"kind":       "MyCRD",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name": "test",
 				},
-				"spec": map[string]interface{}{"foo": "bar"},
+				"spec": map[string]any{"foo": "bar"},
 			},
 		},
 	}
@@ -198,8 +198,8 @@ func TestResolveWithConflictCheck_SingleStrategicPatch(t *testing.T) {
 		{
 			Target: "test",
 			Strategic: &StrategicPatch{
-				Patch: map[string]interface{}{
-					"spec": map[string]interface{}{"foo": "baz"},
+				Patch: map[string]any{
+					"spec": map[string]any{"foo": "baz"},
 				},
 			},
 		},
@@ -230,43 +230,43 @@ func TestResolveWithConflictCheck_SingleStrategicPatch(t *testing.T) {
 func TestDeepEqual_Maps(t *testing.T) {
 	tests := []struct {
 		name string
-		a, b interface{}
+		a, b any
 		want bool
 	}{
 		{
 			name: "equal maps",
-			a:    map[string]interface{}{"x": "1"},
-			b:    map[string]interface{}{"x": "1"},
+			a:    map[string]any{"x": "1"},
+			b:    map[string]any{"x": "1"},
 			want: true,
 		},
 		{
 			name: "maps different length",
-			a:    map[string]interface{}{"x": "1"},
-			b:    map[string]interface{}{"x": "1", "y": "2"},
+			a:    map[string]any{"x": "1"},
+			b:    map[string]any{"x": "1", "y": "2"},
 			want: false,
 		},
 		{
 			name: "map vs non-map",
-			a:    map[string]interface{}{"x": "1"},
+			a:    map[string]any{"x": "1"},
 			b:    "not-a-map",
 			want: false,
 		},
 		{
 			name: "maps missing key",
-			a:    map[string]interface{}{"x": "1", "y": "2"},
-			b:    map[string]interface{}{"x": "1", "z": "2"},
+			a:    map[string]any{"x": "1", "y": "2"},
+			b:    map[string]any{"x": "1", "z": "2"},
 			want: false,
 		},
 		{
 			name: "maps nested value differ",
-			a:    map[string]interface{}{"x": map[string]interface{}{"a": "1"}},
-			b:    map[string]interface{}{"x": map[string]interface{}{"a": "2"}},
+			a:    map[string]any{"x": map[string]any{"a": "1"}},
+			b:    map[string]any{"x": map[string]any{"a": "2"}},
 			want: false,
 		},
 		{
 			name: "maps nested value same",
-			a:    map[string]interface{}{"x": map[string]interface{}{"a": "1"}},
-			b:    map[string]interface{}{"x": map[string]interface{}{"a": "1"}},
+			a:    map[string]any{"x": map[string]any{"a": "1"}},
+			b:    map[string]any{"x": map[string]any{"a": "1"}},
 			want: true,
 		},
 	}
@@ -284,43 +284,43 @@ func TestDeepEqual_Maps(t *testing.T) {
 func TestDeepEqual_Slices(t *testing.T) {
 	tests := []struct {
 		name string
-		a, b interface{}
+		a, b any
 		want bool
 	}{
 		{
 			name: "equal slices",
-			a:    []interface{}{"a", "b"},
-			b:    []interface{}{"a", "b"},
+			a:    []any{"a", "b"},
+			b:    []any{"a", "b"},
 			want: true,
 		},
 		{
 			name: "slices different length",
-			a:    []interface{}{"a"},
-			b:    []interface{}{"a", "b"},
+			a:    []any{"a"},
+			b:    []any{"a", "b"},
 			want: false,
 		},
 		{
 			name: "slice vs non-slice",
-			a:    []interface{}{"a"},
+			a:    []any{"a"},
 			b:    "not-a-slice",
 			want: false,
 		},
 		{
 			name: "slices different content",
-			a:    []interface{}{"a", "b"},
-			b:    []interface{}{"a", "c"},
+			a:    []any{"a", "b"},
+			b:    []any{"a", "c"},
 			want: false,
 		},
 		{
 			name: "nested slices equal",
-			a:    []interface{}{[]interface{}{"x"}},
-			b:    []interface{}{[]interface{}{"x"}},
+			a:    []any{[]any{"x"}},
+			b:    []any{[]any{"x"}},
 			want: true,
 		},
 		{
 			name: "nested slices differ",
-			a:    []interface{}{[]interface{}{"x"}},
-			b:    []interface{}{[]interface{}{"y"}},
+			a:    []any{[]any{"x"}},
+			b:    []any{[]any{"y"}},
 			want: false,
 		},
 	}
@@ -338,7 +338,7 @@ func TestDeepEqual_Slices(t *testing.T) {
 func TestDeepEqual_Scalars(t *testing.T) {
 	tests := []struct {
 		name string
-		a, b interface{}
+		a, b any
 		want bool
 	}{
 		{name: "equal strings", a: "hello", b: "hello", want: true},
@@ -366,32 +366,32 @@ func TestDeepEqual_Scalars(t *testing.T) {
 // ===========================================================================
 
 func TestSimpleKeyOverlapConflict_NoOverlap(t *testing.T) {
-	a := map[string]interface{}{"keyA": "value1"}
-	b := map[string]interface{}{"keyB": "value2"}
+	a := map[string]any{"keyA": "value1"}
+	b := map[string]any{"keyB": "value2"}
 	if simpleKeyOverlapConflict(a, b) {
 		t.Error("expected no conflict for non-overlapping keys")
 	}
 }
 
 func TestSimpleKeyOverlapConflict_SameValues(t *testing.T) {
-	a := map[string]interface{}{"key": "same"}
-	b := map[string]interface{}{"key": "same"}
+	a := map[string]any{"key": "same"}
+	b := map[string]any{"key": "same"}
 	if simpleKeyOverlapConflict(a, b) {
 		t.Error("expected no conflict for same values")
 	}
 }
 
 func TestSimpleKeyOverlapConflict_DifferentValues(t *testing.T) {
-	a := map[string]interface{}{"key": "val1"}
-	b := map[string]interface{}{"key": "val2"}
+	a := map[string]any{"key": "val1"}
+	b := map[string]any{"key": "val2"}
 	if !simpleKeyOverlapConflict(a, b) {
 		t.Error("expected conflict for different values on same key")
 	}
 }
 
 func TestSimpleKeyOverlapConflict_EmptyMaps(t *testing.T) {
-	a := map[string]interface{}{}
-	b := map[string]interface{}{}
+	a := map[string]any{}
+	b := map[string]any{}
 	if simpleKeyOverlapConflict(a, b) {
 		t.Error("expected no conflict for empty maps")
 	}
@@ -840,8 +840,8 @@ data:
 // ===========================================================================
 
 func TestApplyArrayReplace_ArrayNotFound(t *testing.T) {
-	obj := map[string]interface{}{
-		"spec": map[string]interface{}{},
+	obj := map[string]any{
+		"spec": map[string]any{},
 	}
 	op := PatchOp{
 		Op:       "replace",
@@ -859,8 +859,8 @@ func TestApplyArrayReplace_ArrayNotFound(t *testing.T) {
 }
 
 func TestApplyArrayReplace_SelectorResolutionError(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{"a", "b"},
+	obj := map[string]any{
+		"items": []any{"a", "b"},
 	}
 	op := PatchOp{
 		Op:       "replace",
@@ -875,8 +875,8 @@ func TestApplyArrayReplace_SelectorResolutionError(t *testing.T) {
 }
 
 func TestApplyArrayReplace_OutOfBounds(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{"a", "b"},
+	obj := map[string]any{
+		"items": []any{"a", "b"},
 	}
 	op := PatchOp{
 		Op:       "replace",
@@ -898,8 +898,8 @@ func TestApplyArrayReplace_OutOfBounds(t *testing.T) {
 // ===========================================================================
 
 func TestApplyListPatch_ListNotFound(t *testing.T) {
-	obj := map[string]interface{}{
-		"spec": map[string]interface{}{},
+	obj := map[string]any{
+		"spec": map[string]any{},
 	}
 	op := PatchOp{
 		Op:       "insertBefore",
@@ -917,8 +917,8 @@ func TestApplyListPatch_ListNotFound(t *testing.T) {
 }
 
 func TestApplyListPatch_SelectorResolutionError(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{"a", "b"},
+	obj := map[string]any{
+		"items": []any{"a", "b"},
 	}
 	op := PatchOp{
 		Op:       "insertBefore",
@@ -933,8 +933,8 @@ func TestApplyListPatch_SelectorResolutionError(t *testing.T) {
 }
 
 func TestApplyListPatch_InsertAfterBeyondEnd(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{"a", "b"},
+	obj := map[string]any{
+		"items": []any{"a", "b"},
 	}
 	op := PatchOp{
 		Op:       "insertAfter",
@@ -945,7 +945,7 @@ func TestApplyListPatch_InsertAfterBeyondEnd(t *testing.T) {
 	if err := applyListPatch(obj, op); err != nil {
 		t.Fatalf("applyListPatch: %v", err)
 	}
-	items := obj["items"].([]interface{})
+	items := obj["items"].([]any)
 	if len(items) != 3 || items[2] != "c" {
 		t.Errorf("expected [a b c], got %v", items)
 	}
@@ -956,10 +956,10 @@ func TestApplyListPatch_InsertAfterBeyondEnd(t *testing.T) {
 // ===========================================================================
 
 func TestValidateAgainst_DeleteWithSelectorNotFound(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"items": []interface{}{
-				map[string]interface{}{"name": "a"},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{
+			"items": []any{
+				map[string]any{"name": "a"},
 			},
 		},
 	})
@@ -971,8 +971,8 @@ func TestValidateAgainst_DeleteWithSelectorNotFound(t *testing.T) {
 }
 
 func TestValidateAgainst_DeleteWithSelectorListMissing(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{},
 	})
 	p := &PatchOp{Op: "delete", Path: "spec.items", Selector: "name=main"}
 	err := p.ValidateAgainst(obj)
@@ -982,8 +982,8 @@ func TestValidateAgainst_DeleteWithSelectorListMissing(t *testing.T) {
 }
 
 func TestValidateAgainst_InsertNotFoundList(t *testing.T) {
-	obj := testObj(map[string]interface{}{
-		"spec": map[string]interface{}{},
+	obj := testObj(map[string]any{
+		"spec": map[string]any{},
 	})
 	for _, op := range []string{"insertBefore", "insertAfter"} {
 		p := &PatchOp{Op: op, Path: "spec.missing", Selector: "0", Value: "new"}
@@ -995,7 +995,7 @@ func TestValidateAgainst_InsertNotFoundList(t *testing.T) {
 }
 
 func TestValidateAgainst_UnknownOp(t *testing.T) {
-	obj := testObj(map[string]interface{}{"foo": "bar"})
+	obj := testObj(map[string]any{"foo": "bar"})
 	p := &PatchOp{Op: "custom-op", Path: "foo", Value: "baz"}
 	// Unknown ops should not error (no validation rules for unknown ops)
 	_ = p.ValidateAgainst(obj)
@@ -1006,8 +1006,8 @@ func TestValidateAgainst_UnknownOp(t *testing.T) {
 // ===========================================================================
 
 func TestApplyPatchOp_DeleteListNotFound(t *testing.T) {
-	obj := map[string]interface{}{
-		"spec": map[string]interface{}{},
+	obj := map[string]any{
+		"spec": map[string]any{},
 	}
 	op := PatchOp{Op: "delete", Path: "spec.containers", Selector: "name=main"}
 	err := applyPatchOp(obj, op)
@@ -1020,9 +1020,9 @@ func TestApplyPatchOp_DeleteListNotFound(t *testing.T) {
 }
 
 func TestApplyPatchOp_DeleteSelectorResolutionError(t *testing.T) {
-	obj := map[string]interface{}{
-		"items": []interface{}{
-			map[string]interface{}{"name": "a"},
+	obj := map[string]any{
+		"items": []any{
+			map[string]any{"name": "a"},
 		},
 	}
 	op := PatchOp{Op: "delete", Path: "items", Selector: "name=missing"}
@@ -1033,8 +1033,8 @@ func TestApplyPatchOp_DeleteSelectorResolutionError(t *testing.T) {
 }
 
 func TestApplyPatchOp_AppendListNotFound(t *testing.T) {
-	obj := map[string]interface{}{
-		"spec": map[string]interface{}{},
+	obj := map[string]any{
+		"spec": map[string]any{},
 	}
 	op := PatchOp{Op: "append", Path: "spec.items", Value: "new"}
 	err := applyPatchOp(obj, op)
@@ -1134,21 +1134,21 @@ func TestDefaultKindLookup_Success(t *testing.T) {
 
 func TestApplyJSONMergePatch_Basic(t *testing.T) {
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "example.com/v1",
 			"kind":       "MyCRD",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "test",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"key1": "val1",
 				"key2": "val2",
 			},
 		},
 	}
 
-	patch := map[string]interface{}{
-		"spec": map[string]interface{}{
+	patch := map[string]any{
+		"spec": map[string]any{
 			"key1": "updated",
 			"key3": "added",
 		},
@@ -1172,21 +1172,21 @@ func TestApplyJSONMergePatch_Basic(t *testing.T) {
 
 func TestApplyStrategicMergePatch_NilLookupFallsBackToJSONMerge(t *testing.T) {
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "example.com/v1",
 			"kind":       "CustomResource",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "test",
 			},
-			"spec": map[string]interface{}{
-				"items": []interface{}{"a", "b"},
+			"spec": map[string]any{
+				"items": []any{"a", "b"},
 			},
 		},
 	}
 
-	patch := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"items": []interface{}{"c"},
+	patch := map[string]any{
+		"spec": map[string]any{
+			"items": []any{"c"},
 		},
 	}
 
@@ -1216,17 +1216,17 @@ func TestDeepCopyMap_Nil(t *testing.T) {
 }
 
 func TestDeepCopyMap_WithSlice(t *testing.T) {
-	original := map[string]interface{}{
-		"items": []interface{}{"a", map[string]interface{}{"nested": "val"}},
+	original := map[string]any{
+		"items": []any{"a", map[string]any{"nested": "val"}},
 	}
 	copied := deepCopyMap(original)
 
 	// Modify the copy
-	copiedItems := copied["items"].([]interface{})
+	copiedItems := copied["items"].([]any)
 	copiedItems[0] = "modified"
 
 	// Original should be unchanged
-	originalItems := original["items"].([]interface{})
+	originalItems := original["items"].([]any)
 	if originalItems[0] != "a" {
 		t.Error("original was mutated by modifying copy")
 	}
@@ -1727,7 +1727,7 @@ func TestInferValueType(t *testing.T) {
 	tests := []struct {
 		key   string
 		value string
-		want  interface{}
+		want  any
 	}{
 		{key: "replicas", value: "true", want: true},
 		{key: "replicas", value: "false", want: false},
@@ -2206,7 +2206,7 @@ data:
 	}
 
 	doc := docSet.Documents[0]
-	doc.Resource.Object["data"] = map[string]interface{}{
+	doc.Resource.Object["data"] = map[string]any{
 		"key": "new-value",
 	}
 
@@ -2239,22 +2239,22 @@ func TestCopyYAMLNode_Nil(t *testing.T) {
 // ===========================================================================
 
 func TestConvertBaseYAMLTypes_BooleanConversion(t *testing.T) {
-	input := map[string]interface{}{
+	input := map[string]any{
 		"enabled":  "true",
 		"disabled": "false",
 		"name":     "test",
 		"port":     "8080",
-		"nested": map[string]interface{}{
+		"nested": map[string]any{
 			"innerPort": "9090",
 			"innerBool": "true",
 		},
-		"list": []interface{}{
-			map[string]interface{}{"port": "80"},
+		"list": []any{
+			map[string]any{"port": "80"},
 		},
 	}
 
 	result := convertBaseYAMLTypes(input)
-	m, ok := result.(map[string]interface{})
+	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatal("expected map result")
 	}
@@ -2270,7 +2270,7 @@ func TestConvertBaseYAMLTypes_BooleanConversion(t *testing.T) {
 	}
 
 	// Check nested
-	nested, ok := m["nested"].(map[string]interface{})
+	nested, ok := m["nested"].(map[string]any)
 	if !ok {
 		t.Fatal("expected nested map")
 	}
@@ -2506,8 +2506,8 @@ data:
 	doc := docSet.Documents[0]
 	patches := []StrategicPatch{
 		{
-			Patch: map[string]interface{}{
-				"data": map[string]interface{}{
+			Patch: map[string]any{
+				"data": map[string]any{
 					"key":  "new-value",
 					"key2": "added",
 				},
@@ -2561,9 +2561,9 @@ func TestExtractBaseName(t *testing.T) {
 func TestDetectSMPConflicts_NilLookupFallsBackToSimpleConflict(t *testing.T) {
 	gvk := schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "MyCRD"}
 
-	patches := []map[string]interface{}{
-		{"spec": map[string]interface{}{"foo": "bar"}},
-		{"spec": map[string]interface{}{"foo": "baz"}},
+	patches := []map[string]any{
+		{"spec": map[string]any{"foo": "bar"}},
+		{"spec": map[string]any{"foo": "baz"}},
 	}
 
 	report, err := DetectSMPConflicts(patches, nil, gvk)
@@ -2578,9 +2578,9 @@ func TestDetectSMPConflicts_NilLookupFallsBackToSimpleConflict(t *testing.T) {
 func TestDetectSMPConflicts_NilLookupNoConflict(t *testing.T) {
 	gvk := schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "MyCRD"}
 
-	patches := []map[string]interface{}{
-		{"spec": map[string]interface{}{"foo": "same"}},
-		{"spec": map[string]interface{}{"foo": "same"}},
+	patches := []map[string]any{
+		{"spec": map[string]any{"foo": "same"}},
+		{"spec": map[string]any{"foo": "same"}},
 	}
 
 	report, err := DetectSMPConflicts(patches, nil, gvk)
@@ -2668,18 +2668,18 @@ key: value`
 
 func TestSubstituteVariablesInValue_Slice(t *testing.T) {
 	ctx := &VariableContext{
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"name": "test",
 		},
 	}
 
-	input := []interface{}{"${values.name}", "literal"}
+	input := []any{"${values.name}", "literal"}
 	result, err := substituteVariablesInValue(input, ctx)
 	if err != nil {
 		t.Fatalf("substituteVariablesInValue: %v", err)
 	}
 
-	slice, ok := result.([]interface{})
+	slice, ok := result.([]any)
 	if !ok {
 		t.Fatalf("expected slice, got %T", result)
 	}
@@ -2714,9 +2714,9 @@ func TestInferTypesInValue_NonStringNonMapNonSlice(t *testing.T) {
 }
 
 func TestInferTypesInValue_Slice(t *testing.T) {
-	input := []interface{}{"3", "hello"}
+	input := []any{"3", "hello"}
 	result := inferTypesInValue("replicas", input)
-	slice, ok := result.([]interface{})
+	slice, ok := result.([]any)
 	if !ok {
 		t.Fatalf("expected slice, got %T", result)
 	}
@@ -2733,10 +2733,10 @@ func TestInferTypesInValue_Slice(t *testing.T) {
 func TestApply_StrategicMergePatchError(t *testing.T) {
 	// Create an object that will cause strategic merge to fail
 	// Using an invalid typed object - this is tricky. Let's use a mock.
-	obj := testObj(map[string]interface{}{
+	obj := testObj(map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name": "test",
 		},
 	})
@@ -2745,7 +2745,7 @@ func TestApply_StrategicMergePatchError(t *testing.T) {
 		Name: "test",
 		Base: obj,
 		StrategicPatches: []StrategicPatch{
-			{Patch: map[string]interface{}{"spec": map[string]interface{}{"replicas": int64(3)}}},
+			{Patch: map[string]any{"spec": map[string]any{"replicas": int64(3)}}},
 		},
 		// nil KindLookup will use JSON merge fallback, which should work
 	}

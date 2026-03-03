@@ -64,7 +64,7 @@ const (
 
 // marshalOrderedYAML converts a cleaned resource map to YAML bytes with
 // top-level keys in Kubernetes-conventional order.
-func marshalOrderedYAML(m map[string]interface{}) ([]byte, error) {
+func marshalOrderedYAML(m map[string]any) ([]byte, error) {
 	node := mapToNode(m, true)
 	doc := &yaml.Node{
 		Kind:    yaml.DocumentNode,
@@ -86,7 +86,7 @@ func marshalOrderedYAML(m map[string]interface{}) ([]byte, error) {
 // mapToNode builds a yaml.v3 MappingNode from a map. When topLevel is
 // true, keys are ordered per Kubernetes conventions; otherwise keys are
 // sorted alphabetically.
-func mapToNode(m map[string]interface{}, topLevel bool) *yaml.Node {
+func mapToNode(m map[string]any, topLevel bool) *yaml.Node {
 	node := &yaml.Node{
 		Kind: yaml.MappingNode,
 	}
@@ -105,7 +105,7 @@ func mapToNode(m map[string]interface{}, topLevel bool) *yaml.Node {
 
 // valueToNode converts a value produced by json.Unmarshal into interface{}
 // to a yaml.v3 Node.
-func valueToNode(v interface{}) *yaml.Node {
+func valueToNode(v any) *yaml.Node {
 	switch val := v.(type) {
 	case nil:
 		return &yaml.Node{
@@ -131,7 +131,7 @@ func valueToNode(v interface{}) *yaml.Node {
 			Value: val,
 			Tag:   "!!str",
 		}
-	case []interface{}:
+	case []any:
 		node := &yaml.Node{
 			Kind: yaml.SequenceNode,
 		}
@@ -139,7 +139,7 @@ func valueToNode(v interface{}) *yaml.Node {
 			node.Content = append(node.Content, valueToNode(item))
 		}
 		return node
-	case map[string]interface{}:
+	case map[string]any:
 		return mapToNode(val, false)
 	default:
 		// Fallback: render as string
@@ -173,7 +173,7 @@ func floatToNode(f float64) *yaml.Node {
 // their conventional priority; remaining keys are sorted alphabetically
 // and status is always last. When topLevel is false, all keys are
 // sorted alphabetically.
-func sortedKeys(m map[string]interface{}, topLevel bool) []string {
+func sortedKeys(m map[string]any, topLevel bool) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

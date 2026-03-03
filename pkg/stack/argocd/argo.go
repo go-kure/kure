@@ -95,13 +95,13 @@ func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, e
 	}
 
 	// Configure source
-	source := map[string]interface{}{
+	source := map[string]any{
 		"repoURL": w.RepoURL,
 		"path":    w.bundlePath(b),
 	}
 
 	// Configure destination
-	dest := map[string]interface{}{
+	dest := map[string]any{
 		"server":    "https://kubernetes.default.svc",
 		"namespace": "default",
 	}
@@ -134,7 +134,7 @@ func (w *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack
 }
 
 // CreateLayoutWithResources creates a new layout that includes ArgoCD Applications.
-func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterface interface{}) (interface{}, error) {
+func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterface any) (any, error) {
 	rules, ok := rulesInterface.(layout.LayoutRules)
 	if !ok {
 		return nil, fmt.Errorf("rules must be of type layout.LayoutRules")

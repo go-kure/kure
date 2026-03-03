@@ -79,7 +79,7 @@ func (we *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stac
 }
 
 // CreateLayoutWithResources creates a new layout that includes Flux resources.
-func (we *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules interface{}) (interface{}, error) {
+func (we *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules any) (any, error) {
 	layoutRules, ok := rules.(layout.LayoutRules)
 	if !ok {
 		return nil, fmt.Errorf("rules must be of type layout.LayoutRules")

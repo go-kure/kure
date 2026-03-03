@@ -13,7 +13,7 @@ import (
 // StrategicPatch represents a partial YAML document for deep merge
 // using Kubernetes strategic merge patch semantics.
 type StrategicPatch struct {
-	Patch map[string]interface{}
+	Patch map[string]any
 }
 
 // ApplyStrategicMergePatch applies a strategic merge patch to a resource.
@@ -24,7 +24,7 @@ type StrategicPatch struct {
 // If lookup is nil, fallback is always used.
 func ApplyStrategicMergePatch(
 	resource *unstructured.Unstructured,
-	patch map[string]interface{},
+	patch map[string]any,
 	lookup KindLookup,
 ) error {
 	gvk := resource.GroupVersionKind()
@@ -43,7 +43,7 @@ func ApplyStrategicMergePatch(
 // applyTypedSMP applies a strategic merge patch using Go struct tags from the
 // typed object. StrategicMergeMapPatch mutates its arguments, so we deep-copy
 // the resource map before passing it in. On error the resource is left untouched.
-func applyTypedSMP(resource *unstructured.Unstructured, patch map[string]interface{}, typedObj interface{}) error {
+func applyTypedSMP(resource *unstructured.Unstructured, patch map[string]any, typedObj any) error {
 	original := deepCopyMap(resource.Object)
 
 	merged, err := strategicpatch.StrategicMergeMapPatch(original, patch, typedObj)
@@ -57,7 +57,7 @@ func applyTypedSMP(resource *unstructured.Unstructured, patch map[string]interfa
 
 // applyJSONMergePatch applies RFC 7386 JSON merge patch as a fallback for
 // CRDs that lack Go struct tags.
-func applyJSONMergePatch(resource *unstructured.Unstructured, patch map[string]interface{}) error {
+func applyJSONMergePatch(resource *unstructured.Unstructured, patch map[string]any) error {
 	originalJSON, err := json.Marshal(resource.Object)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal resource for JSON merge patch")
@@ -73,7 +73,7 @@ func applyJSONMergePatch(resource *unstructured.Unstructured, patch map[string]i
 		return errors.Wrap(err, "JSON merge patch failed")
 	}
 
-	var merged map[string]interface{}
+	var merged map[string]any
 	if err := json.Unmarshal(mergedJSON, &merged); err != nil {
 		return errors.Wrap(err, "failed to unmarshal merged result")
 	}
@@ -84,23 +84,23 @@ func applyJSONMergePatch(resource *unstructured.Unstructured, patch map[string]i
 
 // deepCopyMap creates a deep copy of a map[string]interface{} to prevent
 // StrategicMergeMapPatch from mutating the original patch data.
-func deepCopyMap(m map[string]interface{}) map[string]interface{} {
+func deepCopyMap(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
 	}
-	result := make(map[string]interface{}, len(m))
+	result := make(map[string]any, len(m))
 	for k, v := range m {
 		result[k] = deepCopyValue(v)
 	}
 	return result
 }
 
-func deepCopyValue(v interface{}) interface{} {
+func deepCopyValue(v any) any {
 	switch val := v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return deepCopyMap(val)
-	case []interface{}:
-		copied := make([]interface{}, len(val))
+	case []any:
+		copied := make([]any, len(val))
 		for i, item := range val {
 			copied[i] = deepCopyValue(item)
 		}

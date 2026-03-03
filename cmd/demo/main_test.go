@@ -23,19 +23,6 @@ import (
 	_ "github.com/go-kure/kure/pkg/stack/generators/fluxhelm"
 )
 
-func TestPtr(t *testing.T) {
-	value := 42
-	result := ptr(value)
-
-	if result == nil {
-		t.Fatal("ptr() returned nil")
-	}
-
-	if *result != value {
-		t.Errorf("ptr() = %d, want %d", *result, value)
-	}
-}
-
 func TestLogError(t *testing.T) {
 	// Skip this test as it requires complex stderr redirection
 	// The function is simple and the logic is straightforward

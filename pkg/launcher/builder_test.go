@@ -46,14 +46,14 @@ func TestBuilder(t *testing.T) {
 						Namespace: "default",
 					},
 					Raw: &unstructured.Unstructured{
-						Object: map[string]interface{}{
+						Object: map[string]any{
 							"apiVersion": "apps/v1",
 							"kind":       "Deployment",
-							"metadata": map[string]interface{}{
+							"metadata": map[string]any{
 								"name":      "test-app",
 								"namespace": "default",
 							},
-							"spec": map[string]interface{}{
+							"spec": map[string]any{
 								"replicas": int64(3),
 							},
 						},
@@ -67,17 +67,17 @@ func TestBuilder(t *testing.T) {
 						Namespace: "default",
 					},
 					Raw: &unstructured.Unstructured{
-						Object: map[string]interface{}{
+						Object: map[string]any{
 							"apiVersion": "v1",
 							"kind":       "Service",
-							"metadata": map[string]interface{}{
+							"metadata": map[string]any{
 								"name":      "test-svc",
 								"namespace": "default",
 							},
-							"spec": map[string]interface{}{
+							"spec": map[string]any{
 								"type": "ClusterIP",
-								"ports": []interface{}{
-									map[string]interface{}{
+								"ports": []any{
+									map[string]any{
 										"port":       int64(80),
 										"targetPort": int64(8080),
 									},
@@ -131,10 +131,10 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, err)
 
 		// Parse YAML to verify structure
-		var docs []map[string]interface{}
+		var docs []map[string]any
 		decoder := yaml.NewDecoder(&buf)
 		for {
-			var doc map[string]interface{}
+			var doc map[string]any
 			if err := decoder.Decode(&doc); err != nil {
 				if errors.Is(err, io.EOF) {
 					break
@@ -173,7 +173,7 @@ func TestBuilder(t *testing.T) {
 		require.NoError(t, err)
 
 		// Parse JSON to verify structure
-		var items []map[string]interface{}
+		var items []map[string]any
 		err = json.Unmarshal(buf.Bytes(), &items)
 		require.NoError(t, err)
 
@@ -242,9 +242,9 @@ func TestBuilder(t *testing.T) {
 		}
 
 		resource := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"kind": "Deployment",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "test-app",
 					"namespace": "production",
 				},
@@ -314,13 +314,13 @@ func TestBuilderDirectory(t *testing.T) {
 							Name: "config",
 						},
 						Raw: &unstructured.Unstructured{
-							Object: map[string]interface{}{
+							Object: map[string]any{
 								"apiVersion": "v1",
 								"kind":       "ConfigMap",
-								"metadata": map[string]interface{}{
+								"metadata": map[string]any{
 									"name": "config",
 								},
-								"data": map[string]interface{}{
+								"data": map[string]any{
 									"key": "value",
 								},
 							},
@@ -423,7 +423,7 @@ func TestConvertToString(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{name: "string", input: "hello", expected: "hello"},
@@ -466,7 +466,7 @@ func TestResolveVariablePath(t *testing.T) {
 
 	t.Run("nested key in ParameterMap", func(t *testing.T) {
 		params := ParameterMap{
-			"app": map[string]interface{}{
+			"app": map[string]any{
 				"name": "nested-app",
 			},
 		}
@@ -481,8 +481,8 @@ func TestResolveVariablePath(t *testing.T) {
 
 	t.Run("nested key in map[string]interface{}", func(t *testing.T) {
 		params := ParameterMap{
-			"config": map[string]interface{}{
-				"db": map[string]interface{}{
+			"config": map[string]any{
+				"db": map[string]any{
 					"host": "localhost",
 				},
 			},
@@ -521,10 +521,10 @@ func TestWriteJSONSingleResource(t *testing.T) {
 	}
 
 	resource := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       "ConfigMap",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "test",
 			},
 		},
@@ -539,7 +539,7 @@ func TestWriteJSONSingleResource(t *testing.T) {
 		t.Fatalf("writeJSON failed: %v", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("expected valid JSON, got: %v", err)
 	}
@@ -559,10 +559,10 @@ func TestWriteDirectoryJSON(t *testing.T) {
 
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "v1",
 				"kind":       "ConfigMap",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name": "test-cm",
 				},
 			},
@@ -619,10 +619,10 @@ func TestWriteDirectoryContextCancelled(t *testing.T) {
 
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "v1",
 				"kind":       "ConfigMap",
-				"metadata":   map[string]interface{}{"name": "test"},
+				"metadata":   map[string]any{"name": "test"},
 			},
 		},
 	}
@@ -682,10 +682,10 @@ func TestWriteOutputToFile(t *testing.T) {
 
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "v1",
 				"kind":       "ConfigMap",
-				"metadata":   map[string]interface{}{"name": "test"},
+				"metadata":   map[string]any{"name": "test"},
 			},
 		},
 	}
@@ -720,10 +720,10 @@ func TestWriteOutputToFileJSON(t *testing.T) {
 
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "v1",
 				"kind":       "ConfigMap",
-				"metadata":   map[string]interface{}{"name": "test"},
+				"metadata":   map[string]any{"name": "test"},
 			},
 		},
 	}
@@ -742,7 +742,7 @@ func TestWriteOutputToFileJSON(t *testing.T) {
 		t.Fatalf("failed to read output file: %v", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
 		t.Fatalf("output should be valid JSON: %v", err)
 	}
@@ -811,10 +811,10 @@ func TestWriteDirectoryUnsupportedFormat(t *testing.T) {
 
 	resources := []*unstructured.Unstructured{
 		{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "v1",
 				"kind":       "ConfigMap",
-				"metadata":   map[string]interface{}{"name": "test"},
+				"metadata":   map[string]any{"name": "test"},
 			},
 		},
 	}

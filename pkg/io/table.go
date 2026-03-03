@@ -340,7 +340,7 @@ func GetDetailedStatus(obj client.Object) string {
 		return "Unknown"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "Unknown"
 	}
@@ -376,18 +376,18 @@ func getPodReadyStatus(obj client.Object) string {
 		return "0/0"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "0/0"
 	}
 
 	// Check container statuses
-	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
+	if containerStatuses, ok := statusMap["containerStatuses"].([]any); ok {
 		ready := 0
 		total := len(containerStatuses)
 
 		for _, cs := range containerStatuses {
-			if csMap, ok := cs.(map[string]interface{}); ok {
+			if csMap, ok := cs.(map[string]any); ok {
 				if isReady, ok := csMap["ready"].(bool); ok && isReady {
 					ready++
 				}
@@ -411,17 +411,17 @@ func getPodRestarts(obj client.Object) string {
 		return "0"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "0"
 	}
 
 	// Sum restart counts from container statuses
-	if containerStatuses, ok := statusMap["containerStatuses"].([]interface{}); ok {
+	if containerStatuses, ok := statusMap["containerStatuses"].([]any); ok {
 		totalRestarts := 0
 
 		for _, cs := range containerStatuses {
-			if csMap, ok := cs.(map[string]interface{}); ok {
+			if csMap, ok := cs.(map[string]any); ok {
 				if restartCount, ok := csMap["restartCount"].(float64); ok {
 					totalRestarts += int(restartCount)
 				}
@@ -445,7 +445,7 @@ func getPodNode(obj client.Object) string {
 		return "<none>"
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "<none>"
 	}
@@ -468,7 +468,7 @@ func getDeploymentReadyStatus(obj client.Object) string {
 		return "0/0"
 	}
 
-	statusMap, ok := statusVal.(map[string]interface{})
+	statusMap, ok := statusVal.(map[string]any)
 	if !ok {
 		return "0/0"
 	}
@@ -497,7 +497,7 @@ func getDeploymentReplicas(obj client.Object) string {
 		return "0"
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "0"
 	}
@@ -520,7 +520,7 @@ func getServiceType(obj client.Object) string {
 		return "ClusterIP" // Default type
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "ClusterIP"
 	}
@@ -543,7 +543,7 @@ func getServiceClusterIP(obj client.Object) string {
 		return "<none>"
 	}
 
-	specMap, ok := specVal.(map[string]interface{})
+	specMap, ok := specVal.(map[string]any)
 	if !ok {
 		return "<none>"
 	}
@@ -563,10 +563,10 @@ func getServiceExternalIP(obj client.Object) string {
 
 	statusVal, found := unstructured.UnstructuredContent()["status"]
 	if found {
-		if statusMap, ok := statusVal.(map[string]interface{}); ok {
-			if lb, ok := statusMap["loadBalancer"].(map[string]interface{}); ok {
-				if ingress, ok := lb["ingress"].([]interface{}); ok && len(ingress) > 0 {
-					if ingressMap, ok := ingress[0].(map[string]interface{}); ok {
+		if statusMap, ok := statusVal.(map[string]any); ok {
+			if lb, ok := statusMap["loadBalancer"].(map[string]any); ok {
+				if ingress, ok := lb["ingress"].([]any); ok && len(ingress) > 0 {
+					if ingressMap, ok := ingress[0].(map[string]any); ok {
 						if ip, ok := ingressMap["ip"].(string); ok && ip != "" {
 							return ip
 						}
@@ -582,8 +582,8 @@ func getServiceExternalIP(obj client.Object) string {
 	// Check spec for external IPs
 	specVal, found := unstructured.UnstructuredContent()["spec"]
 	if found {
-		if specMap, ok := specVal.(map[string]interface{}); ok {
-			if externalIPs, ok := specMap["externalIPs"].([]interface{}); ok && len(externalIPs) > 0 {
+		if specMap, ok := specVal.(map[string]any); ok {
+			if externalIPs, ok := specMap["externalIPs"].([]any); ok && len(externalIPs) > 0 {
 				if ip, ok := externalIPs[0].(string); ok {
 					return ip
 				}
@@ -605,7 +605,7 @@ func getConfigDataCount(obj client.Object) string {
 		return "0"
 	}
 
-	if dataMap, ok := dataVal.(map[string]interface{}); ok {
+	if dataMap, ok := dataVal.(map[string]any); ok {
 		return fmt.Sprintf("%d", len(dataMap))
 	}
 

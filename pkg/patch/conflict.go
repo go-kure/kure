@@ -33,7 +33,7 @@ func (r *ConflictReport) HasConflicts() bool {
 // MergingMapsHaveConflicts with PatchMetaFromStruct. For unknown kinds,
 // it performs a simple key-overlap check.
 func DetectSMPConflicts(
-	patches []map[string]interface{},
+	patches []map[string]any,
 	lookup KindLookup,
 	gvk schema.GroupVersionKind,
 ) (*ConflictReport, error) {
@@ -56,7 +56,7 @@ func DetectSMPConflicts(
 		}
 	}
 
-	for i := 0; i < len(patches); i++ {
+	for i := range patches {
 		for j := i + 1; j < len(patches); j++ {
 			hasConflict, err := detectPairConflict(patches[i], patches[j], schema)
 			if err != nil {
@@ -78,7 +78,7 @@ func DetectSMPConflicts(
 // detectPairConflict checks if two patches conflict. Uses strategic merge
 // conflict detection when a schema is available, otherwise falls back to
 // simple key overlap checking.
-func detectPairConflict(a, b map[string]interface{}, schema strategicpatch.LookupPatchMeta) (bool, error) {
+func detectPairConflict(a, b map[string]any, schema strategicpatch.LookupPatchMeta) (bool, error) {
 	if schema != nil {
 		return strategicpatch.MergingMapsHaveConflicts(a, b, schema)
 	}
@@ -87,7 +87,7 @@ func detectPairConflict(a, b map[string]interface{}, schema strategicpatch.Looku
 
 // simpleKeyOverlapConflict checks if two maps set the same top-level keys
 // to different values. This is a conservative fallback for unknown kinds.
-func simpleKeyOverlapConflict(a, b map[string]interface{}) bool {
+func simpleKeyOverlapConflict(a, b map[string]any) bool {
 	for key, va := range a {
 		if vb, exists := b[key]; exists {
 			if !deepEqual(va, vb) {
@@ -99,10 +99,10 @@ func simpleKeyOverlapConflict(a, b map[string]interface{}) bool {
 }
 
 // deepEqual performs a recursive comparison of two values.
-func deepEqual(a, b interface{}) bool {
+func deepEqual(a, b any) bool {
 	switch va := a.(type) {
-	case map[string]interface{}:
-		vb, ok := b.(map[string]interface{})
+	case map[string]any:
+		vb, ok := b.(map[string]any)
 		if !ok || len(va) != len(vb) {
 			return false
 		}
@@ -113,8 +113,8 @@ func deepEqual(a, b interface{}) bool {
 			}
 		}
 		return true
-	case []interface{}:
-		vb, ok := b.([]interface{})
+	case []any:
+		vb, ok := b.([]any)
 		if !ok || len(va) != len(vb) {
 			return false
 		}

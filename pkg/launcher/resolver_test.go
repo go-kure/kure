@@ -19,7 +19,7 @@ func TestResolver(t *testing.T) {
 
 	t.Run("simple substitution", func(t *testing.T) {
 		base := ParameterMap{
-			"app": map[string]interface{}{
+			"app": map[string]any{
 				"name":    "myapp",
 				"version": "1.0.0",
 			},
@@ -38,8 +38,8 @@ func TestResolver(t *testing.T) {
 	t.Run("nested substitution", func(t *testing.T) {
 		base := ParameterMap{
 			"env": "prod",
-			"config": map[string]interface{}{
-				"database": map[string]interface{}{
+			"config": map[string]any{
+				"database": map[string]any{
 					"host": "db-${env}.example.com",
 					"port": 5432,
 				},
@@ -50,8 +50,8 @@ func TestResolver(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check nested resolution
-		config := result["config"].Value.(map[string]interface{})
-		database := config["database"].(map[string]interface{})
+		config := result["config"].Value.(map[string]any)
+		database := config["database"].(map[string]any)
 		assert.Equal(t, "db-prod.example.com", database["host"])
 		assert.Equal(t, 5432, database["port"])
 	})
@@ -71,7 +71,7 @@ func TestResolver(t *testing.T) {
 
 	t.Run("array access", func(t *testing.T) {
 		base := ParameterMap{
-			"items":    []interface{}{"first", "second", "third"},
+			"items":    []any{"first", "second", "third"},
 			"selected": "${items[1]}",
 		}
 
@@ -119,7 +119,7 @@ func TestResolver(t *testing.T) {
 
 	t.Run("parameter merging", func(t *testing.T) {
 		base := ParameterMap{
-			"app": map[string]interface{}{
+			"app": map[string]any{
 				"name":    "base-app",
 				"version": "1.0.0",
 			},
@@ -127,7 +127,7 @@ func TestResolver(t *testing.T) {
 		}
 
 		overrides := ParameterMap{
-			"app": map[string]interface{}{
+			"app": map[string]any{
 				"name": "override-app", // Override name
 				// version stays from base
 			},
@@ -138,7 +138,7 @@ func TestResolver(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check merged values
-		app := result["app"].Value.(map[string]interface{})
+		app := result["app"].Value.(map[string]any)
 		assert.Equal(t, "override-app", app["name"])
 		assert.Equal(t, "local", result["app"].Location)
 
@@ -165,7 +165,7 @@ func TestResolver(t *testing.T) {
 
 	t.Run("direct variable reference", func(t *testing.T) {
 		base := ParameterMap{
-			"source": map[string]interface{}{
+			"source": map[string]any{
 				"key": "value",
 				"num": 123,
 			},
@@ -176,7 +176,7 @@ func TestResolver(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should get the actual object, not a string
-		ref := result["ref"].Value.(map[string]interface{})
+		ref := result["ref"].Value.(map[string]any)
 		assert.Equal(t, "value", ref["key"])
 		assert.Equal(t, 123, ref["num"])
 	})
@@ -184,7 +184,7 @@ func TestResolver(t *testing.T) {
 	t.Run("array resolution", func(t *testing.T) {
 		base := ParameterMap{
 			"prefix": "item",
-			"items": []interface{}{
+			"items": []any{
 				"${prefix}-1",
 				"${prefix}-2",
 				"${prefix}-3",
@@ -194,7 +194,7 @@ func TestResolver(t *testing.T) {
 		result, err := resolver.Resolve(ctx, base, nil, opts)
 		require.NoError(t, err)
 
-		items := result["items"].Value.([]interface{})
+		items := result["items"].Value.([]any)
 		assert.Equal(t, "item-1", items[0])
 		assert.Equal(t, "item-2", items[1])
 		assert.Equal(t, "item-3", items[2])
@@ -255,7 +255,7 @@ func TestDebugVariableGraph(t *testing.T) {
 	t.Run("complex dependencies", func(t *testing.T) {
 		params := ParameterMap{
 			"base": "value",
-			"app": map[string]interface{}{
+			"app": map[string]any{
 				"name": "${base}-app",
 				"port": 8080,
 			},
@@ -278,13 +278,13 @@ func TestResolverHelpers(t *testing.T) {
 	t.Run("lookupVariable", func(t *testing.T) {
 		params := ParameterMap{
 			"simple": "value",
-			"nested": map[string]interface{}{
+			"nested": map[string]any{
 				"key": "nested-value",
-				"deep": map[string]interface{}{
+				"deep": map[string]any{
 					"field": "deep-value",
 				},
 			},
-			"array": []interface{}{"a", "b", "c"},
+			"array": []any{"a", "b", "c"},
 		}
 
 		// Simple lookup
@@ -311,15 +311,15 @@ func TestResolverHelpers(t *testing.T) {
 	})
 
 	t.Run("deepCopyValue", func(t *testing.T) {
-		original := map[string]interface{}{
+		original := map[string]any{
 			"key": "value",
-			"nested": map[string]interface{}{
+			"nested": map[string]any{
 				"field": "nested",
 			},
-			"array": []interface{}{1, 2, 3},
+			"array": []any{1, 2, 3},
 		}
 
-		copied := resolver.deepCopyValue(original).(map[string]interface{})
+		copied := resolver.deepCopyValue(original).(map[string]any)
 
 		// Verify it's a copy
 		assert.Equal(t, original, copied)
@@ -329,7 +329,7 @@ func TestResolverHelpers(t *testing.T) {
 		assert.Equal(t, "value", original["key"])
 
 		// Modify nested value
-		copied["nested"].(map[string]interface{})["field"] = "modified"
-		assert.Equal(t, "nested", original["nested"].(map[string]interface{})["field"])
+		copied["nested"].(map[string]any)["field"] = "modified"
+		assert.Equal(t, "nested", original["nested"].(map[string]any)["field"])
 	})
 }

@@ -513,8 +513,8 @@ func (o *PatchOptions) printColoredDiff(diffText string) {
 		colorYellow = "\033[33m"
 	)
 
-	lines := strings.Split(diffText, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(diffText, "\n")
+	for line := range lines {
 		switch {
 		case strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++"):
 			_, _ = fmt.Fprintf(o.IOStreams.Out, "%s%s%s\n", colorYellow, line, colorReset)

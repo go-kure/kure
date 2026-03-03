@@ -898,7 +898,7 @@ func TestStackConverter_ComplexScenarios(t *testing.T) {
 		width := 100
 		children := make([]*stack.Node, width)
 
-		for i := 0; i < width; i++ {
+		for i := range width {
 			children[i] = &stack.Node{
 				Name: string(rune('a'+(i%26))) + string(rune('0'+(i/26))),
 				Bundle: &stack.Bundle{

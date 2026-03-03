@@ -2,6 +2,7 @@ package options
 
 import (
 	"os"
+	"slices"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -89,13 +90,7 @@ func (o *GlobalOptions) Complete() error {
 func (o *GlobalOptions) Validate() error {
 	// Validate output format
 	validOutputs := []string{"yaml", "json", "table", "wide", "name"}
-	valid := false
-	for _, format := range validOutputs {
-		if o.Output == format {
-			valid = true
-			break
-		}
-	}
+	valid := slices.Contains(validOutputs, o.Output)
 	if !valid {
 		return errors.NewValidationError("output", o.Output, "GlobalOptions", validOutputs)
 	}

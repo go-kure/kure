@@ -311,7 +311,7 @@ spec:
 
 			// Verify kurel.yaml content
 			kurelContent := files["kurel.yaml"]
-			var kurelDoc map[string]interface{}
+			var kurelDoc map[string]any
 			if err := yaml.Unmarshal(kurelContent, &kurelDoc); err != nil {
 				t.Fatalf("kurel.yaml should be valid YAML: %v", err)
 			}
@@ -753,7 +753,7 @@ metadata:
 		}
 
 		// With inline values
-		withInline := ValuesConfig{Values: map[string]interface{}{"key": "value"}}
+		withInline := ValuesConfig{Values: map[string]any{"key": "value"}}
 		if err := config.validateValuesConfig(withInline); err != nil {
 			t.Errorf("Valid inline values should pass: %v", err)
 		}

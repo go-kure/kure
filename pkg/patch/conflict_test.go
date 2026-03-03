@@ -14,14 +14,14 @@ func TestDetectSMPConflicts_Conflicting(t *testing.T) {
 
 	gvk := schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}
 
-	patches := []map[string]interface{}{
+	patches := []map[string]any{
 		{
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(3),
 			},
 		},
 		{
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(5),
 			},
 		},
@@ -47,18 +47,18 @@ func TestDetectSMPConflicts_NonConflicting(t *testing.T) {
 
 	gvk := schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}
 
-	patches := []map[string]interface{}{
+	patches := []map[string]any{
 		{
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(3),
 			},
 		},
 		{
-			"spec": map[string]interface{}{
-				"template": map[string]interface{}{
-					"spec": map[string]interface{}{
-						"containers": []interface{}{
-							map[string]interface{}{
+			"spec": map[string]any{
+				"template": map[string]any{
+					"spec": map[string]any{
+						"containers": []any{
+							map[string]any{
 								"name":  "main",
 								"image": "nginx:latest",
 							},
@@ -87,14 +87,14 @@ func TestDetectSMPConflicts_UnknownKindFallback(t *testing.T) {
 	gvk := schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "MyCRD"}
 
 	// Two patches that set the same top-level key to different values
-	patches := []map[string]interface{}{
+	patches := []map[string]any{
 		{
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"foo": "bar",
 			},
 		},
 		{
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"foo": "baz",
 			},
 		},
@@ -110,8 +110,8 @@ func TestDetectSMPConflicts_UnknownKindFallback(t *testing.T) {
 }
 
 func TestDetectSMPConflicts_SinglePatch(t *testing.T) {
-	patches := []map[string]interface{}{
-		{"spec": map[string]interface{}{"replicas": int64(3)}},
+	patches := []map[string]any{
+		{"spec": map[string]any{"replicas": int64(3)}},
 	}
 
 	report, err := DetectSMPConflicts(patches, nil, schema.GroupVersionKind{})
@@ -129,14 +129,14 @@ func TestDetectSMPConflicts_SinglePatch(t *testing.T) {
 func TestDetectSMPConflicts_TypeMismatchDetected(t *testing.T) {
 	gvk := schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "MyCRD"}
 
-	patches := []map[string]interface{}{
+	patches := []map[string]any{
 		{
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": int64(1),
 			},
 		},
 		{
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"replicas": "1", // string "1" vs int64 1
 			},
 		},

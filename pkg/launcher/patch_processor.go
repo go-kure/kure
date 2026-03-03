@@ -3,6 +3,7 @@ package launcher
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -172,7 +173,7 @@ func (p *patchProcessor) evaluateExpression(expr string, params ParameterMap) bo
 }
 
 // lookupVariable looks up a variable by path
-func (p *patchProcessor) lookupVariable(path string, params ParameterMap) interface{} {
+func (p *patchProcessor) lookupVariable(path string, params ParameterMap) any {
 	parts := strings.Split(path, ".")
 	current := params
 
@@ -186,7 +187,7 @@ func (p *patchProcessor) lookupVariable(path string, params ParameterMap) interf
 			return val
 		}
 
-		if m, ok := val.(map[string]interface{}); ok {
+		if m, ok := val.(map[string]any); ok {
 			current = m
 		} else if m, ok := val.(ParameterMap); ok {
 			current = m
@@ -199,7 +200,7 @@ func (p *patchProcessor) lookupVariable(path string, params ParameterMap) interf
 }
 
 // toBool converts a value to boolean
-func (p *patchProcessor) toBool(value interface{}) bool {
+func (p *patchProcessor) toBool(value any) bool {
 	switch v := value.(type) {
 	case bool:
 		return v
@@ -312,13 +313,7 @@ func (p *patchProcessor) orderByDependencies(enabled map[string]bool, patchMap m
 	if len(result) != len(enabled) {
 		// Fall back to alphabetical order
 		for name := range enabled {
-			found := false
-			for _, r := range result {
-				if r == name {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(result, name)
 			if !found {
 				result = append(result, name)
 			}
@@ -332,7 +327,7 @@ func (p *patchProcessor) orderByDependencies(enabled map[string]bool, patchMap m
 // createVariableContext converts resolved parameters to patch.VariableContext
 func (p *patchProcessor) createVariableContext(params ParameterMapWithSource) *patch.VariableContext {
 	// The patch engine expects variables under "values" namespace
-	values := make(map[string]interface{})
+	values := make(map[string]any)
 	features := make(map[string]bool)
 
 	for key, source := range params {
@@ -354,9 +349,9 @@ func (p *patchProcessor) createVariableContext(params ParameterMapWithSource) *p
 }
 
 // addToValues recursively adds parameters to values map
-func (p *patchProcessor) addToValues(prefix string, value interface{}, values map[string]interface{}) {
+func (p *patchProcessor) addToValues(prefix string, value any, values map[string]any) {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		// Add the map itself
 		values[prefix] = v
 		// Also add flattened keys
@@ -364,7 +359,7 @@ func (p *patchProcessor) addToValues(prefix string, value interface{}, values ma
 			key := prefix + "." + k
 			p.addToValues(key, val, values)
 		}
-	case []interface{}:
+	case []any:
 		// Add the array itself
 		values[prefix] = v
 		// Also add individual elements
@@ -525,13 +520,7 @@ func (p *patchProcessor) findPatchIssues(patchMap map[string]*Patch) []string {
 		for _, conf := range patch.Metadata.Conflicts {
 			if conflictPatch, ok := patchMap[conf]; ok && conflictPatch.Metadata != nil {
 				// Check if the conflict is mutual
-				mutual := false
-				for _, c := range conflictPatch.Metadata.Conflicts {
-					if c == name {
-						mutual = true
-						break
-					}
-				}
+				mutual := slices.Contains(conflictPatch.Metadata.Conflicts, name)
 				if !mutual {
 					issues = append(issues, fmt.Sprintf("Patch %s conflicts with %s, but not vice versa", name, conf))
 				}
@@ -576,7 +565,7 @@ func (p *patchProcessor) SetVerbose(verbose bool) {
 }
 
 // applyPatchOp applies a patch operation to an object
-func applyPatchOp(obj map[string]interface{}, op patch.PatchOp) error {
+func applyPatchOp(obj map[string]any, op patch.PatchOp) error {
 	// Use the parsed path to navigate and apply the patch
 	if len(op.ParsedPath) == 0 && op.Path != "" {
 		// Parse the path if not already parsed
@@ -631,7 +620,7 @@ func parsePath(path string) ([]patch.PathPart, error) {
 }
 
 // applyOperation applies a patch operation at the specified path
-func applyOperation(obj map[string]interface{}, path []patch.PathPart, value interface{}, op string) error {
+func applyOperation(obj map[string]any, path []patch.PathPart, value any, op string) error {
 	if len(path) == 0 {
 		return errors.Errorf("empty path")
 	}
@@ -643,7 +632,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 
 		if part.MatchType == "index" {
 			// Array access by index
-			arr, ok := current[part.Field].([]interface{})
+			arr, ok := current[part.Field].([]any)
 			if !ok {
 				return errors.Errorf("field %s is not an array", part.Field)
 			}
@@ -651,14 +640,14 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 			if index >= len(arr) {
 				return errors.Errorf("index %d out of bounds for field %s", index, part.Field)
 			}
-			if m, ok := arr[index].(map[string]interface{}); ok {
+			if m, ok := arr[index].(map[string]any); ok {
 				current = m
 			} else {
 				return errors.Errorf("array element at %s[%d] is not an object", part.Field, index)
 			}
 		} else if part.MatchType == "key" {
 			// Selector-based array access
-			arr, ok := current[part.Field].([]interface{})
+			arr, ok := current[part.Field].([]any)
 			if !ok {
 				return errors.Errorf("field %s is not an array", part.Field)
 			}
@@ -666,7 +655,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 			// Find matching element
 			found := false
 			for _, elem := range arr {
-				if m, ok := elem.(map[string]interface{}); ok {
+				if m, ok := elem.(map[string]any); ok {
 					if matchesSelector(m, part.MatchValue) {
 						current = m
 						found = true
@@ -679,13 +668,13 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 			}
 		} else {
 			// Regular field access
-			if next, ok := current[part.Field].(map[string]interface{}); ok {
+			if next, ok := current[part.Field].(map[string]any); ok {
 				current = next
 			} else {
 				// Create intermediate objects if needed
 				if current[part.Field] == nil {
-					current[part.Field] = make(map[string]interface{})
-					current = current[part.Field].(map[string]interface{})
+					current[part.Field] = make(map[string]any)
+					current = current[part.Field].(map[string]any)
 				} else {
 					return errors.Errorf("field %s is not an object", part.Field)
 				}
@@ -702,7 +691,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 	case "delete":
 		delete(current, lastPart.Field)
 	case "add":
-		if arr, ok := current[lastPart.Field].([]interface{}); ok {
+		if arr, ok := current[lastPart.Field].([]any); ok {
 			current[lastPart.Field] = append(arr, value)
 		} else {
 			current[lastPart.Field] = value
@@ -715,7 +704,7 @@ func applyOperation(obj map[string]interface{}, path []patch.PathPart, value int
 }
 
 // matchesSelector checks if an object matches a selector string
-func matchesSelector(obj map[string]interface{}, selector string) bool {
+func matchesSelector(obj map[string]any, selector string) bool {
 	// Parse selector like "name=value"
 	parts := strings.SplitN(selector, "=", 2)
 	if len(parts) != 2 {

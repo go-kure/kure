@@ -105,9 +105,9 @@ func (w *ApplicationWrapper) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // MarshalYAML implements custom YAML marshaling
-func (w *ApplicationWrapper) MarshalYAML() (interface{}, error) {
+func (w *ApplicationWrapper) MarshalYAML() (any, error) {
 	// Create a map representation for clean YAML output
-	result := map[string]interface{}{
+	result := map[string]any{
 		"apiVersion": w.APIVersion,
 		"kind":       w.Kind,
 		"metadata":   w.Metadata,

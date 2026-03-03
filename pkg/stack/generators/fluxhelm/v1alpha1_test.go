@@ -42,8 +42,8 @@ func TestConfigV1Alpha1_Generate_HelmRepository(t *testing.T) {
 			Type: internal.HelmRepositorySource,
 			URL:  "https://charts.bitnami.com/bitnami",
 		},
-		Values: map[string]interface{}{
-			"auth": map[string]interface{}{
+		Values: map[string]any{
+			"auth": map[string]any{
 				"database": "myapp",
 			},
 		},
@@ -194,7 +194,7 @@ func TestConfigV1Alpha1_Generate_OCIRepository(t *testing.T) {
 			Type:   internal.OCIRepositorySource,
 			OCIUrl: "oci://ghcr.io/stefanprodan/charts/podinfo",
 		},
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"replicaCount": 2,
 		},
 	}
@@ -878,7 +878,7 @@ func TestConfigV1Alpha1_Generate_WithChartRef(t *testing.T) {
 			Kind: "OCIRepository",
 			Name: "podinfo-oci",
 		},
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"replicaCount": 2,
 		},
 	}

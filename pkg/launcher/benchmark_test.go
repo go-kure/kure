@@ -18,12 +18,12 @@ func BenchmarkVariableResolution(b *testing.B) {
 
 	// Create test data with nested variables
 	base := ParameterMap{
-		"app": map[string]interface{}{
+		"app": map[string]any{
 			"name":    "${base.name}-app",
 			"version": "${base.version}",
 			"image":   "${registry}/${app.name}:${app.version}",
 		},
-		"base": map[string]interface{}{
+		"base": map[string]any{
 			"name":    "test",
 			"version": "1.0.0",
 		},
@@ -61,14 +61,14 @@ func BenchmarkPatchApplication(b *testing.B) {
 					Namespace: "default",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "apps/v1",
 						"kind":       "Deployment",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name":      "test-app",
 							"namespace": "default",
 						},
-						"spec": map[string]interface{}{
+						"spec": map[string]any{
 							"replicas": int64(1),
 						},
 					},
@@ -141,24 +141,24 @@ func BenchmarkValidation(b *testing.B) {
 					Namespace: "default",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "apps/v1",
 						"kind":       "Deployment",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name":      "test-app",
 							"namespace": "default",
 						},
-						"spec": map[string]interface{}{
+						"spec": map[string]any{
 							"replicas": int64(3),
-							"selector": map[string]interface{}{
-								"matchLabels": map[string]interface{}{
+							"selector": map[string]any{
+								"matchLabels": map[string]any{
 									"app": "test",
 								},
 							},
-							"template": map[string]interface{}{
-								"spec": map[string]interface{}{
-									"containers": []interface{}{
-										map[string]interface{}{
+							"template": map[string]any{
+								"spec": map[string]any{
+									"containers": []any{
+										map[string]any{
 											"name":  "app",
 											"image": "nginx:latest",
 										},
@@ -191,9 +191,9 @@ func BenchmarkDeepCopy(b *testing.B) {
 			Version: "1.0.0",
 		},
 		Parameters: ParameterMap{
-			"nested": map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": map[string]interface{}{
+			"nested": map[string]any{
+				"level1": map[string]any{
+					"level2": map[string]any{
 						"value": "deep",
 					},
 				},
@@ -273,10 +273,10 @@ func BenchmarkFieldUsageTracing(b *testing.B) {
 			APIVersion: "v1",
 			Kind:       "ConfigMap",
 			Raw: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"config": "${app.config}",
 						"name":   "${app.name}",
 						"env":    "${environment}",

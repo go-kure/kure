@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -149,10 +150,10 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 			// Fallback: create from metadata if still nil
 			if obj == nil {
 				obj = &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": resource.APIVersion,
 						"kind":       resource.Kind,
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name":        resource.Metadata.Name,
 							"namespace":   resource.Metadata.Namespace,
 							"labels":      resource.Metadata.Labels,
@@ -169,9 +170,7 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 			if labels == nil {
 				labels = make(map[string]string)
 			}
-			for k, v := range opts.AddLabels {
-				labels[k] = v
-			}
+			maps.Copy(labels, opts.AddLabels)
 			obj.SetLabels(labels)
 		}
 
@@ -180,9 +179,7 @@ func (b *outputBuilder) buildResources(ctx context.Context, def *PackageDefiniti
 			if annotations == nil {
 				annotations = make(map[string]string)
 			}
-			for k, v := range opts.AddAnnotations {
-				annotations[k] = v
-			}
+			maps.Copy(annotations, opts.AddAnnotations)
 			obj.SetAnnotations(annotations)
 		}
 
@@ -286,7 +283,7 @@ func (b *outputBuilder) writeJSON(w io.Writer, resources []*unstructured.Unstruc
 
 	// Wrap in array if multiple resources
 	if len(resources) > 1 && !opts.SeparateFiles {
-		var items []interface{}
+		var items []any
 		for _, resource := range resources {
 			items = append(items, resource.Object)
 		}
@@ -447,9 +444,9 @@ func (b *outputBuilder) resolveTemplateVariables(template string, params Paramet
 }
 
 // resolveVariablePath resolves a dot-notation variable path in parameters
-func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (interface{}, error) {
+func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (any, error) {
 	parts := strings.Split(path, ".")
-	var current interface{} = params
+	var current any = params
 
 	for _, part := range parts {
 		switch v := current.(type) {
@@ -459,7 +456,7 @@ func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (i
 			} else {
 				return nil, errors.Errorf("parameter %s not found", path)
 			}
-		case map[string]interface{}:
+		case map[string]any:
 			if val, exists := v[part]; exists {
 				current = val
 			} else {
@@ -474,7 +471,7 @@ func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (i
 }
 
 // convertToString converts a parameter value to its string representation
-func (b *outputBuilder) convertToString(value interface{}) string {
+func (b *outputBuilder) convertToString(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v

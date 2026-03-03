@@ -103,7 +103,7 @@ func TestDeepCopyParameterMapWithSource(t *testing.T) {
 	t.Run("with values", func(t *testing.T) {
 		original := ParameterMapWithSource{
 			"key1": {Value: "value1", Location: "loc1", File: "file1", Line: 1},
-			"key2": {Value: map[string]interface{}{"nested": "value"}, Location: "loc2", File: "file2", Line: 2},
+			"key2": {Value: map[string]any{"nested": "value"}, Location: "loc2", File: "file2", Line: 2},
 		}
 
 		result := deepCopyParameterMapWithSource(original)
@@ -125,10 +125,10 @@ func TestDeepCopyUnstructured(t *testing.T) {
 
 	t.Run("with unstructured", func(t *testing.T) {
 		original := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "v1",
 				"kind":       "Pod",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name": "test-pod",
 				},
 			},
@@ -174,18 +174,18 @@ func TestDeepCopyInterfaceSlice(t *testing.T) {
 	})
 
 	t.Run("empty slice", func(t *testing.T) {
-		result := deepCopyInterfaceSlice([]interface{}{})
+		result := deepCopyInterfaceSlice([]any{})
 		assert.NotNil(t, result)
 		assert.Len(t, result, 0)
 	})
 
 	t.Run("with values", func(t *testing.T) {
-		original := []interface{}{
+		original := []any{
 			"string",
 			42,
 			true,
-			map[string]interface{}{"nested": "value"},
-			[]interface{}{"nested", "slice"},
+			map[string]any{"nested": "value"},
+			[]any{"nested", "slice"},
 		}
 
 		result := deepCopyInterfaceSlice(original)
@@ -195,9 +195,9 @@ func TestDeepCopyInterfaceSlice(t *testing.T) {
 		assert.Equal(t, true, result[2])
 
 		// Verify nested map independence
-		nestedMap := result[3].(map[string]interface{})
+		nestedMap := result[3].(map[string]any)
 		nestedMap["nested"] = "modified"
-		originalMap := original[3].(map[string]interface{})
+		originalMap := original[3].(map[string]any)
 		assert.Equal(t, "value", originalMap["nested"])
 	})
 }
@@ -209,20 +209,20 @@ func TestDeepCopyMap(t *testing.T) {
 	})
 
 	t.Run("empty map", func(t *testing.T) {
-		result := deepCopyMap(map[string]interface{}{})
+		result := deepCopyMap(map[string]any{})
 		assert.NotNil(t, result)
 		assert.Len(t, result, 0)
 	})
 
 	t.Run("with values", func(t *testing.T) {
-		original := map[string]interface{}{
+		original := map[string]any{
 			"string": "value",
 			"int":    42,
 			"bool":   true,
-			"nested": map[string]interface{}{
+			"nested": map[string]any{
 				"deep": "value",
 			},
-			"slice": []interface{}{"a", "b"},
+			"slice": []any{"a", "b"},
 		}
 
 		result := deepCopyMap(original)
@@ -231,9 +231,9 @@ func TestDeepCopyMap(t *testing.T) {
 		assert.Equal(t, 42, result["int"])
 
 		// Verify nested map independence
-		nestedResult := result["nested"].(map[string]interface{})
+		nestedResult := result["nested"].(map[string]any)
 		nestedResult["deep"] = "modified"
-		nestedOriginal := original["nested"].(map[string]interface{})
+		nestedOriginal := original["nested"].(map[string]any)
 		assert.Equal(t, "value", nestedOriginal["deep"])
 	})
 }

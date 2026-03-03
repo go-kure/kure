@@ -72,7 +72,7 @@ func TestDefaultLogger_Debug(t *testing.T) {
 		name      string
 		level     Level
 		message   string
-		args      []interface{}
+		args      []any
 		shouldLog bool
 	}{
 		{
@@ -91,7 +91,7 @@ func TestDefaultLogger_Debug(t *testing.T) {
 			name:      "debug with formatting",
 			level:     LevelDebug,
 			message:   "debug %s %d",
-			args:      []interface{}{"test", 42},
+			args:      []any{"test", 42},
 			shouldLog: true,
 		},
 	}

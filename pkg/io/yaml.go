@@ -21,7 +21,7 @@ type Buffer struct {
 }
 
 // Marshal writes the YAML representation of obj to the buffer.
-func (b *Buffer) Marshal(obj interface{}) error {
+func (b *Buffer) Marshal(obj any) error {
 	b.Reset()
 	data, err := yaml.Marshal(obj)
 	if err != nil {
@@ -32,12 +32,12 @@ func (b *Buffer) Marshal(obj interface{}) error {
 }
 
 // Unmarshal parses the buffer contents as YAML into obj.
-func (b *Buffer) Unmarshal(obj interface{}) error {
+func (b *Buffer) Unmarshal(obj any) error {
 	return yaml.Unmarshal(b.Bytes(), obj)
 }
 
 // Marshal writes the YAML representation of obj to w.
-func Marshal(w io.Writer, obj interface{}) error {
+func Marshal(w io.Writer, obj any) error {
 	data, err := yaml.Marshal(obj)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func Marshal(w io.Writer, obj interface{}) error {
 }
 
 // Unmarshal reads YAML from r into obj.
-func Unmarshal(r io.Reader, obj interface{}) error {
+func Unmarshal(r io.Reader, obj any) error {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func Unmarshal(r io.Reader, obj interface{}) error {
 }
 
 // SaveFile marshals obj as YAML and writes it to the given file path.
-func SaveFile(path string, obj interface{}) (retErr error) {
+func SaveFile(path string, obj any) (retErr error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ func SaveFile(path string, obj interface{}) (retErr error) {
 }
 
 // LoadFile reads YAML from the given path and unmarshals it into obj.
-func LoadFile(path string, obj interface{}) (retErr error) {
+func LoadFile(path string, obj any) (retErr error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -143,7 +143,7 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 		return nil, fmt.Errorf("failed to marshal resource to JSON: %w", err)
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON for cleanup: %w", err)
 	}
@@ -164,7 +164,7 @@ func marshalCleanResource(obj client.Object, opts EncodeOptions) ([]byte, error)
 
 // cleanResourceMap removes server-managed fields from a resource map.
 // The level parameter controls which fields are removed.
-func cleanResourceMap(m map[string]interface{}, level ServerFieldStripping) {
+func cleanResourceMap(m map[string]any, level ServerFieldStripping) {
 	if level == StripServerFieldsNone {
 		return
 	}
@@ -172,13 +172,13 @@ func cleanResourceMap(m map[string]interface{}, level ServerFieldStripping) {
 	cleanMetadata(m, "metadata", level)
 
 	// spec.template.metadata (Deployments, Jobs, etc.)
-	if spec, ok := m["spec"].(map[string]interface{}); ok {
+	if spec, ok := m["spec"].(map[string]any); ok {
 		cleanMetadata(spec, "template", level)
 
 		// spec.jobTemplate.metadata and spec.jobTemplate.spec.template.metadata (CronJobs)
-		if jobTemplate, ok := spec["jobTemplate"].(map[string]interface{}); ok {
+		if jobTemplate, ok := spec["jobTemplate"].(map[string]any); ok {
 			cleanMetadata(jobTemplate, "metadata", level)
-			if jtSpec, ok := jobTemplate["spec"].(map[string]interface{}); ok {
+			if jtSpec, ok := jobTemplate["spec"].(map[string]any); ok {
 				cleanMetadata(jtSpec, "template", level)
 			}
 		}
@@ -189,20 +189,20 @@ func cleanResourceMap(m map[string]interface{}, level ServerFieldStripping) {
 // When parentKey is "metadata", parent[parentKey] is the metadata map directly.
 // Otherwise, parent[parentKey] is a container (e.g. template) whose "metadata"
 // child is cleaned.
-func cleanMetadata(parent map[string]interface{}, parentKey string, level ServerFieldStripping) {
-	var metadata map[string]interface{}
+func cleanMetadata(parent map[string]any, parentKey string, level ServerFieldStripping) {
+	var metadata map[string]any
 	if parentKey == "metadata" {
-		md, ok := parent[parentKey].(map[string]interface{})
+		md, ok := parent[parentKey].(map[string]any)
 		if !ok {
 			return
 		}
 		metadata = md
 	} else {
-		child, ok := parent[parentKey].(map[string]interface{})
+		child, ok := parent[parentKey].(map[string]any)
 		if !ok {
 			return
 		}
-		md, ok := child["metadata"].(map[string]interface{})
+		md, ok := child["metadata"].(map[string]any)
 		if !ok {
 			return
 		}
@@ -219,14 +219,14 @@ func cleanMetadata(parent map[string]interface{}, parentKey string, level Server
 // stripServerSetFields removes well-known server-set metadata fields:
 // managedFields, resourceVersion, uid, generation, selfLink, and the
 // kubectl.kubernetes.io/last-applied-configuration annotation.
-func stripServerSetFields(metadata map[string]interface{}) {
+func stripServerSetFields(metadata map[string]any) {
 	delete(metadata, "managedFields")
 	delete(metadata, "resourceVersion")
 	delete(metadata, "uid")
 	delete(metadata, "generation")
 	delete(metadata, "selfLink")
 
-	if annotations, ok := metadata["annotations"].(map[string]interface{}); ok {
+	if annotations, ok := metadata["annotations"].(map[string]any); ok {
 		delete(annotations, "kubectl.kubernetes.io/last-applied-configuration")
 		if len(annotations) == 0 {
 			delete(metadata, "annotations")
@@ -235,14 +235,14 @@ func stripServerSetFields(metadata map[string]interface{}) {
 }
 
 // removeNullCreationTimestamp deletes creationTimestamp if its value is nil.
-func removeNullCreationTimestamp(metadata map[string]interface{}) {
+func removeNullCreationTimestamp(metadata map[string]any) {
 	if v, exists := metadata["creationTimestamp"]; exists && v == nil {
 		delete(metadata, "creationTimestamp")
 	}
 }
 
 // removeEmptyStatus deletes the top-level "status" key if it is nil or an empty map.
-func removeEmptyStatus(m map[string]interface{}) {
+func removeEmptyStatus(m map[string]any) {
 	v, exists := m["status"]
 	if !exists {
 		return
@@ -250,7 +250,7 @@ func removeEmptyStatus(m map[string]interface{}) {
 	switch s := v.(type) {
 	case nil:
 		delete(m, "status")
-	case map[string]interface{}:
+	case map[string]any:
 		if isDeepEmpty(s) {
 			delete(m, "status")
 		}
@@ -258,10 +258,10 @@ func removeEmptyStatus(m map[string]interface{}) {
 }
 
 // isDeepEmpty returns true if a map is empty or contains only empty maps recursively.
-func isDeepEmpty(m map[string]interface{}) bool {
+func isDeepEmpty(m map[string]any) bool {
 	for _, v := range m {
 		switch val := v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if !isDeepEmpty(val) {
 				return false
 			}

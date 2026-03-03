@@ -113,7 +113,7 @@ func (s *PatchableAppSet) ResolveWithConflictCheck() ([]*ResourceWithPatches, []
 		}
 
 		// Collect patch maps for conflict detection
-		patchMaps := make([]map[string]interface{}, len(rw.StrategicPatches))
+		patchMaps := make([]map[string]any, len(rw.StrategicPatches))
 		for i, sp := range rw.StrategicPatches {
 			patchMaps[i] = sp.Patch
 		}

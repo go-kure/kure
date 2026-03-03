@@ -65,7 +65,7 @@ func TestFilterPatches(t *testing.T) {
 func TestFormatValue(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{
@@ -80,22 +80,22 @@ func TestFormatValue(t *testing.T) {
 		},
 		{
 			name:     "map",
-			input:    map[string]interface{}{"a": 1, "b": 2, "c": 3},
+			input:    map[string]any{"a": 1, "b": 2, "c": 3},
 			expected: "(map with 3 keys)",
 		},
 		{
 			name:     "empty map",
-			input:    map[string]interface{}{},
+			input:    map[string]any{},
 			expected: "(map with 0 keys)",
 		},
 		{
 			name:     "array",
-			input:    []interface{}{"a", "b"},
+			input:    []any{"a", "b"},
 			expected: "(array with 2 items)",
 		},
 		{
 			name:     "empty array",
-			input:    []interface{}{},
+			input:    []any{},
 			expected: "(array with 0 items)",
 		},
 		{

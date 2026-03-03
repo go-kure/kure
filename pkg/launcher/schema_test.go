@@ -118,14 +118,14 @@ func TestSchemaGenerator(t *testing.T) {
 
 	t.Run("GenerateParameterSchema", func(t *testing.T) {
 		params := ParameterMap{
-			"app": map[string]interface{}{
+			"app": map[string]any{
 				"name":    "test-app",
 				"version": "1.0.0",
 				"port":    8080,
 			},
 			"enabled":  true,
 			"replicas": 3,
-			"features": []interface{}{"logging", "metrics"},
+			"features": []any{"logging", "metrics"},
 		}
 
 		schema, err := generator.GenerateParameterSchema(ctx, params)
@@ -167,22 +167,22 @@ func TestSchemaGenerator(t *testing.T) {
 					Name: "app",
 				},
 				Raw: &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "apps/v1",
 						"kind":       "Deployment",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name": "app",
 						},
-						"spec": map[string]interface{}{
+						"spec": map[string]any{
 							"replicas": "${replicas}",
-							"template": map[string]interface{}{
-								"spec": map[string]interface{}{
-									"containers": []interface{}{
-										map[string]interface{}{
+							"template": map[string]any{
+								"spec": map[string]any{
+									"containers": []any{
+										map[string]any{
 											"name":  "app",
 											"image": "${app.image}",
-											"env": []interface{}{
-												map[string]interface{}{
+											"env": []any{
+												map[string]any{
 													"name":  "PORT",
 													"value": "${app.port}",
 												},
@@ -226,7 +226,7 @@ func TestSchemaGenerator(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check JSON is valid
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err = json.Unmarshal(data, &parsed)
 		require.NoError(t, err)
 
@@ -234,7 +234,7 @@ func TestSchemaGenerator(t *testing.T) {
 		assert.Equal(t, "object", parsed["type"])
 		assert.Equal(t, "Test schema", parsed["description"])
 		assert.NotNil(t, parsed["properties"])
-		assert.Contains(t, parsed["required"].([]interface{}), "name")
+		assert.Contains(t, parsed["required"].([]any), "name")
 	})
 
 	t.Run("DebugSchema", func(t *testing.T) {
@@ -278,7 +278,7 @@ func TestValidateWithSchema(t *testing.T) {
 			Properties: map[string]*JSONSchema{
 				"name": {
 					Type:      "string",
-					MinLength: intPtr(1),
+					MinLength: new(1),
 				},
 				"age": {
 					Type:    "integer",
@@ -289,7 +289,7 @@ func TestValidateWithSchema(t *testing.T) {
 			Required: []string{"name"},
 		}
 
-		data := map[string]interface{}{
+		data := map[string]any{
 			"name": "John",
 			"age":  30,
 		}
@@ -307,7 +307,7 @@ func TestValidateWithSchema(t *testing.T) {
 			Required: []string{"name"},
 		}
 
-		data := map[string]interface{}{}
+		data := map[string]any{}
 
 		errors := ValidateWithSchema(data, schema)
 		assert.Len(t, errors, 1)
@@ -323,7 +323,7 @@ func TestValidateWithSchema(t *testing.T) {
 			},
 		}
 
-		data := map[string]interface{}{
+		data := map[string]any{
 			"count": "not a number",
 		}
 
@@ -338,8 +338,8 @@ func TestValidateWithSchema(t *testing.T) {
 			Properties: map[string]*JSONSchema{
 				"username": {
 					Type:      "string",
-					MinLength: intPtr(3),
-					MaxLength: intPtr(10),
+					MinLength: new(3),
+					MaxLength: new(10),
 				},
 			},
 		}
@@ -355,7 +355,7 @@ func TestValidateWithSchema(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			data := map[string]interface{}{
+			data := map[string]any{
 				"username": tt.value,
 			}
 			errors := ValidateWithSchema(data, schema)
@@ -391,7 +391,7 @@ func TestValidateWithSchema(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			data := map[string]interface{}{
+			data := map[string]any{
 				"port": tt.value,
 			}
 			errors := ValidateWithSchema(data, schema)
@@ -409,7 +409,7 @@ func TestValidateWithSchema(t *testing.T) {
 			Properties: map[string]*JSONSchema{
 				"environment": {
 					Type: "string",
-					Enum: []interface{}{"dev", "staging", "prod"},
+					Enum: []any{"dev", "staging", "prod"},
 				},
 			},
 		}
@@ -426,7 +426,7 @@ func TestValidateWithSchema(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			data := map[string]interface{}{
+			data := map[string]any{
 				"environment": tt.value,
 			}
 			errors := ValidateWithSchema(data, schema)
@@ -447,7 +447,7 @@ func TestValidateWithSchema(t *testing.T) {
 					Properties: map[string]*JSONSchema{
 						"name": {
 							Type:      "string",
-							MinLength: intPtr(1),
+							MinLength: new(1),
 						},
 						"port": {
 							Type:    "integer",
@@ -461,8 +461,8 @@ func TestValidateWithSchema(t *testing.T) {
 		}
 
 		// Valid nested object
-		data := map[string]interface{}{
-			"app": map[string]interface{}{
+		data := map[string]any{
+			"app": map[string]any{
 				"name": "test-app",
 				"port": 8080,
 			},
@@ -471,8 +471,8 @@ func TestValidateWithSchema(t *testing.T) {
 		assert.Empty(t, errors)
 
 		// Missing required nested field
-		data = map[string]interface{}{
-			"app": map[string]interface{}{
+		data = map[string]any{
+			"app": map[string]any{
 				"port": 8080,
 			},
 		}
@@ -487,7 +487,7 @@ func TestValidateWithSchema(t *testing.T) {
 			Properties: map[string]*JSONSchema{
 				"ports": {
 					Type:      "array",
-					MinLength: intPtr(1),
+					MinLength: new(1),
 					Items: &JSONSchema{
 						Type:    "integer",
 						Minimum: float64Ptr(1),
@@ -498,23 +498,23 @@ func TestValidateWithSchema(t *testing.T) {
 		}
 
 		// Valid array
-		data := map[string]interface{}{
-			"ports": []interface{}{80, 443, 8080},
+		data := map[string]any{
+			"ports": []any{80, 443, 8080},
 		}
 		errors := ValidateWithSchema(data, schema)
 		assert.Empty(t, errors)
 
 		// Empty array (violates min length)
-		data = map[string]interface{}{
-			"ports": []interface{}{},
+		data = map[string]any{
+			"ports": []any{},
 		}
 		errors = ValidateWithSchema(data, schema)
 		assert.NotEmpty(t, errors)
 		assert.Contains(t, errors[0].Message, "less than minimum")
 
 		// Invalid item in array
-		data = map[string]interface{}{
-			"ports": []interface{}{80, 70000}, // 70000 > 65535
+		data = map[string]any{
+			"ports": []any{80, 70000}, // 70000 > 65535
 		}
 		errors = ValidateWithSchema(data, schema)
 		assert.NotEmpty(t, errors)
@@ -608,7 +608,7 @@ func TestInferSchema(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		value    interface{}
+		value    any
 		expected string // expected type
 	}{
 		{"nil", nil, "null"},
@@ -616,8 +616,8 @@ func TestInferSchema(t *testing.T) {
 		{"int", 42, "integer"},
 		{"float", 3.14, "number"},
 		{"string", "hello", "string"},
-		{"array", []interface{}{1, 2, 3}, "array"},
-		{"object", map[string]interface{}{"key": "value"}, "object"},
+		{"array", []any{1, 2, 3}, "array"},
+		{"object", map[string]any{"key": "value"}, "object"},
 	}
 
 	for _, tt := range tests {
@@ -642,8 +642,8 @@ func TestInferSchema(t *testing.T) {
 	})
 
 	t.Run("nested object", func(t *testing.T) {
-		value := map[string]interface{}{
-			"app": map[string]interface{}{
+		value := map[string]any{
+			"app": map[string]any{
 				"name": "test",
 				"port": 8080,
 			},
@@ -667,7 +667,7 @@ func TestInferSchema(t *testing.T) {
 func TestGetJSONType(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{name: "nil", input: nil, expected: "null"},
@@ -678,9 +678,9 @@ func TestGetJSONType(t *testing.T) {
 		{name: "float32", input: float32(3.14), expected: "number"},
 		{name: "float64", input: float64(3.14), expected: "number"},
 		{name: "string", input: "hello", expected: "string"},
-		{name: "slice interface", input: []interface{}{1, 2}, expected: "array"},
+		{name: "slice interface", input: []any{1, 2}, expected: "array"},
 		{name: "slice string", input: []string{"a", "b"}, expected: "array"},
-		{name: "map", input: map[string]interface{}{"a": 1}, expected: "object"},
+		{name: "map", input: map[string]any{"a": 1}, expected: "object"},
 		{name: "ParameterMap", input: ParameterMap{"a": 1}, expected: "object"},
 		{name: "slice int via reflect", input: []int{1, 2}, expected: "array"},
 	}
@@ -698,7 +698,7 @@ func TestGetJSONType(t *testing.T) {
 func TestGetNumber(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected float64
 		ok       bool
 	}{

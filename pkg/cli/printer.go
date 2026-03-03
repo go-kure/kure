@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 
 	"gopkg.in/yaml.v3"
@@ -166,11 +167,12 @@ func joinTabs(strs []string) string {
 		return ""
 	}
 
-	result := strs[0]
+	var result strings.Builder
+	result.WriteString(strs[0])
 	for _, s := range strs[1:] {
-		result += "\t" + s
+		result.WriteString("\t" + s)
 	}
-	return result
+	return result.String()
 }
 
 func formatLabels(labels map[string]string) string {
@@ -178,16 +180,16 @@ func formatLabels(labels map[string]string) string {
 		return "<none>"
 	}
 
-	result := ""
+	var result strings.Builder
 	first := true
 	for k, v := range labels {
 		if !first {
-			result += ","
+			result.WriteString(",")
 		}
-		result += k + "=" + v
+		result.WriteString(k + "=" + v)
 		first = false
 	}
-	return result
+	return result.String()
 }
 
 // PrintObjects is a convenience function for printing objects

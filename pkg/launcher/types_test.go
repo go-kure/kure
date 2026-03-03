@@ -22,10 +22,10 @@ func TestResourceDeepCopy(t *testing.T) {
 			},
 		},
 		Raw: &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "apps/v1",
 				"kind":       "Deployment",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "test-app",
 					"namespace": "default",
 				},
@@ -62,7 +62,7 @@ func TestPackageDefinitionDeepCopy(t *testing.T) {
 		},
 		Parameters: ParameterMap{
 			"app": "test",
-			"nested": map[string]interface{}{
+			"nested": map[string]any{
 				"key": "value",
 			},
 		},
@@ -117,10 +117,10 @@ func TestParameterMapDeepCopy(t *testing.T) {
 		"string": "value",
 		"number": 42,
 		"bool":   true,
-		"array":  []interface{}{"a", "b", "c"},
-		"nested": map[string]interface{}{
+		"array":  []any{"a", "b", "c"},
+		"nested": map[string]any{
 			"key1": "value1",
-			"key2": map[string]interface{}{
+			"key2": map[string]any{
 				"deep": "value",
 			},
 		},
@@ -134,13 +134,13 @@ func TestParameterMapDeepCopy(t *testing.T) {
 
 	// Modify nested values in copy
 	copied["string"] = "modified"
-	copied["array"].([]interface{})[0] = "modified"
-	copied["nested"].(map[string]interface{})["key1"] = "modified"
+	copied["array"].([]any)[0] = "modified"
+	copied["nested"].(map[string]any)["key1"] = "modified"
 
 	// Verify original is unchanged
 	assert.Equal(t, "value", original["string"])
-	assert.Equal(t, "a", original["array"].([]interface{})[0])
-	assert.Equal(t, "value1", original["nested"].(map[string]interface{})["key1"])
+	assert.Equal(t, "a", original["array"].([]any)[0])
+	assert.Equal(t, "value1", original["nested"].(map[string]any)["key1"])
 }
 
 func TestValidationResult(t *testing.T) {
@@ -220,7 +220,7 @@ func TestResourceToUnstructured(t *testing.T) {
 
 	// Test with Raw
 	r.Raw = &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"test": "value",
 		},
 	}

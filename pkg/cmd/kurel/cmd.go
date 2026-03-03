@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -241,9 +242,7 @@ parameter validation, and patch consistency.`,
 					return errors.NewParseError(valuesFile, "invalid YAML", 0, 0, err)
 				}
 				// Merge user values into parameters for validation
-				for k, v := range userValues {
-					def.Parameters[k] = v
-				}
+				maps.Copy(def.Parameters, userValues)
 			}
 
 			// Validate package
@@ -446,7 +445,7 @@ func newSchemaCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 
 			// Pretty print if requested
 			if prettyPrint {
-				var obj interface{}
+				var obj any
 				if err := json.Unmarshal(data, &obj); err == nil {
 					if pretty, err := json.MarshalIndent(obj, "", "  "); err == nil {
 						data = pretty
@@ -479,16 +478,16 @@ func newSchemaCommand(globalOpts *options.GlobalOptions) *cobra.Command {
 }
 
 // formatParameterValue formats a parameter value for display
-func formatParameterValue(v interface{}) string {
+func formatParameterValue(v any) string {
 	switch val := v.(type) {
 	case string:
 		if strings.Contains(val, "\n") {
 			return "(multiline)"
 		}
 		return val
-	case map[string]interface{}:
+	case map[string]any:
 		return fmt.Sprintf("(map with %d keys)", len(val))
-	case []interface{}:
+	case []any:
 		return fmt.Sprintf("(array with %d items)", len(val))
 	default:
 		return fmt.Sprintf("%v", val)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -269,12 +270,8 @@ func TestIntegration_WithUserValues(t *testing.T) {
 
 	// Create a copy of parameters and merge with user values
 	mergedParams := make(launcher.ParameterMap)
-	for k, v := range def.Parameters {
-		mergedParams[k] = v
-	}
-	for k, v := range userValues {
-		mergedParams[k] = v
-	}
+	maps.Copy(mergedParams, def.Parameters)
+	maps.Copy(mergedParams, userValues)
 
 	// Check that user values were applied
 	if mergedParams["replicas"] != 4 {
@@ -283,7 +280,7 @@ func TestIntegration_WithUserValues(t *testing.T) {
 
 	// Check nested values - need to handle the type correctly
 	if imageVal, ok := mergedParams["image"]; ok {
-		if imageMap, ok := imageVal.(map[string]interface{}); ok {
+		if imageMap, ok := imageVal.(map[string]any); ok {
 			if imageMap["tag"] != "v2.0.0" {
 				t.Errorf("User value for image tag should be v2.0.0, got %v", imageMap["tag"])
 			}
@@ -317,7 +314,7 @@ func TestIntegration_SchemaGeneration(t *testing.T) {
 	}
 
 	// Parse and validate schema structure
-	var schemaMap map[string]interface{}
+	var schemaMap map[string]any
 	if err := json.Unmarshal(schemaJSON, &schemaMap); err != nil {
 		t.Fatalf("Failed to parse schema JSON: %v", err)
 	}
@@ -330,7 +327,7 @@ func TestIntegration_SchemaGeneration(t *testing.T) {
 	t.Logf("Generated schema has keys: %v", getMapKeys(schemaMap))
 }
 
-func getMapKeys(m map[string]interface{}) []string {
+func getMapKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -384,10 +381,10 @@ func TestIntegration_OutputFormats(t *testing.T) {
 		}
 
 		// Should be valid YAML
-		var docs []interface{}
+		var docs []any
 		decoder := yaml.NewDecoder(bytes.NewReader(data))
 		for {
-			var doc interface{}
+			var doc any
 			if err := decoder.Decode(&doc); err != nil {
 				break
 			}
@@ -422,7 +419,7 @@ func TestIntegration_OutputFormats(t *testing.T) {
 		}
 
 		// Should be valid JSON
-		var jsonData interface{}
+		var jsonData any
 		if err := json.Unmarshal(data, &jsonData); err != nil {
 			t.Errorf("Output should be valid JSON: %v", err)
 		}

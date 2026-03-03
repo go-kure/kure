@@ -15,7 +15,7 @@ func Wrap(err error, message string) error {
 }
 
 // Wrapf wraps an error with a formatted message using Go's standard error wrapping.
-func Wrapf(err error, format string, args ...interface{}) error {
+func Wrapf(err error, format string, args ...any) error {
 	if err == nil {
 		return nil
 	}
@@ -23,7 +23,7 @@ func Wrapf(err error, format string, args ...interface{}) error {
 }
 
 // Errorf creates a new formatted error using Go's standard error formatting.
-func Errorf(format string, args ...interface{}) error {
+func Errorf(format string, args ...any) error {
 	return fmt.Errorf(format, args...)
 }
 
@@ -138,16 +138,16 @@ type KureError interface {
 	error
 	Type() ErrorType
 	Suggestion() string
-	Context() map[string]interface{}
+	Context() map[string]any
 }
 
 // BaseError provides common functionality for all Kure errors
 type BaseError struct {
-	ErrType    ErrorType              `json:"type"`
-	Message    string                 `json:"message"`
-	Cause      error                  `json:"cause,omitempty"`
-	ErrContext map[string]interface{} `json:"context,omitempty"`
-	Help       string                 `json:"suggestion,omitempty"`
+	ErrType    ErrorType      `json:"type"`
+	Message    string         `json:"message"`
+	Cause      error          `json:"cause,omitempty"`
+	ErrContext map[string]any `json:"context,omitempty"`
+	Help       string         `json:"suggestion,omitempty"`
 }
 
 func (e *BaseError) Error() string {
@@ -165,7 +165,7 @@ func (e *BaseError) Suggestion() string {
 	return e.Help
 }
 
-func (e *BaseError) Context() map[string]interface{} {
+func (e *BaseError) Context() map[string]any {
 	return e.ErrContext
 }
 
@@ -193,7 +193,7 @@ func NewValidationError(field, value, component string, validValues []string) *V
 			ErrType: ErrorTypeValidation,
 			Message: fmt.Sprintf("invalid %s for %s: %s", field, component, value),
 			Help:    help,
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"field":     field,
 				"value":     value,
 				"component": component,
@@ -231,7 +231,7 @@ func ResourceNotFoundError(resourceType, name, namespace string, available []str
 			ErrType: ErrorTypeResource,
 			Message: message,
 			Help:    help,
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"resourceType": resourceType,
 				"name":         name,
 				"namespace":    namespace,
@@ -259,7 +259,7 @@ func ResourceValidationError(resourceType, name, field, reason string, cause err
 			Message: message,
 			Cause:   cause,
 			Help:    "Check the resource specification and ensure all required fields are present",
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"resourceType": resourceType,
 				"name":         name,
 				"field":        field,
@@ -302,7 +302,7 @@ func NewPatchError(operation, path, resourceName, reason string, cause error) *P
 			Message: message,
 			Cause:   cause,
 			Help:    help,
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"operation":    operation,
 				"path":         path,
 				"resourceName": resourceName,
@@ -348,7 +348,7 @@ func NewParseError(source, reason string, line, column int, cause error) *ParseE
 			Message: message,
 			Cause:   cause,
 			Help:    help,
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"source": source,
 				"line":   line,
 				"column": column,
@@ -382,7 +382,7 @@ func NewFileError(operation, path, reason string, cause error) *FileError {
 			Message: message,
 			Cause:   cause,
 			Help:    help,
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"operation": operation,
 				"path":      path,
 				"reason":    reason,
@@ -443,7 +443,7 @@ func NewConfigError(source, field, value, reason string, validValues []string) *
 			ErrType: ErrorTypeConfiguration,
 			Message: message,
 			Help:    help,
-			ErrContext: map[string]interface{}{
+			ErrContext: map[string]any{
 				"source": source,
 				"field":  field,
 				"value":  value,

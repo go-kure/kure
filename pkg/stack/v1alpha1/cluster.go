@@ -127,7 +127,7 @@ func (c *ClusterConfig) Validate() error {
 }
 
 // ConvertTo converts this cluster config to another version
-func (c *ClusterConfig) ConvertTo(version string) (interface{}, error) {
+func (c *ClusterConfig) ConvertTo(version string) (any, error) {
 	switch version {
 	case "v1alpha1":
 		return c, nil
@@ -137,7 +137,7 @@ func (c *ClusterConfig) ConvertTo(version string) (interface{}, error) {
 }
 
 // ConvertFrom converts from another version to this cluster config
-func (c *ClusterConfig) ConvertFrom(from interface{}) error {
+func (c *ClusterConfig) ConvertFrom(from any) error {
 	switch src := from.(type) {
 	case *ClusterConfig:
 		*c = *src

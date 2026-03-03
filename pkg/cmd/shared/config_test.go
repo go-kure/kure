@@ -319,7 +319,7 @@ func TestInitConfig_ConfigTypes(t *testing.T) {
 		configFile  string
 		content     string
 		expectedKey string
-		expectedVal interface{}
+		expectedVal any
 	}{
 		{
 			name:        "yaml config",
