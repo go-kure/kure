@@ -56,19 +56,20 @@ infrastructure:
     notes: "Compatible with current Go version"
 
   controller-runtime:
-    current: "0.21.0"
+    current: "0.22.5"
     go_module: "sigs.k8s.io/controller-runtime"
-    supported_range: "0.19 - 0.21"
-    max_dependabot: "< 0.22"
-    notes: "0.22+ requires Go 1.25"
+    supported_range: "0.19 - 0.22"
+    max_dependabot: "< 0.23"
+    notes: "0.23+ changes NewWebhookManagedBy to generics, blocked by external-secrets v0.19.2 (#248)"
 
   kubernetes:
-    current: "0.33.2"
+    current: "0.35.1"
     go_module: "k8s.io/api"
     # What K8s cluster versions kure-generated YAML works with
-    supported_range: "1.28 - 1.33"
+    supported_range: "1.28 - 1.35"
     notes: "Tested in CI matrix"
     related_packages:
       - "k8s.io/apimachinery"
+      - "k8s.io/apiextensions-apiserver"
       - "k8s.io/client-go"
       - "k8s.io/cli-runtime"
