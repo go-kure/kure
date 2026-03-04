@@ -39,3 +39,6 @@ bin/
 
 # GoReleaser output
 dist/
+
+# Temporary test output
+**/temp/
