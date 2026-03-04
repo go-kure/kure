@@ -49,7 +49,7 @@ infrastructure:
     notes: "Stable v1beta1 APIs, patch release"
 
   external-secrets:
-    current: "v0.0.0-20260203074332-a2ec42276c5e"
+    current: "0.0.0-20260203074332-a2ec42276c5e"
     go_module: "github.com/external-secrets/external-secrets/apis"
     supported_range: "1.3"
     max_dependabot: null
