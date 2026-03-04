@@ -67,7 +67,7 @@ infrastructure:
     go_module: "k8s.io/api"
     # What K8s cluster versions kure-generated YAML works with
     supported_range: "1.28 - 1.35"
-    notes: "Tested in CI matrix"
+    notes: "Generated YAML uses stable APIs compatible across this range"
     related_packages:
       - "k8s.io/apimachinery"
       - "k8s.io/apiextensions-apiserver"
