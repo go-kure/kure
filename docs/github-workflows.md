@@ -61,11 +61,11 @@ concurrency:
 │ coverage-check    │  ← 80% threshold enforcement
 └─────────┬─────────┘
           │
-    ┌─────┴─────┐
-    ▼           ▼
-┌───────┐  ┌────────────┐
-│ build │  │ k8s-compat │  ← Build artifacts + K8s matrix
-└───┬───┘  └────────────┘
+    │
+    ▼
+┌───────┐
+│ build │  ← Build artifacts
+└───┬───┘
     │
     ▼
 ┌─────────────────────┐
@@ -92,20 +92,18 @@ PR-only jobs (parallel, no blocking):
 | `security` | `Security` | 10 min | validate | govulncheck, outdated deps, sensitive file check |
 | `coverage-check` | `Coverage Check` | 5 min | test | 80% threshold, Codecov upload, PR comment |
 | `build` | `build` | 10 min | coverage-check | Build kure, kurel, demo |
-| `k8s-compat` | `K8s Compatibility` | 15 min | coverage-check | K8s 0.34, 0.35 compatibility matrix |
 | `cross-platform` | `Cross-Platform Build` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
 | `rebase-check` | `rebase-check` | 2 min | - | Verify PR branch is rebased on main (PR only) |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 10 min | - | Hugo build validation with versioned config overlay |
 | `docs-check` | `Docs Check` | 5 min | - | API changes need docs check (PR only) |
-| `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, k8s-compat, cross-platform, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
+| `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, cross-platform, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
 ### Configuration
 
 - Go Version: `1.26.0`
 - Golangci-lint Version: `v2.10.1`
 - Coverage Threshold: `80%`
-- K8s Versions: `0.34`, `0.35`
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`
 
 ### Features
@@ -116,7 +114,7 @@ PR-only jobs (parallel, no blocking):
 - **PR comments** - Coverage report comment on PRs
 - **Skip draft PRs** - `if: github.event.pull_request.draft == false`
 - **Sensitive file check** - Warn about potential secrets in code
-- **Matrix fail-fast: false** - K8s and cross-platform continue if one fails
+- **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 
 ---
 

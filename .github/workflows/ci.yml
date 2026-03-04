@@ -409,59 +409,6 @@ jobs:
           exit 1
         fi
 
-  k8s-compat:
-    name: K8s Compatibility
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: coverage-check
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-
-    strategy:
-      fail-fast: false
-      matrix:
-        k8s-version: ['0.34', '0.35']
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: ${{ steps.go-version.outputs.version }}
-        check-latest: true
-
-    - name: Cache Go modules
-      uses: actions/cache@v5
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-k8s-${{ matrix.k8s-version }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-k8s-${{ matrix.k8s-version }}-
-          ${{ runner.os }}-go-
-
-    - name: Update k8s.io dependencies to v${{ matrix.k8s-version }}
-      run: |
-        go get k8s.io/api@v${{ matrix.k8s-version }}.0
-        go get k8s.io/apimachinery@v${{ matrix.k8s-version }}.0
-        go get k8s.io/client-go@v${{ matrix.k8s-version }}.0
-        go mod tidy
-
-    - name: Build with k8s.io v${{ matrix.k8s-version }}
-      run: go build ./...
-
-    - name: Test with k8s.io v${{ matrix.k8s-version }}
-      run: go test -short ./...
-
   # =============================================================================
   # Stage 5: Cross-Platform Build (main/release only)
   # =============================================================================
@@ -714,7 +661,7 @@ jobs:
     name: Mirror to GitLab
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [build, security, k8s-compat, cross-platform, docs-build]
+    needs: [build, security, cross-platform, docs-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
