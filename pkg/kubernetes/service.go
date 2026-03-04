@@ -202,7 +202,7 @@ func SetServiceIPFamilies(svc *corev1.Service, fams []corev1.IPFamily) error {
 }
 
 // SetServiceIPFamilyPolicy sets the IP family policy on the Service spec.
-func SetServiceIPFamilyPolicy(svc *corev1.Service, policy *corev1.IPFamilyPolicyType) error {
+func SetServiceIPFamilyPolicy(svc *corev1.Service, policy *corev1.IPFamilyPolicy) error {
 	if svc == nil {
 		return errors.ErrNilService
 	}
@@ -212,7 +212,7 @@ func SetServiceIPFamilyPolicy(svc *corev1.Service, policy *corev1.IPFamilyPolicy
 
 // SetServiceInternalTrafficPolicy sets the internal traffic policy on the
 // Service spec.
-func SetServiceInternalTrafficPolicy(svc *corev1.Service, policy *corev1.ServiceInternalTrafficPolicyType) error {
+func SetServiceInternalTrafficPolicy(svc *corev1.Service, policy *corev1.ServiceInternalTrafficPolicy) error {
 	if svc == nil {
 		return errors.ErrNilService
 	}
