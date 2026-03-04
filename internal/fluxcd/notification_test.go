@@ -4,34 +4,34 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/fluxcd/notification-controller/api/v1"
-	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	"github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestCreateProvider(t *testing.T) {
-	spec := notificationv1beta2.ProviderSpec{Type: notificationv1beta2.SlackProvider}
+	spec := notificationv1beta3.ProviderSpec{Type: notificationv1beta3.SlackProvider}
 	p := CreateProvider("p", "ns", spec)
 
 	if p.Name != "p" || p.Namespace != "ns" {
 		t.Fatalf("metadata mismatch")
 	}
-	if p.Kind != notificationv1beta2.ProviderKind {
+	if p.Kind != notificationv1beta3.ProviderKind {
 		t.Errorf("unexpected kind %s", p.Kind)
 	}
-	if p.APIVersion != notificationv1beta2.GroupVersion.String() {
+	if p.APIVersion != notificationv1beta3.GroupVersion.String() {
 		t.Errorf("unexpected apiVersion %s", p.APIVersion)
 	}
-	if p.Spec.Type != notificationv1beta2.SlackProvider {
+	if p.Spec.Type != notificationv1beta3.SlackProvider {
 		t.Errorf("spec not set")
 	}
 }
 
 func TestProviderSetters(t *testing.T) {
-	p := CreateProvider("p", "ns", notificationv1beta2.ProviderSpec{})
-	SetProviderType(p, notificationv1beta2.GitHubProvider)
-	if p.Spec.Type != notificationv1beta2.GitHubProvider {
+	p := CreateProvider("p", "ns", notificationv1beta3.ProviderSpec{})
+	SetProviderType(p, notificationv1beta3.GitHubProvider)
+	if p.Spec.Type != notificationv1beta3.GitHubProvider {
 		t.Errorf("type not set")
 	}
 	dur := metav1.Duration{Duration: time.Minute}
@@ -77,19 +77,19 @@ func TestProviderSetters(t *testing.T) {
 }
 
 func TestCreateAlert(t *testing.T) {
-	spec := notificationv1beta2.AlertSpec{
+	spec := notificationv1beta3.AlertSpec{
 		ProviderRef:   meta.LocalObjectReference{Name: "p"},
-		EventSources:  []v1.CrossNamespaceObjectReference{{Kind: "GitRepository", Name: "repo"}},
+		EventSources:  []notificationv1.CrossNamespaceObjectReference{{Kind: "GitRepository", Name: "repo"}},
 		EventSeverity: "info",
 	}
 	a := CreateAlert("a", "ns", spec)
 	if a.Name != "a" || a.Namespace != "ns" {
 		t.Fatalf("metadata mismatch")
 	}
-	if a.Kind != notificationv1beta2.AlertKind {
+	if a.Kind != notificationv1beta3.AlertKind {
 		t.Errorf("unexpected kind %s", a.Kind)
 	}
-	if a.APIVersion != notificationv1beta2.GroupVersion.String() {
+	if a.APIVersion != notificationv1beta3.GroupVersion.String() {
 		t.Errorf("unexpected apiversion %s", a.APIVersion)
 	}
 	if len(a.Spec.EventSources) != 1 {
@@ -98,12 +98,12 @@ func TestCreateAlert(t *testing.T) {
 }
 
 func TestAlertHelpers(t *testing.T) {
-	a := CreateAlert("a", "ns", notificationv1beta2.AlertSpec{})
+	a := CreateAlert("a", "ns", notificationv1beta3.AlertSpec{})
 	SetAlertProviderRef(a, meta.LocalObjectReference{Name: "p"})
 	if a.Spec.ProviderRef.Name != "p" {
 		t.Errorf("provider not set")
 	}
-	src := v1.CrossNamespaceObjectReference{Kind: "Bucket", Name: "b"}
+	src := notificationv1.CrossNamespaceObjectReference{Kind: "Bucket", Name: "b"}
 	AddAlertEventSource(a, src)
 	if len(a.Spec.EventSources) != 1 {
 		t.Errorf("event source not added")
@@ -135,16 +135,16 @@ func TestAlertHelpers(t *testing.T) {
 }
 
 func TestCreateReceiver(t *testing.T) {
-	spec := notificationv1beta2.ReceiverSpec{
-		Type:      notificationv1beta2.GenericReceiver,
-		Resources: []v1.CrossNamespaceObjectReference{{Kind: "Kustomization", Name: "ks"}},
+	spec := notificationv1.ReceiverSpec{
+		Type:      notificationv1.GenericReceiver,
+		Resources: []notificationv1.CrossNamespaceObjectReference{{Kind: "Kustomization", Name: "ks"}},
 		SecretRef: meta.LocalObjectReference{Name: "token"},
 	}
 	r := CreateReceiver("r", "ns", spec)
 	if r.Name != "r" || r.Namespace != "ns" {
 		t.Fatalf("metadata mismatch")
 	}
-	if r.Kind != notificationv1beta2.ReceiverKind {
+	if r.Kind != notificationv1.ReceiverKind {
 		t.Errorf("unexpected kind %s", r.Kind)
 	}
 	if len(r.Spec.Resources) != 1 {
@@ -153,9 +153,9 @@ func TestCreateReceiver(t *testing.T) {
 }
 
 func TestReceiverHelpers(t *testing.T) {
-	r := CreateReceiver("r", "ns", notificationv1beta2.ReceiverSpec{})
-	SetReceiverType(r, notificationv1beta2.GitHubReceiver)
-	if r.Spec.Type != notificationv1beta2.GitHubReceiver {
+	r := CreateReceiver("r", "ns", notificationv1.ReceiverSpec{})
+	SetReceiverType(r, notificationv1.GitHubReceiver)
+	if r.Spec.Type != notificationv1.GitHubReceiver {
 		t.Errorf("type not set")
 	}
 	dur := metav1.Duration{Duration: time.Hour}
@@ -167,7 +167,7 @@ func TestReceiverHelpers(t *testing.T) {
 	if len(r.Spec.Events) != 1 {
 		t.Errorf("event not added")
 	}
-	ref := v1.CrossNamespaceObjectReference{Kind: "HelmRelease", Name: "hr"}
+	ref := notificationv1.CrossNamespaceObjectReference{Kind: "HelmRelease", Name: "hr"}
 	AddReceiverResource(r, ref)
 	if len(r.Spec.Resources) != 1 {
 		t.Errorf("resource not added")

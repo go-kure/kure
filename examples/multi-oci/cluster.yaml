@@ -5,12 +5,12 @@ node:
     - name: web
       packageref:
         group: source.toolkit.fluxcd.io
-        version: v1beta2
+        version: v1
         kind: OCIRepository
     - name: database  
       packageref:
         group: source.toolkit.fluxcd.io
-        version: v1beta2
+        version: v1
         kind: OCIRepository
     - name: monitoring
       packageref:

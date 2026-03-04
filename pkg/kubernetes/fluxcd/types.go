@@ -2,9 +2,9 @@ package fluxcd
 
 import (
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	v1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 )
@@ -86,21 +86,21 @@ type ProviderConfig struct {
 
 // AlertConfig contains the configuration for an Alert.
 type AlertConfig struct {
-	Name          string                             `yaml:"name"`
-	Namespace     string                             `yaml:"namespace"`
-	ProviderRef   string                             `yaml:"providerRef"`
-	EventSources  []v1.CrossNamespaceObjectReference `yaml:"eventSources"`
-	EventSeverity string                             `yaml:"eventSeverity,omitempty"`
+	Name          string                                         `yaml:"name"`
+	Namespace     string                                         `yaml:"namespace"`
+	ProviderRef   string                                         `yaml:"providerRef"`
+	EventSources  []notificationv1.CrossNamespaceObjectReference `yaml:"eventSources"`
+	EventSeverity string                                         `yaml:"eventSeverity,omitempty"`
 }
 
 // ReceiverConfig contains the configuration for a Receiver.
 type ReceiverConfig struct {
-	Name       string                             `yaml:"name"`
-	Namespace  string                             `yaml:"namespace"`
-	Type       string                             `yaml:"type"`
-	SecretName string                             `yaml:"secretName"`
-	Resources  []v1.CrossNamespaceObjectReference `yaml:"resources"`
-	Events     []string                           `yaml:"events,omitempty"`
+	Name       string                                         `yaml:"name"`
+	Namespace  string                                         `yaml:"namespace"`
+	Type       string                                         `yaml:"type"`
+	SecretName string                                         `yaml:"secretName"`
+	Resources  []notificationv1.CrossNamespaceObjectReference `yaml:"resources"`
+	Events     []string                                       `yaml:"events,omitempty"`
 }
 
 // ImageUpdateAutomationConfig contains the configuration for ImageUpdateAutomation.

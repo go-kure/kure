@@ -4,7 +4,6 @@ import (
 	"github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -43,8 +42,8 @@ func CreateHelmRepository(name string, namespace string, spec sourcev1.HelmRepos
 }
 
 // CreateOCIRepository returns a new OCIRepository resource.
-func CreateOCIRepository(name string, namespace string, spec sourcev1beta2.OCIRepositorySpec) *sourcev1beta2.OCIRepository {
-	obj := &sourcev1beta2.OCIRepository{
+func CreateOCIRepository(name string, namespace string, spec sourcev1.OCIRepositorySpec) *sourcev1.OCIRepository {
+	obj := &sourcev1.OCIRepository{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OCIRepository",
 			APIVersion: sourcev1.GroupVersion.String(),
@@ -336,71 +335,71 @@ func SetHelmChartVerify(hc *sourcev1.HelmChart, verify *sourcev1.OCIRepositoryVe
 // OCIRepository helpers
 
 // SetOCIRepositoryURL sets the container registry URL.
-func SetOCIRepositoryURL(or *sourcev1beta2.OCIRepository, url string) {
+func SetOCIRepositoryURL(or *sourcev1.OCIRepository, url string) {
 	or.Spec.URL = url
 }
 
 // SetOCIRepositoryReference sets the tag or digest reference.
-func SetOCIRepositoryReference(or *sourcev1beta2.OCIRepository, ref *sourcev1beta2.OCIRepositoryRef) {
+func SetOCIRepositoryReference(or *sourcev1.OCIRepository, ref *sourcev1.OCIRepositoryRef) {
 	or.Spec.Reference = ref
 }
 
 // SetOCIRepositoryLayerSelector configures the layer selector used to pull images.
-func SetOCIRepositoryLayerSelector(or *sourcev1beta2.OCIRepository, sel *sourcev1beta2.OCILayerSelector) {
+func SetOCIRepositoryLayerSelector(or *sourcev1.OCIRepository, sel *sourcev1.OCILayerSelector) {
 	or.Spec.LayerSelector = sel
 }
 
 // SetOCIRepositoryProvider sets the provider name.
-func SetOCIRepositoryProvider(or *sourcev1beta2.OCIRepository, provider string) {
+func SetOCIRepositoryProvider(or *sourcev1.OCIRepository, provider string) {
 	or.Spec.Provider = provider
 }
 
 // SetOCIRepositorySecretRef attaches credentials secret reference.
-func SetOCIRepositorySecretRef(or *sourcev1beta2.OCIRepository, ref *meta.LocalObjectReference) {
+func SetOCIRepositorySecretRef(or *sourcev1.OCIRepository, ref *meta.LocalObjectReference) {
 	or.Spec.SecretRef = ref
 }
 
 // SetOCIRepositoryVerify configures OCI signature verification for the repository.
-func SetOCIRepositoryVerify(or *sourcev1beta2.OCIRepository, verify *sourcev1.OCIRepositoryVerification) {
+func SetOCIRepositoryVerify(or *sourcev1.OCIRepository, verify *sourcev1.OCIRepositoryVerification) {
 	or.Spec.Verify = verify
 }
 
 // SetOCIRepositoryServiceAccountName sets the service account used for pulls.
-func SetOCIRepositoryServiceAccountName(or *sourcev1beta2.OCIRepository, name string) {
+func SetOCIRepositoryServiceAccountName(or *sourcev1.OCIRepository, name string) {
 	or.Spec.ServiceAccountName = name
 }
 
 // SetOCIRepositoryCertSecretRef configures the certificate secret reference.
-func SetOCIRepositoryCertSecretRef(or *sourcev1beta2.OCIRepository, ref *meta.LocalObjectReference) {
+func SetOCIRepositoryCertSecretRef(or *sourcev1.OCIRepository, ref *meta.LocalObjectReference) {
 	or.Spec.CertSecretRef = ref
 }
 
 // SetOCIRepositoryProxySecretRef attaches a proxy secret reference.
-func SetOCIRepositoryProxySecretRef(or *sourcev1beta2.OCIRepository, ref *meta.LocalObjectReference) {
+func SetOCIRepositoryProxySecretRef(or *sourcev1.OCIRepository, ref *meta.LocalObjectReference) {
 	or.Spec.ProxySecretRef = ref
 }
 
 // SetOCIRepositoryInterval sets how often the repository is pulled.
-func SetOCIRepositoryInterval(or *sourcev1beta2.OCIRepository, interval metav1.Duration) {
+func SetOCIRepositoryInterval(or *sourcev1.OCIRepository, interval metav1.Duration) {
 	or.Spec.Interval = interval
 }
 
 // SetOCIRepositoryTimeout configures the timeout for registry operations.
-func SetOCIRepositoryTimeout(or *sourcev1beta2.OCIRepository, timeout *metav1.Duration) {
+func SetOCIRepositoryTimeout(or *sourcev1.OCIRepository, timeout *metav1.Duration) {
 	or.Spec.Timeout = timeout
 }
 
 // SetOCIRepositoryIgnore configures ignore rules for the repository.
-func SetOCIRepositoryIgnore(or *sourcev1beta2.OCIRepository, ignore string) {
+func SetOCIRepositoryIgnore(or *sourcev1.OCIRepository, ignore string) {
 	or.Spec.Ignore = &ignore
 }
 
 // SetOCIRepositoryInsecure toggles insecure pulls from the repository.
-func SetOCIRepositoryInsecure(or *sourcev1beta2.OCIRepository, insecure bool) {
+func SetOCIRepositoryInsecure(or *sourcev1.OCIRepository, insecure bool) {
 	or.Spec.Insecure = insecure
 }
 
 // SetOCIRepositorySuspend toggles reconciliation for the OCIRepository.
-func SetOCIRepositorySuspend(or *sourcev1beta2.OCIRepository, suspend bool) {
+func SetOCIRepositorySuspend(or *sourcev1.OCIRepository, suspend bool) {
 	or.Spec.Suspend = suspend
 }

@@ -8,7 +8,6 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	metaapi "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -180,7 +179,7 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 
 	// Add dependencies
 	for _, dep := range b.DependsOn {
-		kust.Spec.DependsOn = append(kust.Spec.DependsOn, metaapi.NamespacedObjectReference{
+		kust.Spec.DependsOn = append(kust.Spec.DependsOn, kustv1.DependencyReference{
 			Name: dep.Name,
 		})
 	}
@@ -218,12 +217,12 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		}
 		return intfluxcd.CreateGitRepository(ref.Name, namespace, spec), nil
 	case "OCIRepository":
-		spec := sourcev1beta2.OCIRepositorySpec{
+		spec := sourcev1.OCIRepositorySpec{
 			URL:      ref.URL,
 			Interval: metav1.Duration{Duration: g.DefaultInterval},
 		}
 		if ref.Tag != "" {
-			spec.Reference = &sourcev1beta2.OCIRepositoryRef{
+			spec.Reference = &sourcev1.OCIRepositoryRef{
 				Tag: ref.Tag,
 			}
 		}

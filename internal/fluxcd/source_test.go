@@ -6,7 +6,6 @@ import (
 
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -15,17 +14,17 @@ func TestCreateOCIRepository(t *testing.T) {
 		name      string
 		inputName string
 		inputNS   string
-		inputSpec sourcev1beta2.OCIRepositorySpec
-		expected  *sourcev1beta2.OCIRepository
+		inputSpec sourcev1.OCIRepositorySpec
+		expected  *sourcev1.OCIRepository
 	}{
 		{
 			name:      "Valid input",
 			inputName: "test-oci-repo",
 			inputNS:   "default",
-			inputSpec: sourcev1beta2.OCIRepositorySpec{
+			inputSpec: sourcev1.OCIRepositorySpec{
 				URL: "https://registry.example.com/repo",
 			},
-			expected: &sourcev1beta2.OCIRepository{
+			expected: &sourcev1.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
@@ -34,7 +33,7 @@ func TestCreateOCIRepository(t *testing.T) {
 					Name:      "test-oci-repo",
 					Namespace: "default",
 				},
-				Spec: sourcev1beta2.OCIRepositorySpec{
+				Spec: sourcev1.OCIRepositorySpec{
 					URL: "https://registry.example.com/repo",
 				},
 			},
@@ -43,10 +42,10 @@ func TestCreateOCIRepository(t *testing.T) {
 			name:      "Empty name",
 			inputName: "",
 			inputNS:   "default",
-			inputSpec: sourcev1beta2.OCIRepositorySpec{
+			inputSpec: sourcev1.OCIRepositorySpec{
 				URL: "https://registry.example.com/repo",
 			},
-			expected: &sourcev1beta2.OCIRepository{
+			expected: &sourcev1.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
@@ -55,7 +54,7 @@ func TestCreateOCIRepository(t *testing.T) {
 					Name:      "",
 					Namespace: "default",
 				},
-				Spec: sourcev1beta2.OCIRepositorySpec{
+				Spec: sourcev1.OCIRepositorySpec{
 					URL: "https://registry.example.com/repo",
 				},
 			},
@@ -64,10 +63,10 @@ func TestCreateOCIRepository(t *testing.T) {
 			name:      "Empty namespace",
 			inputName: "test-oci-repo",
 			inputNS:   "",
-			inputSpec: sourcev1beta2.OCIRepositorySpec{
+			inputSpec: sourcev1.OCIRepositorySpec{
 				URL: "https://registry.example.com/repo",
 			},
-			expected: &sourcev1beta2.OCIRepository{
+			expected: &sourcev1.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
@@ -76,7 +75,7 @@ func TestCreateOCIRepository(t *testing.T) {
 					Name:      "test-oci-repo",
 					Namespace: "",
 				},
-				Spec: sourcev1beta2.OCIRepositorySpec{
+				Spec: sourcev1.OCIRepositorySpec{
 					URL: "https://registry.example.com/repo",
 				},
 			},
@@ -85,8 +84,8 @@ func TestCreateOCIRepository(t *testing.T) {
 			name:      "Empty spec",
 			inputName: "test-oci-repo",
 			inputNS:   "default",
-			inputSpec: sourcev1beta2.OCIRepositorySpec{},
-			expected: &sourcev1beta2.OCIRepository{
+			inputSpec: sourcev1.OCIRepositorySpec{},
+			expected: &sourcev1.OCIRepository{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "OCIRepository",
 					APIVersion: sourcev1.GroupVersion.String(),
@@ -95,7 +94,7 @@ func TestCreateOCIRepository(t *testing.T) {
 					Name:      "test-oci-repo",
 					Namespace: "default",
 				},
-				Spec: sourcev1beta2.OCIRepositorySpec{},
+				Spec: sourcev1.OCIRepositorySpec{},
 			},
 		},
 	}
@@ -408,7 +407,7 @@ func TestHelmChartHelpers(t *testing.T) {
 }
 
 func TestOCIRepositoryHelpers(t *testing.T) {
-	or := CreateOCIRepository("oci", "ns", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("oci", "ns", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryURL(or, "oci://repo")
 	SetOCIRepositoryInterval(or, metav1.Duration{Duration: time.Minute})
 	SetOCIRepositoryProvider(or, "aws")

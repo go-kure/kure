@@ -6,12 +6,12 @@ import (
 	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -72,13 +72,13 @@ func HelmChart(cfg *HelmChartConfig) *sourcev1.HelmChart {
 }
 
 // OCIRepository converts the config to an OCIRepository object.
-func OCIRepository(cfg *OCIRepositoryConfig) *sourcev1beta2.OCIRepository {
+func OCIRepository(cfg *OCIRepositoryConfig) *sourcev1.OCIRepository {
 	if cfg == nil {
 		return nil
 	}
-	spec := sourcev1beta2.OCIRepositorySpec{
+	spec := sourcev1.OCIRepositorySpec{
 		URL:       cfg.URL,
-		Reference: &sourcev1beta2.OCIRepositoryRef{Tag: cfg.Ref},
+		Reference: &sourcev1.OCIRepositoryRef{Tag: cfg.Ref},
 		Interval:  metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)},
 	}
 	return intfluxcd.CreateOCIRepository(cfg.Name, cfg.Namespace, spec)
@@ -120,11 +120,11 @@ func HelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
 }
 
 // Provider converts the config to a notification Provider object.
-func Provider(cfg *ProviderConfig) *notificationv1beta2.Provider {
+func Provider(cfg *ProviderConfig) *notificationv1beta3.Provider {
 	if cfg == nil {
 		return nil
 	}
-	obj := intfluxcd.CreateProvider(cfg.Name, cfg.Namespace, notificationv1beta2.ProviderSpec{})
+	obj := intfluxcd.CreateProvider(cfg.Name, cfg.Namespace, notificationv1beta3.ProviderSpec{})
 	intfluxcd.SetProviderType(obj, cfg.Type)
 	if cfg.Channel != "" {
 		intfluxcd.SetProviderChannel(obj, cfg.Channel)
@@ -136,11 +136,11 @@ func Provider(cfg *ProviderConfig) *notificationv1beta2.Provider {
 }
 
 // Alert converts the config to an Alert object.
-func Alert(cfg *AlertConfig) *notificationv1beta2.Alert {
+func Alert(cfg *AlertConfig) *notificationv1beta3.Alert {
 	if cfg == nil {
 		return nil
 	}
-	obj := intfluxcd.CreateAlert(cfg.Name, cfg.Namespace, notificationv1beta2.AlertSpec{})
+	obj := intfluxcd.CreateAlert(cfg.Name, cfg.Namespace, notificationv1beta3.AlertSpec{})
 	intfluxcd.SetAlertProviderRef(obj, meta.LocalObjectReference{Name: cfg.ProviderRef})
 	for _, es := range cfg.EventSources {
 		intfluxcd.AddAlertEventSource(obj, es)
@@ -152,11 +152,11 @@ func Alert(cfg *AlertConfig) *notificationv1beta2.Alert {
 }
 
 // Receiver converts the config to a Receiver object.
-func Receiver(cfg *ReceiverConfig) *notificationv1beta2.Receiver {
+func Receiver(cfg *ReceiverConfig) *notificationv1.Receiver {
 	if cfg == nil {
 		return nil
 	}
-	obj := intfluxcd.CreateReceiver(cfg.Name, cfg.Namespace, notificationv1beta2.ReceiverSpec{})
+	obj := intfluxcd.CreateReceiver(cfg.Name, cfg.Namespace, notificationv1.ReceiverSpec{})
 	intfluxcd.SetReceiverType(obj, cfg.Type)
 	intfluxcd.SetReceiverSecretRef(obj, meta.LocalObjectReference{Name: cfg.SecretName})
 	for _, r := range cfg.Resources {

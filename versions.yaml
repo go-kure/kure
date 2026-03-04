@@ -21,25 +21,24 @@ infrastructure:
     notes: "Stable v1 APIs, backward compatible"
 
   fluxcd:
-    current: "2.6.4"
+    current: "2.8.1"
     go_module: "github.com/fluxcd/flux2/v2"
-    supported_range: "2.4 - 2.6"
-    max_dependabot: "< 2.7"
+    supported_range: "2.4 - 2.8"
+    max_dependabot: "< 2.9"
     notes: |
-      2.7+ requires Go 1.25, tracked in #128
-      image-automation-controller 1.0+ requires Go 1.25 (#171)
-      All github.com/fluxcd/* packages blocked from minor/major updates
-    # Additional packages in this ecosystem (same version constraint)
+      v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
+      image-automation-controller promoted to v1.
+      All github.com/fluxcd/* packages upgraded together.
     related_packages:
       - "github.com/fluxcd/*"
       - "github.com/controlplaneio-fluxcd/*"
 
   flux-operator:
-    current: "0.24.1"
+    current: "0.40.0"
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
-    supported_range: "0.23 - 0.24"
-    max_dependabot: "< 0.25"
-    notes: "0.25+ requires Go 1.25"
+    supported_range: "0.23 - 0.40"
+    max_dependabot: "< 0.41"
+    notes: "Upgraded with FluxCD 2.8 ecosystem."
 
   metallb:
     current: "0.15.3"
@@ -49,21 +48,21 @@ infrastructure:
     notes: "Stable v1beta1 APIs, patch release"
 
   external-secrets:
-    current: "0.0.0-20260203074332-a2ec42276c5e"
+    current: "0.0.0-20260213133823-31b0c7c37342"
     go_module: "github.com/external-secrets/external-secrets/apis"
     supported_range: "1.3"
     max_dependabot: null
     notes: |
       Module path changed from root to /apis submodule in v1.0 (#5494).
       No semver tags for apis submodule — use pseudo-versions pinned to release commits.
-      v1.3.2 commit: a2ec42276c5ec6ed46232648f2397823b9b84aaf
+      v1.3.2+ commit: 31b0c7c3734255a92dfe5cf9e1e204de127eb24c (includes controller-runtime v0.23.1 compat)
 
   controller-runtime:
-    current: "0.22.5"
+    current: "0.23.1"
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.23"
     max_dependabot: null
-    notes: "external-secrets module path migration (#248) removed the upgrade blocker"
+    notes: "Upgraded with FluxCD 2.8; external-secrets migration (#248) removed the v0.22.5 pin"
 
   kubernetes:
     current: "0.35.1"
