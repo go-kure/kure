@@ -9,12 +9,11 @@ import (
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
-	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -66,9 +65,8 @@ func registerAllSchemes() error {
 		imagev1.AddToScheme,
 		kustv1.AddToScheme,
 		notificationv1.AddToScheme,
-		notificationv1beta2.AddToScheme,
+		notificationv1beta3.AddToScheme,
 		sourcev1.AddToScheme,
-		sourcev1beta2.AddToScheme,
 		esv1.AddToScheme,
 		metallbv1beta1.AddToScheme,
 	}

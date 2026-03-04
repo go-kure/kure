@@ -80,7 +80,7 @@ func SetHelmReleaseStorageNamespace(obj *helmv2.HelmRelease, ns string) {
 }
 
 // AddHelmReleaseDependsOn appends a dependency to the HelmRelease.
-func AddHelmReleaseDependsOn(obj *helmv2.HelmRelease, ref meta.NamespacedObjectReference) {
+func AddHelmReleaseDependsOn(obj *helmv2.HelmRelease, ref helmv2.DependencyReference) {
 	obj.Spec.DependsOn = append(obj.Spec.DependsOn, ref)
 }
 

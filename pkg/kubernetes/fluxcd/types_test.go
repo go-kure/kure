@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	v1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 )
@@ -211,7 +211,7 @@ func TestProviderConfig(t *testing.T) {
 }
 
 func TestAlertConfig(t *testing.T) {
-	eventSources := []v1.CrossNamespaceObjectReference{
+	eventSources := []notificationv1.CrossNamespaceObjectReference{
 		{Kind: "Kustomization", Name: "app"},
 		{Kind: "HelmRelease", Name: "nginx"},
 	}
@@ -242,7 +242,7 @@ func TestAlertConfig(t *testing.T) {
 }
 
 func TestReceiverConfig(t *testing.T) {
-	resources := []v1.CrossNamespaceObjectReference{
+	resources := []notificationv1.CrossNamespaceObjectReference{
 		{Kind: "GitRepository", Name: "app-repo"},
 	}
 

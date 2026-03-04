@@ -6,12 +6,12 @@ import (
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -128,9 +128,9 @@ func TestSetOCIRepositorySpec(t *testing.T) {
 		t.Fatal("failed to create OCIRepository")
 	}
 
-	newSpec := sourcev1beta2.OCIRepositorySpec{
+	newSpec := sourcev1.OCIRepositorySpec{
 		URL:       "oci://registry.example.com/new-repo",
-		Reference: &sourcev1beta2.OCIRepositoryRef{Tag: "v2.0.0"},
+		Reference: &sourcev1.OCIRepositoryRef{Tag: "v2.0.0"},
 		Interval:  metav1.Duration{Duration: 15 * time.Minute},
 	}
 
@@ -252,7 +252,7 @@ func TestSetProviderSpec(t *testing.T) {
 		t.Fatal("failed to create Provider")
 	}
 
-	newSpec := notificationv1beta2.ProviderSpec{
+	newSpec := notificationv1beta3.ProviderSpec{
 		Type:    "discord",
 		Channel: "#notifications",
 		Address: "https://discord.com/api/webhooks/...",
@@ -281,7 +281,7 @@ func TestSetAlertSpec(t *testing.T) {
 		t.Fatal("failed to create Alert")
 	}
 
-	newSpec := notificationv1beta2.AlertSpec{
+	newSpec := notificationv1beta3.AlertSpec{
 		ProviderRef: meta.LocalObjectReference{Name: "discord-provider"},
 		Summary:     "warning",
 	}
@@ -310,7 +310,7 @@ func TestSetReceiverSpec(t *testing.T) {
 		t.Fatal("failed to create Receiver")
 	}
 
-	newSpec := notificationv1beta2.ReceiverSpec{
+	newSpec := notificationv1.ReceiverSpec{
 		Type:      "gitlab",
 		SecretRef: meta.LocalObjectReference{Name: "gitlab-secret"},
 		Events:    []string{"merge", "push"},

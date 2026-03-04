@@ -102,7 +102,7 @@ func TestKustomizationSettersAndAdders(t *testing.T) {
 	SetKustomizationPrune(k, true)
 	SetKustomizationDeletionPolicy(k, "Delete")
 	AddKustomizationComponent(k, "comp")
-	AddKustomizationDependsOn(k, meta.NamespacedObjectReference{Name: "other"})
+	AddKustomizationDependsOn(k, kustv1.DependencyReference{Name: "other"})
 	AddKustomizationHealthCheck(k, meta.NamespacedObjectKindReference{Kind: "Deployment", Name: "app"})
 	AddKustomizationImage(k, kustomize.Image{Name: "nginx", NewTag: "1"})
 	AddKustomizationPatch(k, kustomize.Patch{Patch: "data"})

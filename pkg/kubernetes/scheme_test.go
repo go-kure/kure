@@ -10,9 +10,8 @@ import (
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -188,8 +187,8 @@ func TestScheme_FluxTypes(t *testing.T) {
 		&sourcev1.GitRepository{},
 		&sourcev1.HelmRepository{},
 		&sourcev1.Bucket{},
-		&sourcev1beta2.OCIRepository{},
-		&sourcev1beta2.HelmChart{},
+		&sourcev1.OCIRepository{},
+		&sourcev1.HelmChart{},
 	}
 
 	for _, obj := range fluxSourceTypes {
@@ -234,7 +233,7 @@ func TestScheme_FluxTypes(t *testing.T) {
 
 	// Test some Flux notification controller types
 	fluxNotificationTypes := []runtime.Object{
-		&notificationv1beta2.Receiver{},
+		&notificationv1.Receiver{},
 	}
 
 	for _, obj := range fluxNotificationTypes {
@@ -478,8 +477,8 @@ func TestScheme_AllTypesRegistered(t *testing.T) {
 		{"GitRepository", &sourcev1.GitRepository{}},
 		{"HelmRepository", &sourcev1.HelmRepository{}},
 		{"Bucket", &sourcev1.Bucket{}},
-		{"OCIRepository", &sourcev1beta2.OCIRepository{}},
-		{"HelmChart", &sourcev1beta2.HelmChart{}},
+		{"OCIRepository", &sourcev1.OCIRepository{}},
+		{"HelmChart", &sourcev1.HelmChart{}},
 
 		// Flux Kustomize Controller
 		{"Kustomization", &kustv1.Kustomization{}},
@@ -488,7 +487,7 @@ func TestScheme_AllTypesRegistered(t *testing.T) {
 		{"HelmRelease", &helmv2.HelmRelease{}},
 
 		// Flux Notification Controller
-		{"Receiver", &notificationv1beta2.Receiver{}},
+		{"Receiver", &notificationv1.Receiver{}},
 
 		// Flux Operator
 		{"FluxInstance", &fluxv1.FluxInstance{}},

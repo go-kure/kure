@@ -356,7 +356,7 @@ func (c *Config) generateOCIRepository() (*client.Object, error) {
 
 	repo := &sourcev1.OCIRepository{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "source.toolkit.fluxcd.io/v1beta2",
+			APIVersion: "source.toolkit.fluxcd.io/v1",
 			Kind:       "OCIRepository",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -393,7 +393,7 @@ func (c *Config) generateBucket() (*client.Object, error) {
 
 	bucket := &sourcev1.Bucket{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "source.toolkit.fluxcd.io/v1beta2",
+			APIVersion: "source.toolkit.fluxcd.io/v1",
 			Kind:       "Bucket",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -567,9 +567,9 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 
 	// Set dependencies
 	if len(c.DependsOn) > 0 {
-		hr.Spec.DependsOn = make([]meta.NamespacedObjectReference, 0, len(c.DependsOn))
+		hr.Spec.DependsOn = make([]helmv2.DependencyReference, 0, len(c.DependsOn))
 		for _, dep := range c.DependsOn {
-			hr.Spec.DependsOn = append(hr.Spec.DependsOn, meta.NamespacedObjectReference{
+			hr.Spec.DependsOn = append(hr.Spec.DependsOn, helmv2.DependencyReference{
 				Name: dep,
 			})
 		}

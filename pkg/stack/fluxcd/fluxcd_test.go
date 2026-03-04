@@ -5,7 +5,6 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -240,7 +239,7 @@ func TestCreateSource_OCIRepository(t *testing.T) {
 	}
 
 	// Second object is the OCIRepository
-	oci, ok := objs[1].(*sourcev1beta2.OCIRepository)
+	oci, ok := objs[1].(*sourcev1.OCIRepository)
 	if !ok {
 		t.Fatalf("expected OCIRepository, got %T", objs[1])
 	}

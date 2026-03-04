@@ -68,7 +68,7 @@ func AddKustomizationComponent(k *kustv1.Kustomization, component string) {
 }
 
 // AddKustomizationDependsOn appends a dependency reference.
-func AddKustomizationDependsOn(k *kustv1.Kustomization, ref metaapi.NamespacedObjectReference) {
+func AddKustomizationDependsOn(k *kustv1.Kustomization, ref kustv1.DependencyReference) {
 	k.Spec.DependsOn = append(k.Spec.DependsOn, ref)
 }
 

@@ -139,7 +139,7 @@ func TestWalkClusterByPackage(t *testing.T) {
 	// Define different package references
 	ociPackageRef := &schema.GroupVersionKind{
 		Group:   "source.toolkit.fluxcd.io",
-		Version: "v1beta2",
+		Version: "v1",
 		Kind:    "OCIRepository",
 	}
 	gitPackageRef := &schema.GroupVersionKind{
@@ -229,7 +229,7 @@ func TestWalkClusterByPackageWithInheritance(t *testing.T) {
 	// Define package reference
 	ociPackageRef := &schema.GroupVersionKind{
 		Group:   "source.toolkit.fluxcd.io",
-		Version: "v1beta2",
+		Version: "v1",
 		Kind:    "OCIRepository",
 	}
 

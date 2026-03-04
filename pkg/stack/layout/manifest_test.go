@@ -325,7 +325,7 @@ func TestWritePackagesToDisk(t *testing.T) {
 	// Create packages with different PackageRef values
 	ociPackageRef := &schema.GroupVersionKind{
 		Group:   "source.toolkit.fluxcd.io",
-		Version: "v1beta2",
+		Version: "v1",
 		Kind:    "OCIRepository",
 	}
 	gitPackageRef := &schema.GroupVersionKind{
@@ -397,7 +397,7 @@ func TestSanitizePackageKey(t *testing.T) {
 		expected string
 	}{
 		{"default", "default"},
-		{"source.toolkit.fluxcd.io/v1beta2, Kind=OCIRepository", "oci-packages"},
+		{"source.toolkit.fluxcd.io/v1, Kind=OCIRepository", "oci-packages"},
 		{"example.com:8080/repo", "example.com-8080-repo"},
 		{"namespace/name?version=1.0", "namespace-name-version-1.0"},
 		{"test::with::colons", "test-with-colons"},

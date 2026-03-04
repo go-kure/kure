@@ -65,7 +65,16 @@
       "Bash(hugo build:*)",
       "Bash(golangci-lint run:*)",
       "Bash(read commit:*)",
-      "Bash(gofmt:*)"
+      "Bash(gofmt:*)",
+      "Bash(git:*)",
+      "Bash(GOPROXY=https://proxy.golang.org go list:*)",
+      "Bash(GOWORK=off GOPROXY=https://proxy.golang.org go list:*)",
+      "Bash(do echo:*)",
+      "Bash(GOWORK=off go mod:*)",
+      "Bash(GOWORK=off go list:*)",
+      "Bash(GOWORK=off grep:*)",
+      "Bash(GOWORK=off make build:*)",
+      "Bash(./scripts/sync-versions.sh check:*)"
     ]
   },
   "outputStyle": "default"

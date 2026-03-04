@@ -127,7 +127,7 @@ metadata:
   name: hr
 spec: {}
 ---
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageUpdateAutomation
 metadata:
   name: ia
@@ -144,7 +144,7 @@ spec:
         email: bot@example.com
     push: {}
 ---
-apiVersion: notification.toolkit.fluxcd.io/v1beta2
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Provider
 metadata:
   name: prov

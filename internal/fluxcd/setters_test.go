@@ -5,13 +5,13 @@ import (
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -344,7 +344,7 @@ func TestSetKustomizationPostBuild(t *testing.T) {
 
 // Notification setter tests
 func TestSetProviderType(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderType(p, "slack")
 	if p.Spec.Type != "slack" {
 		t.Fatal("expected Type to be 'slack'")
@@ -352,7 +352,7 @@ func TestSetProviderType(t *testing.T) {
 }
 
 func TestSetProviderInterval(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	interval := metav1.Duration{Duration: 60}
 	SetProviderInterval(p, interval)
 	if p.Spec.Interval == nil {
@@ -361,7 +361,7 @@ func TestSetProviderInterval(t *testing.T) {
 }
 
 func TestSetProviderChannel(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderChannel(p, "#general")
 	if p.Spec.Channel != "#general" {
 		t.Fatal("expected Channel to be set")
@@ -369,7 +369,7 @@ func TestSetProviderChannel(t *testing.T) {
 }
 
 func TestSetProviderUsername(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderUsername(p, "bot")
 	if p.Spec.Username != "bot" {
 		t.Fatal("expected Username to be set")
@@ -377,7 +377,7 @@ func TestSetProviderUsername(t *testing.T) {
 }
 
 func TestSetProviderAddress(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderAddress(p, "https://slack.com")
 	if p.Spec.Address != "https://slack.com" {
 		t.Fatal("expected Address to be set")
@@ -385,7 +385,7 @@ func TestSetProviderAddress(t *testing.T) {
 }
 
 func TestSetProviderTimeout(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	timeout := metav1.Duration{Duration: 30}
 	SetProviderTimeout(p, timeout)
 	if p.Spec.Timeout == nil {
@@ -394,7 +394,7 @@ func TestSetProviderTimeout(t *testing.T) {
 }
 
 func TestSetProviderProxy(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderProxy(p, "http://proxy:8080")
 	if p.Spec.Proxy != "http://proxy:8080" {
 		t.Fatal("expected Proxy to be set")
@@ -402,7 +402,7 @@ func TestSetProviderProxy(t *testing.T) {
 }
 
 func TestSetProviderSecretRef(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderSecretRef(p, &meta.LocalObjectReference{Name: "secret"})
 	if p.Spec.SecretRef == nil {
 		t.Fatal("expected SecretRef to be set")
@@ -410,7 +410,7 @@ func TestSetProviderSecretRef(t *testing.T) {
 }
 
 func TestSetProviderCertSecretRef(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderCertSecretRef(p, &meta.LocalObjectReference{Name: "cert"})
 	if p.Spec.CertSecretRef == nil {
 		t.Fatal("expected CertSecretRef to be set")
@@ -418,7 +418,7 @@ func TestSetProviderCertSecretRef(t *testing.T) {
 }
 
 func TestSetProviderSuspend(t *testing.T) {
-	p := CreateProvider("test", "default", notificationv1beta2.ProviderSpec{})
+	p := CreateProvider("test", "default", notificationv1beta3.ProviderSpec{})
 	SetProviderSuspend(p, true)
 	if !p.Spec.Suspend {
 		t.Fatal("expected Suspend to be true")
@@ -426,7 +426,7 @@ func TestSetProviderSuspend(t *testing.T) {
 }
 
 func TestSetReceiverType(t *testing.T) {
-	r := CreateReceiver("test", "default", notificationv1beta2.ReceiverSpec{})
+	r := CreateReceiver("test", "default", notificationv1.ReceiverSpec{})
 	SetReceiverType(r, "github")
 	if r.Spec.Type != "github" {
 		t.Fatal("expected Type to be 'github'")
@@ -434,7 +434,7 @@ func TestSetReceiverType(t *testing.T) {
 }
 
 func TestSetReceiverInterval(t *testing.T) {
-	r := CreateReceiver("test", "default", notificationv1beta2.ReceiverSpec{})
+	r := CreateReceiver("test", "default", notificationv1.ReceiverSpec{})
 	interval := metav1.Duration{Duration: 60}
 	SetReceiverInterval(r, interval)
 	if r.Spec.Interval == nil {
@@ -443,7 +443,7 @@ func TestSetReceiverInterval(t *testing.T) {
 }
 
 func TestSetReceiverSecretRef(t *testing.T) {
-	r := CreateReceiver("test", "default", notificationv1beta2.ReceiverSpec{})
+	r := CreateReceiver("test", "default", notificationv1.ReceiverSpec{})
 	SetReceiverSecretRef(r, meta.LocalObjectReference{Name: "secret"})
 	if r.Spec.SecretRef.Name != "secret" {
 		t.Fatal("expected SecretRef to be set")
@@ -451,7 +451,7 @@ func TestSetReceiverSecretRef(t *testing.T) {
 }
 
 func TestSetReceiverSuspend(t *testing.T) {
-	r := CreateReceiver("test", "default", notificationv1beta2.ReceiverSpec{})
+	r := CreateReceiver("test", "default", notificationv1.ReceiverSpec{})
 	SetReceiverSuspend(r, true)
 	if !r.Spec.Suspend {
 		t.Fatal("expected Suspend to be true")
@@ -930,7 +930,7 @@ func TestSetHelmChartVerify(t *testing.T) {
 
 // OCIRepository setter tests
 func TestSetOCIRepositoryURL(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryURL(or, "oci://ghcr.io/test")
 	if or.Spec.URL != "oci://ghcr.io/test" {
 		t.Fatal("expected URL to be set")
@@ -938,23 +938,23 @@ func TestSetOCIRepositoryURL(t *testing.T) {
 }
 
 func TestSetOCIRepositoryReference(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
-	SetOCIRepositoryReference(or, &sourcev1beta2.OCIRepositoryRef{Tag: "latest"})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
+	SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: "latest"})
 	if or.Spec.Reference == nil {
 		t.Fatal("expected Reference to be set")
 	}
 }
 
 func TestSetOCIRepositoryLayerSelector(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
-	SetOCIRepositoryLayerSelector(or, &sourcev1beta2.OCILayerSelector{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
+	SetOCIRepositoryLayerSelector(or, &sourcev1.OCILayerSelector{})
 	if or.Spec.LayerSelector == nil {
 		t.Fatal("expected LayerSelector to be set")
 	}
 }
 
 func TestSetOCIRepositoryProvider(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryProvider(or, "generic")
 	if or.Spec.Provider != "generic" {
 		t.Fatal("expected Provider to be set")
@@ -962,7 +962,7 @@ func TestSetOCIRepositoryProvider(t *testing.T) {
 }
 
 func TestSetOCIRepositorySecretRef(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositorySecretRef(or, &meta.LocalObjectReference{Name: "secret"})
 	if or.Spec.SecretRef == nil {
 		t.Fatal("expected SecretRef to be set")
@@ -970,7 +970,7 @@ func TestSetOCIRepositorySecretRef(t *testing.T) {
 }
 
 func TestSetOCIRepositoryVerify(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryVerify(or, &sourcev1.OCIRepositoryVerification{})
 	if or.Spec.Verify == nil {
 		t.Fatal("expected Verify to be set")
@@ -978,7 +978,7 @@ func TestSetOCIRepositoryVerify(t *testing.T) {
 }
 
 func TestSetOCIRepositoryServiceAccountName(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryServiceAccountName(or, "test-sa")
 	if or.Spec.ServiceAccountName != "test-sa" {
 		t.Fatal("expected ServiceAccountName to be set")
@@ -986,7 +986,7 @@ func TestSetOCIRepositoryServiceAccountName(t *testing.T) {
 }
 
 func TestSetOCIRepositoryCertSecretRef(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryCertSecretRef(or, &meta.LocalObjectReference{Name: "cert"})
 	if or.Spec.CertSecretRef == nil {
 		t.Fatal("expected CertSecretRef to be set")
@@ -994,7 +994,7 @@ func TestSetOCIRepositoryCertSecretRef(t *testing.T) {
 }
 
 func TestSetOCIRepositoryProxySecretRef(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryProxySecretRef(or, &meta.LocalObjectReference{Name: "proxy"})
 	if or.Spec.ProxySecretRef == nil {
 		t.Fatal("expected ProxySecretRef to be set")
@@ -1002,13 +1002,13 @@ func TestSetOCIRepositoryProxySecretRef(t *testing.T) {
 }
 
 func TestSetOCIRepositoryInterval(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	interval := metav1.Duration{Duration: 60}
 	SetOCIRepositoryInterval(or, interval)
 }
 
 func TestSetOCIRepositoryTimeout(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	timeout := metav1.Duration{Duration: 30}
 	SetOCIRepositoryTimeout(or, &timeout)
 	if or.Spec.Timeout == nil {
@@ -1017,7 +1017,7 @@ func TestSetOCIRepositoryTimeout(t *testing.T) {
 }
 
 func TestSetOCIRepositoryIgnore(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryIgnore(or, "*.txt")
 	if or.Spec.Ignore == nil {
 		t.Fatal("expected Ignore to be set")
@@ -1025,7 +1025,7 @@ func TestSetOCIRepositoryIgnore(t *testing.T) {
 }
 
 func TestSetOCIRepositoryInsecure(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositoryInsecure(or, true)
 	if !or.Spec.Insecure {
 		t.Fatal("expected Insecure to be true")
@@ -1033,7 +1033,7 @@ func TestSetOCIRepositoryInsecure(t *testing.T) {
 }
 
 func TestSetOCIRepositorySuspend(t *testing.T) {
-	or := CreateOCIRepository("test", "default", sourcev1beta2.OCIRepositorySpec{})
+	or := CreateOCIRepository("test", "default", sourcev1.OCIRepositorySpec{})
 	SetOCIRepositorySuspend(or, true)
 	if !or.Spec.Suspend {
 		t.Fatal("expected Suspend to be true")

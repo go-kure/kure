@@ -4,11 +4,11 @@ import (
 	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
-	imagev1 "github.com/fluxcd/image-automation-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
-	notificationv1beta2 "github.com/fluxcd/notification-controller/api/v1beta2"
+	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
+	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	meta "github.com/fluxcd/pkg/apis/meta"
@@ -37,7 +37,7 @@ func SetHelmChartSpec(obj *sourcev1.HelmChart, spec sourcev1.HelmChartSpec) {
 }
 
 // SetOCIRepositorySpec replaces the spec on the OCIRepository object.
-func SetOCIRepositorySpec(obj *sourcev1beta2.OCIRepository, spec sourcev1beta2.OCIRepositorySpec) {
+func SetOCIRepositorySpec(obj *sourcev1.OCIRepository, spec sourcev1.OCIRepositorySpec) {
 	obj.Spec = spec
 }
 
@@ -52,17 +52,17 @@ func SetHelmReleaseSpec(obj *helmv2.HelmRelease, spec helmv2.HelmReleaseSpec) {
 }
 
 // SetProviderSpec replaces the spec on the Provider object.
-func SetProviderSpec(obj *notificationv1beta2.Provider, spec notificationv1beta2.ProviderSpec) {
+func SetProviderSpec(obj *notificationv1beta3.Provider, spec notificationv1beta3.ProviderSpec) {
 	obj.Spec = spec
 }
 
 // SetAlertSpec replaces the spec on the Alert object.
-func SetAlertSpec(obj *notificationv1beta2.Alert, spec notificationv1beta2.AlertSpec) {
+func SetAlertSpec(obj *notificationv1beta3.Alert, spec notificationv1beta3.AlertSpec) {
 	obj.Spec = spec
 }
 
 // SetReceiverSpec replaces the spec on the Receiver object.
-func SetReceiverSpec(obj *notificationv1beta2.Receiver, spec notificationv1beta2.ReceiverSpec) {
+func SetReceiverSpec(obj *notificationv1.Receiver, spec notificationv1.ReceiverSpec) {
 	obj.Spec = spec
 }
 
@@ -246,51 +246,51 @@ func AddResourceSetInputProviderSchedule(obj *fluxv1.ResourceSetInputProvider, s
 // Additional helpers for notification resources.
 
 // SetProviderType delegates to the internal helper.
-func SetProviderType(provider *notificationv1beta2.Provider, t string) {
+func SetProviderType(provider *notificationv1beta3.Provider, t string) {
 	intfluxcd.SetProviderType(provider, t)
 }
 
 // SetProviderInterval delegates to the internal helper.
-func SetProviderInterval(provider *notificationv1beta2.Provider, d metav1.Duration) {
+func SetProviderInterval(provider *notificationv1beta3.Provider, d metav1.Duration) {
 	intfluxcd.SetProviderInterval(provider, d)
 }
 
 // SetProviderChannel delegates to the internal helper.
-func SetProviderChannel(provider *notificationv1beta2.Provider, channel string) {
+func SetProviderChannel(provider *notificationv1beta3.Provider, channel string) {
 	intfluxcd.SetProviderChannel(provider, channel)
 }
 
 // SetProviderUsername delegates to the internal helper.
-func SetProviderUsername(provider *notificationv1beta2.Provider, username string) {
+func SetProviderUsername(provider *notificationv1beta3.Provider, username string) {
 	intfluxcd.SetProviderUsername(provider, username)
 }
 
 // SetProviderAddress delegates to the internal helper.
-func SetProviderAddress(provider *notificationv1beta2.Provider, address string) {
+func SetProviderAddress(provider *notificationv1beta3.Provider, address string) {
 	intfluxcd.SetProviderAddress(provider, address)
 }
 
 // SetProviderTimeout delegates to the internal helper.
-func SetProviderTimeout(provider *notificationv1beta2.Provider, d metav1.Duration) {
+func SetProviderTimeout(provider *notificationv1beta3.Provider, d metav1.Duration) {
 	intfluxcd.SetProviderTimeout(provider, d)
 }
 
 // SetProviderProxy delegates to the internal helper.
-func SetProviderProxy(provider *notificationv1beta2.Provider, proxy string) {
+func SetProviderProxy(provider *notificationv1beta3.Provider, proxy string) {
 	intfluxcd.SetProviderProxy(provider, proxy)
 }
 
 // SetProviderSecretRef delegates to the internal helper.
-func SetProviderSecretRef(provider *notificationv1beta2.Provider, ref *meta.LocalObjectReference) {
+func SetProviderSecretRef(provider *notificationv1beta3.Provider, ref *meta.LocalObjectReference) {
 	intfluxcd.SetProviderSecretRef(provider, ref)
 }
 
 // SetProviderCertSecretRef delegates to the internal helper.
-func SetProviderCertSecretRef(provider *notificationv1beta2.Provider, ref *meta.LocalObjectReference) {
+func SetProviderCertSecretRef(provider *notificationv1beta3.Provider, ref *meta.LocalObjectReference) {
 	intfluxcd.SetProviderCertSecretRef(provider, ref)
 }
 
 // SetProviderSuspend delegates to the internal helper.
-func SetProviderSuspend(provider *notificationv1beta2.Provider, suspend bool) {
+func SetProviderSuspend(provider *notificationv1beta3.Provider, suspend bool) {
 	intfluxcd.SetProviderSuspend(provider, suspend)
 }
