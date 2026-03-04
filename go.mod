@@ -16,7 +16,7 @@ require (
 	github.com/cert-manager/cert-manager v1.19.4
 	github.com/controlplaneio-fluxcd/flux-operator v0.24.1
 	github.com/evanphx/json-patch/v5 v5.9.11
-	github.com/external-secrets/external-secrets v0.19.2
+	github.com/external-secrets/external-secrets/apis v0.0.0-20260203074332-a2ec42276c5e
 	github.com/fluxcd/flux2/v2 v2.6.4
 	github.com/fluxcd/helm-controller/api v1.3.0
 	github.com/fluxcd/image-automation-controller/api v0.41.2
@@ -38,7 +38,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.35.1
 	k8s.io/apimachinery v0.35.1
 	k8s.io/cli-runtime v0.35.1
-	sigs.k8s.io/controller-runtime v0.22.5 // TODO(#248): upgrade to v0.23.1 after external-secrets v1.3 migration
+	sigs.k8s.io/controller-runtime v0.22.5
 	sigs.k8s.io/kustomize/api v0.21.1
 	sigs.k8s.io/yaml v1.6.0
 )
