@@ -12,13 +12,13 @@ go:
 # Infrastructure dependencies
 infrastructure:
   cert-manager:
-    # go.mod MUST have: github.com/cert-manager/cert-manager v1.16.5
-    current: "1.16.5"
+    # go.mod MUST have: github.com/cert-manager/cert-manager v1.19.4
+    current: "1.19.4"
     go_module: "github.com/cert-manager/cert-manager"
     # Kure generates YAML compatible with these deployed versions
-    supported_range: "1.14 - 1.16"
-    max_dependabot: "< 1.17"  # Dependabot ignore rule
-    notes: "1.17+ requires Go 1.25"
+    supported_range: "1.14 - 1.19"
+    max_dependabot: null  # No restriction needed
+    notes: "Stable v1 APIs, backward compatible"
 
   fluxcd:
     current: "2.6.4"
@@ -42,11 +42,11 @@ infrastructure:
     notes: "0.25+ requires Go 1.25"
 
   metallb:
-    current: "0.15.2"
+    current: "0.15.3"
     go_module: "go.universe.tf/metallb"
     supported_range: "0.14 - 0.15"
-    max_dependabot: "< 0.15.3"
-    notes: "0.15.3+ requires Go 1.25 and triggers k8s.io upgrade to 0.34+ (#169)"
+    max_dependabot: null  # No restriction needed
+    notes: "Stable v1beta1 APIs, patch release"
 
   external-secrets:
     current: "0.19.2"

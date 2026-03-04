@@ -13,7 +13,7 @@ replace (
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/cert-manager/cert-manager v1.16.5
+	github.com/cert-manager/cert-manager v1.19.4
 	github.com/controlplaneio-fluxcd/flux-operator v0.24.1
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/external-secrets/external-secrets v0.19.2
@@ -32,7 +32,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	go.universe.tf/metallb v0.15.2
+	go.universe.tf/metallb v0.15.3
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver v0.35.1
@@ -106,7 +106,7 @@ require (
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.32.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
@@ -120,7 +120,7 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
-	sigs.k8s.io/gateway-api v1.1.0 // indirect
+	sigs.k8s.io/gateway-api v1.4.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
