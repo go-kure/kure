@@ -190,7 +190,7 @@ func runClusters() error {
 
 // runClusterExample processes a single cluster configuration
 func runClusterExample(clusterFile string) error {
-	file, err := os.Open(clusterFile)
+	file, err := os.Open(filepath.Clean(clusterFile)) //nolint:gosec // G703: CLI tool reads user-specified file paths
 	if err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 		}
 
 		fp := filepath.Join(dir, entry.Name())
-		f, err := os.Open(fp)
+		f, err := os.Open(filepath.Clean(fp)) //nolint:gosec // G703: CLI tool reads user-specified file paths
 		if err != nil {
 			return err
 		}

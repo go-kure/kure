@@ -602,7 +602,7 @@ func (o *PatchOptions) runInteractive() error {
 	}
 
 	_, _ = fmt.Fprintf(o.IOStreams.Out, "=== Interactive Patch Mode ===\n")
-	_, _ = fmt.Fprintf(o.IOStreams.Out, "Loaded %d resources from %s\n", len(resources), o.BaseFile)
+	_, _ = fmt.Fprintf(o.IOStreams.Out, "Loaded %d resources from %s\n", len(resources), o.BaseFile) //nolint:gosec // G705: CLI output, not rendered in web context
 	_, _ = fmt.Fprintf(o.IOStreams.Out, "Type 'help' for available commands\n\n")
 
 	// This would implement the interactive loop similar to the existing main.go

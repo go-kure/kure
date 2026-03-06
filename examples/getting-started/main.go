@@ -263,7 +263,7 @@ func (c *WebAppConfig) Generate(app *stack.Application) ([]*client.Object, error
 // otherwise a temporary directory is created.
 func outputDirectory() (string, error) {
 	if dir := os.Getenv("OUT_DIR"); dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(filepath.Clean(dir), 0755); err != nil { //nolint:gosec // G703: CLI tool, output dir from env
 			return "", err
 		}
 		return dir, nil

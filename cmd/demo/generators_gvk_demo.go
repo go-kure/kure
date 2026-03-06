@@ -13,6 +13,8 @@ import (
 )
 
 // Example YAML configurations using GVK format
+//
+//nolint:gosec // G101: demo YAML constant, not real credentials
 const appWorkloadYAML = `
 apiVersion: generators.gokure.dev/v1alpha1
 kind: AppWorkload
