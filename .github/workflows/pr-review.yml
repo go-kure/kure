@@ -10,7 +10,7 @@
 # No API key secrets needed — ccproxy handles model authentication.
 #
 # Optional overrides (repository variables):
-#   PR_REVIEW_MODEL             - Model for review (default: gpt-5.3-codex)
+#   PR_REVIEW_MODEL             - Model for review (default: gpt-5.4)
 #   PR_REVIEW_MAX_DIFF_CHARS    - Max diff size in chars (default: 50000)
 #   PR_REVIEW_MAX_TOKENS        - Max response tokens (default: 1500)
 #   PR_REVIEW_CONTEXT           - Additional project context for system prompt
@@ -39,7 +39,7 @@ jobs:
 
     env:
       CCPROXY_URL: "http://openclaw-ccproxy.openclaw.svc:8000"
-      PR_REVIEW_MODEL: "gpt-5.3-codex"
+      PR_REVIEW_MODEL: "gpt-5.4"
       PR_REVIEW_MAX_DIFF_CHARS: "50000"
       PR_REVIEW_MAX_TOKENS: "1500"
       PR_REVIEW_CONTEXT: "Go library for programmatically building Kubernetes resources. Uses typed builders instead of templates. Part of the Wharf platform."
