@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-## [0.1.0-beta.4] - 2026-03-06
+## [0.1.0-beta.5] - 2026-03-06
 
 ### Added
 
@@ -93,6 +93,7 @@ All notable changes to this project will be documented in this file.
 - Correct yq pipe precedence in max_dependabot filter
 - Migrate cosign signing to v3 bundle format
 - Bump Go to 1.26.1 (security patch)
+- Remove output flag and use sigstore.json extension for cosign v3
 
 ### Performance
 
@@ -111,6 +112,7 @@ All notable changes to this project will be documented in this file.
 - V0.1.0-beta.1
 - V0.1.0-beta.2
 - V0.1.0-beta.3
+- V0.1.0-beta.4
 
 ## [0.1.0-beta.0] - 2026-02-17
 
