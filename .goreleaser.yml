@@ -64,14 +64,13 @@ sboms:
 # Sign checksums with cosign (v3 bundle format) for artifact verification
 signs:
   - cmd: cosign
-    signature: "${artifact}.bundle.json"
+    signature: "${artifact}.sigstore.json"
     args:
-      - sign-blob
+      - "sign-blob"
       - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
     artifacts: checksum
-    output: true
 
 release:
   github:
