@@ -3,7 +3,7 @@ package appworkload
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-kure/kure/internal/gvk"
+	"github.com/go-kure/kure/pkg/gvk"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/generators/appworkload/internal"

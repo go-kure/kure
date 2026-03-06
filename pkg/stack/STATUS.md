@@ -12,7 +12,7 @@
 - ✅ **GVK System**: Full Group/Version/Kind support for all types
 
 ### GVK Implementation
-- ✅ **Internal GVK Package** (`internal/gvk`)
+- ✅ **GVK Package** (`pkg/gvk`)
   - Generic registry with Go generics
   - Type-safe factory patterns
   - YAML unmarshaling with automatic type detection

@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/gvk"
 )
 
 // BundleConfig represents a versioned bundle configuration

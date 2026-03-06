@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-kure/kure/internal/gvk"
+	"github.com/go-kure/kure/pkg/gvk"
 )
 
 // TestConfig is a simple test type for parsing
