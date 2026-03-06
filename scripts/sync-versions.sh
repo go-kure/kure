@@ -120,9 +120,15 @@ validate_dependabot() {
     # For now, just check that key dependencies are present in ignore list
 
     local deps
-    deps=$(yq '.infrastructure | to_entries | .[] | select(.value.max_dependabot != null) | .key' "$VERSIONS_FILE")
+    deps=$(yq '.infrastructure | to_entries | .[] | select(.value.max_dependabot == null | not) | .key' "$VERSIONS_FILE") || true
+
+    if [[ -z "$deps" ]]; then
+        success "No max_dependabot constraints to validate"
+        return 0
+    fi
 
     while IFS= read -r dep; do
+        [[ -z "$dep" ]] && continue
         local go_module
         go_module=$(yq ".infrastructure.${dep}.go_module" "$VERSIONS_FILE")
         local max_version

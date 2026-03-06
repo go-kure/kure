@@ -24,7 +24,7 @@ infrastructure:
     current: "2.8.1"
     go_module: "github.com/fluxcd/flux2/v2"
     supported_range: "2.4 - 2.8"
-    max_dependabot: "< 2.9"
+    max_dependabot: null
     notes: |
       v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
       image-automation-controller promoted to v1.
@@ -37,7 +37,7 @@ infrastructure:
     current: "0.40.0"
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
     supported_range: "0.23 - 0.40"
-    max_dependabot: "< 0.41"
+    max_dependabot: null
     notes: "Upgraded with FluxCD 2.8 ecosystem."
 
   metallb:
@@ -61,7 +61,7 @@ infrastructure:
     current: "1.28.1"
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
     supported_range: "1.24 - 1.28"
-    max_dependabot: "< 1.29"
+    max_dependabot: null
     notes: |
       CloudNativePG operator for PostgreSQL on Kubernetes.
       Cluster CR (with managed roles), Database CR (postgresql.cnpg.io/v1),
@@ -76,7 +76,7 @@ infrastructure:
     current: "0.11.0"
     go_module: "github.com/cloudnative-pg/plugin-barman-cloud"
     supported_range: "0.9 - 0.11"
-    max_dependabot: "< 0.12"
+    max_dependabot: null
     notes: |
       Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
       Versioned independently from the CNPG operator.
@@ -86,14 +86,17 @@ infrastructure:
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.23"
     max_dependabot: null
-    notes: "Upgraded with FluxCD 2.8; external-secrets migration (#248) removed the v0.22.5 pin"
+    notes: "Upgraded with FluxCD 2.8 and external-secrets 1.3 migrations"
+    related_packages:
+      - "sigs.k8s.io/kustomize/api"
+      - "sigs.k8s.io/yaml"
 
   kubernetes:
     current: "0.35.1"
     go_module: "k8s.io/api"
     # What K8s cluster versions kure-generated YAML works with
-    supported_range: "1.28 - 1.35"
-    notes: "Generated YAML uses stable APIs compatible across this range"
+    supported_range: "1.33 - 1.35"
+    notes: "Go 1.26 baseline; generated YAML uses stable APIs compatible across this range"
     related_packages:
       - "k8s.io/apimachinery"
       - "k8s.io/apiextensions-apiserver"
