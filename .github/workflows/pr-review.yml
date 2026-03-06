@@ -253,7 +253,11 @@ jobs:
           else
             NOTICE="AI review updated — issues found. See the pinned review comment above for details."
           fi
-          gh pr comment "$PR_NUMBER" --body "$NOTICE"
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            -d "$(jq -n --arg body "$NOTICE" '{body: $body}')"
 
       - name: Run assessment
         if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm != 'true' && env.PR_REVIEW_ASSESS_ENABLED == 'true'
@@ -384,4 +388,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr comment "$PR_NUMBER" --body "Review assessment updated — see the pinned assessment comment above for details."
+          NOTICE="Review assessment updated — see the pinned assessment comment above for details."
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            -d "$(jq -n --arg body "$NOTICE" '{body: $body}')"
