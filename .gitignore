@@ -39,6 +39,7 @@ bin/
 
 # GoReleaser output
 dist/
+release-notes.md
 
 # Temporary test output
 **/temp/
