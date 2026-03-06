@@ -1,7 +1,6 @@
 package argocd
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -134,10 +133,10 @@ func (w *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack
 }
 
 // CreateLayoutWithResources creates a new layout that includes ArgoCD Applications.
-func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterface any) (any, error) {
+func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterface stack.LayoutRulesProvider) (stack.ManifestLayoutResult, error) {
 	rules, ok := rulesInterface.(layout.LayoutRules)
 	if !ok {
-		return nil, fmt.Errorf("rules must be of type layout.LayoutRules")
+		return nil, errors.New("rules must be of type layout.LayoutRules")
 	}
 	// Generate the base manifest layout
 	ml, err := layout.WalkCluster(c, rules)

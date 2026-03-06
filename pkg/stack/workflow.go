@@ -6,6 +6,23 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
+// LayoutRulesProvider is the interface for layout configuration passed to
+// CreateLayoutWithResources. The concrete implementation is layout.LayoutRules
+// from pkg/stack/layout. Defined here to avoid an import cycle between
+// pkg/stack and pkg/stack/layout.
+type LayoutRulesProvider interface {
+	Validate() error
+}
+
+// ManifestLayoutResult is the interface for layout results returned by
+// CreateLayoutWithResources. The concrete implementation is *layout.ManifestLayout
+// from pkg/stack/layout. Callers that need the full concrete type should
+// type-assert: ml, ok := result.(*layout.ManifestLayout).
+type ManifestLayoutResult interface {
+	WriteToDisk(basePath string) error
+	FullRepoPath() string
+}
+
 // Workflow defines the core interface for GitOps workflow implementations.
 // This interface provides a minimal abstraction for converting stack definitions
 // into GitOps-specific resources (Flux Kustomizations, ArgoCD Applications, etc.).
@@ -18,8 +35,9 @@ type Workflow interface {
 	// both the application manifests and the GitOps resources needed to
 	// deploy them. This combines manifest generation with GitOps resource
 	// generation in a single operation.
-	// The rules parameter is expected to be of type layout.LayoutRules
-	CreateLayoutWithResources(*Cluster, any) (any, error)
+	// The rules parameter must be a layout.LayoutRules value.
+	// The returned ManifestLayoutResult is a *layout.ManifestLayout.
+	CreateLayoutWithResources(*Cluster, LayoutRulesProvider) (ManifestLayoutResult, error)
 
 	// GenerateBootstrap creates bootstrap resources for initializing the
 	// GitOps system itself. This is used to set up the GitOps controller

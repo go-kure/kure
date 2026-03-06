@@ -342,20 +342,6 @@ func TestIntegrateWithLayout(t *testing.T) {
 	}
 }
 
-func TestCreateLayoutWithResources_InvalidRules(t *testing.T) {
-	engine := Engine()
-	cluster := &stack.Cluster{}
-
-	// Pass invalid rules type
-	result, err := engine.CreateLayoutWithResources(cluster, "invalid")
-	if err == nil {
-		t.Error("expected error for invalid rules type")
-	}
-	if result != nil {
-		t.Error("expected nil result for invalid rules")
-	}
-}
-
 func TestCreateLayoutWithResources_Success(t *testing.T) {
 	engine := Engine()
 
