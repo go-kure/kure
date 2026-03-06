@@ -1,6 +1,25 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-beta.3] - 2026-03-06
+
+### Added
+
+- Add CNPG Database CR builder
+- Add CNPG ObjectStore CR builder
+- Add CNPG ScheduledBackup plugin method and advanced knobs
+- Enable gosec linter with fixes for all violations
+- Add CNPG managed roles builder
+
+### Changed
+
+- Replace any with typed parameters in Workflow interface
+
+### Fixed
+
+- Align pr-review workflow with GitLab mr-review template
+- Correct yq pipe precedence in max_dependabot filter
+
 ## [0.1.0-beta.2] - 2026-03-06
 
 ### Added
@@ -85,6 +104,10 @@ All notable changes to this project will be documented in this file.
 ### Pr-review
 
 - Fix broken pipe and stale assessment comment
+
+### Release
+
+- V0.1.0-beta.2
 
 ## [0.1.0-beta.1] - 2026-02-17
 
