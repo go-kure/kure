@@ -230,35 +230,16 @@ jobs:
 
       - name: Post review comment
         if: steps.review.outcome == 'success'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: ai-review
-          path: /tmp/review_comment.md
-
-      - name: Clear stale assessment comment
-        if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm == 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: ai-review-assessment
-          delete: true
-
-      - name: Post review timeline notice
-        if: steps.review.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [ "${{ steps.review.outputs.is_lgtm }}" = "true" ]; then
-            NOTICE="AI review updated: **LGTM** — no issues found."
-          else
-            NOTICE="AI review updated — issues found. See the pinned review comment above for details."
-          fi
           curl -sf -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            -d "$(jq -n --arg body "$NOTICE" '{body: $body}')"
+            -d "$(jq -n --rawfile body /tmp/review_comment.md '{body: $body}')"
 
       - name: Run assessment
         if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm != 'true' && env.PR_REVIEW_ASSESS_ENABLED == 'true'
@@ -378,21 +359,13 @@ jobs:
 
       - name: Post assessment comment
         if: steps.assessment.outputs.has_comment == 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: ai-review-assessment
-          path: /tmp/assess_comment.md
-
-      - name: Post assessment timeline notice
-        if: steps.assessment.outputs.has_comment == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          NOTICE="Review assessment updated — see the pinned assessment comment above for details."
           curl -sf -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            -d "$(jq -n --arg body "$NOTICE" '{body: $body}')"
+            -d "$(jq -n --rawfile body /tmp/assess_comment.md '{body: $body}')"
