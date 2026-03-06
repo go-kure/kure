@@ -10,5 +10,5 @@ type NamespacedConfig = gvk.NamespacedType
 type MetadataConfig = gvk.MetadataType
 type Convertible = gvk.Convertible
 
-// BaseMetadata provides common metadata fields for generators
+// BaseMetadata provides common metadata fields for generators.
 type BaseMetadata = gvk.BaseMetadata
