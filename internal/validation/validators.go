@@ -225,6 +225,12 @@ func (v *Validator) ValidateExternalSecret(es *esv1beta1.ExternalSecret) error {
 	return v.validateNotNil(es, errors.ErrNilExternalSecret)
 }
 
+// CNPG Resources Validation
+
+func (v *Validator) ValidateScheduledBackup(sb *cnpgv1.ScheduledBackup) error {
+	return v.validateNotNil(sb, errors.ErrNilScheduledBackup)
+}
+
 // Compound validation methods for common patterns
 
 // ValidateDeploymentWithSpec validates both deployment and its core spec components

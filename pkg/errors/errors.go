@@ -100,6 +100,9 @@ var (
 	ErrNilSecretStore        = ResourceValidationError("SecretStore", "", "secretstore", "secret store cannot be nil", nil)
 	ErrNilClusterSecretStore = ResourceValidationError("ClusterSecretStore", "", "clustersecretstore", "cluster secret store cannot be nil", nil)
 	ErrNilExternalSecret     = ResourceValidationError("ExternalSecret", "", "externalsecret", "external secret cannot be nil", nil)
+
+	// CNPG resources
+	ErrNilScheduledBackup = ResourceValidationError("ScheduledBackup", "", "scheduledbackup", "scheduled backup cannot be nil", nil)
 )
 
 // Common file operation errors
