@@ -209,7 +209,7 @@ interval "500ms" is too short, minimum is 1s
 
 #### Shared GVK Infrastructure
 
-Create `internal/gvk` package with reusable components:
+Create `pkg/gvk` package with reusable components:
 
 ```go
 // Generic GVK representation
@@ -243,7 +243,7 @@ type VersionedType interface {
 #### Migration Plan
 
 **Phase 1: Create Shared Infrastructure**
-1. Extract generic GVK components to `internal/gvk`
+1. Extract generic GVK components to `pkg/gvk`
 2. Update generators to use shared infrastructure
 3. Add comprehensive tests
 
@@ -394,7 +394,7 @@ spec:
 
 ### Phase 1: Shared GVK Infrastructure ✅ COMPLETE
 
-Successfully created `internal/gvk` package with:
+Successfully created `pkg/gvk` package with:
 - Generic registry using Go generics
 - Type-safe factory patterns
 - YAML unmarshaling with automatic type detection
@@ -402,11 +402,11 @@ Successfully created `internal/gvk` package with:
 - Comprehensive test coverage
 
 **Files Created:**
-- `internal/gvk/types.go` - Core GVK types and interfaces
-- `internal/gvk/registry.go` - Generic registry implementation
-- `internal/gvk/wrapper.go` - TypedWrapper for YAML unmarshaling
-- `internal/gvk/parsing.go` - YAML parsing utilities
-- `internal/gvk/conversion.go` - Version conversion infrastructure
+- `pkg/gvk/types.go` - Core GVK types and interfaces
+- `pkg/gvk/registry.go` - Generic registry implementation
+- `pkg/gvk/wrapper.go` - TypedWrapper for YAML unmarshaling
+- `pkg/gvk/parsing.go` - YAML parsing utilities
+- `pkg/gvk/conversion.go` - Version conversion infrastructure
 
 ### Phase 2: Stack Struct GVK ✅ COMPLETE
 
@@ -430,7 +430,7 @@ Implemented versioned stack types in `pkg/stack/v1alpha1`:
 
 ### Phase 3: ApplicationConfig Refactoring ✅ COMPLETE
 
-- Refactored generators to use `internal/gvk` infrastructure
+- Refactored generators to use `pkg/gvk` infrastructure
 - Updated ApplicationWrapper to eliminate circular dependencies
 - Maintained full backward compatibility
 - All tests passing

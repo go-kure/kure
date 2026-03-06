@@ -4,10 +4,8 @@ import (
 	"github.com/go-kure/kure/pkg/gvk"
 )
 
-// Re-export GVK type for backward compatibility
+// Deprecated: Use [gvk.GVK] from pkg/gvk directly instead.
 type GVK = gvk.GVK
 
-// Re-export common functions for backward compatibility
-var (
-	ParseAPIVersion = gvk.ParseAPIVersion
-)
+// Deprecated: Use [gvk.ParseAPIVersion] from pkg/gvk directly instead.
+var ParseAPIVersion = gvk.ParseAPIVersion
