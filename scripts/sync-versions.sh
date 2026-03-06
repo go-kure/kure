@@ -120,7 +120,7 @@ validate_dependabot() {
     # For now, just check that key dependencies are present in ignore list
 
     local deps
-    deps=$(yq '.infrastructure | to_entries | .[] | select(.value.max_dependabot == null | not) | .key' "$VERSIONS_FILE") || true
+    deps=$(yq '.infrastructure | to_entries | .[] | select((.value.max_dependabot == null) | not) | .key' "$VERSIONS_FILE") || true
 
     if [[ -z "$deps" ]]; then
         success "No max_dependabot constraints to validate"
