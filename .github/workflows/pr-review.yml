@@ -83,6 +83,13 @@ jobs:
             echo "No ${PR_REVIEW_AGENTS_FILE:-AGENTS.md} found, proceeding without project context."
           fi
 
+          # --- Load project notes (.claude/CLAUDE.md) ---
+          PROJECT_CLAUDE_MD=""
+          if [ -f ".claude/CLAUDE.md" ]; then
+            PROJECT_CLAUDE_MD=$(cat ".claude/CLAUDE.md")
+            echo "Loaded .claude/CLAUDE.md ($(printf '%s' "$PROJECT_CLAUDE_MD" | wc -c) chars)."
+          fi
+
           # --- Fetch PR diff ---
           echo "Fetching PR diff for #${PR_NUMBER}..."
           DIFF=$(curl -sf \
@@ -116,6 +123,14 @@ jobs:
 
           SYSTEM_PROMPT=$(cat <<'PROMPT'
           You review GitHub pull requests for the Kure project (Go library for Kubernetes resource building).
+
+          ANTI-HALLUCINATION RULES:
+          - Only flag issues you can point to with a specific file and line from the diff.
+          - Do NOT flag standards violations unless the standard text appears in the PROJECT STANDARDS section below.
+          - Do NOT invent or assume coding standards — only cite rules explicitly provided.
+            If no PROJECT STANDARDS section is present, do not flag any standards violations.
+          - If unsure whether something is a real issue, skip it. Precision matters more than recall.
+          - Never reference documentation, files, or code not present in the diff or context provided.
 
           RULES:
           - Report ONLY: bugs, security issues, incorrect error handling, logic errors, standards violations.
@@ -152,6 +167,13 @@ jobs:
 
           PROJECT DOCUMENTATION (AGENTS.md):
           ${PROJECT_AGENTS}"
+          fi
+
+          if [ -n "$PROJECT_CLAUDE_MD" ]; then
+            SYSTEM_PROMPT="${SYSTEM_PROMPT}
+
+          PROJECT NOTES (.claude/CLAUDE.md):
+          ${PROJECT_CLAUDE_MD}"
           fi
 
           PAYLOAD=$(jq -n \
@@ -213,6 +235,7 @@ jobs:
           printf '%s' "$DIFF" > /tmp/pr_diff.txt
           printf '%s' "$PR_TITLE" > /tmp/pr_title.txt
           printf '%s' "$PROJECT_AGENTS" > /tmp/project_agents.txt
+          printf '%s' "$PROJECT_CLAUDE_MD" > /tmp/project_claude_md.txt
 
           # --- Build comment body ---
           {
@@ -253,6 +276,7 @@ jobs:
           DIFF=$(cat /tmp/pr_diff.txt)
           PR_TITLE=$(cat /tmp/pr_title.txt)
           PROJECT_AGENTS=$(cat /tmp/project_agents.txt)
+          PROJECT_CLAUDE_MD=$(cat /tmp/project_claude_md.txt)
 
           ASSESS_SYSTEM=$(cat <<'ASSESS_PROMPT'
           You fact-check AI-generated code reviews against the actual pull request diff
@@ -278,6 +302,12 @@ jobs:
 
           If a finding references code not present in the diff, flag it as a hallucination.
 
+          STANDARDS VERIFICATION:
+          When the reviewer claims a "standards violation," check whether the cited standard
+          actually appears in the PROJECT STANDARDS section below. If no PROJECT STANDARDS
+          are provided, or the cited rule does not appear in them, classify the finding as
+          FALSE POSITIVE with reason "cited standard not found in project standards."
+
           OUTPUT FORMAT:
           Start with: "### Assessment: N of M findings are actionable"
           Then a table:
@@ -296,6 +326,13 @@ jobs:
 
           PROJECT CONTEXT:
           ${PROJECT_AGENTS}"
+          fi
+
+          if [ -n "$PROJECT_CLAUDE_MD" ]; then
+            ASSESS_SYSTEM="${ASSESS_SYSTEM}
+
+          PROJECT NOTES (.claude/CLAUDE.md):
+          ${PROJECT_CLAUDE_MD}"
           fi
 
           ASSESS_PAYLOAD=$(jq -n \
