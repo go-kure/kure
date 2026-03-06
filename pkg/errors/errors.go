@@ -92,6 +92,10 @@ var (
 	ErrNilClusterIssuer = ResourceValidationError("ClusterIssuer", "", "clusterissuer", "cluster issuer cannot be nil", nil)
 	ErrNilACMEIssuer    = ResourceValidationError("ACMEIssuer", "", "acmeissuer", "acme issuer cannot be nil", nil)
 
+	// CNPG resources
+	ErrNilDatabase    = ResourceValidationError("Database", "", "database", "database cannot be nil", nil)
+	ErrNilObjectStore = ResourceValidationError("ObjectStore", "", "objectstore", "object store cannot be nil", nil)
+
 	// external-secrets resources
 	ErrNilSecretStore        = ResourceValidationError("SecretStore", "", "secretstore", "secret store cannot be nil", nil)
 	ErrNilClusterSecretStore = ResourceValidationError("ClusterSecretStore", "", "clustersecretstore", "cluster secret store cannot be nil", nil)
