@@ -57,6 +57,29 @@ infrastructure:
       No semver tags for apis submodule — use pseudo-versions pinned to release commits.
       v1.3.2+ commit: 31b0c7c3734255a92dfe5cf9e1e204de127eb24c (includes controller-runtime v0.23.1 compat)
 
+  cnpg:
+    current: "1.28.1"
+    go_module: "github.com/cloudnative-pg/cloudnative-pg"
+    supported_range: "1.24 - 1.28"
+    max_dependabot: "< 1.29"
+    notes: |
+      CloudNativePG operator for PostgreSQL on Kubernetes.
+      Database CR (postgresql.cnpg.io/v1) and ObjectStore CR (barmancloud.cnpg.io/v1).
+      ObjectStore lives in a separate module (plugin-barman-cloud).
+    related_packages:
+      - "github.com/cloudnative-pg/plugin-barman-cloud"
+      - "github.com/cloudnative-pg/barman-cloud"
+      - "github.com/cloudnative-pg/machinery"
+
+  cnpg-barman-cloud:
+    current: "0.11.0"
+    go_module: "github.com/cloudnative-pg/plugin-barman-cloud"
+    supported_range: "0.9 - 0.11"
+    max_dependabot: "< 0.12"
+    notes: |
+      Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
+      Versioned independently from the CNPG operator.
+
   controller-runtime:
     current: "0.23.3"
     go_module: "sigs.k8s.io/controller-runtime"
