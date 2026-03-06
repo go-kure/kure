@@ -10,7 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/go-kure/kure/internal/kubernetes"
+	intkubernetes "github.com/go-kure/kure/internal/kubernetes"
+	"github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 
@@ -421,7 +422,7 @@ spec:
 // Test kubernetes internal API usage
 func TestKubernetesInternalAPIs(t *testing.T) {
 	// Test namespace creation
-	ns := kubernetes.CreateNamespace("test-ns")
+	ns := intkubernetes.CreateNamespace("test-ns")
 	if ns == nil {
 		t.Fatal("CreateNamespace returned nil")
 	}
@@ -430,7 +431,7 @@ func TestKubernetesInternalAPIs(t *testing.T) {
 	}
 
 	// Test label addition
-	kubernetes.AddNamespaceLabel(ns, "env", "test")
+	intkubernetes.AddNamespaceLabel(ns, "env", "test")
 	if ns.Labels["env"] != "test" {
 		t.Error("Label was not added correctly")
 	}
@@ -445,20 +446,20 @@ func TestKubernetesInternalAPIs(t *testing.T) {
 	}
 
 	// Test secret creation
-	secret := kubernetes.CreateSecret("test-secret", "default")
+	secret := intkubernetes.CreateSecret("test-secret", "default")
 	if secret == nil {
 		t.Fatal("CreateSecret returned nil")
 	}
-	if err := kubernetes.AddSecretData(secret, "key", []byte("value")); err != nil {
+	if err := intkubernetes.AddSecretData(secret, "key", []byte("value")); err != nil {
 		t.Errorf("AddSecretData() error = %v", err)
 	}
 
 	// Test configmap creation
-	cm := kubernetes.CreateConfigMap("test-config", "default")
+	cm := intkubernetes.CreateConfigMap("test-config", "default")
 	if cm == nil {
 		t.Fatal("CreateConfigMap returned nil")
 	}
-	if err := kubernetes.AddConfigMapData(cm, "key", "value"); err != nil {
+	if err := intkubernetes.AddConfigMapData(cm, "key", "value"); err != nil {
 		t.Errorf("AddConfigMapData() error = %v", err)
 	}
 }

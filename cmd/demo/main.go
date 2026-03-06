@@ -15,8 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/printers"
 
-	"github.com/go-kure/kure/internal/kubernetes"
+	intkubernetes "github.com/go-kure/kure/internal/kubernetes"
 	kio "github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/patch"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -72,17 +73,17 @@ func runInternals() error {
 	y := printers.YAMLPrinter{}
 
 	// Create a few example resources to demonstrate the internal APIs
-	ns := kubernetes.CreateNamespace("demo")
-	kubernetes.AddNamespaceLabel(ns, "env", "demo")
+	ns := intkubernetes.CreateNamespace("demo")
+	intkubernetes.AddNamespaceLabel(ns, "env", "demo")
 
 	sa := kubernetes.CreateServiceAccount("demo-sa", "demo")
 	logError("add serviceaccount secret", kubernetes.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"}))
 
-	secret := kubernetes.CreateSecret("demo-secret", "demo")
-	logError("add secret data", kubernetes.AddSecretData(secret, "cert", []byte("data")))
+	secret := intkubernetes.CreateSecret("demo-secret", "demo")
+	logError("add secret data", intkubernetes.AddSecretData(secret, "cert", []byte("data")))
 
-	cm := kubernetes.CreateConfigMap("demo-config", "demo")
-	logError("add configmap data", kubernetes.AddConfigMapData(cm, "foo", "bar"))
+	cm := intkubernetes.CreateConfigMap("demo-config", "demo")
+	logError("add configmap data", intkubernetes.AddConfigMapData(cm, "foo", "bar"))
 
 	// Print a few examples
 	objects := []runtime.Object{ns, sa, secret, cm}

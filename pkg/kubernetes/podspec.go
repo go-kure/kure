@@ -3,7 +3,7 @@ package kubernetes
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/go-kure/kure/internal/validation"
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // CreatePodSpec returns a PodSpec initialized with sensible defaults.
@@ -26,12 +26,11 @@ func CreatePodSpec() *corev1.PodSpec {
 
 // AddPodSpecContainer appends a container to the PodSpec.
 func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
-	if err := validator.ValidateContainer(container); err != nil {
-		return err
+	if container == nil {
+		return errors.ErrNilContainer
 	}
 	spec.Containers = append(spec.Containers, *container)
 	return nil
@@ -39,12 +38,11 @@ func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container) erro
 
 // AddPodSpecInitContainer appends an init container to the PodSpec.
 func AddPodSpecInitContainer(spec *corev1.PodSpec, container *corev1.Container) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
-	if err := validator.ValidateInitContainer(container); err != nil {
-		return err
+	if container == nil {
+		return errors.ErrNilInitContainer
 	}
 	spec.InitContainers = append(spec.InitContainers, *container)
 	return nil
@@ -52,12 +50,11 @@ func AddPodSpecInitContainer(spec *corev1.PodSpec, container *corev1.Container) 
 
 // AddPodSpecEphemeralContainer appends an ephemeral container to the PodSpec.
 func AddPodSpecEphemeralContainer(spec *corev1.PodSpec, container *corev1.EphemeralContainer) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
-	if err := validator.ValidateEphemeralContainer(container); err != nil {
-		return err
+	if container == nil {
+		return errors.ErrNilEphemeralContainer
 	}
 	spec.EphemeralContainers = append(spec.EphemeralContainers, *container)
 	return nil
@@ -65,12 +62,11 @@ func AddPodSpecEphemeralContainer(spec *corev1.PodSpec, container *corev1.Epheme
 
 // AddPodSpecVolume appends a volume to the PodSpec.
 func AddPodSpecVolume(spec *corev1.PodSpec, volume *corev1.Volume) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
-	if err := validator.ValidateVolume(volume); err != nil {
-		return err
+	if volume == nil {
+		return errors.ErrNilVolume
 	}
 	spec.Volumes = append(spec.Volumes, *volume)
 	return nil
@@ -78,12 +74,11 @@ func AddPodSpecVolume(spec *corev1.PodSpec, volume *corev1.Volume) error {
 
 // AddPodSpecImagePullSecret appends an image pull secret to the PodSpec.
 func AddPodSpecImagePullSecret(spec *corev1.PodSpec, secret *corev1.LocalObjectReference) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
-	if err := validator.ValidateImagePullSecret(secret); err != nil {
-		return err
+	if secret == nil {
+		return errors.ErrNilImagePullSecret
 	}
 	spec.ImagePullSecrets = append(spec.ImagePullSecrets, *secret)
 	return nil
@@ -91,12 +86,11 @@ func AddPodSpecImagePullSecret(spec *corev1.PodSpec, secret *corev1.LocalObjectR
 
 // AddPodSpecToleration appends a toleration to the PodSpec.
 func AddPodSpecToleration(spec *corev1.PodSpec, toleration *corev1.Toleration) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
-	if err := validator.ValidateToleration(toleration); err != nil {
-		return err
+	if toleration == nil {
+		return errors.ErrNilToleration
 	}
 	spec.Tolerations = append(spec.Tolerations, *toleration)
 	return nil
@@ -104,9 +98,8 @@ func AddPodSpecToleration(spec *corev1.PodSpec, toleration *corev1.Toleration) e
 
 // AddPodSpecTopologySpreadConstraints appends a topology spread constraint if provided.
 func AddPodSpecTopologySpreadConstraints(spec *corev1.PodSpec, constraint *corev1.TopologySpreadConstraint) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	if constraint == nil {
 		return nil
@@ -117,9 +110,8 @@ func AddPodSpecTopologySpreadConstraints(spec *corev1.PodSpec, constraint *corev
 
 // SetPodSpecServiceAccountName sets the service account name.
 func SetPodSpecServiceAccountName(spec *corev1.PodSpec, name string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.ServiceAccountName = name
 	return nil
@@ -127,9 +119,8 @@ func SetPodSpecServiceAccountName(spec *corev1.PodSpec, name string) error {
 
 // SetPodSpecSecurityContext sets the security context for the PodSpec.
 func SetPodSpecSecurityContext(spec *corev1.PodSpec, sc *corev1.PodSecurityContext) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.SecurityContext = sc
 	return nil
@@ -137,9 +128,8 @@ func SetPodSpecSecurityContext(spec *corev1.PodSpec, sc *corev1.PodSecurityConte
 
 // SetPodSpecAffinity assigns affinity rules to the PodSpec.
 func SetPodSpecAffinity(spec *corev1.PodSpec, aff *corev1.Affinity) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.Affinity = aff
 	return nil
@@ -147,9 +137,8 @@ func SetPodSpecAffinity(spec *corev1.PodSpec, aff *corev1.Affinity) error {
 
 // SetPodSpecNodeSelector sets the node selector map.
 func SetPodSpecNodeSelector(spec *corev1.PodSpec, selector map[string]string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.NodeSelector = selector
 	return nil
@@ -157,9 +146,8 @@ func SetPodSpecNodeSelector(spec *corev1.PodSpec, selector map[string]string) er
 
 // SetPodSpecPriorityClassName sets the priority class name.
 func SetPodSpecPriorityClassName(spec *corev1.PodSpec, class string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.PriorityClassName = class
 	return nil
@@ -167,9 +155,8 @@ func SetPodSpecPriorityClassName(spec *corev1.PodSpec, class string) error {
 
 // SetPodSpecHostNetwork configures host networking.
 func SetPodSpecHostNetwork(spec *corev1.PodSpec, hostNetwork bool) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.HostNetwork = hostNetwork
 	return nil
@@ -177,9 +164,8 @@ func SetPodSpecHostNetwork(spec *corev1.PodSpec, hostNetwork bool) error {
 
 // SetPodSpecHostPID configures host PID namespace usage.
 func SetPodSpecHostPID(spec *corev1.PodSpec, hostPID bool) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.HostPID = hostPID
 	return nil
@@ -187,9 +173,8 @@ func SetPodSpecHostPID(spec *corev1.PodSpec, hostPID bool) error {
 
 // SetPodSpecHostIPC configures host IPC namespace usage.
 func SetPodSpecHostIPC(spec *corev1.PodSpec, hostIPC bool) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.HostIPC = hostIPC
 	return nil
@@ -197,9 +182,8 @@ func SetPodSpecHostIPC(spec *corev1.PodSpec, hostIPC bool) error {
 
 // SetPodSpecDNSPolicy sets the DNS policy.
 func SetPodSpecDNSPolicy(spec *corev1.PodSpec, policy corev1.DNSPolicy) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.DNSPolicy = policy
 	return nil
@@ -207,9 +191,8 @@ func SetPodSpecDNSPolicy(spec *corev1.PodSpec, policy corev1.DNSPolicy) error {
 
 // SetPodSpecDNSConfig sets the DNS config.
 func SetPodSpecDNSConfig(spec *corev1.PodSpec, cfg *corev1.PodDNSConfig) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.DNSConfig = cfg
 	return nil
@@ -217,9 +200,8 @@ func SetPodSpecDNSConfig(spec *corev1.PodSpec, cfg *corev1.PodDNSConfig) error {
 
 // SetPodSpecHostname sets the hostname.
 func SetPodSpecHostname(spec *corev1.PodSpec, hostname string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.Hostname = hostname
 	return nil
@@ -227,9 +209,8 @@ func SetPodSpecHostname(spec *corev1.PodSpec, hostname string) error {
 
 // SetPodSpecSubdomain sets the subdomain.
 func SetPodSpecSubdomain(spec *corev1.PodSpec, subdomain string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.Subdomain = subdomain
 	return nil
@@ -237,9 +218,8 @@ func SetPodSpecSubdomain(spec *corev1.PodSpec, subdomain string) error {
 
 // SetPodSpecRestartPolicy sets the restart policy.
 func SetPodSpecRestartPolicy(spec *corev1.PodSpec, policy corev1.RestartPolicy) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.RestartPolicy = policy
 	return nil
@@ -247,9 +227,8 @@ func SetPodSpecRestartPolicy(spec *corev1.PodSpec, policy corev1.RestartPolicy) 
 
 // SetPodSpecTerminationGracePeriod sets the termination grace period seconds.
 func SetPodSpecTerminationGracePeriod(spec *corev1.PodSpec, secs int64) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	if spec.TerminationGracePeriodSeconds == nil {
 		spec.TerminationGracePeriodSeconds = new(int64)
@@ -260,9 +239,8 @@ func SetPodSpecTerminationGracePeriod(spec *corev1.PodSpec, secs int64) error {
 
 // SetPodSpecSchedulerName sets the scheduler name.
 func SetPodSpecSchedulerName(spec *corev1.PodSpec, scheduler string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidatePodSpec(spec); err != nil {
-		return err
+	if spec == nil {
+		return errors.ErrNilPodSpec
 	}
 	spec.SchedulerName = scheduler
 	return nil

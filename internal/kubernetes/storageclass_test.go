@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestCreateStorageClass(t *testing.T) {
@@ -112,7 +113,7 @@ func TestStorageClassFunctions(t *testing.T) {
 		t.Errorf("topologies not set")
 	}
 
-	pvc := CreatePersistentVolumeClaim("pvc", "ns")
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "pvc", Namespace: "ns"}}
 	SetPVCStorageClass(pvc, sc)
 	if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != sc.Name {
 		t.Errorf("pvc storage class not set")
@@ -146,7 +147,7 @@ func TestStorageClassNilMapGuards(t *testing.T) {
 	})
 
 	t.Run("SetPVCStorageClass/nil-sc", func(t *testing.T) {
-		pvc := CreatePersistentVolumeClaim("pvc", "ns")
+		pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "pvc", Namespace: "ns"}}
 		SetPVCStorageClass(pvc, nil)
 		if pvc.Spec.StorageClassName != nil {
 			t.Errorf("expected storage class name to remain nil when sc is nil")
