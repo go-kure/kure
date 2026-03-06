@@ -61,16 +61,13 @@ sboms:
     documents:
       - "${artifact}.sbom.json"
 
-# Sign checksums with cosign for artifact verification
+# Sign checksums with cosign (v3 bundle format) for artifact verification
 signs:
   - cmd: cosign
-    env:
-      - COSIGN_EXPERIMENTAL=1
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.bundle.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
     artifacts: checksum
