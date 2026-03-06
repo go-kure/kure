@@ -1,10 +1,9 @@
 package fluxcd
 
 import (
-	"fmt"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -79,10 +78,10 @@ func (we *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stac
 }
 
 // CreateLayoutWithResources creates a new layout that includes Flux resources.
-func (we *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules any) (any, error) {
+func (we *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rules stack.LayoutRulesProvider) (stack.ManifestLayoutResult, error) {
 	layoutRules, ok := rules.(layout.LayoutRules)
 	if !ok {
-		return nil, fmt.Errorf("rules must be of type layout.LayoutRules")
+		return nil, errors.New("rules must be of type layout.LayoutRules")
 	}
 	return we.LayoutInteg.CreateLayoutWithResources(c, layoutRules)
 }
