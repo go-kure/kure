@@ -226,9 +226,9 @@ A PAT is required because pushes made with `GITHUB_TOKEN` do not trigger subsequ
 
 Uses a two-pass AI review system via ccproxy (ported from the GitLab `mr-review.yml` template):
 
-1. **Pass 1 — Review:** Sends the PR diff + project context (`AGENTS.md`) to the review model (default: `gpt-5.3-codex`). The model returns up to 3 findings ranked by severity in a structured table. Posted as a sticky PR comment.
+1. **Pass 1 — Review:** Sends the PR diff + project context (`AGENTS.md`, `.claude/CLAUDE.md`) to the review model (default: `gpt-5.3-codex`). Anti-hallucination rules prevent the model from inventing standards or referencing code not in the diff. The model returns up to 3 findings ranked by severity in a structured table. Posted as a PR comment.
 
-2. **Pass 2 — Assessment:** If the review found issues (not LGTM), sends the review + diff to an assessment model (default: `claude-sonnet-4-6`) which fact-checks each finding against the actual diff. Catches hallucinations and false positives. Posted as a second sticky PR comment.
+2. **Pass 2 — Assessment:** If the review found issues (not LGTM), sends the review + diff to an assessment model (default: `claude-sonnet-4-6`) which fact-checks each finding against the actual diff and project context. Includes standards verification — claims about "standards violations" are checked against actually-provided standards. Catches hallucinations and false positives. Posted as a second PR comment.
 
 ### Requirements
 
