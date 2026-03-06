@@ -6,7 +6,7 @@
 
 # Go version (mise.toml is authoritative for tooling)
 go:
-  current: "1.26.0"
+  current: "1.26.1"
   # mise.toml is the source of truth for Go version
 
 # Infrastructure dependencies

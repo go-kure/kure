@@ -101,7 +101,7 @@ PR-only jobs (parallel, no blocking):
 
 ### Configuration
 
-- Go Version: `1.26.0`
+- Go Version: `1.26.1`
 - Golangci-lint Version: `v2.10.1`
 - Coverage Threshold: `80%`
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`
@@ -137,7 +137,7 @@ PR-only jobs (parallel, no blocking):
 
 ### Configuration
 
-- Go Version: `1.26.0`
+- Go Version: `1.26.1`
 - Build Tool: GoReleaser v2
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`, `windows/arm64`
 - Tag Format: `^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$`
