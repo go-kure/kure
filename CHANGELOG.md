@@ -1,6 +1,91 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-beta.2] - 2026-03-06
+
+### Added
+
+- Add HelmRelease targetNamespace and releaseName fields
+- Expose valuesFrom in FluxHelm ReleaseConfig
+- Add PostRenderer Kustomize builder helpers
+- Add CRD lifecycle policy fields to ReleaseConfig
+- Add chartRef support to FluxHelm generator (#267)
+- Allow SourceRefName override in FluxHelm generator
+- Support prune protection annotation on generated resources
+- Add DriftDetection builder helpers for HelmRelease
+- Add HealthChecks field to Bundle
+- Add mise release task with dry-run trigger wrapper
+- Promote internal/gvk to pkg/gvk
+- Promote 7 internal K8s builders to public API
+
+### Build
+
+- Add gen-versions-toml.sh for Hugo config overlay
+- Use versioned config overlay in docs-build
+- Rework deploy-docs for multi-version deployment
+- Trigger versioned docs deployment on stable release
+- Add manage-docs admin workflow
+- Migrate golangci-lint from v1 to v2
+- Upgrade to Go 1.26.0
+- Remove accidentally committed temp file
+- Upgrade k8s.io dependencies to v0.35.1 (Kubernetes 1.35)
+- Update versions.yaml for k8s 1.35 upgrade
+- Remove broken k8s-compat CI job
+- Upgrade cert-manager to v1.19.4 and metallb to v0.15.3
+- Upgrade external-secrets to v1.3.2 (module path migration)
+
+### Dependencies
+
+- Upgrade FluxCD ecosystem to 2.8
+- Bump sigs.k8s.io/controller-runtime
+
+### Documentation
+
+- Add version-aware banner and header display
+- Add pkg.go.dev reference links to package READMEs
+- Document versioned docs system in github-workflows.md
+- Add 2026-02-26 deep code review
+- Add action plan, issue specs, and implementation design
+- Clarify AGENTS.md fmt.Errorf guidance
+- Add example_test.go for CRD builder packages
+- Document deepCopyBundle shallow copy behavior
+- Document Cluster getter/setter duality
+- Add getting-started example for Cluster-to-Disk pipeline
+
+### Fixed
+
+- Resolve 30+ broken links on gokure.dev
+- Use json.Marshal for HelmRelease values encoding
+- Exclude docs/development/ from unmapped docs check
+- Replace gh CLI with curl in pr-review workflow
+- Address AI review findings on pr-review workflow
+- Enforce ChartRef validation and mutual exclusivity
+- Check remote tags before releasing
+- Use pkg/errors and pkg/logger in getting-started example
+- Use ToClientObject helper instead of manual pointer-to-interface
+- Isolate TestEnsureConfigDir from host environment
+- Harden release-trigger.sh remote detection and hint output
+- Remove curl|sh auto-install from lint-fast target
+- Strip v prefix from pseudo-version in versions.yaml
+- Add deprecation markers and update DESIGN.md references
+- Add timeline notification comments for PR review updates
+- Replace gh CLI with curl for timeline notice comments
+- Add Content-Type header to timeline notice API calls
+- Replace sticky comments with regular PR comments
+- Sync controller-runtime version to 0.23.3 in versions.yaml
+
+### Performance
+
+- Add lint-fast Makefile target
+
+### Testing
+
+- Improve test coverage from 78% to 88%
+
+### Pr-review
+
+- Fix broken pipe and stale assessment comment
+
 ## [0.1.0-beta.1] - 2026-02-17
 
 ### Added
@@ -18,6 +103,10 @@ All notable changes to this project will be documented in this file.
 - Guard unstructured fallback from list decode panics
 - Release read lock before invoking converter callback
 - Fix CI lint baseline and resolve pre-existing lint issues
+
+### Release
+
+- V0.1.0-beta.1
 
 ## [0.1.0-beta.0] - 2026-02-17
 
