@@ -14,7 +14,9 @@ replace (
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cert-manager/cert-manager v1.19.4
+	github.com/cloudnative-pg/barman-cloud v0.4.1-0.20260108104508-ced266c145f5
 	github.com/cloudnative-pg/cloudnative-pg v1.28.1
+	github.com/cloudnative-pg/machinery v0.3.3
 	github.com/cloudnative-pg/plugin-barman-cloud v0.11.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.40.0
 	github.com/evanphx/json-patch/v5 v5.9.11
@@ -51,9 +53,7 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cloudnative-pg/barman-cloud v0.4.1-0.20260108104508-ced266c145f5 // indirect
 	github.com/cloudnative-pg/cnpg-i v0.3.1 // indirect
-	github.com/cloudnative-pg/machinery v0.3.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

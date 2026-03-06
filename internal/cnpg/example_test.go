@@ -3,7 +3,10 @@ package cnpg_test
 import (
 	"fmt"
 
+	barmanapi "github.com/cloudnative-pg/barman-cloud/pkg/api"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
+	machineryapi "github.com/cloudnative-pg/machinery/pkg/api"
+	barmanv1 "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/go-kure/kure/internal/cnpg"
@@ -56,4 +59,57 @@ func Example_composeDatabaseWithExtensions() {
 	// Extensions: 2
 	// Ext[0]: pg_stat_statements
 	// Ext[1]: pgcrypto
+}
+
+// This example demonstrates creating a CNPG ObjectStore CR with S3
+// credentials, WAL compression, and retention policy — the standard
+// pattern for configuring PostgreSQL backups to object storage.
+func Example_composeObjectStoreWithS3() {
+	os := cnpg.CreateObjectStore("pg-backup", "postgres-system", barmanv1.ObjectStoreSpec{
+		Configuration: barmanapi.BarmanObjectStoreConfiguration{
+			DestinationPath: "s3://pg-backups/production",
+		},
+	})
+
+	_ = cnpg.SetObjectStoreEndpointURL(os, "https://s3.eu-west-1.amazonaws.com")
+	_ = cnpg.SetObjectStoreS3Credentials(os, &barmanapi.S3Credentials{
+		AccessKeyIDReference: &machineryapi.SecretKeySelector{
+			LocalObjectReference: machineryapi.LocalObjectReference{Name: "aws-creds"},
+			Key:                  "ACCESS_KEY_ID",
+		},
+		SecretAccessKeyReference: &machineryapi.SecretKeySelector{
+			LocalObjectReference: machineryapi.LocalObjectReference{Name: "aws-creds"},
+			Key:                  "SECRET_ACCESS_KEY",
+		},
+	})
+	_ = cnpg.SetObjectStoreRetentionPolicy(os, "60d")
+	_ = cnpg.SetObjectStoreWalConfig(os, &barmanapi.WalBackupConfiguration{
+		Compression: "gzip",
+		MaxParallel: 4,
+	})
+	_ = cnpg.AddObjectStoreEnvVar(os, corev1.EnvVar{
+		Name:  "AWS_REGION",
+		Value: "eu-west-1",
+	})
+	_ = cnpg.AddObjectStoreLabel(os, "backup-target", "production")
+
+	fmt.Println("Name:", os.Name)
+	fmt.Println("Kind:", os.Kind)
+	fmt.Println("APIVersion:", os.APIVersion)
+	fmt.Println("DestinationPath:", os.Spec.Configuration.DestinationPath)
+	fmt.Println("EndpointURL:", os.Spec.Configuration.EndpointURL)
+	fmt.Println("RetentionPolicy:", os.Spec.RetentionPolicy)
+	fmt.Println("WAL Compression:", os.Spec.Configuration.Wal.Compression)
+	fmt.Println("WAL MaxParallel:", os.Spec.Configuration.Wal.MaxParallel)
+	fmt.Println("Env:", os.Spec.InstanceSidecarConfiguration.Env[0].Name)
+	// Output:
+	// Name: pg-backup
+	// Kind: ObjectStore
+	// APIVersion: barmancloud.cnpg.io/v1
+	// DestinationPath: s3://pg-backups/production
+	// EndpointURL: https://s3.eu-west-1.amazonaws.com
+	// RetentionPolicy: 60d
+	// WAL Compression: gzip
+	// WAL MaxParallel: 4
+	// Env: AWS_REGION
 }
