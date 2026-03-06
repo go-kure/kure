@@ -93,16 +93,15 @@ var (
 	ErrNilACMEIssuer    = ResourceValidationError("ACMEIssuer", "", "acmeissuer", "acme issuer cannot be nil", nil)
 
 	// CNPG resources
-	ErrNilDatabase    = ResourceValidationError("Database", "", "database", "database cannot be nil", nil)
-	ErrNilObjectStore = ResourceValidationError("ObjectStore", "", "objectstore", "object store cannot be nil", nil)
+	ErrNilDatabase        = ResourceValidationError("Database", "", "database", "database cannot be nil", nil)
+	ErrNilObjectStore     = ResourceValidationError("ObjectStore", "", "objectstore", "object store cannot be nil", nil)
+	ErrNilCluster         = ResourceValidationError("Cluster", "", "cluster", "cluster cannot be nil", nil)
+	ErrNilScheduledBackup = ResourceValidationError("ScheduledBackup", "", "scheduledbackup", "scheduled backup cannot be nil", nil)
 
 	// external-secrets resources
 	ErrNilSecretStore        = ResourceValidationError("SecretStore", "", "secretstore", "secret store cannot be nil", nil)
 	ErrNilClusterSecretStore = ResourceValidationError("ClusterSecretStore", "", "clustersecretstore", "cluster secret store cannot be nil", nil)
 	ErrNilExternalSecret     = ResourceValidationError("ExternalSecret", "", "externalsecret", "external secret cannot be nil", nil)
-
-	// CNPG resources
-	ErrNilScheduledBackup = ResourceValidationError("ScheduledBackup", "", "scheduledbackup", "scheduled backup cannot be nil", nil)
 )
 
 // Common file operation errors

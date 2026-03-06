@@ -211,6 +211,14 @@ func (v *Validator) ValidateObjectStore(os *barmanv1.ObjectStore) error {
 	return v.validateNotNil(os, errors.ErrNilObjectStore)
 }
 
+func (v *Validator) ValidateCluster(c *cnpgv1.Cluster) error {
+	return v.validateNotNil(c, errors.ErrNilCluster)
+}
+
+func (v *Validator) ValidateScheduledBackup(sb *cnpgv1.ScheduledBackup) error {
+	return v.validateNotNil(sb, errors.ErrNilScheduledBackup)
+}
+
 // external-secrets Resources Validation
 
 func (v *Validator) ValidateSecretStore(ss *esv1beta1.SecretStore) error {
@@ -223,12 +231,6 @@ func (v *Validator) ValidateClusterSecretStore(css *esv1beta1.ClusterSecretStore
 
 func (v *Validator) ValidateExternalSecret(es *esv1beta1.ExternalSecret) error {
 	return v.validateNotNil(es, errors.ErrNilExternalSecret)
-}
-
-// CNPG Resources Validation
-
-func (v *Validator) ValidateScheduledBackup(sb *cnpgv1.ScheduledBackup) error {
-	return v.validateNotNil(sb, errors.ErrNilScheduledBackup)
 }
 
 // Compound validation methods for common patterns
