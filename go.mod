@@ -1,6 +1,6 @@
 module github.com/go-kure/kure
 
-go 1.26.0
+go 1.26.1
 
 // Replace directives keep all k8s.io packages in lockstep at v0.35.1 (Kubernetes 1.35).
 replace (
