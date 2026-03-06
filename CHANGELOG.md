@@ -1,29 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-## [0.1.0-beta.3] - 2026-03-06
+## [0.1.0-beta.4] - 2026-03-06
 
 ### Added
 
-- Add CNPG Database CR builder
-- Add CNPG ObjectStore CR builder
-- Add CNPG ScheduledBackup plugin method and advanced knobs
-- Enable gosec linter with fixes for all violations
-- Add CNPG managed roles builder
-
-### Changed
-
-- Replace any with typed parameters in Workflow interface
-
-### Fixed
-
-- Align pr-review workflow with GitLab mr-review template
-- Correct yq pipe precedence in max_dependabot filter
-
-## [0.1.0-beta.2] - 2026-03-06
-
-### Added
-
+- Add strategic merge patch support with namespace-aware target resolution
 - Add HelmRelease targetNamespace and releaseName fields
 - Expose valuesFrom in FluxHelm ReleaseConfig
 - Add PostRenderer Kustomize builder helpers
@@ -36,6 +18,11 @@ All notable changes to this project will be documented in this file.
 - Add mise release task with dry-run trigger wrapper
 - Promote internal/gvk to pkg/gvk
 - Promote 7 internal K8s builders to public API
+- Add CNPG Database CR builder
+- Add CNPG ObjectStore CR builder
+- Add CNPG ScheduledBackup plugin method and advanced knobs
+- Enable gosec linter with fixes for all violations
+- Add CNPG managed roles builder
 
 ### Build
 
@@ -53,6 +40,10 @@ All notable changes to this project will be documented in this file.
 - Upgrade cert-manager to v1.19.4 and metallb to v0.15.3
 - Upgrade external-secrets to v1.3.2 (module path migration)
 
+### Changed
+
+- Replace any with typed parameters in Workflow interface
+
 ### Dependencies
 
 - Upgrade FluxCD ecosystem to 2.8
@@ -60,6 +51,7 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
+- Update branch protection docs to reflect ruleset migration
 - Add version-aware banner and header display
 - Add pkg.go.dev reference links to package READMEs
 - Document versioned docs system in github-workflows.md
@@ -73,6 +65,11 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Add release notes extraction to release workflow
+- Use tab-indented code block for YAML example in doc comment
+- Guard unstructured fallback from list decode panics
+- Release read lock before invoking converter callback
+- Fix CI lint baseline and resolve pre-existing lint issues
 - Resolve 30+ broken links on gokure.dev
 - Use json.Marshal for HelmRelease values encoding
 - Exclude docs/development/ from unmapped docs check
@@ -92,6 +89,10 @@ All notable changes to this project will be documented in this file.
 - Add Content-Type header to timeline notice API calls
 - Replace sticky comments with regular PR comments
 - Sync controller-runtime version to 0.23.3 in versions.yaml
+- Align pr-review workflow with GitLab mr-review template
+- Correct yq pipe precedence in max_dependabot filter
+- Migrate cosign signing to v3 bundle format
+- Bump Go to 1.26.1 (security patch)
 
 ### Performance
 
@@ -107,29 +108,9 @@ All notable changes to this project will be documented in this file.
 
 ### Release
 
-- V0.1.0-beta.2
-
-## [0.1.0-beta.1] - 2026-02-17
-
-### Added
-
-- Add strategic merge patch support with namespace-aware target resolution
-
-### Documentation
-
-- Update branch protection docs to reflect ruleset migration
-
-### Fixed
-
-- Add release notes extraction to release workflow
-- Use tab-indented code block for YAML example in doc comment
-- Guard unstructured fallback from list decode panics
-- Release read lock before invoking converter callback
-- Fix CI lint baseline and resolve pre-existing lint issues
-
-### Release
-
 - V0.1.0-beta.1
+- V0.1.0-beta.2
+- V0.1.0-beta.3
 
 ## [0.1.0-beta.0] - 2026-02-17
 
