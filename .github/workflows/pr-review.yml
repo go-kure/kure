@@ -242,6 +242,19 @@ jobs:
           header: ai-review-assessment
           delete: true
 
+      - name: Post review timeline notice
+        if: steps.review.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "${{ steps.review.outputs.is_lgtm }}" = "true" ]; then
+            NOTICE="AI review updated: **LGTM** — no issues found."
+          else
+            NOTICE="AI review updated — issues found. See the pinned review comment above for details."
+          fi
+          gh pr comment "$PR_NUMBER" --body "$NOTICE"
+
       - name: Run assessment
         if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm != 'true' && env.PR_REVIEW_ASSESS_ENABLED == 'true'
         id: assessment
@@ -364,3 +377,11 @@ jobs:
         with:
           header: ai-review-assessment
           path: /tmp/assess_comment.md
+
+      - name: Post assessment timeline notice
+        if: steps.assessment.outputs.has_comment == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Review assessment updated — see the pinned assessment comment above for details."
