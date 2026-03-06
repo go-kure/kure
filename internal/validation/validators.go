@@ -16,6 +16,8 @@ import (
 
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
+	barmanv1 "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
@@ -197,6 +199,16 @@ func (v *Validator) ValidateClusterIssuer(issuer *certv1.ClusterIssuer) error {
 
 func (v *Validator) ValidateACMEIssuer(acme *cmacme.ACMEIssuer) error {
 	return v.validateNotNil(acme, errors.ErrNilACMEIssuer)
+}
+
+// CNPG Resources Validation
+
+func (v *Validator) ValidateDatabase(db *cnpgv1.Database) error {
+	return v.validateNotNil(db, errors.ErrNilDatabase)
+}
+
+func (v *Validator) ValidateObjectStore(os *barmanv1.ObjectStore) error {
+	return v.validateNotNil(os, errors.ErrNilObjectStore)
 }
 
 // external-secrets Resources Validation
