@@ -13,6 +13,7 @@ linters:
     - durationcheck
     - errorlint
     - exhaustive
+    - gosec
     - misspell
     - nilerr
     - unconvert
@@ -23,6 +24,14 @@ linters:
       check-blank: false
     exhaustive:
       default-signifies-exhaustive: true
+    gosec:
+      excludes:
+        # CLI tool reads files from user-provided paths — not a vulnerability
+        - G304
+        # Manifest/config files need 0644 (world-readable), not 0600
+        - G306
+        # Standard 0755 directory permissions
+        - G301
     staticcheck:
       checks:
         - "all"
@@ -34,6 +43,7 @@ linters:
       # Test files have relaxed rules
       - linters:
           - errcheck
+          - gosec
         path: _test\.go
     paths:
       - third_party$

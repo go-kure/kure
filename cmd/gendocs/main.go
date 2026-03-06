@@ -22,7 +22,7 @@ func main() {
 		outDir = os.Args[1]
 	}
 
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Clean(outDir), 0o755); err != nil { //nolint:gosec // G703: CLI tool, output dir from args
 		fmt.Fprintf(os.Stderr, "error creating output directory: %v\n", err)
 		os.Exit(1)
 	}
