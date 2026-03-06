@@ -1,8 +1,9 @@
 package generators
 
-import "github.com/go-kure/kure/internal/gvk"
+import "github.com/go-kure/kure/pkg/gvk"
 
-// Re-export interfaces from internal/gvk for backward compatibility
+// Deprecated: Use the types from pkg/gvk directly instead.
+// These aliases are kept for backward compatibility.
 type VersionedType = gvk.VersionedType
 type NamedConfig = gvk.NamedType
 type NamespacedConfig = gvk.NamespacedType

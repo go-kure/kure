@@ -1,7 +1,7 @@
 package generators
 
 import (
-	"github.com/go-kure/kure/internal/gvk"
+	"github.com/go-kure/kure/pkg/gvk"
 )
 
 // Re-export GVK type for backward compatibility

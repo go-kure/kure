@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/go-kure/kure/internal/gvk"
+	"github.com/go-kure/kure/pkg/gvk"
 	"github.com/go-kure/kure/pkg/stack"
 )
 

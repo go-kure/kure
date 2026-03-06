@@ -5,7 +5,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/go-kure/kure/internal/gvk"
+	"github.com/go-kure/kure/pkg/gvk"
 )
 
 // applicationConfigRegistry is the stack package's registry for ApplicationConfig types

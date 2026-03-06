@@ -65,10 +65,4 @@
 //	    }
 //	    return &wrapper.Spec, nil
 //	}
-//
-// # Internal Package
-//
-// This package is internal to Kure and provides shared infrastructure
-// for both the generators system and the future stack GVK system.
-// It is not intended for external use and its API may change without notice.
 package gvk

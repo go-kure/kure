@@ -1,8 +1,8 @@
 package v1alpha1
 
 import (
-	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/gvk"
 )
 
 // ClusterConfig represents a versioned cluster configuration

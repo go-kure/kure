@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/go-kure/kure/internal/gvk"
 	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/gvk"
 	kureio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/generators"

@@ -64,7 +64,7 @@ package plugins
 
 import (
     "context"
-    "github.com/go-kure/kure/internal/gvk"
+    "github.com/go-kure/kure/pkg/gvk"
     "github.com/go-kure/kure/pkg/stack"
 )
 
@@ -224,7 +224,7 @@ import (
     "fmt"
     "sync"
     
-    "github.com/go-kure/kure/internal/gvk"
+    "github.com/go-kure/kure/pkg/gvk"
     "github.com/go-kure/kure/pkg/stack"
 )
 
@@ -347,7 +347,7 @@ package sdk
 import (
     "context"
     
-    "github.com/go-kure/kure/internal/gvk"
+    "github.com/go-kure/kure/pkg/gvk"
     "github.com/go-kure/kure/pkg/stack/plugins"
 )
 
@@ -493,7 +493,7 @@ import (
     
     "sigs.k8s.io/controller-runtime/pkg/client"
     
-    "github.com/go-kure/kure/internal/gvk"
+    "github.com/go-kure/kure/pkg/gvk"
     "github.com/go-kure/kure/pkg/stack"
     "github.com/go-kure/kure/pkg/stack/plugins"
     "github.com/go-kure/kure/pkg/stack/plugins/sdk"
