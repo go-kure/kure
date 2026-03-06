@@ -58,7 +58,7 @@ infrastructure:
       v1.3.2+ commit: 31b0c7c3734255a92dfe5cf9e1e204de127eb24c (includes controller-runtime v0.23.1 compat)
 
   controller-runtime:
-    current: "0.23.1"
+    current: "0.23.3"
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.23"
     max_dependabot: null
