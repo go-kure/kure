@@ -104,11 +104,10 @@ jobs:
           PR_DESC=$(echo "$PR_DATA" | jq -r '.body // ""')
 
           # --- Truncate if too large ---
-          DIFF_LEN=$(printf '%s' "$DIFF" | wc -c)
+          DIFF_LEN=${#DIFF}
           if [ "$DIFF_LEN" -gt "$PR_REVIEW_MAX_DIFF_CHARS" ]; then
             echo "Diff is ${DIFF_LEN} chars, truncating to ${PR_REVIEW_MAX_DIFF_CHARS}..."
-            DIFF=$(printf '%s' "$DIFF" | head -c "$PR_REVIEW_MAX_DIFF_CHARS")
-            DIFF="${DIFF}
+            DIFF="${DIFF:0:$PR_REVIEW_MAX_DIFF_CHARS}
           ... (diff truncated at ${PR_REVIEW_MAX_DIFF_CHARS} chars)"
           fi
 
@@ -235,6 +234,13 @@ jobs:
         with:
           header: ai-review
           path: /tmp/review_comment.md
+
+      - name: Clear stale assessment comment
+        if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm == 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ai-review-assessment
+          delete: true
 
       - name: Run assessment
         if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm != 'true' && env.PR_REVIEW_ASSESS_ENABLED == 'true'
