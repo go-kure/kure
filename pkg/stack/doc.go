@@ -79,7 +79,7 @@
 //			Type: "flux",
 //			Bootstrap: &stack.BootstrapConfig{
 //				Enabled:   true,
-//				FluxMode:  "gitops-toolkit",
+//				FluxMode:  "flux-operator",
 //			},
 //		}).
 //		WithNode("infrastructure").

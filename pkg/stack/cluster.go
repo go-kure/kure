@@ -57,7 +57,7 @@ type BootstrapConfig struct {
 	Enabled bool `yaml:"enabled"`
 
 	// Flux-specific
-	FluxMode        string   `yaml:"fluxMode,omitempty"` // "gitops-toolkit" or "flux-operator"
+	FluxMode        string   `yaml:"fluxMode,omitempty"` // "flux-operator" (default) or "gotk" (legacy)
 	FluxVersion     string   `yaml:"fluxVersion,omitempty"`
 	Components      []string `yaml:"components,omitempty"`
 	Registry        string   `yaml:"registry,omitempty"`

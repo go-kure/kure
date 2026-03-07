@@ -36,25 +36,32 @@ func NewBootstrapGenerator() *BootstrapGenerator {
 }
 
 // GenerateBootstrap creates bootstrap resources for setting up Flux.
+// When FluxMode is empty, flux-operator is used as the default.
 func (bg *BootstrapGenerator) GenerateBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
 	if config == nil || !config.Enabled {
 		return nil, nil
 	}
 
-	switch config.FluxMode {
-	case "gotk":
-		return bg.generateGotkBootstrap(config, rootNode)
+	mode := config.FluxMode
+	if mode == "" {
+		mode = "flux-operator"
+	}
+
+	switch mode {
 	case "flux-operator":
 		return bg.generateFluxOperatorBootstrap(config, rootNode)
+	case "gotk":
+		return bg.generateGotkBootstrap(config, rootNode)
 	default:
 		return nil, errors.NewValidationError("fluxMode", config.FluxMode, "BootstrapConfig",
-			[]string{"gotk", "flux-operator"})
+			[]string{"flux-operator", "gotk"})
 	}
 }
 
 // SupportedBootstrapModes returns the bootstrap modes supported by this generator.
+// flux-operator is the primary (recommended) mode; gotk is the legacy mode.
 func (bg *BootstrapGenerator) SupportedBootstrapModes() []string {
-	return []string{"gotk", "flux-operator"}
+	return []string{"flux-operator", "gotk"}
 }
 
 // generateGotkBootstrap generates bootstrap resources using the standard Flux toolkit.
