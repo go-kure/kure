@@ -186,11 +186,11 @@ spec:
 }
 
 func TestParseYAMLWithOptionsUnstructuredFallback(t *testing.T) {
-	data := []byte(`apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+	data := []byte(`apiVersion: example.com/v1
+kind: TestResource
 metadata:
-  name: my-monitor
-  namespace: monitoring
+  name: my-resource
+  namespace: testing
 spec:
   selector:
     matchLabels:
@@ -207,16 +207,16 @@ spec:
 	if !ok {
 		t.Fatalf("expected *unstructured.Unstructured, got %T", objs[0])
 	}
-	if u.GetName() != "my-monitor" {
-		t.Fatalf("expected name 'my-monitor', got %q", u.GetName())
+	if u.GetName() != "my-resource" {
+		t.Fatalf("expected name 'my-resource', got %q", u.GetName())
 	}
-	if u.GetNamespace() != "monitoring" {
-		t.Fatalf("expected namespace 'monitoring', got %q", u.GetNamespace())
+	if u.GetNamespace() != "testing" {
+		t.Fatalf("expected namespace 'testing', got %q", u.GetNamespace())
 	}
 	expectedGVK := schema.GroupVersionKind{
-		Group:   "monitoring.coreos.com",
+		Group:   "example.com",
 		Version: "v1",
-		Kind:    "ServiceMonitor",
+		Kind:    "TestResource",
 	}
 	if u.GroupVersionKind() != expectedGVK {
 		t.Fatalf("expected GVK %v, got %v", expectedGVK, u.GroupVersionKind())
@@ -229,10 +229,10 @@ kind: ServiceAccount
 metadata:
   name: sa
 ---
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+apiVersion: example.com/v1
+kind: TestResource
 metadata:
-  name: sm
+  name: tr
   namespace: default
 spec:
   selector: {}
@@ -263,10 +263,10 @@ spec:
 }
 
 func TestParseYAMLWithOptionsStrictByDefault(t *testing.T) {
-	data := []byte(`apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+	data := []byte(`apiVersion: example.com/v1
+kind: TestResource
 metadata:
-  name: sm
+  name: tr
 spec: {}
 `)
 	objs, err := ParseYAMLWithOptions(data, ParseOptions{})
