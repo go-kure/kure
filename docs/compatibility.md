@@ -44,8 +44,8 @@ The version Kure imports and builds against. This is validated by CI to match `v
 The range of versions that Kure can generate valid YAML for. Kure may generate YAML compatible with older or newer versions than it builds against.
 
 For example:
-- Kure builds against cert-manager 1.16.2
-- But generates YAML compatible with cert-manager 1.14.x, 1.15.x, and 1.16.x
+- Kure builds against cert-manager 1.19.4
+- But generates YAML compatible with cert-manager 1.14.x through 1.19.x
 
 ## Upgrading Dependencies
 
@@ -59,6 +59,6 @@ When upgrading a dependency:
 
 ## Related Issues
 
-- [#133](https://github.com/go-kure/kure/issues/133) - Go 1.25 upgrade tracking
-- [#128](https://github.com/go-kure/kure/issues/128) - FluxCD ecosystem upgrade (blocked by Go 1.25)
+- [#133](https://github.com/go-kure/kure/issues/133) - Go version upgrade tracking
+- [#128](https://github.com/go-kure/kure/issues/128) - FluxCD ecosystem upgrade
 
