@@ -25,7 +25,12 @@ type Config struct {
 	// KustomizationMode controls how kustomization.yaml files are generated.
 	// Defaults to KustomizationExplicit.
 	KustomizationMode KustomizationMode
+	// FileNaming controls the file naming pattern. When set, it determines
+	// the ManifestFileNameFunc to use. If ManifestFileName is also set, it
+	// takes precedence over FileNaming.
+	FileNaming FileNamingMode
 	// ManifestFileName formats the file name for a resource manifest.
+	// Takes precedence over FileNaming when set.
 	ManifestFileName ManifestFileNameFunc
 	// KustomizationFileName formats the file name for a Flux Kustomization.
 	KustomizationFileName KustomizationFileNameFunc
@@ -61,4 +66,20 @@ func DefaultManifestFileName(namespace, kind, name string, mode FileExportMode) 
 // DefaultKustomizationFileName returns the standard Flux Kustomization file name.
 func DefaultKustomizationFileName(name string) string {
 	return fmt.Sprintf("kustomization-%s.yaml", name)
+}
+
+// ResolveManifestFileName returns the effective ManifestFileNameFunc for this
+// Config. If ManifestFileName is set it is returned directly. Otherwise,
+// FileNaming is used to select the function. If neither is set,
+// DefaultManifestFileName is returned.
+func (c Config) ResolveManifestFileName() ManifestFileNameFunc {
+	if c.ManifestFileName != nil {
+		return c.ManifestFileName
+	}
+	switch c.FileNaming {
+	case FileNamingKindName:
+		return KindNameManifestFileName
+	default:
+		return DefaultManifestFileName
+	}
 }

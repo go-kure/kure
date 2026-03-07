@@ -61,6 +61,18 @@ const (
 	KustomizationUnset KustomizationMode = ""
 )
 
+// FileNamingMode controls the file naming pattern for manifest files.
+type FileNamingMode string
+
+const (
+	// FileNamingDefault uses the standard {namespace}-{kind}-{name}.yaml format.
+	FileNamingDefault FileNamingMode = "default"
+	// FileNamingKindName uses the {kind}-{name}.yaml format, omitting the namespace prefix.
+	FileNamingKindName FileNamingMode = "kind-name"
+	// FileNamingUnset indicates no file naming preference.
+	FileNamingUnset FileNamingMode = ""
+)
+
 // FluxPlacement determines how Flux Kustomizations are placed in the layout.
 type FluxPlacement string
 
@@ -100,6 +112,9 @@ type LayoutRules struct {
 	// FluxPlacement determines how Flux Kustomizations are placed.
 	// Defaults to FluxSeparate.
 	FluxPlacement FluxPlacement
+	// FileNaming controls the file naming pattern for manifest files.
+	// Defaults to FileNamingDefault ({namespace}-{kind}-{name}.yaml).
+	FileNaming FileNamingMode
 }
 
 // DefaultLayoutRules returns a LayoutRules instance populated with the
@@ -155,6 +170,13 @@ func (lr LayoutRules) Validate() error {
 		// valid
 	default:
 		return errors.NewValidationError("FluxPlacement", string(lr.FluxPlacement), "LayoutRules", []string{string(FluxSeparate), string(FluxIntegrated)})
+	}
+
+	switch lr.FileNaming {
+	case FileNamingDefault, FileNamingKindName, FileNamingUnset:
+		// valid
+	default:
+		return errors.NewValidationError("FileNaming", string(lr.FileNaming), "LayoutRules", []string{string(FileNamingDefault), string(FileNamingKindName)})
 	}
 
 	return nil
