@@ -64,8 +64,9 @@ type BootstrapConfig struct {
 	ImagePullSecret string   `yaml:"imagePullSecret,omitempty"`
 
 	// Source configuration
-	SourceURL string `yaml:"sourceURL,omitempty"` // OCI/Git repository URL
-	SourceRef string `yaml:"sourceRef,omitempty"` // Tag/branch/ref
+	SourceKind string `yaml:"sourceKind,omitempty"` // "GitRepository" or "OCIRepository"
+	SourceURL  string `yaml:"sourceURL,omitempty"`  // OCI/Git repository URL
+	SourceRef  string `yaml:"sourceRef,omitempty"`  // Tag/branch/ref
 
 	// ArgoCD-specific (mock for now)
 	ArgoCDVersion   string `yaml:"argoCDVersion,omitempty"`
