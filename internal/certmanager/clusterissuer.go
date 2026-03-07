@@ -58,3 +58,13 @@ func SetClusterIssuerACME(obj *certv1.ClusterIssuer, acme *cmacme.ACMEIssuer) er
 	obj.Spec.IssuerConfig.ACME = acme
 	return nil
 }
+
+// SetClusterIssuerCA sets the CA configuration on the ClusterIssuer spec.
+func SetClusterIssuerCA(obj *certv1.ClusterIssuer, ca *certv1.CAIssuer) error {
+	v := validation.NewValidator()
+	if err := v.ValidateClusterIssuer(obj); err != nil {
+		return err
+	}
+	obj.Spec.IssuerConfig.CA = ca
+	return nil
+}

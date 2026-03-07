@@ -55,7 +55,7 @@ func ClusterIssuer(cfg *ClusterIssuerConfig) *certv1.ClusterIssuer {
 		intcm.SetClusterIssuerACME(obj, acme) //nolint:errcheck,gosec // obj is freshly created
 	}
 	if cfg.CA != nil {
-		obj.Spec.IssuerConfig.CA = &certv1.CAIssuer{SecretName: cfg.CA.SecretName}
+		intcm.SetClusterIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName}) //nolint:errcheck,gosec // obj is freshly created
 	}
 	return obj
 }
