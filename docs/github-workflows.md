@@ -393,11 +393,11 @@ The development version shows a warning banner linking to the latest stable vers
 
 ### Go Version
 
-All workflows use Go **1.26.0** consistently, defined via environment variable:
+All workflows use Go **1.26.1** consistently, defined via environment variable:
 
 ```yaml
 env:
-  GO_VERSION: '1.26.0'
+  GO_VERSION: '1.26.1'
 ```
 
 ### Caching
