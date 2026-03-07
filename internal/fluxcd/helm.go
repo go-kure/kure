@@ -178,3 +178,68 @@ func AddPostRendererKustomizePatch(k *helmv2.Kustomize, patch kustomize.Patch) {
 func AddPostRendererKustomizeImage(k *helmv2.Kustomize, img kustomize.Image) {
 	k.Images = append(k.Images, img)
 }
+
+// SetHelmReleaseInstallRemediation sets the install remediation configuration.
+func SetHelmReleaseInstallRemediation(obj *helmv2.HelmRelease, remediation *helmv2.InstallRemediation) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.Remediation = remediation
+}
+
+// SetHelmReleaseUpgradeRemediation sets the upgrade remediation configuration.
+func SetHelmReleaseUpgradeRemediation(obj *helmv2.HelmRelease, remediation *helmv2.UpgradeRemediation) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.Remediation = remediation
+}
+
+// CreateInstallRemediation returns an InstallRemediation with the given retries.
+func CreateInstallRemediation(retries int) *helmv2.InstallRemediation {
+	return &helmv2.InstallRemediation{
+		Retries: retries,
+	}
+}
+
+// CreateUpgradeRemediation returns an UpgradeRemediation with the given retries.
+func CreateUpgradeRemediation(retries int) *helmv2.UpgradeRemediation {
+	return &helmv2.UpgradeRemediation{
+		Retries: retries,
+	}
+}
+
+// SetInstallRemediationIgnoreTestFailures sets the IgnoreTestFailures flag on install remediation.
+func SetInstallRemediationIgnoreTestFailures(r *helmv2.InstallRemediation, ignore bool) {
+	r.IgnoreTestFailures = &ignore
+}
+
+// SetInstallRemediationRemediateLastFailure sets the RemediateLastFailure flag on install remediation.
+func SetInstallRemediationRemediateLastFailure(r *helmv2.InstallRemediation, remediate bool) {
+	r.RemediateLastFailure = &remediate
+}
+
+// SetUpgradeRemediationIgnoreTestFailures sets the IgnoreTestFailures flag on upgrade remediation.
+func SetUpgradeRemediationIgnoreTestFailures(r *helmv2.UpgradeRemediation, ignore bool) {
+	r.IgnoreTestFailures = &ignore
+}
+
+// SetUpgradeRemediationRemediateLastFailure sets the RemediateLastFailure flag on upgrade remediation.
+func SetUpgradeRemediationRemediateLastFailure(r *helmv2.UpgradeRemediation, remediate bool) {
+	r.RemediateLastFailure = &remediate
+}
+
+// SetUpgradeRemediationStrategy sets the remediation strategy on upgrade remediation.
+func SetUpgradeRemediationStrategy(r *helmv2.UpgradeRemediation, strategy helmv2.RemediationStrategy) {
+	r.Strategy = &strategy
+}
+
+// SetHelmReleaseWaitStrategy sets the wait strategy for the HelmRelease.
+func SetHelmReleaseWaitStrategy(obj *helmv2.HelmRelease, strategy *helmv2.WaitStrategy) {
+	obj.Spec.WaitStrategy = strategy
+}
+
+// CreateWaitStrategy returns a WaitStrategy with the given name.
+func CreateWaitStrategy(name helmv2.WaitStrategyName) *helmv2.WaitStrategy {
+	return &helmv2.WaitStrategy{Name: name}
+}

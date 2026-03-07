@@ -362,3 +362,208 @@ func TestHelmReleaseDriftDetectionIntegration(t *testing.T) {
 		t.Errorf("second rule target kind mismatch")
 	}
 }
+
+func TestCreateInstallRemediation(t *testing.T) {
+	tests := []struct {
+		name    string
+		retries int
+	}{
+		{"zero retries", 0},
+		{"positive retries", 3},
+		{"unlimited retries", -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := CreateInstallRemediation(tt.retries)
+			if r == nil {
+				t.Fatal("expected non-nil InstallRemediation")
+			}
+			if r.Retries != tt.retries {
+				t.Errorf("Retries = %d, want %d", r.Retries, tt.retries)
+			}
+		})
+	}
+}
+
+func TestCreateUpgradeRemediation(t *testing.T) {
+	tests := []struct {
+		name    string
+		retries int
+	}{
+		{"zero retries", 0},
+		{"positive retries", 5},
+		{"unlimited retries", -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := CreateUpgradeRemediation(tt.retries)
+			if r == nil {
+				t.Fatal("expected non-nil UpgradeRemediation")
+			}
+			if r.Retries != tt.retries {
+				t.Errorf("Retries = %d, want %d", r.Retries, tt.retries)
+			}
+		})
+	}
+}
+
+func TestSetHelmReleaseInstallRemediation(t *testing.T) {
+	hr := CreateHelmRelease("test", "default", helmv2.HelmReleaseSpec{})
+
+	// Install is nil initially — should be created
+	r := CreateInstallRemediation(3)
+	SetInstallRemediationIgnoreTestFailures(r, true)
+	SetInstallRemediationRemediateLastFailure(r, true)
+	SetHelmReleaseInstallRemediation(hr, r)
+
+	if hr.Spec.Install == nil {
+		t.Fatal("expected Install to be created")
+	}
+	if hr.Spec.Install.Remediation == nil {
+		t.Fatal("expected Install.Remediation to be set")
+	}
+	if hr.Spec.Install.Remediation.Retries != 3 {
+		t.Errorf("Retries = %d, want 3", hr.Spec.Install.Remediation.Retries)
+	}
+	if hr.Spec.Install.Remediation.IgnoreTestFailures == nil || !*hr.Spec.Install.Remediation.IgnoreTestFailures {
+		t.Error("IgnoreTestFailures should be true")
+	}
+	if hr.Spec.Install.Remediation.RemediateLastFailure == nil || !*hr.Spec.Install.Remediation.RemediateLastFailure {
+		t.Error("RemediateLastFailure should be true")
+	}
+}
+
+func TestSetHelmReleaseInstallRemediationExistingInstall(t *testing.T) {
+	hr := CreateHelmRelease("test", "default", helmv2.HelmReleaseSpec{})
+	hr.Spec.Install = &helmv2.Install{CreateNamespace: true}
+
+	r := CreateInstallRemediation(2)
+	SetHelmReleaseInstallRemediation(hr, r)
+
+	// Existing Install config should be preserved
+	if !hr.Spec.Install.CreateNamespace {
+		t.Error("CreateNamespace should still be true")
+	}
+	if hr.Spec.Install.Remediation.Retries != 2 {
+		t.Errorf("Retries = %d, want 2", hr.Spec.Install.Remediation.Retries)
+	}
+}
+
+func TestSetHelmReleaseUpgradeRemediation(t *testing.T) {
+	hr := CreateHelmRelease("test", "default", helmv2.HelmReleaseSpec{})
+
+	r := CreateUpgradeRemediation(5)
+	SetUpgradeRemediationIgnoreTestFailures(r, false)
+	SetUpgradeRemediationRemediateLastFailure(r, true)
+	SetUpgradeRemediationStrategy(r, helmv2.RollbackRemediationStrategy)
+	SetHelmReleaseUpgradeRemediation(hr, r)
+
+	if hr.Spec.Upgrade == nil {
+		t.Fatal("expected Upgrade to be created")
+	}
+	if hr.Spec.Upgrade.Remediation == nil {
+		t.Fatal("expected Upgrade.Remediation to be set")
+	}
+	if hr.Spec.Upgrade.Remediation.Retries != 5 {
+		t.Errorf("Retries = %d, want 5", hr.Spec.Upgrade.Remediation.Retries)
+	}
+	if hr.Spec.Upgrade.Remediation.IgnoreTestFailures == nil || *hr.Spec.Upgrade.Remediation.IgnoreTestFailures {
+		t.Error("IgnoreTestFailures should be false")
+	}
+	if hr.Spec.Upgrade.Remediation.RemediateLastFailure == nil || !*hr.Spec.Upgrade.Remediation.RemediateLastFailure {
+		t.Error("RemediateLastFailure should be true")
+	}
+	if hr.Spec.Upgrade.Remediation.Strategy == nil || *hr.Spec.Upgrade.Remediation.Strategy != helmv2.RollbackRemediationStrategy {
+		t.Errorf("Strategy = %v, want rollback", hr.Spec.Upgrade.Remediation.Strategy)
+	}
+}
+
+func TestSetUpgradeRemediationStrategyUninstall(t *testing.T) {
+	r := CreateUpgradeRemediation(1)
+	SetUpgradeRemediationStrategy(r, helmv2.UninstallRemediationStrategy)
+
+	if r.Strategy == nil {
+		t.Fatal("expected Strategy to be set")
+	}
+	if *r.Strategy != helmv2.UninstallRemediationStrategy {
+		t.Errorf("Strategy = %v, want uninstall", *r.Strategy)
+	}
+}
+
+func TestSetHelmReleaseUpgradeRemediationExistingUpgrade(t *testing.T) {
+	hr := CreateHelmRelease("test", "default", helmv2.HelmReleaseSpec{})
+	hr.Spec.Upgrade = &helmv2.Upgrade{Force: true}
+
+	r := CreateUpgradeRemediation(1)
+	SetHelmReleaseUpgradeRemediation(hr, r)
+
+	// Existing Upgrade config should be preserved
+	if !hr.Spec.Upgrade.Force {
+		t.Error("Force should still be true")
+	}
+	if hr.Spec.Upgrade.Remediation.Retries != 1 {
+		t.Errorf("Retries = %d, want 1", hr.Spec.Upgrade.Remediation.Retries)
+	}
+}
+
+func TestCreateWaitStrategy(t *testing.T) {
+	tests := []struct {
+		name     string
+		strategy helmv2.WaitStrategyName
+	}{
+		{"poller", helmv2.WaitStrategyPoller},
+		{"legacy", helmv2.WaitStrategyLegacy},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ws := CreateWaitStrategy(tt.strategy)
+			if ws == nil {
+				t.Fatal("expected non-nil WaitStrategy")
+			}
+			if ws.Name != tt.strategy {
+				t.Errorf("Name = %q, want %q", ws.Name, tt.strategy)
+			}
+		})
+	}
+}
+
+func TestSetHelmReleaseWaitStrategy(t *testing.T) {
+	hr := CreateHelmRelease("test", "default", helmv2.HelmReleaseSpec{})
+
+	ws := CreateWaitStrategy(helmv2.WaitStrategyPoller)
+	SetHelmReleaseWaitStrategy(hr, ws)
+
+	if hr.Spec.WaitStrategy == nil {
+		t.Fatal("expected WaitStrategy to be set")
+	}
+	if hr.Spec.WaitStrategy.Name != helmv2.WaitStrategyPoller {
+		t.Errorf("WaitStrategy.Name = %q, want %q", hr.Spec.WaitStrategy.Name, helmv2.WaitStrategyPoller)
+	}
+}
+
+func TestRemediationIntegration(t *testing.T) {
+	hr := CreateHelmRelease("my-app", "production", helmv2.HelmReleaseSpec{})
+
+	// Configure install remediation
+	installRemediation := CreateInstallRemediation(3)
+	SetInstallRemediationRemediateLastFailure(installRemediation, true)
+	SetHelmReleaseInstallRemediation(hr, installRemediation)
+
+	// Configure upgrade remediation with rollback strategy
+	upgradeRemediation := CreateUpgradeRemediation(5)
+	SetUpgradeRemediationStrategy(upgradeRemediation, helmv2.RollbackRemediationStrategy)
+	SetUpgradeRemediationRemediateLastFailure(upgradeRemediation, true)
+	SetUpgradeRemediationIgnoreTestFailures(upgradeRemediation, true)
+	SetHelmReleaseUpgradeRemediation(hr, upgradeRemediation)
+
+	// Verify complete configuration
+	if hr.Spec.Install.Remediation.Retries != 3 {
+		t.Errorf("Install retries = %d, want 3", hr.Spec.Install.Remediation.Retries)
+	}
+	if hr.Spec.Upgrade.Remediation.Retries != 5 {
+		t.Errorf("Upgrade retries = %d, want 5", hr.Spec.Upgrade.Remediation.Retries)
+	}
+	if *hr.Spec.Upgrade.Remediation.Strategy != helmv2.RollbackRemediationStrategy {
+		t.Errorf("Upgrade strategy = %v, want rollback", *hr.Spec.Upgrade.Remediation.Strategy)
+	}
+}
