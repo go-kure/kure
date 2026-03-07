@@ -24,6 +24,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var (
@@ -69,6 +70,7 @@ func registerAllSchemes() error {
 		sourcev1.AddToScheme,
 		esv1.AddToScheme,
 		metallbv1beta1.AddToScheme,
+		gwapiv1.Install,
 	}
 
 	// Register each scheme, returning the first error
