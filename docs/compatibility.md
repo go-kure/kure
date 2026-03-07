@@ -35,6 +35,28 @@ Versioned independently from the CNPG operator. |
 | controller-runtime | 0.23.3 | 0.22 - 0.23 | Upgraded with FluxCD 2.8 and external-secrets 1.3 migrations |
 | kubernetes | 0.35.1 | 1.33 - 1.35 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range |
 
+## Known API Version Blockers
+
+### Notification Controller: Provider and Alert on v1beta3
+
+**Status:** Blocked upstream (as of 2026-03-07)
+**Tracking:** [#250](https://github.com/go-kure/kure/issues/250)
+
+The Flux notification-controller has three resource types:
+
+| Resource | Current API Version | Target | Status |
+|----------|-------------------|--------|--------|
+| Receiver | v1 | v1 | Complete |
+| Provider | v1beta3 | v1 | Blocked — not yet promoted upstream |
+| Alert | v1beta3 | v1 | Blocked — not yet promoted upstream |
+
+Kure ships v0.1.0-stable with Provider and Alert on `notification.toolkit.fluxcd.io/v1beta3`,
+which is the highest API version available in the Flux notification-controller.
+The v1beta2 scheme registrations have been removed as part of the FluxCD 2.8 upgrade.
+
+When upstream Flux promotes Provider and Alert to v1, kure will migrate (#250) and
+remove the v1beta3 scheme registration (#252).
+
 ## Understanding the Matrix
 
 ### Build Version (go.mod)

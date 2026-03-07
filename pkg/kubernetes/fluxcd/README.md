@@ -84,6 +84,10 @@ hr := fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{
 
 ### Notification Controllers
 
+> **Note:** Provider and Alert use `notification.toolkit.fluxcd.io/v1beta3` — the highest
+> API version available upstream. Receiver is on v1. See [compatibility.md](/docs/compatibility.md#notification-controller-provider-and-alert-on-v1beta3)
+> for details and tracking issue [#250](https://github.com/go-kure/kure/issues/250).
+
 ```go
 // Alert
 alert := fluxcd.Alert(&fluxcd.AlertConfig{
