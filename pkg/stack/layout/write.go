@@ -15,9 +15,7 @@ import (
 
 // WriteManifest writes a ManifestLayout to disk using the provided configuration.
 func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
-	if cfg.ManifestFileName == nil {
-		cfg.ManifestFileName = DefaultManifestFileName
-	}
+	manifestFileName := cfg.ResolveManifestFileName()
 	if cfg.ManifestsDir == "" {
 		cfg.ManifestsDir = "clusters"
 	}
@@ -57,7 +55,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		if appMode == AppFileSingle {
 			fileName = fmt.Sprintf("%s.yaml", ml.Name)
 		} else {
-			fileName = cfg.ManifestFileName(ns, kind, name, mode)
+			fileName = manifestFileName(ns, kind, name, mode)
 		}
 
 		fileGroups[fileName] = append(fileGroups[fileName], obj)

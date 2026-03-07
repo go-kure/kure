@@ -121,6 +121,45 @@ func TestLayoutRules_Validate(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "valid file naming kind-name",
+			rules: layout.LayoutRules{
+				NodeGrouping:        layout.GroupByName,
+				BundleGrouping:      layout.GroupFlat,
+				ApplicationGrouping: layout.GroupFlat,
+				ApplicationFileMode: layout.AppFilePerResource,
+				FilePer:             layout.FilePerResource,
+				FluxPlacement:       layout.FluxSeparate,
+				FileNaming:          layout.FileNamingKindName,
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid file naming unset",
+			rules: layout.LayoutRules{
+				NodeGrouping:        layout.GroupByName,
+				BundleGrouping:      layout.GroupFlat,
+				ApplicationGrouping: layout.GroupFlat,
+				ApplicationFileMode: layout.AppFilePerResource,
+				FilePer:             layout.FilePerResource,
+				FluxPlacement:       layout.FluxSeparate,
+				FileNaming:          layout.FileNamingUnset,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid file naming",
+			rules: layout.LayoutRules{
+				NodeGrouping:        layout.GroupByName,
+				BundleGrouping:      layout.GroupFlat,
+				ApplicationGrouping: layout.GroupFlat,
+				ApplicationFileMode: layout.AppFilePerResource,
+				FilePer:             layout.FilePerResource,
+				FluxPlacement:       layout.FluxSeparate,
+				FileNaming:          layout.FileNamingMode("invalid"),
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, test := range tests {

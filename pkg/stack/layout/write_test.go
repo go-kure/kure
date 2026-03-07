@@ -484,7 +484,6 @@ func TestWriteManifest_ChildAppFileSingle(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // WriteToDisk FluxPlacement tests (bug fix #264)
 // ---------------------------------------------------------------------------
 
@@ -623,6 +622,84 @@ func TestWriteManifest_PatternA_EndToEnd(t *testing.T) {
 	// Should NOT contain namespace-prefixed file names
 	if strings.Contains(string(kData), "default-deployment") {
 		t.Errorf("Pattern A should not use namespace-prefixed file names, got:\n%s", kData)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FileNaming tests (#266)
+// ---------------------------------------------------------------------------
+
+func TestWriteManifest_FileNamingKindName(t *testing.T) {
+	objs := []client.Object{
+		testObject("apps/v1", "Deployment", "web", "default"),
+		testObject("v1", "Service", "web", "default"),
+		testObject("v1", "ConfigMap", "config", "default"),
+	}
+
+	ml := &ManifestLayout{
+		Name:      "myapp",
+		Namespace: "cl/apps",
+		Resources: objs,
+	}
+
+	cfg := DefaultLayoutConfig()
+	cfg.FileNaming = FileNamingKindName
+	cfg.ManifestFileName = nil // Use FileNaming to resolve
+	dir := t.TempDir()
+
+	if err := WriteManifest(dir, cfg, ml); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	base := filepath.Join(dir, "clusters", "cl", "apps", "myapp")
+	expectedFiles := []string{
+		"deployment-web.yaml",
+		"service-web.yaml",
+		"configmap-config.yaml",
+	}
+	for _, f := range expectedFiles {
+		p := filepath.Join(base, f)
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("expected file %s: %v", p, err)
+		}
+	}
+
+	// Should NOT contain namespace-prefixed file names
+	kData, err := os.ReadFile(filepath.Join(base, "kustomization.yaml"))
+	if err != nil {
+		t.Fatalf("read kustomization.yaml: %v", err)
+	}
+	if strings.Contains(string(kData), "default-deployment") {
+		t.Errorf("FileNamingKindName should not use namespace-prefixed names, got:\n%s", kData)
+	}
+	for _, f := range expectedFiles {
+		if !strings.Contains(string(kData), f) {
+			t.Errorf("kustomization.yaml missing reference to %s", f)
+		}
+	}
+}
+
+func TestWriteManifest_FileNamingDefault_Unchanged(t *testing.T) {
+	obj := testObject("v1", "ConfigMap", "test", "ns")
+
+	ml := &ManifestLayout{
+		Name:      "app",
+		Namespace: "cl/ns",
+		Resources: []client.Object{obj},
+	}
+
+	cfg := DefaultLayoutConfig()
+	cfg.FileNaming = FileNamingDefault
+	dir := t.TempDir()
+
+	if err := WriteManifest(dir, cfg, ml); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	// Default naming: {ns}-{kind}-{name}.yaml
+	resourceFile := filepath.Join(dir, "clusters", "cl", "ns", "app", "ns-configmap-test.yaml")
+	if _, err := os.Stat(resourceFile); err != nil {
+		t.Fatalf("expected default-named file at %s: %v", resourceFile, err)
 	}
 }
 
