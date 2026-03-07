@@ -47,6 +47,16 @@ infrastructure:
     max_dependabot: null  # No restriction needed
     notes: "Stable v1beta1 APIs, patch release"
 
+  prometheus-operator:
+    current: "0.87.1"
+    go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
+    supported_range: "0.75 - 0.87"
+    max_dependabot: null
+    notes: |
+      Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
+      Only the /pkg/apis/monitoring submodule is imported — not the full operator.
+      Stable v1 APIs (monitoring.coreos.com/v1).
+
   external-secrets:
     current: "0.0.0-20260213133823-31b0c7c37342"
     go_module: "github.com/external-secrets/external-secrets/apis"
