@@ -41,6 +41,8 @@ linters:
     staticcheck:
       checks:
         - "all"
+        # gosimple (S*) checks are included via "all" — gosimple was merged
+        # into staticcheck in golangci-lint v2
         - "-QF*"
         - "-ST*"
   exclusions:
