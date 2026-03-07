@@ -485,6 +485,90 @@ func TestWriteManifest_ChildAppFileSingle(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// WriteToDisk FluxPlacement tests (bug fix #264)
+// ---------------------------------------------------------------------------
+
+func TestWriteToDisk_FluxIntegrated(t *testing.T) {
+	childA := &ManifestLayout{
+		Name:      "team-a",
+		Namespace: "cl/flux-system/team-a",
+		Resources: []client.Object{testObject("v1", "ConfigMap", "ca", "flux-system")},
+	}
+	childB := &ManifestLayout{
+		Name:      "team-b",
+		Namespace: "cl/flux-system/team-b",
+		Resources: []client.Object{testObject("v1", "ConfigMap", "cb", "flux-system")},
+	}
+
+	root := &ManifestLayout{
+		Name:          "flux-root",
+		Namespace:     "cl/flux-system",
+		FluxPlacement: FluxIntegrated,
+		Children:      []*ManifestLayout{childA, childB},
+	}
+
+	dir := t.TempDir()
+	if err := root.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk failed: %v", err)
+	}
+
+	kustomFile := filepath.Join(dir, "cl", "flux-system", "flux-root", "kustomization.yaml")
+	data, err := os.ReadFile(kustomFile)
+	if err != nil {
+		t.Fatalf("read kustomization: %v", err)
+	}
+
+	content := string(data)
+	// FluxIntegrated: children referenced as flux-system-kustomization-<name>.yaml
+	if !strings.Contains(content, "flux-system-kustomization-team-a.yaml") {
+		t.Errorf("expected flux kustomization reference for team-a, got:\n%s", content)
+	}
+	if !strings.Contains(content, "flux-system-kustomization-team-b.yaml") {
+		t.Errorf("expected flux kustomization reference for team-b, got:\n%s", content)
+	}
+	// Should NOT reference child directory names directly.
+	if strings.Contains(content, "  - team-a\n") {
+		t.Errorf("should not reference child as plain directory in flux integrated mode, got:\n%s", content)
+	}
+}
+
+func TestWriteToDisk_FluxSeparateDefault(t *testing.T) {
+	child := &ManifestLayout{
+		Name:      "apps",
+		Namespace: "cl/apps",
+		Resources: []client.Object{testObject("v1", "ConfigMap", "ca", "default")},
+	}
+
+	root := &ManifestLayout{
+		Name:          "root",
+		Namespace:     "cl",
+		FluxPlacement: FluxSeparate,
+		Children:      []*ManifestLayout{child},
+	}
+
+	dir := t.TempDir()
+	if err := root.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk failed: %v", err)
+	}
+
+	kustomFile := filepath.Join(dir, "cl", "root", "kustomization.yaml")
+	data, err := os.ReadFile(kustomFile)
+	if err != nil {
+		t.Fatalf("read kustomization: %v", err)
+	}
+
+	content := string(data)
+	// FluxSeparate: children referenced as plain directory names
+	if !strings.Contains(content, "  - apps\n") {
+		t.Errorf("expected plain directory reference for apps, got:\n%s", content)
+	}
+	// Should NOT contain flux kustomization references
+	if strings.Contains(content, "flux-system-kustomization") {
+		t.Errorf("should not contain flux kustomization references in separate mode, got:\n%s", content)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // WriteToDisk tests
 // ---------------------------------------------------------------------------
 

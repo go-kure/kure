@@ -139,6 +139,45 @@ func TestWriteToTar_Deterministic(t *testing.T) {
 	}
 }
 
+func TestWriteToTar_FluxIntegrated(t *testing.T) {
+	child := &ManifestLayout{
+		Name:      "team-a",
+		Namespace: "cl/flux-system/team-a",
+		FilePer:   FilePerResource,
+		Mode:      KustomizationExplicit,
+		Resources: []client.Object{
+			&corev1.ConfigMap{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "flux-system"},
+			},
+		},
+	}
+
+	root := &ManifestLayout{
+		Name:          "flux-root",
+		Namespace:     "cl/flux-system",
+		FluxPlacement: FluxIntegrated,
+		FilePer:       FilePerResource,
+		Mode:          KustomizationExplicit,
+		Children:      []*ManifestLayout{child},
+	}
+
+	var buf bytes.Buffer
+	if err := root.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar failed: %v", err)
+	}
+
+	files := extractTarFiles(t, &buf)
+
+	rootKustom := string(files["cl/flux-system/flux-root/kustomization.yaml"])
+	if !bytes.Contains([]byte(rootKustom), []byte("flux-system-kustomization-team-a.yaml")) {
+		t.Errorf("expected flux kustomization reference for team-a, got:\n%s", rootKustom)
+	}
+	if bytes.Contains([]byte(rootKustom), []byte("  - team-a\n")) {
+		t.Errorf("should not reference child as plain directory in flux integrated mode, got:\n%s", rootKustom)
+	}
+}
+
 // extractTarFiles reads all entries from a tar archive into a map.
 func extractTarFiles(t *testing.T, buf *bytes.Buffer) map[string][]byte {
 	t.Helper()
