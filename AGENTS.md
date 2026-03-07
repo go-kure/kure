@@ -345,6 +345,8 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 2. **Test Failures**: Ensure all required fields are set in constructors
 3. **Layout Issues**: Verify LayoutRules configuration
 4. **Patch Problems**: Check JSONPath syntax and target existence
+5. **golangci-lint version mismatch**: If lint fails with "Go language version used to build golangci-lint is lower than the targeted Go version", update the golangci-lint version in both `mise.toml` and `Makefile`. When bumping Go, always check that golangci-lint is built with a compatible Go version.
+6. **Stale GOPATH binaries shadowing mise**: The Makefile appends (not prepends) `GOPATH/bin` to PATH so mise-managed tools take precedence. If you see unexpected tool versions, check `which <tool>` vs `mise which <tool>`.
 
 ### Debugging Tips
 
