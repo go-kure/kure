@@ -1,7 +1,7 @@
 package metallb
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +26,7 @@ func CreateBGPAdvertisement(name, namespace string, spec metallbv1beta1.BGPAdver
 // AddBGPAdvertisementIPAddressPool appends an IPAddressPool name to the BGPAdvertisement spec.
 func AddBGPAdvertisementIPAddressPool(obj *metallbv1beta1.BGPAdvertisement, pool string) error {
 	if obj == nil {
-		return errors.New("nil BGPAdvertisement")
+		return errors.ErrNilBGPAdvertisement
 	}
 	obj.Spec.IPAddressPools = append(obj.Spec.IPAddressPools, pool)
 	return nil
@@ -35,7 +35,7 @@ func AddBGPAdvertisementIPAddressPool(obj *metallbv1beta1.BGPAdvertisement, pool
 // AddBGPAdvertisementNodeSelector appends a node selector to the BGPAdvertisement spec.
 func AddBGPAdvertisementNodeSelector(obj *metallbv1beta1.BGPAdvertisement, sel metav1.LabelSelector) error {
 	if obj == nil {
-		return errors.New("nil BGPAdvertisement")
+		return errors.ErrNilBGPAdvertisement
 	}
 	obj.Spec.NodeSelectors = append(obj.Spec.NodeSelectors, sel)
 	return nil
@@ -44,7 +44,7 @@ func AddBGPAdvertisementNodeSelector(obj *metallbv1beta1.BGPAdvertisement, sel m
 // AddBGPAdvertisementCommunity appends a BGP community to the BGPAdvertisement spec.
 func AddBGPAdvertisementCommunity(obj *metallbv1beta1.BGPAdvertisement, c string) error {
 	if obj == nil {
-		return errors.New("nil BGPAdvertisement")
+		return errors.ErrNilBGPAdvertisement
 	}
 	obj.Spec.Communities = append(obj.Spec.Communities, c)
 	return nil
@@ -53,7 +53,7 @@ func AddBGPAdvertisementCommunity(obj *metallbv1beta1.BGPAdvertisement, c string
 // AddBGPAdvertisementPeer appends a peer name to the BGPAdvertisement spec.
 func AddBGPAdvertisementPeer(obj *metallbv1beta1.BGPAdvertisement, peer string) error {
 	if obj == nil {
-		return errors.New("nil BGPAdvertisement")
+		return errors.ErrNilBGPAdvertisement
 	}
 	obj.Spec.Peers = append(obj.Spec.Peers, peer)
 	return nil
@@ -62,7 +62,7 @@ func AddBGPAdvertisementPeer(obj *metallbv1beta1.BGPAdvertisement, peer string) 
 // SetBGPAdvertisementLocalPref sets the localPref value on the BGPAdvertisement spec.
 func SetBGPAdvertisementLocalPref(obj *metallbv1beta1.BGPAdvertisement, pref uint32) error {
 	if obj == nil {
-		return errors.New("nil BGPAdvertisement")
+		return errors.ErrNilBGPAdvertisement
 	}
 	obj.Spec.LocalPref = pref
 	return nil
