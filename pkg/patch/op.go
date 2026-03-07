@@ -337,7 +337,7 @@ func (p *PatchOp) ValidateAgainst(obj *unstructured.Unstructured) error {
 			return err
 		}
 		if !found {
-			return fmt.Errorf("path not found for replace: %s", p.Path)
+			return errors.Errorf("path not found for replace: %s", p.Path)
 		}
 	case "delete":
 		if p.Selector == "" {
@@ -346,7 +346,7 @@ func (p *PatchOp) ValidateAgainst(obj *unstructured.Unstructured) error {
 				return err
 			}
 			if !found {
-				return fmt.Errorf("path not found for delete: %s", p.Path)
+				return errors.Errorf("path not found for delete: %s", p.Path)
 			}
 			return nil
 		}
@@ -355,7 +355,7 @@ func (p *PatchOp) ValidateAgainst(obj *unstructured.Unstructured) error {
 			return err
 		}
 		if !found {
-			return fmt.Errorf("path not found for list delete: %s", p.Path)
+			return errors.Errorf("path not found for list delete: %s", p.Path)
 		}
 		if _, err := resolveListIndex(lst, p.Selector); err != nil {
 			return err
@@ -366,7 +366,7 @@ func (p *PatchOp) ValidateAgainst(obj *unstructured.Unstructured) error {
 			return err
 		}
 		if !found {
-			return fmt.Errorf("path not found for list op: %s", p.Path)
+			return errors.Errorf("path not found for list op: %s", p.Path)
 		}
 	}
 	return nil
@@ -383,7 +383,7 @@ type PathPart struct {
 func (p *PatchOp) NormalizePath() error {
 	parsed, err := ParsePatchPath(p.Path)
 	if err != nil {
-		return fmt.Errorf("NormalizePath failed for %s: %w", p.Path, err)
+		return errors.Wrapf(err, "NormalizePath failed for %s", p.Path)
 	}
 	p.ParsedPath = parsed
 	return nil
@@ -423,7 +423,7 @@ func InferPatchOp(path string) string {
 func ParsePatchPath(path string) ([]PathPart, error) {
 	clean := strings.Trim(path, ".")
 	if clean == "" {
-		return nil, fmt.Errorf("empty path")
+		return nil, errors.New("empty path")
 	}
 
 	segments := strings.Split(clean, ".")
@@ -431,7 +431,7 @@ func ParsePatchPath(path string) ([]PathPart, error) {
 
 	for _, seg := range segments {
 		if seg == "" {
-			return nil, fmt.Errorf("invalid empty segment in %q", path)
+			return nil, errors.Errorf("invalid empty segment in %q", path)
 		}
 
 		var part PathPart
@@ -442,13 +442,13 @@ func ParsePatchPath(path string) ([]PathPart, error) {
 			continue
 		}
 		if !strings.HasSuffix(seg, "]") || idx == 0 {
-			return nil, fmt.Errorf("malformed selector in segment %q", seg)
+			return nil, errors.Errorf("malformed selector in segment %q", seg)
 		}
 
 		part.Field = seg[:idx]
 		sel := seg[idx+1 : len(seg)-1]
 		if sel == "" {
-			return nil, fmt.Errorf("empty selector in segment %q", seg)
+			return nil, errors.Errorf("empty selector in segment %q", seg)
 		}
 
 		if strings.Contains(sel, "=") {
@@ -456,7 +456,7 @@ func ParsePatchPath(path string) ([]PathPart, error) {
 			part.MatchValue = sel
 		} else {
 			if _, err := strconv.Atoi(sel); err != nil {
-				return nil, fmt.Errorf("invalid index %q in segment %q", sel, seg)
+				return nil, errors.Errorf("invalid index %q in segment %q", sel, seg)
 			}
 			part.MatchType = "index"
 			part.MatchValue = sel
