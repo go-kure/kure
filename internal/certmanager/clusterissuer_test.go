@@ -41,6 +41,19 @@ func TestClusterIssuerFunctions(t *testing.T) {
 	}
 }
 
+func TestClusterIssuerCA(t *testing.T) {
+	spec := certv1.IssuerSpec{}
+	ci := CreateClusterIssuer("ca-issuer", spec)
+
+	ca := &certv1.CAIssuer{SecretName: "ca-key-pair"}
+	if err := SetClusterIssuerCA(ci, ca); err != nil {
+		t.Errorf("SetClusterIssuerCA failed: %v", err)
+	}
+	if ci.Spec.IssuerConfig.CA == nil || ci.Spec.IssuerConfig.CA.SecretName != "ca-key-pair" {
+		t.Errorf("CA config not set")
+	}
+}
+
 func TestClusterIssuerFunctionsWithNil(t *testing.T) {
 	// Test that functions return errors when given nil ClusterIssuer
 	if err := AddClusterIssuerLabel(nil, "key", "value"); err == nil {
@@ -50,6 +63,9 @@ func TestClusterIssuerFunctionsWithNil(t *testing.T) {
 		t.Error("expected error for nil ClusterIssuer")
 	}
 	if err := SetClusterIssuerACME(nil, nil); err == nil {
+		t.Error("expected error for nil ClusterIssuer")
+	}
+	if err := SetClusterIssuerCA(nil, nil); err == nil {
 		t.Error("expected error for nil ClusterIssuer")
 	}
 }

@@ -88,3 +88,8 @@ func AddClusterIssuerAnnotation(obj *certv1.ClusterIssuer, key, value string) er
 func SetClusterIssuerACME(obj *certv1.ClusterIssuer, acme *cmacme.ACMEIssuer) error {
 	return intcm.SetClusterIssuerACME(obj, acme)
 }
+
+// SetClusterIssuerCA delegates to the internal helper.
+func SetClusterIssuerCA(obj *certv1.ClusterIssuer, ca *certv1.CAIssuer) error {
+	return intcm.SetClusterIssuerCA(obj, ca)
+}
