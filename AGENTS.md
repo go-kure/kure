@@ -408,6 +408,7 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 | `pkg/cli/` | `api-reference/cli` | — |
 | `pkg/kubernetes/` | `api-reference/kubernetes-builders` | `guides/library-usage` |
 | `pkg/kubernetes/fluxcd/` | `api-reference/fluxcd-builders` | `guides/library-usage` |
+| `pkg/kubernetes/metallb/` | `api-reference/metallb-builders` | `guides/library-usage` |
 | `pkg/logger/` | `api-reference/logger` | — |
 | `cmd/kure/` | CLI ref (auto-generated) | — |
 | `cmd/kurel/` | CLI ref (auto-generated) | — |
