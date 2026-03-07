@@ -1282,6 +1282,235 @@ func TestGenerateResources_ChartRefAndChartMutualExclusion(t *testing.T) {
 	}
 }
 
+func TestGenerateHelmReleaseInstallRemediation(t *testing.T) {
+	boolTrue := true
+	boolFalse := false
+
+	config := &Config{
+		Name:      "app-release",
+		Namespace: "default",
+		Chart: ChartConfig{
+			Name: "app",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+		},
+		Release: ReleaseConfig{
+			InstallRemediation: &RemediationConfig{
+				Retries:              3,
+				IgnoreTestFailures:   &boolTrue,
+				RemediateLastFailure: &boolFalse,
+			},
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release := hr.(*helmv2.HelmRelease)
+
+	if release.Spec.Install == nil {
+		t.Fatal("Install should be set")
+	}
+	if release.Spec.Install.Remediation == nil {
+		t.Fatal("Install.Remediation should be set")
+	}
+	if release.Spec.Install.Remediation.Retries != 3 {
+		t.Errorf("Install.Remediation.Retries = %d, want 3", release.Spec.Install.Remediation.Retries)
+	}
+	if release.Spec.Install.Remediation.IgnoreTestFailures == nil || !*release.Spec.Install.Remediation.IgnoreTestFailures {
+		t.Error("Install.Remediation.IgnoreTestFailures should be true")
+	}
+	if release.Spec.Install.Remediation.RemediateLastFailure == nil || *release.Spec.Install.Remediation.RemediateLastFailure {
+		t.Error("Install.Remediation.RemediateLastFailure should be false")
+	}
+}
+
+func TestGenerateHelmReleaseUpgradeRemediation(t *testing.T) {
+	boolTrue := true
+
+	config := &Config{
+		Name:      "app-release",
+		Namespace: "default",
+		Chart: ChartConfig{
+			Name: "app",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+		},
+		Release: ReleaseConfig{
+			UpgradeRemediation: &RemediationConfig{
+				Retries:              5,
+				RemediateLastFailure: &boolTrue,
+				Strategy:             "rollback",
+			},
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release := hr.(*helmv2.HelmRelease)
+
+	if release.Spec.Upgrade == nil {
+		t.Fatal("Upgrade should be set")
+	}
+	if release.Spec.Upgrade.Remediation == nil {
+		t.Fatal("Upgrade.Remediation should be set")
+	}
+	if release.Spec.Upgrade.Remediation.Retries != 5 {
+		t.Errorf("Upgrade.Remediation.Retries = %d, want 5", release.Spec.Upgrade.Remediation.Retries)
+	}
+	if release.Spec.Upgrade.Remediation.RemediateLastFailure == nil || !*release.Spec.Upgrade.Remediation.RemediateLastFailure {
+		t.Error("Upgrade.Remediation.RemediateLastFailure should be true")
+	}
+	if release.Spec.Upgrade.Remediation.Strategy == nil {
+		t.Fatal("Upgrade.Remediation.Strategy should be set")
+	}
+	if *release.Spec.Upgrade.Remediation.Strategy != helmv2.RollbackRemediationStrategy {
+		t.Errorf("Upgrade.Remediation.Strategy = %v, want rollback", *release.Spec.Upgrade.Remediation.Strategy)
+	}
+}
+
+func TestGenerateHelmReleaseUpgradeRemediationUninstall(t *testing.T) {
+	config := &Config{
+		Name:      "app-release",
+		Namespace: "default",
+		Chart: ChartConfig{
+			Name: "app",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+		},
+		Release: ReleaseConfig{
+			UpgradeRemediation: &RemediationConfig{
+				Retries:  -1,
+				Strategy: "uninstall",
+			},
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release := hr.(*helmv2.HelmRelease)
+
+	if release.Spec.Upgrade.Remediation.Retries != -1 {
+		t.Errorf("Retries = %d, want -1 (unlimited)", release.Spec.Upgrade.Remediation.Retries)
+	}
+	if *release.Spec.Upgrade.Remediation.Strategy != helmv2.UninstallRemediationStrategy {
+		t.Errorf("Strategy = %v, want uninstall", *release.Spec.Upgrade.Remediation.Strategy)
+	}
+}
+
+func TestGenerateHelmReleaseNoRemediation(t *testing.T) {
+	config := &Config{
+		Name:      "app-release",
+		Namespace: "default",
+		Chart: ChartConfig{
+			Name: "app",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+		},
+		Release: ReleaseConfig{},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release := hr.(*helmv2.HelmRelease)
+
+	// No remediation set — fields should be nil
+	if release.Spec.Install.Remediation != nil {
+		t.Error("Install.Remediation should be nil when not configured")
+	}
+	if release.Spec.Upgrade.Remediation != nil {
+		t.Error("Upgrade.Remediation should be nil when not configured")
+	}
+}
+
+func TestGenerateHelmReleaseUpgradeRemediationNoStrategy(t *testing.T) {
+	config := &Config{
+		Name:      "app-release",
+		Namespace: "default",
+		Chart: ChartConfig{
+			Name: "app",
+		},
+		Source: SourceConfig{
+			Type: HelmRepositorySource,
+		},
+		Release: ReleaseConfig{
+			UpgradeRemediation: &RemediationConfig{
+				Retries: 2,
+				// No Strategy — should default to nil (Flux defaults to rollback)
+			},
+		},
+	}
+
+	hr, err := config.generateHelmRelease()
+	if err != nil {
+		t.Fatalf("generateHelmRelease() error = %v", err)
+	}
+
+	release := hr.(*helmv2.HelmRelease)
+
+	if release.Spec.Upgrade.Remediation.Strategy != nil {
+		t.Errorf("Strategy should be nil when not set, got %v", *release.Spec.Upgrade.Remediation.Strategy)
+	}
+}
+
+func TestRemediationConfigJSONRoundTrip(t *testing.T) {
+	boolTrue := true
+	config := &Config{
+		Name:      "test",
+		Namespace: "default",
+		Chart:     ChartConfig{Name: "app"},
+		Source:    SourceConfig{Type: HelmRepositorySource},
+		Release: ReleaseConfig{
+			InstallRemediation: &RemediationConfig{
+				Retries:              3,
+				RemediateLastFailure: &boolTrue,
+			},
+			UpgradeRemediation: &RemediationConfig{
+				Retries:  5,
+				Strategy: "rollback",
+			},
+		},
+	}
+
+	jsonData, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+
+	var unmarshaled Config
+	if err := json.Unmarshal(jsonData, &unmarshaled); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	if unmarshaled.Release.InstallRemediation == nil {
+		t.Fatal("InstallRemediation should survive round-trip")
+	}
+	if unmarshaled.Release.InstallRemediation.Retries != 3 {
+		t.Errorf("InstallRemediation.Retries = %d, want 3", unmarshaled.Release.InstallRemediation.Retries)
+	}
+	if unmarshaled.Release.UpgradeRemediation == nil {
+		t.Fatal("UpgradeRemediation should survive round-trip")
+	}
+	if unmarshaled.Release.UpgradeRemediation.Strategy != "rollback" {
+		t.Errorf("UpgradeRemediation.Strategy = %q, want rollback", unmarshaled.Release.UpgradeRemediation.Strategy)
+	}
+}
+
 func TestGenerateResources_ChartRefValidation(t *testing.T) {
 	tests := []struct {
 		name    string
