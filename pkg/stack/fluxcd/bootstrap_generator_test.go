@@ -29,7 +29,7 @@ func TestSupportedBootstrapModes(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 	modes := bg.SupportedBootstrapModes()
 
-	expectedModes := []string{"gotk", "flux-operator"}
+	expectedModes := []string{"flux-operator", "gotk"}
 
 	if len(modes) != len(expectedModes) {
 		t.Errorf("SupportedBootstrapModes() returned %d modes, want %d", len(modes), len(expectedModes))
@@ -171,6 +171,36 @@ func TestGenerateGotkBootstrap(t *testing.T) {
 	// gotk mode may fail due to network or version requirements
 	// we just test that it doesn't panic
 	_, _ = bg.GenerateBootstrap(config, rootNode)
+}
+
+func TestGenerateBootstrapDefaultMode(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+
+	// Empty FluxMode should default to flux-operator
+	config := &stack.BootstrapConfig{
+		Enabled:     true,
+		FluxVersion: "v2.4.0",
+		SourceURL:   "oci://registry.example.com/flux-system",
+		SourceRef:   "latest",
+	}
+
+	rootNode := &stack.Node{Name: "test-cluster"}
+
+	resources, err := bg.GenerateBootstrap(config, rootNode)
+	if err != nil {
+		t.Fatalf("GenerateBootstrap() error = %v", err)
+	}
+
+	// Should generate FluxInstance (flux-operator mode)
+	if len(resources) == 0 {
+		t.Fatal("expected at least one resource")
+	}
+
+	// Verify it's a FluxInstance (not gotk output)
+	if resources[0].GetObjectKind().GroupVersionKind().Kind != "FluxInstance" {
+		t.Errorf("expected FluxInstance for default mode, got %s",
+			resources[0].GetObjectKind().GroupVersionKind().Kind)
+	}
 }
 
 func TestGenerateGotkBootstrapWithOptions(t *testing.T) {
