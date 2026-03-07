@@ -37,8 +37,7 @@ func Issuer(cfg *IssuerConfig) *certv1.Issuer {
 	if cfg.ACME != nil {
 		acme := buildACMEIssuer(cfg.ACME)
 		intcm.SetIssuerACME(obj, acme) //nolint:errcheck,gosec // obj is freshly created
-	}
-	if cfg.CA != nil {
+	} else if cfg.CA != nil {
 		intcm.SetIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName}) //nolint:errcheck,gosec // obj is freshly created
 	}
 	return obj
@@ -53,8 +52,7 @@ func ClusterIssuer(cfg *ClusterIssuerConfig) *certv1.ClusterIssuer {
 	if cfg.ACME != nil {
 		acme := buildACMEIssuer(cfg.ACME)
 		intcm.SetClusterIssuerACME(obj, acme) //nolint:errcheck,gosec // obj is freshly created
-	}
-	if cfg.CA != nil {
+	} else if cfg.CA != nil {
 		intcm.SetClusterIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName}) //nolint:errcheck,gosec // obj is freshly created
 	}
 	return obj
@@ -65,7 +63,9 @@ func buildACMEIssuer(cfg *ACMEConfig) *cmacme.ACMEIssuer {
 	acme := intcm.CreateACMEIssuer(cfg.Server, cfg.Email, cfg.PrivateKey)
 	for _, s := range cfg.Solvers {
 		solver := buildACMESolver(&s)
-		intcm.AddACMEIssuerSolver(acme, solver)
+		if solver.HTTP01 != nil || solver.DNS01 != nil {
+			intcm.AddACMEIssuerSolver(acme, solver)
+		}
 	}
 	return acme
 }

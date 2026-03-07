@@ -163,6 +163,69 @@ func TestClusterIssuer_NilConfig(t *testing.T) {
 	}
 }
 
+func TestBuildACMEIssuer_SkipsEmptySolver(t *testing.T) {
+	cfg := &ACMEConfig{
+		Server: "https://acme-v02.api.letsencrypt.org/directory",
+		Email:  "admin@example.com",
+		Solvers: []ACMESolverConfig{
+			{}, // no HTTP01 or DNS01 — should be skipped
+		},
+	}
+
+	acme := buildACMEIssuer(cfg)
+
+	if len(acme.Solvers) != 0 {
+		t.Errorf("expected 0 solvers for invalid config, got %d", len(acme.Solvers))
+	}
+}
+
+func TestIssuer_ACMEPrecedenceOverCA(t *testing.T) {
+	cfg := &IssuerConfig{
+		Name:      "both",
+		Namespace: "default",
+		ACME: &ACMEConfig{
+			Server: "https://acme-v02.api.letsencrypt.org/directory",
+			Email:  "admin@example.com",
+		},
+		CA: &CAConfig{SecretName: "ca-key-pair"},
+	}
+
+	issuer := Issuer(cfg)
+
+	if issuer == nil {
+		t.Fatal("expected non-nil Issuer")
+	}
+	if issuer.Spec.IssuerConfig.ACME == nil {
+		t.Fatal("expected ACME to be set when both ACME and CA are configured")
+	}
+	if issuer.Spec.IssuerConfig.CA != nil {
+		t.Error("expected CA to be nil when ACME is configured (ACME takes precedence)")
+	}
+}
+
+func TestClusterIssuer_ACMEPrecedenceOverCA(t *testing.T) {
+	cfg := &ClusterIssuerConfig{
+		Name: "both",
+		ACME: &ACMEConfig{
+			Server: "https://acme-v02.api.letsencrypt.org/directory",
+			Email:  "admin@example.com",
+		},
+		CA: &CAConfig{SecretName: "ca-key-pair"},
+	}
+
+	ci := ClusterIssuer(cfg)
+
+	if ci == nil {
+		t.Fatal("expected non-nil ClusterIssuer")
+	}
+	if ci.Spec.IssuerConfig.ACME == nil {
+		t.Fatal("expected ACME to be set when both ACME and CA are configured")
+	}
+	if ci.Spec.IssuerConfig.CA != nil {
+		t.Error("expected CA to be nil when ACME is configured (ACME takes precedence)")
+	}
+}
+
 func TestBuildDNS01Solver_Cloudflare(t *testing.T) {
 	token := cmmeta.SecretKeySelector{
 		LocalObjectReference: cmmeta.LocalObjectReference{Name: "cloudflare-token"},
