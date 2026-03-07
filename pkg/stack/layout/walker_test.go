@@ -121,6 +121,94 @@ func TestWalkClusterNodeOnly(t *testing.T) {
 	}
 }
 
+func TestWalkClusterFlatRoot(t *testing.T) {
+	obj1 := &unstructured.Unstructured{}
+	obj1.SetAPIVersion("v1")
+	obj1.SetKind("ConfigMap")
+	obj1.SetName("cm1")
+	obj1.SetNamespace("default")
+	var o1 client.Object = obj1
+
+	obj2 := &unstructured.Unstructured{}
+	obj2.SetAPIVersion("v1")
+	obj2.SetKind("Secret")
+	obj2.SetName("sec1")
+	obj2.SetNamespace("default")
+	var o2 client.Object = obj2
+
+	app1 := stack.NewApplication("app1", "ns", &fakeConfig{objs: []*client.Object{&o1}})
+	app2 := stack.NewApplication("app2", "ns", &fakeConfig{objs: []*client.Object{&o2}})
+	bundle1 := &stack.Bundle{Name: "bundle1", Applications: []*stack.Application{app1}}
+	bundle2 := &stack.Bundle{Name: "bundle2", Applications: []*stack.Application{app2}}
+	node1 := &stack.Node{Name: "infra", Bundle: bundle1}
+	node2 := &stack.Node{Name: "apps", Bundle: bundle2}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node1, node2}}
+	node1.SetParent(root)
+	node2.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	// All flat: NodeGrouping=GroupFlat, BundleGrouping=GroupFlat, ApplicationGrouping=GroupFlat
+	rules := layout.LayoutRules{
+		NodeGrouping:        layout.GroupFlat,
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+	}
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("nil layout returned")
+	}
+
+	// With flat root output, all child node resources are merged into root
+	if len(ml.Children) != 0 {
+		t.Fatalf("expected no children (flat root), got %d", len(ml.Children))
+	}
+	if len(ml.Resources) != 2 {
+		t.Fatalf("expected 2 resources from both nodes, got %d", len(ml.Resources))
+	}
+}
+
+func TestWalkClusterFlatRoot_DeepHierarchy(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app", "ns", &fakeConfig{objs: []*client.Object{&o}})
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	grandchild := &stack.Node{Name: "grandchild", Bundle: bundle}
+	child := &stack.Node{Name: "child", Children: []*stack.Node{grandchild}}
+	grandchild.SetParent(child)
+	root := &stack.Node{Name: "root", Children: []*stack.Node{child}}
+	child.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.LayoutRules{
+		NodeGrouping:        layout.GroupFlat,
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+	}
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("nil layout returned")
+	}
+
+	// Deep hierarchy should be fully flattened
+	if len(ml.Children) != 0 {
+		t.Fatalf("expected no children (flat root), got %d", len(ml.Children))
+	}
+	if len(ml.Resources) != 1 {
+		t.Fatalf("expected 1 resource from grandchild, got %d", len(ml.Resources))
+	}
+}
+
 func TestWalkClusterByPackage(t *testing.T) {
 	obj1 := &unstructured.Unstructured{}
 	obj1.SetAPIVersion("v1")

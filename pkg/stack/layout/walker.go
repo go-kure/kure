@@ -38,6 +38,7 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 	}
 
 	nodeOnly := rules.BundleGrouping == GroupFlat && rules.ApplicationGrouping == GroupFlat
+	nodeFlat := rules.NodeGrouping == GroupFlat
 	filePer := rules.FilePer
 	if nodeOnly {
 		filePer = FilePerResource
@@ -49,7 +50,7 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 	}
 
 	// Traditional layout without cluster name
-	ml, err := walkNode(c.Node, nil, nodeOnly, filePer, nil, rules.FluxPlacement)
+	ml, err := walkNode(c.Node, nil, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +99,9 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 	}
 
 	// Process all child nodes as siblings at the cluster level (with their own resources)
+	nodeFlat := rules.NodeGrouping == GroupFlat
 	for _, child := range c.Node.Children {
-		childLayout, err := walkNode(child, []string{rules.ClusterName}, nodeOnly, filePer, nil, rules.FluxPlacement)
+		childLayout, err := walkNode(child, []string{rules.ClusterName}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +163,9 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 }
 
 // walkNode recursively processes a stack.Node and its children.
-func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, inheritedPackageRef *schema.GroupVersionKind, fluxPlacement FluxPlacement) (*ManifestLayout, error) {
+// When nodeFlat is true, child nodes do not create subdirectories; their
+// resources are merged into the parent ManifestLayout.
+func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, filePer FileExportMode, inheritedPackageRef *schema.GroupVersionKind, fluxPlacement FluxPlacement) (*ManifestLayout, error) {
 	if n == nil {
 		return nil, nil
 	}
@@ -235,7 +239,7 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExpo
 		}
 
 		for _, child := range n.Children {
-			cl, err := walkNode(child, currentPath, nodeOnly, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement)
+			cl, err := walkNode(child, currentPath, nodeOnly, nodeFlat, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement)
 			if err != nil {
 				return nil, err
 			}
@@ -249,12 +253,27 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExpo
 
 	if nodeOnly {
 		for _, child := range n.Children {
-			cl, err := walkNode(child, currentPath, nodeOnly, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement)
-			if err != nil {
-				return nil, err
-			}
-			if cl != nil {
-				ml.Children = append(ml.Children, cl)
+			if nodeFlat {
+				// Merge child node resources directly into this node
+				cl, err := walkNode(child, ancestors, nodeOnly, nodeFlat, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement)
+				if err != nil {
+					return nil, err
+				}
+				if cl != nil {
+					ml.Resources = append(ml.Resources, cl.Resources...)
+					// Recursively collect from grandchildren too
+					for _, gc := range cl.Children {
+						ml.Resources = append(ml.Resources, gc.Resources...)
+					}
+				}
+			} else {
+				cl, err := walkNode(child, currentPath, nodeOnly, nodeFlat, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement)
+				if err != nil {
+					return nil, err
+				}
+				if cl != nil {
+					ml.Children = append(ml.Children, cl)
+				}
 			}
 		}
 	}
