@@ -32,6 +32,7 @@ func TestWalkClusterGroupingCombinations(t *testing.T) {
 		name     string
 		rules    layout.LayoutRules
 		nodeOnly bool
+		nodeFlat bool
 	}
 
 	modes := []layout.GroupingMode{layout.GroupByName, layout.GroupFlat}
@@ -43,6 +44,7 @@ func TestWalkClusterGroupingCombinations(t *testing.T) {
 					name:     string(ng) + "_" + string(bg) + "_" + string(ag),
 					rules:    layout.LayoutRules{NodeGrouping: ng, BundleGrouping: bg, ApplicationGrouping: ag},
 					nodeOnly: bg == layout.GroupFlat && ag == layout.GroupFlat,
+					nodeFlat: ng == layout.GroupFlat,
 				}
 				tests = append(tests, tc)
 			}
@@ -57,6 +59,18 @@ func TestWalkClusterGroupingCombinations(t *testing.T) {
 			if err != nil {
 				t.Fatalf("walk cluster: %v", err)
 			}
+
+			// When both nodeOnly and nodeFlat, child node resources are merged into root
+			if tc.nodeOnly && tc.nodeFlat {
+				if len(ml.Children) != 0 {
+					t.Fatalf("expected no children (flat root), got %d", len(ml.Children))
+				}
+				if len(ml.Resources) != 1 {
+					t.Fatalf("expected resources at root, got %d", len(ml.Resources))
+				}
+				return
+			}
+
 			if len(ml.Children) != 1 {
 				t.Fatalf("expected one child, got %d", len(ml.Children))
 			}
