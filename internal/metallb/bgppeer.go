@@ -1,7 +1,7 @@
 package metallb
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +26,7 @@ func CreateBGPPeer(name, namespace string, spec metallbv1beta1.BGPPeerSpec) *met
 // AddBGPPeerNodeSelector appends a node selector to the BGPPeer spec.
 func AddBGPPeerNodeSelector(obj *metallbv1beta1.BGPPeer, sel metallbv1beta1.NodeSelector) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.NodeSelectors = append(obj.Spec.NodeSelectors, sel)
 	return nil
@@ -35,7 +35,7 @@ func AddBGPPeerNodeSelector(obj *metallbv1beta1.BGPPeer, sel metallbv1beta1.Node
 // SetBGPPeerPort sets the peer port on the BGPPeer spec.
 func SetBGPPeerPort(obj *metallbv1beta1.BGPPeer, port uint16) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.Port = port
 	return nil
@@ -44,7 +44,7 @@ func SetBGPPeerPort(obj *metallbv1beta1.BGPPeer, port uint16) error {
 // SetBGPPeerHoldTime sets the hold time on the BGPPeer spec.
 func SetBGPPeerHoldTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.HoldTime = d
 	return nil
@@ -53,7 +53,7 @@ func SetBGPPeerHoldTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) error {
 // SetBGPPeerKeepaliveTime sets the keepalive time on the BGPPeer spec.
 func SetBGPPeerKeepaliveTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.KeepaliveTime = d
 	return nil
@@ -62,7 +62,7 @@ func SetBGPPeerKeepaliveTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) err
 // SetBGPPeerSrcAddress sets the source address on the BGPPeer spec.
 func SetBGPPeerSrcAddress(obj *metallbv1beta1.BGPPeer, addr string) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.SrcAddress = addr
 	return nil
@@ -71,7 +71,7 @@ func SetBGPPeerSrcAddress(obj *metallbv1beta1.BGPPeer, addr string) error {
 // SetBGPPeerRouterID sets the router ID on the BGPPeer spec.
 func SetBGPPeerRouterID(obj *metallbv1beta1.BGPPeer, id string) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.RouterID = id
 	return nil
@@ -80,7 +80,7 @@ func SetBGPPeerRouterID(obj *metallbv1beta1.BGPPeer, id string) error {
 // SetBGPPeerEBGPMultiHop sets the eBGP multi-hop flag on the BGPPeer spec.
 func SetBGPPeerEBGPMultiHop(obj *metallbv1beta1.BGPPeer, multi bool) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.EBGPMultiHop = multi
 	return nil
@@ -89,7 +89,7 @@ func SetBGPPeerEBGPMultiHop(obj *metallbv1beta1.BGPPeer, multi bool) error {
 // SetBGPPeerPassword sets the password on the BGPPeer spec.
 func SetBGPPeerPassword(obj *metallbv1beta1.BGPPeer, pw string) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.Password = pw
 	return nil
@@ -98,7 +98,7 @@ func SetBGPPeerPassword(obj *metallbv1beta1.BGPPeer, pw string) error {
 // SetBGPPeerBFDProfile sets the BFD profile name on the BGPPeer spec.
 func SetBGPPeerBFDProfile(obj *metallbv1beta1.BGPPeer, profile string) error {
 	if obj == nil {
-		return errors.New("nil BGPPeer")
+		return errors.ErrNilBGPPeer
 	}
 	obj.Spec.BFDProfile = profile
 	return nil
