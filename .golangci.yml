@@ -8,7 +8,13 @@ run:
 
 linters:
   enable:
-    # Additional linters (default linters are enabled automatically in v2)
+    # Default linters (listed explicitly per Wharf standard)
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    # Additional required linters
     - bodyclose
     - durationcheck
     - errorlint
