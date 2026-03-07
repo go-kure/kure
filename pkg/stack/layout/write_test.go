@@ -569,6 +569,64 @@ func TestWriteToDisk_FluxSeparateDefault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Golden file test: Pattern A preset end-to-end
+// ---------------------------------------------------------------------------
+
+func TestWriteManifest_PatternA_EndToEnd(t *testing.T) {
+	objs := []client.Object{
+		testObject("apps/v1", "Deployment", "myapp-web", "default"),
+		testObject("v1", "Service", "myapp-web", "default"),
+		testObject("v1", "ConfigMap", "myapp-config", "default"),
+	}
+
+	ml := &ManifestLayout{
+		Name:      "myapp",
+		Namespace: "cl/applications",
+		Resources: objs,
+	}
+
+	cfg, err := ConfigForPreset(PresetCentralizedControlPlane)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	dir := t.TempDir()
+
+	if err := WriteManifest(dir, cfg, ml); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	// Pattern A uses {kind}-{name}.yaml naming
+	base := filepath.Join(dir, "clusters", "cl", "applications", "myapp")
+	expectedFiles := []string{
+		"deployment-myapp-web.yaml",
+		"service-myapp-web.yaml",
+		"configmap-myapp-config.yaml",
+	}
+	for _, f := range expectedFiles {
+		p := filepath.Join(base, f)
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("expected file %s: %v", p, err)
+		}
+	}
+
+	// Kustomization should reference {kind}-{name}.yaml files
+	kData, err := os.ReadFile(filepath.Join(base, "kustomization.yaml"))
+	if err != nil {
+		t.Fatalf("read kustomization.yaml: %v", err)
+	}
+	for _, f := range expectedFiles {
+		if !strings.Contains(string(kData), f) {
+			t.Errorf("kustomization.yaml missing reference to %s", f)
+		}
+	}
+
+	// Should NOT contain namespace-prefixed file names
+	if strings.Contains(string(kData), "default-deployment") {
+		t.Errorf("Pattern A should not use namespace-prefixed file names, got:\n%s", kData)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // WriteToDisk tests
 // ---------------------------------------------------------------------------
 
