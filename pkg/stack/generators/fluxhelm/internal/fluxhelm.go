@@ -130,6 +130,22 @@ type ReleaseConfig struct {
 	// CRD lifecycle policies
 	InstallCRDs CRDsPolicy `yaml:"installCRDs,omitempty" json:"installCRDs,omitempty"`
 	UpgradeCRDs CRDsPolicy `yaml:"upgradeCRDs,omitempty" json:"upgradeCRDs,omitempty"`
+
+	// Remediation configuration
+	InstallRemediation *RemediationConfig `yaml:"installRemediation,omitempty" json:"installRemediation,omitempty"`
+	UpgradeRemediation *RemediationConfig `yaml:"upgradeRemediation,omitempty" json:"upgradeRemediation,omitempty"`
+}
+
+// RemediationConfig defines the remediation strategy for failed Helm actions.
+type RemediationConfig struct {
+	// Retries is the number of retries before bailing. A negative value means unlimited.
+	Retries int `yaml:"retries,omitempty" json:"retries,omitempty"`
+	// IgnoreTestFailures tells the controller to skip remediation when tests fail.
+	IgnoreTestFailures *bool `yaml:"ignoreTestFailures,omitempty" json:"ignoreTestFailures,omitempty"`
+	// RemediateLastFailure tells the controller to remediate the last failure when no retries remain.
+	RemediateLastFailure *bool `yaml:"remediateLastFailure,omitempty" json:"remediateLastFailure,omitempty"`
+	// Strategy is the remediation strategy: "rollback" or "uninstall". Only applies to upgrade remediation.
+	Strategy string `yaml:"strategy,omitempty" json:"strategy,omitempty"`
 }
 
 // ValuesReference defines a reference to a resource from which Helm values are sourced.
@@ -563,6 +579,29 @@ func (c *Config) generateHelmRelease() (client.Object, error) {
 		PreserveValues:           c.Release.PreserveValues,
 		CRDs:                     helmv2.CRDsPolicy(c.Release.UpgradeCRDs),
 		CleanupOnFail:            c.Release.CleanupOnFail,
+	}
+
+	// Set install remediation
+	if c.Release.InstallRemediation != nil {
+		hr.Spec.Install.Remediation = &helmv2.InstallRemediation{
+			Retries:              c.Release.InstallRemediation.Retries,
+			IgnoreTestFailures:   c.Release.InstallRemediation.IgnoreTestFailures,
+			RemediateLastFailure: c.Release.InstallRemediation.RemediateLastFailure,
+		}
+	}
+
+	// Set upgrade remediation
+	if c.Release.UpgradeRemediation != nil {
+		r := &helmv2.UpgradeRemediation{
+			Retries:              c.Release.UpgradeRemediation.Retries,
+			IgnoreTestFailures:   c.Release.UpgradeRemediation.IgnoreTestFailures,
+			RemediateLastFailure: c.Release.UpgradeRemediation.RemediateLastFailure,
+		}
+		if c.Release.UpgradeRemediation.Strategy != "" {
+			strategy := helmv2.RemediationStrategy(c.Release.UpgradeRemediation.Strategy)
+			r.Strategy = &strategy
+		}
+		hr.Spec.Upgrade.Remediation = r
 	}
 
 	// Set dependencies
