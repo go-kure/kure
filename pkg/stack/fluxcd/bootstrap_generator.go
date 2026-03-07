@@ -70,12 +70,12 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 	resources = append(resources, gotkResources...)
 
 	// Generate flux-system Kustomization
-	fluxSystemKust := bg.generateFluxSystemKustomization(rootNode)
+	fluxSystemKust := bg.generateFluxSystemKustomization(config, rootNode)
 	resources = append(resources, fluxSystemKust)
 
-	// Generate OCI source for the root node
+	// Generate source for the root node based on SourceKind
 	if config.SourceURL != "" {
-		source := bg.generateOCISource(config, rootNode)
+		source := bg.generateSource(config, rootNode)
 		if source != nil {
 			resources = append(resources, source)
 		}
@@ -134,7 +134,12 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 }
 
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
-func (bg *BootstrapGenerator) generateFluxSystemKustomization(rootNode *stack.Node) client.Object {
+func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+	sourceKind := "GitRepository"
+	if config.SourceKind == "OCIRepository" {
+		sourceKind = "OCIRepository"
+	}
+
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
@@ -149,7 +154,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(rootNode *stack.No
 			Path:     filepath.ToSlash(filepath.Join("manifests", rootNode.Name)),
 			Prune:    true,
 			SourceRef: kustv1.CrossNamespaceSourceReference{
-				Kind: "GitRepository",
+				Kind: sourceKind,
 				Name: "flux-system",
 			},
 		},
@@ -158,22 +163,49 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(rootNode *stack.No
 	return kust
 }
 
+// generateSource creates a source resource based on SourceKind.
+// When SourceKind is "GitRepository", a GitRepository is created.
+// Otherwise (including when SourceKind is empty), an OCIRepository is created for backward compatibility.
+func (bg *BootstrapGenerator) generateSource(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+	if config.SourceKind == "GitRepository" {
+		return bg.generateGitSource(config, rootNode)
+	}
+	return bg.generateOCISource(config, rootNode)
+}
+
+// generateGitSource creates a GitRepository source for bootstrap from config.
+func (bg *BootstrapGenerator) generateGitSource(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+	sourceName := "flux-system"
+	if rootNode != nil && rootNode.Name != "" {
+		sourceName = rootNode.Name
+	}
+
+	spec := sourcev1.GitRepositorySpec{
+		URL:      config.SourceURL,
+		Interval: metav1.Duration{Duration: bg.DefaultInterval},
+	}
+
+	if config.SourceRef != "" {
+		spec.Reference = &sourcev1.GitRepositoryRef{
+			Branch: config.SourceRef,
+		}
+	}
+
+	return intfluxcd.CreateGitRepository(sourceName, bg.DefaultNamespace, spec)
+}
+
 // generateOCISource creates an OCI source for bootstrap from config.
 func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
-	// Default values
 	url := "oci://registry.example.com/flux-system"
 	ref := "latest"
 	sourceName := "flux-system"
 
-	// Use configuration from BootstrapConfig if available
 	if config.SourceURL != "" {
 		url = config.SourceURL
 	}
 	if config.SourceRef != "" {
 		ref = config.SourceRef
 	}
-
-	// Create source name based on node
 	if rootNode != nil && rootNode.Name != "" {
 		sourceName = rootNode.Name
 	}
@@ -210,8 +242,13 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 			path = "./" + rootNode.Name
 		}
 
+		syncKind := "OCIRepository"
+		if config.SourceKind == "GitRepository" {
+			syncKind = "GitRepository"
+		}
+
 		spec.Sync = &fluxv1.Sync{
-			Kind:     "OCIRepository",
+			Kind:     syncKind,
 			URL:      config.SourceURL,
 			Ref:      config.SourceRef,
 			Path:     path,
