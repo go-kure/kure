@@ -118,6 +118,10 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		for _, child := range ml.Children {
 			if child.ApplicationFileMode == AppFileSingle {
 				kustomBuf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
+			} else if ml.FluxPlacement == FluxIntegrated {
+				// FluxIntegrated: reference Flux Kustomization YAML files
+				fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
+				kustomBuf.WriteString(fmt.Sprintf("  - %s\n", fluxKustName))
 			} else {
 				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {
 					continue
