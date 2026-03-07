@@ -438,6 +438,175 @@ func TestValidateWithSchema(t *testing.T) {
 		}
 	})
 
+	t.Run("pattern validation", func(t *testing.T) {
+		schema := &JSONSchema{
+			Type: "object",
+			Properties: map[string]*JSONSchema{
+				"name": {
+					Type:    "string",
+					Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`,
+				},
+			},
+		}
+
+		tests := []struct {
+			value     string
+			shouldErr bool
+		}{
+			{"valid-name", false},
+			{"a", false},
+			{"abc123", false},
+			{"my-app-v2", false},
+			{"Invalid", true},        // uppercase
+			{"-invalid", true},       // starts with dash
+			{"invalid-", true},       // ends with dash
+			{"no spaces", true},      // spaces
+			{"no_underscores", true}, // underscores
+		}
+
+		for _, tt := range tests {
+			data := map[string]any{
+				"name": tt.value,
+			}
+			errors := ValidateWithSchema(data, schema)
+			if tt.shouldErr {
+				assert.NotEmpty(t, errors, "Expected error for value: %s", tt.value)
+				assert.Contains(t, errors[0].Message, "does not match pattern")
+			} else {
+				assert.Empty(t, errors, "Unexpected error for value: %s", tt.value)
+			}
+		}
+	})
+
+	t.Run("pattern validation with email", func(t *testing.T) {
+		schema := &JSONSchema{
+			Type: "object",
+			Properties: map[string]*JSONSchema{
+				"email": {
+					Type:    "string",
+					Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+				},
+			},
+		}
+
+		tests := []struct {
+			value     string
+			shouldErr bool
+		}{
+			{"user@example.com", false},
+			{"test.user@domain.org", false},
+			{"notanemail", true},
+			{"@missing-local.com", true},
+			{"missing-domain@", true},
+		}
+
+		for _, tt := range tests {
+			data := map[string]any{
+				"email": tt.value,
+			}
+			errors := ValidateWithSchema(data, schema)
+			if tt.shouldErr {
+				assert.NotEmpty(t, errors, "Expected error for value: %s", tt.value)
+			} else {
+				assert.Empty(t, errors, "Unexpected error for value: %s", tt.value)
+			}
+		}
+	})
+
+	t.Run("pattern validation with invalid regex", func(t *testing.T) {
+		schema := &JSONSchema{
+			Type: "object",
+			Properties: map[string]*JSONSchema{
+				"field": {
+					Type:    "string",
+					Pattern: `[invalid`,
+				},
+			},
+		}
+
+		data := map[string]any{
+			"field": "any value",
+		}
+		errors := ValidateWithSchema(data, schema)
+		assert.NotEmpty(t, errors)
+		assert.Contains(t, errors[0].Message, "invalid schema pattern")
+	})
+
+	t.Run("pattern validation skips empty string", func(t *testing.T) {
+		schema := &JSONSchema{
+			Type: "object",
+			Properties: map[string]*JSONSchema{
+				"version": {
+					Type:    "string",
+					Pattern: `^v?\d+\.\d+\.\d+(-[a-z0-9]+)?(\+[a-z0-9]+)?$`,
+				},
+			},
+		}
+
+		// Empty string is not validated against patterns (use minLength to enforce presence)
+		data := map[string]any{
+			"version": "",
+		}
+		errors := ValidateWithSchema(data, schema)
+		assert.Empty(t, errors)
+	})
+
+	t.Run("pattern validation non-empty mismatch", func(t *testing.T) {
+		schema := &JSONSchema{
+			Type: "object",
+			Properties: map[string]*JSONSchema{
+				"version": {
+					Type:    "string",
+					Pattern: `^v?\d+\.\d+\.\d+(-[a-z0-9]+)?(\+[a-z0-9]+)?$`,
+				},
+			},
+		}
+
+		// Non-empty string that doesn't match should fail
+		data := map[string]any{
+			"version": "not-a-version",
+		}
+		errors := ValidateWithSchema(data, schema)
+		assert.NotEmpty(t, errors)
+		assert.Contains(t, errors[0].Message, "does not match pattern")
+	})
+
+	t.Run("pattern validation skips template variables", func(t *testing.T) {
+		schema := &JSONSchema{
+			Type: "object",
+			Properties: map[string]*JSONSchema{
+				"name": {
+					Type:    "string",
+					Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`,
+				},
+			},
+		}
+
+		// Template variables should not be validated against patterns
+		data := map[string]any{
+			"name": "${app_name}",
+		}
+		errors := ValidateWithSchema(data, schema)
+		assert.Empty(t, errors)
+	})
+
+	t.Run("pattern with no pattern set", func(t *testing.T) {
+		schema := &JSONSchema{
+			Type: "object",
+			Properties: map[string]*JSONSchema{
+				"name": {
+					Type: "string",
+				},
+			},
+		}
+
+		data := map[string]any{
+			"name": "anything goes",
+		}
+		errors := ValidateWithSchema(data, schema)
+		assert.Empty(t, errors)
+	})
+
 	t.Run("nested object validation", func(t *testing.T) {
 		schema := &JSONSchema{
 			Type: "object",

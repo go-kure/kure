@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -972,7 +973,21 @@ func validateRecursive(data any, schema *JSONSchema, path string, errors *[]Vali
 
 	case "string":
 		if str, ok := data.(string); ok {
-			// TODO: pattern validation (schema.Pattern)
+			// Check pattern (skip empty strings and template variables)
+			if schema.Pattern != "" && str != "" && !strings.Contains(str, "${") {
+				re, err := regexp.Compile(schema.Pattern)
+				if err != nil {
+					*errors = append(*errors, ValidationError{
+						Field:   path,
+						Message: fmt.Sprintf("invalid schema pattern %q: %v", schema.Pattern, err),
+					})
+				} else if !re.MatchString(str) {
+					*errors = append(*errors, ValidationError{
+						Field:   path,
+						Message: fmt.Sprintf("value %q does not match pattern %q", str, schema.Pattern),
+					})
+				}
+			}
 
 			// Check length
 			if schema.MinLength != nil && len(str) < *schema.MinLength {
