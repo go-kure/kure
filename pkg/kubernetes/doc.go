@@ -138,4 +138,19 @@
 // All setter/adder functions operating on the HTTPRoute return an error
 // when passed a nil pointer, using
 // [github.com/go-kure/kure/pkg/errors.ErrNilHTTPRoute].
+//
+// # PSA Security Context Helpers
+//
+// [RestrictedPodSecurityContext], [BaselinePodSecurityContext], and
+// [PrivilegedPodSecurityContext] return PodSecurityContext objects compliant
+// with the corresponding Pod Security Standards levels.
+//
+// [RestrictedSecurityContext], [BaselineSecurityContext], and
+// [PrivilegedSecurityContext] return container SecurityContext objects.
+//
+// [PodSecurityContextForLevel] and [SecurityContextForLevel] accept a
+// [PSALevel] and return the appropriate context.
+//
+// [ValidateContainerPSA] and [ValidatePodSpecPSA] check compliance against a
+// given PSA level.
 package kubernetes
