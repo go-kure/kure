@@ -153,4 +153,17 @@
 //
 // [ValidateContainerPSA] and [ValidatePodSpecPSA] check compliance against a
 // given PSA level.
+//
+// # ResourceRequirements Builder
+//
+// [CreateResourceRequirements] returns an empty ResourceRequirements.
+// The remaining helpers follow the Set*/Add* convention:
+//
+//   - [SetResourceRequestCPU], [SetResourceRequestMemory], [SetResourceRequestEphemeralStorage]
+//   - [SetResourceLimitCPU], [SetResourceLimitMemory], [SetResourceLimitEphemeralStorage]
+//   - [SetResourceRequest], [SetResourceLimit] — named resources
+//   - [AddResourceClaim] — resource claims
+//
+// All setter/adder functions return an error when passed a nil ResourceRequirements pointer,
+// using [github.com/go-kure/kure/pkg/errors.ErrNilResourceRequirements].
 package kubernetes
