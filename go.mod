@@ -2,7 +2,21 @@ module github.com/go-kure/kure
 
 go 1.26.1
 
-// Replace directives keep all k8s.io packages in lockstep at v0.35.1 (Kubernetes 1.35).
+// Replace directives: pin all k8s.io packages to the same patch release.
+//
+// Why: Kubernetes client libraries (api, apimachinery, client-go, etc.) must
+// be used at the same version to avoid type incompatibilities and runtime
+// panics. Kure's transitive dependencies (cert-manager, cloudnative-pg,
+// flux-operator, metallb, prometheus-operator, etc.) each require different
+// k8s.io minor versions (v0.30–v0.35). Without explicit pins, `go mod tidy`
+// could pull in mismatched versions during dependency updates.
+//
+// Current pin: v0.35.1 (Kubernetes 1.35)
+//
+// Removal condition: these directives can be removed when ALL direct and
+// transitive dependencies converge on the same k8s.io minor version, making
+// Go's MVS sufficient to maintain lockstep. Check with:
+//   go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 replace (
 	k8s.io/api => k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.35.1
