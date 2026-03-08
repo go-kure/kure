@@ -37,6 +37,7 @@ func LayoutRulesForPreset(p LayoutPreset) (LayoutRules, error) {
 			ApplicationFileMode: AppFilePerResource,
 			FilePer:             FilePerResource,
 			FluxPlacement:       FluxSeparate,
+			FileNaming:          FileNamingKindName,
 		}, nil
 
 	case PresetSiblingControlPlane:
