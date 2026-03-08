@@ -1,6 +1,55 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-beta.7] - 2026-03-08
+
+### Added
+
+- Add public facade package
+- Add public facade package
+- Add public facade package
+- Support flat root output with NodeGrouping=GroupFlat (#240)
+- Add configurable layout presets (#263)
+- Add NetworkPolicy and HTTPRoute builders (#242)
+- Add PSA security context helpers (#243)
+- Add Prometheus operator builders (#354)
+- Add ResourceRequirements builder (#244)
+- Add {kind}-{name}.yaml file naming pattern (#266)
+- Set FileNamingKindName in centralized preset LayoutRules
+- Add SourceKind field to BootstrapConfig (#254)
+- Implement regex pattern validation in schema
+- Add configurable kustomization mode per FluxPlacement (#265)
+- Add Flux 2.8 remediation and wait strategy builders (#255)
+- Promote flux-operator to primary bootstrap mode (#256)
+- Add remediation config to ReleaseConfig (#236)
+
+### Documentation
+
+- Add package README
+- Add metallb to AGENTS.md reverse mapping table
+- Fix version mismatches and outdated references across documentation
+- Add godoc comments to namespace builder functions
+- Document Provider/Alert v1beta3 blocked state (#250)
+- Document k8s.io replace directives in go.mod (#291)
+
+### Fixed
+
+- Add missing types.go, doc.go, tests and SetClusterIssuerCA
+- Skip empty ACME solvers, make ACME and CA mutually exclusive
+- Append GOPATH/bin to PATH instead of prepending in Makefile
+- Use predefined nil error constants in metallb builders
+- Use pkg/errors instead of fmt.Errorf in patch package
+- Check FluxPlacement in WriteToDisk and WriteToTar (#264)
+- Centralize error sentinels and add documentation
+- Avoid slice mutation and validate ephemeral containers in PSA
+- Use centralized sentinel errors and add missing Prometheus helpers
+- Remove trailing blank line in bootstrap generator test
+
+### Testing
+
+- Add comprehensive tests for public facade
+- Add tests and docs for externalsecrets facade
+
 ## [0.1.0-beta.6] - 2026-03-06
 
 ### Added
@@ -115,6 +164,7 @@ All notable changes to this project will be documented in this file.
 - V0.1.0-beta.3
 - V0.1.0-beta.4
 - V0.1.0-beta.5
+- V0.1.0-beta.6
 
 ## [0.1.0-beta.0] - 2026-02-17
 
