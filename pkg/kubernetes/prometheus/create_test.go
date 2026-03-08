@@ -94,8 +94,9 @@ func TestPodMonitor(t *testing.T) {
 			PodMetricsEndpoints: []monitoringv1.PodMetricsEndpoint{
 				{Port: strPtr("metrics")},
 			},
-			JobLabel: "app",
-			Labels:   map[string]string{"team": "platform"},
+			JobLabel:        "app",
+			PodTargetLabels: []string{"version"},
+			Labels:          map[string]string{"team": "platform"},
 		}
 		obj := PodMonitor(cfg)
 		if obj == nil {
@@ -109,6 +110,9 @@ func TestPodMonitor(t *testing.T) {
 		}
 		if obj.Spec.JobLabel != "app" {
 			t.Errorf("expected jobLabel app, got %s", obj.Spec.JobLabel)
+		}
+		if len(obj.Spec.PodTargetLabels) != 1 || obj.Spec.PodTargetLabels[0] != "version" {
+			t.Errorf("expected podTargetLabels [version], got %v", obj.Spec.PodTargetLabels)
 		}
 		if obj.Labels["team"] != "platform" {
 			t.Errorf("expected label team=platform")

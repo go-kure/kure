@@ -1,7 +1,7 @@
 package prometheus
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +29,7 @@ func CreatePodMonitor(name, namespace string, selector metav1.LabelSelector) *mo
 // AddPodMonitorEndpoint appends a pod metrics endpoint to the PodMonitor.
 func AddPodMonitorEndpoint(obj *monitoringv1.PodMonitor, ep monitoringv1.PodMetricsEndpoint) error {
 	if obj == nil {
-		return errors.New("nil PodMonitor")
+		return errors.ErrNilPodMonitor
 	}
 	obj.Spec.PodMetricsEndpoints = append(obj.Spec.PodMetricsEndpoints, ep)
 	return nil
@@ -38,7 +38,7 @@ func AddPodMonitorEndpoint(obj *monitoringv1.PodMonitor, ep monitoringv1.PodMetr
 // SetPodMonitorJobLabel sets the jobLabel field.
 func SetPodMonitorJobLabel(obj *monitoringv1.PodMonitor, label string) error {
 	if obj == nil {
-		return errors.New("nil PodMonitor")
+		return errors.ErrNilPodMonitor
 	}
 	obj.Spec.JobLabel = label
 	return nil
@@ -47,7 +47,7 @@ func SetPodMonitorJobLabel(obj *monitoringv1.PodMonitor, label string) error {
 // SetPodMonitorNamespaceSelector sets the namespace selector.
 func SetPodMonitorNamespaceSelector(obj *monitoringv1.PodMonitor, ns monitoringv1.NamespaceSelector) error {
 	if obj == nil {
-		return errors.New("nil PodMonitor")
+		return errors.ErrNilPodMonitor
 	}
 	obj.Spec.NamespaceSelector = ns
 	return nil
@@ -56,8 +56,17 @@ func SetPodMonitorNamespaceSelector(obj *monitoringv1.PodMonitor, ns monitoringv
 // SetPodMonitorSampleLimit sets the per-scrape sample limit.
 func SetPodMonitorSampleLimit(obj *monitoringv1.PodMonitor, limit uint64) error {
 	if obj == nil {
-		return errors.New("nil PodMonitor")
+		return errors.ErrNilPodMonitor
 	}
 	obj.Spec.SampleLimit = &limit
+	return nil
+}
+
+// AddPodMonitorPodTargetLabel appends a pod target label.
+func AddPodMonitorPodTargetLabel(obj *monitoringv1.PodMonitor, label string) error {
+	if obj == nil {
+		return errors.ErrNilPodMonitor
+	}
+	obj.Spec.PodTargetLabels = append(obj.Spec.PodTargetLabels, label)
 	return nil
 }

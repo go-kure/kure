@@ -111,3 +111,39 @@ func TestSetPodMonitorSampleLimit_Public(t *testing.T) {
 		t.Error("expected error for nil PodMonitor")
 	}
 }
+
+func TestAddServiceMonitorTargetLabel_Public(t *testing.T) {
+	obj := ServiceMonitor(&ServiceMonitorConfig{
+		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
+	})
+	if err := AddServiceMonitorTargetLabel(obj, "version"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obj.Spec.TargetLabels) != 1 || obj.Spec.TargetLabels[0] != "version" {
+		t.Error("expected targetLabel version")
+	}
+}
+
+func TestAddServiceMonitorTargetLabelNil_Public(t *testing.T) {
+	if err := AddServiceMonitorTargetLabel(nil, "version"); err == nil {
+		t.Error("expected error for nil ServiceMonitor")
+	}
+}
+
+func TestAddPodMonitorPodTargetLabel_Public(t *testing.T) {
+	obj := PodMonitor(&PodMonitorConfig{
+		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
+	})
+	if err := AddPodMonitorPodTargetLabel(obj, "version"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obj.Spec.PodTargetLabels) != 1 || obj.Spec.PodTargetLabels[0] != "version" {
+		t.Error("expected podTargetLabel version")
+	}
+}
+
+func TestAddPodMonitorPodTargetLabelNil_Public(t *testing.T) {
+	if err := AddPodMonitorPodTargetLabel(nil, "version"); err == nil {
+		t.Error("expected error for nil PodMonitor")
+	}
+}

@@ -104,6 +104,12 @@ var (
 	ErrNilSecretStore        = ResourceValidationError("SecretStore", "", "secretstore", "secret store cannot be nil", nil)
 	ErrNilClusterSecretStore = ResourceValidationError("ClusterSecretStore", "", "clustersecretstore", "cluster secret store cannot be nil", nil)
 	ErrNilExternalSecret     = ResourceValidationError("ExternalSecret", "", "externalsecret", "external secret cannot be nil", nil)
+
+	// Prometheus operator resources
+	ErrNilServiceMonitor = ResourceValidationError("ServiceMonitor", "", "servicemonitor", "service monitor cannot be nil", nil)
+	ErrNilPodMonitor     = ResourceValidationError("PodMonitor", "", "podmonitor", "pod monitor cannot be nil", nil)
+	ErrNilPrometheusRule = ResourceValidationError("PrometheusRule", "", "prometheusrule", "prometheus rule cannot be nil", nil)
+	ErrNilRuleGroup      = ResourceValidationError("RuleGroup", "", "rulegroup", "rule group cannot be nil", nil)
 )
 
 // Common file operation errors

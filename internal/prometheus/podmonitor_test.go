@@ -80,3 +80,19 @@ func TestSetPodMonitorSampleLimit(t *testing.T) {
 		t.Error("expected sampleLimit 10000")
 	}
 }
+
+func TestAddPodMonitorPodTargetLabel(t *testing.T) {
+	obj := CreatePodMonitor("test", "ns", metav1.LabelSelector{})
+	if err := AddPodMonitorPodTargetLabel(obj, "version"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obj.Spec.PodTargetLabels) != 1 || obj.Spec.PodTargetLabels[0] != "version" {
+		t.Error("expected podTargetLabel version")
+	}
+}
+
+func TestAddPodMonitorPodTargetLabelNil(t *testing.T) {
+	if err := AddPodMonitorPodTargetLabel(nil, "version"); err == nil {
+		t.Error("expected error for nil PodMonitor")
+	}
+}
