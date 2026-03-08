@@ -163,6 +163,58 @@ err = kubernetes.AddIngressTLS(ing, netv1.IngressTLS{
 })
 ```
 
+## NetworkPolicy Builders
+
+```go
+// Create a NetworkPolicy
+np := kubernetes.CreateNetworkPolicy("my-app", "default")
+
+// Set pod selector and policy types
+err := kubernetes.SetNetworkPolicyPodSelector(np, metav1.LabelSelector{
+    MatchLabels: map[string]string{"app": "my-app"},
+})
+err = kubernetes.AddNetworkPolicyPolicyType(np, netv1.PolicyTypeIngress)
+err = kubernetes.AddNetworkPolicyPolicyType(np, netv1.PolicyTypeEgress)
+
+// Build an ingress rule with peers and ports
+ingressRule := netv1.NetworkPolicyIngressRule{}
+kubernetes.AddNetworkPolicyIngressPeer(&ingressRule, netv1.NetworkPolicyPeer{
+    PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "frontend"}},
+})
+kubernetes.AddNetworkPolicyIngressPort(&ingressRule, netv1.NetworkPolicyPort{})
+err = kubernetes.AddNetworkPolicyIngressRule(np, ingressRule)
+```
+
+## HTTPRoute Builders
+
+```go
+// Create an HTTPRoute
+route := kubernetes.CreateHTTPRoute("my-app", "default")
+
+// Add parent gateway reference and hostname
+err := kubernetes.AddHTTPRouteParentRef(route, gwapiv1.ParentReference{Name: "my-gateway"})
+err = kubernetes.AddHTTPRouteHostname(route, "app.example.com")
+
+// Build a rule with match, filter, and backend ref
+rule := gwapiv1.HTTPRouteRule{}
+pathType := gwapiv1.PathMatchPathPrefix
+kubernetes.AddHTTPRouteRuleMatch(&rule, gwapiv1.HTTPRouteMatch{
+    Path: &gwapiv1.HTTPPathMatch{Type: &pathType, Value: ptrStr("/api")},
+})
+kubernetes.AddHTTPRouteRuleFilter(&rule, gwapiv1.HTTPRouteFilter{
+    Type: gwapiv1.HTTPRouteFilterRequestHeaderModifier,
+    RequestHeaderModifier: &gwapiv1.HTTPHeaderFilter{
+        Set: []gwapiv1.HTTPHeader{{Name: "X-Custom", Value: "val"}},
+    },
+})
+kubernetes.AddHTTPRouteRuleBackendRef(&rule, gwapiv1.HTTPBackendRef{
+    BackendRef: gwapiv1.BackendRef{
+        BackendObjectReference: gwapiv1.BackendObjectReference{Name: "my-svc"},
+    },
+})
+err = kubernetes.AddHTTPRouteRule(route, rule)
+```
+
 ## Related Packages
 
 - [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors

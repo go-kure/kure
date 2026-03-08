@@ -7,10 +7,6 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
-// ErrNilNetworkPolicy is returned when a nil NetworkPolicy is passed to a
-// builder function.
-var ErrNilNetworkPolicy = errors.ResourceValidationError("NetworkPolicy", "", "networkpolicy", "network policy cannot be nil", nil)
-
 // CreateNetworkPolicy returns a NetworkPolicy with default labels, annotations,
 // and empty rule slices.
 func CreateNetworkPolicy(name, namespace string) *netv1.NetworkPolicy {
@@ -41,7 +37,7 @@ func CreateNetworkPolicy(name, namespace string) *netv1.NetworkPolicy {
 // SetNetworkPolicyPodSelector sets the pod selector on the NetworkPolicy.
 func SetNetworkPolicyPodSelector(np *netv1.NetworkPolicy, selector metav1.LabelSelector) error {
 	if np == nil {
-		return ErrNilNetworkPolicy
+		return errors.ErrNilNetworkPolicy
 	}
 	np.Spec.PodSelector = selector
 	return nil
@@ -50,7 +46,7 @@ func SetNetworkPolicyPodSelector(np *netv1.NetworkPolicy, selector metav1.LabelS
 // AddNetworkPolicyPolicyType appends a policy type to the NetworkPolicy.
 func AddNetworkPolicyPolicyType(np *netv1.NetworkPolicy, t netv1.PolicyType) error {
 	if np == nil {
-		return ErrNilNetworkPolicy
+		return errors.ErrNilNetworkPolicy
 	}
 	np.Spec.PolicyTypes = append(np.Spec.PolicyTypes, t)
 	return nil
@@ -59,7 +55,7 @@ func AddNetworkPolicyPolicyType(np *netv1.NetworkPolicy, t netv1.PolicyType) err
 // SetNetworkPolicyPolicyTypes replaces the policy types on the NetworkPolicy.
 func SetNetworkPolicyPolicyTypes(np *netv1.NetworkPolicy, types []netv1.PolicyType) error {
 	if np == nil {
-		return ErrNilNetworkPolicy
+		return errors.ErrNilNetworkPolicy
 	}
 	np.Spec.PolicyTypes = types
 	return nil
@@ -68,7 +64,7 @@ func SetNetworkPolicyPolicyTypes(np *netv1.NetworkPolicy, types []netv1.PolicyTy
 // AddNetworkPolicyIngressRule appends an ingress rule to the NetworkPolicy.
 func AddNetworkPolicyIngressRule(np *netv1.NetworkPolicy, rule netv1.NetworkPolicyIngressRule) error {
 	if np == nil {
-		return ErrNilNetworkPolicy
+		return errors.ErrNilNetworkPolicy
 	}
 	np.Spec.Ingress = append(np.Spec.Ingress, rule)
 	return nil
@@ -77,7 +73,7 @@ func AddNetworkPolicyIngressRule(np *netv1.NetworkPolicy, rule netv1.NetworkPoli
 // SetNetworkPolicyIngressRules replaces the ingress rules on the NetworkPolicy.
 func SetNetworkPolicyIngressRules(np *netv1.NetworkPolicy, rules []netv1.NetworkPolicyIngressRule) error {
 	if np == nil {
-		return ErrNilNetworkPolicy
+		return errors.ErrNilNetworkPolicy
 	}
 	np.Spec.Ingress = rules
 	return nil
@@ -86,7 +82,7 @@ func SetNetworkPolicyIngressRules(np *netv1.NetworkPolicy, rules []netv1.Network
 // AddNetworkPolicyEgressRule appends an egress rule to the NetworkPolicy.
 func AddNetworkPolicyEgressRule(np *netv1.NetworkPolicy, rule netv1.NetworkPolicyEgressRule) error {
 	if np == nil {
-		return ErrNilNetworkPolicy
+		return errors.ErrNilNetworkPolicy
 	}
 	np.Spec.Egress = append(np.Spec.Egress, rule)
 	return nil
@@ -95,7 +91,7 @@ func AddNetworkPolicyEgressRule(np *netv1.NetworkPolicy, rule netv1.NetworkPolic
 // SetNetworkPolicyEgressRules replaces the egress rules on the NetworkPolicy.
 func SetNetworkPolicyEgressRules(np *netv1.NetworkPolicy, rules []netv1.NetworkPolicyEgressRule) error {
 	if np == nil {
-		return ErrNilNetworkPolicy
+		return errors.ErrNilNetworkPolicy
 	}
 	np.Spec.Egress = rules
 	return nil

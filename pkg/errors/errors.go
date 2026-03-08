@@ -55,6 +55,8 @@ var (
 	ErrNilConfigMap      = ResourceValidationError("ConfigMap", "", "configmap", "configmap cannot be nil", nil)
 	ErrNilServiceAccount = ResourceValidationError("ServiceAccount", "", "serviceaccount", "serviceaccount cannot be nil", nil)
 	ErrNilIngress        = ResourceValidationError("Ingress", "", "ingress", "ingress cannot be nil", nil)
+	ErrNilNetworkPolicy  = ResourceValidationError("NetworkPolicy", "", "networkpolicy", "network policy cannot be nil", nil)
+	ErrNilHTTPRoute      = ResourceValidationError("HTTPRoute", "", "httproute", "http route cannot be nil", nil)
 	ErrNilBundle         = ResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
 
 	// Common field validation errors
