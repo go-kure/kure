@@ -365,6 +365,38 @@ func TestValidatePodSpecPSA(t *testing.T) {
 			level:   PSARestricted,
 			wantErr: true,
 		},
+		{
+			name: "baseline with non-compliant ephemeral container",
+			spec: &corev1.PodSpec{
+				EphemeralContainers: []corev1.EphemeralContainer{
+					{EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+						Name: "debug",
+						SecurityContext: &corev1.SecurityContext{
+							Privileged: boolPtr(true),
+						},
+					}},
+				},
+			},
+			level:   PSABaseline,
+			wantErr: true,
+		},
+		{
+			name: "restricted with non-compliant ephemeral container",
+			spec: &corev1.PodSpec{
+				SecurityContext: RestrictedPodSecurityContext(),
+				Containers:      []corev1.Container{restrictedContainer},
+				EphemeralContainers: []corev1.EphemeralContainer{
+					{EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+						Name: "debug",
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: boolPtr(true),
+						},
+					}},
+				},
+			},
+			level:   PSARestricted,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
