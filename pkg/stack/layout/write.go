@@ -29,7 +29,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	}
 	kMode := ml.Mode
 	if kMode == KustomizationUnset {
-		kMode = cfg.KustomizationMode
+		kMode = cfg.ResolveKustomizationMode(ml.FluxPlacement)
 	}
 
 	var fullPath string

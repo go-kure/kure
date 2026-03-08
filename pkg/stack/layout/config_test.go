@@ -39,6 +39,40 @@ func TestResolveManifestFileName_ExplicitFuncOverridesFileNaming(t *testing.T) {
 	}
 }
 
+func TestResolveKustomizationMode_Default(t *testing.T) {
+	cfg := layout.Config{}
+	mode := cfg.ResolveKustomizationMode(layout.FluxSeparate)
+	if mode != layout.KustomizationExplicit {
+		t.Errorf("expected KustomizationExplicit, got %s", mode)
+	}
+}
+
+func TestResolveKustomizationMode_GlobalOverride(t *testing.T) {
+	cfg := layout.Config{KustomizationMode: layout.KustomizationRecursive}
+	mode := cfg.ResolveKustomizationMode(layout.FluxSeparate)
+	if mode != layout.KustomizationRecursive {
+		t.Errorf("expected KustomizationRecursive, got %s", mode)
+	}
+}
+
+func TestResolveKustomizationMode_PerFluxPlacement(t *testing.T) {
+	cfg := layout.Config{
+		KustomizationMode: layout.KustomizationExplicit,
+		FluxKustomizationMode: map[layout.FluxPlacement]layout.KustomizationMode{
+			layout.FluxIntegrated: layout.KustomizationRecursive,
+		},
+	}
+	// FluxIntegrated should use the override
+	mode := cfg.ResolveKustomizationMode(layout.FluxIntegrated)
+	if mode != layout.KustomizationRecursive {
+		t.Errorf("expected KustomizationRecursive for FluxIntegrated, got %s", mode)
+	}
+	// FluxSeparate should fall back to global
+	mode = cfg.ResolveKustomizationMode(layout.FluxSeparate)
+	if mode != layout.KustomizationExplicit {
+		t.Errorf("expected KustomizationExplicit for FluxSeparate, got %s", mode)
+	}
+}
 func TestDefaultKustomizationFileName(t *testing.T) {
 	tests := []struct {
 		name     string
