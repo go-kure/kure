@@ -1,7 +1,7 @@
 package prometheus
 
 import (
-	"errors"
+	"github.com/go-kure/kure/pkg/errors"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +29,7 @@ func CreateServiceMonitor(name, namespace string, selector metav1.LabelSelector)
 // AddServiceMonitorEndpoint appends an endpoint to the ServiceMonitor.
 func AddServiceMonitorEndpoint(obj *monitoringv1.ServiceMonitor, ep monitoringv1.Endpoint) error {
 	if obj == nil {
-		return errors.New("nil ServiceMonitor")
+		return errors.ErrNilServiceMonitor
 	}
 	obj.Spec.Endpoints = append(obj.Spec.Endpoints, ep)
 	return nil
@@ -38,7 +38,7 @@ func AddServiceMonitorEndpoint(obj *monitoringv1.ServiceMonitor, ep monitoringv1
 // SetServiceMonitorJobLabel sets the jobLabel field.
 func SetServiceMonitorJobLabel(obj *monitoringv1.ServiceMonitor, label string) error {
 	if obj == nil {
-		return errors.New("nil ServiceMonitor")
+		return errors.ErrNilServiceMonitor
 	}
 	obj.Spec.JobLabel = label
 	return nil
@@ -47,7 +47,7 @@ func SetServiceMonitorJobLabel(obj *monitoringv1.ServiceMonitor, label string) e
 // SetServiceMonitorNamespaceSelector sets the namespace selector.
 func SetServiceMonitorNamespaceSelector(obj *monitoringv1.ServiceMonitor, ns monitoringv1.NamespaceSelector) error {
 	if obj == nil {
-		return errors.New("nil ServiceMonitor")
+		return errors.ErrNilServiceMonitor
 	}
 	obj.Spec.NamespaceSelector = ns
 	return nil
@@ -56,7 +56,7 @@ func SetServiceMonitorNamespaceSelector(obj *monitoringv1.ServiceMonitor, ns mon
 // SetServiceMonitorSampleLimit sets the per-scrape sample limit.
 func SetServiceMonitorSampleLimit(obj *monitoringv1.ServiceMonitor, limit uint64) error {
 	if obj == nil {
-		return errors.New("nil ServiceMonitor")
+		return errors.ErrNilServiceMonitor
 	}
 	obj.Spec.SampleLimit = &limit
 	return nil
@@ -65,7 +65,7 @@ func SetServiceMonitorSampleLimit(obj *monitoringv1.ServiceMonitor, limit uint64
 // AddServiceMonitorTargetLabel appends a target label.
 func AddServiceMonitorTargetLabel(obj *monitoringv1.ServiceMonitor, label string) error {
 	if obj == nil {
-		return errors.New("nil ServiceMonitor")
+		return errors.ErrNilServiceMonitor
 	}
 	obj.Spec.TargetLabels = append(obj.Spec.TargetLabels, label)
 	return nil

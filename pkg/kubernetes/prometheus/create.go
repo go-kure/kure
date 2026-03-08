@@ -48,6 +48,9 @@ func PodMonitor(cfg *PodMonitorConfig) *monitoringv1.PodMonitor {
 	if cfg.JobLabel != "" {
 		intprom.SetPodMonitorJobLabel(obj, cfg.JobLabel) //nolint:errcheck,gosec // obj is freshly created
 	}
+	for _, label := range cfg.PodTargetLabels {
+		intprom.AddPodMonitorPodTargetLabel(obj, label) //nolint:errcheck,gosec // obj is freshly created
+	}
 	if cfg.NamespaceSelector != nil {
 		intprom.SetPodMonitorNamespaceSelector(obj, *cfg.NamespaceSelector) //nolint:errcheck,gosec // obj is freshly created
 	}
