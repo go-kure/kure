@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    app: my-app
+  labels:
+    app: my-app
+  name: my-app
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: my-app
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - image: myapp:latest
+          name: app
+          resources: {}
+      initContainers:
+        - args:
+            - cp /src/config.yaml /data/config.yaml
+          command:
+            - /bin/sh
+            - -c
+          env:
+            - name: INIT_MODE
+              value: copy
+          image: busybox:1.36
+          name: init-data
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /data
+              name: data-vol
+      volumes:
+        - emptyDir: {}
+          name: data-vol
