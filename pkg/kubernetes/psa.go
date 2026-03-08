@@ -142,7 +142,8 @@ func ValidateContainerPSA(container *corev1.Container, level PSALevel) error {
 }
 
 // ValidatePodSpecPSA checks whether a PodSpec is compliant with the given PSA
-// level. It validates both the pod-level security context and all containers.
+// level. It validates both the pod-level security context and all containers
+// (including init and ephemeral containers).
 func ValidatePodSpecPSA(spec *corev1.PodSpec, level PSALevel) error {
 	if spec == nil {
 		return errors.ErrNilPodSpec
@@ -231,9 +232,19 @@ func validatePodSpecBaseline(spec *corev1.PodSpec) error {
 		return errors.New("hostIPC is not allowed at baseline level")
 	}
 
-	allContainers := append(spec.Containers, spec.InitContainers...)
-	for i := range allContainers {
-		if err := validateContainerBaseline(&allContainers[i]); err != nil {
+	for i := range spec.Containers {
+		if err := validateContainerBaseline(&spec.Containers[i]); err != nil {
+			return err
+		}
+	}
+	for i := range spec.InitContainers {
+		if err := validateContainerBaseline(&spec.InitContainers[i]); err != nil {
+			return err
+		}
+	}
+	for i := range spec.EphemeralContainers {
+		c := containerFromEphemeral(&spec.EphemeralContainers[i])
+		if err := validateContainerBaseline(&c); err != nil {
 			return err
 		}
 	}
@@ -257,9 +268,19 @@ func validatePodSpecRestricted(spec *corev1.PodSpec) error {
 		return errors.New("pod seccompProfile must be RuntimeDefault or Localhost at restricted level")
 	}
 
-	allContainers := append(spec.Containers, spec.InitContainers...)
-	for i := range allContainers {
-		if err := validateContainerRestricted(&allContainers[i]); err != nil {
+	for i := range spec.Containers {
+		if err := validateContainerRestricted(&spec.Containers[i]); err != nil {
+			return err
+		}
+	}
+	for i := range spec.InitContainers {
+		if err := validateContainerRestricted(&spec.InitContainers[i]); err != nil {
+			return err
+		}
+	}
+	for i := range spec.EphemeralContainers {
+		c := containerFromEphemeral(&spec.EphemeralContainers[i])
+		if err := validateContainerRestricted(&c); err != nil {
 			return err
 		}
 	}
@@ -267,23 +288,35 @@ func validatePodSpecRestricted(spec *corev1.PodSpec) error {
 	return nil
 }
 
+// baselineAllowedCapabilities lists capabilities permitted at the baseline
+// Pod Security Standards level.
+var baselineAllowedCapabilities = map[corev1.Capability]bool{
+	"AUDIT_WRITE":      true,
+	"CHOWN":            true,
+	"DAC_OVERRIDE":     true,
+	"FOWNER":           true,
+	"FSETID":           true,
+	"KILL":             true,
+	"MKNOD":            true,
+	"NET_BIND_SERVICE": true,
+	"SETFCAP":          true,
+	"SETGID":           true,
+	"SETPCAP":          true,
+	"SETUID":           true,
+	"SYS_CHROOT":       true,
+}
+
 func isBaselineAllowedCapability(cap corev1.Capability) bool {
-	allowed := map[corev1.Capability]bool{
-		"AUDIT_WRITE":      true,
-		"CHOWN":            true,
-		"DAC_OVERRIDE":     true,
-		"FOWNER":           true,
-		"FSETID":           true,
-		"KILL":             true,
-		"MKNOD":            true,
-		"NET_BIND_SERVICE": true,
-		"SETFCAP":          true,
-		"SETGID":           true,
-		"SETPCAP":          true,
-		"SETUID":           true,
-		"SYS_CHROOT":       true,
+	return baselineAllowedCapabilities[cap]
+}
+
+// containerFromEphemeral converts an EphemeralContainer to a Container for
+// validation purposes.
+func containerFromEphemeral(ec *corev1.EphemeralContainer) corev1.Container {
+	return corev1.Container{
+		Name:            ec.Name,
+		SecurityContext: ec.SecurityContext,
 	}
-	return allowed[cap]
 }
 
 func hasDropAll(caps []corev1.Capability) bool {
