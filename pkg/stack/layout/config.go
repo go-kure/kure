@@ -25,6 +25,12 @@ type Config struct {
 	// KustomizationMode controls how kustomization.yaml files are generated.
 	// Defaults to KustomizationExplicit.
 	KustomizationMode KustomizationMode
+	// FluxKustomizationMode overrides KustomizationMode based on FluxPlacement.
+	// When a ManifestLayout's FluxPlacement matches a key in this map, the
+	// corresponding KustomizationMode is used instead of the global
+	// KustomizationMode. This allows different kustomization.yaml reference
+	// styles per flux placement strategy.
+	FluxKustomizationMode map[FluxPlacement]KustomizationMode
 	// FileNaming controls the file naming pattern. When set, it determines
 	// the ManifestFileNameFunc to use. If ManifestFileName is also set, it
 	// takes precedence over FileNaming.
@@ -82,4 +88,20 @@ func (c Config) ResolveManifestFileName() ManifestFileNameFunc {
 	default:
 		return DefaultManifestFileName
 	}
+}
+
+// ResolveKustomizationMode returns the effective KustomizationMode for the
+// given FluxPlacement. If FluxKustomizationMode contains an override for the
+// placement, that value is used. Otherwise, the global KustomizationMode (or
+// KustomizationExplicit when unset) is returned.
+func (c Config) ResolveKustomizationMode(fp FluxPlacement) KustomizationMode {
+	if c.FluxKustomizationMode != nil {
+		if mode, ok := c.FluxKustomizationMode[fp]; ok {
+			return mode
+		}
+	}
+	if c.KustomizationMode == KustomizationUnset {
+		return KustomizationExplicit
+	}
+	return c.KustomizationMode
 }

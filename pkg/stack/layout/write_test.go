@@ -704,6 +704,106 @@ func TestWriteManifest_FileNamingDefault_Unchanged(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// FluxKustomizationMode per FluxPlacement tests (#265)
+// ---------------------------------------------------------------------------
+
+func TestWriteManifest_FluxKustomizationMode_PerPlacement(t *testing.T) {
+	// Parent with FluxIntegrated, child with resources
+	child := &ManifestLayout{
+		Name:      "team-a",
+		Namespace: "cl/ns/root/team-a",
+		Resources: []client.Object{
+			testObject("v1", "ConfigMap", "ca", "ns"),
+			testObject("v1", "Secret", "sa", "ns"),
+		},
+	}
+
+	root := &ManifestLayout{
+		Name:          "root",
+		Namespace:     "cl/ns",
+		FluxPlacement: FluxIntegrated,
+		Resources:     []client.Object{testObject("v1", "ConfigMap", "root-cfg", "ns")},
+		Children:      []*ManifestLayout{child},
+	}
+
+	cfg := DefaultLayoutConfig()
+	cfg.FluxKustomizationMode = map[FluxPlacement]KustomizationMode{
+		FluxIntegrated: KustomizationRecursive,
+	}
+	dir := t.TempDir()
+
+	if err := WriteManifest(dir, cfg, root); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	// Root's kustomization should NOT list its own resource files (recursive mode)
+	rootK := filepath.Join(dir, "clusters", "cl", "ns", "root", "kustomization.yaml")
+	data, err := os.ReadFile(rootK)
+	if err != nil {
+		t.Fatalf("read root kustomization: %v", err)
+	}
+	content := string(data)
+	if strings.Contains(content, "ns-configmap-root-cfg.yaml") {
+		t.Errorf("recursive mode should NOT list resource files when children exist, got:\n%s", content)
+	}
+	// Should still reference child via flux kustomization reference
+	if !strings.Contains(content, "flux-system-kustomization-team-a.yaml") {
+		t.Errorf("expected flux kustomization reference for team-a, got:\n%s", content)
+	}
+
+	// Child (leaf) kustomization should list its own files regardless of parent mode
+	childK := filepath.Join(dir, "clusters", "cl", "ns", "root", "team-a", "kustomization.yaml")
+	childData, err := os.ReadFile(childK)
+	if err != nil {
+		t.Fatalf("read child kustomization: %v", err)
+	}
+	if !strings.Contains(string(childData), "ns-configmap-ca.yaml") {
+		t.Errorf("child leaf kustomization should list its files, got:\n%s", childData)
+	}
+}
+
+func TestWriteManifest_FluxKustomizationMode_NoOverride(t *testing.T) {
+	// FluxSeparate without override should use default KustomizationMode
+	child := &ManifestLayout{
+		Name:      "apps",
+		Namespace: "cl/ns/root/apps",
+		Resources: []client.Object{testObject("v1", "ConfigMap", "c", "ns")},
+	}
+
+	root := &ManifestLayout{
+		Name:          "root",
+		Namespace:     "cl/ns",
+		FluxPlacement: FluxSeparate,
+		Resources:     []client.Object{testObject("v1", "Secret", "s", "ns")},
+		Children:      []*ManifestLayout{child},
+	}
+
+	cfg := DefaultLayoutConfig()
+	cfg.FluxKustomizationMode = map[FluxPlacement]KustomizationMode{
+		FluxIntegrated: KustomizationRecursive,
+	}
+	dir := t.TempDir()
+
+	if err := WriteManifest(dir, cfg, root); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	// Root's kustomization should list resource files (explicit is default)
+	rootK := filepath.Join(dir, "clusters", "cl", "ns", "root", "kustomization.yaml")
+	data, err := os.ReadFile(rootK)
+	if err != nil {
+		t.Fatalf("read root kustomization: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "ns-secret-s.yaml") {
+		t.Errorf("explicit mode should list resource files, got:\n%s", content)
+	}
+	if !strings.Contains(content, "  - apps\n") {
+		t.Errorf("FluxSeparate should reference child as plain directory, got:\n%s", content)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // WriteToDisk tests
 // ---------------------------------------------------------------------------
 
