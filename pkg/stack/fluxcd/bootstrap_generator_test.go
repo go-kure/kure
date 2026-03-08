@@ -393,4 +393,3 @@ func TestGotkGitRepositorySourceGeneration(t *testing.T) {
 		t.Errorf("Sync.Path = %q, want ./test", fi.Spec.Sync.Path)
 	}
 }
-
