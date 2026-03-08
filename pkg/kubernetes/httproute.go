@@ -7,9 +7,6 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
-// ErrNilHTTPRoute is returned when a nil HTTPRoute is passed to a builder function.
-var ErrNilHTTPRoute = errors.ResourceValidationError("HTTPRoute", "", "httproute", "http route cannot be nil", nil)
-
 // CreateHTTPRoute returns an HTTPRoute with default labels, annotations,
 // and empty rule and hostname slices.
 func CreateHTTPRoute(name, namespace string) *gwapiv1.HTTPRoute {
@@ -38,7 +35,7 @@ func CreateHTTPRoute(name, namespace string) *gwapiv1.HTTPRoute {
 // AddHTTPRouteHostname appends a hostname to the HTTPRoute.
 func AddHTTPRouteHostname(route *gwapiv1.HTTPRoute, hostname gwapiv1.Hostname) error {
 	if route == nil {
-		return ErrNilHTTPRoute
+		return errors.ErrNilHTTPRoute
 	}
 	route.Spec.Hostnames = append(route.Spec.Hostnames, hostname)
 	return nil
@@ -47,7 +44,7 @@ func AddHTTPRouteHostname(route *gwapiv1.HTTPRoute, hostname gwapiv1.Hostname) e
 // SetHTTPRouteHostnames replaces all hostnames on the HTTPRoute.
 func SetHTTPRouteHostnames(route *gwapiv1.HTTPRoute, hostnames []gwapiv1.Hostname) error {
 	if route == nil {
-		return ErrNilHTTPRoute
+		return errors.ErrNilHTTPRoute
 	}
 	route.Spec.Hostnames = hostnames
 	return nil
@@ -56,7 +53,7 @@ func SetHTTPRouteHostnames(route *gwapiv1.HTTPRoute, hostnames []gwapiv1.Hostnam
 // AddHTTPRouteParentRef appends a parent reference (typically a Gateway) to the HTTPRoute.
 func AddHTTPRouteParentRef(route *gwapiv1.HTTPRoute, ref gwapiv1.ParentReference) error {
 	if route == nil {
-		return ErrNilHTTPRoute
+		return errors.ErrNilHTTPRoute
 	}
 	route.Spec.ParentRefs = append(route.Spec.ParentRefs, ref)
 	return nil
@@ -65,7 +62,7 @@ func AddHTTPRouteParentRef(route *gwapiv1.HTTPRoute, ref gwapiv1.ParentReference
 // SetHTTPRouteParentRefs replaces the parent references on the HTTPRoute.
 func SetHTTPRouteParentRefs(route *gwapiv1.HTTPRoute, refs []gwapiv1.ParentReference) error {
 	if route == nil {
-		return ErrNilHTTPRoute
+		return errors.ErrNilHTTPRoute
 	}
 	route.Spec.ParentRefs = refs
 	return nil
@@ -74,7 +71,7 @@ func SetHTTPRouteParentRefs(route *gwapiv1.HTTPRoute, refs []gwapiv1.ParentRefer
 // AddHTTPRouteRule appends a routing rule to the HTTPRoute.
 func AddHTTPRouteRule(route *gwapiv1.HTTPRoute, rule gwapiv1.HTTPRouteRule) error {
 	if route == nil {
-		return ErrNilHTTPRoute
+		return errors.ErrNilHTTPRoute
 	}
 	route.Spec.Rules = append(route.Spec.Rules, rule)
 	return nil
@@ -83,7 +80,7 @@ func AddHTTPRouteRule(route *gwapiv1.HTTPRoute, rule gwapiv1.HTTPRouteRule) erro
 // SetHTTPRouteRules replaces the routing rules on the HTTPRoute.
 func SetHTTPRouteRules(route *gwapiv1.HTTPRoute, rules []gwapiv1.HTTPRouteRule) error {
 	if route == nil {
-		return ErrNilHTTPRoute
+		return errors.ErrNilHTTPRoute
 	}
 	route.Spec.Rules = rules
 	return nil

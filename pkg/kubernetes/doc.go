@@ -10,7 +10,8 @@
 // # Scheme Registration
 //
 // [RegisterSchemes] initialises a shared runtime.Scheme that covers Kubernetes
-// built-in types, FluxCD CRDs, cert-manager, MetalLB, and External Secrets.
+// built-in types, FluxCD CRDs, cert-manager, MetalLB, External Secrets, and
+// Gateway API.
 // The scheme is registered lazily on first use and is safe for concurrent
 // access.
 //
@@ -103,4 +104,38 @@
 //
 // All setter/adder functions return an error when passed a nil Ingress pointer,
 // using [github.com/go-kure/kure/pkg/errors.ErrNilIngress].
+//
+// # NetworkPolicy Builders
+//
+// [CreateNetworkPolicy] allocates a fully initialised networking/v1
+// NetworkPolicy.  The remaining helpers follow the Add*/Set* convention:
+//
+//   - [SetNetworkPolicyPodSelector] — pod selector
+//   - [AddNetworkPolicyPolicyType], [SetNetworkPolicyPolicyTypes] — policy types
+//   - [AddNetworkPolicyIngressRule], [SetNetworkPolicyIngressRules] — ingress rules
+//   - [AddNetworkPolicyEgressRule], [SetNetworkPolicyEgressRules] — egress rules
+//   - [AddNetworkPolicyIngressPeer], [SetNetworkPolicyIngressPeers] — ingress peers
+//   - [AddNetworkPolicyIngressPort], [SetNetworkPolicyIngressPorts] — ingress ports
+//   - [AddNetworkPolicyEgressPeer], [SetNetworkPolicyEgressPeers] — egress peers
+//   - [AddNetworkPolicyEgressPort], [SetNetworkPolicyEgressPorts] — egress ports
+//
+// All setter/adder functions operating on the NetworkPolicy return an error
+// when passed a nil pointer, using
+// [github.com/go-kure/kure/pkg/errors.ErrNilNetworkPolicy].
+//
+// # HTTPRoute Builders
+//
+// [CreateHTTPRoute] allocates a fully initialised gateway/v1 HTTPRoute.
+// The remaining helpers follow the Add*/Set* convention:
+//
+//   - [AddHTTPRouteHostname], [SetHTTPRouteHostnames] — hostnames
+//   - [AddHTTPRouteParentRef], [SetHTTPRouteParentRefs] — parent references (Gateways)
+//   - [AddHTTPRouteRule], [SetHTTPRouteRules] — routing rules
+//   - [AddHTTPRouteRuleMatch], [SetHTTPRouteRuleMatches] — rule match conditions
+//   - [AddHTTPRouteRuleFilter], [SetHTTPRouteRuleFilters] — rule filters
+//   - [AddHTTPRouteRuleBackendRef], [SetHTTPRouteRuleBackendRefs] — backend references
+//
+// All setter/adder functions operating on the HTTPRoute return an error
+// when passed a nil pointer, using
+// [github.com/go-kure/kure/pkg/errors.ErrNilHTTPRoute].
 package kubernetes
