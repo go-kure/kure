@@ -1,5 +1,6 @@
 # golangci-lint configuration for Kure
 # Aligned with Wharf standard (meta/standards/golangci-lint.md)
+# and Crane's linter set (gitlab.com/autops/wharf/crane)
 
 version: "2"
 
@@ -14,16 +15,17 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    # Additional required linters
+    # Additional required linters (aligned with Crane)
     - bodyclose
     - durationcheck
     - errorlint
     - exhaustive
-    - gosec
     - misspell
     - nilerr
     - unconvert
     - whitespace
+    # Optional linters (kure-specific, not required by Wharf standard)
+    - gosec
   settings:
     errcheck:
       check-type-assertions: false

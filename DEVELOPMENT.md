@@ -363,6 +363,29 @@ ls -la out/
 - Code must be properly formatted with `go fmt`
 - Modules must be tidy
 
+### Active Linters
+
+The `.golangci.yml` enables these linters, aligned with Crane and the Wharf standard (`meta/standards/golangci-lint.md`):
+
+| Linter | Category | Purpose |
+|--------|----------|---------|
+| `errcheck` | Default | Unchecked errors |
+| `govet` | Default | Suspicious constructs |
+| `ineffassign` | Default | Ineffectual assignments |
+| `staticcheck` | Default | Comprehensive static analysis (includes gosimple S* checks) |
+| `unused` | Default | Unused code |
+| `bodyclose` | Required | HTTP response body closed |
+| `durationcheck` | Required | time.Duration mistakes |
+| `errorlint` | Required | Error wrapping issues |
+| `exhaustive` | Required | Exhaustive enum switches |
+| `misspell` | Required | Common misspellings |
+| `nilerr` | Required | Nil error returns |
+| `unconvert` | Required | Unnecessary conversions |
+| `whitespace` | Required | Unnecessary whitespace |
+| `gosec` | Optional | Security checks (kure-specific) |
+
+Formatters: `gofmt`, `goimports` (with `github.com/go-kure/kure` as local prefix).
+
 ### Performance
 - Benchmark tests can be run with `make test-benchmark`
 - PR checks include performance benchmarks when labeled with `performance`
