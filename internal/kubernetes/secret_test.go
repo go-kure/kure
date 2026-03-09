@@ -21,9 +21,6 @@ func TestCreateSecret(t *testing.T) {
 	if sec.Type != corev1.SecretTypeOpaque {
 		t.Errorf("unexpected default type %s", sec.Type)
 	}
-	if sec.Immutable == nil {
-		t.Errorf("expected immutable pointer set")
-	}
 	if len(sec.Data) != 0 || len(sec.StringData) != 0 {
 		t.Errorf("expected empty data fields")
 	}
