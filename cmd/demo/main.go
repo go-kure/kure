@@ -80,10 +80,10 @@ func runInternals() error {
 	logError("add serviceaccount secret", kubernetes.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"}))
 
 	secret := intkubernetes.CreateSecret("demo-secret", "demo")
-	logError("add secret data", intkubernetes.AddSecretData(secret, "cert", []byte("data")))
+	intkubernetes.AddSecretData(secret, "cert", []byte("data"))
 
 	cm := intkubernetes.CreateConfigMap("demo-config", "demo")
-	logError("add configmap data", intkubernetes.AddConfigMapData(cm, "foo", "bar"))
+	intkubernetes.AddConfigMapData(cm, "foo", "bar")
 
 	// Print a few examples
 	objects := []runtime.Object{ns, sa, secret, cm}

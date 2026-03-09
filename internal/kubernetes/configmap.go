@@ -3,8 +3,6 @@ package kubernetes
 import (
 	"maps"
 
-	"github.com/go-kure/kure/pkg/errors"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -33,118 +31,74 @@ func CreateConfigMap(name, namespace string) *corev1.ConfigMap {
 }
 
 // AddConfigMapData inserts a single key/value pair into the ConfigMap's Data field.
-func AddConfigMapData(cm *corev1.ConfigMap, key, value string) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func AddConfigMapData(cm *corev1.ConfigMap, key, value string) {
 	if cm.Data == nil {
 		cm.Data = make(map[string]string)
 	}
 	cm.Data[key] = value
-	return nil
 }
 
 // AddConfigMapDataMap merges all entries from the provided map into the ConfigMap's Data field.
-func AddConfigMapDataMap(cm *corev1.ConfigMap, data map[string]string) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func AddConfigMapDataMap(cm *corev1.ConfigMap, data map[string]string) {
 	if cm.Data == nil {
 		cm.Data = make(map[string]string)
 	}
 	maps.Copy(cm.Data, data)
-	return nil
 }
 
 // AddConfigMapBinaryData inserts a single binary entry into the ConfigMap.
-func AddConfigMapBinaryData(cm *corev1.ConfigMap, key string, value []byte) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func AddConfigMapBinaryData(cm *corev1.ConfigMap, key string, value []byte) {
 	if cm.BinaryData == nil {
 		cm.BinaryData = make(map[string][]byte)
 	}
 	cm.BinaryData[key] = value
-	return nil
 }
 
 // AddConfigMapBinaryDataMap merges all binary entries into the ConfigMap's BinaryData field.
-func AddConfigMapBinaryDataMap(cm *corev1.ConfigMap, data map[string][]byte) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func AddConfigMapBinaryDataMap(cm *corev1.ConfigMap, data map[string][]byte) {
 	if cm.BinaryData == nil {
 		cm.BinaryData = make(map[string][]byte)
 	}
 	maps.Copy(cm.BinaryData, data)
-	return nil
 }
 
 // SetConfigMapData replaces the ConfigMap's Data map entirely.
-func SetConfigMapData(cm *corev1.ConfigMap, data map[string]string) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func SetConfigMapData(cm *corev1.ConfigMap, data map[string]string) {
 	cm.Data = data
-	return nil
 }
 
 // SetConfigMapBinaryData replaces the ConfigMap's BinaryData map entirely.
-func SetConfigMapBinaryData(cm *corev1.ConfigMap, data map[string][]byte) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func SetConfigMapBinaryData(cm *corev1.ConfigMap, data map[string][]byte) {
 	cm.BinaryData = data
-	return nil
 }
 
 // SetConfigMapImmutable sets the immutable field for the ConfigMap.
-func SetConfigMapImmutable(cm *corev1.ConfigMap, immutable bool) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func SetConfigMapImmutable(cm *corev1.ConfigMap, immutable bool) {
 	cm.Immutable = &immutable
-	return nil
 }
 
 // AddConfigMapLabel adds a label to the ConfigMap.
-func AddConfigMapLabel(cm *corev1.ConfigMap, key, value string) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func AddConfigMapLabel(cm *corev1.ConfigMap, key, value string) {
 	if cm.Labels == nil {
 		cm.Labels = make(map[string]string)
 	}
 	cm.Labels[key] = value
-	return nil
 }
 
 // AddConfigMapAnnotation adds an annotation to the ConfigMap.
-func AddConfigMapAnnotation(cm *corev1.ConfigMap, key, value string) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func AddConfigMapAnnotation(cm *corev1.ConfigMap, key, value string) {
 	if cm.Annotations == nil {
 		cm.Annotations = make(map[string]string)
 	}
 	cm.Annotations[key] = value
-	return nil
 }
 
 // SetConfigMapLabels replaces all labels on the ConfigMap.
-func SetConfigMapLabels(cm *corev1.ConfigMap, labels map[string]string) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func SetConfigMapLabels(cm *corev1.ConfigMap, labels map[string]string) {
 	cm.Labels = labels
-	return nil
 }
 
 // SetConfigMapAnnotations replaces all annotations on the ConfigMap.
-func SetConfigMapAnnotations(cm *corev1.ConfigMap, anns map[string]string) error {
-	if cm == nil {
-		return errors.ErrNilConfigMap
-	}
+func SetConfigMapAnnotations(cm *corev1.ConfigMap, anns map[string]string) {
 	cm.Annotations = anns
-	return nil
 }
