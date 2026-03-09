@@ -1,8 +1,6 @@
 package fluxcd
 
 import (
-	"github.com/go-kure/kure/pkg/errors"
-
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,73 +23,41 @@ func CreateResourceSet(name, namespace string, spec fluxv1.ResourceSetSpec) *flu
 }
 
 // AddResourceSetInput appends an input to the ResourceSet.
-func AddResourceSetInput(rs *fluxv1.ResourceSet, in fluxv1.ResourceSetInput) error {
-	if rs == nil {
-		return errors.New("nil ResourceSet")
-	}
+func AddResourceSetInput(rs *fluxv1.ResourceSet, in fluxv1.ResourceSetInput) {
 	rs.Spec.Inputs = append(rs.Spec.Inputs, in)
-	return nil
 }
 
 // AddResourceSetInputFrom appends an input provider reference.
-func AddResourceSetInputFrom(rs *fluxv1.ResourceSet, ref fluxv1.InputProviderReference) error {
-	if rs == nil {
-		return errors.New("nil ResourceSet")
-	}
+func AddResourceSetInputFrom(rs *fluxv1.ResourceSet, ref fluxv1.InputProviderReference) {
 	rs.Spec.InputsFrom = append(rs.Spec.InputsFrom, ref)
-	return nil
 }
 
 // AddResourceSetResource appends a resource to reconcile.
-func AddResourceSetResource(rs *fluxv1.ResourceSet, r *apiextensionsv1.JSON) error {
-	if rs == nil || r == nil {
-		return errors.New("nil ResourceSet or resource")
-	}
+func AddResourceSetResource(rs *fluxv1.ResourceSet, r *apiextensionsv1.JSON) {
 	rs.Spec.Resources = append(rs.Spec.Resources, r)
-	return nil
 }
 
 // SetResourceSetResourcesTemplate sets the resources template.
-func SetResourceSetResourcesTemplate(rs *fluxv1.ResourceSet, tpl string) error {
-	if rs == nil {
-		return errors.New("nil ResourceSet")
-	}
+func SetResourceSetResourcesTemplate(rs *fluxv1.ResourceSet, tpl string) {
 	rs.Spec.ResourcesTemplate = tpl
-	return nil
 }
 
 // AddResourceSetDependency appends a dependency.
-func AddResourceSetDependency(rs *fluxv1.ResourceSet, dep fluxv1.Dependency) error {
-	if rs == nil {
-		return errors.New("nil ResourceSet")
-	}
+func AddResourceSetDependency(rs *fluxv1.ResourceSet, dep fluxv1.Dependency) {
 	rs.Spec.DependsOn = append(rs.Spec.DependsOn, dep)
-	return nil
 }
 
 // SetResourceSetServiceAccountName sets the service account name.
-func SetResourceSetServiceAccountName(rs *fluxv1.ResourceSet, name string) error {
-	if rs == nil {
-		return errors.New("nil ResourceSet")
-	}
+func SetResourceSetServiceAccountName(rs *fluxv1.ResourceSet, name string) {
 	rs.Spec.ServiceAccountName = name
-	return nil
 }
 
 // SetResourceSetWait sets the wait flag.
-func SetResourceSetWait(rs *fluxv1.ResourceSet, wait bool) error {
-	if rs == nil {
-		return errors.New("nil ResourceSet")
-	}
+func SetResourceSetWait(rs *fluxv1.ResourceSet, wait bool) {
 	rs.Spec.Wait = wait
-	return nil
 }
 
 // SetResourceSetCommonMetadata sets the common metadata.
-func SetResourceSetCommonMetadata(rs *fluxv1.ResourceSet, cm *fluxv1.CommonMetadata) error {
-	if rs == nil {
-		return errors.New("nil ResourceSet")
-	}
+func SetResourceSetCommonMetadata(rs *fluxv1.ResourceSet, cm *fluxv1.CommonMetadata) {
 	rs.Spec.CommonMetadata = cm
-	return nil
 }

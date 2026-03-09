@@ -38,9 +38,7 @@ func TestCreateScheduledBackup(t *testing.T) {
 
 func TestAddScheduledBackupLabel(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := AddScheduledBackupLabel(obj, "app", "postgres"); err != nil {
-		t.Fatalf("AddScheduledBackupLabel failed: %v", err)
-	}
+	AddScheduledBackupLabel(obj, "app", "postgres")
 	if obj.Labels["app"] != "postgres" {
 		t.Errorf("label not set")
 	}
@@ -48,9 +46,7 @@ func TestAddScheduledBackupLabel(t *testing.T) {
 
 func TestAddScheduledBackupAnnotation(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := AddScheduledBackupAnnotation(obj, "team", "dba"); err != nil {
-		t.Fatalf("AddScheduledBackupAnnotation failed: %v", err)
-	}
+	AddScheduledBackupAnnotation(obj, "team", "dba")
 	if obj.Annotations["team"] != "dba" {
 		t.Errorf("annotation not set")
 	}
@@ -58,9 +54,7 @@ func TestAddScheduledBackupAnnotation(t *testing.T) {
 
 func TestSetScheduledBackupMethod(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupMethod(obj, cnpgv1.BackupMethodPlugin); err != nil {
-		t.Fatalf("SetScheduledBackupMethod failed: %v", err)
-	}
+	SetScheduledBackupMethod(obj, cnpgv1.BackupMethodPlugin)
 	if obj.Spec.Method != cnpgv1.BackupMethodPlugin {
 		t.Errorf("unexpected method %q", obj.Spec.Method)
 	}
@@ -68,9 +62,7 @@ func TestSetScheduledBackupMethod(t *testing.T) {
 
 func TestSetScheduledBackupMethodVolumeSnapshot(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupMethod(obj, cnpgv1.BackupMethodVolumeSnapshot); err != nil {
-		t.Fatalf("SetScheduledBackupMethod failed: %v", err)
-	}
+	SetScheduledBackupMethod(obj, cnpgv1.BackupMethodVolumeSnapshot)
 	if obj.Spec.Method != cnpgv1.BackupMethodVolumeSnapshot {
 		t.Errorf("unexpected method %q", obj.Spec.Method)
 	}
@@ -78,9 +70,7 @@ func TestSetScheduledBackupMethodVolumeSnapshot(t *testing.T) {
 
 func TestSetScheduledBackupMethodBarmanObjectStore(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupMethod(obj, cnpgv1.BackupMethodBarmanObjectStore); err != nil {
-		t.Fatalf("SetScheduledBackupMethod failed: %v", err)
-	}
+	SetScheduledBackupMethod(obj, cnpgv1.BackupMethodBarmanObjectStore)
 	if obj.Spec.Method != cnpgv1.BackupMethodBarmanObjectStore {
 		t.Errorf("unexpected method %q", obj.Spec.Method)
 	}
@@ -89,9 +79,7 @@ func TestSetScheduledBackupMethodBarmanObjectStore(t *testing.T) {
 func TestSetScheduledBackupPluginConfiguration(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
 	params := map[string]string{"bucket": "my-bucket", "region": "eu-west-1"}
-	if err := SetScheduledBackupPluginConfiguration(obj, "barman-cloud.cloudnative-pg.io", params); err != nil {
-		t.Fatalf("SetScheduledBackupPluginConfiguration failed: %v", err)
-	}
+	SetScheduledBackupPluginConfiguration(obj, "barman-cloud.cloudnative-pg.io", params)
 	if obj.Spec.PluginConfiguration == nil {
 		t.Fatal("expected non-nil pluginConfiguration")
 	}
@@ -108,9 +96,7 @@ func TestSetScheduledBackupPluginConfiguration(t *testing.T) {
 
 func TestSetScheduledBackupPluginConfigurationNilParams(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupPluginConfiguration(obj, "barman-cloud.cloudnative-pg.io", nil); err != nil {
-		t.Fatalf("SetScheduledBackupPluginConfiguration failed: %v", err)
-	}
+	SetScheduledBackupPluginConfiguration(obj, "barman-cloud.cloudnative-pg.io", nil)
 	if obj.Spec.PluginConfiguration == nil {
 		t.Fatal("expected non-nil pluginConfiguration")
 	}
@@ -124,9 +110,7 @@ func TestSetScheduledBackupPluginConfigurationNilParams(t *testing.T) {
 
 func TestSetScheduledBackupImmediate(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupImmediate(obj, true); err != nil {
-		t.Fatalf("SetScheduledBackupImmediate failed: %v", err)
-	}
+	SetScheduledBackupImmediate(obj, true)
 	if obj.Spec.Immediate == nil || !*obj.Spec.Immediate {
 		t.Errorf("expected immediate to be true")
 	}
@@ -134,9 +118,7 @@ func TestSetScheduledBackupImmediate(t *testing.T) {
 
 func TestSetScheduledBackupImmediateFalse(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupImmediate(obj, false); err != nil {
-		t.Fatalf("SetScheduledBackupImmediate failed: %v", err)
-	}
+	SetScheduledBackupImmediate(obj, false)
 	if obj.Spec.Immediate == nil || *obj.Spec.Immediate {
 		t.Errorf("expected immediate to be false")
 	}
@@ -154,9 +136,7 @@ func TestSetScheduledBackupBackupOwnerReference(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-			if err := SetScheduledBackupBackupOwnerReference(obj, tc.ref); err != nil {
-				t.Fatalf("SetScheduledBackupBackupOwnerReference failed: %v", err)
-			}
+			SetScheduledBackupBackupOwnerReference(obj, tc.ref)
 			if obj.Spec.BackupOwnerReference != tc.ref {
 				t.Errorf("unexpected backupOwnerReference %q, want %q", obj.Spec.BackupOwnerReference, tc.ref)
 			}
@@ -166,9 +146,7 @@ func TestSetScheduledBackupBackupOwnerReference(t *testing.T) {
 
 func TestSetScheduledBackupSuspend(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupSuspend(obj, true); err != nil {
-		t.Fatalf("SetScheduledBackupSuspend failed: %v", err)
-	}
+	SetScheduledBackupSuspend(obj, true)
 	if obj.Spec.Suspend == nil || !*obj.Spec.Suspend {
 		t.Errorf("expected suspend to be true")
 	}
@@ -176,34 +154,8 @@ func TestSetScheduledBackupSuspend(t *testing.T) {
 
 func TestSetScheduledBackupSuspendFalse(t *testing.T) {
 	obj := CreateScheduledBackup("test", "ns", cnpgv1.ScheduledBackupSpec{})
-	if err := SetScheduledBackupSuspend(obj, false); err != nil {
-		t.Fatalf("SetScheduledBackupSuspend failed: %v", err)
-	}
+	SetScheduledBackupSuspend(obj, false)
 	if obj.Spec.Suspend == nil || *obj.Spec.Suspend {
 		t.Errorf("expected suspend to be false")
-	}
-}
-
-func TestScheduledBackupNilGuards(t *testing.T) {
-	if err := AddScheduledBackupLabel(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil ScheduledBackup")
-	}
-	if err := AddScheduledBackupAnnotation(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil ScheduledBackup")
-	}
-	if err := SetScheduledBackupMethod(nil, cnpgv1.BackupMethodPlugin); err == nil {
-		t.Error("expected error for nil ScheduledBackup")
-	}
-	if err := SetScheduledBackupPluginConfiguration(nil, "plugin", nil); err == nil {
-		t.Error("expected error for nil ScheduledBackup")
-	}
-	if err := SetScheduledBackupImmediate(nil, true); err == nil {
-		t.Error("expected error for nil ScheduledBackup")
-	}
-	if err := SetScheduledBackupBackupOwnerReference(nil, "self"); err == nil {
-		t.Error("expected error for nil ScheduledBackup")
-	}
-	if err := SetScheduledBackupSuspend(nil, true); err == nil {
-		t.Error("expected error for nil ScheduledBackup")
 	}
 }

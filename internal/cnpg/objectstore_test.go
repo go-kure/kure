@@ -49,30 +49,22 @@ func TestObjectStoreFunctions(t *testing.T) {
 	}
 	os := CreateObjectStore("store", "ns", spec)
 
-	if err := AddObjectStoreLabel(os, "app", "backup"); err != nil {
-		t.Errorf("AddObjectStoreLabel failed: %v", err)
-	}
+	AddObjectStoreLabel(os, "app", "backup")
 	if os.Labels["app"] != "backup" {
 		t.Errorf("label not set")
 	}
 
-	if err := AddObjectStoreAnnotation(os, "team", "dba"); err != nil {
-		t.Errorf("AddObjectStoreAnnotation failed: %v", err)
-	}
+	AddObjectStoreAnnotation(os, "team", "dba")
 	if os.Annotations["team"] != "dba" {
 		t.Errorf("annotation not set")
 	}
 
-	if err := SetObjectStoreDestinationPath(os, "s3://new-bucket/backups"); err != nil {
-		t.Errorf("SetObjectStoreDestinationPath failed: %v", err)
-	}
+	SetObjectStoreDestinationPath(os, "s3://new-bucket/backups")
 	if os.Spec.Configuration.DestinationPath != "s3://new-bucket/backups" {
 		t.Errorf("destination path not updated")
 	}
 
-	if err := SetObjectStoreEndpointURL(os, "https://s3.example.com"); err != nil {
-		t.Errorf("SetObjectStoreEndpointURL failed: %v", err)
-	}
+	SetObjectStoreEndpointURL(os, "https://s3.example.com")
 	if os.Spec.Configuration.EndpointURL != "https://s3.example.com" {
 		t.Errorf("endpoint URL not set")
 	}
@@ -91,9 +83,7 @@ func TestObjectStoreFunctions(t *testing.T) {
 			Key:                  "REGION",
 		},
 	}
-	if err := SetObjectStoreS3Credentials(os, creds); err != nil {
-		t.Errorf("SetObjectStoreS3Credentials failed: %v", err)
-	}
+	SetObjectStoreS3Credentials(os, creds)
 	if os.Spec.Configuration.AWS == nil {
 		t.Fatal("S3 credentials not set")
 	}
@@ -101,9 +91,7 @@ func TestObjectStoreFunctions(t *testing.T) {
 		t.Errorf("access key secret name mismatch")
 	}
 
-	if err := SetObjectStoreRetentionPolicy(os, "30d"); err != nil {
-		t.Errorf("SetObjectStoreRetentionPolicy failed: %v", err)
-	}
+	SetObjectStoreRetentionPolicy(os, "30d")
 	if os.Spec.RetentionPolicy != "30d" {
 		t.Errorf("retention policy not set")
 	}
@@ -112,9 +100,7 @@ func TestObjectStoreFunctions(t *testing.T) {
 		Compression: "gzip",
 		MaxParallel: 4,
 	}
-	if err := SetObjectStoreWalConfig(os, walCfg); err != nil {
-		t.Errorf("SetObjectStoreWalConfig failed: %v", err)
-	}
+	SetObjectStoreWalConfig(os, walCfg)
 	if os.Spec.Configuration.Wal == nil || os.Spec.Configuration.Wal.Compression != "gzip" {
 		t.Errorf("WAL config not set")
 	}
@@ -124,48 +110,14 @@ func TestObjectStoreFunctions(t *testing.T) {
 		Compression: "gzip",
 		Jobs:        &jobs,
 	}
-	if err := SetObjectStoreDataConfig(os, dataCfg); err != nil {
-		t.Errorf("SetObjectStoreDataConfig failed: %v", err)
-	}
+	SetObjectStoreDataConfig(os, dataCfg)
 	if os.Spec.Configuration.Data == nil || os.Spec.Configuration.Data.Compression != "gzip" {
 		t.Errorf("data config not set")
 	}
 
 	envVar := corev1.EnvVar{Name: "AWS_REGION", Value: "eu-west-1"}
-	if err := AddObjectStoreEnvVar(os, envVar); err != nil {
-		t.Errorf("AddObjectStoreEnvVar failed: %v", err)
-	}
+	AddObjectStoreEnvVar(os, envVar)
 	if len(os.Spec.InstanceSidecarConfiguration.Env) != 1 {
 		t.Errorf("expected 1 env var, got %d", len(os.Spec.InstanceSidecarConfiguration.Env))
-	}
-}
-
-func TestObjectStoreFunctionsWithNil(t *testing.T) {
-	if err := AddObjectStoreLabel(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := AddObjectStoreAnnotation(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := AddObjectStoreEnvVar(nil, corev1.EnvVar{}); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := SetObjectStoreDestinationPath(nil, "s3://bucket"); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := SetObjectStoreEndpointURL(nil, "https://example.com"); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := SetObjectStoreS3Credentials(nil, nil); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := SetObjectStoreRetentionPolicy(nil, "60d"); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := SetObjectStoreWalConfig(nil, nil); err == nil {
-		t.Error("expected error for nil ObjectStore")
-	}
-	if err := SetObjectStoreDataConfig(nil, nil); err == nil {
-		t.Error("expected error for nil ObjectStore")
 	}
 }

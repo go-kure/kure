@@ -1,8 +1,6 @@
 package fluxcd
 
 import (
-	"github.com/go-kure/kure/pkg/errors"
-
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	"github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,55 +23,31 @@ func CreateResourceSetInputProvider(name, namespace string, spec fluxv1.Resource
 }
 
 // SetResourceSetInputProviderType sets the provider type.
-func SetResourceSetInputProviderType(obj *fluxv1.ResourceSetInputProvider, typ string) error {
-	if obj == nil {
-		return errors.New("nil ResourceSetInputProvider")
-	}
+func SetResourceSetInputProviderType(obj *fluxv1.ResourceSetInputProvider, typ string) {
 	obj.Spec.Type = typ
-	return nil
 }
 
 // SetResourceSetInputProviderURL sets the provider URL.
-func SetResourceSetInputProviderURL(obj *fluxv1.ResourceSetInputProvider, url string) error {
-	if obj == nil {
-		return errors.New("nil ResourceSetInputProvider")
-	}
+func SetResourceSetInputProviderURL(obj *fluxv1.ResourceSetInputProvider, url string) {
 	obj.Spec.URL = url
-	return nil
 }
 
 // SetResourceSetInputProviderServiceAccountName sets the service account name.
-func SetResourceSetInputProviderServiceAccountName(obj *fluxv1.ResourceSetInputProvider, name string) error {
-	if obj == nil {
-		return errors.New("nil ResourceSetInputProvider")
-	}
+func SetResourceSetInputProviderServiceAccountName(obj *fluxv1.ResourceSetInputProvider, name string) {
 	obj.Spec.ServiceAccountName = name
-	return nil
 }
 
 // SetResourceSetInputProviderSecretRef sets the secret reference.
-func SetResourceSetInputProviderSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) error {
-	if obj == nil {
-		return errors.New("nil ResourceSetInputProvider")
-	}
+func SetResourceSetInputProviderSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) {
 	obj.Spec.SecretRef = ref
-	return nil
 }
 
 // SetResourceSetInputProviderCertSecretRef sets the certificate secret reference.
-func SetResourceSetInputProviderCertSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) error {
-	if obj == nil {
-		return errors.New("nil ResourceSetInputProvider")
-	}
+func SetResourceSetInputProviderCertSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) {
 	obj.Spec.CertSecretRef = ref
-	return nil
 }
 
 // AddResourceSetInputProviderSchedule appends a schedule to the provider.
-func AddResourceSetInputProviderSchedule(obj *fluxv1.ResourceSetInputProvider, s fluxv1.Schedule) error {
-	if obj == nil {
-		return errors.New("nil ResourceSetInputProvider")
-	}
+func AddResourceSetInputProviderSchedule(obj *fluxv1.ResourceSetInputProvider, s fluxv1.Schedule) {
 	obj.Spec.Schedule = append(obj.Spec.Schedule, s)
-	return nil
 }

@@ -23,26 +23,14 @@ func TestCreateKustomizationFile(t *testing.T) {
 func TestKustomizationFileFunctions(t *testing.T) {
 	k := CreateKustomizationFile()
 
-	if err := AddKustomizationResource(k, "deployment.yaml"); err != nil {
-		t.Fatalf("AddKustomizationResource returned error: %v", err)
-	}
-	if err := AddKustomizationComponent(k, "../base"); err != nil {
-		t.Fatalf("AddKustomizationComponent returned error: %v", err)
-	}
-	if err := AddKustomizationCRD(k, "crd.yaml"); err != nil {
-		t.Fatalf("AddKustomizationCRD returned error: %v", err)
-	}
+	AddKustomizationResource(k, "deployment.yaml")
+	AddKustomizationComponent(k, "../base")
+	AddKustomizationCRD(k, "crd.yaml")
 	img := types.Image{Name: "nginx", NewTag: "latest"}
-	if err := AddKustomizationImage(k, img); err != nil {
-		t.Fatalf("AddKustomizationImage returned error: %v", err)
-	}
+	AddKustomizationImage(k, img)
 	patch := types.Patch{Path: "patch.yaml"}
-	if err := AddKustomizationPatch(k, patch); err != nil {
-		t.Fatalf("AddKustomizationPatch returned error: %v", err)
-	}
-	if err := SetKustomizationNamespace(k, "demo"); err != nil {
-		t.Fatalf("SetKustomizationNamespace returned error: %v", err)
-	}
+	AddKustomizationPatch(k, patch)
+	SetKustomizationNamespace(k, "demo")
 
 	if !reflect.DeepEqual(k.Resources, []string{"deployment.yaml"}) {
 		t.Errorf("resource not added")
@@ -61,24 +49,5 @@ func TestKustomizationFileFunctions(t *testing.T) {
 	}
 	if k.Namespace != "demo" {
 		t.Errorf("namespace not set")
-	}
-
-	if err := AddKustomizationResource(nil, "x"); err == nil {
-		t.Errorf("expected error when kustomization nil")
-	}
-	if err := AddKustomizationComponent(nil, "x"); err == nil {
-		t.Errorf("expected error when kustomization nil")
-	}
-	if err := AddKustomizationCRD(nil, "x"); err == nil {
-		t.Errorf("expected error when kustomization nil")
-	}
-	if err := AddKustomizationImage(nil, img); err == nil {
-		t.Errorf("expected error when kustomization nil")
-	}
-	if err := AddKustomizationPatch(nil, patch); err == nil {
-		t.Errorf("expected error when kustomization nil")
-	}
-	if err := SetKustomizationNamespace(nil, "x"); err == nil {
-		t.Errorf("expected error when kustomization nil")
 	}
 }

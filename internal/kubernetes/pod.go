@@ -3,9 +3,6 @@ package kubernetes
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/go-kure/kure/pkg/errors"
-	pkgkubernetes "github.com/go-kure/kure/pkg/kubernetes"
 )
 
 // CreatePod returns a Pod with the provided name and namespace. The object is
@@ -32,183 +29,113 @@ func CreatePod(name string, namespace string) *corev1.Pod {
 }
 
 // SetPodSpec assigns a pod spec to the Pod.
-func SetPodSpec(pod *corev1.Pod, spec *corev1.PodSpec) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	if spec == nil {
-		return errors.ErrNilPodSpec
-	}
+func SetPodSpec(pod *corev1.Pod, spec *corev1.PodSpec) {
 	pod.Spec = *spec
-	return nil
 }
 
 // AddPodContainer appends a container to the Pod spec.
-func AddPodContainer(pod *corev1.Pod, container *corev1.Container) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.AddPodSpecContainer(&pod.Spec, container)
+func AddPodContainer(pod *corev1.Pod, container *corev1.Container) {
+	pod.Spec.Containers = append(pod.Spec.Containers, *container)
 }
 
 // AddPodInitContainer appends an init container to the Pod spec.
-func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.AddPodSpecInitContainer(&pod.Spec, container)
+func AddPodInitContainer(pod *corev1.Pod, container *corev1.Container) {
+	pod.Spec.InitContainers = append(pod.Spec.InitContainers, *container)
 }
 
 // AddPodEphemeralContainer appends an ephemeral container to the Pod spec.
-func AddPodEphemeralContainer(pod *corev1.Pod, container *corev1.EphemeralContainer) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.AddPodSpecEphemeralContainer(&pod.Spec, container)
+func AddPodEphemeralContainer(pod *corev1.Pod, container *corev1.EphemeralContainer) {
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, *container)
 }
 
 // AddPodVolume appends a volume to the Pod spec.
-func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.AddPodSpecVolume(&pod.Spec, volume)
+func AddPodVolume(pod *corev1.Pod, volume *corev1.Volume) {
+	pod.Spec.Volumes = append(pod.Spec.Volumes, *volume)
 }
 
 // AddPodImagePullSecret appends an image pull secret to the Pod spec.
-func AddPodImagePullSecret(pod *corev1.Pod, imagePullSecret *corev1.LocalObjectReference) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.AddPodSpecImagePullSecret(&pod.Spec, imagePullSecret)
+func AddPodImagePullSecret(pod *corev1.Pod, imagePullSecret *corev1.LocalObjectReference) {
+	pod.Spec.ImagePullSecrets = append(pod.Spec.ImagePullSecrets, *imagePullSecret)
 }
 
 // AddPodToleration appends a toleration to the Pod spec.
-func AddPodToleration(pod *corev1.Pod, toleration *corev1.Toleration) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.AddPodSpecToleration(&pod.Spec, toleration)
+func AddPodToleration(pod *corev1.Pod, toleration *corev1.Toleration) {
+	pod.Spec.Tolerations = append(pod.Spec.Tolerations, *toleration)
 }
 
 // AddPodTopologySpreadConstraints appends a topology spread constraint if provided.
-func AddPodTopologySpreadConstraints(pod *corev1.Pod, topologySpreadConstraint *corev1.TopologySpreadConstraint) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.AddPodSpecTopologySpreadConstraints(&pod.Spec, topologySpreadConstraint)
+func AddPodTopologySpreadConstraints(pod *corev1.Pod, topologySpreadConstraint *corev1.TopologySpreadConstraint) {
+	pod.Spec.TopologySpreadConstraints = append(pod.Spec.TopologySpreadConstraints, *topologySpreadConstraint)
 }
 
 // SetPodServiceAccountName sets the service account used by the Pod.
-func SetPodServiceAccountName(pod *corev1.Pod, serviceAccountName string) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecServiceAccountName(&pod.Spec, serviceAccountName)
+func SetPodServiceAccountName(pod *corev1.Pod, serviceAccountName string) {
+	pod.Spec.ServiceAccountName = serviceAccountName
 }
 
 // SetPodSecurityContext sets the pod-level security context.
-func SetPodSecurityContext(pod *corev1.Pod, securityContext *corev1.PodSecurityContext) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecSecurityContext(&pod.Spec, securityContext)
+func SetPodSecurityContext(pod *corev1.Pod, securityContext *corev1.PodSecurityContext) {
+	pod.Spec.SecurityContext = securityContext
 }
 
 // SetPodAffinity assigns affinity rules to the Pod.
-func SetPodAffinity(pod *corev1.Pod, affinity *corev1.Affinity) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecAffinity(&pod.Spec, affinity)
+func SetPodAffinity(pod *corev1.Pod, affinity *corev1.Affinity) {
+	pod.Spec.Affinity = affinity
 }
 
 // SetPodNodeSelector sets the node selector map.
-func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecNodeSelector(&pod.Spec, nodeSelector)
+func SetPodNodeSelector(pod *corev1.Pod, nodeSelector map[string]string) {
+	pod.Spec.NodeSelector = nodeSelector
 }
 
 // SetPodPriorityClassName sets the priority class name.
-func SetPodPriorityClassName(pod *corev1.Pod, class string) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecPriorityClassName(&pod.Spec, class)
+func SetPodPriorityClassName(pod *corev1.Pod, class string) {
+	pod.Spec.PriorityClassName = class
 }
 
 // SetPodHostNetwork configures host networking for the Pod.
-func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecHostNetwork(&pod.Spec, hostNetwork)
+func SetPodHostNetwork(pod *corev1.Pod, hostNetwork bool) {
+	pod.Spec.HostNetwork = hostNetwork
 }
 
 // SetPodHostPID configures host PID namespace usage for the Pod.
-func SetPodHostPID(pod *corev1.Pod, hostPID bool) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecHostPID(&pod.Spec, hostPID)
+func SetPodHostPID(pod *corev1.Pod, hostPID bool) {
+	pod.Spec.HostPID = hostPID
 }
 
 // SetPodHostIPC configures host IPC namespace usage for the Pod.
-func SetPodHostIPC(pod *corev1.Pod, hostIPC bool) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecHostIPC(&pod.Spec, hostIPC)
+func SetPodHostIPC(pod *corev1.Pod, hostIPC bool) {
+	pod.Spec.HostIPC = hostIPC
 }
 
 // SetPodDNSPolicy sets the DNS policy for the Pod.
-func SetPodDNSPolicy(pod *corev1.Pod, policy corev1.DNSPolicy) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecDNSPolicy(&pod.Spec, policy)
+func SetPodDNSPolicy(pod *corev1.Pod, policy corev1.DNSPolicy) {
+	pod.Spec.DNSPolicy = policy
 }
 
-func SetPodDNSConfig(pod *corev1.Pod, dnsConfig *corev1.PodDNSConfig) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecDNSConfig(&pod.Spec, dnsConfig)
+func SetPodDNSConfig(pod *corev1.Pod, dnsConfig *corev1.PodDNSConfig) {
+	pod.Spec.DNSConfig = dnsConfig
 }
 
-func SetPodHostname(pod *corev1.Pod, hostname string) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecHostname(&pod.Spec, hostname)
+func SetPodHostname(pod *corev1.Pod, hostname string) {
+	pod.Spec.Hostname = hostname
 }
 
-func SetPodSubdomain(pod *corev1.Pod, subdomain string) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecSubdomain(&pod.Spec, subdomain)
+func SetPodSubdomain(pod *corev1.Pod, subdomain string) {
+	pod.Spec.Subdomain = subdomain
 }
 
-func SetPodRestartPolicy(pod *corev1.Pod, policy corev1.RestartPolicy) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecRestartPolicy(&pod.Spec, policy)
+func SetPodRestartPolicy(pod *corev1.Pod, policy corev1.RestartPolicy) {
+	pod.Spec.RestartPolicy = policy
 }
 
-func SetPodTerminationGracePeriod(pod *corev1.Pod, secs int64) error {
-	if pod == nil {
-		return errors.ErrNilPod
+func SetPodTerminationGracePeriod(pod *corev1.Pod, secs int64) {
+	if pod.Spec.TerminationGracePeriodSeconds == nil {
+		pod.Spec.TerminationGracePeriodSeconds = new(int64)
 	}
-	return pkgkubernetes.SetPodSpecTerminationGracePeriod(&pod.Spec, secs)
+	*pod.Spec.TerminationGracePeriodSeconds = secs
 }
 
-func SetPodSchedulerName(pod *corev1.Pod, scheduler string) error {
-	if pod == nil {
-		return errors.ErrNilPod
-	}
-	return pkgkubernetes.SetPodSpecSchedulerName(&pod.Spec, scheduler)
+func SetPodSchedulerName(pod *corev1.Pod, scheduler string) {
+	pod.Spec.SchedulerName = scheduler
 }

@@ -34,9 +34,7 @@ func TestCreateCluster(t *testing.T) {
 
 func TestAddClusterLabel(t *testing.T) {
 	obj := CreateCluster("test", "ns", cnpgv1.ClusterSpec{})
-	if err := AddClusterLabel(obj, "app", "postgres"); err != nil {
-		t.Fatalf("AddClusterLabel failed: %v", err)
-	}
+	AddClusterLabel(obj, "app", "postgres")
 	if obj.Labels["app"] != "postgres" {
 		t.Errorf("label not set")
 	}
@@ -44,9 +42,7 @@ func TestAddClusterLabel(t *testing.T) {
 
 func TestAddClusterAnnotation(t *testing.T) {
 	obj := CreateCluster("test", "ns", cnpgv1.ClusterSpec{})
-	if err := AddClusterAnnotation(obj, "team", "dba"); err != nil {
-		t.Fatalf("AddClusterAnnotation failed: %v", err)
-	}
+	AddClusterAnnotation(obj, "team", "dba")
 	if obj.Annotations["team"] != "dba" {
 		t.Errorf("annotation not set")
 	}
@@ -66,9 +62,7 @@ func TestAddClusterManagedRole(t *testing.T) {
 		},
 		Inherit: &loginTrue,
 	}
-	if err := AddClusterManagedRole(obj, role); err != nil {
-		t.Fatalf("AddClusterManagedRole failed: %v", err)
-	}
+	AddClusterManagedRole(obj, role)
 	if obj.Spec.Managed == nil {
 		t.Fatal("expected non-nil Managed")
 	}
@@ -100,9 +94,7 @@ func TestAddClusterManagedRoleSuperuser(t *testing.T) {
 		Superuser: true,
 		CreateDB:  true,
 	}
-	if err := AddClusterManagedRole(obj, role); err != nil {
-		t.Fatalf("AddClusterManagedRole failed: %v", err)
-	}
+	AddClusterManagedRole(obj, role)
 	r := obj.Spec.Managed.Roles[0]
 	if !r.Superuser {
 		t.Error("expected superuser to be true")
@@ -119,9 +111,7 @@ func TestAddClusterManagedRoleAbsent(t *testing.T) {
 		Name:   "old_user",
 		Ensure: cnpgv1.EnsureAbsent,
 	}
-	if err := AddClusterManagedRole(obj, role); err != nil {
-		t.Fatalf("AddClusterManagedRole failed: %v", err)
-	}
+	AddClusterManagedRole(obj, role)
 	if obj.Spec.Managed.Roles[0].Ensure != cnpgv1.EnsureAbsent {
 		t.Errorf("unexpected ensure %q", obj.Spec.Managed.Roles[0].Ensure)
 	}
@@ -136,9 +126,7 @@ func TestAddClusterManagedRoleMultiple(t *testing.T) {
 		{Name: "admin", Ensure: cnpgv1.EnsurePresent, Login: true, Superuser: true},
 	}
 	for _, role := range roles {
-		if err := AddClusterManagedRole(obj, role); err != nil {
-			t.Fatalf("AddClusterManagedRole failed for %s: %v", role.Name, err)
-		}
+		AddClusterManagedRole(obj, role)
 	}
 	if len(obj.Spec.Managed.Roles) != 3 {
 		t.Fatalf("expected 3 roles, got %d", len(obj.Spec.Managed.Roles))
@@ -158,23 +146,8 @@ func TestAddClusterManagedRoleInitializesManaged(t *testing.T) {
 	}
 
 	role := cnpgv1.RoleConfiguration{Name: "test_user"}
-	if err := AddClusterManagedRole(obj, role); err != nil {
-		t.Fatalf("AddClusterManagedRole failed: %v", err)
-	}
+	AddClusterManagedRole(obj, role)
 	if obj.Spec.Managed == nil {
 		t.Fatal("expected non-nil Managed after adding role")
-	}
-}
-
-func TestClusterNilGuards(t *testing.T) {
-	if err := AddClusterLabel(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil Cluster")
-	}
-	if err := AddClusterAnnotation(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil Cluster")
-	}
-	role := cnpgv1.RoleConfiguration{Name: "test"}
-	if err := AddClusterManagedRole(nil, role); err == nil {
-		t.Error("expected error for nil Cluster")
 	}
 }

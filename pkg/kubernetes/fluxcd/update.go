@@ -94,153 +94,153 @@ func SetFluxReportSpec(obj *fluxv1.FluxReport, spec fluxv1.FluxReportSpec) {
 // Wrapper helpers for internal functions so they are exported from this package.
 
 // AddFluxInstanceComponent delegates to the internal helper.
-func AddFluxInstanceComponent(obj *fluxv1.FluxInstance, c fluxv1.Component) error {
-	return intfluxcd.AddFluxInstanceComponent(obj, c)
+func AddFluxInstanceComponent(obj *fluxv1.FluxInstance, c fluxv1.Component) {
+	intfluxcd.AddFluxInstanceComponent(obj, c)
 }
 
 // SetFluxInstanceDistribution delegates to the internal helper.
-func SetFluxInstanceDistribution(obj *fluxv1.FluxInstance, dist fluxv1.Distribution) error {
-	return intfluxcd.SetFluxInstanceDistribution(obj, dist)
+func SetFluxInstanceDistribution(obj *fluxv1.FluxInstance, dist fluxv1.Distribution) {
+	intfluxcd.SetFluxInstanceDistribution(obj, dist)
 }
 
 // SetFluxInstanceCommonMetadata delegates to the internal helper.
-func SetFluxInstanceCommonMetadata(obj *fluxv1.FluxInstance, cm *fluxv1.CommonMetadata) error {
-	return intfluxcd.SetFluxInstanceCommonMetadata(obj, cm)
+func SetFluxInstanceCommonMetadata(obj *fluxv1.FluxInstance, cm *fluxv1.CommonMetadata) {
+	intfluxcd.SetFluxInstanceCommonMetadata(obj, cm)
 }
 
 // SetFluxInstanceCluster delegates to the internal helper.
-func SetFluxInstanceCluster(obj *fluxv1.FluxInstance, cluster *fluxv1.Cluster) error {
-	return intfluxcd.SetFluxInstanceCluster(obj, cluster)
+func SetFluxInstanceCluster(obj *fluxv1.FluxInstance, cluster *fluxv1.Cluster) {
+	intfluxcd.SetFluxInstanceCluster(obj, cluster)
 }
 
 // SetFluxInstanceSharding delegates to the internal helper.
-func SetFluxInstanceSharding(obj *fluxv1.FluxInstance, shard *fluxv1.Sharding) error {
-	return intfluxcd.SetFluxInstanceSharding(obj, shard)
+func SetFluxInstanceSharding(obj *fluxv1.FluxInstance, shard *fluxv1.Sharding) {
+	intfluxcd.SetFluxInstanceSharding(obj, shard)
 }
 
 // SetFluxInstanceStorage delegates to the internal helper.
-func SetFluxInstanceStorage(obj *fluxv1.FluxInstance, st *fluxv1.Storage) error {
-	return intfluxcd.SetFluxInstanceStorage(obj, st)
+func SetFluxInstanceStorage(obj *fluxv1.FluxInstance, st *fluxv1.Storage) {
+	intfluxcd.SetFluxInstanceStorage(obj, st)
 }
 
 // SetFluxInstanceKustomize delegates to the internal helper.
-func SetFluxInstanceKustomize(obj *fluxv1.FluxInstance, k *fluxv1.Kustomize) error {
-	return intfluxcd.SetFluxInstanceKustomize(obj, k)
+func SetFluxInstanceKustomize(obj *fluxv1.FluxInstance, k *fluxv1.Kustomize) {
+	intfluxcd.SetFluxInstanceKustomize(obj, k)
 }
 
 // SetFluxInstanceWait delegates to the internal helper.
-func SetFluxInstanceWait(obj *fluxv1.FluxInstance, wait bool) error {
-	return intfluxcd.SetFluxInstanceWait(obj, wait)
+func SetFluxInstanceWait(obj *fluxv1.FluxInstance, wait bool) {
+	intfluxcd.SetFluxInstanceWait(obj, wait)
 }
 
 // SetFluxInstanceMigrateResources delegates to the internal helper.
-func SetFluxInstanceMigrateResources(obj *fluxv1.FluxInstance, m bool) error {
-	return intfluxcd.SetFluxInstanceMigrateResources(obj, m)
+func SetFluxInstanceMigrateResources(obj *fluxv1.FluxInstance, m bool) {
+	intfluxcd.SetFluxInstanceMigrateResources(obj, m)
 }
 
 // SetFluxInstanceSync delegates to the internal helper.
-func SetFluxInstanceSync(obj *fluxv1.FluxInstance, sync *fluxv1.Sync) error {
-	return intfluxcd.SetFluxInstanceSync(obj, sync)
+func SetFluxInstanceSync(obj *fluxv1.FluxInstance, sync *fluxv1.Sync) {
+	intfluxcd.SetFluxInstanceSync(obj, sync)
 }
 
 // AddFluxReportComponentStatus delegates to the internal helper.
-func AddFluxReportComponentStatus(fr *fluxv1.FluxReport, cs fluxv1.FluxComponentStatus) error {
-	return intfluxcd.AddFluxReportComponentStatus(fr, cs)
+func AddFluxReportComponentStatus(fr *fluxv1.FluxReport, cs fluxv1.FluxComponentStatus) {
+	intfluxcd.AddFluxReportComponentStatus(fr, cs)
 }
 
 // AddFluxReportReconcilerStatus delegates to the internal helper.
-func AddFluxReportReconcilerStatus(fr *fluxv1.FluxReport, rs fluxv1.FluxReconcilerStatus) error {
-	return intfluxcd.AddFluxReportReconcilerStatus(fr, rs)
+func AddFluxReportReconcilerStatus(fr *fluxv1.FluxReport, rs fluxv1.FluxReconcilerStatus) {
+	intfluxcd.AddFluxReportReconcilerStatus(fr, rs)
 }
 
 // SetFluxReportDistribution delegates to the internal helper.
-func SetFluxReportDistribution(fr *fluxv1.FluxReport, dist fluxv1.FluxDistributionStatus) error {
-	return intfluxcd.SetFluxReportDistribution(fr, dist)
+func SetFluxReportDistribution(fr *fluxv1.FluxReport, dist fluxv1.FluxDistributionStatus) {
+	intfluxcd.SetFluxReportDistribution(fr, dist)
 }
 
 // SetFluxReportCluster delegates to the internal helper.
-func SetFluxReportCluster(fr *fluxv1.FluxReport, c *fluxv1.ClusterInfo) error {
-	return intfluxcd.SetFluxReportCluster(fr, c)
+func SetFluxReportCluster(fr *fluxv1.FluxReport, c *fluxv1.ClusterInfo) {
+	intfluxcd.SetFluxReportCluster(fr, c)
 }
 
 // SetFluxReportOperator delegates to the internal helper.
-func SetFluxReportOperator(fr *fluxv1.FluxReport, op *fluxv1.OperatorInfo) error {
-	return intfluxcd.SetFluxReportOperator(fr, op)
+func SetFluxReportOperator(fr *fluxv1.FluxReport, op *fluxv1.OperatorInfo) {
+	intfluxcd.SetFluxReportOperator(fr, op)
 }
 
 // SetFluxReportSyncStatus delegates to the internal helper.
-func SetFluxReportSyncStatus(fr *fluxv1.FluxReport, s *fluxv1.FluxSyncStatus) error {
-	return intfluxcd.SetFluxReportSyncStatus(fr, s)
+func SetFluxReportSyncStatus(fr *fluxv1.FluxReport, s *fluxv1.FluxSyncStatus) {
+	intfluxcd.SetFluxReportSyncStatus(fr, s)
 }
 
 // AddResourceSetInput delegates to the internal helper.
-func AddResourceSetInput(rs *fluxv1.ResourceSet, in fluxv1.ResourceSetInput) error {
-	return intfluxcd.AddResourceSetInput(rs, in)
+func AddResourceSetInput(rs *fluxv1.ResourceSet, in fluxv1.ResourceSetInput) {
+	intfluxcd.AddResourceSetInput(rs, in)
 }
 
 // AddResourceSetInputFrom delegates to the internal helper.
-func AddResourceSetInputFrom(rs *fluxv1.ResourceSet, ref fluxv1.InputProviderReference) error {
-	return intfluxcd.AddResourceSetInputFrom(rs, ref)
+func AddResourceSetInputFrom(rs *fluxv1.ResourceSet, ref fluxv1.InputProviderReference) {
+	intfluxcd.AddResourceSetInputFrom(rs, ref)
 }
 
 // AddResourceSetResource delegates to the internal helper.
-func AddResourceSetResource(rs *fluxv1.ResourceSet, r *apiextensionsv1.JSON) error {
-	return intfluxcd.AddResourceSetResource(rs, r)
+func AddResourceSetResource(rs *fluxv1.ResourceSet, r *apiextensionsv1.JSON) {
+	intfluxcd.AddResourceSetResource(rs, r)
 }
 
 // SetResourceSetResourcesTemplate delegates to the internal helper.
-func SetResourceSetResourcesTemplate(rs *fluxv1.ResourceSet, tpl string) error {
-	return intfluxcd.SetResourceSetResourcesTemplate(rs, tpl)
+func SetResourceSetResourcesTemplate(rs *fluxv1.ResourceSet, tpl string) {
+	intfluxcd.SetResourceSetResourcesTemplate(rs, tpl)
 }
 
 // AddResourceSetDependency delegates to the internal helper.
-func AddResourceSetDependency(rs *fluxv1.ResourceSet, dep fluxv1.Dependency) error {
-	return intfluxcd.AddResourceSetDependency(rs, dep)
+func AddResourceSetDependency(rs *fluxv1.ResourceSet, dep fluxv1.Dependency) {
+	intfluxcd.AddResourceSetDependency(rs, dep)
 }
 
 // SetResourceSetServiceAccountName delegates to the internal helper.
-func SetResourceSetServiceAccountName(rs *fluxv1.ResourceSet, name string) error {
-	return intfluxcd.SetResourceSetServiceAccountName(rs, name)
+func SetResourceSetServiceAccountName(rs *fluxv1.ResourceSet, name string) {
+	intfluxcd.SetResourceSetServiceAccountName(rs, name)
 }
 
 // SetResourceSetWait delegates to the internal helper.
-func SetResourceSetWait(rs *fluxv1.ResourceSet, wait bool) error {
-	return intfluxcd.SetResourceSetWait(rs, wait)
+func SetResourceSetWait(rs *fluxv1.ResourceSet, wait bool) {
+	intfluxcd.SetResourceSetWait(rs, wait)
 }
 
 // SetResourceSetCommonMetadata delegates to the internal helper.
-func SetResourceSetCommonMetadata(rs *fluxv1.ResourceSet, cm *fluxv1.CommonMetadata) error {
-	return intfluxcd.SetResourceSetCommonMetadata(rs, cm)
+func SetResourceSetCommonMetadata(rs *fluxv1.ResourceSet, cm *fluxv1.CommonMetadata) {
+	intfluxcd.SetResourceSetCommonMetadata(rs, cm)
 }
 
 // SetResourceSetInputProviderType delegates to the internal helper.
-func SetResourceSetInputProviderType(obj *fluxv1.ResourceSetInputProvider, typ string) error {
-	return intfluxcd.SetResourceSetInputProviderType(obj, typ)
+func SetResourceSetInputProviderType(obj *fluxv1.ResourceSetInputProvider, typ string) {
+	intfluxcd.SetResourceSetInputProviderType(obj, typ)
 }
 
 // SetResourceSetInputProviderURL delegates to the internal helper.
-func SetResourceSetInputProviderURL(obj *fluxv1.ResourceSetInputProvider, url string) error {
-	return intfluxcd.SetResourceSetInputProviderURL(obj, url)
+func SetResourceSetInputProviderURL(obj *fluxv1.ResourceSetInputProvider, url string) {
+	intfluxcd.SetResourceSetInputProviderURL(obj, url)
 }
 
 // SetResourceSetInputProviderServiceAccountName delegates to the internal helper.
-func SetResourceSetInputProviderServiceAccountName(obj *fluxv1.ResourceSetInputProvider, name string) error {
-	return intfluxcd.SetResourceSetInputProviderServiceAccountName(obj, name)
+func SetResourceSetInputProviderServiceAccountName(obj *fluxv1.ResourceSetInputProvider, name string) {
+	intfluxcd.SetResourceSetInputProviderServiceAccountName(obj, name)
 }
 
 // SetResourceSetInputProviderSecretRef delegates to the internal helper.
-func SetResourceSetInputProviderSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) error {
-	return intfluxcd.SetResourceSetInputProviderSecretRef(obj, ref)
+func SetResourceSetInputProviderSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) {
+	intfluxcd.SetResourceSetInputProviderSecretRef(obj, ref)
 }
 
 // SetResourceSetInputProviderCertSecretRef delegates to the internal helper.
-func SetResourceSetInputProviderCertSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) error {
-	return intfluxcd.SetResourceSetInputProviderCertSecretRef(obj, ref)
+func SetResourceSetInputProviderCertSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) {
+	intfluxcd.SetResourceSetInputProviderCertSecretRef(obj, ref)
 }
 
 // AddResourceSetInputProviderSchedule delegates to the internal helper.
-func AddResourceSetInputProviderSchedule(obj *fluxv1.ResourceSetInputProvider, s fluxv1.Schedule) error {
-	return intfluxcd.AddResourceSetInputProviderSchedule(obj, s)
+func AddResourceSetInputProviderSchedule(obj *fluxv1.ResourceSetInputProvider, s fluxv1.Schedule) {
+	intfluxcd.AddResourceSetInputProviderSchedule(obj, s)
 }
 
 // Additional helpers for notification resources.

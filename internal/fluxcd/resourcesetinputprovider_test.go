@@ -17,53 +17,14 @@ func TestCreateResourceSetInputProvider(t *testing.T) {
 	}
 }
 
-func TestResourceSetInputProviderNilGuards(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"SetResourceSetInputProviderType", func() error { return SetResourceSetInputProviderType(nil, "") }},
-		{"SetResourceSetInputProviderURL", func() error { return SetResourceSetInputProviderURL(nil, "") }},
-		{"SetResourceSetInputProviderServiceAccountName", func() error {
-			return SetResourceSetInputProviderServiceAccountName(nil, "")
-		}},
-		{"SetResourceSetInputProviderSecretRef", func() error { return SetResourceSetInputProviderSecretRef(nil, nil) }},
-		{"SetResourceSetInputProviderCertSecretRef", func() error {
-			return SetResourceSetInputProviderCertSecretRef(nil, nil)
-		}},
-		{"AddResourceSetInputProviderSchedule", func() error {
-			return AddResourceSetInputProviderSchedule(nil, fluxv1.Schedule{})
-		}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
-	}
-}
-
 func TestResourceSetInputProviderHelpers(t *testing.T) {
 	rsip := CreateResourceSetInputProvider("prov", "ns", fluxv1.ResourceSetInputProviderSpec{})
-	if err := SetResourceSetInputProviderType(rsip, fluxv1.InputProviderGitHubBranch); err != nil {
-		t.Fatalf("SetResourceSetInputProviderType returned error: %v", err)
-	}
-	if err := SetResourceSetInputProviderURL(rsip, "https://example.com/repo"); err != nil {
-		t.Fatalf("SetResourceSetInputProviderURL returned error: %v", err)
-	}
-	if err := SetResourceSetInputProviderServiceAccountName(rsip, "sa"); err != nil {
-		t.Fatalf("SetResourceSetInputProviderServiceAccountName returned error: %v", err)
-	}
-	if err := SetResourceSetInputProviderSecretRef(rsip, &meta.LocalObjectReference{Name: "secret"}); err != nil {
-		t.Fatalf("SetResourceSetInputProviderSecretRef returned error: %v", err)
-	}
-	if err := SetResourceSetInputProviderCertSecretRef(rsip, &meta.LocalObjectReference{Name: "cert"}); err != nil {
-		t.Fatalf("SetResourceSetInputProviderCertSecretRef returned error: %v", err)
-	}
-	if err := AddResourceSetInputProviderSchedule(rsip, CreateSchedule("@daily")); err != nil {
-		t.Fatalf("AddResourceSetInputProviderSchedule returned error: %v", err)
-	}
+	SetResourceSetInputProviderType(rsip, fluxv1.InputProviderGitHubBranch)
+	SetResourceSetInputProviderURL(rsip, "https://example.com/repo")
+	SetResourceSetInputProviderServiceAccountName(rsip, "sa")
+	SetResourceSetInputProviderSecretRef(rsip, &meta.LocalObjectReference{Name: "secret"})
+	SetResourceSetInputProviderCertSecretRef(rsip, &meta.LocalObjectReference{Name: "cert"})
+	AddResourceSetInputProviderSchedule(rsip, CreateSchedule("@daily"))
 	if rsip.Spec.Type != fluxv1.InputProviderGitHubBranch {
 		t.Errorf("type not set")
 	}
