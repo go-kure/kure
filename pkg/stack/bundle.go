@@ -123,10 +123,11 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 
 	// Propagate bundle labels to all generated resources.
 	// Application-specific labels take precedence.
+	// Direct mutation on *r is correct: client.Object is an interface backed by
+	// a pointer, so the underlying concrete object is modified in place.
 	if len(a.Labels) > 0 {
 		for _, r := range resources {
-			obj := *r
-			labels := obj.GetLabels()
+			labels := (*r).GetLabels()
 			if labels == nil {
 				labels = make(map[string]string, len(a.Labels))
 			}
@@ -135,7 +136,7 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 					labels[k] = v
 				}
 			}
-			obj.SetLabels(labels)
+			(*r).SetLabels(labels)
 		}
 	}
 
@@ -143,8 +144,7 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 	// Application-specific annotations take precedence.
 	if len(a.Annotations) > 0 {
 		for _, r := range resources {
-			obj := *r
-			annotations := obj.GetAnnotations()
+			annotations := (*r).GetAnnotations()
 			if annotations == nil {
 				annotations = make(map[string]string, len(a.Annotations))
 			}
@@ -153,7 +153,7 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 					annotations[k] = v
 				}
 			}
-			obj.SetAnnotations(annotations)
+			(*r).SetAnnotations(annotations)
 		}
 	}
 
