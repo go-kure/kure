@@ -1,8 +1,6 @@
 package metallb
 
 import (
-	"github.com/go-kure/kure/internal/validation"
-
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -24,41 +22,21 @@ func CreateIPAddressPool(name, namespace string, spec metallbv1beta1.IPAddressPo
 }
 
 // AddIPAddressPoolAddress adds an address range to the IPAddressPool spec.
-func AddIPAddressPoolAddress(obj *metallbv1beta1.IPAddressPool, addr string) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidateIPAddressPool(obj); err != nil {
-		return err
-	}
+func AddIPAddressPoolAddress(obj *metallbv1beta1.IPAddressPool, addr string) {
 	obj.Spec.Addresses = append(obj.Spec.Addresses, addr)
-	return nil
 }
 
 // SetIPAddressPoolAutoAssign sets the autoAssign flag on the IPAddressPool spec.
-func SetIPAddressPoolAutoAssign(obj *metallbv1beta1.IPAddressPool, auto bool) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidateIPAddressPool(obj); err != nil {
-		return err
-	}
+func SetIPAddressPoolAutoAssign(obj *metallbv1beta1.IPAddressPool, auto bool) {
 	obj.Spec.AutoAssign = &auto
-	return nil
 }
 
 // SetIPAddressPoolAvoidBuggyIPs sets the avoidBuggyIPs flag on the IPAddressPool spec.
-func SetIPAddressPoolAvoidBuggyIPs(obj *metallbv1beta1.IPAddressPool, avoid bool) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidateIPAddressPool(obj); err != nil {
-		return err
-	}
+func SetIPAddressPoolAvoidBuggyIPs(obj *metallbv1beta1.IPAddressPool, avoid bool) {
 	obj.Spec.AvoidBuggyIPs = avoid
-	return nil
 }
 
 // SetIPAddressPoolAllocateTo sets the allocation policy on the IPAddressPool spec.
-func SetIPAddressPoolAllocateTo(obj *metallbv1beta1.IPAddressPool, alloc *metallbv1beta1.ServiceAllocation) error {
-	validator := validation.NewValidator()
-	if err := validator.ValidateIPAddressPool(obj); err != nil {
-		return err
-	}
+func SetIPAddressPoolAllocateTo(obj *metallbv1beta1.IPAddressPool, alloc *metallbv1beta1.ServiceAllocation) {
 	obj.Spec.AllocateTo = alloc
-	return nil
 }
