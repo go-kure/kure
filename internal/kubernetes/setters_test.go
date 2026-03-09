@@ -11,10 +11,7 @@ import (
 // ConfigMap setter tests
 func TestAddConfigMapData_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
-	err := AddConfigMapData(cm, "key", "value")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddConfigMapData(cm, "key", "value")
 	if cm.Data["key"] != "value" {
 		t.Fatal("expected Data to be set")
 	}
@@ -23,10 +20,7 @@ func TestAddConfigMapData_Success(t *testing.T) {
 func TestAddConfigMapDataMap_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
 	data := map[string]string{"key1": "value1", "key2": "value2"}
-	err := AddConfigMapDataMap(cm, data)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddConfigMapDataMap(cm, data)
 	if len(cm.Data) != 2 {
 		t.Fatal("expected Data to be set")
 	}
@@ -34,10 +28,7 @@ func TestAddConfigMapDataMap_Success(t *testing.T) {
 
 func TestAddConfigMapBinaryData_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
-	err := AddConfigMapBinaryData(cm, "key", []byte("value"))
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddConfigMapBinaryData(cm, "key", []byte("value"))
 	if string(cm.BinaryData["key"]) != "value" {
 		t.Fatal("expected BinaryData to be set")
 	}
@@ -46,10 +37,7 @@ func TestAddConfigMapBinaryData_Success(t *testing.T) {
 func TestAddConfigMapBinaryDataMap_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
 	data := map[string][]byte{"key1": []byte("value1")}
-	err := AddConfigMapBinaryDataMap(cm, data)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddConfigMapBinaryDataMap(cm, data)
 	if len(cm.BinaryData) != 1 {
 		t.Fatal("expected BinaryData to be set")
 	}
@@ -58,10 +46,7 @@ func TestAddConfigMapBinaryDataMap_Success(t *testing.T) {
 func TestSetConfigMapData_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
 	data := map[string]string{"new": "data"}
-	err := SetConfigMapData(cm, data)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetConfigMapData(cm, data)
 	if cm.Data["new"] != "data" {
 		t.Fatal("expected Data to be replaced")
 	}
@@ -70,10 +55,7 @@ func TestSetConfigMapData_Success(t *testing.T) {
 func TestSetConfigMapBinaryData_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
 	data := map[string][]byte{"new": []byte("data")}
-	err := SetConfigMapBinaryData(cm, data)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetConfigMapBinaryData(cm, data)
 	if string(cm.BinaryData["new"]) != "data" {
 		t.Fatal("expected BinaryData to be replaced")
 	}
@@ -81,10 +63,7 @@ func TestSetConfigMapBinaryData_Success(t *testing.T) {
 
 func TestSetConfigMapImmutable_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
-	err := SetConfigMapImmutable(cm, true)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetConfigMapImmutable(cm, true)
 	if cm.Immutable == nil || !*cm.Immutable {
 		t.Fatal("expected Immutable to be true")
 	}
@@ -92,10 +71,7 @@ func TestSetConfigMapImmutable_Success(t *testing.T) {
 
 func TestAddConfigMapLabel_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
-	err := AddConfigMapLabel(cm, "key", "value")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddConfigMapLabel(cm, "key", "value")
 	if cm.Labels["key"] != "value" {
 		t.Fatal("expected Label to be set")
 	}
@@ -103,10 +79,7 @@ func TestAddConfigMapLabel_Success(t *testing.T) {
 
 func TestAddConfigMapAnnotation_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
-	err := AddConfigMapAnnotation(cm, "key", "value")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddConfigMapAnnotation(cm, "key", "value")
 	if cm.Annotations["key"] != "value" {
 		t.Fatal("expected Annotation to be set")
 	}
@@ -115,10 +88,7 @@ func TestAddConfigMapAnnotation_Success(t *testing.T) {
 func TestSetConfigMapLabels_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
 	labels := map[string]string{"new": "label"}
-	err := SetConfigMapLabels(cm, labels)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetConfigMapLabels(cm, labels)
 	if cm.Labels["new"] != "label" {
 		t.Fatal("expected Labels to be replaced")
 	}
@@ -127,10 +97,7 @@ func TestSetConfigMapLabels_Success(t *testing.T) {
 func TestSetConfigMapAnnotations_Success(t *testing.T) {
 	cm := CreateConfigMap("test", "default")
 	anns := map[string]string{"new": "annotation"}
-	err := SetConfigMapAnnotations(cm, anns)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetConfigMapAnnotations(cm, anns)
 	if cm.Annotations["new"] != "annotation" {
 		t.Fatal("expected Annotations to be replaced")
 	}
@@ -139,10 +106,7 @@ func TestSetConfigMapAnnotations_Success(t *testing.T) {
 // Secret setter tests
 func TestAddSecretData_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
-	err := AddSecretData(secret, "key", []byte("value"))
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddSecretData(secret, "key", []byte("value"))
 	if string(secret.Data["key"]) != "value" {
 		t.Fatal("expected Data to be set")
 	}
@@ -150,10 +114,7 @@ func TestAddSecretData_Success(t *testing.T) {
 
 func TestAddSecretStringData_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
-	err := AddSecretStringData(secret, "key", "value")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddSecretStringData(secret, "key", "value")
 	if secret.StringData["key"] != "value" {
 		t.Fatal("expected StringData to be set")
 	}
@@ -161,10 +122,7 @@ func TestAddSecretStringData_Success(t *testing.T) {
 
 func TestSetSecretType_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
-	err := SetSecretType(secret, corev1.SecretTypeTLS)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetSecretType(secret, corev1.SecretTypeTLS)
 	if secret.Type != corev1.SecretTypeTLS {
 		t.Fatal("expected Type to be set")
 	}
@@ -172,10 +130,7 @@ func TestSetSecretType_Success(t *testing.T) {
 
 func TestSetSecretImmutable_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
-	err := SetSecretImmutable(secret, true)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetSecretImmutable(secret, true)
 	if secret.Immutable == nil || !*secret.Immutable {
 		t.Fatal("expected Immutable to be true")
 	}
@@ -183,10 +138,7 @@ func TestSetSecretImmutable_Success(t *testing.T) {
 
 func TestAddSecretLabel_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
-	err := AddSecretLabel(secret, "key", "value")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddSecretLabel(secret, "key", "value")
 	if secret.Labels["key"] != "value" {
 		t.Fatal("expected Label to be set")
 	}
@@ -194,10 +146,7 @@ func TestAddSecretLabel_Success(t *testing.T) {
 
 func TestAddSecretAnnotation_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
-	err := AddSecretAnnotation(secret, "key", "value")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddSecretAnnotation(secret, "key", "value")
 	if secret.Annotations["key"] != "value" {
 		t.Fatal("expected Annotation to be set")
 	}
@@ -206,10 +155,7 @@ func TestAddSecretAnnotation_Success(t *testing.T) {
 func TestSetSecretLabels_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
 	labels := map[string]string{"new": "label"}
-	err := SetSecretLabels(secret, labels)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetSecretLabels(secret, labels)
 	if secret.Labels["new"] != "label" {
 		t.Fatal("expected Labels to be replaced")
 	}
@@ -218,10 +164,7 @@ func TestSetSecretLabels_Success(t *testing.T) {
 func TestSetSecretAnnotations_Success(t *testing.T) {
 	secret := CreateSecret("test", "default")
 	anns := map[string]string{"new": "annotation"}
-	err := SetSecretAnnotations(secret, anns)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetSecretAnnotations(secret, anns)
 	if secret.Annotations["new"] != "annotation" {
 		t.Fatal("expected Annotations to be replaced")
 	}

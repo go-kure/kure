@@ -31,9 +31,7 @@ func TestCreateSecret(t *testing.T) {
 
 func TestAddSecretData(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	if err := AddSecretData(sec, "key", []byte("val")); err != nil {
-		t.Fatalf("AddSecretData returned error: %v", err)
-	}
+	AddSecretData(sec, "key", []byte("val"))
 	if v, ok := sec.Data["key"]; !ok || string(v) != "val" {
 		t.Errorf("data not added correctly")
 	}
@@ -41,9 +39,7 @@ func TestAddSecretData(t *testing.T) {
 
 func TestAddSecretStringData(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	if err := AddSecretStringData(sec, "key", "val"); err != nil {
-		t.Fatalf("AddSecretStringData returned error: %v", err)
-	}
+	AddSecretStringData(sec, "key", "val")
 	if v, ok := sec.StringData["key"]; !ok || v != "val" {
 		t.Errorf("stringData not added correctly")
 	}
@@ -51,9 +47,7 @@ func TestAddSecretStringData(t *testing.T) {
 
 func TestSetSecretType(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	if err := SetSecretType(sec, corev1.SecretTypeDockercfg); err != nil {
-		t.Fatalf("SetSecretType returned error: %v", err)
-	}
+	SetSecretType(sec, corev1.SecretTypeDockercfg)
 	if sec.Type != corev1.SecretTypeDockercfg {
 		t.Errorf("secret type not set")
 	}
@@ -61,15 +55,11 @@ func TestSetSecretType(t *testing.T) {
 
 func TestSetSecretImmutable(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	if err := SetSecretImmutable(sec, true); err != nil {
-		t.Fatalf("SetSecretImmutable returned error: %v", err)
-	}
+	SetSecretImmutable(sec, true)
 	if sec.Immutable == nil || !*sec.Immutable {
 		t.Errorf("immutable not set to true")
 	}
-	if err := SetSecretImmutable(sec, false); err != nil {
-		t.Fatalf("SetSecretImmutable returned error: %v", err)
-	}
+	SetSecretImmutable(sec, false)
 	if sec.Immutable == nil || *sec.Immutable {
 		t.Errorf("immutable not updated to false")
 	}
@@ -77,16 +67,12 @@ func TestSetSecretImmutable(t *testing.T) {
 
 func TestSecretLabelFunctions(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	if err := AddSecretLabel(sec, "env", "prod"); err != nil {
-		t.Fatalf("AddSecretLabel returned error: %v", err)
-	}
+	AddSecretLabel(sec, "env", "prod")
 	if sec.Labels["env"] != "prod" {
 		t.Errorf("label not added")
 	}
 	newLabels := map[string]string{"a": "b"}
-	if err := SetSecretLabels(sec, newLabels); err != nil {
-		t.Fatalf("SetSecretLabels returned error: %v", err)
-	}
+	SetSecretLabels(sec, newLabels)
 	if !reflect.DeepEqual(sec.Labels, newLabels) {
 		t.Errorf("labels not set correctly")
 	}
@@ -94,40 +80,13 @@ func TestSecretLabelFunctions(t *testing.T) {
 
 func TestSecretAnnotationFunctions(t *testing.T) {
 	sec := CreateSecret("s", "ns")
-	if err := AddSecretAnnotation(sec, "team", "dev"); err != nil {
-		t.Fatalf("AddSecretAnnotation returned error: %v", err)
-	}
+	AddSecretAnnotation(sec, "team", "dev")
 	if sec.Annotations["team"] != "dev" {
 		t.Errorf("annotation not added")
 	}
 	newAnn := map[string]string{"x": "y"}
-	if err := SetSecretAnnotations(sec, newAnn); err != nil {
-		t.Fatalf("SetSecretAnnotations returned error: %v", err)
-	}
+	SetSecretAnnotations(sec, newAnn)
 	if !reflect.DeepEqual(sec.Annotations, newAnn) {
 		t.Errorf("annotations not set correctly")
-	}
-}
-
-func TestSecretNilGuards(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"AddSecretData", func() error { return AddSecretData(nil, "k", []byte("v")) }},
-		{"AddSecretStringData", func() error { return AddSecretStringData(nil, "k", "v") }},
-		{"SetSecretType", func() error { return SetSecretType(nil, corev1.SecretTypeOpaque) }},
-		{"SetSecretImmutable", func() error { return SetSecretImmutable(nil, true) }},
-		{"AddSecretLabel", func() error { return AddSecretLabel(nil, "k", "v") }},
-		{"AddSecretAnnotation", func() error { return AddSecretAnnotation(nil, "k", "v") }},
-		{"SetSecretLabels", func() error { return SetSecretLabels(nil, map[string]string{"k": "v"}) }},
-		{"SetSecretAnnotations", func() error { return SetSecretAnnotations(nil, map[string]string{"k": "v"}) }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
 	}
 }

@@ -450,18 +450,14 @@ func TestKubernetesInternalAPIs(t *testing.T) {
 	if secret == nil {
 		t.Fatal("CreateSecret returned nil")
 	}
-	if err := intkubernetes.AddSecretData(secret, "key", []byte("value")); err != nil {
-		t.Errorf("AddSecretData() error = %v", err)
-	}
+	intkubernetes.AddSecretData(secret, "key", []byte("value"))
 
 	// Test configmap creation
 	cm := intkubernetes.CreateConfigMap("test-config", "default")
 	if cm == nil {
 		t.Fatal("CreateConfigMap returned nil")
 	}
-	if err := intkubernetes.AddConfigMapData(cm, "key", "value"); err != nil {
-		t.Errorf("AddConfigMapData() error = %v", err)
-	}
+	intkubernetes.AddConfigMapData(cm, "key", "value")
 }
 
 // Test bundle creation and generation
