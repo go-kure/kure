@@ -395,10 +395,7 @@ func TestSetResourceSetInputProviderSpec(t *testing.T) {
 		Type:      "http",
 	}
 
-	provider, err := ResourceSetInputProvider(cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	provider := ResourceSetInputProvider(cfg)
 	if provider == nil {
 		t.Fatal("failed to create ResourceSetInputProvider")
 	}
@@ -501,26 +498,17 @@ func TestFluxInstanceHelpers(t *testing.T) {
 
 	// Test AddFluxInstanceComponent
 	component := fluxv1.Component("source-controller")
-	err := AddFluxInstanceComponent(instance, component)
-	if err != nil {
-		t.Errorf("AddFluxInstanceComponent failed: %v", err)
-	}
+	AddFluxInstanceComponent(instance, component)
 
 	// Test SetFluxInstanceDistribution
 	dist := fluxv1.Distribution{
 		Version:  "v2.2.0",
 		Registry: "quay.io/fluxcd",
 	}
-	err = SetFluxInstanceDistribution(instance, dist)
-	if err != nil {
-		t.Errorf("SetFluxInstanceDistribution failed: %v", err)
-	}
+	SetFluxInstanceDistribution(instance, dist)
 
 	// Test SetFluxInstanceWait
-	err = SetFluxInstanceWait(instance, true)
-	if err != nil {
-		t.Errorf("SetFluxInstanceWait failed: %v", err)
-	}
+	SetFluxInstanceWait(instance, true)
 }
 
 func TestFluxReportHelpers(t *testing.T) {
@@ -541,20 +529,14 @@ func TestFluxReportHelpers(t *testing.T) {
 		Name:   "kustomize-controller",
 		Status: "running",
 	}
-	err := AddFluxReportComponentStatus(report, componentStatus)
-	if err != nil {
-		t.Errorf("AddFluxReportComponentStatus failed: %v", err)
-	}
+	AddFluxReportComponentStatus(report, componentStatus)
 
 	// Test SetFluxReportDistribution
 	dist := fluxv1.FluxDistributionStatus{
 		Entitlement: "community",
 		Status:      "inactive",
 	}
-	err = SetFluxReportDistribution(report, dist)
-	if err != nil {
-		t.Errorf("SetFluxReportDistribution failed: %v", err)
-	}
+	SetFluxReportDistribution(report, dist)
 }
 
 func TestResourceSetHelpers(t *testing.T) {
@@ -572,31 +554,19 @@ func TestResourceSetHelpers(t *testing.T) {
 	input := fluxv1.ResourceSetInput{
 		"test-input": &apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 	}
-	err := AddResourceSetInput(resourceSet, input)
-	if err != nil {
-		t.Errorf("AddResourceSetInput failed: %v", err)
-	}
+	AddResourceSetInput(resourceSet, input)
 
 	// Test AddResourceSetInputFrom
 	inputRef := fluxv1.InputProviderReference{
 		Name: "input-provider",
 	}
-	err = AddResourceSetInputFrom(resourceSet, inputRef)
-	if err != nil {
-		t.Errorf("AddResourceSetInputFrom failed: %v", err)
-	}
+	AddResourceSetInputFrom(resourceSet, inputRef)
 
 	// Test SetResourceSetWait
-	err = SetResourceSetWait(resourceSet, true)
-	if err != nil {
-		t.Errorf("SetResourceSetWait failed: %v", err)
-	}
+	SetResourceSetWait(resourceSet, true)
 
 	// Test SetResourceSetServiceAccountName
-	err = SetResourceSetServiceAccountName(resourceSet, "flux")
-	if err != nil {
-		t.Errorf("SetResourceSetServiceAccountName failed: %v", err)
-	}
+	SetResourceSetServiceAccountName(resourceSet, "flux")
 }
 
 func TestProviderHelpers(t *testing.T) {
@@ -683,54 +653,33 @@ func TestResourceSetInputProviderHelpers(t *testing.T) {
 		Type:      "http",
 	}
 
-	provider, err := ResourceSetInputProvider(cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	provider := ResourceSetInputProvider(cfg)
 	if provider == nil {
 		t.Fatal("failed to create ResourceSetInputProvider")
 	}
 
 	// Test SetResourceSetInputProviderType (via the function that delegates)
-	err = SetResourceSetInputProviderType(provider, "oci")
-	if err != nil {
-		t.Errorf("SetResourceSetInputProviderType failed: %v", err)
-	}
+	SetResourceSetInputProviderType(provider, "oci")
 
 	// Test SetResourceSetInputProviderURL
-	err = SetResourceSetInputProviderURL(provider, "oci://registry.example.com/config")
-	if err != nil {
-		t.Errorf("SetResourceSetInputProviderURL failed: %v", err)
-	}
+	SetResourceSetInputProviderURL(provider, "oci://registry.example.com/config")
 
 	// Test SetResourceSetInputProviderServiceAccountName
-	err = SetResourceSetInputProviderServiceAccountName(provider, "flux")
-	if err != nil {
-		t.Errorf("SetResourceSetInputProviderServiceAccountName failed: %v", err)
-	}
+	SetResourceSetInputProviderServiceAccountName(provider, "flux")
 
 	// Test SetResourceSetInputProviderSecretRef
 	secretRef := &meta.LocalObjectReference{Name: "registry-secret"}
-	err = SetResourceSetInputProviderSecretRef(provider, secretRef)
-	if err != nil {
-		t.Errorf("SetResourceSetInputProviderSecretRef failed: %v", err)
-	}
+	SetResourceSetInputProviderSecretRef(provider, secretRef)
 
 	// Test SetResourceSetInputProviderCertSecretRef
 	certSecretRef := &meta.LocalObjectReference{Name: "cert-secret"}
-	err = SetResourceSetInputProviderCertSecretRef(provider, certSecretRef)
-	if err != nil {
-		t.Errorf("SetResourceSetInputProviderCertSecretRef failed: %v", err)
-	}
+	SetResourceSetInputProviderCertSecretRef(provider, certSecretRef)
 
 	// Test AddResourceSetInputProviderSchedule
 	schedule := fluxv1.Schedule{
 		Cron: "0 */6 * * *", // Every 6 hours
 	}
-	err = AddResourceSetInputProviderSchedule(provider, schedule)
-	if err != nil {
-		t.Errorf("AddResourceSetInputProviderSchedule failed: %v", err)
-	}
+	AddResourceSetInputProviderSchedule(provider, schedule)
 }
 
 func TestResourceSetAdvancedHelpers(t *testing.T) {
@@ -746,26 +695,17 @@ func TestResourceSetAdvancedHelpers(t *testing.T) {
 
 	// Test AddResourceSetResource
 	resource := &apiextensionsv1.JSON{Raw: []byte(`{"apiVersion": "v1", "kind": "ConfigMap"}`)}
-	err := AddResourceSetResource(resourceSet, resource)
-	if err != nil {
-		t.Errorf("AddResourceSetResource failed: %v", err)
-	}
+	AddResourceSetResource(resourceSet, resource)
 
 	// Test SetResourceSetResourcesTemplate
 	template := "{{ .Values.configMap }}"
-	err = SetResourceSetResourcesTemplate(resourceSet, template)
-	if err != nil {
-		t.Errorf("SetResourceSetResourcesTemplate failed: %v", err)
-	}
+	SetResourceSetResourcesTemplate(resourceSet, template)
 
 	// Test AddResourceSetDependency
 	dependency := fluxv1.Dependency{
 		Name: "prerequisite-resource",
 	}
-	err = AddResourceSetDependency(resourceSet, dependency)
-	if err != nil {
-		t.Errorf("AddResourceSetDependency failed: %v", err)
-	}
+	AddResourceSetDependency(resourceSet, dependency)
 
 	// Test SetResourceSetCommonMetadata
 	commonMetadata := &fluxv1.CommonMetadata{
@@ -773,8 +713,5 @@ func TestResourceSetAdvancedHelpers(t *testing.T) {
 			"app": "test",
 		},
 	}
-	err = SetResourceSetCommonMetadata(resourceSet, commonMetadata)
-	if err != nil {
-		t.Errorf("SetResourceSetCommonMetadata failed: %v", err)
-	}
+	SetResourceSetCommonMetadata(resourceSet, commonMetadata)
 }

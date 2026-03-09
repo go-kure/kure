@@ -33,9 +33,7 @@ func TestAddPodMonitorEndpoint(t *testing.T) {
 	obj := CreatePodMonitor("test", "ns", metav1.LabelSelector{})
 	port := "metrics"
 	ep := monitoringv1.PodMetricsEndpoint{Port: &port}
-	if err := AddPodMonitorEndpoint(obj, ep); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddPodMonitorEndpoint(obj, ep)
 	if len(obj.Spec.PodMetricsEndpoints) != 1 {
 		t.Fatalf("expected 1 endpoint, got %d", len(obj.Spec.PodMetricsEndpoints))
 	}
@@ -44,17 +42,9 @@ func TestAddPodMonitorEndpoint(t *testing.T) {
 	}
 }
 
-func TestAddPodMonitorEndpointNil(t *testing.T) {
-	if err := AddPodMonitorEndpoint(nil, monitoringv1.PodMetricsEndpoint{}); err == nil {
-		t.Error("expected error for nil PodMonitor")
-	}
-}
-
 func TestSetPodMonitorJobLabel(t *testing.T) {
 	obj := CreatePodMonitor("test", "ns", metav1.LabelSelector{})
-	if err := SetPodMonitorJobLabel(obj, "app"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetPodMonitorJobLabel(obj, "app")
 	if obj.Spec.JobLabel != "app" {
 		t.Errorf("expected jobLabel app, got %s", obj.Spec.JobLabel)
 	}
@@ -63,9 +53,7 @@ func TestSetPodMonitorJobLabel(t *testing.T) {
 func TestSetPodMonitorNamespaceSelector(t *testing.T) {
 	obj := CreatePodMonitor("test", "ns", metav1.LabelSelector{})
 	ns := monitoringv1.NamespaceSelector{Any: true}
-	if err := SetPodMonitorNamespaceSelector(obj, ns); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetPodMonitorNamespaceSelector(obj, ns)
 	if !obj.Spec.NamespaceSelector.Any {
 		t.Error("expected namespaceSelector.Any to be true")
 	}
@@ -73,9 +61,7 @@ func TestSetPodMonitorNamespaceSelector(t *testing.T) {
 
 func TestSetPodMonitorSampleLimit(t *testing.T) {
 	obj := CreatePodMonitor("test", "ns", metav1.LabelSelector{})
-	if err := SetPodMonitorSampleLimit(obj, 10000); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetPodMonitorSampleLimit(obj, 10000)
 	if obj.Spec.SampleLimit == nil || *obj.Spec.SampleLimit != 10000 {
 		t.Error("expected sampleLimit 10000")
 	}
@@ -83,16 +69,8 @@ func TestSetPodMonitorSampleLimit(t *testing.T) {
 
 func TestAddPodMonitorPodTargetLabel(t *testing.T) {
 	obj := CreatePodMonitor("test", "ns", metav1.LabelSelector{})
-	if err := AddPodMonitorPodTargetLabel(obj, "version"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddPodMonitorPodTargetLabel(obj, "version")
 	if len(obj.Spec.PodTargetLabels) != 1 || obj.Spec.PodTargetLabels[0] != "version" {
 		t.Error("expected podTargetLabel version")
-	}
-}
-
-func TestAddPodMonitorPodTargetLabelNil(t *testing.T) {
-	if err := AddPodMonitorPodTargetLabel(nil, "version"); err == nil {
-		t.Error("expected error for nil PodMonitor")
 	}
 }

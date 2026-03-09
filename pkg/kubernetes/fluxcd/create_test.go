@@ -554,10 +554,7 @@ func TestResourceSetInputProvider_Success(t *testing.T) {
 		URL:       "https://api.example.com/config",
 	}
 
-	provider, err := ResourceSetInputProvider(cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	provider := ResourceSetInputProvider(cfg)
 
 	if provider == nil {
 		t.Fatal("expected non-nil ResourceSetInputProvider")
@@ -745,11 +742,7 @@ func TestAllConstructorsWithNilConfig(t *testing.T) {
 			}
 		}},
 		{"ResourceSetInputProvider", func(t *testing.T) {
-			obj, err := ResourceSetInputProvider(nil)
-			if err != nil {
-				t.Errorf("unexpected error for nil config: %v", err)
-			}
-			if obj != nil {
+			if ResourceSetInputProvider(nil) != nil {
 				t.Error("ResourceSetInputProvider should return nil for nil config")
 			}
 		}},

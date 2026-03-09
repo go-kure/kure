@@ -22,37 +22,10 @@ func TestCreateFluxReport(t *testing.T) {
 	}
 }
 
-func TestFluxReportNilGuards(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"SetFluxReportDistribution", func() error { return SetFluxReportDistribution(nil, fluxv1.FluxDistributionStatus{}) }},
-		{"SetFluxReportCluster", func() error { return SetFluxReportCluster(nil, nil) }},
-		{"SetFluxReportOperator", func() error { return SetFluxReportOperator(nil, nil) }},
-		{"AddFluxReportComponentStatus", func() error { return AddFluxReportComponentStatus(nil, fluxv1.FluxComponentStatus{}) }},
-		{"AddFluxReportReconcilerStatus", func() error {
-			return AddFluxReportReconcilerStatus(nil, fluxv1.FluxReconcilerStatus{})
-		}},
-		{"SetFluxReportSyncStatus", func() error { return SetFluxReportSyncStatus(nil, nil) }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
-	}
-}
-
 func TestFluxReportHelpers(t *testing.T) {
 	fr := CreateFluxReport("flux", "ns", fluxv1.FluxReportSpec{})
-	if err := AddFluxReportComponentStatus(fr, fluxv1.FluxComponentStatus{Name: "source-controller"}); err != nil {
-		t.Fatalf("AddFluxReportComponentStatus returned error: %v", err)
-	}
-	if err := AddFluxReportReconcilerStatus(fr, fluxv1.FluxReconcilerStatus{Kind: "Kustomization"}); err != nil {
-		t.Fatalf("AddFluxReportReconcilerStatus returned error: %v", err)
-	}
+	AddFluxReportComponentStatus(fr, fluxv1.FluxComponentStatus{Name: "source-controller"})
+	AddFluxReportReconcilerStatus(fr, fluxv1.FluxReconcilerStatus{Kind: "Kustomization"})
 	if len(fr.Spec.ComponentsStatus) != 1 {
 		t.Errorf("component status not added")
 	}

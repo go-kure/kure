@@ -358,29 +358,6 @@ const (
 - Line and column numbers
 - Format-specific help suggestions
 
-### Centralized Validation
-
-The validation system provides consistent error reporting across all resource builders:
-
-```go
-// internal/validation/validators.go
-
-type Validator struct{}
-
-func (v *Validator) ValidateDeployment(deployment *appsv1.Deployment) error {
-    return v.validateNotNil(deployment, errors.ErrNilDeployment)
-}
-
-// Pre-defined error instances for common cases
-var (
-    ErrNilDeployment = ResourceValidationError("Deployment", "", "deployment", 
-                                               "deployment cannot be nil", nil)
-    ErrNilPod        = ResourceValidationError("Pod", "", "pod", 
-                                               "pod cannot be nil", nil)
-    // ... more predefined errors
-)
-```
-
 ### Error Wrapping Strategy
 
 Kure follows Go's error wrapping conventions while adding structured context:
@@ -439,8 +416,8 @@ internal/kubernetes/
 Builders provide compile-time type safety through:
 
 1. **Strong Return Types**: All constructors return specific Kubernetes types
-2. **Validation Integration**: Automatic validation in constructor functions
-3. **Error Propagation**: Explicit error returns for validation failures
+2. **Void Helpers**: Setter/adder functions use void returns (no nil-checking) since callers always use constructors first
+3. **Validation at Boundaries**: Only public facade functions (`pkg/kubernetes/`) validate inputs
 
 Example implementation:
 
@@ -473,18 +450,9 @@ func CreateDeployment(name, namespace string) *appsv1.Deployment {
     }
 }
 
-func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) error {
-    validator := validation.NewValidator()
-    if err := validator.ValidateDeployment(deployment); err != nil {
-        return err
-    }
-    if err := validator.ValidateContainer(container); err != nil {
-        return err
-    }
-    
+func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) {
     deployment.Spec.Template.Spec.Containers = append(
         deployment.Spec.Template.Spec.Containers, *container)
-    return nil
 }
 ```
 
@@ -492,9 +460,9 @@ func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Con
 
 All builders maintain consistency through:
 
-- **Common Validation**: Centralized validator used across all builders
-- **Standard Error Types**: Consistent error reporting patterns
-- **Naming Conventions**: Uniform function naming across resource types
+- **Void Returns**: All internal setter/adder functions use void returns consistently
+- **Standard Patterns**: Uniform function naming across resource types
+- **Boundary Validation**: Public facade functions handle nil-config checks
 
 ---
 
@@ -731,8 +699,7 @@ internal/                    # Implementation packages (private)
 ├── fluxcd/                # Flux resource builders
 ├── certmanager/           # cert-manager builders
 ├── metallb/               # MetalLB builders
-├── externalsecrets/       # External Secrets builders
-└── validation/            # Centralized validation
+└── externalsecrets/       # External Secrets builders
 ```
 
 ### File Naming Patterns
@@ -776,39 +743,16 @@ func CreateNewResource(name, namespace string, opts ...Option) *v1.NewResource {
 
 #### 2. Add Helper Functions
 ```go
-func AddNewResourceField(resource *v1.NewResource, field FieldType) error {
-    validator := validation.NewValidator()
-    if err := validator.ValidateNewResource(resource); err != nil {
-        return err
-    }
-    if err := validator.ValidateField(field); err != nil {
-        return err
-    }
-    
-    // Add field to resource
+func AddNewResourceField(resource *v1.NewResource, field FieldType) {
     resource.Spec.Fields = append(resource.Spec.Fields, field)
-    return nil
 }
 
-func SetNewResourceProperty(resource *v1.NewResource, value PropertyType) error {
-    // Validation and assignment
+func SetNewResourceProperty(resource *v1.NewResource, value PropertyType) {
+    resource.Spec.Property = value
 }
 ```
 
-#### 3. Add Validation Support
-```go
-// internal/validation/validators.go
-
-func (v *Validator) ValidateNewResource(resource *v1.NewResource) error {
-    return v.validateNotNil(resource, errors.ErrNilNewResource)
-}
-
-// pkg/errors/errors.go - Add to predefined errors
-var ErrNilNewResource = ResourceValidationError("NewResource", "", "newresource", 
-                                                "new resource cannot be nil", nil)
-```
-
-#### 4. Comprehensive Testing
+#### 3. Comprehensive Testing
 ```go
 // internal/kubernetes/newresource_test.go
 
@@ -829,13 +773,11 @@ func TestCreateNewResource(t *testing.T) {
 
 func TestNewResourceHelpers(t *testing.T) {
     resource := CreateNewResource("test", "default")
-    
+
     // Test all helper functions
     field := FieldType{/* valid field */}
-    if err := AddNewResourceField(resource, field); err != nil {
-        t.Errorf("unexpected error: %v", err)
-    }
-    
+    AddNewResourceField(resource, field)
+
     // Validate field was added
     if len(resource.Spec.Fields) != 1 {
         t.Errorf("expected 1 field, got %d", len(resource.Spec.Fields))
@@ -976,19 +918,13 @@ func TestWorkflowGeneration(t *testing.T) {
 }
 ```
 
-#### Error Testing
+#### Facade Testing
 ```go
-func TestErrorHandling(t *testing.T) {
-    // Test nil inputs
-    err := AddResourceField(nil, field)
-    if !errors.IsType(err, errors.ErrorTypeValidation) {
-        t.Errorf("expected validation error, got %T", err)
-    }
-    
-    // Test error context
-    kureErr := errors.GetKureError(err)
-    if kureErr == nil {
-        t.Error("expected KureError")
+func TestFacadeNilConfig(t *testing.T) {
+    // Test nil config returns nil object
+    obj := NewResource(nil)
+    if obj != nil {
+        t.Error("expected nil for nil config")
     }
 }
 ```
@@ -1026,22 +962,11 @@ func (n *Node) InitializePathMap() {
 }
 ```
 
-#### 2. Resource Pooling
-```go
-// Reuse validation instances
-var validatorPool = sync.Pool{
-    New: func() interface{} {
-        return validation.NewValidator()
-    },
-}
-```
-
-#### 3. Batch Operations
+#### 2. Batch Operations
 ```go
 func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
     // Generate all resources in single pass
     // Minimize allocation overhead
-    // Batch validation operations
 }
 ```
 
@@ -1050,7 +975,7 @@ func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object
 **Known Bottlenecks:**
 1. YAML serialization (mitigated by streaming output)
 2. Path resolution in complex hierarchies (mitigated by path caching)
-3. Validation overhead (mitigated by batch validation)
+3. Resource generation overhead (mitigated by void builder functions)
 
 **Scaling Characteristics:**
 - Linear scaling with number of resources
@@ -1437,7 +1362,7 @@ For migrating from previous versions:
 
 **Error Handling Changes:**
 - Replace generic errors with typed `KureError` instances
-- Use centralized validation from `internal/validation` package
+- Internal builder functions use void returns (no nil-checking)
 - Handle error context and suggestions in error reporting
 
 **Function Naming Changes:**

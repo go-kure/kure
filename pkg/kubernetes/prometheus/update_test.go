@@ -13,17 +13,9 @@ func TestAddServiceMonitorEndpoint_Public(t *testing.T) {
 		Namespace: "ns",
 		Selector:  metav1.LabelSelector{},
 	})
-	if err := AddServiceMonitorEndpoint(obj, monitoringv1.Endpoint{Port: "http"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddServiceMonitorEndpoint(obj, monitoringv1.Endpoint{Port: "http"})
 	if len(obj.Spec.Endpoints) != 1 {
 		t.Errorf("expected 1 endpoint, got %d", len(obj.Spec.Endpoints))
-	}
-}
-
-func TestAddServiceMonitorEndpointNil_Public(t *testing.T) {
-	if err := AddServiceMonitorEndpoint(nil, monitoringv1.Endpoint{}); err == nil {
-		t.Error("expected error for nil ServiceMonitor")
 	}
 }
 
@@ -31,17 +23,9 @@ func TestSetServiceMonitorJobLabel_Public(t *testing.T) {
 	obj := ServiceMonitor(&ServiceMonitorConfig{
 		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
 	})
-	if err := SetServiceMonitorJobLabel(obj, "job"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetServiceMonitorJobLabel(obj, "job")
 	if obj.Spec.JobLabel != "job" {
 		t.Errorf("expected jobLabel job, got %s", obj.Spec.JobLabel)
-	}
-}
-
-func TestSetServiceMonitorJobLabelNil_Public(t *testing.T) {
-	if err := SetServiceMonitorJobLabel(nil, "job"); err == nil {
-		t.Error("expected error for nil ServiceMonitor")
 	}
 }
 
@@ -50,17 +34,9 @@ func TestAddPodMonitorEndpoint_Public(t *testing.T) {
 		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
 	})
 	port := "http"
-	if err := AddPodMonitorEndpoint(obj, monitoringv1.PodMetricsEndpoint{Port: &port}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddPodMonitorEndpoint(obj, monitoringv1.PodMetricsEndpoint{Port: &port})
 	if len(obj.Spec.PodMetricsEndpoints) != 1 {
 		t.Errorf("expected 1 endpoint, got %d", len(obj.Spec.PodMetricsEndpoints))
-	}
-}
-
-func TestAddPodMonitorEndpointNil_Public(t *testing.T) {
-	if err := AddPodMonitorEndpoint(nil, monitoringv1.PodMetricsEndpoint{}); err == nil {
-		t.Error("expected error for nil PodMonitor")
 	}
 }
 
@@ -68,47 +44,59 @@ func TestAddPrometheusRuleGroup_Public(t *testing.T) {
 	obj := PrometheusRule(&PrometheusRuleConfig{
 		Name: "test", Namespace: "ns",
 	})
-	if err := AddPrometheusRuleGroup(obj, monitoringv1.RuleGroup{Name: "grp"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddPrometheusRuleGroup(obj, monitoringv1.RuleGroup{Name: "grp"})
 	if len(obj.Spec.Groups) != 1 {
 		t.Errorf("expected 1 group, got %d", len(obj.Spec.Groups))
 	}
 }
 
-func TestAddPrometheusRuleGroupNil_Public(t *testing.T) {
-	if err := AddPrometheusRuleGroup(nil, monitoringv1.RuleGroup{}); err == nil {
-		t.Error("expected error for nil PrometheusRule")
-	}
-}
-
 func TestSetServiceMonitorNamespaceSelector_Public(t *testing.T) {
-	if err := SetServiceMonitorNamespaceSelector(nil, monitoringv1.NamespaceSelector{}); err == nil {
-		t.Error("expected error for nil ServiceMonitor")
+	obj := ServiceMonitor(&ServiceMonitorConfig{
+		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
+	})
+	SetServiceMonitorNamespaceSelector(obj, monitoringv1.NamespaceSelector{Any: true})
+	if !obj.Spec.NamespaceSelector.Any {
+		t.Error("namespace selector not set")
 	}
 }
 
 func TestSetServiceMonitorSampleLimit_Public(t *testing.T) {
-	if err := SetServiceMonitorSampleLimit(nil, 100); err == nil {
-		t.Error("expected error for nil ServiceMonitor")
+	obj := ServiceMonitor(&ServiceMonitorConfig{
+		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
+	})
+	SetServiceMonitorSampleLimit(obj, 100)
+	if obj.Spec.SampleLimit == nil || *obj.Spec.SampleLimit != 100 {
+		t.Error("sample limit not set")
 	}
 }
 
 func TestSetPodMonitorJobLabel_Public(t *testing.T) {
-	if err := SetPodMonitorJobLabel(nil, "job"); err == nil {
-		t.Error("expected error for nil PodMonitor")
+	obj := PodMonitor(&PodMonitorConfig{
+		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
+	})
+	SetPodMonitorJobLabel(obj, "job")
+	if obj.Spec.JobLabel != "job" {
+		t.Error("job label not set")
 	}
 }
 
 func TestSetPodMonitorNamespaceSelector_Public(t *testing.T) {
-	if err := SetPodMonitorNamespaceSelector(nil, monitoringv1.NamespaceSelector{}); err == nil {
-		t.Error("expected error for nil PodMonitor")
+	obj := PodMonitor(&PodMonitorConfig{
+		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
+	})
+	SetPodMonitorNamespaceSelector(obj, monitoringv1.NamespaceSelector{Any: true})
+	if !obj.Spec.NamespaceSelector.Any {
+		t.Error("namespace selector not set")
 	}
 }
 
 func TestSetPodMonitorSampleLimit_Public(t *testing.T) {
-	if err := SetPodMonitorSampleLimit(nil, 100); err == nil {
-		t.Error("expected error for nil PodMonitor")
+	obj := PodMonitor(&PodMonitorConfig{
+		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
+	})
+	SetPodMonitorSampleLimit(obj, 100)
+	if obj.Spec.SampleLimit == nil || *obj.Spec.SampleLimit != 100 {
+		t.Error("sample limit not set")
 	}
 }
 
@@ -116,17 +104,9 @@ func TestAddServiceMonitorTargetLabel_Public(t *testing.T) {
 	obj := ServiceMonitor(&ServiceMonitorConfig{
 		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
 	})
-	if err := AddServiceMonitorTargetLabel(obj, "version"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddServiceMonitorTargetLabel(obj, "version")
 	if len(obj.Spec.TargetLabels) != 1 || obj.Spec.TargetLabels[0] != "version" {
 		t.Error("expected targetLabel version")
-	}
-}
-
-func TestAddServiceMonitorTargetLabelNil_Public(t *testing.T) {
-	if err := AddServiceMonitorTargetLabel(nil, "version"); err == nil {
-		t.Error("expected error for nil ServiceMonitor")
 	}
 }
 
@@ -134,16 +114,8 @@ func TestAddPodMonitorPodTargetLabel_Public(t *testing.T) {
 	obj := PodMonitor(&PodMonitorConfig{
 		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
 	})
-	if err := AddPodMonitorPodTargetLabel(obj, "version"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddPodMonitorPodTargetLabel(obj, "version")
 	if len(obj.Spec.PodTargetLabels) != 1 || obj.Spec.PodTargetLabels[0] != "version" {
 		t.Error("expected podTargetLabel version")
-	}
-}
-
-func TestAddPodMonitorPodTargetLabelNil_Public(t *testing.T) {
-	if err := AddPodMonitorPodTargetLabel(nil, "version"); err == nil {
-		t.Error("expected error for nil PodMonitor")
 	}
 }

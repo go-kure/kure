@@ -32,9 +32,7 @@ func TestCreateServiceMonitor(t *testing.T) {
 func TestAddServiceMonitorEndpoint(t *testing.T) {
 	obj := CreateServiceMonitor("test", "ns", metav1.LabelSelector{})
 	ep := monitoringv1.Endpoint{Port: "metrics"}
-	if err := AddServiceMonitorEndpoint(obj, ep); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddServiceMonitorEndpoint(obj, ep)
 	if len(obj.Spec.Endpoints) != 1 {
 		t.Fatalf("expected 1 endpoint, got %d", len(obj.Spec.Endpoints))
 	}
@@ -43,17 +41,9 @@ func TestAddServiceMonitorEndpoint(t *testing.T) {
 	}
 }
 
-func TestAddServiceMonitorEndpointNil(t *testing.T) {
-	if err := AddServiceMonitorEndpoint(nil, monitoringv1.Endpoint{}); err == nil {
-		t.Error("expected error for nil ServiceMonitor")
-	}
-}
-
 func TestSetServiceMonitorJobLabel(t *testing.T) {
 	obj := CreateServiceMonitor("test", "ns", metav1.LabelSelector{})
-	if err := SetServiceMonitorJobLabel(obj, "app"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetServiceMonitorJobLabel(obj, "app")
 	if obj.Spec.JobLabel != "app" {
 		t.Errorf("expected jobLabel app, got %s", obj.Spec.JobLabel)
 	}
@@ -62,9 +52,7 @@ func TestSetServiceMonitorJobLabel(t *testing.T) {
 func TestSetServiceMonitorNamespaceSelector(t *testing.T) {
 	obj := CreateServiceMonitor("test", "ns", metav1.LabelSelector{})
 	ns := monitoringv1.NamespaceSelector{Any: true}
-	if err := SetServiceMonitorNamespaceSelector(obj, ns); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetServiceMonitorNamespaceSelector(obj, ns)
 	if !obj.Spec.NamespaceSelector.Any {
 		t.Error("expected namespaceSelector.Any to be true")
 	}
@@ -72,9 +60,7 @@ func TestSetServiceMonitorNamespaceSelector(t *testing.T) {
 
 func TestSetServiceMonitorSampleLimit(t *testing.T) {
 	obj := CreateServiceMonitor("test", "ns", metav1.LabelSelector{})
-	if err := SetServiceMonitorSampleLimit(obj, 5000); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetServiceMonitorSampleLimit(obj, 5000)
 	if obj.Spec.SampleLimit == nil || *obj.Spec.SampleLimit != 5000 {
 		t.Error("expected sampleLimit 5000")
 	}
@@ -82,9 +68,7 @@ func TestSetServiceMonitorSampleLimit(t *testing.T) {
 
 func TestAddServiceMonitorTargetLabel(t *testing.T) {
 	obj := CreateServiceMonitor("test", "ns", metav1.LabelSelector{})
-	if err := AddServiceMonitorTargetLabel(obj, "version"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddServiceMonitorTargetLabel(obj, "version")
 	if len(obj.Spec.TargetLabels) != 1 || obj.Spec.TargetLabels[0] != "version" {
 		t.Error("expected targetLabel version")
 	}

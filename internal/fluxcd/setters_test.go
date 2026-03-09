@@ -19,34 +19,22 @@ import (
 // FluxReport setter tests
 func TestSetFluxReportDistribution(t *testing.T) {
 	fr := CreateFluxReport("test", "default", fluxv1.FluxReportSpec{})
-	err := SetFluxReportDistribution(fr, fluxv1.FluxDistributionStatus{})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetFluxReportDistribution(fr, fluxv1.FluxDistributionStatus{})
 }
 
 func TestSetFluxReportCluster(t *testing.T) {
 	fr := CreateFluxReport("test", "default", fluxv1.FluxReportSpec{})
-	err := SetFluxReportCluster(fr, &fluxv1.ClusterInfo{})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetFluxReportCluster(fr, &fluxv1.ClusterInfo{})
 }
 
 func TestSetFluxReportOperator(t *testing.T) {
 	fr := CreateFluxReport("test", "default", fluxv1.FluxReportSpec{})
-	err := SetFluxReportOperator(fr, &fluxv1.OperatorInfo{})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetFluxReportOperator(fr, &fluxv1.OperatorInfo{})
 }
 
 func TestSetFluxReportSyncStatus(t *testing.T) {
 	fr := CreateFluxReport("test", "default", fluxv1.FluxReportSpec{})
-	err := SetFluxReportSyncStatus(fr, &fluxv1.FluxSyncStatus{})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetFluxReportSyncStatus(fr, &fluxv1.FluxSyncStatus{})
 }
 
 // HelmRelease setter tests
@@ -461,10 +449,7 @@ func TestSetReceiverSuspend(t *testing.T) {
 // ResourceSet setter tests
 func TestSetResourceSetResourcesTemplate(t *testing.T) {
 	rs := CreateResourceSet("test", "default", fluxv1.ResourceSetSpec{})
-	err := SetResourceSetResourcesTemplate(rs, "template")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetResourcesTemplate(rs, "template")
 	if rs.Spec.ResourcesTemplate != "template" {
 		t.Fatal("expected ResourcesTemplate to be set")
 	}
@@ -472,10 +457,7 @@ func TestSetResourceSetResourcesTemplate(t *testing.T) {
 
 func TestSetResourceSetServiceAccountName(t *testing.T) {
 	rs := CreateResourceSet("test", "default", fluxv1.ResourceSetSpec{})
-	err := SetResourceSetServiceAccountName(rs, "test-sa")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetServiceAccountName(rs, "test-sa")
 	if rs.Spec.ServiceAccountName != "test-sa" {
 		t.Fatal("expected ServiceAccountName to be set")
 	}
@@ -483,10 +465,7 @@ func TestSetResourceSetServiceAccountName(t *testing.T) {
 
 func TestSetResourceSetWait(t *testing.T) {
 	rs := CreateResourceSet("test", "default", fluxv1.ResourceSetSpec{})
-	err := SetResourceSetWait(rs, true)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetWait(rs, true)
 	if !rs.Spec.Wait {
 		t.Fatal("expected Wait to be true")
 	}
@@ -494,10 +473,7 @@ func TestSetResourceSetWait(t *testing.T) {
 
 func TestSetResourceSetCommonMetadata(t *testing.T) {
 	rs := CreateResourceSet("test", "default", fluxv1.ResourceSetSpec{})
-	err := SetResourceSetCommonMetadata(rs, &fluxv1.CommonMetadata{})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetCommonMetadata(rs, &fluxv1.CommonMetadata{})
 	if rs.Spec.CommonMetadata == nil {
 		t.Fatal("expected CommonMetadata to be set")
 	}
@@ -506,10 +482,7 @@ func TestSetResourceSetCommonMetadata(t *testing.T) {
 // ResourceSetInputProvider setter tests
 func TestSetResourceSetInputProviderType(t *testing.T) {
 	obj := CreateResourceSetInputProvider("test", "default", fluxv1.ResourceSetInputProviderSpec{})
-	err := SetResourceSetInputProviderType(obj, "http")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetInputProviderType(obj, "http")
 	if obj.Spec.Type != "http" {
 		t.Fatal("expected Type to be set")
 	}
@@ -517,10 +490,7 @@ func TestSetResourceSetInputProviderType(t *testing.T) {
 
 func TestSetResourceSetInputProviderURL(t *testing.T) {
 	obj := CreateResourceSetInputProvider("test", "default", fluxv1.ResourceSetInputProviderSpec{})
-	err := SetResourceSetInputProviderURL(obj, "http://example.com")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetInputProviderURL(obj, "http://example.com")
 	if obj.Spec.URL != "http://example.com" {
 		t.Fatal("expected URL to be set")
 	}
@@ -528,10 +498,7 @@ func TestSetResourceSetInputProviderURL(t *testing.T) {
 
 func TestSetResourceSetInputProviderServiceAccountName(t *testing.T) {
 	obj := CreateResourceSetInputProvider("test", "default", fluxv1.ResourceSetInputProviderSpec{})
-	err := SetResourceSetInputProviderServiceAccountName(obj, "test-sa")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetInputProviderServiceAccountName(obj, "test-sa")
 	if obj.Spec.ServiceAccountName != "test-sa" {
 		t.Fatal("expected ServiceAccountName to be set")
 	}
@@ -539,10 +506,7 @@ func TestSetResourceSetInputProviderServiceAccountName(t *testing.T) {
 
 func TestSetResourceSetInputProviderSecretRef(t *testing.T) {
 	obj := CreateResourceSetInputProvider("test", "default", fluxv1.ResourceSetInputProviderSpec{})
-	err := SetResourceSetInputProviderSecretRef(obj, &meta.LocalObjectReference{Name: "secret"})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetInputProviderSecretRef(obj, &meta.LocalObjectReference{Name: "secret"})
 	if obj.Spec.SecretRef == nil {
 		t.Fatal("expected SecretRef to be set")
 	}
@@ -550,10 +514,7 @@ func TestSetResourceSetInputProviderSecretRef(t *testing.T) {
 
 func TestSetResourceSetInputProviderCertSecretRef(t *testing.T) {
 	obj := CreateResourceSetInputProvider("test", "default", fluxv1.ResourceSetInputProviderSpec{})
-	err := SetResourceSetInputProviderCertSecretRef(obj, &meta.LocalObjectReference{Name: "cert"})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetResourceSetInputProviderCertSecretRef(obj, &meta.LocalObjectReference{Name: "cert"})
 	if obj.Spec.CertSecretRef == nil {
 		t.Fatal("expected CertSecretRef to be set")
 	}
@@ -562,10 +523,7 @@ func TestSetResourceSetInputProviderCertSecretRef(t *testing.T) {
 // Schedule setter tests
 func TestSetScheduleTimeZone(t *testing.T) {
 	s := CreateSchedule("0 0 * * *")
-	err := SetScheduleTimeZone(&s, "UTC")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetScheduleTimeZone(&s, "UTC")
 	if s.TimeZone != "UTC" {
 		t.Fatal("expected TimeZone to be set")
 	}
@@ -574,10 +532,7 @@ func TestSetScheduleTimeZone(t *testing.T) {
 func TestSetScheduleWindow(t *testing.T) {
 	s := CreateSchedule("0 0 * * *")
 	window := metav1.Duration{Duration: 60}
-	err := SetScheduleWindow(&s, window)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetScheduleWindow(&s, window)
 }
 
 // Source controller setter tests - GitRepository
@@ -1100,20 +1055,9 @@ func TestSetDriftDetectionIgnoreRuleWithTarget(t *testing.T) {
 	}
 }
 
-// Test nil cases for error handling
-func TestAddResourceSetResource_NilResource(t *testing.T) {
-	rs := CreateResourceSet("test", "default", fluxv1.ResourceSetSpec{})
-	err := AddResourceSetResource(rs, nil)
-	if err == nil {
-		t.Fatal("expected error for nil resource")
-	}
-}
-
+// ResourceSet resource tests
 func TestAddResourceSetResource_ValidResource(t *testing.T) {
 	rs := CreateResourceSet("test", "default", fluxv1.ResourceSetSpec{})
 	resource := &apiextensionsv1.JSON{Raw: []byte("{}")}
-	err := AddResourceSetResource(rs, resource)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddResourceSetResource(rs, resource)
 }

@@ -24,12 +24,8 @@ func TestCreateFluxInstance(t *testing.T) {
 
 func TestFluxInstanceHelpers(t *testing.T) {
 	fi := CreateFluxInstance("flux", "ns", fluxv1.FluxInstanceSpec{Distribution: fluxv1.Distribution{}})
-	if err := AddFluxInstanceComponent(fi, "source-controller"); err != nil {
-		t.Fatalf("AddFluxInstanceComponent returned error: %v", err)
-	}
-	if err := SetFluxInstanceWait(fi, true); err != nil {
-		t.Fatalf("SetFluxInstanceWait returned error: %v", err)
-	}
+	AddFluxInstanceComponent(fi, "source-controller")
+	SetFluxInstanceWait(fi, true)
 	if len(fi.Spec.Components) != 1 || fi.Spec.Components[0] != "source-controller" {
 		t.Errorf("component not added")
 	}
@@ -44,9 +40,7 @@ func TestSetFluxInstanceDistribution(t *testing.T) {
 		Version:  "2.x",
 		Registry: "ghcr.io/fluxcd",
 	}
-	if err := SetFluxInstanceDistribution(fi, dist); err != nil {
-		t.Fatalf("SetFluxInstanceDistribution returned error: %v", err)
-	}
+	SetFluxInstanceDistribution(fi, dist)
 	if fi.Spec.Distribution.Version != "2.x" {
 		t.Errorf("distribution version not set")
 	}
@@ -57,9 +51,7 @@ func TestSetFluxInstanceCommonMetadata(t *testing.T) {
 	cm := &fluxv1.CommonMetadata{
 		Labels: map[string]string{"app": "flux"},
 	}
-	if err := SetFluxInstanceCommonMetadata(fi, cm); err != nil {
-		t.Fatalf("SetFluxInstanceCommonMetadata returned error: %v", err)
-	}
+	SetFluxInstanceCommonMetadata(fi, cm)
 	if fi.Spec.CommonMetadata == nil || fi.Spec.CommonMetadata.Labels["app"] != "flux" {
 		t.Errorf("common metadata not set")
 	}
@@ -71,9 +63,7 @@ func TestSetFluxInstanceCluster(t *testing.T) {
 		Type:   "kubernetes",
 		Domain: "cluster.local",
 	}
-	if err := SetFluxInstanceCluster(fi, cluster); err != nil {
-		t.Fatalf("SetFluxInstanceCluster returned error: %v", err)
-	}
+	SetFluxInstanceCluster(fi, cluster)
 	if fi.Spec.Cluster == nil || fi.Spec.Cluster.Domain != "cluster.local" {
 		t.Errorf("cluster not set")
 	}
@@ -84,9 +74,7 @@ func TestSetFluxInstanceSharding(t *testing.T) {
 	shard := &fluxv1.Sharding{
 		Key: "shard-key",
 	}
-	if err := SetFluxInstanceSharding(fi, shard); err != nil {
-		t.Fatalf("SetFluxInstanceSharding returned error: %v", err)
-	}
+	SetFluxInstanceSharding(fi, shard)
 	if fi.Spec.Sharding == nil || fi.Spec.Sharding.Key != "shard-key" {
 		t.Errorf("sharding not set")
 	}
@@ -98,9 +86,7 @@ func TestSetFluxInstanceStorage(t *testing.T) {
 		Class: "standard",
 		Size:  "10Gi",
 	}
-	if err := SetFluxInstanceStorage(fi, storage); err != nil {
-		t.Fatalf("SetFluxInstanceStorage returned error: %v", err)
-	}
+	SetFluxInstanceStorage(fi, storage)
 	if fi.Spec.Storage == nil || fi.Spec.Storage.Class != "standard" {
 		t.Errorf("storage not set")
 	}
@@ -109,9 +95,7 @@ func TestSetFluxInstanceStorage(t *testing.T) {
 func TestSetFluxInstanceKustomize(t *testing.T) {
 	fi := CreateFluxInstance("flux", "ns", fluxv1.FluxInstanceSpec{})
 	kustomize := &fluxv1.Kustomize{}
-	if err := SetFluxInstanceKustomize(fi, kustomize); err != nil {
-		t.Fatalf("SetFluxInstanceKustomize returned error: %v", err)
-	}
+	SetFluxInstanceKustomize(fi, kustomize)
 	if fi.Spec.Kustomize == nil {
 		t.Errorf("kustomize not set")
 	}
@@ -119,9 +103,7 @@ func TestSetFluxInstanceKustomize(t *testing.T) {
 
 func TestSetFluxInstanceMigrateResources(t *testing.T) {
 	fi := CreateFluxInstance("flux", "ns", fluxv1.FluxInstanceSpec{})
-	if err := SetFluxInstanceMigrateResources(fi, true); err != nil {
-		t.Fatalf("SetFluxInstanceMigrateResources returned error: %v", err)
-	}
+	SetFluxInstanceMigrateResources(fi, true)
 	if fi.Spec.MigrateResources == nil || !*fi.Spec.MigrateResources {
 		t.Errorf("migrate resources not set")
 	}
@@ -134,35 +116,8 @@ func TestSetFluxInstanceSync(t *testing.T) {
 		URL:  "https://github.com/org/repo",
 		Path: "./clusters",
 	}
-	if err := SetFluxInstanceSync(fi, sync); err != nil {
-		t.Fatalf("SetFluxInstanceSync returned error: %v", err)
-	}
+	SetFluxInstanceSync(fi, sync)
 	if fi.Spec.Sync == nil || fi.Spec.Sync.URL != "https://github.com/org/repo" {
 		t.Errorf("sync not set")
-	}
-}
-
-func TestFluxInstanceNilGuards(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"AddFluxInstanceComponent", func() error { return AddFluxInstanceComponent(nil, "") }},
-		{"SetFluxInstanceDistribution", func() error { return SetFluxInstanceDistribution(nil, fluxv1.Distribution{}) }},
-		{"SetFluxInstanceCommonMetadata", func() error { return SetFluxInstanceCommonMetadata(nil, nil) }},
-		{"SetFluxInstanceCluster", func() error { return SetFluxInstanceCluster(nil, nil) }},
-		{"SetFluxInstanceSharding", func() error { return SetFluxInstanceSharding(nil, nil) }},
-		{"SetFluxInstanceStorage", func() error { return SetFluxInstanceStorage(nil, nil) }},
-		{"SetFluxInstanceKustomize", func() error { return SetFluxInstanceKustomize(nil, nil) }},
-		{"SetFluxInstanceWait", func() error { return SetFluxInstanceWait(nil, true) }},
-		{"SetFluxInstanceMigrateResources", func() error { return SetFluxInstanceMigrateResources(nil, true) }},
-		{"SetFluxInstanceSync", func() error { return SetFluxInstanceSync(nil, nil) }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
 	}
 }

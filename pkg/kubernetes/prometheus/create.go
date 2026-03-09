@@ -16,19 +16,19 @@ func ServiceMonitor(cfg *ServiceMonitorConfig) *monitoringv1.ServiceMonitor {
 		obj.Labels = cfg.Labels
 	}
 	for _, ep := range cfg.Endpoints {
-		intprom.AddServiceMonitorEndpoint(obj, ep) //nolint:errcheck,gosec // obj is freshly created
+		intprom.AddServiceMonitorEndpoint(obj, ep)
 	}
 	if cfg.JobLabel != "" {
-		intprom.SetServiceMonitorJobLabel(obj, cfg.JobLabel) //nolint:errcheck,gosec // obj is freshly created
+		intprom.SetServiceMonitorJobLabel(obj, cfg.JobLabel)
 	}
 	for _, label := range cfg.TargetLabels {
-		intprom.AddServiceMonitorTargetLabel(obj, label) //nolint:errcheck,gosec // obj is freshly created
+		intprom.AddServiceMonitorTargetLabel(obj, label)
 	}
 	if cfg.NamespaceSelector != nil {
-		intprom.SetServiceMonitorNamespaceSelector(obj, *cfg.NamespaceSelector) //nolint:errcheck,gosec // obj is freshly created
+		intprom.SetServiceMonitorNamespaceSelector(obj, *cfg.NamespaceSelector)
 	}
 	if cfg.SampleLimit != nil {
-		intprom.SetServiceMonitorSampleLimit(obj, *cfg.SampleLimit) //nolint:errcheck,gosec // obj is freshly created
+		intprom.SetServiceMonitorSampleLimit(obj, *cfg.SampleLimit)
 	}
 	return obj
 }
@@ -43,19 +43,19 @@ func PodMonitor(cfg *PodMonitorConfig) *monitoringv1.PodMonitor {
 		obj.Labels = cfg.Labels
 	}
 	for _, ep := range cfg.PodMetricsEndpoints {
-		intprom.AddPodMonitorEndpoint(obj, ep) //nolint:errcheck,gosec // obj is freshly created
+		intprom.AddPodMonitorEndpoint(obj, ep)
 	}
 	if cfg.JobLabel != "" {
-		intprom.SetPodMonitorJobLabel(obj, cfg.JobLabel) //nolint:errcheck,gosec // obj is freshly created
+		intprom.SetPodMonitorJobLabel(obj, cfg.JobLabel)
 	}
 	for _, label := range cfg.PodTargetLabels {
-		intprom.AddPodMonitorPodTargetLabel(obj, label) //nolint:errcheck,gosec // obj is freshly created
+		intprom.AddPodMonitorPodTargetLabel(obj, label)
 	}
 	if cfg.NamespaceSelector != nil {
-		intprom.SetPodMonitorNamespaceSelector(obj, *cfg.NamespaceSelector) //nolint:errcheck,gosec // obj is freshly created
+		intprom.SetPodMonitorNamespaceSelector(obj, *cfg.NamespaceSelector)
 	}
 	if cfg.SampleLimit != nil {
-		intprom.SetPodMonitorSampleLimit(obj, *cfg.SampleLimit) //nolint:errcheck,gosec // obj is freshly created
+		intprom.SetPodMonitorSampleLimit(obj, *cfg.SampleLimit)
 	}
 	return obj
 }
@@ -70,7 +70,7 @@ func PrometheusRule(cfg *PrometheusRuleConfig) *monitoringv1.PrometheusRule {
 		obj.Labels = cfg.Labels
 	}
 	for _, group := range cfg.Groups {
-		intprom.AddPrometheusRuleGroup(obj, group) //nolint:errcheck,gosec // obj is freshly created
+		intprom.AddPrometheusRuleGroup(obj, group)
 	}
 	return obj
 }

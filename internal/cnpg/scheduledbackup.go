@@ -3,8 +3,6 @@ package cnpg
 import (
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/go-kure/kure/internal/validation"
 )
 
 // CreateScheduledBackup returns a new ScheduledBackup object with the provided name, namespace and spec.
@@ -24,80 +22,45 @@ func CreateScheduledBackup(name, namespace string, spec cnpgv1.ScheduledBackupSp
 }
 
 // AddScheduledBackupLabel adds or updates a label on the ScheduledBackup metadata.
-func AddScheduledBackupLabel(obj *cnpgv1.ScheduledBackup, key, value string) error {
-	v := validation.NewValidator()
-	if err := v.ValidateScheduledBackup(obj); err != nil {
-		return err
-	}
+func AddScheduledBackupLabel(obj *cnpgv1.ScheduledBackup, key, value string) {
 	if obj.Labels == nil {
 		obj.Labels = make(map[string]string)
 	}
 	obj.Labels[key] = value
-	return nil
 }
 
 // AddScheduledBackupAnnotation adds or updates an annotation on the ScheduledBackup metadata.
-func AddScheduledBackupAnnotation(obj *cnpgv1.ScheduledBackup, key, value string) error {
-	v := validation.NewValidator()
-	if err := v.ValidateScheduledBackup(obj); err != nil {
-		return err
-	}
+func AddScheduledBackupAnnotation(obj *cnpgv1.ScheduledBackup, key, value string) {
 	if obj.Annotations == nil {
 		obj.Annotations = make(map[string]string)
 	}
 	obj.Annotations[key] = value
-	return nil
 }
 
 // SetScheduledBackupMethod sets the backup method on the ScheduledBackup spec.
-func SetScheduledBackupMethod(obj *cnpgv1.ScheduledBackup, method cnpgv1.BackupMethod) error {
-	v := validation.NewValidator()
-	if err := v.ValidateScheduledBackup(obj); err != nil {
-		return err
-	}
+func SetScheduledBackupMethod(obj *cnpgv1.ScheduledBackup, method cnpgv1.BackupMethod) {
 	obj.Spec.Method = method
-	return nil
 }
 
 // SetScheduledBackupPluginConfiguration sets the plugin configuration on the ScheduledBackup spec.
-func SetScheduledBackupPluginConfiguration(obj *cnpgv1.ScheduledBackup, name string, params map[string]string) error {
-	v := validation.NewValidator()
-	if err := v.ValidateScheduledBackup(obj); err != nil {
-		return err
-	}
+func SetScheduledBackupPluginConfiguration(obj *cnpgv1.ScheduledBackup, name string, params map[string]string) {
 	obj.Spec.PluginConfiguration = &cnpgv1.BackupPluginConfiguration{
 		Name:       name,
 		Parameters: params,
 	}
-	return nil
 }
 
 // SetScheduledBackupImmediate sets the immediate flag on the ScheduledBackup spec.
-func SetScheduledBackupImmediate(obj *cnpgv1.ScheduledBackup, immediate bool) error {
-	v := validation.NewValidator()
-	if err := v.ValidateScheduledBackup(obj); err != nil {
-		return err
-	}
+func SetScheduledBackupImmediate(obj *cnpgv1.ScheduledBackup, immediate bool) {
 	obj.Spec.Immediate = &immediate
-	return nil
 }
 
 // SetScheduledBackupBackupOwnerReference sets the backupOwnerReference on the ScheduledBackup spec.
-func SetScheduledBackupBackupOwnerReference(obj *cnpgv1.ScheduledBackup, ref string) error {
-	v := validation.NewValidator()
-	if err := v.ValidateScheduledBackup(obj); err != nil {
-		return err
-	}
+func SetScheduledBackupBackupOwnerReference(obj *cnpgv1.ScheduledBackup, ref string) {
 	obj.Spec.BackupOwnerReference = ref
-	return nil
 }
 
 // SetScheduledBackupSuspend sets the suspend flag on the ScheduledBackup spec.
-func SetScheduledBackupSuspend(obj *cnpgv1.ScheduledBackup, suspend bool) error {
-	v := validation.NewValidator()
-	if err := v.ValidateScheduledBackup(obj); err != nil {
-		return err
-	}
+func SetScheduledBackupSuspend(obj *cnpgv1.ScheduledBackup, suspend bool) {
 	obj.Spec.Suspend = &suspend
-	return nil
 }

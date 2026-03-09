@@ -49,16 +49,12 @@ func TestDatabaseFunctions(t *testing.T) {
 	}
 	db := CreateDatabase("testdb", "ns", spec)
 
-	if err := AddDatabaseLabel(db, "app", "demo"); err != nil {
-		t.Errorf("AddDatabaseLabel failed: %v", err)
-	}
+	AddDatabaseLabel(db, "app", "demo")
 	if db.Labels["app"] != "demo" {
 		t.Errorf("label not set")
 	}
 
-	if err := AddDatabaseAnnotation(db, "team", "dev"); err != nil {
-		t.Errorf("AddDatabaseAnnotation failed: %v", err)
-	}
+	AddDatabaseAnnotation(db, "team", "dev")
 	if db.Annotations["team"] != "dev" {
 		t.Errorf("annotation not set")
 	}
@@ -69,62 +65,28 @@ func TestDatabaseFunctions(t *testing.T) {
 			Ensure: cnpgv1.EnsurePresent,
 		},
 	}
-	if err := AddDatabaseExtension(db, ext); err != nil {
-		t.Errorf("AddDatabaseExtension failed: %v", err)
-	}
+	AddDatabaseExtension(db, ext)
 	if len(db.Spec.Extensions) != 1 || db.Spec.Extensions[0].Name != "pg_stat_statements" {
 		t.Errorf("extension not added")
 	}
 
-	if err := SetDatabaseClusterRef(db, "new-cluster"); err != nil {
-		t.Errorf("SetDatabaseClusterRef failed: %v", err)
-	}
+	SetDatabaseClusterRef(db, "new-cluster")
 	if db.Spec.ClusterRef.Name != "new-cluster" {
 		t.Errorf("cluster ref not set")
 	}
 
-	if err := SetDatabaseOwner(db, "new-owner"); err != nil {
-		t.Errorf("SetDatabaseOwner failed: %v", err)
-	}
+	SetDatabaseOwner(db, "new-owner")
 	if db.Spec.Owner != "new-owner" {
 		t.Errorf("owner not set")
 	}
 
-	if err := SetDatabaseReclaimPolicy(db, cnpgv1.DatabaseReclaimDelete); err != nil {
-		t.Errorf("SetDatabaseReclaimPolicy failed: %v", err)
-	}
+	SetDatabaseReclaimPolicy(db, cnpgv1.DatabaseReclaimDelete)
 	if db.Spec.ReclaimPolicy != cnpgv1.DatabaseReclaimDelete {
 		t.Errorf("reclaim policy not set")
 	}
 
-	if err := SetDatabaseEnsure(db, cnpgv1.EnsurePresent); err != nil {
-		t.Errorf("SetDatabaseEnsure failed: %v", err)
-	}
+	SetDatabaseEnsure(db, cnpgv1.EnsurePresent)
 	if db.Spec.Ensure != cnpgv1.EnsurePresent {
 		t.Errorf("ensure not set")
-	}
-}
-
-func TestDatabaseFunctionsWithNil(t *testing.T) {
-	if err := AddDatabaseLabel(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil Database")
-	}
-	if err := AddDatabaseAnnotation(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil Database")
-	}
-	if err := AddDatabaseExtension(nil, cnpgv1.ExtensionSpec{}); err == nil {
-		t.Error("expected error for nil Database")
-	}
-	if err := SetDatabaseClusterRef(nil, "cluster"); err == nil {
-		t.Error("expected error for nil Database")
-	}
-	if err := SetDatabaseOwner(nil, "owner"); err == nil {
-		t.Error("expected error for nil Database")
-	}
-	if err := SetDatabaseReclaimPolicy(nil, cnpgv1.DatabaseReclaimRetain); err == nil {
-		t.Error("expected error for nil Database")
-	}
-	if err := SetDatabaseEnsure(nil, cnpgv1.EnsurePresent); err == nil {
-		t.Error("expected error for nil Database")
 	}
 }

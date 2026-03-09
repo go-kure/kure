@@ -22,16 +22,16 @@ func Example_composeDatabaseWithExtensions() {
 		ClusterRef: corev1.LocalObjectReference{Name: "pg-cluster"},
 	})
 
-	_ = cnpg.SetDatabaseReclaimPolicy(db, cnpgv1.DatabaseReclaimRetain)
-	_ = cnpg.AddDatabaseLabel(db, "app", "myapp")
+	cnpg.SetDatabaseReclaimPolicy(db, cnpgv1.DatabaseReclaimRetain)
+	cnpg.AddDatabaseLabel(db, "app", "myapp")
 
-	_ = cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{
+	cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{
 		DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{
 			Name:   "pg_stat_statements",
 			Ensure: cnpgv1.EnsurePresent,
 		},
 	})
-	_ = cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{
+	cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{
 		DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{
 			Name:   "pgcrypto",
 			Ensure: cnpgv1.EnsurePresent,
@@ -71,8 +71,8 @@ func Example_composeObjectStoreWithS3() {
 		},
 	})
 
-	_ = cnpg.SetObjectStoreEndpointURL(os, "https://s3.eu-west-1.amazonaws.com")
-	_ = cnpg.SetObjectStoreS3Credentials(os, &barmanapi.S3Credentials{
+	cnpg.SetObjectStoreEndpointURL(os, "https://s3.eu-west-1.amazonaws.com")
+	cnpg.SetObjectStoreS3Credentials(os, &barmanapi.S3Credentials{
 		AccessKeyIDReference: &machineryapi.SecretKeySelector{
 			LocalObjectReference: machineryapi.LocalObjectReference{Name: "aws-creds"},
 			Key:                  "ACCESS_KEY_ID",
@@ -82,16 +82,16 @@ func Example_composeObjectStoreWithS3() {
 			Key:                  "SECRET_ACCESS_KEY",
 		},
 	})
-	_ = cnpg.SetObjectStoreRetentionPolicy(os, "60d")
-	_ = cnpg.SetObjectStoreWalConfig(os, &barmanapi.WalBackupConfiguration{
+	cnpg.SetObjectStoreRetentionPolicy(os, "60d")
+	cnpg.SetObjectStoreWalConfig(os, &barmanapi.WalBackupConfiguration{
 		Compression: "gzip",
 		MaxParallel: 4,
 	})
-	_ = cnpg.AddObjectStoreEnvVar(os, corev1.EnvVar{
+	cnpg.AddObjectStoreEnvVar(os, corev1.EnvVar{
 		Name:  "AWS_REGION",
 		Value: "eu-west-1",
 	})
-	_ = cnpg.AddObjectStoreLabel(os, "backup-target", "production")
+	cnpg.AddObjectStoreLabel(os, "backup-target", "production")
 
 	fmt.Println("Name:", os.Name)
 	fmt.Println("Kind:", os.Kind)
