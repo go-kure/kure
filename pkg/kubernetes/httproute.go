@@ -13,7 +13,7 @@ func CreateHTTPRoute(name, namespace string) *gwapiv1.HTTPRoute {
 	return &gwapiv1.HTTPRoute{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "HTTPRoute",
-			APIVersion: gwapiv1.SchemeGroupVersion.String(),
+			APIVersion: gwapiv1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
