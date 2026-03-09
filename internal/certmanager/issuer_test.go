@@ -18,49 +18,25 @@ func TestIssuerFunctions(t *testing.T) {
 		t.Errorf("unexpected kind %q", issuer.Kind)
 	}
 
-	if err := AddIssuerLabel(issuer, "env", "prod"); err != nil {
-		t.Errorf("AddIssuerLabel failed: %v", err)
-	}
+	AddIssuerLabel(issuer, "env", "prod")
 	if issuer.Labels["env"] != "prod" {
 		t.Errorf("label not set")
 	}
 
-	if err := AddIssuerAnnotation(issuer, "team", "dev"); err != nil {
-		t.Errorf("AddIssuerAnnotation failed: %v", err)
-	}
+	AddIssuerAnnotation(issuer, "team", "dev")
 	if issuer.Annotations["team"] != "dev" {
 		t.Errorf("annotation not set")
 	}
 
 	acme := &cmacme.ACMEIssuer{Server: "https://acme.example.com"}
-	if err := SetIssuerACME(issuer, acme); err != nil {
-		t.Errorf("SetIssuerACME failed: %v", err)
-	}
+	SetIssuerACME(issuer, acme)
 	if issuer.Spec.IssuerConfig.ACME == nil || issuer.Spec.IssuerConfig.ACME.Server != "https://acme.example.com" {
 		t.Errorf("acme config not set")
 	}
 
 	ca := &certv1.CAIssuer{SecretName: "ca"}
-	if err := SetIssuerCA(issuer, ca); err != nil {
-		t.Errorf("SetIssuerCA failed: %v", err)
-	}
+	SetIssuerCA(issuer, ca)
 	if issuer.Spec.IssuerConfig.CA == nil || issuer.Spec.IssuerConfig.CA.SecretName != "ca" {
 		t.Errorf("ca config not set")
-	}
-}
-
-func TestIssuerFunctionsWithNil(t *testing.T) {
-	// Test that functions return errors when given nil Issuer
-	if err := AddIssuerLabel(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil Issuer")
-	}
-	if err := AddIssuerAnnotation(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil Issuer")
-	}
-	if err := SetIssuerACME(nil, nil); err == nil {
-		t.Error("expected error for nil Issuer")
-	}
-	if err := SetIssuerCA(nil, nil); err == nil {
-		t.Error("expected error for nil Issuer")
 	}
 }

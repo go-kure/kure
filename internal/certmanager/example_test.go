@@ -29,21 +29,21 @@ func Example_composeClusterIssuerAndCertificate() {
 	certmanager.AddACMEIssuerSolver(acme, solver)
 
 	issuer := certmanager.CreateClusterIssuer("letsencrypt-prod", certv1.IssuerSpec{})
-	_ = certmanager.SetClusterIssuerACME(issuer, acme)
-	_ = certmanager.AddClusterIssuerLabel(issuer, "env", "production")
+	certmanager.SetClusterIssuerACME(issuer, acme)
+	certmanager.AddClusterIssuerLabel(issuer, "env", "production")
 
 	// --- Certificate referencing the ClusterIssuer ---
 	cert := certmanager.CreateCertificate("app-tls", "default", certv1.CertificateSpec{
 		SecretName: "app-tls-secret",
 	})
-	_ = certmanager.SetCertificateIssuerRef(cert, cmmeta.ObjectReference{
+	certmanager.SetCertificateIssuerRef(cert, cmmeta.ObjectReference{
 		Name:  issuer.Name,
 		Kind:  "ClusterIssuer",
 		Group: "cert-manager.io",
 	})
-	_ = certmanager.AddCertificateDNSName(cert, "app.example.com")
-	_ = certmanager.AddCertificateDNSName(cert, "www.example.com")
-	_ = certmanager.AddCertificateLabel(cert, "env", "production")
+	certmanager.AddCertificateDNSName(cert, "app.example.com")
+	certmanager.AddCertificateDNSName(cert, "www.example.com")
+	certmanager.AddCertificateLabel(cert, "env", "production")
 
 	fmt.Println("Issuer:", issuer.Name)
 	fmt.Println("Issuer Kind:", issuer.Kind)

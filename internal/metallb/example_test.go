@@ -14,8 +14,8 @@ import (
 func Example_composeBGPSetup() {
 	// --- IPAddressPool ---
 	pool := metallb.CreateIPAddressPool("public-pool", "metallb-system", metallbv1beta1.IPAddressPoolSpec{})
-	_ = metallb.AddIPAddressPoolAddress(pool, "203.0.113.0/24")
-	_ = metallb.SetIPAddressPoolAutoAssign(pool, true)
+	metallb.AddIPAddressPoolAddress(pool, "203.0.113.0/24")
+	metallb.SetIPAddressPoolAutoAssign(pool, true)
 
 	// --- BGPPeer ---
 	peer := metallb.CreateBGPPeer("upstream-router", "metallb-system", metallbv1beta1.BGPPeerSpec{
@@ -23,16 +23,16 @@ func Example_composeBGPSetup() {
 		ASN:     64513,
 		Address: "10.0.0.1",
 	})
-	_ = metallb.SetBGPPeerPort(peer, 179)
-	_ = metallb.SetBGPPeerEBGPMultiHop(peer, true)
-	_ = metallb.SetBGPPeerBFDProfile(peer, "default-bfd")
+	metallb.SetBGPPeerPort(peer, 179)
+	metallb.SetBGPPeerEBGPMultiHop(peer, true)
+	metallb.SetBGPPeerBFDProfile(peer, "default-bfd")
 
 	// --- BGPAdvertisement linking the pool and the peer ---
 	advert := metallb.CreateBGPAdvertisement("public-advert", "metallb-system", metallbv1beta1.BGPAdvertisementSpec{})
-	_ = metallb.AddBGPAdvertisementIPAddressPool(advert, pool.Name)
-	_ = metallb.AddBGPAdvertisementPeer(advert, peer.Name)
-	_ = metallb.SetBGPAdvertisementLocalPref(advert, 100)
-	_ = metallb.AddBGPAdvertisementCommunity(advert, "65535:65281")
+	metallb.AddBGPAdvertisementIPAddressPool(advert, pool.Name)
+	metallb.AddBGPAdvertisementPeer(advert, peer.Name)
+	metallb.SetBGPAdvertisementLocalPref(advert, 100)
+	metallb.AddBGPAdvertisementCommunity(advert, "65535:65281")
 
 	fmt.Println("Pool:", pool.Name)
 	fmt.Println("Pool Namespace:", pool.Namespace)

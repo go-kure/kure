@@ -33,126 +33,126 @@ func SetBFDProfileSpec(obj *metallbv1beta1.BFDProfile, spec metallbv1beta1.BFDPr
 }
 
 // AddIPAddressPoolAddress delegates to the internal helper.
-func AddIPAddressPoolAddress(obj *metallbv1beta1.IPAddressPool, addr string) error {
-	return intmetallb.AddIPAddressPoolAddress(obj, addr)
+func AddIPAddressPoolAddress(obj *metallbv1beta1.IPAddressPool, addr string) {
+	intmetallb.AddIPAddressPoolAddress(obj, addr)
 }
 
 // SetIPAddressPoolAutoAssign delegates to the internal helper.
-func SetIPAddressPoolAutoAssign(obj *metallbv1beta1.IPAddressPool, auto bool) error {
-	return intmetallb.SetIPAddressPoolAutoAssign(obj, auto)
+func SetIPAddressPoolAutoAssign(obj *metallbv1beta1.IPAddressPool, auto bool) {
+	intmetallb.SetIPAddressPoolAutoAssign(obj, auto)
 }
 
 // SetIPAddressPoolAvoidBuggyIPs delegates to the internal helper.
-func SetIPAddressPoolAvoidBuggyIPs(obj *metallbv1beta1.IPAddressPool, avoid bool) error {
-	return intmetallb.SetIPAddressPoolAvoidBuggyIPs(obj, avoid)
+func SetIPAddressPoolAvoidBuggyIPs(obj *metallbv1beta1.IPAddressPool, avoid bool) {
+	intmetallb.SetIPAddressPoolAvoidBuggyIPs(obj, avoid)
 }
 
 // SetIPAddressPoolAllocateTo delegates to the internal helper.
-func SetIPAddressPoolAllocateTo(obj *metallbv1beta1.IPAddressPool, alloc *metallbv1beta1.ServiceAllocation) error {
-	return intmetallb.SetIPAddressPoolAllocateTo(obj, alloc)
+func SetIPAddressPoolAllocateTo(obj *metallbv1beta1.IPAddressPool, alloc *metallbv1beta1.ServiceAllocation) {
+	intmetallb.SetIPAddressPoolAllocateTo(obj, alloc)
 }
 
 // AddBGPPeerNodeSelector delegates to the internal helper.
-func AddBGPPeerNodeSelector(obj *metallbv1beta1.BGPPeer, sel metallbv1beta1.NodeSelector) error {
-	return intmetallb.AddBGPPeerNodeSelector(obj, sel)
+func AddBGPPeerNodeSelector(obj *metallbv1beta1.BGPPeer, sel metallbv1beta1.NodeSelector) {
+	intmetallb.AddBGPPeerNodeSelector(obj, sel)
 }
 
 // SetBGPPeerPort delegates to the internal helper.
-func SetBGPPeerPort(obj *metallbv1beta1.BGPPeer, port uint16) error {
-	return intmetallb.SetBGPPeerPort(obj, port)
+func SetBGPPeerPort(obj *metallbv1beta1.BGPPeer, port uint16) {
+	intmetallb.SetBGPPeerPort(obj, port)
 }
 
 // SetBGPPeerHoldTime delegates to the internal helper.
-func SetBGPPeerHoldTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) error {
-	return intmetallb.SetBGPPeerHoldTime(obj, d)
+func SetBGPPeerHoldTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) {
+	intmetallb.SetBGPPeerHoldTime(obj, d)
 }
 
 // SetBGPPeerKeepaliveTime delegates to the internal helper.
-func SetBGPPeerKeepaliveTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) error {
-	return intmetallb.SetBGPPeerKeepaliveTime(obj, d)
+func SetBGPPeerKeepaliveTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) {
+	intmetallb.SetBGPPeerKeepaliveTime(obj, d)
 }
 
 // SetBGPPeerSrcAddress delegates to the internal helper.
-func SetBGPPeerSrcAddress(obj *metallbv1beta1.BGPPeer, addr string) error {
-	return intmetallb.SetBGPPeerSrcAddress(obj, addr)
+func SetBGPPeerSrcAddress(obj *metallbv1beta1.BGPPeer, addr string) {
+	intmetallb.SetBGPPeerSrcAddress(obj, addr)
 }
 
 // SetBGPPeerRouterID delegates to the internal helper.
-func SetBGPPeerRouterID(obj *metallbv1beta1.BGPPeer, id string) error {
-	return intmetallb.SetBGPPeerRouterID(obj, id)
+func SetBGPPeerRouterID(obj *metallbv1beta1.BGPPeer, id string) {
+	intmetallb.SetBGPPeerRouterID(obj, id)
 }
 
 // SetBGPPeerEBGPMultiHop delegates to the internal helper.
-func SetBGPPeerEBGPMultiHop(obj *metallbv1beta1.BGPPeer, multi bool) error {
-	return intmetallb.SetBGPPeerEBGPMultiHop(obj, multi)
+func SetBGPPeerEBGPMultiHop(obj *metallbv1beta1.BGPPeer, multi bool) {
+	intmetallb.SetBGPPeerEBGPMultiHop(obj, multi)
 }
 
 // SetBGPPeerPassword delegates to the internal helper.
-func SetBGPPeerPassword(obj *metallbv1beta1.BGPPeer, pw string) error {
-	return intmetallb.SetBGPPeerPassword(obj, pw)
+func SetBGPPeerPassword(obj *metallbv1beta1.BGPPeer, pw string) {
+	intmetallb.SetBGPPeerPassword(obj, pw)
 }
 
 // SetBGPPeerBFDProfile delegates to the internal helper.
-func SetBGPPeerBFDProfile(obj *metallbv1beta1.BGPPeer, profile string) error {
-	return intmetallb.SetBGPPeerBFDProfile(obj, profile)
+func SetBGPPeerBFDProfile(obj *metallbv1beta1.BGPPeer, profile string) {
+	intmetallb.SetBGPPeerBFDProfile(obj, profile)
 }
 
 // AddBGPAdvertisementIPAddressPool delegates to the internal helper.
-func AddBGPAdvertisementIPAddressPool(obj *metallbv1beta1.BGPAdvertisement, pool string) error {
-	return intmetallb.AddBGPAdvertisementIPAddressPool(obj, pool)
+func AddBGPAdvertisementIPAddressPool(obj *metallbv1beta1.BGPAdvertisement, pool string) {
+	intmetallb.AddBGPAdvertisementIPAddressPool(obj, pool)
 }
 
 // AddBGPAdvertisementNodeSelector delegates to the internal helper.
-func AddBGPAdvertisementNodeSelector(obj *metallbv1beta1.BGPAdvertisement, sel metav1.LabelSelector) error {
-	return intmetallb.AddBGPAdvertisementNodeSelector(obj, sel)
+func AddBGPAdvertisementNodeSelector(obj *metallbv1beta1.BGPAdvertisement, sel metav1.LabelSelector) {
+	intmetallb.AddBGPAdvertisementNodeSelector(obj, sel)
 }
 
 // AddBGPAdvertisementCommunity delegates to the internal helper.
-func AddBGPAdvertisementCommunity(obj *metallbv1beta1.BGPAdvertisement, c string) error {
-	return intmetallb.AddBGPAdvertisementCommunity(obj, c)
+func AddBGPAdvertisementCommunity(obj *metallbv1beta1.BGPAdvertisement, c string) {
+	intmetallb.AddBGPAdvertisementCommunity(obj, c)
 }
 
 // AddBGPAdvertisementPeer delegates to the internal helper.
-func AddBGPAdvertisementPeer(obj *metallbv1beta1.BGPAdvertisement, peer string) error {
-	return intmetallb.AddBGPAdvertisementPeer(obj, peer)
+func AddBGPAdvertisementPeer(obj *metallbv1beta1.BGPAdvertisement, peer string) {
+	intmetallb.AddBGPAdvertisementPeer(obj, peer)
 }
 
 // SetBGPAdvertisementLocalPref delegates to the internal helper.
-func SetBGPAdvertisementLocalPref(obj *metallbv1beta1.BGPAdvertisement, pref uint32) error {
-	return intmetallb.SetBGPAdvertisementLocalPref(obj, pref)
+func SetBGPAdvertisementLocalPref(obj *metallbv1beta1.BGPAdvertisement, pref uint32) {
+	intmetallb.SetBGPAdvertisementLocalPref(obj, pref)
 }
 
 // AddL2AdvertisementIPAddressPool delegates to the internal helper.
-func AddL2AdvertisementIPAddressPool(obj *metallbv1beta1.L2Advertisement, pool string) error {
-	return intmetallb.AddL2AdvertisementIPAddressPool(obj, pool)
+func AddL2AdvertisementIPAddressPool(obj *metallbv1beta1.L2Advertisement, pool string) {
+	intmetallb.AddL2AdvertisementIPAddressPool(obj, pool)
 }
 
 // AddL2AdvertisementNodeSelector delegates to the internal helper.
-func AddL2AdvertisementNodeSelector(obj *metallbv1beta1.L2Advertisement, sel metav1.LabelSelector) error {
-	return intmetallb.AddL2AdvertisementNodeSelector(obj, sel)
+func AddL2AdvertisementNodeSelector(obj *metallbv1beta1.L2Advertisement, sel metav1.LabelSelector) {
+	intmetallb.AddL2AdvertisementNodeSelector(obj, sel)
 }
 
 // AddL2AdvertisementInterface delegates to the internal helper.
-func AddL2AdvertisementInterface(obj *metallbv1beta1.L2Advertisement, iface string) error {
-	return intmetallb.AddL2AdvertisementInterface(obj, iface)
+func AddL2AdvertisementInterface(obj *metallbv1beta1.L2Advertisement, iface string) {
+	intmetallb.AddL2AdvertisementInterface(obj, iface)
 }
 
 // SetBFDProfileDetectMultiplier delegates to the internal helper.
-func SetBFDProfileDetectMultiplier(obj *metallbv1beta1.BFDProfile, mult uint32) error {
-	return intmetallb.SetBFDProfileDetectMultiplier(obj, mult)
+func SetBFDProfileDetectMultiplier(obj *metallbv1beta1.BFDProfile, mult uint32) {
+	intmetallb.SetBFDProfileDetectMultiplier(obj, mult)
 }
 
 // SetBFDProfileEchoInterval delegates to the internal helper.
-func SetBFDProfileEchoInterval(obj *metallbv1beta1.BFDProfile, interval uint32) error {
-	return intmetallb.SetBFDProfileEchoInterval(obj, interval)
+func SetBFDProfileEchoInterval(obj *metallbv1beta1.BFDProfile, interval uint32) {
+	intmetallb.SetBFDProfileEchoInterval(obj, interval)
 }
 
 // SetBFDProfileEchoMode delegates to the internal helper.
-func SetBFDProfileEchoMode(obj *metallbv1beta1.BFDProfile, mode bool) error {
-	return intmetallb.SetBFDProfileEchoMode(obj, mode)
+func SetBFDProfileEchoMode(obj *metallbv1beta1.BFDProfile, mode bool) {
+	intmetallb.SetBFDProfileEchoMode(obj, mode)
 }
 
 // SetBFDProfilePassiveMode delegates to the internal helper.
-func SetBFDProfilePassiveMode(obj *metallbv1beta1.BFDProfile, mode bool) error {
-	return intmetallb.SetBFDProfilePassiveMode(obj, mode)
+func SetBFDProfilePassiveMode(obj *metallbv1beta1.BFDProfile, mode bool) {
+	intmetallb.SetBFDProfilePassiveMode(obj, mode)
 }

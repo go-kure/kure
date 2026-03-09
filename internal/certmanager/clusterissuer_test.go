@@ -18,24 +18,18 @@ func TestClusterIssuerFunctions(t *testing.T) {
 		t.Errorf("unexpected kind %q", ci.Kind)
 	}
 
-	if err := AddClusterIssuerLabel(ci, "app", "demo"); err != nil {
-		t.Errorf("AddClusterIssuerLabel failed: %v", err)
-	}
+	AddClusterIssuerLabel(ci, "app", "demo")
 	if ci.Labels["app"] != "demo" {
 		t.Errorf("label not set")
 	}
 
-	if err := AddClusterIssuerAnnotation(ci, "team", "dev"); err != nil {
-		t.Errorf("AddClusterIssuerAnnotation failed: %v", err)
-	}
+	AddClusterIssuerAnnotation(ci, "team", "dev")
 	if ci.Annotations["team"] != "dev" {
 		t.Errorf("annotation not set")
 	}
 
 	acme := &cmacme.ACMEIssuer{Server: "https://acme.example.com"}
-	if err := SetClusterIssuerACME(ci, acme); err != nil {
-		t.Errorf("SetClusterIssuerACME failed: %v", err)
-	}
+	SetClusterIssuerACME(ci, acme)
 	if ci.Spec.IssuerConfig.ACME == nil || ci.Spec.IssuerConfig.ACME.Server != "https://acme.example.com" {
 		t.Errorf("acme config not set")
 	}
@@ -46,26 +40,8 @@ func TestClusterIssuerCA(t *testing.T) {
 	ci := CreateClusterIssuer("ca-issuer", spec)
 
 	ca := &certv1.CAIssuer{SecretName: "ca-key-pair"}
-	if err := SetClusterIssuerCA(ci, ca); err != nil {
-		t.Errorf("SetClusterIssuerCA failed: %v", err)
-	}
+	SetClusterIssuerCA(ci, ca)
 	if ci.Spec.IssuerConfig.CA == nil || ci.Spec.IssuerConfig.CA.SecretName != "ca-key-pair" {
 		t.Errorf("CA config not set")
-	}
-}
-
-func TestClusterIssuerFunctionsWithNil(t *testing.T) {
-	// Test that functions return errors when given nil ClusterIssuer
-	if err := AddClusterIssuerLabel(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil ClusterIssuer")
-	}
-	if err := AddClusterIssuerAnnotation(nil, "key", "value"); err == nil {
-		t.Error("expected error for nil ClusterIssuer")
-	}
-	if err := SetClusterIssuerACME(nil, nil); err == nil {
-		t.Error("expected error for nil ClusterIssuer")
-	}
-	if err := SetClusterIssuerCA(nil, nil); err == nil {
-		t.Error("expected error for nil ClusterIssuer")
 	}
 }

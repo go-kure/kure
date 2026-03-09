@@ -157,10 +157,7 @@ func TestAddIPAddressPoolAddress(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := AddIPAddressPoolAddress(pool, "10.0.0.0/24")
-	if err != nil {
-		t.Fatalf("AddIPAddressPoolAddress failed: %v", err)
-	}
+	AddIPAddressPoolAddress(pool, "10.0.0.0/24")
 
 	if len(pool.Spec.Addresses) != 1 {
 		t.Fatalf("expected 1 address, got %d", len(pool.Spec.Addresses))
@@ -177,10 +174,7 @@ func TestSetIPAddressPoolAutoAssign(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := SetIPAddressPoolAutoAssign(pool, false)
-	if err != nil {
-		t.Fatalf("SetIPAddressPoolAutoAssign failed: %v", err)
-	}
+	SetIPAddressPoolAutoAssign(pool, false)
 
 	if pool.Spec.AutoAssign == nil || *pool.Spec.AutoAssign {
 		t.Error("expected AutoAssign to be false")
@@ -193,10 +187,7 @@ func TestSetIPAddressPoolAvoidBuggyIPs(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := SetIPAddressPoolAvoidBuggyIPs(pool, true)
-	if err != nil {
-		t.Fatalf("SetIPAddressPoolAvoidBuggyIPs failed: %v", err)
-	}
+	SetIPAddressPoolAvoidBuggyIPs(pool, true)
 
 	if !pool.Spec.AvoidBuggyIPs {
 		t.Error("expected AvoidBuggyIPs to be true")
@@ -210,10 +201,7 @@ func TestSetIPAddressPoolAllocateTo(t *testing.T) {
 	})
 
 	alloc := &metallbv1beta1.ServiceAllocation{Priority: 5}
-	err := SetIPAddressPoolAllocateTo(pool, alloc)
-	if err != nil {
-		t.Fatalf("SetIPAddressPoolAllocateTo failed: %v", err)
-	}
+	SetIPAddressPoolAllocateTo(pool, alloc)
 
 	if pool.Spec.AllocateTo == nil || pool.Spec.AllocateTo.Priority != 5 {
 		t.Error("expected AllocateTo.Priority 5")
@@ -232,10 +220,7 @@ func TestAddBGPPeerNodeSelector(t *testing.T) {
 	sel := metallbv1beta1.NodeSelector{
 		MatchLabels: map[string]string{"role": "worker"},
 	}
-	err := AddBGPPeerNodeSelector(peer, sel)
-	if err != nil {
-		t.Fatalf("AddBGPPeerNodeSelector failed: %v", err)
-	}
+	AddBGPPeerNodeSelector(peer, sel)
 
 	if len(peer.Spec.NodeSelectors) != 1 {
 		t.Fatalf("expected 1 node selector, got %d", len(peer.Spec.NodeSelectors))
@@ -251,10 +236,7 @@ func TestSetBGPPeerPort(t *testing.T) {
 		Address:   "10.0.0.1",
 	})
 
-	err := SetBGPPeerPort(peer, 1179)
-	if err != nil {
-		t.Fatalf("SetBGPPeerPort failed: %v", err)
-	}
+	SetBGPPeerPort(peer, 1179)
 
 	if peer.Spec.Port != 1179 {
 		t.Errorf("expected Port 1179, got %d", peer.Spec.Port)
@@ -271,10 +253,7 @@ func TestSetBGPPeerHoldTime(t *testing.T) {
 	})
 
 	d := metav1.Duration{Duration: 120000000000} // 120s
-	err := SetBGPPeerHoldTime(peer, d)
-	if err != nil {
-		t.Fatalf("SetBGPPeerHoldTime failed: %v", err)
-	}
+	SetBGPPeerHoldTime(peer, d)
 }
 
 func TestSetBGPPeerKeepaliveTime(t *testing.T) {
@@ -287,10 +266,7 @@ func TestSetBGPPeerKeepaliveTime(t *testing.T) {
 	})
 
 	d := metav1.Duration{Duration: 30000000000} // 30s
-	err := SetBGPPeerKeepaliveTime(peer, d)
-	if err != nil {
-		t.Fatalf("SetBGPPeerKeepaliveTime failed: %v", err)
-	}
+	SetBGPPeerKeepaliveTime(peer, d)
 }
 
 func TestSetBGPPeerSrcAddress(t *testing.T) {
@@ -302,10 +278,7 @@ func TestSetBGPPeerSrcAddress(t *testing.T) {
 		Address:   "10.0.0.1",
 	})
 
-	err := SetBGPPeerSrcAddress(peer, "10.0.0.100")
-	if err != nil {
-		t.Fatalf("SetBGPPeerSrcAddress failed: %v", err)
-	}
+	SetBGPPeerSrcAddress(peer, "10.0.0.100")
 
 	if peer.Spec.SrcAddress != "10.0.0.100" {
 		t.Errorf("expected SrcAddress '10.0.0.100', got %s", peer.Spec.SrcAddress)
@@ -321,10 +294,7 @@ func TestSetBGPPeerRouterID(t *testing.T) {
 		Address:   "10.0.0.1",
 	})
 
-	err := SetBGPPeerRouterID(peer, "1.2.3.4")
-	if err != nil {
-		t.Fatalf("SetBGPPeerRouterID failed: %v", err)
-	}
+	SetBGPPeerRouterID(peer, "1.2.3.4")
 
 	if peer.Spec.RouterID != "1.2.3.4" {
 		t.Errorf("expected RouterID '1.2.3.4', got %s", peer.Spec.RouterID)
@@ -340,10 +310,7 @@ func TestSetBGPPeerEBGPMultiHop(t *testing.T) {
 		Address:   "10.0.0.1",
 	})
 
-	err := SetBGPPeerEBGPMultiHop(peer, true)
-	if err != nil {
-		t.Fatalf("SetBGPPeerEBGPMultiHop failed: %v", err)
-	}
+	SetBGPPeerEBGPMultiHop(peer, true)
 
 	if !peer.Spec.EBGPMultiHop {
 		t.Error("expected EBGPMultiHop to be true")
@@ -359,10 +326,7 @@ func TestSetBGPPeerPassword(t *testing.T) {
 		Address:   "10.0.0.1",
 	})
 
-	err := SetBGPPeerPassword(peer, "bgp-secret")
-	if err != nil {
-		t.Fatalf("SetBGPPeerPassword failed: %v", err)
-	}
+	SetBGPPeerPassword(peer, "bgp-secret")
 
 	if peer.Spec.Password != "bgp-secret" {
 		t.Errorf("expected Password 'bgp-secret', got %s", peer.Spec.Password)
@@ -378,10 +342,7 @@ func TestSetBGPPeerBFDProfile(t *testing.T) {
 		Address:   "10.0.0.1",
 	})
 
-	err := SetBGPPeerBFDProfile(peer, "my-bfd")
-	if err != nil {
-		t.Fatalf("SetBGPPeerBFDProfile failed: %v", err)
-	}
+	SetBGPPeerBFDProfile(peer, "my-bfd")
 
 	if peer.Spec.BFDProfile != "my-bfd" {
 		t.Errorf("expected BFDProfile 'my-bfd', got %s", peer.Spec.BFDProfile)
@@ -394,10 +355,7 @@ func TestAddBGPAdvertisementIPAddressPool(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := AddBGPAdvertisementIPAddressPool(advert, "pool-1")
-	if err != nil {
-		t.Fatalf("AddBGPAdvertisementIPAddressPool failed: %v", err)
-	}
+	AddBGPAdvertisementIPAddressPool(advert, "pool-1")
 
 	if len(advert.Spec.IPAddressPools) != 1 {
 		t.Fatalf("expected 1 pool, got %d", len(advert.Spec.IPAddressPools))
@@ -417,10 +375,7 @@ func TestAddBGPAdvertisementNodeSelector(t *testing.T) {
 	sel := metav1.LabelSelector{
 		MatchLabels: map[string]string{"zone": "us-east"},
 	}
-	err := AddBGPAdvertisementNodeSelector(advert, sel)
-	if err != nil {
-		t.Fatalf("AddBGPAdvertisementNodeSelector failed: %v", err)
-	}
+	AddBGPAdvertisementNodeSelector(advert, sel)
 
 	if len(advert.Spec.NodeSelectors) != 1 {
 		t.Fatalf("expected 1 node selector, got %d", len(advert.Spec.NodeSelectors))
@@ -433,10 +388,7 @@ func TestAddBGPAdvertisementCommunity(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := AddBGPAdvertisementCommunity(advert, "65535:65282")
-	if err != nil {
-		t.Fatalf("AddBGPAdvertisementCommunity failed: %v", err)
-	}
+	AddBGPAdvertisementCommunity(advert, "65535:65282")
 
 	if len(advert.Spec.Communities) != 1 {
 		t.Fatalf("expected 1 community, got %d", len(advert.Spec.Communities))
@@ -449,10 +401,7 @@ func TestAddBGPAdvertisementPeer(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := AddBGPAdvertisementPeer(advert, "peer-1")
-	if err != nil {
-		t.Fatalf("AddBGPAdvertisementPeer failed: %v", err)
-	}
+	AddBGPAdvertisementPeer(advert, "peer-1")
 
 	if len(advert.Spec.Peers) != 1 {
 		t.Fatalf("expected 1 peer, got %d", len(advert.Spec.Peers))
@@ -465,10 +414,7 @@ func TestSetBGPAdvertisementLocalPref(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := SetBGPAdvertisementLocalPref(advert, 150)
-	if err != nil {
-		t.Fatalf("SetBGPAdvertisementLocalPref failed: %v", err)
-	}
+	SetBGPAdvertisementLocalPref(advert, 150)
 
 	if advert.Spec.LocalPref != 150 {
 		t.Errorf("expected LocalPref 150, got %d", advert.Spec.LocalPref)
@@ -481,10 +427,7 @@ func TestAddL2AdvertisementIPAddressPool(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := AddL2AdvertisementIPAddressPool(l2, "pool-1")
-	if err != nil {
-		t.Fatalf("AddL2AdvertisementIPAddressPool failed: %v", err)
-	}
+	AddL2AdvertisementIPAddressPool(l2, "pool-1")
 
 	if len(l2.Spec.IPAddressPools) != 1 {
 		t.Fatalf("expected 1 pool, got %d", len(l2.Spec.IPAddressPools))
@@ -500,10 +443,7 @@ func TestAddL2AdvertisementNodeSelector(t *testing.T) {
 	sel := metav1.LabelSelector{
 		MatchLabels: map[string]string{"zone": "us-west"},
 	}
-	err := AddL2AdvertisementNodeSelector(l2, sel)
-	if err != nil {
-		t.Fatalf("AddL2AdvertisementNodeSelector failed: %v", err)
-	}
+	AddL2AdvertisementNodeSelector(l2, sel)
 
 	if len(l2.Spec.NodeSelectors) != 1 {
 		t.Fatalf("expected 1 node selector, got %d", len(l2.Spec.NodeSelectors))
@@ -516,10 +456,7 @@ func TestAddL2AdvertisementInterface(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := AddL2AdvertisementInterface(l2, "eth0")
-	if err != nil {
-		t.Fatalf("AddL2AdvertisementInterface failed: %v", err)
-	}
+	AddL2AdvertisementInterface(l2, "eth0")
 
 	if len(l2.Spec.Interfaces) != 1 {
 		t.Fatalf("expected 1 interface, got %d", len(l2.Spec.Interfaces))
@@ -536,10 +473,7 @@ func TestSetBFDProfileDetectMultiplier(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := SetBFDProfileDetectMultiplier(bfd, 5)
-	if err != nil {
-		t.Fatalf("SetBFDProfileDetectMultiplier failed: %v", err)
-	}
+	SetBFDProfileDetectMultiplier(bfd, 5)
 
 	if bfd.Spec.DetectMultiplier == nil || *bfd.Spec.DetectMultiplier != 5 {
 		t.Error("expected DetectMultiplier 5")
@@ -552,10 +486,7 @@ func TestSetBFDProfileEchoInterval(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := SetBFDProfileEchoInterval(bfd, 100)
-	if err != nil {
-		t.Fatalf("SetBFDProfileEchoInterval failed: %v", err)
-	}
+	SetBFDProfileEchoInterval(bfd, 100)
 
 	if bfd.Spec.EchoInterval == nil || *bfd.Spec.EchoInterval != 100 {
 		t.Error("expected EchoInterval 100")
@@ -568,10 +499,7 @@ func TestSetBFDProfileEchoMode(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := SetBFDProfileEchoMode(bfd, true)
-	if err != nil {
-		t.Fatalf("SetBFDProfileEchoMode failed: %v", err)
-	}
+	SetBFDProfileEchoMode(bfd, true)
 
 	if bfd.Spec.EchoMode == nil || !*bfd.Spec.EchoMode {
 		t.Error("expected EchoMode true")
@@ -584,10 +512,7 @@ func TestSetBFDProfilePassiveMode(t *testing.T) {
 		Namespace: "metallb-system",
 	})
 
-	err := SetBFDProfilePassiveMode(bfd, true)
-	if err != nil {
-		t.Fatalf("SetBFDProfilePassiveMode failed: %v", err)
-	}
+	SetBFDProfilePassiveMode(bfd, true)
 
 	if bfd.Spec.PassiveMode == nil || !*bfd.Spec.PassiveMode {
 		t.Error("expected PassiveMode true")

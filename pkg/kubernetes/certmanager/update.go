@@ -25,71 +25,71 @@ func SetClusterIssuerSpec(obj *certv1.ClusterIssuer, spec certv1.IssuerSpec) {
 }
 
 // AddCertificateLabel delegates to the internal helper.
-func AddCertificateLabel(obj *certv1.Certificate, key, value string) error {
-	return intcm.AddCertificateLabel(obj, key, value)
+func AddCertificateLabel(obj *certv1.Certificate, key, value string) {
+	intcm.AddCertificateLabel(obj, key, value)
 }
 
 // AddCertificateAnnotation delegates to the internal helper.
-func AddCertificateAnnotation(obj *certv1.Certificate, key, value string) error {
-	return intcm.AddCertificateAnnotation(obj, key, value)
+func AddCertificateAnnotation(obj *certv1.Certificate, key, value string) {
+	intcm.AddCertificateAnnotation(obj, key, value)
 }
 
 // AddCertificateDNSName delegates to the internal helper.
-func AddCertificateDNSName(obj *certv1.Certificate, dns string) error {
-	return intcm.AddCertificateDNSName(obj, dns)
+func AddCertificateDNSName(obj *certv1.Certificate, dns string) {
+	intcm.AddCertificateDNSName(obj, dns)
 }
 
 // SetCertificateIssuerRef delegates to the internal helper.
-func SetCertificateIssuerRef(obj *certv1.Certificate, ref cmmeta.ObjectReference) error {
-	return intcm.SetCertificateIssuerRef(obj, ref)
+func SetCertificateIssuerRef(obj *certv1.Certificate, ref cmmeta.ObjectReference) {
+	intcm.SetCertificateIssuerRef(obj, ref)
 }
 
 // SetCertificateDuration delegates to the internal helper.
-func SetCertificateDuration(obj *certv1.Certificate, dur *metav1.Duration) error {
-	return intcm.SetCertificateDuration(obj, dur)
+func SetCertificateDuration(obj *certv1.Certificate, dur *metav1.Duration) {
+	intcm.SetCertificateDuration(obj, dur)
 }
 
 // SetCertificateRenewBefore delegates to the internal helper.
-func SetCertificateRenewBefore(obj *certv1.Certificate, dur *metav1.Duration) error {
-	return intcm.SetCertificateRenewBefore(obj, dur)
+func SetCertificateRenewBefore(obj *certv1.Certificate, dur *metav1.Duration) {
+	intcm.SetCertificateRenewBefore(obj, dur)
 }
 
 // AddIssuerLabel delegates to the internal helper.
-func AddIssuerLabel(obj *certv1.Issuer, key, value string) error {
-	return intcm.AddIssuerLabel(obj, key, value)
+func AddIssuerLabel(obj *certv1.Issuer, key, value string) {
+	intcm.AddIssuerLabel(obj, key, value)
 }
 
 // AddIssuerAnnotation delegates to the internal helper.
-func AddIssuerAnnotation(obj *certv1.Issuer, key, value string) error {
-	return intcm.AddIssuerAnnotation(obj, key, value)
+func AddIssuerAnnotation(obj *certv1.Issuer, key, value string) {
+	intcm.AddIssuerAnnotation(obj, key, value)
 }
 
 // SetIssuerACME delegates to the internal helper.
-func SetIssuerACME(obj *certv1.Issuer, acme *cmacme.ACMEIssuer) error {
-	return intcm.SetIssuerACME(obj, acme)
+func SetIssuerACME(obj *certv1.Issuer, acme *cmacme.ACMEIssuer) {
+	intcm.SetIssuerACME(obj, acme)
 }
 
 // SetIssuerCA delegates to the internal helper.
-func SetIssuerCA(obj *certv1.Issuer, ca *certv1.CAIssuer) error {
-	return intcm.SetIssuerCA(obj, ca)
+func SetIssuerCA(obj *certv1.Issuer, ca *certv1.CAIssuer) {
+	intcm.SetIssuerCA(obj, ca)
 }
 
 // AddClusterIssuerLabel delegates to the internal helper.
-func AddClusterIssuerLabel(obj *certv1.ClusterIssuer, key, value string) error {
-	return intcm.AddClusterIssuerLabel(obj, key, value)
+func AddClusterIssuerLabel(obj *certv1.ClusterIssuer, key, value string) {
+	intcm.AddClusterIssuerLabel(obj, key, value)
 }
 
 // AddClusterIssuerAnnotation delegates to the internal helper.
-func AddClusterIssuerAnnotation(obj *certv1.ClusterIssuer, key, value string) error {
-	return intcm.AddClusterIssuerAnnotation(obj, key, value)
+func AddClusterIssuerAnnotation(obj *certv1.ClusterIssuer, key, value string) {
+	intcm.AddClusterIssuerAnnotation(obj, key, value)
 }
 
 // SetClusterIssuerACME delegates to the internal helper.
-func SetClusterIssuerACME(obj *certv1.ClusterIssuer, acme *cmacme.ACMEIssuer) error {
-	return intcm.SetClusterIssuerACME(obj, acme)
+func SetClusterIssuerACME(obj *certv1.ClusterIssuer, acme *cmacme.ACMEIssuer) {
+	intcm.SetClusterIssuerACME(obj, acme)
 }
 
 // SetClusterIssuerCA delegates to the internal helper.
-func SetClusterIssuerCA(obj *certv1.ClusterIssuer, ca *certv1.CAIssuer) error {
-	return intcm.SetClusterIssuerCA(obj, ca)
+func SetClusterIssuerCA(obj *certv1.ClusterIssuer, ca *certv1.CAIssuer) {
+	intcm.SetClusterIssuerCA(obj, ca)
 }

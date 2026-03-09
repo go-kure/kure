@@ -15,15 +15,15 @@ func Certificate(cfg *CertificateConfig) *certv1.Certificate {
 	obj := intcm.CreateCertificate(cfg.Name, cfg.Namespace, certv1.CertificateSpec{
 		SecretName: cfg.SecretName,
 	})
-	intcm.SetCertificateIssuerRef(obj, cfg.IssuerRef) //nolint:errcheck,gosec // obj is freshly created
+	intcm.SetCertificateIssuerRef(obj, cfg.IssuerRef)
 	for _, dns := range cfg.DNSNames {
-		intcm.AddCertificateDNSName(obj, dns) //nolint:errcheck,gosec // obj is freshly created
+		intcm.AddCertificateDNSName(obj, dns)
 	}
 	if cfg.Duration != nil {
-		intcm.SetCertificateDuration(obj, cfg.Duration) //nolint:errcheck,gosec // obj is freshly created
+		intcm.SetCertificateDuration(obj, cfg.Duration)
 	}
 	if cfg.RenewBefore != nil {
-		intcm.SetCertificateRenewBefore(obj, cfg.RenewBefore) //nolint:errcheck,gosec // obj is freshly created
+		intcm.SetCertificateRenewBefore(obj, cfg.RenewBefore)
 	}
 	return obj
 }
@@ -36,9 +36,9 @@ func Issuer(cfg *IssuerConfig) *certv1.Issuer {
 	obj := intcm.CreateIssuer(cfg.Name, cfg.Namespace, certv1.IssuerSpec{})
 	if cfg.ACME != nil {
 		acme := buildACMEIssuer(cfg.ACME)
-		intcm.SetIssuerACME(obj, acme) //nolint:errcheck,gosec // obj is freshly created
+		intcm.SetIssuerACME(obj, acme)
 	} else if cfg.CA != nil {
-		intcm.SetIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName}) //nolint:errcheck,gosec // obj is freshly created
+		intcm.SetIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName})
 	}
 	return obj
 }
@@ -51,9 +51,9 @@ func ClusterIssuer(cfg *ClusterIssuerConfig) *certv1.ClusterIssuer {
 	obj := intcm.CreateClusterIssuer(cfg.Name, certv1.IssuerSpec{})
 	if cfg.ACME != nil {
 		acme := buildACMEIssuer(cfg.ACME)
-		intcm.SetClusterIssuerACME(obj, acme) //nolint:errcheck,gosec // obj is freshly created
+		intcm.SetClusterIssuerACME(obj, acme)
 	} else if cfg.CA != nil {
-		intcm.SetClusterIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName}) //nolint:errcheck,gosec // obj is freshly created
+		intcm.SetClusterIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName})
 	}
 	return obj
 }

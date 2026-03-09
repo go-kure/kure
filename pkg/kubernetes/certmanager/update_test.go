@@ -83,9 +83,7 @@ func TestAddCertificateLabel(t *testing.T) {
 	}
 	cert := Certificate(cfg)
 
-	if err := AddCertificateLabel(cert, "app", "test"); err != nil {
-		t.Errorf("AddCertificateLabel failed: %v", err)
-	}
+	AddCertificateLabel(cert, "app", "test")
 	if cert.Labels["app"] != "test" {
 		t.Error("expected label 'app' to be 'test'")
 	}
@@ -100,9 +98,7 @@ func TestAddCertificateAnnotation(t *testing.T) {
 	}
 	cert := Certificate(cfg)
 
-	if err := AddCertificateAnnotation(cert, "note", "value"); err != nil {
-		t.Errorf("AddCertificateAnnotation failed: %v", err)
-	}
+	AddCertificateAnnotation(cert, "note", "value")
 	if cert.Annotations["note"] != "value" {
 		t.Error("expected annotation 'note' to be 'value'")
 	}
@@ -118,9 +114,7 @@ func TestSetCertificateDuration(t *testing.T) {
 	cert := Certificate(cfg)
 
 	dur := &metav1.Duration{Duration: 720 * 3600_000_000_000} // 720h
-	if err := SetCertificateDuration(cert, dur); err != nil {
-		t.Errorf("SetCertificateDuration failed: %v", err)
-	}
+	SetCertificateDuration(cert, dur)
 }
 
 func TestSetIssuerACME(t *testing.T) {
@@ -131,9 +125,7 @@ func TestSetIssuerACME(t *testing.T) {
 	issuer := Issuer(cfg)
 
 	acme := &cmacme.ACMEIssuer{Server: "https://acme.example.com"}
-	if err := SetIssuerACME(issuer, acme); err != nil {
-		t.Errorf("SetIssuerACME failed: %v", err)
-	}
+	SetIssuerACME(issuer, acme)
 	if issuer.Spec.IssuerConfig.ACME == nil || issuer.Spec.IssuerConfig.ACME.Server != "https://acme.example.com" {
 		t.Error("expected ACME config to be set")
 	}
@@ -147,9 +139,7 @@ func TestSetIssuerCA(t *testing.T) {
 	issuer := Issuer(cfg)
 
 	ca := &certv1.CAIssuer{SecretName: "ca-secret"}
-	if err := SetIssuerCA(issuer, ca); err != nil {
-		t.Errorf("SetIssuerCA failed: %v", err)
-	}
+	SetIssuerCA(issuer, ca)
 	if issuer.Spec.IssuerConfig.CA == nil || issuer.Spec.IssuerConfig.CA.SecretName != "ca-secret" {
 		t.Error("expected CA config to be set")
 	}
@@ -162,9 +152,7 @@ func TestSetClusterIssuerACME(t *testing.T) {
 	ci := ClusterIssuer(cfg)
 
 	acme := &cmacme.ACMEIssuer{Server: "https://acme.example.com"}
-	if err := SetClusterIssuerACME(ci, acme); err != nil {
-		t.Errorf("SetClusterIssuerACME failed: %v", err)
-	}
+	SetClusterIssuerACME(ci, acme)
 	if ci.Spec.IssuerConfig.ACME == nil || ci.Spec.IssuerConfig.ACME.Server != "https://acme.example.com" {
 		t.Error("expected ACME config to be set")
 	}
@@ -177,9 +165,7 @@ func TestSetClusterIssuerCA(t *testing.T) {
 	ci := ClusterIssuer(cfg)
 
 	ca := &certv1.CAIssuer{SecretName: "ca-secret"}
-	if err := SetClusterIssuerCA(ci, ca); err != nil {
-		t.Errorf("SetClusterIssuerCA failed: %v", err)
-	}
+	SetClusterIssuerCA(ci, ca)
 	if ci.Spec.IssuerConfig.CA == nil || ci.Spec.IssuerConfig.CA.SecretName != "ca-secret" {
 		t.Error("expected CA config to be set")
 	}
@@ -192,9 +178,7 @@ func TestAddIssuerLabel(t *testing.T) {
 	}
 	issuer := Issuer(cfg)
 
-	if err := AddIssuerLabel(issuer, "env", "prod"); err != nil {
-		t.Errorf("AddIssuerLabel failed: %v", err)
-	}
+	AddIssuerLabel(issuer, "env", "prod")
 	if issuer.Labels["env"] != "prod" {
 		t.Error("expected label 'env' to be 'prod'")
 	}
@@ -206,9 +190,7 @@ func TestAddClusterIssuerLabel(t *testing.T) {
 	}
 	ci := ClusterIssuer(cfg)
 
-	if err := AddClusterIssuerLabel(ci, "env", "prod"); err != nil {
-		t.Errorf("AddClusterIssuerLabel failed: %v", err)
-	}
+	AddClusterIssuerLabel(ci, "env", "prod")
 	if ci.Labels["env"] != "prod" {
 		t.Error("expected label 'env' to be 'prod'")
 	}
