@@ -24,7 +24,6 @@ func CreateSecret(name, namespace string) *corev1.Secret {
 		Data:       map[string][]byte{},
 		StringData: map[string]string{},
 		Type:       corev1.SecretTypeOpaque,
-		Immutable:  new(bool),
 	}
 	return obj
 }
@@ -48,10 +47,7 @@ func SetSecretType(secret *corev1.Secret, type_ corev1.SecretType) {
 }
 
 func SetSecretImmutable(secret *corev1.Secret, immutable bool) {
-	if secret.Immutable == nil {
-		secret.Immutable = new(bool)
-	}
-	*secret.Immutable = immutable
+	secret.Immutable = &immutable
 }
 
 func AddSecretLabel(secret *corev1.Secret, key, value string) {
