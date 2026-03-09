@@ -1,6 +1,28 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.0] - 2026-03-09
+
+### Changed
+
+- Simplify Bundle.Generate() label propagation
+- Standardize CRD builders to void returns
+- Standardize ConfigMap and Secret builders to void returns
+- Standardize validation strategy with void returns
+
+### Dependencies
+
+- Bump github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring
+- Bump sigs.k8s.io/gateway-api from 1.4.0 to 1.5.0
+
+### Fixed
+
+- Simplify SetSecretImmutable and remove unnecessary Immutable pre-allocation
+
+### Testing
+
+- Add golden file tests for InitContainer builders
+
 ## [0.1.0-beta.7] - 2026-03-08
 
 ### Added
@@ -49,6 +71,10 @@ All notable changes to this project will be documented in this file.
 
 - Add comprehensive tests for public facade
 - Add tests and docs for externalsecrets facade
+
+### Release
+
+- V0.1.0-beta.7
 
 ## [0.1.0-beta.6] - 2026-03-06
 
