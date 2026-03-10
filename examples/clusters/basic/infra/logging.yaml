@@ -10,10 +10,10 @@ spec:
       image: fluent/fluentd-kubernetes-daemonset:v1.16-debian-elasticsearch7-1
       ports:
         - name: fluentd
-          containerport: 24224
+          containerPort: 24224
           protocol: TCP
         - name: prometheus
-          containerport: 24231
+          containerPort: 24231
           protocol: TCP
       env:
         - name: FLUENT_ELASTICSEARCH_HOST
