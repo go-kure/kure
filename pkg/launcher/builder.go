@@ -472,6 +472,9 @@ func (b *outputBuilder) resolveVariablePath(path string, params ParameterMap) (a
 
 // convertToString converts a parameter value to its string representation
 func (b *outputBuilder) convertToString(value any) string {
+	if value == nil {
+		return "null"
+	}
 	switch v := value.(type) {
 	case string:
 		return v
@@ -483,6 +486,12 @@ func (b *outputBuilder) convertToString(value any) string {
 		return fmt.Sprintf("%g", v)
 	case bool:
 		return fmt.Sprintf("%t", v)
+	case map[string]any, []any:
+		data, err := yaml.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return strings.TrimSpace(string(data))
 	default:
 		return fmt.Sprintf("%v", v)
 	}

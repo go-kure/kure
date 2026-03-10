@@ -1,10 +1,14 @@
-name: monitoring
-namespace: monitoring
-workload: Deployment
-replicas: 1
-containers:
-  - name: prometheus
-    image: prometheus:latest
-    ports:
-      - containerPort: 9090
-        protocol: TCP
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: monitoring
+  namespace: monitoring
+spec:
+  workload: Deployment
+  replicas: 1
+  containers:
+    - name: prometheus
+      image: prometheus:latest
+      ports:
+        - containerPort: 9090
+          protocol: TCP

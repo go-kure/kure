@@ -86,20 +86,29 @@ func LoadYAMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 			return nil, fmt.Errorf("invalid simple patch map: %w", err)
 		}
 		for k, v := range raw {
-			// Apply variable substitution
-			substitutedValue, err := SubstituteVariables(fmt.Sprintf("%v", v), varCtx)
+			// Apply variable substitution to key
+			substitutedKey, err := SubstituteVariables(k, varCtx)
 			if err != nil {
-				return nil, fmt.Errorf("variable substitution failed for key '%s': %w", k, err)
+				return nil, fmt.Errorf("variable substitution failed for key: %w", err)
+			}
+			keyStr := fmt.Sprintf("%v", substitutedKey)
+
+			// Apply variable substitution to value based on type
+			substitutedValue, err := substituteVariablesInValue(v, varCtx)
+			if err != nil {
+				return nil, fmt.Errorf("variable substitution failed for key '%s': %w", keyStr, err)
 			}
 
 			// Apply type inference to convert strings to appropriate types (int, bool, etc.)
 			if valueStr, ok := substitutedValue.(string); ok {
-				substitutedValue = inferValueType(k, valueStr)
+				substitutedValue = inferValueType(keyStr, valueStr)
+			} else if m, ok := substitutedValue.(map[string]any); ok {
+				inferTypesInMap(m)
 			}
 
-			op, err := ParsePatchLine(k, substitutedValue)
+			op, err := ParsePatchLine(keyStr, substitutedValue)
 			if err != nil {
-				return nil, fmt.Errorf("invalid patch line '%s': %w", k, err)
+				return nil, fmt.Errorf("invalid patch line '%s': %w", keyStr, err)
 			}
 			patches = append(patches, PatchSpec{Patch: op})
 		}
@@ -130,20 +139,29 @@ func LoadYAMLPatchFile(r io.Reader, varCtx *VariableContext) ([]PatchSpec, error
 			}
 
 			for k, v := range entry.Patch {
-				// Apply variable substitution
-				substitutedValue, err := SubstituteVariables(fmt.Sprintf("%v", v), varCtx)
+				// Apply variable substitution to key
+				substitutedKey, err := SubstituteVariables(k, varCtx)
 				if err != nil {
-					return nil, fmt.Errorf("variable substitution failed for key '%s': %w", k, err)
+					return nil, fmt.Errorf("variable substitution failed for key: %w", err)
+				}
+				keyStr := fmt.Sprintf("%v", substitutedKey)
+
+				// Apply variable substitution to value based on type
+				substitutedValue, err := substituteVariablesInValue(v, varCtx)
+				if err != nil {
+					return nil, fmt.Errorf("variable substitution failed for key '%s': %w", keyStr, err)
 				}
 
 				// Apply type inference to convert strings to appropriate types (int, bool, etc.)
 				if valueStr, ok := substitutedValue.(string); ok {
-					substitutedValue = inferValueType(k, valueStr)
+					substitutedValue = inferValueType(keyStr, valueStr)
+				} else if m, ok := substitutedValue.(map[string]any); ok {
+					inferTypesInMap(m)
 				}
 
-				op, err := ParsePatchLine(k, substitutedValue)
+				op, err := ParsePatchLine(keyStr, substitutedValue)
 				if err != nil {
-					return nil, fmt.Errorf("invalid patch line '%s': %w", k, err)
+					return nil, fmt.Errorf("invalid patch line '%s': %w", keyStr, err)
 				}
 				if err := op.NormalizePath(); err != nil {
 					return nil, fmt.Errorf("invalid patch path syntax: %s: %w", op.Path, err)

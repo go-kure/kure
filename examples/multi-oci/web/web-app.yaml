@@ -1,10 +1,14 @@
-name: web-app
-namespace: production
-workload: Deployment
-replicas: 3
-containers:
-  - name: nginx
-    image: nginx:latest
-    ports:
-      - containerPort: 80
-        protocol: TCP
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: web-app
+  namespace: production
+spec:
+  workload: Deployment
+  replicas: 3
+  containers:
+    - name: nginx
+      image: nginx:latest
+      ports:
+        - containerPort: 80
+          protocol: TCP

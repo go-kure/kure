@@ -130,6 +130,19 @@ func (p *patchProcessor) ApplyPatches(ctx context.Context, def *PackageDefinitio
 			return nil, NewPatchError(patch.Name, "", "", "", fmt.Sprintf("failed to parse patch: %v", err))
 		}
 
+		// Resolve empty targets from path prefix against known resources
+		for i, spec := range patchSpecs {
+			if spec.Target == "" && spec.Strategic == nil {
+				target, trimmed := extractTargetFromPath(spec.Patch.Path, result.Resources)
+				if target != "" {
+					patchSpecs[i].Target = target
+					if trimmed != "" {
+						patchSpecs[i].Patch.Path = trimmed
+					}
+				}
+			}
+		}
+
 		// Apply patch to resources
 		for i, resource := range result.Resources {
 			applied, err := p.applyPatchToResource(&resource, patchSpecs, patch.Name)
@@ -434,6 +447,41 @@ func (p *patchProcessor) matchesTarget(resource *Resource, target string) bool {
 	return false
 }
 
+// extractTargetFromPath attempts to extract a resource target from a path prefix.
+// It checks if the path starts with kind.name or just name of a known resource.
+func extractTargetFromPath(path string, resources []Resource) (string, string) {
+	parts := splitPathRespectingVariables(path)
+	if len(parts) < 2 {
+		return "", ""
+	}
+
+	first := strings.ToLower(parts[0])
+
+	// Check if first two parts form kind.name
+	if len(parts) >= 3 {
+		second := parts[1]
+		for _, r := range resources {
+			if strings.EqualFold(r.Kind, first) && r.GetName() == second {
+				return r.Kind + "." + r.GetName(), strings.Join(parts[2:], ".")
+			}
+		}
+	}
+
+	// Check if first part matches a unique resource name
+	var nameMatches []Resource
+	for _, r := range resources {
+		if strings.EqualFold(r.GetName(), first) {
+			nameMatches = append(nameMatches, r)
+		}
+	}
+	if len(nameMatches) == 1 {
+		r := nameMatches[0]
+		return r.Kind + "." + r.GetName(), strings.Join(parts[1:], ".")
+	}
+
+	return "", ""
+}
+
 // DebugPatchGraph generates a patch dependency graph for debugging
 func (p *patchProcessor) DebugPatchGraph(patches []Patch) string {
 	graph := &strings.Builder{}
@@ -579,13 +627,42 @@ func applyPatchOp(obj map[string]any, op patch.PatchOp) error {
 	return applyOperation(obj, op.ParsedPath, op.Value, op.Op)
 }
 
+// splitPathRespectingVariables splits a dot-notation path into parts,
+// preserving ${...} variable references that contain dots.
+func splitPathRespectingVariables(path string) []string {
+	var parts []string
+	var current strings.Builder
+	depth := 0
+	for i := 0; i < len(path); i++ {
+		switch {
+		case path[i] == '$' && i+1 < len(path) && path[i+1] == '{':
+			depth++
+			current.WriteByte(path[i])
+		case path[i] == '}' && depth > 0:
+			depth--
+			current.WriteByte(path[i])
+		case path[i] == '.' && depth == 0:
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteByte(path[i])
+		}
+	}
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	return parts
+}
+
 // parsePath parses a dot-notation path into PathPart components
 func parsePath(path string) ([]patch.PathPart, error) {
 	if path == "" {
 		return nil, nil
 	}
 
-	parts := strings.Split(path, ".")
+	parts := splitPathRespectingVariables(path)
 	var result []patch.PathPart
 
 	for _, part := range parts {
