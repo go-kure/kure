@@ -1,0 +1,24 @@
+{{- $version := site.Params.version | default "dev" -}}
+{{- if eq $version "dev" -}}
+<details open class="box cstyle notices warning">
+  <summary class="box-label" tabindex="-1">
+    <i class="fa-fw fas fa-exclamation-triangle"></i>
+    Warning
+  </summary>
+  <div class="box-content">
+    <p>Work in Progress: Kure is currently under active development
+    {{- with site.Params.latestTag }} ({{ . }}{{ with site.Params.commitSha }} @ {{ . }}{{ end }}){{ end }}.
+    APIs and features are subject to change.</p>
+  </div>
+</details>
+{{- else -}}
+<details open class="box cstyle notices info">
+  <summary class="box-label" tabindex="-1">
+    <i class="fa-fw fas fa-info-circle"></i>
+    Version
+  </summary>
+  <div class="box-content">
+    <p>You are viewing the documentation for Kure <strong>{{ $version }}</strong>.</p>
+  </div>
+</details>
+{{- end -}}
