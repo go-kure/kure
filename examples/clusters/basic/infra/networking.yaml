@@ -10,11 +10,11 @@ spec:
       image: k8s.gcr.io/ingress-nginx/controller:v1.8.1
       ports:
         - name: http
-          containerport: 80
+          containerPort: 80
         - name: https
-          containerport: 443
+          containerPort: 443
         - name: webhook
-          containerport: 8443
+          containerPort: 8443
       env:
         - name: POD_NAME
           valueFrom:
