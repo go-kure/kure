@@ -79,11 +79,17 @@ if [[ -z "$LATEST" && ${#sorted_minors[@]} -gt 0 ]]; then
     LATEST="${minor_map[$last_minor]}"
 fi
 
+# Compute git metadata for homepage notice
+LATEST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "unreleased")"
+COMMIT_SHA="$(git rev-parse --short HEAD)"
+
 # --- Generate TOML ---
 
 {
     echo "[params]"
     echo "  version = '${VERSION}'"
+    echo "  latestTag = '${LATEST_TAG}'"
+    echo "  commitSha = '${COMMIT_SHA}'"
     echo ""
 
     # Stable version entries (newest first for display order)

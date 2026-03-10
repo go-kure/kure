@@ -5,9 +5,7 @@ type = "home"
 
 # Kure: Type-Safe Kubernetes Resource Generation
 
-{{< notice warning >}}
-Work in Progress: Kure is currently under active development (v0.1.0-alpha.2). APIs and features are subject to change.
-{{< /notice >}}
+{{< version-notice >}}
 
 **Kure** is a Go library for programmatically building Kubernetes resources, designed for GitOps workflows with FluxCD. Instead of complex templating engines, Kure provides strongly-typed, composable resource generation in native Go.
 
