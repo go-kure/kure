@@ -72,10 +72,10 @@ func TestRunInternals(t *testing.T) {
 
 func TestRunAppWorkloads_NoDirectory(t *testing.T) {
 	// Test with non-existent directory
-	originalDir := "examples/app-workloads"
+	originalDir := "examples/demo/app-workloads"
 
 	// Temporarily rename directory if it exists
-	tempDir := "examples/app-workloads.bak"
+	tempDir := "examples/demo/app-workloads.bak"
 	if _, err := os.Stat(originalDir); err == nil {
 		os.Rename(originalDir, tempDir)
 		defer os.Rename(tempDir, originalDir)
@@ -95,7 +95,7 @@ func TestRunAppWorkloads_WithMockData(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	exampleDir := filepath.Join(tempDir, "examples", "app-workloads")
+	exampleDir := filepath.Join(tempDir, "examples", "demo", "app-workloads")
 	if err := os.MkdirAll(exampleDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -138,10 +138,10 @@ spec:
 
 func TestRunClusters_NoDirectory(t *testing.T) {
 	// Test with non-existent directory
-	originalDir := "examples/clusters"
+	originalDir := "examples/demo/clusters"
 
 	// Temporarily rename directory if it exists
-	tempDir := "examples/clusters.bak"
+	tempDir := "examples/demo/clusters.bak"
 	if _, err := os.Stat(originalDir); err == nil {
 		os.Rename(originalDir, tempDir)
 		defer os.Rename(tempDir, originalDir)
@@ -267,10 +267,10 @@ spec:
 
 func TestRunMultiOCIDemo_NoFile(t *testing.T) {
 	// Test with non-existent cluster file
-	originalFile := "examples/multi-oci/cluster.yaml"
+	originalFile := "examples/demo/multi-oci/cluster.yaml"
 
 	// Temporarily rename file if it exists
-	tempFile := "examples/multi-oci/cluster.yaml.bak"
+	tempFile := "examples/demo/multi-oci/cluster.yaml.bak"
 	if _, err := os.Stat(originalFile); err == nil {
 		os.Rename(originalFile, tempFile)
 		defer os.Rename(tempFile, originalFile)
@@ -284,10 +284,10 @@ func TestRunMultiOCIDemo_NoFile(t *testing.T) {
 
 func TestRunBootstrapDemo_NoDirectory(t *testing.T) {
 	// Test with non-existent directory
-	originalDir := "examples/bootstrap"
+	originalDir := "examples/demo/bootstrap"
 
 	// Temporarily rename directory if it exists
-	tempDir := "examples/bootstrap.bak"
+	tempDir := "examples/demo/bootstrap.bak"
 	if _, err := os.Stat(originalDir); err == nil {
 		os.Rename(originalDir, tempDir)
 		defer os.Rename(tempDir, originalDir)
@@ -307,7 +307,7 @@ func TestRunBootstrapDemo_WithMockData(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	bootstrapDir := filepath.Join(tempDir, "examples", "bootstrap")
+	bootstrapDir := filepath.Join(tempDir, "examples", "demo", "bootstrap")
 	if err := os.MkdirAll(bootstrapDir, 0755); err != nil {
 		t.Fatal(err)
 	}

@@ -61,7 +61,7 @@ directory structure with Kubernetes manifests organized for GitOps workflows.
 
 Examples:
   # Generate cluster from config file
-  kure generate cluster examples/clusters/basic/cluster.yaml
+  kure generate cluster examples/demo/clusters/basic/cluster.yaml
 
   # Generate with custom output directory
   kure generate cluster --output-dir ./output cluster.yaml

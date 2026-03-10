@@ -55,10 +55,10 @@ manifests to bootstrap a GitOps workflow in a Kubernetes cluster.
 
 Examples:
   # Generate Flux bootstrap configuration
-  kure generate bootstrap examples/bootstrap/flux-operator.yaml
+  kure generate bootstrap examples/demo/bootstrap/flux-operator.yaml
 
-  # Generate ArgoCD bootstrap configuration  
-  kure generate bootstrap examples/bootstrap/argocd.yaml
+  # Generate ArgoCD bootstrap configuration
+  kure generate bootstrap examples/demo/bootstrap/argocd.yaml
 
   # Generate with custom output directory
   kure generate bootstrap --output-dir ./bootstrap cluster.yaml

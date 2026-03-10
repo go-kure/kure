@@ -95,9 +95,9 @@ func runInternals() error {
 	return nil
 }
 
-// runAppWorkloads processes all app-workload configs from examples/app-workloads/
+// runAppWorkloads processes all app-workload configs from examples/demo/app-workloads/
 func runAppWorkloads() error {
-	exampleDir := "examples/app-workloads"
+	exampleDir := "examples/demo/app-workloads"
 	outputDir := "out/app-workloads"
 
 	if err := os.RemoveAll(outputDir); err != nil {
@@ -174,9 +174,9 @@ func runAppWorkloads() error {
 	})
 }
 
-// runClusters processes all cluster configs from examples/clusters/
+// runClusters processes all cluster configs from examples/demo/clusters/
 func runClusters() error {
-	clustersDir := "examples/clusters"
+	clustersDir := "examples/demo/clusters"
 
 	return filepath.Walk(clustersDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, "cluster.yaml") {
@@ -322,11 +322,11 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 	return nil
 }
 
-// runMultiOCIDemo processes multi-OCI configurations from examples/multi-oci/
+// runMultiOCIDemo processes multi-OCI configurations from examples/demo/multi-oci/
 func runMultiOCIDemo() error {
 	fmt.Println("Processing multi-OCI package configurations...")
 
-	clusterFile := "examples/multi-oci/cluster.yaml"
+	clusterFile := "examples/demo/multi-oci/cluster.yaml"
 	file, err := os.Open(clusterFile)
 	if err != nil {
 		return fmt.Errorf("open multi-oci cluster config: %w", err)
@@ -340,7 +340,7 @@ func runMultiOCIDemo() error {
 	}
 
 	// Load node applications from multi-oci subdirectories
-	baseDir := "examples/multi-oci"
+	baseDir := "examples/demo/multi-oci"
 	rootBundle, err := stack.NewBundle(cl.Node.Name, nil, nil)
 	if err != nil {
 		return err
@@ -382,9 +382,9 @@ func runMultiOCIDemo() error {
 	return nil
 }
 
-// runBootstrapDemo processes bootstrap configurations from examples/bootstrap/
+// runBootstrapDemo processes bootstrap configurations from examples/demo/bootstrap/
 func runBootstrapDemo() error {
-	bootstrapDir := "examples/bootstrap"
+	bootstrapDir := "examples/demo/bootstrap"
 
 	return filepath.Walk(bootstrapDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".yaml") {
