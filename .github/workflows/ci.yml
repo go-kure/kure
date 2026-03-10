@@ -94,8 +94,11 @@ jobs:
       run: make check-go-version
 
     - name: Install yq for version validation
+      env:
+        YQ_VERSION: '4.44.6'
       run: |
-        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        sudo wget -qO /usr/local/bin/yq \
+          https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64
         sudo chmod +x /usr/local/bin/yq
 
     - name: Validate version consistency
@@ -496,7 +499,7 @@ jobs:
   docs-build:
     name: docs-build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
     env:
@@ -539,6 +542,16 @@ jobs:
 
     - name: Generate versions config overlay
       run: bash scripts/gen-versions-toml.sh --version dev
+
+    - name: Cache Hugo modules
+      uses: actions/cache@v5
+      with:
+        path: |
+          ${{ runner.temp }}/hugo_cache
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-hugo-${{ hashFiles('site/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-hugo-
 
     - name: Build Hugo site
       working-directory: site
