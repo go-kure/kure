@@ -81,7 +81,7 @@ fi
 
 # Compute git metadata for homepage notice
 LATEST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "unreleased")"
-COMMIT_SHA="$(git rev-parse --short HEAD)"
+COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
 
 # --- Generate TOML ---
 
