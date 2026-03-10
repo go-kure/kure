@@ -1,74 +1,82 @@
 ---
-name: web-app
-namespace: demo
-workload: Deployment
-replicas: 2
-labels:
-  app: web
-containers:
-  - name: web
-    image: nginx:1.21
-    ports:
-      - name: http
-        containerPort: 80
-        hostPort: 80
-    env:
-      - name: ENV
-        value: prod
-    volumeMounts:
-      - name: data
-        mountPath: /usr/share/nginx/html
-volumes:
-  - name: data
-    hostPath:
-      path: /data
-services:
-  - name: web
-    type: ClusterIP
-    port: 80
-    targetPort: 80
-    protocol: TCP
-    selector:
-      app: web
-ingress:
-  host: example.com
-  path: /
-  serviceName: web
-  servicePortName: http
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: web-app
+  namespace: demo
+spec:
+  workload: Deployment
+  replicas: 2
+  labels:
+    app: web
+  containers:
+    - name: web
+      image: nginx:1.21
+      ports:
+        - name: http
+          containerPort: 80
+          hostPort: 80
+      env:
+        - name: ENV
+          value: prod
+      volumeMounts:
+        - name: data
+          mountPath: /usr/share/nginx/html
+  volumes:
+    - name: data
+      hostPath:
+        path: /data
+  services:
+    - name: web
+      type: ClusterIP
+      port: 80
+      targetPort: 80
+      protocol: TCP
+      selector:
+        app: web
+  ingress:
+    host: example.com
+    path: /
+    serviceName: web
+    servicePortName: http
 ---
-name: db-app
-namespace: demo
-workload: StatefulSet
-replicas: 3
-labels:
-  app: db
-containers:
-  - name: db
-    image: postgres:14
-    ports:
-      - name: psql
-        containerPort: 5432
-        hostPort: 5432
-    env:
-      - name: POSTGRES_DB
-        value: example
-    volumeMounts:
-      - name: db-data
-        mountPath: /var/lib/postgresql/data
-volumes:
-  - name: db-data
-    hostPath:
-      path: /var/lib/postgresql/data
-services:
-  - name: db
-    type: ClusterIP
-    port: 5432
-    targetPort: 5432
-    protocol: TCP
-    selector:
-      app: db
-ingress:
-  host: db.example.com
-  path: /
-  serviceName: db
-  servicePortName: psql
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: db-app
+  namespace: demo
+spec:
+  workload: StatefulSet
+  replicas: 3
+  labels:
+    app: db
+  containers:
+    - name: db
+      image: postgres:14
+      ports:
+        - name: psql
+          containerPort: 5432
+          hostPort: 5432
+      env:
+        - name: POSTGRES_DB
+          value: example
+      volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/postgresql/data
+  volumes:
+    - name: db-data
+      hostPath:
+        path: /var/lib/postgresql/data
+  services:
+    - name: db
+      type: ClusterIP
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+      selector:
+        app: db
+  ingress:
+    host: db.example.com
+    path: /
+    serviceName: db
+    servicePortName: psql

@@ -286,6 +286,90 @@ func TestNewPatchableAppSet_AmbiguousFieldTargetErrors(t *testing.T) {
 	}
 }
 
+func TestLoadYAMLPatchFile_ComplexValue(t *testing.T) {
+	content := `spec.template.spec.affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - web
+        topologyKey: kubernetes.io/hostname
+`
+
+	specs, err := LoadYAMLPatchFile(strings.NewReader(content), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("expected 1 spec, got %d", len(specs))
+	}
+
+	// The value should be a map-like type, not a stringified "map[...]"
+	switch specs[0].Patch.Value.(type) {
+	case map[string]any, RawPatchMap:
+		// OK — complex value preserved as a map
+	default:
+		t.Errorf("expected Value to be map type, got %T: %v", specs[0].Patch.Value, specs[0].Patch.Value)
+	}
+}
+
+func TestLoadYAMLPatchFile_VariableSubstitutionInKeys(t *testing.T) {
+	content := `deployment.${values.app_name}.spec.replicas: 3`
+
+	varCtx := &VariableContext{
+		Values: map[string]any{
+			"app_name": "my-app",
+		},
+	}
+
+	specs, err := LoadYAMLPatchFile(strings.NewReader(content), varCtx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("expected 1 spec, got %d", len(specs))
+	}
+
+	if specs[0].Patch.Path != "deployment.my-app.spec.replicas" {
+		t.Errorf("expected path 'deployment.my-app.spec.replicas', got '%s'", specs[0].Patch.Path)
+	}
+}
+
+func TestLoadYAMLPatchFile_TargetedComplexValue(t *testing.T) {
+	content := `- target: deployment.my-app
+  patch:
+    spec.template.spec.affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+`
+
+	specs, err := LoadYAMLPatchFile(strings.NewReader(content), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("expected 1 spec, got %d", len(specs))
+	}
+
+	if specs[0].Target != "deployment.my-app" {
+		t.Errorf("expected target 'deployment.my-app', got '%s'", specs[0].Target)
+	}
+
+	// The value should be a map-like type, not a stringified "map[...]"
+	switch specs[0].Patch.Value.(type) {
+	case map[string]any, RawPatchMap:
+		// OK — complex value preserved as a map
+	default:
+		t.Errorf("expected Value to be map type, got %T: %v", specs[0].Patch.Value, specs[0].Patch.Value)
+	}
+}
+
 func TestNewPatchableAppSetStrategicNamespaceTarget(t *testing.T) {
 	resources := []*unstructured.Unstructured{
 		makeNamespacedResource("Deployment", "my-app", "staging"),

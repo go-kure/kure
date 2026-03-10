@@ -598,6 +598,152 @@ func TestOrderByDependencies(t *testing.T) {
 	})
 }
 
+func TestExtractTargetFromPath(t *testing.T) {
+	resources := []Resource{
+		{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+			Metadata:   metav1.ObjectMeta{Name: "web-app"},
+		},
+		{
+			APIVersion: "v1",
+			Kind:       "Service",
+			Metadata:   metav1.ObjectMeta{Name: "web-svc"},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		path       string
+		wantTarget string
+		wantPath   string
+	}{
+		{
+			name:       "kind.name prefix",
+			path:       "deployment.web-app.spec.replicas",
+			wantTarget: "Deployment.web-app",
+			wantPath:   "spec.replicas",
+		},
+		{
+			name:       "unique name prefix",
+			path:       "web-svc.spec.type",
+			wantTarget: "Service.web-svc",
+			wantPath:   "spec.type",
+		},
+		{
+			name:       "no resource prefix",
+			path:       "spec.replicas",
+			wantTarget: "",
+			wantPath:   "",
+		},
+		{
+			name:       "short path",
+			path:       "replicas",
+			wantTarget: "",
+			wantPath:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target, trimmed := extractTargetFromPath(tt.path, resources)
+			if target != tt.wantTarget {
+				t.Errorf("extractTargetFromPath(%q) target = %q, want %q", tt.path, target, tt.wantTarget)
+			}
+			if trimmed != tt.wantPath {
+				t.Errorf("extractTargetFromPath(%q) path = %q, want %q", tt.path, trimmed, tt.wantPath)
+			}
+		})
+	}
+}
+
+func TestSplitPathRespectingVariables(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want []string
+	}{
+		{
+			name: "simple path",
+			path: "spec.replicas",
+			want: []string{"spec", "replicas"},
+		},
+		{
+			name: "path with variable",
+			path: "deployment.${values.app_name}.spec.replicas",
+			want: []string{"deployment", "${values.app_name}", "spec", "replicas"},
+		},
+		{
+			name: "variable with dots preserved",
+			path: "${values.nested.key}",
+			want: []string{"${values.nested.key}"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitPathRespectingVariables(tt.path)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPatchTargetResolution(t *testing.T) {
+	log := logger.Noop()
+	resolver := NewResolver(log)
+	processor := NewPatchProcessor(log, resolver)
+	ctx := context.Background()
+
+	def := &PackageDefinition{
+		Resources: []Resource{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Metadata:   metav1.ObjectMeta{Name: "app1"},
+				Raw: &unstructured.Unstructured{
+					Object: map[string]any{
+						"apiVersion": "apps/v1",
+						"kind":       "Deployment",
+						"metadata":   map[string]any{"name": "app1"},
+						"spec":       map[string]any{"replicas": float64(1)},
+					},
+				},
+			},
+			{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Metadata:   metav1.ObjectMeta{Name: "app2"},
+				Raw: &unstructured.Unstructured{
+					Object: map[string]any{
+						"apiVersion": "apps/v1",
+						"kind":       "Deployment",
+						"metadata":   map[string]any{"name": "app2"},
+						"spec":       map[string]any{"replicas": float64(1)},
+					},
+				},
+			},
+		},
+	}
+
+	// YAML patch with kind.name prefix should only apply to the targeted resource
+	patches := []Patch{
+		{
+			Name:    "scale-app1",
+			Content: `deployment.app1.spec.replicas: 5`,
+		},
+	}
+
+	params := ParameterMap{}
+	result, err := processor.ApplyPatches(ctx, def, patches, params)
+	require.NoError(t, err)
+
+	spec1 := result.Resources[0].Raw.Object["spec"].(map[string]any)
+	spec2 := result.Resources[1].Raw.Object["spec"].(map[string]any)
+
+	assert.Equal(t, 5, spec1["replicas"], "app1 should be patched")
+	assert.Equal(t, float64(1), spec2["replicas"], "app2 should be unchanged")
+}
+
 func TestCreateVariableContext(t *testing.T) {
 	p := &patchProcessor{logger: logger.Noop()}
 

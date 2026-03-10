@@ -1,10 +1,14 @@
-name: database
-namespace: production
-workload: StatefulSet
-replicas: 1
-containers:
-  - name: postgres
-    image: postgres:13
-    ports:
-      - containerPort: 5432
-        protocol: TCP
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: database
+  namespace: production
+spec:
+  workload: StatefulSet
+  replicas: 1
+  containers:
+    - name: postgres
+      image: postgres:13
+      ports:
+        - containerPort: 5432
+          protocol: TCP

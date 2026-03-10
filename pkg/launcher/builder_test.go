@@ -435,8 +435,10 @@ func TestConvertToString(t *testing.T) {
 		{name: "float32", input: float32(2.5), expected: "2.5"},
 		{name: "bool true", input: true, expected: "true"},
 		{name: "bool false", input: false, expected: "false"},
-		{name: "nil", input: nil, expected: "<nil>"},
-		{name: "slice", input: []string{"a", "b"}, expected: "[a b]"},
+		{name: "nil", input: nil, expected: "null"},
+		{name: "slice of strings", input: []string{"a", "b"}, expected: "[a b]"},
+		{name: "map[string]any", input: map[string]any{"key": "val"}, expected: "key: val"},
+		{name: "[]any", input: []any{"a", "b"}, expected: "- a\n- b"},
 	}
 
 	for _, tt := range tests {
