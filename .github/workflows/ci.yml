@@ -30,7 +30,7 @@ jobs:
 
   rebase-check:
     name: rebase-check
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 2
     if: github.event_name == 'pull_request'
 
@@ -56,7 +56,7 @@ jobs:
 
   validate:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
@@ -143,7 +143,7 @@ jobs:
 
   test:
     name: test
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 15
     needs: validate
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -212,7 +212,7 @@ jobs:
 
   security:
     name: Security
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 10
     needs: validate
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -275,7 +275,7 @@ jobs:
 
   coverage-check:
     name: Coverage Check
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     needs: test
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -345,7 +345,7 @@ jobs:
 
   build-binaries:
     name: Build ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 10
     needs: coverage-check
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -396,7 +396,7 @@ jobs:
 
   build:
     name: build
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 1
     needs: [build-binaries, docs-build]
     if: always()
@@ -418,7 +418,7 @@ jobs:
 
   cross-platform:
     name: Cross-Platform Build
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 15
     needs: build-binaries
     if: |
@@ -498,7 +498,7 @@ jobs:
 
   docs-build:
     name: docs-build
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 15
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
@@ -573,7 +573,7 @@ jobs:
 
   analyze-changes:
     name: Analyze Changes
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
 
@@ -622,7 +622,7 @@ jobs:
 
   docs-check:
     name: Docs Check
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
 
@@ -672,7 +672,7 @@ jobs:
 
   mirror-to-gitlab:
     name: Mirror to GitLab
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     needs: [build, security, cross-platform, docs-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

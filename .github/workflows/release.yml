@@ -15,7 +15,7 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 15
     permissions:
       contents: read
@@ -34,7 +34,7 @@ jobs:
 
   validate:
     name: Validate tag and changelog
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     permissions:
       contents: read
@@ -71,7 +71,7 @@ jobs:
 
   goreleaser:
     needs: [test, validate]
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 15
     permissions:
       contents: write
@@ -111,7 +111,7 @@ jobs:
   deploy-docs:
     name: Deploy versioned docs
     needs: goreleaser
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     if: "!contains(github.ref_name, '-')"
     permissions:
@@ -135,7 +135,7 @@ jobs:
 
   post-release:
     needs: goreleaser
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     permissions:
       contents: read

@@ -27,7 +27,7 @@ concurrency:
 jobs:
   remove-version:
     name: Remove version
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     if: inputs.action == 'remove-version'
 
@@ -56,7 +56,7 @@ jobs:
 
   set-latest:
     name: Set latest version
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     if: inputs.action == 'set-latest'
 
@@ -76,7 +76,7 @@ jobs:
 
   rebuild-version:
     name: Rebuild version
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 5
     if: inputs.action == 'rebuild-version'
 
