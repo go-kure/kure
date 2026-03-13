@@ -14,7 +14,7 @@ concurrency:
 jobs:
   auto-rebase:
     name: auto-rebase
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 30
     if: github.repository == 'go-kure/kure'
 

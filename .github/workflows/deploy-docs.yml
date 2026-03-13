@@ -42,7 +42,7 @@ env:
 jobs:
   deploy:
     name: Build and Deploy
-    runs-on: ubuntu-latest
+    runs-on: autops-kube
     timeout-minutes: 10
 
     steps:
