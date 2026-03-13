@@ -74,7 +74,24 @@
       "Bash(GOWORK=off go list:*)",
       "Bash(GOWORK=off grep:*)",
       "Bash(GOWORK=off make build:*)",
-      "Bash(./scripts/sync-versions.sh check:*)"
+      "Bash(./scripts/sync-versions.sh check:*)",
+      "Bash(bin/kurel examples/kurel/frigate 2>&1)",
+      "Bash(bin/kurel --help 2>&1)",
+      "Bash(bin/kurel build:*)",
+      "Bash(bin/demo 2>&1 | head -40)",
+      "Bash(bin/demo 2>&1 | tail -40)",
+      "Bash(GOTOOLCHAIN=go1.26.1 go run /tmp/test_yaml.go)",
+      "Bash(GOTOOLCHAIN=go1.26.1 go build ./pkg/patch/ 2>&1)",
+      "Bash(GOTOOLCHAIN=go1.26.1 go vet ./pkg/patch/ 2>&1)",
+      "Bash(GOTOOLCHAIN=go1.26.1 mise run build 2>&1 | tail -20)",
+      "Bash(./bin/demo 2>&1 | head -30)",
+      "Bash(./bin/demo 2>&1 | tail -20)",
+      "Bash(find /home/serge/src/autops/wharf/kure/site -path '*/hugo_cache*' -name 'notice.html' 2>/dev/null; hugo version 2>/dev/null || true; find /tmp/hugo_cache* -name 'notice.html' 2>/dev/null || true)",
+      "Bash(cd /home/serge/src/autops/wharf/kure/site && hugo --config hugo.toml,/tmp/test-versions.toml 2>&1 | tail -5)",
+      "Bash(hugo 2>&1 | tail -5)",
+      "Bash(hugo --config hugo.toml,/tmp/test-versions.toml -d /tmp/hugo-out-dev 2>&1 | tail -1 && grep -o 'under active development[^<]*' /tmp/hugo-out-dev/index.html)",
+      "Bash(hugo -d /tmp/hugo-out-noversion 2>&1 | tail -1 && grep -o 'under active development[^<]*' /tmp/hugo-out-noversion/index.html)",
+      "Bash(hugo --config hugo.toml,/tmp/test-versions-release.toml -d /tmp/hugo-out-release 2>&1 | tail -1 && grep -o 'documentation for Kure[^<]*' /tmp/hugo-out-release/index.html | head -1)"
     ]
   },
   "outputStyle": "default"
