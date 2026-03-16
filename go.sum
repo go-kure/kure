@@ -59,8 +59,8 @@ github.com/fluxcd/notification-controller/api v1.8.1 h1:tBg5QrXsVAdMEsV/oq3gqApd
 github.com/fluxcd/notification-controller/api v1.8.1/go.mod h1:tGlTJS+hSLbgQm1L78hl6N3iWbTerifh1V5Qm8we4Zo=
 github.com/fluxcd/pkg/apis/acl v0.9.0 h1:wBpgsKT+jcyZEcM//OmZr9RiF8klL3ebrDp2u2ThsnA=
 github.com/fluxcd/pkg/apis/acl v0.9.0/go.mod h1:TttNS+gocsGLwnvmgVi3/Yscwqrjc17+vhgYfqkfrV4=
-github.com/fluxcd/pkg/apis/kustomize v1.15.0 h1:p8wPIxdmn0vy0a664rsE9JKCfnliZz4HUsDcTy4ZOxA=
-github.com/fluxcd/pkg/apis/kustomize v1.15.0/go.mod h1:XWdsx8P15OiMaQIvmUjYWdmD3zAwhl5q9osl5iCqcOk=
+github.com/fluxcd/pkg/apis/kustomize v1.15.1 h1:t9QZh+3ZS8EKmlxrnnbcKZcGTrg8FDvMF1T8BHMCuqI=
+github.com/fluxcd/pkg/apis/kustomize v1.15.1/go.mod h1:IZOy4CCtR/hxMGb7erK1RfbGnczVv4/dRBoVD37AywI=
 github.com/fluxcd/pkg/apis/meta v1.25.0 h1:fmZgMoe7yITGfhFqdOs7w2GOu3Y/2Vvz4+4p/eay3eA=
 github.com/fluxcd/pkg/apis/meta v1.25.0/go.mod h1:1D92RqAet0/n/cH5S0khBXweirHWkw9rCO0V4NCY6xc=
 github.com/fluxcd/pkg/kustomize v1.27.0 h1:bWoWVaHV1ZRo3Ei1JXpY58hJK25WWna+az5jj6zseE0=
