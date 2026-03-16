@@ -28,7 +28,7 @@ replace (
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cert-manager/cert-manager v1.19.4
-	github.com/cloudnative-pg/barman-cloud v0.4.1-0.20260108104508-ced266c145f5
+	github.com/cloudnative-pg/barman-cloud v0.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.28.1
 	github.com/cloudnative-pg/machinery v0.3.3
 	github.com/cloudnative-pg/plugin-barman-cloud v0.11.0
@@ -53,9 +53,9 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.universe.tf/metallb v0.15.3
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.35.1
+	k8s.io/api v0.35.2
 	k8s.io/apiextensions-apiserver v0.35.1
-	k8s.io/apimachinery v0.35.1
+	k8s.io/apimachinery v0.35.2
 	k8s.io/cli-runtime v0.35.1
 	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/gateway-api v1.5.0
@@ -135,7 +135,7 @@ require (
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
