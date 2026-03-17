@@ -433,12 +433,23 @@ Most workflows use Go module caching:
 
 ---
 
+## Self-Hosted Runner Requirements
+
+All jobs run on the `autops-kube` GitHub ARC scale-set, which uses `ghcr.io/actions/actions-runner:latest` — a minimal Ubuntu image that includes `curl` and `git` but **not** `make` or `wget`.
+
+To account for this:
+- Every job that calls `make` includes an explicit install step: `sudo apt-get install -y --no-install-recommends make`
+- All `wget` calls have been replaced with `curl -fsSL -o`
+
+---
+
 ## Maintenance Notes
 
 - **When adding/modifying workflows:** Update this document with changes
 - **Version updates:** Run `make sync-go-version` to update Go version in all files
 - **Version check:** Run `make check-go-version` to verify consistency
 - **Action versions:** Keep GitHub Actions up to date (currently using v4-v6)
+- **New jobs using `make`:** Add the `Install build tools` step (see above) if the job runs on `autops-kube`
 
 ---
 
