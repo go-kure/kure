@@ -181,19 +181,13 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-
 
-    - name: Set up gotestfmt
-      uses: GoTestTools/gotestfmt-action@v2
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        version: v2.2.0
-
     - name: Install dependencies
       run: make deps
 
     - name: Run unit tests
       run: |
         set -euo pipefail
-        go test -json -v -timeout 30s ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
+        go test -v -timeout 30s ./... 2>&1 | tee /tmp/gotest.log
 
     - name: Upload test log
       uses: actions/upload-artifact@v7
