@@ -257,12 +257,26 @@ func removeEmptyStatus(m map[string]any) {
 	}
 }
 
-// isDeepEmpty returns true if a map is empty or contains only empty maps recursively.
+// isDeepEmpty returns true if a map is empty or contains only zero-value primitives
+// and empty maps recursively. After JSON round-trip, numbers are float64, booleans
+// are bool, and strings are string — all checked against their zero values.
 func isDeepEmpty(m map[string]any) bool {
 	for _, v := range m {
 		switch val := v.(type) {
 		case map[string]any:
 			if !isDeepEmpty(val) {
+				return false
+			}
+		case float64:
+			if val != 0 {
+				return false
+			}
+		case string:
+			if val != "" {
+				return false
+			}
+		case bool:
+			if val {
 				return false
 			}
 		default:
