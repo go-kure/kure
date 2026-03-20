@@ -1,6 +1,17 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+### Fixed
+
+- Strip zero-value primitives (nil, float64(0), false, "", empty slices) in `isDeepEmpty` for K8s status blocks (#405)
+
+### CI
+
+- Install goimports before formatting check in CI workflow
+
 ## [0.1.0-rc.0] - 2026-03-09
 
 ### Changed
