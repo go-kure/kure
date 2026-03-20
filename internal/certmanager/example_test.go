@@ -36,7 +36,7 @@ func Example_composeClusterIssuerAndCertificate() {
 	cert := certmanager.CreateCertificate("app-tls", "default", certv1.CertificateSpec{
 		SecretName: "app-tls-secret",
 	})
-	certmanager.SetCertificateIssuerRef(cert, cmmeta.ObjectReference{
+	certmanager.SetCertificateIssuerRef(cert, cmmeta.IssuerReference{
 		Name:  issuer.Name,
 		Kind:  "ClusterIssuer",
 		Group: "cert-manager.io",

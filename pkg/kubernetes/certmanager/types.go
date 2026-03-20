@@ -12,7 +12,7 @@ type CertificateConfig struct {
 	Name        string                 `yaml:"name"`
 	Namespace   string                 `yaml:"namespace"`
 	SecretName  string                 `yaml:"secretName"`
-	IssuerRef   cmmeta.ObjectReference `yaml:"issuerRef"`
+	IssuerRef   cmmeta.IssuerReference `yaml:"issuerRef"`
 	DNSNames    []string               `yaml:"dnsNames,omitempty"`
 	Duration    *metav1.Duration       `yaml:"duration,omitempty"`
 	RenewBefore *metav1.Duration       `yaml:"renewBefore,omitempty"`

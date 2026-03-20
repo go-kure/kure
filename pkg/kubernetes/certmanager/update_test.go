@@ -14,7 +14,7 @@ func TestSetCertificateSpec(t *testing.T) {
 		Name:       "test-cert",
 		Namespace:  "default",
 		SecretName: "test-tls",
-		IssuerRef:  cmmeta.ObjectReference{Name: "issuer"},
+		IssuerRef:  cmmeta.IssuerReference{Name: "issuer"},
 	}
 
 	cert := Certificate(cfg)
@@ -79,7 +79,7 @@ func TestAddCertificateLabel(t *testing.T) {
 		Name:       "test-cert",
 		Namespace:  "default",
 		SecretName: "tls",
-		IssuerRef:  cmmeta.ObjectReference{Name: "issuer"},
+		IssuerRef:  cmmeta.IssuerReference{Name: "issuer"},
 	}
 	cert := Certificate(cfg)
 
@@ -94,7 +94,7 @@ func TestAddCertificateAnnotation(t *testing.T) {
 		Name:       "test-cert",
 		Namespace:  "default",
 		SecretName: "tls",
-		IssuerRef:  cmmeta.ObjectReference{Name: "issuer"},
+		IssuerRef:  cmmeta.IssuerReference{Name: "issuer"},
 	}
 	cert := Certificate(cfg)
 
@@ -109,7 +109,7 @@ func TestSetCertificateDuration(t *testing.T) {
 		Name:       "test-cert",
 		Namespace:  "default",
 		SecretName: "tls",
-		IssuerRef:  cmmeta.ObjectReference{Name: "issuer"},
+		IssuerRef:  cmmeta.IssuerReference{Name: "issuer"},
 	}
 	cert := Certificate(cfg)
 

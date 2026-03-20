@@ -34,7 +34,7 @@ func TestCertificateFunctions(t *testing.T) {
 		t.Errorf("dns name not added")
 	}
 
-	ref := cmmeta.ObjectReference{Name: "issuer"}
+	ref := cmmeta.IssuerReference{Name: "issuer"}
 	SetCertificateIssuerRef(crt, ref)
 	if crt.Spec.IssuerRef.Name != "issuer" {
 		t.Errorf("issuerRef not set")

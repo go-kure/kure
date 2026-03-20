@@ -17,7 +17,7 @@ Kure maintains two version concepts for each dependency:
 
 | Tool | Build Version | Deployment Compatibility | Notes |
 |------|---------------|-------------------------|-------|
-| cert-manager | 1.19.4 | 1.14 - 1.19 | Stable v1 APIs, backward compatible |
+| cert-manager | 1.20.0 | 1.14 - 1.20 | Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias). |
 | fluxcd | 2.8.2 | 2.4 - 2.8 | v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
 image-automation-controller promoted to v1.
 All github.com/fluxcd/* packages upgraded together. |

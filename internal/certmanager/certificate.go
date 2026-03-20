@@ -44,7 +44,7 @@ func AddCertificateDNSName(obj *certv1.Certificate, dns string) {
 }
 
 // SetCertificateIssuerRef sets the issuer reference for the certificate.
-func SetCertificateIssuerRef(obj *certv1.Certificate, ref cmmeta.ObjectReference) {
+func SetCertificateIssuerRef(obj *certv1.Certificate, ref cmmeta.IssuerReference) {
 	obj.Spec.IssuerRef = ref
 }
 

@@ -19,7 +19,7 @@ cert := certmanager.Certificate(&certmanager.CertificateConfig{
     Name:       "my-cert",
     Namespace:  "default",
     SecretName: "my-cert-tls",
-    IssuerRef:  cmmeta.ObjectReference{Name: "letsencrypt", Kind: "ClusterIssuer"},
+    IssuerRef:  cmmeta.IssuerReference{Name: "letsencrypt", Kind: "ClusterIssuer"},
     DNSNames:   []string{"example.com", "www.example.com"},
 })
 ```

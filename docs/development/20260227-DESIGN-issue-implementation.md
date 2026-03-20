@@ -386,7 +386,7 @@ None of these packages have `example_test.go` files. The existing builder functi
        cert := certmanager.CreateCertificate("app-tls", "default", certv1.CertificateSpec{
            SecretName: "app-tls-secret",
        })
-       _ = certmanager.SetCertificateIssuerRef(cert, cmmeta.ObjectReference{
+       _ = certmanager.SetCertificateIssuerRef(cert, cmmeta.IssuerReference{
            Name:  "letsencrypt-prod",
            Kind:  "ClusterIssuer",
            Group: "cert-manager.io",
