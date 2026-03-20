@@ -269,6 +269,8 @@ When an update requires a blocked dependency (e.g., newer Go version):
 
 Reference: [GitHub Docs - Dependabot PR Commands](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-pull-request-comment-commands)
 
+For the full dependency update process (review, bundling, version tracking), see [docs/dependency-updates.md](docs/dependency-updates.md).
+
 ## Makefile Targets Reference
 
 ### Development

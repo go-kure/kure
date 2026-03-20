@@ -9,7 +9,7 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 ### Technology Stack
 
 - **Language**: Go 1.26.1
-- **Core Dependencies**: Kubernetes APIs (v0.35.1), Flux v2.8.1, cert-manager v1.19.4, MetalLB v0.15.3
+- **Core Dependencies**: Kubernetes APIs (v0.35.1), Flux v2.8.2, cert-manager v1.19.4, MetalLB v0.15.3
 - **CLI Tools**: kure (main CLI), kurel (package system), demo (comprehensive examples)
 - **Testing**: 105 test files with 100% pass rate
 - **Build System**: Comprehensive Makefile with 40+ targets, mise for cross-repo consistency
@@ -359,7 +359,7 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 ### Core Dependencies
 
 - Kubernetes client libraries (v0.35.1)
-- Flux controller APIs (v2.8.1)
+- Flux controller APIs (v2.8.2)
 - cert-manager (v1.19.4)
 - External Secrets (v1.3)
 - MetalLB (v0.15.3)
@@ -416,6 +416,7 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 | `cmd/kure/` | CLI ref (auto-generated) | — |
 | `cmd/kurel/` | CLI ref (auto-generated) | — |
 | `.github/workflows/` | — | `contributing/github-workflows` |
+| `go.mod` / `versions.yaml` | — | `docs/dependency-updates`, `docs/compatibility` |
 | `scripts/gen-versions-toml.sh` | — | `contributing/github-workflows` |
 
 ## Implementation Workflow
@@ -435,5 +436,6 @@ When implementing a GitHub issue, follow this checklist in order:
 
 Refer to:
 1. `DEVELOPMENT.md` - Detailed development workflow
-2. Crane's `PLAN.md` - Authoritative requirements for API design
-3. Crane's `AGENTS.md` - Crane integration details
+2. `docs/dependency-updates.md` - Dependency upgrade procedures
+3. Crane's `PLAN.md` - Authoritative requirements for API design
+4. Crane's `AGENTS.md` - Crane integration details

@@ -484,7 +484,7 @@ To account for this:
 - **When adding/modifying workflows:** Update this document with changes
 - **Version updates:** Run `make sync-go-version` to update Go version in all files
 - **Version check:** Run `make check-go-version` to verify consistency
-- **Action versions:** Keep GitHub Actions up to date (currently using v4-v6)
+- **Action versions:** Keep GitHub Actions up to date (currently using v3-v6)
 - **New jobs using `make`:** Add the `Install build tools` step (see above) if the job runs on `autops-kube`
 
 ---
