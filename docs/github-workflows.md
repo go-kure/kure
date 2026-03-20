@@ -15,6 +15,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
 | [Auto-Rebase](#auto-rebase-workflow) | `auto-rebase.yml` | push to main | Rebase all open PRs when main is updated |
 | [Release](#release-workflow) | `release.yml` | version tags | GoReleaser-based release with versioned docs deploy |
+| [Create Release](#create-release-workflow) | `release-create.yml` | `workflow_dispatch` | Pre-release test gate + tag creation |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via ccproxy |
 
 ---
@@ -172,6 +173,40 @@ make release TYPE=alpha
 # Create release via CI:
 #   Actions > "Create Release" > type=alpha > Run workflow
 ```
+
+---
+
+## Create Release Workflow
+
+**File:** `.github/workflows/release-create.yml`
+**Name:** `Create Release`
+
+### Triggers
+
+- Manual dispatch with inputs: `type` (alpha/beta/rc/stable/bump), `scope` (minor/major), `dry_run`
+
+### Pre-release Test Gate
+
+The workflow runs a full test suite (with race detection) **before** creating the tag. This prevents tags from being pushed when tests fail.
+
+```
+workflow_dispatch
+  → test job (go test -race ./...)
+    → release job (needs: test)
+      → release.sh → creates tag + pushes
+        → triggers release.yml (tag push)
+```
+
+If the pre-release test fails, the release job never runs and no tag is created.
+
+### Jobs
+
+1. **test** — Full test run with race detection and CGO enabled (`build-essential` + `CGO_ENABLED=1`)
+2. **release** — Runs `scripts/release.sh` to generate changelog, commit, create tag, and push
+
+### Authentication
+
+Uses a GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`) so that the tag push triggers subsequent workflows (tag-triggered `release.yml`).
 
 ---
 
