@@ -57,7 +57,66 @@ func TestIsDeepEmpty(t *testing.T) {
 			m: map[string]any{
 				"key": nil,
 			},
+			want: true,
+		},
+		{
+			name: "map with zero float64",
+			m: map[string]any{
+				"key": float64(0),
+			},
+			want: true,
+		},
+		{
+			name: "map with non-zero float64",
+			m: map[string]any{
+				"key": float64(1),
+			},
 			want: false,
+		},
+		{
+			name: "map with false bool",
+			m: map[string]any{
+				"key": false,
+			},
+			want: true,
+		},
+		{
+			name: "map with true bool",
+			m: map[string]any{
+				"key": true,
+			},
+			want: false,
+		},
+		{
+			name: "map with empty string",
+			m: map[string]any{
+				"key": "",
+			},
+			want: true,
+		},
+		{
+			name: "map with empty slice",
+			m: map[string]any{
+				"key": []any{},
+			},
+			want: true,
+		},
+		{
+			name: "map with non-empty slice",
+			m: map[string]any{
+				"key": []any{1},
+			},
+			want: false,
+		},
+		{
+			name: "DaemonSet-like status",
+			m: map[string]any{
+				"currentNumberScheduled": float64(0),
+				"desiredNumberScheduled": float64(0),
+				"numberMisscheduled":     float64(0),
+				"numberReady":            float64(0),
+			},
+			want: true,
 		},
 		{
 			name: "map with int value",
@@ -136,6 +195,20 @@ func TestRemoveEmptyStatus(t *testing.T) {
 			name:       "int status (non-map, non-nil)",
 			m:          map[string]any{"status": 42},
 			wantStatus: true,
+		},
+		{
+			name: "zero-value status fields",
+			m: map[string]any{
+				"apiVersion": "apps/v1",
+				"kind":       "DaemonSet",
+				"status": map[string]any{
+					"currentNumberScheduled": float64(0),
+					"desiredNumberScheduled": float64(0),
+					"numberMisscheduled":     float64(0),
+					"numberReady":            float64(0),
+				},
+			},
+			wantStatus: false,
 		},
 	}
 

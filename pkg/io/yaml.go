@@ -279,6 +279,12 @@ func isDeepEmpty(m map[string]any) bool {
 			if val {
 				return false
 			}
+		case []any:
+			if len(val) > 0 {
+				return false
+			}
+		case nil:
+			// nil is empty
 		default:
 			return false
 		}
