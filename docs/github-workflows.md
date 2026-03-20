@@ -88,7 +88,7 @@ PR-only jobs (parallel, no blocking):
 
 | Job | Check Name | Timeout | Dependencies | Purpose |
 |-----|------------|---------|--------------|---------|
-| `validate` | `lint` | 10 min | - | Go version check, fmt, tidy, vet, lint |
+| `validate` | `lint` | 15 min | - | Go version check, fmt, tidy, vet, lint |
 | `test` | `test` | 15 min | validate | Unit tests, race tests, coverage |
 | `security` | `Security` | 10 min | validate | govulncheck, outdated deps, sensitive file check |
 | `coverage-check` | `Coverage Check` | 5 min | test | 80% threshold, Codecov upload, PR comment |
