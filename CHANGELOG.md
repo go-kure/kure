@@ -1,16 +1,39 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.1] - 2026-03-20
 
-## [Unreleased]
+### Added
 
-### Fixed
-
-- Strip zero-value primitives (nil, float64(0), false, "", empty slices) in `isDeepEmpty` for K8s status blocks (#405)
+- Dynamic version notice on homepage
 
 ### CI
 
-- Install goimports before formatting check in CI workflow
+- Run all GitHub Actions on self-hosted runner
+
+### Changed
+
+- Reorganize examples/ with demo/ grouping and READMEs
+
+### Documentation
+
+- Update CI docs and changelog for isDeepEmpty fix
+
+### Fixed
+
+- Patch pipeline bugs and update demo examples to AppWorkload format
+- Correct containerport typo to containerPort in example YAMLs
+- Pin yq version and cache Hugo modules in CI
+- Add fallback for COMMIT_SHA in gen-versions-toml.sh
+- Install missing tools on self-hosted runner in CI workflows
+- Run apt-get update before installing make in CI workflows
+- Install gcc and enable CGO for race tests on self-hosted runner
+- Remove gotestfmt from unit test step to fix self-hosted runner
+- Install build-essential to provide C headers for CGO
+- Strip zero-value primitives in isDeepEmpty
+- Add nil and []any handling to isDeepEmpty
+- Install goimports before formatting check
+- Increase lint timeout and scope cache to modules only
 
 ## [0.1.0-rc.0] - 2026-03-09
 
@@ -33,6 +56,10 @@ All notable changes to this project will be documented in this file.
 ### Testing
 
 - Add golden file tests for InitContainer builders
+
+### Release
+
+- V0.1.0-rc.0
 
 ## [0.1.0-beta.7] - 2026-03-08
 
