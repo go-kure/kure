@@ -70,6 +70,7 @@ inject_fm "$KURE_ROOT/docs/compatibility.md"                "api-reference/compa
 # Contributing
 inject_fm "$KURE_ROOT/DEVELOPMENT.md"                      "contributing/guide.md"                       "Development Guide"            10
 inject_fm "$KURE_ROOT/docs/github-workflows.md"            "contributing/github-workflows.md"            "GitHub Workflows"             20
+inject_fm "$KURE_ROOT/docs/dependency-updates.md"          "contributing/dependency-updates.md"           "Dependency Updates"           30
 
 # Changelog
 inject_fm "$KURE_ROOT/CHANGELOG.md"                        "changelog/releases.md"                       "Releases"                     10
