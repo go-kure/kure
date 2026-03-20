@@ -27,7 +27,7 @@ replace (
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/cert-manager/cert-manager v1.19.4
+	github.com/cert-manager/cert-manager v1.20.0
 	github.com/cloudnative-pg/barman-cloud v0.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.28.1
 	github.com/cloudnative-pg/machinery v0.3.3
