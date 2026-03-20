@@ -491,6 +491,6 @@ To account for this:
 
 ## See Also
 
-- [Makefile](../Makefile) - Local development commands
-- [mise.toml](../mise.toml) - Local tool version management
-- [gen-versions-toml.sh](../scripts/gen-versions-toml.sh) - Versioned docs config generator
+- [Makefile](https://github.com/go-kure/kure/blob/main/Makefile) - Local development commands
+- [mise.toml](https://github.com/go-kure/kure/blob/main/mise.toml) - Local tool version management
+- [gen-versions-toml.sh](https://github.com/go-kure/kure/blob/main/scripts/gen-versions-toml.sh) - Versioned docs config generator
