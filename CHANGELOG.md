@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-## [0.1.0-rc.1] - 2026-03-20
+## [0.1.0-rc.2] - 2026-03-20
 
 ### Added
 
@@ -34,6 +34,11 @@ All notable changes to this project will be documented in this file.
 - Add nil and []any handling to isDeepEmpty
 - Install goimports before formatting check
 - Increase lint timeout and scope cache to modules only
+- Gate release on pre-release tests and fix CGO_ENABLED
+
+### Release
+
+- V0.1.0-rc.1
 
 ## [0.1.0-rc.0] - 2026-03-09
 
