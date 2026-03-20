@@ -47,6 +47,7 @@ MAPPED_FILES=(
   "docs/quickstart.md"
   "docs/compatibility.md"
   "docs/github-workflows.md"
+  "docs/dependency-updates.md"
   "pkg/stack/README.md"
   "pkg/stack/fluxcd/README.md"
   "pkg/stack/generators/README.md"
