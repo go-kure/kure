@@ -18,7 +18,7 @@ Kure maintains two version concepts for each dependency:
 | Tool | Build Version | Deployment Compatibility | Notes |
 |------|---------------|-------------------------|-------|
 | cert-manager | 1.19.4 | 1.14 - 1.19 | Stable v1 APIs, backward compatible |
-| fluxcd | 2.8.1 | 2.4 - 2.8 | v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
+| fluxcd | 2.8.2 | 2.4 - 2.8 | v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
 image-automation-controller promoted to v1.
 All github.com/fluxcd/* packages upgraded together. |
 | flux-operator | 0.40.0 | 0.23 - 0.40 | Upgraded with FluxCD 2.8 ecosystem. |
@@ -36,6 +36,8 @@ ObjectStore lives in a separate module (plugin-barman-cloud). |
 | cnpg-barman-cloud | 0.11.0 | 0.9 - 0.11 | Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
 Versioned independently from the CNPG operator. |
 | controller-runtime | 0.23.3 | 0.22 - 0.23 | Upgraded with FluxCD 2.8 and external-secrets 1.3 migrations |
+| gateway-api | 1.5.1 | 1.0 - 1.5 | Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders.
+Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0). |
 | kubernetes | 0.35.1 | 1.33 - 1.35 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range |
 
 ## Understanding the Matrix
