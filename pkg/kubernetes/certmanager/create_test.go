@@ -11,7 +11,7 @@ func TestCertificate_Success(t *testing.T) {
 		Name:       "test-cert",
 		Namespace:  "default",
 		SecretName: "test-cert-tls",
-		IssuerRef: cmmeta.ObjectReference{
+		IssuerRef: cmmeta.IssuerReference{
 			Name: "letsencrypt",
 			Kind: "ClusterIssuer",
 		},

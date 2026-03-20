@@ -40,7 +40,7 @@ func AddCertificateDNSName(obj *certv1.Certificate, dns string) {
 }
 
 // SetCertificateIssuerRef delegates to the internal helper.
-func SetCertificateIssuerRef(obj *certv1.Certificate, ref cmmeta.ObjectReference) {
+func SetCertificateIssuerRef(obj *certv1.Certificate, ref cmmeta.IssuerReference) {
 	intcm.SetCertificateIssuerRef(obj, ref)
 }
 

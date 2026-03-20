@@ -1061,7 +1061,7 @@ certmanager.AddClusterIssuerACMEDNS01Provider(issuer, "cloudflare", map[string]s
 
 // Certificate with DNS validation
 cert := certmanager.CreateCertificate("api-tls", "default")  
-certmanager.SetCertificateIssuer(cert, cmmeta.ObjectReference{
+certmanager.SetCertificateIssuer(cert, cmmeta.IssuerReference{
     Name: "letsencrypt",
     Kind: "ClusterIssuer",
 })
