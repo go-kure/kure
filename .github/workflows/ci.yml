@@ -79,6 +79,7 @@ jobs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
+        cache: false
 
     - name: Cache Go modules
       uses: actions/cache@v5
@@ -171,6 +172,7 @@ jobs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
+        cache: false
 
     - name: Cache Go modules
       uses: actions/cache@v5
@@ -239,6 +241,7 @@ jobs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
+        cache: false
 
     - name: Install govulncheck
       run: go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -302,6 +305,7 @@ jobs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
+        cache: false
 
     - name: Download coverage artifact
       uses: actions/download-artifact@v8
@@ -379,6 +383,7 @@ jobs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
+        cache: false
 
     - name: Cache Go modules
       uses: actions/cache@v5
@@ -462,6 +467,7 @@ jobs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
+        cache: false
 
     - name: Cache Go modules
       uses: actions/cache@v5
@@ -536,6 +542,7 @@ jobs:
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
+        cache: false
 
     - name: Install Hugo CLI
       run: |

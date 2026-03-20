@@ -438,11 +438,19 @@ env:
 
 ### Caching
 
-Most workflows use Go module caching:
+The `actions/setup-go@v6` action has built-in caching enabled by default, but CI
+jobs disable it (`cache: false`) to avoid double-caching with the explicit
+`actions/cache@v5` steps that follow. Each job uses tuned cache keys and paths:
 
 ```yaml
+- name: Set up Go
+  uses: actions/setup-go@v6
+  with:
+    go-version: ${{ steps.go-version.outputs.version }}
+    cache: false          # explicit actions/cache step below
+
 - name: Cache Go modules
-  uses: actions/cache@v4
+  uses: actions/cache@v5
   with:
     path: |
       ~/.cache/go-build
