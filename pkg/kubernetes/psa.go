@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -120,8 +122,9 @@ func SecurityContextForLevel(level PSALevel) (*corev1.SecurityContext, error) {
 }
 
 // ValidateContainerPSA checks whether a container's SecurityContext is
-// compliant with the given PSA level. Returns nil when compliant, or an error
-// describing the first violation found.
+// compliant with the given PSA level. Returns nil when compliant, or a
+// *errors.PSAViolationError describing the first violation found.
+// Field paths are relative to the container (no container prefix).
 func ValidateContainerPSA(container *corev1.Container, level PSALevel) error {
 	if container == nil {
 		return errors.ErrNilContainer
@@ -131,9 +134,9 @@ func ValidateContainerPSA(container *corev1.Container, level PSALevel) error {
 	case PSAPrivileged:
 		return nil
 	case PSABaseline:
-		return validateContainerBaseline(container)
+		return validateContainerBaseline(container, "", string(level))
 	case PSARestricted:
-		return validateContainerRestricted(container)
+		return validateContainerRestricted(container, "", string(level))
 	default:
 		return errors.NewValidationError("level", string(level), "PSA", []string{
 			string(PSARestricted), string(PSABaseline), string(PSAPrivileged),
@@ -143,7 +146,9 @@ func ValidateContainerPSA(container *corev1.Container, level PSALevel) error {
 
 // ValidatePodSpecPSA checks whether a PodSpec is compliant with the given PSA
 // level. It validates both the pod-level security context and all containers
-// (including init and ephemeral containers).
+// (including init and ephemeral containers). Returns nil when compliant, or a
+// *errors.PSAViolationError describing the first violation found.
+// Field paths are relative to the PodSpec.
 func ValidatePodSpecPSA(spec *corev1.PodSpec, level PSALevel) error {
 	if spec == nil {
 		return errors.ErrNilPodSpec
@@ -153,36 +158,45 @@ func ValidatePodSpecPSA(spec *corev1.PodSpec, level PSALevel) error {
 	case PSAPrivileged:
 		return nil
 	case PSABaseline:
-		if err := validatePodSpecBaseline(spec); err != nil {
-			return err
-		}
+		return validatePodSpecBaseline(spec, string(level))
 	case PSARestricted:
-		if err := validatePodSpecRestricted(spec); err != nil {
-			return err
-		}
+		return validatePodSpecRestricted(spec, string(level))
 	default:
 		return errors.NewValidationError("level", string(level), "PSA", []string{
 			string(PSARestricted), string(PSABaseline), string(PSAPrivileged),
 		})
 	}
-
-	return nil
 }
 
-func validateContainerBaseline(c *corev1.Container) error {
+func psaField(prefix, suffix string) string {
+	if prefix == "" {
+		return suffix
+	}
+	return prefix + "." + suffix
+}
+
+func validateContainerBaseline(c *corev1.Container, fieldPrefix, level string) error {
 	sc := c.SecurityContext
 	if sc == nil {
 		return nil
 	}
 
 	if sc.Privileged != nil && *sc.Privileged {
-		return errors.Errorf("container %q: privileged mode is not allowed at baseline level", c.Name)
+		return errors.NewPSAViolationError(
+			psaField(fieldPrefix, "securityContext.privileged"),
+			level,
+			fmt.Sprintf("container %q: privileged mode is not allowed at %s level", c.Name, level),
+		)
 	}
 
 	if sc.Capabilities != nil {
 		for _, cap := range sc.Capabilities.Add {
 			if !isBaselineAllowedCapability(cap) {
-				return errors.Errorf("container %q: capability %q is not allowed at baseline level", c.Name, cap)
+				return errors.NewPSAViolationError(
+					psaField(fieldPrefix, "securityContext.capabilities.add"),
+					level,
+					fmt.Sprintf("container %q: capability %q is not allowed at %s level", c.Name, cap, level),
+				)
 			}
 		}
 	}
@@ -190,61 +204,81 @@ func validateContainerBaseline(c *corev1.Container) error {
 	return nil
 }
 
-func validateContainerRestricted(c *corev1.Container) error {
-	if err := validateContainerBaseline(c); err != nil {
+func validateContainerRestricted(c *corev1.Container, fieldPrefix, level string) error {
+	if err := validateContainerBaseline(c, fieldPrefix, level); err != nil {
 		return err
 	}
 
 	sc := c.SecurityContext
 	if sc == nil {
-		return errors.Errorf("container %q: security context must be set at restricted level", c.Name)
+		return errors.NewPSAViolationError(
+			psaField(fieldPrefix, "securityContext"),
+			level,
+			fmt.Sprintf("container %q: security context must be set at %s level", c.Name, level),
+		)
 	}
 
 	if sc.AllowPrivilegeEscalation == nil || *sc.AllowPrivilegeEscalation {
-		return errors.Errorf("container %q: allowPrivilegeEscalation must be false at restricted level", c.Name)
+		return errors.NewPSAViolationError(
+			psaField(fieldPrefix, "securityContext.allowPrivilegeEscalation"),
+			level,
+			fmt.Sprintf("container %q: allowPrivilegeEscalation must be false at %s level", c.Name, level),
+		)
 	}
 
 	if sc.RunAsNonRoot == nil || !*sc.RunAsNonRoot {
-		return errors.Errorf("container %q: runAsNonRoot must be true at restricted level", c.Name)
+		return errors.NewPSAViolationError(
+			psaField(fieldPrefix, "securityContext.runAsNonRoot"),
+			level,
+			fmt.Sprintf("container %q: runAsNonRoot must be true at %s level", c.Name, level),
+		)
 	}
 
 	if sc.Capabilities == nil || !hasDropAll(sc.Capabilities.Drop) {
-		return errors.Errorf("container %q: must drop ALL capabilities at restricted level", c.Name)
+		return errors.NewPSAViolationError(
+			psaField(fieldPrefix, "securityContext.capabilities"),
+			level,
+			fmt.Sprintf("container %q: must drop ALL capabilities at %s level", c.Name, level),
+		)
 	}
 
 	if sc.SeccompProfile == nil ||
 		(sc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault &&
 			sc.SeccompProfile.Type != corev1.SeccompProfileTypeLocalhost) {
-		return errors.Errorf("container %q: seccompProfile must be RuntimeDefault or Localhost at restricted level", c.Name)
+		return errors.NewPSAViolationError(
+			psaField(fieldPrefix, "securityContext.seccompProfile"),
+			level,
+			fmt.Sprintf("container %q: seccompProfile must be RuntimeDefault or Localhost at %s level", c.Name, level),
+		)
 	}
 
 	return nil
 }
 
-func validatePodSpecBaseline(spec *corev1.PodSpec) error {
+func validatePodSpecBaseline(spec *corev1.PodSpec, level string) error {
 	if spec.HostNetwork {
-		return errors.New("hostNetwork is not allowed at baseline level")
+		return errors.NewPSAViolationError("hostNetwork", level, fmt.Sprintf("hostNetwork is not allowed at %s level", level))
 	}
 	if spec.HostPID {
-		return errors.New("hostPID is not allowed at baseline level")
+		return errors.NewPSAViolationError("hostPID", level, fmt.Sprintf("hostPID is not allowed at %s level", level))
 	}
 	if spec.HostIPC {
-		return errors.New("hostIPC is not allowed at baseline level")
+		return errors.NewPSAViolationError("hostIPC", level, fmt.Sprintf("hostIPC is not allowed at %s level", level))
 	}
 
 	for i := range spec.Containers {
-		if err := validateContainerBaseline(&spec.Containers[i]); err != nil {
+		if err := validateContainerBaseline(&spec.Containers[i], fmt.Sprintf("containers[%d]", i), level); err != nil {
 			return err
 		}
 	}
 	for i := range spec.InitContainers {
-		if err := validateContainerBaseline(&spec.InitContainers[i]); err != nil {
+		if err := validateContainerBaseline(&spec.InitContainers[i], fmt.Sprintf("initContainers[%d]", i), level); err != nil {
 			return err
 		}
 	}
 	for i := range spec.EphemeralContainers {
 		c := containerFromEphemeral(&spec.EphemeralContainers[i])
-		if err := validateContainerBaseline(&c); err != nil {
+		if err := validateContainerBaseline(&c, fmt.Sprintf("ephemeralContainers[%d]", i), level); err != nil {
 			return err
 		}
 	}
@@ -252,35 +286,43 @@ func validatePodSpecBaseline(spec *corev1.PodSpec) error {
 	return nil
 }
 
-func validatePodSpecRestricted(spec *corev1.PodSpec) error {
-	if err := validatePodSpecBaseline(spec); err != nil {
+func validatePodSpecRestricted(spec *corev1.PodSpec, level string) error {
+	if err := validatePodSpecBaseline(spec, level); err != nil {
 		return err
 	}
 
 	sc := spec.SecurityContext
 	if sc == nil || sc.RunAsNonRoot == nil || !*sc.RunAsNonRoot {
-		return errors.New("pod runAsNonRoot must be true at restricted level")
+		return errors.NewPSAViolationError(
+			"securityContext.runAsNonRoot",
+			level,
+			fmt.Sprintf("pod runAsNonRoot must be true at %s level", level),
+		)
 	}
 
 	if sc.SeccompProfile == nil ||
 		(sc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault &&
 			sc.SeccompProfile.Type != corev1.SeccompProfileTypeLocalhost) {
-		return errors.New("pod seccompProfile must be RuntimeDefault or Localhost at restricted level")
+		return errors.NewPSAViolationError(
+			"securityContext.seccompProfile",
+			level,
+			fmt.Sprintf("pod seccompProfile must be RuntimeDefault or Localhost at %s level", level),
+		)
 	}
 
 	for i := range spec.Containers {
-		if err := validateContainerRestricted(&spec.Containers[i]); err != nil {
+		if err := validateContainerRestricted(&spec.Containers[i], fmt.Sprintf("containers[%d]", i), level); err != nil {
 			return err
 		}
 	}
 	for i := range spec.InitContainers {
-		if err := validateContainerRestricted(&spec.InitContainers[i]); err != nil {
+		if err := validateContainerRestricted(&spec.InitContainers[i], fmt.Sprintf("initContainers[%d]", i), level); err != nil {
 			return err
 		}
 	}
 	for i := range spec.EphemeralContainers {
 		c := containerFromEphemeral(&spec.EphemeralContainers[i])
-		if err := validateContainerRestricted(&c); err != nil {
+		if err := validateContainerRestricted(&c, fmt.Sprintf("ephemeralContainers[%d]", i), level); err != nil {
 			return err
 		}
 	}

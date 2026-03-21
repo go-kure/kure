@@ -280,6 +280,60 @@ func TestConfigError(t *testing.T) {
 	}
 }
 
+func TestPSAViolationError(t *testing.T) {
+	err := kerrors.NewPSAViolationError(
+		"containers[0].securityContext.allowPrivilegeEscalation",
+		"restricted",
+		"container \"app\": allowPrivilegeEscalation must be false at restricted level",
+	)
+
+	// Test type
+	if err.Type() != kerrors.ErrorTypePSA {
+		t.Errorf("Expected PSA error type, got %v", err.Type())
+	}
+
+	// Test message
+	if !strings.Contains(err.Error(), "allowPrivilegeEscalation") {
+		t.Errorf("Expected message to contain allowPrivilegeEscalation, got %q", err.Error())
+	}
+
+	// Test Field and Level
+	if err.Field != "containers[0].securityContext.allowPrivilegeEscalation" {
+		t.Errorf("Expected Field, got %q", err.Field)
+	}
+	if err.Level != "restricted" {
+		t.Errorf("Expected Level restricted, got %q", err.Level)
+	}
+
+	// Test suggestion
+	suggestion := err.Suggestion()
+	if !strings.Contains(suggestion, "restricted") {
+		t.Errorf("Expected suggestion to mention restricted, got %q", suggestion)
+	}
+
+	// Test context
+	ctx := err.Context()
+	if ctx["field"] != "containers[0].securityContext.allowPrivilegeEscalation" {
+		t.Errorf("Expected field in context, got %v", ctx["field"])
+	}
+	if ctx["level"] != "restricted" {
+		t.Errorf("Expected level in context, got %v", ctx["level"])
+	}
+
+	// Test KureError interface
+	if !kerrors.IsKureError(err) {
+		t.Error("Expected error to be identified as KureError")
+	}
+
+	// Test IsType
+	if !kerrors.IsType(err, kerrors.ErrorTypePSA) {
+		t.Error("Expected error to match PSA type")
+	}
+	if kerrors.IsType(err, kerrors.ErrorTypeValidation) {
+		t.Error("Expected error to NOT match validation type")
+	}
+}
+
 func TestErrorTypeChecking(t *testing.T) {
 	validationErr := kerrors.NewValidationError("field", "value", "component", nil)
 	resourceErr := kerrors.ResourceNotFoundError("Pod", "missing", "", nil)
