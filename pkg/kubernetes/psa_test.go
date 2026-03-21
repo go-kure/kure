@@ -1,9 +1,12 @@
 package kubernetes
 
 import (
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+
+	kerrors "github.com/go-kure/kure/pkg/errors"
 )
 
 func TestRestrictedPodSecurityContext(t *testing.T) {
@@ -141,6 +144,7 @@ func TestValidateContainerPSA(t *testing.T) {
 		container *corev1.Container
 		level     PSALevel
 		wantErr   bool
+		wantField string // expected PSAViolationError.Field (empty = no check)
 	}{
 		{
 			name:      "nil container",
@@ -162,8 +166,9 @@ func TestValidateContainerPSA(t *testing.T) {
 			container: &corev1.Container{
 				Name: "test",
 			},
-			level:   PSARestricted,
-			wantErr: true,
+			level:     PSARestricted,
+			wantErr:   true,
+			wantField: "securityContext",
 		},
 		{
 			name: "restricted with privilege escalation",
@@ -176,8 +181,9 @@ func TestValidateContainerPSA(t *testing.T) {
 					SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 				},
 			},
-			level:   PSARestricted,
-			wantErr: true,
+			level:     PSARestricted,
+			wantErr:   true,
+			wantField: "securityContext.allowPrivilegeEscalation",
 		},
 		{
 			name: "restricted missing drop ALL",
@@ -189,8 +195,9 @@ func TestValidateContainerPSA(t *testing.T) {
 					SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 				},
 			},
-			level:   PSARestricted,
-			wantErr: true,
+			level:     PSARestricted,
+			wantErr:   true,
+			wantField: "securityContext.capabilities",
 		},
 		{
 			name: "baseline compliant container",
@@ -211,8 +218,9 @@ func TestValidateContainerPSA(t *testing.T) {
 					Privileged: boolPtr(true),
 				},
 			},
-			level:   PSABaseline,
-			wantErr: true,
+			level:     PSABaseline,
+			wantErr:   true,
+			wantField: "securityContext.privileged",
 		},
 		{
 			name: "baseline with disallowed capability",
@@ -224,8 +232,9 @@ func TestValidateContainerPSA(t *testing.T) {
 					},
 				},
 			},
-			level:   PSABaseline,
-			wantErr: true,
+			level:     PSABaseline,
+			wantErr:   true,
+			wantField: "securityContext.capabilities.add",
 		},
 		{
 			name: "baseline with allowed capability",
@@ -270,6 +279,15 @@ func TestValidateContainerPSA(t *testing.T) {
 			if !tt.wantErr && err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+			if tt.wantField != "" {
+				var psaErr *kerrors.PSAViolationError
+				if !errors.As(err, &psaErr) {
+					t.Fatalf("expected *PSAViolationError, got %T", err)
+				}
+				if psaErr.Field != tt.wantField {
+					t.Errorf("Field = %q, want %q", psaErr.Field, tt.wantField)
+				}
+			}
 		})
 	}
 }
@@ -281,10 +299,11 @@ func TestValidatePodSpecPSA(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		spec    *corev1.PodSpec
-		level   PSALevel
-		wantErr bool
+		name      string
+		spec      *corev1.PodSpec
+		level     PSALevel
+		wantErr   bool
+		wantField string // expected PSAViolationError.Field (empty = no check)
 	}{
 		{
 			name:    "nil spec",
@@ -309,32 +328,36 @@ func TestValidatePodSpecPSA(t *testing.T) {
 				},
 				Containers: []corev1.Container{restrictedContainer},
 			},
-			level:   PSARestricted,
-			wantErr: true,
+			level:     PSARestricted,
+			wantErr:   true,
+			wantField: "securityContext.runAsNonRoot",
 		},
 		{
 			name: "baseline with hostNetwork",
 			spec: &corev1.PodSpec{
 				HostNetwork: true,
 			},
-			level:   PSABaseline,
-			wantErr: true,
+			level:     PSABaseline,
+			wantErr:   true,
+			wantField: "hostNetwork",
 		},
 		{
 			name: "baseline with hostPID",
 			spec: &corev1.PodSpec{
 				HostPID: true,
 			},
-			level:   PSABaseline,
-			wantErr: true,
+			level:     PSABaseline,
+			wantErr:   true,
+			wantField: "hostPID",
 		},
 		{
 			name: "baseline with hostIPC",
 			spec: &corev1.PodSpec{
 				HostIPC: true,
 			},
-			level:   PSABaseline,
-			wantErr: true,
+			level:     PSABaseline,
+			wantErr:   true,
+			wantField: "hostIPC",
 		},
 		{
 			name: "privileged allows anything",
@@ -362,8 +385,9 @@ func TestValidatePodSpecPSA(t *testing.T) {
 					}},
 				},
 			},
-			level:   PSARestricted,
-			wantErr: true,
+			level:     PSARestricted,
+			wantErr:   true,
+			wantField: "initContainers[0].securityContext.allowPrivilegeEscalation",
 		},
 		{
 			name: "baseline with non-compliant ephemeral container",
@@ -377,8 +401,9 @@ func TestValidatePodSpecPSA(t *testing.T) {
 					}},
 				},
 			},
-			level:   PSABaseline,
-			wantErr: true,
+			level:     PSABaseline,
+			wantErr:   true,
+			wantField: "ephemeralContainers[0].securityContext.privileged",
 		},
 		{
 			name: "restricted with non-compliant ephemeral container",
@@ -394,8 +419,22 @@ func TestValidatePodSpecPSA(t *testing.T) {
 					}},
 				},
 			},
-			level:   PSARestricted,
-			wantErr: true,
+			level:     PSARestricted,
+			wantErr:   true,
+			wantField: "ephemeralContainers[0].securityContext.allowPrivilegeEscalation",
+		},
+		{
+			name: "second container fails produces correct index",
+			spec: &corev1.PodSpec{
+				SecurityContext: RestrictedPodSecurityContext(),
+				Containers: []corev1.Container{
+					restrictedContainer,
+					{Name: "sidecar"},
+				},
+			},
+			level:     PSARestricted,
+			wantErr:   true,
+			wantField: "containers[1].securityContext",
 		},
 	}
 
@@ -407,6 +446,15 @@ func TestValidatePodSpecPSA(t *testing.T) {
 			}
 			if !tt.wantErr && err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+			if tt.wantField != "" {
+				var psaErr *kerrors.PSAViolationError
+				if !errors.As(err, &psaErr) {
+					t.Fatalf("expected *PSAViolationError, got %T", err)
+				}
+				if psaErr.Field != tt.wantField {
+					t.Errorf("Field = %q, want %q", psaErr.Field, tt.wantField)
+				}
 			}
 		})
 	}

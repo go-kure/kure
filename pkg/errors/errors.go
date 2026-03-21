@@ -146,6 +146,7 @@ const (
 	ErrorTypeFile          ErrorType = "file"
 	ErrorTypeConfiguration ErrorType = "configuration"
 	ErrorTypeInternal      ErrorType = "internal"
+	ErrorTypePSA           ErrorType = "psa"
 )
 
 // KureError is the base interface for all Kure-specific errors
@@ -468,6 +469,29 @@ func NewConfigError(source, field, value, reason string, validValues []string) *
 		Source:      source,
 		Field:       field,
 		ValidValues: validValues,
+	}
+}
+
+// PSAViolationError represents a Pod Security Standards violation with field path information.
+type PSAViolationError struct {
+	*BaseError
+	Field string `json:"field"` // path relative to PodSpec
+	Level string `json:"level"` // "baseline" or "restricted"
+}
+
+func NewPSAViolationError(field, level, message string) *PSAViolationError {
+	return &PSAViolationError{
+		BaseError: &BaseError{
+			ErrType: ErrorTypePSA,
+			Message: message,
+			Help:    fmt.Sprintf("ensure PodSpec complies with the %s Pod Security Standards level", level),
+			ErrContext: map[string]any{
+				"field": field,
+				"level": level,
+			},
+		},
+		Field: field,
+		Level: level,
 	}
 }
 
