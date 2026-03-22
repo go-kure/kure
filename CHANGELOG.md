@@ -1,6 +1,29 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.3] - 2026-03-22
+
+### Added
+
+- Upgrade cert-manager v1.19.4 → v1.20.0
+- Add PSAViolationError with field paths
+
+### Dependencies
+
+- Bundle dependency updates
+
+### Documentation
+
+- Update lint job timeout from 10 to 15 minutes
+
+### Fixed
+
+- Map dependency-updates.md to docs site
+- Increase lint job timeout to 15 minutes
+- Resolve broken links on versioned doc subsites
+- Disable setup-go built-in cache to prevent double-caching
+- Resolve broken dependency-updates link on contributing guide page
+
 ## [0.1.0-rc.2] - 2026-03-20
 
 ### Added
@@ -39,6 +62,7 @@ All notable changes to this project will be documented in this file.
 ### Release
 
 - V0.1.0-rc.1
+- V0.1.0-rc.2
 
 ## [0.1.0-rc.0] - 2026-03-09
 
