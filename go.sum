@@ -47,10 +47,10 @@ github.com/evanphx/json-patch/v5 v5.9.11 h1:/8HVnzMq13/3x9TPvjG08wUGqBTmZBsCWzjT
 github.com/evanphx/json-patch/v5 v5.9.11/go.mod h1:3j+LviiESTElxA4p3EMKAB9HXj3/XEtnUf6OZxqIQTM=
 github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342 h1:/pfjvNZGHTIisL12xKJRVzSLt8AYUW6pWuxrImxjrxY=
 github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342/go.mod h1:Ne6H/bciRDZLiH8IB17B1BiIi7BtOoGN2TCRNsrCBsI=
-github.com/fluxcd/flux2/v2 v2.8.2 h1:noCWOq38AdRNjRofIBpx+qJao9exaaN+pzro/qTtRUo=
-github.com/fluxcd/flux2/v2 v2.8.2/go.mod h1:4dnmq4FSJNbW9qvnb7Et8RFN0UHGiBcqhA0hfa9YG8s=
-github.com/fluxcd/helm-controller/api v1.5.2 h1:3xeFPcsvibingV32y8MRj040ydZIPOMCTToMXOkhtUo=
-github.com/fluxcd/helm-controller/api v1.5.2/go.mod h1:lTgeUmtVYExMKp7mRDncsr4JwHTz3LFtLjRJZeR98lI=
+github.com/fluxcd/flux2/v2 v2.8.3 h1:obZYHj98hS1w9eo4LWSam4I2p7M7925jpmZqllGqaog=
+github.com/fluxcd/flux2/v2 v2.8.3/go.mod h1:9ZPbVw+/5i7xZt82IYif3VYZ85nI0wSYMOwhq53Rabc=
+github.com/fluxcd/helm-controller/api v1.5.3 h1:ruLzuyTHjjE9A5B/U+Id2q7yHXXqSFTswdZ14xCS5So=
+github.com/fluxcd/helm-controller/api v1.5.3/go.mod h1:lTgeUmtVYExMKp7mRDncsr4JwHTz3LFtLjRJZeR98lI=
 github.com/fluxcd/image-automation-controller/api v1.1.1 h1:uiu7kjdVoW8/461HOemX6I7RcPornEzQliWgTg6LnWI=
 github.com/fluxcd/image-automation-controller/api v1.1.1/go.mod h1:lkD/drkD6Wc+2SDjVj5KqfozEucTLFexWgby/5ft660=
 github.com/fluxcd/kustomize-controller/api v1.8.2 h1:LcFUjJccwNrhCo7pQBBneLAlHfZZcb58bWB2LnyFwag=
