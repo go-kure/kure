@@ -21,7 +21,7 @@ infrastructure:
     notes: "Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias)."
 
   fluxcd:
-    current: "2.8.2"
+    current: "2.8.3"
     go_module: "github.com/fluxcd/flux2/v2"
     supported_range: "2.4 - 2.8"
     max_dependabot: null
