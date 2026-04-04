@@ -36,7 +36,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
 	github.com/fluxcd/flux2/v2 v2.8.2
-	github.com/fluxcd/helm-controller/api v1.5.2
+	github.com/fluxcd/helm-controller/api v1.5.3
 	github.com/fluxcd/image-automation-controller/api v1.1.1
 	github.com/fluxcd/kustomize-controller/api v1.8.2
 	github.com/fluxcd/notification-controller/api v1.8.2
