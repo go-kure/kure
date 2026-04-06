@@ -68,9 +68,9 @@ infrastructure:
       v1.3.2+ commit: 31b0c7c3734255a92dfe5cf9e1e204de127eb24c (includes controller-runtime v0.23.1 compat)
 
   cnpg:
-    current: "1.28.1"
+    current: "1.29.0"
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
-    supported_range: "1.24 - 1.28"
+    supported_range: "1.24 - 1.29"
     max_dependabot: null
     notes: |
       CloudNativePG operator for PostgreSQL on Kubernetes.
