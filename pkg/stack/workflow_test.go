@@ -80,7 +80,7 @@ func TestWorkflowInterface(t *testing.T) {
 					Type: provider,
 					Bootstrap: &stack.BootstrapConfig{
 						Enabled:  true,
-						FluxMode: "gotk",
+						FluxMode: "flux-operator",
 					},
 				},
 			}
