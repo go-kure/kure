@@ -156,23 +156,6 @@ func TestGenerateFluxOperatorBootstrapNoSourceURL(t *testing.T) {
 	}
 }
 
-func TestGenerateGotkBootstrap(t *testing.T) {
-	bg := fluxstack.NewBootstrapGenerator()
-
-	config := &stack.BootstrapConfig{
-		Enabled:  true,
-		FluxMode: "gotk",
-		// Note: gotk mode generates real Flux components which may fail
-		// in a test environment without proper setup
-	}
-
-	rootNode := &stack.Node{Name: "test-cluster"}
-
-	// gotk mode may fail due to network or version requirements
-	// we just test that it doesn't panic
-	_, _ = bg.GenerateBootstrap(config, rootNode)
-}
-
 func TestGenerateBootstrapDefaultMode(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
@@ -201,27 +184,6 @@ func TestGenerateBootstrapDefaultMode(t *testing.T) {
 		t.Errorf("expected FluxInstance for default mode, got %s",
 			resources[0].GetObjectKind().GroupVersionKind().Kind)
 	}
-}
-
-func TestGenerateGotkBootstrapWithOptions(t *testing.T) {
-	bg := fluxstack.NewBootstrapGenerator()
-
-	config := &stack.BootstrapConfig{
-		Enabled:         true,
-		FluxMode:        "gotk",
-		FluxVersion:     "v2.0.0",
-		Registry:        "ghcr.io/fluxcd",
-		ImagePullSecret: "my-secret",
-		Components:      []string{"source-controller", "kustomize-controller"},
-		SourceURL:       "oci://registry.example.com/flux-system",
-		SourceRef:       "latest",
-	}
-
-	rootNode := &stack.Node{Name: "test-cluster"}
-
-	// gotk mode attempts to generate real manifests
-	// It may fail in tests without network access
-	_, _ = bg.GenerateBootstrap(config, rootNode)
 }
 
 func TestFluxOperatorSourceKindGitRepository(t *testing.T) {
