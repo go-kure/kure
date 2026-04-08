@@ -49,6 +49,14 @@ description = "Release workflow (dry-run by default, --do-it to trigger CI)"
 run = "./scripts/release-trigger.sh"
 raw = true
 
+[tasks."versions:check"]
+description = "Validate version consistency across all files"
+run = "./scripts/sync-versions.sh check"
+
+[tasks."versions:generate"]
+description = "Generate docs from versions.yaml"
+run = "./scripts/sync-versions.sh generate"
+
 [tasks."site:dev"]
 description = "Start local docs dev server"
 dir = "site"
