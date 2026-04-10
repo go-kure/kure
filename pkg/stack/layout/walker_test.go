@@ -209,6 +209,65 @@ func TestWalkClusterFlatRoot_DeepHierarchy(t *testing.T) {
 	}
 }
 
+// TestWalkCluster_ClusterNameWithChildNodes verifies that when rules.ClusterName
+// is set, child-node sub-layouts are nested under the root node layout (not as
+// siblings of it under the cluster-level layout). The Flux integrator's
+// path-based layout lookup uses stack.Node.GetPath() — e.g. "root/apps" for a
+// child named "apps" of a root named "root" — so the layout tree must mirror
+// that hierarchy.
+func TestWalkCluster_ClusterNameWithChildNodes(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app", "ns", &fakeConfig{objs: []*client.Object{&o}})
+	appsBundle := &stack.Bundle{Name: "apps-bundle", Applications: []*stack.Application{app}}
+	appsNode := &stack.Node{Name: "apps", Bundle: appsBundle}
+	rootBundle := &stack.Bundle{Name: "root-bundle"}
+	rootNode := &stack.Node{Name: "flux-system", Bundle: rootBundle, Children: []*stack.Node{appsNode}}
+	appsNode.SetParent(rootNode)
+	cluster := &stack.Cluster{Name: "demo", Node: rootNode}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "demo"
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("nil layout returned")
+	}
+
+	// The cluster layout should contain exactly the root node layout —
+	// child nodes must NOT appear as siblings here.
+	if len(ml.Children) != 1 {
+		t.Fatalf("cluster layout should have exactly 1 child (root node), got %d", len(ml.Children))
+	}
+	rootLayout := ml.Children[0]
+	if rootLayout.Name != "flux-system" {
+		t.Fatalf("expected root layout name %q, got %q", "flux-system", rootLayout.Name)
+	}
+	if rootLayout.Namespace != "demo/flux-system" {
+		t.Fatalf("expected root layout namespace %q, got %q", "demo/flux-system", rootLayout.Namespace)
+	}
+
+	// The child node layout must be nested under rootLayout, not under
+	// clusterLayout — this is what the fix enforces.
+	if len(rootLayout.Children) != 1 {
+		t.Fatalf("root layout should have 1 child (apps node), got %d", len(rootLayout.Children))
+	}
+	appsLayout := rootLayout.Children[0]
+	if appsLayout.Name != "apps" {
+		t.Fatalf("expected apps layout name %q, got %q", "apps", appsLayout.Name)
+	}
+	if appsLayout.Namespace != "demo/flux-system" {
+		t.Fatalf("expected apps layout namespace %q, got %q", "demo/flux-system", appsLayout.Namespace)
+	}
+}
+
 func TestWalkClusterByPackage(t *testing.T) {
 	obj1 := &unstructured.Unstructured{}
 	obj1.SetAPIVersion("v1")
