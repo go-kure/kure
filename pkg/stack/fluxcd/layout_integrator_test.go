@@ -348,3 +348,22 @@ func TestLayoutIntegrator_SeparateMode_EmptyCluster(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateLayoutWithResources_InvalidUmbrellaRejected(t *testing.T) {
+	// Shared pointer is both a child node Bundle and an umbrella child —
+	// ValidateCluster must reject.
+	shared := &stack.Bundle{Name: "shared"}
+	root := &stack.Node{
+		Name:   "root",
+		Bundle: &stack.Bundle{Name: "root", Children: []*stack.Bundle{shared}},
+		Children: []*stack.Node{
+			{Name: "child", Bundle: shared},
+		},
+	}
+	c := &stack.Cluster{Name: "c", Node: root}
+
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	if _, err := integrator.CreateLayoutWithResources(c, layout.LayoutRules{}); err == nil {
+		t.Fatal("expected invalid umbrella cluster to be rejected by CreateLayoutWithResources")
+	}
+}

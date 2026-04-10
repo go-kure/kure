@@ -114,6 +114,14 @@ Controls where Flux Kustomization resources are placed:
 - `FluxSeparate` - Flux resources in a separate directory tree
 - `FluxIntegrated` - Flux resources alongside application manifests
 
+## Validation
+
+All cluster-level entry points (`GenerateFromCluster`, `CreateLayoutWithResources`)
+call `stack.ValidateCluster` before walking the tree. Invalid umbrella
+configurations — such as a bundle referenced both by a `Node` and by another
+bundle's `Children`, shared umbrella ownership, or multi-package umbrellas —
+fail fast with a validation error rather than producing malformed output.
+
 ## Related Packages
 
 - [stack](../) - Core domain model

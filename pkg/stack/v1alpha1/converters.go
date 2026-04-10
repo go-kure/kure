@@ -346,15 +346,17 @@ func (c *StackConverter) convertNodeTreeToV1Alpha1(node *stack.Node, nodes *[]*N
 	}
 }
 
-// ConvertV1Alpha1ToClusterTree converts versioned configs back to a cluster tree
+// ConvertV1Alpha1ToClusterTree converts versioned configs back to a cluster tree.
+// It calls stack.ValidateCluster at the end so round-tripped umbrella errors
+// surface at decode time rather than leaking into downstream code.
 func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 	clusterConfig *ClusterConfig,
 	nodeConfigs []*NodeConfig,
 	bundleConfigs []*BundleConfig,
 	applications []*stack.Application,
-) *stack.Cluster {
+) (*stack.Cluster, error) {
 	if clusterConfig == nil {
-		return nil
+		return nil, nil
 	}
 
 	// Build maps for lookup
@@ -425,5 +427,9 @@ func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 		}
 	}
 
-	return cluster
+	if err := stack.ValidateCluster(cluster); err != nil {
+		return nil, err
+	}
+
+	return cluster, nil
 }

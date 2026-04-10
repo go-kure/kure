@@ -49,6 +49,12 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 		return nil, nil
 	}
 
+	// Fail fast on umbrella / disjointness / multi-package violations before
+	// we walk the tree.
+	if err := stack.ValidateCluster(c); err != nil {
+		return nil, err
+	}
+
 	// Generate the base manifest layout first
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {

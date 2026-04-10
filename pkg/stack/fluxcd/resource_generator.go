@@ -38,9 +38,14 @@ func NewResourceGenerator() *ResourceGenerator {
 }
 
 // GenerateFromCluster creates Flux Kustomizations and Sources from a cluster definition.
+// It runs stack.ValidateCluster first to fail fast on structural errors
+// (umbrella cycles, disjointness violations, etc.).
 func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
 	if c == nil || c.Node == nil {
 		return nil, nil
+	}
+	if err := stack.ValidateCluster(c); err != nil {
+		return nil, err
 	}
 	return g.GenerateFromNode(c.Node)
 }
