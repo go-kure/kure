@@ -19,6 +19,11 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		return nil, nil
 	}
 
+	// Fail fast on umbrella / disjointness / multi-package violations.
+	if err := stack.ValidateCluster(c); err != nil {
+		return nil, err
+	}
+
 	// Apply documented defaults for unset options.
 	def := DefaultLayoutRules()
 	if rules.NodeGrouping == GroupUnset {
@@ -120,6 +125,11 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*ManifestLayout, error) {
 	if c == nil || c.Node == nil {
 		return nil, nil
+	}
+
+	// Fail fast on umbrella / disjointness / multi-package violations.
+	if err := stack.ValidateCluster(c); err != nil {
+		return nil, err
 	}
 
 	// Apply documented defaults for unset options.

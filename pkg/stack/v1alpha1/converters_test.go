@@ -706,7 +706,10 @@ func TestStackConverter_ConvertV1Alpha1ToClusterTree(t *testing.T) {
 	}
 
 	converter := NewStackConverter()
-	cluster := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, applications)
+	cluster, err := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, applications)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify cluster
 	if cluster == nil {
@@ -776,7 +779,10 @@ func TestStackConverter_HandleNilValues(t *testing.T) {
 	})
 
 	t.Run("nil cluster config", func(t *testing.T) {
-		cluster := converter.ConvertV1Alpha1ToClusterTree(nil, nil, nil, nil)
+		cluster, err := converter.ConvertV1Alpha1ToClusterTree(nil, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if cluster != nil {
 			t.Error("expected nil cluster for nil config")
 		}
@@ -786,7 +792,10 @@ func TestStackConverter_HandleNilValues(t *testing.T) {
 		clusterConfig := &ClusterConfig{
 			Metadata: gvk.BaseMetadata{Name: "empty"},
 		}
-		cluster := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, []*NodeConfig{}, []*BundleConfig{}, []*stack.Application{})
+		cluster, err := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, []*NodeConfig{}, []*BundleConfig{}, []*stack.Application{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		if cluster == nil {
 			t.Fatal("expected non-nil cluster")
@@ -1009,7 +1018,7 @@ func BenchmarkConvertV1Alpha1ToClusterTree(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, applications)
+		_, _ = converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, applications)
 	}
 }
 

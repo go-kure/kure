@@ -430,3 +430,37 @@ func TestWalkClusterByPackageDefaultPackage(t *testing.T) {
 		t.Fatalf("Default package child should be 'apps', got %s", defaultLayout.Children[0].Name)
 	}
 }
+
+func TestWalkCluster_InvalidUmbrellaRejected(t *testing.T) {
+	// Shared pointer is both a child node Bundle and an umbrella child —
+	// ValidateCluster must reject.
+	shared := &stack.Bundle{Name: "shared"}
+	root := &stack.Node{
+		Name:   "root",
+		Bundle: &stack.Bundle{Name: "root", Children: []*stack.Bundle{shared}},
+		Children: []*stack.Node{
+			{Name: "child", Bundle: shared},
+		},
+	}
+	c := &stack.Cluster{Name: "c", Node: root}
+
+	if _, err := layout.WalkCluster(c, layout.LayoutRules{}); err == nil {
+		t.Fatal("expected invalid umbrella cluster to be rejected by WalkCluster")
+	}
+}
+
+func TestWalkClusterByPackage_InvalidUmbrellaRejected(t *testing.T) {
+	shared := &stack.Bundle{Name: "shared"}
+	root := &stack.Node{
+		Name:   "root",
+		Bundle: &stack.Bundle{Name: "root", Children: []*stack.Bundle{shared}},
+		Children: []*stack.Node{
+			{Name: "child", Bundle: shared},
+		},
+	}
+	c := &stack.Cluster{Name: "c", Node: root}
+
+	if _, err := layout.WalkClusterByPackage(c, layout.LayoutRules{}); err == nil {
+		t.Fatal("expected invalid umbrella cluster to be rejected by WalkClusterByPackage")
+	}
+}

@@ -424,3 +424,23 @@ func TestBundlePath_MultiLevel(t *testing.T) {
 		t.Errorf("recursive Path = %q, want %q", k.Spec.Path, "cluster/infrastructure")
 	}
 }
+
+func TestGenerateFromCluster_InvalidUmbrellaRejected(t *testing.T) {
+	// Shared pointer is both a child node Bundle and an umbrella child —
+	// ValidateCluster must reject.
+	shared := &stack.Bundle{Name: "shared"}
+	root := &stack.Node{
+		Name:   "root",
+		Bundle: &stack.Bundle{Name: "root", Children: []*stack.Bundle{shared}},
+		Children: []*stack.Node{
+			{Name: "child", Bundle: shared},
+		},
+	}
+	c := &stack.Cluster{Name: "c", Node: root}
+
+	gen := fluxstack.NewResourceGenerator()
+	_, err := gen.GenerateFromCluster(c)
+	if err == nil {
+		t.Fatal("expected invalid umbrella cluster to be rejected by GenerateFromCluster")
+	}
+}
