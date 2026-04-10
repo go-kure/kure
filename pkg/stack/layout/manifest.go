@@ -269,10 +269,18 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		// Add child references
 		for _, child := range ml.Children {
 			if child.UmbrellaChild {
-				// Umbrella child: reference the child's Flux Kustomization CR
-				// YAML (placed in this parent directory), not the subdirectory.
-				fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
-				writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
+				// Umbrella children are not referenced from the parent
+				// kustomization.yaml's Children loop:
+				//   - FluxIntegrated: the child's Kustomization CR is
+				//     already in ml.Resources (placed there by the
+				//     LayoutIntegrator), so the Resources loop above
+				//     emits the filename exactly once.
+				//   - FluxSeparate: the child is applied by its own CR
+				//     under flux-system/ with spec.path pointing directly
+				//     at the child subdir, so the parent must not
+				//     reference it at all.
+				// The sub-layout is still walked below to write its
+				// workloads + own kustomization.yaml.
 				continue
 			}
 			if child.ApplicationFileMode == AppFileSingle {

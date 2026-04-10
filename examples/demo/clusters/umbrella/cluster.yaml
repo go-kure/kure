@@ -1,0 +1,9 @@
+name: umbrella-demo
+node:
+  name: flux-system
+  bundle:
+    name: platform
+    children:
+      - name: platform-infra
+      - name: platform-services
+      - name: platform-apps

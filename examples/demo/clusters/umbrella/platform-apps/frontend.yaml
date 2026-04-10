@@ -1,0 +1,23 @@
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: frontend
+  namespace: platform-apps
+spec:
+  workload: Deployment
+  containers:
+    - name: web
+      image: nginx:1.25-alpine
+      ports:
+        - name: http
+          containerPort: 80
+      env:
+        - name: BACKEND_CACHE
+          value: cache.platform-services.svc.cluster.local:6379
+      resources:
+        requests:
+          memory: 64Mi
+          cpu: 50m
+        limits:
+          memory: 128Mi
+          cpu: 200m
