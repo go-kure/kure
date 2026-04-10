@@ -464,3 +464,200 @@ func TestWalkClusterByPackage_InvalidUmbrellaRejected(t *testing.T) {
 		t.Fatal("expected invalid umbrella cluster to be rejected by WalkClusterByPackage")
 	}
 }
+
+// umbrellaObj returns a single-object ConfigMap the fakeConfig can emit.
+func umbrellaObj(name string) client.Object {
+	u := &unstructured.Unstructured{}
+	u.SetAPIVersion("v1")
+	u.SetKind("ConfigMap")
+	u.SetName(name)
+	u.SetNamespace("default")
+	return u
+}
+
+// makeUmbrellaApp builds a stack.Application whose Generate() returns the
+// given ConfigMap wrapped in the single-object slice the layout walker expects.
+func makeUmbrellaApp(appName, cmName string) *stack.Application {
+	o := umbrellaObj(cmName)
+	return stack.NewApplication(appName, "ns", &fakeConfig{objs: []*client.Object{&o}})
+}
+
+func TestWalkCluster_Umbrella_NonNodeOnly(t *testing.T) {
+	// In non-nodeOnly mode, umbrella children are siblings of application
+	// sub-layouts within the bundle layout.
+	parentApp := makeUmbrellaApp("parent-app", "cm-parent")
+	childApp := makeUmbrellaApp("child-app", "cm-child")
+
+	childBundle := &stack.Bundle{
+		Name:         "leaf",
+		Applications: []*stack.Application{childApp},
+	}
+	umbrella := &stack.Bundle{
+		Name:         "platform",
+		Applications: []*stack.Application{parentApp},
+		Children:     []*stack.Bundle{childBundle},
+	}
+	node := &stack.Node{Name: "apps", Bundle: umbrella}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+	})
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	// root -> apps -> platform bundle
+	if len(ml.Children) != 1 {
+		t.Fatalf("expected 1 node child, got %d", len(ml.Children))
+	}
+	nodeLayout := ml.Children[0]
+	if len(nodeLayout.Children) != 1 {
+		t.Fatalf("expected 1 bundle child, got %d", len(nodeLayout.Children))
+	}
+	bundleLayout := nodeLayout.Children[0]
+	if bundleLayout.Name != "platform" {
+		t.Fatalf("expected bundle name platform, got %q", bundleLayout.Name)
+	}
+
+	// bundle layout should contain parent-app (application) AND leaf (umbrella child)
+	if len(bundleLayout.Children) != 2 {
+		t.Fatalf("expected 2 children (parent-app + leaf), got %d", len(bundleLayout.Children))
+	}
+
+	var umbrellaChildLayout *layout.ManifestLayout
+	var appLayout *layout.ManifestLayout
+	for _, c := range bundleLayout.Children {
+		if c.UmbrellaChild {
+			umbrellaChildLayout = c
+		} else {
+			appLayout = c
+		}
+	}
+	if umbrellaChildLayout == nil {
+		t.Fatal("expected an UmbrellaChild sub-layout under the bundle")
+	}
+	if appLayout == nil {
+		t.Fatal("expected a non-UmbrellaChild application sub-layout under the bundle")
+	}
+	if umbrellaChildLayout.Name != "leaf" {
+		t.Errorf("umbrella child Name = %q, want %q", umbrellaChildLayout.Name, "leaf")
+	}
+	if umbrellaChildLayout.Namespace != "root/apps/platform" {
+		t.Errorf("umbrella child Namespace = %q, want root/apps/platform", umbrellaChildLayout.Namespace)
+	}
+	// Child workload should live in the umbrella child's Resources.
+	if len(umbrellaChildLayout.Resources) != 1 {
+		t.Errorf("expected 1 resource in umbrella child layout, got %d", len(umbrellaChildLayout.Resources))
+	}
+}
+
+func TestWalkCluster_Umbrella_NodeOnly(t *testing.T) {
+	// In nodeOnly mode (GroupFlat everywhere), umbrella child sub-layouts
+	// hang directly off the node layout with no intermediate bundle layer.
+	parentApp := makeUmbrellaApp("parent-app", "cm-parent")
+	childApp := makeUmbrellaApp("child-app", "cm-child")
+
+	childBundle := &stack.Bundle{
+		Name:         "leaf",
+		Applications: []*stack.Application{childApp},
+	}
+	umbrella := &stack.Bundle{
+		Name:         "platform",
+		Applications: []*stack.Application{parentApp},
+		Children:     []*stack.Bundle{childBundle},
+	}
+	node := &stack.Node{Name: "apps", Bundle: umbrella}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.LayoutRules{
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+	}
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	if len(ml.Children) != 1 {
+		t.Fatalf("expected 1 node child, got %d", len(ml.Children))
+	}
+	nodeLayout := ml.Children[0]
+
+	// Node layout carries the parent app's resources directly (nodeOnly).
+	if len(nodeLayout.Resources) != 1 {
+		t.Errorf("expected 1 resource on node layout, got %d", len(nodeLayout.Resources))
+	}
+
+	// Umbrella child hangs directly off the node layout.
+	if len(nodeLayout.Children) != 1 {
+		t.Fatalf("expected 1 umbrella child, got %d", len(nodeLayout.Children))
+	}
+	uc := nodeLayout.Children[0]
+	if !uc.UmbrellaChild {
+		t.Error("expected UmbrellaChild=true on nodeOnly umbrella sub-layout")
+	}
+	if uc.Name != "leaf" {
+		t.Errorf("umbrella child Name = %q, want leaf", uc.Name)
+	}
+	// In nodeOnly mode, the umbrella child sits under the node path (no bundle layer).
+	if uc.Namespace != "root/apps" {
+		t.Errorf("umbrella child Namespace = %q, want root/apps", uc.Namespace)
+	}
+}
+
+func TestWalkCluster_Umbrella_Nested(t *testing.T) {
+	grandchildApp := makeUmbrellaApp("gc-app", "cm-gc")
+	grandchild := &stack.Bundle{
+		Name:         "networking",
+		Applications: []*stack.Application{grandchildApp},
+	}
+	child := &stack.Bundle{
+		Name:     "infra",
+		Children: []*stack.Bundle{grandchild},
+	}
+	umbrella := &stack.Bundle{
+		Name:     "platform",
+		Children: []*stack.Bundle{child},
+	}
+	node := &stack.Node{Name: "apps", Bundle: umbrella}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+	})
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	// root -> apps -> platform -> infra (UmbrellaChild) -> networking (UmbrellaChild)
+	bundleLayout := ml.Children[0].Children[0]
+	if bundleLayout.Name != "platform" {
+		t.Fatalf("expected platform bundle, got %q", bundleLayout.Name)
+	}
+	if len(bundleLayout.Children) != 1 {
+		t.Fatalf("expected 1 umbrella child, got %d", len(bundleLayout.Children))
+	}
+	infra := bundleLayout.Children[0]
+	if !infra.UmbrellaChild || infra.Name != "infra" {
+		t.Fatalf("expected infra as UmbrellaChild, got name=%q UmbrellaChild=%v", infra.Name, infra.UmbrellaChild)
+	}
+	if len(infra.Children) != 1 {
+		t.Fatalf("expected 1 nested umbrella child, got %d", len(infra.Children))
+	}
+	nw := infra.Children[0]
+	if !nw.UmbrellaChild || nw.Name != "networking" {
+		t.Fatalf("expected networking as nested UmbrellaChild, got name=%q UmbrellaChild=%v", nw.Name, nw.UmbrellaChild)
+	}
+	if nw.Namespace != "root/apps/platform/infra" {
+		t.Errorf("nested umbrella Namespace = %q, want root/apps/platform/infra", nw.Namespace)
+	}
+}

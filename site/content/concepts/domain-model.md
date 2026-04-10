@@ -31,8 +31,28 @@ Nodes map to **directory structures** in the GitOps repository. Each node can al
 A deployment unit corresponding to a single GitOps reconciliation resource (e.g., a Flux Kustomization or ArgoCD Application). Bundles contain applications and support:
 
 - **Dependency ordering** via `DependsOn` (e.g., "deploy cert-manager before my app")
+- **Umbrella composition** via `Children` (see below)
 - **Reconciliation settings**: interval, pruning, timeouts
 - **Labels and annotations** for metadata
+
+#### Umbrella Bundles
+
+`DependsOn` and `Children` answer different questions. `DependsOn` is about
+**ordering** between siblings: "reconcile X only after Y is Ready".
+`Children` is about **containment**: the parent Bundle becomes an umbrella
+whose Flux Kustomization renders its child Kustomization CRs, sets
+`spec.wait: true`, and aggregates each child's Ready condition via
+`spec.healthChecks`. The parent is Ready iff all children are Ready.
+
+This gives downstream consumers a single stable anchor — for example, a
+`platform` umbrella with tier children `infra`, `services`, `apps` lets an
+external bundle `DependsOn: [platform]` without having to know or care about
+the internal tiers.
+
+A bundle referenced by `Children` must be **standalone**: it cannot
+simultaneously be the `Bundle` of any `Node`. The `stack.ValidateCluster`
+check enforces disjointness, cycle detection, and rejects multi-package
+umbrellas in the current release.
 
 ### Application
 

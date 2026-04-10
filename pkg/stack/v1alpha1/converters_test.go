@@ -1083,6 +1083,182 @@ func TestSourceRefRoundTrip(t *testing.T) {
 	}
 }
 
+func TestConvertBundleToV1Alpha1_EmitsChildren(t *testing.T) {
+	// Forward conversion should populate Spec.Children from Bundle.Children.
+	b := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{Name: "infra"},
+			{Name: "services"},
+			nil,
+		},
+	}
+
+	config := ConvertBundleToV1Alpha1(b)
+	if config == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if got, want := len(config.Spec.Children), 2; got != want {
+		t.Fatalf("expected %d children (nil filtered), got %d", want, got)
+	}
+	names := map[string]bool{}
+	for _, c := range config.Spec.Children {
+		names[c.Name] = true
+		if c.APIVersion != "stack.gokure.dev/v1alpha1" {
+			t.Errorf("child %q has wrong APIVersion: %q", c.Name, c.APIVersion)
+		}
+	}
+	if !names["infra"] || !names["services"] {
+		t.Errorf("missing child names, got: %v", names)
+	}
+}
+
+func TestConvertClusterTreeToV1Alpha1_EmitsUmbrellaDescendants(t *testing.T) {
+	// The node tree walk should emit BundleConfigs for umbrella descendants,
+	// deduplicated via a visited pointer set.
+	grandchild := &stack.Bundle{Name: "networking"}
+	infra := &stack.Bundle{
+		Name:     "infra",
+		Children: []*stack.Bundle{grandchild},
+	}
+	services := &stack.Bundle{Name: "services"}
+	umbrella := &stack.Bundle{
+		Name:     "platform",
+		Children: []*stack.Bundle{infra, services},
+	}
+
+	cluster := &stack.Cluster{
+		Name: "demo",
+		Node: &stack.Node{
+			Name:   "root",
+			Bundle: umbrella,
+		},
+	}
+
+	converter := NewStackConverter()
+	_, _, bundleConfigs := converter.ConvertClusterTreeToV1Alpha1(cluster)
+
+	// Expect platform + infra + services + networking = 4 bundles, each emitted once.
+	names := map[string]int{}
+	for _, bc := range bundleConfigs {
+		names[bc.Metadata.Name]++
+	}
+	for _, want := range []string{"platform", "infra", "services", "networking"} {
+		if names[want] != 1 {
+			t.Errorf("expected exactly 1 BundleConfig for %q, got %d", want, names[want])
+		}
+	}
+
+	// Verify Children are populated on the umbrella configs
+	var platformConfig, infraConfig *BundleConfig
+	for _, bc := range bundleConfigs {
+		switch bc.Metadata.Name {
+		case "platform":
+			platformConfig = bc
+		case "infra":
+			infraConfig = bc
+		}
+	}
+	if platformConfig == nil {
+		t.Fatal("missing platform BundleConfig")
+	}
+	if len(platformConfig.Spec.Children) != 2 {
+		t.Errorf("expected platform to have 2 Children refs, got %d", len(platformConfig.Spec.Children))
+	}
+	if infraConfig == nil {
+		t.Fatal("missing infra BundleConfig")
+	}
+	if len(infraConfig.Spec.Children) != 1 || infraConfig.Spec.Children[0].Name != "networking" {
+		t.Errorf("expected infra to have child networking, got %+v", infraConfig.Spec.Children)
+	}
+}
+
+func TestConvertV1Alpha1ToClusterTree_ReconstructsChildren(t *testing.T) {
+	// Reverse conversion should resolve Spec.Children into *Bundle pointers
+	// and ValidateCluster should accept the well-formed tree.
+	clusterConfig := &ClusterConfig{
+		Metadata: gvk.BaseMetadata{Name: "demo"},
+		Spec: ClusterSpec{
+			Node: &NodeReference{Name: "root"},
+		},
+	}
+	nodeConfigs := []*NodeConfig{
+		{
+			Metadata: gvk.BaseMetadata{Name: "root"},
+			Spec:     NodeSpec{Bundle: &BundleReference{Name: "platform"}},
+		},
+	}
+	bundleConfigs := []*BundleConfig{
+		{
+			Metadata: gvk.BaseMetadata{Name: "platform"},
+			Spec: BundleSpec{
+				Children: []BundleReference{
+					{Name: "infra"},
+					{Name: "services"},
+				},
+			},
+		},
+		{Metadata: gvk.BaseMetadata{Name: "infra"}},
+		{Metadata: gvk.BaseMetadata{Name: "services"}},
+	}
+
+	converter := NewStackConverter()
+	cluster, err := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cluster == nil || cluster.Node == nil || cluster.Node.Bundle == nil {
+		t.Fatal("expected reconstructed cluster with root bundle")
+	}
+	platform := cluster.Node.Bundle
+	if len(platform.Children) != 2 {
+		t.Fatalf("expected 2 umbrella children, got %d", len(platform.Children))
+	}
+	if platform.Children[0].Name != "infra" || platform.Children[1].Name != "services" {
+		t.Errorf("unexpected child names: %q, %q",
+			platform.Children[0].Name, platform.Children[1].Name)
+	}
+}
+
+func TestConvertV1Alpha1ToClusterTree_InvalidUmbrellaRejected(t *testing.T) {
+	// Round-tripping an invalid umbrella (same bundle name as both a Node
+	// bundle and an umbrella child) must fail at ValidateCluster.
+	clusterConfig := &ClusterConfig{
+		Metadata: gvk.BaseMetadata{Name: "demo"},
+		Spec: ClusterSpec{
+			Node: &NodeReference{Name: "root"},
+		},
+	}
+	nodeConfigs := []*NodeConfig{
+		{
+			Metadata: gvk.BaseMetadata{Name: "root"},
+			Spec: NodeSpec{
+				Bundle:   &BundleReference{Name: "platform"},
+				Children: []NodeReference{{Name: "child"}},
+			},
+		},
+		{
+			Metadata: gvk.BaseMetadata{Name: "child"},
+			// The "shared" bundle is referenced as a Node's Bundle AND as
+			// an umbrella child of platform — ValidateCluster must reject.
+			Spec: NodeSpec{Bundle: &BundleReference{Name: "shared"}},
+		},
+	}
+	bundleConfigs := []*BundleConfig{
+		{
+			Metadata: gvk.BaseMetadata{Name: "platform"},
+			Spec:     BundleSpec{Children: []BundleReference{{Name: "shared"}}},
+		},
+		{Metadata: gvk.BaseMetadata{Name: "shared"}},
+	}
+
+	converter := NewStackConverter()
+	_, err := converter.ConvertV1Alpha1ToClusterTree(clusterConfig, nodeConfigs, bundleConfigs, nil)
+	if err == nil {
+		t.Fatal("expected ValidateCluster to reject shared umbrella/node bundle")
+	}
+}
+
 func TestHealthChecksRoundTrip(t *testing.T) {
 	original := &stack.Bundle{
 		Name: "hc-bundle",

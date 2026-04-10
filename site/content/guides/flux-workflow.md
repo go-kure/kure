@@ -170,6 +170,36 @@ Umbrella children must be **standalone** — a bundle cannot simultaneously be
 the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
 `stack.ValidateCluster` rejects any such overlap before resource generation.
 
+### Disk layout
+
+In `FluxIntegrated` placement, the umbrella children's Flux Kustomization CRs
+live alongside the parent's, and the parent's `kustomization.yaml` references
+each child via the CR file (not the child subdirectory):
+
+```
+clusters/production/apps/
+  platform/                                       # umbrella bundle directory
+    flux-system-kustomization-platform.yaml       # umbrella self CR (wait+HC)
+    flux-system-kustomization-platform-infra.yaml # child CR (placed at parent)
+    flux-system-kustomization-platform-apps.yaml  # child CR (placed at parent)
+    kustomization.yaml                            # references the CR files
+    platform-infra/                               # umbrella child subdirectory
+      workload-*.yaml
+      kustomization.yaml                          # workloads only, no Flux CRs
+    platform-apps/
+      workload-*.yaml
+      kustomization.yaml
+```
+
+The child subdirectories contain **only** their workload manifests and a
+per-directory `kustomization.yaml` listing those workloads. They do **not**
+contain any `flux-system-kustomization-*.yaml` files — those live in the
+parent directory, so Flux applies them once via the parent's Kustomization.
+
+In `FluxSeparate` placement, all Kustomization CRs (the umbrella's own plus
+every descendant) are written to the shared `flux-system/` directory as a
+flat list.
+
 ## Bootstrap
 
 Generate Flux system bootstrap manifests:

@@ -178,6 +178,71 @@ func TestWriteToTar_FluxIntegrated(t *testing.T) {
 	}
 }
 
+func TestWriteToTar_UmbrellaChild(t *testing.T) {
+	// Umbrella child layouts should cause the parent kustomization.yaml
+	// to reference flux-system-kustomization-{name}.yaml (regardless of
+	// FluxPlacement), and the child subdirectory should contain its own
+	// workloads + kustomization.yaml (no flux CR file).
+	child := &ManifestLayout{
+		Name:          "infra",
+		Namespace:     "cl/apps/platform/infra",
+		FilePer:       FilePerResource,
+		Mode:          KustomizationExplicit,
+		UmbrellaChild: true,
+		Resources: []client.Object{
+			&corev1.ConfigMap{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				ObjectMeta: metav1.ObjectMeta{Name: "cfg", Namespace: "default"},
+			},
+		},
+	}
+
+	parent := &ManifestLayout{
+		Name:      "platform",
+		Namespace: "cl/apps/platform",
+		FilePer:   FilePerResource,
+		Mode:      KustomizationExplicit,
+		Children:  []*ManifestLayout{child},
+	}
+
+	var buf bytes.Buffer
+	if err := parent.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar failed: %v", err)
+	}
+
+	files := extractTarFiles(t, &buf)
+
+	parentKustom, ok := files["cl/apps/platform/kustomization.yaml"]
+	if !ok {
+		t.Fatalf("missing parent kustomization.yaml, got files: %v", fileNames(files))
+	}
+	if !bytes.Contains(parentKustom, []byte("flux-system-kustomization-infra.yaml")) {
+		t.Errorf("expected parent to reference flux-system-kustomization-infra.yaml, got:\n%s", parentKustom)
+	}
+	if bytes.Contains(parentKustom, []byte("  - infra\n")) {
+		t.Errorf("umbrella child should NOT be referenced as plain subdirectory, got:\n%s", parentKustom)
+	}
+
+	// Child subdir contains workload + its own kustomization.yaml
+	if _, ok := files["cl/apps/platform/infra/default-configmap-cfg.yaml"]; !ok {
+		t.Errorf("missing umbrella child workload file, got: %v", fileNames(files))
+	}
+	childKustom, ok := files["cl/apps/platform/infra/kustomization.yaml"]
+	if !ok {
+		t.Errorf("missing umbrella child kustomization.yaml, got: %v", fileNames(files))
+	}
+	if !bytes.Contains(childKustom, []byte("default-configmap-cfg.yaml")) {
+		t.Errorf("umbrella child kustomization should list workload file, got:\n%s", childKustom)
+	}
+
+	// The umbrella child subdir must NOT contain any flux-system-kustomization-* file
+	for name := range files {
+		if bytes.HasPrefix([]byte(name), []byte("cl/apps/platform/infra/flux-system-kustomization-")) {
+			t.Errorf("umbrella child subdir contains flux CR file it should not: %s", name)
+		}
+	}
+}
+
 // extractTarFiles reads all entries from a tar archive into a map.
 func extractTarFiles(t *testing.T, buf *bytes.Buffer) map[string][]byte {
 	t.Helper()

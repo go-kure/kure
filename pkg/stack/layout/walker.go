@@ -100,6 +100,22 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 			}
 		}
 
+		// Umbrella children of the root node's bundle become sub-layouts of
+		// the root node layout (cluster-name root dir → rootNode → children).
+		if len(c.Node.Bundle.Children) > 0 {
+			c.Node.Bundle.InitializeUmbrella()
+			umbrellaChildren, err := walkUmbrellaChildLayouts(
+				c.Node.Bundle.Children,
+				[]string{rules.ClusterName, c.Node.Name},
+				filePer,
+				rules.FluxPlacement,
+			)
+			if err != nil {
+				return nil, err
+			}
+			rootLayout.Children = append(rootLayout.Children, umbrellaChildren...)
+		}
+
 		clusterLayout.Children = append(clusterLayout.Children, rootLayout)
 	}
 
@@ -209,6 +225,16 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 					ml.Resources = append(ml.Resources, *o)
 				}
 			}
+			// Umbrella: umbrella child sub-layouts live directly under the
+			// node layout in nodeOnly mode (no intermediate bundle layer).
+			if len(b.Children) > 0 {
+				b.InitializeUmbrella()
+				umbrellaChildren, err := walkUmbrellaChildLayouts(b.Children, currentPath, filePer, fluxPlacement)
+				if err != nil {
+					return nil, err
+				}
+				ml.Children = append(ml.Children, umbrellaChildren...)
+			}
 		}
 	} else {
 		var children []*ManifestLayout
@@ -237,6 +263,16 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 					FluxPlacement: fluxPlacement,         // Pass flux placement mode
 				}
 				bundleChildren = append(bundleChildren, appLayout)
+			}
+			// Umbrella: umbrella child sub-layouts are siblings of application
+			// sub-layouts within the bundle's layout directory.
+			if len(b.Children) > 0 {
+				b.InitializeUmbrella()
+				umbrellaChildren, err := walkUmbrellaChildLayouts(b.Children, append(currentPath, b.Name), filePer, fluxPlacement)
+				if err != nil {
+					return nil, err
+				}
+				bundleChildren = append(bundleChildren, umbrellaChildren...)
 			}
 			bundleLayout := &ManifestLayout{
 				Name:          b.Name,
@@ -289,6 +325,55 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 	}
 
 	return ml, nil
+}
+
+// walkUmbrellaChildLayouts renders a slice of umbrella Bundle.Children into a
+// flat ManifestLayout list. Each returned layout carries UmbrellaChild=true so
+// downstream writers emit a flux-system-kustomization-{Name}.yaml reference
+// in the parent directory instead of descending into a subdirectory for the
+// Flux CR. Child application resources are flattened into the child layout's
+// Resources (single-directory-per-child on disk). Nested umbrellas recurse so
+// grandchildren become sub-layouts of their immediate parent umbrella child.
+func walkUmbrellaChildLayouts(children []*stack.Bundle, currentPath []string, filePer FileExportMode, fluxPlacement FluxPlacement) ([]*ManifestLayout, error) {
+	var out []*ManifestLayout
+	for _, cb := range children {
+		if cb == nil {
+			continue
+		}
+		ml := &ManifestLayout{
+			Name:          cb.Name,
+			Namespace:     filepath.Join(currentPath...),
+			FilePer:       filePer,
+			FluxPlacement: fluxPlacement,
+			Mode:          KustomizationExplicit,
+			UmbrellaChild: true,
+		}
+		for _, app := range cb.Applications {
+			if app == nil {
+				continue
+			}
+			objsPtr, err := app.Generate()
+			if err != nil {
+				return nil, err
+			}
+			for _, o := range objsPtr {
+				if o == nil {
+					continue
+				}
+				ml.Resources = append(ml.Resources, *o)
+			}
+		}
+		if len(cb.Children) > 0 {
+			cb.InitializeUmbrella()
+			nested, err := walkUmbrellaChildLayouts(cb.Children, append(currentPath, cb.Name), filePer, fluxPlacement)
+			if err != nil {
+				return nil, err
+			}
+			ml.Children = append(ml.Children, nested...)
+		}
+		out = append(out, ml)
+	}
+	return out, nil
 }
 
 // resolvePackageRef returns the effective PackageRef for a node, using inheritance from parent

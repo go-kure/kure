@@ -212,6 +212,16 @@ func ConvertBundleToV1Alpha1(b *stack.Bundle) *BundleConfig {
 		}
 	}
 
+	// Convert umbrella children
+	for _, ch := range b.Children {
+		if ch != nil {
+			config.Spec.Children = append(config.Spec.Children, BundleReference{
+				Name:       ch.Name,
+				APIVersion: "stack.gokure.dev/v1alpha1",
+			})
+		}
+	}
+
 	// Convert applications
 	for _, app := range b.Applications {
 		if app != nil {
@@ -250,6 +260,15 @@ func ConvertV1Alpha1ToBundle(config *BundleConfig) *stack.Bundle {
 		Wait:          &wait,
 		Timeout:       config.Spec.Timeout,
 		RetryInterval: config.Spec.RetryInterval,
+	}
+
+	// Umbrella bundles always run with Wait=true (createKustomization forces
+	// it at CR generation time). Since BundleSpec.Wait is a plain bool, an
+	// unset field decodes as false — which would trigger the umbrella
+	// "Wait=false" validation error on the reverse path. Leave Wait nil for
+	// umbrellas so validation sees it as "not set" and CR generation fills it.
+	if len(config.Spec.Children) > 0 {
+		b.Wait = nil
 	}
 
 	// Convert source ref
@@ -291,6 +310,11 @@ type StackConverter struct {
 
 	// appMap maps application references to their actual applications
 	appMap map[string]*stack.Application
+
+	// visited tracks bundle pointers already emitted during a tree walk so
+	// umbrella descendants shared between node bundles are emitted exactly
+	// once.
+	visited map[*stack.Bundle]bool
 }
 
 // NewStackConverter creates a new stack converter
@@ -299,6 +323,7 @@ func NewStackConverter() *StackConverter {
 		nodeMap:   make(map[string]*NodeConfig),
 		bundleMap: make(map[string]*BundleConfig),
 		appMap:    make(map[string]*stack.Application),
+		visited:   make(map[*stack.Bundle]bool),
 	}
 }
 
@@ -333,16 +358,36 @@ func (c *StackConverter) convertNodeTreeToV1Alpha1(node *stack.Node, nodes *[]*N
 	*nodes = append(*nodes, nodeConfig)
 	c.nodeMap[node.Name] = nodeConfig
 
-	// Convert bundle if present
-	if node.Bundle != nil {
+	// Convert bundle if present, plus any umbrella descendants reachable
+	// from it. Visited-pointer dedup prevents emitting the same umbrella
+	// child twice if the tree references it from multiple node bundles.
+	if node.Bundle != nil && !c.visited[node.Bundle] {
+		c.visited[node.Bundle] = true
 		bundleConfig := ConvertBundleToV1Alpha1(node.Bundle)
 		*bundles = append(*bundles, bundleConfig)
 		c.bundleMap[node.Bundle.Name] = bundleConfig
+		c.emitUmbrellaDescendants(node.Bundle, bundles)
 	}
 
 	// Recursively convert children
 	for _, child := range node.Children {
 		c.convertNodeTreeToV1Alpha1(child, nodes, bundles)
+	}
+}
+
+// emitUmbrellaDescendants walks a bundle's umbrella Children subtree and
+// appends a BundleConfig for each descendant, skipping any bundle pointer
+// already emitted.
+func (c *StackConverter) emitUmbrellaDescendants(b *stack.Bundle, bundles *[]*BundleConfig) {
+	for _, ch := range b.Children {
+		if ch == nil || c.visited[ch] {
+			continue
+		}
+		c.visited[ch] = true
+		childConfig := ConvertBundleToV1Alpha1(ch)
+		*bundles = append(*bundles, childConfig)
+		c.bundleMap[ch.Name] = childConfig
+		c.emitUmbrellaDescendants(ch, bundles)
 	}
 }
 
@@ -387,6 +432,16 @@ func (c *StackConverter) ConvertV1Alpha1ToClusterTree(
 		for _, depRef := range bundleConfig.Spec.DependsOn {
 			if dep, exists := bundleMap[depRef.Name]; exists {
 				bundle.DependsOn = append(bundle.DependsOn, dep)
+			}
+		}
+	}
+
+	// Resolve umbrella children
+	for _, bundleConfig := range bundleConfigs {
+		bundle := bundleMap[bundleConfig.Metadata.Name]
+		for _, childRef := range bundleConfig.Spec.Children {
+			if ch, exists := bundleMap[childRef.Name]; exists {
+				bundle.Children = append(bundle.Children, ch)
 			}
 		}
 	}

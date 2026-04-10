@@ -48,8 +48,30 @@ Cluster                    # Top-level configuration
 - **Features**:
   - Flux reconciliation settings (interval, timeout, retryInterval, source)
   - Interval validation (1s to 24h, Go duration format)
-  - Dependency management
+  - Dependency management (`DependsOn`) — ordering between sibling bundles
+  - Umbrella composition (`Children`) — a parent Kustomization aggregates
+    child readiness via `spec.wait: true` + auto `spec.healthChecks`. See
+    the "Umbrella Bundles" subsection below.
   - Label propagation
+
+##### Umbrella Bundles (Containment vs Ordering)
+
+`Bundle.DependsOn` and `Bundle.Children` answer different questions:
+
+- `DependsOn` expresses **ordering** between siblings: "reconcile X only after
+  Y is Ready". It does not change which resources either bundle applies.
+- `Children` expresses **containment**: the parent bundle is a wrapper around
+  its children. The parent's Flux Kustomization renders the child
+  Kustomization CRs in its own path, sets `spec.wait: true`, and uses
+  `spec.healthChecks` to aggregate each child's Ready condition into its own.
+  The parent becomes Ready iff all children are Ready — giving downstream
+  consumers a single stable anchor regardless of how many internal tiers the
+  umbrella contains.
+
+Children bundles must be **standalone**: a bundle referenced by `Children`
+cannot simultaneously be the `Bundle` of any `stack.Node`. `ValidateCluster`
+enforces this disjointness along with cycle detection, shared-ownership
+rejection, and multi-package rejection (initial patch restriction).
 
 #### 4. Application (`pkg/stack/application.go`)
 - **Purpose**: Single deployable application

@@ -134,6 +134,13 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 
 		// Add child references
 		for _, child := range ml.Children {
+			if child.UmbrellaChild {
+				// Umbrella child: reference the child's Flux Kustomization CR
+				// YAML (placed in this parent directory), not the subdirectory.
+				fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
+				writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
+				continue
+			}
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else {
