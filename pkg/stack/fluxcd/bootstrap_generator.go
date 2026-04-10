@@ -92,11 +92,29 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 }
 
 // generateFluxOperatorBootstrap generates bootstrap resources using the Flux Operator.
+//
+// Output order (also a valid apply order):
+//  1. Flux Operator install bundle — Namespace, CRDs, RBAC, ServiceAccount,
+//     Service, controller Deployment (from the embedded upstream install.yaml,
+//     see FluxOperatorInstallObjects / FluxOperatorVersion).
+//  2. FluxInstance CR — configured from BootstrapConfig.
+//
+// Prior to kure v0.1.0-rc.5 only the FluxInstance was emitted, which
+// required every caller to provide the Flux Operator install bundle
+// separately (see crane's bootstrap-chain design §9). Emitting the full
+// set here makes the generator self-sufficient so callers can return a
+// single apply-ready bundle.
 func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
-	// Generate FluxInstance resource
-	fluxInstance := bg.generateFluxInstance(config, rootNode)
+	installObjs, err := FluxOperatorInstallObjects()
+	if err != nil {
+		return nil, errors.ResourceValidationError("BootstrapConfig", "flux-operator", "install",
+			fmt.Sprintf("failed to load vendored flux-operator install bundle: %v", err), err)
+	}
 
-	return []client.Object{fluxInstance}, nil
+	resources := make([]client.Object, 0, len(installObjs)+1)
+	resources = append(resources, installObjs...)
+	resources = append(resources, bg.generateFluxInstance(config, rootNode))
+	return resources, nil
 }
 
 // generateGotkComponents generates the standard Flux toolkit components.
