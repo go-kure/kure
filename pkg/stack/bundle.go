@@ -2,6 +2,7 @@ package stack
 
 import (
 	"fmt"
+	"slices"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -27,6 +28,13 @@ type Bundle struct {
 	ParentPath string
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []*Bundle
+	// Children holds bundles whose Flux Kustomization CRs are rendered into
+	// this bundle's tar path and whose readiness is aggregated into this
+	// bundle's HealthChecks. When non-empty, this bundle acts as an umbrella:
+	// it is Ready only when all Children are Ready. Children bundles must be
+	// standalone — they cannot simultaneously be the Bundle of a stack.Node.
+	// Setting Wait=false on a bundle with Children is a validation error.
+	Children []*Bundle
 	// Interval controls how often Flux reconciles the bundle.
 	Interval string
 	// SourceRef specifies the source for the bundle.
@@ -95,7 +103,9 @@ func NewBundle(name string, resources []*Application, labels map[string]string) 
 	return a, nil
 }
 
-// Validate performs basic sanity checks on the Bundle.
+// Validate performs basic sanity checks on the Bundle. When the bundle has
+// umbrella Children, Validate recursively walks the child subtree checking for
+// cycles, duplicate names, and Wait/DependsOn contradictions.
 func (a *Bundle) Validate() error {
 	if a == nil {
 		return errors.ErrNilBundle
@@ -108,7 +118,89 @@ func (a *Bundle) Validate() error {
 			return errors.ResourceValidationError("Bundle", a.Name, "applications", fmt.Sprintf("application at index %d is nil", i), nil)
 		}
 	}
+	visited := make(map[*Bundle]bool)
+	return a.validateChildren(visited)
+}
+
+// validateChildren performs recursive umbrella-children validation: cycle
+// detection, nil/self/duplicate/empty-name checks, Wait contradictions, and
+// DependsOn/Children disjointness. Cycle detection uses a visited pointer set
+// shared across the whole recursion.
+func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
+	if visited[a] {
+		return errors.ResourceValidationError("Bundle", a.Name, "children",
+			fmt.Sprintf("umbrella cycle detected at %q", a.Name), nil)
+	}
+	visited[a] = true
+	if a.Wait != nil && !*a.Wait && len(a.Children) > 0 {
+		return errors.ResourceValidationError("Bundle", a.Name, "wait",
+			"umbrella bundle (has Children) cannot set Wait=false", nil)
+	}
+	depNames := make(map[string]bool, len(a.DependsOn))
+	for _, dep := range a.DependsOn {
+		if dep != nil {
+			depNames[dep.Name] = true
+		}
+	}
+	childNames := make(map[string]bool, len(a.Children))
+	for i, c := range a.Children {
+		if c == nil {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("child at index %d is nil", i), nil)
+		}
+		if c == a {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				"bundle cannot be its own child", nil)
+		}
+		if c.Name == "" {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("child at index %d has empty name", i), nil)
+		}
+		if c.Name == a.Name {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("child name %q equals parent name", c.Name), nil)
+		}
+		if childNames[c.Name] {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("duplicate child name %q", c.Name), nil)
+		}
+		childNames[c.Name] = true
+		if depNames[c.Name] {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("child %q also appears in dependsOn", c.Name), nil)
+		}
+		if slices.Contains(c.DependsOn, a) {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("child %q depends on parent %q", c.Name, a.Name), nil)
+		}
+		if err := c.validateChildren(visited); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// IsUmbrella reports whether the bundle acts as an umbrella (has Children
+// that contribute their Flux Kustomizations into this bundle's directory).
+func (a *Bundle) IsUmbrella() bool {
+	return a != nil && len(a.Children) > 0
+}
+
+// InitializeUmbrella walks the umbrella Children subtree and sets each child's
+// runtime parent pointer (via SetParent) so that path-derivation code (e.g.
+// bundlePath) can walk upward from any child. Idempotent and safe to call
+// multiple times.
+func (a *Bundle) InitializeUmbrella() {
+	if a == nil {
+		return
+	}
+	for _, c := range a.Children {
+		if c == nil {
+			continue
+		}
+		c.SetParent(a)
+		c.InitializeUmbrella()
+	}
 }
 
 func (a *Bundle) Generate() ([]*client.Object, error) {

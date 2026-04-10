@@ -177,6 +177,79 @@ func TestBundleConfig(t *testing.T) {
 			wantErr: true,
 			errMsg:  "nil",
 		},
+		{
+			name: "umbrella with children",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata: gvk.BaseMetadata{
+					Name: "umbrella",
+				},
+				Spec: BundleSpec{
+					Children: []BundleReference{
+						{Name: "child1"},
+						{Name: "child2"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty child name",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata:   gvk.BaseMetadata{Name: "umbrella"},
+				Spec: BundleSpec{
+					Children: []BundleReference{{Name: ""}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "child name cannot be empty",
+		},
+		{
+			name: "self as child",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata:   gvk.BaseMetadata{Name: "umbrella"},
+				Spec: BundleSpec{
+					Children: []BundleReference{{Name: "umbrella"}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "cannot be its own child",
+		},
+		{
+			name: "duplicate child",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata:   gvk.BaseMetadata{Name: "umbrella"},
+				Spec: BundleSpec{
+					Children: []BundleReference{
+						{Name: "child1"},
+						{Name: "child1"},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "duplicate child",
+		},
+		{
+			name: "child overlaps with dependsOn",
+			bundle: &BundleConfig{
+				APIVersion: "stack.gokure.dev/v1alpha1",
+				Kind:       "Bundle",
+				Metadata:   gvk.BaseMetadata{Name: "umbrella"},
+				Spec: BundleSpec{
+					DependsOn: []BundleReference{{Name: "shared"}},
+					Children:  []BundleReference{{Name: "shared"}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "also appears in dependsOn",
+		},
 	}
 
 	for _, tt := range tests {

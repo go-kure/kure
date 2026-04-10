@@ -29,6 +29,14 @@ type BundleSpec struct {
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []BundleReference `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
 
+	// Children lists bundles whose Flux Kustomization CRs are rendered into
+	// this bundle's directory and whose readiness is aggregated into this
+	// bundle's HealthChecks. When non-empty, this bundle acts as an umbrella.
+	// Children bundles must be standalone — they cannot simultaneously be
+	// attached as the Bundle of any Node. Setting Wait=false on a bundle
+	// with Children is a validation error.
+	Children []BundleReference `yaml:"children,omitempty" json:"children,omitempty"`
+
 	// Interval controls how often Flux reconciles the bundle
 	// Supports Go duration format (e.g., "5m", "1h", "30s", "1h30m")
 	// Valid range: 1s to 24h. Empty value uses system defaults.
@@ -271,6 +279,31 @@ func (b *BundleConfig) Validate() error {
 				fmt.Sprintf("duplicate dependency: %s", dep.Name), nil)
 		}
 		depNames[dep.Name] = true
+	}
+
+	// Local umbrella children checks. Deep cycle detection happens after the
+	// tree is reconstructed in ConvertV1Alpha1ToClusterTree via ValidateCluster.
+	// Wait=false + non-empty Children contradiction also lives in the
+	// unversioned Bundle.Validate — this block only checks local name rules.
+	childNames := make(map[string]bool)
+	for _, child := range b.Spec.Children {
+		if child.Name == "" {
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.children",
+				"child name cannot be empty", nil)
+		}
+		if child.Name == b.Metadata.Name {
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.children",
+				"bundle cannot be its own child", nil)
+		}
+		if childNames[child.Name] {
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.children",
+				fmt.Sprintf("duplicate child: %s", child.Name), nil)
+		}
+		if depNames[child.Name] {
+			return errors.ResourceValidationError("Bundle", b.Metadata.Name, "spec.children",
+				fmt.Sprintf("child %q also appears in dependsOn", child.Name), nil)
+		}
+		childNames[child.Name] = true
 	}
 
 	return nil

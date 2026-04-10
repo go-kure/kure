@@ -516,6 +516,177 @@ func TestBundleGetPath(t *testing.T) {
 	}
 }
 
+func TestBundleValidateUmbrellaChildren(t *testing.T) {
+	truePtr := func() *bool { v := true; return &v }
+	falsePtr := func() *bool { v := false; return &v }
+
+	t.Run("happy umbrella passes", func(t *testing.T) {
+		child := &Bundle{Name: "child"}
+		parent := &Bundle{Name: "parent", Children: []*Bundle{child}}
+		if err := parent.Validate(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("umbrella with Wait=true passes", func(t *testing.T) {
+		child := &Bundle{Name: "c"}
+		parent := &Bundle{Name: "p", Wait: truePtr(), Children: []*Bundle{child}}
+		if err := parent.Validate(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("umbrella with Wait=false rejected", func(t *testing.T) {
+		child := &Bundle{Name: "c"}
+		parent := &Bundle{Name: "p", Wait: falsePtr(), Children: []*Bundle{child}}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected Wait=false + Children to fail")
+		}
+	})
+
+	t.Run("nil child rejected", func(t *testing.T) {
+		parent := &Bundle{Name: "p", Children: []*Bundle{nil}}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected nil child to fail")
+		}
+	})
+
+	t.Run("self-child rejected", func(t *testing.T) {
+		parent := &Bundle{Name: "p"}
+		parent.Children = []*Bundle{parent}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected self-child to fail")
+		}
+	})
+
+	t.Run("empty child name rejected", func(t *testing.T) {
+		parent := &Bundle{Name: "p", Children: []*Bundle{{Name: ""}}}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected empty child name to fail")
+		}
+	})
+
+	t.Run("child name equal to parent rejected", func(t *testing.T) {
+		parent := &Bundle{Name: "p", Children: []*Bundle{{Name: "p"}}}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected child-name==parent-name to fail")
+		}
+	})
+
+	t.Run("duplicate child names rejected", func(t *testing.T) {
+		parent := &Bundle{Name: "p", Children: []*Bundle{{Name: "c"}, {Name: "c"}}}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected duplicate child names to fail")
+		}
+	})
+
+	t.Run("DependsOn/Children overlap rejected", func(t *testing.T) {
+		shared := &Bundle{Name: "shared"}
+		parent := &Bundle{
+			Name:      "p",
+			DependsOn: []*Bundle{shared},
+			Children:  []*Bundle{shared},
+		}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected child also in DependsOn to fail")
+		}
+	})
+
+	t.Run("child depending on parent rejected", func(t *testing.T) {
+		parent := &Bundle{Name: "p"}
+		child := &Bundle{Name: "c", DependsOn: []*Bundle{parent}}
+		parent.Children = []*Bundle{child}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected child->parent DependsOn cycle to fail")
+		}
+	})
+
+	t.Run("direct child cycle rejected", func(t *testing.T) {
+		a := &Bundle{Name: "a"}
+		b := &Bundle{Name: "b"}
+		a.Children = []*Bundle{b}
+		b.Children = []*Bundle{a}
+		if err := a.Validate(); err == nil {
+			t.Fatal("expected a->b->a cycle to fail")
+		}
+	})
+
+	t.Run("deep cycle rejected", func(t *testing.T) {
+		a := &Bundle{Name: "a"}
+		b := &Bundle{Name: "b"}
+		c := &Bundle{Name: "c"}
+		a.Children = []*Bundle{b}
+		b.Children = []*Bundle{c}
+		c.Children = []*Bundle{a}
+		if err := a.Validate(); err == nil {
+			t.Fatal("expected deep a->b->c->a cycle to fail")
+		}
+	})
+
+	t.Run("nested umbrella validated recursively", func(t *testing.T) {
+		gc := &Bundle{Name: "grandchild"}
+		c := &Bundle{Name: "child", Children: []*Bundle{gc}}
+		p := &Bundle{Name: "parent", Children: []*Bundle{c}}
+		if err := p.Validate(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid nested child bubbles up", func(t *testing.T) {
+		badGC := &Bundle{Name: ""}
+		c := &Bundle{Name: "child", Children: []*Bundle{badGC}}
+		p := &Bundle{Name: "parent", Children: []*Bundle{c}}
+		if err := p.Validate(); err == nil {
+			t.Fatal("expected empty grandchild name to fail")
+		}
+	})
+}
+
+func TestBundleIsUmbrella(t *testing.T) {
+	var nilBundle *Bundle
+	if nilBundle.IsUmbrella() {
+		t.Error("nil bundle should not be umbrella")
+	}
+	if (&Bundle{Name: "p"}).IsUmbrella() {
+		t.Error("bundle with no Children is not an umbrella")
+	}
+	b := &Bundle{Name: "p", Children: []*Bundle{{Name: "c"}}}
+	if !b.IsUmbrella() {
+		t.Error("bundle with Children should be an umbrella")
+	}
+}
+
+func TestBundleInitializeUmbrella(t *testing.T) {
+	gc := &Bundle{Name: "grandchild"}
+	c := &Bundle{Name: "child", Children: []*Bundle{gc}}
+	p := &Bundle{Name: "parent", Children: []*Bundle{c}}
+
+	p.InitializeUmbrella()
+
+	if c.GetParent() != p {
+		t.Error("child parent should be set to parent")
+	}
+	if gc.GetParent() != c {
+		t.Error("grandchild parent should be set to child")
+	}
+	if c.ParentPath != "parent" {
+		t.Errorf("child ParentPath expected %q got %q", "parent", c.ParentPath)
+	}
+	if gc.ParentPath != "parent/child" {
+		t.Errorf("grandchild ParentPath expected %q got %q", "parent/child", gc.ParentPath)
+	}
+
+	// Idempotent
+	p.InitializeUmbrella()
+	if c.GetParent() != p || gc.GetParent() != c {
+		t.Error("InitializeUmbrella should be idempotent")
+	}
+
+	// Nil safe
+	var nilP *Bundle
+	nilP.InitializeUmbrella()
+}
+
 func TestBundleSetParent(t *testing.T) {
 	parent := &Bundle{Name: "parent", ParentPath: ""}
 	child := &Bundle{Name: "child", ParentPath: ""}
