@@ -1,6 +1,34 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.4] - 2026-04-10
+
+### Added
+
+- Add Bundle.Children + shared cluster validator
+- Wire ValidateCluster into all entry points
+- Umbrella Kustomization spec generation
+- Umbrella layout walker + integrated placement + v1alpha1 parity
+- Add umbrella cluster demo and fix writer CR duplication
+
+### Dependencies
+
+- Bump github.com/fluxcd/flux2/v2 from 2.8.2 to 2.8.3
+- Bump github.com/cert-manager/cert-manager
+- Bump github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring
+- Bump github.com/cloudnative-pg/cloudnative-pg
+- Bump github.com/fluxcd/flux2/v2 from 2.8.2 to 2.8.3
+
+### Fixed
+
+- Bump Go to 1.26.2 for stdlib security fixes
+- Switch to claude-max-proxy
+- Nest child nodes under root node layout when ClusterName is set
+
+### Testing
+
+- Move gotk network tests to integration, use flux-operator in workflow test
+
 ## [0.1.0-rc.3] - 2026-03-22
 
 ### Added
@@ -23,6 +51,10 @@ All notable changes to this project will be documented in this file.
 - Resolve broken links on versioned doc subsites
 - Disable setup-go built-in cache to prevent double-caching
 - Resolve broken dependency-updates link on contributing guide page
+
+### Release
+
+- V0.1.0-rc.3
 
 ## [0.1.0-rc.2] - 2026-03-20
 
