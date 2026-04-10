@@ -1,16 +1,26 @@
 # Automated PR review for Kure
-# Posts AI-generated code review comments on pull requests via ccproxy.
+# Posts AI-generated code review comments on pull requests.
 # Ported from the GitLab mr-review.yml template (meta/ci-templates/mr-review.yml).
 #
-# Two-pass review:
-#   Pass 1: Review model analyzes the diff and posts findings
-#   Pass 2: Assessment model fact-checks the review for hallucinations
+# Backend: claude-max-proxy (wende/claude-max-api-proxy) sidecar of the
+# openclaw StatefulSet, at http://openclaw-claude-proxy.openclaw.svc:3456.
+# The proxy exposes an OpenAI-compatible /v1/chat/completions endpoint but
+# ignores the request "model" field and always routes through Claude Code CLI
+# on the Max subscription. PR_REVIEW_MODEL / PR_REVIEW_ASSESS_MODEL are
+# cosmetic labels only.
 #
-# Requires a self-hosted runner (autops-kube) with in-cluster access to ccproxy.
-# No API key secrets needed — ccproxy handles model authentication.
+# Two-pass review:
+#   Pass 1: Review pass analyzes the diff and posts findings
+#   Pass 2: Assessment pass fact-checks the review for hallucinations
+#   (Both passes now hit the same Claude instance — the "different model"
+#    second-opinion pattern is no longer enforced by the backend.)
+#
+# Requires a self-hosted runner (arc-runners) with in-cluster access to
+# claude-max-proxy. No API key secrets needed — the proxy uses the host's
+# Claude Max credentials.
 #
 # Optional overrides (repository variables):
-#   PR_REVIEW_MODEL             - Model for review (default: gpt-5.4)
+#   PR_REVIEW_MODEL             - Model label for the review pass (default: claude-opus-4)
 #   PR_REVIEW_MAX_DIFF_CHARS    - Max diff size in chars (default: 50000)
 #   PR_REVIEW_MAX_TOKENS        - Max response tokens (default: 1500)
 #   PR_REVIEW_CONTEXT           - Additional project context for system prompt
@@ -38,8 +48,8 @@ jobs:
       pull-requests: write
 
     env:
-      CCPROXY_URL: "http://openclaw-ccproxy.openclaw.svc:8000"
-      PR_REVIEW_MODEL: "gpt-5.4"
+      CCPROXY_URL: "http://openclaw-claude-proxy.openclaw.svc:3456"
+      PR_REVIEW_MODEL: "claude-opus-4"
       PR_REVIEW_MAX_DIFF_CHARS: "50000"
       PR_REVIEW_MAX_TOKENS: "1500"
       PR_REVIEW_CONTEXT: "Go library for programmatically building Kubernetes resources. Uses typed builders instead of templates. Part of the Wharf platform."
@@ -199,13 +209,13 @@ jobs:
             }')
 
           HTTP_CODE=$(curl -s -o /tmp/review_response.json -w '%{http_code}' \
-            -X POST "${CCPROXY_URL}/codex/v1/chat/completions" \
+            -X POST "${CCPROXY_URL}/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
           RESPONSE=$(cat /tmp/review_response.json)
 
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "ERROR: ccproxy returned HTTP ${HTTP_CODE}"
+            echo "ERROR: claude-max-proxy returned HTTP ${HTTP_CODE}"
             echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
             exit 1
           fi
@@ -358,7 +368,7 @@ jobs:
             }')
 
           ASSESS_HTTP=$(curl -s -o /tmp/assess_response.json -w '%{http_code}' \
-            -X POST "${CCPROXY_URL}/codex/v1/chat/completions" \
+            -X POST "${CCPROXY_URL}/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -d "$ASSESS_PAYLOAD")
           ASSESS_RESP=$(cat /tmp/assess_response.json)
