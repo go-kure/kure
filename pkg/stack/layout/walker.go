@@ -63,8 +63,12 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 	return ml, nil
 }
 
-// walkClusterWithClusterName creates a cluster-aware layout where the cluster name is the root
-// and all nodes (including the root node) become siblings underneath it.
+// walkClusterWithClusterName creates a cluster-aware layout where the cluster
+// name is the root directory and the root node (plus any child-node subtrees)
+// are nested underneath it. Child-node sub-layouts are placed under the root
+// node layout (not as cluster-level siblings) so their accumulated layout
+// path matches stack.Node.GetPath() — the Flux integrator's path-based lookup
+// relies on this correspondence.
 func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bool, filePer FileExportMode) (*ManifestLayout, error) {
 	// Create a cluster-level layout with the cluster name as the root
 	clusterLayout := &ManifestLayout{
@@ -74,15 +78,16 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 		Children:  []*ManifestLayout{},
 	}
 
-	// Process the root node as a sibling (only its bundle, not children)
-	if c.Node.Bundle != nil {
-		rootLayout := &ManifestLayout{
-			Name:      c.Node.Name,
-			Namespace: filepath.Join(rules.ClusterName, c.Node.Name),
-			FilePer:   filePer,
-			Children:  []*ManifestLayout{},
-		}
+	// Build the root node layout. Done unconditionally (even when the root
+	// node has no Bundle) so child-node subtrees can be nested underneath it.
+	rootLayout := &ManifestLayout{
+		Name:      c.Node.Name,
+		Namespace: filepath.Join(rules.ClusterName, c.Node.Name),
+		FilePer:   filePer,
+		Children:  []*ManifestLayout{},
+	}
 
+	if c.Node.Bundle != nil {
 		// Add only the root node's bundle resources (not child resources)
 		for _, app := range c.Node.Bundle.Applications {
 			if app == nil {
@@ -115,21 +120,24 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 			}
 			rootLayout.Children = append(rootLayout.Children, umbrellaChildren...)
 		}
-
-		clusterLayout.Children = append(clusterLayout.Children, rootLayout)
 	}
 
-	// Process all child nodes as siblings at the cluster level (with their own resources)
+	// Nest child-node sub-layouts under the root node layout so their
+	// accumulated path (clusterName/rootName/childName/...) matches
+	// stack.Node.GetPath() (rootName/childName/...) when the Flux integrator
+	// searches for the corresponding layout node.
 	nodeFlat := rules.NodeGrouping == GroupFlat
 	for _, child := range c.Node.Children {
-		childLayout, err := walkNode(child, []string{rules.ClusterName}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement)
+		childLayout, err := walkNode(child, []string{rules.ClusterName, c.Node.Name}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement)
 		if err != nil {
 			return nil, err
 		}
 		if childLayout != nil {
-			clusterLayout.Children = append(clusterLayout.Children, childLayout)
+			rootLayout.Children = append(rootLayout.Children, childLayout)
 		}
 	}
+
+	clusterLayout.Children = append(clusterLayout.Children, rootLayout)
 
 	return clusterLayout, nil
 }

@@ -352,6 +352,66 @@ func TestLayoutIntegrator_SeparateMode_EmptyCluster(t *testing.T) {
 	}
 }
 
+// TestCreateLayoutWithResources_ClusterNameWithChildNodes verifies that
+// setting rules.ClusterName on a cluster whose root node has child nodes
+// produces a layout tree whose paths match stack.Node.GetPath(), so the
+// Flux integrator's path-based lookup can find each child node's layout.
+// Previously walkClusterWithClusterName flattened child nodes to cluster
+// siblings, causing CreateLayoutWithResources to fail with "corresponding
+// layout node not found". This matches the shape of examples/demo/clusters/
+// basic/cluster.yaml.
+func TestCreateLayoutWithResources_ClusterNameWithChildNodes(t *testing.T) {
+	rootBundle := &stack.Bundle{Name: "root-bundle"}
+	appsBundle := &stack.Bundle{Name: "apps-bundle"}
+	infraBundle := &stack.Bundle{Name: "infra-bundle"}
+
+	appsNode := &stack.Node{Name: "apps", Bundle: appsBundle}
+	infraNode := &stack.Node{Name: "infra", Bundle: infraBundle}
+	rootNode := &stack.Node{
+		Name:     "flux-system",
+		Bundle:   rootBundle,
+		Children: []*stack.Node{appsNode, infraNode},
+	}
+	appsNode.SetParent(rootNode)
+	infraNode.SetParent(rootNode)
+	cluster := &stack.Cluster{Name: "demo", Node: rootNode}
+
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	integrator.SetFluxPlacement(layout.FluxIntegrated)
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "demo"
+	rules.FluxPlacement = layout.FluxIntegrated
+
+	ml, err := integrator.CreateLayoutWithResources(cluster, rules)
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources failed: %v", err)
+	}
+	if ml == nil {
+		t.Fatal("expected non-nil layout")
+	}
+
+	// Cluster layout contains exactly the root node layout.
+	if len(ml.Children) != 1 {
+		t.Fatalf("cluster layout should have 1 child (root node), got %d", len(ml.Children))
+	}
+	rootLayout := ml.Children[0]
+	if rootLayout.Name != "flux-system" {
+		t.Fatalf("expected root layout name %q, got %q", "flux-system", rootLayout.Name)
+	}
+
+	// Child nodes must be nested under the root layout.
+	childNames := map[string]bool{}
+	for _, c := range rootLayout.Children {
+		childNames[c.Name] = true
+	}
+	for _, want := range []string{"apps", "infra"} {
+		if !childNames[want] {
+			t.Errorf("expected child node layout %q under root layout, not found", want)
+		}
+	}
+}
+
 func TestCreateLayoutWithResources_InvalidUmbrellaRejected(t *testing.T) {
 	// Shared pointer is both a child node Bundle and an umbrella child —
 	// ValidateCluster must reject.
