@@ -444,3 +444,30 @@ func TestGenerateFromCluster_InvalidUmbrellaRejected(t *testing.T) {
 		t.Fatal("expected invalid umbrella cluster to be rejected by GenerateFromCluster")
 	}
 }
+
+func TestGeneratePath_UmbrellaChild(t *testing.T) {
+	// Umbrella initialization wires child parent pointers, so the child's
+	// Kustomization path should reflect the umbrella hierarchy.
+	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
+
+	umbrella := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{Name: "infra"},
+		},
+	}
+
+	// Trigger InitializeUmbrella via GenerateFromBundle on the umbrella.
+	if _, err := wf.GenerateFromBundle(umbrella); err != nil {
+		t.Fatalf("umbrella generate: %v", err)
+	}
+
+	objs, err := wf.GenerateFromBundle(umbrella.Children[0])
+	if err != nil {
+		t.Fatalf("child generate: %v", err)
+	}
+	k := objs[0].(*kustv1.Kustomization)
+	if k.Spec.Path != "platform/infra" {
+		t.Errorf("Path = %q, want platform/infra", k.Spec.Path)
+	}
+}

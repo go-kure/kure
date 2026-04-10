@@ -336,3 +336,275 @@ func TestCreateSource_InvalidKind(t *testing.T) {
 		t.Fatal("expected error for invalid source kind")
 	}
 }
+
+func TestGenerateFromBundle_UmbrellaAutoHealthChecks(t *testing.T) {
+	wf := fluxstack.Engine()
+	umbrella := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{Name: "infra"},
+			{Name: "services"},
+			{Name: "apps"},
+		},
+	}
+
+	objs, err := wf.GenerateFromBundle(umbrella)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Self-only: umbrella bundle emits ONE Kustomization, not four.
+	if len(objs) != 1 {
+		t.Fatalf("expected 1 object (self-only), got %d", len(objs))
+	}
+
+	k, ok := objs[0].(*kustv1.Kustomization)
+	if !ok {
+		t.Fatalf("expected *kustv1.Kustomization, got %T", objs[0])
+	}
+
+	if !k.Spec.Wait {
+		t.Error("expected Wait=true for umbrella bundle")
+	}
+
+	if len(k.Spec.HealthChecks) != 3 {
+		t.Fatalf("expected 3 auto HealthChecks, got %d", len(k.Spec.HealthChecks))
+	}
+	wantNames := []string{"infra", "services", "apps"}
+	for i, want := range wantNames {
+		hc := k.Spec.HealthChecks[i]
+		if hc.Name != want {
+			t.Errorf("HealthChecks[%d].Name = %q, want %q", i, hc.Name, want)
+		}
+		if hc.Kind != "Kustomization" {
+			t.Errorf("HealthChecks[%d].Kind = %q, want Kustomization", i, hc.Kind)
+		}
+		if hc.APIVersion != kustv1.GroupVersion.String() {
+			t.Errorf("HealthChecks[%d].APIVersion = %q, want %q", i, hc.APIVersion, kustv1.GroupVersion.String())
+		}
+		if hc.Namespace != "flux-system" {
+			t.Errorf("HealthChecks[%d].Namespace = %q, want flux-system", i, hc.Namespace)
+		}
+	}
+}
+
+func TestGenerateFromBundle_UmbrellaUserHealthChecksAppended(t *testing.T) {
+	wf := fluxstack.Engine()
+	umbrella := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{Name: "infra"},
+		},
+		HealthChecks: []stack.HealthCheck{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "manual-check",
+				Namespace:  "default",
+			},
+		},
+	}
+
+	objs, err := wf.GenerateFromBundle(umbrella)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	k := objs[0].(*kustv1.Kustomization)
+
+	if len(k.Spec.HealthChecks) != 2 {
+		t.Fatalf("expected 2 HealthChecks (1 auto + 1 user), got %d", len(k.Spec.HealthChecks))
+	}
+	// Auto entries come first.
+	if k.Spec.HealthChecks[0].Name != "infra" {
+		t.Errorf("HealthChecks[0] = %q, want auto entry 'infra'", k.Spec.HealthChecks[0].Name)
+	}
+	if k.Spec.HealthChecks[1].Name != "manual-check" {
+		t.Errorf("HealthChecks[1] = %q, want user entry 'manual-check'", k.Spec.HealthChecks[1].Name)
+	}
+}
+
+func TestGenerateFromBundle_UmbrellaPreservesTimeout(t *testing.T) {
+	wf := fluxstack.Engine()
+	umbrella := &stack.Bundle{
+		Name:          "platform",
+		Timeout:       "10m",
+		RetryInterval: "2m",
+		Children: []*stack.Bundle{
+			{Name: "infra"},
+		},
+	}
+
+	objs, err := wf.GenerateFromBundle(umbrella)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	k := objs[0].(*kustv1.Kustomization)
+
+	if k.Spec.Timeout == nil || k.Spec.Timeout.Duration.String() != "10m0s" {
+		t.Errorf("Timeout = %v, want 10m", k.Spec.Timeout)
+	}
+	if k.Spec.RetryInterval == nil || k.Spec.RetryInterval.Duration.String() != "2m0s" {
+		t.Errorf("RetryInterval = %v, want 2m", k.Spec.RetryInterval)
+	}
+}
+
+func TestGenerateFromBundle_UmbrellaDoesNotRecurse(t *testing.T) {
+	// Assert the GenerateFromBundle self-only invariant: a two-level umbrella
+	// still yields exactly 1 object (just the top bundle's Kustomization).
+	wf := fluxstack.Engine()
+	umbrella := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{
+				Name: "infra",
+				Children: []*stack.Bundle{
+					{Name: "networking"},
+				},
+			},
+		},
+	}
+
+	objs, err := wf.GenerateFromBundle(umbrella)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objs) != 1 {
+		t.Fatalf("expected 1 object (self-only), got %d", len(objs))
+	}
+}
+
+func TestGenerateFromNode_UmbrellaClosure(t *testing.T) {
+	// GenerateFromNode must walk the umbrella subtree so flat-list consumers
+	// (separate Flux placement) see every descendant Kustomization.
+	wf := fluxstack.Engine()
+	n := &stack.Node{
+		Name: "root",
+		Bundle: &stack.Bundle{
+			Name: "platform",
+			Children: []*stack.Bundle{
+				{Name: "infra"},
+				{Name: "services"},
+				{Name: "apps"},
+			},
+		},
+	}
+
+	objs, err := wf.GenerateFromNode(n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 1 umbrella + 3 children = 4 Kustomizations.
+	if len(objs) != 4 {
+		t.Fatalf("expected 4 objects (umbrella + 3 children), got %d", len(objs))
+	}
+
+	names := map[string]bool{}
+	for _, o := range objs {
+		k, ok := o.(*kustv1.Kustomization)
+		if !ok {
+			t.Fatalf("unexpected object type %T", o)
+		}
+		names[k.Name] = true
+	}
+	for _, want := range []string{"platform", "infra", "services", "apps"} {
+		if !names[want] {
+			t.Errorf("missing Kustomization %q in closure output", want)
+		}
+	}
+}
+
+func TestGenerateFromNode_NestedUmbrellaClosure(t *testing.T) {
+	wf := fluxstack.Engine()
+	n := &stack.Node{
+		Name: "root",
+		Bundle: &stack.Bundle{
+			Name: "platform",
+			Children: []*stack.Bundle{
+				{
+					Name: "infra",
+					Children: []*stack.Bundle{
+						{Name: "networking"},
+						{Name: "storage"},
+					},
+				},
+				{Name: "apps"},
+			},
+		},
+	}
+
+	objs, err := wf.GenerateFromNode(n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// platform + infra + networking + storage + apps = 5
+	if len(objs) != 5 {
+		t.Fatalf("expected 5 objects, got %d", len(objs))
+	}
+}
+
+func TestGenerateFromNode_UmbrellaChildWithSource(t *testing.T) {
+	wf := fluxstack.Engine()
+	n := &stack.Node{
+		Name: "root",
+		Bundle: &stack.Bundle{
+			Name: "platform",
+			Children: []*stack.Bundle{
+				{
+					Name: "ext",
+					SourceRef: &stack.SourceRef{
+						Kind:   "GitRepository",
+						Name:   "ext-repo",
+						URL:    "https://github.com/example/ext",
+						Branch: "main",
+					},
+				},
+			},
+		},
+	}
+
+	objs, err := wf.GenerateFromNode(n)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// umbrella Kustomization + ext Kustomization + ext GitRepository source = 3
+	if len(objs) != 3 {
+		t.Fatalf("expected 3 objects, got %d", len(objs))
+	}
+
+	var sawSource bool
+	for _, o := range objs {
+		if _, ok := o.(*sourcev1.GitRepository); ok {
+			sawSource = true
+		}
+	}
+	if !sawSource {
+		t.Error("expected umbrella child's GitRepository source in output")
+	}
+}
+
+func TestGenerateFromBundle_UmbrellaInitializesParent(t *testing.T) {
+	// Umbrella path should call InitializeUmbrella which sets child parent
+	// pointers, allowing path derivation to work without manual SetParent.
+	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
+	umbrella := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{Name: "infra"},
+		},
+	}
+
+	// Generate the umbrella first — this should initialize children.
+	if _, err := wf.GenerateFromBundle(umbrella); err != nil {
+		t.Fatalf("umbrella generate: %v", err)
+	}
+
+	// Now generate the child — its path must include the parent.
+	childObjs, err := wf.GenerateFromBundle(umbrella.Children[0])
+	if err != nil {
+		t.Fatalf("child generate: %v", err)
+	}
+	k := childObjs[0].(*kustv1.Kustomization)
+	if k.Spec.Path != "platform/infra" {
+		t.Errorf("child Path = %q, want platform/infra (parent not wired)", k.Spec.Path)
+	}
+}

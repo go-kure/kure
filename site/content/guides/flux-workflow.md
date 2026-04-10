@@ -115,6 +115,61 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 | FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
 | FluxPlacement | `FluxSeparate`, `FluxIntegrated` | Separate or inline Flux resources |
 
+## Umbrella Bundles — Readiness Aggregation
+
+A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
+its Kustomization `Ready` once every child Kustomization is `Ready`. The Flux
+engine enforces this by:
+
+- Forcing `spec.wait: true` on the umbrella's Kustomization
+- Prepending an auto `spec.healthChecks` entry for each direct child
+
+The resulting umbrella Kustomization aggregates child readiness regardless of
+how many children there are, giving external consumers a single stable anchor:
+
+```go
+umbrella := &stack.Bundle{
+    Name: "platform",
+    Children: []*stack.Bundle{
+        {Name: "platform-infra"},
+        {Name: "platform-services"},
+        {Name: "platform-apps"},
+    },
+}
+```
+
+```yaml
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: platform
+  namespace: flux-system
+spec:
+  wait: true
+  healthChecks:
+  - apiVersion: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    name: platform-infra
+    namespace: flux-system
+  - apiVersion: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    name: platform-services
+    namespace: flux-system
+  - apiVersion: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    name: platform-apps
+    namespace: flux-system
+  # ...rest of spec
+```
+
+User-supplied `HealthChecks` on the umbrella bundle are appended AFTER the
+auto entries. Setting `Wait: false` on a bundle that has `Children` is
+rejected at validation time.
+
+Umbrella children must be **standalone** — a bundle cannot simultaneously be
+the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
+`stack.ValidateCluster` rejects any such overlap before resource generation.
+
 ## Bootstrap
 
 Generate Flux system bootstrap manifests:

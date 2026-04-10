@@ -51,6 +51,9 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Obje
 }
 
 // GenerateFromNode creates Flux resources from a node and its children.
+// When a node's bundle is an umbrella (len(Bundle.Children) > 0), the umbrella
+// closure is walked and flattened into the returned slice so flat-list
+// consumers (e.g. separate Flux placement) see every child Kustomization CR.
 func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, error) {
 	if n == nil {
 		return nil, nil
@@ -66,6 +69,17 @@ func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, er
 				fmt.Sprintf("failed to generate bundle resources: %v", err), err)
 		}
 		resources = append(resources, bundleResources...)
+
+		// Walk umbrella closure so flat-list consumers see descendant CRs.
+		if len(n.Bundle.Children) > 0 {
+			n.Bundle.InitializeUmbrella()
+			closure, err := g.generateUmbrellaClosure(n.Bundle)
+			if err != nil {
+				return nil, errors.ResourceValidationError("Node", n.Name, "umbrella",
+					fmt.Sprintf("failed to generate umbrella closure: %v", err), err)
+			}
+			resources = append(resources, closure...)
+		}
 	}
 
 	// Generate resources for child nodes
@@ -81,7 +95,43 @@ func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, er
 	return resources, nil
 }
 
-// GenerateFromBundle creates a Flux Kustomization from a bundle definition.
+// generateUmbrellaClosure walks a bundle's umbrella Children subtree and emits
+// a Kustomization (and, when URL is set, a Source) for every descendant. The
+// parent umbrella itself is NOT emitted here — callers handle it separately
+// via createKustomization / GenerateFromBundle. The walk is depth-first and
+// emits nested umbrella descendants in declaration order.
+func (g *ResourceGenerator) generateUmbrellaClosure(umbrella *stack.Bundle) ([]client.Object, error) {
+	var out []client.Object
+	for _, c := range umbrella.Children {
+		if c == nil {
+			continue
+		}
+		out = append(out, g.createKustomization(c))
+		if c.SourceRef != nil && c.SourceRef.URL != "" {
+			src, err := g.createSource(c.SourceRef, c.Name)
+			if err != nil {
+				return nil, errors.ResourceValidationError("Bundle", c.Name, "source",
+					fmt.Sprintf("failed to create source: %v", err), err)
+			}
+			if src != nil {
+				out = append(out, src)
+			}
+		}
+		if len(c.Children) > 0 {
+			nested, err := g.generateUmbrellaClosure(c)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, nested...)
+		}
+	}
+	return out, nil
+}
+
+// GenerateFromBundle creates Flux resources (Kustomization, and optionally a
+// Source) for b itself only. Umbrella Children are NOT recursed — callers that
+// need the closure should use GenerateFromNode, which walks the subtree, or
+// iterate b.Children directly.
 func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object, error) {
 	if b == nil {
 		return nil, nil
@@ -169,17 +219,35 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		}
 	}
 
-	// Set health checks if specified
-	if len(b.HealthChecks) > 0 {
-		kust.Spec.HealthChecks = make([]metaapi.NamespacedObjectKindReference, 0, len(b.HealthChecks))
-		for _, hc := range b.HealthChecks {
+	// Umbrella bundles: force Wait=true and prepend auto HealthChecks for each
+	// child Kustomization. Validation has already rejected any explicit
+	// Wait=false when Children is non-empty, so this override is safe.
+	// User-supplied HealthChecks are appended AFTER the auto entries.
+	if len(b.Children) > 0 {
+		b.InitializeUmbrella()
+		kust.Spec.Wait = true
+		for _, child := range b.Children {
+			if child == nil {
+				continue
+			}
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
-				APIVersion: hc.APIVersion,
-				Kind:       hc.Kind,
-				Name:       hc.Name,
-				Namespace:  hc.Namespace,
+				APIVersion: kustv1.GroupVersion.String(),
+				Kind:       "Kustomization",
+				Name:       child.Name,
+				Namespace:  g.DefaultNamespace,
 			})
 		}
+	}
+
+	// Append user-specified health checks. For umbrella bundles, these come
+	// AFTER the auto entries emitted above.
+	for _, hc := range b.HealthChecks {
+		kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
+			APIVersion: hc.APIVersion,
+			Kind:       hc.Kind,
+			Name:       hc.Name,
+			Namespace:  hc.Namespace,
+		})
 	}
 
 	// Add dependencies
