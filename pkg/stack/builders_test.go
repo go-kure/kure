@@ -733,3 +733,30 @@ func TestMultipleDependencies(t *testing.T) {
 		}
 	}
 }
+
+func TestDeepCopyBundle_PreservesChildren(t *testing.T) {
+	child1 := &Bundle{Name: "child1"}
+	child2 := &Bundle{Name: "child2"}
+	original := &Bundle{
+		Name:     "umbrella",
+		Children: []*Bundle{child1, child2},
+	}
+
+	copyBundle := deepCopyBundle(original)
+
+	if copyBundle == nil {
+		t.Fatal("expected non-nil copy")
+	}
+	if len(copyBundle.Children) != 2 {
+		t.Fatalf("expected 2 children, got %d", len(copyBundle.Children))
+	}
+	// Pointers to children are shared (shallow copy).
+	if copyBundle.Children[0] != child1 || copyBundle.Children[1] != child2 {
+		t.Error("expected child pointers to be shared with original")
+	}
+	// Slice headers must be distinct: appending to the copy does not affect the original.
+	copyBundle.Children = append(copyBundle.Children, &Bundle{Name: "child3"})
+	if len(original.Children) != 2 {
+		t.Fatalf("appending to copy must not affect original; got %d", len(original.Children))
+	}
+}
