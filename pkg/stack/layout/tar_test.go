@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -179,10 +180,23 @@ func TestWriteToTar_FluxIntegrated(t *testing.T) {
 }
 
 func TestWriteToTar_UmbrellaChild(t *testing.T) {
-	// Umbrella child layouts should cause the parent kustomization.yaml
-	// to reference flux-system-kustomization-{name}.yaml (regardless of
-	// FluxPlacement), and the child subdirectory should contain its own
-	// workloads + kustomization.yaml (no flux CR file).
+	// Mirrors the layout produced by the Flux LayoutIntegrator in
+	// FluxIntegrated mode: the umbrella parent carries the child's
+	// Kustomization CR in Resources (placed there by placeUmbrellaChildrenFlux),
+	// and an UmbrellaChild sub-layout in Children (carrying the child's
+	// workloads). Verifies:
+	//   1) The parent kustomization.yaml references the child CR filename
+	//      exactly once (duplication regression test — the Children-loop
+	//      UmbrellaChild branch used to emit the same entry a second time).
+	//   2) The umbrella child is NOT referenced as a plain subdirectory.
+	//   3) The child subdirectory contains its own workload + kustomization.yaml.
+	//   4) The child subdirectory does NOT contain any flux-system-kustomization-* file.
+	childKust := &unstructured.Unstructured{}
+	childKust.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
+	childKust.SetKind("Kustomization")
+	childKust.SetName("infra")
+	childKust.SetNamespace("flux-system")
+
 	child := &ManifestLayout{
 		Name:          "infra",
 		Namespace:     "cl/apps/platform/infra",
@@ -202,6 +216,7 @@ func TestWriteToTar_UmbrellaChild(t *testing.T) {
 		Namespace: "cl/apps/platform",
 		FilePer:   FilePerResource,
 		Mode:      KustomizationExplicit,
+		Resources: []client.Object{childKust},
 		Children:  []*ManifestLayout{child},
 	}
 
@@ -219,8 +234,16 @@ func TestWriteToTar_UmbrellaChild(t *testing.T) {
 	if !bytes.Contains(parentKustom, []byte("flux-system-kustomization-infra.yaml")) {
 		t.Errorf("expected parent to reference flux-system-kustomization-infra.yaml, got:\n%s", parentKustom)
 	}
+	if got := bytes.Count(parentKustom, []byte("flux-system-kustomization-infra.yaml")); got != 1 {
+		t.Errorf("flux-system-kustomization-infra.yaml should appear exactly once in parent kustomization.yaml, got %d occurrences:\n%s", got, parentKustom)
+	}
 	if bytes.Contains(parentKustom, []byte("  - infra\n")) {
 		t.Errorf("umbrella child should NOT be referenced as plain subdirectory, got:\n%s", parentKustom)
+	}
+
+	// The parent directory also contains the child's Kustomization CR file.
+	if _, ok := files["cl/apps/platform/flux-system-kustomization-infra.yaml"]; !ok {
+		t.Errorf("missing child Kustomization CR file at parent layer, got: %v", fileNames(files))
 	}
 
 	// Child subdir contains workload + its own kustomization.yaml

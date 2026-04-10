@@ -915,10 +915,15 @@ func TestWriteToDisk_KustomizationGenerated(t *testing.T) {
 }
 
 func TestWriteManifest_UmbrellaChild(t *testing.T) {
-	// UmbrellaChild sub-layouts should cause the parent kustomization.yaml to
-	// emit flux-system-kustomization-{name}.yaml entries instead of a plain
-	// subdirectory reference, and each child subdir should still carry its
-	// own workloads and its own kustomization.yaml.
+	// Mirrors the layout produced by the Flux LayoutIntegrator in
+	// FluxIntegrated mode: the parent carries the child's Kustomization CR
+	// in Resources (via placeUmbrellaChildrenFlux) and an UmbrellaChild
+	// sub-layout in Children. Asserts the parent kustomization.yaml
+	// references the child CR filename exactly once (no duplication), and
+	// each child subdir carries its own workloads + own kustomization.yaml
+	// with no flux CR file.
+	childKustCR := testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "infra", "flux-system")
+
 	child := &ManifestLayout{
 		Name:          "infra",
 		Namespace:     "mycluster/apps/platform/infra",
@@ -931,6 +936,7 @@ func TestWriteManifest_UmbrellaChild(t *testing.T) {
 	parent := &ManifestLayout{
 		Name:      "platform",
 		Namespace: "mycluster/apps/platform",
+		Resources: []client.Object{childKustCR},
 		Children:  []*ManifestLayout{child},
 	}
 
@@ -949,8 +955,17 @@ func TestWriteManifest_UmbrellaChild(t *testing.T) {
 	if !strings.Contains(content, "flux-system-kustomization-infra.yaml") {
 		t.Errorf("parent kustomization should reference flux-system-kustomization-infra.yaml, got:\n%s", content)
 	}
+	if got := strings.Count(content, "flux-system-kustomization-infra.yaml"); got != 1 {
+		t.Errorf("flux-system-kustomization-infra.yaml should appear exactly once in parent kustomization.yaml, got %d occurrences:\n%s", got, content)
+	}
 	if strings.Contains(content, "\n  - infra\n") {
 		t.Errorf("umbrella child must NOT be referenced as plain subdirectory, got:\n%s", content)
+	}
+
+	// Parent directory also contains the child's Kustomization CR file.
+	parentCRFile := filepath.Join(dir, "clusters", "mycluster", "apps", "platform", "flux-system-kustomization-infra.yaml")
+	if _, err := os.Stat(parentCRFile); err != nil {
+		t.Errorf("expected child Kustomization CR file at parent layer: %v", err)
 	}
 
 	// Child directory exists with its own workload + kustomization.yaml

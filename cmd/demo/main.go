@@ -174,7 +174,9 @@ func runAppWorkloads() error {
 	})
 }
 
-// runClusters processes all cluster configs from examples/demo/clusters/
+// runClusters processes all cluster configs from examples/demo/clusters/.
+// Per-cluster failures are logged but do not abort the walk, so one broken
+// example does not hide the output of the others.
 func runClusters() error {
 	clustersDir := "examples/demo/clusters"
 
@@ -184,7 +186,10 @@ func runClusters() error {
 		}
 
 		fmt.Printf("Processing cluster: %s\n", path)
-		return runClusterExample(path)
+		if err := runClusterExample(path); err != nil {
+			log.Printf("cluster %s failed: %v", path, err)
+		}
+		return nil
 	})
 }
 
@@ -205,27 +210,38 @@ func runClusterExample(clusterFile string) error {
 		return nil
 	}
 
-	// Create bundles and load app configs
-	rootBundle, err := stack.NewBundle(cl.Node.Name, nil, nil)
-	if err != nil {
-		return err
-	}
-	cl.Node.Bundle = rootBundle
-
 	// Determine base directory for loading app configs
 	baseDir := filepath.Dir(clusterFile)
-	for _, child := range cl.Node.Children {
-		child.SetParent(cl.Node)
-		childBundle, err := stack.NewBundle(child.Name, nil, nil)
+
+	// Umbrella path: when the cluster YAML provides a Bundle with Children,
+	// respect it as-is and load each child's workloads from <baseDir>/<childName>/.
+	// The umbrella itself holds no Applications — its job is to aggregate
+	// child readiness via spec.wait + spec.healthChecks.
+	if cl.Node.Bundle != nil && len(cl.Node.Bundle.Children) > 0 {
+		if err := loadUmbrellaChildrenApps(cl.Node.Bundle, baseDir); err != nil {
+			return err
+		}
+	} else {
+		// Create bundles and load app configs
+		rootBundle, err := stack.NewBundle(cl.Node.Name, nil, nil)
 		if err != nil {
 			return err
 		}
-		child.Bundle = childBundle
-		childBundle.SetParent(rootBundle)
+		cl.Node.Bundle = rootBundle
 
-		// Load app configs from child directory
-		if err := loadNodeApps(child, baseDir); err != nil {
-			return err
+		for _, child := range cl.Node.Children {
+			child.SetParent(cl.Node)
+			childBundle, err := stack.NewBundle(child.Name, nil, nil)
+			if err != nil {
+				return err
+			}
+			child.Bundle = childBundle
+			childBundle.SetParent(rootBundle)
+
+			// Load app configs from child directory
+			if err := loadNodeApps(child, baseDir); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -320,6 +336,66 @@ func loadNodeApps(node *stack.Node, baseDir string) error {
 	}
 
 	return nil
+}
+
+// loadUmbrellaChildrenApps attaches each umbrella child's workloads by reading
+// AppWorkload YAML files from baseDir/<child.Name>/ into child.Applications.
+// The parent pointer on each child is set so the flux engine can derive paths
+// relative to the umbrella.
+func loadUmbrellaChildrenApps(umbrella *stack.Bundle, baseDir string) error {
+	for _, child := range umbrella.Children {
+		if child == nil {
+			continue
+		}
+		child.SetParent(umbrella)
+		apps, err := loadApplicationsFromDir(filepath.Join(baseDir, child.Name))
+		if err != nil {
+			return err
+		}
+		child.Applications = apps
+	}
+	return nil
+}
+
+// loadApplicationsFromDir decodes each .yaml file in dir as one or more
+// stack.ApplicationWrapper documents and returns the corresponding Applications.
+func loadApplicationsFromDir(dir string) ([]*stack.Application, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var apps []*stack.Application
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(entry.Name())
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+
+		fp := filepath.Join(dir, entry.Name())
+		f, err := os.Open(filepath.Clean(fp)) //nolint:gosec // G703: CLI tool reads user-specified file paths
+		if err != nil {
+			return nil, err
+		}
+
+		dec := yaml.NewDecoder(f)
+		for {
+			var wrapper stack.ApplicationWrapper
+			if err := dec.Decode(&wrapper); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				_ = f.Close()
+				return nil, err
+			}
+			apps = append(apps, wrapper.ToApplication())
+		}
+		_ = f.Close()
+	}
+	return apps, nil
 }
 
 // runMultiOCIDemo processes multi-OCI configurations from examples/demo/multi-oci/
