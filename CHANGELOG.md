@@ -1,6 +1,13 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+### Added
+
+- BootstrapGenerator (flux-operator mode) now emits the full Flux Operator install bundle (Namespace, CRDs, RBAC, ServiceAccount, Service, controller Deployment) in addition to the FluxInstance. The install manifest is vendored from upstream `fluxcd/flux-operator v0.40.0` and embedded via `//go:embed`, with the version surfaced as `fluxcd.FluxOperatorVersion`. Callers can now stand up flux-operator from scratch with a single apply of the bootstrap output — no separate install step required. Consumers that only want the FluxInstance can filter by type.
+
 ## [0.1.0-rc.4] - 2026-04-10
 
 ### Added
