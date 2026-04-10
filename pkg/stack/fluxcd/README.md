@@ -114,6 +114,53 @@ Controls where Flux Kustomization resources are placed:
 - `FluxSeparate` - Flux resources in a separate directory tree
 - `FluxIntegrated` - Flux resources alongside application manifests
 
+## Umbrella Bundles
+
+A `Bundle` with a non-empty `Children` slice becomes an **umbrella**: a parent
+Flux Kustomization that aggregates the readiness of its children via
+`spec.wait: true` and auto-generated `spec.healthChecks`. This gives downstream
+consumers a single stable anchor regardless of how many internal tiers the
+umbrella contains.
+
+### Resource generation
+
+`ResourceGenerator.createKustomization` detects umbrella bundles and:
+- forces `spec.wait = true`
+- prepends one `HealthChecks` entry per direct child (referencing the child's
+  own Kustomization by name/namespace)
+- leaves user-supplied `HealthChecks` appended after the auto entries
+
+`GenerateFromBundle(b)` is strictly self-only — it never recurses into
+`b.Children`. Callers that want the entire umbrella closure as a flat list use
+`GenerateFromNode` or `GenerateFromCluster`, which walk umbrella children via
+`generateUmbrellaClosure` internally.
+
+### Placement in layouts
+
+`LayoutIntegrator` places umbrella child Flux CRs at the **parent** layout
+node:
+
+- **FluxIntegrated, non-nodeOnly**: the walker creates a bundle sub-layout
+  under the node layout. Umbrella child Kustomization CRs (and their Source
+  CRs, if the child has a `SourceRef.URL`) are appended to the bundle
+  sub-layout's `Resources`. Nested umbrella children are placed at their
+  enclosing umbrella child's layout node.
+- **FluxIntegrated, nodeOnly (GroupFlat)**: there is no intermediate bundle
+  layer, so umbrella children become direct sub-layouts of the node layout,
+  and their Flux CRs sit at the node layout alongside the umbrella self CR.
+- **FluxSeparate**: `GenerateFromCluster` walks the full umbrella closure, so
+  the `flux-system` layout directory receives every descendant's Kustomization
+  CR as a flat list.
+
+### On-disk shape
+
+When a parent layout has an umbrella child, the parent's `kustomization.yaml`
+references the child via `flux-system-kustomization-{child}.yaml` (the
+Kustomization CR file sitting in the parent directory) instead of the child
+subdirectory. The child subdirectory still exists and still contains its own
+`kustomization.yaml` plus workload YAML files — but **no** Flux CR files, so
+Flux does not double-apply the child's resources.
+
 ## Validation
 
 All cluster-level entry points (`GenerateFromCluster`, `CreateLayoutWithResources`)

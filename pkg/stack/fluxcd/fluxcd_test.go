@@ -1,15 +1,41 @@
 package fluxcd_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"errors"
+	"io"
+	"strings"
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
+
+// fakeAppConfig is a minimal ApplicationConfig for end-to-end umbrella tests.
+type fakeAppConfig struct {
+	objs []*client.Object
+}
+
+func (f *fakeAppConfig) Generate(*stack.Application) ([]*client.Object, error) {
+	return f.objs, nil
+}
+
+func fakeUmbrellaApp(appName, cmName string) *stack.Application {
+	u := &unstructured.Unstructured{}
+	u.SetAPIVersion("v1")
+	u.SetKind("ConfigMap")
+	u.SetName(cmName)
+	u.SetNamespace("default")
+	var o client.Object = u
+	return stack.NewApplication(appName, "default", &fakeAppConfig{objs: []*client.Object{&o}})
+}
 
 func TestWorkflowBundlePathMode(t *testing.T) {
 	parent := &stack.Bundle{Name: "parent"}
@@ -607,4 +633,251 @@ func TestGenerateFromBundle_UmbrellaInitializesParent(t *testing.T) {
 	if k.Spec.Path != "platform/infra" {
 		t.Errorf("child Path = %q, want platform/infra (parent not wired)", k.Spec.Path)
 	}
+}
+
+// extractTarFilesFluxcd reads all regular file entries from a tar into a map.
+func extractTarFilesFluxcd(t *testing.T, buf *bytes.Buffer) map[string][]byte {
+	t.Helper()
+	files := make(map[string][]byte)
+	tr := tar.NewReader(buf)
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("tar read: %v", err)
+		}
+		if hdr.Typeflag == tar.TypeReg {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				t.Fatalf("tar file read: %v", err)
+			}
+			files[hdr.Name] = data
+		}
+	}
+	return files
+}
+
+func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
+	// Build a cluster with a Node whose Bundle is an umbrella with 3 children,
+	// each holding one Application. Use PresetParentDeployedControl equivalent
+	// (GroupFlat + FluxIntegrated) via LayoutRules and assert that the tar
+	// output has the right directory shape, kustomization.yaml references, and
+	// the umbrella parent Kustomization CR with HealthChecks.
+	umbrella := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{
+				Name:         "Y-infra",
+				Applications: []*stack.Application{fakeUmbrellaApp("infra-app", "cm-infra")},
+			},
+			{
+				Name:         "Y-services",
+				Applications: []*stack.Application{fakeUmbrellaApp("services-app", "cm-services")},
+			},
+			{
+				Name:         "Y-apps",
+				Applications: []*stack.Application{fakeUmbrellaApp("apps-app", "cm-apps")},
+			},
+		},
+	}
+	node := &stack.Node{Name: "apps", Bundle: umbrella}
+	root := &stack.Node{Name: "demo", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	integrator.SetFluxPlacement(layout.FluxIntegrated)
+
+	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+	})
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+
+	// Find the node layout to assert umbrella self + 3 children CRs (2 per
+	// child: none — only 3 Kustomizations) are all at the node layout in
+	// nodeOnly mode.
+	if len(ml.Children) == 0 {
+		t.Fatalf("expected children on top-level layout")
+	}
+
+	// Walk to the "apps" node layout. The exact shape depends on root
+	// flattening — find by name.
+	var nodeLayout *layout.ManifestLayout
+	var visit func(*layout.ManifestLayout)
+	visit = func(l *layout.ManifestLayout) {
+		if l.Name == "apps" {
+			nodeLayout = l
+			return
+		}
+		for _, c := range l.Children {
+			visit(c)
+			if nodeLayout != nil {
+				return
+			}
+		}
+	}
+	visit(ml)
+	if nodeLayout == nil {
+		t.Fatalf("could not locate apps node layout")
+	}
+
+	// In GroupFlat/nodeOnly mode, all 4 Flux Kustomization CRs live at the
+	// node layout (umbrella self + 3 children).
+	kustsByName := map[string]*kustv1.Kustomization{}
+	for _, r := range nodeLayout.Resources {
+		if k, ok := r.(*kustv1.Kustomization); ok {
+			kustsByName[k.Name] = k
+		}
+	}
+	for _, want := range []string{"platform", "Y-infra", "Y-services", "Y-apps"} {
+		if kustsByName[want] == nil {
+			t.Errorf("missing Flux Kustomization %q at node layout", want)
+		}
+	}
+
+	// Umbrella parent should have Wait=true and HealthChecks entries for children.
+	platform := kustsByName["platform"]
+	if platform == nil {
+		t.Fatal("no platform Kustomization")
+	}
+	if !platform.Spec.Wait {
+		t.Error("expected platform.Spec.Wait == true (umbrella)")
+	}
+	hcNames := map[string]bool{}
+	for _, hc := range platform.Spec.HealthChecks {
+		hcNames[hc.Name] = true
+	}
+	for _, want := range []string{"Y-infra", "Y-services", "Y-apps"} {
+		if !hcNames[want] {
+			t.Errorf("platform HealthChecks missing %q, got %v", want, hcNames)
+		}
+	}
+
+	// Write to tar and verify disk shape.
+	var buf bytes.Buffer
+	if err := ml.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar: %v", err)
+	}
+	files := extractTarFilesFluxcd(t, &buf)
+
+	// Parent kustomization.yaml should reference each child's Flux
+	// Kustomization CR file. The node layout's namespace is demo/apps.
+	parentKust, ok := files["demo/apps/kustomization.yaml"]
+	if !ok {
+		t.Fatalf("no demo/apps/kustomization.yaml found, files: %v", fileNamesFromFluxcd(files))
+	}
+	for _, child := range []string{"Y-infra", "Y-services", "Y-apps"} {
+		want := "flux-system-kustomization-" + child + ".yaml"
+		if !bytes.Contains(parentKust, []byte(want)) {
+			t.Errorf("parent kustomization.yaml missing reference to %s:\n%s", want, parentKust)
+		}
+	}
+
+	// Each umbrella child subdir should contain its own workload + its own
+	// kustomization.yaml, and must NOT contain any flux-system-kustomization-*.
+	for _, child := range []string{"Y-infra", "Y-services", "Y-apps"} {
+		childPrefix := ""
+		for name := range files {
+			if strings.HasSuffix(name, "/"+child+"/kustomization.yaml") {
+				childPrefix = strings.TrimSuffix(name, "/kustomization.yaml")
+				break
+			}
+		}
+		if childPrefix == "" {
+			t.Errorf("no subdir kustomization.yaml for umbrella child %q", child)
+			continue
+		}
+		// Check for workload file
+		foundWorkload := false
+		for name := range files {
+			if strings.HasPrefix(name, childPrefix+"/") && strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, "kustomization.yaml") {
+				foundWorkload = true
+			}
+			if strings.HasPrefix(name, childPrefix+"/flux-system-kustomization-") {
+				t.Errorf("umbrella child subdir %q contains flux CR file: %s", child, name)
+			}
+		}
+		if !foundWorkload {
+			t.Errorf("umbrella child subdir %q has no workload file", child)
+		}
+	}
+}
+
+func TestEndToEndUmbrellaFromCluster_Separate(t *testing.T) {
+	// In separate Flux placement, the flux-system dir should contain all
+	// Kustomizations (umbrella + children) via GenerateFromCluster's flat
+	// closure output.
+	umbrella := &stack.Bundle{
+		Name: "platform",
+		Children: []*stack.Bundle{
+			{
+				Name:         "Y-infra",
+				Applications: []*stack.Application{fakeUmbrellaApp("infra-app", "cm-infra")},
+			},
+			{
+				Name:         "Y-services",
+				Applications: []*stack.Application{fakeUmbrellaApp("services-app", "cm-services")},
+			},
+		},
+	}
+	node := &stack.Node{Name: "apps", Bundle: umbrella}
+	root := &stack.Node{Name: "demo", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	integrator.SetFluxPlacement(layout.FluxSeparate)
+
+	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+	})
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+
+	// Find flux-system layout
+	var flux *layout.ManifestLayout
+	var visit func(*layout.ManifestLayout)
+	visit = func(l *layout.ManifestLayout) {
+		if l.Name == "flux-system" {
+			flux = l
+			return
+		}
+		for _, c := range l.Children {
+			visit(c)
+			if flux != nil {
+				return
+			}
+		}
+	}
+	visit(ml)
+	if flux == nil {
+		t.Fatalf("no flux-system layout found")
+	}
+
+	kustNames := map[string]bool{}
+	for _, r := range flux.Resources {
+		if k, ok := r.(*kustv1.Kustomization); ok {
+			kustNames[k.Name] = true
+		}
+	}
+	for _, want := range []string{"platform", "Y-infra", "Y-services"} {
+		if !kustNames[want] {
+			t.Errorf("flux-system missing Kustomization %q, got %v", want, kustNames)
+		}
+	}
+}
+
+func fileNamesFromFluxcd(files map[string][]byte) []string {
+	names := make([]string, 0, len(files))
+	for k := range files {
+		names = append(names, k)
+	}
+	return names
 }

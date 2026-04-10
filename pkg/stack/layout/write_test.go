@@ -913,3 +913,64 @@ func TestWriteToDisk_KustomizationGenerated(t *testing.T) {
 		t.Errorf("kustomization missing service reference, got:\n%s", content)
 	}
 }
+
+func TestWriteManifest_UmbrellaChild(t *testing.T) {
+	// UmbrellaChild sub-layouts should cause the parent kustomization.yaml to
+	// emit flux-system-kustomization-{name}.yaml entries instead of a plain
+	// subdirectory reference, and each child subdir should still carry its
+	// own workloads and its own kustomization.yaml.
+	child := &ManifestLayout{
+		Name:          "infra",
+		Namespace:     "mycluster/apps/platform/infra",
+		UmbrellaChild: true,
+		Resources: []client.Object{
+			testObject("v1", "ConfigMap", "cfg", "default"),
+		},
+	}
+
+	parent := &ManifestLayout{
+		Name:      "platform",
+		Namespace: "mycluster/apps/platform",
+		Children:  []*ManifestLayout{child},
+	}
+
+	cfg := DefaultLayoutConfig()
+	dir := t.TempDir()
+	if err := WriteManifest(dir, cfg, parent); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	parentKustom := filepath.Join(dir, "clusters", "mycluster", "apps", "platform", "kustomization.yaml")
+	data, err := os.ReadFile(parentKustom)
+	if err != nil {
+		t.Fatalf("failed to read parent kustomization.yaml: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "flux-system-kustomization-infra.yaml") {
+		t.Errorf("parent kustomization should reference flux-system-kustomization-infra.yaml, got:\n%s", content)
+	}
+	if strings.Contains(content, "\n  - infra\n") {
+		t.Errorf("umbrella child must NOT be referenced as plain subdirectory, got:\n%s", content)
+	}
+
+	// Child directory exists with its own workload + kustomization.yaml
+	childDir := filepath.Join(dir, "clusters", "mycluster", "apps", "platform", "infra")
+	if _, err := os.Stat(filepath.Join(childDir, "default-configmap-cfg.yaml")); err != nil {
+		t.Errorf("expected umbrella child workload file: %v", err)
+	}
+	childKustomPath := filepath.Join(childDir, "kustomization.yaml")
+	if _, err := os.Stat(childKustomPath); err != nil {
+		t.Errorf("expected umbrella child kustomization.yaml: %v", err)
+	}
+
+	// Child dir must NOT contain any flux-system-kustomization-* file.
+	entries, err := os.ReadDir(childDir)
+	if err != nil {
+		t.Fatalf("read child dir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "flux-system-kustomization-") {
+			t.Errorf("umbrella child subdir contains flux CR file it should not: %s", e.Name())
+		}
+	}
+}

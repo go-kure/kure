@@ -24,6 +24,13 @@ type ManifestLayout struct {
 	FluxPlacement       FluxPlacement // Track flux placement mode for kustomization generation
 	Resources           []client.Object
 	Children            []*ManifestLayout
+	// UmbrellaChild marks this layout as rendered from a Bundle.Children
+	// entry. When true, kustomization.yaml writers emit a
+	// flux-system-kustomization-{Name}.yaml reference in the parent directory
+	// (regardless of FluxPlacement), and the layout integrator places the
+	// child's Flux Kustomization CR at the parent layout node rather than in
+	// the child's own directory.
+	UmbrellaChild bool
 }
 
 func (ml *ManifestLayout) FullRepoPath() string {
@@ -261,6 +268,13 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 
 		// Add child references
 		for _, child := range ml.Children {
+			if child.UmbrellaChild {
+				// Umbrella child: reference the child's Flux Kustomization CR
+				// YAML (placed in this parent directory), not the subdirectory.
+				fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
+				writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
+				continue
+			}
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegrated {
