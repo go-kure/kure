@@ -370,6 +370,60 @@ func TestWriteToTar_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	}
 }
 
+func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
+	// Regression: FilePerKind must not collapse FluxIntegrated kustomization
+	// references — each child needs a unique filename including child.Name.
+	childA := &ManifestLayout{
+		Name:      "team-a",
+		Namespace: "cl/flux-system/team-a",
+		FilePer:   FilePerKind,
+		Mode:      KustomizationExplicit,
+		Resources: []client.Object{
+			&corev1.ConfigMap{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				ObjectMeta: metav1.ObjectMeta{Name: "cfg-a", Namespace: "flux-system"},
+			},
+		},
+	}
+	childB := &ManifestLayout{
+		Name:      "team-b",
+		Namespace: "cl/flux-system/team-b",
+		FilePer:   FilePerKind,
+		Mode:      KustomizationExplicit,
+		Resources: []client.Object{
+			&corev1.ConfigMap{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				ObjectMeta: metav1.ObjectMeta{Name: "cfg-b", Namespace: "flux-system"},
+			},
+		},
+	}
+
+	root := &ManifestLayout{
+		Name:          "flux-root",
+		Namespace:     "cl/flux-system",
+		FluxPlacement: FluxIntegrated,
+		FilePer:       FilePerKind,
+		Mode:          KustomizationExplicit,
+		Children:      []*ManifestLayout{childA, childB},
+	}
+
+	var buf bytes.Buffer
+	if err := root.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar failed: %v", err)
+	}
+
+	files := extractTarFiles(t, &buf)
+	rootKustom := string(files["cl/flux-system/flux-root/kustomization.yaml"])
+
+	// Each child must have a distinct reference
+	if !bytes.Contains([]byte(rootKustom), []byte("flux-system-kustomization-team-a.yaml")) {
+		t.Errorf("expected flux-system-kustomization-team-a.yaml reference, got:\n%s", rootKustom)
+	}
+	if !bytes.Contains([]byte(rootKustom), []byte("flux-system-kustomization-team-b.yaml")) {
+		t.Errorf("expected flux-system-kustomization-team-b.yaml reference, got:\n%s", rootKustom)
+	}
+}
+
 // extractTarFiles reads all entries from a tar archive into a map.
 func extractTarFiles(t *testing.T, buf *bytes.Buffer) map[string][]byte {
 	t.Helper()
