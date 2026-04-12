@@ -266,6 +266,110 @@ func TestWriteToTar_UmbrellaChild(t *testing.T) {
 	}
 }
 
+func TestWriteToTar_FileNamingKindName(t *testing.T) {
+	ml := &ManifestLayout{
+		Name:       "apps",
+		Namespace:  "default",
+		FilePer:    FilePerResource,
+		FileNaming: FileNamingKindName,
+		Mode:       KustomizationExplicit,
+		Resources: []client.Object{
+			&corev1.Service{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
+				ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default"},
+			},
+			&appsv1.Deployment{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+				ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default"},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := ml.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar failed: %v", err)
+	}
+
+	files := extractTarFiles(t, &buf)
+
+	// With FileNamingKindName, files should be {kind}-{name}.yaml (no namespace prefix)
+	expectedFiles := []string{
+		"default/apps/",
+		"default/apps/service-web.yaml",
+		"default/apps/deployment-web.yaml",
+		"default/apps/kustomization.yaml",
+	}
+	for _, expected := range expectedFiles {
+		if _, ok := files[expected]; !ok {
+			t.Errorf("missing expected file: %s (got: %v)", expected, fileNames(files))
+		}
+	}
+
+	// Should NOT have namespace-prefixed files
+	for name := range files {
+		if name == "default/apps/default-service-web.yaml" || name == "default/apps/default-deployment-web.yaml" {
+			t.Errorf("unexpected namespace-prefixed file: %s", name)
+		}
+	}
+
+	// Kustomization should reference the kind-name files
+	kustomContent := string(files["default/apps/kustomization.yaml"])
+	if !bytes.Contains([]byte(kustomContent), []byte("service-web.yaml")) {
+		t.Errorf("kustomization.yaml should reference service-web.yaml:\n%s", kustomContent)
+	}
+	if !bytes.Contains([]byte(kustomContent), []byte("deployment-web.yaml")) {
+		t.Errorf("kustomization.yaml should reference deployment-web.yaml:\n%s", kustomContent)
+	}
+}
+
+func TestWriteToTar_FileNamingKindName_FluxIntegrated(t *testing.T) {
+	child := &ManifestLayout{
+		Name:       "team-a",
+		Namespace:  "cl/flux-system/team-a",
+		FilePer:    FilePerResource,
+		FileNaming: FileNamingKindName,
+		Mode:       KustomizationExplicit,
+		Resources: []client.Object{
+			&corev1.ConfigMap{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "flux-system"},
+			},
+		},
+	}
+
+	root := &ManifestLayout{
+		Name:          "flux-root",
+		Namespace:     "cl/flux-system",
+		FluxPlacement: FluxIntegrated,
+		FilePer:       FilePerResource,
+		FileNaming:    FileNamingKindName,
+		Mode:          KustomizationExplicit,
+		Children:      []*ManifestLayout{child},
+	}
+
+	var buf bytes.Buffer
+	if err := root.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar failed: %v", err)
+	}
+
+	files := extractTarFiles(t, &buf)
+
+	// With FileNamingKindName, the flux kustomization reference should be
+	// kustomization-team-a.yaml (not flux-system-kustomization-team-a.yaml)
+	rootKustom := string(files["cl/flux-system/flux-root/kustomization.yaml"])
+	if !bytes.Contains([]byte(rootKustom), []byte("kustomization-team-a.yaml")) {
+		t.Errorf("expected kustomization-team-a.yaml reference, got:\n%s", rootKustom)
+	}
+	if bytes.Contains([]byte(rootKustom), []byte("flux-system-kustomization-team-a.yaml")) {
+		t.Errorf("should not have namespace-prefixed flux kustomization reference, got:\n%s", rootKustom)
+	}
+
+	// Child resource should use kind-name format
+	if _, ok := files["cl/flux-system/team-a/configmap-ca.yaml"]; !ok {
+		t.Errorf("missing kind-name child resource file (got: %v)", fileNames(files))
+	}
+}
+
 // extractTarFiles reads all entries from a tar archive into a map.
 func extractTarFiles(t *testing.T, buf *bytes.Buffer) map[string][]byte {
 	t.Helper()
