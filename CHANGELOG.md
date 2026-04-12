@@ -1,11 +1,25 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.6] - 2026-04-12
+
+### Added
+
+- Propagate FileNaming to ManifestLayout and WriteToTar
+
+### Fixed
+
+- Force FilePerResource for FluxIntegrated kustomization refs
+
 ## [0.1.0-rc.5] - 2026-04-11
 
 ### Added
 
 - Emit full Flux Operator install bundle in flux-operator mode
+
+### Release
+
+- V0.1.0-rc.5
 
 ## [0.1.0-rc.4] - 2026-04-10
 
