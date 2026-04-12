@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.7] - 2026-04-12
+
+### Fixed
+
+- Honor FileNaming in WriteToDisk, WriteManifest, and package walker
+
 ## [0.1.0-rc.6] - 2026-04-12
 
 ### Added
@@ -10,6 +16,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Force FilePerResource for FluxIntegrated kustomization refs
+
+### Release
+
+- V0.1.0-rc.6
 
 ## [0.1.0-rc.5] - 2026-04-11
 
