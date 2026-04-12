@@ -21,7 +21,8 @@ type ManifestLayout struct {
 	FilePer             FileExportMode
 	ApplicationFileMode ApplicationFileMode
 	Mode                KustomizationMode
-	FluxPlacement       FluxPlacement // Track flux placement mode for kustomization generation
+	FluxPlacement       FluxPlacement  // Track flux placement mode for kustomization generation
+	FileNaming          FileNamingMode // Controls resource file naming pattern
 	Resources           []client.Object
 	Children            []*ManifestLayout
 	// UmbrellaChild marks this layout as rendered from a Bundle.Children
@@ -31,6 +32,18 @@ type ManifestLayout struct {
 	// child's Flux Kustomization CR at the parent layout node rather than in
 	// the child's own directory.
 	UmbrellaChild bool
+}
+
+// resolveManifestFileName returns the effective ManifestFileNameFunc for this
+// layout. It mirrors Config.ResolveManifestFileName but uses the layout's own
+// FileNaming field.
+func (ml *ManifestLayout) resolveManifestFileName() ManifestFileNameFunc {
+	switch ml.FileNaming {
+	case FileNamingKindName:
+		return KindNameManifestFileName
+	default:
+		return DefaultManifestFileName
+	}
 }
 
 func (ml *ManifestLayout) FullRepoPath() string {

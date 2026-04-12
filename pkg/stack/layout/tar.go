@@ -45,6 +45,8 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		return err
 	}
 
+	nameFn := ml.resolveManifestFileName()
+
 	// Group resources into files
 	fileGroups := map[string][]client.Object{}
 	for _, obj := range ml.Resources {
@@ -60,12 +62,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		if appMode == AppFileSingle {
 			fileName = fmt.Sprintf("%s.yaml", ml.Name)
 		} else {
-			switch fileMode {
-			case FilePerKind:
-				fileName = fmt.Sprintf("%s-%s.yaml", ns, kind)
-			default:
-				fileName = fmt.Sprintf("%s-%s-%s.yaml", ns, kind, name)
-			}
+			fileName = nameFn(ns, kind, name, fileMode)
 		}
 
 		fileGroups[fileName] = append(fileGroups[fileName], obj)
@@ -135,7 +132,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 				kustomBuf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegrated {
 				// FluxIntegrated: reference Flux Kustomization YAML files
-				fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
+				fluxKustName := nameFn("flux-system", "kustomization", child.Name, fileMode)
 				kustomBuf.WriteString(fmt.Sprintf("  - %s\n", fluxKustName))
 			} else {
 				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {

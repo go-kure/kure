@@ -21,6 +21,7 @@ The layout module transforms Kure's in-memory stack representation (Clusters →
 - **ApplicationGrouping**: How applications within bundles are organized
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
 - **FluxPlacement**: Where Flux Kustomizations go (FluxSeparate vs FluxIntegrated)
+- **FileNaming**: Resource file naming pattern (FileNamingDefault vs FileNamingKindName)
 
 ### 3. Two Main Walker Functions
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
