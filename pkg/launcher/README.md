@@ -243,7 +243,19 @@ kurel schema generate my-app.kurel/
 # - Type information from parameter values
 # - Kubernetes validation rules where traceable
 # - Custom validation patterns
+# - Regex pattern constraints from parameter definitions
 ```
+
+Parameters can define regex patterns for validation:
+
+```yaml
+# parameters.yaml
+domain:
+  pattern: "^[a-z0-9.-]+$"
+  value: "example.com"
+```
+
+The generated JSON schema includes `"pattern"` constraints that are enforced during `kurel validate`.
 
 ### Building Manifests
 ```bash

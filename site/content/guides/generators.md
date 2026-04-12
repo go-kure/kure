@@ -93,6 +93,11 @@ Generates a complete application deployment:
 Generates Flux HelmRelease resources:
 - HelmRelease with chart reference and values
 - HelmRepository source (when needed)
+- ChartRef support for OCI-based charts (alternative to HelmRepository)
+- Configurable remediation strategies (install/upgrade retries, rollback)
+- ValuesFrom references for external value sources
+- PostRenderer Kustomize patches for chart output customization
+- Target namespace and release name overrides
 
 ### KurelPackage
 

@@ -41,6 +41,21 @@ patches:
     value: "nginx:latest"
 ```
 
+## CLI Usage
+
+The `kure patch` command provides a CLI for applying patches:
+
+```bash
+# Apply patches and write output
+kure patch base.yaml patches/customize.kpatch -o output.yaml
+
+# Preview changes without writing (diff mode)
+kure patch --diff base.yaml patches/customize.kpatch
+
+# Combine all patched resources into a single output
+kure patch --combined base.yaml patches/
+```
+
 ## Quick Start
 
 ```go
