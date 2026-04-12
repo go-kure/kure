@@ -152,9 +152,10 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else {
-				// For FluxIntegrated mode, reference Flux Kustomization YAML files instead of directories
+				// For FluxIntegrated mode, reference Flux Kustomization YAML files instead of directories.
+				// Always use FilePerResource — each child must have a unique filename.
 				if ml.FluxPlacement == FluxIntegrated {
-					fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
+					fluxKustName := manifestFileName("flux-system", "kustomization", child.Name, FilePerResource)
 					writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
 				} else {
 					writeStr(fmt.Sprintf("  - %s\n", child.Name))

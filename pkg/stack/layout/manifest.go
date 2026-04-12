@@ -196,12 +196,8 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		if appMode == AppFileSingle {
 			fileName = fmt.Sprintf("%s.yaml", ml.Name)
 		} else {
-			switch fileMode {
-			case FilePerKind:
-				fileName = fmt.Sprintf("%s-%s.yaml", ns, kind)
-			default:
-				fileName = fmt.Sprintf("%s-%s-%s.yaml", ns, kind, name)
-			}
+			nameFn := ml.resolveManifestFileName()
+			fileName = nameFn(ns, kind, name, fileMode)
 		}
 
 		fileGroups[fileName] = append(fileGroups[fileName], obj)
@@ -299,8 +295,11 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegrated {
-				// FluxIntegrated: reference Flux Kustomization YAML files
-				fluxKustName := fmt.Sprintf("flux-system-kustomization-%s.yaml", child.Name)
+				// FluxIntegrated: reference Flux Kustomization YAML files.
+				// Use FilePerResource to force per-resource naming even when
+				// the parent directory uses FilePerKind.
+				nameFn := ml.resolveManifestFileName()
+				fluxKustName := nameFn("flux-system", "kustomization", child.Name, FilePerResource)
 				writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
 			} else {
 				// For package-aware layouts, use relative path

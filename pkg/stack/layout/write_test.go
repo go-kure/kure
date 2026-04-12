@@ -989,3 +989,139 @@ func TestWriteManifest_UmbrellaChild(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteManifest_FileNamingKindName_FluxIntegrated(t *testing.T) {
+	child := &ManifestLayout{
+		Name:       "team-a",
+		Namespace:  "cl/flux-system/team-a",
+		FileNaming: FileNamingKindName,
+		Resources:  []client.Object{testObject("v1", "ConfigMap", "ca", "flux-system")},
+	}
+
+	root := &ManifestLayout{
+		Name:          "flux-root",
+		Namespace:     "cl/flux-system",
+		FluxPlacement: FluxIntegrated,
+		FileNaming:    FileNamingKindName,
+		Children:      []*ManifestLayout{child},
+	}
+
+	cfg := DefaultLayoutConfig()
+	cfg.FileNaming = FileNamingKindName
+	cfg.ManifestFileName = nil // Let FileNaming take effect
+	dir := t.TempDir()
+
+	if err := WriteManifest(dir, cfg, root); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	kustomFile := filepath.Join(dir, "clusters", "cl", "flux-system", "flux-root", "kustomization.yaml")
+	data, err := os.ReadFile(kustomFile)
+	if err != nil {
+		t.Fatalf("read kustomization: %v", err)
+	}
+
+	content := string(data)
+	// With FileNamingKindName, flux kustomization reference should be kustomization-team-a.yaml
+	if !strings.Contains(content, "kustomization-team-a.yaml") {
+		t.Errorf("expected kustomization-team-a.yaml reference, got:\n%s", content)
+	}
+	if strings.Contains(content, "flux-system-kustomization-team-a.yaml") {
+		t.Errorf("should not have namespace-prefixed flux kustomization reference, got:\n%s", content)
+	}
+
+	// Child resource should use kind-name format
+	childResFile := filepath.Join(dir, "clusters", "cl", "flux-system", "team-a", "configmap-ca.yaml")
+	if _, err := os.Stat(childResFile); err != nil {
+		t.Errorf("expected kind-name resource file at %s: %v", childResFile, err)
+	}
+}
+
+func TestWriteToDisk_FileNamingKindName(t *testing.T) {
+	ml := &ManifestLayout{
+		Name:       "apps",
+		Namespace:  "default",
+		FilePer:    FilePerResource,
+		FileNaming: FileNamingKindName,
+		Mode:       KustomizationExplicit,
+		Resources: []client.Object{
+			testObject("v1", "Service", "web", "default"),
+			testObject("apps/v1", "Deployment", "web", "default"),
+		},
+	}
+
+	dir := t.TempDir()
+	if err := ml.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk failed: %v", err)
+	}
+
+	// With FileNamingKindName, files should be {kind}-{name}.yaml
+	svcFile := filepath.Join(dir, "default", "apps", "service-web.yaml")
+	if _, err := os.Stat(svcFile); err != nil {
+		t.Errorf("expected service-web.yaml at %s: %v", svcFile, err)
+	}
+	deployFile := filepath.Join(dir, "default", "apps", "deployment-web.yaml")
+	if _, err := os.Stat(deployFile); err != nil {
+		t.Errorf("expected deployment-web.yaml at %s: %v", deployFile, err)
+	}
+
+	// Should NOT have namespace-prefixed files
+	oldSvcFile := filepath.Join(dir, "default", "apps", "default-service-web.yaml")
+	if _, err := os.Stat(oldSvcFile); err == nil {
+		t.Errorf("unexpected namespace-prefixed file: %s", oldSvcFile)
+	}
+
+	// Kustomization should reference kind-name files
+	kustomFile := filepath.Join(dir, "default", "apps", "kustomization.yaml")
+	data, err := os.ReadFile(kustomFile)
+	if err != nil {
+		t.Fatalf("read kustomization: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "service-web.yaml") {
+		t.Errorf("kustomization.yaml should reference service-web.yaml:\n%s", content)
+	}
+	if !strings.Contains(content, "deployment-web.yaml") {
+		t.Errorf("kustomization.yaml should reference deployment-web.yaml:\n%s", content)
+	}
+}
+
+func TestWriteToDisk_FileNamingKindName_FluxIntegrated(t *testing.T) {
+	child := &ManifestLayout{
+		Name:       "team-a",
+		Namespace:  "cl/flux-system/team-a",
+		FilePer:    FilePerResource,
+		FileNaming: FileNamingKindName,
+		Mode:       KustomizationExplicit,
+		Resources:  []client.Object{testObject("v1", "ConfigMap", "ca", "flux-system")},
+	}
+
+	root := &ManifestLayout{
+		Name:          "flux-root",
+		Namespace:     "cl/flux-system",
+		FluxPlacement: FluxIntegrated,
+		FilePer:       FilePerResource,
+		FileNaming:    FileNamingKindName,
+		Mode:          KustomizationExplicit,
+		Children:      []*ManifestLayout{child},
+	}
+
+	dir := t.TempDir()
+	if err := root.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk failed: %v", err)
+	}
+
+	kustomFile := filepath.Join(dir, "cl", "flux-system", "flux-root", "kustomization.yaml")
+	data, err := os.ReadFile(kustomFile)
+	if err != nil {
+		t.Fatalf("read kustomization: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "kustomization-team-a.yaml") {
+		t.Errorf("expected kustomization-team-a.yaml reference, got:\n%s", content)
+	}
+	if strings.Contains(content, "flux-system-kustomization-team-a.yaml") {
+		t.Errorf("should not have namespace-prefixed flux reference, got:\n%s", content)
+	}
+}
