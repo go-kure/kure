@@ -67,6 +67,22 @@ The child bundles' Flux Kustomization CRs are rendered into the parent
 bundle's directory. Children must be standalone bundles — they cannot
 simultaneously be attached as the `Bundle` of any `stack.Node`.
 
+`Bundle.HealthChecks` can also be set explicitly to monitor specific resources
+during reconciliation:
+
+```go
+bundle.HealthChecks = []stack.HealthCheck{
+    {APIVersion: "apps/v1", Kind: "Deployment", Name: "web", Namespace: "default"},
+}
+```
+
+When Children is non-empty, health checks for each child Kustomization are
+auto-generated and merged with any user-supplied entries.
+
+**Validation:** `ValidateCluster()` runs automatically in all layout entry
+points (`WalkCluster`, `WalkClusterByPackage`) and rejects invalid umbrella
+configurations (e.g., shared ownership, children that are also node bundles).
+
 ### Application
 
 An individual Kubernetes workload. Applications use the `ApplicationConfig` interface to generate their resources.
@@ -124,7 +140,9 @@ Configs that do not implement `Validator` continue to work without changes.
 
 ## Fluent Builder API
 
-For ergonomic cluster construction, use the fluent builder:
+For ergonomic cluster construction, use the fluent builder. Builder methods
+use **copy-on-write semantics** — each `With*` call returns a new builder
+instance, leaving the original unchanged:
 
 ```go
 cluster := stack.NewClusterBuilder("production").

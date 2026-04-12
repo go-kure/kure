@@ -134,6 +134,12 @@ printer := io.NewResourcePrinter(io.PrintOptions{
     ShowLabels:   true,
 })
 err := printer.Print(objects, os.Stdout)
+
+// Format-agnostic printing (selects printer by format string)
+err := io.PrintObjects(objects, "yaml", os.Stdout)
+
+// Validate a format string before use
+err := io.ValidateOutputFormat("table")
 ```
 
 ## Related Packages

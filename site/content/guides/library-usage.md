@@ -47,6 +47,8 @@ ks := fluxcd.Kustomization(&fluxcd.KustomizationConfig{
 
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.
 
+Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) package provides typed constructors for core resources (Deployment, Service, Ingress, CronJob, NetworkPolicy, HTTPRoute), PSA security context helpers, ResourceRequirements builders, and more. The [Prometheus Builders](/api-reference/prometheus-builders) sub-package covers ServiceMonitor, PodMonitor, and PrometheusRule CRDs.
+
 ## Generating YAML
 
 Use the `io` package to serialize resources:

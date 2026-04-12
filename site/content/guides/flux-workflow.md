@@ -202,13 +202,18 @@ flat list.
 
 ## Bootstrap
 
-Generate Flux system bootstrap manifests:
+Generate Flux system bootstrap manifests. Two modes are available:
+
+- **`"flux-operator"`** (default) — emits a full Flux Operator install bundle (CRDs, Deployment, RBAC). Recommended for new clusters.
+- **`"gotk"`** — emits the legacy GitOps Toolkit component manifests directly.
+
+When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
 ```go
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
-    FluxMode:    "install",
-    FluxVersion: "v2.6.4",
+    FluxMode:    "flux-operator", // or "gotk"; empty defaults to "flux-operator"
+    FluxVersion: "v2.8.2",
     SourceRef:   sourceRef,
 }
 

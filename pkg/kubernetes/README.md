@@ -215,7 +215,59 @@ kubernetes.AddHTTPRouteRuleBackendRef(&rule, gwapiv1.HTTPBackendRef{
 err = kubernetes.AddHTTPRouteRule(route, rule)
 ```
 
+## PSA Security Context Helpers
+
+Helpers for Pod Security Admission (PSA) compliance at Restricted, Baseline, and Privileged levels.
+
+```go
+// Get a security context matching the Restricted PSA level
+sc := kubernetes.RestrictedSecurityContext()
+
+// Get a pod-level security context
+psc := kubernetes.RestrictedPodSecurityContext()
+
+// Level-based selection
+sc := kubernetes.SecurityContextForLevel(kubernetes.PSALevelBaseline)
+psc := kubernetes.PodSecurityContextForLevel(kubernetes.PSALevelRestricted)
+
+// Validate a container against a PSA level
+err := kubernetes.ValidateContainerPSA(container, kubernetes.PSALevelRestricted)
+
+// Validate an entire PodSpec
+violations := kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSALevelRestricted)
+```
+
+## ResourceRequirements Builder
+
+Build Kubernetes resource requirements for containers.
+
+```go
+reqs := kubernetes.CreateResourceRequirements()
+kubernetes.SetResourceRequestCPU(reqs, "100m")
+kubernetes.SetResourceRequestMemory(reqs, "128Mi")
+kubernetes.SetResourceLimitCPU(reqs, "500m")
+kubernetes.SetResourceLimitMemory(reqs, "512Mi")
+kubernetes.SetResourceRequestEphemeralStorage(reqs, "1Gi")
+kubernetes.SetResourceLimitEphemeralStorage(reqs, "2Gi")
+```
+
+## Prometheus Builders
+
+Builders for Prometheus Operator CRDs are in the `pkg/kubernetes/prometheus/` sub-package:
+
+```go
+import "github.com/go-kure/kure/pkg/kubernetes/prometheus"
+
+sm := prometheus.CreateServiceMonitor("my-app", "monitoring")
+prometheus.AddServiceMonitorEndpoint(sm, "/metrics", "http", "30s")
+prometheus.SetServiceMonitorSelector(sm, map[string]string{"app": "my-app"})
+
+pm := prometheus.CreatePodMonitor("my-app", "monitoring")
+rule := prometheus.CreatePrometheusRule("alerts", "monitoring")
+```
+
 ## Related Packages
 
 - [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors
+- [prometheus](prometheus/) - Prometheus Operator CRD builders
 - [errors](../errors/) - Structured error types used for nil-check sentinels

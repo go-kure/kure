@@ -21,16 +21,19 @@ The layout module transforms Kure's in-memory stack representation (Clusters →
 - **ApplicationGrouping**: How applications within bundles are organized
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
 - **FluxPlacement**: Where Flux Kustomizations go (FluxSeparate vs FluxIntegrated)
-- **FileNaming**: Resource file naming pattern (FileNamingDefault vs FileNamingKindName)
+- **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
+- **ClusterName**: Optional cluster name prefix for cluster-aware directory paths
 
 ### 3. Two Main Walker Functions
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
 - **WalkClusterByPackage()**: Groups by PackageRef for multi-source scenarios
 
 ### 4. Writing System
-- **WriteManifest()**: Standard hierarchical writing
+- **WriteManifest()**: Config-driven writing — uses `Config` to resolve file naming, kustomization mode, and directory structure
+- **WriteToDisk()**: Self-contained method on ManifestLayout — uses the layout's own `FileNaming` and `FluxPlacement` fields
+- **WriteToTar()**: Same as WriteToDisk but writes to a tar archive (used by Crane for OCI artifacts)
 - **WritePackagesToDisk()**: Package-based writing with sanitized directory names
-- Auto-generates kustomization.yaml files with proper resource references
+- All writers auto-generate kustomization.yaml files with proper resource references
 
 ## Directory Structure Patterns
 
@@ -93,10 +96,40 @@ clusters/
 - **FilePerKind**: Group objects by Kind (all Services together, etc.)
 - **AppFileSingle**: All app resources in one file
 
+### File Naming Modes
+
+Controls how resource YAML files are named:
+
+| Mode | Format | Example |
+|------|--------|---------|
+| `FileNamingDefault` | `{namespace}-{kind}-{name}.yaml` | `default-service-web.yaml` |
+| `FileNamingKindName` | `{kind}-{name}.yaml` | `service-web.yaml` |
+
+`FileNamingKindName` drops the namespace prefix, which is useful when each application already has its own directory (e.g., Pattern A / CentralizedControlPlane). The naming mode is propagated through all writers: `WriteManifest`, `WriteToDisk`, and `WriteToTar`.
+
 ### Kustomization Generation
 - **KustomizationExplicit**: Lists all manifest files explicitly
 - **KustomizationRecursive**: References subdirectories only
 - Smart handling of cross-references and child relationships
+
+### ClusterName-Aware Layouts
+
+Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters.
+
+## Layout Presets
+
+Three named presets provide pre-configured LayoutRules for common deployment patterns. Use `LayoutRulesForPreset()` to get rules, or `ConfigForPreset()` to get a matching Config.
+
+| Preset | Pattern | FluxPlacement | NodeGrouping | FileNaming |
+|--------|---------|---------------|--------------|------------|
+| `CentralizedControlPlane` | A | FluxSeparate | GroupFlat | FileNamingKindName |
+| `SiblingControlPlane` | B | FluxSeparate | GroupByName | FileNamingDefault |
+| `ParentDeployedControl` | C | FluxIntegrated | GroupByName | FileNamingDefault |
+
+```go
+rules, err := layout.LayoutRulesForPreset(layout.PresetCentralizedControlPlane)
+cfg, err := layout.ConfigForPreset(layout.PresetCentralizedControlPlane)
+```
 
 ## Real-World Use Cases
 
