@@ -720,3 +720,41 @@ func TestWalkCluster_Umbrella_Nested(t *testing.T) {
 		t.Errorf("nested umbrella Namespace = %q, want root/apps/platform/infra", nw.Namespace)
 	}
 }
+
+func TestWalkClusterByPackage_PropagatesFileNaming(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app1", "ns", &fakeConfig{objs: []*client.Object{&o}})
+	bundle := &stack.Bundle{Name: "bundle1", Applications: []*stack.Application{app}}
+	root := &stack.Node{Name: "root", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	packages, err := layout.WalkClusterByPackage(cluster, layout.LayoutRules{
+		FileNaming: layout.FileNamingKindName,
+	})
+	if err != nil {
+		t.Fatalf("walk cluster by package: %v", err)
+	}
+
+	for _, ml := range packages {
+		if ml.FileNaming != layout.FileNamingKindName {
+			t.Errorf("root layout FileNaming = %q, want %q", ml.FileNaming, layout.FileNamingKindName)
+		}
+		// Check children recursively
+		var check func(l *layout.ManifestLayout)
+		check = func(l *layout.ManifestLayout) {
+			if l.FileNaming != layout.FileNamingKindName {
+				t.Errorf("layout %q FileNaming = %q, want %q", l.Name, l.FileNaming, layout.FileNamingKindName)
+			}
+			for _, c := range l.Children {
+				check(c)
+			}
+		}
+		check(ml)
+	}
+}

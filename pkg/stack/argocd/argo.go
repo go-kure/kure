@@ -152,10 +152,11 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 
 	if len(apps) > 0 {
 		argoCDLayout := &layout.ManifestLayout{
-			Name:      "argocd",
-			Namespace: filepath.Join(ml.Namespace, "argocd"),
-			FilePer:   layout.FilePerResource,
-			Resources: apps,
+			Name:       "argocd",
+			Namespace:  filepath.Join(ml.Namespace, "argocd"),
+			FilePer:    layout.FilePerResource,
+			FileNaming: ml.FileNaming,
+			Resources:  apps,
 		}
 		ml.Children = append(ml.Children, argoCDLayout)
 	}

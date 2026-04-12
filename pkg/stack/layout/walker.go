@@ -187,7 +187,7 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 	// Second pass: build layouts for each package
 	layouts := make(map[string]*ManifestLayout)
 	for pkgKey, pkgRef := range packages {
-		layout, err := walkNodeForPackage(c.Node, nil, nodeOnly, filePer, pkgRef, pkgKey)
+		layout, err := walkNodeForPackage(c.Node, nil, nodeOnly, filePer, pkgRef, pkgKey, rules.FileNaming)
 		if err != nil {
 			return nil, err
 		}
@@ -423,12 +423,12 @@ func collectPackageRefs(n *stack.Node, inheritedPackageRef *schema.GroupVersionK
 }
 
 // walkNodeForPackage walks the tree but only includes nodes that belong to the specified package
-func walkNodeForPackage(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, targetPackageRef *schema.GroupVersionKind, targetKey string) (*ManifestLayout, error) {
-	return walkNodeForPackageInternal(n, ancestors, nodeOnly, filePer, nil, targetPackageRef, targetKey)
+func walkNodeForPackage(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, targetPackageRef *schema.GroupVersionKind, targetKey string, fileNaming FileNamingMode) (*ManifestLayout, error) {
+	return walkNodeForPackageInternal(n, ancestors, nodeOnly, filePer, nil, targetPackageRef, targetKey, fileNaming)
 }
 
 // walkNodeForPackageInternal is the internal implementation with inheritance tracking
-func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, inheritedPackageRef *schema.GroupVersionKind, targetPackageRef *schema.GroupVersionKind, targetKey string) (*ManifestLayout, error) {
+func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, inheritedPackageRef *schema.GroupVersionKind, targetPackageRef *schema.GroupVersionKind, targetKey string, fileNaming FileNamingMode) (*ManifestLayout, error) {
 	if n == nil {
 		return nil, nil
 	}
@@ -446,9 +446,10 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 	var ml *ManifestLayout
 	if belongsToPackage {
 		ml = &ManifestLayout{
-			Name:      n.Name,
-			Namespace: filepath.Join(ancestors...),
-			FilePer:   filePer,
+			Name:       n.Name,
+			Namespace:  filepath.Join(ancestors...),
+			FilePer:    filePer,
+			FileNaming: fileNaming,
 		}
 
 		if nodeOnly {
@@ -489,24 +490,26 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 						objs = append(objs, *o)
 					}
 					appLayout := &ManifestLayout{
-						Name:      app.Name,
-						Namespace: filepath.Join(append(currentPath, b.Name)...),
-						Resources: objs,
+						Name:       app.Name,
+						Namespace:  filepath.Join(append(currentPath, b.Name)...),
+						Resources:  objs,
+						FileNaming: fileNaming,
 					}
 					bundleChildren = append(bundleChildren, appLayout)
 				}
 				if len(bundleChildren) > 0 {
 					bundleLayout := &ManifestLayout{
-						Name:      b.Name,
-						Namespace: filepath.Join(currentPath...),
-						Children:  bundleChildren,
+						Name:       b.Name,
+						Namespace:  filepath.Join(currentPath...),
+						Children:   bundleChildren,
+						FileNaming: fileNaming,
 					}
 					children = append(children, bundleLayout)
 				}
 			}
 
 			for _, child := range n.Children {
-				cl, err := walkNodeForPackageInternal(child, currentPath, nodeOnly, filePer, currentPackageRef, targetPackageRef, targetKey)
+				cl, err := walkNodeForPackageInternal(child, currentPath, nodeOnly, filePer, currentPackageRef, targetPackageRef, targetKey, fileNaming)
 				if err != nil {
 					return nil, err
 				}
@@ -520,7 +523,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 
 		if nodeOnly {
 			for _, child := range n.Children {
-				cl, err := walkNodeForPackageInternal(child, currentPath, nodeOnly, filePer, currentPackageRef, targetPackageRef, targetKey)
+				cl, err := walkNodeForPackageInternal(child, currentPath, nodeOnly, filePer, currentPackageRef, targetPackageRef, targetKey, fileNaming)
 				if err != nil {
 					return nil, err
 				}
@@ -533,7 +536,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 		// Node doesn't belong to target package, but continue traversing children
 		// in case they have different PackageRef values
 		for _, child := range n.Children {
-			cl, err := walkNodeForPackageInternal(child, ancestors, nodeOnly, filePer, currentPackageRef, targetPackageRef, targetKey)
+			cl, err := walkNodeForPackageInternal(child, ancestors, nodeOnly, filePer, currentPackageRef, targetPackageRef, targetKey, fileNaming)
 			if err != nil {
 				return nil, err
 			}
@@ -542,10 +545,11 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 				// we need to create a minimal parent structure
 				if ml == nil {
 					ml = &ManifestLayout{
-						Name:      "",
-						Namespace: filepath.Join(ancestors...),
-						FilePer:   filePer,
-						Children:  []*ManifestLayout{cl},
+						Name:       "",
+						Namespace:  filepath.Join(ancestors...),
+						FilePer:    filePer,
+						FileNaming: fileNaming,
+						Children:   []*ManifestLayout{cl},
 					}
 				} else {
 					ml.Children = append(ml.Children, cl)
