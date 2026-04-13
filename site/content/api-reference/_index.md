@@ -32,6 +32,7 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 | [IO](io) | YAML/JSON serialization and resource printing | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/io) |
 | [Kubernetes Builders](kubernetes-builders) | Core K8s resource constructors (GVK, HPA, PDB) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes) |
 | [FluxCD Builders](fluxcd-builders) | Low-level Flux resource constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/fluxcd) |
+| [Prometheus Builders](prometheus-builders) | Prometheus Operator CRD constructors (ServiceMonitor, PodMonitor, PrometheusRule) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/prometheus) |
 
 ## Utilities
 

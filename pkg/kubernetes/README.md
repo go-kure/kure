@@ -269,5 +269,5 @@ rule := prometheus.CreatePrometheusRule("alerts", "monitoring")
 ## Related Packages
 
 - [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors
-- [prometheus](prometheus/) - Prometheus Operator CRD builders
+- [prometheus](/api-reference/prometheus-builders/) - Prometheus Operator CRD builders
 - [errors](../errors/) - Structured error types used for nil-check sentinels
