@@ -74,7 +74,13 @@
       "Bash(GOWORK=off go list:*)",
       "Bash(GOWORK=off grep:*)",
       "Bash(GOWORK=off make build:*)",
-      "Bash(./scripts/sync-versions.sh check:*)"
+      "Bash(./scripts/sync-versions.sh check:*)",
+      "Skill(mempalace)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs"
+    ],
+    "additionalDirectories": [
+      "/home/serge/src/ginsys/opsmaster"
     ]
   },
   "outputStyle": "default"
