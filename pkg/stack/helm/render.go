@@ -2,7 +2,9 @@ package helm
 
 import (
 	"bytes"
+	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	chartpkg "helm.sh/helm/v4/pkg/chart"
@@ -57,13 +59,14 @@ func renderChart(chrt chartpkg.Charter, values map[string]any) ([]byte, error) {
 
 // assembleManifests concatenates rendered template strings into multi-doc YAML.
 // It skips Helm partial templates (basename starting with "_") and empty output.
+// Keys are sorted to guarantee stable output across calls.
 func assembleManifests(rendered map[string]string) []byte {
 	var buf bytes.Buffer
-	for name, content := range rendered {
+	for _, name := range slices.Sorted(maps.Keys(rendered)) {
 		if strings.HasPrefix(filepath.Base(name), "_") {
 			continue
 		}
-		content = strings.TrimSpace(content)
+		content := strings.TrimSpace(rendered[name])
 		if content == "" {
 			continue
 		}
