@@ -1,11 +1,34 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.8] - 2026-04-14
+
+### Added
+
+- Add RenderChart for client-side OCI chart rendering
+
+### Dependencies
+
+- Bump github.com/google/cel-go from 0.27.0 to 0.28.0
+
+### Documentation
+
+- Document undocumented features across package READMEs and guides
+- Add prometheus-builders API reference page and fix broken links
+
+### Fixed
+
+- Sort manifest keys for stable output
+
 ## [0.1.0-rc.7] - 2026-04-12
 
 ### Fixed
 
 - Honor FileNaming in WriteToDisk, WriteManifest, and package walker
+
+### Release
+
+- V0.1.0-rc.7
 
 ## [0.1.0-rc.6] - 2026-04-12
 
