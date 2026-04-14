@@ -6,6 +6,7 @@ import (
 	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/apis/kustomize"
 	metaapi "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -248,6 +249,39 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 			Name:       hc.Name,
 			Namespace:  hc.Namespace,
 		})
+	}
+
+	// Apply patches
+	for _, p := range b.Patches {
+		patch := kustomize.Patch{Patch: p.Patch}
+		if p.Target != nil {
+			patch.Target = &kustomize.Selector{
+				Group:              p.Target.Group,
+				Version:            p.Target.Version,
+				Kind:               p.Target.Kind,
+				Name:               p.Target.Name,
+				Namespace:          p.Target.Namespace,
+				LabelSelector:      p.Target.LabelSelector,
+				AnnotationSelector: p.Target.AnnotationSelector,
+			}
+		}
+		kust.Spec.Patches = append(kust.Spec.Patches, patch)
+	}
+
+	// Apply postBuild variable substitution
+	if b.PostBuild != nil {
+		pb := &kustv1.PostBuild{}
+		if len(b.PostBuild.Substitute) > 0 {
+			pb.Substitute = b.PostBuild.Substitute
+		}
+		for _, ref := range b.PostBuild.SubstituteFrom {
+			pb.SubstituteFrom = append(pb.SubstituteFrom, kustv1.SubstituteReference{
+				Kind:     ref.Kind,
+				Name:     ref.Name,
+				Optional: ref.Optional,
+			})
+		}
+		kust.Spec.PostBuild = pb
 	}
 
 	// Add dependencies
