@@ -59,6 +59,11 @@ type Bundle struct {
 	// HealthChecks lists resources whose health is monitored during reconciliation.
 	// When specified, the Kustomization waits for these resources to become ready.
 	HealthChecks []HealthCheck
+	// Patches lists strategic merge or JSON patches to apply to resources after
+	// kustomize build. Each patch targets resources matching its selector.
+	Patches []Patch
+	// PostBuild configures variable substitution performed after kustomize build.
+	PostBuild *PostBuild
 
 	// Internal fields for runtime hierarchy navigation (not serialized)
 	parent  *Bundle            `yaml:"-"` // Runtime parent reference for efficient traversal
@@ -91,6 +96,54 @@ type HealthCheck struct {
 	Name string
 	// Namespace of the resource. When empty, defaults to the Kustomization namespace.
 	Namespace string
+}
+
+// Patch defines a strategic merge or JSON patch applied to resources after kustomize build.
+type Patch struct {
+	// Patch is the patch content in strategic merge patch or JSON patch format.
+	Patch string
+	// Target selects which resources the patch applies to.
+	// When nil the patch applies to all resources.
+	Target *PatchSelector
+}
+
+// PatchSelector selects Kubernetes resources by GVK and metadata filters.
+type PatchSelector struct {
+	// Group of the target resource (e.g. "apps").
+	Group string
+	// Version of the target resource (e.g. "v1").
+	Version string
+	// Kind of the target resource (e.g. "Deployment").
+	Kind string
+	// Name of the target resource.
+	Name string
+	// Namespace of the target resource.
+	Namespace string
+	// LabelSelector is a label selector expression.
+	LabelSelector string
+	// AnnotationSelector is an annotation selector expression.
+	AnnotationSelector string
+}
+
+// PostBuild configures variable substitution performed after kustomize build.
+type PostBuild struct {
+	// Substitute contains inline key-value substitution variables.
+	// Values are substituted for ${VAR} occurrences in manifests.
+	Substitute map[string]string
+	// SubstituteFrom lists ConfigMaps and Secrets whose data is merged into
+	// the substitution variables.
+	SubstituteFrom []SubstituteRef
+}
+
+// SubstituteRef defines a reference to a ConfigMap or Secret used as a
+// source of PostBuild substitution variables.
+type SubstituteRef struct {
+	// Kind is ConfigMap or Secret.
+	Kind string
+	// Name of the ConfigMap or Secret.
+	Name string
+	// Optional allows the reference to be absent without causing an error.
+	Optional bool
 }
 
 // NewBundle constructs a Bundle with the given name, resources and labels.
