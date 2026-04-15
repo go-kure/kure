@@ -56,6 +56,10 @@ type Bundle struct {
 	Timeout string
 	// RetryInterval is the interval between retry attempts for failed reconciliations (e.g. "2m").
 	RetryInterval string
+	// Force causes Flux to re-apply resources even if there are no detected changes.
+	Force *bool
+	// Suspend disables reconciliation when true. Set to false to resume.
+	Suspend *bool
 	// HealthChecks lists resources whose health is monitored during reconciliation.
 	// When specified, the Kustomization waits for these resources to become ready.
 	HealthChecks []HealthCheck
