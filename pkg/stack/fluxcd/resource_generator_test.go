@@ -253,6 +253,44 @@ func TestGenerateFromBundle_RetryInterval(t *testing.T) {
 	}
 }
 
+func TestGenerateFromBundle_Force(t *testing.T) {
+	wf := fluxstack.Engine()
+	forceVal := true
+	b := &stack.Bundle{
+		Name:  "test",
+		Force: &forceVal,
+	}
+
+	objs, err := wf.GenerateFromBundle(b)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	k := objs[0].(*kustv1.Kustomization)
+	if !k.Spec.Force {
+		t.Error("expected Force to be true")
+	}
+}
+
+func TestGenerateFromBundle_Suspend(t *testing.T) {
+	wf := fluxstack.Engine()
+	suspendVal := true
+	b := &stack.Bundle{
+		Name:    "test",
+		Suspend: &suspendVal,
+	}
+
+	objs, err := wf.GenerateFromBundle(b)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	k := objs[0].(*kustv1.Kustomization)
+	if !k.Spec.Suspend {
+		t.Error("expected Suspend to be true")
+	}
+}
+
 func TestGenerateFromBundle_Labels(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{

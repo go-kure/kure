@@ -209,6 +209,16 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		}
 	}
 
+	// Set force if specified
+	if b.Force != nil {
+		kust.Spec.Force = *b.Force
+	}
+
+	// Set suspend if specified
+	if b.Suspend != nil {
+		kust.Spec.Suspend = *b.Suspend
+	}
+
 	// Set source reference
 	if b.SourceRef != nil {
 		kust.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
