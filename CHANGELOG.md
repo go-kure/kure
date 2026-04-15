@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.10] - 2026-04-15
+
+### Added
+
+- Add builders for Role, RoleBinding, ClusterRole, ClusterRoleBinding
+
 ## [0.1.0-rc.9] - 2026-04-15
 
 ### Added
@@ -11,6 +17,10 @@ All notable changes to this project will be documented in this file.
 ### Dependencies
 
 - Bump github.com/cert-manager/cert-manager
+
+### Release
+
+- V0.1.0-rc.9
 
 ## [0.1.0-rc.8] - 2026-04-14
 
