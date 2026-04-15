@@ -1,6 +1,17 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.9] - 2026-04-15
+
+### Added
+
+- Add Patches and PostBuild fields to Bundle
+- Add Force and Suspend fields to Bundle
+
+### Dependencies
+
+- Bump github.com/cert-manager/cert-manager
+
 ## [0.1.0-rc.8] - 2026-04-14
 
 ### Added
@@ -19,6 +30,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Sort manifest keys for stable output
+
+### Release
+
+- V0.1.0-rc.8
 
 ## [0.1.0-rc.7] - 2026-04-12
 
