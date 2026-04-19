@@ -53,7 +53,7 @@ These remain in kure. Launcher depends on kure; kure does not depend on launcher
 
 ### `pkg/cmd/kure/patch.go`
 
-The `kure patch` CLI subcommand stays in kure's CLI. After the move it will import `pkg/patch` from the launcher module rather than from kure's own package tree. No behavioural change.
+The `kure patch` CLI subcommand will be **deleted** from kure. kure's CLI demos the kure library; it has no reason to wrap launcher's patch engine. `pkg/cmd/kure/patch.go` and `pkg/cmd/kure/patch_test.go` are removed as part of the extraction. The `runPatchDemo()` function in `cmd/demo/main.go` is also removed.
 
 ### `pkg/stack/generators/kurelpackage/`
 
@@ -80,7 +80,7 @@ Consumers of the rest of kure's public API (`pkg/stack`, `pkg/kubernetes`, etc.)
 3. Update imports in launcher from `github.com/go-kure/kure/pkg/{launcher,patch}` to the new module path
 4. Add `github.com/go-kure/kure` as a dependency in launcher's `go.mod`
 5. In kure: remove `pkg/launcher/`, `pkg/patch/`, `cmd/kurel/`, `pkg/cmd/kurel/`
-6. In kure: update `pkg/cmd/kure/patch.go` to import `pkg/patch` from the launcher module
+6. In kure: delete `pkg/cmd/kure/patch.go`, `pkg/cmd/kure/patch_test.go`; remove `NewPatchCommand()` from `pkg/cmd/kure/cmd.go`; remove `runPatchDemo()` from `cmd/demo/main.go`
 7. Tag launcher v0.1.0-alpha.0 once CI passes
 8. Tag a new kure release removing the extracted packages (breaking change — minor version bump)
 
