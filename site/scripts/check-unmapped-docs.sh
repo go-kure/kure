@@ -48,6 +48,7 @@ MAPPED_FILES=(
   "docs/compatibility.md"
   "docs/github-workflows.md"
   "docs/dependency-updates.md"
+  "docs/oci-layout.md"
   "pkg/stack/README.md"
   "pkg/stack/fluxcd/README.md"
   "pkg/stack/generators/README.md"

@@ -45,6 +45,7 @@ inject_fm "$KURE_ROOT/docs/quickstart.md"                  "getting-started/quic
 
 # Concepts
 inject_fm "$KURE_ROOT/docs/ARCHITECTURE.md"                 "concepts/architecture.md"                    "Architecture"                 10
+inject_fm "$KURE_ROOT/docs/oci-layout.md"                   "concepts/oci-layout.md"                      "OCI Artifact Layout"          20
 
 # Examples
 inject_fm "$KURE_ROOT/examples/patches/README.md"           "examples/patches.md"                         "Patches"                      10
