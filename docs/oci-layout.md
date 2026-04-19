@@ -22,22 +22,22 @@ cluster-prod/
 │   ├── OCIRepository  stack-prod        url: oci://<registry>/<repository>:<tag>
 │   ├── Kustomization  flux-system       path: ./cluster-prod/flux-system
 │   │                                    sourceRef: stack-prod
-│   ├── Kustomization  flux-system-infrastructure
-│   │                                    path: ./cluster-prod/flux-system-infrastructure
+│   ├── Kustomization  flux-system-platform
+│   │                                    path: ./cluster-prod/flux-system-platform
 │   │                                    sourceRef: stack-prod
 │   └── Kustomization  flux-system-<group>
 │                                        path: ./cluster-prod/flux-system-<group>
 │                                        sourceRef: stack-prod
 │
-├── flux-system-infrastructure/          Layer 2 — platform infra group
-│   └── Kustomization  infra-<id>        path: ./cluster-prod/infrastructure/<id>
+├── flux-system-platform/          Layer 2 — platform group
+│   └── Kustomization  platform-<id>        path: ./cluster-prod/platform/<id>
 │                                        sourceRef: stack-prod
 │
 ├── flux-system-<group>/                 Layer 2 — application group
 │   └── Kustomization  <appname>         path: ./cluster-prod/<group>/<appname>
 │                                        sourceRef: stack-prod
 │
-├── infrastructure/<id>/                 Layer 3 — platform component payloads
+├── platform/<id>/                 Layer 3 — platform component payloads
 │   └── helmrelease.yaml, issuer.yaml …
 │
 └── <group>/<appname>/                   Layer 3 — application payloads
@@ -53,7 +53,7 @@ OCIRepository defined in `flux-system/`.
 
 ---
 
-## Split OCI (infra + per-group)
+## Split OCI (platform + per-group)
 
 The split layout is a packaging concern only. Directory structure, file names,
 Kustomization paths, and depends-on relationships are **identical** to the
@@ -61,7 +61,7 @@ monolithic layout. Only `sourceRef` values change in affected Kustomization obje
 
 ### Rule
 
-- `flux-system/` always lives in the **infra OCI** (the bootstrap root).
+- `flux-system/` always lives in the **platform OCI** (the bootstrap root).
 - Each `flux-system-<group>/` lives in the **same OCI as that group's payloads**.
 - `flux-system/` gains one additional `OCIRepository` CR per split group OCI.
 - The `Kustomization flux-system-<group>` CR inside `flux-system/` gets its
@@ -73,30 +73,30 @@ Derived from the base repository path by appending the set name:
 
 | Set        | Repository suffix  | Example                           |
 |------------|--------------------|-----------------------------------|
-| Infra      | `-infra`           | `wharf/prod/stack-cluster-infra`  |
+| Platform      | `-platform`           | `wharf/prod/stack-cluster-platform`  |
 | App group  | `-<groupname>`     | `wharf/prod/stack-cluster-frontend` |
 | Monolithic | *(none)*           | `wharf/prod/stack-cluster`        |
 
-### Example: infra + frontend split
+### Example: platform + frontend split
 
-**OCI 1 — `stack-prod-infra`** (bootstrap root):
+**OCI 1 — `stack-prod-platform`** (bootstrap root):
 ```
 cluster-prod/
 ├── flux-system/
 │   ├── gotk-components.yaml
-│   ├── OCIRepository  stack-prod-infra      url: oci://<registry>/…-infra:<tag>
+│   ├── OCIRepository  stack-prod-platform      url: oci://<registry>/…-platform:<tag>
 │   ├── OCIRepository  stack-prod-frontend   url: oci://<registry>/…-frontend:<tag>
 │   ├── Kustomization  flux-system           path: ./cluster-prod/flux-system
-│   │                                        sourceRef: stack-prod-infra
-│   ├── Kustomization  flux-system-infrastructure
-│   │                                        path: ./cluster-prod/flux-system-infrastructure
-│   │                                        sourceRef: stack-prod-infra
+│   │                                        sourceRef: stack-prod-platform
+│   ├── Kustomization  flux-system-platform
+│   │                                        path: ./cluster-prod/flux-system-platform
+│   │                                        sourceRef: stack-prod-platform
 │   └── Kustomization  flux-system-frontend  path: ./cluster-prod/flux-system-frontend
 │                                            sourceRef: stack-prod-frontend    ← changed
-├── flux-system-infrastructure/
-│   └── Kustomization  infra-cert-manager    path: ./cluster-prod/infrastructure/cert-manager
-│                                            sourceRef: stack-prod-infra
-└── infrastructure/
+├── flux-system-platform/
+│   └── Kustomization  platform-cert-manager    path: ./cluster-prod/platform/cert-manager
+│                                            sourceRef: stack-prod-platform
+└── platform/
     └── cert-manager/
         └── helmrelease.yaml …
 ```
@@ -104,7 +104,7 @@ cluster-prod/
 **OCI 2 — `stack-prod-frontend`**:
 ```
 cluster-prod/
-├── flux-system-frontend/                    ← lives here, not in infra OCI
+├── flux-system-frontend/                    ← lives here, not in platform OCI
 │   ├── Kustomization  storefront            path: ./cluster-prod/frontend/storefront
 │   │                                        sourceRef: stack-prod-frontend    ← changed
 │   └── Kustomization  cart                  path: ./cluster-prod/frontend/cart
@@ -116,7 +116,7 @@ cluster-prod/
         └── deployment.yaml …
 ```
 
-Bootstrap still applies only two objects from OCI 1: `OCIRepository stack-prod-infra`
+Bootstrap still applies only two objects from OCI 1: `OCIRepository stack-prod-platform`
 and `Kustomization flux-system`. Flux discovers OCI 2 when it reconciles
 `flux-system/` and finds the `OCIRepository stack-prod-frontend` CR there.
 
@@ -129,7 +129,7 @@ and `Kustomization flux-system`. Flux discovers OCI 2 when it reconciles
 | 1     | `flux-system/`             | OCIRepository CRs, root + group Kustomization CRs, gotk-components |
 | 2     | `flux-system-<group>/`     | Per-app Kustomization CRs for one group         |
 | 3     | `<group>/<appname>/`       | Application manifests (Deployment, Service, …)  |
-| 3     | `infrastructure/<id>/`     | Platform component manifests (HelmRelease, …)   |
+| 3     | `platform/<id>/`     | Platform component manifests (HelmRelease, …)   |
 
 ---
 
@@ -155,4 +155,4 @@ Kure's `ManifestLayout` tree represents the above structure. Key conventions:
   applicationGroups support (crane#155).
 - **Per-group split**: splitting individual app groups into their own OCIs is
   deferred until crane#155. The current `splitInfra bool` only separates the
-  infra set from the combined apps set.
+  platform set from the combined apps set.
