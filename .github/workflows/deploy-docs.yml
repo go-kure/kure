@@ -105,23 +105,18 @@ jobs:
         HUGO_ENVIRONMENT: production
       run: |
         SLOT="${{ steps.version.outputs.slot }}"
-        if [[ "$SLOT" == "dev" ]]; then
-          BASE_URL="https://www.gokure.dev/dev/"
-        else
-          BASE_URL="https://www.gokure.dev/${SLOT}/"
-        fi
-        hugo --config hugo.toml,versions.toml --minify --baseURL "$BASE_URL"
+        hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/kure/${SLOT}/"
         # Save for deploy
         mv public public-slot
 
-    - name: Build Hugo site (root — latest)
+    - name: Build Hugo site (kure/ root — latest)
       if: steps.version.outputs.set_latest == 'true'
       working-directory: site
       env:
         HUGO_CACHEDIR: ${{ runner.temp }}/hugo_cache
         HUGO_ENVIRONMENT: production
       run: |
-        hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/"
+        hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/kure/"
         mv public public-root
 
     - name: Checkout go-kure.github.io
@@ -141,24 +136,21 @@ jobs:
         echo "www.gokure.dev" > CNAME
         touch .nojekyll
 
-        # --- Deploy versioned slot ---
-        echo "Deploying to /${SLOT}/..."
-        rm -rf "${SLOT}"
-        cp -r ../site/public-slot "${SLOT}"
+        # --- Deploy versioned slot to kure/{slot}/ ---
+        echo "Deploying to /kure/${SLOT}/..."
+        mkdir -p kure
+        rm -rf "kure/${SLOT}"
+        cp -r ../site/public-slot "kure/${SLOT}"
 
-        # --- Deploy to root (latest stable) ---
+        # --- Deploy to kure/ root (latest stable) ---
         if [[ "$SET_LATEST" == "true" ]]; then
-          echo "Deploying to / (latest stable)..."
-          # Remove root content but preserve version subdirectories and infra files
-          find . -maxdepth 1 \
-            -not -name '.' \
-            -not -name '.git' \
-            -not -name 'CNAME' \
-            -not -name '.nojekyll' \
+          echo "Deploying to /kure/ (latest stable)..."
+          # Remove kure/ root content but preserve version subdirectories
+          find kure -maxdepth 1 -mindepth 1 \
             -not -name 'dev' \
             -not -name 'v*' \
             -exec rm -rf {} +
-          cp -r ../site/public-root/* .
+          cp -r ../site/public-root/* kure/
         fi
 
         # Get kure commit info for the deploy message
@@ -172,9 +164,9 @@ jobs:
         else
           LABEL="${{ steps.version.outputs.label }}"
           if [[ "$SET_LATEST" == "true" ]]; then
-            MSG="deploy: ${LABEL} → /${SLOT}/ + / (latest) from kure@${KURE_SHA}"
+            MSG="deploy: ${LABEL} → /kure/${SLOT}/ + /kure/ (latest) from kure@${KURE_SHA}"
           else
-            MSG="deploy: ${LABEL} → /${SLOT}/ from kure@${KURE_SHA}"
+            MSG="deploy: ${LABEL} → /kure/${SLOT}/ from kure@${KURE_SHA}"
           fi
           git commit -m "$MSG"
           git push
