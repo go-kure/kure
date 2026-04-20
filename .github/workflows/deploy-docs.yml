@@ -156,6 +156,7 @@ jobs:
             -not -name 'CNAME' \
             -not -name '.nojekyll' \
             -not -name 'dev' \
+            -not -name 'launcher' \
             -not -name 'v*' \
             -exec rm -rf {} +
           cp -r ../site/public-root/* .
