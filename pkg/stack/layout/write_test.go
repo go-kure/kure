@@ -1086,6 +1086,68 @@ func TestWriteToDisk_FileNamingKindName(t *testing.T) {
 	}
 }
 
+// TestWriteToDisk_NamespaceDot_RootPaths verifies that Namespace:"." on layout
+// nodes produces paths relative to basePath (no "cluster/" prefix), mirroring
+// the tar behaviour. This is the OCI root convention from docs/oci-layout.md.
+func TestWriteToDisk_NamespaceDot_RootPaths(t *testing.T) {
+	fluxSystem := &ManifestLayout{
+		Name:       "flux-system",
+		Namespace:  ".",
+		FilePer:    FilePerResource,
+		FileNaming: FileNamingKindName,
+		Mode:       KustomizationExplicit,
+		Resources: []client.Object{
+			testObject("v1", "ConfigMap", "gotk-components", "flux-system"),
+		},
+	}
+	fluxSystemPlatform := &ManifestLayout{
+		Name:      "flux-system-platform",
+		Namespace: ".",
+		FilePer:   FilePerResource,
+		Mode:      KustomizationExplicit,
+		Resources: []client.Object{
+			testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "cert-manager", "flux-system"),
+		},
+	}
+	certManager := &ManifestLayout{
+		Name:       "cert-manager",
+		Namespace:  "platform",
+		FilePer:    FilePerResource,
+		FileNaming: FileNamingKindName,
+		Mode:       KustomizationExplicit,
+		Resources: []client.Object{
+			testObject("v1", "ConfigMap", "cert-manager-config", "cert-manager"),
+		},
+	}
+
+	dir := t.TempDir()
+	for _, ml := range []*ManifestLayout{fluxSystem, fluxSystemPlatform, certManager} {
+		if err := ml.WriteToDisk(dir); err != nil {
+			t.Fatalf("WriteToDisk(%s) failed: %v", ml.Name, err)
+		}
+	}
+
+	// Layer 1: directly under basePath, not under basePath/cluster/
+	if _, err := os.Stat(filepath.Join(dir, "flux-system", "configmap-gotk-components.yaml")); err != nil {
+		t.Errorf("Layer 1: expected configmap-gotk-components.yaml at flux-system/: %v", err)
+	}
+	// Layer 2: flux-system-platform/ directly under basePath
+	if _, err := os.Stat(filepath.Join(dir, "flux-system-platform")); err != nil {
+		t.Errorf("Layer 2: expected flux-system-platform/ at basePath root: %v", err)
+	}
+	// Layer 3: <group>/<appname>/ path
+	if _, err := os.Stat(filepath.Join(dir, "platform", "cert-manager")); err != nil {
+		t.Errorf("Layer 3: expected platform/cert-manager/ at basePath root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "platform", "cert-manager", "configmap-cert-manager-config.yaml")); err != nil {
+		t.Errorf("Layer 3: expected resource file in platform/cert-manager/: %v", err)
+	}
+	// Must NOT have a "cluster/" directory.
+	if _, err := os.Stat(filepath.Join(dir, "cluster")); err == nil {
+		t.Error("unexpected 'cluster/' directory: Namespace:'.' should not create it")
+	}
+}
+
 func TestWriteToDisk_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	child := &ManifestLayout{
 		Name:       "team-a",
