@@ -127,3 +127,30 @@ func TestAssembleManifests_EmptyInput(t *testing.T) {
 		t.Errorf("expected empty output for empty input, got: %q", out)
 	}
 }
+
+func TestAssembleManifests_StableOrder(t *testing.T) {
+	rendered := map[string]string{
+		"mychart/templates/z-last.yaml":   "kind: Z",
+		"mychart/templates/a-first.yaml":  "kind: A",
+		"mychart/templates/m-middle.yaml": "kind: M",
+	}
+
+	out1 := assembleManifests(rendered)
+	out2 := assembleManifests(rendered)
+
+	if string(out1) != string(out2) {
+		t.Errorf("assembleManifests is non-deterministic:\nfirst:  %s\nsecond: %s", out1, out2)
+	}
+
+	// sorted key order: a-first < m-middle < z-last
+	s := string(out1)
+	posA := strings.Index(s, "kind: A")
+	posM := strings.Index(s, "kind: M")
+	posZ := strings.Index(s, "kind: Z")
+	if posA < 0 || posM < 0 || posZ < 0 {
+		t.Fatalf("expected all three kinds in output, got:\n%s", s)
+	}
+	if !(posA < posM && posM < posZ) {
+		t.Errorf("expected sorted order A < M < Z, got positions A=%d M=%d Z=%d in:\n%s", posA, posM, posZ, s)
+	}
+}
