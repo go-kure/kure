@@ -30,7 +30,7 @@ require (
 	github.com/cert-manager/cert-manager v1.20.2
 	github.com/cloudnative-pg/barman-cloud v0.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.29.0
-	github.com/cloudnative-pg/machinery v0.3.3
+	github.com/cloudnative-pg/machinery v0.4.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.11.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.40.0
 	github.com/evanphx/json-patch/v5 v5.9.11
@@ -114,7 +114,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0 // indirect
-	github.com/lib/pq v1.12.0 // indirect
+	github.com/lib/pq v1.12.3 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
@@ -151,7 +151,7 @@ require (
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/term v0.41.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
