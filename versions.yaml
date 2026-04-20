@@ -83,9 +83,9 @@ infrastructure:
       - "github.com/cloudnative-pg/machinery"
 
   cnpg-barman-cloud:
-    current: "0.11.0"
+    current: "0.12.0"
     go_module: "github.com/cloudnative-pg/plugin-barman-cloud"
-    supported_range: "0.9 - 0.11"
+    supported_range: "0.9 - 0.12"
     max_dependabot: null
     notes: |
       Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
