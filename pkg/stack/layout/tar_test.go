@@ -488,6 +488,13 @@ func TestWriteToTar_OCILayer2GroupNaming(t *testing.T) {
 	kustCR.SetKind("Kustomization")
 	kustCR.SetName("storefront")
 	kustCR.SetNamespace("flux-system")
+	kustCR.Object["spec"] = map[string]interface{}{
+		"path": "./frontend/storefront",
+		"sourceRef": map[string]interface{}{
+			"kind": "OCIRepository",
+			"name": "stack-prod",
+		},
+	}
 
 	ml := &ManifestLayout{
 		Name:       "flux-system-frontend",
@@ -515,6 +522,15 @@ func TestWriteToTar_OCILayer2GroupNaming(t *testing.T) {
 	kustom := string(files["flux-system-frontend/kustomization.yaml"])
 	if !bytes.Contains([]byte(kustom), []byte("kustomization-storefront.yaml")) {
 		t.Errorf("flux-system-frontend kustomization.yaml should reference kustomization-storefront.yaml:\n%s", kustom)
+	}
+	// spec.path and spec.sourceRef must survive serialization — a regression that
+	// drops these fields passes the directory/naming checks above but breaks Flux.
+	kustContent := string(files["flux-system-frontend/kustomization-storefront.yaml"])
+	if !strings.Contains(kustContent, "path: ./frontend/storefront") {
+		t.Errorf("Layer 2 Kustomization must have spec.path ./frontend/storefront:\n%s", kustContent)
+	}
+	if !strings.Contains(kustContent, "name: stack-prod") {
+		t.Errorf("Layer 2 Kustomization must have spec.sourceRef.name stack-prod:\n%s", kustContent)
 	}
 }
 
@@ -600,6 +616,13 @@ func TestWriteToTar_OCIMonolithic_SiblingLayers(t *testing.T) {
 	kustCR.SetKind("Kustomization")
 	kustCR.SetName("cert-manager")
 	kustCR.SetNamespace("flux-system")
+	kustCR.Object["spec"] = map[string]interface{}{
+		"path": "./platform/cert-manager",
+		"sourceRef": map[string]interface{}{
+			"kind": "OCIRepository",
+			"name": "stack-prod",
+		},
+	}
 
 	fluxSystemPlatform := &ManifestLayout{
 		Name:       "flux-system-platform",
@@ -656,6 +679,14 @@ func TestWriteToTar_OCIMonolithic_SiblingLayers(t *testing.T) {
 	// Layer 2 contents — Kustomization CR uses kind-name format.
 	if _, ok := files["flux-system-platform/kustomization-cert-manager.yaml"]; !ok {
 		t.Errorf("Layer 2: missing kustomization-cert-manager.yaml, got: %v", fileNames(files))
+	}
+	// spec.path (Layer 3 dir) and spec.sourceRef must survive serialization.
+	layer2Content := string(files["flux-system-platform/kustomization-cert-manager.yaml"])
+	if !strings.Contains(layer2Content, "path: ./platform/cert-manager") {
+		t.Errorf("Layer 2 Kustomization must have spec.path ./platform/cert-manager:\n%s", layer2Content)
+	}
+	if !strings.Contains(layer2Content, "name: stack-prod") {
+		t.Errorf("Layer 2 Kustomization must have spec.sourceRef.name stack-prod:\n%s", layer2Content)
 	}
 
 	// Layer 3 contents.
