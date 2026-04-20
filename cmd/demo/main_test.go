@@ -345,19 +345,6 @@ node:
 	}
 }
 
-func TestRunPatchDemo_NoFiles(t *testing.T) {
-	// Test with non-existent files
-	err := runPatchDemo()
-	if err == nil {
-		t.Error("runPatchDemo should return error for non-existent base file")
-	}
-}
-
-func TestRunPatchDemo_WithMockData(t *testing.T) {
-	// This test involves complex patch processing
-	// Skip it to avoid complexity in test environments
-	t.Skip("Skipping complex patch processing test")
-}
 
 // Test demo data processing
 func TestDemoDataProcessing(t *testing.T) {

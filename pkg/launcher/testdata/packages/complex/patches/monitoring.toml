@@ -1,4 +1,0 @@
-# Enable Prometheus monitoring
-[service.complex-app]
-metadata.annotations.prometheus.io/scrape: "true"
-metadata.annotations.prometheus.io/port: "9090"
