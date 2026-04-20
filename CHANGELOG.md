@@ -1,11 +1,35 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.1.0-rc.11] - 2026-04-20
+
+### Added
+
+- Add public pkg/kubernetes/cnpg wrapper
+
+### Dependencies
+
+- Bump github.com/moby/spdystream from 0.5.0 to 0.5.1
+- Bump github.com/cloudnative-pg/machinery
+- Bump github.com/cloudnative-pg/plugin-barman-cloud
+
+### Documentation
+
+- Add internal design note for launcher extraction
+- Correct patch.go treatment in launcher extraction design
+- Document OCI folder layout and split strategy design
+- Rename infra to platform in OCI layout design doc
+- Register oci-layout.md in docs site scripts
+
 ## [0.1.0-rc.10] - 2026-04-15
 
 ### Added
 
 - Add builders for Role, RoleBinding, ClusterRole, ClusterRoleBinding
+
+### Release
+
+- V0.1.0-rc.10
 
 ## [0.1.0-rc.9] - 2026-04-15
 
