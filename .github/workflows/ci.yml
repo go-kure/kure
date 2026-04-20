@@ -580,7 +580,7 @@ jobs:
       env:
         HUGO_CACHEDIR: ${{ runner.temp }}/hugo_cache
         HUGO_ENVIRONMENT: production
-      run: hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/"
+      run: hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/kure/"
 
     - name: Upload docs artifact
       uses: actions/upload-artifact@v7

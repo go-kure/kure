@@ -27,7 +27,7 @@ set -euo pipefail
 
 VERSION=""
 LATEST=""
-BASE_URL="https://www.gokure.dev"
+BASE_URL="https://www.gokure.dev/kure"
 OUTPUT="site/versions.toml"
 
 while [[ $# -gt 0 ]]; do
