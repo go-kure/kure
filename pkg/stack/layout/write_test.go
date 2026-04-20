@@ -1100,14 +1100,25 @@ func TestWriteToDisk_NamespaceDot_RootPaths(t *testing.T) {
 			testObject("v1", "ConfigMap", "gotk-components", "flux-system"),
 		},
 	}
-	fluxSystemPlatform := &ManifestLayout{
-		Name:      "flux-system-platform",
-		Namespace: ".",
-		FilePer:   FilePerResource,
-		Mode:      KustomizationExplicit,
-		Resources: []client.Object{
-			testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "cert-manager", "flux-system"),
+	kustPlatform := &unstructured.Unstructured{}
+	kustPlatform.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
+	kustPlatform.SetKind("Kustomization")
+	kustPlatform.SetName("cert-manager")
+	kustPlatform.SetNamespace("flux-system")
+	kustPlatform.Object["spec"] = map[string]interface{}{
+		"path": "./platform/cert-manager",
+		"sourceRef": map[string]interface{}{
+			"kind": "OCIRepository",
+			"name": "stack-prod",
 		},
+	}
+	fluxSystemPlatform := &ManifestLayout{
+		Name:       "flux-system-platform",
+		Namespace:  ".",
+		FilePer:    FilePerResource,
+		FileNaming: FileNamingKindName,
+		Mode:       KustomizationExplicit,
+		Resources:  []client.Object{kustPlatform},
 	}
 	certManager := &ManifestLayout{
 		Name:       "cert-manager",
@@ -1131,9 +1142,24 @@ func TestWriteToDisk_NamespaceDot_RootPaths(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "flux-system", "configmap-gotk-components.yaml")); err != nil {
 		t.Errorf("Layer 1: expected configmap-gotk-components.yaml at flux-system/: %v", err)
 	}
-	// Layer 2: flux-system-platform/ directly under basePath
-	if _, err := os.Stat(filepath.Join(dir, "flux-system-platform")); err != nil {
-		t.Errorf("Layer 2: expected flux-system-platform/ at basePath root: %v", err)
+	// Layer 2: kind-name filename (not namespace-prefixed), spec fields preserved.
+	kustFile := filepath.Join(dir, "flux-system-platform", "kustomization-cert-manager.yaml")
+	if _, err := os.Stat(kustFile); err != nil {
+		t.Errorf("Layer 2: expected kustomization-cert-manager.yaml (FileNamingKindName): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "flux-system-platform", "flux-system-kustomization-cert-manager.yaml")); err == nil {
+		t.Error("Layer 2: namespace-prefixed filename found; FileNamingKindName must suppress it")
+	}
+	kustData, err := os.ReadFile(kustFile)
+	if err != nil {
+		t.Fatalf("read Layer 2 Kustomization: %v", err)
+	}
+	kustContent := string(kustData)
+	if !strings.Contains(kustContent, "path: ./platform/cert-manager") {
+		t.Errorf("Layer 2 Kustomization must have spec.path ./platform/cert-manager:\n%s", kustContent)
+	}
+	if !strings.Contains(kustContent, "name: stack-prod") {
+		t.Errorf("Layer 2 Kustomization must have spec.sourceRef.name stack-prod:\n%s", kustContent)
 	}
 	// Layer 3: <group>/<appname>/ path
 	if _, err := os.Stat(filepath.Join(dir, "platform", "cert-manager")); err != nil {
