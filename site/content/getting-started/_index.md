@@ -5,7 +5,7 @@ weight = 10
 
 # Getting Started with Kure
 
-Kure is primarily a Go library. You can also install its CLI tools for package management and code generation.
+Kure is primarily a Go library. You can also install its CLI tool for code generation.
 
 ## Using as a Library
 
@@ -25,21 +25,16 @@ import (
 )
 ```
 
-## Installing CLI Tools
+## Installing the CLI
 
 ```bash
-# kure — main CLI for resource generation
 go install github.com/go-kure/kure/cmd/kure@latest
-
-# kurel — package system for reusable application bundles
-go install github.com/go-kure/kure/cmd/kurel@latest
 ```
 
 Verify the installation:
 
 ```bash
 kure version
-kurel version
 ```
 
 ## Next Steps

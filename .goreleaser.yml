@@ -21,21 +21,6 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
 
-  - id: kurel
-    main: ./cmd/kurel
-    binary: kurel
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w
-      - -X github.com/go-kure/kure/pkg/cmd/shared.Version={{.Version}}
-      - -X github.com/go-kure/kure/pkg/cmd/shared.GitCommit={{.ShortCommit}}
-      - -X github.com/go-kure/kure/pkg/cmd/shared.BuildDate={{.Date}}
-    env:
-      - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
-
 archives:
   - id: kure-archive
     ids: [kure]
@@ -44,14 +29,6 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "kure_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-  - id: kurel-archive
-    ids: [kurel]
-    formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
-    name_template: "kurel_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
 checksum:
   name_template: "checksums.txt"
 

@@ -362,7 +362,7 @@ jobs:
 
     strategy:
       matrix:
-        target: [kure, kurel, demo]
+        target: [kure, demo]
 
     steps:
     - name: Checkout code
@@ -500,8 +500,6 @@ jobs:
         mkdir -p bin
         go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
           -o bin/kure-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kure
-        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
-          -o bin/kurel-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kurel
 
     - name: Upload cross-platform artifacts
       uses: actions/upload-artifact@v7
