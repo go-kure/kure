@@ -509,3 +509,232 @@ func TestGeneratePath_UmbrellaChild(t *testing.T) {
 		t.Errorf("Path = %q, want platform/infra", k.Spec.Path)
 	}
 }
+
+func TestGenerateFromBundle_Patches(t *testing.T) {
+	t.Run("empty patches leaves spec nil", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{Name: "test"}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if k.Spec.Patches != nil {
+			t.Errorf("expected nil Patches, got %v", k.Spec.Patches)
+		}
+	})
+
+	t.Run("single patch without target", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{
+			Name: "test",
+			Patches: []stack.Patch{
+				{Patch: `{"op":"add","path":"/metadata/labels/env","value":"prod"}`},
+			},
+		}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if len(k.Spec.Patches) != 1 {
+			t.Fatalf("expected 1 patch, got %d", len(k.Spec.Patches))
+		}
+		if k.Spec.Patches[0].Patch != `{"op":"add","path":"/metadata/labels/env","value":"prod"}` {
+			t.Errorf("Patch content mismatch: %q", k.Spec.Patches[0].Patch)
+		}
+		if k.Spec.Patches[0].Target != nil {
+			t.Errorf("expected nil Target, got %v", k.Spec.Patches[0].Target)
+		}
+	})
+
+	t.Run("patch with full selector", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{
+			Name: "test",
+			Patches: []stack.Patch{
+				{
+					Patch: "apiVersion: apps/v1\nkind: Deployment",
+					Target: &stack.PatchSelector{
+						Group:              "apps",
+						Version:            "v1",
+						Kind:               "Deployment",
+						Name:               "my-app",
+						Namespace:          "default",
+						LabelSelector:      "app=my-app",
+						AnnotationSelector: "tier=backend",
+					},
+				},
+			},
+		}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if len(k.Spec.Patches) != 1 {
+			t.Fatalf("expected 1 patch, got %d", len(k.Spec.Patches))
+		}
+		sel := k.Spec.Patches[0].Target
+		if sel == nil {
+			t.Fatal("expected non-nil Target selector")
+		}
+		if sel.Group != "apps" {
+			t.Errorf("Group = %q, want %q", sel.Group, "apps")
+		}
+		if sel.Version != "v1" {
+			t.Errorf("Version = %q, want %q", sel.Version, "v1")
+		}
+		if sel.Kind != "Deployment" {
+			t.Errorf("Kind = %q, want %q", sel.Kind, "Deployment")
+		}
+		if sel.Name != "my-app" {
+			t.Errorf("Name = %q, want %q", sel.Name, "my-app")
+		}
+		if sel.Namespace != "default" {
+			t.Errorf("Namespace = %q, want %q", sel.Namespace, "default")
+		}
+		if sel.LabelSelector != "app=my-app" {
+			t.Errorf("LabelSelector = %q, want %q", sel.LabelSelector, "app=my-app")
+		}
+		if sel.AnnotationSelector != "tier=backend" {
+			t.Errorf("AnnotationSelector = %q, want %q", sel.AnnotationSelector, "tier=backend")
+		}
+	})
+
+	t.Run("multiple patches preserve order", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{
+			Name: "test",
+			Patches: []stack.Patch{
+				{Patch: "first"},
+				{Patch: "second"},
+				{Patch: "third"},
+			},
+		}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if len(k.Spec.Patches) != 3 {
+			t.Fatalf("expected 3 patches, got %d", len(k.Spec.Patches))
+		}
+		for i, want := range []string{"first", "second", "third"} {
+			if k.Spec.Patches[i].Patch != want {
+				t.Errorf("Patches[%d].Patch = %q, want %q", i, k.Spec.Patches[i].Patch, want)
+			}
+		}
+	})
+}
+
+func TestGenerateFromBundle_PostBuild(t *testing.T) {
+	t.Run("nil PostBuild leaves spec nil", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{Name: "test"}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if k.Spec.PostBuild != nil {
+			t.Errorf("expected nil PostBuild, got %v", k.Spec.PostBuild)
+		}
+	})
+
+	t.Run("Substitute only", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{
+			Name: "test",
+			PostBuild: &stack.PostBuild{
+				Substitute: map[string]string{
+					"CLUSTER_ENV": "production",
+					"REGION":      "eu-west-1",
+				},
+			},
+		}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if k.Spec.PostBuild == nil {
+			t.Fatal("expected PostBuild to be set")
+		}
+		if k.Spec.PostBuild.Substitute["CLUSTER_ENV"] != "production" {
+			t.Errorf("CLUSTER_ENV = %q, want production", k.Spec.PostBuild.Substitute["CLUSTER_ENV"])
+		}
+		if k.Spec.PostBuild.Substitute["REGION"] != "eu-west-1" {
+			t.Errorf("REGION = %q, want eu-west-1", k.Spec.PostBuild.Substitute["REGION"])
+		}
+		if len(k.Spec.PostBuild.SubstituteFrom) != 0 {
+			t.Errorf("expected empty SubstituteFrom, got %d entries", len(k.Spec.PostBuild.SubstituteFrom))
+		}
+	})
+
+	t.Run("SubstituteFrom only", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{
+			Name: "test",
+			PostBuild: &stack.PostBuild{
+				SubstituteFrom: []stack.SubstituteRef{
+					{Kind: "ConfigMap", Name: "cluster-vars", Optional: false},
+					{Kind: "Secret", Name: "cluster-secrets", Optional: true},
+				},
+			},
+		}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if k.Spec.PostBuild == nil {
+			t.Fatal("expected PostBuild to be set")
+		}
+		if len(k.Spec.PostBuild.SubstituteFrom) != 2 {
+			t.Fatalf("expected 2 SubstituteFrom entries, got %d", len(k.Spec.PostBuild.SubstituteFrom))
+		}
+		if k.Spec.PostBuild.SubstituteFrom[0].Kind != "ConfigMap" {
+			t.Errorf("SubstituteFrom[0].Kind = %q, want ConfigMap", k.Spec.PostBuild.SubstituteFrom[0].Kind)
+		}
+		if k.Spec.PostBuild.SubstituteFrom[0].Name != "cluster-vars" {
+			t.Errorf("SubstituteFrom[0].Name = %q, want cluster-vars", k.Spec.PostBuild.SubstituteFrom[0].Name)
+		}
+		if k.Spec.PostBuild.SubstituteFrom[0].Optional {
+			t.Error("SubstituteFrom[0].Optional = true, want false")
+		}
+		if k.Spec.PostBuild.SubstituteFrom[1].Kind != "Secret" {
+			t.Errorf("SubstituteFrom[1].Kind = %q, want Secret", k.Spec.PostBuild.SubstituteFrom[1].Kind)
+		}
+		if !k.Spec.PostBuild.SubstituteFrom[1].Optional {
+			t.Error("SubstituteFrom[1].Optional = false, want true")
+		}
+	})
+
+	t.Run("Substitute and SubstituteFrom combined", func(t *testing.T) {
+		wf := fluxstack.Engine()
+		b := &stack.Bundle{
+			Name: "test",
+			PostBuild: &stack.PostBuild{
+				Substitute: map[string]string{"ENV": "staging"},
+				SubstituteFrom: []stack.SubstituteRef{
+					{Kind: "ConfigMap", Name: "extra-vars"},
+				},
+			},
+		}
+		objs, err := wf.GenerateFromBundle(b)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		k := objs[0].(*kustv1.Kustomization)
+		if k.Spec.PostBuild == nil {
+			t.Fatal("expected PostBuild to be set")
+		}
+		if k.Spec.PostBuild.Substitute["ENV"] != "staging" {
+			t.Errorf("ENV = %q, want staging", k.Spec.PostBuild.Substitute["ENV"])
+		}
+		if len(k.Spec.PostBuild.SubstituteFrom) != 1 {
+			t.Fatalf("expected 1 SubstituteFrom entry, got %d", len(k.Spec.PostBuild.SubstituteFrom))
+		}
+	})
+}
