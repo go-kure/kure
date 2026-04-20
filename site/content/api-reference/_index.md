@@ -18,17 +18,10 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 | [Generators](generators) | Application generator system (GVK) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/generators) |
 | [Layout Engine](layout) | Manifest directory organization | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/layout) |
 
-## Package System
-
-| Package | Description | Reference |
-|---------|-------------|-----------|
-| [Launcher](launcher) | Kurel package loading, building, validation | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/launcher) |
-
 ## Resource Operations
 
 | Package | Description | Reference |
 |---------|-------------|-----------|
-| [Patch](patch) | JSONPath-based declarative patching | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/patch) |
 | [IO](io) | YAML/JSON serialization and resource printing | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/io) |
 | [Kubernetes Builders](kubernetes-builders) | Core K8s resource constructors (GVK, HPA, PDB) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes) |
 | [FluxCD Builders](fluxcd-builders) | Low-level Flux resource constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/fluxcd) |

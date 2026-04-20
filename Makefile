@@ -24,7 +24,6 @@ COVERAGE_DIR := coverage
 
 # Executables
 KURE_BIN := $(BUILD_DIR)/kure
-KUREL_BIN := $(BUILD_DIR)/kurel
 DEMO_BIN := $(BUILD_DIR)/demo
 
 # Test configuration
@@ -92,7 +91,7 @@ deps-upgrade: ## Upgrade all dependencies to latest versions
 # =============================================================================
 
 .PHONY: build
-build: build-kure build-kurel build-demo ## Build all executables
+build: build-kure build-demo ## Build all executables
 
 # Build ldflags - must match .goreleaser.yml for consistent version info
 LDFLAGS := -s -w \
@@ -108,12 +107,6 @@ build-kure: $(BUILD_DIR) ## Build the kure executable
 	@echo "$(COLOR_YELLOW)Building kure...$(COLOR_RESET)"
 	$(GO) build $(BUILD_FLAGS) -ldflags="$(LDFLAGS)" -o $(KURE_BIN) ./cmd/kure
 	@echo "$(COLOR_GREEN)Built $(KURE_BIN)$(COLOR_RESET)"
-
-.PHONY: build-kurel
-build-kurel: $(BUILD_DIR) ## Build the kurel executable
-	@echo "$(COLOR_YELLOW)Building kurel...$(COLOR_RESET)"
-	$(GO) build $(BUILD_FLAGS) -ldflags="$(LDFLAGS)" -o $(KUREL_BIN) ./cmd/kurel
-	@echo "$(COLOR_GREEN)Built $(KUREL_BIN)$(COLOR_RESET)"
 
 .PHONY: build-demo
 build-demo: $(BUILD_DIR) ## Build the demo executable

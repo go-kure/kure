@@ -29,13 +29,13 @@ go get github.com/go-kure/kure
 
 ## CLI Tools
 
-Kure ships two CLI tools: **kure** for manifest generation and patching, and **kurel** for package-based resource management. Run `kure --help` or `kurel --help` for usage details.
+Kure ships a CLI tool: **kure** for manifest generation. Run `kure --help` for usage details.
 
 ## Documentation
 
 - [Website](https://www.gokure.dev) — guides, architecture, and tutorials
 - [API Reference](https://pkg.go.dev/github.com/go-kure/kure) — full Go package documentation
-- [`examples/`](examples/) — cluster configurations, kurel packages, and patching samples
+- [`examples/`](examples/) — cluster configurations and patching samples
 
 ## Development
 
