@@ -1,6 +1,6 @@
 name: Bug Report
-description: Report a bug in Kure
-labels: [bug]
+description: Report a bug
+labels: ["type/bug"]
 body:
   - type: textarea
     id: description
@@ -26,7 +26,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Kure Version
+      label: Version
       placeholder: e.g. v0.1.0 or commit hash
     validations:
       required: true
