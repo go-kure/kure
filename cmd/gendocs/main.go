@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/cobra/doc"
 
 	"github.com/go-kure/kure/pkg/cmd/kure"
-	"github.com/go-kure/kure/pkg/cmd/kurel"
 )
 
 func main() {
@@ -56,14 +55,6 @@ weight: %d
 	kureCmd.DisableAutoGenTag = true
 	if err := doc.GenMarkdownTreeCustom(kureCmd, outDir, filePrepender, linkHandler); err != nil {
 		fmt.Fprintf(os.Stderr, "error generating kure docs: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Generate kurel CLI docs
-	kurelCmd := kurel.NewKurelCommand()
-	kurelCmd.DisableAutoGenTag = true
-	if err := doc.GenMarkdownTreeCustom(kurelCmd, outDir, filePrepender, linkHandler); err != nil {
-		fmt.Fprintf(os.Stderr, "error generating kurel docs: %v\n", err)
 		os.Exit(1)
 	}
 

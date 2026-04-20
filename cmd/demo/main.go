@@ -18,7 +18,6 @@ import (
 	intkubernetes "github.com/go-kure/kure/internal/kubernetes"
 	kio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/kubernetes"
-	"github.com/go-kure/kure/pkg/patch"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 
@@ -52,7 +51,6 @@ func main() {
 		{"Clusters", runClusters},
 		{"Multi-OCI Packages", runMultiOCIDemo},
 		{"Bootstrap Configurations", runBootstrapDemo},
-		{"Patch System", runPatchDemo},
 	}
 
 	for _, demo := range demos {
@@ -550,54 +548,3 @@ func runBootstrapDemo() error {
 	})
 }
 
-// runPatchDemo processes patch configurations from examples/patches/
-func runPatchDemo() error {
-	fmt.Println("Processing patch system examples...")
-
-	examplesDir := "examples/patches"
-	baseYAML := filepath.Join(examplesDir, "cert-manager-simple.yaml")
-	patchFiles := []string{
-		filepath.Join(examplesDir, "resources.kpatch"),
-		filepath.Join(examplesDir, "ingress.kpatch"),
-		filepath.Join(examplesDir, "security.kpatch"),
-		filepath.Join(examplesDir, "advanced.kpatch"),
-	}
-
-	// Check if files exist
-	if _, err := os.Stat(baseYAML); os.IsNotExist(err) {
-		return fmt.Errorf("base YAML file not found: %s", baseYAML)
-	}
-
-	// Load base resources
-	baseFile, err := os.Open(baseYAML)
-	if err != nil {
-		return fmt.Errorf("failed to open base YAML: %w", err)
-	}
-	defer func() { _ = baseFile.Close() }()
-
-	documentSet, err := patch.LoadResourcesWithStructure(baseFile)
-	if err != nil {
-		return fmt.Errorf("failed to load resources with structure: %w", err)
-	}
-
-	fmt.Printf("Loaded %d base resources with preserved structure\n", len(documentSet.Documents))
-
-	// Create patchable set
-	patchableSet := &patch.PatchableAppSet{
-		Resources:   documentSet.GetResources(),
-		DocumentSet: documentSet,
-		Patches: make([]struct {
-			Target    string
-			Patch     patch.PatchOp
-			Strategic *patch.StrategicPatch
-		}, 0),
-	}
-
-	outputDir := "out/patches"
-	if err := patchableSet.WritePatchedFiles(baseYAML, patchFiles, outputDir); err != nil {
-		return fmt.Errorf("failed to write patched files: %w", err)
-	}
-
-	fmt.Printf("Generated patched files: %s\n", outputDir)
-	return nil
-}
