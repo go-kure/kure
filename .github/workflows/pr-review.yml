@@ -110,12 +110,14 @@ jobs:
           if [ "$DIFF_HTTP" -lt 200 ] || [ "$DIFF_HTTP" -ge 300 ]; then
             echo "WARNING: GitHub returned HTTP ${DIFF_HTTP} for diff (PR may be too large), skipping review."
             cat /tmp/pr_diff_raw.txt || true
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           DIFF=$(cat /tmp/pr_diff_raw.txt)
           if [ -z "$DIFF" ]; then
             echo "No diff found, skipping review."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -269,7 +271,7 @@ jobs:
           fi
 
       - name: Post review comment
-        if: steps.review.outcome == 'success'
+        if: steps.review.outcome == 'success' && steps.review.outputs.skipped != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -282,7 +284,7 @@ jobs:
             -d "$(jq -n --rawfile body /tmp/review_comment.md '{body: $body}')"
 
       - name: Run assessment
-        if: steps.review.outcome == 'success' && steps.review.outputs.is_lgtm != 'true' && env.PR_REVIEW_ASSESS_ENABLED == 'true'
+        if: steps.review.outcome == 'success' && steps.review.outputs.skipped != 'true' && steps.review.outputs.is_lgtm != 'true' && env.PR_REVIEW_ASSESS_ENABLED == 'true'
         id: assessment
         run: |
           set -eu
