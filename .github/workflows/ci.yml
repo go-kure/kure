@@ -561,6 +561,10 @@ jobs:
       id: hugo-version
       run: |
         HUGO_VER=$(grep '^hugo = ' mise.toml | sed 's/hugo = "\(.*\)"/\1/')
+        if [ -z "$HUGO_VER" ]; then
+          echo "::error::Failed to parse Hugo version from mise.toml"
+          exit 1
+        fi
         echo "version=$HUGO_VER" >> $GITHUB_OUTPUT
 
     - name: Restore Hugo from cache
