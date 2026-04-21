@@ -92,7 +92,7 @@ PR-only jobs (parallel, no blocking):
 | `test` | `test` | 15 min | validate | Unit tests, race tests, coverage |
 | `security` | `Security` | 10 min | validate | govulncheck, outdated deps, sensitive file check |
 | `coverage-check` | `Coverage Check` | 5 min | test | 80% threshold, Codecov upload, PR comment |
-| `build` | `build` | 10 min | coverage-check | Build kure, kurel, demo |
+| `build` | `build` | 10 min | coverage-check | Build kure, demo |
 | `cross-platform` | `Cross-Platform Build` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
 | `rebase-check` | `rebase-check` | 2 min | - | Verify PR branch is rebased on main (PR only) |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
