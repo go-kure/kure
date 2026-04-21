@@ -27,70 +27,14 @@ on:
         type: boolean
         default: false
 
-concurrency:
-  group: release-create
-  cancel-in-progress: false
-
-env:
-  GO_VERSION: '1.26.2'
+permissions:
+  contents: write
 
 jobs:
-  test:
-    name: Pre-release test
-    runs-on: autops-kube
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v6
-
-      - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Run tests
-        env:
-          CGO_ENABLED: "1"
-        run: go test -v -race ./...
-
-  release:
-    name: Create Release
-    needs: test
-    runs-on: autops-kube
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
-      - name: Check out code
-        uses: actions/checkout@v6
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          fetch-depth: 0
-
-      - name: Install git-cliff
-        run: |
-          CLIFF_VERSION="2.7.0"
-          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/v${CLIFF_VERSION}/git-cliff-${CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
-            | tar xzf - -C /tmp
-          sudo install /tmp/git-cliff-${CLIFF_VERSION}/git-cliff /usr/local/bin/
-
-      - name: Run release script
-        env:
-          RELEASE_TYPE: ${{ inputs.type }}
-          RELEASE_SCOPE: ${{ inputs.scope }}
-          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
-          CI: 'true'
-        run: ./scripts/release.sh
+  release-create:
+    uses: go-kure/.github/.github/workflows/release-create.yml@main
+    with:
+      type: ${{ inputs.type }}
+      scope: ${{ inputs.scope }}
+      dry_run: ${{ inputs.dry_run }}
+    secrets: inherit
