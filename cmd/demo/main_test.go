@@ -345,7 +345,6 @@ node:
 	}
 }
 
-
 // Test demo data processing
 func TestDemoDataProcessing(t *testing.T) {
 	tests := []struct {

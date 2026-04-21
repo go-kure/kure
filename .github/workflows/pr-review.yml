@@ -102,11 +102,18 @@ jobs:
 
           # --- Fetch PR diff ---
           echo "Fetching PR diff for #${PR_NUMBER}..."
-          DIFF=$(curl -sf \
+          DIFF_HTTP=$(curl -s -o /tmp/pr_diff_raw.txt -w '%{http_code}' \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github.diff" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
 
+          if [ "$DIFF_HTTP" -lt 200 ] || [ "$DIFF_HTTP" -ge 300 ]; then
+            echo "WARNING: GitHub returned HTTP ${DIFF_HTTP} for diff (PR may be too large), skipping review."
+            cat /tmp/pr_diff_raw.txt || true
+            exit 0
+          fi
+
+          DIFF=$(cat /tmp/pr_diff_raw.txt)
           if [ -z "$DIFF" ]; then
             echo "No diff found, skipping review."
             exit 0
