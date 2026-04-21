@@ -440,16 +440,17 @@ jobs:
     name: build
     runs-on: autops-kube
     timeout-minutes: 1
-    needs: [test, build-binaries, docs-build, coverage-check]
+    needs: [validate, test, build-binaries, docs-build, coverage-check]
     if: always()
     steps:
     - name: Check build results
       run: |
+        vl="${{ needs.validate.result }}"
         tt="${{ needs.test.result }}"
         bb="${{ needs.build-binaries.result }}"
         db="${{ needs.docs-build.result }}"
         cc="${{ needs.coverage-check.result }}"
-        for result in "$tt" "$bb" "$db" "$cc"; do
+        for result in "$vl" "$tt" "$bb" "$db" "$cc"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
             exit 1
