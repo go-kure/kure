@@ -7,22 +7,7 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: auto-rebase
-  cancel-in-progress: true
-
 jobs:
   auto-rebase:
-    name: auto-rebase
-    runs-on: autops-kube
-    timeout-minutes: 30
-    if: github.repository == 'go-kure/kure'
-
-    steps:
-      - name: Rebase open PRs
-        uses: peter-evans/rebase@v4
-        with:
-          token: ${{ secrets.AUTO_REBASE_PAT }}
-          base: main
-          exclude-labels: dependencies
-          exclude-drafts: true
+    uses: go-kure/.github/.github/workflows/auto-rebase.yml@main
+    secrets: inherit
