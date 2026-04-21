@@ -20,8 +20,8 @@ env:
 
 # Avoid duplicate runs on the same commit
 concurrency:
-  group: ci-${{ github.sha }}
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # =============================================================================
