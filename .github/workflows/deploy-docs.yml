@@ -55,6 +55,7 @@ jobs:
       id: hugo-version
       run: |
         HUGO_VER=$(grep '^hugo = ' mise.toml | sed 's/hugo = "\(.*\)"/\1/')
+        [[ -z "$HUGO_VER" ]] && echo "::error::Failed to read Hugo version from mise.toml" && exit 1
         echo "version=$HUGO_VER" >> $GITHUB_OUTPUT
 
     - name: Determine version parameters
