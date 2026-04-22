@@ -25,6 +25,9 @@ title = 'Go Kure'
   [[module.mounts]]
     source = ".generated/concepts/architecture.md"
     target = "content/concepts/architecture.md"
+  [[module.mounts]]
+    source = ".generated/concepts/oci-layout.md"
+    target = "content/concepts/oci-layout.md"
 
   # Examples
   [[module.mounts]]
@@ -54,12 +57,6 @@ title = 'Go Kure'
     source = ".generated/api-reference/layout.md"
     target = "content/api-reference/layout.md"
   [[module.mounts]]
-    source = ".generated/api-reference/launcher.md"
-    target = "content/api-reference/launcher.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/patch.md"
-    target = "content/api-reference/patch.md"
-  [[module.mounts]]
     source = ".generated/api-reference/io.md"
     target = "content/api-reference/io.md"
   [[module.mounts]]
@@ -74,6 +71,9 @@ title = 'Go Kure'
   [[module.mounts]]
     source = ".generated/api-reference/fluxcd-builders.md"
     target = "content/api-reference/fluxcd-builders.md"
+  [[module.mounts]]
+    source = ".generated/api-reference/prometheus-builders.md"
+    target = "content/api-reference/prometheus-builders.md"
   [[module.mounts]]
     source = ".generated/api-reference/logger.md"
     target = "content/api-reference/logger.md"
@@ -93,6 +93,9 @@ title = 'Go Kure'
   [[module.mounts]]
     source = ".generated/contributing/github-workflows.md"
     target = "content/contributing/github-workflows.md"
+  [[module.mounts]]
+    source = ".generated/contributing/dependency-updates.md"
+    target = "content/contributing/dependency-updates.md"
 
   # Changelog
   [[module.mounts]]
