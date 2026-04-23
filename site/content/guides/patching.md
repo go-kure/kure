@@ -185,6 +185,6 @@ for _, r := range reports {
 
 ## Further Reading
 
-- [Patch reference](/api-reference/patch) for API details
+- [Patch reference](https://pkg.go.dev/github.com/go-kure/launcher/pkg/patch) for API details
 - [Patch examples](/examples/patches) for working samples
 - [Kurel packages](/guides/kurel-packages/) for patch-based package customization
