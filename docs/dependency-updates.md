@@ -110,6 +110,6 @@ Before merging any dependency update:
 
 ## See Also
 
-- [DEVELOPMENT.md](../DEVELOPMENT.md) § Dependabot Management — PR commands for managing Dependabot PRs
-- [compatibility.md](compatibility.md) — Generated compatibility matrix
-- [versions.yaml](../versions.yaml) — Version source of truth
+- [Development Guide § Dependabot Management](/contributing/guide/#dependabot-management) — PR commands for managing Dependabot PRs
+- [Compatibility Matrix](/api-reference/compatibility/) — Generated compatibility matrix
+- [versions.yaml](https://github.com/go-kure/kure/blob/main/versions.yaml) — Version source of truth

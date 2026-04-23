@@ -108,6 +108,6 @@ my-app.local.kurel/
 
 ## Further Reading
 
-- [Launcher reference](/api-reference/launcher) for the package system API
+- [Launcher reference](https://pkg.go.dev/github.com/go-kure/launcher/pkg/launcher) for the package system API
 - [Kurel Frigate example](/examples/kurel-frigate) for a complete package
 - [Patching guide](/guides/patching/) for the patch format
