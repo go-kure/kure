@@ -87,8 +87,8 @@ github.com/fluxcd/helm-controller/api v1.5.3 h1:ruLzuyTHjjE9A5B/U+Id2q7yHXXqSFTs
 github.com/fluxcd/helm-controller/api v1.5.3/go.mod h1:lTgeUmtVYExMKp7mRDncsr4JwHTz3LFtLjRJZeR98lI=
 github.com/fluxcd/image-automation-controller/api v1.1.1 h1:uiu7kjdVoW8/461HOemX6I7RcPornEzQliWgTg6LnWI=
 github.com/fluxcd/image-automation-controller/api v1.1.1/go.mod h1:lkD/drkD6Wc+2SDjVj5KqfozEucTLFexWgby/5ft660=
-github.com/fluxcd/kustomize-controller/api v1.8.3 h1:Ux9AAOY0lkP6FgRg5/b/ITvRSy8lz6VBBaZ9bXmTLmI=
-github.com/fluxcd/kustomize-controller/api v1.8.3/go.mod h1:c/mUPIffDDLg1EicXCJtX4N/rc+z5Zh0e/CXjhd7Dyc=
+github.com/fluxcd/kustomize-controller/api v1.8.4 h1:13+9CgxGj67Bn7wzFILw8S4r4urEgiLTODwjA4XU0mU=
+github.com/fluxcd/kustomize-controller/api v1.8.4/go.mod h1:c/mUPIffDDLg1EicXCJtX4N/rc+z5Zh0e/CXjhd7Dyc=
 github.com/fluxcd/notification-controller/api v1.8.3 h1:edYpC/t4pNw/KQur189SRC1XtFNU597ooDTCrW90Xmw=
 github.com/fluxcd/notification-controller/api v1.8.3/go.mod h1:ozgJGQPy0dG5eOsLZlwAr6n0q/y6+TWd1fGOtavlXJA=
 github.com/fluxcd/pkg/apis/acl v0.9.0 h1:wBpgsKT+jcyZEcM//OmZr9RiF8klL3ebrDp2u2ThsnA=

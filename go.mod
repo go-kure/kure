@@ -36,7 +36,7 @@ require (
 	github.com/fluxcd/flux2/v2 v2.8.5
 	github.com/fluxcd/helm-controller/api v1.5.3
 	github.com/fluxcd/image-automation-controller/api v1.1.1
-	github.com/fluxcd/kustomize-controller/api v1.8.3
+	github.com/fluxcd/kustomize-controller/api v1.8.4
 	github.com/fluxcd/notification-controller/api v1.8.3
 	github.com/fluxcd/pkg/apis/acl v0.9.0
 	github.com/fluxcd/pkg/apis/kustomize v1.15.1
