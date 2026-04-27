@@ -27,7 +27,7 @@ replace (
 
 require (
 	github.com/cert-manager/cert-manager v1.20.2
-	github.com/cloudnative-pg/barman-cloud v0.5.0
+	github.com/cloudnative-pg/barman-cloud v0.5.1
 	github.com/cloudnative-pg/cloudnative-pg v1.29.0
 	github.com/cloudnative-pg/machinery v0.4.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.12.0
@@ -50,9 +50,9 @@ require (
 	go.universe.tf/metallb v0.15.3
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.1.4
-	k8s.io/api v0.35.3
+	k8s.io/api v0.35.4
 	k8s.io/apiextensions-apiserver v0.35.3
-	k8s.io/apimachinery v0.35.3
+	k8s.io/apimachinery v0.35.4
 	k8s.io/cli-runtime v0.35.3
 	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/gateway-api v1.5.1
