@@ -1,6 +1,41 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.0] - 2026-05-01
+
+### Added
+
+- Move kure docs site to /kure/ subpath
+
+### Build
+
+- Remove kurel and extracted packages from build and docs
+
+### CI
+
+- Trigger Claude Code action automatically on PRs
+- Replace shared workflows with callers to go-kure/.github
+- Optimize pipeline — parallel jobs, single test run, Hugo cache, path filtering
+- Cancel in-progress runs when new push arrives on same branch
+
+### Fixed
+
+- Handle large PR diffs in review workflow, fix formatting, update docs
+- Set skipped output before early exits in pr-review workflow
+- Add test to build gate needs to catch skipped cascade on failure
+- Guard against empty Hugo version parse from mise.toml
+- Add validate to build gate needs so lint failure blocks merge
+- Sync hugo.toml mounts and check-mounts after package extraction
+- Guard against empty Hugo version read
+- Repair 5 broken links on deployed docs site
+- Support unnamed root node — merge resources at cluster root
+
+### Testing
+
+- Add missing tests for Patches/PostBuild and stable helm output
+- Add OCI layout pattern tests (Namespace:"."/layer naming/3-layer structure)
+- Assert spec.path and sourceRef in Layer 2 Kustomization tests
+
 ## [0.1.0-rc.11] - 2026-04-20
 
 ### Added
@@ -20,6 +55,10 @@ All notable changes to this project will be documented in this file.
 - Document OCI folder layout and split strategy design
 - Rename infra to platform in OCI layout design doc
 - Register oci-layout.md in docs site scripts
+
+### Release
+
+- V0.1.0-rc.11
 
 ## [0.1.0-rc.10] - 2026-04-15
 
