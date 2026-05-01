@@ -79,6 +79,55 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 		Children:   []*ManifestLayout{},
 	}
 
+	nodeFlat := rules.NodeGrouping == GroupFlat
+
+	// Unnamed root node: resources go directly at the cluster root with no
+	// intermediate subdirectory. The clusterLayout itself holds the bundle's
+	// resources so WriteToDisk writes a single directory (no path collision).
+	if c.Node.Name == "" {
+		if c.Node.Bundle != nil {
+			for _, app := range c.Node.Bundle.Applications {
+				if app == nil {
+					continue
+				}
+				objsPtr, err := app.Generate()
+				if err != nil {
+					return nil, err
+				}
+				for _, o := range objsPtr {
+					if o == nil {
+						continue
+					}
+					clusterLayout.Resources = append(clusterLayout.Resources, *o)
+				}
+			}
+			if len(c.Node.Bundle.Children) > 0 {
+				c.Node.Bundle.InitializeUmbrella()
+				umbrellaChildren, err := walkUmbrellaChildLayouts(
+					c.Node.Bundle.Children,
+					[]string{rules.ClusterName},
+					filePer,
+					rules.FluxPlacement,
+					rules.FileNaming,
+				)
+				if err != nil {
+					return nil, err
+				}
+				clusterLayout.Children = append(clusterLayout.Children, umbrellaChildren...)
+			}
+		}
+		for _, child := range c.Node.Children {
+			childLayout, err := walkNode(child, []string{rules.ClusterName}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
+			if err != nil {
+				return nil, err
+			}
+			if childLayout != nil {
+				clusterLayout.Children = append(clusterLayout.Children, childLayout)
+			}
+		}
+		return clusterLayout, nil
+	}
+
 	// Build the root node layout. Done unconditionally (even when the root
 	// node has no Bundle) so child-node subtrees can be nested underneath it.
 	rootLayout := &ManifestLayout{
@@ -129,7 +178,6 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 	// accumulated path (clusterName/rootName/childName/...) matches
 	// stack.Node.GetPath() (rootName/childName/...) when the Flux integrator
 	// searches for the corresponding layout node.
-	nodeFlat := rules.NodeGrouping == GroupFlat
 	for _, child := range c.Node.Children {
 		childLayout, err := walkNode(child, []string{rules.ClusterName, c.Node.Name}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
 		if err != nil {
