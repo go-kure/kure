@@ -700,3 +700,91 @@ func TestCreateLayoutWithResources_UmbrellaChildWithSource(t *testing.T) {
 		t.Error("expected umbrella child's GitRepository at parent bundle layout")
 	}
 }
+
+// TestIntegrateWithLayout_AppliesFlattenPathRewrites confirms that
+// IntegrateWithLayout invokes layout.ApplyFlattenPathRewrites before
+// returning, so callers using WalkCluster + IntegrateWithLayout directly
+// (without going through CreateLayoutWithResources) still get rewritten
+// Spec.Path values on Flux Kustomization CRs.
+func TestIntegrateWithLayout_AppliesFlattenPathRewrites(t *testing.T) {
+	generator := fluxstack.NewResourceGenerator()
+	integrator := fluxstack.NewLayoutIntegrator(generator)
+	integrator.SetFluxPlacement(layout.FluxSeparate)
+
+	cluster := &stack.Cluster{
+		Name: "arc-runners",
+		Node: &stack.Node{Name: "apps", Bundle: &stack.Bundle{Name: "bundle"}},
+	}
+
+	// Walk + collapse via the public API; this populates flattenInfo on
+	// the absorbing root.
+	walked, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		ClusterName:         "arc-runners",
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+		FlattenSingleTier:   true,
+	})
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+
+	// Pre-plant a Kustomization CR whose Spec.Path matches the recorded
+	// rewrite. After IntegrateWithLayout returns, the post-pass must have
+	// rewritten it.
+	preplanted := &kustv1.Kustomization{}
+	preplanted.Spec.Path = "arc-runners/apps"
+	walked.Resources = append(walked.Resources, preplanted)
+
+	if err := integrator.IntegrateWithLayout(walked, cluster, layout.LayoutRules{}); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	if preplanted.Spec.Path != "arc-runners" {
+		t.Errorf("expected Spec.Path rewritten to 'arc-runners', got %q", preplanted.Spec.Path)
+	}
+}
+
+// TestIntegrateWithLayout_RepeatedCallSucceeds confirms that calling
+// IntegrateWithLayout twice on the same flattened layout works. The first
+// call must not destroy the alias state that integrated placement depends
+// on for resolving the collapsed node path on the second call.
+func TestIntegrateWithLayout_RepeatedCallSucceeds(t *testing.T) {
+	generator := fluxstack.NewResourceGenerator()
+	integrator := fluxstack.NewLayoutIntegrator(generator)
+	integrator.SetFluxPlacement(layout.FluxIntegrated)
+
+	cluster := &stack.Cluster{
+		Name: "arc-runners",
+		Node: &stack.Node{
+			Name: "apps",
+			Bundle: &stack.Bundle{
+				Name: "bundle",
+				SourceRef: &stack.SourceRef{
+					Kind:      "GitRepository",
+					Name:      "test-source",
+					Namespace: "flux-system",
+				},
+			},
+		},
+	}
+
+	walked, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		ClusterName:         "arc-runners",
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+		FlattenSingleTier:   true,
+	})
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+
+	if err := integrator.IntegrateWithLayout(walked, cluster, layout.LayoutRules{}); err != nil {
+		t.Fatalf("first IntegrateWithLayout: %v", err)
+	}
+
+	// Second call must still resolve the collapsed "apps" node via the
+	// alias fallback rather than failing with "layout node not found".
+	if err := integrator.IntegrateWithLayout(walked, cluster, layout.LayoutRules{}); err != nil {
+		t.Fatalf("second IntegrateWithLayout: %v (alias state was destroyed by the first pass)", err)
+	}
+}

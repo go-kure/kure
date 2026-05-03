@@ -103,12 +103,20 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		return err
 	}
 
-	// Don't generate root kustomization.yaml at cluster level (when namespace is just the cluster name)
-	isClusterRoot := strings.Count(ml.Namespace, string(filepath.Separator)) == 0 && ml.Name == ""
+	// Skip the kustomization.yaml at the synthetic cluster root only when it
+	// has no resources of its own. The synthetic root is the cluster-name
+	// container created by walkClusterWithClusterName: Name="",
+	// single-segment Namespace. With FlattenSingleTier the root may absorb a
+	// collapsed child's Resources, in which case it does need a
+	// kustomization.yaml.
+	skipClusterRoot := ml.Namespace != "" &&
+		strings.Count(ml.Namespace, string(filepath.Separator)) == 0 &&
+		ml.Name == "" &&
+		len(fileGroups) == 0
 
-	// Generate kustomization.yaml if there are resources or children, but not at cluster root
-	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
-	if !isClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0) {
+	// Generate kustomization.yaml if there are resources or children, except at the empty cluster root.
+	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow.
+	if !skipClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {

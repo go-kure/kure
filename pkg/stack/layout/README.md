@@ -130,6 +130,27 @@ When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-a
 
 Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters.
 
+### Flatten Single Tier (opt-in)
+
+`LayoutRules.FlattenSingleTier` collapses one vestigial intermediate directory layer when the wrapping Node adds no semantic value. Typical case: a flat single-bundle app whose caller wraps the Bundle in an extra Node (e.g. crane's `apps` Node), producing `cluster-name/apps/manifests.yaml` where the `apps/` layer is redundant. Enabling the flag yields `cluster-name/manifests.yaml` directly.
+
+Conservative collapse preconditions — ALL must hold:
+
+- `LayoutRules.FlattenSingleTier` is `true`.
+- The parent layout is top-level (`Namespace` has no path separator).
+- Parent has exactly one `Children` entry.
+- Parent has no own `Resources`.
+- The single child is not an `UmbrellaChild`.
+- The single child has no `Children` of its own (terminal layer).
+
+Multi-tier apps with sub-Kustomizations are unaffected: the precondition that the child be terminal preserves them. Empty containers (`only-Children`) are also unaffected: the precondition requiring the parent to have no own resources doesn't apply to them.
+
+When the layout participates in Flux integration, the flatten helper records redirect tables (`nodeAliases` for `findLayoutNode` lookups, `pathRewrites` for `Spec.Path` rewriting). `IntegrateWithLayout` consults the aliases during integrated placement and calls `ApplyFlattenPathRewrites(root)` before returning, regardless of placement mode (FluxIntegrated or FluxSeparate). Direct callers using `WalkCluster` + `IntegrateWithLayout` (without going through `CreateLayoutWithResources`) get the rewrite for free.
+
+Scoped to `WalkCluster`. `WalkClusterByPackage` is unaffected — its synthetic unnamed wrappers express package boundaries that the flatten helper would otherwise erroneously collapse.
+
+Default: `false` — no behaviour change for existing callers.
+
 ## Layout Presets
 
 Three named presets provide pre-configured LayoutRules for common deployment patterns. Use `LayoutRulesForPreset()` to get rules, or `ConfigForPreset()` to get a matching Config.
