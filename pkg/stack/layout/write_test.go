@@ -345,10 +345,43 @@ func TestWriteManifest_WithChildren(t *testing.T) {
 	}
 }
 
-func TestWriteManifest_ClusterRootNoKustomization(t *testing.T) {
+func TestWriteManifest_ClusterRootEmptyContainerNoKustomization(t *testing.T) {
+	// Cluster root acting as a structural container: no own resources, only
+	// child layouts. No kustomization.yaml at this level — children own their
+	// own kustomization.yaml. Preserves the original walkClusterWithClusterName
+	// behaviour.
+	ml := &ManifestLayout{
+		Name:      "",
+		Namespace: "mycluster",
+		Children: []*ManifestLayout{
+			{
+				Name:      "child",
+				Namespace: "mycluster/child",
+				Resources: []client.Object{testObject("v1", "Namespace", "default", "")},
+			},
+		},
+	}
+
+	cfg := DefaultLayoutConfig()
+	dir := t.TempDir()
+
+	if err := WriteManifest(dir, cfg, ml); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	kustomFile := filepath.Join(dir, "clusters", "mycluster", "kustomization.yaml")
+	if _, err := os.Stat(kustomFile); !os.IsNotExist(err) {
+		t.Errorf("kustomization.yaml should NOT be generated at empty cluster root (%s)", kustomFile)
+	}
+}
+
+func TestWriteManifest_ClusterRootWithResourcesEmitsKustomization(t *testing.T) {
+	// Cluster root carrying its own resources (e.g. after FlattenSingleTier
+	// collapsed a child up): the directory has manifests, so it must have a
+	// kustomization.yaml referencing them. Regression guard for the writer
+	// relaxation.
 	obj := testObject("v1", "Namespace", "default", "")
 
-	// Cluster root: Namespace without separator, Name empty.
 	ml := &ManifestLayout{
 		Name:      "",
 		Namespace: "mycluster",
@@ -362,16 +395,18 @@ func TestWriteManifest_ClusterRootNoKustomization(t *testing.T) {
 		t.Fatalf("WriteManifest failed: %v", err)
 	}
 
-	// Resource file should still be written.
 	resourceFile := filepath.Join(dir, "clusters", "mycluster", "cluster-namespace-default.yaml")
 	if _, err := os.Stat(resourceFile); err != nil {
 		t.Fatalf("expected resource file at %s: %v", resourceFile, err)
 	}
 
-	// Kustomization should NOT be generated at cluster root.
 	kustomFile := filepath.Join(dir, "clusters", "mycluster", "kustomization.yaml")
-	if _, err := os.Stat(kustomFile); !os.IsNotExist(err) {
-		t.Errorf("kustomization.yaml should NOT be generated at cluster root (%s)", kustomFile)
+	data, err := os.ReadFile(kustomFile)
+	if err != nil {
+		t.Fatalf("expected kustomization.yaml at cluster root with resources: %v", err)
+	}
+	if !strings.Contains(string(data), "cluster-namespace-default.yaml") {
+		t.Errorf("kustomization.yaml should reference the resource file, got:\n%s", data)
 	}
 }
 

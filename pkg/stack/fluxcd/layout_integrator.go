@@ -27,20 +27,33 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 }
 
 // IntegrateWithLayout adds Flux resources to an existing manifest layout.
+//
+// If the layout was post-processed by FlattenSingleTier (recorded as
+// flattenInfo on the absorbing layouts), this method consults nodeAliases
+// during integrated placement (see findLayoutNode) and rewrites Flux
+// Kustomization Spec.Path values via layout.ApplyFlattenPathRewrites before
+// returning, regardless of placement mode.
 func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
 	if ml == nil || c == nil {
 		return nil
 	}
 
+	var err error
 	switch li.FluxPlacement {
 	case layout.FluxIntegrated:
-		return li.addIntegratedFluxToLayout(ml, c, rules)
+		err = li.addIntegratedFluxToLayout(ml, c, rules)
 	case layout.FluxSeparate:
-		return li.addSeparateFluxToLayout(ml, c, rules)
+		err = li.addSeparateFluxToLayout(ml, c, rules)
 	default:
 		return errors.NewValidationError("fluxPlacement", string(li.FluxPlacement), "LayoutIntegrator",
 			[]string{string(layout.FluxIntegrated), string(layout.FluxSeparate)})
 	}
+	if err != nil {
+		return err
+	}
+
+	layout.ApplyFlattenPathRewrites(ml)
+	return nil
 }
 
 // CreateLayoutWithResources creates a new layout that includes Flux resources.
@@ -221,9 +234,15 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 // findLayoutNode finds the layout node corresponding to a stack node using path-based matching.
 // It computes the layout's full path and compares against the node's path to avoid
 // ambiguity when nodes at different hierarchy levels share the same name.
+// When path-based search misses (because FlattenSingleTier collapsed the
+// target's layout into an ancestor), it falls back to the flattenInfo alias
+// recorded on the absorbing layout.
 func (li *LayoutIntegrator) findLayoutNode(ml *layout.ManifestLayout, node *stack.Node) *layout.ManifestLayout {
 	targetPath := node.GetPath()
-	return li.findLayoutNodeByPath(ml, targetPath, "")
+	if found := li.findLayoutNodeByPath(ml, targetPath, ""); found != nil {
+		return found
+	}
+	return layout.FindByNodeAlias(ml, targetPath)
 }
 
 // findLayoutNodeByPath recursively searches the layout tree for a node whose

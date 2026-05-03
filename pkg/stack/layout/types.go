@@ -115,6 +115,27 @@ type LayoutRules struct {
 	// FileNaming controls the file naming pattern for manifest files.
 	// Defaults to FileNamingDefault ({namespace}-{kind}-{name}.yaml).
 	FileNaming FileNamingMode
+
+	// FlattenSingleTier collapses a vestigial intermediate directory layer
+	// produced by the walker when it adds no semantic value: a parent layout
+	// with exactly one named child whose own children are empty and which is
+	// not an UmbrellaChild, where the parent itself is a top-level layout
+	// (Namespace has no path separator) with no own Resources.
+	//
+	// Typical case: flat single-bundle apps where the caller wraps the bundle
+	// in an extra Node (e.g. crane's "apps" Node). Multi-tier apps with sub-
+	// Kustomizations are unaffected — the collapse rules require the
+	// intermediate to be terminal.
+	//
+	// Only effective for WalkCluster (not WalkClusterByPackage, which uses
+	// synthetic unnamed wrappers to express package boundaries).
+	//
+	// When the layout participates in Flux integration, the flatten helper
+	// records pathRewrites/nodeAliases on the absorbing layout.
+	// IntegrateWithLayout consults aliases via findLayoutNode and calls
+	// ApplyFlattenPathRewrites before returning, so generated Flux
+	// Kustomization CRs resolve to the post-collapse directory.
+	FlattenSingleTier bool
 }
 
 // DefaultLayoutRules returns a LayoutRules instance populated with the

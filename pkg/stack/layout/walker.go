@@ -52,7 +52,11 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 
 	// For cluster-aware layout, we need to restructure the hierarchy
 	if rules.ClusterName != "" {
-		return walkClusterWithClusterName(c, rules, nodeOnly, filePer)
+		ml, err := walkClusterWithClusterName(c, rules, nodeOnly, filePer)
+		if err != nil {
+			return nil, err
+		}
+		return flattenSingleTier(ml, c, rules), nil
 	}
 
 	// Traditional layout without cluster name
@@ -61,7 +65,7 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		return nil, err
 	}
 
-	return ml, nil
+	return flattenSingleTier(ml, c, rules), nil
 }
 
 // walkClusterWithClusterName creates a cluster-aware layout where the cluster
