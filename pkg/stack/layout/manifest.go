@@ -25,6 +25,16 @@ type ManifestLayout struct {
 	FileNaming          FileNamingMode // Controls resource file naming pattern
 	Resources           []client.Object
 	Children            []*ManifestLayout
+	// ExtraFiles are arbitrary files written alongside resource YAMLs in this
+	// layout's directory. Typical use: a values.yaml referenced by a
+	// configMapGenerator entry. Augmenters (LayoutAugmenter) attach these.
+	ExtraFiles []ExtraFile
+	// ConfigMapGenerators emit a kustomize configMapGenerator: section in
+	// kustomization.yaml. kustomize appends a content-hash suffix to each
+	// generated ConfigMap name; resources referencing it (e.g.
+	// HelmRelease.spec.valuesFrom) are rewritten to the suffixed name on
+	// build, so any change to the source file forces re-reconciliation.
+	ConfigMapGenerators []ConfigMapGeneratorSpec
 	// UmbrellaChild marks this layout as rendered from a Bundle.Children
 	// entry. When true, kustomization.yaml writers emit a
 	// flux-system-kustomization-{Name}.yaml reference in the parent directory
@@ -32,6 +42,21 @@ type ManifestLayout struct {
 	// child's Flux Kustomization CR at the parent layout node rather than in
 	// the child's own directory.
 	UmbrellaChild bool
+}
+
+// ExtraFile is an arbitrary file written into a ManifestLayout's directory
+// alongside the resource YAMLs.
+type ExtraFile struct {
+	Name    string
+	Content []byte
+}
+
+// ConfigMapGeneratorSpec describes a single kustomize configMapGenerator entry.
+// Files are paths (relative to the layout directory) of files included in the
+// generated ConfigMap.
+type ConfigMapGeneratorSpec struct {
+	Name  string
+	Files []string
 }
 
 // resolveManifestFileName returns the effective ManifestFileNameFunc for this
@@ -241,6 +266,10 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		}
 	}
 
+	if err := writeExtraFilesToDisk(fullPath, ml.ExtraFiles); err != nil {
+		return err
+	}
+
 	kMode := ml.Mode
 	if kMode == KustomizationUnset {
 		kMode = KustomizationExplicit
@@ -310,6 +339,8 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 				writeStr(fmt.Sprintf("  - %s\n", child.Name))
 			}
 		}
+
+		writeStr(renderConfigMapGeneratorBlock(ml.ConfigMapGenerators))
 
 		if writeErr != nil {
 			_ = kf.Close()

@@ -112,6 +112,20 @@ Controls how resource YAML files are named:
 - **KustomizationRecursive**: References subdirectories only
 - Smart handling of cross-references and child relationships
 
+### Extra Files and ConfigMap Generators
+
+`ManifestLayout.ExtraFiles` lets callers attach arbitrary files (e.g. a `values.yaml`) into a layout's directory alongside the resource YAMLs. `ManifestLayout.ConfigMapGenerators` adds entries to a `configMapGenerator:` section in the generated `kustomization.yaml`. kustomize appends a content-hash suffix to the generated ConfigMap name and rewrites references (e.g. `HelmRelease.spec.valuesFrom`) on build, so any change to the source file forces re-reconciliation — the canonical FluxCD pattern for tracking Helm values changes.
+
+`LayoutAugmenter` is an optional interface on `stack.ApplicationConfig`:
+
+```go
+type LayoutAugmenter interface {
+    AugmentLayout(layout *ManifestLayout) error
+}
+```
+
+When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles` and `ConfigMapGenerators`. Only invoked on per-app layouts produced by the non-flat (`GroupByName`) walker paths; `GroupFlat` and umbrella layouts merge resources into shared parent layouts and are not currently augmented.
+
 ### ClusterName-Aware Layouts
 
 Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters.

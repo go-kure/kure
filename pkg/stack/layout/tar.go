@@ -94,6 +94,10 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		}
 	}
 
+	if err := writeExtraFilesToTar(tw, fullPath, ml.ExtraFiles); err != nil {
+		return err
+	}
+
 	// Write kustomization.yaml
 	kMode := ml.Mode
 	if kMode == KustomizationUnset {
@@ -143,6 +147,8 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 				kustomBuf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
 			}
 		}
+
+		kustomBuf.WriteString(renderConfigMapGeneratorBlock(ml.ConfigMapGenerators))
 
 		if err := writeTarFile(tw, path.Join(fullPath, "kustomization.yaml"), []byte(kustomBuf.String())); err != nil {
 			return err

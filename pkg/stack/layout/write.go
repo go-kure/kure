@@ -99,6 +99,10 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		}
 	}
 
+	if err := writeExtraFilesToDisk(fullPath, ml.ExtraFiles); err != nil {
+		return err
+	}
+
 	// Don't generate root kustomization.yaml at cluster level (when namespace is just the cluster name)
 	isClusterRoot := strings.Count(ml.Namespace, string(filepath.Separator)) == 0 && ml.Name == ""
 
@@ -162,6 +166,8 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 				}
 			}
 		}
+
+		writeStr(renderConfigMapGeneratorBlock(ml.ConfigMapGenerators))
 
 		if writeErr != nil {
 			_ = kf.Close()

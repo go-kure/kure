@@ -1,6 +1,7 @@
 package layout_test
 
 import (
+	"errors"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -19,6 +20,31 @@ type fakeConfig struct {
 
 func (f *fakeConfig) Generate(*stack.Application) ([]*client.Object, error) {
 	return f.objs, f.err
+}
+
+// fakeAugmentingConfig implements both stack.ApplicationConfig and
+// layout.LayoutAugmenter. It records the layout it was called with.
+type fakeAugmentingConfig struct {
+	objs       []*client.Object
+	augmentErr error
+	called     *layout.ManifestLayout
+}
+
+func (f *fakeAugmentingConfig) Generate(*stack.Application) ([]*client.Object, error) {
+	return f.objs, nil
+}
+
+func (f *fakeAugmentingConfig) AugmentLayout(ml *layout.ManifestLayout) error {
+	f.called = ml
+	if f.augmentErr != nil {
+		return f.augmentErr
+	}
+	ml.ExtraFiles = append(ml.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
+	ml.ConfigMapGenerators = append(ml.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{
+		Name:  "augmented-values",
+		Files: []string{"values.yaml"},
+	})
+	return nil
 }
 
 func TestWalkCluster(t *testing.T) {
@@ -756,5 +782,70 @@ func TestWalkClusterByPackage_PropagatesFileNaming(t *testing.T) {
 			}
 		}
 		check(ml)
+	}
+}
+
+func TestWalkCluster_LayoutAugmenter(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	cfg := &fakeAugmentingConfig{objs: []*client.Object{&o}}
+	app := stack.NewApplication("app", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	root := &stack.Node{Name: "root", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+	})
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	bundleLayout := ml.Children[0]
+	if len(bundleLayout.Children) != 1 {
+		t.Fatalf("expected one app layout, got %d", len(bundleLayout.Children))
+	}
+	appLayout := bundleLayout.Children[0]
+	if cfg.called != appLayout {
+		t.Errorf("AugmentLayout was not called with the per-app layout")
+	}
+	if len(appLayout.ExtraFiles) != 1 || appLayout.ExtraFiles[0].Name != "values.yaml" {
+		t.Errorf("expected ExtraFiles attached, got %+v", appLayout.ExtraFiles)
+	}
+	if len(appLayout.ConfigMapGenerators) != 1 || appLayout.ConfigMapGenerators[0].Name != "augmented-values" {
+		t.Errorf("expected ConfigMapGenerators attached, got %+v", appLayout.ConfigMapGenerators)
+	}
+}
+
+func TestWalkCluster_LayoutAugmenter_Error(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	wantErr := errors.New("augment failed")
+	cfg := &fakeAugmentingConfig{objs: []*client.Object{&o}, augmentErr: wantErr}
+	app := stack.NewApplication("app", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	root := &stack.Node{Name: "root", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	_, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+	})
+	if err == nil {
+		t.Fatalf("expected error from augmenter, got nil")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped wantErr, got: %v", err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 )
 
@@ -323,6 +324,9 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 					FluxPlacement: fluxPlacement,
 					FileNaming:    fileNaming,
 				}
+				if err := augmentAppLayout(app, appLayout); err != nil {
+					return nil, err
+				}
 				bundleChildren = append(bundleChildren, appLayout)
 			}
 			// Umbrella: umbrella child sub-layouts are siblings of application
@@ -439,6 +443,24 @@ func walkUmbrellaChildLayouts(children []*stack.Bundle, currentPath []string, fi
 	return out, nil
 }
 
+// augmentAppLayout invokes the LayoutAugmenter on app.Config when it satisfies
+// the interface, attaching ExtraFiles and ConfigMapGenerators to the per-app
+// ManifestLayout. It is a no-op when the config does not implement the
+// interface.
+func augmentAppLayout(app *stack.Application, ml *ManifestLayout) error {
+	if app == nil || app.Config == nil {
+		return nil
+	}
+	augmenter, ok := app.Config.(LayoutAugmenter)
+	if !ok {
+		return nil
+	}
+	if err := augmenter.AugmentLayout(ml); err != nil {
+		return errors.Wrapf(err, "augment layout for application %q", app.Name)
+	}
+	return nil
+}
+
 // resolvePackageRef returns the effective PackageRef for a node, using inheritance from parent
 func resolvePackageRef(n *stack.Node, inheritedPackageRef *schema.GroupVersionKind) *schema.GroupVersionKind {
 	if n.PackageRef != nil {
@@ -542,6 +564,9 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 						Namespace:  filepath.Join(append(currentPath, b.Name)...),
 						Resources:  objs,
 						FileNaming: fileNaming,
+					}
+					if err := augmentAppLayout(app, appLayout); err != nil {
+						return nil, err
 					}
 					bundleChildren = append(bundleChildren, appLayout)
 				}
