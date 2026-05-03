@@ -120,7 +120,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		}
 
 		// Write proper YAML header
-		writeStr("apiVersion: kustomize.config.kubernetes.io/v1beta1\n")
+		writeStr("apiVersion: kustomize.config.k8s.io/v1beta1\n")
 		writeStr("kind: Kustomization\n")
 		writeStr("resources:\n")
 
