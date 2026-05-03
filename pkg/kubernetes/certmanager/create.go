@@ -34,12 +34,11 @@ func Issuer(cfg *IssuerConfig) *certv1.Issuer {
 		return nil
 	}
 	obj := intcm.CreateIssuer(cfg.Name, cfg.Namespace, certv1.IssuerSpec{})
-	if cfg.ACME != nil {
-		acme := buildACMEIssuer(cfg.ACME)
-		intcm.SetIssuerACME(obj, acme)
-	} else if cfg.CA != nil {
-		intcm.SetIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName})
-	}
+	applyIssuerVariant(cfg.Variant, func(v *cmacme.ACMEIssuer) {
+		intcm.SetIssuerACME(obj, v)
+	}, func(v *certv1.CAIssuer) {
+		intcm.SetIssuerCA(obj, v)
+	})
 	return obj
 }
 
@@ -49,13 +48,30 @@ func ClusterIssuer(cfg *ClusterIssuerConfig) *certv1.ClusterIssuer {
 		return nil
 	}
 	obj := intcm.CreateClusterIssuer(cfg.Name, certv1.IssuerSpec{})
-	if cfg.ACME != nil {
-		acme := buildACMEIssuer(cfg.ACME)
-		intcm.SetClusterIssuerACME(obj, acme)
-	} else if cfg.CA != nil {
-		intcm.SetClusterIssuerCA(obj, &certv1.CAIssuer{SecretName: cfg.CA.SecretName})
-	}
+	applyIssuerVariant(cfg.Variant, func(v *cmacme.ACMEIssuer) {
+		intcm.SetClusterIssuerACME(obj, v)
+	}, func(v *certv1.CAIssuer) {
+		intcm.SetClusterIssuerCA(obj, v)
+	})
 	return obj
+}
+
+// applyIssuerVariant dispatches on the IssuerVariant sum and invokes the
+// matching setter. Each case guards against typed-nil pointers stored in the
+// interface (a `var v *ACMEConfig` would match the case but `*v` would panic);
+// typed-nil is treated as "no variant set" — same effective behaviour as a
+// nil interface.
+func applyIssuerVariant(v IssuerVariant, setACME func(*cmacme.ACMEIssuer), setCA func(*certv1.CAIssuer)) {
+	switch x := v.(type) {
+	case *ACMEConfig:
+		if x != nil {
+			setACME(buildACMEIssuer(x))
+		}
+	case *CAConfig:
+		if x != nil {
+			setCA(&certv1.CAIssuer{SecretName: x.SecretName})
+		}
+	}
 }
 
 // buildACMEIssuer converts an ACMEConfig to an ACMEIssuer, including solvers.
@@ -71,29 +87,42 @@ func buildACMEIssuer(cfg *ACMEConfig) *cmacme.ACMEIssuer {
 }
 
 // buildACMESolver converts an ACMESolverConfig to an ACMEChallengeSolver.
+// The Solver field is a sealed sum (HTTP01SolverConfig or DNS01SolverConfig);
+// each case guards against typed-nil.
 func buildACMESolver(cfg *ACMESolverConfig) cmacme.ACMEChallengeSolver {
-	if cfg.HTTP01 != nil {
-		return intcm.CreateACMEHTTP01Solver(cfg.HTTP01.ServiceType, cfg.HTTP01.IngressClass)
+	if cfg == nil {
+		return cmacme.ACMEChallengeSolver{}
 	}
-	if cfg.DNS01 != nil {
-		return buildDNS01Solver(cfg.DNS01)
+	switch s := cfg.Solver.(type) {
+	case *HTTP01SolverConfig:
+		if s != nil {
+			return intcm.CreateACMEHTTP01Solver(s.ServiceType, s.IngressClass)
+		}
+	case *DNS01SolverConfig:
+		if s != nil {
+			return buildDNS01Solver(s)
+		}
 	}
 	return cmacme.ACMEChallengeSolver{}
 }
 
 // buildDNS01Solver converts a DNS01SolverConfig to an ACMEChallengeSolver.
+// Provider is a sealed sum (Cloudflare/Route53/Google); each case guards
+// against typed-nil.
 func buildDNS01Solver(cfg *DNS01SolverConfig) cmacme.ACMEChallengeSolver {
-	switch cfg.Provider {
-	case "cloudflare":
-		if cfg.APIToken != nil {
-			return intcm.CreateACMEDNS01SolverCloudflare(cfg.Email, *cfg.APIToken)
+	switch p := cfg.Provider.(type) {
+	case *CloudflareProviderConfig:
+		if p != nil && p.APIToken != nil {
+			return intcm.CreateACMEDNS01SolverCloudflare(p.Email, *p.APIToken)
 		}
-	case "route53":
-		if cfg.SecretAccessKey != nil {
-			return intcm.CreateACMEDNS01SolverRoute53(cfg.Region, *cfg.SecretAccessKey)
+	case *Route53ProviderConfig:
+		if p != nil && p.SecretAccessKey != nil {
+			return intcm.CreateACMEDNS01SolverRoute53(p.Region, *p.SecretAccessKey)
 		}
-	case "clouddns":
-		return intcm.CreateACMEDNS01SolverGoogle(cfg.Project, cfg.ServiceAccount)
+	case *GoogleProviderConfig:
+		if p != nil {
+			return intcm.CreateACMEDNS01SolverGoogle(p.Project, p.ServiceAccount)
+		}
 	}
 	return cmacme.ACMEChallengeSolver{}
 }

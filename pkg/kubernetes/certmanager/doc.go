@@ -14,6 +14,13 @@
 // Resources covered include `Certificate`, `Issuer`, and `ClusterIssuer`, with
 // ACME and CA issuer configurations.
 //
+// ## One-of constraints
+//
+// `IssuerConfig.Variant`, `ClusterIssuerConfig.Variant`, `ACMESolverConfig.Solver`,
+// and `DNS01SolverConfig.Provider` are sealed-interface sum types — exactly one
+// implementation may be set, enforced at compile time. See
+// `docs/ARCHITECTURE.md` § "One-of Constraints (Sealed Interfaces)".
+//
 // ## Constructors
 //
 // Constructors accept a configuration struct and return the corresponding

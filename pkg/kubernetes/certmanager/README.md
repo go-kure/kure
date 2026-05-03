@@ -26,16 +26,42 @@ cert := certmanager.Certificate(&certmanager.CertificateConfig{
 
 ### Issuer
 
+`IssuerConfig.Variant` is a [sealed-interface sum type](/concepts/architecture/#one-of-constraints-sealed-interfaces): exactly one of `*ACMEConfig` or `*CAConfig` is permitted, enforced at compile time.
+
 ```go
 issuer := certmanager.Issuer(&certmanager.IssuerConfig{
     Name:      "letsencrypt",
     Namespace: "default",
-    ACME: &certmanager.ACMEConfig{
+    Variant: &certmanager.ACMEConfig{
         Server: "https://acme-v02.api.letsencrypt.org/directory",
         Email:  "admin@example.com",
         Solvers: []certmanager.ACMESolverConfig{
-            {HTTP01: &certmanager.HTTP01SolverConfig{IngressClass: "nginx"}},
+            {Solver: &certmanager.HTTP01SolverConfig{IngressClass: "nginx"}},
         },
+    },
+})
+```
+
+`ACMESolverConfig.Solver` is also a sealed sum (`*HTTP01SolverConfig` or `*DNS01SolverConfig`). DNS-01 providers are likewise sealed:
+
+```go
+issuer = certmanager.Issuer(&certmanager.IssuerConfig{
+    Name:      "letsencrypt-dns",
+    Namespace: "default",
+    Variant: &certmanager.ACMEConfig{
+        Server: "https://acme-v02.api.letsencrypt.org/directory",
+        Email:  "admin@example.com",
+        Solvers: []certmanager.ACMESolverConfig{{
+            Solver: &certmanager.DNS01SolverConfig{
+                Provider: &certmanager.CloudflareProviderConfig{
+                    Email:    "admin@example.com",
+                    APIToken: &cmmeta.SecretKeySelector{
+                        LocalObjectReference: cmmeta.LocalObjectReference{Name: "cf-api-token"},
+                        Key:                  "api-token",
+                    },
+                },
+            },
+        }},
     },
 })
 ```
@@ -44,8 +70,8 @@ issuer := certmanager.Issuer(&certmanager.IssuerConfig{
 
 ```go
 clusterIssuer := certmanager.ClusterIssuer(&certmanager.ClusterIssuerConfig{
-    Name: "letsencrypt-prod",
-    CA:   &certmanager.CAConfig{SecretName: "ca-key-pair"},
+    Name:    "letsencrypt-prod",
+    Variant: &certmanager.CAConfig{SecretName: "ca-key-pair"},
 })
 ```
 
