@@ -464,6 +464,51 @@ All builders maintain consistency through:
 - **Standard Patterns**: Uniform function naming across resource types
 - **Boundary Validation**: Public facade functions handle nil-config checks
 
+### One-of Constraints (Sealed Interfaces)
+
+Some upstream CRDs encode an *exactly-one-of* constraint as a struct with multiple optional pointer fields — the user is expected to set exactly one. Examples: cert-manager `IssuerSpec` (ACME / CA / Vault / SelfSigned / Venafi); VolSync `ReplicationSourceSpec` (Restic / Rsync / RsyncTLS / Rclone / Syncthing / External). Go's type system can't statically express "set exactly one of these fields", so the constraint is a CRD-level (apply-time) check.
+
+Kure encodes these as a **sealed-interface sum type** so violations are a compile error rather than an apply-time error. Pattern:
+
+1. **Sealed marker interface** with an unexported method, so only types in the same package can satisfy it:
+   ```go
+   type SourceMover interface {
+       isSourceMover()
+   }
+   ```
+2. **Per-variant Configs** as defined types over the upstream specs (or hand-rolled structs where simplification adds value), each attaching the marker:
+   ```go
+   type SourceResticConfig volsyncv1alpha1.ReplicationSourceResticSpec
+   func (*SourceResticConfig) isSourceMover() {}
+
+   type SourceRcloneConfig volsyncv1alpha1.ReplicationSourceRcloneSpec
+   func (*SourceRcloneConfig) isSourceMover() {}
+   // ... etc.
+   ```
+3. **Single field** of the interface type on the parent Config — the compiler enforces "at most one variant":
+   ```go
+   type ReplicationSourceConfig struct {
+       Name, Namespace string
+       SourcePVC       string
+       Trigger         *TriggerConfig
+       Mover           SourceMover  // exactly one variant
+   }
+   ```
+4. **Type-switch dispatch** in the public constructor:
+   ```go
+   switch m := cfg.Mover.(type) {
+   case *SourceResticConfig:
+       spec := volsyncv1alpha1.ReplicationSourceResticSpec(*m)
+       rs.Spec.Restic = &spec
+   case *SourceRcloneConfig:
+       // ...
+   }
+   ```
+
+This is the kure idiom for one-of: setting two variants is a compile error (single field), and missing variants are caught at construction (nil case in the type switch).
+
+`pkg/kubernetes/volsync` is the reference implementation. `pkg/kubernetes/certmanager` predates this convention and uses the older multi-pointer + first-match-precedence pattern; refactoring it to the sealed-interface idiom is tracked as a follow-up before v1.0.
+
 ---
 
 ## Patch System Architecture
