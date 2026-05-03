@@ -27,21 +27,21 @@ replace (
 
 require (
 	github.com/cert-manager/cert-manager v1.20.2
-	github.com/cloudnative-pg/barman-cloud v0.5.0
+	github.com/cloudnative-pg/barman-cloud v0.5.1
 	github.com/cloudnative-pg/cloudnative-pg v1.29.0
 	github.com/cloudnative-pg/machinery v0.4.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.12.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.40.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
-	github.com/fluxcd/flux2/v2 v2.8.5
-	github.com/fluxcd/helm-controller/api v1.5.3
-	github.com/fluxcd/image-automation-controller/api v1.1.1
-	github.com/fluxcd/kustomize-controller/api v1.8.3
-	github.com/fluxcd/notification-controller/api v1.8.3
+	github.com/fluxcd/flux2/v2 v2.8.6
+	github.com/fluxcd/helm-controller/api v1.5.4
+	github.com/fluxcd/image-automation-controller/api v1.1.2
+	github.com/fluxcd/kustomize-controller/api v1.8.4
+	github.com/fluxcd/notification-controller/api v1.8.4
 	github.com/fluxcd/pkg/apis/acl v0.9.0
 	github.com/fluxcd/pkg/apis/kustomize v1.15.1
 	github.com/fluxcd/pkg/apis/meta v1.25.1
-	github.com/fluxcd/source-controller/api v1.8.2
+	github.com/fluxcd/source-controller/api v1.8.3
 	github.com/google/cel-go v0.28.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1
 	github.com/spf13/cobra v1.10.2
@@ -50,9 +50,9 @@ require (
 	go.universe.tf/metallb v0.15.3
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.1.4
-	k8s.io/api v0.35.3
+	k8s.io/api v0.35.4
 	k8s.io/apiextensions-apiserver v0.35.3
-	k8s.io/apimachinery v0.35.3
+	k8s.io/apimachinery v0.35.4
 	k8s.io/cli-runtime v0.35.3
 	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/gateway-api v1.5.1
@@ -145,14 +145,14 @@ require (
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/exp v0.0.0-20251017212417-90e834f514db // indirect
-	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.41.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect

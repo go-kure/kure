@@ -11,29 +11,29 @@ Kure maintains two version concepts for each dependency:
 
 ## Go Version
 
-**Current:** Go 1.26.1
+**Current:** Go 1.26.2
 
 ## Infrastructure Dependencies
 
 | Tool | Build Version | Deployment Compatibility | Notes |
 |------|---------------|-------------------------|-------|
-| cert-manager | 1.20.0 | 1.14 - 1.20 | Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias). |
-| fluxcd | 2.8.2 | 2.4 - 2.8 | v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
+| cert-manager | 1.20.2 | 1.14 - 1.20 | Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias). |
+| fluxcd | 2.8.6 | 2.4 - 2.8 | v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
 image-automation-controller promoted to v1.
 All github.com/fluxcd/* packages upgraded together. |
 | flux-operator | 0.40.0 | 0.23 - 0.40 | Upgraded with FluxCD 2.8 ecosystem. |
 | metallb | 0.15.3 | 0.14 - 0.15 | Stable v1beta1 APIs, patch release |
-| prometheus-operator | 0.89.0 | 0.75 - 0.89 | Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
+| prometheus-operator | 0.90.1 | 0.75 - 0.90 | Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
 Only the /pkg/apis/monitoring submodule is imported — not the full operator.
 Stable v1 APIs (monitoring.coreos.com/v1). |
 | external-secrets | 0.0.0-20260213133823-31b0c7c37342 | 1.3 | Module path changed from root to /apis submodule in v1.0 (#5494).
 No semver tags for apis submodule — use pseudo-versions pinned to release commits.
 v1.3.2+ commit: 31b0c7c3734255a92dfe5cf9e1e204de127eb24c (includes controller-runtime v0.23.1 compat) |
-| cnpg | 1.28.1 | 1.24 - 1.28 | CloudNativePG operator for PostgreSQL on Kubernetes.
+| cnpg | 1.29.0 | 1.24 - 1.29 | CloudNativePG operator for PostgreSQL on Kubernetes.
 Cluster CR (with managed roles), Database CR (postgresql.cnpg.io/v1),
 ObjectStore CR (barmancloud.cnpg.io/v1), and ScheduledBackups.
 ObjectStore lives in a separate module (plugin-barman-cloud). |
-| cnpg-barman-cloud | 0.11.0 | 0.9 - 0.11 | Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
+| cnpg-barman-cloud | 0.12.0 | 0.9 - 0.12 | Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
 Versioned independently from the CNPG operator. |
 | controller-runtime | 0.23.3 | 0.22 - 0.23 | Upgraded with FluxCD 2.8 and external-secrets 1.3 migrations |
 | gateway-api | 1.5.1 | 1.0 - 1.5 | Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders.
