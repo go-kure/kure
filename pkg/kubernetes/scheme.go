@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"sync"
 
+	volsyncv1alpha1 "github.com/backube/volsync/api/v1alpha1"
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
@@ -73,6 +74,7 @@ func registerAllSchemes() error {
 		metallbv1beta1.AddToScheme,
 		gwapiv1.Install,
 		monitoringv1.AddToScheme,
+		volsyncv1alpha1.AddToScheme,
 	}
 
 	// Register each scheme, returning the first error

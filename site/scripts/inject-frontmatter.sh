@@ -64,6 +64,7 @@ inject_fm "$KURE_ROOT/pkg/cli/README.md"                    "api-reference/cli.m
 inject_fm "$KURE_ROOT/pkg/kubernetes/README.md"             "api-reference/kubernetes-builders.md"        "Kubernetes Builders"           95
 inject_fm "$KURE_ROOT/pkg/kubernetes/fluxcd/README.md"      "api-reference/fluxcd-builders.md"            "FluxCD Builders"              100
 inject_fm "$KURE_ROOT/pkg/kubernetes/prometheus/README.md"  "api-reference/prometheus-builders.md"        "Prometheus Builders"          105
+inject_fm "$KURE_ROOT/pkg/kubernetes/volsync/README.md"     "api-reference/volsync-builders.md"           "VolSync Builders"             107
 inject_fm "$KURE_ROOT/pkg/logger/README.md"                 "api-reference/logger.md"                     "Logger"                       110
 inject_fm "$KURE_ROOT/docs/compatibility.md"                "api-reference/compatibility.md"              "Compatibility Matrix"         120
 

@@ -28,6 +28,7 @@ MOUNTED_FILES=(
   "pkg/cli/README.md"
   "pkg/kubernetes/fluxcd/README.md"
   "pkg/kubernetes/prometheus/README.md"
+  "pkg/kubernetes/volsync/README.md"
   "pkg/logger/README.md"
   "examples/patches/README.md"
   "examples/generators/README.md"

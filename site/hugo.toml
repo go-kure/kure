@@ -75,6 +75,9 @@ title = 'Go Kure'
     source = ".generated/api-reference/prometheus-builders.md"
     target = "content/api-reference/prometheus-builders.md"
   [[module.mounts]]
+    source = ".generated/api-reference/volsync-builders.md"
+    target = "content/api-reference/volsync-builders.md"
+  [[module.mounts]]
     source = ".generated/api-reference/logger.md"
     target = "content/api-reference/logger.md"
   [[module.mounts]]
