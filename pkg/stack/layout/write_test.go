@@ -897,7 +897,7 @@ func TestWriteToDisk_KustomizationGenerated(t *testing.T) {
 	}
 
 	content := string(data)
-	if !strings.Contains(content, "apiVersion: kustomize.config.kubernetes.io/v1beta1") {
+	if !strings.Contains(content, "apiVersion: kustomize.config.k8s.io/v1beta1") {
 		t.Errorf("kustomization missing apiVersion, got:\n%s", content)
 	}
 	if !strings.Contains(content, "kind: Kustomization") {

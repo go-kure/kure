@@ -102,7 +102,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 
 	if len(fileGroups) > 0 || len(ml.Children) > 0 {
 		var kustomBuf strings.Builder
-		kustomBuf.WriteString("apiVersion: kustomize.config.kubernetes.io/v1beta1\n")
+		kustomBuf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
 		kustomBuf.WriteString("kind: Kustomization\n")
 		kustomBuf.WriteString("resources:\n")
 
