@@ -97,7 +97,7 @@ spec:
 
 #### 2. **Additional Generators**
 - [ ] **CronJobGenerator** - Kubernetes CronJob resources
-- [ ] **ConfigMapGenerator** - ConfigMaps from files/literals
+- [x] **ConfigMapGenerator** - ConfigMaps from files/literals (#473)
 - [ ] **SecretGenerator** - Secrets with encoding support
 - [ ] **NetworkPolicyGenerator** - Network policies
 - [ ] **KustomizationGenerator** - Flux Kustomizations
