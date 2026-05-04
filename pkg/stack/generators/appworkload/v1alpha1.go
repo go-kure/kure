@@ -5,7 +5,6 @@ import (
 
 	"github.com/go-kure/kure/pkg/gvk"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/generators/appworkload/internal"
 )
 
@@ -22,7 +21,7 @@ func init() {
 
 // ConfigV1Alpha1 describes a single deployable application with GVK support
 type ConfigV1Alpha1 struct {
-	generators.BaseMetadata `yaml:",inline" json:",inline"`
+	gvk.BaseMetadata `yaml:",inline" json:",inline"`
 
 	Workload internal.WorkloadType `yaml:"workload,omitempty" json:"workload,omitempty"`
 	Replicas int32                 `yaml:"replicas,omitempty" json:"replicas,omitempty"`

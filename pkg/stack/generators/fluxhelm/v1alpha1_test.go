@@ -7,8 +7,8 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/gvk"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/generators/fluxhelm/internal"
 )
 
@@ -30,7 +30,7 @@ func TestConfigV1Alpha1_GetKind(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_HelmRepository(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "postgresql",
 			Namespace: "database",
 		},
@@ -122,7 +122,7 @@ func TestConfigV1Alpha1_Generate_HelmRepository(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_GitRepository(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "app-chart",
 			Namespace: "apps",
 		},
@@ -182,7 +182,7 @@ func TestConfigV1Alpha1_Generate_GitRepository(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_OCIRepository(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "podinfo",
 			Namespace: "apps",
 		},
@@ -241,7 +241,7 @@ func TestConfigV1Alpha1_Generate_OCIRepository(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_Bucket(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "charts",
 			Namespace: "flux-system",
 		},
@@ -309,7 +309,7 @@ func TestConfigV1Alpha1_Generate_Bucket(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithDependencies(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "app",
 			Namespace: "default",
 		},
@@ -355,7 +355,7 @@ func TestConfigV1Alpha1_Generate_WithDependencies(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithPostRenderers(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "app",
 			Namespace: "default",
 		},
@@ -435,7 +435,7 @@ func TestConfigV1Alpha1_Generate_WithPostRenderers(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithAdvancedReleaseOptions(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "advanced-app",
 			Namespace: "default",
 		},
@@ -510,7 +510,7 @@ func TestConfigV1Alpha1_Generate_WithAdvancedReleaseOptions(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithTargetNamespaceAndReleaseName(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "cert-manager",
 			Namespace: "flux-system",
 		},
@@ -552,7 +552,7 @@ func TestConfigV1Alpha1_Generate_WithTargetNamespaceAndReleaseName(t *testing.T)
 
 func TestConfigV1Alpha1_Generate_WithValuesFrom(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "app",
 			Namespace: "default",
 		},
@@ -593,7 +593,7 @@ func TestConfigV1Alpha1_Generate_WithValuesFrom(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithCRDsPolicy(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "cert-manager",
 			Namespace: "flux-system",
 		},
@@ -633,7 +633,7 @@ func TestConfigV1Alpha1_Generate_WithCRDsPolicy(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithSourceRefNameOverride(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "trust-manager",
 			Namespace: "flux-system",
 		},
@@ -672,7 +672,7 @@ func TestConfigV1Alpha1_Generate_WithSourceRefNameOverride(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_NoExplicitSource(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "no-source",
 			Namespace: "default",
 		},
@@ -703,7 +703,7 @@ func TestConfigV1Alpha1_Generate_NoExplicitSource(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_InferSourceFromURL(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "inferred",
 			Namespace: "default",
 		},
@@ -740,7 +740,7 @@ func TestConfigV1Alpha1_Generate_InferSourceFromURL(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_InferSourceFromOCIUrl(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "inferred-oci",
 			Namespace: "default",
 		},
@@ -802,7 +802,7 @@ func TestRegistration(t *testing.T) {
 
 func TestConfigV1Alpha1_BaseMetadata(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test-base",
 			Namespace: "test-namespace",
 		},
@@ -837,7 +837,7 @@ func findHelmRelease(objs []*client.Object) *helmv2.HelmRelease {
 
 func TestConfigV1Alpha1_Generate_EmptyValues(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "empty-values",
 			Namespace: "default",
 		},
@@ -870,7 +870,7 @@ func TestConfigV1Alpha1_Generate_EmptyValues(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithChartRef(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "podinfo",
 			Namespace: "apps",
 		},
@@ -923,7 +923,7 @@ func TestConfigV1Alpha1_Generate_WithChartRef(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithChartRefCrossNamespace(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "shared-app",
 			Namespace: "apps",
 		},
@@ -968,7 +968,7 @@ func TestSourceTypeValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &ConfigV1Alpha1{
-				BaseMetadata: generators.BaseMetadata{
+				BaseMetadata: gvk.BaseMetadata{
 					Name:      "test",
 					Namespace: "default",
 				},
