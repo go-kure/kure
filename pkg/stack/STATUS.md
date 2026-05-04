@@ -22,10 +22,6 @@
   - AppWorkload v1alpha1 - Deployments, StatefulSets, DaemonSets
   - FluxHelm v1alpha1 - HelmRelease with multiple source types
   
-- ✅ **Stack Types** (`stack.gokure.dev/v1alpha1`)
-  - ClusterV1Alpha1 - Cluster configuration with GitOps
-  - NodeV1Alpha1 - Hierarchical node structure
-  - BundleV1Alpha1 - Application bundles with dependencies
 
 ## In Progress 🔄
 

@@ -33,7 +33,6 @@ MOUNTED_FILES=(
   "examples/patches/README.md"
   "examples/generators/README.md"
   "examples/kurel/frigate/README.md"
-  "examples/validation/README.md"
 )
 
 missing=0
