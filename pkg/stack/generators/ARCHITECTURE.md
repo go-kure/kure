@@ -233,8 +233,13 @@ mkdir -p pkg/stack/generators/mygenerator
 // pkg/stack/generators/mygenerator/v1alpha1.go
 package mygenerator
 
+import (
+    "github.com/go-kure/kure/pkg/gvk"
+    "github.com/go-kure/kure/pkg/stack"
+)
+
 type ConfigV1Alpha1 struct {
-    generators.BaseMetadata `yaml:",inline"`
+    gvk.BaseMetadata `yaml:",inline"`
     // Your fields here
 }
 
