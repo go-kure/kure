@@ -383,7 +383,7 @@ jobs:
   build-binaries:
     name: Build ${{ matrix.target }}
     runs-on: autops-kube
-    timeout-minutes: 10
+    timeout-minutes: 15  # 15 to match lint/test: controller-runtime 0.24 adds gonum which is slow to compile on cache miss
     needs: [changes, test]
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
@@ -396,9 +396,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
-
-    - name: Install build tools
-      run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
     - name: Read Go version from mise.toml
       id: go-version
@@ -424,10 +421,24 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: Install dependencies
-      run: make deps
+      run: go mod download
 
     - name: Build ${{ matrix.target }}
-      run: make build-${{ matrix.target }}
+      # Inline equivalent of make build-<target> — avoids apt-get install make
+      # which can take 9+ minutes on runners without it pre-installed.
+      run: |
+        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+        MODULE=$(head -1 go.mod | awk '{print $2}')
+        mkdir -p bin
+        go build -trimpath \
+          -ldflags="-s -w \
+            -X ${MODULE}/pkg/cmd/shared.Version=${VERSION} \
+            -X ${MODULE}/pkg/cmd/shared.GitCommit=${GIT_COMMIT} \
+            -X ${MODULE}/pkg/cmd/shared.BuildDate=${BUILD_TIME}" \
+          -o bin/${{ matrix.target }} \
+          ./cmd/${{ matrix.target }}
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7
