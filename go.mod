@@ -8,21 +8,21 @@ go 1.26.2
 // be used at the same version to avoid type incompatibilities and runtime
 // panics. Kure's transitive dependencies (cert-manager, cloudnative-pg,
 // flux-operator, metallb, prometheus-operator, etc.) each require different
-// k8s.io minor versions (v0.30–v0.35). Without explicit pins, `go mod tidy`
+// k8s.io minor versions (v0.30–v0.36). Without explicit pins, `go mod tidy`
 // could pull in mismatched versions during dependency updates.
 //
-// Current pin: v0.35.1 (Kubernetes 1.35)
+// Current pin: v0.36.0 (Kubernetes 1.36)
 //
 // Removal condition: these directives can be removed when ALL direct and
 // transitive dependencies converge on the same k8s.io minor version, making
 // Go's MVS sufficient to maintain lockstep. Check with:
 //   go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 replace (
-	k8s.io/api => k8s.io/api v0.35.1
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.35.1
-	k8s.io/apimachinery => k8s.io/apimachinery v0.35.1
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.35.1
-	k8s.io/client-go => k8s.io/client-go v0.35.1
+	k8s.io/api => k8s.io/api v0.36.0
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.0
+	k8s.io/apimachinery => k8s.io/apimachinery v0.36.0
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.36.0
+	k8s.io/client-go => k8s.io/client-go v0.36.0
 )
 
 require (
@@ -54,7 +54,7 @@ require (
 	k8s.io/api v0.36.0
 	k8s.io/apiextensions-apiserver v0.36.0
 	k8s.io/apimachinery v0.36.0
-	k8s.io/cli-runtime v0.35.3
+	k8s.io/cli-runtime v0.36.0
 	sigs.k8s.io/controller-runtime v0.24.0
 	sigs.k8s.io/gateway-api v1.5.1
 	sigs.k8s.io/kustomize/api v0.21.1
@@ -104,7 +104,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -122,7 +121,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -164,6 +162,7 @@ require (
 	k8s.io/client-go v0.36.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
+	k8s.io/streaming v0.36.0 // indirect
 	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5 // indirect
 	oras.land/oras-go/v2 v2.6.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
