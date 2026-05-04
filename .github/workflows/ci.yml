@@ -193,7 +193,7 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Install build tools
-      run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential
+      run: command -v gcc &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential)
 
     - name: Read Go version from mise.toml
       id: go-version
