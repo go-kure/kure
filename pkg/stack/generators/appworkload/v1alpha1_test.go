@@ -8,8 +8,8 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/pkg/gvk"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/generators/appworkload/internal"
 )
 
@@ -31,7 +31,7 @@ func TestConfigV1Alpha1_GetKind(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_Deployment(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test-app",
 			Namespace: "test-ns",
 		},
@@ -129,7 +129,7 @@ func TestConfigV1Alpha1_Generate_Deployment(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_StatefulSet(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test-statefulset",
 			Namespace: "default",
 		},
@@ -208,7 +208,7 @@ func TestConfigV1Alpha1_Generate_StatefulSet(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_DaemonSet(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test-daemonset",
 			Namespace: "kube-system",
 		},
@@ -251,7 +251,7 @@ func TestConfigV1Alpha1_Generate_DaemonSet(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_InvalidWorkload(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test-invalid",
 			Namespace: "default",
 		},
@@ -273,7 +273,7 @@ func TestConfigV1Alpha1_Generate_InvalidWorkload(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_WithComplexContainer(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "complex-app",
 			Namespace: "default",
 		},
@@ -439,7 +439,7 @@ func TestConfigV1Alpha1_Generate_WithComplexContainer(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_NilApp(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test",
 			Namespace: "default",
 		},
@@ -461,7 +461,7 @@ func TestConfigV1Alpha1_Generate_NilApp(t *testing.T) {
 
 func TestConfigV1Alpha1_Generate_EmptyContainers(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test",
 			Namespace: "default",
 		},
@@ -507,7 +507,7 @@ func TestRegistration(t *testing.T) {
 
 func TestConfigV1Alpha1_BaseMetadata(t *testing.T) {
 	cfg := &ConfigV1Alpha1{
-		BaseMetadata: generators.BaseMetadata{
+		BaseMetadata: gvk.BaseMetadata{
 			Name:      "test-base",
 			Namespace: "test-namespace",
 		},
@@ -554,7 +554,7 @@ func TestWorkloadTypeValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &ConfigV1Alpha1{
-				BaseMetadata: generators.BaseMetadata{
+				BaseMetadata: gvk.BaseMetadata{
 					Name:      "test",
 					Namespace: "default",
 				},

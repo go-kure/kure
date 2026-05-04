@@ -5,7 +5,6 @@ import (
 
 	"github.com/go-kure/kure/pkg/gvk"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 	"github.com/go-kure/kure/pkg/stack/generators/fluxhelm/internal"
 )
 
@@ -22,7 +21,7 @@ func init() {
 
 // ConfigV1Alpha1 generates Flux HelmRelease and source resources
 type ConfigV1Alpha1 struct {
-	generators.BaseMetadata `yaml:",inline" json:",inline"`
+	gvk.BaseMetadata `yaml:",inline" json:",inline"`
 
 	// HelmRelease metadata overrides
 	TargetNamespace string `yaml:"targetNamespace,omitempty" json:"targetNamespace,omitempty"`

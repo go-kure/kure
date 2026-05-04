@@ -17,7 +17,6 @@ import (
 	"github.com/go-kure/kure/pkg/gvk"
 	kureio "github.com/go-kure/kure/pkg/io"
 	"github.com/go-kure/kure/pkg/stack"
-	"github.com/go-kure/kure/pkg/stack/generators"
 )
 
 func init() {
@@ -33,7 +32,7 @@ func init() {
 
 // ConfigV1Alpha1 generates a kurel package structure
 type ConfigV1Alpha1 struct {
-	generators.BaseMetadata `yaml:",inline" json:",inline"`
+	gvk.BaseMetadata `yaml:",inline" json:",inline"`
 
 	// Package metadata
 	Package PackageMetadata `yaml:"package" json:"package"`
