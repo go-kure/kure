@@ -566,6 +566,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Install build tools
+      run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
+
     - name: Read Hugo version from mise.toml
       id: hugo-version
       run: |
@@ -617,7 +620,7 @@ jobs:
       run: bash site/scripts/inject-frontmatter.sh
 
     - name: Generate CLI reference
-      run: go run ./cmd/gendocs
+      run: make docs-cli
 
     - name: Check for unmapped docs
       run: bash site/scripts/check-unmapped-docs.sh
