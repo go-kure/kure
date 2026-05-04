@@ -1,6 +1,36 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.1] - 2026-05-04
+
+### Added
+
+- Add configMapGenerator support to ManifestLayout
+- Add ReplicationSource and ReplicationDestination builders
+- Add LayoutRules.FlattenSingleTier opt-in flag
+
+### CI
+
+- Fix build-binaries timeout and remove make dependency
+- Remove make dependency from docs-build job
+- Skip apt-get in test job when build-essential already installed
+
+### Dependencies
+
+- Bump FluxCD ecosystem to v2.8.6 and cnpg/barman-cloud to 0.5.1
+- Bump sigs.k8s.io/controller-runtime from 0.23.3 to 0.24.0
+- Pin k8s.io to v0.36.0 to match controller-runtime v0.24.0
+- Update versions.yaml for controller-runtime 0.24.0 and k8s 0.36.0
+
+### Documentation
+
+- Fix stale references to deleted stack/v1alpha1 and generator aliases
+- Fix remaining stale references after stack/v1alpha1 removal
+
+### Fixed
+
+- Use kustomize.config.k8s.io domain in generated kustomization.yaml
+
 ## [0.2.0-alpha.0] - 2026-05-01
 
 ### Added
@@ -35,6 +65,10 @@ All notable changes to this project will be documented in this file.
 - Add missing tests for Patches/PostBuild and stable helm output
 - Add OCI layout pattern tests (Namespace:"."/layer naming/3-layer structure)
 - Assert spec.path and sourceRef in Layer 2 Kustomization tests
+
+### Release
+
+- V0.2.0-alpha.0
 
 ## [0.1.0-rc.11] - 2026-04-20
 
