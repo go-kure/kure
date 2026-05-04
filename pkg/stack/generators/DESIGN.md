@@ -95,93 +95,22 @@ type NamespacedConfig interface {
 
 ### Registry Implementation
 
-Located in `pkg/stack/generators/registry.go`:
+The registry is implemented in `pkg/gvk` as `gvk.Registry[T]`, a generic thread-safe factory registry. Generators register via `stack.RegisterApplicationConfig()` (backed by a `gvk.Registry[ApplicationConfig]` in `pkg/stack/application_wrapper.go`). GVK types and parsing utilities come from `pkg/gvk` directly:
 
 ```go
-package generators
-
 import (
-    "fmt"
-    "strings"
-    "sync"
+    "github.com/go-kure/kure/pkg/gvk"
+    "github.com/go-kure/kure/pkg/stack"
 )
 
-type GVK struct {
-    Group   string
-    Version string
-    Kind    string
-}
-
-func (g GVK) String() string {
-    return fmt.Sprintf("%s/%s, Kind=%s", g.Group, g.Version, g.Kind)
-}
-
-func ParseAPIVersion(apiVersion, kind string) GVK {
-    parts := strings.Split(apiVersion, "/")
-    if len(parts) == 2 {
-        return GVK{
-            Group:   parts[0],
-            Version: parts[1],
-            Kind:    kind,
-        }
-    }
-    // Handle core/v1 style
-    return GVK{
-        Group:   "",
-        Version: parts[0],
-        Kind:    kind,
-    }
-}
-
-type ApplicationConfigFactory func() ApplicationConfig
-
-var (
-    registry = &Registry{
-        factories: make(map[GVK]ApplicationConfigFactory),
-    }
-)
-
-type Registry struct {
-    factories map[GVK]ApplicationConfigFactory
-    mu        sync.RWMutex
-}
-
-func (r *Registry) Register(gvk GVK, factory ApplicationConfigFactory) {
-    r.mu.Lock()
-    defer r.mu.Unlock()
-    r.factories[gvk] = factory
-}
-
-func (r *Registry) Create(gvk GVK) (ApplicationConfig, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    
-    factory, exists := r.factories[gvk]
-    if !exists {
-        return nil, fmt.Errorf("unknown application config type: %s", gvk)
-    }
-    return factory(), nil
-}
-
-func (r *Registry) ListKinds() []GVK {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    
-    kinds := make([]GVK, 0, len(r.factories))
-    for gvk := range r.factories {
-        kinds = append(kinds, gvk)
-    }
-    return kinds
-}
-
-// Global registry functions
-func Register(gvk GVK, factory ApplicationConfigFactory) {
-    registry.Register(gvk, factory)
-}
-
-func Create(apiVersion, kind string) (ApplicationConfig, error) {
-    gvk := ParseAPIVersion(apiVersion, kind)
-    return registry.Create(gvk)
+func init() {
+    stack.RegisterApplicationConfig(gvk.GVK{
+        Group:   "generators.gokure.dev",
+        Version: "v1alpha1",
+        Kind:    "MyGenerator",
+    }, func() stack.ApplicationConfig {
+        return &ConfigV1Alpha1{}
+    })
 }
 ```
 
@@ -192,85 +121,21 @@ Located in `pkg/stack/application_wrapper.go`:
 ```go
 package stack
 
-import (
-    "fmt"
-    "gopkg.in/yaml.v3"
-    "github.com/go-kure/kure/pkg/stack/generators"
-)
-
-// ApplicationWrapper provides type detection and unmarshaling
+// ApplicationWrapper dispatches YAML to the appropriate registered
+// ApplicationConfig type based on apiVersion and kind.
+// See pkg/stack/application_wrapper.go for the implementation.
+// The registry backing this is gvk.Registry[ApplicationConfig] from pkg/gvk.
 type ApplicationWrapper struct {
-    APIVersion string                 `yaml:"apiVersion"`
-    Kind       string                 `yaml:"kind"`
-    Metadata   ApplicationMetadata    `yaml:"metadata"`
-    Spec       generators.ApplicationConfig `yaml:"spec"`
+    APIVersion string              `yaml:"apiVersion"`
+    Kind       string              `yaml:"kind"`
+    Metadata   ApplicationMetadata `yaml:"metadata"`
+    Spec       ApplicationConfig   `yaml:"-"` // populated by UnmarshalYAML
 }
 
-type ApplicationMetadata struct {
-    Name      string            `yaml:"name"`
-    Namespace string            `yaml:"namespace,omitempty"`
-    Labels    map[string]string `yaml:"labels,omitempty"`
-}
-
-func (w *ApplicationWrapper) UnmarshalYAML(node *yaml.Node) error {
-    // First pass: extract GVK
-    var gvkDetect struct {
-        APIVersion string `yaml:"apiVersion"`
-        Kind       string `yaml:"kind"`
-    }
-    if err := node.Decode(&gvkDetect); err != nil {
-        return fmt.Errorf("failed to detect GVK: %w", err)
-    }
-    
-    if gvkDetect.APIVersion == "" || gvkDetect.Kind == "" {
-        return fmt.Errorf("apiVersion and kind are required fields")
-    }
-    
-    // Create appropriate config instance
-    config, err := generators.Create(gvkDetect.APIVersion, gvkDetect.Kind)
-    if err != nil {
-        return fmt.Errorf("failed to create config for %s/%s: %w", 
-            gvkDetect.APIVersion, gvkDetect.Kind, err)
-    }
-    
-    // Decode full content
-    var raw struct {
-        APIVersion string                      `yaml:"apiVersion"`
-        Kind       string                      `yaml:"kind"`
-        Metadata   ApplicationMetadata         `yaml:"metadata"`
-        Spec       yaml.Node                   `yaml:"spec"`
-    }
-    
-    if err := node.Decode(&raw); err != nil {
-        return fmt.Errorf("failed to decode wrapper: %w", err)
-    }
-    
-    // Decode spec into the specific config type
-    if err := raw.Spec.Decode(config); err != nil {
-        return fmt.Errorf("failed to decode spec: %w", err)
-    }
-    
-    w.APIVersion = raw.APIVersion
-    w.Kind = raw.Kind
-    w.Metadata = raw.Metadata
-    w.Spec = config
-    
-    return nil
-}
-
-func (w *ApplicationWrapper) ToApplication() *Application {
-    app := NewApplication(w.Metadata.Name, w.Metadata.Namespace, w.Spec)
-    
-    // If the config supports metadata injection, apply it
-    if named, ok := w.Spec.(generators.NamedConfig); ok {
-        named.SetName(w.Metadata.Name)
-    }
-    if namespaced, ok := w.Spec.(generators.NamespacedConfig); ok {
-        namespaced.SetNamespace(w.Metadata.Namespace)
-    }
-    
-    return app
-}
+// UnmarshalYAML reads apiVersion+kind, calls stack.CreateApplicationConfig()
+// to get a typed instance from the registry, then decodes the rest of the
+// document into that instance. Metadata name/namespace are propagated via
+// gvk.NamedType and gvk.NamespacedType interfaces if the config implements them.
 ```
 
 ### Example Generator Implementations
