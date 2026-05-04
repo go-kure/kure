@@ -430,25 +430,9 @@ Successfully created `pkg/gvk` package with:
 - `pkg/gvk/parsing.go` - YAML parsing utilities
 - `pkg/gvk/conversion.go` - Version conversion infrastructure
 
-### Phase 2: Stack Struct GVK ✅ COMPLETE
+### Phase 2: Stack Struct GVK ~~COMPLETE~~ REMOVED
 
-Implemented versioned stack types in `pkg/stack/v1alpha1`:
-- **ClusterV1Alpha1**: Versioned cluster configuration with GitOps support
-- **NodeV1Alpha1**: Hierarchical node structure with bundles
-- **BundleV1Alpha1**: Application bundle with dependencies
-
-**Key Features:**
-- Full GVK support (apiVersion: stack.gokure.dev/v1alpha1)
-- Conversion to unversioned types for backward compatibility
-- Multi-document YAML parsing
-- Nested resource support (inline and references)
-- Comprehensive test coverage
-
-**Files Created:**
-- `pkg/stack/v1alpha1/types.go` - Versioned type definitions
-- `pkg/stack/v1alpha1/register.go` - Registration and factory
-- `pkg/stack/v1alpha1/parser.go` - YAML parsing utilities
-- `pkg/stack/v1alpha1/types_test.go` - Complete test suite
+`pkg/stack/v1alpha1` (ClusterV1Alpha1, NodeV1Alpha1, BundleV1Alpha1) was implemented but had no live consumer outside its own tests. The package was removed in favour of direct Go type construction. If a versioned serialized stack interchange format is needed in future, it should be introduced as a dedicated package with an explicit consumer requirement.
 
 ### Phase 3: ApplicationConfig Refactoring ✅ COMPLETE
 

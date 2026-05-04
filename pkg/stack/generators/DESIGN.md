@@ -140,111 +140,44 @@ type ApplicationWrapper struct {
 
 ### Example Generator Implementations
 
-#### AppWorkload v1alpha1
-
-Located in `pkg/stack/generators/appworkload.go`:
-
-```go
-package generators
-
-func init() {
-    Register(GVK{
-        Group:   "generators.gokure.dev",
-        Version: "v1alpha1",
-        Kind:    "AppWorkload",
-    }, func() ApplicationConfig { return &AppWorkloadConfig{} })
-}
-
-// AppWorkloadConfig with GVK support
-type AppWorkloadConfig struct {
-    // Existing fields...
-    Name      string `yaml:"name"`
-    Namespace string `yaml:"namespace,omitempty"`
-    
-    // ... rest of existing implementation
-}
-
-func (c *AppWorkloadConfig) GetAPIVersion() string {
-    return "generators.gokure.dev/v1alpha1"
-}
-
-func (c *AppWorkloadConfig) GetKind() string {
-    return "AppWorkload"
-}
-
-func (c *AppWorkloadConfig) GetName() string {
-    return c.Name
-}
-
-func (c *AppWorkloadConfig) SetName(name string) {
-    c.Name = name
-}
-
-func (c *AppWorkloadConfig) GetNamespace() string {
-    return c.Namespace
-}
-
-func (c *AppWorkloadConfig) SetNamespace(namespace string) {
-    c.Namespace = namespace
-}
-```
-
-#### HelmChart v1alpha1
-
-Located in `pkg/stack/generators/helmchart.go`:
+Each generator lives in its own subpackage (`pkg/stack/generators/<type>/v1alpha1.go`).
+The pattern is uniform across all generators:
 
 ```go
-package generators
+// pkg/stack/generators/appworkload/v1alpha1.go
+package appworkload
 
 import (
-    fluxhelm "github.com/fluxcd/helm-controller/api/v2beta1"
+    "github.com/go-kure/kure/pkg/gvk"
+    "github.com/go-kure/kure/pkg/stack"
 )
 
 func init() {
-    Register(GVK{
+    stack.RegisterApplicationConfig(gvk.GVK{
         Group:   "generators.gokure.dev",
         Version: "v1alpha1",
-        Kind:    "HelmChart",
-    }, func() ApplicationConfig { return &HelmChartConfig{} })
+        Kind:    "AppWorkload",
+    }, func() stack.ApplicationConfig {
+        return &ConfigV1Alpha1{}
+    })
 }
 
-type HelmChartConfig struct {
-    Name      string                 `yaml:"name"`
-    Namespace string                 `yaml:"namespace,omitempty"`
-    
-    // Helm-specific fields
-    Chart      string                 `yaml:"chart"`
-    Version    string                 `yaml:"version"`
-    Repository string                 `yaml:"repository,omitempty"`
-    Values     map[string]interface{} `yaml:"values,omitempty"`
-    
-    // Advanced options
-    CreateNamespace bool              `yaml:"createNamespace,omitempty"`
-    Wait            bool              `yaml:"wait,omitempty"`
-    Timeout         string            `yaml:"timeout,omitempty"`
-    DependsOn       []string          `yaml:"dependsOn,omitempty"`
+type ConfigV1Alpha1 struct {
+    gvk.BaseMetadata `yaml:",inline"`
+    // generator-specific fields
 }
 
-func (h *HelmChartConfig) Generate(app *Application) ([]*client.Object, error) {
-    // Generate HelmRelease for Flux or Application for ArgoCD
-    // based on the workflow context
+func (c *ConfigV1Alpha1) GetAPIVersion() string { return "generators.gokure.dev/v1alpha1" }
+func (c *ConfigV1Alpha1) GetKind() string       { return "AppWorkload" }
+func (c *ConfigV1Alpha1) Generate(app *stack.Application) ([]*client.Object, error) {
+    // delegate to internal package
 }
-
-// Implement VersionedConfig
-func (h *HelmChartConfig) GetAPIVersion() string {
-    return "generators.gokure.dev/v1alpha1"
-}
-
-func (h *HelmChartConfig) GetKind() string {
-    return "HelmChart"
-}
-
-// Implement NamedConfig and NamespacedConfig
-func (h *HelmChartConfig) GetName() string { return h.Name }
-func (h *HelmChartConfig) SetName(name string) { h.Name = name }
-func (h *HelmChartConfig) GetNamespace() string { return h.Namespace }
-func (h *HelmChartConfig) SetNamespace(ns string) { h.Namespace = ns }
 ```
+
+Built-in generators:
+- `pkg/stack/generators/appworkload/` — Kubernetes workloads (Deployment, StatefulSet, DaemonSet)
+- `pkg/stack/generators/fluxhelm/` — Flux HelmRelease with multiple source types
+- `pkg/stack/generators/kurelpackage/` — kurel package structure (deferred)
 
 ## Configuration Examples
 
