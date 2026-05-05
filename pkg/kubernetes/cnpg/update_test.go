@@ -7,11 +7,19 @@ import (
 
 	barmanapi "github.com/cloudnative-pg/barman-cloud/pkg/api"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
-	barmanv1 "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 )
 
+func mustCluster(t *testing.T, cfg *ClusterConfig) *cnpgv1.Cluster {
+	t.Helper()
+	obj, err := Cluster(cfg)
+	if err != nil {
+		t.Fatalf("Cluster: unexpected error: %v", err)
+	}
+	return obj
+}
+
 func TestAddClusterLabel(t *testing.T) {
-	obj := Cluster(&ClusterConfig{Name: "pg", Namespace: "db", Spec: cnpgv1.ClusterSpec{}})
+	obj := mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}})
 	AddClusterLabel(obj, "env", "prod")
 	if obj.Labels["env"] != "prod" {
 		t.Error("expected label 'env' to be 'prod'")
@@ -19,7 +27,7 @@ func TestAddClusterLabel(t *testing.T) {
 }
 
 func TestAddClusterAnnotation(t *testing.T) {
-	obj := Cluster(&ClusterConfig{Name: "pg", Namespace: "db", Spec: cnpgv1.ClusterSpec{}})
+	obj := mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}})
 	AddClusterAnnotation(obj, "note", "value")
 	if obj.Annotations["note"] != "value" {
 		t.Error("expected annotation 'note' to be 'value'")
@@ -27,7 +35,7 @@ func TestAddClusterAnnotation(t *testing.T) {
 }
 
 func TestAddClusterManagedRole(t *testing.T) {
-	obj := Cluster(&ClusterConfig{Name: "pg", Namespace: "db", Spec: cnpgv1.ClusterSpec{}})
+	obj := mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}})
 	role := cnpgv1.RoleConfiguration{Name: "app"}
 	AddClusterManagedRole(obj, role)
 	if len(obj.Spec.Managed.Roles) != 1 {
@@ -39,7 +47,7 @@ func TestAddClusterManagedRole(t *testing.T) {
 }
 
 func TestAddDatabaseLabel(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Spec: cnpgv1.DatabaseSpec{}})
+	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	AddDatabaseLabel(obj, "env", "prod")
 	if obj.Labels["env"] != "prod" {
 		t.Error("expected label 'env' to be 'prod'")
@@ -47,7 +55,7 @@ func TestAddDatabaseLabel(t *testing.T) {
 }
 
 func TestAddDatabaseAnnotation(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Spec: cnpgv1.DatabaseSpec{}})
+	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	AddDatabaseAnnotation(obj, "note", "value")
 	if obj.Annotations["note"] != "value" {
 		t.Error("expected annotation 'note' to be 'value'")
@@ -55,7 +63,7 @@ func TestAddDatabaseAnnotation(t *testing.T) {
 }
 
 func TestAddDatabaseExtension(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Spec: cnpgv1.DatabaseSpec{}})
+	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	ext := cnpgv1.ExtensionSpec{DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{Name: "pgcrypto"}}
 	AddDatabaseExtension(obj, ext)
 	if len(obj.Spec.Extensions) != 1 {
@@ -67,7 +75,7 @@ func TestAddDatabaseExtension(t *testing.T) {
 }
 
 func TestSetDatabaseClusterRef(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Spec: cnpgv1.DatabaseSpec{}})
+	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	SetDatabaseClusterRef(obj, "pg-main")
 	if obj.Spec.ClusterRef.Name != "pg-main" {
 		t.Errorf("expected cluster ref 'pg-main', got %s", obj.Spec.ClusterRef.Name)
@@ -75,7 +83,7 @@ func TestSetDatabaseClusterRef(t *testing.T) {
 }
 
 func TestSetDatabaseOwner(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Spec: cnpgv1.DatabaseSpec{}})
+	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	SetDatabaseOwner(obj, "appuser")
 	if obj.Spec.Owner != "appuser" {
 		t.Errorf("expected owner 'appuser', got %s", obj.Spec.Owner)
@@ -83,7 +91,7 @@ func TestSetDatabaseOwner(t *testing.T) {
 }
 
 func TestSetDatabaseReclaimPolicy(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Spec: cnpgv1.DatabaseSpec{}})
+	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	SetDatabaseReclaimPolicy(obj, cnpgv1.DatabaseReclaimDelete)
 	if obj.Spec.ReclaimPolicy != cnpgv1.DatabaseReclaimDelete {
 		t.Errorf("expected reclaim policy Delete, got %s", obj.Spec.ReclaimPolicy)
@@ -91,7 +99,7 @@ func TestSetDatabaseReclaimPolicy(t *testing.T) {
 }
 
 func TestSetDatabaseEnsure(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Spec: cnpgv1.DatabaseSpec{}})
+	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	SetDatabaseEnsure(obj, cnpgv1.EnsurePresent)
 	if obj.Spec.Ensure != cnpgv1.EnsurePresent {
 		t.Errorf("expected ensure Present, got %s", obj.Spec.Ensure)
@@ -99,7 +107,7 @@ func TestSetDatabaseEnsure(t *testing.T) {
 }
 
 func TestAddObjectStoreLabel(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	AddObjectStoreLabel(obj, "env", "prod")
 	if obj.Labels["env"] != "prod" {
 		t.Error("expected label 'env' to be 'prod'")
@@ -107,7 +115,7 @@ func TestAddObjectStoreLabel(t *testing.T) {
 }
 
 func TestAddObjectStoreAnnotation(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	AddObjectStoreAnnotation(obj, "note", "value")
 	if obj.Annotations["note"] != "value" {
 		t.Error("expected annotation 'note' to be 'value'")
@@ -115,7 +123,7 @@ func TestAddObjectStoreAnnotation(t *testing.T) {
 }
 
 func TestAddObjectStoreEnvVar(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	env := corev1.EnvVar{Name: "AWS_REGION", Value: "us-east-1"}
 	AddObjectStoreEnvVar(obj, env)
 	if len(obj.Spec.InstanceSidecarConfiguration.Env) != 1 {
@@ -127,7 +135,7 @@ func TestAddObjectStoreEnvVar(t *testing.T) {
 }
 
 func TestSetObjectStoreDestinationPath(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	SetObjectStoreDestinationPath(obj, "s3://my-bucket/backups")
 	if obj.Spec.Configuration.DestinationPath != "s3://my-bucket/backups" {
 		t.Errorf("expected DestinationPath 's3://my-bucket/backups', got %s", obj.Spec.Configuration.DestinationPath)
@@ -135,7 +143,7 @@ func TestSetObjectStoreDestinationPath(t *testing.T) {
 }
 
 func TestSetObjectStoreEndpointURL(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	SetObjectStoreEndpointURL(obj, "https://s3.example.com")
 	if obj.Spec.Configuration.EndpointURL != "https://s3.example.com" {
 		t.Errorf("expected EndpointURL 'https://s3.example.com', got %s", obj.Spec.Configuration.EndpointURL)
@@ -143,7 +151,7 @@ func TestSetObjectStoreEndpointURL(t *testing.T) {
 }
 
 func TestSetObjectStoreS3Credentials(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	creds := &barmanapi.S3Credentials{}
 	SetObjectStoreS3Credentials(obj, creds)
 	if obj.Spec.Configuration.AWS == nil {
@@ -152,7 +160,7 @@ func TestSetObjectStoreS3Credentials(t *testing.T) {
 }
 
 func TestSetObjectStoreRetentionPolicy(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	SetObjectStoreRetentionPolicy(obj, "30d")
 	if obj.Spec.RetentionPolicy != "30d" {
 		t.Errorf("expected RetentionPolicy '30d', got %s", obj.Spec.RetentionPolicy)
@@ -160,7 +168,7 @@ func TestSetObjectStoreRetentionPolicy(t *testing.T) {
 }
 
 func TestSetObjectStoreWalConfig(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	wal := &barmanapi.WalBackupConfiguration{Compression: barmanapi.CompressionTypeGzip}
 	SetObjectStoreWalConfig(obj, wal)
 	if obj.Spec.Configuration.Wal == nil {
@@ -172,7 +180,7 @@ func TestSetObjectStoreWalConfig(t *testing.T) {
 }
 
 func TestSetObjectStoreDataConfig(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Spec: barmanv1.ObjectStoreSpec{}})
+	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	data := &barmanapi.DataBackupConfiguration{Compression: barmanapi.CompressionTypeGzip}
 	SetObjectStoreDataConfig(obj, data)
 	if obj.Spec.Configuration.Data == nil {
