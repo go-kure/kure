@@ -113,15 +113,15 @@ type AffinityOptions struct {
 
 // ManagedRoleOptions configures a single entry in spec.managed.roles[].
 type ManagedRoleOptions struct {
-	Name     string
-	Comment  string
-	Login    bool
-	Superuser bool
-	CreateDB  bool
-	CreateRole bool
+	Name        string
+	Comment     string
+	Login       bool
+	Superuser   bool
+	CreateDB    bool
+	CreateRole  bool
 	Replication bool
 	// Inherit nil means omit (CNPG defaults to true).
-	Inherit         *bool
+	Inherit *bool
 	// ConnectionLimit nil means omit (CNPG defaults to -1).
 	ConnectionLimit *int64
 	PasswordSecret  string
@@ -150,8 +150,8 @@ type ClusterOptions struct {
 	InheritedLabels      map[string]string
 	InheritedAnnotations map[string]string
 
-	Resources *ResourceOptions
-	Backup    *BackupOptions
+	Resources  *ResourceOptions
+	Backup     *BackupOptions
 	Monitoring *MonitoringOptions
 	Bootstrap  *BootstrapOptions
 
