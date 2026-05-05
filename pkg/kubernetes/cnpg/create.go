@@ -2,7 +2,6 @@ package cnpg
 
 import (
 	"encoding/json"
-	"fmt"
 
 	barmanApi "github.com/cloudnative-pg/barman-cloud/pkg/api"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
@@ -12,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	intcnpg "github.com/go-kure/kure/internal/cnpg"
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // ObjectStore converts ObjectStoreOptions to a Barman Cloud ObjectStore object.
@@ -188,11 +188,11 @@ func Cluster(cfg *ClusterConfig) (*cnpgv1.Cluster, error) {
 			if ec.BarmanObjectStore != nil {
 				data, err := json.Marshal(ec.BarmanObjectStore)
 				if err != nil {
-					return nil, fmt.Errorf("external cluster %q: marshal barman object store: %w", ec.Name, err)
+					return nil, errors.Wrapf(err, "external cluster %q: marshal barman object store", ec.Name)
 				}
 				var bos barmanApi.BarmanObjectStoreConfiguration
 				if err := json.Unmarshal(data, &bos); err != nil {
-					return nil, fmt.Errorf("external cluster %q: unmarshal barman object store: %w", ec.Name, err)
+					return nil, errors.Wrapf(err, "external cluster %q: unmarshal barman object store", ec.Name)
 				}
 				extCluster.BarmanObjectStore = &bos
 			}
@@ -286,14 +286,14 @@ func buildResourceRequirements(r *ResourceOptions) (corev1.ResourceRequirements,
 		if r.RequestsCPU != "" {
 			q, err := resource.ParseQuantity(r.RequestsCPU)
 			if err != nil {
-				return rr, fmt.Errorf("invalid cpu request %q: %w", r.RequestsCPU, err)
+				return rr, errors.Wrapf(err, "invalid cpu request %q", r.RequestsCPU)
 			}
 			rr.Requests[corev1.ResourceCPU] = q
 		}
 		if r.RequestsMemory != "" {
 			q, err := resource.ParseQuantity(r.RequestsMemory)
 			if err != nil {
-				return rr, fmt.Errorf("invalid memory request %q: %w", r.RequestsMemory, err)
+				return rr, errors.Wrapf(err, "invalid memory request %q", r.RequestsMemory)
 			}
 			rr.Requests[corev1.ResourceMemory] = q
 		}
@@ -303,14 +303,14 @@ func buildResourceRequirements(r *ResourceOptions) (corev1.ResourceRequirements,
 		if r.LimitsCPU != "" {
 			q, err := resource.ParseQuantity(r.LimitsCPU)
 			if err != nil {
-				return rr, fmt.Errorf("invalid cpu limit %q: %w", r.LimitsCPU, err)
+				return rr, errors.Wrapf(err, "invalid cpu limit %q", r.LimitsCPU)
 			}
 			rr.Limits[corev1.ResourceCPU] = q
 		}
 		if r.LimitsMemory != "" {
 			q, err := resource.ParseQuantity(r.LimitsMemory)
 			if err != nil {
-				return rr, fmt.Errorf("invalid memory limit %q: %w", r.LimitsMemory, err)
+				return rr, errors.Wrapf(err, "invalid memory limit %q", r.LimitsMemory)
 			}
 			rr.Limits[corev1.ResourceMemory] = q
 		}
