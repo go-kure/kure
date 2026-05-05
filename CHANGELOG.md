@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.2] - 2026-05-05
+
+### Added
+
+- Add domain config types for Cluster, Database, and ObjectStore
+
+### Fixed
+
+- Use kure errors package instead of fmt.Errorf
+
 ## [0.2.0-alpha.1] - 2026-05-04
 
 ### Added
@@ -30,6 +40,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Use kustomize.config.k8s.io domain in generated kustomization.yaml
+
+### Release
+
+- V0.2.0-alpha.1
 
 ## [0.2.0-alpha.0] - 2026-05-01
 
