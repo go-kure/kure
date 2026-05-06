@@ -3,6 +3,7 @@ package cilium
 import (
 	"testing"
 
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy/api"
 )
 
@@ -98,5 +99,17 @@ func TestSetCiliumNetworkPolicyDescription(t *testing.T) {
 	SetCiliumNetworkPolicyDescription(obj, "allow internal traffic")
 	if obj.Spec.Description != "allow internal traffic" {
 		t.Errorf("unexpected Description: %s", obj.Spec.Description)
+	}
+}
+
+func TestSetCiliumNetworkPolicyLabels(t *testing.T) {
+	obj := CreateCiliumNetworkPolicy("p", "ns")
+	lbls := labels.LabelArray{labels.NewLabel("env", "prod", labels.LabelSourceK8s)}
+	SetCiliumNetworkPolicyLabels(obj, lbls)
+	if obj.Spec == nil {
+		t.Fatal("expected Spec to be auto-initialised")
+	}
+	if len(obj.Spec.Labels) != 1 {
+		t.Fatalf("expected 1 label, got %d", len(obj.Spec.Labels))
 	}
 }

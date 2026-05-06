@@ -3,6 +3,7 @@ package cilium
 import (
 	"testing"
 
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy/api"
 )
 
@@ -86,6 +87,26 @@ func TestSetCiliumNetworkPolicyDescription(t *testing.T) {
 	}
 }
 
+func TestSetCiliumNetworkPolicyLabels(t *testing.T) {
+	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	lbls := labels.LabelArray{labels.NewLabel("env", "prod", labels.LabelSourceK8s)}
+	SetCiliumNetworkPolicyLabels(obj, lbls)
+	if obj.Spec == nil {
+		t.Fatal("expected Spec to be auto-initialised")
+	}
+	if len(obj.Spec.Labels) != 1 {
+		t.Fatalf("expected 1 label, got %d", len(obj.Spec.Labels))
+	}
+}
+
+func TestSetCiliumClusterwideNetworkPolicySpecs(t *testing.T) {
+	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	SetCiliumClusterwideNetworkPolicySpecs(obj, api.Rules{&api.Rule{Description: "r1"}, &api.Rule{Description: "r2"}})
+	if len(obj.Specs) != 2 {
+		t.Fatalf("expected 2 Specs, got %d", len(obj.Specs))
+	}
+}
+
 func TestSetCiliumClusterwideNetworkPolicySpec(t *testing.T) {
 	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
 	SetCiliumClusterwideNetworkPolicySpec(obj, &api.Rule{Description: "cluster rule"})
@@ -156,6 +177,18 @@ func TestSetCiliumClusterwideNetworkPolicyDescription(t *testing.T) {
 	}
 	if obj.Spec.Description != "cluster wide policy" {
 		t.Errorf("unexpected Description: %s", obj.Spec.Description)
+	}
+}
+
+func TestSetCiliumClusterwideNetworkPolicyLabels(t *testing.T) {
+	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	lbls := labels.LabelArray{labels.NewLabel("env", "prod", labels.LabelSourceK8s)}
+	SetCiliumClusterwideNetworkPolicyLabels(obj, lbls)
+	if obj.Spec == nil {
+		t.Fatal("expected Spec to be auto-initialised")
+	}
+	if len(obj.Spec.Labels) != 1 {
+		t.Fatalf("expected 1 label, got %d", len(obj.Spec.Labels))
 	}
 }
 
