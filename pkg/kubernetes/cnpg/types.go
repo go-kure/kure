@@ -183,15 +183,28 @@ type ScheduledBackupConfig struct {
 	Spec      cnpgv1.ScheduledBackupSpec `yaml:"spec"`
 }
 
+// PgBouncerOptions is the domain-friendly configuration for the PgBouncer
+// connection pooler. It covers the fields used by crane without exposing the
+// cnpgv1.PgBouncerSpec type to callers.
+type PgBouncerOptions struct {
+	// PoolMode is the connection pooling mode: "session" or "transaction".
+	// When empty, CNPG defaults to "session".
+	PoolMode string
+	// Parameters are extra PgBouncer configuration key-value pairs.
+	Parameters map[string]string
+}
+
 // PoolerOptions is the domain-friendly input for Pooler construction.
 type PoolerOptions struct {
 	ClusterName string
-	Instances   int32
-	// Type is the pooler type: "rw" (read-write) or "ro" (read-only).
-	// Defaults to "rw" if empty.
+	// Instances is the number of Pooler replicas. Zero means omit the field
+	// and let CNPG default to 1.
+	Instances int32
+	// Type is the pooler type: "rw" (read-write, default) or "ro" (read-only).
+	// Defaults to "rw" if empty or unrecognised.
 	Type string
 	// PgBouncer holds pgBouncer-specific configuration.
-	PgBouncer *cnpgv1.PgBouncerSpec
+	PgBouncer *PgBouncerOptions
 }
 
 // PoolerConfig describes a CNPG Pooler resource.

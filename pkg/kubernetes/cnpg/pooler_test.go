@@ -69,16 +69,16 @@ func TestPooler_DefaultTypeRW(t *testing.T) {
 	}
 }
 
-func TestPooler_WithPgBouncerSpec(t *testing.T) {
-	pgBouncer := &cnpgv1.PgBouncerSpec{
-		PoolMode: cnpgv1.PgBouncerPoolModeTransaction,
-	}
+func TestPooler_WithPgBouncerOptions(t *testing.T) {
 	obj := Pooler(&PoolerConfig{
 		Name:      "pg-pooler",
 		Namespace: "ns",
 		Options: &PoolerOptions{
 			ClusterName: "pg-main",
-			PgBouncer:   pgBouncer,
+			PgBouncer: &PgBouncerOptions{
+				PoolMode:   "transaction",
+				Parameters: map[string]string{"max_client_conn": "100"},
+			},
 		},
 	})
 	if obj.Spec.PgBouncer == nil {
@@ -86,6 +86,9 @@ func TestPooler_WithPgBouncerSpec(t *testing.T) {
 	}
 	if obj.Spec.PgBouncer.PoolMode != cnpgv1.PgBouncerPoolModeTransaction {
 		t.Errorf("expected PoolMode transaction, got %s", obj.Spec.PgBouncer.PoolMode)
+	}
+	if obj.Spec.PgBouncer.Parameters["max_client_conn"] != "100" {
+		t.Errorf("expected parameter max_client_conn=100, got %v", obj.Spec.PgBouncer.Parameters)
 	}
 }
 
