@@ -206,6 +206,8 @@ func HelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
 	}
 
 	if len(cfg.Values) > 0 {
+		// Marshal errors are only possible for non-serialisable types (channels,
+		// funcs) which callers will never pass in a values map.
 		raw, err := json.Marshal(cfg.Values)
 		if err == nil {
 			intfluxcd.SetHelmReleaseValues(obj, &apiextensionsv1.JSON{Raw: raw})
