@@ -215,6 +215,36 @@ kubernetes.AddHTTPRouteRuleBackendRef(&rule, gwapiv1.HTTPBackendRef{
 err = kubernetes.AddHTTPRouteRule(route, rule)
 ```
 
+## Namespace Builder
+
+Create and configure Kubernetes Namespaces, including Pod Security Admission (PSA) label management.
+
+```go
+// Create a Namespace with default app label and annotation
+ns := kubernetes.CreateNamespace("my-app")
+
+// Add or replace labels and annotations
+kubernetes.AddNamespaceLabel(ns, "env", "prod")
+kubernetes.AddNamespaceAnnotation(ns, "owner", "platform-team")
+kubernetes.SetNamespaceLabels(ns, map[string]string{"app": "my-app", "env": "prod"})
+kubernetes.SetNamespaceAnnotations(ns, map[string]string{"owner": "platform-team"})
+
+// Manage finalizers
+kubernetes.AddNamespaceFinalizer(ns, corev1.FinalizerKubernetes)
+kubernetes.SetNamespaceFinalizers(ns, []corev1.FinalizerName{"custom-finalizer"})
+
+// Apply PSA admission labels (enforce, warn, audit modes)
+kubernetes.SetNamespacePSALabels(ns,
+    kubernetes.PSARestricted,  // enforce
+    kubernetes.PSARestricted,  // warn
+    kubernetes.PSARestricted,  // audit
+    "v1.28",                   // version (pass "" to omit version labels)
+)
+
+// Skip a mode by passing an empty string
+kubernetes.SetNamespacePSALabels(ns, kubernetes.PSARestricted, "", "", "latest")
+```
+
 ## PSA Security Context Helpers
 
 Helpers for Pod Security Admission (PSA) compliance at Restricted, Baseline, and Privileged levels.
