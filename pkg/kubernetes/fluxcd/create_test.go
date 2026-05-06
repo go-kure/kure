@@ -290,6 +290,47 @@ func TestOCIRepository_Success(t *testing.T) {
 	}
 }
 
+func TestOCIRepository_Digest(t *testing.T) {
+	cfg := &OCIRepositoryConfig{
+		Name:      "test-oci",
+		Namespace: "flux-system",
+		URL:       "oci://registry.example.com/repo",
+		Ref:       "v1.0.0",
+		Digest:    "sha256:abc123",
+		Interval:  "1m",
+	}
+	ociRepo := OCIRepository(cfg)
+	if ociRepo == nil {
+		t.Fatal("expected non-nil OCIRepository")
+	}
+	if ociRepo.Spec.Reference == nil {
+		t.Fatal("expected non-nil Reference")
+	}
+	if ociRepo.Spec.Reference.Digest != "sha256:abc123" {
+		t.Errorf("expected digest 'sha256:abc123', got %s", ociRepo.Spec.Reference.Digest)
+	}
+	if ociRepo.Spec.Reference.Tag != "" {
+		t.Errorf("expected empty Tag when Digest is set, got %s", ociRepo.Spec.Reference.Tag)
+	}
+}
+
+func TestHelmRepository_Interval(t *testing.T) {
+	cfg := &HelmRepositoryConfig{
+		Name:      "bitnami",
+		Namespace: "flux-system",
+		URL:       "https://charts.bitnami.com/bitnami",
+		Interval:  "10m",
+	}
+	helmRepo := HelmRepository(cfg)
+	if helmRepo == nil {
+		t.Fatal("expected non-nil HelmRepository")
+	}
+	expected := 10 * time.Minute
+	if helmRepo.Spec.Interval.Duration != expected {
+		t.Errorf("expected interval %v, got %v", expected, helmRepo.Spec.Interval.Duration)
+	}
+}
+
 func TestKustomization_Success(t *testing.T) {
 	sourceRef := kustv1.CrossNamespaceSourceReference{
 		Kind:      "GitRepository",
@@ -358,6 +399,55 @@ func TestKustomization_NoPath(t *testing.T) {
 	// Path should remain empty when not specified
 	if kustomization.Spec.Path != "" {
 		t.Errorf("expected empty Path, got %s", kustomization.Spec.Path)
+	}
+}
+
+func TestKustomization_TargetNamespaceAndWait(t *testing.T) {
+	cfg := &KustomizationConfig{
+		Name:            "app",
+		Namespace:       "flux-system",
+		Interval:        "5m",
+		Prune:           true,
+		SourceRef:       kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "repo"},
+		TargetNamespace: "production",
+		Wait:            true,
+	}
+	ks := Kustomization(cfg)
+	if ks == nil {
+		t.Fatal("expected non-nil Kustomization")
+	}
+	if ks.Spec.TargetNamespace != "production" {
+		t.Errorf("expected TargetNamespace 'production', got %s", ks.Spec.TargetNamespace)
+	}
+	if !ks.Spec.Wait {
+		t.Error("expected Wait true")
+	}
+}
+
+func TestHelmRelease_Values(t *testing.T) {
+	cfg := &HelmReleaseConfig{
+		Name:      "my-app",
+		Namespace: "flux-system",
+		Interval:  "10m",
+		Chart:     "nginx",
+		SourceRef: helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+		Values: map[string]any{
+			"replicaCount": 3,
+			"image": map[string]any{
+				"tag": "latest",
+			},
+		},
+	}
+	hr := HelmRelease(cfg)
+	if hr == nil {
+		t.Fatal("expected non-nil HelmRelease")
+	}
+	if hr.Spec.Values == nil {
+		t.Fatal("expected non-nil Values")
+	}
+	raw := string(hr.Spec.Values.Raw)
+	if raw == "" {
+		t.Error("expected non-empty Values.Raw")
 	}
 }
 

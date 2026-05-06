@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"encoding/json"
 	"time"
 
 	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
@@ -14,6 +15,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -40,6 +42,9 @@ func HelmRepository(cfg *HelmRepositoryConfig) *sourcev1.HelmRepository {
 	intfluxcd.SetHelmRepositoryURL(obj, cfg.URL)
 	if cfg.Type != "" {
 		intfluxcd.SetHelmRepositoryType(obj, cfg.Type)
+	}
+	if cfg.Interval != "" {
+		intfluxcd.SetHelmRepositoryInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
 	}
 	return obj
 }
@@ -79,9 +84,15 @@ func OCIRepository(cfg *OCIRepositoryConfig) *sourcev1.OCIRepository {
 	if cfg == nil {
 		return nil
 	}
+	ref := &sourcev1.OCIRepositoryRef{}
+	if cfg.Digest != "" {
+		ref.Digest = cfg.Digest
+	} else {
+		ref.Tag = cfg.Ref
+	}
 	spec := sourcev1.OCIRepositorySpec{
 		URL:       cfg.URL,
-		Reference: &sourcev1.OCIRepositoryRef{Tag: cfg.Ref},
+		Reference: ref,
 		Interval:  metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)},
 	}
 	return intfluxcd.CreateOCIRepository(cfg.Name, cfg.Namespace, spec)
@@ -97,6 +108,12 @@ func Kustomization(cfg *KustomizationConfig) *kustv1.Kustomization {
 	intfluxcd.SetKustomizationSourceRef(obj, cfg.SourceRef)
 	if cfg.Path != "" {
 		intfluxcd.SetKustomizationPath(obj, cfg.Path)
+	}
+	if cfg.TargetNamespace != "" {
+		intfluxcd.SetKustomizationTargetNamespace(obj, cfg.TargetNamespace)
+	}
+	if cfg.Wait {
+		intfluxcd.SetKustomizationWait(obj, true)
 	}
 	return obj
 }
@@ -186,6 +203,13 @@ func HelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
 			Optional:   vf.Optional,
 		}
 		intfluxcd.AddHelmReleaseValuesFrom(obj, ref)
+	}
+
+	if len(cfg.Values) > 0 {
+		raw, err := json.Marshal(cfg.Values)
+		if err == nil {
+			intfluxcd.SetHelmReleaseValues(obj, &apiextensionsv1.JSON{Raw: raw})
+		}
 	}
 
 	return obj

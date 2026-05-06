@@ -20,16 +20,25 @@ gitRepo := fluxcd.GitRepository(&fluxcd.GitRepositoryConfig{
     Name:      "my-repo",
     Namespace: "flux-system",
     URL:       "https://github.com/org/repo",
-    Branch:    "main",
+    Ref:       "main",
     Interval:  "5m",
 })
 
-// OCI repository source
+// OCI repository source — tag reference
 ociRepo := fluxcd.OCIRepository(&fluxcd.OCIRepositoryConfig{
     Name:      "my-oci",
     Namespace: "flux-system",
     URL:       "oci://registry.example.com/manifests",
-    Tag:       "latest",
+    Ref:       "latest",
+    Interval:  "10m",
+})
+
+// OCI repository source — digest (content-addressable) reference
+ociRepoDigest := fluxcd.OCIRepository(&fluxcd.OCIRepositoryConfig{
+    Name:      "my-oci-pinned",
+    Namespace: "flux-system",
+    URL:       "oci://registry.example.com/manifests",
+    Digest:    "sha256:abc123...",
     Interval:  "10m",
 })
 
@@ -38,6 +47,7 @@ helmRepo := fluxcd.HelmRepository(&fluxcd.HelmRepositoryConfig{
     Name:      "bitnami",
     Namespace: "flux-system",
     URL:       "https://charts.bitnami.com/bitnami",
+    Interval:  "10m",
 })
 
 // Helm repository (OCI registry)
@@ -46,13 +56,14 @@ ociHelmRepo := fluxcd.HelmRepository(&fluxcd.HelmRepositoryConfig{
     Namespace: "flux-system",
     URL:       "oci://ghcr.io/example/charts",
     Type:      sourcev1.HelmRepositoryTypeOCI, // "oci"
+    Interval:  "10m",
 })
 
 // Bucket source
 bucket := fluxcd.Bucket(&fluxcd.BucketConfig{
-    Name:      "my-bucket",
-    Namespace: "flux-system",
-    Endpoint:  "minio.example.com",
+    Name:       "my-bucket",
+    Namespace:  "flux-system",
+    Endpoint:   "minio.example.com",
     BucketName: "manifests",
 })
 ```
@@ -62,11 +73,13 @@ bucket := fluxcd.Bucket(&fluxcd.BucketConfig{
 ```go
 // Kustomization (reconciles manifests from a source)
 ks := fluxcd.Kustomization(&fluxcd.KustomizationConfig{
-    Name:      "my-app",
-    Namespace: "flux-system",
-    Path:      "./clusters/production/apps",
-    Interval:  "10m",
-    Prune:     true,
+    Name:            "my-app",
+    Namespace:       "flux-system",
+    Path:            "./clusters/production/apps",
+    Interval:        "10m",
+    Prune:           true,
+    TargetNamespace: "production",
+    Wait:            true,
     SourceRef: kustv1.CrossNamespaceSourceReference{
         Kind: "GitRepository",
         Name: "my-repo",
@@ -96,6 +109,9 @@ hr := fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{
         {Kind: "ConfigMap", Name: "redis-values"},
         {Kind: "Secret", Name: "redis-secret", Optional: true},
     },
+    Values: map[string]any{
+        "replicaCount": 1,
+    },
 })
 
 // HelmRelease — chartRef mode (references an existing OCIRepository or HelmChart)
@@ -120,10 +136,10 @@ hr = fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{
 ```go
 // Alert
 alert := fluxcd.Alert(&fluxcd.AlertConfig{
-    Name:      "slack-alert",
-    Namespace: "flux-system",
-    Provider:  "slack",
-    Severity:  "error",
+    Name:          "slack-alert",
+    Namespace:     "flux-system",
+    ProviderRef:   "slack",
+    EventSeverity: "error",
 })
 
 // Provider
