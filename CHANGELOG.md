@@ -1,6 +1,46 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.3] - 2026-05-06
+
+### Added
+
+- Promote ConfigMap builder to public API
+- Add granular setters for RefreshInterval, Target, DataFrom
+- Expose GenerateFluxInstance as public method
+- Add Pooler builder
+- Add CreateVolumeClaimTemplate helper for StatefulSet embedding
+- Add public Namespace builder with PSA label support
+- Add Type field to HelmRepositoryConfig for OCI registries
+- Extend HelmReleaseConfig with chartRef, valuesFrom, and remediation fields closes #496
+- Extend builders for infra component use cases
+- Add CiliumNetworkPolicy, CiliumClusterwideNetworkPolicy, and CiliumCIDRGroup builders
+- Add builders for remaining stable Cilium CRDs (#514)
+
+### Changed
+
+- Wrap PgBouncerSpec in domain PgBouncerOptions
+
+### Documentation
+
+- Add crane state analysis review (2026-05-06)
+- Note that GenerateFluxInstance does not check config.Enabled
+- Add Namespace builder section to README
+- Add OCI HelmRepository example to README
+- Fix variable name collision in README OCI example
+- Update README with 10 new CRD builders
+
+### Fixed
+
+- Remove dead variable and fix README ptr usage in HelmRelease tests
+- Address review findings on #499 builders
+- Address review findings on #501 builders
+- Add EnableDefaultDeny setters for CNP and CCNP
+
+### Testing
+
+- Add default label/annotation assertions in TestCreateConfigMap
+
 ## [0.2.0-alpha.2] - 2026-05-05
 
 ### Added
@@ -10,6 +50,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Use kure errors package instead of fmt.Errorf
+
+### Release
+
+- V0.2.0-alpha.2
 
 ## [0.2.0-alpha.1] - 2026-05-04
 
