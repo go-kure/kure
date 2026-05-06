@@ -86,3 +86,99 @@ func TestPersistentVolumeClaimFunctions(t *testing.T) {
 		t.Errorf("data source ref not set")
 	}
 }
+
+func TestCreateVolumeClaimTemplate(t *testing.T) {
+	t.Run("sets name", func(t *testing.T) {
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageRequest: resource.MustParse("5Gi"),
+		})
+		if pvc.Name != "data" {
+			t.Errorf("expected name %q got %q", "data", pvc.Name)
+		}
+	})
+
+	t.Run("TypeMeta is empty", func(t *testing.T) {
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageRequest: resource.MustParse("1Gi"),
+		})
+		if pvc.Kind != "" {
+			t.Errorf("expected empty Kind, got %q", pvc.Kind)
+		}
+		if pvc.APIVersion != "" {
+			t.Errorf("expected empty APIVersion, got %q", pvc.APIVersion)
+		}
+	})
+
+	t.Run("Namespace is empty", func(t *testing.T) {
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageRequest: resource.MustParse("1Gi"),
+		})
+		if pvc.Namespace != "" {
+			t.Errorf("expected empty Namespace, got %q", pvc.Namespace)
+		}
+	})
+
+	t.Run("sets storageClassName", func(t *testing.T) {
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageClassName: "fast",
+			StorageRequest:   resource.MustParse("10Gi"),
+		})
+		if pvc.Spec.StorageClassName == nil {
+			t.Fatal("expected non-nil StorageClassName")
+		}
+		if *pvc.Spec.StorageClassName != "fast" {
+			t.Errorf("expected StorageClassName %q got %q", "fast", *pvc.Spec.StorageClassName)
+		}
+	})
+
+	t.Run("empty storageClassName omitted", func(t *testing.T) {
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageRequest: resource.MustParse("1Gi"),
+		})
+		if pvc.Spec.StorageClassName != nil {
+			t.Errorf("expected nil StorageClassName, got %q", *pvc.Spec.StorageClassName)
+		}
+	})
+
+	t.Run("sets accessModes", func(t *testing.T) {
+		modes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			AccessModes:    modes,
+			StorageRequest: resource.MustParse("1Gi"),
+		})
+		if !reflect.DeepEqual(pvc.Spec.AccessModes, modes) {
+			t.Errorf("access modes mismatch: got %v want %v", pvc.Spec.AccessModes, modes)
+		}
+	})
+
+	t.Run("sets storage request", func(t *testing.T) {
+		qty := resource.MustParse("20Gi")
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageRequest: qty,
+		})
+		got := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		if got.Cmp(qty) != 0 {
+			t.Errorf("storage request mismatch: got %v want %v", got, qty)
+		}
+	})
+
+	t.Run("sets labels when provided", func(t *testing.T) {
+		labels := map[string]string{"env": "prod", "tier": "db"}
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageRequest: resource.MustParse("1Gi"),
+			Labels:         labels,
+		})
+		if !reflect.DeepEqual(pvc.Labels, labels) {
+			t.Errorf("labels mismatch: got %v want %v", pvc.Labels, labels)
+		}
+	})
+
+	t.Run("nil labels not set", func(t *testing.T) {
+		pvc := CreateVolumeClaimTemplate("data", VolumeClaimTemplateOptions{
+			StorageRequest: resource.MustParse("1Gi"),
+		})
+		if pvc.Labels != nil {
+			t.Errorf("expected nil labels, got %v", pvc.Labels)
+		}
+	})
+}

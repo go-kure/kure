@@ -76,3 +76,43 @@ func SetPVCDataSource(pvc *corev1.PersistentVolumeClaim, src *corev1.TypedLocalO
 func SetPVCDataSourceRef(pvc *corev1.PersistentVolumeClaim, src *corev1.TypedObjectReference) {
 	pvc.Spec.DataSourceRef = src
 }
+
+// VolumeClaimTemplateOptions holds fields needed to construct a PVC for
+// embedding in StatefulSet.Spec.VolumeClaimTemplates.
+type VolumeClaimTemplateOptions struct {
+	// StorageClassName is the name of the StorageClass. When empty, the cluster
+	// default StorageClass is used.
+	StorageClassName string
+	// AccessModes defines the desired access modes for the volume.
+	AccessModes []corev1.PersistentVolumeAccessMode
+	// StorageRequest is the minimum storage capacity requested.
+	StorageRequest resource.Quantity
+	// Labels are optional metadata labels applied to the PVC template.
+	Labels map[string]string
+}
+
+// CreateVolumeClaimTemplate returns a PersistentVolumeClaim suitable for
+// embedding in StatefulSet.Spec.VolumeClaimTemplates. Only ObjectMeta.Name and
+// Spec are set; TypeMeta and Namespace are intentionally omitted because
+// StatefulSet embeds PVCs by name only and the owning StatefulSet provides the
+// namespace.
+func CreateVolumeClaimTemplate(name string, opts VolumeClaimTemplateOptions) corev1.PersistentVolumeClaim {
+	pvc := corev1.PersistentVolumeClaim{}
+	pvc.Name = name
+	if opts.Labels != nil {
+		pvc.Labels = opts.Labels
+	}
+	pvc.Spec = corev1.PersistentVolumeClaimSpec{
+		AccessModes: opts.AccessModes,
+		Resources: corev1.VolumeResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceStorage: opts.StorageRequest,
+			},
+		},
+	}
+	if opts.StorageClassName != "" {
+		sc := opts.StorageClassName
+		pvc.Spec.StorageClassName = &sc
+	}
+	return pvc
+}
