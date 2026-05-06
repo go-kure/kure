@@ -74,6 +74,8 @@ ks := fluxcd.Kustomization(&fluxcd.KustomizationConfig{
 })
 
 // HelmRelease — chart template mode (chart + version + source reference)
+installRetries := 3
+upgradeRetries := 3
 hr := fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{
     Name:        "redis",
     Namespace:   "apps",
@@ -85,10 +87,10 @@ hr := fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{
     TargetNamespace:       "databases",
     DriftDetectionMode:    "enabled",
     InstallCRDs:           "CreateReplace",
-    InstallRetries:        ptr(3),
+    InstallRetries:        &installRetries,
     UpgradeCRDs:           "Skip",
     UpgradeCleanupOnFail:  true,
-    UpgradeRetries:        ptr(3),
+    UpgradeRetries:        &upgradeRetries,
     RollbackCleanupOnFail: true,
     ValuesFrom: []fluxcd.ValuesFromConfig{
         {Kind: "ConfigMap", Name: "redis-values"},
