@@ -7,6 +7,7 @@ import (
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
@@ -77,6 +78,7 @@ func registerAllSchemes() error {
 		monitoringv1.AddToScheme,
 		volsyncv1alpha1.AddToScheme,
 		cnpgv1.AddToScheme,
+		ciliumv2.AddToScheme,
 	}
 
 	// Register each scheme, returning the first error
