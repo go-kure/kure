@@ -10,12 +10,17 @@ import (
 )
 
 // OCIRepositoryConfig describes an OCIRepository resource used by Flux.
+// Ref and Digest are mutually exclusive: when Digest is non-empty it is used
+// as spec.reference.digest and Ref is ignored.
 type OCIRepositoryConfig struct {
 	Name      string `yaml:"name"`
 	Namespace string `yaml:"namespace"`
 	URL       string `yaml:"url"`
 	Ref       string `yaml:"ref"`
-	Interval  string `yaml:"interval"`
+	// Digest is a content-addressable reference (e.g. "sha256:abc…"). When
+	// set, Ref is ignored and spec.reference.digest is used instead.
+	Digest   string `yaml:"digest,omitempty"`
+	Interval string `yaml:"interval"`
 }
 
 // GitRepositoryConfig contains the minimal settings for a GitRepository.
@@ -33,6 +38,7 @@ type HelmRepositoryConfig struct {
 	Namespace string `yaml:"namespace"`
 	URL       string `yaml:"url"`
 	Type      string `yaml:"type,omitempty"`
+	Interval  string `yaml:"interval,omitempty"`
 }
 
 // BucketConfig contains the configuration for a Bucket source.
@@ -63,6 +69,10 @@ type KustomizationConfig struct {
 	Interval  string                               `yaml:"interval"`
 	Prune     bool                                 `yaml:"prune"`
 	SourceRef kustv1.CrossNamespaceSourceReference `yaml:"sourceRef"`
+	// TargetNamespace overrides the namespace for all reconciled resources.
+	TargetNamespace string `yaml:"targetNamespace,omitempty"`
+	// Wait instructs Flux to wait for all reconciled resources to become ready.
+	Wait bool `yaml:"wait,omitempty"`
 }
 
 // ChartRefConfig references an existing Flux source (OCIRepository or HelmChart)
@@ -119,6 +129,9 @@ type HelmReleaseConfig struct {
 	// ValuesFrom is a list of references to ConfigMaps or Secrets whose data
 	// is merged into the Helm values.
 	ValuesFrom []ValuesFromConfig `yaml:"valuesFrom,omitempty"`
+	// Values is an inline map of Helm values. It is encoded as JSON and set
+	// as spec.values. Takes precedence over ValuesFrom entries for the same keys.
+	Values map[string]any `yaml:"values,omitempty"`
 }
 
 // ProviderConfig contains the configuration for a notification Provider.
