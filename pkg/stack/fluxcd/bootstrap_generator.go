@@ -248,7 +248,8 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 
 // GenerateFluxInstance returns only the FluxInstance CR configured for
 // the given bootstrap settings, without the full Flux Operator install bundle.
-// Returns (nil, nil) when config is nil.
+// Returns (nil, nil) when config is nil. Unlike GenerateBootstrap, this method
+// does not check config.Enabled — the caller is responsible for that gate.
 func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (*fluxv1.FluxInstance, error) {
 	if config == nil {
 		return nil, nil
