@@ -38,6 +38,9 @@ func HelmRepository(cfg *HelmRepositoryConfig) *sourcev1.HelmRepository {
 	}
 	obj := intfluxcd.CreateHelmRepository(cfg.Name, cfg.Namespace, sourcev1.HelmRepositorySpec{})
 	intfluxcd.SetHelmRepositoryURL(obj, cfg.URL)
+	if cfg.Type != "" {
+		intfluxcd.SetHelmRepositoryType(obj, cfg.Type)
+	}
 	return obj
 }
 

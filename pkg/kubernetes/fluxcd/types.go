@@ -32,6 +32,7 @@ type HelmRepositoryConfig struct {
 	Name      string `yaml:"name"`
 	Namespace string `yaml:"namespace"`
 	URL       string `yaml:"url"`
+	Type      string `yaml:"type,omitempty"`
 }
 
 // BucketConfig contains the configuration for a Bucket source.

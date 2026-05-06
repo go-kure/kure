@@ -109,6 +109,47 @@ func TestHelmRepository_NilConfig(t *testing.T) {
 	}
 }
 
+func TestHelmRepository_NoType(t *testing.T) {
+	cfg := &HelmRepositoryConfig{
+		Name:      "bitnami",
+		Namespace: "flux-system",
+		URL:       "https://charts.bitnami.com/bitnami",
+	}
+
+	helmRepo := HelmRepository(cfg)
+
+	if helmRepo == nil {
+		t.Fatal("expected non-nil HelmRepository")
+	}
+
+	if helmRepo.Spec.Type != "" {
+		t.Errorf("expected empty Type, got %s", helmRepo.Spec.Type)
+	}
+}
+
+func TestHelmRepository_OCI(t *testing.T) {
+	cfg := &HelmRepositoryConfig{
+		Name:      "ghcr",
+		Namespace: "flux-system",
+		URL:       "oci://ghcr.io/example/charts",
+		Type:      sourcev1.HelmRepositoryTypeOCI,
+	}
+
+	helmRepo := HelmRepository(cfg)
+
+	if helmRepo == nil {
+		t.Fatal("expected non-nil HelmRepository")
+	}
+
+	if helmRepo.Spec.URL != "oci://ghcr.io/example/charts" {
+		t.Errorf("expected URL 'oci://ghcr.io/example/charts', got %s", helmRepo.Spec.URL)
+	}
+
+	if helmRepo.Spec.Type != sourcev1.HelmRepositoryTypeOCI {
+		t.Errorf("expected Type %q, got %q", sourcev1.HelmRepositoryTypeOCI, helmRepo.Spec.Type)
+	}
+}
+
 func TestBucket_Success(t *testing.T) {
 	cfg := &BucketConfig{
 		Name:       "s3-bucket",
