@@ -73,18 +73,38 @@ ks := fluxcd.Kustomization(&fluxcd.KustomizationConfig{
     },
 })
 
-// HelmRelease (reconciles a Helm chart)
+// HelmRelease — chart template mode (chart + version + source reference)
 hr := fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{
-    Name:       "redis",
-    Namespace:  "default",
-    Chart:      "redis",
-    Version:    "17.0.0",
-    RepoName:   "bitnami",
-    RepoNamespace: "flux-system",
-    Values: map[string]interface{}{
-        "auth": map[string]interface{}{
-            "enabled": false,
-        },
+    Name:        "redis",
+    Namespace:   "apps",
+    Chart:       "redis",
+    Version:     "17.0.0",
+    SourceRef:   helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+    Interval:    "10m",
+    ReleaseName: "redis",
+    TargetNamespace:       "databases",
+    DriftDetectionMode:    "enabled",
+    InstallCRDs:           "CreateReplace",
+    InstallRetries:        ptr(3),
+    UpgradeCRDs:           "Skip",
+    UpgradeCleanupOnFail:  true,
+    UpgradeRetries:        ptr(3),
+    RollbackCleanupOnFail: true,
+    ValuesFrom: []fluxcd.ValuesFromConfig{
+        {Kind: "ConfigMap", Name: "redis-values"},
+        {Kind: "Secret", Name: "redis-secret", Optional: true},
+    },
+})
+
+// HelmRelease — chartRef mode (references an existing OCIRepository or HelmChart)
+hr = fluxcd.HelmRelease(&fluxcd.HelmReleaseConfig{
+    Name:      "my-app",
+    Namespace: "apps",
+    Interval:  "10m",
+    ChartRef: &fluxcd.ChartRefConfig{
+        Kind:      "OCIRepository",
+        Name:      "my-oci-source",
+        Namespace: "flux-system",
     },
 })
 ```

@@ -413,6 +413,200 @@ func TestHelmRelease_Success(t *testing.T) {
 	}
 }
 
+func TestHelmRelease_ChartRef(t *testing.T) {
+	cfg := &HelmReleaseConfig{
+		Name:      "my-app",
+		Namespace: "apps",
+		Interval:  "10m",
+		ChartRef: &ChartRefConfig{
+			Kind:      "OCIRepository",
+			Name:      "my-oci-source",
+			Namespace: "flux-system",
+		},
+	}
+	hr := HelmRelease(cfg)
+	if hr == nil {
+		t.Fatal("expected non-nil HelmRelease")
+	}
+	if hr.Spec.ChartRef == nil {
+		t.Fatal("expected non-nil ChartRef")
+	}
+	if hr.Spec.ChartRef.Kind != "OCIRepository" {
+		t.Errorf("expected ChartRef.Kind OCIRepository, got %s", hr.Spec.ChartRef.Kind)
+	}
+	if hr.Spec.ChartRef.Name != "my-oci-source" {
+		t.Errorf("expected ChartRef.Name my-oci-source, got %s", hr.Spec.ChartRef.Name)
+	}
+	if hr.Spec.ChartRef.Namespace != "flux-system" {
+		t.Errorf("expected ChartRef.Namespace flux-system, got %s", hr.Spec.ChartRef.Namespace)
+	}
+	if hr.Spec.Chart != nil {
+		t.Error("expected nil Chart when ChartRef is set")
+	}
+}
+
+func TestHelmRelease_ChartRefNoNamespace(t *testing.T) {
+	cfg := &HelmReleaseConfig{
+		Name:      "my-app",
+		Namespace: "apps",
+		Interval:  "10m",
+		ChartRef:  &ChartRefConfig{Kind: "HelmChart", Name: "local-chart"},
+	}
+	hr := HelmRelease(cfg)
+	if hr.Spec.ChartRef == nil {
+		t.Fatal("expected non-nil ChartRef")
+	}
+	if hr.Spec.ChartRef.Namespace != "" {
+		t.Errorf("expected empty Namespace, got %q", hr.Spec.ChartRef.Namespace)
+	}
+}
+
+func TestHelmRelease_TargetNamespace(t *testing.T) {
+	cfg := &HelmReleaseConfig{
+		Name:            "my-app",
+		Namespace:       "flux-system",
+		Interval:        "10m",
+		Chart:           "nginx",
+		SourceRef:       helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+		TargetNamespace: "production",
+	}
+	hr := HelmRelease(cfg)
+	if hr.Spec.TargetNamespace != "production" {
+		t.Errorf("expected TargetNamespace production, got %s", hr.Spec.TargetNamespace)
+	}
+}
+
+func TestHelmRelease_DriftDetection(t *testing.T) {
+	cfg := &HelmReleaseConfig{
+		Name:               "my-app",
+		Namespace:          "flux-system",
+		Interval:           "10m",
+		Chart:              "nginx",
+		SourceRef:          helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+		DriftDetectionMode: "enabled",
+	}
+	hr := HelmRelease(cfg)
+	if hr.Spec.DriftDetection == nil {
+		t.Fatal("expected non-nil DriftDetection")
+	}
+	if string(hr.Spec.DriftDetection.Mode) != "enabled" {
+		t.Errorf("expected DriftDetection.Mode enabled, got %s", hr.Spec.DriftDetection.Mode)
+	}
+}
+
+func TestHelmRelease_InstallUpgrade(t *testing.T) {
+	retries := 3
+	remediateLastFailure := true
+	cfg := &HelmReleaseConfig{
+		Name:                 "my-app",
+		Namespace:            "flux-system",
+		Interval:             "10m",
+		Chart:                "nginx",
+		SourceRef:            helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+		InstallCRDs:          "CreateReplace",
+		InstallRetries:       &retries,
+		UpgradeCRDs:          "Skip",
+		UpgradeRetries:       &retries,
+		RemediateLastFailure: &remediateLastFailure,
+		UpgradeCleanupOnFail: true,
+	}
+	hr := HelmRelease(cfg)
+	if hr.Spec.Install == nil {
+		t.Fatal("expected non-nil Install")
+	}
+	if string(hr.Spec.Install.CRDs) != "CreateReplace" {
+		t.Errorf("expected Install.CRDs CreateReplace, got %s", hr.Spec.Install.CRDs)
+	}
+	if hr.Spec.Install.Remediation == nil || hr.Spec.Install.Remediation.Retries != 3 {
+		t.Errorf("expected Install.Remediation.Retries 3, got %v", hr.Spec.Install.Remediation)
+	}
+	if hr.Spec.Upgrade == nil {
+		t.Fatal("expected non-nil Upgrade")
+	}
+	if string(hr.Spec.Upgrade.CRDs) != "Skip" {
+		t.Errorf("expected Upgrade.CRDs Skip, got %s", hr.Spec.Upgrade.CRDs)
+	}
+	if !hr.Spec.Upgrade.CleanupOnFail {
+		t.Error("expected Upgrade.CleanupOnFail true")
+	}
+	if hr.Spec.Upgrade.Remediation == nil || hr.Spec.Upgrade.Remediation.Retries != 3 {
+		t.Errorf("expected Upgrade.Remediation.Retries 3, got %v", hr.Spec.Upgrade.Remediation)
+	}
+	if hr.Spec.Upgrade.Remediation.RemediateLastFailure == nil || !*hr.Spec.Upgrade.Remediation.RemediateLastFailure {
+		t.Error("expected RemediateLastFailure true")
+	}
+}
+
+func TestHelmRelease_RollbackCleanupOnFail(t *testing.T) {
+	cfg := &HelmReleaseConfig{
+		Name:                  "my-app",
+		Namespace:             "flux-system",
+		Interval:              "10m",
+		Chart:                 "nginx",
+		SourceRef:             helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+		RollbackCleanupOnFail: true,
+	}
+	hr := HelmRelease(cfg)
+	if hr.Spec.Rollback == nil {
+		t.Fatal("expected non-nil Rollback")
+	}
+	if !hr.Spec.Rollback.CleanupOnFail {
+		t.Error("expected Rollback.CleanupOnFail true")
+	}
+}
+
+func TestHelmRelease_ValuesFrom(t *testing.T) {
+	optional := true
+	cfg := &HelmReleaseConfig{
+		Name:      "my-app",
+		Namespace: "flux-system",
+		Interval:  "10m",
+		Chart:     "nginx",
+		SourceRef: helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+		ValuesFrom: []ValuesFromConfig{
+			{Kind: "ConfigMap", Name: "my-values", ValuesKey: "values.yaml"},
+			{Kind: "Secret", Name: "my-secret", TargetPath: "secret.key", Optional: true},
+		},
+	}
+	_ = optional
+	hr := HelmRelease(cfg)
+	if len(hr.Spec.ValuesFrom) != 2 {
+		t.Fatalf("expected 2 ValuesFrom entries, got %d", len(hr.Spec.ValuesFrom))
+	}
+	if hr.Spec.ValuesFrom[0].Kind != "ConfigMap" || hr.Spec.ValuesFrom[0].Name != "my-values" {
+		t.Errorf("unexpected ValuesFrom[0]: %+v", hr.Spec.ValuesFrom[0])
+	}
+	if hr.Spec.ValuesFrom[1].Kind != "Secret" || !hr.Spec.ValuesFrom[1].Optional {
+		t.Errorf("unexpected ValuesFrom[1]: %+v", hr.Spec.ValuesFrom[1])
+	}
+	if hr.Spec.ValuesFrom[1].TargetPath != "secret.key" {
+		t.Errorf("expected TargetPath secret.key, got %s", hr.Spec.ValuesFrom[1].TargetPath)
+	}
+}
+
+func TestHelmRelease_NoDriftDetectionWhenEmpty(t *testing.T) {
+	cfg := &HelmReleaseConfig{
+		Name:      "my-app",
+		Namespace: "flux-system",
+		Interval:  "10m",
+		Chart:     "nginx",
+		SourceRef: helmv2.CrossNamespaceObjectReference{Kind: "HelmRepository", Name: "bitnami"},
+	}
+	hr := HelmRelease(cfg)
+	if hr.Spec.DriftDetection != nil {
+		t.Errorf("expected nil DriftDetection when mode is empty, got %+v", hr.Spec.DriftDetection)
+	}
+	if hr.Spec.Install != nil {
+		t.Errorf("expected nil Install when no install fields set, got %+v", hr.Spec.Install)
+	}
+	if hr.Spec.Upgrade != nil {
+		t.Errorf("expected nil Upgrade when no upgrade fields set, got %+v", hr.Spec.Upgrade)
+	}
+	if hr.Spec.Rollback != nil {
+		t.Errorf("expected nil Rollback when RollbackCleanupOnFail is false, got %+v", hr.Spec.Rollback)
+	}
+}
+
 func TestProvider_Success(t *testing.T) {
 	cfg := &ProviderConfig{
 		Name:      "slack-provider",

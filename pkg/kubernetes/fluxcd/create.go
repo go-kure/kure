@@ -107,18 +107,87 @@ func HelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
 		return nil
 	}
 	obj := intfluxcd.CreateHelmRelease(cfg.Name, cfg.Namespace, helmv2.HelmReleaseSpec{})
-	chart := helmv2.HelmChartTemplate{
-		Spec: helmv2.HelmChartTemplateSpec{
-			Chart:     cfg.Chart,
-			Version:   cfg.Version,
-			SourceRef: cfg.SourceRef,
-		},
+
+	if cfg.ChartRef != nil {
+		ref := &helmv2.CrossNamespaceSourceReference{
+			Kind: cfg.ChartRef.Kind,
+			Name: cfg.ChartRef.Name,
+		}
+		if cfg.ChartRef.Namespace != "" {
+			ref.Namespace = cfg.ChartRef.Namespace
+		}
+		intfluxcd.SetHelmReleaseChartRef(obj, ref)
+	} else if cfg.Chart != "" {
+		chart := &helmv2.HelmChartTemplate{
+			Spec: helmv2.HelmChartTemplateSpec{
+				Chart:     cfg.Chart,
+				Version:   cfg.Version,
+				SourceRef: cfg.SourceRef,
+			},
+		}
+		intfluxcd.SetHelmReleaseChart(obj, chart)
 	}
-	intfluxcd.SetHelmReleaseChart(obj, &chart)
+
 	intfluxcd.SetHelmReleaseInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
+
 	if cfg.ReleaseName != "" {
 		intfluxcd.SetHelmReleaseReleaseName(obj, cfg.ReleaseName)
 	}
+	if cfg.TargetNamespace != "" {
+		intfluxcd.SetHelmReleaseTargetNamespace(obj, cfg.TargetNamespace)
+	}
+	if cfg.DriftDetectionMode != "" {
+		dd := intfluxcd.CreateDriftDetection(helmv2.DriftDetectionMode(cfg.DriftDetectionMode))
+		intfluxcd.SetHelmReleaseDriftDetection(obj, dd)
+	}
+
+	if cfg.InstallCRDs != "" || cfg.InstallRetries != nil {
+		install := &helmv2.Install{}
+		if cfg.InstallCRDs != "" {
+			install.CRDs = helmv2.CRDsPolicy(cfg.InstallCRDs)
+		}
+		if cfg.InstallRetries != nil {
+			install.Remediation = &helmv2.InstallRemediation{Retries: *cfg.InstallRetries}
+		}
+		intfluxcd.SetHelmReleaseInstall(obj, install)
+	}
+
+	if cfg.UpgradeCRDs != "" || cfg.UpgradeRetries != nil || cfg.RemediateLastFailure != nil || cfg.UpgradeCleanupOnFail {
+		upgrade := &helmv2.Upgrade{}
+		if cfg.UpgradeCRDs != "" {
+			upgrade.CRDs = helmv2.CRDsPolicy(cfg.UpgradeCRDs)
+		}
+		if cfg.UpgradeCleanupOnFail {
+			upgrade.CleanupOnFail = true
+		}
+		if cfg.UpgradeRetries != nil || cfg.RemediateLastFailure != nil {
+			remediation := &helmv2.UpgradeRemediation{}
+			if cfg.UpgradeRetries != nil {
+				remediation.Retries = *cfg.UpgradeRetries
+			}
+			if cfg.RemediateLastFailure != nil {
+				remediation.RemediateLastFailure = cfg.RemediateLastFailure
+			}
+			upgrade.Remediation = remediation
+		}
+		intfluxcd.SetHelmReleaseUpgrade(obj, upgrade)
+	}
+
+	if cfg.RollbackCleanupOnFail {
+		intfluxcd.SetHelmReleaseRollback(obj, &helmv2.Rollback{CleanupOnFail: true})
+	}
+
+	for _, vf := range cfg.ValuesFrom {
+		ref := helmv2.ValuesReference{
+			Kind:       vf.Kind,
+			Name:       vf.Name,
+			ValuesKey:  vf.ValuesKey,
+			TargetPath: vf.TargetPath,
+			Optional:   vf.Optional,
+		}
+		intfluxcd.AddHelmReleaseValuesFrom(obj, ref)
+	}
+
 	return obj
 }
 
