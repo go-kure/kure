@@ -48,3 +48,103 @@ func CiliumCIDRGroup(cfg *CiliumCIDRGroupConfig) *ciliumv2.CiliumCIDRGroup {
 	}
 	return obj
 }
+
+// CiliumEgressGatewayPolicy converts the config to a CiliumEgressGatewayPolicy object.
+func CiliumEgressGatewayPolicy(cfg *CiliumEgressGatewayPolicyConfig) *ciliumv2.CiliumEgressGatewayPolicy {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumEgressGatewayPolicy(cfg.Name)
+	intcilium.SetCiliumEgressGatewayPolicySpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumLocalRedirectPolicy converts the config to a CiliumLocalRedirectPolicy object.
+func CiliumLocalRedirectPolicy(cfg *CiliumLocalRedirectPolicyConfig) *ciliumv2.CiliumLocalRedirectPolicy {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumLocalRedirectPolicy(cfg.Name, cfg.Namespace)
+	intcilium.SetCiliumLocalRedirectPolicySpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumLoadBalancerIPPool converts the config to a CiliumLoadBalancerIPPool object.
+func CiliumLoadBalancerIPPool(cfg *CiliumLoadBalancerIPPoolConfig) *ciliumv2.CiliumLoadBalancerIPPool {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumLoadBalancerIPPool(cfg.Name)
+	intcilium.SetCiliumLoadBalancerIPPoolSpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumEnvoyConfig converts the config to a CiliumEnvoyConfig object.
+func CiliumEnvoyConfig(cfg *CiliumEnvoyConfigConfig) *ciliumv2.CiliumEnvoyConfig {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumEnvoyConfig(cfg.Name, cfg.Namespace)
+	intcilium.SetCiliumEnvoyConfigSpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumClusterwideEnvoyConfig converts the config to a CiliumClusterwideEnvoyConfig object.
+func CiliumClusterwideEnvoyConfig(cfg *CiliumClusterwideEnvoyConfigConfig) *ciliumv2.CiliumClusterwideEnvoyConfig {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumClusterwideEnvoyConfig(cfg.Name)
+	intcilium.SetCiliumClusterwideEnvoyConfigSpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumBGPClusterConfig converts the config to a CiliumBGPClusterConfig object.
+func CiliumBGPClusterConfig(cfg *CiliumBGPClusterConfigConfig) *ciliumv2.CiliumBGPClusterConfig {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumBGPClusterConfig(cfg.Name)
+	intcilium.SetCiliumBGPClusterConfigSpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumBGPPeerConfig converts the config to a CiliumBGPPeerConfig object.
+func CiliumBGPPeerConfig(cfg *CiliumBGPPeerConfigConfig) *ciliumv2.CiliumBGPPeerConfig {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumBGPPeerConfig(cfg.Name)
+	intcilium.SetCiliumBGPPeerConfigSpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumBGPAdvertisement converts the config to a CiliumBGPAdvertisement object.
+func CiliumBGPAdvertisement(cfg *CiliumBGPAdvertisementConfig) *ciliumv2.CiliumBGPAdvertisement {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumBGPAdvertisement(cfg.Name)
+	intcilium.SetCiliumBGPAdvertisementSpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumBGPNodeConfig converts the config to a CiliumBGPNodeConfig object.
+func CiliumBGPNodeConfig(cfg *CiliumBGPNodeConfigConfig) *ciliumv2.CiliumBGPNodeConfig {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumBGPNodeConfig(cfg.Name)
+	intcilium.SetCiliumBGPNodeConfigSpec(obj, cfg.Spec)
+	return obj
+}
+
+// CiliumBGPNodeConfigOverride converts the config to a CiliumBGPNodeConfigOverride object.
+func CiliumBGPNodeConfigOverride(cfg *CiliumBGPNodeConfigOverrideConfig) *ciliumv2.CiliumBGPNodeConfigOverride {
+	if cfg == nil {
+		return nil
+	}
+	obj := intcilium.CreateCiliumBGPNodeConfigOverride(cfg.Name)
+	intcilium.SetCiliumBGPNodeConfigOverrideSpec(obj, cfg.Spec)
+	return obj
+}
