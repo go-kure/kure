@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -314,6 +315,29 @@ func TestOCIRepository_Digest(t *testing.T) {
 	}
 }
 
+func TestOCIRepository_DigestOnly(t *testing.T) {
+	cfg := &OCIRepositoryConfig{
+		Name:      "test-oci",
+		Namespace: "flux-system",
+		URL:       "oci://registry.example.com/repo",
+		Digest:    "sha256:def456",
+		Interval:  "1m",
+	}
+	ociRepo := OCIRepository(cfg)
+	if ociRepo == nil {
+		t.Fatal("expected non-nil OCIRepository")
+	}
+	if ociRepo.Spec.Reference == nil {
+		t.Fatal("expected non-nil Reference")
+	}
+	if ociRepo.Spec.Reference.Digest != "sha256:def456" {
+		t.Errorf("expected digest 'sha256:def456', got %s", ociRepo.Spec.Reference.Digest)
+	}
+	if ociRepo.Spec.Reference.Tag != "" {
+		t.Errorf("expected empty Tag, got %s", ociRepo.Spec.Reference.Tag)
+	}
+}
+
 func TestHelmRepository_Interval(t *testing.T) {
 	cfg := &HelmRepositoryConfig{
 		Name:      "bitnami",
@@ -448,6 +472,13 @@ func TestHelmRelease_Values(t *testing.T) {
 	raw := string(hr.Spec.Values.Raw)
 	if raw == "" {
 		t.Error("expected non-empty Values.Raw")
+	}
+	// Verify the JSON contains expected keys.
+	if !strings.Contains(raw, `"replicaCount"`) {
+		t.Errorf("expected Values.Raw to contain replicaCount, got %s", raw)
+	}
+	if !strings.Contains(raw, `"tag"`) {
+		t.Errorf("expected Values.Raw to contain image.tag, got %s", raw)
 	}
 }
 

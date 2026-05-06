@@ -16,7 +16,7 @@ type OCIRepositoryConfig struct {
 	Name      string `yaml:"name"`
 	Namespace string `yaml:"namespace"`
 	URL       string `yaml:"url"`
-	Ref       string `yaml:"ref"`
+	Ref       string `yaml:"ref,omitempty"`
 	// Digest is a content-addressable reference (e.g. "sha256:abc…"). When
 	// set, Ref is ignored and spec.reference.digest is used instead.
 	Digest   string `yaml:"digest,omitempty"`
