@@ -380,6 +380,101 @@ func TestGotkGitRepositorySourceGeneration(t *testing.T) {
 	}
 }
 
+func TestGenerateFluxInstanceNilConfig(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+
+	fi, err := bg.GenerateFluxInstance(nil, nil)
+	if err != nil {
+		t.Errorf("GenerateFluxInstance(nil, nil) error = %v, want nil", err)
+	}
+	if fi != nil {
+		t.Errorf("GenerateFluxInstance(nil, nil) = %v, want nil", fi)
+	}
+}
+
+func TestGenerateFluxInstanceDistribution(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+
+	config := &stack.BootstrapConfig{
+		Enabled:     true,
+		FluxVersion: "v2.4.0",
+		Registry:    "registry.example.com",
+	}
+
+	fi, err := bg.GenerateFluxInstance(config, nil)
+	if err != nil {
+		t.Fatalf("GenerateFluxInstance() error = %v", err)
+	}
+	if fi == nil {
+		t.Fatal("expected non-nil FluxInstance")
+	}
+
+	if fi.Spec.Distribution.Version != "v2.4.0" {
+		t.Errorf("Distribution.Version = %q, want %q", fi.Spec.Distribution.Version, "v2.4.0")
+	}
+	if fi.Spec.Distribution.Registry != "registry.example.com" {
+		t.Errorf("Distribution.Registry = %q, want %q", fi.Spec.Distribution.Registry, "registry.example.com")
+	}
+}
+
+func TestGenerateFluxInstanceSyncFromSourceURL(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+
+	config := &stack.BootstrapConfig{
+		Enabled:    true,
+		SourceURL:  "https://github.com/example/fleet.git",
+		SourceRef:  "main",
+		SourceKind: "GitRepository",
+	}
+	rootNode := &stack.Node{Name: "production"}
+
+	fi, err := bg.GenerateFluxInstance(config, rootNode)
+	if err != nil {
+		t.Fatalf("GenerateFluxInstance() error = %v", err)
+	}
+	if fi == nil {
+		t.Fatal("expected non-nil FluxInstance")
+	}
+
+	if fi.Spec.Sync == nil {
+		t.Fatal("expected Sync to be set when SourceURL is non-empty")
+	}
+	if fi.Spec.Sync.Kind != "GitRepository" {
+		t.Errorf("Sync.Kind = %q, want %q", fi.Spec.Sync.Kind, "GitRepository")
+	}
+	if fi.Spec.Sync.URL != "https://github.com/example/fleet.git" {
+		t.Errorf("Sync.URL = %q, want %q", fi.Spec.Sync.URL, "https://github.com/example/fleet.git")
+	}
+	if fi.Spec.Sync.Ref != "main" {
+		t.Errorf("Sync.Ref = %q, want %q", fi.Spec.Sync.Ref, "main")
+	}
+	if fi.Spec.Sync.Path != "./production" {
+		t.Errorf("Sync.Path = %q, want %q", fi.Spec.Sync.Path, "./production")
+	}
+}
+
+func TestGenerateFluxInstanceNoSyncWhenNoSourceURL(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+
+	config := &stack.BootstrapConfig{
+		Enabled:     true,
+		FluxVersion: "v2.4.0",
+		// No SourceURL
+	}
+
+	fi, err := bg.GenerateFluxInstance(config, nil)
+	if err != nil {
+		t.Fatalf("GenerateFluxInstance() error = %v", err)
+	}
+	if fi == nil {
+		t.Fatal("expected non-nil FluxInstance")
+	}
+
+	if fi.Spec.Sync != nil {
+		t.Errorf("expected Sync to be nil when SourceURL is empty, got %+v", fi.Spec.Sync)
+	}
+}
+
 // TestFluxOperatorInstallObjects verifies the vendored install.yaml parses
 // into the expected resource inventory. If the manifest is bumped to a
 // newer flux-operator release the counts may shift and this test should

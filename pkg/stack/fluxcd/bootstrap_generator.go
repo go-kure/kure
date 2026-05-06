@@ -246,6 +246,21 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	return intfluxcd.CreateOCIRepository(sourceName, bg.DefaultNamespace, spec)
 }
 
+// GenerateFluxInstance returns only the FluxInstance CR configured for
+// the given bootstrap settings, without the full Flux Operator install bundle.
+// Returns (nil, nil) when config is nil.
+func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (*fluxv1.FluxInstance, error) {
+	if config == nil {
+		return nil, nil
+	}
+	obj := bg.generateFluxInstance(config, rootNode)
+	fi, ok := obj.(*fluxv1.FluxInstance)
+	if !ok {
+		return nil, errors.Errorf("internal error: generateFluxInstance returned unexpected type %T", obj)
+	}
+	return fi, nil
+}
+
 // generateFluxInstance creates a FluxInstance for flux-operator mode.
 func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
 	spec := fluxv1.FluxInstanceSpec{
