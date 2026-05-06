@@ -2,6 +2,7 @@ package cilium
 
 import (
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -93,4 +94,13 @@ func SetCiliumClusterwideNetworkPolicyDescription(obj *ciliumv2.CiliumClusterwid
 		obj.Spec = &api.Rule{}
 	}
 	obj.Spec.Description = desc
+}
+
+// SetCiliumClusterwideNetworkPolicyLabels sets the rule labels on obj.Spec. Labels
+// are used by tooling such as Hubble to identify and filter policies.
+func SetCiliumClusterwideNetworkPolicyLabels(obj *ciliumv2.CiliumClusterwideNetworkPolicy, lbls labels.LabelArray) {
+	if obj.Spec == nil {
+		obj.Spec = &api.Rule{}
+	}
+	obj.Spec.Labels = lbls
 }

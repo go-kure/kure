@@ -4,6 +4,7 @@ import (
 	intcilium "github.com/go-kure/kure/internal/cilium"
 
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy/api"
 )
 
@@ -56,6 +57,13 @@ func AddCiliumNetworkPolicyEgressDenyRule(obj *ciliumv2.CiliumNetworkPolicy, rul
 // initialising Spec if nil.
 func SetCiliumNetworkPolicyDescription(obj *ciliumv2.CiliumNetworkPolicy, desc string) {
 	intcilium.SetCiliumNetworkPolicyDescription(obj, desc)
+}
+
+// SetCiliumNetworkPolicyLabels sets the rule labels on the policy, initialising
+// Spec if nil. Labels are used by tooling such as Hubble to identify and filter
+// policies.
+func SetCiliumNetworkPolicyLabels(obj *ciliumv2.CiliumNetworkPolicy, lbls labels.LabelArray) {
+	intcilium.SetCiliumNetworkPolicyLabels(obj, lbls)
 }
 
 // SetCiliumClusterwideNetworkPolicySpec sets the single-rule spec on the policy.
@@ -116,6 +124,13 @@ func AddCiliumClusterwideNetworkPolicyEgressDenyRule(obj *ciliumv2.CiliumCluster
 // policy, initialising Spec if nil.
 func SetCiliumClusterwideNetworkPolicyDescription(obj *ciliumv2.CiliumClusterwideNetworkPolicy, desc string) {
 	intcilium.SetCiliumClusterwideNetworkPolicyDescription(obj, desc)
+}
+
+// SetCiliumClusterwideNetworkPolicyLabels sets the rule labels on the policy,
+// initialising Spec if nil. Labels are used by tooling such as Hubble to
+// identify and filter policies.
+func SetCiliumClusterwideNetworkPolicyLabels(obj *ciliumv2.CiliumClusterwideNetworkPolicy, lbls labels.LabelArray) {
+	intcilium.SetCiliumClusterwideNetworkPolicyLabels(obj, lbls)
 }
 
 // AddCiliumCIDRGroupCIDR appends a CIDR to the group's ExternalCIDRs list.

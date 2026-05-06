@@ -3,6 +3,7 @@ package cilium
 import (
 	"testing"
 
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/policy/api"
 )
 
@@ -22,6 +23,9 @@ func TestCreateCiliumClusterwideNetworkPolicy(t *testing.T) {
 	}
 	if obj.APIVersion != "cilium.io/v2" {
 		t.Errorf("expected APIVersion 'cilium.io/v2', got %s", obj.APIVersion)
+	}
+	if obj.Spec != nil {
+		t.Error("expected nil Spec on creation")
 	}
 }
 
@@ -64,5 +68,17 @@ func TestAddCiliumClusterwideNetworkPolicyEgressDenyRule(t *testing.T) {
 	AddCiliumClusterwideNetworkPolicyEgressDenyRule(obj, api.EgressDenyRule{})
 	if len(obj.Spec.EgressDeny) != 1 {
 		t.Errorf("expected 1 egress deny rule, got %d", len(obj.Spec.EgressDeny))
+	}
+}
+
+func TestSetCiliumClusterwideNetworkPolicyLabels(t *testing.T) {
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
+	lbls := labels.LabelArray{labels.NewLabel("env", "prod", labels.LabelSourceK8s)}
+	SetCiliumClusterwideNetworkPolicyLabels(obj, lbls)
+	if obj.Spec == nil {
+		t.Fatal("expected Spec to be auto-initialised")
+	}
+	if len(obj.Spec.Labels) != 1 {
+		t.Fatalf("expected 1 label, got %d", len(obj.Spec.Labels))
 	}
 }
