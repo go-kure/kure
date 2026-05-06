@@ -1,3 +1,5 @@
+// Package kubernetes exposes ConfigMap builders that delegate to internal/kubernetes,
+// keeping the implementation in one place while providing the public API.
 package kubernetes
 
 import (
