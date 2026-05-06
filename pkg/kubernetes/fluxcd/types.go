@@ -65,15 +65,60 @@ type KustomizationConfig struct {
 	SourceRef kustv1.CrossNamespaceSourceReference `yaml:"sourceRef"`
 }
 
+// ChartRefConfig references an existing Flux source (OCIRepository or HelmChart)
+// for use as the chart source in chartRef mode.
+type ChartRefConfig struct {
+	Kind      string `yaml:"kind"` // "OCIRepository" or "HelmChart"
+	Name      string `yaml:"name"`
+	Namespace string `yaml:"namespace,omitempty"`
+}
+
+// ValuesFromConfig describes a single entry in spec.valuesFrom.
+type ValuesFromConfig struct {
+	Kind       string `yaml:"kind"` // "ConfigMap" or "Secret"
+	Name       string `yaml:"name"`
+	ValuesKey  string `yaml:"valuesKey,omitempty"` // defaults to "values.yaml" when empty
+	TargetPath string `yaml:"targetPath,omitempty"`
+	Optional   bool   `yaml:"optional,omitempty"`
+}
+
 // HelmReleaseConfig contains the configuration for a HelmRelease.
+// ChartRef and Chart/Version/SourceRef are mutually exclusive:
+// when ChartRef is non-nil the chart template fields are ignored.
 type HelmReleaseConfig struct {
-	Name        string                               `yaml:"name"`
-	Namespace   string                               `yaml:"namespace"`
-	Chart       string                               `yaml:"chart"`
-	Version     string                               `yaml:"version,omitempty"`
-	SourceRef   helmv2.CrossNamespaceObjectReference `yaml:"sourceRef"`
-	Interval    string                               `yaml:"interval"`
-	ReleaseName string                               `yaml:"releaseName,omitempty"`
+	Name      string `yaml:"name"`
+	Namespace string `yaml:"namespace"`
+	// Chart source via inline HelmChartTemplate (mutually exclusive with ChartRef).
+	Chart     string                               `yaml:"chart,omitempty"`
+	Version   string                               `yaml:"version,omitempty"`
+	SourceRef helmv2.CrossNamespaceObjectReference `yaml:"sourceRef,omitempty"`
+	// ChartRef references an existing OCIRepository or HelmChart (mutually exclusive with Chart/Version/SourceRef).
+	ChartRef    *ChartRefConfig `yaml:"chartRef,omitempty"`
+	Interval    string          `yaml:"interval"`
+	ReleaseName string          `yaml:"releaseName,omitempty"`
+	// TargetNamespace deploys Helm-managed resources into a namespace other than
+	// the HelmRelease CR itself.
+	TargetNamespace string `yaml:"targetNamespace,omitempty"`
+	// DriftDetectionMode is "enabled", "warn", or "disabled". When empty, drift
+	// detection is not configured.
+	DriftDetectionMode string `yaml:"driftDetectionMode,omitempty"`
+	// InstallCRDs controls CRD handling on install: "Skip", "Create", or "CreateReplace".
+	InstallCRDs string `yaml:"installCRDs,omitempty"`
+	// InstallRetries sets spec.install.remediation.retries.
+	InstallRetries *int `yaml:"installRetries,omitempty"`
+	// UpgradeCRDs controls CRD handling on upgrade: "Skip", "Create", or "CreateReplace".
+	UpgradeCRDs string `yaml:"upgradeCRDs,omitempty"`
+	// UpgradeRetries sets spec.upgrade.remediation.retries.
+	UpgradeRetries *int `yaml:"upgradeRetries,omitempty"`
+	// RemediateLastFailure sets spec.upgrade.remediation.remediateLastFailure.
+	RemediateLastFailure *bool `yaml:"remediateLastFailure,omitempty"`
+	// UpgradeCleanupOnFail sets spec.upgrade.cleanupOnFail.
+	UpgradeCleanupOnFail bool `yaml:"upgradeCleanupOnFail,omitempty"`
+	// RollbackCleanupOnFail sets spec.rollback.cleanupOnFail.
+	RollbackCleanupOnFail bool `yaml:"rollbackCleanupOnFail,omitempty"`
+	// ValuesFrom is a list of references to ConfigMaps or Secrets whose data
+	// is merged into the Helm values.
+	ValuesFrom []ValuesFromConfig `yaml:"valuesFrom,omitempty"`
 }
 
 // ProviderConfig contains the configuration for a notification Provider.
