@@ -266,6 +266,32 @@ pm := prometheus.CreatePodMonitor("my-app", "monitoring")
 rule := prometheus.CreatePrometheusRule("alerts", "monitoring")
 ```
 
+## ConfigMap Builders
+
+```go
+// Create a ConfigMap
+cm := kubernetes.CreateConfigMap("my-config", "default")
+
+// Add or replace string data
+kubernetes.AddConfigMapData(cm, "key", "value")
+kubernetes.AddConfigMapDataMap(cm, map[string]string{"a": "1", "b": "2"})
+kubernetes.SetConfigMapData(cm, map[string]string{"x": "y"})
+
+// Add or replace binary data
+kubernetes.AddConfigMapBinaryData(cm, "cert", certBytes)
+kubernetes.AddConfigMapBinaryDataMap(cm, map[string][]byte{"p12": p12Bytes})
+kubernetes.SetConfigMapBinaryData(cm, map[string][]byte{"tls.key": keyBytes})
+
+// Mark as immutable
+kubernetes.SetConfigMapImmutable(cm, true)
+
+// Update metadata
+kubernetes.AddConfigMapLabel(cm, "env", "prod")
+kubernetes.AddConfigMapAnnotation(cm, "owner", "platform")
+kubernetes.SetConfigMapLabels(cm, map[string]string{"app": "my-config"})
+kubernetes.SetConfigMapAnnotations(cm, map[string]string{"managed-by": "crane"})
+```
+
 ## Related Packages
 
 - [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors
