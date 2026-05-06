@@ -23,7 +23,12 @@ func Pooler(cfg *PoolerConfig) *cnpgv1.Pooler {
 
 	pgBouncer := &cnpgv1.PgBouncerSpec{}
 	if opts.PgBouncer != nil {
-		pgBouncer = opts.PgBouncer
+		if opts.PgBouncer.PoolMode != "" {
+			pgBouncer.PoolMode = cnpgv1.PgBouncerPoolMode(opts.PgBouncer.PoolMode)
+		}
+		if len(opts.PgBouncer.Parameters) > 0 {
+			pgBouncer.Parameters = opts.PgBouncer.Parameters
+		}
 	}
 
 	spec := cnpgv1.PoolerSpec{
