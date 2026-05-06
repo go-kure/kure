@@ -556,7 +556,6 @@ func TestHelmRelease_RollbackCleanupOnFail(t *testing.T) {
 }
 
 func TestHelmRelease_ValuesFrom(t *testing.T) {
-	optional := true
 	cfg := &HelmReleaseConfig{
 		Name:      "my-app",
 		Namespace: "flux-system",
@@ -568,7 +567,6 @@ func TestHelmRelease_ValuesFrom(t *testing.T) {
 			{Kind: "Secret", Name: "my-secret", TargetPath: "secret.key", Optional: true},
 		},
 	}
-	_ = optional
 	hr := HelmRelease(cfg)
 	if len(hr.Spec.ValuesFrom) != 2 {
 		t.Fatalf("expected 2 ValuesFrom entries, got %d", len(hr.Spec.ValuesFrom))
