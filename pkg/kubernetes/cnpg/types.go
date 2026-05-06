@@ -182,3 +182,21 @@ type ScheduledBackupConfig struct {
 	Namespace string                     `yaml:"namespace"`
 	Spec      cnpgv1.ScheduledBackupSpec `yaml:"spec"`
 }
+
+// PoolerOptions is the domain-friendly input for Pooler construction.
+type PoolerOptions struct {
+	ClusterName string
+	Instances   int32
+	// Type is the pooler type: "rw" (read-write) or "ro" (read-only).
+	// Defaults to "rw" if empty.
+	Type string
+	// PgBouncer holds pgBouncer-specific configuration.
+	PgBouncer *cnpgv1.PgBouncerSpec
+}
+
+// PoolerConfig describes a CNPG Pooler resource.
+type PoolerConfig struct {
+	Name      string
+	Namespace string
+	Options   *PoolerOptions
+}

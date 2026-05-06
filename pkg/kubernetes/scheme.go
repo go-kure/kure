@@ -7,6 +7,7 @@ import (
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
@@ -75,6 +76,7 @@ func registerAllSchemes() error {
 		gwapiv1.Install,
 		monitoringv1.AddToScheme,
 		volsyncv1alpha1.AddToScheme,
+		cnpgv1.AddToScheme,
 	}
 
 	// Register each scheme, returning the first error
