@@ -41,7 +41,7 @@ helmRepo := fluxcd.HelmRepository(&fluxcd.HelmRepositoryConfig{
 })
 
 // Helm repository (OCI registry)
-ociRepo := fluxcd.HelmRepository(&fluxcd.HelmRepositoryConfig{
+ociHelmRepo := fluxcd.HelmRepository(&fluxcd.HelmRepositoryConfig{
     Name:      "ghcr",
     Namespace: "flux-system",
     URL:       "oci://ghcr.io/example/charts",
