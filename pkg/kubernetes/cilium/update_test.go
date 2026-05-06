@@ -99,6 +99,22 @@ func TestSetCiliumNetworkPolicyLabels(t *testing.T) {
 	}
 }
 
+func TestSetCiliumNetworkPolicyEnableDefaultDeny(t *testing.T) {
+	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	ingress := true
+	egress := false
+	SetCiliumNetworkPolicyEnableDefaultDeny(obj, api.DefaultDenyConfig{Ingress: &ingress, Egress: &egress})
+	if obj.Spec == nil {
+		t.Fatal("expected Spec to be auto-initialised")
+	}
+	if obj.Spec.EnableDefaultDeny.Ingress == nil || !*obj.Spec.EnableDefaultDeny.Ingress {
+		t.Error("expected EnableDefaultDeny.Ingress to be true")
+	}
+	if obj.Spec.EnableDefaultDeny.Egress == nil || *obj.Spec.EnableDefaultDeny.Egress {
+		t.Error("expected EnableDefaultDeny.Egress to be false")
+	}
+}
+
 func TestSetCiliumClusterwideNetworkPolicySpecs(t *testing.T) {
 	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
 	SetCiliumClusterwideNetworkPolicySpecs(obj, api.Rules{&api.Rule{Description: "r1"}, &api.Rule{Description: "r2"}})
@@ -189,6 +205,22 @@ func TestSetCiliumClusterwideNetworkPolicyLabels(t *testing.T) {
 	}
 	if len(obj.Spec.Labels) != 1 {
 		t.Fatalf("expected 1 label, got %d", len(obj.Spec.Labels))
+	}
+}
+
+func TestSetCiliumClusterwideNetworkPolicyEnableDefaultDeny(t *testing.T) {
+	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	ingress := true
+	egress := true
+	SetCiliumClusterwideNetworkPolicyEnableDefaultDeny(obj, api.DefaultDenyConfig{Ingress: &ingress, Egress: &egress})
+	if obj.Spec == nil {
+		t.Fatal("expected Spec to be auto-initialised")
+	}
+	if obj.Spec.EnableDefaultDeny.Ingress == nil || !*obj.Spec.EnableDefaultDeny.Ingress {
+		t.Error("expected EnableDefaultDeny.Ingress to be true")
+	}
+	if obj.Spec.EnableDefaultDeny.Egress == nil || !*obj.Spec.EnableDefaultDeny.Egress {
+		t.Error("expected EnableDefaultDeny.Egress to be true")
 	}
 }
 

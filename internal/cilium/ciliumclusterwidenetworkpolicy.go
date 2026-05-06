@@ -104,3 +104,12 @@ func SetCiliumClusterwideNetworkPolicyLabels(obj *ciliumv2.CiliumClusterwideNetw
 	}
 	obj.Spec.Labels = lbls
 }
+
+// SetCiliumClusterwideNetworkPolicyEnableDefaultDeny sets the EnableDefaultDeny
+// field on obj.Spec, initialising the spec if it is nil.
+func SetCiliumClusterwideNetworkPolicyEnableDefaultDeny(obj *ciliumv2.CiliumClusterwideNetworkPolicy, cfg api.DefaultDenyConfig) {
+	if obj.Spec == nil {
+		obj.Spec = &api.Rule{}
+	}
+	obj.Spec.EnableDefaultDeny = cfg
+}
