@@ -106,6 +106,11 @@ var (
 	ErrNilClusterSecretStore = ResourceValidationError("ClusterSecretStore", "", "clustersecretstore", "cluster secret store cannot be nil", nil)
 	ErrNilExternalSecret     = ResourceValidationError("ExternalSecret", "", "externalsecret", "external secret cannot be nil", nil)
 
+	// Cilium resources
+	ErrNilCiliumNetworkPolicy            = ResourceValidationError("CiliumNetworkPolicy", "", "ciliumnetworkpolicy", "cilium network policy cannot be nil", nil)
+	ErrNilCiliumClusterwideNetworkPolicy = ResourceValidationError("CiliumClusterwideNetworkPolicy", "", "ciliumclusterwidenetworkpolicy", "cilium clusterwide network policy cannot be nil", nil)
+	ErrNilCiliumCIDRGroup                = ResourceValidationError("CiliumCIDRGroup", "", "ciliumcidrgroup", "cilium CIDR group cannot be nil", nil)
+
 	// Prometheus operator resources
 	ErrNilServiceMonitor = ResourceValidationError("ServiceMonitor", "", "servicemonitor", "service monitor cannot be nil", nil)
 	ErrNilPodMonitor     = ResourceValidationError("PodMonitor", "", "podmonitor", "pod monitor cannot be nil", nil)
