@@ -66,6 +66,12 @@ func SetCiliumNetworkPolicyLabels(obj *ciliumv2.CiliumNetworkPolicy, lbls labels
 	intcilium.SetCiliumNetworkPolicyLabels(obj, lbls)
 }
 
+// SetCiliumNetworkPolicyEnableDefaultDeny sets the EnableDefaultDeny field on
+// the policy, initialising Spec if nil.
+func SetCiliumNetworkPolicyEnableDefaultDeny(obj *ciliumv2.CiliumNetworkPolicy, cfg api.DefaultDenyConfig) {
+	intcilium.SetCiliumNetworkPolicyEnableDefaultDeny(obj, cfg)
+}
+
 // SetCiliumClusterwideNetworkPolicySpec sets the single-rule spec on the policy.
 func SetCiliumClusterwideNetworkPolicySpec(obj *ciliumv2.CiliumClusterwideNetworkPolicy, spec *api.Rule) {
 	intcilium.SetCiliumClusterwideNetworkPolicySpec(obj, spec)
@@ -131,6 +137,12 @@ func SetCiliumClusterwideNetworkPolicyDescription(obj *ciliumv2.CiliumClusterwid
 // identify and filter policies.
 func SetCiliumClusterwideNetworkPolicyLabels(obj *ciliumv2.CiliumClusterwideNetworkPolicy, lbls labels.LabelArray) {
 	intcilium.SetCiliumClusterwideNetworkPolicyLabels(obj, lbls)
+}
+
+// SetCiliumClusterwideNetworkPolicyEnableDefaultDeny sets the EnableDefaultDeny
+// field on the policy, initialising Spec if nil.
+func SetCiliumClusterwideNetworkPolicyEnableDefaultDeny(obj *ciliumv2.CiliumClusterwideNetworkPolicy, cfg api.DefaultDenyConfig) {
+	intcilium.SetCiliumClusterwideNetworkPolicyEnableDefaultDeny(obj, cfg)
 }
 
 // AddCiliumCIDRGroupCIDR appends a CIDR to the group's ExternalCIDRs list.

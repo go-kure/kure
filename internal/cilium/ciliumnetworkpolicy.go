@@ -94,3 +94,13 @@ func SetCiliumNetworkPolicyLabels(obj *ciliumv2.CiliumNetworkPolicy, lbls labels
 	}
 	obj.Spec.Labels = lbls
 }
+
+// SetCiliumNetworkPolicyEnableDefaultDeny sets the EnableDefaultDeny field on
+// obj.Spec, initialising the spec if it is nil. Use cfg to control whether
+// default-deny is applied to ingress, egress, or both.
+func SetCiliumNetworkPolicyEnableDefaultDeny(obj *ciliumv2.CiliumNetworkPolicy, cfg api.DefaultDenyConfig) {
+	if obj.Spec == nil {
+		obj.Spec = &api.Rule{}
+	}
+	obj.Spec.EnableDefaultDeny = cfg
+}

@@ -113,3 +113,19 @@ func TestSetCiliumNetworkPolicyLabels(t *testing.T) {
 		t.Fatalf("expected 1 label, got %d", len(obj.Spec.Labels))
 	}
 }
+
+func TestSetCiliumNetworkPolicyEnableDefaultDeny(t *testing.T) {
+	obj := CreateCiliumNetworkPolicy("p", "ns")
+	ingress := true
+	egress := false
+	SetCiliumNetworkPolicyEnableDefaultDeny(obj, api.DefaultDenyConfig{Ingress: &ingress, Egress: &egress})
+	if obj.Spec == nil {
+		t.Fatal("expected Spec to be auto-initialised")
+	}
+	if obj.Spec.EnableDefaultDeny.Ingress == nil || !*obj.Spec.EnableDefaultDeny.Ingress {
+		t.Error("expected EnableDefaultDeny.Ingress to be true")
+	}
+	if obj.Spec.EnableDefaultDeny.Egress == nil || *obj.Spec.EnableDefaultDeny.Egress {
+		t.Error("expected EnableDefaultDeny.Egress to be false")
+	}
+}
