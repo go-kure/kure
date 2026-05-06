@@ -33,12 +33,19 @@ ociRepo := fluxcd.OCIRepository(&fluxcd.OCIRepositoryConfig{
     Interval:  "10m",
 })
 
-// Helm repository
+// Helm repository (HTTP/HTTPS)
 helmRepo := fluxcd.HelmRepository(&fluxcd.HelmRepositoryConfig{
     Name:      "bitnami",
     Namespace: "flux-system",
     URL:       "https://charts.bitnami.com/bitnami",
-    Interval:  "1h",
+})
+
+// Helm repository (OCI registry)
+ociRepo := fluxcd.HelmRepository(&fluxcd.HelmRepositoryConfig{
+    Name:      "ghcr",
+    Namespace: "flux-system",
+    URL:       "oci://ghcr.io/example/charts",
+    Type:      sourcev1.HelmRepositoryTypeOCI, // "oci"
 })
 
 // Bucket source
