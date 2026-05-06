@@ -23,6 +23,12 @@ func TestCreateConfigMap(t *testing.T) {
 	if cm.APIVersion != corev1.SchemeGroupVersion.String() {
 		t.Errorf("unexpected apiVersion %q", cm.APIVersion)
 	}
+	if cm.Labels["app"] != "cm" {
+		t.Errorf("expected default label app=cm, got %q", cm.Labels["app"])
+	}
+	if cm.Annotations["app"] != "cm" {
+		t.Errorf("expected default annotation app=cm, got %q", cm.Annotations["app"])
+	}
 	if len(cm.Data) != 0 {
 		t.Errorf("expected empty data map")
 	}
