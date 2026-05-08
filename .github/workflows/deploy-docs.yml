@@ -39,7 +39,7 @@ concurrency:
 jobs:
   deploy:
     name: Build and Deploy
-    runs-on: autops-kube
+    runs-on: autops-kube-kure
     timeout-minutes: 10
 
     steps:
