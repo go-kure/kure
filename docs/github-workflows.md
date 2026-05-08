@@ -113,7 +113,7 @@ PR-only jobs (parallel, no blocking):
 
 - **gotestfmt** - Nice formatted test output
 - **Fail fast** - Jobs depend on validate, so lint failure stops everything
-- **Artifact sharing** - Coverage uploaded as artifact, reused by coverage-check
+- **Artifact sharing** - Coverage uploaded as artifact, reused by coverage-check; both upload and download use `continue-on-error: true` to tolerate `ACTIONS_RESULTS_URL` failures on in-cluster ARC runners
 - **PR comments** - Coverage report comment on PRs
 - **Skip draft PRs** - `if: github.event.pull_request.draft == false`
 - **Sensitive file check** - Warn about potential secrets in code
