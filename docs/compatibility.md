@@ -11,7 +11,7 @@ Kure maintains two version concepts for each dependency:
 
 ## Go Version
 
-**Current:** Go 1.26.2
+**Current:** Go 1.26.3
 
 ## Infrastructure Dependencies
 
