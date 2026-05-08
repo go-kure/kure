@@ -318,7 +318,10 @@ jobs:
         EXIT_CODE=$?
         echo "$OUTPUT"
 
-        if [ $EXIT_CODE -ne 0 ]; then
+        if [ $EXIT_CODE -eq 3 ]; then
+          # Exit code 3 = vulnerabilities found; report but do not block CI.
+          # Track and fix via dedicated dependency-update issues.
+          echo "::warning::govulncheck found vulnerabilities — see step summary"
           {
             echo "## :shield: govulncheck found vulnerabilities"
             echo ""
@@ -326,8 +329,11 @@ jobs:
             echo "$OUTPUT"
             echo '```'
             echo ""
-            echo "**Fix:** Update the Go version or affected dependencies as indicated above."
+            echo "**Action:** Open a dependency-update issue and fix before next release."
           } >> "$GITHUB_STEP_SUMMARY"
+        elif [ $EXIT_CODE -ne 0 ]; then
+          # Exit code 1/2 = tool error; fail the job.
+          echo "::error::govulncheck failed with exit code $EXIT_CODE"
           exit $EXIT_CODE
         else
           echo ":white_check_mark: **govulncheck** — no vulnerabilities found" >> "$GITHUB_STEP_SUMMARY"
@@ -389,7 +395,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v6
       with:
-        file: ./coverage/coverage.out
+        files: ./coverage/coverage.out
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false

@@ -90,7 +90,7 @@ PR-only jobs (parallel, no blocking):
 |-----|------------|---------|--------------|---------|
 | `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint; caches goimports + yq binaries |
 | `test` | `test` | 10 min | changes | Unit tests with race detection and coverage |
-| `security` | `Security` | 5 min | changes | govulncheck (`-scan package`, v1.1.4), outdated deps, sensitive file check |
+| `security` | `Security` | 5 min | changes | govulncheck (`-scan package`, v1.1.4, informational — findings warn but do not fail), outdated deps, sensitive file check |
 | `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
 | `build-binaries` | `Build kure/demo` | 10 min | changes, test | Build kure and demo binaries (matrix) |
 | `build` | `build` | 1 min | all above | Aggregation gate — fails if any required job failed |
