@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-02-27
+**Last Updated:** 2026-05-08
 
 ---
 
@@ -88,23 +88,25 @@ PR-only jobs (parallel, no blocking):
 
 | Job | Check Name | Timeout | Dependencies | Purpose |
 |-----|------------|---------|--------------|---------|
-| `validate` | `lint` | 15 min | - | Go version check, fmt, tidy, vet, lint |
-| `test` | `test` | 15 min | validate | Unit tests, race tests, coverage |
-| `security` | `Security` | 10 min | validate | govulncheck, outdated deps, sensitive file check |
-| `coverage-check` | `Coverage Check` | 5 min | test | 80% threshold, Codecov upload, PR comment |
-| `build` | `build` | 10 min | coverage-check | Build kure, demo |
-| `cross-platform` | `Cross-Platform Build` | 15 min | build | linux/darwin/windows × amd64/arm64 (main/release only) |
+| `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint; caches goimports + yq binaries |
+| `test` | `test` | 10 min | changes | Unit tests with race detection and coverage |
+| `security` | `Security` | 5 min | changes | govulncheck (`-scan package`, v1.1.4), outdated deps, sensitive file check |
+| `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
+| `build-binaries` | `Build kure/demo` | 10 min | changes, test | Build kure and demo binaries (matrix) |
+| `build` | `build` | 1 min | all above | Aggregation gate — fails if any required job failed |
+| `cross-platform` | `Cross-Platform Build` | 15 min | build-binaries | linux/darwin/windows × amd64/arm64 (main/release only) |
 | `rebase-check` | `rebase-check` | 2 min | - | Verify PR branch is rebased on main (PR only) |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 10 min | - | Hugo build validation with versioned config overlay |
-| `docs-check` | `Docs Check` | 5 min | - | API changes need docs check (PR only) |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build with CLI reference generation; separate Go + Hugo caches |
+| `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only) |
 | `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, cross-platform, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
 ### Configuration
 
-- Go Version: `1.26.2`
+- Go Version: read from `go.mod` (`go-version-file: go.mod`)
 - Golangci-lint Version: `v2.10.1`
-- Coverage Threshold: `80%`
+- govulncheck Version: `v1.1.4` (pinned, cached binary, `-scan package` mode)
+- Coverage Threshold: `85%`
 - Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`
 
 ### Features
@@ -429,36 +431,48 @@ The development version shows a warning banner linking to the latest stable vers
 
 ### Go Version
 
-All workflows use Go **1.26.1** consistently, defined via environment variable:
-
-```yaml
-env:
-  GO_VERSION: '1.26.1'
-```
+All jobs use `go-version-file: go.mod` — the `go` directive in `go.mod` is the single
+source of truth (kept in sync with `mise.toml` via `make check-go-version`).
 
 ### Caching
 
-The `actions/setup-go@v6` action has built-in caching enabled by default, but CI
-jobs disable it (`cache: false`) to avoid double-caching with the explicit
-`actions/cache@v5` steps that follow. Each job uses tuned cache keys and paths:
+CI jobs use explicit `actions/cache@v5` steps with `cache: false` on `setup-go` to
+control cache keys precisely. Two separate Go caches are maintained:
 
 ```yaml
-- name: Set up Go
-  uses: actions/setup-go@v6
-  with:
-    go-version: ${{ steps.go-version.outputs.version }}
-    cache: false          # explicit actions/cache step below
-
+# Module cache: stable, invalidates only when go.sum changes
 - name: Cache Go modules
   uses: actions/cache@v5
   with:
-    path: |
-      ~/.cache/go-build
-      ~/go/pkg/mod
-    key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+    path: ~/go/pkg/mod
+    key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
     restore-keys: |
-      ${{ runner.os }}-go-
+      ${{ runner.os }}-gomod-
+
+# Build cache: per-commit, partial restore from previous commits
+- name: Cache Go build cache
+  uses: actions/cache@v5
+  with:
+    path: ~/.cache/go-build
+    key: ${{ runner.os }}-gobuild-${{ github.sha }}
+    restore-keys: |
+      ${{ runner.os }}-gobuild-
 ```
+
+Tool binaries are also cached to avoid reinstalling on every run:
+- `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
+- `yq` — keyed by pinned version (`4.44.6`)
+- `govulncheck` — keyed by pinned version (`v1.1.4`)
+
+Cache traffic is routed through an in-cluster falcondev cache server backed by Garage S3,
+via `ACTIONS_CACHE_URL` in the workflow env (overrides the GitHub-injected value).
+
+### docs-build Caching
+
+The `docs-build` job uses three separate caches:
+- `gomod` — for `make docs-cli` CLI reference generation
+- `gobuild` — for Go compilation during CLI reference generation
+- `hugo` — Hugo module cache (`$HUGO_CACHEDIR` only, **not** `~/go/pkg/mod`)
 
 ### Branch Patterns
 
@@ -479,7 +493,9 @@ jobs disable it (`cache: false`) to avoid double-caching with the explicit
 
 ## Self-Hosted Runner Requirements
 
-All jobs run on the `autops-kube` GitHub ARC scale-set, which uses `ghcr.io/actions/actions-runner:latest` — a minimal Ubuntu image that includes `curl` and `git` but **not** `make` or `wget`.
+All jobs run on the `autops-kube-kure` GitHub ARC scale-set, which uses a custom runner image
+(`ghcr.io/ginsys/opsmaster/actions-runner:latest`) — a minimal Ubuntu image that includes
+`curl` and `git` but **not** `make` or `wget`.
 
 To account for this:
 - Every job that calls `make` includes an explicit install step: `sudo apt-get install -y --no-install-recommends make`

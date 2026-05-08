@@ -14,9 +14,8 @@ permissions:
   pull-requests: write
 
 env:
-  # Go version is read from mise.toml (single source of truth)
-  # GO_VERSION is set dynamically in each job that needs it
   GOLANGCI_LINT_VERSION: 'v2.10.1'
+  GOVULNCHECK_VERSION: 'v1.1.4'
   # Route cache through in-cluster falcondev cache server (backed by Garage S3).
   # GitHub's job dispatch overwrites both ACTIONS_RESULTS_URL (twirp/v2) and
   # ACTIONS_CACHE_URL (REST/v1) in the runner process env. Workflow-level env vars
@@ -108,17 +107,10 @@ jobs:
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ steps.go-version.outputs.version }}
+        go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
@@ -129,24 +121,54 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gomod-
 
+    - name: Cache Go build cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/go-build
+        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-gobuild-
+
     - name: Install dependencies
       run: make deps
 
     - name: Check Go version consistency
       run: make check-go-version
 
-    - name: Install yq for version validation
-      env:
-        YQ_VERSION: '4.44.6'
+    - name: Cache yq
+      id: yq-cache
+      uses: actions/cache@v5
+      with:
+        path: ~/bin/yq
+        key: yq-4.44.6-linux-amd64
+
+    - name: Install yq
+      if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
-        sudo curl -fsSL -o /usr/local/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64
-        sudo chmod +x /usr/local/bin/yq
+        mkdir -p ~/bin
+        curl -fsSL -o ~/bin/yq \
+          https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64
+        chmod +x ~/bin/yq
+        echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Add yq to PATH
+      if: steps.yq-cache.outputs.cache-hit == 'true'
+      run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Validate version consistency
       run: ./scripts/sync-versions.sh check
 
+    - name: Cache goimports
+      id: goimports-cache
+      uses: actions/cache@v5
+      with:
+        path: ~/go/bin/goimports
+        key: goimports-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          goimports-
+
     - name: Install goimports
+      if: steps.goimports-cache.outputs.cache-hit != 'true'
       run: go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Check formatting
@@ -189,7 +211,7 @@ jobs:
   test:
     name: test
     runs-on: autops-kube-kure
-    timeout-minutes: 25
+    timeout-minutes: 10
     needs: [changes]
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
@@ -202,17 +224,10 @@ jobs:
     - name: Install build tools
       run: command -v gcc &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential)
 
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ steps.go-version.outputs.version }}
+        go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
@@ -222,6 +237,14 @@ jobs:
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gomod-
+
+    - name: Cache Go build cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/go-build
+        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-gobuild-
 
     - name: Install dependencies
       run: make deps
@@ -250,7 +273,7 @@ jobs:
   security:
     name: Security
     runs-on: autops-kube-kure
-    timeout-minutes: 10
+    timeout-minutes: 5
     needs: [changes]
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
@@ -263,26 +286,35 @@ jobs:
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ steps.go-version.outputs.version }}
+        go-version-file: go.mod
         cache: false
 
+    - name: Cache Go modules
+      uses: actions/cache@v5
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-gomod-
+
+    - name: Cache govulncheck binary
+      id: govulncheck-cache
+      uses: actions/cache@v5
+      with:
+        path: ~/go/bin/govulncheck
+        key: govulncheck-${{ env.GOVULNCHECK_VERSION }}
+
     - name: Install govulncheck
-      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      if: steps.govulncheck-cache.outputs.cache-hit != 'true'
+      run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
 
     - name: Run govulncheck
       run: |
         set +e
-        OUTPUT=$(govulncheck ./... 2>&1)
+        OUTPUT=$(~/go/bin/govulncheck -scan package ./... 2>&1)
         EXIT_CODE=$?
         echo "$OUTPUT"
 
@@ -326,17 +358,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ steps.go-version.outputs.version }}
+        go-version-file: go.mod
         cache: false
 
     - name: Download coverage artifact
@@ -405,17 +430,10 @@ jobs:
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ steps.go-version.outputs.version }}
+        go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
@@ -425,6 +443,14 @@ jobs:
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gomod-
+
+    - name: Cache Go build cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/go-build
+        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-gobuild-
 
     - name: Install dependencies
       run: make deps
@@ -489,17 +515,10 @@ jobs:
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ steps.go-version.outputs.version }}
+        go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
@@ -509,6 +528,15 @@ jobs:
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gomod-
+
+    - name: Cache Go build cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/go-build
+        key: ${{ runner.os }}-gobuild-${{ matrix.os }}-${{ matrix.arch }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-gobuild-${{ matrix.os }}-${{ matrix.arch }}-
+          ${{ runner.os }}-gobuild-
 
     - name: Install dependencies
       run: make deps
@@ -590,18 +618,35 @@ jobs:
       if: steps.hugo-cache.outputs.cache-hit == 'true'
       run: sudo install ${{ runner.temp }}/hugo-bin/hugo /usr/local/bin/hugo
 
-    - name: Read Go version from mise.toml
-      id: go-version
-      run: |
-        GO_VER=$(grep '^go = ' mise.toml | sed 's/go = "\(.*\)"/\1/')
-        echo "version=$GO_VER" >> $GITHUB_OUTPUT
-        echo "Using Go version: $GO_VER"
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ steps.go-version.outputs.version }}
+        go-version-file: go.mod
         cache: false
+
+    - name: Cache Go modules
+      uses: actions/cache@v5
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-gomod-
+
+    - name: Cache Go build cache
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/go-build
+        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-gobuild-
+
+    - name: Cache Hugo modules
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.temp }}/hugo_cache
+        key: ${{ runner.os }}-hugo-${{ hashFiles('site/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-hugo-
 
     - name: Check mounted files exist
       run: bash site/scripts/check-mounts.sh
@@ -617,16 +662,6 @@ jobs:
 
     - name: Generate versions config overlay
       run: bash scripts/gen-versions-toml.sh --version dev
-
-    - name: Cache Hugo modules
-      uses: actions/cache@v5
-      with:
-        path: |
-          ${{ runner.temp }}/hugo_cache
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-hugo-${{ hashFiles('site/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-hugo-
 
     - name: Build Hugo site
       working-directory: site
