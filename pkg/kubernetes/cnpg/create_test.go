@@ -235,3 +235,428 @@ func TestScheduledBackup_NilConfig(t *testing.T) {
 		t.Error("expected nil result for nil config")
 	}
 }
+
+func TestCluster_Resources(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Resources: &ResourceOptions{
+				RequestsCPU:    "250m",
+				RequestsMemory: "512Mi",
+				LimitsCPU:      "1",
+				LimitsMemory:   "2Gi",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj == nil {
+		t.Fatal("expected non-nil cluster")
+	}
+	if obj.Spec.Resources.Requests.Cpu().IsZero() {
+		t.Error("expected non-zero CPU request")
+	}
+	if obj.Spec.Resources.Requests.Memory().IsZero() {
+		t.Error("expected non-zero memory request")
+	}
+	if obj.Spec.Resources.Limits.Cpu().IsZero() {
+		t.Error("expected non-zero CPU limit")
+	}
+	if obj.Spec.Resources.Limits.Memory().IsZero() {
+		t.Error("expected non-zero memory limit")
+	}
+}
+
+func TestCluster_Resources_OnlyRequests(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Resources: &ResourceOptions{
+				RequestsCPU:    "250m",
+				RequestsMemory: "512Mi",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Resources.Requests == nil {
+		t.Error("expected non-nil Requests")
+	}
+	if obj.Spec.Resources.Limits != nil {
+		t.Error("expected nil Limits")
+	}
+}
+
+func TestCluster_Resources_OnlyLimits(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Resources: &ResourceOptions{
+				LimitsCPU:    "1",
+				LimitsMemory: "2Gi",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Resources.Limits == nil {
+		t.Error("expected non-nil Limits")
+	}
+	if obj.Spec.Resources.Requests != nil {
+		t.Error("expected nil Requests")
+	}
+}
+
+func TestCluster_Resources_InvalidCPURequest(t *testing.T) {
+	_, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Resources: &ResourceOptions{RequestsCPU: "not-a-quantity"},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for invalid CPU request")
+	}
+}
+
+func TestCluster_Resources_InvalidMemoryRequest(t *testing.T) {
+	_, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Resources: &ResourceOptions{RequestsMemory: "not-a-quantity"},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for invalid memory request")
+	}
+}
+
+func TestCluster_Resources_InvalidCPULimit(t *testing.T) {
+	_, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Resources: &ResourceOptions{LimitsCPU: "not-a-quantity"},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for invalid CPU limit")
+	}
+}
+
+func TestCluster_Resources_InvalidMemoryLimit(t *testing.T) {
+	_, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Resources: &ResourceOptions{LimitsMemory: "not-a-quantity"},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for invalid memory limit")
+	}
+}
+
+func TestCluster_BackupWithS3(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Backup: &BackupOptions{
+				DestinationPath: "s3://bucket/pg/",
+				EndpointURL:     "https://s3.example.com",
+				RetentionPolicy: "30d",
+				S3Credentials: &S3CredentialOptions{
+					SecretName:         "backup-creds",
+					AccessKeyIDKey:     "MY_ACCESS_KEY",
+					SecretAccessKeyKey: "MY_SECRET_KEY",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Backup == nil {
+		t.Fatal("expected non-nil Backup")
+	}
+	if obj.Spec.Backup.BarmanObjectStore == nil {
+		t.Fatal("expected non-nil BarmanObjectStore")
+	}
+	if obj.Spec.Backup.BarmanObjectStore.AWS == nil {
+		t.Fatal("expected non-nil S3 credentials")
+	}
+	if obj.Spec.Backup.BarmanObjectStore.AWS.AccessKeyIDReference.Key != "MY_ACCESS_KEY" {
+		t.Errorf("unexpected access key: %s", obj.Spec.Backup.BarmanObjectStore.AWS.AccessKeyIDReference.Key)
+	}
+}
+
+func TestCluster_BackupWithDefaultS3Keys(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Backup: &BackupOptions{
+				DestinationPath: "s3://bucket/pg/",
+				S3Credentials:   &S3CredentialOptions{SecretName: "creds"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Backup.BarmanObjectStore.AWS.AccessKeyIDReference.Key != "ACCESS_KEY_ID" {
+		t.Errorf("expected default access key name, got %s", obj.Spec.Backup.BarmanObjectStore.AWS.AccessKeyIDReference.Key)
+	}
+	if obj.Spec.Backup.BarmanObjectStore.AWS.SecretAccessKeyReference.Key != "SECRET_ACCESS_KEY" {
+		t.Errorf("expected default secret key name, got %s", obj.Spec.Backup.BarmanObjectStore.AWS.SecretAccessKeyReference.Key)
+	}
+}
+
+func TestCluster_Monitoring(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Monitoring: &MonitoringOptions{
+				EnablePodMonitor: true,
+				CustomQueriesConfigMap: []ConfigMapKeyRefOptions{
+					{Name: "custom-queries", Key: "queries.yaml"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Monitoring == nil {
+		t.Fatal("expected non-nil Monitoring")
+	}
+	if !obj.Spec.Monitoring.EnablePodMonitor {
+		t.Error("expected EnablePodMonitor=true")
+	}
+	if len(obj.Spec.Monitoring.CustomQueriesConfigMap) != 1 {
+		t.Fatalf("expected 1 custom query, got %d", len(obj.Spec.Monitoring.CustomQueriesConfigMap))
+	}
+}
+
+func TestCluster_BootstrapRecovery(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Bootstrap: &BootstrapOptions{RecoverySource: "pg-old"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Bootstrap == nil || obj.Spec.Bootstrap.Recovery == nil {
+		t.Fatal("expected non-nil Bootstrap.Recovery")
+	}
+	if obj.Spec.Bootstrap.Recovery.Source != "pg-old" {
+		t.Errorf("unexpected recovery source: %s", obj.Spec.Bootstrap.Recovery.Source)
+	}
+}
+
+func TestCluster_BootstrapPgBaseBackup(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			Bootstrap: &BootstrapOptions{PgBasebackupSource: "pg-primary"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Bootstrap == nil || obj.Spec.Bootstrap.PgBaseBackup == nil {
+		t.Fatal("expected non-nil Bootstrap.PgBaseBackup")
+	}
+	if obj.Spec.Bootstrap.PgBaseBackup.Source != "pg-primary" {
+		t.Errorf("unexpected pgbasebackup source: %s", obj.Spec.Bootstrap.PgBaseBackup.Source)
+	}
+}
+
+func TestCluster_ExternalClusters(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			ExternalClusters: []ExternalClusterOptions{
+				{
+					Name:                 "pg-old",
+					ConnectionParameters: map[string]string{"host": "pg-old.example.com"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obj.Spec.ExternalClusters) != 1 {
+		t.Fatalf("expected 1 external cluster, got %d", len(obj.Spec.ExternalClusters))
+	}
+	if obj.Spec.ExternalClusters[0].Name != "pg-old" {
+		t.Errorf("unexpected external cluster name: %s", obj.Spec.ExternalClusters[0].Name)
+	}
+}
+
+func TestCluster_ExternalClusters_WithBarmanObjectStore(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			ExternalClusters: []ExternalClusterOptions{
+				{
+					Name: "pg-old",
+					BarmanObjectStore: map[string]any{
+						"destinationPath": "s3://bucket/pg-old/",
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obj.Spec.ExternalClusters) != 1 {
+		t.Fatalf("expected 1 external cluster, got %d", len(obj.Spec.ExternalClusters))
+	}
+	if obj.Spec.ExternalClusters[0].BarmanObjectStore == nil {
+		t.Fatal("expected non-nil BarmanObjectStore")
+	}
+}
+
+func TestCluster_PostgresParams(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances:      1,
+			PostgresParams: map[string]string{"max_connections": "200"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.PostgresConfiguration.Parameters["max_connections"] != "200" {
+		t.Error("PostgresParams not set")
+	}
+}
+
+func TestCluster_Synchronous(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 3,
+			Synchronous: &SynchronousOptions{
+				Method:         "any",
+				Number:         1,
+				DataDurability: "required",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.PostgresConfiguration.Synchronous == nil {
+		t.Fatal("expected non-nil Synchronous")
+	}
+	if string(obj.Spec.PostgresConfiguration.Synchronous.Method) != "any" {
+		t.Errorf("unexpected Synchronous.Method: %s", obj.Spec.PostgresConfiguration.Synchronous.Method)
+	}
+}
+
+func TestCluster_Affinity(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 3,
+			Affinity: &AffinityOptions{
+				EnablePodAntiAffinity: true,
+				TopologyKey:           "kubernetes.io/hostname",
+				PodAntiAffinityType:   "preferred",
+				NodeSelector:          map[string]string{"node-type": "db"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.Affinity.EnablePodAntiAffinity == nil || !*obj.Spec.Affinity.EnablePodAntiAffinity {
+		t.Error("expected EnablePodAntiAffinity=true")
+	}
+	if obj.Spec.Affinity.TopologyKey != "kubernetes.io/hostname" {
+		t.Errorf("unexpected TopologyKey: %s", obj.Spec.Affinity.TopologyKey)
+	}
+}
+
+func TestCluster_ManagedRoles_FullOptions(t *testing.T) {
+	connLimit := int64(10)
+	inheritFalse := false
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances: 1,
+			ManagedRoles: []ManagedRoleOptions{
+				{
+					Name:            "readonly",
+					Login:           true,
+					ConnectionLimit: &connLimit,
+					Inherit:         &inheritFalse,
+					Ensure:          "absent",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obj.Spec.Managed.Roles) != 1 {
+		t.Fatalf("expected 1 role, got %d", len(obj.Spec.Managed.Roles))
+	}
+	role := obj.Spec.Managed.Roles[0]
+	if role.ConnectionLimit != 10 {
+		t.Errorf("expected ConnectionLimit=10, got %d", role.ConnectionLimit)
+	}
+}
+
+func TestCluster_InheritedMetadata(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{
+		Name: "pg", Namespace: "ns",
+		Options: &ClusterOptions{
+			Instances:       1,
+			InheritedLabels: map[string]string{"team": "backend"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj.Spec.InheritedMetadata == nil {
+		t.Fatal("expected non-nil InheritedMetadata")
+	}
+	if obj.Spec.InheritedMetadata.Labels["team"] != "backend" {
+		t.Error("InheritedLabels not set")
+	}
+}
+
+func TestCluster_NilOptions(t *testing.T) {
+	obj, err := Cluster(&ClusterConfig{Name: "pg", Namespace: "ns"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj == nil {
+		t.Fatal("expected non-nil cluster")
+	}
+	if obj.Spec.Instances != 0 {
+		t.Errorf("expected 0 instances, got %d", obj.Spec.Instances)
+	}
+}
