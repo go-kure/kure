@@ -106,8 +106,12 @@ func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, e
 	}
 
 	// Set spec fields
-	_ = unstructured.SetNestedField(app.Object, source, "spec", "source")
-	_ = unstructured.SetNestedField(app.Object, dest, "spec", "destination")
+	if err := unstructured.SetNestedField(app.Object, source, "spec", "source"); err != nil {
+		return nil, errors.Wrap(err, "failed to set spec.source")
+	}
+	if err := unstructured.SetNestedField(app.Object, dest, "spec", "destination"); err != nil {
+		return nil, errors.Wrap(err, "failed to set spec.destination")
+	}
 
 	// Add dependencies if present
 	if len(b.DependsOn) > 0 {
@@ -115,7 +119,9 @@ func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, e
 		for _, d := range b.DependsOn {
 			deps = append(deps, d.Name)
 		}
-		_ = unstructured.SetNestedStringSlice(app.Object, deps, "spec", "dependencies")
+		if err := unstructured.SetNestedStringSlice(app.Object, deps, "spec", "dependencies"); err != nil {
+			return nil, errors.Wrap(err, "failed to set spec.dependencies")
+		}
 	}
 
 	var obj client.Object = app
