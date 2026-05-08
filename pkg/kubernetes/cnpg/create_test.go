@@ -427,7 +427,7 @@ func TestCluster_Monitoring(t *testing.T) {
 		Options: &ClusterOptions{
 			Instances: 1,
 			Monitoring: &MonitoringOptions{
-				EnablePodMonitor: true,
+				EnablePodMonitor: true, //nolint:staticcheck
 				CustomQueriesConfigMap: []ConfigMapKeyRefOptions{
 					{Name: "custom-queries", Key: "queries.yaml"},
 				},
@@ -440,7 +440,7 @@ func TestCluster_Monitoring(t *testing.T) {
 	if obj.Spec.Monitoring == nil {
 		t.Fatal("expected non-nil Monitoring")
 	}
-	if !obj.Spec.Monitoring.EnablePodMonitor {
+	if !obj.Spec.Monitoring.EnablePodMonitor { //nolint:staticcheck
 		t.Error("expected EnablePodMonitor=true")
 	}
 	if len(obj.Spec.Monitoring.CustomQueriesConfigMap) != 1 {
