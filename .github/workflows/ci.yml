@@ -17,11 +17,13 @@ env:
   # Go version is read from mise.toml (single source of truth)
   # GO_VERSION is set dynamically in each job that needs it
   GOLANGCI_LINT_VERSION: 'v2.10.1'
-  # Force actions/cache to use legacy REST API (v1) so it reads ACTIONS_CACHE_URL
-  # from the runner pod env, routing cache traffic through the in-cluster cache server.
-  # Without this, cache@v5 uses twirp API via ACTIONS_RESULTS_URL which GitHub's
-  # job dispatch overwrites, bypassing the local cache server entirely.
+  # Route cache through in-cluster falcondev cache server (backed by Garage S3).
+  # GitHub's job dispatch overwrites both ACTIONS_RESULTS_URL (twirp/v2) and
+  # ACTIONS_CACHE_URL (REST/v1) in the runner process env. Workflow-level env vars
+  # take precedence over runner-injected values, so we re-assert ACTIONS_CACHE_URL
+  # here and force v1 to ensure actions/cache reads it instead of ACTIONS_RESULTS_URL.
   ACTIONS_CACHE_SERVICE_V2: 'false'
+  ACTIONS_CACHE_URL: 'http://actions-cache-server.arc-runners.svc.cluster.local:3000/'
 
 # Avoid duplicate runs on the same commit
 concurrency:
