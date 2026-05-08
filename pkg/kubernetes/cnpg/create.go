@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	intcnpg "github.com/go-kure/kure/internal/cnpg"
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -52,7 +51,9 @@ func ObjectStore(cfg *ObjectStoreConfig) *barmanv1.ObjectStore {
 		Configuration:   bos,
 		RetentionPolicy: opts.RetentionPolicy,
 	}
-	return intcnpg.CreateObjectStore(cfg.Name, cfg.Namespace, spec)
+	obj := CreateObjectStore(cfg.Name, cfg.Namespace)
+	obj.Spec = spec
+	return obj
 }
 
 // Database converts DatabaseOptions to a CNPG Database object.
@@ -85,7 +86,9 @@ func Database(cfg *DatabaseConfig) *cnpgv1.Database {
 		}
 		spec.Extensions = append(spec.Extensions, e)
 	}
-	return intcnpg.CreateDatabase(cfg.Name, cfg.Namespace, spec)
+	obj := CreateDatabase(cfg.Name, cfg.Namespace)
+	obj.Spec = spec
+	return obj
 }
 
 // Cluster converts ClusterOptions to a CNPG Cluster object.
@@ -268,7 +271,9 @@ func Cluster(cfg *ClusterConfig) (*cnpgv1.Cluster, error) {
 		spec.Managed = &cnpgv1.ManagedConfiguration{Roles: roles}
 	}
 
-	return intcnpg.CreateCluster(cfg.Name, cfg.Namespace, spec), nil
+	obj := CreateCluster(cfg.Name, cfg.Namespace)
+	obj.Spec = spec
+	return obj, nil
 }
 
 // ScheduledBackup converts the config to a CNPG ScheduledBackup object.
@@ -276,7 +281,9 @@ func ScheduledBackup(cfg *ScheduledBackupConfig) *cnpgv1.ScheduledBackup {
 	if cfg == nil {
 		return nil
 	}
-	return intcnpg.CreateScheduledBackup(cfg.Name, cfg.Namespace, cfg.Spec)
+	obj := CreateScheduledBackup(cfg.Name, cfg.Namespace)
+	obj.Spec = cfg.Spec
+	return obj
 }
 
 func buildResourceRequirements(r *ResourceOptions) (corev1.ResourceRequirements, error) {

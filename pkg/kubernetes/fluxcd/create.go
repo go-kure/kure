@@ -1,325 +1,222 @@
 package fluxcd
 
 import (
-	"encoding/json"
-	"time"
-
-	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
-
+	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
-	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-
-	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GitRepository converts the config to a GitRepository object.
-func GitRepository(cfg *GitRepositoryConfig) *sourcev1.GitRepository {
-	if cfg == nil {
-		return nil
+// CreateGitRepository returns a new GitRepository with TypeMeta and ObjectMeta set.
+func CreateGitRepository(name, namespace string) *sourcev1.GitRepository {
+	return &sourcev1.GitRepository{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "GitRepository",
+			APIVersion: sourcev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateGitRepository(cfg.Name, cfg.Namespace, sourcev1.GitRepositorySpec{})
-	intfluxcd.SetGitRepositoryURL(obj, cfg.URL)
-	intfluxcd.SetGitRepositoryInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
-	if cfg.Ref != "" {
-		intfluxcd.SetGitRepositoryReference(obj, &sourcev1.GitRepositoryRef{Branch: cfg.Ref})
-	}
-	return obj
 }
 
-// HelmRepository converts the config to a HelmRepository object.
-func HelmRepository(cfg *HelmRepositoryConfig) *sourcev1.HelmRepository {
-	if cfg == nil {
-		return nil
+// CreateHelmRepository returns a new HelmRepository with TypeMeta and ObjectMeta set.
+func CreateHelmRepository(name, namespace string) *sourcev1.HelmRepository {
+	return &sourcev1.HelmRepository{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "HelmRepository",
+			APIVersion: sourcev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateHelmRepository(cfg.Name, cfg.Namespace, sourcev1.HelmRepositorySpec{})
-	intfluxcd.SetHelmRepositoryURL(obj, cfg.URL)
-	if cfg.Type != "" {
-		intfluxcd.SetHelmRepositoryType(obj, cfg.Type)
-	}
-	if cfg.Interval != "" {
-		intfluxcd.SetHelmRepositoryInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
-	}
-	return obj
 }
 
-// Bucket converts the config to a Bucket object.
-func Bucket(cfg *BucketConfig) *sourcev1.Bucket {
-	if cfg == nil {
-		return nil
+// CreateOCIRepository returns a new OCIRepository with TypeMeta and ObjectMeta set.
+func CreateOCIRepository(name, namespace string) *sourcev1.OCIRepository {
+	return &sourcev1.OCIRepository{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "OCIRepository",
+			APIVersion: sourcev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateBucket(cfg.Name, cfg.Namespace, sourcev1.BucketSpec{})
-	intfluxcd.SetBucketName(obj, cfg.BucketName)
-	intfluxcd.SetBucketEndpoint(obj, cfg.Endpoint)
-	intfluxcd.SetBucketInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
-	if cfg.Provider != "" {
-		intfluxcd.SetBucketProvider(obj, cfg.Provider)
-	}
-	return obj
 }
 
-// HelmChart converts the config to a HelmChart object.
-func HelmChart(cfg *HelmChartConfig) *sourcev1.HelmChart {
-	if cfg == nil {
-		return nil
+// CreateBucket returns a new Bucket with TypeMeta and ObjectMeta set.
+func CreateBucket(name, namespace string) *sourcev1.Bucket {
+	return &sourcev1.Bucket{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Bucket",
+			APIVersion: sourcev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateHelmChart(cfg.Name, cfg.Namespace, sourcev1.HelmChartSpec{})
-	intfluxcd.SetHelmChartChart(obj, cfg.Chart)
-	intfluxcd.SetHelmChartSourceRef(obj, cfg.SourceRef)
-	intfluxcd.SetHelmChartInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
-	if cfg.Version != "" {
-		intfluxcd.SetHelmChartVersion(obj, cfg.Version)
-	}
-	return obj
 }
 
-// OCIRepository converts the config to an OCIRepository object.
-func OCIRepository(cfg *OCIRepositoryConfig) *sourcev1.OCIRepository {
-	if cfg == nil {
-		return nil
+// CreateHelmChart returns a new HelmChart with TypeMeta and ObjectMeta set.
+func CreateHelmChart(name, namespace string) *sourcev1.HelmChart {
+	return &sourcev1.HelmChart{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "HelmChart",
+			APIVersion: sourcev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	ref := &sourcev1.OCIRepositoryRef{}
-	if cfg.Digest != "" {
-		ref.Digest = cfg.Digest
-	} else {
-		ref.Tag = cfg.Ref
-	}
-	spec := sourcev1.OCIRepositorySpec{
-		URL:       cfg.URL,
-		Reference: ref,
-		Interval:  metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)},
-	}
-	return intfluxcd.CreateOCIRepository(cfg.Name, cfg.Namespace, spec)
 }
 
-// Kustomization converts the config to a Kustomization object.
-func Kustomization(cfg *KustomizationConfig) *kustv1.Kustomization {
-	if cfg == nil {
-		return nil
+// CreateKustomization returns a new Kustomization with TypeMeta and ObjectMeta set.
+func CreateKustomization(name, namespace string) *kustv1.Kustomization {
+	return &kustv1.Kustomization{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Kustomization",
+			APIVersion: kustv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateKustomization(cfg.Name, cfg.Namespace, kustv1.KustomizationSpec{Prune: cfg.Prune})
-	intfluxcd.SetKustomizationInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
-	intfluxcd.SetKustomizationSourceRef(obj, cfg.SourceRef)
-	if cfg.Path != "" {
-		intfluxcd.SetKustomizationPath(obj, cfg.Path)
-	}
-	if cfg.TargetNamespace != "" {
-		intfluxcd.SetKustomizationTargetNamespace(obj, cfg.TargetNamespace)
-	}
-	if cfg.Wait {
-		intfluxcd.SetKustomizationWait(obj, true)
-	}
-	return obj
 }
 
-// HelmRelease converts the config to a HelmRelease object.
-func HelmRelease(cfg *HelmReleaseConfig) *helmv2.HelmRelease {
-	if cfg == nil {
-		return nil
+// CreateHelmRelease returns a new HelmRelease with TypeMeta and ObjectMeta set.
+func CreateHelmRelease(name, namespace string) *helmv2.HelmRelease {
+	return &helmv2.HelmRelease{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "HelmRelease",
+			APIVersion: helmv2.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateHelmRelease(cfg.Name, cfg.Namespace, helmv2.HelmReleaseSpec{})
-
-	if cfg.ChartRef != nil {
-		ref := &helmv2.CrossNamespaceSourceReference{
-			Kind: cfg.ChartRef.Kind,
-			Name: cfg.ChartRef.Name,
-		}
-		if cfg.ChartRef.Namespace != "" {
-			ref.Namespace = cfg.ChartRef.Namespace
-		}
-		intfluxcd.SetHelmReleaseChartRef(obj, ref)
-	} else if cfg.Chart != "" {
-		chart := &helmv2.HelmChartTemplate{
-			Spec: helmv2.HelmChartTemplateSpec{
-				Chart:     cfg.Chart,
-				Version:   cfg.Version,
-				SourceRef: cfg.SourceRef,
-			},
-		}
-		intfluxcd.SetHelmReleaseChart(obj, chart)
-	}
-
-	intfluxcd.SetHelmReleaseInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
-
-	if cfg.ReleaseName != "" {
-		intfluxcd.SetHelmReleaseReleaseName(obj, cfg.ReleaseName)
-	}
-	if cfg.TargetNamespace != "" {
-		intfluxcd.SetHelmReleaseTargetNamespace(obj, cfg.TargetNamespace)
-	}
-	if cfg.DriftDetectionMode != "" {
-		dd := intfluxcd.CreateDriftDetection(helmv2.DriftDetectionMode(cfg.DriftDetectionMode))
-		intfluxcd.SetHelmReleaseDriftDetection(obj, dd)
-	}
-
-	if cfg.InstallCRDs != "" || cfg.InstallRetries != nil {
-		install := &helmv2.Install{}
-		if cfg.InstallCRDs != "" {
-			install.CRDs = helmv2.CRDsPolicy(cfg.InstallCRDs)
-		}
-		if cfg.InstallRetries != nil {
-			install.Remediation = &helmv2.InstallRemediation{Retries: *cfg.InstallRetries}
-		}
-		intfluxcd.SetHelmReleaseInstall(obj, install)
-	}
-
-	if cfg.UpgradeCRDs != "" || cfg.UpgradeRetries != nil || cfg.RemediateLastFailure != nil || cfg.UpgradeCleanupOnFail {
-		upgrade := &helmv2.Upgrade{}
-		if cfg.UpgradeCRDs != "" {
-			upgrade.CRDs = helmv2.CRDsPolicy(cfg.UpgradeCRDs)
-		}
-		if cfg.UpgradeCleanupOnFail {
-			upgrade.CleanupOnFail = true
-		}
-		if cfg.UpgradeRetries != nil || cfg.RemediateLastFailure != nil {
-			remediation := &helmv2.UpgradeRemediation{}
-			if cfg.UpgradeRetries != nil {
-				remediation.Retries = *cfg.UpgradeRetries
-			}
-			if cfg.RemediateLastFailure != nil {
-				remediation.RemediateLastFailure = cfg.RemediateLastFailure
-			}
-			upgrade.Remediation = remediation
-		}
-		intfluxcd.SetHelmReleaseUpgrade(obj, upgrade)
-	}
-
-	if cfg.RollbackCleanupOnFail {
-		intfluxcd.SetHelmReleaseRollback(obj, &helmv2.Rollback{CleanupOnFail: true})
-	}
-
-	for _, vf := range cfg.ValuesFrom {
-		ref := helmv2.ValuesReference{
-			Kind:       vf.Kind,
-			Name:       vf.Name,
-			ValuesKey:  vf.ValuesKey,
-			TargetPath: vf.TargetPath,
-			Optional:   vf.Optional,
-		}
-		intfluxcd.AddHelmReleaseValuesFrom(obj, ref)
-	}
-
-	if len(cfg.Values) > 0 {
-		// Marshal errors are only possible for non-serialisable types (channels,
-		// funcs) which callers will never pass in a values map.
-		raw, err := json.Marshal(cfg.Values)
-		if err == nil {
-			intfluxcd.SetHelmReleaseValues(obj, &apiextensionsv1.JSON{Raw: raw})
-		}
-	}
-
-	return obj
 }
 
-// Provider converts the config to a notification Provider object.
-func Provider(cfg *ProviderConfig) *notificationv1beta3.Provider {
-	if cfg == nil {
-		return nil
+// CreateProvider returns a new notification Provider with TypeMeta and ObjectMeta set.
+func CreateProvider(name, namespace string) *notificationv1beta3.Provider {
+	return &notificationv1beta3.Provider{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       notificationv1beta3.ProviderKind,
+			APIVersion: notificationv1beta3.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateProvider(cfg.Name, cfg.Namespace, notificationv1beta3.ProviderSpec{})
-	intfluxcd.SetProviderType(obj, cfg.Type)
-	if cfg.Channel != "" {
-		intfluxcd.SetProviderChannel(obj, cfg.Channel)
-	}
-	if cfg.Address != "" {
-		intfluxcd.SetProviderAddress(obj, cfg.Address)
-	}
-	return obj
 }
 
-// Alert converts the config to an Alert object.
-func Alert(cfg *AlertConfig) *notificationv1beta3.Alert {
-	if cfg == nil {
-		return nil
+// CreateAlert returns a new Alert with TypeMeta and ObjectMeta set.
+func CreateAlert(name, namespace string) *notificationv1beta3.Alert {
+	return &notificationv1beta3.Alert{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       notificationv1beta3.AlertKind,
+			APIVersion: notificationv1beta3.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateAlert(cfg.Name, cfg.Namespace, notificationv1beta3.AlertSpec{})
-	intfluxcd.SetAlertProviderRef(obj, meta.LocalObjectReference{Name: cfg.ProviderRef})
-	for _, es := range cfg.EventSources {
-		intfluxcd.AddAlertEventSource(obj, es)
-	}
-	if cfg.EventSeverity != "" {
-		intfluxcd.SetAlertEventSeverity(obj, cfg.EventSeverity)
-	}
-	return obj
 }
 
-// Receiver converts the config to a Receiver object.
-func Receiver(cfg *ReceiverConfig) *notificationv1.Receiver {
-	if cfg == nil {
-		return nil
+// CreateReceiver returns a new Receiver with TypeMeta and ObjectMeta set.
+func CreateReceiver(name, namespace string) *notificationv1.Receiver {
+	return &notificationv1.Receiver{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       notificationv1.ReceiverKind,
+			APIVersion: notificationv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateReceiver(cfg.Name, cfg.Namespace, notificationv1.ReceiverSpec{})
-	intfluxcd.SetReceiverType(obj, cfg.Type)
-	intfluxcd.SetReceiverSecretRef(obj, meta.LocalObjectReference{Name: cfg.SecretName})
-	for _, r := range cfg.Resources {
-		intfluxcd.AddReceiverResource(obj, r)
-	}
-	for _, e := range cfg.Events {
-		intfluxcd.AddReceiverEvent(obj, e)
-	}
-	return obj
 }
 
-// ImageUpdateAutomation converts the config to an ImageUpdateAutomation object.
-func ImageUpdateAutomation(cfg *ImageUpdateAutomationConfig) *imagev1.ImageUpdateAutomation {
-	if cfg == nil {
-		return nil
+// CreateImageUpdateAutomation returns a new ImageUpdateAutomation with TypeMeta and ObjectMeta set.
+func CreateImageUpdateAutomation(name, namespace string) *imagev1.ImageUpdateAutomation {
+	return &imagev1.ImageUpdateAutomation{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ImageUpdateAutomation",
+			APIVersion: imagev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateImageUpdateAutomation(cfg.Name, cfg.Namespace, imagev1.ImageUpdateAutomationSpec{})
-	intfluxcd.SetImageUpdateAutomationSourceRef(obj, cfg.SourceRef)
-	intfluxcd.SetImageUpdateAutomationInterval(obj, metav1.Duration{Duration: parseDurationOrDefault(cfg.Interval)})
-	return obj
 }
 
-// ResourceSet converts the config to a ResourceSet object.
-func ResourceSet(cfg *ResourceSetConfig) *fluxv1.ResourceSet {
-	if cfg == nil {
-		return nil
+// CreateResourceSet returns a new ResourceSet with TypeMeta and ObjectMeta set.
+func CreateResourceSet(name, namespace string) *fluxv1.ResourceSet {
+	return &fluxv1.ResourceSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       fluxv1.ResourceSetKind,
+			APIVersion: fluxv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	return intfluxcd.CreateResourceSet(cfg.Name, cfg.Namespace, fluxv1.ResourceSetSpec{})
 }
 
-// ResourceSetInputProvider converts the config to a ResourceSetInputProvider object.
-func ResourceSetInputProvider(cfg *ResourceSetInputProviderConfig) *fluxv1.ResourceSetInputProvider {
-	if cfg == nil {
-		return nil
+// CreateResourceSetInputProvider returns a new ResourceSetInputProvider with TypeMeta and ObjectMeta set.
+func CreateResourceSetInputProvider(name, namespace string) *fluxv1.ResourceSetInputProvider {
+	return &fluxv1.ResourceSetInputProvider{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       fluxv1.ResourceSetInputProviderKind,
+			APIVersion: fluxv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	obj := intfluxcd.CreateResourceSetInputProvider(cfg.Name, cfg.Namespace, fluxv1.ResourceSetInputProviderSpec{})
-	intfluxcd.SetResourceSetInputProviderType(obj, cfg.Type)
-	if cfg.URL != "" {
-		intfluxcd.SetResourceSetInputProviderURL(obj, cfg.URL)
-	}
-	return obj
 }
 
-// FluxInstance converts the config to a FluxInstance object.
-func FluxInstance(cfg *FluxInstanceConfig) *fluxv1.FluxInstance {
-	if cfg == nil {
-		return nil
+// CreateFluxInstance returns a new FluxInstance with TypeMeta and ObjectMeta set.
+func CreateFluxInstance(name, namespace string) *fluxv1.FluxInstance {
+	return &fluxv1.FluxInstance{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       fluxv1.FluxInstanceKind,
+			APIVersion: fluxv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	spec := fluxv1.FluxInstanceSpec{Distribution: fluxv1.Distribution{Version: cfg.Version, Registry: cfg.Registry}}
-	return intfluxcd.CreateFluxInstance(cfg.Name, cfg.Namespace, spec)
 }
 
-// FluxReport converts the config to a FluxReport object.
-func FluxReport(cfg *FluxReportConfig) *fluxv1.FluxReport {
-	if cfg == nil {
-		return nil
+// CreateFluxReport returns a new FluxReport with TypeMeta and ObjectMeta set.
+func CreateFluxReport(name, namespace string) *fluxv1.FluxReport {
+	return &fluxv1.FluxReport{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       fluxv1.FluxReportKind,
+			APIVersion: fluxv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
 	}
-	spec := fluxv1.FluxReportSpec{Distribution: fluxv1.FluxDistributionStatus{Entitlement: cfg.Entitlement, Status: cfg.Status}}
-	return intfluxcd.CreateFluxReport(cfg.Name, cfg.Namespace, spec)
-}
-
-func parseDurationOrDefault(s string) time.Duration {
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return 5 * time.Minute
-	}
-	return d
 }

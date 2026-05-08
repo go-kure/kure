@@ -1,38 +1,214 @@
 package cilium
 
 import (
-	intcilium "github.com/go-kure/kure/internal/cilium"
-
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	"github.com/cilium/cilium/pkg/policy/api"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// CreateCiliumNetworkPolicy returns a new CiliumNetworkPolicy with TypeMeta and ObjectMeta set.
+func CreateCiliumNetworkPolicy(name, namespace string) *ciliumv2.CiliumNetworkPolicy {
+	return &ciliumv2.CiliumNetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.CNPKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
+
+// CreateCiliumClusterwideNetworkPolicy returns a new CiliumClusterwideNetworkPolicy with TypeMeta and ObjectMeta set.
+func CreateCiliumClusterwideNetworkPolicy(name string) *ciliumv2.CiliumClusterwideNetworkPolicy {
+	return &ciliumv2.CiliumClusterwideNetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.CCNPKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumCIDRGroup returns a new CiliumCIDRGroup with TypeMeta and ObjectMeta set.
+func CreateCiliumCIDRGroup(name string) *ciliumv2.CiliumCIDRGroup {
+	return &ciliumv2.CiliumCIDRGroup{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.CCGKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: ciliumv2.CiliumCIDRGroupSpec{
+			ExternalCIDRs: []api.CIDR{},
+		},
+	}
+}
+
+// CreateCiliumEgressGatewayPolicy returns a new CiliumEgressGatewayPolicy with TypeMeta and ObjectMeta set.
+func CreateCiliumEgressGatewayPolicy(name string) *ciliumv2.CiliumEgressGatewayPolicy {
+	return &ciliumv2.CiliumEgressGatewayPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.CEGPKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumLocalRedirectPolicy returns a new CiliumLocalRedirectPolicy with TypeMeta and ObjectMeta set.
+func CreateCiliumLocalRedirectPolicy(name, namespace string) *ciliumv2.CiliumLocalRedirectPolicy {
+	return &ciliumv2.CiliumLocalRedirectPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.CLRPKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
+
+// CreateCiliumLoadBalancerIPPool returns a new CiliumLoadBalancerIPPool with TypeMeta and ObjectMeta set.
+func CreateCiliumLoadBalancerIPPool(name string) *ciliumv2.CiliumLoadBalancerIPPool {
+	return &ciliumv2.CiliumLoadBalancerIPPool{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.PoolKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumEnvoyConfig returns a new CiliumEnvoyConfig with TypeMeta and ObjectMeta set.
+func CreateCiliumEnvoyConfig(name, namespace string) *ciliumv2.CiliumEnvoyConfig {
+	return &ciliumv2.CiliumEnvoyConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.CECKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
+
+// CreateCiliumClusterwideEnvoyConfig returns a new CiliumClusterwideEnvoyConfig with TypeMeta and ObjectMeta set.
+func CreateCiliumClusterwideEnvoyConfig(name string) *ciliumv2.CiliumClusterwideEnvoyConfig {
+	return &ciliumv2.CiliumClusterwideEnvoyConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.CCECKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumBGPClusterConfig returns a new CiliumBGPClusterConfig with TypeMeta and ObjectMeta set.
+func CreateCiliumBGPClusterConfig(name string) *ciliumv2.CiliumBGPClusterConfig {
+	return &ciliumv2.CiliumBGPClusterConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.BGPCCKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumBGPPeerConfig returns a new CiliumBGPPeerConfig with TypeMeta and ObjectMeta set.
+func CreateCiliumBGPPeerConfig(name string) *ciliumv2.CiliumBGPPeerConfig {
+	return &ciliumv2.CiliumBGPPeerConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.BGPPCKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumBGPAdvertisement returns a new CiliumBGPAdvertisement with TypeMeta and ObjectMeta set.
+func CreateCiliumBGPAdvertisement(name string) *ciliumv2.CiliumBGPAdvertisement {
+	return &ciliumv2.CiliumBGPAdvertisement{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.BGPAKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumBGPNodeConfig returns a new CiliumBGPNodeConfig with TypeMeta and ObjectMeta set.
+func CreateCiliumBGPNodeConfig(name string) *ciliumv2.CiliumBGPNodeConfig {
+	return &ciliumv2.CiliumBGPNodeConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.BGPNCKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// CreateCiliumBGPNodeConfigOverride returns a new CiliumBGPNodeConfigOverride with TypeMeta and ObjectMeta set.
+func CreateCiliumBGPNodeConfigOverride(name string) *ciliumv2.CiliumBGPNodeConfigOverride {
+	return &ciliumv2.CiliumBGPNodeConfigOverride{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       ciliumv2.BGPNCOKindDefinition,
+			APIVersion: ciliumv2.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// Config-based constructors (convenience wrappers using Style B for backwards compat)
 
 // CiliumNetworkPolicy converts the config to a CiliumNetworkPolicy object.
 func CiliumNetworkPolicy(cfg *CiliumNetworkPolicyConfig) *ciliumv2.CiliumNetworkPolicy {
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumNetworkPolicy(cfg.Name, cfg.Namespace)
+	obj := CreateCiliumNetworkPolicy(cfg.Name, cfg.Namespace)
 	if cfg.Spec != nil {
-		intcilium.SetCiliumNetworkPolicySpec(obj, cfg.Spec)
+		SetCiliumNetworkPolicySpec(obj, cfg.Spec)
 	}
 	for _, spec := range cfg.Specs {
-		intcilium.AddCiliumNetworkPolicySpec(obj, spec)
+		AddCiliumNetworkPolicySpec(obj, spec)
 	}
 	return obj
 }
 
-// CiliumClusterwideNetworkPolicy converts the config to a
-// CiliumClusterwideNetworkPolicy object.
+// CiliumClusterwideNetworkPolicy converts the config to a CiliumClusterwideNetworkPolicy object.
 func CiliumClusterwideNetworkPolicy(cfg *CiliumClusterwideNetworkPolicyConfig) *ciliumv2.CiliumClusterwideNetworkPolicy {
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumClusterwideNetworkPolicy(cfg.Name)
+	obj := CreateCiliumClusterwideNetworkPolicy(cfg.Name)
 	if cfg.Spec != nil {
-		intcilium.SetCiliumClusterwideNetworkPolicySpec(obj, cfg.Spec)
+		SetCiliumClusterwideNetworkPolicySpec(obj, cfg.Spec)
 	}
 	for _, spec := range cfg.Specs {
-		intcilium.AddCiliumClusterwideNetworkPolicySpec(obj, spec)
+		AddCiliumClusterwideNetworkPolicySpec(obj, spec)
 	}
 	return obj
 }
@@ -42,9 +218,9 @@ func CiliumCIDRGroup(cfg *CiliumCIDRGroupConfig) *ciliumv2.CiliumCIDRGroup {
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumCIDRGroup(cfg.Name)
+	obj := CreateCiliumCIDRGroup(cfg.Name)
 	for _, cidr := range cfg.ExternalCIDRs {
-		intcilium.AddCiliumCIDRGroupCIDR(obj, cidr)
+		AddCiliumCIDRGroupCIDR(obj, cidr)
 	}
 	return obj
 }
@@ -54,8 +230,8 @@ func CiliumEgressGatewayPolicy(cfg *CiliumEgressGatewayPolicyConfig) *ciliumv2.C
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumEgressGatewayPolicy(cfg.Name)
-	intcilium.SetCiliumEgressGatewayPolicySpec(obj, cfg.Spec)
+	obj := CreateCiliumEgressGatewayPolicy(cfg.Name)
+	SetCiliumEgressGatewayPolicySpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -64,8 +240,8 @@ func CiliumLocalRedirectPolicy(cfg *CiliumLocalRedirectPolicyConfig) *ciliumv2.C
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumLocalRedirectPolicy(cfg.Name, cfg.Namespace)
-	intcilium.SetCiliumLocalRedirectPolicySpec(obj, cfg.Spec)
+	obj := CreateCiliumLocalRedirectPolicy(cfg.Name, cfg.Namespace)
+	SetCiliumLocalRedirectPolicySpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -74,8 +250,8 @@ func CiliumLoadBalancerIPPool(cfg *CiliumLoadBalancerIPPoolConfig) *ciliumv2.Cil
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumLoadBalancerIPPool(cfg.Name)
-	intcilium.SetCiliumLoadBalancerIPPoolSpec(obj, cfg.Spec)
+	obj := CreateCiliumLoadBalancerIPPool(cfg.Name)
+	SetCiliumLoadBalancerIPPoolSpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -84,8 +260,8 @@ func CiliumEnvoyConfig(cfg *CiliumEnvoyConfigConfig) *ciliumv2.CiliumEnvoyConfig
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumEnvoyConfig(cfg.Name, cfg.Namespace)
-	intcilium.SetCiliumEnvoyConfigSpec(obj, cfg.Spec)
+	obj := CreateCiliumEnvoyConfig(cfg.Name, cfg.Namespace)
+	SetCiliumEnvoyConfigSpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -94,8 +270,8 @@ func CiliumClusterwideEnvoyConfig(cfg *CiliumClusterwideEnvoyConfigConfig) *cili
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumClusterwideEnvoyConfig(cfg.Name)
-	intcilium.SetCiliumClusterwideEnvoyConfigSpec(obj, cfg.Spec)
+	obj := CreateCiliumClusterwideEnvoyConfig(cfg.Name)
+	SetCiliumClusterwideEnvoyConfigSpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -104,8 +280,8 @@ func CiliumBGPClusterConfig(cfg *CiliumBGPClusterConfigConfig) *ciliumv2.CiliumB
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumBGPClusterConfig(cfg.Name)
-	intcilium.SetCiliumBGPClusterConfigSpec(obj, cfg.Spec)
+	obj := CreateCiliumBGPClusterConfig(cfg.Name)
+	SetCiliumBGPClusterConfigSpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -114,8 +290,8 @@ func CiliumBGPPeerConfig(cfg *CiliumBGPPeerConfigConfig) *ciliumv2.CiliumBGPPeer
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumBGPPeerConfig(cfg.Name)
-	intcilium.SetCiliumBGPPeerConfigSpec(obj, cfg.Spec)
+	obj := CreateCiliumBGPPeerConfig(cfg.Name)
+	SetCiliumBGPPeerConfigSpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -124,8 +300,8 @@ func CiliumBGPAdvertisement(cfg *CiliumBGPAdvertisementConfig) *ciliumv2.CiliumB
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumBGPAdvertisement(cfg.Name)
-	intcilium.SetCiliumBGPAdvertisementSpec(obj, cfg.Spec)
+	obj := CreateCiliumBGPAdvertisement(cfg.Name)
+	SetCiliumBGPAdvertisementSpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -134,8 +310,8 @@ func CiliumBGPNodeConfig(cfg *CiliumBGPNodeConfigConfig) *ciliumv2.CiliumBGPNode
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumBGPNodeConfig(cfg.Name)
-	intcilium.SetCiliumBGPNodeConfigSpec(obj, cfg.Spec)
+	obj := CreateCiliumBGPNodeConfig(cfg.Name)
+	SetCiliumBGPNodeConfigSpec(obj, cfg.Spec)
 	return obj
 }
 
@@ -144,7 +320,7 @@ func CiliumBGPNodeConfigOverride(cfg *CiliumBGPNodeConfigOverrideConfig) *cilium
 	if cfg == nil {
 		return nil
 	}
-	obj := intcilium.CreateCiliumBGPNodeConfigOverride(cfg.Name)
-	intcilium.SetCiliumBGPNodeConfigOverrideSpec(obj, cfg.Spec)
+	obj := CreateCiliumBGPNodeConfigOverride(cfg.Name)
+	SetCiliumBGPNodeConfigOverrideSpec(obj, cfg.Spec)
 	return obj
 }

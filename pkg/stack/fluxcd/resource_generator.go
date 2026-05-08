@@ -12,8 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/pkg/errors"
+	pubfluxcd "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
@@ -319,31 +319,23 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 
 	switch ref.Kind {
 	case "GitRepository":
-		spec := sourcev1.GitRepositorySpec{
-			URL:      ref.URL,
-			Interval: metav1.Duration{Duration: g.DefaultInterval},
-		}
+		gr := pubfluxcd.CreateGitRepository(ref.Name, namespace)
+		pubfluxcd.SetGitRepositoryURL(gr, ref.URL)
+		pubfluxcd.SetGitRepositoryInterval(gr, metav1.Duration{Duration: g.DefaultInterval})
 		if ref.Branch != "" {
-			spec.Reference = &sourcev1.GitRepositoryRef{
-				Branch: ref.Branch,
-			}
+			pubfluxcd.SetGitRepositoryReference(gr, &sourcev1.GitRepositoryRef{Branch: ref.Branch})
 		} else if ref.Tag != "" {
-			spec.Reference = &sourcev1.GitRepositoryRef{
-				Tag: ref.Tag,
-			}
+			pubfluxcd.SetGitRepositoryReference(gr, &sourcev1.GitRepositoryRef{Tag: ref.Tag})
 		}
-		return intfluxcd.CreateGitRepository(ref.Name, namespace, spec), nil
+		return gr, nil
 	case "OCIRepository":
-		spec := sourcev1.OCIRepositorySpec{
-			URL:      ref.URL,
-			Interval: metav1.Duration{Duration: g.DefaultInterval},
-		}
+		or := pubfluxcd.CreateOCIRepository(ref.Name, namespace)
+		pubfluxcd.SetOCIRepositoryURL(or, ref.URL)
+		pubfluxcd.SetOCIRepositoryInterval(or, metav1.Duration{Duration: g.DefaultInterval})
 		if ref.Tag != "" {
-			spec.Reference = &sourcev1.OCIRepositoryRef{
-				Tag: ref.Tag,
-			}
+			pubfluxcd.SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: ref.Tag})
 		}
-		return intfluxcd.CreateOCIRepository(ref.Name, namespace, spec), nil
+		return or, nil
 	default:
 		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef",
 			[]string{"GitRepository", "OCIRepository"})

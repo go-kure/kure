@@ -1,141 +1,170 @@
 package cnpg
 
 import (
-	corev1 "k8s.io/api/core/v1"
-
 	barmanapi "github.com/cloudnative-pg/barman-cloud/pkg/api"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	barmanv1 "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
-
-	intcnpg "github.com/go-kure/kure/internal/cnpg"
+	corev1 "k8s.io/api/core/v1"
 )
 
-// AddClusterLabel delegates to the internal helper.
+// AddClusterLabel adds or updates a label on the Cluster metadata.
 func AddClusterLabel(obj *cnpgv1.Cluster, key, value string) {
-	intcnpg.AddClusterLabel(obj, key, value)
+	if obj.Labels == nil {
+		obj.Labels = make(map[string]string)
+	}
+	obj.Labels[key] = value
 }
 
-// AddClusterAnnotation delegates to the internal helper.
+// AddClusterAnnotation adds or updates an annotation on the Cluster metadata.
 func AddClusterAnnotation(obj *cnpgv1.Cluster, key, value string) {
-	intcnpg.AddClusterAnnotation(obj, key, value)
+	if obj.Annotations == nil {
+		obj.Annotations = make(map[string]string)
+	}
+	obj.Annotations[key] = value
 }
 
-// AddClusterManagedRole delegates to the internal helper.
+// AddClusterManagedRole adds a managed role to the Cluster spec.
 func AddClusterManagedRole(obj *cnpgv1.Cluster, role cnpgv1.RoleConfiguration) {
-	intcnpg.AddClusterManagedRole(obj, role)
+	if obj.Spec.Managed == nil {
+		obj.Spec.Managed = &cnpgv1.ManagedConfiguration{}
+	}
+	obj.Spec.Managed.Roles = append(obj.Spec.Managed.Roles, role)
 }
 
-// AddDatabaseLabel delegates to the internal helper.
+// AddDatabaseLabel adds or updates a label on the Database metadata.
 func AddDatabaseLabel(obj *cnpgv1.Database, key, value string) {
-	intcnpg.AddDatabaseLabel(obj, key, value)
+	if obj.Labels == nil {
+		obj.Labels = make(map[string]string)
+	}
+	obj.Labels[key] = value
 }
 
-// AddDatabaseAnnotation delegates to the internal helper.
+// AddDatabaseAnnotation adds or updates an annotation on the Database metadata.
 func AddDatabaseAnnotation(obj *cnpgv1.Database, key, value string) {
-	intcnpg.AddDatabaseAnnotation(obj, key, value)
+	if obj.Annotations == nil {
+		obj.Annotations = make(map[string]string)
+	}
+	obj.Annotations[key] = value
 }
 
-// AddDatabaseExtension delegates to the internal helper.
+// AddDatabaseExtension appends an extension to the Database spec.
 func AddDatabaseExtension(obj *cnpgv1.Database, ext cnpgv1.ExtensionSpec) {
-	intcnpg.AddDatabaseExtension(obj, ext)
+	obj.Spec.Extensions = append(obj.Spec.Extensions, ext)
 }
 
-// SetDatabaseClusterRef delegates to the internal helper.
+// SetDatabaseClusterRef sets the cluster reference on the Database spec.
 func SetDatabaseClusterRef(obj *cnpgv1.Database, clusterName string) {
-	intcnpg.SetDatabaseClusterRef(obj, clusterName)
+	obj.Spec.ClusterRef = corev1.LocalObjectReference{Name: clusterName}
 }
 
-// SetDatabaseOwner delegates to the internal helper.
+// SetDatabaseOwner sets the owner role on the Database spec.
 func SetDatabaseOwner(obj *cnpgv1.Database, owner string) {
-	intcnpg.SetDatabaseOwner(obj, owner)
+	obj.Spec.Owner = owner
 }
 
-// SetDatabaseReclaimPolicy delegates to the internal helper.
+// SetDatabaseReclaimPolicy sets the reclaim policy on the Database spec.
 func SetDatabaseReclaimPolicy(obj *cnpgv1.Database, policy cnpgv1.DatabaseReclaimPolicy) {
-	intcnpg.SetDatabaseReclaimPolicy(obj, policy)
+	obj.Spec.ReclaimPolicy = policy
 }
 
-// SetDatabaseEnsure delegates to the internal helper.
+// SetDatabaseEnsure sets the ensure option (present/absent) on the Database spec.
 func SetDatabaseEnsure(obj *cnpgv1.Database, ensure cnpgv1.EnsureOption) {
-	intcnpg.SetDatabaseEnsure(obj, ensure)
+	obj.Spec.Ensure = ensure
 }
 
-// AddObjectStoreLabel delegates to the internal helper.
+// AddObjectStoreLabel adds or updates a label on the ObjectStore metadata.
 func AddObjectStoreLabel(obj *barmanv1.ObjectStore, key, value string) {
-	intcnpg.AddObjectStoreLabel(obj, key, value)
+	if obj.Labels == nil {
+		obj.Labels = make(map[string]string)
+	}
+	obj.Labels[key] = value
 }
 
-// AddObjectStoreAnnotation delegates to the internal helper.
+// AddObjectStoreAnnotation adds or updates an annotation on the ObjectStore metadata.
 func AddObjectStoreAnnotation(obj *barmanv1.ObjectStore, key, value string) {
-	intcnpg.AddObjectStoreAnnotation(obj, key, value)
+	if obj.Annotations == nil {
+		obj.Annotations = make(map[string]string)
+	}
+	obj.Annotations[key] = value
 }
 
-// AddObjectStoreEnvVar delegates to the internal helper.
+// AddObjectStoreEnvVar appends an environment variable to the instance sidecar configuration.
 func AddObjectStoreEnvVar(obj *barmanv1.ObjectStore, envVar corev1.EnvVar) {
-	intcnpg.AddObjectStoreEnvVar(obj, envVar)
+	obj.Spec.InstanceSidecarConfiguration.Env = append(
+		obj.Spec.InstanceSidecarConfiguration.Env, envVar,
+	)
 }
 
-// SetObjectStoreDestinationPath delegates to the internal helper.
+// SetObjectStoreDestinationPath sets the destination path on the ObjectStore configuration.
 func SetObjectStoreDestinationPath(obj *barmanv1.ObjectStore, path string) {
-	intcnpg.SetObjectStoreDestinationPath(obj, path)
+	obj.Spec.Configuration.DestinationPath = path
 }
 
-// SetObjectStoreEndpointURL delegates to the internal helper.
+// SetObjectStoreEndpointURL sets the endpoint URL on the ObjectStore configuration.
 func SetObjectStoreEndpointURL(obj *barmanv1.ObjectStore, url string) {
-	intcnpg.SetObjectStoreEndpointURL(obj, url)
+	obj.Spec.Configuration.EndpointURL = url
 }
 
-// SetObjectStoreS3Credentials delegates to the internal helper.
+// SetObjectStoreS3Credentials sets S3 credentials on the ObjectStore configuration.
 func SetObjectStoreS3Credentials(obj *barmanv1.ObjectStore, creds *barmanapi.S3Credentials) {
-	intcnpg.SetObjectStoreS3Credentials(obj, creds)
+	obj.Spec.Configuration.AWS = creds
 }
 
-// SetObjectStoreRetentionPolicy delegates to the internal helper.
+// SetObjectStoreRetentionPolicy sets the retention policy on the ObjectStore spec.
 func SetObjectStoreRetentionPolicy(obj *barmanv1.ObjectStore, policy string) {
-	intcnpg.SetObjectStoreRetentionPolicy(obj, policy)
+	obj.Spec.RetentionPolicy = policy
 }
 
-// SetObjectStoreWalConfig delegates to the internal helper.
+// SetObjectStoreWalConfig sets the WAL backup configuration on the ObjectStore.
 func SetObjectStoreWalConfig(obj *barmanv1.ObjectStore, wal *barmanapi.WalBackupConfiguration) {
-	intcnpg.SetObjectStoreWalConfig(obj, wal)
+	obj.Spec.Configuration.Wal = wal
 }
 
-// SetObjectStoreDataConfig delegates to the internal helper.
+// SetObjectStoreDataConfig sets the data backup configuration on the ObjectStore.
 func SetObjectStoreDataConfig(obj *barmanv1.ObjectStore, data *barmanapi.DataBackupConfiguration) {
-	intcnpg.SetObjectStoreDataConfig(obj, data)
+	obj.Spec.Configuration.Data = data
 }
 
-// AddScheduledBackupLabel delegates to the internal helper.
+// AddScheduledBackupLabel adds or updates a label on the ScheduledBackup metadata.
 func AddScheduledBackupLabel(obj *cnpgv1.ScheduledBackup, key, value string) {
-	intcnpg.AddScheduledBackupLabel(obj, key, value)
+	if obj.Labels == nil {
+		obj.Labels = make(map[string]string)
+	}
+	obj.Labels[key] = value
 }
 
-// AddScheduledBackupAnnotation delegates to the internal helper.
+// AddScheduledBackupAnnotation adds or updates an annotation on the ScheduledBackup metadata.
 func AddScheduledBackupAnnotation(obj *cnpgv1.ScheduledBackup, key, value string) {
-	intcnpg.AddScheduledBackupAnnotation(obj, key, value)
+	if obj.Annotations == nil {
+		obj.Annotations = make(map[string]string)
+	}
+	obj.Annotations[key] = value
 }
 
-// SetScheduledBackupMethod delegates to the internal helper.
+// SetScheduledBackupMethod sets the backup method on the ScheduledBackup spec.
 func SetScheduledBackupMethod(obj *cnpgv1.ScheduledBackup, method cnpgv1.BackupMethod) {
-	intcnpg.SetScheduledBackupMethod(obj, method)
+	obj.Spec.Method = method
 }
 
-// SetScheduledBackupPluginConfiguration delegates to the internal helper.
+// SetScheduledBackupPluginConfiguration sets the plugin configuration on the ScheduledBackup spec.
 func SetScheduledBackupPluginConfiguration(obj *cnpgv1.ScheduledBackup, name string, params map[string]string) {
-	intcnpg.SetScheduledBackupPluginConfiguration(obj, name, params)
+	obj.Spec.PluginConfiguration = &cnpgv1.BackupPluginConfiguration{
+		Name:       name,
+		Parameters: params,
+	}
 }
 
-// SetScheduledBackupImmediate delegates to the internal helper.
+// SetScheduledBackupImmediate sets the immediate flag on the ScheduledBackup spec.
 func SetScheduledBackupImmediate(obj *cnpgv1.ScheduledBackup, immediate bool) {
-	intcnpg.SetScheduledBackupImmediate(obj, immediate)
+	obj.Spec.Immediate = &immediate
 }
 
-// SetScheduledBackupBackupOwnerReference delegates to the internal helper.
+// SetScheduledBackupBackupOwnerReference sets the backupOwnerReference on the ScheduledBackup spec.
 func SetScheduledBackupBackupOwnerReference(obj *cnpgv1.ScheduledBackup, ref string) {
-	intcnpg.SetScheduledBackupBackupOwnerReference(obj, ref)
+	obj.Spec.BackupOwnerReference = ref
 }
 
-// SetScheduledBackupSuspend delegates to the internal helper.
+// SetScheduledBackupSuspend sets the suspend flag on the ScheduledBackup spec.
 func SetScheduledBackupSuspend(obj *cnpgv1.ScheduledBackup, suspend bool) {
-	intcnpg.SetScheduledBackupSuspend(obj, suspend)
+	obj.Spec.Suspend = &suspend
 }

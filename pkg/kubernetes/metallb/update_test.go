@@ -8,16 +8,8 @@ import (
 )
 
 func TestSetIPAddressPoolSpec(t *testing.T) {
-	cfg := &IPAddressPoolConfig{
-		Name:      "test-pool",
-		Namespace: "metallb-system",
-		Addresses: []string{"10.0.0.0/24"},
-	}
-
-	pool := IPAddressPool(cfg)
-	if pool == nil {
-		t.Fatal("failed to create IPAddressPool")
-	}
+	pool := CreateIPAddressPool("test-pool", "metallb-system")
+	AddIPAddressPoolAddress(pool, "10.0.0.0/24")
 
 	newSpec := metallbv1beta1.IPAddressPoolSpec{
 		Addresses: []string{"192.168.0.0/16", "172.16.0.0/12"},
@@ -35,18 +27,10 @@ func TestSetIPAddressPoolSpec(t *testing.T) {
 }
 
 func TestSetBGPPeerSpec(t *testing.T) {
-	cfg := &BGPPeerConfig{
-		Name:      "test-peer",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	}
-
-	peer := BGPPeer(cfg)
-	if peer == nil {
-		t.Fatal("failed to create BGPPeer")
-	}
+	peer := CreateBGPPeer("test-peer", "metallb-system")
+	peer.Spec.MyASN = 64500
+	peer.Spec.ASN = 64501
+	peer.Spec.Address = "10.0.0.1"
 
 	newSpec := metallbv1beta1.BGPPeerSpec{
 		MyASN:   64600,
@@ -71,15 +55,7 @@ func TestSetBGPPeerSpec(t *testing.T) {
 }
 
 func TestSetBGPAdvertisementSpec(t *testing.T) {
-	cfg := &BGPAdvertisementConfig{
-		Name:      "test-advert",
-		Namespace: "metallb-system",
-	}
-
-	advert := BGPAdvertisement(cfg)
-	if advert == nil {
-		t.Fatal("failed to create BGPAdvertisement")
-	}
+	advert := CreateBGPAdvertisement("test-advert", "metallb-system")
 
 	newSpec := metallbv1beta1.BGPAdvertisementSpec{
 		IPAddressPools: []string{"new-pool"},
@@ -102,15 +78,7 @@ func TestSetBGPAdvertisementSpec(t *testing.T) {
 }
 
 func TestSetL2AdvertisementSpec(t *testing.T) {
-	cfg := &L2AdvertisementConfig{
-		Name:      "test-l2",
-		Namespace: "metallb-system",
-	}
-
-	l2 := L2Advertisement(cfg)
-	if l2 == nil {
-		t.Fatal("failed to create L2Advertisement")
-	}
+	l2 := CreateL2Advertisement("test-l2", "metallb-system")
 
 	newSpec := metallbv1beta1.L2AdvertisementSpec{
 		IPAddressPools: []string{"pool-a"},
@@ -129,15 +97,7 @@ func TestSetL2AdvertisementSpec(t *testing.T) {
 }
 
 func TestSetBFDProfileSpec(t *testing.T) {
-	cfg := &BFDProfileConfig{
-		Name:      "test-bfd",
-		Namespace: "metallb-system",
-	}
-
-	bfd := BFDProfile(cfg)
-	if bfd == nil {
-		t.Fatal("failed to create BFDProfile")
-	}
+	bfd := CreateBFDProfile("test-bfd", "metallb-system")
 
 	detectMult := uint32(5)
 	newSpec := metallbv1beta1.BFDProfileSpec{
@@ -152,10 +112,7 @@ func TestSetBFDProfileSpec(t *testing.T) {
 }
 
 func TestAddIPAddressPoolAddress(t *testing.T) {
-	pool := IPAddressPool(&IPAddressPoolConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	pool := CreateIPAddressPool("test", "metallb-system")
 
 	AddIPAddressPoolAddress(pool, "10.0.0.0/24")
 
@@ -169,10 +126,7 @@ func TestAddIPAddressPoolAddress(t *testing.T) {
 }
 
 func TestSetIPAddressPoolAutoAssign(t *testing.T) {
-	pool := IPAddressPool(&IPAddressPoolConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	pool := CreateIPAddressPool("test", "metallb-system")
 
 	SetIPAddressPoolAutoAssign(pool, false)
 
@@ -182,10 +136,7 @@ func TestSetIPAddressPoolAutoAssign(t *testing.T) {
 }
 
 func TestSetIPAddressPoolAvoidBuggyIPs(t *testing.T) {
-	pool := IPAddressPool(&IPAddressPoolConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	pool := CreateIPAddressPool("test", "metallb-system")
 
 	SetIPAddressPoolAvoidBuggyIPs(pool, true)
 
@@ -195,10 +146,7 @@ func TestSetIPAddressPoolAvoidBuggyIPs(t *testing.T) {
 }
 
 func TestSetIPAddressPoolAllocateTo(t *testing.T) {
-	pool := IPAddressPool(&IPAddressPoolConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	pool := CreateIPAddressPool("test", "metallb-system")
 
 	alloc := &metallbv1beta1.ServiceAllocation{Priority: 5}
 	SetIPAddressPoolAllocateTo(pool, alloc)
@@ -209,13 +157,7 @@ func TestSetIPAddressPoolAllocateTo(t *testing.T) {
 }
 
 func TestAddBGPPeerNodeSelector(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	sel := metallbv1beta1.NodeSelector{
 		MatchLabels: map[string]string{"role": "worker"},
@@ -228,13 +170,7 @@ func TestAddBGPPeerNodeSelector(t *testing.T) {
 }
 
 func TestSetBGPPeerPort(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	SetBGPPeerPort(peer, 1179)
 
@@ -244,39 +180,21 @@ func TestSetBGPPeerPort(t *testing.T) {
 }
 
 func TestSetBGPPeerHoldTime(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	d := metav1.Duration{Duration: 120000000000} // 120s
 	SetBGPPeerHoldTime(peer, d)
 }
 
 func TestSetBGPPeerKeepaliveTime(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	d := metav1.Duration{Duration: 30000000000} // 30s
 	SetBGPPeerKeepaliveTime(peer, d)
 }
 
 func TestSetBGPPeerSrcAddress(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	SetBGPPeerSrcAddress(peer, "10.0.0.100")
 
@@ -286,13 +204,7 @@ func TestSetBGPPeerSrcAddress(t *testing.T) {
 }
 
 func TestSetBGPPeerRouterID(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	SetBGPPeerRouterID(peer, "1.2.3.4")
 
@@ -302,13 +214,7 @@ func TestSetBGPPeerRouterID(t *testing.T) {
 }
 
 func TestSetBGPPeerEBGPMultiHop(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	SetBGPPeerEBGPMultiHop(peer, true)
 
@@ -318,13 +224,7 @@ func TestSetBGPPeerEBGPMultiHop(t *testing.T) {
 }
 
 func TestSetBGPPeerPassword(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	SetBGPPeerPassword(peer, "bgp-secret")
 
@@ -334,13 +234,7 @@ func TestSetBGPPeerPassword(t *testing.T) {
 }
 
 func TestSetBGPPeerBFDProfile(t *testing.T) {
-	peer := BGPPeer(&BGPPeerConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-		MyASN:     64500,
-		ASN:       64501,
-		Address:   "10.0.0.1",
-	})
+	peer := CreateBGPPeer("test", "metallb-system")
 
 	SetBGPPeerBFDProfile(peer, "my-bfd")
 
@@ -350,10 +244,7 @@ func TestSetBGPPeerBFDProfile(t *testing.T) {
 }
 
 func TestAddBGPAdvertisementIPAddressPool(t *testing.T) {
-	advert := BGPAdvertisement(&BGPAdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	advert := CreateBGPAdvertisement("test", "metallb-system")
 
 	AddBGPAdvertisementIPAddressPool(advert, "pool-1")
 
@@ -367,10 +258,7 @@ func TestAddBGPAdvertisementIPAddressPool(t *testing.T) {
 }
 
 func TestAddBGPAdvertisementNodeSelector(t *testing.T) {
-	advert := BGPAdvertisement(&BGPAdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	advert := CreateBGPAdvertisement("test", "metallb-system")
 
 	sel := metav1.LabelSelector{
 		MatchLabels: map[string]string{"zone": "us-east"},
@@ -383,10 +271,7 @@ func TestAddBGPAdvertisementNodeSelector(t *testing.T) {
 }
 
 func TestAddBGPAdvertisementCommunity(t *testing.T) {
-	advert := BGPAdvertisement(&BGPAdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	advert := CreateBGPAdvertisement("test", "metallb-system")
 
 	AddBGPAdvertisementCommunity(advert, "65535:65282")
 
@@ -396,10 +281,7 @@ func TestAddBGPAdvertisementCommunity(t *testing.T) {
 }
 
 func TestAddBGPAdvertisementPeer(t *testing.T) {
-	advert := BGPAdvertisement(&BGPAdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	advert := CreateBGPAdvertisement("test", "metallb-system")
 
 	AddBGPAdvertisementPeer(advert, "peer-1")
 
@@ -409,10 +291,7 @@ func TestAddBGPAdvertisementPeer(t *testing.T) {
 }
 
 func TestSetBGPAdvertisementLocalPref(t *testing.T) {
-	advert := BGPAdvertisement(&BGPAdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	advert := CreateBGPAdvertisement("test", "metallb-system")
 
 	SetBGPAdvertisementLocalPref(advert, 150)
 
@@ -422,10 +301,7 @@ func TestSetBGPAdvertisementLocalPref(t *testing.T) {
 }
 
 func TestAddL2AdvertisementIPAddressPool(t *testing.T) {
-	l2 := L2Advertisement(&L2AdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	l2 := CreateL2Advertisement("test", "metallb-system")
 
 	AddL2AdvertisementIPAddressPool(l2, "pool-1")
 
@@ -435,10 +311,7 @@ func TestAddL2AdvertisementIPAddressPool(t *testing.T) {
 }
 
 func TestAddL2AdvertisementNodeSelector(t *testing.T) {
-	l2 := L2Advertisement(&L2AdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	l2 := CreateL2Advertisement("test", "metallb-system")
 
 	sel := metav1.LabelSelector{
 		MatchLabels: map[string]string{"zone": "us-west"},
@@ -451,10 +324,7 @@ func TestAddL2AdvertisementNodeSelector(t *testing.T) {
 }
 
 func TestAddL2AdvertisementInterface(t *testing.T) {
-	l2 := L2Advertisement(&L2AdvertisementConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	l2 := CreateL2Advertisement("test", "metallb-system")
 
 	AddL2AdvertisementInterface(l2, "eth0")
 
@@ -468,10 +338,7 @@ func TestAddL2AdvertisementInterface(t *testing.T) {
 }
 
 func TestSetBFDProfileDetectMultiplier(t *testing.T) {
-	bfd := BFDProfile(&BFDProfileConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	bfd := CreateBFDProfile("test", "metallb-system")
 
 	SetBFDProfileDetectMultiplier(bfd, 5)
 
@@ -481,10 +348,7 @@ func TestSetBFDProfileDetectMultiplier(t *testing.T) {
 }
 
 func TestSetBFDProfileEchoInterval(t *testing.T) {
-	bfd := BFDProfile(&BFDProfileConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	bfd := CreateBFDProfile("test", "metallb-system")
 
 	SetBFDProfileEchoInterval(bfd, 100)
 
@@ -494,10 +358,7 @@ func TestSetBFDProfileEchoInterval(t *testing.T) {
 }
 
 func TestSetBFDProfileEchoMode(t *testing.T) {
-	bfd := BFDProfile(&BFDProfileConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	bfd := CreateBFDProfile("test", "metallb-system")
 
 	SetBFDProfileEchoMode(bfd, true)
 
@@ -507,10 +368,7 @@ func TestSetBFDProfileEchoMode(t *testing.T) {
 }
 
 func TestSetBFDProfilePassiveMode(t *testing.T) {
-	bfd := BFDProfile(&BFDProfileConfig{
-		Name:      "test",
-		Namespace: "metallb-system",
-	})
+	bfd := CreateBFDProfile("test", "metallb-system")
 
 	SetBFDProfilePassiveMode(bfd, true)
 
