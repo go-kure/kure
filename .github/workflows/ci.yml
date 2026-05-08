@@ -283,6 +283,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Diagnose cache routing
+      run: |
+        echo "ACTIONS_CACHE_URL=$ACTIONS_CACHE_URL"
+        echo "ACTIONS_RESULTS_URL=$ACTIONS_RESULTS_URL"
+        echo "ACTIONS_CACHE_SERVICE_V2=$ACTIONS_CACHE_SERVICE_V2"
+        curl -fs http://actions-cache-server.arc-runners.svc.cluster.local:3000/health && echo "in-cluster: reachable" || echo "in-cluster: UNREACHABLE"
+
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
