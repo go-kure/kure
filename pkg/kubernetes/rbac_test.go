@@ -29,9 +29,7 @@ func TestAddRoleRule(t *testing.T) {
 		Resources: []string{"pods"},
 		Verbs:     []string{"get", "list"},
 	}
-	if err := AddRoleRule(r, rule); err != nil {
-		t.Fatalf("AddRoleRule returned error: %v", err)
-	}
+	AddRoleRule(r, rule)
 	if len(r.Rules) != 1 {
 		t.Fatalf("expected 1 rule, got %d", len(r.Rules))
 	}
@@ -60,9 +58,7 @@ func TestSetRoleBindingRoleRef(t *testing.T) {
 		Kind:     "Role",
 		Name:     "my-role",
 	}
-	if err := SetRoleBindingRoleRef(rb, ref); err != nil {
-		t.Fatalf("SetRoleBindingRoleRef returned error: %v", err)
-	}
+	SetRoleBindingRoleRef(rb, ref)
 	if rb.RoleRef != ref {
 		t.Errorf("role ref not set correctly")
 	}
@@ -75,9 +71,7 @@ func TestAddRoleBindingSubject(t *testing.T) {
 		Name:      "my-sa",
 		Namespace: "ns",
 	}
-	if err := AddRoleBindingSubject(rb, subj); err != nil {
-		t.Fatalf("AddRoleBindingSubject returned error: %v", err)
-	}
+	AddRoleBindingSubject(rb, subj)
 	if len(rb.Subjects) != 1 || rb.Subjects[0] != subj {
 		t.Errorf("subject not added correctly")
 	}
@@ -103,9 +97,7 @@ func TestAddClusterRoleRule(t *testing.T) {
 		Resources: []string{"deployments"},
 		Verbs:     []string{"get", "list", "watch"},
 	}
-	if err := AddClusterRoleRule(cr, rule); err != nil {
-		t.Fatalf("AddClusterRoleRule returned error: %v", err)
-	}
+	AddClusterRoleRule(cr, rule)
 	if len(cr.Rules) != 1 {
 		t.Fatalf("expected 1 rule, got %d", len(cr.Rules))
 	}
@@ -134,9 +126,7 @@ func TestSetClusterRoleBindingRoleRef(t *testing.T) {
 		Kind:     "ClusterRole",
 		Name:     "my-cr",
 	}
-	if err := SetClusterRoleBindingRoleRef(crb, ref); err != nil {
-		t.Fatalf("SetClusterRoleBindingRoleRef returned error: %v", err)
-	}
+	SetClusterRoleBindingRoleRef(crb, ref)
 	if crb.RoleRef != ref {
 		t.Errorf("role ref not set correctly")
 	}
@@ -149,9 +139,7 @@ func TestAddClusterRoleBindingSubject(t *testing.T) {
 		Name:      "my-sa",
 		Namespace: "ns",
 	}
-	if err := AddClusterRoleBindingSubject(crb, subj); err != nil {
-		t.Fatalf("AddClusterRoleBindingSubject returned error: %v", err)
-	}
+	AddClusterRoleBindingSubject(crb, subj)
 	if len(crb.Subjects) != 1 || crb.Subjects[0] != subj {
 		t.Errorf("subject not added correctly")
 	}
@@ -162,22 +150,11 @@ func TestRBACNilGuards(t *testing.T) {
 	ref := rbacv1.RoleRef{}
 	subj := rbacv1.Subject{}
 
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"AddRoleRule", func() error { return AddRoleRule(nil, rule) }},
-		{"SetRoleBindingRoleRef", func() error { return SetRoleBindingRoleRef(nil, ref) }},
-		{"AddRoleBindingSubject", func() error { return AddRoleBindingSubject(nil, subj) }},
-		{"AddClusterRoleRule", func() error { return AddClusterRoleRule(nil, rule) }},
-		{"SetClusterRoleBindingRoleRef", func() error { return SetClusterRoleBindingRoleRef(nil, ref) }},
-		{"AddClusterRoleBindingSubject", func() error { return AddClusterRoleBindingSubject(nil, subj) }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
-	}
+	// All RBAC functions now panic on nil receiver
+	assertPanics(t, func() { AddRoleRule(nil, rule) })
+	assertPanics(t, func() { SetRoleBindingRoleRef(nil, ref) })
+	assertPanics(t, func() { AddRoleBindingSubject(nil, subj) })
+	assertPanics(t, func() { AddClusterRoleRule(nil, rule) })
+	assertPanics(t, func() { SetClusterRoleBindingRoleRef(nil, ref) })
+	assertPanics(t, func() { AddClusterRoleBindingSubject(nil, subj) })
 }

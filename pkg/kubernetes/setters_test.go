@@ -12,10 +12,7 @@ import (
 func TestAddContainerPort_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	port := corev1.ContainerPort{ContainerPort: 8080}
-	err := AddContainerPort(container, port)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddContainerPort(container, port)
 	if len(container.Ports) != 1 {
 		t.Fatal("expected Port to be added")
 	}
@@ -24,10 +21,7 @@ func TestAddContainerPort_Success(t *testing.T) {
 func TestAddContainerEnv_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	env := corev1.EnvVar{Name: "KEY", Value: "value"}
-	err := AddContainerEnv(container, env)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddContainerEnv(container, env)
 	if len(container.Env) != 1 {
 		t.Fatal("expected Env to be added")
 	}
@@ -36,10 +30,7 @@ func TestAddContainerEnv_Success(t *testing.T) {
 func TestAddContainerEnvFrom_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	envFrom := corev1.EnvFromSource{}
-	err := AddContainerEnvFrom(container, envFrom)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddContainerEnvFrom(container, envFrom)
 	if len(container.EnvFrom) != 1 {
 		t.Fatal("expected EnvFrom to be added")
 	}
@@ -48,10 +39,7 @@ func TestAddContainerEnvFrom_Success(t *testing.T) {
 func TestAddContainerVolumeMount_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	mount := corev1.VolumeMount{Name: "vol", MountPath: "/data"}
-	err := AddContainerVolumeMount(container, mount)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddContainerVolumeMount(container, mount)
 	if len(container.VolumeMounts) != 1 {
 		t.Fatal("expected VolumeMount to be added")
 	}
@@ -60,10 +48,7 @@ func TestAddContainerVolumeMount_Success(t *testing.T) {
 func TestAddContainerVolumeDevice_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	device := corev1.VolumeDevice{Name: "dev", DevicePath: "/dev/sda"}
-	err := AddContainerVolumeDevice(container, device)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	AddContainerVolumeDevice(container, device)
 	if len(container.VolumeDevices) != 1 {
 		t.Fatal("expected VolumeDevice to be added")
 	}
@@ -72,10 +57,7 @@ func TestAddContainerVolumeDevice_Success(t *testing.T) {
 func TestSetContainerLivenessProbe_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	probe := corev1.Probe{}
-	err := SetContainerLivenessProbe(container, probe)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetContainerLivenessProbe(container, probe)
 	if container.LivenessProbe == nil {
 		t.Fatal("expected LivenessProbe to be set")
 	}
@@ -84,10 +66,7 @@ func TestSetContainerLivenessProbe_Success(t *testing.T) {
 func TestSetContainerReadinessProbe_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	probe := corev1.Probe{}
-	err := SetContainerReadinessProbe(container, probe)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetContainerReadinessProbe(container, probe)
 	if container.ReadinessProbe == nil {
 		t.Fatal("expected ReadinessProbe to be set")
 	}
@@ -96,10 +75,7 @@ func TestSetContainerReadinessProbe_Success(t *testing.T) {
 func TestSetContainerStartupProbe_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	probe := corev1.Probe{}
-	err := SetContainerStartupProbe(container, probe)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetContainerStartupProbe(container, probe)
 	if container.StartupProbe == nil {
 		t.Fatal("expected StartupProbe to be set")
 	}
@@ -112,18 +88,12 @@ func TestSetContainerResources_Success(t *testing.T) {
 			"cpu": resource.MustParse("1"),
 		},
 	}
-	err := SetContainerResources(container, resources)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetContainerResources(container, resources)
 }
 
 func TestSetContainerImagePullPolicy_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
-	err := SetContainerImagePullPolicy(container, corev1.PullAlways)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetContainerImagePullPolicy(container, corev1.PullAlways)
 	if container.ImagePullPolicy != corev1.PullAlways {
 		t.Fatal("expected ImagePullPolicy to be set")
 	}
@@ -132,10 +102,7 @@ func TestSetContainerImagePullPolicy_Success(t *testing.T) {
 func TestSetContainerSecurityContext_Success(t *testing.T) {
 	container := CreateContainer("test", "nginx", nil, nil)
 	sc := corev1.SecurityContext{}
-	err := SetContainerSecurityContext(container, sc)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetContainerSecurityContext(container, sc)
 	if container.SecurityContext == nil {
 		t.Fatal("expected SecurityContext to be set")
 	}
@@ -215,55 +182,37 @@ func TestAddDaemonSetTopologySpreadConstraints_Success(t *testing.T) {
 
 func TestSetDaemonSetServiceAccountName_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
-	err := SetDaemonSetServiceAccountName(ds, "test-sa")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetDaemonSetServiceAccountName(ds, "test-sa")
 }
 
 func TestSetDaemonSetSecurityContext_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
 	sc := &corev1.PodSecurityContext{}
-	err := SetDaemonSetSecurityContext(ds, sc)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetDaemonSetSecurityContext(ds, sc)
 }
 
 func TestSetDaemonSetAffinity_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
 	affinity := &corev1.Affinity{}
-	err := SetDaemonSetAffinity(ds, affinity)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetDaemonSetAffinity(ds, affinity)
 }
 
 func TestSetDaemonSetNodeSelector_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
 	selector := map[string]string{"key": "value"}
-	err := SetDaemonSetNodeSelector(ds, selector)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetDaemonSetNodeSelector(ds, selector)
 }
 
 func TestSetDaemonSetUpdateStrategy_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
 	strategy := appsv1.DaemonSetUpdateStrategy{}
-	err := SetDaemonSetUpdateStrategy(ds, strategy)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetDaemonSetUpdateStrategy(ds, strategy)
 }
 
 func TestSetDaemonSetRevisionHistoryLimit_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
 	limit := int32(5)
-	err := SetDaemonSetRevisionHistoryLimit(ds, &limit)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetDaemonSetRevisionHistoryLimit(ds, &limit)
 	if ds.Spec.RevisionHistoryLimit == nil || *ds.Spec.RevisionHistoryLimit != 5 {
 		t.Fatal("expected RevisionHistoryLimit to be 5")
 	}
@@ -343,45 +292,30 @@ func TestAddJobTopologySpreadConstraint_Success(t *testing.T) {
 
 func TestSetJobServiceAccountName_Success(t *testing.T) {
 	job := CreateJob("test", "default")
-	err := SetJobServiceAccountName(job, "test-sa")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobServiceAccountName(job, "test-sa")
 }
 
 func TestSetJobSecurityContext_Success(t *testing.T) {
 	job := CreateJob("test", "default")
 	sc := &corev1.PodSecurityContext{}
-	err := SetJobSecurityContext(job, sc)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobSecurityContext(job, sc)
 }
 
 func TestSetJobAffinity_Success(t *testing.T) {
 	job := CreateJob("test", "default")
 	affinity := &corev1.Affinity{}
-	err := SetJobAffinity(job, affinity)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobAffinity(job, affinity)
 }
 
 func TestSetJobNodeSelector_Success(t *testing.T) {
 	job := CreateJob("test", "default")
 	selector := map[string]string{"key": "value"}
-	err := SetJobNodeSelector(job, selector)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobNodeSelector(job, selector)
 }
 
 func TestSetJobCompletions_Success(t *testing.T) {
 	job := CreateJob("test", "default")
-	err := SetJobCompletions(job, 1)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobCompletions(job, 1)
 	if job.Spec.Completions == nil || *job.Spec.Completions != 1 {
 		t.Fatal("expected Completions to be 1")
 	}
@@ -389,10 +323,7 @@ func TestSetJobCompletions_Success(t *testing.T) {
 
 func TestSetJobParallelism_Success(t *testing.T) {
 	job := CreateJob("test", "default")
-	err := SetJobParallelism(job, 2)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobParallelism(job, 2)
 	if job.Spec.Parallelism == nil || *job.Spec.Parallelism != 2 {
 		t.Fatal("expected Parallelism to be 2")
 	}
@@ -400,10 +331,7 @@ func TestSetJobParallelism_Success(t *testing.T) {
 
 func TestSetJobBackoffLimit_Success(t *testing.T) {
 	job := CreateJob("test", "default")
-	err := SetJobBackoffLimit(job, 3)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobBackoffLimit(job, 3)
 	if job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 3 {
 		t.Fatal("expected BackoffLimit to be 3")
 	}
@@ -411,10 +339,7 @@ func TestSetJobBackoffLimit_Success(t *testing.T) {
 
 func TestSetJobTTLSecondsAfterFinished_Success(t *testing.T) {
 	job := CreateJob("test", "default")
-	err := SetJobTTLSecondsAfterFinished(job, 100)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobTTLSecondsAfterFinished(job, 100)
 	if job.Spec.TTLSecondsAfterFinished == nil || *job.Spec.TTLSecondsAfterFinished != 100 {
 		t.Fatal("expected TTLSecondsAfterFinished to be 100")
 	}
@@ -423,10 +348,7 @@ func TestSetJobTTLSecondsAfterFinished_Success(t *testing.T) {
 func TestSetJobActiveDeadlineSeconds_Success(t *testing.T) {
 	job := CreateJob("test", "default")
 	secs := int64(600)
-	err := SetJobActiveDeadlineSeconds(job, &secs)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetJobActiveDeadlineSeconds(job, &secs)
 	if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != 600 {
 		t.Fatal("expected ActiveDeadlineSeconds to be 600")
 	}
@@ -435,10 +357,7 @@ func TestSetJobActiveDeadlineSeconds_Success(t *testing.T) {
 // StatefulSet setter tests
 func TestSetStatefulSetReplicas_Success(t *testing.T) {
 	ss := CreateStatefulSet("test", "default")
-	err := SetStatefulSetReplicas(ss, 3)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetStatefulSetReplicas(ss, 3)
 	if ss.Spec.Replicas == nil || *ss.Spec.Replicas != 3 {
 		t.Fatal("expected Replicas to be 3")
 	}
@@ -446,10 +365,7 @@ func TestSetStatefulSetReplicas_Success(t *testing.T) {
 
 func TestSetStatefulSetServiceName_Success(t *testing.T) {
 	ss := CreateStatefulSet("test", "default")
-	err := SetStatefulSetServiceName(ss, "headless")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetStatefulSetServiceName(ss, "headless")
 	if ss.Spec.ServiceName != "headless" {
 		t.Fatal("expected ServiceName to be set")
 	}
@@ -458,19 +374,13 @@ func TestSetStatefulSetServiceName_Success(t *testing.T) {
 func TestSetStatefulSetUpdateStrategy_Success(t *testing.T) {
 	ss := CreateStatefulSet("test", "default")
 	strategy := appsv1.StatefulSetUpdateStrategy{Type: appsv1.RollingUpdateStatefulSetStrategyType}
-	err := SetStatefulSetUpdateStrategy(ss, strategy)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetStatefulSetUpdateStrategy(ss, strategy)
 }
 
 func TestSetStatefulSetRevisionHistoryLimit_Success(t *testing.T) {
 	ss := CreateStatefulSet("test", "default")
 	limit := int32(5)
-	err := SetStatefulSetRevisionHistoryLimit(ss, &limit)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetStatefulSetRevisionHistoryLimit(ss, &limit)
 	if ss.Spec.RevisionHistoryLimit == nil || *ss.Spec.RevisionHistoryLimit != 5 {
 		t.Fatal("expected RevisionHistoryLimit to be 5")
 	}
@@ -478,10 +388,7 @@ func TestSetStatefulSetRevisionHistoryLimit_Success(t *testing.T) {
 
 func TestSetStatefulSetPodManagementPolicy_Success(t *testing.T) {
 	ss := CreateStatefulSet("test", "default")
-	err := SetStatefulSetPodManagementPolicy(ss, appsv1.ParallelPodManagement)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	SetStatefulSetPodManagementPolicy(ss, appsv1.ParallelPodManagement)
 	if ss.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 		t.Fatal("expected PodManagementPolicy to be set")
 	}

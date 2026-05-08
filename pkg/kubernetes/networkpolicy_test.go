@@ -34,51 +34,32 @@ func TestCreateNetworkPolicy(t *testing.T) {
 }
 
 func TestNetworkPolicyNilErrors(t *testing.T) {
-	if err := SetNetworkPolicyPodSelector(nil, metav1.LabelSelector{}); err == nil {
-		t.Error("expected error for nil NetworkPolicy on SetNetworkPolicyPodSelector")
-	}
-	if err := AddNetworkPolicyPolicyType(nil, netv1.PolicyTypeIngress); err == nil {
-		t.Error("expected error for nil NetworkPolicy on AddNetworkPolicyPolicyType")
-	}
-	if err := SetNetworkPolicyPolicyTypes(nil, nil); err == nil {
-		t.Error("expected error for nil NetworkPolicy on SetNetworkPolicyPolicyTypes")
-	}
-	if err := AddNetworkPolicyIngressRule(nil, netv1.NetworkPolicyIngressRule{}); err == nil {
-		t.Error("expected error for nil NetworkPolicy on AddNetworkPolicyIngressRule")
-	}
-	if err := SetNetworkPolicyIngressRules(nil, nil); err == nil {
-		t.Error("expected error for nil NetworkPolicy on SetNetworkPolicyIngressRules")
-	}
-	if err := AddNetworkPolicyEgressRule(nil, netv1.NetworkPolicyEgressRule{}); err == nil {
-		t.Error("expected error for nil NetworkPolicy on AddNetworkPolicyEgressRule")
-	}
-	if err := SetNetworkPolicyEgressRules(nil, nil); err == nil {
-		t.Error("expected error for nil NetworkPolicy on SetNetworkPolicyEgressRules")
-	}
+	// All NetworkPolicy functions now panic on nil receiver
+	assertPanics(t, func() { SetNetworkPolicyPodSelector(nil, metav1.LabelSelector{}) })
+	assertPanics(t, func() { AddNetworkPolicyPolicyType(nil, netv1.PolicyTypeIngress) })
+	assertPanics(t, func() { SetNetworkPolicyPolicyTypes(nil, nil) })
+	assertPanics(t, func() { AddNetworkPolicyIngressRule(nil, netv1.NetworkPolicyIngressRule{}) })
+	assertPanics(t, func() { SetNetworkPolicyIngressRules(nil, nil) })
+	assertPanics(t, func() { AddNetworkPolicyEgressRule(nil, netv1.NetworkPolicyEgressRule{}) })
+	assertPanics(t, func() { SetNetworkPolicyEgressRules(nil, nil) })
 }
 
 func TestNetworkPolicyFunctions(t *testing.T) {
 	np := CreateNetworkPolicy("app", "ns")
 
 	sel := metav1.LabelSelector{MatchLabels: map[string]string{"tier": "frontend"}}
-	if err := SetNetworkPolicyPodSelector(np, sel); err != nil {
-		t.Fatalf("SetNetworkPolicyPodSelector returned error: %v", err)
-	}
+	SetNetworkPolicyPodSelector(np, sel)
 	if !reflect.DeepEqual(np.Spec.PodSelector, sel) {
 		t.Errorf("pod selector not set")
 	}
 
-	if err := AddNetworkPolicyPolicyType(np, netv1.PolicyTypeIngress); err != nil {
-		t.Fatalf("AddNetworkPolicyPolicyType returned error: %v", err)
-	}
+	AddNetworkPolicyPolicyType(np, netv1.PolicyTypeIngress)
 	if len(np.Spec.PolicyTypes) != 1 || np.Spec.PolicyTypes[0] != netv1.PolicyTypeIngress {
 		t.Errorf("policy type not added")
 	}
 
 	types := []netv1.PolicyType{netv1.PolicyTypeIngress, netv1.PolicyTypeEgress}
-	if err := SetNetworkPolicyPolicyTypes(np, types); err != nil {
-		t.Fatalf("SetNetworkPolicyPolicyTypes returned error: %v", err)
-	}
+	SetNetworkPolicyPolicyTypes(np, types)
 	if !reflect.DeepEqual(np.Spec.PolicyTypes, types) {
 		t.Errorf("policy types not set")
 	}
@@ -92,33 +73,25 @@ func TestNetworkPolicyFunctions(t *testing.T) {
 		t.Errorf("rule not populated correctly")
 	}
 
-	if err := AddNetworkPolicyIngressRule(np, rule); err != nil {
-		t.Fatalf("AddNetworkPolicyIngressRule returned error: %v", err)
-	}
+	AddNetworkPolicyIngressRule(np, rule)
 	if len(np.Spec.Ingress) != 1 {
 		t.Errorf("ingress rule not added")
 	}
 
 	ingressRules := []netv1.NetworkPolicyIngressRule{{}, {}}
-	if err := SetNetworkPolicyIngressRules(np, ingressRules); err != nil {
-		t.Fatalf("SetNetworkPolicyIngressRules returned error: %v", err)
-	}
+	SetNetworkPolicyIngressRules(np, ingressRules)
 	if len(np.Spec.Ingress) != 2 {
 		t.Errorf("ingress rules not set")
 	}
 
 	egressRule := netv1.NetworkPolicyEgressRule{}
-	if err := AddNetworkPolicyEgressRule(np, egressRule); err != nil {
-		t.Fatalf("AddNetworkPolicyEgressRule returned error: %v", err)
-	}
+	AddNetworkPolicyEgressRule(np, egressRule)
 	if len(np.Spec.Egress) != 1 {
 		t.Errorf("egress rule not added")
 	}
 
 	egressRules := []netv1.NetworkPolicyEgressRule{{}, {}}
-	if err := SetNetworkPolicyEgressRules(np, egressRules); err != nil {
-		t.Fatalf("SetNetworkPolicyEgressRules returned error: %v", err)
-	}
+	SetNetworkPolicyEgressRules(np, egressRules)
 	if len(np.Spec.Egress) != 2 {
 		t.Errorf("egress rules not set")
 	}

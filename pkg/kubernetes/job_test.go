@@ -75,69 +75,51 @@ func TestJobFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	if err := SetJobServiceAccountName(job, "sa"); err != nil {
-		t.Fatalf("SetJobServiceAccountName returned error: %v", err)
-	}
+	SetJobServiceAccountName(job, "sa")
 	if job.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	if err := SetJobSecurityContext(job, sc); err != nil {
-		t.Fatalf("SetJobSecurityContext returned error: %v", err)
-	}
+	SetJobSecurityContext(job, sc)
 	if job.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	if err := SetJobAffinity(job, aff); err != nil {
-		t.Fatalf("SetJobAffinity returned error: %v", err)
-	}
+	SetJobAffinity(job, aff)
 	if job.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	sel := map[string]string{"role": "db"}
-	if err := SetJobNodeSelector(job, sel); err != nil {
-		t.Fatalf("SetJobNodeSelector returned error: %v", err)
-	}
+	SetJobNodeSelector(job, sel)
 	if !reflect.DeepEqual(job.Spec.Template.Spec.NodeSelector, sel) {
 		t.Errorf("node selector not set")
 	}
 
-	if err := SetJobCompletions(job, 2); err != nil {
-		t.Fatalf("SetJobCompletions returned error: %v", err)
-	}
+	SetJobCompletions(job, 2)
 	if job.Spec.Completions == nil || *job.Spec.Completions != 2 {
 		t.Errorf("completions not set")
 	}
 
-	if err := SetJobParallelism(job, 3); err != nil {
-		t.Fatalf("SetJobParallelism returned error: %v", err)
-	}
+	SetJobParallelism(job, 3)
 	if job.Spec.Parallelism == nil || *job.Spec.Parallelism != 3 {
 		t.Errorf("parallelism not set")
 	}
 
-	if err := SetJobBackoffLimit(job, 4); err != nil {
-		t.Fatalf("SetJobBackoffLimit returned error: %v", err)
-	}
+	SetJobBackoffLimit(job, 4)
 	if job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 4 {
 		t.Errorf("backoff limit not set")
 	}
 
-	if err := SetJobTTLSecondsAfterFinished(job, 30); err != nil {
-		t.Fatalf("SetJobTTLSecondsAfterFinished returned error: %v", err)
-	}
+	SetJobTTLSecondsAfterFinished(job, 30)
 	if job.Spec.TTLSecondsAfterFinished == nil || *job.Spec.TTLSecondsAfterFinished != 30 {
 		t.Errorf("ttl not set")
 	}
 
 	ad := int64(100)
-	if err := SetJobActiveDeadlineSeconds(job, &ad); err != nil {
-		t.Fatalf("SetJobActiveDeadlineSeconds returned error: %v", err)
-	}
+	SetJobActiveDeadlineSeconds(job, &ad)
 	if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != 100 {
 		t.Errorf("active deadline not set")
 	}
@@ -145,34 +127,38 @@ func TestJobFunctions(t *testing.T) {
 
 func TestJobNilGuards(t *testing.T) {
 	ad := int64(1)
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"SetJobPodSpec", func() error { return SetJobPodSpec(nil, &corev1.PodSpec{}) }},
-		{"AddJobContainer", func() error { return AddJobContainer(nil, &corev1.Container{}) }},
-		{"AddJobInitContainer", func() error { return AddJobInitContainer(nil, &corev1.Container{}) }},
-		{"AddJobVolume", func() error { return AddJobVolume(nil, &corev1.Volume{}) }},
-		{"AddJobImagePullSecret", func() error { return AddJobImagePullSecret(nil, &corev1.LocalObjectReference{}) }},
-		{"AddJobToleration", func() error { return AddJobToleration(nil, &corev1.Toleration{}) }},
-		{"AddJobTopologySpreadConstraint", func() error {
-			return AddJobTopologySpreadConstraint(nil, &corev1.TopologySpreadConstraint{})
-		}},
-		{"SetJobServiceAccountName", func() error { return SetJobServiceAccountName(nil, "sa") }},
-		{"SetJobSecurityContext", func() error { return SetJobSecurityContext(nil, nil) }},
-		{"SetJobAffinity", func() error { return SetJobAffinity(nil, nil) }},
-		{"SetJobNodeSelector", func() error { return SetJobNodeSelector(nil, nil) }},
-		{"SetJobCompletions", func() error { return SetJobCompletions(nil, 1) }},
-		{"SetJobParallelism", func() error { return SetJobParallelism(nil, 1) }},
-		{"SetJobBackoffLimit", func() error { return SetJobBackoffLimit(nil, 1) }},
-		{"SetJobTTLSecondsAfterFinished", func() error { return SetJobTTLSecondsAfterFinished(nil, 1) }},
-		{"SetJobActiveDeadlineSeconds", func() error { return SetJobActiveDeadlineSeconds(nil, &ad) }},
+
+	// Functions with secondary nil checks — still return errors
+	if err := SetJobPodSpec(nil, &corev1.PodSpec{}); err == nil {
+		t.Error("SetJobPodSpec(nil) should return error")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
+	if err := AddJobContainer(nil, &corev1.Container{}); err == nil {
+		t.Error("AddJobContainer(nil) should return error")
 	}
+	if err := AddJobInitContainer(nil, &corev1.Container{}); err == nil {
+		t.Error("AddJobInitContainer(nil) should return error")
+	}
+	if err := AddJobVolume(nil, &corev1.Volume{}); err == nil {
+		t.Error("AddJobVolume(nil) should return error")
+	}
+	if err := AddJobImagePullSecret(nil, &corev1.LocalObjectReference{}); err == nil {
+		t.Error("AddJobImagePullSecret(nil) should return error")
+	}
+	if err := AddJobToleration(nil, &corev1.Toleration{}); err == nil {
+		t.Error("AddJobToleration(nil) should return error")
+	}
+	if err := AddJobTopologySpreadConstraint(nil, &corev1.TopologySpreadConstraint{}); err == nil {
+		t.Error("AddJobTopologySpreadConstraint(nil) should return error")
+	}
+
+	// Functions that now panic on nil receiver
+	assertPanics(t, func() { SetJobServiceAccountName(nil, "sa") })
+	assertPanics(t, func() { SetJobSecurityContext(nil, nil) })
+	assertPanics(t, func() { SetJobAffinity(nil, nil) })
+	assertPanics(t, func() { SetJobNodeSelector(nil, nil) })
+	assertPanics(t, func() { SetJobCompletions(nil, 1) })
+	assertPanics(t, func() { SetJobParallelism(nil, 1) })
+	assertPanics(t, func() { SetJobBackoffLimit(nil, 1) })
+	assertPanics(t, func() { SetJobTTLSecondsAfterFinished(nil, 1) })
+	assertPanics(t, func() { SetJobActiveDeadlineSeconds(nil, &ad) })
 }

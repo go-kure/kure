@@ -23,6 +23,7 @@ func TestCreateDeployment(t *testing.T) {
 }
 
 func TestDeploymentNilErrors(t *testing.T) {
+	// Functions with secondary nil checks — still return error on nil receiver
 	if err := SetDeploymentPodSpec(nil, &corev1.PodSpec{}); err == nil {
 		t.Error("expected error for nil Deployment on SetDeploymentPodSpec")
 	}
@@ -44,33 +45,17 @@ func TestDeploymentNilErrors(t *testing.T) {
 	if err := AddDeploymentTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{}); err == nil {
 		t.Error("expected error for nil Deployment on AddDeploymentTopologySpreadConstraints")
 	}
-	if err := SetDeploymentServiceAccountName(nil, "sa"); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentServiceAccountName")
-	}
-	if err := SetDeploymentSecurityContext(nil, &corev1.PodSecurityContext{}); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentSecurityContext")
-	}
-	if err := SetDeploymentAffinity(nil, &corev1.Affinity{}); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentAffinity")
-	}
-	if err := SetDeploymentNodeSelector(nil, map[string]string{}); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentNodeSelector")
-	}
-	if err := SetDeploymentReplicas(nil, 3); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentReplicas")
-	}
-	if err := SetDeploymentStrategy(nil, appsv1.DeploymentStrategy{}); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentStrategy")
-	}
-	if err := SetDeploymentRevisionHistoryLimit(nil, 5); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentRevisionHistoryLimit")
-	}
-	if err := SetDeploymentMinReadySeconds(nil, 10); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentMinReadySeconds")
-	}
-	if err := SetDeploymentProgressDeadlineSeconds(nil, 60); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentProgressDeadlineSeconds")
-	}
+
+	// Functions that now panic on nil receiver
+	assertPanics(t, func() { SetDeploymentServiceAccountName(nil, "sa") })
+	assertPanics(t, func() { SetDeploymentSecurityContext(nil, &corev1.PodSecurityContext{}) })
+	assertPanics(t, func() { SetDeploymentAffinity(nil, &corev1.Affinity{}) })
+	assertPanics(t, func() { SetDeploymentNodeSelector(nil, map[string]string{}) })
+	assertPanics(t, func() { SetDeploymentReplicas(nil, 3) })
+	assertPanics(t, func() { SetDeploymentStrategy(nil, appsv1.DeploymentStrategy{}) })
+	assertPanics(t, func() { SetDeploymentRevisionHistoryLimit(nil, 5) })
+	assertPanics(t, func() { SetDeploymentMinReadySeconds(nil, 10) })
+	assertPanics(t, func() { SetDeploymentProgressDeadlineSeconds(nil, 60) })
 }
 
 func TestDeploymentNilArgErrors(t *testing.T) {
@@ -220,69 +205,51 @@ func TestDeploymentFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	if err := SetDeploymentServiceAccountName(dep, "sa"); err != nil {
-		t.Fatalf("SetDeploymentServiceAccountName returned error: %v", err)
-	}
+	SetDeploymentServiceAccountName(dep, "sa")
 	if dep.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account name not set")
 	}
 
 	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
-	if err := SetDeploymentSecurityContext(dep, sc); err != nil {
-		t.Fatalf("SetDeploymentSecurityContext returned error: %v", err)
-	}
+	SetDeploymentSecurityContext(dep, sc)
 	if dep.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	if err := SetDeploymentAffinity(dep, aff); err != nil {
-		t.Fatalf("SetDeploymentAffinity returned error: %v", err)
-	}
+	SetDeploymentAffinity(dep, aff)
 	if dep.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	ns := map[string]string{"role": "db"}
-	if err := SetDeploymentNodeSelector(dep, ns); err != nil {
-		t.Fatalf("SetDeploymentNodeSelector returned error: %v", err)
-	}
+	SetDeploymentNodeSelector(dep, ns)
 	if !reflect.DeepEqual(dep.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}
 
-	if err := SetDeploymentReplicas(dep, 3); err != nil {
-		t.Fatalf("SetDeploymentReplicas returned error: %v", err)
-	}
+	SetDeploymentReplicas(dep, 3)
 	if dep.Spec.Replicas == nil || *dep.Spec.Replicas != 3 {
 		t.Errorf("replicas not set")
 	}
 
 	strategy := appsv1.DeploymentStrategy{Type: appsv1.RollingUpdateDeploymentStrategyType}
-	if err := SetDeploymentStrategy(dep, strategy); err != nil {
-		t.Fatalf("SetDeploymentStrategy returned error: %v", err)
-	}
+	SetDeploymentStrategy(dep, strategy)
 	if dep.Spec.Strategy.Type != appsv1.RollingUpdateDeploymentStrategyType {
 		t.Errorf("strategy not set")
 	}
 
-	if err := SetDeploymentRevisionHistoryLimit(dep, 5); err != nil {
-		t.Fatalf("SetDeploymentRevisionHistoryLimit returned error: %v", err)
-	}
+	SetDeploymentRevisionHistoryLimit(dep, 5)
 	if dep.Spec.RevisionHistoryLimit == nil || *dep.Spec.RevisionHistoryLimit != 5 {
 		t.Errorf("revision history limit not set")
 	}
 
-	if err := SetDeploymentMinReadySeconds(dep, 10); err != nil {
-		t.Fatalf("SetDeploymentMinReadySeconds returned error: %v", err)
-	}
+	SetDeploymentMinReadySeconds(dep, 10)
 	if dep.Spec.MinReadySeconds != 10 {
 		t.Errorf("min ready seconds not set")
 	}
 
-	if err := SetDeploymentProgressDeadlineSeconds(dep, 60); err != nil {
-		t.Fatalf("SetDeploymentProgressDeadlineSeconds returned error: %v", err)
-	}
+	SetDeploymentProgressDeadlineSeconds(dep, 60)
 	if dep.Spec.ProgressDeadlineSeconds == nil || *dep.Spec.ProgressDeadlineSeconds != 60 {
 		t.Errorf("progress deadline seconds not set")
 	}

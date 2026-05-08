@@ -59,12 +59,11 @@ func SetResourceLimit(rr *corev1.ResourceRequirements, name corev1.ResourceName,
 }
 
 // AddResourceClaim appends a ResourceClaim to the ResourceRequirements.
-func AddResourceClaim(rr *corev1.ResourceRequirements, claim corev1.ResourceClaim) error {
+func AddResourceClaim(rr *corev1.ResourceRequirements, claim corev1.ResourceClaim) {
 	if rr == nil {
-		return errors.ErrNilResourceRequirements
+		panic("AddResourceClaim: rr must not be nil")
 	}
 	rr.Claims = append(rr.Claims, claim)
-	return nil
 }
 
 func setResourceQuantity(rr *corev1.ResourceRequirements, name corev1.ResourceName, value string, isRequest bool) error {

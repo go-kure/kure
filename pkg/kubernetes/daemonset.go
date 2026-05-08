@@ -1,11 +1,11 @@
 package kubernetes
 
 import (
-	"github.com/go-kure/kure/pkg/errors"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // CreateDaemonSet returns a DaemonSet with sane defaults.
@@ -98,51 +98,49 @@ func AddDaemonSetTopologySpreadConstraints(ds *appsv1.DaemonSet, c *corev1.Topol
 }
 
 // SetDaemonSetServiceAccountName sets the service account name.
-func SetDaemonSetServiceAccountName(ds *appsv1.DaemonSet, name string) error {
+func SetDaemonSetServiceAccountName(ds *appsv1.DaemonSet, name string) {
 	if ds == nil {
-		return errors.ErrNilDaemonSet
+		panic("SetDaemonSetServiceAccountName: ds must not be nil")
 	}
-	return SetPodSpecServiceAccountName(&ds.Spec.Template.Spec, name)
+	SetPodSpecServiceAccountName(&ds.Spec.Template.Spec, name)
 }
 
 // SetDaemonSetSecurityContext sets the pod security context.
-func SetDaemonSetSecurityContext(ds *appsv1.DaemonSet, sc *corev1.PodSecurityContext) error {
+func SetDaemonSetSecurityContext(ds *appsv1.DaemonSet, sc *corev1.PodSecurityContext) {
 	if ds == nil {
-		return errors.ErrNilDaemonSet
+		panic("SetDaemonSetSecurityContext: ds must not be nil")
 	}
-	return SetPodSpecSecurityContext(&ds.Spec.Template.Spec, sc)
+	SetPodSpecSecurityContext(&ds.Spec.Template.Spec, sc)
 }
 
 // SetDaemonSetAffinity sets the pod affinity rules.
-func SetDaemonSetAffinity(ds *appsv1.DaemonSet, aff *corev1.Affinity) error {
+func SetDaemonSetAffinity(ds *appsv1.DaemonSet, aff *corev1.Affinity) {
 	if ds == nil {
-		return errors.ErrNilDaemonSet
+		panic("SetDaemonSetAffinity: ds must not be nil")
 	}
-	return SetPodSpecAffinity(&ds.Spec.Template.Spec, aff)
+	SetPodSpecAffinity(&ds.Spec.Template.Spec, aff)
 }
 
 // SetDaemonSetNodeSelector sets the node selector.
-func SetDaemonSetNodeSelector(ds *appsv1.DaemonSet, ns map[string]string) error {
+func SetDaemonSetNodeSelector(ds *appsv1.DaemonSet, ns map[string]string) {
 	if ds == nil {
-		return errors.ErrNilDaemonSet
+		panic("SetDaemonSetNodeSelector: ds must not be nil")
 	}
-	return SetPodSpecNodeSelector(&ds.Spec.Template.Spec, ns)
+	SetPodSpecNodeSelector(&ds.Spec.Template.Spec, ns)
 }
 
 // SetDaemonSetUpdateStrategy sets the update strategy.
-func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strategy appsv1.DaemonSetUpdateStrategy) error {
+func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strategy appsv1.DaemonSetUpdateStrategy) {
 	if ds == nil {
-		return errors.ErrNilDaemonSet
+		panic("SetDaemonSetUpdateStrategy: ds must not be nil")
 	}
 	ds.Spec.UpdateStrategy = strategy
-	return nil
 }
 
 // SetDaemonSetRevisionHistoryLimit sets the revision history limit.
-func SetDaemonSetRevisionHistoryLimit(ds *appsv1.DaemonSet, limit *int32) error {
+func SetDaemonSetRevisionHistoryLimit(ds *appsv1.DaemonSet, limit *int32) {
 	if ds == nil {
-		return errors.ErrNilDaemonSet
+		panic("SetDaemonSetRevisionHistoryLimit: ds must not be nil")
 	}
 	ds.Spec.RevisionHistoryLimit = limit
-	return nil
 }

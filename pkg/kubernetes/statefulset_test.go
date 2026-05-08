@@ -129,84 +129,62 @@ func TestStatefulSetFunctions(t *testing.T) {
 	}
 
 	pvc := corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "data"}}
-	if err := AddStatefulSetVolumeClaimTemplate(sts, pvc); err != nil {
-		t.Fatalf("AddStatefulSetVolumeClaimTemplate returned error: %v", err)
-	}
+	AddStatefulSetVolumeClaimTemplate(sts, pvc)
 	if len(sts.Spec.VolumeClaimTemplates) != 1 {
 		t.Errorf("volume claim template not added")
 	}
 
-	if err := SetStatefulSetServiceAccountName(sts, "sa"); err != nil {
-		t.Fatalf("SetStatefulSetServiceAccountName returned error: %v", err)
-	}
+	SetStatefulSetServiceAccountName(sts, "sa")
 	if sts.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account name not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	if err := SetStatefulSetSecurityContext(sts, sc); err != nil {
-		t.Fatalf("SetStatefulSetSecurityContext returned error: %v", err)
-	}
+	SetStatefulSetSecurityContext(sts, sc)
 	if sts.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	if err := SetStatefulSetAffinity(sts, aff); err != nil {
-		t.Fatalf("SetStatefulSetAffinity returned error: %v", err)
-	}
+	SetStatefulSetAffinity(sts, aff)
 	if sts.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	ns := map[string]string{"role": "db"}
-	if err := SetStatefulSetNodeSelector(sts, ns); err != nil {
-		t.Fatalf("SetStatefulSetNodeSelector returned error: %v", err)
-	}
+	SetStatefulSetNodeSelector(sts, ns)
 	if !reflect.DeepEqual(sts.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}
 
 	strategy := appsv1.StatefulSetUpdateStrategy{Type: appsv1.RollingUpdateStatefulSetStrategyType}
-	if err := SetStatefulSetUpdateStrategy(sts, strategy); err != nil {
-		t.Fatalf("SetStatefulSetUpdateStrategy returned error: %v", err)
-	}
+	SetStatefulSetUpdateStrategy(sts, strategy)
 	if sts.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
 		t.Errorf("update strategy not set")
 	}
 
-	if err := SetStatefulSetReplicas(sts, 3); err != nil {
-		t.Fatalf("SetStatefulSetReplicas returned error: %v", err)
-	}
+	SetStatefulSetReplicas(sts, 3)
 	if sts.Spec.Replicas == nil || *sts.Spec.Replicas != 3 {
 		t.Errorf("replicas not set")
 	}
 
-	if err := SetStatefulSetServiceName(sts, "svc"); err != nil {
-		t.Fatalf("SetStatefulSetServiceName returned error: %v", err)
-	}
+	SetStatefulSetServiceName(sts, "svc")
 	if sts.Spec.ServiceName != "svc" {
 		t.Errorf("service name not set")
 	}
 
-	if err := SetStatefulSetPodManagementPolicy(sts, appsv1.ParallelPodManagement); err != nil {
-		t.Fatalf("SetStatefulSetPodManagementPolicy returned error: %v", err)
-	}
+	SetStatefulSetPodManagementPolicy(sts, appsv1.ParallelPodManagement)
 	if sts.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 		t.Errorf("pod management policy not set")
 	}
 
 	rhl := int32(4)
-	if err := SetStatefulSetRevisionHistoryLimit(sts, &rhl); err != nil {
-		t.Fatalf("SetStatefulSetRevisionHistoryLimit returned error: %v", err)
-	}
+	SetStatefulSetRevisionHistoryLimit(sts, &rhl)
 	if sts.Spec.RevisionHistoryLimit == nil || *sts.Spec.RevisionHistoryLimit != 4 {
 		t.Errorf("revision history limit not set")
 	}
 
-	if err := SetStatefulSetMinReadySeconds(sts, 5); err != nil {
-		t.Fatalf("SetStatefulSetMinReadySeconds returned error: %v", err)
-	}
+	SetStatefulSetMinReadySeconds(sts, 5)
 	if sts.Spec.MinReadySeconds != 5 {
 		t.Errorf("min ready seconds not set")
 	}
@@ -214,44 +192,40 @@ func TestStatefulSetFunctions(t *testing.T) {
 
 func TestStatefulSetNilGuards(t *testing.T) {
 	rhl := int32(1)
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"SetStatefulSetPodSpec", func() error { return SetStatefulSetPodSpec(nil, &corev1.PodSpec{}) }},
-		{"AddStatefulSetContainer", func() error { return AddStatefulSetContainer(nil, &corev1.Container{}) }},
-		{"AddStatefulSetInitContainer", func() error { return AddStatefulSetInitContainer(nil, &corev1.Container{}) }},
-		{"AddStatefulSetVolume", func() error { return AddStatefulSetVolume(nil, &corev1.Volume{}) }},
-		{"AddStatefulSetImagePullSecret", func() error {
-			return AddStatefulSetImagePullSecret(nil, &corev1.LocalObjectReference{})
-		}},
-		{"AddStatefulSetToleration", func() error { return AddStatefulSetToleration(nil, &corev1.Toleration{}) }},
-		{"AddStatefulSetTopologySpreadConstraints", func() error {
-			return AddStatefulSetTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{})
-		}},
-		{"AddStatefulSetVolumeClaimTemplate", func() error {
-			return AddStatefulSetVolumeClaimTemplate(nil, corev1.PersistentVolumeClaim{})
-		}},
-		{"SetStatefulSetServiceAccountName", func() error { return SetStatefulSetServiceAccountName(nil, "sa") }},
-		{"SetStatefulSetSecurityContext", func() error { return SetStatefulSetSecurityContext(nil, nil) }},
-		{"SetStatefulSetAffinity", func() error { return SetStatefulSetAffinity(nil, nil) }},
-		{"SetStatefulSetNodeSelector", func() error { return SetStatefulSetNodeSelector(nil, nil) }},
-		{"SetStatefulSetUpdateStrategy", func() error {
-			return SetStatefulSetUpdateStrategy(nil, appsv1.StatefulSetUpdateStrategy{})
-		}},
-		{"SetStatefulSetReplicas", func() error { return SetStatefulSetReplicas(nil, 1) }},
-		{"SetStatefulSetServiceName", func() error { return SetStatefulSetServiceName(nil, "svc") }},
-		{"SetStatefulSetPodManagementPolicy", func() error {
-			return SetStatefulSetPodManagementPolicy(nil, appsv1.OrderedReadyPodManagement)
-		}},
-		{"SetStatefulSetRevisionHistoryLimit", func() error { return SetStatefulSetRevisionHistoryLimit(nil, &rhl) }},
-		{"SetStatefulSetMinReadySeconds", func() error { return SetStatefulSetMinReadySeconds(nil, 1) }},
+
+	// Functions with secondary nil checks — still return errors
+	if err := SetStatefulSetPodSpec(nil, &corev1.PodSpec{}); err == nil {
+		t.Error("SetStatefulSetPodSpec(nil) should return error")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
+	if err := AddStatefulSetContainer(nil, &corev1.Container{}); err == nil {
+		t.Error("AddStatefulSetContainer(nil) should return error")
 	}
+	if err := AddStatefulSetInitContainer(nil, &corev1.Container{}); err == nil {
+		t.Error("AddStatefulSetInitContainer(nil) should return error")
+	}
+	if err := AddStatefulSetVolume(nil, &corev1.Volume{}); err == nil {
+		t.Error("AddStatefulSetVolume(nil) should return error")
+	}
+	if err := AddStatefulSetImagePullSecret(nil, &corev1.LocalObjectReference{}); err == nil {
+		t.Error("AddStatefulSetImagePullSecret(nil) should return error")
+	}
+	if err := AddStatefulSetToleration(nil, &corev1.Toleration{}); err == nil {
+		t.Error("AddStatefulSetToleration(nil) should return error")
+	}
+	if err := AddStatefulSetTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{}); err == nil {
+		t.Error("AddStatefulSetTopologySpreadConstraints(nil) should return error")
+	}
+
+	// Functions that now panic on nil receiver
+	assertPanics(t, func() { AddStatefulSetVolumeClaimTemplate(nil, corev1.PersistentVolumeClaim{}) })
+	assertPanics(t, func() { SetStatefulSetServiceAccountName(nil, "sa") })
+	assertPanics(t, func() { SetStatefulSetSecurityContext(nil, nil) })
+	assertPanics(t, func() { SetStatefulSetAffinity(nil, nil) })
+	assertPanics(t, func() { SetStatefulSetNodeSelector(nil, nil) })
+	assertPanics(t, func() { SetStatefulSetUpdateStrategy(nil, appsv1.StatefulSetUpdateStrategy{}) })
+	assertPanics(t, func() { SetStatefulSetReplicas(nil, 1) })
+	assertPanics(t, func() { SetStatefulSetServiceName(nil, "svc") })
+	assertPanics(t, func() { SetStatefulSetPodManagementPolicy(nil, appsv1.OrderedReadyPodManagement) })
+	assertPanics(t, func() { SetStatefulSetRevisionHistoryLimit(nil, &rhl) })
+	assertPanics(t, func() { SetStatefulSetMinReadySeconds(nil, 1) })
 }

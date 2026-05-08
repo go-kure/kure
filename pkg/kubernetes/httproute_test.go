@@ -30,73 +30,50 @@ func TestCreateHTTPRoute(t *testing.T) {
 }
 
 func TestHTTPRouteNilErrors(t *testing.T) {
-	if err := AddHTTPRouteHostname(nil, "example.com"); err == nil {
-		t.Error("expected error for nil HTTPRoute on AddHTTPRouteHostname")
-	}
-	if err := SetHTTPRouteHostnames(nil, nil); err == nil {
-		t.Error("expected error for nil HTTPRoute on SetHTTPRouteHostnames")
-	}
-	if err := AddHTTPRouteParentRef(nil, gwapiv1.ParentReference{}); err == nil {
-		t.Error("expected error for nil HTTPRoute on AddHTTPRouteParentRef")
-	}
-	if err := SetHTTPRouteParentRefs(nil, nil); err == nil {
-		t.Error("expected error for nil HTTPRoute on SetHTTPRouteParentRefs")
-	}
-	if err := AddHTTPRouteRule(nil, gwapiv1.HTTPRouteRule{}); err == nil {
-		t.Error("expected error for nil HTTPRoute on AddHTTPRouteRule")
-	}
-	if err := SetHTTPRouteRules(nil, nil); err == nil {
-		t.Error("expected error for nil HTTPRoute on SetHTTPRouteRules")
-	}
+	// All HTTPRoute functions now panic on nil receiver
+	assertPanics(t, func() { AddHTTPRouteHostname(nil, "example.com") })
+	assertPanics(t, func() { SetHTTPRouteHostnames(nil, nil) })
+	assertPanics(t, func() { AddHTTPRouteParentRef(nil, gwapiv1.ParentReference{}) })
+	assertPanics(t, func() { SetHTTPRouteParentRefs(nil, nil) })
+	assertPanics(t, func() { AddHTTPRouteRule(nil, gwapiv1.HTTPRouteRule{}) })
+	assertPanics(t, func() { SetHTTPRouteRules(nil, nil) })
 }
 
 func TestHTTPRouteFunctions(t *testing.T) {
 	route := CreateHTTPRoute("web", "ns")
 
-	if err := AddHTTPRouteHostname(route, "example.com"); err != nil {
-		t.Fatalf("AddHTTPRouteHostname returned error: %v", err)
-	}
+	AddHTTPRouteHostname(route, "example.com")
 	if len(route.Spec.Hostnames) != 1 || route.Spec.Hostnames[0] != "example.com" {
 		t.Errorf("hostname not added")
 	}
 
 	hostnames := []gwapiv1.Hostname{"a.example.com", "b.example.com"}
-	if err := SetHTTPRouteHostnames(route, hostnames); err != nil {
-		t.Fatalf("SetHTTPRouteHostnames returned error: %v", err)
-	}
+	SetHTTPRouteHostnames(route, hostnames)
 	if !reflect.DeepEqual(route.Spec.Hostnames, hostnames) {
 		t.Errorf("hostnames not set")
 	}
 
 	gwName := gwapiv1.ObjectName("my-gw")
 	ref := gwapiv1.ParentReference{Name: gwName}
-	if err := AddHTTPRouteParentRef(route, ref); err != nil {
-		t.Fatalf("AddHTTPRouteParentRef returned error: %v", err)
-	}
+	AddHTTPRouteParentRef(route, ref)
 	if len(route.Spec.ParentRefs) != 1 || route.Spec.ParentRefs[0].Name != gwName {
 		t.Errorf("parent ref not added")
 	}
 
 	refs := []gwapiv1.ParentReference{{Name: "gw-1"}, {Name: "gw-2"}}
-	if err := SetHTTPRouteParentRefs(route, refs); err != nil {
-		t.Fatalf("SetHTTPRouteParentRefs returned error: %v", err)
-	}
+	SetHTTPRouteParentRefs(route, refs)
 	if len(route.Spec.ParentRefs) != 2 {
 		t.Errorf("parent refs not set")
 	}
 
 	rule := gwapiv1.HTTPRouteRule{}
-	if err := AddHTTPRouteRule(route, rule); err != nil {
-		t.Fatalf("AddHTTPRouteRule returned error: %v", err)
-	}
+	AddHTTPRouteRule(route, rule)
 	if len(route.Spec.Rules) != 1 {
 		t.Errorf("rule not added")
 	}
 
 	rules := []gwapiv1.HTTPRouteRule{{}, {}}
-	if err := SetHTTPRouteRules(route, rules); err != nil {
-		t.Fatalf("SetHTTPRouteRules returned error: %v", err)
-	}
+	SetHTTPRouteRules(route, rules)
 	if len(route.Spec.Rules) != 2 {
 		t.Errorf("rules not set")
 	}

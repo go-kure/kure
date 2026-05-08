@@ -24,18 +24,11 @@ func TestCreateIngress(t *testing.T) {
 
 func TestIngressNilErrors(t *testing.T) {
 	rule := CreateIngressRule("example.com")
-	if err := AddIngressRule(nil, rule); err == nil {
-		t.Error("expected error for nil Ingress on AddIngressRule")
-	}
-	if err := AddIngressTLS(nil, netv1.IngressTLS{}); err == nil {
-		t.Error("expected error for nil Ingress on AddIngressTLS")
-	}
-	if err := SetIngressDefaultBackend(nil, netv1.IngressBackend{}); err == nil {
-		t.Error("expected error for nil Ingress on SetIngressDefaultBackend")
-	}
-	if err := SetIngressClassName(nil, "nginx"); err == nil {
-		t.Error("expected error for nil Ingress on SetIngressClassName")
-	}
+	// All Ingress functions now panic on nil receiver
+	assertPanics(t, func() { AddIngressRule(nil, rule) })
+	assertPanics(t, func() { AddIngressTLS(nil, netv1.IngressTLS{}) })
+	assertPanics(t, func() { SetIngressDefaultBackend(nil, netv1.IngressBackend{}) })
+	assertPanics(t, func() { SetIngressClassName(nil, "nginx") })
 }
 
 func TestIngressFunctions(t *testing.T) {
@@ -66,32 +59,24 @@ func TestIngressFunctions(t *testing.T) {
 		t.Errorf("path not added")
 	}
 
-	if err := AddIngressRule(ing, rule); err != nil {
-		t.Fatalf("AddIngressRule returned error: %v", err)
-	}
+	AddIngressRule(ing, rule)
 	if len(ing.Spec.Rules) != 1 {
 		t.Errorf("rule not added")
 	}
 
 	tls := netv1.IngressTLS{Hosts: []string{"example.com"}}
-	if err := AddIngressTLS(ing, tls); err != nil {
-		t.Fatalf("AddIngressTLS returned error: %v", err)
-	}
+	AddIngressTLS(ing, tls)
 	if len(ing.Spec.TLS) != 1 || ing.Spec.TLS[0].Hosts[0] != "example.com" {
 		t.Errorf("tls not added")
 	}
 
 	backend := netv1.IngressBackend{Service: &netv1.IngressServiceBackend{Name: "svc", Port: netv1.ServiceBackendPort{Number: 80}}}
-	if err := SetIngressDefaultBackend(ing, backend); err != nil {
-		t.Fatalf("SetIngressDefaultBackend returned error: %v", err)
-	}
+	SetIngressDefaultBackend(ing, backend)
 	if ing.Spec.DefaultBackend == nil || ing.Spec.DefaultBackend.Service.Name != "svc" {
 		t.Errorf("default backend not set")
 	}
 
-	if err := SetIngressClassName(ing, "newclass"); err != nil {
-		t.Fatalf("SetIngressClassName returned error: %v", err)
-	}
+	SetIngressClassName(ing, "newclass")
 	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != "newclass" {
 		t.Errorf("ingress class name not set")
 	}

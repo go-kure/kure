@@ -1,11 +1,11 @@
 package kubernetes
 
 import (
-	"github.com/go-kure/kure/pkg/errors"
-
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 func CreateJob(name, namespace string) *batchv1.Job {
@@ -92,71 +92,66 @@ func AddJobTopologySpreadConstraint(job *batchv1.Job, constraint *corev1.Topolog
 	return AddPodSpecTopologySpreadConstraints(&job.Spec.Template.Spec, constraint)
 }
 
-func SetJobServiceAccountName(job *batchv1.Job, name string) error {
+func SetJobServiceAccountName(job *batchv1.Job, name string) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobServiceAccountName: job must not be nil")
 	}
-	return SetPodSpecServiceAccountName(&job.Spec.Template.Spec, name)
+	SetPodSpecServiceAccountName(&job.Spec.Template.Spec, name)
 }
 
-func SetJobSecurityContext(job *batchv1.Job, sc *corev1.PodSecurityContext) error {
+func SetJobSecurityContext(job *batchv1.Job, sc *corev1.PodSecurityContext) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobSecurityContext: job must not be nil")
 	}
-	return SetPodSpecSecurityContext(&job.Spec.Template.Spec, sc)
+	SetPodSpecSecurityContext(&job.Spec.Template.Spec, sc)
 }
 
-func SetJobAffinity(job *batchv1.Job, aff *corev1.Affinity) error {
+func SetJobAffinity(job *batchv1.Job, aff *corev1.Affinity) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobAffinity: job must not be nil")
 	}
-	return SetPodSpecAffinity(&job.Spec.Template.Spec, aff)
+	SetPodSpecAffinity(&job.Spec.Template.Spec, aff)
 }
 
-func SetJobNodeSelector(job *batchv1.Job, selector map[string]string) error {
+func SetJobNodeSelector(job *batchv1.Job, selector map[string]string) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobNodeSelector: job must not be nil")
 	}
-	return SetPodSpecNodeSelector(&job.Spec.Template.Spec, selector)
+	SetPodSpecNodeSelector(&job.Spec.Template.Spec, selector)
 }
 
-func SetJobCompletions(job *batchv1.Job, completions int32) error {
+func SetJobCompletions(job *batchv1.Job, completions int32) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobCompletions: job must not be nil")
 	}
 	job.Spec.Completions = &completions
-	return nil
 }
 
-func SetJobParallelism(job *batchv1.Job, parallelism int32) error {
+func SetJobParallelism(job *batchv1.Job, parallelism int32) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobParallelism: job must not be nil")
 	}
 	job.Spec.Parallelism = &parallelism
-	return nil
 }
 
-func SetJobBackoffLimit(job *batchv1.Job, limit int32) error {
+func SetJobBackoffLimit(job *batchv1.Job, limit int32) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobBackoffLimit: job must not be nil")
 	}
 	job.Spec.BackoffLimit = &limit
-	return nil
 }
 
-func SetJobTTLSecondsAfterFinished(job *batchv1.Job, ttl int32) error {
+func SetJobTTLSecondsAfterFinished(job *batchv1.Job, ttl int32) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobTTLSecondsAfterFinished: job must not be nil")
 	}
 	job.Spec.TTLSecondsAfterFinished = &ttl
-	return nil
 }
 
 // SetJobActiveDeadlineSeconds sets the active deadline seconds for the job.
-func SetJobActiveDeadlineSeconds(job *batchv1.Job, secs *int64) error {
+func SetJobActiveDeadlineSeconds(job *batchv1.Job, secs *int64) {
 	if job == nil {
-		return errors.ErrNilJob
+		panic("SetJobActiveDeadlineSeconds: job must not be nil")
 	}
 	job.Spec.ActiveDeadlineSeconds = secs
-	return nil
 }

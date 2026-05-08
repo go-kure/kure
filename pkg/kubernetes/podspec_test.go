@@ -81,153 +81,138 @@ func TestPodSpecFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	if err := SetPodSpecServiceAccountName(spec, "sa"); err != nil {
-		t.Fatalf("SetPodSpecServiceAccountName returned error: %v", err)
-	}
+	SetPodSpecServiceAccountName(spec, "sa")
 	if spec.ServiceAccountName != "sa" {
 		t.Errorf("service account not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	if err := SetPodSpecSecurityContext(spec, sc); err != nil {
-		t.Fatalf("SetPodSpecSecurityContext returned error: %v", err)
-	}
+	SetPodSpecSecurityContext(spec, sc)
 	if spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	if err := SetPodSpecAffinity(spec, aff); err != nil {
-		t.Fatalf("SetPodSpecAffinity returned error: %v", err)
-	}
+	SetPodSpecAffinity(spec, aff)
 	if spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	sel := map[string]string{"role": "db"}
-	if err := SetPodSpecNodeSelector(spec, sel); err != nil {
-		t.Fatalf("SetPodSpecNodeSelector returned error: %v", err)
-	}
+	SetPodSpecNodeSelector(spec, sel)
 	if !reflect.DeepEqual(spec.NodeSelector, sel) {
 		t.Errorf("node selector not set")
 	}
 
-	if err := SetPodSpecPriorityClassName(spec, "high"); err != nil {
-		t.Fatalf("SetPodSpecPriorityClassName returned error: %v", err)
-	}
+	SetPodSpecPriorityClassName(spec, "high")
 	if spec.PriorityClassName != "high" {
 		t.Errorf("priority class name not set")
 	}
 
-	if err := SetPodSpecHostNetwork(spec, true); err != nil {
-		t.Fatalf("SetPodSpecHostNetwork returned error: %v", err)
-	}
+	SetPodSpecHostNetwork(spec, true)
 	if !spec.HostNetwork {
 		t.Errorf("host network not set")
 	}
 
-	if err := SetPodSpecHostPID(spec, true); err != nil {
-		t.Fatalf("SetPodSpecHostPID returned error: %v", err)
-	}
+	SetPodSpecHostPID(spec, true)
 	if !spec.HostPID {
 		t.Errorf("host pid not set")
 	}
 
-	if err := SetPodSpecHostIPC(spec, true); err != nil {
-		t.Fatalf("SetPodSpecHostIPC returned error: %v", err)
-	}
+	SetPodSpecHostIPC(spec, true)
 	if !spec.HostIPC {
 		t.Errorf("host ipc not set")
 	}
 
-	if err := SetPodSpecDNSPolicy(spec, corev1.DNSClusterFirstWithHostNet); err != nil {
-		t.Fatalf("SetPodSpecDNSPolicy returned error: %v", err)
-	}
+	SetPodSpecDNSPolicy(spec, corev1.DNSClusterFirstWithHostNet)
 	if spec.DNSPolicy != corev1.DNSClusterFirstWithHostNet {
 		t.Errorf("dns policy not set")
 	}
 
 	dnsCfg := &corev1.PodDNSConfig{Nameservers: []string{"8.8.8.8"}}
-	if err := SetPodSpecDNSConfig(spec, dnsCfg); err != nil {
-		t.Fatalf("SetPodSpecDNSConfig returned error: %v", err)
-	}
+	SetPodSpecDNSConfig(spec, dnsCfg)
 	if spec.DNSConfig != dnsCfg {
 		t.Errorf("dns config not set")
 	}
 
-	if err := SetPodSpecHostname(spec, "myhost"); err != nil {
-		t.Fatalf("SetPodSpecHostname returned error: %v", err)
-	}
+	SetPodSpecHostname(spec, "myhost")
 	if spec.Hostname != "myhost" {
 		t.Errorf("hostname not set")
 	}
 
-	if err := SetPodSpecSubdomain(spec, "sub"); err != nil {
-		t.Fatalf("SetPodSpecSubdomain returned error: %v", err)
-	}
+	SetPodSpecSubdomain(spec, "sub")
 	if spec.Subdomain != "sub" {
 		t.Errorf("subdomain not set")
 	}
 
-	if err := SetPodSpecRestartPolicy(spec, corev1.RestartPolicyOnFailure); err != nil {
-		t.Fatalf("SetPodSpecRestartPolicy returned error: %v", err)
-	}
+	SetPodSpecRestartPolicy(spec, corev1.RestartPolicyOnFailure)
 	if spec.RestartPolicy != corev1.RestartPolicyOnFailure {
 		t.Errorf("restart policy not set")
 	}
 
-	if err := SetPodSpecTerminationGracePeriod(spec, 15); err != nil {
-		t.Fatalf("SetPodSpecTerminationGracePeriod returned error: %v", err)
-	}
+	SetPodSpecTerminationGracePeriod(spec, 15)
 	if spec.TerminationGracePeriodSeconds == nil || *spec.TerminationGracePeriodSeconds != 15 {
 		t.Errorf("termination grace period not set")
 	}
 
-	if err := SetPodSpecSchedulerName(spec, "sched"); err != nil {
-		t.Fatalf("SetPodSpecSchedulerName returned error: %v", err)
-	}
+	SetPodSpecSchedulerName(spec, "sched")
 	if spec.SchedulerName != "sched" {
 		t.Errorf("scheduler name not set")
 	}
 }
 
 func TestPodSpecNilGuards(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"AddPodSpecContainer", func() error { return AddPodSpecContainer(nil, &corev1.Container{Name: "c"}) }},
-		{"AddPodSpecInitContainer", func() error { return AddPodSpecInitContainer(nil, &corev1.Container{Name: "c"}) }},
-		{"AddPodSpecEphemeralContainer", func() error {
-			return AddPodSpecEphemeralContainer(nil, &corev1.EphemeralContainer{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "e"}})
-		}},
-		{"AddPodSpecVolume", func() error { return AddPodSpecVolume(nil, &corev1.Volume{Name: "v"}) }},
-		{"AddPodSpecImagePullSecret", func() error { return AddPodSpecImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}) }},
-		{"AddPodSpecToleration", func() error { return AddPodSpecToleration(nil, &corev1.Toleration{Key: "k"}) }},
-		{"AddPodSpecTopologySpreadConstraints", func() error {
-			return AddPodSpecTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}})
-		}},
-		{"SetPodSpecServiceAccountName", func() error { return SetPodSpecServiceAccountName(nil, "sa") }},
-		{"SetPodSpecSecurityContext", func() error { return SetPodSpecSecurityContext(nil, &corev1.PodSecurityContext{}) }},
-		{"SetPodSpecAffinity", func() error { return SetPodSpecAffinity(nil, &corev1.Affinity{}) }},
-		{"SetPodSpecNodeSelector", func() error { return SetPodSpecNodeSelector(nil, map[string]string{"k": "v"}) }},
-		{"SetPodSpecPriorityClassName", func() error { return SetPodSpecPriorityClassName(nil, "high") }},
-		{"SetPodSpecHostNetwork", func() error { return SetPodSpecHostNetwork(nil, true) }},
-		{"SetPodSpecHostPID", func() error { return SetPodSpecHostPID(nil, true) }},
-		{"SetPodSpecHostIPC", func() error { return SetPodSpecHostIPC(nil, true) }},
-		{"SetPodSpecDNSPolicy", func() error { return SetPodSpecDNSPolicy(nil, corev1.DNSClusterFirst) }},
-		{"SetPodSpecDNSConfig", func() error { return SetPodSpecDNSConfig(nil, &corev1.PodDNSConfig{}) }},
-		{"SetPodSpecHostname", func() error { return SetPodSpecHostname(nil, "host") }},
-		{"SetPodSpecSubdomain", func() error { return SetPodSpecSubdomain(nil, "sub") }},
-		{"SetPodSpecRestartPolicy", func() error { return SetPodSpecRestartPolicy(nil, corev1.RestartPolicyAlways) }},
-		{"SetPodSpecTerminationGracePeriod", func() error { return SetPodSpecTerminationGracePeriod(nil, 30) }},
-		{"SetPodSpecSchedulerName", func() error { return SetPodSpecSchedulerName(nil, "sched") }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
-	}
+	// Functions that still return error (secondary nil checks) — keep error-based tests
+	t.Run("AddPodSpecContainer nil spec", func(t *testing.T) {
+		if err := AddPodSpecContainer(nil, &corev1.Container{Name: "c"}); err == nil {
+			t.Error("AddPodSpecContainer(nil) should return error")
+		}
+	})
+	t.Run("AddPodSpecInitContainer nil spec", func(t *testing.T) {
+		if err := AddPodSpecInitContainer(nil, &corev1.Container{Name: "c"}); err == nil {
+			t.Error("AddPodSpecInitContainer(nil) should return error")
+		}
+	})
+	t.Run("AddPodSpecEphemeralContainer nil spec", func(t *testing.T) {
+		if err := AddPodSpecEphemeralContainer(nil, &corev1.EphemeralContainer{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "e"}}); err == nil {
+			t.Error("AddPodSpecEphemeralContainer(nil) should return error")
+		}
+	})
+	t.Run("AddPodSpecVolume nil spec", func(t *testing.T) {
+		if err := AddPodSpecVolume(nil, &corev1.Volume{Name: "v"}); err == nil {
+			t.Error("AddPodSpecVolume(nil) should return error")
+		}
+	})
+	t.Run("AddPodSpecImagePullSecret nil spec", func(t *testing.T) {
+		if err := AddPodSpecImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}); err == nil {
+			t.Error("AddPodSpecImagePullSecret(nil) should return error")
+		}
+	})
+	t.Run("AddPodSpecToleration nil spec", func(t *testing.T) {
+		if err := AddPodSpecToleration(nil, &corev1.Toleration{Key: "k"}); err == nil {
+			t.Error("AddPodSpecToleration(nil) should return error")
+		}
+	})
+	t.Run("AddPodSpecTopologySpreadConstraints nil spec", func(t *testing.T) {
+		if err := AddPodSpecTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}}); err == nil {
+			t.Error("AddPodSpecTopologySpreadConstraints(nil) should return error")
+		}
+	})
+
+	// Functions now panic on nil receiver
+	assertPanics(t, func() { SetPodSpecServiceAccountName(nil, "sa") })
+	assertPanics(t, func() { SetPodSpecSecurityContext(nil, &corev1.PodSecurityContext{}) })
+	assertPanics(t, func() { SetPodSpecAffinity(nil, &corev1.Affinity{}) })
+	assertPanics(t, func() { SetPodSpecNodeSelector(nil, map[string]string{"k": "v"}) })
+	assertPanics(t, func() { SetPodSpecPriorityClassName(nil, "high") })
+	assertPanics(t, func() { SetPodSpecHostNetwork(nil, true) })
+	assertPanics(t, func() { SetPodSpecHostPID(nil, true) })
+	assertPanics(t, func() { SetPodSpecHostIPC(nil, true) })
+	assertPanics(t, func() { SetPodSpecDNSPolicy(nil, corev1.DNSClusterFirst) })
+	assertPanics(t, func() { SetPodSpecDNSConfig(nil, &corev1.PodDNSConfig{}) })
+	assertPanics(t, func() { SetPodSpecHostname(nil, "host") })
+	assertPanics(t, func() { SetPodSpecSubdomain(nil, "sub") })
+	assertPanics(t, func() { SetPodSpecRestartPolicy(nil, corev1.RestartPolicyAlways) })
+	assertPanics(t, func() { SetPodSpecTerminationGracePeriod(nil, 30) })
+	assertPanics(t, func() { SetPodSpecSchedulerName(nil, "sched") })
 }

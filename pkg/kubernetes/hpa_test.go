@@ -20,37 +20,20 @@ func TestCreateHorizontalPodAutoscaler(t *testing.T) {
 }
 
 func TestHPANilErrors(t *testing.T) {
-	if err := SetHPAScaleTargetRef(nil, "apps/v1", "Deployment", "web"); err == nil {
-		t.Error("expected error for nil HPA")
-	}
-	if err := SetHPAMinMaxReplicas(nil, 1, 10); err == nil {
-		t.Error("expected error for nil HPA")
-	}
-	if err := AddHPACPUMetric(nil, 80); err == nil {
-		t.Error("expected error for nil HPA")
-	}
-	if err := AddHPAMemoryMetric(nil, 80); err == nil {
-		t.Error("expected error for nil HPA")
-	}
-	if err := AddHPACustomMetric(nil, autoscalingv2.MetricSpec{}); err == nil {
-		t.Error("expected error for nil HPA")
-	}
-	if err := SetHPABehavior(nil, &autoscalingv2.HorizontalPodAutoscalerBehavior{}); err == nil {
-		t.Error("expected error for nil HPA")
-	}
-	if err := SetHPALabels(nil, map[string]string{}); err == nil {
-		t.Error("expected error for nil HPA")
-	}
-	if err := SetHPAAnnotations(nil, map[string]string{}); err == nil {
-		t.Error("expected error for nil HPA")
-	}
+	// All HPA functions now panic on nil receiver
+	assertPanics(t, func() { SetHPAScaleTargetRef(nil, "apps/v1", "Deployment", "web") })
+	assertPanics(t, func() { SetHPAMinMaxReplicas(nil, 1, 10) })
+	assertPanics(t, func() { AddHPACPUMetric(nil, 80) })
+	assertPanics(t, func() { AddHPAMemoryMetric(nil, 80) })
+	assertPanics(t, func() { AddHPACustomMetric(nil, autoscalingv2.MetricSpec{}) })
+	assertPanics(t, func() { SetHPABehavior(nil, &autoscalingv2.HorizontalPodAutoscalerBehavior{}) })
+	assertPanics(t, func() { SetHPALabels(nil, map[string]string{}) })
+	assertPanics(t, func() { SetHPAAnnotations(nil, map[string]string{}) })
 }
 
 func TestHPAScaleTargetRef(t *testing.T) {
 	hpa := CreateHorizontalPodAutoscaler("test", "default")
-	if err := SetHPAScaleTargetRef(hpa, "apps/v1", "Deployment", "web"); err != nil {
-		t.Fatalf("SetHPAScaleTargetRef: %v", err)
-	}
+	SetHPAScaleTargetRef(hpa, "apps/v1", "Deployment", "web")
 	ref := hpa.Spec.ScaleTargetRef
 	if ref.APIVersion != "apps/v1" || ref.Kind != "Deployment" || ref.Name != "web" {
 		t.Errorf("scale target ref mismatch: %+v", ref)
@@ -59,9 +42,7 @@ func TestHPAScaleTargetRef(t *testing.T) {
 
 func TestHPAMinMaxReplicas(t *testing.T) {
 	hpa := CreateHorizontalPodAutoscaler("test", "default")
-	if err := SetHPAMinMaxReplicas(hpa, 2, 10); err != nil {
-		t.Fatalf("SetHPAMinMaxReplicas: %v", err)
-	}
+	SetHPAMinMaxReplicas(hpa, 2, 10)
 	if hpa.Spec.MinReplicas == nil || *hpa.Spec.MinReplicas != 2 {
 		t.Errorf("min replicas not set")
 	}
@@ -73,9 +54,7 @@ func TestHPAMinMaxReplicas(t *testing.T) {
 func TestHPAMetrics(t *testing.T) {
 	hpa := CreateHorizontalPodAutoscaler("test", "default")
 
-	if err := AddHPACPUMetric(hpa, 80); err != nil {
-		t.Fatalf("AddHPACPUMetric: %v", err)
-	}
+	AddHPACPUMetric(hpa, 80)
 	if len(hpa.Spec.Metrics) != 1 {
 		t.Fatalf("expected 1 metric, got %d", len(hpa.Spec.Metrics))
 	}
@@ -83,9 +62,7 @@ func TestHPAMetrics(t *testing.T) {
 		t.Errorf("CPU metric not set correctly")
 	}
 
-	if err := AddHPAMemoryMetric(hpa, 70); err != nil {
-		t.Fatalf("AddHPAMemoryMetric: %v", err)
-	}
+	AddHPAMemoryMetric(hpa, 70)
 	if len(hpa.Spec.Metrics) != 2 {
 		t.Fatalf("expected 2 metrics, got %d", len(hpa.Spec.Metrics))
 	}
@@ -93,9 +70,7 @@ func TestHPAMetrics(t *testing.T) {
 	custom := autoscalingv2.MetricSpec{
 		Type: autoscalingv2.PodsMetricSourceType,
 	}
-	if err := AddHPACustomMetric(hpa, custom); err != nil {
-		t.Fatalf("AddHPACustomMetric: %v", err)
-	}
+	AddHPACustomMetric(hpa, custom)
 	if len(hpa.Spec.Metrics) != 3 {
 		t.Fatalf("expected 3 metrics, got %d", len(hpa.Spec.Metrics))
 	}
@@ -108,9 +83,7 @@ func TestHPABehavior(t *testing.T) {
 			StabilizationWindowSeconds: func(i int32) *int32 { return &i }(300),
 		},
 	}
-	if err := SetHPABehavior(hpa, behavior); err != nil {
-		t.Fatalf("SetHPABehavior: %v", err)
-	}
+	SetHPABehavior(hpa, behavior)
 	if hpa.Spec.Behavior == nil || hpa.Spec.Behavior.ScaleDown == nil {
 		t.Errorf("behavior not set correctly")
 	}
@@ -120,17 +93,13 @@ func TestHPALabelsAndAnnotations(t *testing.T) {
 	hpa := CreateHorizontalPodAutoscaler("test", "default")
 
 	labels := map[string]string{"env": "prod"}
-	if err := SetHPALabels(hpa, labels); err != nil {
-		t.Fatalf("SetHPALabels: %v", err)
-	}
+	SetHPALabels(hpa, labels)
 	if hpa.Labels["env"] != "prod" {
 		t.Errorf("labels not set correctly")
 	}
 
 	annotations := map[string]string{"note": "test"}
-	if err := SetHPAAnnotations(hpa, annotations); err != nil {
-		t.Fatalf("SetHPAAnnotations: %v", err)
-	}
+	SetHPAAnnotations(hpa, annotations)
 	if hpa.Annotations["note"] != "test" {
 		t.Errorf("annotations not set correctly")
 	}

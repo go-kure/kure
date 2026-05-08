@@ -3,8 +3,6 @@ package kubernetes
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/go-kure/kure/pkg/errors"
 )
 
 // CreateContainer returns a Container populated with the provided name, image,
@@ -36,102 +34,91 @@ func CreateContainer(name string, image string, command []string, args []string)
 }
 
 // AddContainerPort appends a container port to the Ports slice.
-func AddContainerPort(container *corev1.Container, port corev1.ContainerPort) error {
+func AddContainerPort(container *corev1.Container, port corev1.ContainerPort) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("AddContainerPort: container must not be nil")
 	}
 	container.Ports = append(container.Ports, port)
-	return nil
 }
 
 // AddContainerEnv appends an environment variable to the container.
-func AddContainerEnv(container *corev1.Container, env corev1.EnvVar) error {
+func AddContainerEnv(container *corev1.Container, env corev1.EnvVar) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("AddContainerEnv: container must not be nil")
 	}
 	container.Env = append(container.Env, env)
-	return nil
 }
 
 // AddContainerEnvFrom appends an EnvFromSource entry to the container.
-func AddContainerEnvFrom(container *corev1.Container, envFrom corev1.EnvFromSource) error {
+func AddContainerEnvFrom(container *corev1.Container, envFrom corev1.EnvFromSource) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("AddContainerEnvFrom: container must not be nil")
 	}
 	container.EnvFrom = append(container.EnvFrom, envFrom)
-	return nil
 }
 
 // AddContainerVolumeMount appends a volume mount to the container.
-func AddContainerVolumeMount(container *corev1.Container, volumeMount corev1.VolumeMount) error {
+func AddContainerVolumeMount(container *corev1.Container, volumeMount corev1.VolumeMount) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("AddContainerVolumeMount: container must not be nil")
 	}
 	container.VolumeMounts = append(container.VolumeMounts, volumeMount)
-	return nil
 }
 
 // AddContainerVolumeDevice appends a volume device to the container.
-func AddContainerVolumeDevice(container *corev1.Container, volumeDevice corev1.VolumeDevice) error {
+func AddContainerVolumeDevice(container *corev1.Container, volumeDevice corev1.VolumeDevice) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("AddContainerVolumeDevice: container must not be nil")
 	}
 	container.VolumeDevices = append(container.VolumeDevices, volumeDevice)
-	return nil
 }
 
 // SetContainerLivenessProbe sets the container's liveness probe.
-func SetContainerLivenessProbe(container *corev1.Container, livenessProbe corev1.Probe) error {
+func SetContainerLivenessProbe(container *corev1.Container, livenessProbe corev1.Probe) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("SetContainerLivenessProbe: container must not be nil")
 	}
 	container.LivenessProbe = &livenessProbe
-	return nil
 }
 
 // SetContainerReadinessProbe sets the container's readiness probe.
-func SetContainerReadinessProbe(container *corev1.Container, readinessProbe corev1.Probe) error {
+func SetContainerReadinessProbe(container *corev1.Container, readinessProbe corev1.Probe) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("SetContainerReadinessProbe: container must not be nil")
 	}
 	container.ReadinessProbe = &readinessProbe
-	return nil
 }
 
 // SetContainerStartupProbe sets the container's startup probe.
-func SetContainerStartupProbe(container *corev1.Container, startupProbe corev1.Probe) error {
+func SetContainerStartupProbe(container *corev1.Container, startupProbe corev1.Probe) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("SetContainerStartupProbe: container must not be nil")
 	}
 	container.StartupProbe = &startupProbe
-	return nil
 }
 
 // SetContainerResources sets resource requirements on the container.
-func SetContainerResources(container *corev1.Container, resources corev1.ResourceRequirements) error {
+func SetContainerResources(container *corev1.Container, resources corev1.ResourceRequirements) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("SetContainerResources: container must not be nil")
 	}
 	container.Resources = resources
-	return nil
 }
 
 // SetContainerImagePullPolicy sets the image pull policy.
-func SetContainerImagePullPolicy(container *corev1.Container, imagePullPolicy corev1.PullPolicy) error {
+func SetContainerImagePullPolicy(container *corev1.Container, imagePullPolicy corev1.PullPolicy) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("SetContainerImagePullPolicy: container must not be nil")
 	}
 	container.ImagePullPolicy = imagePullPolicy
-	return nil
 }
 
 // SetContainerSecurityContext sets the security context on the container.
-func SetContainerSecurityContext(container *corev1.Container, securityContext corev1.SecurityContext) error {
+func SetContainerSecurityContext(container *corev1.Container, securityContext corev1.SecurityContext) {
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("SetContainerSecurityContext: container must not be nil")
 	}
 	container.SecurityContext = &securityContext
-	return nil
 }
 
 func SetContainerWorkingDir(container *corev1.Container, dir string) {

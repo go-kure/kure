@@ -75,7 +75,7 @@ func runInternals() error {
 	intkubernetes.AddNamespaceLabel(ns, "env", "demo")
 
 	sa := kubernetes.CreateServiceAccount("demo-sa", "demo")
-	logError("add serviceaccount secret", kubernetes.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"}))
+	kubernetes.AddServiceAccountSecret(sa, apiv1.ObjectReference{Name: "sa-secret"})
 
 	secret := intkubernetes.CreateSecret("demo-secret", "demo")
 	intkubernetes.AddSecretData(secret, "cert", []byte("data"))

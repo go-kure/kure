@@ -124,9 +124,7 @@ func TestAddContainerEnvFrom(t *testing.T) {
 				EnvFrom: tt.initialEnvFrom,
 			}
 
-			if err := AddContainerEnvFrom(container, tt.newEnvFrom); err != nil {
-				t.Fatalf("AddContainerEnvFrom returned error: %v", err)
-			}
+			AddContainerEnvFrom(container, tt.newEnvFrom)
 			if err := compareEnvFromSources(container.EnvFrom, tt.expectedResult); err != nil {
 				t.Error(err)
 			}
@@ -392,9 +390,7 @@ func TestAddContainerPort(t *testing.T) {
 				Ports: tt.initialPorts,
 			}
 
-			if err := AddContainerPort(container, tt.newPort); err != nil {
-				t.Fatalf("AddContainerPort returned error: %v", err)
-			}
+			AddContainerPort(container, tt.newPort)
 
 			if len(container.Ports) != len(tt.expectedResult) {
 				t.Errorf("unexpected number of ports: got %d, want %d", len(container.Ports), len(tt.expectedResult))
@@ -461,9 +457,7 @@ func TestAddContainerEnv(t *testing.T) {
 				Env: tt.initialEnv,
 			}
 
-			if err := AddContainerEnv(container, tt.newEnv); err != nil {
-				t.Fatalf("AddContainerEnv returned error: %v", err)
-			}
+			AddContainerEnv(container, tt.newEnv)
 
 			if len(container.Env) != len(tt.expectedResult) {
 				t.Errorf("unexpected number of env vars: got %d, want %d", len(container.Env), len(tt.expectedResult))
@@ -482,62 +476,46 @@ func TestAdditionalContainerFunctions(t *testing.T) {
 	c := &corev1.Container{}
 
 	mount := corev1.VolumeMount{Name: "data", MountPath: "/data"}
-	if err := AddContainerVolumeMount(c, mount); err != nil {
-		t.Fatalf("AddContainerVolumeMount returned error: %v", err)
-	}
+	AddContainerVolumeMount(c, mount)
 	if len(c.VolumeMounts) != 1 || c.VolumeMounts[0] != mount {
 		t.Errorf("volume mount not added")
 	}
 
 	dev := corev1.VolumeDevice{Name: "block", DevicePath: "/dev/block"}
-	if err := AddContainerVolumeDevice(c, dev); err != nil {
-		t.Fatalf("AddContainerVolumeDevice returned error: %v", err)
-	}
+	AddContainerVolumeDevice(c, dev)
 	if len(c.VolumeDevices) != 1 || c.VolumeDevices[0] != dev {
 		t.Errorf("volume device not added")
 	}
 
 	probe := corev1.Probe{TimeoutSeconds: 5}
-	if err := SetContainerLivenessProbe(c, probe); err != nil {
-		t.Fatalf("SetContainerLivenessProbe returned error: %v", err)
-	}
+	SetContainerLivenessProbe(c, probe)
 	if c.LivenessProbe == nil || *c.LivenessProbe != probe {
 		t.Errorf("liveness probe not set")
 	}
 
-	if err := SetContainerReadinessProbe(c, probe); err != nil {
-		t.Fatalf("SetContainerReadinessProbe returned error: %v", err)
-	}
+	SetContainerReadinessProbe(c, probe)
 	if c.ReadinessProbe == nil || *c.ReadinessProbe != probe {
 		t.Errorf("readiness probe not set")
 	}
 
-	if err := SetContainerStartupProbe(c, probe); err != nil {
-		t.Fatalf("SetContainerStartupProbe returned error: %v", err)
-	}
+	SetContainerStartupProbe(c, probe)
 	if c.StartupProbe == nil || *c.StartupProbe != probe {
 		t.Errorf("startup probe not set")
 	}
 
 	resources := corev1.ResourceRequirements{}
-	if err := SetContainerResources(c, resources); err != nil {
-		t.Fatalf("SetContainerResources returned error: %v", err)
-	}
+	SetContainerResources(c, resources)
 	if !reflect.DeepEqual(c.Resources, resources) {
 		t.Errorf("resources not set")
 	}
 
-	if err := SetContainerImagePullPolicy(c, corev1.PullAlways); err != nil {
-		t.Fatalf("SetContainerImagePullPolicy returned error: %v", err)
-	}
+	SetContainerImagePullPolicy(c, corev1.PullAlways)
 	if c.ImagePullPolicy != corev1.PullAlways {
 		t.Errorf("image pull policy not set")
 	}
 
 	sc := corev1.SecurityContext{RunAsUser: new(int64)}
-	if err := SetContainerSecurityContext(c, sc); err != nil {
-		t.Fatalf("SetContainerSecurityContext returned error: %v", err)
-	}
+	SetContainerSecurityContext(c, sc)
 	if c.SecurityContext == nil || *c.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
@@ -584,29 +562,17 @@ func TestContainerMiscFunctions(t *testing.T) {
 }
 
 func TestContainerNilGuards(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"AddContainerPort", func() error { return AddContainerPort(nil, corev1.ContainerPort{}) }},
-		{"AddContainerEnv", func() error { return AddContainerEnv(nil, corev1.EnvVar{}) }},
-		{"AddContainerEnvFrom", func() error { return AddContainerEnvFrom(nil, corev1.EnvFromSource{}) }},
-		{"AddContainerVolumeMount", func() error { return AddContainerVolumeMount(nil, corev1.VolumeMount{}) }},
-		{"AddContainerVolumeDevice", func() error { return AddContainerVolumeDevice(nil, corev1.VolumeDevice{}) }},
-		{"SetContainerLivenessProbe", func() error { return SetContainerLivenessProbe(nil, corev1.Probe{}) }},
-		{"SetContainerReadinessProbe", func() error { return SetContainerReadinessProbe(nil, corev1.Probe{}) }},
-		{"SetContainerStartupProbe", func() error { return SetContainerStartupProbe(nil, corev1.Probe{}) }},
-		{"SetContainerResources", func() error { return SetContainerResources(nil, corev1.ResourceRequirements{}) }},
-		{"SetContainerImagePullPolicy", func() error { return SetContainerImagePullPolicy(nil, corev1.PullAlways) }},
-		{"SetContainerSecurityContext", func() error { return SetContainerSecurityContext(nil, corev1.SecurityContext{}) }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
-	}
+	assertPanics(t, func() { AddContainerPort(nil, corev1.ContainerPort{}) })
+	assertPanics(t, func() { AddContainerEnv(nil, corev1.EnvVar{}) })
+	assertPanics(t, func() { AddContainerEnvFrom(nil, corev1.EnvFromSource{}) })
+	assertPanics(t, func() { AddContainerVolumeMount(nil, corev1.VolumeMount{}) })
+	assertPanics(t, func() { AddContainerVolumeDevice(nil, corev1.VolumeDevice{}) })
+	assertPanics(t, func() { SetContainerLivenessProbe(nil, corev1.Probe{}) })
+	assertPanics(t, func() { SetContainerReadinessProbe(nil, corev1.Probe{}) })
+	assertPanics(t, func() { SetContainerStartupProbe(nil, corev1.Probe{}) })
+	assertPanics(t, func() { SetContainerResources(nil, corev1.ResourceRequirements{}) })
+	assertPanics(t, func() { SetContainerImagePullPolicy(nil, corev1.PullAlways) })
+	assertPanics(t, func() { SetContainerSecurityContext(nil, corev1.SecurityContext{}) })
 }
 
 func TestContainerSetters(t *testing.T) {
