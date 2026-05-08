@@ -133,87 +133,78 @@ func AddDeploymentTopologySpreadConstraints(deployment *appsv1.Deployment, topol
 
 // SetDeploymentServiceAccountName sets the service account name on the
 // Deployment's pod template.
-func SetDeploymentServiceAccountName(deployment *appsv1.Deployment, serviceAccountName string) error {
+func SetDeploymentServiceAccountName(deployment *appsv1.Deployment, serviceAccountName string) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentServiceAccountName: deployment must not be nil")
 	}
 	deployment.Spec.Template.Spec.ServiceAccountName = serviceAccountName
-	return nil
 }
 
 // SetDeploymentSecurityContext sets the pod-level security context on the
 // Deployment's pod template.
-func SetDeploymentSecurityContext(deployment *appsv1.Deployment, securityContext *corev1.PodSecurityContext) error {
+func SetDeploymentSecurityContext(deployment *appsv1.Deployment, securityContext *corev1.PodSecurityContext) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentSecurityContext: deployment must not be nil")
 	}
 	deployment.Spec.Template.Spec.SecurityContext = securityContext
-	return nil
 }
 
 // SetDeploymentAffinity assigns affinity rules to the Deployment's pod template.
-func SetDeploymentAffinity(deployment *appsv1.Deployment, affinity *corev1.Affinity) error {
+func SetDeploymentAffinity(deployment *appsv1.Deployment, affinity *corev1.Affinity) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentAffinity: deployment must not be nil")
 	}
 	deployment.Spec.Template.Spec.Affinity = affinity
-	return nil
 }
 
 // SetDeploymentNodeSelector sets the node selector map on the Deployment's pod
 // template.
-func SetDeploymentNodeSelector(deployment *appsv1.Deployment, nodeSelector map[string]string) error {
+func SetDeploymentNodeSelector(deployment *appsv1.Deployment, nodeSelector map[string]string) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentNodeSelector: deployment must not be nil")
 	}
 	deployment.Spec.Template.Spec.NodeSelector = nodeSelector
-	return nil
 }
 
 // SetDeploymentReplicas sets the desired replica count.
-func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32) error {
+func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentReplicas: deployment must not be nil")
 	}
 	if deployment.Spec.Replicas == nil {
 		deployment.Spec.Replicas = new(int32)
 	}
 	*deployment.Spec.Replicas = replicas
-	return nil
 }
 
 // SetDeploymentStrategy sets the deployment strategy.
-func SetDeploymentStrategy(deployment *appsv1.Deployment, strategy appsv1.DeploymentStrategy) error {
+func SetDeploymentStrategy(deployment *appsv1.Deployment, strategy appsv1.DeploymentStrategy) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentStrategy: deployment must not be nil")
 	}
 	deployment.Spec.Strategy = strategy
-	return nil
 }
 
 // SetDeploymentRevisionHistoryLimit sets the revision history limit.
-func SetDeploymentRevisionHistoryLimit(deployment *appsv1.Deployment, limit int32) error {
+func SetDeploymentRevisionHistoryLimit(deployment *appsv1.Deployment, limit int32) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentRevisionHistoryLimit: deployment must not be nil")
 	}
 	deployment.Spec.RevisionHistoryLimit = &limit
-	return nil
 }
 
 // SetDeploymentMinReadySeconds sets the minimum ready seconds.
-func SetDeploymentMinReadySeconds(deployment *appsv1.Deployment, secs int32) error {
+func SetDeploymentMinReadySeconds(deployment *appsv1.Deployment, secs int32) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentMinReadySeconds: deployment must not be nil")
 	}
 	deployment.Spec.MinReadySeconds = secs
-	return nil
 }
 
 // SetDeploymentProgressDeadlineSeconds sets the progress deadline seconds.
-func SetDeploymentProgressDeadlineSeconds(deployment *appsv1.Deployment, secs int32) error {
+func SetDeploymentProgressDeadlineSeconds(deployment *appsv1.Deployment, secs int32) {
 	if deployment == nil {
-		return errors.ErrNilDeployment
+		panic("SetDeploymentProgressDeadlineSeconds: deployment must not be nil")
 	}
 	deployment.Spec.ProgressDeadlineSeconds = &secs
-	return nil
 }

@@ -401,11 +401,9 @@ func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, e
 			if err != nil {
 				return nil, err
 			}
-			if err := kubernetes.AddStatefulSetVolumeClaimTemplate(sts, *k8sPVC); err != nil {
-				return nil, err
-			}
+			kubernetes.AddStatefulSetVolumeClaimTemplate(sts, *k8sPVC)
 		}
-		_ = kubernetes.SetStatefulSetReplicas(sts, cfg.Replicas)
+		kubernetes.SetStatefulSetReplicas(sts, cfg.Replicas)
 		objs = append(objs, kubernetes.ToClientObject(sts))
 	case DaemonSetWorkload:
 		ds := kubernetes.CreateDaemonSet(app.Name, app.Namespace)
@@ -434,7 +432,7 @@ func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, e
 				return nil, err
 			}
 		}
-		_ = kubernetes.SetDeploymentReplicas(dep, cfg.Replicas)
+		kubernetes.SetDeploymentReplicas(dep, cfg.Replicas)
 		objs = append(objs, kubernetes.ToClientObject(dep))
 	default:
 		return nil, errors.NewValidationError("workload", string(cfg.Workload), "AppWorkloadConfig", []string{"Deployment", "StatefulSet", "DaemonSet"})
@@ -444,9 +442,9 @@ func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, e
 	var svc *corev1.Service
 	if len(allports) > 0 {
 		svc = kubernetes.CreateService(app.Name, app.Namespace)
-		_ = kubernetes.SetServiceSelector(svc, map[string]string{"app": app.Name})
+		kubernetes.SetServiceSelector(svc, map[string]string{"app": app.Name})
 		for _, p := range allports {
-			_ = kubernetes.AddServicePort(svc, corev1.ServicePort{
+			kubernetes.AddServicePort(svc, corev1.ServicePort{
 				Name:       p.Name,
 				Port:       p.ContainerPort,
 				TargetPort: intstr.FromInt32(p.ContainerPort),
@@ -465,8 +463,8 @@ func GenerateResources(cfg *Config, app *stack.Application) ([]*client.Object, e
 		}
 		port := cfg.Ingress.ServicePortName
 		kubernetes.AddIngressRulePath(rule, kubernetes.CreateIngressPath(path, &pt, svc.Name, port))
-		_ = kubernetes.AddIngressRule(ing, rule)
-		_ = kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
+		kubernetes.AddIngressRule(ing, rule)
+		kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{cfg.Ingress.Host}, SecretName: fmt.Sprintf("%s-tls", app.Name)})
 		objs = append(objs, kubernetes.ToClientObject(ing))
 	}
 
@@ -480,20 +478,20 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 	// Add ports
 	for _, p := range cfg.Ports {
 		k8sPort := p.ToKubernetesPort()
-		_ = kubernetes.AddContainerPort(container, k8sPort)
+		kubernetes.AddContainerPort(container, k8sPort)
 		ports = append(ports, k8sPort)
 	}
 
 	// Add environment variables
 	for _, env := range cfg.Env {
 		k8sEnv := env.ToKubernetesEnvVar()
-		_ = kubernetes.AddContainerEnv(container, k8sEnv)
+		kubernetes.AddContainerEnv(container, k8sEnv)
 	}
 
 	// Add volume mounts
 	for _, vm := range cfg.VolumeMounts {
 		k8sMount := vm.ToKubernetesVolumeMount()
-		_ = kubernetes.AddContainerVolumeMount(container, k8sMount)
+		kubernetes.AddContainerVolumeMount(container, k8sMount)
 	}
 
 	// Set resources if provided
@@ -503,7 +501,7 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 			return nil, nil, err
 		}
 		if k8sResources != nil {
-			_ = kubernetes.SetContainerResources(container, *k8sResources)
+			kubernetes.SetContainerResources(container, *k8sResources)
 		}
 	}
 
@@ -511,19 +509,19 @@ func (cfg ContainerConfig) Generate() (*corev1.Container, []corev1.ContainerPort
 	if cfg.LivenessProbe != nil {
 		k8sProbe := cfg.LivenessProbe.ToKubernetesProbe()
 		if k8sProbe != nil {
-			_ = kubernetes.SetContainerLivenessProbe(container, *k8sProbe)
+			kubernetes.SetContainerLivenessProbe(container, *k8sProbe)
 		}
 	}
 	if cfg.ReadinessProbe != nil {
 		k8sProbe := cfg.ReadinessProbe.ToKubernetesProbe()
 		if k8sProbe != nil {
-			_ = kubernetes.SetContainerReadinessProbe(container, *k8sProbe)
+			kubernetes.SetContainerReadinessProbe(container, *k8sProbe)
 		}
 	}
 	if cfg.StartupProbe != nil {
 		k8sProbe := cfg.StartupProbe.ToKubernetesProbe()
 		if k8sProbe != nil {
-			_ = kubernetes.SetContainerStartupProbe(container, *k8sProbe)
+			kubernetes.SetContainerStartupProbe(container, *k8sProbe)
 		}
 	}
 

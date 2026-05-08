@@ -1,11 +1,11 @@
 package kubernetes
 
 import (
-	"github.com/go-kure/kure/pkg/errors"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // CreateStatefulSet returns a StatefulSet with sensible defaults set.
@@ -102,99 +102,92 @@ func AddStatefulSetTopologySpreadConstraints(sts *appsv1.StatefulSet, c *corev1.
 }
 
 // AddStatefulSetVolumeClaimTemplate appends a PVC template to the StatefulSet.
-func AddStatefulSetVolumeClaimTemplate(sts *appsv1.StatefulSet, pvc corev1.PersistentVolumeClaim) error {
+func AddStatefulSetVolumeClaimTemplate(sts *appsv1.StatefulSet, pvc corev1.PersistentVolumeClaim) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("AddStatefulSetVolumeClaimTemplate: sts must not be nil")
 	}
 	sts.Spec.VolumeClaimTemplates = append(sts.Spec.VolumeClaimTemplates, pvc)
-	return nil
 }
 
 // SetStatefulSetServiceAccountName sets the service account name for the pod template.
-func SetStatefulSetServiceAccountName(sts *appsv1.StatefulSet, name string) error {
+func SetStatefulSetServiceAccountName(sts *appsv1.StatefulSet, name string) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetServiceAccountName: sts must not be nil")
 	}
-	return SetPodSpecServiceAccountName(&sts.Spec.Template.Spec, name)
+	SetPodSpecServiceAccountName(&sts.Spec.Template.Spec, name)
 }
 
 // SetStatefulSetSecurityContext sets the pod security context.
-func SetStatefulSetSecurityContext(sts *appsv1.StatefulSet, sc *corev1.PodSecurityContext) error {
+func SetStatefulSetSecurityContext(sts *appsv1.StatefulSet, sc *corev1.PodSecurityContext) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetSecurityContext: sts must not be nil")
 	}
-	return SetPodSpecSecurityContext(&sts.Spec.Template.Spec, sc)
+	SetPodSpecSecurityContext(&sts.Spec.Template.Spec, sc)
 }
 
 // SetStatefulSetAffinity sets the pod affinity rules.
-func SetStatefulSetAffinity(sts *appsv1.StatefulSet, aff *corev1.Affinity) error {
+func SetStatefulSetAffinity(sts *appsv1.StatefulSet, aff *corev1.Affinity) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetAffinity: sts must not be nil")
 	}
-	return SetPodSpecAffinity(&sts.Spec.Template.Spec, aff)
+	SetPodSpecAffinity(&sts.Spec.Template.Spec, aff)
 }
 
 // SetStatefulSetNodeSelector sets the node selector.
-func SetStatefulSetNodeSelector(sts *appsv1.StatefulSet, ns map[string]string) error {
+func SetStatefulSetNodeSelector(sts *appsv1.StatefulSet, ns map[string]string) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetNodeSelector: sts must not be nil")
 	}
-	return SetPodSpecNodeSelector(&sts.Spec.Template.Spec, ns)
+	SetPodSpecNodeSelector(&sts.Spec.Template.Spec, ns)
 }
 
 // SetStatefulSetUpdateStrategy sets the update strategy for the StatefulSet.
-func SetStatefulSetUpdateStrategy(sts *appsv1.StatefulSet, strategy appsv1.StatefulSetUpdateStrategy) error {
+func SetStatefulSetUpdateStrategy(sts *appsv1.StatefulSet, strategy appsv1.StatefulSetUpdateStrategy) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetUpdateStrategy: sts must not be nil")
 	}
 	sts.Spec.UpdateStrategy = strategy
-	return nil
 }
 
 // SetStatefulSetReplicas sets the replica count.
-func SetStatefulSetReplicas(sts *appsv1.StatefulSet, replicas int32) error {
+func SetStatefulSetReplicas(sts *appsv1.StatefulSet, replicas int32) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetReplicas: sts must not be nil")
 	}
 	if sts.Spec.Replicas == nil {
 		sts.Spec.Replicas = new(int32)
 	}
 	*sts.Spec.Replicas = replicas
-	return nil
 }
 
 // SetStatefulSetServiceName sets the service name used by the StatefulSet.
-func SetStatefulSetServiceName(sts *appsv1.StatefulSet, svc string) error {
+func SetStatefulSetServiceName(sts *appsv1.StatefulSet, svc string) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetServiceName: sts must not be nil")
 	}
 	sts.Spec.ServiceName = svc
-	return nil
 }
 
 // SetStatefulSetPodManagementPolicy sets the pod management policy.
-func SetStatefulSetPodManagementPolicy(sts *appsv1.StatefulSet, policy appsv1.PodManagementPolicyType) error {
+func SetStatefulSetPodManagementPolicy(sts *appsv1.StatefulSet, policy appsv1.PodManagementPolicyType) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetPodManagementPolicy: sts must not be nil")
 	}
 	sts.Spec.PodManagementPolicy = policy
-	return nil
 }
 
 // SetStatefulSetRevisionHistoryLimit sets the revision history limit.
-func SetStatefulSetRevisionHistoryLimit(sts *appsv1.StatefulSet, limit *int32) error {
+func SetStatefulSetRevisionHistoryLimit(sts *appsv1.StatefulSet, limit *int32) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetRevisionHistoryLimit: sts must not be nil")
 	}
 	sts.Spec.RevisionHistoryLimit = limit
-	return nil
 }
 
 // SetStatefulSetMinReadySeconds sets the minimum ready seconds.
-func SetStatefulSetMinReadySeconds(sts *appsv1.StatefulSet, secs int32) error {
+func SetStatefulSetMinReadySeconds(sts *appsv1.StatefulSet, secs int32) {
 	if sts == nil {
-		return errors.ErrNilStatefulSet
+		panic("SetStatefulSetMinReadySeconds: sts must not be nil")
 	}
 	sts.Spec.MinReadySeconds = secs
-	return nil
 }

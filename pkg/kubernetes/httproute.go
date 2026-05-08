@@ -3,8 +3,6 @@ package kubernetes
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/go-kure/kure/pkg/errors"
 )
 
 // CreateHTTPRoute returns an HTTPRoute with default labels, annotations,
@@ -33,57 +31,51 @@ func CreateHTTPRoute(name, namespace string) *gwapiv1.HTTPRoute {
 }
 
 // AddHTTPRouteHostname appends a hostname to the HTTPRoute.
-func AddHTTPRouteHostname(route *gwapiv1.HTTPRoute, hostname gwapiv1.Hostname) error {
+func AddHTTPRouteHostname(route *gwapiv1.HTTPRoute, hostname gwapiv1.Hostname) {
 	if route == nil {
-		return errors.ErrNilHTTPRoute
+		panic("AddHTTPRouteHostname: route must not be nil")
 	}
 	route.Spec.Hostnames = append(route.Spec.Hostnames, hostname)
-	return nil
 }
 
 // SetHTTPRouteHostnames replaces all hostnames on the HTTPRoute.
-func SetHTTPRouteHostnames(route *gwapiv1.HTTPRoute, hostnames []gwapiv1.Hostname) error {
+func SetHTTPRouteHostnames(route *gwapiv1.HTTPRoute, hostnames []gwapiv1.Hostname) {
 	if route == nil {
-		return errors.ErrNilHTTPRoute
+		panic("SetHTTPRouteHostnames: route must not be nil")
 	}
 	route.Spec.Hostnames = hostnames
-	return nil
 }
 
 // AddHTTPRouteParentRef appends a parent reference (typically a Gateway) to the HTTPRoute.
-func AddHTTPRouteParentRef(route *gwapiv1.HTTPRoute, ref gwapiv1.ParentReference) error {
+func AddHTTPRouteParentRef(route *gwapiv1.HTTPRoute, ref gwapiv1.ParentReference) {
 	if route == nil {
-		return errors.ErrNilHTTPRoute
+		panic("AddHTTPRouteParentRef: route must not be nil")
 	}
 	route.Spec.ParentRefs = append(route.Spec.ParentRefs, ref)
-	return nil
 }
 
 // SetHTTPRouteParentRefs replaces the parent references on the HTTPRoute.
-func SetHTTPRouteParentRefs(route *gwapiv1.HTTPRoute, refs []gwapiv1.ParentReference) error {
+func SetHTTPRouteParentRefs(route *gwapiv1.HTTPRoute, refs []gwapiv1.ParentReference) {
 	if route == nil {
-		return errors.ErrNilHTTPRoute
+		panic("SetHTTPRouteParentRefs: route must not be nil")
 	}
 	route.Spec.ParentRefs = refs
-	return nil
 }
 
 // AddHTTPRouteRule appends a routing rule to the HTTPRoute.
-func AddHTTPRouteRule(route *gwapiv1.HTTPRoute, rule gwapiv1.HTTPRouteRule) error {
+func AddHTTPRouteRule(route *gwapiv1.HTTPRoute, rule gwapiv1.HTTPRouteRule) {
 	if route == nil {
-		return errors.ErrNilHTTPRoute
+		panic("AddHTTPRouteRule: route must not be nil")
 	}
 	route.Spec.Rules = append(route.Spec.Rules, rule)
-	return nil
 }
 
 // SetHTTPRouteRules replaces the routing rules on the HTTPRoute.
-func SetHTTPRouteRules(route *gwapiv1.HTTPRoute, rules []gwapiv1.HTTPRouteRule) error {
+func SetHTTPRouteRules(route *gwapiv1.HTTPRoute, rules []gwapiv1.HTTPRouteRule) {
 	if route == nil {
-		return errors.ErrNilHTTPRoute
+		panic("SetHTTPRouteRules: route must not be nil")
 	}
 	route.Spec.Rules = rules
-	return nil
 }
 
 // AddHTTPRouteRuleMatch appends a match condition to an HTTPRouteRule.

@@ -109,139 +109,124 @@ func AddPodSpecTopologySpreadConstraints(spec *corev1.PodSpec, constraint *corev
 }
 
 // SetPodSpecServiceAccountName sets the service account name.
-func SetPodSpecServiceAccountName(spec *corev1.PodSpec, name string) error {
+func SetPodSpecServiceAccountName(spec *corev1.PodSpec, name string) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecServiceAccountName: spec must not be nil")
 	}
 	spec.ServiceAccountName = name
-	return nil
 }
 
 // SetPodSpecSecurityContext sets the security context for the PodSpec.
-func SetPodSpecSecurityContext(spec *corev1.PodSpec, sc *corev1.PodSecurityContext) error {
+func SetPodSpecSecurityContext(spec *corev1.PodSpec, sc *corev1.PodSecurityContext) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecSecurityContext: spec must not be nil")
 	}
 	spec.SecurityContext = sc
-	return nil
 }
 
 // SetPodSpecAffinity assigns affinity rules to the PodSpec.
-func SetPodSpecAffinity(spec *corev1.PodSpec, aff *corev1.Affinity) error {
+func SetPodSpecAffinity(spec *corev1.PodSpec, aff *corev1.Affinity) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecAffinity: spec must not be nil")
 	}
 	spec.Affinity = aff
-	return nil
 }
 
 // SetPodSpecNodeSelector sets the node selector map.
-func SetPodSpecNodeSelector(spec *corev1.PodSpec, selector map[string]string) error {
+func SetPodSpecNodeSelector(spec *corev1.PodSpec, selector map[string]string) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecNodeSelector: spec must not be nil")
 	}
 	spec.NodeSelector = selector
-	return nil
 }
 
 // SetPodSpecPriorityClassName sets the priority class name.
-func SetPodSpecPriorityClassName(spec *corev1.PodSpec, class string) error {
+func SetPodSpecPriorityClassName(spec *corev1.PodSpec, class string) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecPriorityClassName: spec must not be nil")
 	}
 	spec.PriorityClassName = class
-	return nil
 }
 
 // SetPodSpecHostNetwork configures host networking.
-func SetPodSpecHostNetwork(spec *corev1.PodSpec, hostNetwork bool) error {
+func SetPodSpecHostNetwork(spec *corev1.PodSpec, hostNetwork bool) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecHostNetwork: spec must not be nil")
 	}
 	spec.HostNetwork = hostNetwork
-	return nil
 }
 
 // SetPodSpecHostPID configures host PID namespace usage.
-func SetPodSpecHostPID(spec *corev1.PodSpec, hostPID bool) error {
+func SetPodSpecHostPID(spec *corev1.PodSpec, hostPID bool) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecHostPID: spec must not be nil")
 	}
 	spec.HostPID = hostPID
-	return nil
 }
 
 // SetPodSpecHostIPC configures host IPC namespace usage.
-func SetPodSpecHostIPC(spec *corev1.PodSpec, hostIPC bool) error {
+func SetPodSpecHostIPC(spec *corev1.PodSpec, hostIPC bool) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecHostIPC: spec must not be nil")
 	}
 	spec.HostIPC = hostIPC
-	return nil
 }
 
 // SetPodSpecDNSPolicy sets the DNS policy.
-func SetPodSpecDNSPolicy(spec *corev1.PodSpec, policy corev1.DNSPolicy) error {
+func SetPodSpecDNSPolicy(spec *corev1.PodSpec, policy corev1.DNSPolicy) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecDNSPolicy: spec must not be nil")
 	}
 	spec.DNSPolicy = policy
-	return nil
 }
 
 // SetPodSpecDNSConfig sets the DNS config.
-func SetPodSpecDNSConfig(spec *corev1.PodSpec, cfg *corev1.PodDNSConfig) error {
+func SetPodSpecDNSConfig(spec *corev1.PodSpec, cfg *corev1.PodDNSConfig) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecDNSConfig: spec must not be nil")
 	}
 	spec.DNSConfig = cfg
-	return nil
 }
 
 // SetPodSpecHostname sets the hostname.
-func SetPodSpecHostname(spec *corev1.PodSpec, hostname string) error {
+func SetPodSpecHostname(spec *corev1.PodSpec, hostname string) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecHostname: spec must not be nil")
 	}
 	spec.Hostname = hostname
-	return nil
 }
 
 // SetPodSpecSubdomain sets the subdomain.
-func SetPodSpecSubdomain(spec *corev1.PodSpec, subdomain string) error {
+func SetPodSpecSubdomain(spec *corev1.PodSpec, subdomain string) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecSubdomain: spec must not be nil")
 	}
 	spec.Subdomain = subdomain
-	return nil
 }
 
 // SetPodSpecRestartPolicy sets the restart policy.
-func SetPodSpecRestartPolicy(spec *corev1.PodSpec, policy corev1.RestartPolicy) error {
+func SetPodSpecRestartPolicy(spec *corev1.PodSpec, policy corev1.RestartPolicy) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecRestartPolicy: spec must not be nil")
 	}
 	spec.RestartPolicy = policy
-	return nil
 }
 
 // SetPodSpecTerminationGracePeriod sets the termination grace period seconds.
-func SetPodSpecTerminationGracePeriod(spec *corev1.PodSpec, secs int64) error {
+func SetPodSpecTerminationGracePeriod(spec *corev1.PodSpec, secs int64) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecTerminationGracePeriod: spec must not be nil")
 	}
 	if spec.TerminationGracePeriodSeconds == nil {
 		spec.TerminationGracePeriodSeconds = new(int64)
 	}
 	*spec.TerminationGracePeriodSeconds = secs
-	return nil
 }
 
 // SetPodSpecSchedulerName sets the scheduler name.
-func SetPodSpecSchedulerName(spec *corev1.PodSpec, scheduler string) error {
+func SetPodSpecSchedulerName(spec *corev1.PodSpec, scheduler string) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("SetPodSpecSchedulerName: spec must not be nil")
 	}
 	spec.SchedulerName = scheduler
-	return nil
 }

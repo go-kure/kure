@@ -142,105 +142,94 @@ func AddCronJobTopologySpreadConstraint(cron *batchv1.CronJob, topologySpreadCon
 
 // SetCronJobServiceAccountName sets the service account name on the CronJob's
 // pod template.
-func SetCronJobServiceAccountName(cron *batchv1.CronJob, serviceAccountName string) error {
+func SetCronJobServiceAccountName(cron *batchv1.CronJob, serviceAccountName string) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobServiceAccountName: cron must not be nil")
 	}
 	cron.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName = serviceAccountName
-	return nil
 }
 
 // SetCronJobSecurityContext sets the pod-level security context on the
 // CronJob's pod template.
-func SetCronJobSecurityContext(cron *batchv1.CronJob, securityContext *corev1.PodSecurityContext) error {
+func SetCronJobSecurityContext(cron *batchv1.CronJob, securityContext *corev1.PodSecurityContext) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobSecurityContext: cron must not be nil")
 	}
 	cron.Spec.JobTemplate.Spec.Template.Spec.SecurityContext = securityContext
-	return nil
 }
 
 // SetCronJobAffinity assigns affinity rules to the CronJob's pod template.
-func SetCronJobAffinity(cron *batchv1.CronJob, affinity *corev1.Affinity) error {
+func SetCronJobAffinity(cron *batchv1.CronJob, affinity *corev1.Affinity) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobAffinity: cron must not be nil")
 	}
 	cron.Spec.JobTemplate.Spec.Template.Spec.Affinity = affinity
-	return nil
 }
 
 // SetCronJobNodeSelector sets the node selector map on the CronJob's pod
 // template.
-func SetCronJobNodeSelector(cron *batchv1.CronJob, nodeSelector map[string]string) error {
+func SetCronJobNodeSelector(cron *batchv1.CronJob, nodeSelector map[string]string) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobNodeSelector: cron must not be nil")
 	}
 	cron.Spec.JobTemplate.Spec.Template.Spec.NodeSelector = nodeSelector
-	return nil
 }
 
 // SetCronJobSchedule sets the cron schedule expression.
-func SetCronJobSchedule(cron *batchv1.CronJob, schedule string) error {
+func SetCronJobSchedule(cron *batchv1.CronJob, schedule string) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobSchedule: cron must not be nil")
 	}
 	cron.Spec.Schedule = schedule
-	return nil
 }
 
 // SetCronJobConcurrencyPolicy sets the concurrency policy for the CronJob.
-func SetCronJobConcurrencyPolicy(cron *batchv1.CronJob, policy batchv1.ConcurrencyPolicy) error {
+func SetCronJobConcurrencyPolicy(cron *batchv1.CronJob, policy batchv1.ConcurrencyPolicy) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobConcurrencyPolicy: cron must not be nil")
 	}
 	cron.Spec.ConcurrencyPolicy = policy
-	return nil
 }
 
 // SetCronJobSuspend sets whether the CronJob is suspended.
-func SetCronJobSuspend(cron *batchv1.CronJob, suspend bool) error {
+func SetCronJobSuspend(cron *batchv1.CronJob, suspend bool) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobSuspend: cron must not be nil")
 	}
 	cron.Spec.Suspend = &suspend
-	return nil
 }
 
 // SetCronJobSuccessfulJobsHistoryLimit sets the number of successful finished
 // jobs to retain.
-func SetCronJobSuccessfulJobsHistoryLimit(cron *batchv1.CronJob, limit int32) error {
+func SetCronJobSuccessfulJobsHistoryLimit(cron *batchv1.CronJob, limit int32) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobSuccessfulJobsHistoryLimit: cron must not be nil")
 	}
 	cron.Spec.SuccessfulJobsHistoryLimit = &limit
-	return nil
 }
 
 // SetCronJobFailedJobsHistoryLimit sets the number of failed finished jobs to
 // retain.
-func SetCronJobFailedJobsHistoryLimit(cron *batchv1.CronJob, limit int32) error {
+func SetCronJobFailedJobsHistoryLimit(cron *batchv1.CronJob, limit int32) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobFailedJobsHistoryLimit: cron must not be nil")
 	}
 	cron.Spec.FailedJobsHistoryLimit = &limit
-	return nil
 }
 
 // SetCronJobStartingDeadlineSeconds sets the optional deadline in seconds for
 // starting the job if it misses its scheduled time.
-func SetCronJobStartingDeadlineSeconds(cron *batchv1.CronJob, sec int64) error {
+func SetCronJobStartingDeadlineSeconds(cron *batchv1.CronJob, sec int64) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobStartingDeadlineSeconds: cron must not be nil")
 	}
 	cron.Spec.StartingDeadlineSeconds = &sec
-	return nil
 }
 
 // SetCronJobTimeZone sets the time zone for the CronJob schedule.
-func SetCronJobTimeZone(cron *batchv1.CronJob, tz *string) error {
+func SetCronJobTimeZone(cron *batchv1.CronJob, tz *string) {
 	if cron == nil {
-		return errors.ErrNilCronJob
+		panic("SetCronJobTimeZone: cron must not be nil")
 	}
 	cron.Spec.TimeZone = tz
-	return nil
 }

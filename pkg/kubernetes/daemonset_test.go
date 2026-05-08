@@ -128,49 +128,37 @@ func TestDaemonSetFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	if err := SetDaemonSetServiceAccountName(ds, "sa"); err != nil {
-		t.Fatalf("SetDaemonSetServiceAccountName returned error: %v", err)
-	}
+	SetDaemonSetServiceAccountName(ds, "sa")
 	if ds.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account name not set")
 	}
 
 	sc := &corev1.PodSecurityContext{}
-	if err := SetDaemonSetSecurityContext(ds, sc); err != nil {
-		t.Fatalf("SetDaemonSetSecurityContext returned error: %v", err)
-	}
+	SetDaemonSetSecurityContext(ds, sc)
 	if ds.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	if err := SetDaemonSetAffinity(ds, aff); err != nil {
-		t.Fatalf("SetDaemonSetAffinity returned error: %v", err)
-	}
+	SetDaemonSetAffinity(ds, aff)
 	if ds.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	ns := map[string]string{"role": "db"}
-	if err := SetDaemonSetNodeSelector(ds, ns); err != nil {
-		t.Fatalf("SetDaemonSetNodeSelector returned error: %v", err)
-	}
+	SetDaemonSetNodeSelector(ds, ns)
 	if !reflect.DeepEqual(ds.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}
 
 	strategy := appsv1.DaemonSetUpdateStrategy{Type: appsv1.RollingUpdateDaemonSetStrategyType}
-	if err := SetDaemonSetUpdateStrategy(ds, strategy); err != nil {
-		t.Fatalf("SetDaemonSetUpdateStrategy returned error: %v", err)
-	}
+	SetDaemonSetUpdateStrategy(ds, strategy)
 	if ds.Spec.UpdateStrategy.Type != appsv1.RollingUpdateDaemonSetStrategyType {
 		t.Errorf("update strategy not set")
 	}
 
 	rhl := int32(3)
-	if err := SetDaemonSetRevisionHistoryLimit(ds, &rhl); err != nil {
-		t.Fatalf("SetDaemonSetRevisionHistoryLimit returned error: %v", err)
-	}
+	SetDaemonSetRevisionHistoryLimit(ds, &rhl)
 	if ds.Spec.RevisionHistoryLimit == nil || *ds.Spec.RevisionHistoryLimit != 3 {
 		t.Errorf("revision history limit not set")
 	}
@@ -178,35 +166,35 @@ func TestDaemonSetFunctions(t *testing.T) {
 
 func TestDaemonSetNilGuards(t *testing.T) {
 	rhl := int32(1)
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"SetDaemonSetPodSpec", func() error { return SetDaemonSetPodSpec(nil, &corev1.PodSpec{}) }},
-		{"AddDaemonSetContainer", func() error { return AddDaemonSetContainer(nil, &corev1.Container{}) }},
-		{"AddDaemonSetInitContainer", func() error { return AddDaemonSetInitContainer(nil, &corev1.Container{}) }},
-		{"AddDaemonSetVolume", func() error { return AddDaemonSetVolume(nil, &corev1.Volume{}) }},
-		{"AddDaemonSetImagePullSecret", func() error {
-			return AddDaemonSetImagePullSecret(nil, &corev1.LocalObjectReference{})
-		}},
-		{"AddDaemonSetToleration", func() error { return AddDaemonSetToleration(nil, &corev1.Toleration{}) }},
-		{"AddDaemonSetTopologySpreadConstraints", func() error {
-			return AddDaemonSetTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{})
-		}},
-		{"SetDaemonSetServiceAccountName", func() error { return SetDaemonSetServiceAccountName(nil, "sa") }},
-		{"SetDaemonSetSecurityContext", func() error { return SetDaemonSetSecurityContext(nil, nil) }},
-		{"SetDaemonSetAffinity", func() error { return SetDaemonSetAffinity(nil, nil) }},
-		{"SetDaemonSetNodeSelector", func() error { return SetDaemonSetNodeSelector(nil, nil) }},
-		{"SetDaemonSetUpdateStrategy", func() error {
-			return SetDaemonSetUpdateStrategy(nil, appsv1.DaemonSetUpdateStrategy{})
-		}},
-		{"SetDaemonSetRevisionHistoryLimit", func() error { return SetDaemonSetRevisionHistoryLimit(nil, &rhl) }},
+
+	// Functions with secondary nil checks — still return errors
+	if err := SetDaemonSetPodSpec(nil, &corev1.PodSpec{}); err == nil {
+		t.Error("SetDaemonSetPodSpec(nil) should return error")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
+	if err := AddDaemonSetContainer(nil, &corev1.Container{}); err == nil {
+		t.Error("AddDaemonSetContainer(nil) should return error")
 	}
+	if err := AddDaemonSetInitContainer(nil, &corev1.Container{}); err == nil {
+		t.Error("AddDaemonSetInitContainer(nil) should return error")
+	}
+	if err := AddDaemonSetVolume(nil, &corev1.Volume{}); err == nil {
+		t.Error("AddDaemonSetVolume(nil) should return error")
+	}
+	if err := AddDaemonSetImagePullSecret(nil, &corev1.LocalObjectReference{}); err == nil {
+		t.Error("AddDaemonSetImagePullSecret(nil) should return error")
+	}
+	if err := AddDaemonSetToleration(nil, &corev1.Toleration{}); err == nil {
+		t.Error("AddDaemonSetToleration(nil) should return error")
+	}
+	if err := AddDaemonSetTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{}); err == nil {
+		t.Error("AddDaemonSetTopologySpreadConstraints(nil) should return error")
+	}
+
+	// Functions that now panic on nil receiver
+	assertPanics(t, func() { SetDaemonSetServiceAccountName(nil, "sa") })
+	assertPanics(t, func() { SetDaemonSetSecurityContext(nil, nil) })
+	assertPanics(t, func() { SetDaemonSetAffinity(nil, nil) })
+	assertPanics(t, func() { SetDaemonSetNodeSelector(nil, nil) })
+	assertPanics(t, func() { SetDaemonSetUpdateStrategy(nil, appsv1.DaemonSetUpdateStrategy{}) })
+	assertPanics(t, func() { SetDaemonSetRevisionHistoryLimit(nil, &rhl) })
 }

@@ -32,9 +32,7 @@ func TestCreateServiceAccount(t *testing.T) {
 func TestAddServiceAccountSecret(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
 	ref := corev1.ObjectReference{Name: "secret"}
-	if err := AddServiceAccountSecret(sa, ref); err != nil {
-		t.Fatalf("AddServiceAccountSecret returned error: %v", err)
-	}
+	AddServiceAccountSecret(sa, ref)
 	if len(sa.Secrets) != 1 || sa.Secrets[0] != ref {
 		t.Errorf("secret not added")
 	}
@@ -43,9 +41,7 @@ func TestAddServiceAccountSecret(t *testing.T) {
 func TestAddServiceAccountImagePullSecret(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
 	ref := corev1.LocalObjectReference{Name: "pullsecret"}
-	if err := AddServiceAccountImagePullSecret(sa, ref); err != nil {
-		t.Fatalf("AddServiceAccountImagePullSecret returned error: %v", err)
-	}
+	AddServiceAccountImagePullSecret(sa, ref)
 	if len(sa.ImagePullSecrets) != 1 || sa.ImagePullSecrets[0] != ref {
 		t.Errorf("image pull secret not added")
 	}
@@ -54,9 +50,7 @@ func TestAddServiceAccountImagePullSecret(t *testing.T) {
 func TestSetServiceAccountSecrets(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
 	secrets := []corev1.ObjectReference{{Name: "a"}, {Name: "b"}}
-	if err := SetServiceAccountSecrets(sa, secrets); err != nil {
-		t.Fatalf("SetServiceAccountSecrets returned error: %v", err)
-	}
+	SetServiceAccountSecrets(sa, secrets)
 	if !reflect.DeepEqual(sa.Secrets, secrets) {
 		t.Errorf("secrets not set")
 	}
@@ -65,9 +59,7 @@ func TestSetServiceAccountSecrets(t *testing.T) {
 func TestSetServiceAccountImagePullSecrets(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
 	pulls := []corev1.LocalObjectReference{{Name: "x"}, {Name: "y"}}
-	if err := SetServiceAccountImagePullSecrets(sa, pulls); err != nil {
-		t.Fatalf("SetServiceAccountImagePullSecrets returned error: %v", err)
-	}
+	SetServiceAccountImagePullSecrets(sa, pulls)
 	if !reflect.DeepEqual(sa.ImagePullSecrets, pulls) {
 		t.Errorf("image pull secrets not set")
 	}
@@ -75,15 +67,11 @@ func TestSetServiceAccountImagePullSecrets(t *testing.T) {
 
 func TestSetServiceAccountAutomountToken(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
-	if err := SetServiceAccountAutomountToken(sa, true); err != nil {
-		t.Fatalf("SetServiceAccountAutomountToken returned error: %v", err)
-	}
+	SetServiceAccountAutomountToken(sa, true)
 	if sa.AutomountServiceAccountToken == nil || !*sa.AutomountServiceAccountToken {
 		t.Errorf("automount token not set to true")
 	}
-	if err := SetServiceAccountAutomountToken(sa, false); err != nil {
-		t.Fatalf("SetServiceAccountAutomountToken returned error: %v", err)
-	}
+	SetServiceAccountAutomountToken(sa, false)
 	if sa.AutomountServiceAccountToken == nil || *sa.AutomountServiceAccountToken {
 		t.Errorf("automount token not updated to false")
 	}
@@ -114,23 +102,9 @@ func TestServiceAccountMetadataFunctions(t *testing.T) {
 }
 
 func TestServiceAccountNilGuards(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"AddServiceAccountSecret", func() error { return AddServiceAccountSecret(nil, corev1.ObjectReference{}) }},
-		{"AddServiceAccountImagePullSecret", func() error {
-			return AddServiceAccountImagePullSecret(nil, corev1.LocalObjectReference{})
-		}},
-		{"SetServiceAccountSecrets", func() error { return SetServiceAccountSecrets(nil, nil) }},
-		{"SetServiceAccountImagePullSecrets", func() error { return SetServiceAccountImagePullSecrets(nil, nil) }},
-		{"SetServiceAccountAutomountToken", func() error { return SetServiceAccountAutomountToken(nil, true) }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fn(); err == nil {
-				t.Errorf("%s(nil) should return error", tt.name)
-			}
-		})
-	}
+	assertPanics(t, func() { AddServiceAccountSecret(nil, corev1.ObjectReference{}) })
+	assertPanics(t, func() { AddServiceAccountImagePullSecret(nil, corev1.LocalObjectReference{}) })
+	assertPanics(t, func() { SetServiceAccountSecrets(nil, nil) })
+	assertPanics(t, func() { SetServiceAccountImagePullSecrets(nil, nil) })
+	assertPanics(t, func() { SetServiceAccountAutomountToken(nil, true) })
 }

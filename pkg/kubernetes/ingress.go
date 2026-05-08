@@ -1,8 +1,6 @@
 package kubernetes
 
 import (
-	"github.com/go-kure/kure/pkg/errors"
-
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -66,12 +64,11 @@ func CreateIngressPath(path string, pathType *netv1.PathType, servicename string
 }
 
 // AddIngressRule appends an IngressRule to the Ingress spec.
-func AddIngressRule(ingress *netv1.Ingress, rule *netv1.IngressRule) error {
+func AddIngressRule(ingress *netv1.Ingress, rule *netv1.IngressRule) {
 	if ingress == nil {
-		return errors.ErrNilIngress
+		panic("AddIngressRule: ingress must not be nil")
 	}
 	ingress.Spec.Rules = append(ingress.Spec.Rules, *rule)
-	return nil
 }
 
 // AddIngressRulePath appends a path to an IngressRule's HTTP paths.
@@ -83,28 +80,25 @@ func AddIngressRulePath(rule *netv1.IngressRule, path netv1.HTTPIngressPath) {
 }
 
 // AddIngressTLS appends a TLS configuration to the Ingress spec.
-func AddIngressTLS(ingress *netv1.Ingress, tls netv1.IngressTLS) error {
+func AddIngressTLS(ingress *netv1.Ingress, tls netv1.IngressTLS) {
 	if ingress == nil {
-		return errors.ErrNilIngress
+		panic("AddIngressTLS: ingress must not be nil")
 	}
 	ingress.Spec.TLS = append(ingress.Spec.TLS, tls)
-	return nil
 }
 
 // SetIngressDefaultBackend sets the default backend on the Ingress spec.
-func SetIngressDefaultBackend(ingress *netv1.Ingress, backend netv1.IngressBackend) error {
+func SetIngressDefaultBackend(ingress *netv1.Ingress, backend netv1.IngressBackend) {
 	if ingress == nil {
-		return errors.ErrNilIngress
+		panic("SetIngressDefaultBackend: ingress must not be nil")
 	}
 	ingress.Spec.DefaultBackend = &backend
-	return nil
 }
 
 // SetIngressClassName sets the ingress class name on the Ingress spec.
-func SetIngressClassName(ingress *netv1.Ingress, class string) error {
+func SetIngressClassName(ingress *netv1.Ingress, class string) {
 	if ingress == nil {
-		return errors.ErrNilIngress
+		panic("SetIngressClassName: ingress must not be nil")
 	}
 	ingress.Spec.IngressClassName = &class
-	return nil
 }

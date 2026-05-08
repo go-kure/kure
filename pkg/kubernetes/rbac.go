@@ -3,8 +3,6 @@ package kubernetes
 import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/go-kure/kure/pkg/errors"
 )
 
 func CreateRole(name, namespace string) *rbacv1.Role {
@@ -20,12 +18,11 @@ func CreateRole(name, namespace string) *rbacv1.Role {
 	}
 }
 
-func AddRoleRule(role *rbacv1.Role, rule rbacv1.PolicyRule) error {
+func AddRoleRule(role *rbacv1.Role, rule rbacv1.PolicyRule) {
 	if role == nil {
-		return errors.ErrNilRole
+		panic("AddRoleRule: role must not be nil")
 	}
 	role.Rules = append(role.Rules, rule)
-	return nil
 }
 
 func CreateRoleBinding(name, namespace string) *rbacv1.RoleBinding {
@@ -41,20 +38,18 @@ func CreateRoleBinding(name, namespace string) *rbacv1.RoleBinding {
 	}
 }
 
-func SetRoleBindingRoleRef(rb *rbacv1.RoleBinding, roleRef rbacv1.RoleRef) error {
+func SetRoleBindingRoleRef(rb *rbacv1.RoleBinding, roleRef rbacv1.RoleRef) {
 	if rb == nil {
-		return errors.ErrNilRoleBinding
+		panic("SetRoleBindingRoleRef: rb must not be nil")
 	}
 	rb.RoleRef = roleRef
-	return nil
 }
 
-func AddRoleBindingSubject(rb *rbacv1.RoleBinding, subject rbacv1.Subject) error {
+func AddRoleBindingSubject(rb *rbacv1.RoleBinding, subject rbacv1.Subject) {
 	if rb == nil {
-		return errors.ErrNilRoleBinding
+		panic("AddRoleBindingSubject: rb must not be nil")
 	}
 	rb.Subjects = append(rb.Subjects, subject)
-	return nil
 }
 
 func CreateClusterRole(name string) *rbacv1.ClusterRole {
@@ -69,12 +64,11 @@ func CreateClusterRole(name string) *rbacv1.ClusterRole {
 	}
 }
 
-func AddClusterRoleRule(cr *rbacv1.ClusterRole, rule rbacv1.PolicyRule) error {
+func AddClusterRoleRule(cr *rbacv1.ClusterRole, rule rbacv1.PolicyRule) {
 	if cr == nil {
-		return errors.ErrNilClusterRole
+		panic("AddClusterRoleRule: cr must not be nil")
 	}
 	cr.Rules = append(cr.Rules, rule)
-	return nil
 }
 
 func CreateClusterRoleBinding(name string) *rbacv1.ClusterRoleBinding {
@@ -89,18 +83,16 @@ func CreateClusterRoleBinding(name string) *rbacv1.ClusterRoleBinding {
 	}
 }
 
-func SetClusterRoleBindingRoleRef(crb *rbacv1.ClusterRoleBinding, roleRef rbacv1.RoleRef) error {
+func SetClusterRoleBindingRoleRef(crb *rbacv1.ClusterRoleBinding, roleRef rbacv1.RoleRef) {
 	if crb == nil {
-		return errors.ErrNilClusterRoleBinding
+		panic("SetClusterRoleBindingRoleRef: crb must not be nil")
 	}
 	crb.RoleRef = roleRef
-	return nil
 }
 
-func AddClusterRoleBindingSubject(crb *rbacv1.ClusterRoleBinding, subject rbacv1.Subject) error {
+func AddClusterRoleBindingSubject(crb *rbacv1.ClusterRoleBinding, subject rbacv1.Subject) {
 	if crb == nil {
-		return errors.ErrNilClusterRoleBinding
+		panic("AddClusterRoleBindingSubject: crb must not be nil")
 	}
 	crb.Subjects = append(crb.Subjects, subject)
-	return nil
 }

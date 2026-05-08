@@ -115,9 +115,7 @@ func TestSetResourceLimit(t *testing.T) {
 func TestAddResourceClaim(t *testing.T) {
 	rr := CreateResourceRequirements()
 	claim := corev1.ResourceClaim{Name: "my-gpu-claim"}
-	if err := AddResourceClaim(rr, claim); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	AddResourceClaim(rr, claim)
 	if len(rr.Claims) != 1 {
 		t.Fatalf("expected 1 claim, got %d", len(rr.Claims))
 	}
@@ -127,15 +125,15 @@ func TestAddResourceClaim(t *testing.T) {
 }
 
 func TestResourceRequirementsNilErrors(t *testing.T) {
+	// SetResource* functions still return error (can fail on quantity parse)
 	if err := SetResourceRequestCPU(nil, "100m"); err == nil {
 		t.Error("expected error for nil ResourceRequirements")
 	}
 	if err := SetResourceLimitMemory(nil, "256Mi"); err == nil {
 		t.Error("expected error for nil ResourceRequirements")
 	}
-	if err := AddResourceClaim(nil, corev1.ResourceClaim{Name: "test"}); err == nil {
-		t.Error("expected error for nil ResourceRequirements")
-	}
+	// AddResourceClaim now panics on nil receiver
+	assertPanics(t, func() { AddResourceClaim(nil, corev1.ResourceClaim{Name: "test"}) })
 }
 
 func TestResourceRequirementsInvalidQuantity(t *testing.T) {

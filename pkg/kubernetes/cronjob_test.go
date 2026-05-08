@@ -29,6 +29,7 @@ func TestCreateCronJob(t *testing.T) {
 }
 
 func TestCronJobNilErrors(t *testing.T) {
+	// Functions with secondary nil checks — still return errors
 	if err := SetCronJobPodSpec(nil, &corev1.PodSpec{}); err == nil {
 		t.Error("expected error for nil CronJob on SetCronJobPodSpec")
 	}
@@ -50,40 +51,20 @@ func TestCronJobNilErrors(t *testing.T) {
 	if err := AddCronJobTopologySpreadConstraint(nil, &corev1.TopologySpreadConstraint{}); err == nil {
 		t.Error("expected error for nil CronJob on AddCronJobTopologySpreadConstraint")
 	}
-	if err := SetCronJobServiceAccountName(nil, "sa"); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobServiceAccountName")
-	}
-	if err := SetCronJobSecurityContext(nil, &corev1.PodSecurityContext{}); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobSecurityContext")
-	}
-	if err := SetCronJobAffinity(nil, &corev1.Affinity{}); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobAffinity")
-	}
-	if err := SetCronJobNodeSelector(nil, map[string]string{}); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobNodeSelector")
-	}
-	if err := SetCronJobSchedule(nil, "* * * * *"); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobSchedule")
-	}
-	if err := SetCronJobConcurrencyPolicy(nil, batchv1.ForbidConcurrent); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobConcurrencyPolicy")
-	}
-	if err := SetCronJobSuspend(nil, true); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobSuspend")
-	}
-	if err := SetCronJobSuccessfulJobsHistoryLimit(nil, 3); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobSuccessfulJobsHistoryLimit")
-	}
-	if err := SetCronJobFailedJobsHistoryLimit(nil, 1); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobFailedJobsHistoryLimit")
-	}
-	if err := SetCronJobStartingDeadlineSeconds(nil, 60); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobStartingDeadlineSeconds")
-	}
+
+	// Functions that now panic on nil receiver
+	assertPanics(t, func() { SetCronJobServiceAccountName(nil, "sa") })
+	assertPanics(t, func() { SetCronJobSecurityContext(nil, nil) })
+	assertPanics(t, func() { SetCronJobAffinity(nil, nil) })
+	assertPanics(t, func() { SetCronJobNodeSelector(nil, nil) })
+	assertPanics(t, func() { SetCronJobSchedule(nil, "* * * * *") })
+	assertPanics(t, func() { SetCronJobConcurrencyPolicy(nil, batchv1.ForbidConcurrent) })
+	assertPanics(t, func() { SetCronJobSuspend(nil, true) })
+	assertPanics(t, func() { SetCronJobSuccessfulJobsHistoryLimit(nil, 3) })
+	assertPanics(t, func() { SetCronJobFailedJobsHistoryLimit(nil, 1) })
+	assertPanics(t, func() { SetCronJobStartingDeadlineSeconds(nil, 60) })
 	tz := "UTC"
-	if err := SetCronJobTimeZone(nil, &tz); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobTimeZone")
-	}
+	assertPanics(t, func() { SetCronJobTimeZone(nil, &tz) })
 }
 
 func TestCronJobNilArgErrors(t *testing.T) {
@@ -233,83 +214,61 @@ func TestCronJobFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	if err := SetCronJobServiceAccountName(cj, "sa"); err != nil {
-		t.Fatalf("SetCronJobServiceAccountName returned error: %v", err)
-	}
+	SetCronJobServiceAccountName(cj, "sa")
 	if cj.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName != "sa" {
 		t.Errorf("service account name not set")
 	}
 
 	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
-	if err := SetCronJobSecurityContext(cj, sc); err != nil {
-		t.Fatalf("SetCronJobSecurityContext returned error: %v", err)
-	}
+	SetCronJobSecurityContext(cj, sc)
 	if cj.Spec.JobTemplate.Spec.Template.Spec.SecurityContext != sc {
 		t.Errorf("security context not set")
 	}
 
 	aff := &corev1.Affinity{}
-	if err := SetCronJobAffinity(cj, aff); err != nil {
-		t.Fatalf("SetCronJobAffinity returned error: %v", err)
-	}
+	SetCronJobAffinity(cj, aff)
 	if cj.Spec.JobTemplate.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
 	}
 
 	ns := map[string]string{"role": "db"}
-	if err := SetCronJobNodeSelector(cj, ns); err != nil {
-		t.Fatalf("SetCronJobNodeSelector returned error: %v", err)
-	}
+	SetCronJobNodeSelector(cj, ns)
 	if !reflect.DeepEqual(cj.Spec.JobTemplate.Spec.Template.Spec.NodeSelector, ns) {
 		t.Errorf("node selector not set")
 	}
 
-	if err := SetCronJobSchedule(cj, "*/5 * * * *"); err != nil {
-		t.Fatalf("SetCronJobSchedule returned error: %v", err)
-	}
+	SetCronJobSchedule(cj, "*/5 * * * *")
 	if cj.Spec.Schedule != "*/5 * * * *" {
 		t.Errorf("schedule not updated")
 	}
 
-	if err := SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent); err != nil {
-		t.Fatalf("SetCronJobConcurrencyPolicy returned error: %v", err)
-	}
+	SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent)
 	if cj.Spec.ConcurrencyPolicy != batchv1.ForbidConcurrent {
 		t.Errorf("concurrency policy not set")
 	}
 
-	if err := SetCronJobSuspend(cj, true); err != nil {
-		t.Fatalf("SetCronJobSuspend returned error: %v", err)
-	}
+	SetCronJobSuspend(cj, true)
 	if cj.Spec.Suspend == nil || !*cj.Spec.Suspend {
 		t.Errorf("suspend not set")
 	}
 
-	if err := SetCronJobSuccessfulJobsHistoryLimit(cj, 1); err != nil {
-		t.Fatalf("SetCronJobSuccessfulJobsHistoryLimit returned error: %v", err)
-	}
+	SetCronJobSuccessfulJobsHistoryLimit(cj, 1)
 	if cj.Spec.SuccessfulJobsHistoryLimit == nil || *cj.Spec.SuccessfulJobsHistoryLimit != 1 {
 		t.Errorf("successful jobs history limit not set")
 	}
 
-	if err := SetCronJobFailedJobsHistoryLimit(cj, 2); err != nil {
-		t.Fatalf("SetCronJobFailedJobsHistoryLimit returned error: %v", err)
-	}
+	SetCronJobFailedJobsHistoryLimit(cj, 2)
 	if cj.Spec.FailedJobsHistoryLimit == nil || *cj.Spec.FailedJobsHistoryLimit != 2 {
 		t.Errorf("failed jobs history limit not set")
 	}
 
-	if err := SetCronJobStartingDeadlineSeconds(cj, 60); err != nil {
-		t.Fatalf("SetCronJobStartingDeadlineSeconds returned error: %v", err)
-	}
+	SetCronJobStartingDeadlineSeconds(cj, 60)
 	if cj.Spec.StartingDeadlineSeconds == nil || *cj.Spec.StartingDeadlineSeconds != 60 {
 		t.Errorf("starting deadline seconds not set")
 	}
 
 	tz := "UTC"
-	if err := SetCronJobTimeZone(cj, &tz); err != nil {
-		t.Fatalf("SetCronJobTimeZone returned error: %v", err)
-	}
+	SetCronJobTimeZone(cj, &tz)
 	if cj.Spec.TimeZone == nil || *cj.Spec.TimeZone != "UTC" {
 		t.Errorf("timezone not set")
 	}

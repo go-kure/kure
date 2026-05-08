@@ -15,6 +15,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// assertPanics asserts that f() panics. Used to test nil-receiver panic guards.
+func assertPanics(t *testing.T, f func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic, got none")
+		}
+	}()
+	f()
+}
+
 func TestGetGroupVersionKind_Success(t *testing.T) {
 	tests := []struct {
 		name        string
