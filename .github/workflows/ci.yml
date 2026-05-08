@@ -16,6 +16,12 @@ permissions:
 env:
   GOLANGCI_LINT_VERSION: 'v2.10.1'
   GOVULNCHECK_VERSION: 'v1.1.4'
+  # The runner binary patch (Runner.Worker.dll) renames all occurrences of
+  # ACTIONS_RESULTS_URL to ACTIONS_RESULTS_ORL, including the name the Worker
+  # injects into step process environments.  Workflow env overrides runner-injected
+  # values, so setting ACTIONS_RESULTS_URL here ensures upload-artifact,
+  # download-artifact, and cache (v2) all see the correct in-cluster URL.
+  ACTIONS_RESULTS_URL: 'http://actions-cache-server.arc-runners.svc.cluster.local:3000/'
 
 # Avoid duplicate runs on the same commit
 concurrency:
