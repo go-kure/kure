@@ -3,8 +3,6 @@ package externalsecrets
 import (
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	intes "github.com/go-kure/kure/internal/externalsecrets"
 )
 
 // SetExternalSecretSpec replaces the spec on the ExternalSecret object.
@@ -22,77 +20,95 @@ func SetClusterSecretStoreSpec(obj *esv1.ClusterSecretStore, spec esv1.SecretSto
 	obj.Spec = spec
 }
 
-// AddExternalSecretLabel delegates to the internal helper.
+// AddExternalSecretLabel adds or updates a label on the ExternalSecret.
 func AddExternalSecretLabel(obj *esv1.ExternalSecret, key, value string) {
-	intes.AddExternalSecretLabel(obj, key, value)
+	if obj.Labels == nil {
+		obj.Labels = make(map[string]string)
+	}
+	obj.Labels[key] = value
 }
 
-// AddExternalSecretAnnotation delegates to the internal helper.
+// AddExternalSecretAnnotation adds or updates an annotation on the ExternalSecret.
 func AddExternalSecretAnnotation(obj *esv1.ExternalSecret, key, value string) {
-	intes.AddExternalSecretAnnotation(obj, key, value)
+	if obj.Annotations == nil {
+		obj.Annotations = make(map[string]string)
+	}
+	obj.Annotations[key] = value
 }
 
-// AddExternalSecretData delegates to the internal helper.
+// AddExternalSecretData appends a data entry to the ExternalSecret spec.
 func AddExternalSecretData(obj *esv1.ExternalSecret, data esv1.ExternalSecretData) {
-	intes.AddExternalSecretData(obj, data)
+	obj.Spec.Data = append(obj.Spec.Data, data)
 }
 
-// SetExternalSecretSecretStoreRef delegates to the internal helper.
+// SetExternalSecretSecretStoreRef sets the secret store reference on the ExternalSecret spec.
 func SetExternalSecretSecretStoreRef(obj *esv1.ExternalSecret, ref esv1.SecretStoreRef) {
-	intes.SetExternalSecretSecretStoreRef(obj, ref)
+	obj.Spec.SecretStoreRef = ref
 }
 
-// AddSecretStoreLabel delegates to the internal helper.
+// AddSecretStoreLabel adds or updates a label on the SecretStore.
 func AddSecretStoreLabel(obj *esv1.SecretStore, key, value string) {
-	intes.AddSecretStoreLabel(obj, key, value)
+	if obj.Labels == nil {
+		obj.Labels = make(map[string]string)
+	}
+	obj.Labels[key] = value
 }
 
-// AddSecretStoreAnnotation delegates to the internal helper.
+// AddSecretStoreAnnotation adds or updates an annotation on the SecretStore.
 func AddSecretStoreAnnotation(obj *esv1.SecretStore, key, value string) {
-	intes.AddSecretStoreAnnotation(obj, key, value)
+	if obj.Annotations == nil {
+		obj.Annotations = make(map[string]string)
+	}
+	obj.Annotations[key] = value
 }
 
-// SetSecretStoreProvider delegates to the internal helper.
+// SetSecretStoreProvider sets the provider field on the SecretStore spec.
 func SetSecretStoreProvider(obj *esv1.SecretStore, provider *esv1.SecretStoreProvider) {
-	intes.SetSecretStoreProvider(obj, provider)
+	obj.Spec.Provider = provider
 }
 
-// SetSecretStoreController delegates to the internal helper.
+// SetSecretStoreController sets the controller name on the SecretStore spec.
 func SetSecretStoreController(obj *esv1.SecretStore, controller string) {
-	intes.SetSecretStoreController(obj, controller)
+	obj.Spec.Controller = controller
 }
 
-// AddClusterSecretStoreLabel delegates to the internal helper.
+// AddClusterSecretStoreLabel adds or updates a label on the ClusterSecretStore.
 func AddClusterSecretStoreLabel(obj *esv1.ClusterSecretStore, key, value string) {
-	intes.AddClusterSecretStoreLabel(obj, key, value)
+	if obj.Labels == nil {
+		obj.Labels = make(map[string]string)
+	}
+	obj.Labels[key] = value
 }
 
-// AddClusterSecretStoreAnnotation delegates to the internal helper.
+// AddClusterSecretStoreAnnotation adds or updates an annotation on the ClusterSecretStore.
 func AddClusterSecretStoreAnnotation(obj *esv1.ClusterSecretStore, key, value string) {
-	intes.AddClusterSecretStoreAnnotation(obj, key, value)
+	if obj.Annotations == nil {
+		obj.Annotations = make(map[string]string)
+	}
+	obj.Annotations[key] = value
 }
 
-// SetClusterSecretStoreProvider delegates to the internal helper.
+// SetClusterSecretStoreProvider sets the provider field on the ClusterSecretStore spec.
 func SetClusterSecretStoreProvider(obj *esv1.ClusterSecretStore, provider *esv1.SecretStoreProvider) {
-	intes.SetClusterSecretStoreProvider(obj, provider)
+	obj.Spec.Provider = provider
 }
 
-// SetClusterSecretStoreController delegates to the internal helper.
+// SetClusterSecretStoreController sets the controller name on the ClusterSecretStore spec.
 func SetClusterSecretStoreController(obj *esv1.ClusterSecretStore, controller string) {
-	intes.SetClusterSecretStoreController(obj, controller)
+	obj.Spec.Controller = controller
 }
 
 // SetRefreshInterval sets the polling interval on an ExternalSecret.
 func SetRefreshInterval(obj *esv1.ExternalSecret, d metav1.Duration) {
-	intes.SetRefreshInterval(obj, d)
+	obj.Spec.RefreshInterval = &d
 }
 
 // SetTarget sets the target secret configuration on an ExternalSecret.
 func SetTarget(obj *esv1.ExternalSecret, target esv1.ExternalSecretTarget) {
-	intes.SetTarget(obj, target)
+	obj.Spec.Target = target
 }
 
 // AddDataFrom appends a dataFrom source to an ExternalSecret.
 func AddDataFrom(obj *esv1.ExternalSecret, source esv1.ExternalSecretDataFromRemoteRef) {
-	intes.AddDataFrom(obj, source)
+	obj.Spec.DataFrom = append(obj.Spec.DataFrom, source)
 }

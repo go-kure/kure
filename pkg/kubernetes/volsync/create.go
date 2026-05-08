@@ -2,9 +2,39 @@ package volsync
 
 import (
 	volsyncv1alpha1 "github.com/backube/volsync/api/v1alpha1"
-
-	intvol "github.com/go-kure/kure/internal/volsync"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// CreateReplicationSource returns a new ReplicationSource with TypeMeta and
+// ObjectMeta set. Spec fields are left zero; use the setters to populate them.
+func CreateReplicationSource(name, namespace string) *volsyncv1alpha1.ReplicationSource {
+	return &volsyncv1alpha1.ReplicationSource{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: volsyncv1alpha1.GroupVersion.String(),
+			Kind:       "ReplicationSource",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
+
+// CreateReplicationDestination returns a new ReplicationDestination with
+// TypeMeta and ObjectMeta set. Spec fields are left zero; use the setters to
+// populate them.
+func CreateReplicationDestination(name, namespace string) *volsyncv1alpha1.ReplicationDestination {
+	return &volsyncv1alpha1.ReplicationDestination{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: volsyncv1alpha1.GroupVersion.String(),
+			Kind:       "ReplicationDestination",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
 
 // ReplicationSource constructs a typed ReplicationSource from cfg. The Mover
 // variant is dispatched via type switch; if Mover is nil, no mover spec is
@@ -13,7 +43,7 @@ func ReplicationSource(cfg *ReplicationSourceConfig) *volsyncv1alpha1.Replicatio
 	if cfg == nil {
 		return nil
 	}
-	rs := intvol.CreateReplicationSource(cfg.Name, cfg.Namespace)
+	rs := CreateReplicationSource(cfg.Name, cfg.Namespace)
 	rs.Spec.SourcePVC = cfg.SourcePVC
 	rs.Spec.Paused = cfg.Paused
 	if cfg.Trigger != nil {
@@ -70,7 +100,7 @@ func ReplicationDestination(cfg *ReplicationDestinationConfig) *volsyncv1alpha1.
 	if cfg == nil {
 		return nil
 	}
-	rd := intvol.CreateReplicationDestination(cfg.Name, cfg.Namespace)
+	rd := CreateReplicationDestination(cfg.Name, cfg.Namespace)
 	rd.Spec.Paused = cfg.Paused
 	if cfg.Trigger != nil {
 		rd.Spec.Trigger = &volsyncv1alpha1.ReplicationDestinationTriggerSpec{

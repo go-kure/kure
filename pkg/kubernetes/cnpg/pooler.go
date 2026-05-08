@@ -2,8 +2,6 @@ package cnpg
 
 import (
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
-
-	intcnpg "github.com/go-kure/kure/internal/cnpg"
 )
 
 // Pooler converts PoolerConfig to a CNPG Pooler object.
@@ -41,5 +39,7 @@ func Pooler(cfg *PoolerConfig) *cnpgv1.Pooler {
 		spec.Instances = &instances
 	}
 
-	return intcnpg.CreatePooler(cfg.Name, cfg.Namespace, spec)
+	obj := CreatePooler(cfg.Name, cfg.Namespace)
+	obj.Spec = spec
+	return obj
 }

@@ -17,30 +17,17 @@ import (
 )
 
 func TestSetGitRepositorySpec(t *testing.T) {
-	// Create a GitRepository using the constructor first
-	cfg := &GitRepositoryConfig{
-		Name:      "test-repo",
-		Namespace: "flux-system",
-		URL:       "https://github.com/example/repo",
-		Interval:  "5m",
-	}
+	repo := CreateGitRepository("test-repo", "flux-system")
+	SetGitRepositoryURL(repo, "https://github.com/example/repo")
 
-	repo := GitRepository(cfg)
-	if repo == nil {
-		t.Fatal("failed to create GitRepository")
-	}
-
-	// Create a new spec to set
 	newSpec := sourcev1.GitRepositorySpec{
 		URL:       "https://github.com/example/new-repo",
 		Interval:  metav1.Duration{Duration: 10 * time.Minute},
 		Reference: &sourcev1.GitRepositoryRef{Branch: "develop"},
 	}
 
-	// Set the new spec
 	SetGitRepositorySpec(repo, newSpec)
 
-	// Verify the spec was replaced
 	if repo.Spec.URL != "https://github.com/example/new-repo" {
 		t.Errorf("expected URL 'https://github.com/example/new-repo', got %s", repo.Spec.URL)
 	}
@@ -55,16 +42,8 @@ func TestSetGitRepositorySpec(t *testing.T) {
 }
 
 func TestSetHelmRepositorySpec(t *testing.T) {
-	cfg := &HelmRepositoryConfig{
-		Name:      "bitnami",
-		Namespace: "flux-system",
-		URL:       "https://charts.bitnami.com/bitnami",
-	}
-
-	helmRepo := HelmRepository(cfg)
-	if helmRepo == nil {
-		t.Fatal("failed to create HelmRepository")
-	}
+	helmRepo := CreateHelmRepository("bitnami", "flux-system")
+	SetHelmRepositoryURL(helmRepo, "https://charts.bitnami.com/bitnami")
 
 	newSpec := sourcev1.HelmRepositorySpec{
 		URL:      "https://charts.example.com/charts",
@@ -83,18 +62,7 @@ func TestSetHelmRepositorySpec(t *testing.T) {
 }
 
 func TestSetBucketSpec(t *testing.T) {
-	cfg := &BucketConfig{
-		Name:       "s3-bucket",
-		Namespace:  "flux-system",
-		BucketName: "my-flux-bucket",
-		Endpoint:   "s3.amazonaws.com",
-		Interval:   "10m",
-	}
-
-	bucket := Bucket(cfg)
-	if bucket == nil {
-		t.Fatal("failed to create Bucket")
-	}
+	bucket := CreateBucket("s3-bucket", "flux-system")
 
 	newSpec := sourcev1.BucketSpec{
 		BucketName: "new-bucket",
@@ -115,18 +83,8 @@ func TestSetBucketSpec(t *testing.T) {
 }
 
 func TestSetOCIRepositorySpec(t *testing.T) {
-	cfg := &OCIRepositoryConfig{
-		Name:      "test-oci",
-		Namespace: "flux-system",
-		URL:       "oci://registry.example.com/repo",
-		Ref:       "v1.0.0",
-		Interval:  "1m",
-	}
-
-	ociRepo := OCIRepository(cfg)
-	if ociRepo == nil {
-		t.Fatal("failed to create OCIRepository")
-	}
+	ociRepo := CreateOCIRepository("test-oci", "flux-system")
+	SetOCIRepositoryURL(ociRepo, "oci://registry.example.com/repo")
 
 	newSpec := sourcev1.OCIRepositorySpec{
 		URL:       "oci://registry.example.com/new-repo",
@@ -146,23 +104,8 @@ func TestSetOCIRepositorySpec(t *testing.T) {
 }
 
 func TestSetKustomizationSpec(t *testing.T) {
-	sourceRef := kustv1.CrossNamespaceSourceReference{
-		Kind: "GitRepository",
-		Name: "app-repo",
-	}
-
-	cfg := &KustomizationConfig{
-		Name:      "app-kustomization",
-		Namespace: "default",
-		Interval:  "2m",
-		Prune:     true,
-		SourceRef: sourceRef,
-	}
-
-	kustomization := Kustomization(cfg)
-	if kustomization == nil {
-		t.Fatal("failed to create Kustomization")
-	}
+	kustomization := CreateKustomization("app-kustomization", "default")
+	SetKustomizationSourceRef(kustomization, kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "app-repo"})
 
 	newSourceRef := kustv1.CrossNamespaceSourceReference{
 		Kind: "OCIRepository",
@@ -192,24 +135,17 @@ func TestSetKustomizationSpec(t *testing.T) {
 }
 
 func TestSetHelmReleaseSpec(t *testing.T) {
-	sourceRef := helmv2.CrossNamespaceObjectReference{
-		Kind: "HelmRepository",
-		Name: "bitnami",
-	}
-
-	cfg := &HelmReleaseConfig{
-		Name:      "my-nginx",
-		Namespace: "default",
-		Chart:     "nginx",
-		Version:   "1.2.3",
-		SourceRef: sourceRef,
-		Interval:  "1h",
-	}
-
-	helmRelease := HelmRelease(cfg)
-	if helmRelease == nil {
-		t.Fatal("failed to create HelmRelease")
-	}
+	helmRelease := CreateHelmRelease("my-nginx", "default")
+	SetHelmReleaseChart(helmRelease, &helmv2.HelmChartTemplate{
+		Spec: helmv2.HelmChartTemplateSpec{
+			Chart:   "nginx",
+			Version: "1.2.3",
+			SourceRef: helmv2.CrossNamespaceObjectReference{
+				Kind: "HelmRepository",
+				Name: "bitnami",
+			},
+		},
+	})
 
 	newChart := helmv2.HelmChartTemplate{
 		Spec: helmv2.HelmChartTemplateSpec{
@@ -240,17 +176,8 @@ func TestSetHelmReleaseSpec(t *testing.T) {
 }
 
 func TestSetProviderSpec(t *testing.T) {
-	cfg := &ProviderConfig{
-		Name:      "slack-provider",
-		Namespace: "flux-system",
-		Type:      "slack",
-		Channel:   "#alerts",
-	}
-
-	provider := Provider(cfg)
-	if provider == nil {
-		t.Fatal("failed to create Provider")
-	}
+	provider := CreateProvider("slack-provider", "flux-system")
+	SetProviderType(provider, "slack")
 
 	newSpec := notificationv1beta3.ProviderSpec{
 		Type:    "discord",
@@ -270,16 +197,8 @@ func TestSetProviderSpec(t *testing.T) {
 }
 
 func TestSetAlertSpec(t *testing.T) {
-	cfg := &AlertConfig{
-		Name:        "app-alert",
-		Namespace:   "flux-system",
-		ProviderRef: "slack-provider",
-	}
-
-	alert := Alert(cfg)
-	if alert == nil {
-		t.Fatal("failed to create Alert")
-	}
+	alert := CreateAlert("app-alert", "flux-system")
+	SetAlertProviderRef(alert, meta.LocalObjectReference{Name: "slack-provider"})
 
 	newSpec := notificationv1beta3.AlertSpec{
 		ProviderRef: meta.LocalObjectReference{Name: "discord-provider"},
@@ -298,17 +217,8 @@ func TestSetAlertSpec(t *testing.T) {
 }
 
 func TestSetReceiverSpec(t *testing.T) {
-	cfg := &ReceiverConfig{
-		Name:       "webhook-receiver",
-		Namespace:  "flux-system",
-		Type:       "github",
-		SecretName: "webhook-secret",
-	}
-
-	receiver := Receiver(cfg)
-	if receiver == nil {
-		t.Fatal("failed to create Receiver")
-	}
+	receiver := CreateReceiver("webhook-receiver", "flux-system")
+	SetReceiverType(receiver, "github")
 
 	newSpec := notificationv1.ReceiverSpec{
 		Type:      "gitlab",
@@ -328,22 +238,11 @@ func TestSetReceiverSpec(t *testing.T) {
 }
 
 func TestSetImageUpdateAutomationSpec(t *testing.T) {
-	sourceRef := imagev1.CrossNamespaceSourceReference{
+	imageUpdate := CreateImageUpdateAutomation("image-updater", "flux-system")
+	SetImageUpdateAutomationSourceRef(imageUpdate, imagev1.CrossNamespaceSourceReference{
 		Kind: "GitRepository",
 		Name: "app-repo",
-	}
-
-	cfg := &ImageUpdateAutomationConfig{
-		Name:      "image-updater",
-		Namespace: "flux-system",
-		Interval:  "30m",
-		SourceRef: sourceRef,
-	}
-
-	imageUpdate := ImageUpdateAutomation(cfg)
-	if imageUpdate == nil {
-		t.Fatal("failed to create ImageUpdateAutomation")
-	}
+	})
 
 	newSourceRef := imagev1.CrossNamespaceSourceReference{
 		Kind: "GitRepository",
@@ -367,15 +266,7 @@ func TestSetImageUpdateAutomationSpec(t *testing.T) {
 }
 
 func TestSetResourceSetSpec(t *testing.T) {
-	cfg := &ResourceSetConfig{
-		Name:      "test-resourceset",
-		Namespace: "flux-system",
-	}
-
-	resourceSet := ResourceSet(cfg)
-	if resourceSet == nil {
-		t.Fatal("failed to create ResourceSet")
-	}
+	resourceSet := CreateResourceSet("test-resourceset", "flux-system")
 
 	newSpec := fluxv1.ResourceSetSpec{
 		Wait: true,
@@ -389,16 +280,8 @@ func TestSetResourceSetSpec(t *testing.T) {
 }
 
 func TestSetResourceSetInputProviderSpec(t *testing.T) {
-	cfg := &ResourceSetInputProviderConfig{
-		Name:      "input-provider",
-		Namespace: "flux-system",
-		Type:      "http",
-	}
-
-	provider := ResourceSetInputProvider(cfg)
-	if provider == nil {
-		t.Fatal("failed to create ResourceSetInputProvider")
-	}
+	provider := CreateResourceSetInputProvider("input-provider", "flux-system")
+	SetResourceSetInputProviderType(provider, "http")
 
 	newSpec := fluxv1.ResourceSetInputProviderSpec{
 		Type: "oci",
@@ -417,24 +300,19 @@ func TestSetResourceSetInputProviderSpec(t *testing.T) {
 }
 
 func TestSetFluxInstanceSpec(t *testing.T) {
-	cfg := &FluxInstanceConfig{
-		Name:      "flux-instance",
-		Namespace: "flux-system",
-		Version:   "v2.1.0",
-		Registry:  "ghcr.io/fluxcd",
-	}
+	instance := CreateFluxInstance("flux-instance", "flux-system")
+	SetFluxInstanceDistribution(instance, fluxv1.Distribution{
+		Version:  "v2.1.0",
+		Registry: "ghcr.io/fluxcd",
+	})
 
-	instance := FluxInstance(cfg)
-	if instance == nil {
-		t.Fatal("failed to create FluxInstance")
-	}
-
+	wait := true
 	newSpec := fluxv1.FluxInstanceSpec{
 		Distribution: fluxv1.Distribution{
 			Version:  "v2.2.0",
 			Registry: "quay.io/fluxcd",
 		},
-		Wait: new(true),
+		Wait: &wait,
 	}
 
 	SetFluxInstanceSpec(instance, newSpec)
@@ -453,17 +331,7 @@ func TestSetFluxInstanceSpec(t *testing.T) {
 }
 
 func TestSetFluxReportSpec(t *testing.T) {
-	cfg := &FluxReportConfig{
-		Name:        "flux-report",
-		Namespace:   "flux-system",
-		Entitlement: "enterprise",
-		Status:      "active",
-	}
-
-	report := FluxReport(cfg)
-	if report == nil {
-		t.Fatal("failed to create FluxReport")
-	}
+	report := CreateFluxReport("flux-report", "flux-system")
 
 	newSpec := fluxv1.FluxReportSpec{
 		Distribution: fluxv1.FluxDistributionStatus{
@@ -484,54 +352,29 @@ func TestSetFluxReportSpec(t *testing.T) {
 }
 
 func TestFluxInstanceHelpers(t *testing.T) {
-	cfg := &FluxInstanceConfig{
-		Name:      "flux-instance",
-		Namespace: "flux-system",
-		Version:   "v2.1.0",
-		Registry:  "ghcr.io/fluxcd",
-	}
+	instance := CreateFluxInstance("flux-instance", "flux-system")
 
-	instance := FluxInstance(cfg)
-	if instance == nil {
-		t.Fatal("failed to create FluxInstance")
-	}
-
-	// Test AddFluxInstanceComponent
 	component := fluxv1.Component("source-controller")
 	AddFluxInstanceComponent(instance, component)
 
-	// Test SetFluxInstanceDistribution
 	dist := fluxv1.Distribution{
 		Version:  "v2.2.0",
 		Registry: "quay.io/fluxcd",
 	}
 	SetFluxInstanceDistribution(instance, dist)
 
-	// Test SetFluxInstanceWait
 	SetFluxInstanceWait(instance, true)
 }
 
 func TestFluxReportHelpers(t *testing.T) {
-	cfg := &FluxReportConfig{
-		Name:        "flux-report",
-		Namespace:   "flux-system",
-		Entitlement: "enterprise",
-		Status:      "active",
-	}
+	report := CreateFluxReport("flux-report", "flux-system")
 
-	report := FluxReport(cfg)
-	if report == nil {
-		t.Fatal("failed to create FluxReport")
-	}
-
-	// Test AddFluxReportComponentStatus
 	componentStatus := fluxv1.FluxComponentStatus{
 		Name:   "kustomize-controller",
 		Status: "running",
 	}
 	AddFluxReportComponentStatus(report, componentStatus)
 
-	// Test SetFluxReportDistribution
 	dist := fluxv1.FluxDistributionStatus{
 		Entitlement: "community",
 		Status:      "inactive",
@@ -540,106 +383,75 @@ func TestFluxReportHelpers(t *testing.T) {
 }
 
 func TestResourceSetHelpers(t *testing.T) {
-	cfg := &ResourceSetConfig{
-		Name:      "test-resourceset",
-		Namespace: "flux-system",
-	}
+	resourceSet := CreateResourceSet("test-resourceset", "flux-system")
 
-	resourceSet := ResourceSet(cfg)
-	if resourceSet == nil {
-		t.Fatal("failed to create ResourceSet")
-	}
-
-	// Test AddResourceSetInput
 	input := fluxv1.ResourceSetInput{
 		"test-input": &apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 	}
 	AddResourceSetInput(resourceSet, input)
 
-	// Test AddResourceSetInputFrom
 	inputRef := fluxv1.InputProviderReference{
 		Name: "input-provider",
 	}
 	AddResourceSetInputFrom(resourceSet, inputRef)
 
-	// Test SetResourceSetWait
 	SetResourceSetWait(resourceSet, true)
 
-	// Test SetResourceSetServiceAccountName
 	SetResourceSetServiceAccountName(resourceSet, "flux")
 }
 
 func TestProviderHelpers(t *testing.T) {
-	cfg := &ProviderConfig{
-		Name:      "slack-provider",
-		Namespace: "flux-system",
-		Type:      "slack",
-	}
+	provider := CreateProvider("slack-provider", "flux-system")
 
-	provider := Provider(cfg)
-	if provider == nil {
-		t.Fatal("failed to create Provider")
-	}
-
-	// Test SetProviderType
 	SetProviderType(provider, "discord")
 	if provider.Spec.Type != "discord" {
 		t.Errorf("expected Type 'discord', got %s", provider.Spec.Type)
 	}
 
-	// Test SetProviderInterval
 	interval := metav1.Duration{Duration: 10 * time.Minute}
 	SetProviderInterval(provider, interval)
 	if provider.Spec.Interval.Duration != 10*time.Minute {
 		t.Errorf("expected interval 10m, got %v", provider.Spec.Interval.Duration)
 	}
 
-	// Test SetProviderChannel
 	SetProviderChannel(provider, "#notifications")
 	if provider.Spec.Channel != "#notifications" {
 		t.Errorf("expected Channel '#notifications', got %s", provider.Spec.Channel)
 	}
 
-	// Test SetProviderUsername
 	SetProviderUsername(provider, "fluxbot")
 	if provider.Spec.Username != "fluxbot" {
 		t.Errorf("expected Username 'fluxbot', got %s", provider.Spec.Username)
 	}
 
-	// Test SetProviderAddress
 	SetProviderAddress(provider, "https://discord.com/api/webhooks/...")
 	if provider.Spec.Address != "https://discord.com/api/webhooks/..." {
 		t.Errorf("expected specific Address, got %s", provider.Spec.Address)
 	}
 
-	// Test SetProviderTimeout
 	timeout := metav1.Duration{Duration: 30 * time.Second}
 	SetProviderTimeout(provider, timeout)
 	if provider.Spec.Timeout.Duration != 30*time.Second {
 		t.Errorf("expected timeout 30s, got %v", provider.Spec.Timeout.Duration)
 	}
 
-	// Test SetProviderProxy
 	SetProviderProxy(provider, "http://proxy.example.com:8080")
 	if provider.Spec.Proxy != "http://proxy.example.com:8080" {
 		t.Errorf("expected proxy 'http://proxy.example.com:8080', got %s", provider.Spec.Proxy)
 	}
 
-	// Test SetProviderSecretRef
 	secretRef := &meta.LocalObjectReference{Name: "discord-secret"}
 	SetProviderSecretRef(provider, secretRef)
 	if provider.Spec.SecretRef == nil || provider.Spec.SecretRef.Name != "discord-secret" {
 		t.Error("expected SecretRef.Name 'discord-secret'")
 	}
 
-	// Test SetProviderCertSecretRef
 	certSecretRef := &meta.LocalObjectReference{Name: "cert-secret"}
 	SetProviderCertSecretRef(provider, certSecretRef)
 	if provider.Spec.CertSecretRef == nil || provider.Spec.CertSecretRef.Name != "cert-secret" {
 		t.Error("expected CertSecretRef.Name 'cert-secret'")
 	}
 
-	// Test SetProviderSuspend
 	SetProviderSuspend(provider, true)
 	if !provider.Spec.Suspend {
 		t.Error("expected Suspend to be true")
@@ -647,67 +459,40 @@ func TestProviderHelpers(t *testing.T) {
 }
 
 func TestResourceSetInputProviderHelpers(t *testing.T) {
-	cfg := &ResourceSetInputProviderConfig{
-		Name:      "input-provider",
-		Namespace: "flux-system",
-		Type:      "http",
-	}
+	provider := CreateResourceSetInputProvider("input-provider", "flux-system")
 
-	provider := ResourceSetInputProvider(cfg)
-	if provider == nil {
-		t.Fatal("failed to create ResourceSetInputProvider")
-	}
-
-	// Test SetResourceSetInputProviderType (via the function that delegates)
 	SetResourceSetInputProviderType(provider, "oci")
 
-	// Test SetResourceSetInputProviderURL
 	SetResourceSetInputProviderURL(provider, "oci://registry.example.com/config")
 
-	// Test SetResourceSetInputProviderServiceAccountName
 	SetResourceSetInputProviderServiceAccountName(provider, "flux")
 
-	// Test SetResourceSetInputProviderSecretRef
 	secretRef := &meta.LocalObjectReference{Name: "registry-secret"}
 	SetResourceSetInputProviderSecretRef(provider, secretRef)
 
-	// Test SetResourceSetInputProviderCertSecretRef
 	certSecretRef := &meta.LocalObjectReference{Name: "cert-secret"}
 	SetResourceSetInputProviderCertSecretRef(provider, certSecretRef)
 
-	// Test AddResourceSetInputProviderSchedule
 	schedule := fluxv1.Schedule{
-		Cron: "0 */6 * * *", // Every 6 hours
+		Cron: "0 */6 * * *",
 	}
 	AddResourceSetInputProviderSchedule(provider, schedule)
 }
 
 func TestResourceSetAdvancedHelpers(t *testing.T) {
-	cfg := &ResourceSetConfig{
-		Name:      "test-resourceset",
-		Namespace: "flux-system",
-	}
+	resourceSet := CreateResourceSet("test-resourceset", "flux-system")
 
-	resourceSet := ResourceSet(cfg)
-	if resourceSet == nil {
-		t.Fatal("failed to create ResourceSet")
-	}
-
-	// Test AddResourceSetResource
 	resource := &apiextensionsv1.JSON{Raw: []byte(`{"apiVersion": "v1", "kind": "ConfigMap"}`)}
 	AddResourceSetResource(resourceSet, resource)
 
-	// Test SetResourceSetResourcesTemplate
 	template := "{{ .Values.configMap }}"
 	SetResourceSetResourcesTemplate(resourceSet, template)
 
-	// Test AddResourceSetDependency
 	dependency := fluxv1.Dependency{
 		Name: "prerequisite-resource",
 	}
 	AddResourceSetDependency(resourceSet, dependency)
 
-	// Test SetResourceSetCommonMetadata
 	commonMetadata := &fluxv1.CommonMetadata{
 		Labels: map[string]string{
 			"app": "test",

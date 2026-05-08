@@ -12,9 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	intfluxcd "github.com/go-kure/kure/internal/fluxcd"
 	"github.com/go-kure/kure/pkg/errors"
 	kio "github.com/go-kure/kure/pkg/io"
+	pubfluxcd "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
 	"github.com/go-kure/kure/pkg/stack"
 )
 
@@ -83,9 +83,7 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 	// Generate source for the root node based on SourceKind
 	if config.SourceURL != "" {
 		source := bg.generateSource(config, rootNode)
-		if source != nil {
-			resources = append(resources, source)
-		}
+		resources = append(resources, source)
 	}
 
 	return resources, nil
@@ -205,18 +203,15 @@ func (bg *BootstrapGenerator) generateGitSource(config *stack.BootstrapConfig, r
 		sourceName = rootNode.Name
 	}
 
-	spec := sourcev1.GitRepositorySpec{
-		URL:      config.SourceURL,
-		Interval: metav1.Duration{Duration: bg.DefaultInterval},
-	}
+	gr := pubfluxcd.CreateGitRepository(sourceName, bg.DefaultNamespace)
+	pubfluxcd.SetGitRepositoryURL(gr, config.SourceURL)
+	pubfluxcd.SetGitRepositoryInterval(gr, metav1.Duration{Duration: bg.DefaultInterval})
 
 	if config.SourceRef != "" {
-		spec.Reference = &sourcev1.GitRepositoryRef{
-			Branch: config.SourceRef,
-		}
+		pubfluxcd.SetGitRepositoryReference(gr, &sourcev1.GitRepositoryRef{Branch: config.SourceRef})
 	}
 
-	return intfluxcd.CreateGitRepository(sourceName, bg.DefaultNamespace, spec)
+	return gr
 }
 
 // generateOCISource creates an OCI source for bootstrap from config.
@@ -235,15 +230,12 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 		sourceName = rootNode.Name
 	}
 
-	spec := sourcev1.OCIRepositorySpec{
-		URL:      url,
-		Interval: metav1.Duration{Duration: bg.DefaultInterval},
-		Reference: &sourcev1.OCIRepositoryRef{
-			Tag: ref,
-		},
-	}
+	or := pubfluxcd.CreateOCIRepository(sourceName, bg.DefaultNamespace)
+	pubfluxcd.SetOCIRepositoryURL(or, url)
+	pubfluxcd.SetOCIRepositoryInterval(or, metav1.Duration{Duration: bg.DefaultInterval})
+	pubfluxcd.SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: ref})
 
-	return intfluxcd.CreateOCIRepository(sourceName, bg.DefaultNamespace, spec)
+	return or
 }
 
 // GenerateFluxInstance returns only the FluxInstance CR configured for
@@ -297,5 +289,7 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		}
 	}
 
-	return intfluxcd.CreateFluxInstance("flux-system", bg.DefaultNamespace, spec)
+	fi := pubfluxcd.CreateFluxInstance("flux-system", bg.DefaultNamespace)
+	pubfluxcd.SetFluxInstanceSpec(fi, spec)
+	return fi
 }

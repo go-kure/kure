@@ -1,33 +1,31 @@
 // Package metallb exposes helper functions for constructing MetalLB
-// resources.  Each function returns a fully initialized controller-runtime
+// resources. Each function returns a fully initialized controller-runtime
 // object that can be serialized to YAML or modified further by the calling
 // application.
 //
-// ## Overview
+// # Overview
 //
-// The package mirrors the constructors and setters found under
-// `internal/metallb` so applications can build MetalLB manifests
-// programmatically without depending on the internal packages directly.
-// All builders operate on configuration structures defined in this package
-// and convert them to the appropriate MetalLB custom resources.
+// The package provides two layers of API:
 //
-// Resources covered include [IPAddressPool], [BGPPeer], [BGPAdvertisement],
-// [L2Advertisement], and [BFDProfile].
+//   - CreateX constructors: allocate an object with TypeMeta and ObjectMeta set,
+//     leaving the spec empty. Use the Set/Add helpers to populate it.
+//   - SetX/AddX helpers: granular setters that mutate a single field on an existing
+//     object.
 //
-// ## Constructors
+// Resources covered include IPAddressPool, BGPPeer, BGPAdvertisement,
+// L2Advertisement, and BFDProfile.
 //
-// Constructors follow the form `<Type>` and accept a configuration struct.  A
-// minimal example creating an IPAddressPool looks like:
+// # Constructors
 //
-//	pool := metallb.IPAddressPool(&metallb.IPAddressPoolConfig{
-//	        Name:      "my-pool",
-//	        Namespace: "metallb-system",
-//	        Addresses: []string{"192.168.1.0/24"},
-//	})
+// Constructors follow the form CreateX(name, namespace string). A minimal example
+// creating an IPAddressPool looks like:
 //
-// ## Update helpers
+//	pool := metallb.CreateIPAddressPool("my-pool", "metallb-system")
+//	metallb.AddIPAddressPoolAddress(pool, "192.168.1.0/24")
+//	metallb.SetIPAddressPoolAutoAssign(pool, true)
 //
-// Additional functions prefixed with `Set` or `Add` expose granular control
-// over the generated objects.  They delegate to the internal package to
-// perform the actual mutations while keeping the public API stable.
+// # Update helpers
+//
+// Additional functions prefixed with Set or Add expose granular control over
+// the generated objects. SetXSpec functions replace the entire spec at once.
 package metallb
