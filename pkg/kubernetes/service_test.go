@@ -40,9 +40,6 @@ func TestServiceNilErrors(t *testing.T) {
 	if err := AddServiceExternalIP(nil, "1.2.3.4"); err == nil {
 		t.Error("expected error for nil Service on AddServiceExternalIP")
 	}
-	if err := SetServiceLoadBalancerIP(nil, "1.2.3.4"); err == nil {
-		t.Error("expected error for nil Service on SetServiceLoadBalancerIP")
-	}
 	if err := SetServiceExternalTrafficPolicy(nil, corev1.ServiceExternalTrafficPolicyLocal); err == nil {
 		t.Error("expected error for nil Service on SetServiceExternalTrafficPolicy")
 	}
@@ -158,13 +155,6 @@ func TestServiceFunctions(t *testing.T) {
 	}
 	if len(svc.Spec.ExternalIPs) != 1 || svc.Spec.ExternalIPs[0] != "192.168.1.2" {
 		t.Errorf("external IP not added")
-	}
-
-	if err := SetServiceLoadBalancerIP(svc, "1.1.1.1"); err != nil {
-		t.Fatalf("SetServiceLoadBalancerIP returned error: %v", err)
-	}
-	if svc.Spec.LoadBalancerIP != "1.1.1.1" {
-		t.Errorf("loadBalancerIP not set")
 	}
 
 	if err := SetServicePublishNotReadyAddresses(svc, true); err != nil {

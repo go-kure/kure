@@ -78,19 +78,6 @@ func AddServiceExternalIP(service *corev1.Service, ip string) error {
 	return nil
 }
 
-// SetServiceLoadBalancerIP sets the load balancer IP on the Service spec.
-//
-// Deprecated: This field was under-specified and its meaning varies across
-// implementations. As of Kubernetes v1.24, users are encouraged to use
-// implementation-specific annotations when available.
-func SetServiceLoadBalancerIP(service *corev1.Service, ip string) error {
-	if service == nil {
-		return errors.ErrNilService
-	}
-	service.Spec.LoadBalancerIP = ip
-	return nil
-}
-
 // SetServiceExternalTrafficPolicy sets the external traffic policy on the
 // Service spec.
 func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) error {
