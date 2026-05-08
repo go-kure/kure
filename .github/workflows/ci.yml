@@ -189,7 +189,7 @@ jobs:
   test:
     name: test
     runs-on: autops-kube-kure
-    timeout-minutes: 15
+    timeout-minutes: 25
     needs: [changes]
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
@@ -218,12 +218,10 @@ jobs:
     - name: Cache Go modules
       uses: actions/cache@v5
       with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-
+          ${{ runner.os }}-gomod-
 
     - name: Install dependencies
       run: make deps
@@ -423,12 +421,10 @@ jobs:
     - name: Cache Go modules
       uses: actions/cache@v5
       with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-
+          ${{ runner.os }}-gomod-
 
     - name: Install dependencies
       run: make deps
@@ -509,12 +505,10 @@ jobs:
     - name: Cache Go modules
       uses: actions/cache@v5
       with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-
+          ${{ runner.os }}-gomod-
 
     - name: Install dependencies
       run: make deps
