@@ -211,7 +211,7 @@ jobs:
   test:
     name: test
     runs-on: autops-kube-kure
-    timeout-minutes: 10
+    timeout-minutes: 20
     needs: [changes]
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
@@ -253,7 +253,7 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p coverage
-        go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 5m ./... 2>&1 | tee /tmp/gotest.log
+        go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 15m ./... 2>&1 | tee /tmp/gotest.log
 
     - name: Upload test log
       uses: actions/upload-artifact@v7

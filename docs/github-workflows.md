@@ -89,7 +89,7 @@ PR-only jobs (parallel, no blocking):
 | Job | Check Name | Timeout | Dependencies | Purpose |
 |-----|------------|---------|--------------|---------|
 | `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint; caches goimports + yq binaries |
-| `test` | `test` | 10 min | changes | Unit tests with race detection and coverage |
+| `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
 | `security` | `Security` | 5 min | changes | govulncheck (`-scan package`, v1.1.4, informational — findings warn but do not fail), outdated deps, sensitive file check |
 | `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
 | `build-binaries` | `Build kure/demo` | 10 min | changes, test | Build kure and demo binaries (matrix) |
