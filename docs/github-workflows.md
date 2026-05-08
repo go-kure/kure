@@ -464,8 +464,12 @@ Tool binaries are also cached to avoid reinstalling on every run:
 - `yq` — keyed by pinned version (`4.44.6`)
 - `govulncheck` — keyed by pinned version (`v1.1.4`)
 
-Cache traffic is routed through an in-cluster falcondev cache server backed by Garage S3,
-via `ACTIONS_CACHE_URL` in the workflow env (overrides the GitHub-injected value).
+Cache traffic is routed through an in-cluster falcondev cache server backed by Garage S3.
+The runner image (`containers/actions-runner/Dockerfile` in opsmaster) is patched at build
+time to honour `CUSTOM_ACTIONS_RESULTS_URL` instead of the hard-coded `ACTIONS_RESULTS_URL`
+that the GitHub Actions runner binary injects at job dispatch (which cannot be overridden by
+workflow env vars). `CUSTOM_ACTIONS_RESULTS_URL` is set as a pod env var in the runner's
+`HelmRelease`. No workflow-level env vars are needed for cache routing.
 
 ### docs-build Caching
 
