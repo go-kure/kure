@@ -81,7 +81,7 @@
 // The remaining helpers follow the Add*/Set* convention:
 //
 //   - [AddServicePort], [SetServiceSelector], [SetServiceType]
-//   - [SetServiceClusterIP], [AddServiceExternalIP], [SetServiceLoadBalancerIP]
+//   - [SetServiceClusterIP], [AddServiceExternalIP]
 //   - [SetServiceExternalTrafficPolicy], [SetServiceSessionAffinity]
 //   - [SetServiceLoadBalancerClass], [SetServicePublishNotReadyAddresses]
 //   - [AddServiceLabel], [AddServiceAnnotation], [SetServiceLabels], [SetServiceAnnotations]
