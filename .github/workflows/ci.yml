@@ -78,7 +78,7 @@ jobs:
             - 'go.mod'
             - 'go.sum'
             - 'Makefile'
-            - '.github/workflows/ci.yml'
+            - '.github/workflows/**'
           docs:
             - 'site/**'
             - 'docs/**'
@@ -124,7 +124,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gobuild-
 
@@ -241,7 +241,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gobuild-
 
@@ -462,7 +462,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gobuild-
 
@@ -547,7 +547,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ matrix.os }}-${{ matrix.arch }}-${{ github.sha }}
+        key: ${{ runner.os }}-gobuild-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gobuild-${{ matrix.os }}-${{ matrix.arch }}-
           ${{ runner.os }}-gobuild-
@@ -650,7 +650,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ github.sha }}
+        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-gobuild-
 
