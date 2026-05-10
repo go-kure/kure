@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-05-08
+**Last Updated:** 2026-05-10
 
 ---
 
@@ -34,14 +34,12 @@ This document provides an overview of all GitHub Actions workflows used in the k
 
 ### Concurrency
 
-Uses `github.sha` to avoid duplicate runs:
-- Same commit won't run CI twice (e.g., PR merge → push to main)
-- Different commits run independently
+Uses `github.ref` to cancel superseded runs on the same branch or PR:
 
 ```yaml
 concurrency:
-  group: ci-${{ github.sha }}
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 ```
 
 ### Job Dependency Graph
@@ -449,12 +447,12 @@ control cache keys precisely. Two separate Go caches are maintained:
     restore-keys: |
       ${{ runner.os }}-gomod-
 
-# Build cache: per-commit, partial restore from previous commits
+# Build cache: invalidates when go.sum changes, shared across commits with same deps
 - name: Cache Go build cache
   uses: actions/cache@v5
   with:
     path: ~/.cache/go-build
-    key: ${{ runner.os }}-gobuild-${{ github.sha }}
+    key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
     restore-keys: |
       ${{ runner.os }}-gobuild-
 ```
@@ -487,6 +485,16 @@ The `docs-build` job uses three separate caches:
 - `gomod` — for `make docs-cli` CLI reference generation
 - `gobuild` — for Go compilation during CLI reference generation
 - `hugo` — Hugo module cache (`$HUGO_CACHEDIR` only, **not** `~/go/pkg/mod`)
+
+### Path Filters
+
+The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files change:
+
+- `go:` filter — triggers lint/test/security/build jobs. Includes `**.go`, `go.mod`, `go.sum`,
+  `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated.
+- `docs:` filter — triggers docs-build/docs-check jobs. Includes `site/**`, `docs/**`, `*.md`,
+  `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
+  the docs build).
 
 ### Branch Patterns
 
