@@ -1,6 +1,45 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.4] - 2026-05-11
+
+### Added
+
+- Add actions:read permission to release-create workflow
+
+### CI
+
+- Route cache through in-cluster server, rename runner label
+- Explicitly set ACTIONS_CACHE_URL in workflow env to override job dispatch
+- Drop go build cache, use gomod- key prefix, bump test timeout
+- Restore build cache, fix Hugo cache, fix govulncheck, cache tools
+- Fix govulncheck blocking on findings, fix codecov file input
+- Increase test job timeout from 10 min to 20 min
+- Remove ineffective ACTIONS_CACHE_URL env vars, document cache routing
+- Make artifact upload/download resilient on ARC runners
+- Set ACTIONS_RESULTS_URL at workflow level for step env routing
+- Stable gobuild cache key and expand workflow path filter
+
+### Changed
+
+- Nil-receiver setters panic instead of returning error
+- Migrate CRD subpackage constructors to CreateX pattern
+
+### Documentation
+
+- Bump Go version to 1.26.3 in github-workflows.md
+
+### Fixed
+
+- Remove deprecated SetServiceLoadBalancerIP
+- Propagate SetNestedField errors
+- Complete migration by removing all stale internal package imports
+
+### Testing
+
+- Add missing tests for CRD subpackage setters
+- Suppress staticcheck SA1019 on intentional deprecated field usage
+
 ## [0.2.0-alpha.3] - 2026-05-06
 
 ### Added
@@ -40,6 +79,10 @@ All notable changes to this project will be documented in this file.
 ### Testing
 
 - Add default label/annotation assertions in TestCreateConfigMap
+
+### Release
+
+- V0.2.0-alpha.3
 
 ## [0.2.0-alpha.2] - 2026-05-05
 
