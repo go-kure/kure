@@ -29,16 +29,16 @@ Stable v1 APIs (monitoring.coreos.com/v1). |
 | external-secrets | 0.0.0-20260213133823-31b0c7c37342 | 1.3 | Module path changed from root to /apis submodule in v1.0 (#5494).
 No semver tags for apis submodule — use pseudo-versions pinned to release commits.
 v1.3.2+ commit: 31b0c7c3734255a92dfe5cf9e1e204de127eb24c (includes controller-runtime v0.23.1 compat) |
-| cnpg | 1.29.0 | 1.24 - 1.29 | CloudNativePG operator for PostgreSQL on Kubernetes.
+| cnpg | 1.29.1 | 1.24 - 1.29 | CloudNativePG operator for PostgreSQL on Kubernetes.
 Cluster CR (with managed roles), Database CR (postgresql.cnpg.io/v1),
 ObjectStore CR (barmancloud.cnpg.io/v1), and ScheduledBackups.
 ObjectStore lives in a separate module (plugin-barman-cloud). |
 | cnpg-barman-cloud | 0.12.0 | 0.9 - 0.12 | Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
 Versioned independently from the CNPG operator. |
-| controller-runtime | 0.23.3 | 0.22 - 0.23 | Upgraded with FluxCD 2.8 and external-secrets 1.3 migrations |
+| controller-runtime | 0.24.0 | 0.22 - 0.24 | v0.24.0 requires k8s.io/* v0.36.0 (Kubernetes 1.36) |
 | gateway-api | 1.5.1 | 1.0 - 1.5 | Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders.
 Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0). |
-| kubernetes | 0.35.1 | 1.33 - 1.35 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range |
+| kubernetes | 0.36.0 | 1.33 - 1.36 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range |
 
 ## Understanding the Matrix
 
