@@ -112,7 +112,7 @@ make test-benchmark
 make test-integration
 ```
 
-### 5. Code Quality
+### 4. Code Quality
 
 ```bash
 # Run all linting
@@ -129,16 +129,6 @@ make tidy
 
 # Run Qodana static analysis (requires Docker)
 make qodana
-```
-
-### 6. Package Operations
-
-```bash
-# Build a kurel package
-make kurel-build PACKAGE_PATH=path/to/package
-
-# Show package information
-make kurel-info PACKAGE_PATH=path/to/package
 ```
 
 ## Pre-commit Workflow
@@ -293,8 +283,8 @@ Key environment variables the Makefile respects:
 - `GO` - Go command (default: `go`)
 - `GOROOT` - Go root directory
 - `VERSION` - Version string for builds
-- `BUILD_DIR` - Build output directory (default: `bin`)
-- `OUTPUT_DIR` - Demo output directory (default: `out`)
+- `BUILD_DIR` - Clean target artifact directory (default: `bin`)
+- `OUTPUT_DIR` - Clean target artifact directory (default: `out`)
 - `TEST_TIMEOUT` - Test timeout (default: `30s`)
 - `PACKAGE_PATH` - Package path for kurel operations
 
@@ -307,7 +297,7 @@ Key environment variables the Makefile respects:
 - Use `make check` for quick pre-commit validation
 
 ### Code Quality
-- The CI pipeline enforces 80% test coverage
+- The CI pipeline enforces 85% test coverage
 - All code must pass golangci-lint checks
 - Code must be properly formatted with `go fmt`
 - Modules must be tidy
@@ -384,7 +374,7 @@ To verify the docs site builds correctly:
 # Check all mounted files exist
 bash site/scripts/check-mounts.sh
 
-# Generate CLI reference + build site
+# Build site
 mise run site:build
 ```
 

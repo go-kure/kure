@@ -509,14 +509,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gomod-
 
-    - name: Cache Go build cache
-      uses: actions/cache@v5
-      with:
-        path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-gobuild-
-
     - name: Cache Hugo modules
       uses: actions/cache@v5
       with:
@@ -628,7 +620,6 @@ jobs:
           **.md
           docs/**
           examples/**
-          cmd/demo/**
 
     - name: Validate documentation
       if: steps.docs-changed.outputs.any_changed == 'true'
@@ -655,7 +646,7 @@ jobs:
         fi
 
   # =============================================================================
-  # Stage 6: Mirror to GitLab (main only, after all checks pass)
+  # Stage 5: Mirror to GitLab (main only, after all checks pass)
   # =============================================================================
 
   mirror-to-gitlab:

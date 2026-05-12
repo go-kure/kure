@@ -4,18 +4,10 @@ This guide walks you through installing Kure, generating your first cluster conf
 
 ## Installation
 
-Install the Kure CLI tools using Go:
+Add Kure as a Go module dependency:
 
 ```bash
-go install github.com/go-kure/kure/cmd/kure@latest
-go install github.com/go-kure/kure/cmd/kurel@latest
-```
-
-Verify the installation:
-
-```bash
-kure version
-kurel version
+go get github.com/go-kure/kure@latest
 ```
 
 ## Hello World: Generate a Simple Cluster Config

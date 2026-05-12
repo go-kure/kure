@@ -10,12 +10,6 @@ This directory demonstrates the new TOML-style patch system with cert-manager as
 - **`security.kpatch`** - Security contexts with deployment targeting
 - **`advanced.kpatch`** - Complex selectors and variable substitution
 
-## Running the Demo
-
-```bash
-go run ./cmd/demo -patches
-```
-
 ## TOML Patch Format
 
 The patch files now use TOML-style headers for precise resource targeting:

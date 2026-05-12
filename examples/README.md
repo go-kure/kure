@@ -18,13 +18,4 @@ These directories have documentation mounted to the docs site:
 
 ### Demo Inputs
 
-- [`demo/`](demo/) — YAML input configurations consumed by `cmd/demo`
-
-## Running the Demo
-
-```bash
-make build-demo && ./bin/demo
-```
-
-The demo binary reads configs from `examples/demo/` and writes generated
-manifests to `out/`. See [`demo/README.md`](demo/README.md) for details.
+- [`demo/`](demo/) — YAML input configurations used as reference inputs for manifest generation

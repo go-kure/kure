@@ -14,7 +14,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Deploy Docs](#deploy-docs-workflow) | `deploy-docs.yml` | push to main (docs paths), `workflow_dispatch` | Multi-version docs deployment |
 | [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
 | [Auto-Rebase](#auto-rebase-workflow) | `auto-rebase.yml` | push to main | Rebase all open PRs when main is updated |
-| [Release](#release-workflow) | `release.yml` | version tags | GoReleaser-based release with versioned docs deploy |
+| [Release](#release-workflow) | `release.yml` | version tags | Release with versioned docs deploy (shared org workflow) |
 | [Create Release](#create-release-workflow) | `release-create.yml` | `workflow_dispatch` | Pre-release test gate + tag creation |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via ccproxy |
 
@@ -131,8 +131,6 @@ PR-only jobs (parallel, no blocking):
 ### Configuration
 
 - Go Version: `1.26.3`
-- Build Tool: GoReleaser v2
-- Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`, `windows/arm64`
 - Tag Format: `^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$`
 - Changelog: Required (must have `## v0.1.0` section)
 
@@ -412,7 +410,7 @@ The development version shows a warning banner linking to the latest stable vers
 | Target | Tasks | Use Case |
 |--------|-------|----------|
 | `precommit` | fmt, tidy, lint, test | Fast local checks (~10s) |
-| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, build, vuln | Comprehensive CI pipeline (~2min) |
+| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln | Comprehensive CI pipeline (~2min) |
 
 ---
 

@@ -356,7 +356,7 @@ changelog-preview: ## Preview unreleased changelog entries
 	git cliff --unreleased
 
 # =============================================================================
-# Release Management (GoReleaser workflow)
+# Release Management
 # =============================================================================
 
 .PHONY: release

@@ -1,7 +1,6 @@
 # Demo Input Configurations
 
-These directories contain YAML input files consumed by `cmd/demo` to
-demonstrate Kure's manifest generation pipeline.
+These directories contain YAML input files that demonstrate Kure's manifest generation pipeline.
 
 ## Subdirectories
 
@@ -14,12 +13,4 @@ demonstrate Kure's manifest generation pipeline.
 - **`multi-oci/`** — Multi-source OCI package configurations demonstrating
   per-node manifest generation.
 
-## Running
-
-From the repository root:
-
-```bash
-make build-demo && ./bin/demo
-```
-
-Output is written to `out/` with one subdirectory per demo section.
+These YAML files serve as reference inputs and test fixtures for the library's manifest generation packages.
