@@ -23,7 +23,7 @@ image-automation-controller promoted to v1.
 All github.com/fluxcd/* packages upgraded together. |
 | flux-operator | 0.40.0 | 0.23 - 0.40 | Upgraded with FluxCD 2.8 ecosystem. |
 | metallb | 0.15.3 | 0.14 - 0.15 | Stable v1beta1 APIs, patch release |
-| prometheus-operator | 0.90.1 | 0.75 - 0.90 | Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
+| prometheus-operator | 0.91.0 | 0.75 - 0.91 | Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
 Only the /pkg/apis/monitoring submodule is imported — not the full operator.
 Stable v1 APIs (monitoring.coreos.com/v1). |
 | external-secrets | 0.0.0-20260213133823-31b0c7c37342 | 1.3 | Module path changed from root to /apis submodule in v1.0 (#5494).
