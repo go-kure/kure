@@ -96,9 +96,6 @@ jobs:
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
 
-    - name: Generate CLI reference
-      run: make docs-cli
-
     - name: Generate versions config overlay
       run: bash scripts/gen-versions-toml.sh --version "${{ steps.version.outputs.label }}"
 

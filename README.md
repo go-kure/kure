@@ -27,10 +27,6 @@
 go get github.com/go-kure/kure
 ```
 
-## CLI Tools
-
-Kure ships a CLI tool: **kure** for manifest generation. Run `kure --help` for usage details.
-
 ## Documentation
 
 - [Website](https://www.gokure.dev) — guides, architecture, and tutorials
@@ -45,7 +41,6 @@ Kure ships a CLI tool: **kure** for manifest generation. Run `kure --help` for u
 Quick commands:
 
 ```bash
-make build   # Build all executables
 make test    # Run tests
 make lint    # Run linter
 ```

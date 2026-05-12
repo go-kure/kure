@@ -22,10 +22,6 @@ BUILD_DIR := bin
 OUTPUT_DIR := out
 COVERAGE_DIR := coverage
 
-# Executables
-KURE_BIN := $(BUILD_DIR)/kure
-DEMO_BIN := $(BUILD_DIR)/demo
-
 # Test configuration
 TEST_TIMEOUT := 30s
 TEST_PACKAGES := ./...
@@ -85,37 +81,6 @@ deps-upgrade: ## Upgrade all dependencies to latest versions
 	$(GO) get -u ./...
 	$(GO) mod tidy
 	@echo "$(COLOR_GREEN)Dependencies upgraded$(COLOR_RESET)"
-
-# =============================================================================
-# Building
-# =============================================================================
-
-.PHONY: build
-build: build-kure build-demo ## Build all executables
-
-# Build ldflags - must match .goreleaser.yml for consistent version info
-LDFLAGS := -s -w \
-	-X $(MODULE)/pkg/cmd/shared.Version=$(VERSION) \
-	-X $(MODULE)/pkg/cmd/shared.GitCommit=$(GIT_COMMIT) \
-	-X $(MODULE)/pkg/cmd/shared.BuildDate=$(BUILD_TIME)
-
-# Build flags for reproducible builds
-BUILD_FLAGS := -trimpath
-
-.PHONY: build-kure
-build-kure: $(BUILD_DIR) ## Build the kure executable
-	@echo "$(COLOR_YELLOW)Building kure...$(COLOR_RESET)"
-	$(GO) build $(BUILD_FLAGS) -ldflags="$(LDFLAGS)" -o $(KURE_BIN) ./cmd/kure
-	@echo "$(COLOR_GREEN)Built $(KURE_BIN)$(COLOR_RESET)"
-
-.PHONY: build-demo
-build-demo: $(BUILD_DIR) ## Build the demo executable
-	@echo "$(COLOR_YELLOW)Building demo...$(COLOR_RESET)"
-	$(GO) build $(BUILD_FLAGS) -ldflags="$(LDFLAGS)" -o $(DEMO_BIN) ./cmd/demo
-	@echo "$(COLOR_GREEN)Built $(DEMO_BIN)$(COLOR_RESET)"
-
-$(BUILD_DIR):
-	@mkdir -p $(BUILD_DIR)
 
 # =============================================================================
 # Testing
@@ -221,19 +186,6 @@ vuln: ## Run vulnerability check with govulncheck
 	@echo "$(COLOR_GREEN)Vulnerability check completed$(COLOR_RESET)"
 
 # =============================================================================
-# Demo and Examples
-# =============================================================================
-
-.PHONY: demo
-demo: build-demo $(OUTPUT_DIR) ## Run the comprehensive demo
-	@echo "$(COLOR_YELLOW)Running Kure demo...$(COLOR_RESET)"
-	$(DEMO_BIN)
-	@echo "$(COLOR_GREEN)Demo completed$(COLOR_RESET)"
-
-$(OUTPUT_DIR):
-	@mkdir -p $(OUTPUT_DIR)
-
-# =============================================================================
 # Development Utilities
 # =============================================================================
 
@@ -247,10 +199,6 @@ tools: ## Install development tools
 	@if ! command -v goimports >/dev/null 2>&1; then \
 		$(GO) install golang.org/x/tools/cmd/goimports@latest; \
 		echo "Installed goimports"; \
-	fi
-	@if ! command -v goreleaser >/dev/null 2>&1; then \
-		$(GO) install github.com/goreleaser/goreleaser/v2@latest; \
-		echo "Installed goreleaser v2"; \
 	fi
 	@if ! command -v govulncheck >/dev/null 2>&1; then \
 		$(GO) install golang.org/x/vuln/cmd/govulncheck@latest; \
@@ -379,7 +327,7 @@ check: lint vet test-short ## Quick code quality check (lint, vet, short tests)
 precommit: fmt tidy lint test ## Run fast pre-commit checks (fmt, tidy, lint, test)
 
 .PHONY: ci
-ci: deps fmt tidy lint vet test test-race test-coverage test-integration build vuln ## Run comprehensive CI pipeline
+ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln ## Run comprehensive CI pipeline
 
 # =============================================================================
 # Cleanup
@@ -419,26 +367,6 @@ release: ## Preview release (dry-run)
 		exit 1; \
 	fi
 	@DRY_RUN=1 ./scripts/release.sh $(TYPE) $(SCOPE)
-
-.PHONY: release-snapshot
-release-snapshot: ## Test GoReleaser locally (no tag, no publish)
-	@echo "$(COLOR_YELLOW)Running GoReleaser snapshot...$(COLOR_RESET)"
-	@if ! command -v goreleaser >/dev/null 2>&1; then \
-		echo "$(COLOR_RED)goreleaser not found. Run 'make tools' to install.$(COLOR_RESET)"; \
-		exit 1; \
-	fi
-	goreleaser release --snapshot --clean
-	@echo "$(COLOR_GREEN)Snapshot build completed. Artifacts in dist/$(COLOR_RESET)"
-
-# =============================================================================
-# Documentation
-# =============================================================================
-
-.PHONY: docs-cli
-docs-cli: ## Generate CLI reference documentation from cobra commands
-	@echo "$(COLOR_YELLOW)Generating CLI reference docs...$(COLOR_RESET)"
-	$(GO) run ./cmd/gendocs
-	@echo "$(COLOR_GREEN)CLI reference generated$(COLOR_RESET)"
 
 # =============================================================================
 # Default target
