@@ -48,9 +48,9 @@ infrastructure:
     notes: "Stable v1beta1 APIs, patch release"
 
   prometheus-operator:
-    current: "0.90.1"
+    current: "0.91.0"
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
-    supported_range: "0.75 - 0.90"
+    supported_range: "0.75 - 0.91"
     max_dependabot: null
     notes: |
       Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
