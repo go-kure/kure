@@ -581,6 +581,22 @@ func TestSetOCIRepositorySuspend(t *testing.T) {
 	}
 }
 
+// ExternalArtifact setters
+
+func TestSetExternalArtifactSourceRef(t *testing.T) {
+	obj := CreateExternalArtifact("ea", "ns")
+	ref := &meta.NamespacedObjectKindReference{
+		APIVersion: "source.toolkit.fluxcd.io/v1",
+		Kind:       "OCIRepository",
+		Name:       "my-oci-repo",
+		Namespace:  "flux-system",
+	}
+	SetExternalArtifactSourceRef(obj, ref)
+	if obj.Spec.SourceRef != ref {
+		t.Error("SourceRef not set")
+	}
+}
+
 // Kustomization setters
 
 func TestSetKustomizationInterval(t *testing.T) {

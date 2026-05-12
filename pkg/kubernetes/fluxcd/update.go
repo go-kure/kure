@@ -35,6 +35,11 @@ func SetOCIRepositorySpec(obj *sourcev1.OCIRepository, spec sourcev1.OCIReposito
 	obj.Spec = spec
 }
 
+// SetExternalArtifactSpec replaces the spec on the ExternalArtifact object.
+func SetExternalArtifactSpec(obj *sourcev1.ExternalArtifact, spec sourcev1.ExternalArtifactSpec) {
+	obj.Spec = spec
+}
+
 // SetKustomizationSpec replaces the spec on the Kustomization object.
 func SetKustomizationSpec(obj *kustv1.Kustomization, spec kustv1.KustomizationSpec) {
 	obj.Spec = spec
