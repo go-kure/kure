@@ -126,6 +126,38 @@ func TestAddGitRepositoryInclude(t *testing.T) {
 	}
 }
 
+func TestSetGitRepositorySparseCheckout(t *testing.T) {
+	obj := CreateGitRepository("repo", "ns")
+	paths := []string{"deploy/", "config/"}
+	SetGitRepositorySparseCheckout(obj, paths)
+	if len(obj.Spec.SparseCheckout) != 2 {
+		t.Fatalf("expected 2 sparse checkout paths, got %d", len(obj.Spec.SparseCheckout))
+	}
+	if obj.Spec.SparseCheckout[0] != "deploy/" {
+		t.Errorf("got SparseCheckout[0] %q", obj.Spec.SparseCheckout[0])
+	}
+}
+
+func TestAddGitRepositorySparseCheckoutPath(t *testing.T) {
+	obj := CreateGitRepository("repo", "ns")
+	AddGitRepositorySparseCheckoutPath(obj, "apps/")
+	AddGitRepositorySparseCheckoutPath(obj, "infra/")
+	if len(obj.Spec.SparseCheckout) != 2 {
+		t.Fatalf("expected 2 paths, got %d", len(obj.Spec.SparseCheckout))
+	}
+	if obj.Spec.SparseCheckout[1] != "infra/" {
+		t.Errorf("got SparseCheckout[1] %q", obj.Spec.SparseCheckout[1])
+	}
+}
+
+func TestSetGitRepositoryServiceAccountName(t *testing.T) {
+	obj := CreateGitRepository("repo", "ns")
+	SetGitRepositoryServiceAccountName(obj, "flux-sa")
+	if obj.Spec.ServiceAccountName != "flux-sa" {
+		t.Errorf("got ServiceAccountName %q", obj.Spec.ServiceAccountName)
+	}
+}
+
 // HelmRepository setters
 
 func TestSetHelmRepositoryURL(t *testing.T) {

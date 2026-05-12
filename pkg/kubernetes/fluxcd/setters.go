@@ -77,6 +77,21 @@ func AddGitRepositoryInclude(gr *sourcev1.GitRepository, include sourcev1.GitRep
 	gr.Spec.Include = append(gr.Spec.Include, include)
 }
 
+// SetGitRepositorySparseCheckout sets the list of directories to use for sparse checkout.
+func SetGitRepositorySparseCheckout(gr *sourcev1.GitRepository, paths []string) {
+	gr.Spec.SparseCheckout = paths
+}
+
+// AddGitRepositorySparseCheckoutPath appends a directory path to the sparse checkout list.
+func AddGitRepositorySparseCheckoutPath(gr *sourcev1.GitRepository, path string) {
+	gr.Spec.SparseCheckout = append(gr.Spec.SparseCheckout, path)
+}
+
+// SetGitRepositoryServiceAccountName sets the service account name used for OIDC workload identity.
+func SetGitRepositoryServiceAccountName(gr *sourcev1.GitRepository, name string) {
+	gr.Spec.ServiceAccountName = name
+}
+
 // HelmRepository setters
 
 // SetHelmRepositoryURL sets the repository URL.
