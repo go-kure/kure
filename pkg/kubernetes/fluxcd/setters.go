@@ -701,6 +701,184 @@ func AddPostRendererKustomizeImage(k *helmv2.Kustomize, img kustomize.Image) {
 	k.Images = append(k.Images, img)
 }
 
+// SetHelmReleaseCommonMetadata sets the common labels and annotations applied to all rendered resources.
+func SetHelmReleaseCommonMetadata(obj *helmv2.HelmRelease, cm *helmv2.CommonMetadata) {
+	obj.Spec.CommonMetadata = cm
+}
+
+// AddHelmReleaseHealthCheckExpr appends a CEL-based health check expression to the HelmRelease.
+func AddHelmReleaseHealthCheckExpr(obj *helmv2.HelmRelease, check kustomize.CustomHealthCheck) {
+	obj.Spec.HealthCheckExprs = append(obj.Spec.HealthCheckExprs, check)
+}
+
+// SetHelmReleaseInstallTimeout sets the timeout for the Helm install action.
+func SetHelmReleaseInstallTimeout(obj *helmv2.HelmRelease, timeout *metav1.Duration) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.Timeout = timeout
+}
+
+// SetHelmReleaseInstallCRDs sets the CRD policy for the Helm install action.
+func SetHelmReleaseInstallCRDs(obj *helmv2.HelmRelease, policy helmv2.CRDsPolicy) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.CRDs = policy
+}
+
+// SetHelmReleaseInstallCreateNamespace configures namespace creation during install.
+func SetHelmReleaseInstallCreateNamespace(obj *helmv2.HelmRelease, create bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.CreateNamespace = create
+}
+
+// SetHelmReleaseInstallDisableSchemaValidation disables JSON schema validation during install.
+func SetHelmReleaseInstallDisableSchemaValidation(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.DisableSchemaValidation = disable
+}
+
+// SetHelmReleaseInstallDisableOpenAPIValidation disables OpenAPI validation during install.
+func SetHelmReleaseInstallDisableOpenAPIValidation(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.DisableOpenAPIValidation = disable
+}
+
+// SetHelmReleaseInstallDisableHooks prevents hooks from running during install.
+func SetHelmReleaseInstallDisableHooks(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.DisableHooks = disable
+}
+
+// SetHelmReleaseInstallDisableWait disables waiting for resources to be ready after install.
+func SetHelmReleaseInstallDisableWait(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.DisableWait = disable
+}
+
+// SetHelmReleaseInstallDisableWaitForJobs disables waiting for jobs after install.
+func SetHelmReleaseInstallDisableWaitForJobs(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.DisableWaitForJobs = disable
+}
+
+// SetHelmReleaseInstallDisableTakeOwnership disables taking ownership of existing resources during install.
+func SetHelmReleaseInstallDisableTakeOwnership(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.DisableTakeOwnership = disable
+}
+
+// SetHelmReleaseInstallReplace re-uses the release name if it is a deleted release in history.
+func SetHelmReleaseInstallReplace(obj *helmv2.HelmRelease, replace bool) {
+	if obj.Spec.Install == nil {
+		obj.Spec.Install = &helmv2.Install{}
+	}
+	obj.Spec.Install.Replace = replace
+}
+
+// SetHelmReleaseUpgradeTimeout sets the timeout for the Helm upgrade action.
+func SetHelmReleaseUpgradeTimeout(obj *helmv2.HelmRelease, timeout *metav1.Duration) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.Timeout = timeout
+}
+
+// SetHelmReleaseUpgradeCRDs sets the CRD policy for the Helm upgrade action.
+func SetHelmReleaseUpgradeCRDs(obj *helmv2.HelmRelease, policy helmv2.CRDsPolicy) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.CRDs = policy
+}
+
+// SetHelmReleaseUpgradeDisableSchemaValidation disables JSON schema validation during upgrade.
+func SetHelmReleaseUpgradeDisableSchemaValidation(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.DisableSchemaValidation = disable
+}
+
+// SetHelmReleaseUpgradeDisableOpenAPIValidation disables OpenAPI validation during upgrade.
+func SetHelmReleaseUpgradeDisableOpenAPIValidation(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.DisableOpenAPIValidation = disable
+}
+
+// SetHelmReleaseUpgradeDisableHooks prevents hooks from running during upgrade.
+func SetHelmReleaseUpgradeDisableHooks(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.DisableHooks = disable
+}
+
+// SetHelmReleaseUpgradeDisableWait disables waiting for resources to be ready after upgrade.
+func SetHelmReleaseUpgradeDisableWait(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.DisableWait = disable
+}
+
+// SetHelmReleaseUpgradeDisableWaitForJobs disables waiting for jobs after upgrade.
+func SetHelmReleaseUpgradeDisableWaitForJobs(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.DisableWaitForJobs = disable
+}
+
+// SetHelmReleaseUpgradeDisableTakeOwnership disables taking ownership of existing resources during upgrade.
+func SetHelmReleaseUpgradeDisableTakeOwnership(obj *helmv2.HelmRelease, disable bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.DisableTakeOwnership = disable
+}
+
+// SetHelmReleaseUpgradeForce forces resource updates through a replacement strategy during upgrade.
+func SetHelmReleaseUpgradeForce(obj *helmv2.HelmRelease, force bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.Force = force
+}
+
+// SetHelmReleaseUpgradePreserveValues makes Helm reuse the last release's values during upgrade.
+func SetHelmReleaseUpgradePreserveValues(obj *helmv2.HelmRelease, preserve bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.PreserveValues = preserve
+}
+
+// SetHelmReleaseUpgradeCleanupOnFail allows deletion of new resources when upgrade fails.
+func SetHelmReleaseUpgradeCleanupOnFail(obj *helmv2.HelmRelease, cleanup bool) {
+	if obj.Spec.Upgrade == nil {
+		obj.Spec.Upgrade = &helmv2.Upgrade{}
+	}
+	obj.Spec.Upgrade.CleanupOnFail = cleanup
+}
+
 // SetHelmReleaseInstallRemediation sets the install remediation configuration.
 func SetHelmReleaseInstallRemediation(obj *helmv2.HelmRelease, remediation *helmv2.InstallRemediation) {
 	if obj.Spec.Install == nil {
