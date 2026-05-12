@@ -427,6 +427,38 @@ func SetKustomizationWait(k *kustv1.Kustomization, wait bool) {
 	k.Spec.Wait = wait
 }
 
+// SetKustomizationIgnoreMissingComponents silently ignores component paths not found in source.
+func SetKustomizationIgnoreMissingComponents(k *kustv1.Kustomization, ignore bool) {
+	k.Spec.IgnoreMissingComponents = ignore
+}
+
+// AddKustomizationHealthCheckExpr appends a CEL-based custom health check expression.
+func AddKustomizationHealthCheckExpr(k *kustv1.Kustomization, check kustomize.CustomHealthCheck) {
+	k.Spec.HealthCheckExprs = append(k.Spec.HealthCheckExprs, check)
+}
+
+// CreateCustomHealthCheck constructs a CustomHealthCheck with required fields.
+// current is the CEL expression for the desired-state condition.
+func CreateCustomHealthCheck(apiVersion, kind, current string) kustomize.CustomHealthCheck {
+	return kustomize.CustomHealthCheck{
+		APIVersion: apiVersion,
+		Kind:       kind,
+		HealthCheckExpressions: kustomize.HealthCheckExpressions{
+			Current: current,
+		},
+	}
+}
+
+// SetCustomHealthCheckInProgress sets the in-progress CEL expression on a CustomHealthCheck.
+func SetCustomHealthCheckInProgress(chk *kustomize.CustomHealthCheck, expr string) {
+	chk.HealthCheckExpressions.InProgress = expr
+}
+
+// SetCustomHealthCheckFailed sets the failed CEL expression on a CustomHealthCheck.
+func SetCustomHealthCheckFailed(chk *kustomize.CustomHealthCheck, expr string) {
+	chk.HealthCheckExpressions.Failed = expr
+}
+
 // AddKustomizationImage appends an image transformation.
 func AddKustomizationImage(k *kustv1.Kustomization, img kustomize.Image) {
 	k.Spec.Images = append(k.Spec.Images, img)
