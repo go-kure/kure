@@ -24,7 +24,7 @@ v2.8.7 fixes CVE-2026-45022 (go-git v5.19.0) in source-controller
 and image-automation-controller; fixes non-namespaced resource
 ssa:IfNotPresent delete/recreate loop in kustomize-controller.
 All github.com/fluxcd/* packages upgraded together. |
-| flux-operator | 0.40.0 | 0.23 - 0.40 | Upgraded with FluxCD 2.8 ecosystem. |
+| flux-operator | 0.48.0 | 0.23 - 0.48 | Upgraded alongside FluxCD 2.8.7 ecosystem. |
 | metallb | 0.15.3 | 0.14 - 0.15 | Stable v1beta1 APIs, patch release |
 | prometheus-operator | 0.91.0 | 0.75 - 0.91 | Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
 Only the /pkg/apis/monitoring submodule is imported — not the full operator.

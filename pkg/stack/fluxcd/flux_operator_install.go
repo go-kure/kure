@@ -25,7 +25,7 @@ import (
 //  4. Update this constant.
 //  5. Run the tests in this package and confirm the resource inventory in
 //     TestFluxOperatorInstallObjects still matches.
-const FluxOperatorVersion = "v0.40.0"
+const FluxOperatorVersion = "v0.48.0"
 
 //go:embed flux_operator_install.yaml
 var fluxOperatorInstallYAML []byte
