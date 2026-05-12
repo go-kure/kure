@@ -8,6 +8,7 @@ import (
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -227,6 +228,20 @@ func CreateExternalArtifact(name, namespace string) *sourcev1.ExternalArtifact {
 		TypeMeta: metav1.TypeMeta{
 			Kind:       sourcev1.ExternalArtifactKind,
 			APIVersion: sourcev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
+
+// CreateArtifactGenerator returns a new ArtifactGenerator with TypeMeta and ObjectMeta set.
+func CreateArtifactGenerator(name, namespace string) *sourceWatcherv1beta1.ArtifactGenerator {
+	return &sourceWatcherv1beta1.ArtifactGenerator{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       sourceWatcherv1beta1.ArtifactGeneratorKind,
+			APIVersion: sourceWatcherv1beta1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

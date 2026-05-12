@@ -8,6 +8,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -268,5 +269,24 @@ func TestCreateExternalArtifact(t *testing.T) {
 	}
 	if obj.APIVersion != sourcev1.GroupVersion.String() {
 		t.Errorf("expected APIVersion %q, got %q", sourcev1.GroupVersion.String(), obj.APIVersion)
+	}
+}
+
+func TestCreateArtifactGenerator(t *testing.T) {
+	obj := CreateArtifactGenerator("ag", "flux-system")
+	if obj == nil {
+		t.Fatal("expected non-nil ArtifactGenerator")
+	}
+	if obj.Name != "ag" {
+		t.Errorf("expected Name 'ag', got %s", obj.Name)
+	}
+	if obj.Namespace != "flux-system" {
+		t.Errorf("expected Namespace 'flux-system', got %s", obj.Namespace)
+	}
+	if obj.Kind != sourceWatcherv1beta1.ArtifactGeneratorKind {
+		t.Errorf("expected Kind %q, got %q", sourceWatcherv1beta1.ArtifactGeneratorKind, obj.Kind)
+	}
+	if obj.APIVersion != sourceWatcherv1beta1.GroupVersion.String() {
+		t.Errorf("expected APIVersion %q, got %q", sourceWatcherv1beta1.GroupVersion.String(), obj.APIVersion)
 	}
 }

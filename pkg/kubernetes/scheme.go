@@ -17,6 +17,7 @@ import (
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -72,6 +73,7 @@ func registerAllSchemes() error {
 		notificationv1.AddToScheme,
 		notificationv1beta3.AddToScheme,
 		sourcev1.AddToScheme,
+		sourceWatcherv1beta1.AddToScheme,
 		esv1.AddToScheme,
 		metallbv1beta1.AddToScheme,
 		gwapiv1.Install,

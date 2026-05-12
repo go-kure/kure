@@ -44,6 +44,7 @@ require (
 	github.com/fluxcd/pkg/apis/kustomize v1.16.0
 	github.com/fluxcd/pkg/apis/meta v1.26.0
 	github.com/fluxcd/source-controller/api v1.8.4
+	github.com/fluxcd/source-watcher/api/v2 v2.1.1
 	github.com/google/cel-go v0.28.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.91.0
 	go.universe.tf/metallb v0.15.3

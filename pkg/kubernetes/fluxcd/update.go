@@ -8,6 +8,7 @@ import (
 	notificationv1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 )
 
 // SetGitRepositorySpec replaces the spec on the GitRepository object.
@@ -37,6 +38,11 @@ func SetOCIRepositorySpec(obj *sourcev1.OCIRepository, spec sourcev1.OCIReposito
 
 // SetExternalArtifactSpec replaces the spec on the ExternalArtifact object.
 func SetExternalArtifactSpec(obj *sourcev1.ExternalArtifact, spec sourcev1.ExternalArtifactSpec) {
+	obj.Spec = spec
+}
+
+// SetArtifactGeneratorSpec replaces the spec on the ArtifactGenerator object.
+func SetArtifactGeneratorSpec(obj *sourceWatcherv1beta1.ArtifactGenerator, spec sourceWatcherv1beta1.ArtifactGeneratorSpec) {
 	obj.Spec = spec
 }
 
