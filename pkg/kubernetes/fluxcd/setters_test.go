@@ -1332,6 +1332,217 @@ func TestCreateWaitStrategy(t *testing.T) {
 	}
 }
 
+func TestSetHelmReleaseCommonMetadata(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	cm := &helmv2.CommonMetadata{Labels: map[string]string{"env": "prod"}}
+	SetHelmReleaseCommonMetadata(obj, cm)
+	if obj.Spec.CommonMetadata != cm {
+		t.Error("CommonMetadata not set")
+	}
+}
+
+func TestAddHelmReleaseHealthCheckExpr(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	chk := CreateCustomHealthCheck("apps/v1", "Deployment", "status.ready")
+	AddHelmReleaseHealthCheckExpr(obj, chk)
+	if len(obj.Spec.HealthCheckExprs) != 1 {
+		t.Fatalf("expected 1 health check expr, got %d", len(obj.Spec.HealthCheckExprs))
+	}
+}
+
+func TestSetHelmReleaseInstallTimeout(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	d := &metav1.Duration{Duration: 5 * 60 * 1e9}
+	SetHelmReleaseInstallTimeout(obj, d)
+	if obj.Spec.Install == nil || obj.Spec.Install.Timeout != d {
+		t.Error("Install.Timeout not set")
+	}
+}
+
+func TestSetHelmReleaseInstallTimeout_CreatesInstall(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	if obj.Spec.Install != nil {
+		t.Fatal("expected nil Install before setter")
+	}
+	d := &metav1.Duration{Duration: 1e9}
+	SetHelmReleaseInstallTimeout(obj, d)
+	if obj.Spec.Install == nil {
+		t.Fatal("expected Install to be created")
+	}
+}
+
+func TestSetHelmReleaseInstallCRDs(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallCRDs(obj, helmv2.Create)
+	if obj.Spec.Install == nil || obj.Spec.Install.CRDs != helmv2.Create {
+		t.Errorf("got Install.CRDs %q", obj.Spec.Install.CRDs)
+	}
+}
+
+func TestSetHelmReleaseInstallCreateNamespace(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallCreateNamespace(obj, true)
+	if !obj.Spec.Install.CreateNamespace {
+		t.Error("expected Install.CreateNamespace true")
+	}
+}
+
+func TestSetHelmReleaseInstallDisableSchemaValidation(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallDisableSchemaValidation(obj, true)
+	if !obj.Spec.Install.DisableSchemaValidation {
+		t.Error("expected Install.DisableSchemaValidation true")
+	}
+}
+
+func TestSetHelmReleaseInstallDisableOpenAPIValidation(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallDisableOpenAPIValidation(obj, true)
+	if !obj.Spec.Install.DisableOpenAPIValidation {
+		t.Error("expected Install.DisableOpenAPIValidation true")
+	}
+}
+
+func TestSetHelmReleaseInstallDisableHooks(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallDisableHooks(obj, true)
+	if !obj.Spec.Install.DisableHooks {
+		t.Error("expected Install.DisableHooks true")
+	}
+}
+
+func TestSetHelmReleaseInstallDisableWait(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallDisableWait(obj, true)
+	if !obj.Spec.Install.DisableWait {
+		t.Error("expected Install.DisableWait true")
+	}
+}
+
+func TestSetHelmReleaseInstallDisableWaitForJobs(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallDisableWaitForJobs(obj, true)
+	if !obj.Spec.Install.DisableWaitForJobs {
+		t.Error("expected Install.DisableWaitForJobs true")
+	}
+}
+
+func TestSetHelmReleaseInstallDisableTakeOwnership(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallDisableTakeOwnership(obj, true)
+	if !obj.Spec.Install.DisableTakeOwnership {
+		t.Error("expected Install.DisableTakeOwnership true")
+	}
+}
+
+func TestSetHelmReleaseInstallReplace(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseInstallReplace(obj, true)
+	if !obj.Spec.Install.Replace {
+		t.Error("expected Install.Replace true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeTimeout(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	d := &metav1.Duration{Duration: 10 * 60 * 1e9}
+	SetHelmReleaseUpgradeTimeout(obj, d)
+	if obj.Spec.Upgrade == nil || obj.Spec.Upgrade.Timeout != d {
+		t.Error("Upgrade.Timeout not set")
+	}
+}
+
+func TestSetHelmReleaseUpgradeTimeout_CreatesUpgrade(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	if obj.Spec.Upgrade != nil {
+		t.Fatal("expected nil Upgrade before setter")
+	}
+	SetHelmReleaseUpgradeTimeout(obj, &metav1.Duration{Duration: 1e9})
+	if obj.Spec.Upgrade == nil {
+		t.Fatal("expected Upgrade to be created")
+	}
+}
+
+func TestSetHelmReleaseUpgradeCRDs(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeCRDs(obj, helmv2.CreateReplace)
+	if obj.Spec.Upgrade == nil || obj.Spec.Upgrade.CRDs != helmv2.CreateReplace {
+		t.Errorf("got Upgrade.CRDs %q", obj.Spec.Upgrade.CRDs)
+	}
+}
+
+func TestSetHelmReleaseUpgradeDisableSchemaValidation(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeDisableSchemaValidation(obj, true)
+	if !obj.Spec.Upgrade.DisableSchemaValidation {
+		t.Error("expected Upgrade.DisableSchemaValidation true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeDisableOpenAPIValidation(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeDisableOpenAPIValidation(obj, true)
+	if !obj.Spec.Upgrade.DisableOpenAPIValidation {
+		t.Error("expected Upgrade.DisableOpenAPIValidation true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeDisableHooks(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeDisableHooks(obj, true)
+	if !obj.Spec.Upgrade.DisableHooks {
+		t.Error("expected Upgrade.DisableHooks true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeDisableWait(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeDisableWait(obj, true)
+	if !obj.Spec.Upgrade.DisableWait {
+		t.Error("expected Upgrade.DisableWait true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeDisableWaitForJobs(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeDisableWaitForJobs(obj, true)
+	if !obj.Spec.Upgrade.DisableWaitForJobs {
+		t.Error("expected Upgrade.DisableWaitForJobs true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeDisableTakeOwnership(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeDisableTakeOwnership(obj, true)
+	if !obj.Spec.Upgrade.DisableTakeOwnership {
+		t.Error("expected Upgrade.DisableTakeOwnership true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeForce(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeForce(obj, true)
+	if !obj.Spec.Upgrade.Force {
+		t.Error("expected Upgrade.Force true")
+	}
+}
+
+func TestSetHelmReleaseUpgradePreserveValues(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradePreserveValues(obj, true)
+	if !obj.Spec.Upgrade.PreserveValues {
+		t.Error("expected Upgrade.PreserveValues true")
+	}
+}
+
+func TestSetHelmReleaseUpgradeCleanupOnFail(t *testing.T) {
+	obj := CreateHelmRelease("hr", "ns")
+	SetHelmReleaseUpgradeCleanupOnFail(obj, true)
+	if !obj.Spec.Upgrade.CleanupOnFail {
+		t.Error("expected Upgrade.CleanupOnFail true")
+	}
+}
+
 // Provider setters
 
 func TestSetProviderType(t *testing.T) {
