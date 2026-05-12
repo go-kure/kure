@@ -1951,6 +1951,14 @@ func TestSetFluxInstanceDistribution(t *testing.T) {
 	}
 }
 
+func TestSetFluxInstanceDistributionVariant(t *testing.T) {
+	obj := CreateFluxInstance("flux", "flux-system")
+	SetFluxInstanceDistributionVariant(obj, "enterprise-distroless")
+	if obj.Spec.Distribution.Variant != "enterprise-distroless" {
+		t.Errorf("got Variant %q", obj.Spec.Distribution.Variant)
+	}
+}
+
 func TestSetFluxInstanceCommonMetadata(t *testing.T) {
 	obj := CreateFluxInstance("flux", "flux-system")
 	cm := &fluxv1.CommonMetadata{Labels: map[string]string{"managed-by": "flux-operator"}}

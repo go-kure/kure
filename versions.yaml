@@ -37,11 +37,11 @@ infrastructure:
       - "github.com/controlplaneio-fluxcd/*"
 
   flux-operator:
-    current: "0.40.0"
+    current: "0.48.0"
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
-    supported_range: "0.23 - 0.40"
+    supported_range: "0.23 - 0.48"
     max_dependabot: null
-    notes: "Upgraded with FluxCD 2.8 ecosystem."
+    notes: "Upgraded alongside FluxCD 2.8.7 ecosystem."
 
   metallb:
     current: "0.15.3"

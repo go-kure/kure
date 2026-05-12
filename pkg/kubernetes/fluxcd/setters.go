@@ -1107,6 +1107,12 @@ func SetFluxInstanceDistribution(obj *fluxv1.FluxInstance, dist fluxv1.Distribut
 	obj.Spec.Distribution = dist
 }
 
+// SetFluxInstanceDistributionVariant sets the distribution variant.
+// Valid values: upstream-alpine, enterprise-alpine, enterprise-distroless, enterprise-distroless-fips.
+func SetFluxInstanceDistributionVariant(obj *fluxv1.FluxInstance, variant string) {
+	obj.Spec.Distribution.Variant = variant
+}
+
 // SetFluxInstanceCommonMetadata sets the common metadata.
 func SetFluxInstanceCommonMetadata(obj *fluxv1.FluxInstance, cm *fluxv1.CommonMetadata) {
 	obj.Spec.CommonMetadata = cm

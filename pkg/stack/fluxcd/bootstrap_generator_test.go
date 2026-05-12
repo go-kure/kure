@@ -501,7 +501,7 @@ func TestFluxOperatorInstallObjects(t *testing.T) {
 		"Namespace":                1,
 		"CustomResourceDefinition": 4, // FluxInstance, FluxReport, ResourceSet, ResourceSetInputProvider
 		"ServiceAccount":           1,
-		"ClusterRole":              2,
+		"ClusterRole":              4,
 		"ClusterRoleBinding":       1,
 		"Service":                  1,
 		"Deployment":               1,
