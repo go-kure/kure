@@ -185,6 +185,103 @@ err := fluxcd.AddKustomizationDependency(ks, kustv1.Dependency{
 })
 ```
 
+### ExternalArtifact (source.toolkit.fluxcd.io/v1)
+
+`ExternalArtifact` allows a Flux source artifact produced outside the cluster to be referenced by other Flux resources.
+
+```go
+ea := fluxcd.CreateExternalArtifact("my-artifact", "flux-system")
+fluxcd.SetExternalArtifactSourceRef(ea, &meta.NamespacedObjectKindReference{
+    APIVersion: "source.toolkit.fluxcd.io/v1",
+    Kind:       "OCIRepository",
+    Name:       "my-oci-source",
+    Namespace:  "flux-system",
+})
+// Replace the full spec when needed:
+// fluxcd.SetExternalArtifactSpec(ea, newSpec)
+```
+
+Available functions: `CreateExternalArtifact`, `SetExternalArtifactSourceRef`, `SetExternalArtifactSpec`.
+
+### ArtifactGenerator (source.extensions.fluxcd.io/v1beta1)
+
+`ArtifactGenerator` is provided by the optional **source-watcher** component. It assembles a new artifact by copying files from one or more source artifacts.
+
+```go
+ag := fluxcd.CreateArtifactGenerator("my-gen", "flux-system")
+
+// Declare source references
+src := fluxcd.CreateSourceReference("app", "my-oci-source", "OCIRepository")
+fluxcd.SetSourceReferenceNamespace(&src, "flux-system")
+fluxcd.AddArtifactGeneratorSource(ag, src)
+
+// Build an output artifact with a copy operation
+out := fluxcd.CreateOutputArtifact("combined")
+fluxcd.SetOutputArtifactRevision(&out, "@app")
+
+cp := fluxcd.CreateCopyOperation("@app/manifests/**", "@artifact/manifests")
+fluxcd.AddCopyOperationExclude(&cp, "**/*.secret.yaml")
+fluxcd.SetCopyOperationStrategy(&cp, "Overwrite")
+fluxcd.AddOutputArtifactCopyOperation(&out, cp)
+
+fluxcd.AddArtifactGeneratorOutputArtifact(ag, out)
+```
+
+Available functions:
+- Resource: `CreateArtifactGenerator`, `AddArtifactGeneratorSource`, `AddArtifactGeneratorOutputArtifact`
+- Source references: `CreateSourceReference`, `SetSourceReferenceNamespace`
+- Output artifacts: `CreateOutputArtifact`, `SetOutputArtifactRevision`, `SetOutputArtifactOriginRevision`
+- Copy operations: `CreateCopyOperation`, `AddCopyOperationExclude`, `SetCopyOperationStrategy`, `AddOutputArtifactCopyOperation`
+
+## New Setters on Existing Types
+
+### GitRepository
+
+- `SetGitRepositorySparseCheckout(gr, []string)` — restrict checkout to specific directories
+- `AddGitRepositorySparseCheckoutPath(gr, path)` — append a single sparse-checkout path
+- `SetGitRepositoryServiceAccountName(gr, name)` — workload identity via service account
+
+### Kustomization
+
+- `AddKustomizationHealthCheckExpr(k, check)` — add a CEL-based custom health check expression
+- `SetKustomizationIgnoreMissingComponents(k, bool)` — silently skip missing component paths
+- Helper: `CreateCustomHealthCheck(apiVersion, kind, current)` constructs a `CustomHealthCheck`; optionally set `SetCustomHealthCheckInProgress` and `SetCustomHealthCheckFailed` for the remaining CEL expressions.
+
+### HelmRelease Install control flags
+
+Fine-grained setters for `spec.install` — each auto-initialises the `Install` struct if nil:
+
+- `SetHelmReleaseInstallTimeout` — per-action timeout
+- `SetHelmReleaseInstallCRDs` — CRD policy (`Skip`, `Create`, `CreateReplace`)
+- `SetHelmReleaseInstallCreateNamespace` — create target namespace
+- `SetHelmReleaseInstallDisableSchemaValidation`
+- `SetHelmReleaseInstallDisableOpenAPIValidation`
+- `SetHelmReleaseInstallDisableHooks`
+- `SetHelmReleaseInstallDisableWait`
+- `SetHelmReleaseInstallDisableWaitForJobs`
+- `SetHelmReleaseInstallDisableTakeOwnership`
+- `SetHelmReleaseInstallReplace`
+
+### HelmRelease Upgrade control flags
+
+Fine-grained setters for `spec.upgrade` — each auto-initialises the `Upgrade` struct if nil:
+
+- `SetHelmReleaseUpgradeTimeout` — per-action timeout
+- `SetHelmReleaseUpgradeCRDs` — CRD policy
+- `SetHelmReleaseUpgradeDisableSchemaValidation`
+- `SetHelmReleaseUpgradeDisableOpenAPIValidation`
+- `SetHelmReleaseUpgradeDisableHooks`
+- `SetHelmReleaseUpgradeDisableWait`
+- `SetHelmReleaseUpgradeDisableWaitForJobs`
+- `SetHelmReleaseUpgradeDisableTakeOwnership`
+- `SetHelmReleaseUpgradeForce`
+- `SetHelmReleaseUpgradePreserveValues`
+- `SetHelmReleaseUpgradeCleanupOnFail`
+
+### FluxInstance
+
+- `SetFluxInstanceDistributionVariant(obj, variant)` — set the image variant (`upstream-alpine`, `enterprise-alpine`, `enterprise-distroless`, `enterprise-distroless-fips`)
+
 ## Related Packages
 
 - [stack/fluxcd](/api-reference/flux-engine/) - High-level Flux workflow engine
