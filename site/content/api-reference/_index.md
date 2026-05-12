@@ -32,7 +32,6 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 | Package | Description | Reference |
 |---------|-------------|-----------|
 | [Errors](errors) | Structured error types | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/errors) |
-| [CLI Utilities](cli) | Factory, IOStreams, Printer | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/cli) |
 | [Logger](logger) | Structured logging | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/logger) |
 
 ## Compatibility

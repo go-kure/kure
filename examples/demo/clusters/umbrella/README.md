@@ -24,8 +24,7 @@ node:
 ```
 
 Each child is a directory next to `cluster.yaml` containing `AppWorkload`
-YAML documents. `cmd/demo` loads them via `loadUmbrellaChildrenApps` so the
-child bundles carry their own applications.
+YAML documents. The child bundles carry their own applications.
 
 ## Containment vs ordering
 

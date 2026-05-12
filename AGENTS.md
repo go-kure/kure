@@ -36,9 +36,7 @@ kure/
 │   ├── errors/       # Error handling (use in app code instead of fmt.Errorf)
 │   ├── io/           # YAML serialization
 │   ├── kubernetes/   # Public K8s utilities
-│   ├── launcher/     # Package launcher
 │   ├── logger/       # Logging (use this for all logging)
-│   ├── patch/        # JSONPath-based patching
 │   └── stack/        # Core domain model
 │       ├── argocd/   # ArgoCD workflow
 │       ├── fluxcd/   # FluxCD workflow
@@ -60,10 +58,6 @@ kure/
 ```bash
 # Install tools via mise
 mise install
-
-# Build all executables
-mise run build
-# or: make build
 
 # Run tests
 mise run test
@@ -110,8 +104,6 @@ make precommit
 # Run Qodana analysis (requires Docker)
 make qodana
 ```
-
-### Building
 
 ### Pre-commit Workflow
 
@@ -379,8 +371,6 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 | `pkg/stack/fluxcd/` | `api-reference/flux-engine` | `guides/flux-workflow` |
 | `pkg/stack/generators/` | `api-reference/generators` | `guides/generators` |
 | `pkg/stack/layout/` | `api-reference/layout` | `guides/flux-workflow` |
-| `pkg/launcher/` | `api-reference/launcher` | `guides/kurel-packages` |
-| `pkg/patch/` | `api-reference/patch` | `guides/patching` |
 | `pkg/io/` | `api-reference/io` | `guides/library-usage` |
 | `pkg/errors/` | `api-reference/errors` | — |
 | `pkg/kubernetes/` | `api-reference/kubernetes-builders` | `guides/library-usage` |
