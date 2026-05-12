@@ -880,6 +880,62 @@ func TestAddCommonMetadataAnnotation_NilMap(t *testing.T) {
 	}
 }
 
+func TestSetKustomizationIgnoreMissingComponents(t *testing.T) {
+	obj := CreateKustomization("ks", "ns")
+	SetKustomizationIgnoreMissingComponents(obj, true)
+	if !obj.Spec.IgnoreMissingComponents {
+		t.Error("expected IgnoreMissingComponents to be true")
+	}
+	SetKustomizationIgnoreMissingComponents(obj, false)
+	if obj.Spec.IgnoreMissingComponents {
+		t.Error("expected IgnoreMissingComponents to be false")
+	}
+}
+
+func TestAddKustomizationHealthCheckExpr(t *testing.T) {
+	obj := CreateKustomization("ks", "ns")
+	chk := CreateCustomHealthCheck("example.io/v1", "MyApp", "status.ready == true")
+	AddKustomizationHealthCheckExpr(obj, chk)
+	if len(obj.Spec.HealthCheckExprs) != 1 {
+		t.Fatalf("expected 1 health check expr, got %d", len(obj.Spec.HealthCheckExprs))
+	}
+	if obj.Spec.HealthCheckExprs[0].APIVersion != "example.io/v1" {
+		t.Errorf("got APIVersion %q", obj.Spec.HealthCheckExprs[0].APIVersion)
+	}
+	if obj.Spec.HealthCheckExprs[0].Current != "status.ready == true" {
+		t.Errorf("got Current %q", obj.Spec.HealthCheckExprs[0].Current)
+	}
+}
+
+func TestCreateCustomHealthCheck(t *testing.T) {
+	chk := CreateCustomHealthCheck("apps/v1", "Deployment", "status.availableReplicas > 0")
+	if chk.APIVersion != "apps/v1" {
+		t.Errorf("got APIVersion %q", chk.APIVersion)
+	}
+	if chk.Kind != "Deployment" {
+		t.Errorf("got Kind %q", chk.Kind)
+	}
+	if chk.HealthCheckExpressions.Current != "status.availableReplicas > 0" {
+		t.Errorf("got Current %q", chk.HealthCheckExpressions.Current)
+	}
+}
+
+func TestSetCustomHealthCheckInProgress(t *testing.T) {
+	chk := CreateCustomHealthCheck("apps/v1", "Deployment", "status.ready")
+	SetCustomHealthCheckInProgress(&chk, "status.observedGeneration < status.generation")
+	if chk.HealthCheckExpressions.InProgress != "status.observedGeneration < status.generation" {
+		t.Errorf("got InProgress %q", chk.HealthCheckExpressions.InProgress)
+	}
+}
+
+func TestSetCustomHealthCheckFailed(t *testing.T) {
+	chk := CreateCustomHealthCheck("apps/v1", "Deployment", "status.ready")
+	SetCustomHealthCheckFailed(&chk, "status.conditions.filter(c, c.type == 'Failed').size() > 0")
+	if chk.HealthCheckExpressions.Failed != "status.conditions.filter(c, c.type == 'Failed').size() > 0" {
+		t.Errorf("got Failed %q", chk.HealthCheckExpressions.Failed)
+	}
+}
+
 // HelmRelease setters
 
 func TestAddHelmReleaseLabel(t *testing.T) {
