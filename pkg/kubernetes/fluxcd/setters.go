@@ -345,6 +345,13 @@ func SetOCIRepositorySuspend(or *sourcev1.OCIRepository, suspend bool) {
 	or.Spec.Suspend = suspend
 }
 
+// ExternalArtifact setters
+
+// SetExternalArtifactSourceRef sets the source reference for the ExternalArtifact.
+func SetExternalArtifactSourceRef(ea *sourcev1.ExternalArtifact, ref *meta.NamespacedObjectKindReference) {
+	ea.Spec.SourceRef = ref
+}
+
 // Kustomization setters
 
 // SetKustomizationInterval updates the reconciliation interval.

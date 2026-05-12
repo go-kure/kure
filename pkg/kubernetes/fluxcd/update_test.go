@@ -103,6 +103,20 @@ func TestSetOCIRepositorySpec(t *testing.T) {
 	}
 }
 
+func TestSetExternalArtifactSpec(t *testing.T) {
+	ea := CreateExternalArtifact("ext", "flux-system")
+	ref := &meta.NamespacedObjectKindReference{
+		APIVersion: "source.toolkit.fluxcd.io/v1",
+		Kind:       "OCIRepository",
+		Name:       "my-oci",
+	}
+	newSpec := sourcev1.ExternalArtifactSpec{SourceRef: ref}
+	SetExternalArtifactSpec(ea, newSpec)
+	if ea.Spec.SourceRef != ref {
+		t.Error("expected SourceRef to be set after SetExternalArtifactSpec")
+	}
+}
+
 func TestSetKustomizationSpec(t *testing.T) {
 	kustomization := CreateKustomization("app-kustomization", "default")
 	SetKustomizationSourceRef(kustomization, kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "app-repo"})

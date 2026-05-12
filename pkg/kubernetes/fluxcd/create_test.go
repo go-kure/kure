@@ -251,3 +251,22 @@ func TestKustomizationSetters(t *testing.T) {
 		t.Errorf("expected SourceRef.Kind 'GitRepository', got %s", obj.Spec.SourceRef.Kind)
 	}
 }
+
+func TestCreateExternalArtifact(t *testing.T) {
+	obj := CreateExternalArtifact("ext-artifact", "flux-system")
+	if obj == nil {
+		t.Fatal("expected non-nil ExternalArtifact")
+	}
+	if obj.Name != "ext-artifact" {
+		t.Errorf("expected Name 'ext-artifact', got %s", obj.Name)
+	}
+	if obj.Namespace != "flux-system" {
+		t.Errorf("expected Namespace 'flux-system', got %s", obj.Namespace)
+	}
+	if obj.Kind != sourcev1.ExternalArtifactKind {
+		t.Errorf("expected Kind %q, got %q", sourcev1.ExternalArtifactKind, obj.Kind)
+	}
+	if obj.APIVersion != sourcev1.GroupVersion.String() {
+		t.Errorf("expected APIVersion %q, got %q", sourcev1.GroupVersion.String(), obj.APIVersion)
+	}
+}

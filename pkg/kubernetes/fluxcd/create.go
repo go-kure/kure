@@ -220,3 +220,17 @@ func CreateFluxReport(name, namespace string) *fluxv1.FluxReport {
 		},
 	}
 }
+
+// CreateExternalArtifact returns a new ExternalArtifact with TypeMeta and ObjectMeta set.
+func CreateExternalArtifact(name, namespace string) *sourcev1.ExternalArtifact {
+	return &sourcev1.ExternalArtifact{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       sourcev1.ExternalArtifactKind,
+			APIVersion: sourcev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
