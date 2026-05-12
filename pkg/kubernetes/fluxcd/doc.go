@@ -13,10 +13,11 @@
 //     object, keeping callers in control of which fields are set.
 //
 // Applications covered include sources (GitRepository, OCIRepository,
-// HelmRepository, Bucket, ExternalArtifact), workloads (Kustomization,
-// HelmRelease), the notification stack (Provider, Alert, Receiver), image
-// automation (ImageUpdateAutomation), and objects from the Flux operator
-// (FluxInstance, FluxReport, ResourceSet, ResourceSetInputProvider).
+// HelmRepository, Bucket, ExternalArtifact, ArtifactGenerator), workloads
+// (Kustomization, HelmRelease), the notification stack (Provider, Alert,
+// Receiver), image automation (ImageUpdateAutomation), and objects from the
+// Flux operator (FluxInstance, FluxReport, ResourceSet,
+// ResourceSetInputProvider).
 //
 // # Constructors
 //

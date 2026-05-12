@@ -14,6 +14,7 @@ import (
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -594,6 +595,126 @@ func TestSetExternalArtifactSourceRef(t *testing.T) {
 	SetExternalArtifactSourceRef(obj, ref)
 	if obj.Spec.SourceRef != ref {
 		t.Error("SourceRef not set")
+	}
+}
+
+// ArtifactGenerator setters
+
+func TestAddArtifactGeneratorSource(t *testing.T) {
+	ag := CreateArtifactGenerator("ag", "flux-system")
+	src := CreateSourceReference("apps", "my-git-repo", "GitRepository")
+	AddArtifactGeneratorSource(ag, src)
+	if len(ag.Spec.Sources) != 1 {
+		t.Fatalf("expected 1 source, got %d", len(ag.Spec.Sources))
+	}
+	if ag.Spec.Sources[0].Alias != "apps" {
+		t.Errorf("got Alias %q", ag.Spec.Sources[0].Alias)
+	}
+	if ag.Spec.Sources[0].Kind != "GitRepository" {
+		t.Errorf("got Kind %q", ag.Spec.Sources[0].Kind)
+	}
+}
+
+func TestAddArtifactGeneratorOutputArtifact(t *testing.T) {
+	ag := CreateArtifactGenerator("ag", "flux-system")
+	out := CreateOutputArtifact("combined")
+	op := CreateCopyOperation("@apps/deploy/", "@artifact/deploy/")
+	AddOutputArtifactCopyOperation(&out, op)
+	AddArtifactGeneratorOutputArtifact(ag, out)
+	if len(ag.Spec.OutputArtifacts) != 1 {
+		t.Fatalf("expected 1 output artifact, got %d", len(ag.Spec.OutputArtifacts))
+	}
+	if ag.Spec.OutputArtifacts[0].Name != "combined" {
+		t.Errorf("got Name %q", ag.Spec.OutputArtifacts[0].Name)
+	}
+	if len(ag.Spec.OutputArtifacts[0].Copy) != 1 {
+		t.Fatalf("expected 1 copy op, got %d", len(ag.Spec.OutputArtifacts[0].Copy))
+	}
+}
+
+func TestCreateSourceReference(t *testing.T) {
+	ref := CreateSourceReference("infra", "infra-repo", "OCIRepository")
+	if ref.Alias != "infra" {
+		t.Errorf("got Alias %q", ref.Alias)
+	}
+	if ref.Name != "infra-repo" {
+		t.Errorf("got Name %q", ref.Name)
+	}
+	if ref.Kind != "OCIRepository" {
+		t.Errorf("got Kind %q", ref.Kind)
+	}
+}
+
+func TestSetSourceReferenceNamespace(t *testing.T) {
+	ref := CreateSourceReference("apps", "my-repo", "GitRepository")
+	SetSourceReferenceNamespace(&ref, "other-ns")
+	if ref.Namespace != "other-ns" {
+		t.Errorf("got Namespace %q", ref.Namespace)
+	}
+}
+
+func TestCreateOutputArtifact(t *testing.T) {
+	out := CreateOutputArtifact("merged")
+	if out.Name != "merged" {
+		t.Errorf("got Name %q", out.Name)
+	}
+}
+
+func TestSetOutputArtifactRevision(t *testing.T) {
+	out := CreateOutputArtifact("out")
+	SetOutputArtifactRevision(&out, "@apps")
+	if out.Revision != "@apps" {
+		t.Errorf("got Revision %q", out.Revision)
+	}
+}
+
+func TestSetOutputArtifactOriginRevision(t *testing.T) {
+	out := CreateOutputArtifact("out")
+	SetOutputArtifactOriginRevision(&out, "@apps")
+	if out.OriginRevision != "@apps" {
+		t.Errorf("got OriginRevision %q", out.OriginRevision)
+	}
+}
+
+func TestAddOutputArtifactCopyOperation(t *testing.T) {
+	out := CreateOutputArtifact("out")
+	op := CreateCopyOperation("@apps/deploy/", "@artifact/deploy/")
+	AddOutputArtifactCopyOperation(&out, op)
+	if len(out.Copy) != 1 {
+		t.Fatalf("expected 1 copy op, got %d", len(out.Copy))
+	}
+	if out.Copy[0].From != "@apps/deploy/" {
+		t.Errorf("got From %q", out.Copy[0].From)
+	}
+}
+
+func TestCreateCopyOperation(t *testing.T) {
+	op := CreateCopyOperation("@apps/manifests/", "@artifact/manifests/")
+	if op.From != "@apps/manifests/" {
+		t.Errorf("got From %q", op.From)
+	}
+	if op.To != "@artifact/manifests/" {
+		t.Errorf("got To %q", op.To)
+	}
+}
+
+func TestAddCopyOperationExclude(t *testing.T) {
+	op := CreateCopyOperation("@apps/", "@artifact/")
+	AddCopyOperationExclude(&op, "*.tmp")
+	AddCopyOperationExclude(&op, ".git/")
+	if len(op.Exclude) != 2 {
+		t.Fatalf("expected 2 excludes, got %d", len(op.Exclude))
+	}
+	if op.Exclude[0] != "*.tmp" {
+		t.Errorf("got Exclude[0] %q", op.Exclude[0])
+	}
+}
+
+func TestSetCopyOperationStrategy(t *testing.T) {
+	op := CreateCopyOperation("@apps/", "@artifact/")
+	SetCopyOperationStrategy(&op, sourceWatcherv1beta1.MergeStrategy)
+	if op.Strategy != sourceWatcherv1beta1.MergeStrategy {
+		t.Errorf("got Strategy %q", op.Strategy)
 	}
 }
 

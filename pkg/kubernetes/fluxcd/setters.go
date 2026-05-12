@@ -11,6 +11,7 @@ import (
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -350,6 +351,68 @@ func SetOCIRepositorySuspend(or *sourcev1.OCIRepository, suspend bool) {
 // SetExternalArtifactSourceRef sets the source reference for the ExternalArtifact.
 func SetExternalArtifactSourceRef(ea *sourcev1.ExternalArtifact, ref *meta.NamespacedObjectKindReference) {
 	ea.Spec.SourceRef = ref
+}
+
+// ArtifactGenerator setters
+
+// AddArtifactGeneratorSource appends a source reference to the ArtifactGenerator.
+func AddArtifactGeneratorSource(ag *sourceWatcherv1beta1.ArtifactGenerator, source sourceWatcherv1beta1.SourceReference) {
+	ag.Spec.Sources = append(ag.Spec.Sources, source)
+}
+
+// AddArtifactGeneratorOutputArtifact appends an output artifact to the ArtifactGenerator.
+func AddArtifactGeneratorOutputArtifact(ag *sourceWatcherv1beta1.ArtifactGenerator, output sourceWatcherv1beta1.OutputArtifact) {
+	ag.Spec.OutputArtifacts = append(ag.Spec.OutputArtifacts, output)
+}
+
+// CreateSourceReference constructs a SourceReference with required fields.
+func CreateSourceReference(alias, name, kind string) sourceWatcherv1beta1.SourceReference {
+	return sourceWatcherv1beta1.SourceReference{
+		Alias: alias,
+		Name:  name,
+		Kind:  kind,
+	}
+}
+
+// SetSourceReferenceNamespace sets the optional namespace on a SourceReference.
+func SetSourceReferenceNamespace(ref *sourceWatcherv1beta1.SourceReference, namespace string) {
+	ref.Namespace = namespace
+}
+
+// CreateOutputArtifact constructs an OutputArtifact with the given name.
+func CreateOutputArtifact(name string) sourceWatcherv1beta1.OutputArtifact {
+	return sourceWatcherv1beta1.OutputArtifact{Name: name}
+}
+
+// SetOutputArtifactRevision sets the revision on an OutputArtifact (format: "@<alias>").
+func SetOutputArtifactRevision(out *sourceWatcherv1beta1.OutputArtifact, revision string) {
+	out.Revision = revision
+}
+
+// SetOutputArtifactOriginRevision sets the origin revision on an OutputArtifact.
+func SetOutputArtifactOriginRevision(out *sourceWatcherv1beta1.OutputArtifact, originRevision string) {
+	out.OriginRevision = originRevision
+}
+
+// AddOutputArtifactCopyOperation appends a copy operation to an OutputArtifact.
+func AddOutputArtifactCopyOperation(out *sourceWatcherv1beta1.OutputArtifact, op sourceWatcherv1beta1.CopyOperation) {
+	out.Copy = append(out.Copy, op)
+}
+
+// CreateCopyOperation constructs a CopyOperation with required from and to paths.
+// from format: "@<alias>/<glob-pattern>"; to format: "@artifact/<path>"
+func CreateCopyOperation(from, to string) sourceWatcherv1beta1.CopyOperation {
+	return sourceWatcherv1beta1.CopyOperation{From: from, To: to}
+}
+
+// AddCopyOperationExclude appends a glob pattern to the exclude list of a CopyOperation.
+func AddCopyOperationExclude(op *sourceWatcherv1beta1.CopyOperation, pattern string) {
+	op.Exclude = append(op.Exclude, pattern)
+}
+
+// SetCopyOperationStrategy sets the copy strategy (Overwrite, Merge, or Extract).
+func SetCopyOperationStrategy(op *sourceWatcherv1beta1.CopyOperation, strategy string) {
+	op.Strategy = strategy
 }
 
 // Kustomization setters

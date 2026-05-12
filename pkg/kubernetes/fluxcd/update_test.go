@@ -12,6 +12,7 @@ import (
 	notificationv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -114,6 +115,29 @@ func TestSetExternalArtifactSpec(t *testing.T) {
 	SetExternalArtifactSpec(ea, newSpec)
 	if ea.Spec.SourceRef != ref {
 		t.Error("expected SourceRef to be set after SetExternalArtifactSpec")
+	}
+}
+
+func TestSetArtifactGeneratorSpec(t *testing.T) {
+	ag := CreateArtifactGenerator("ag", "flux-system")
+	src := sourceWatcherv1beta1.SourceReference{Alias: "apps", Name: "my-repo", Kind: "GitRepository"}
+	out := sourceWatcherv1beta1.OutputArtifact{
+		Name: "combined",
+		Copy: []sourceWatcherv1beta1.CopyOperation{{From: "@apps/deploy/", To: "@artifact/deploy/"}},
+	}
+	newSpec := sourceWatcherv1beta1.ArtifactGeneratorSpec{
+		Sources:         []sourceWatcherv1beta1.SourceReference{src},
+		OutputArtifacts: []sourceWatcherv1beta1.OutputArtifact{out},
+	}
+	SetArtifactGeneratorSpec(ag, newSpec)
+	if len(ag.Spec.Sources) != 1 {
+		t.Fatalf("expected 1 source, got %d", len(ag.Spec.Sources))
+	}
+	if ag.Spec.Sources[0].Alias != "apps" {
+		t.Errorf("got Alias %q", ag.Spec.Sources[0].Alias)
+	}
+	if len(ag.Spec.OutputArtifacts) != 1 {
+		t.Fatalf("expected 1 output, got %d", len(ag.Spec.OutputArtifacts))
 	}
 }
 

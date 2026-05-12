@@ -43,6 +43,18 @@ infrastructure:
     max_dependabot: null
     notes: "Upgraded alongside FluxCD 2.8.7 ecosystem."
 
+  source-watcher:
+    current: "2.1.1"
+    go_module: "github.com/fluxcd/source-watcher/api/v2"
+    supported_range: "2.0 - 2.1"
+    max_dependabot: null
+    notes: |
+      Optional FluxCD controller for source composition/decomposition.
+      Manages ArtifactGenerator CRD (source.extensions.fluxcd.io/v1beta1).
+      Not in default Flux installation; requires --components-extra=source-watcher.
+    related_packages:
+      - "github.com/fluxcd/source-controller"
+
   metallb:
     current: "0.15.3"
     go_module: "go.universe.tf/metallb"

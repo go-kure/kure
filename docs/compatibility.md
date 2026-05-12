@@ -25,6 +25,9 @@ and image-automation-controller; fixes non-namespaced resource
 ssa:IfNotPresent delete/recreate loop in kustomize-controller.
 All github.com/fluxcd/* packages upgraded together. |
 | flux-operator | 0.48.0 | 0.23 - 0.48 | Upgraded alongside FluxCD 2.8.7 ecosystem. |
+| source-watcher | 2.1.1 | 2.0 - 2.1 | Optional FluxCD controller for source composition/decomposition.
+Manages ArtifactGenerator CRD (source.extensions.fluxcd.io/v1beta1).
+Not in default Flux installation; requires --components-extra=source-watcher. |
 | metallb | 0.15.3 | 0.14 - 0.15 | Stable v1beta1 APIs, patch release |
 | prometheus-operator | 0.91.0 | 0.75 - 0.91 | Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
 Only the /pkg/apis/monitoring submodule is imported — not the full operator.
