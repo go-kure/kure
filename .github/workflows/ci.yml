@@ -421,165 +421,28 @@ jobs:
           Coverage threshold: 85%
 
   # =============================================================================
-  # Stage 4: Build and K8s Compatibility (parallel with coverage-check)
+  # Stage 4: Build Gate (parallel with coverage-check)
   # =============================================================================
-
-  build-binaries:
-    name: Build ${{ matrix.target }}
-    runs-on: autops-kube-kure
-    timeout-minutes: 10
-    needs: [changes, test]
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'pull_request' || needs.changes.outputs.go == 'true')
-
-    strategy:
-      matrix:
-        target: [kure, demo]
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Install build tools
-      run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Cache Go modules
-      uses: actions/cache@v5
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-gomod-
-
-    - name: Cache Go build cache
-      uses: actions/cache@v5
-      with:
-        path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-gobuild-
-
-    - name: Install dependencies
-      run: make deps
-
-    - name: Build ${{ matrix.target }}
-      run: make build-${{ matrix.target }}
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v7
-      with:
-        name: ${{ matrix.target }}-linux-amd64
-        path: bin/${{ matrix.target }}
-        retention-days: 7
 
   build:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, build-binaries, docs-build, coverage-check]
+    needs: [validate, test, docs-build, coverage-check]
     if: always()
     steps:
     - name: Check build results
       run: |
         vl="${{ needs.validate.result }}"
         tt="${{ needs.test.result }}"
-        bb="${{ needs.build-binaries.result }}"
         db="${{ needs.docs-build.result }}"
         cc="${{ needs.coverage-check.result }}"
-        for result in "$vl" "$tt" "$bb" "$db" "$cc"; do
+        for result in "$vl" "$tt" "$db" "$cc"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
             exit 1
           fi
         done
-
-  # =============================================================================
-  # Stage 5: Cross-Platform Build (main/release only)
-  # =============================================================================
-
-  cross-platform:
-    name: Cross-Platform Build
-    runs-on: autops-kube-kure
-    timeout-minutes: 15
-    needs: build-binaries
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [linux, darwin, windows]
-        arch: [amd64, arm64]
-        exclude:
-          - os: windows
-            arch: arm64
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-
-    - name: Install build tools
-      run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: go.mod
-        cache: false
-
-    - name: Cache Go modules
-      uses: actions/cache@v5
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-gomod-
-
-    - name: Cache Go build cache
-      uses: actions/cache@v5
-      with:
-        path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-gobuild-${{ matrix.os }}-${{ matrix.arch }}-
-          ${{ runner.os }}-gobuild-
-
-    - name: Install dependencies
-      run: make deps
-
-    - name: Build for ${{ matrix.os }}/${{ matrix.arch }}
-      env:
-        GOOS: ${{ matrix.os }}
-        GOARCH: ${{ matrix.arch }}
-      run: |
-        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-
-        if [ "${{ matrix.os }}" = "windows" ]; then
-          EXT=".exe"
-        else
-          EXT=""
-        fi
-
-        mkdir -p bin
-        go build -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
-          -o bin/kure-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/kure
-
-    - name: Upload cross-platform artifacts
-      uses: actions/upload-artifact@v7
-      with:
-        name: binaries-${{ matrix.os }}-${{ matrix.arch }}
-        path: bin/*
-        retention-days: 30
 
   # =============================================================================
   # Docs Build (parallel with main pipeline)
@@ -667,9 +530,6 @@ jobs:
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
-
-    - name: Generate CLI reference
-      run: make docs-cli
 
     - name: Check for unmapped docs
       run: bash site/scripts/check-unmapped-docs.sh
@@ -802,7 +662,7 @@ jobs:
     name: Mirror to GitLab
     runs-on: autops-kube-kure
     timeout-minutes: 5
-    needs: [build, security, cross-platform, docs-build]
+    needs: [build, security, docs-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:

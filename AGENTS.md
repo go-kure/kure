@@ -10,7 +10,6 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 
 - **Language**: Go 1.26.1
 - **Core Dependencies**: Kubernetes APIs (v0.35.1), Flux v2.8.2, cert-manager v1.20.0, MetalLB v0.15.3
-- **CLI Tools**: kure (main CLI), kurel (package system), demo (comprehensive examples)
 - **Testing**: 105 test files with 100% pass rate
 - **Build System**: Comprehensive Makefile with 40+ targets, mise for cross-repo consistency
 
@@ -25,10 +24,6 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 
 ```
 kure/
-├── cmd/
-│   ├── kure/         # Main CLI
-│   ├── kurel/        # Package system CLI
-│   └── demo/         # Comprehensive examples
 ├── internal/         # Resource builders
 │   ├── certmanager/  # cert-manager resources
 │   ├── externalsecrets/  # External Secrets resources
@@ -38,10 +33,6 @@ kure/
 │   ├── metallb/      # MetalLB resources
 │   └── validation/   # Validation utilities
 ├── pkg/
-│   ├── cli/          # CLI utilities
-│   ├── cmd/          # Command implementations
-│   │   ├── kure/     # kure command
-│   │   └── kurel/    # kurel command
 │   ├── errors/       # Error handling (use in app code instead of fmt.Errorf)
 │   ├── io/           # YAML serialization
 │   ├── kubernetes/   # Public K8s utilities
@@ -121,16 +112,6 @@ make qodana
 ```
 
 ### Building
-
-```bash
-# Build all executables
-make build
-
-# Build specific tools
-make build-kure    # Main CLI
-make build-kurel   # Package system
-make build-demo    # Demo executable
-```
 
 ### Pre-commit Workflow
 
@@ -350,7 +331,6 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 
 ### Debugging Tips
 
-- Use `go run ./cmd/demo` to see generated YAML
 - Check test output for validation errors
 - Verify Kubernetes API versions in dependencies
 
@@ -383,11 +363,7 @@ Each `pkg/` package has a `README.md` that lives alongside the code. These are a
 
 Hand-authored guides in `site/content/guides/` describe multi-package workflows. They focus on the flow (which steps, in what order) and link to package READMEs for specifics. Use the reverse mapping table below to know which guides to review.
 
-### Layer 3: CLI reference (auto-generated)
-
-Generated from cobra command definitions by `cmd/gendocs/main.go`. Run `make docs-cli` to regenerate.
-
-### Layer 4: API reference (external)
+### Layer 3: API reference (external)
 
 Links to pkg.go.dev. Updated automatically when the module is published.
 
@@ -407,14 +383,11 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 | `pkg/patch/` | `api-reference/patch` | `guides/patching` |
 | `pkg/io/` | `api-reference/io` | `guides/library-usage` |
 | `pkg/errors/` | `api-reference/errors` | — |
-| `pkg/cli/` | `api-reference/cli` | — |
 | `pkg/kubernetes/` | `api-reference/kubernetes-builders` | `guides/library-usage` |
 | `pkg/kubernetes/fluxcd/` | `api-reference/fluxcd-builders` | `guides/library-usage` |
 | `pkg/kubernetes/metallb/` | `api-reference/metallb-builders` | `guides/library-usage` |
 | `pkg/kubernetes/externalsecrets/` | `api-reference/externalsecrets-builders` | `guides/library-usage` |
 | `pkg/logger/` | `api-reference/logger` | — |
-| `cmd/kure/` | CLI ref (auto-generated) | — |
-| `cmd/kurel/` | CLI ref (auto-generated) | — |
 | `.github/workflows/` | — | `contributing/github-workflows` |
 | `go.mod` / `versions.yaml` | — | `docs/dependency-updates`, `docs/compatibility` |
 | `scripts/gen-versions-toml.sh` | — | `contributing/github-workflows` |

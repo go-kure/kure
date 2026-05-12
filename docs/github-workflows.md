@@ -63,15 +63,10 @@ concurrency:
     │
     ▼
 ┌───────┐
-│ build │  ← Build artifacts
+│ build │  ← Aggregation gate
 └───┬───┘
     │
     ▼
-┌─────────────────────┐
-│ cross-platform      │  ← Only on main/release branches
-└─────────┬───────────┘
-          │
-          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ mirror-to-gitlab (main push only, after all checks)         │
 └─────────────────────────────────────────────────────────────┘
@@ -90,14 +85,12 @@ PR-only jobs (parallel, no blocking):
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
 | `security` | `Security` | 5 min | changes | govulncheck (`-scan package`, v1.1.4, informational — findings warn but do not fail), outdated deps, sensitive file check |
 | `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
-| `build-binaries` | `Build kure/demo` | 10 min | changes, test | Build kure and demo binaries (matrix) |
-| `build` | `build` | 1 min | all above | Aggregation gate — fails if any required job failed |
-| `cross-platform` | `Cross-Platform Build` | 15 min | build-binaries | linux/darwin/windows × amd64/arm64 (main/release only) |
+| `build` | `build` | 1 min | validate, test, docs-build, coverage-check | Aggregation gate — fails if any required job failed |
 | `rebase-check` | `rebase-check` | 2 min | - | Verify PR branch is rebased on main (PR only) |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 15 min | changes | Hugo build with CLI reference generation; separate Go + Hugo caches |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches |
 | `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only) |
-| `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, cross-platform, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
+| `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
 ### Configuration
 
@@ -105,7 +98,6 @@ PR-only jobs (parallel, no blocking):
 - Golangci-lint Version: `v2.10.1`
 - govulncheck Version: `v1.1.4` (pinned, cached binary, `-scan package` mode)
 - Coverage Threshold: `85%`
-- Platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`
 
 ### Features
 
@@ -133,9 +125,8 @@ PR-only jobs (parallel, no blocking):
 
 1. **test** - Full test run with race detection
 2. **validate** - Strict tag format, changelog, and version progression validation
-3. **goreleaser** - Cross-platform builds using GoReleaser v2
-4. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
-5. **post-release** - Go proxy refresh
+3. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
+4. **post-release** - Go proxy refresh
 
 ### Configuration
 
@@ -481,9 +472,8 @@ Results API path through `ACTIONS_RESULTS_URL`.
 
 ### docs-build Caching
 
-The `docs-build` job uses three separate caches:
-- `gomod` — for `make docs-cli` CLI reference generation
-- `gobuild` — for Go compilation during CLI reference generation
+The `docs-build` job uses two separate caches:
+- `gomod` — Go module cache
 - `hugo` — Hugo module cache (`$HUGO_CACHEDIR` only, **not** `~/go/pkg/mod`)
 
 ### Path Filters

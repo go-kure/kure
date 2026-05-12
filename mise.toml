@@ -4,17 +4,10 @@ go = "1.26.3"
 golangci-lint = "2.10.1"
 git-cliff = "2.7.0"
 hugo = "0.155.3"
-# Required for GoReleaser SBOM generation and signing
-syft = "1.21.0"
-cosign = "2.4.3"
 
 [env]
 GOBIN = "{{config_root}}/.bin"
 PATH = "{{config_root}}/.bin:{{env.PATH}}"
-
-[tasks.build]
-description = "Build all executables"
-run = "make build"
 
 [tasks.test]
 description = "Run all tests"
@@ -64,10 +57,6 @@ run = """
 bash scripts/inject-frontmatter.sh
 hugo server --buildDrafts --navigateToChanged
 """
-
-[tasks."docs-cli"]
-description = "Generate CLI reference from cobra commands"
-run = "make docs-cli"
 
 [tasks."site:build"]
 description = "Build the docs site (includes CLI reference generation)"

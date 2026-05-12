@@ -17,11 +17,6 @@ echo "=== Injecting front matter ==="
 bash "$SITE_DIR/scripts/inject-frontmatter.sh" "$KURE_ROOT"
 
 echo ""
-echo "=== Generating CLI reference ==="
-cd "$KURE_ROOT"
-make docs-cli
-
-echo ""
 echo "=== Building Hugo site ==="
 cd "$SITE_DIR"
 hugo --minify

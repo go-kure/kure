@@ -59,9 +59,6 @@ title = 'Go Kure'
     source = ".generated/api-reference/errors.md"
     target = "content/api-reference/errors.md"
   [[module.mounts]]
-    source = ".generated/api-reference/cli.md"
-    target = "content/api-reference/cli.md"
-  [[module.mounts]]
     source = ".generated/api-reference/kubernetes-builders.md"
     target = "content/api-reference/kubernetes-builders.md"
   [[module.mounts]]
@@ -79,11 +76,6 @@ title = 'Go Kure'
   [[module.mounts]]
     source = ".generated/api-reference/compatibility.md"
     target = "content/api-reference/compatibility.md"
-
-  # CLI Reference (auto-generated from cobra/doc)
-  [[module.mounts]]
-    source = ".generated/cli-reference"
-    target = "content/cli-reference"
 
   # Contributing
   [[module.mounts]]

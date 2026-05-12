@@ -87,22 +87,7 @@ make test
 make test-coverage
 ```
 
-### 3. Building
-
-```bash
-# Build all executables
-make build
-
-# Build specific executable
-make build-kure
-make build-kurel
-make build-demo
-
-# Build with race detection for debugging
-make build-race
-```
-
-### 4. Testing
+### 3. Testing
 
 ```bash
 # Run all tests
@@ -146,20 +131,7 @@ make tidy
 make qodana
 ```
 
-### 6. Demo and Examples
-
-```bash
-# Run comprehensive demo
-make demo
-
-# Run GVK generators demo
-make demo-gvk
-
-# Generate all examples (alias for demo)
-make examples
-```
-
-### 7. Package Operations
+### 6. Package Operations
 
 ```bash
 # Build a kurel package
@@ -193,10 +165,7 @@ The project uses several GitHub Actions workflows:
 - **Jobs**:
   - Test (unit, race, coverage)
   - Lint and format check
-  - Build executables
-  - Generate demo outputs
   - Integration tests (main branch only)
-  - Cross-platform builds
   - Security scanning
   - Dependency vulnerability checks
 
@@ -285,13 +254,6 @@ For the full dependency update process (review, bundling, version tracking), see
 - `tools` - Install development tools
 - `outdated` - Check for outdated dependencies
 
-### Building
-- `build` - Build all executables
-- `build-kure` - Build kure executable
-- `build-kurel` - Build kurel executable
-- `build-demo` - Build demo executable
-- `build-race` - Build with race detection
-
 ### Testing
 - `test` - Run all tests
 - `test-verbose` - Run tests with verbose output
@@ -320,14 +282,10 @@ For the full dependency update process (review, bundling, version tracking), see
 - `release TYPE=<type>` - Preview release (dry-run); types: alpha, beta, rc, stable, bump
 - `release-check` - Check if ready for release
 - `release-build` - Build release artifacts for multiple platforms
-- `release-snapshot` - Test GoReleaser locally (no tag, no publish)
-
 ### Utilities
 - `generate` - Run go generate
 - `mod-graph` - Display module dependency graph
 - `list-packages` - List all packages
-- `demo*` - Various demo commands
-
 ## Environment Variables
 
 Key environment variables the Makefile respects:
@@ -341,17 +299,6 @@ Key environment variables the Makefile respects:
 - `PACKAGE_PATH` - Package path for kurel operations
 
 ## Development Tips
-
-### Running Demos
-The demo system generates example YAML files showing Kure's capabilities:
-
-```bash
-# Run all demos
-make demo
-
-# Generated files appear in out/ directory
-ls -la out/
-```
 
 ### Testing Strategy
 - Use `make test-short` for quick feedback during development
@@ -430,7 +377,6 @@ When modifying a package's public API, update documentation in the same PR:
 
 1. **Package README** — Update the `README.md` in the package directory (e.g., `pkg/stack/README.md`)
 2. **Guides** — Check the reverse mapping in `AGENTS.md` for guides that reference the changed package
-3. **CLI reference** — Regenerated automatically by `make docs-cli` (no manual updates needed)
 
 To verify the docs site builds correctly:
 
