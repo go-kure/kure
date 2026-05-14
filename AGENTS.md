@@ -294,6 +294,9 @@ rules := layout.LayoutRules{
 ml, err := layout.WalkCluster(cluster, rules)
 ```
 
+See [OCI Artifact Layout](https://github.com/go-kure/.github/blob/main/docs/design/oci-layout.md)
+for the directory structure and naming conventions that `ManifestLayout` and `WriteToTar` enforce.
+
 ## Fluent Builders
 
 Kure provides fluent builders for ergonomic configuration:
@@ -394,6 +397,20 @@ When implementing a GitHub issue, follow this checklist in order:
 6. **Iterate on review feedback** — address every comment, then return to step 5.
 7. **Verify the diff** — before committing, review the full working-tree diff. If there are more changes than expected, ask the user what should be committed.
 8. **Commit, push, PR** — commit with a conventional-commit message, push, and open a PR with `gh pr create`.
+
+## Organization Resources
+
+The go-kure org governance, design documents, and community files are maintained in
+[go-kure/.github](https://github.com/go-kure/.github).
+
+- **Design documents** (`docs/design/`):
+  - [OCI Artifact Layout](https://github.com/go-kure/.github/blob/main/docs/design/oci-layout.md) — layout tree conventions, layer structure
+  - [API Stability Contract](https://github.com/go-kure/.github/blob/main/docs/design/api-stability.md) — versioning, pkg/ vs internal/, deprecation policy
+  - [Package Structure](https://github.com/go-kure/.github/blob/main/docs/design/package-structure.md) — kure + launcher organization
+  - [OAM Runtime](https://github.com/go-kure/.github/blob/main/docs/design/oam-runtime.md) — kurel design
+- **Standards**: [docs/standards.md](https://github.com/go-kure/.github/blob/main/docs/standards.md)
+- **Contributing**: [CONTRIBUTING.md](https://github.com/go-kure/.github/blob/main/CONTRIBUTING.md)
+- **Reusable workflows**: release, auto-rebase, pr-review, claude — all hosted in go-kure/.github
 
 ## Questions?
 
