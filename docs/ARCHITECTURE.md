@@ -13,7 +13,7 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 - **Interface Segregation**: Split monolithic workflow interfaces into focused components
 - **Type Safety**: Strong typing throughout with comprehensive validation
 - **GitOps Agnostic**: Support for multiple GitOps tools through pluggable workflows
-- **Declarative Patching**: JSONPath-based patching system with structure preservation
+- **Declarative Patching**: JSONPath-based patching system with structure preservation *(moved to go-kure/launcher)*
 
 The architecture supports complex Kubernetes cluster configurations while maintaining simplicity and extensibility through clean separation of concerns and well-defined interfaces.
 
@@ -81,7 +81,26 @@ The system is organized around four primary architectural layers:
 1. **Domain Model** (`pkg/stack/`): Hierarchical abstractions for cluster configuration
 2. **Workflow Engines** (`pkg/stack/workflow.go`, `pkg/stack/fluxcd/`, `pkg/stack/argocd/`): GitOps-specific implementations
 3. **Resource Builders** (`internal/`): Strongly-typed Kubernetes resource factories
-4. **Support Systems**: Error handling, patching, layout, and I/O utilities
+4. **Support Systems**: Error handling, layout, and I/O utilities
+
+### What kure does NOT provide
+
+kure is an unopinionated foundation. It provides building blocks — it does not compose them into
+named application patterns or OAM abstractions.
+
+| Not in kure | Reason |
+|-------------|--------|
+| Application-level components (webservice, worker, helmrelease) | Downstream consumers have different opinions on what each means |
+| Trait logic (ingress, certificate, external-secret) | Trait implementation depends on platform capabilities |
+| OAM model (Application, Component, Trait, Policy) | This belongs in the OAM runtime layer (launcher) |
+| Policy enforcement | Enforcement rules are organizational — not a library concern |
+| GitOps delivery layout decisions | Each consumer defines its own OCI artifact hierarchy |
+
+**Why this matters for library design.** If kure defined a `WebserviceConfig`, it would need to
+decide: does it include a `ServiceAccount`? Topology spread constraints? Sidecars? Each downstream
+consumer has different answers. Putting the composed abstraction in the library couples all
+consumers to kure's version of that answer. kure avoids this by providing composable primitives and
+leaving composition to consumers.
 
 ### Key Design Principles
 
@@ -104,6 +123,33 @@ The system is organized around four primary architectural layers:
 - Strong typing for all Kubernetes resources
 - Compile-time validation of resource construction
 - Custom error types with contextual information
+
+### Relationship to Launcher
+
+[launcher](https://github.com/go-kure/launcher) is an OAM-native package manager built on kure.
+The dependency is strictly one-directional: launcher imports kure; kure has no dependency on
+launcher.
+
+```
+downstream consumers
+        │
+        ▼
+   launcher (OAM runtime)
+        │
+        ▼
+    kure (library)
+```
+
+kure provides the building blocks — `ApplicationConfig` interface, K8s resource builders, FluxCD
+workflow primitives. Launcher uses these to implement an OAM-to-manifest pipeline with component
+handlers, trait handlers, and a Policy extension point for downstream enforcement.
+
+Downstream consumers that need capabilities beyond launcher's built-in handlers can register
+additional handlers and implement the `launcher.Policy` interface, while still using kure's
+resource builders directly.
+
+For the full layering model see
+[kure-launcher-architecture](https://github.com/go-kure/.github/blob/main/docs/design/kure-launcher-architecture.md).
 
 ---
 
@@ -513,6 +559,9 @@ This is the kure idiom for one-of: setting two variants is a compile error (sing
 
 ## Patch System Architecture
 
+> **Note (2026-05-15)**: `pkg/patch` moved to `go-kure/launcher`. The section below describes the
+> historical implementation that lived in kure before the launcher extraction (ADR-018).
+
 ### Design Philosophy
 
 The patch system implements declarative, JSONPath-based patching with structure preservation:
@@ -737,7 +786,7 @@ pkg/                          # Public APIs and interfaces
 │   └── layout/             # Layout generation utilities
 ├── stack/workflow.go       # Workflow interfaces (public)
 ├── errors/                 # Error handling utilities (public)
-└── patch/                  # Patch system (public)
+└── patch/                  # Patch system (public) — moved to go-kure/launcher (ADR-018)
 
 internal/                    # Implementation packages (private)
 ├── kubernetes/             # Core Kubernetes builders

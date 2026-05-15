@@ -5,6 +5,12 @@ weight = 50
 
 # Building Kurel Packages
 
+> **Note (2026-05-15)**: This page describes the historical kurel prototype — a patch-based package
+> system that lived in kure. The current kurel is an OAM-native package manager that lives in
+> [go-kure/launcher](https://github.com/go-kure/launcher). The design described below is superseded.
+> See [launcher/docs/design.md](https://github.com/go-kure/launcher/blob/main/docs/design.md) for
+> the current design.
+
 Kurel is the package system for creating reusable Kubernetes applications. A kurel package bundles base manifests, patches, and parameters into a self-contained unit that can be customized per deployment.
 
 ## Package Structure
@@ -108,6 +114,6 @@ my-app.local.kurel/
 
 ## Further Reading
 
-- [Launcher reference](https://pkg.go.dev/github.com/go-kure/launcher/pkg/launcher) for the package system API
+- [Launcher reference](https://github.com/go-kure/launcher) for the package system API
 - [Kurel Frigate example](/examples/kurel-frigate) for a complete package
 - [Patching guide](/guides/patching/) for the patch format

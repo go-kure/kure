@@ -50,6 +50,10 @@ This allows new application types and GitOps tools to be added without modifying
 
 The kurel package system follows a simple principle: it takes base manifests, applies patches, resolves variables, and writes YAML files. It's not a runtime system, not a controller, not an orchestrator.
 
+> **Note (2026-05-15)**: This describes the historical kurel prototype. The current kurel is an
+> OAM-native package manager in [go-kure/launcher](https://github.com/go-kure/launcher) — it uses
+> OAM Application/Component/Trait semantics rather than the patch-and-variables model above.
+
 This constraint keeps the system simple and auditable. You can always inspect exactly what will be deployed by looking at the generated output.
 
 ## Composition Over Configuration

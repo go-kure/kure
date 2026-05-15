@@ -5,6 +5,11 @@ weight = 30
 
 # Working with Generators
 
+> **Deprecated (2026-05-15)**: The generator system (`pkg/stack/generators/`) is being removed from
+> kure. It is unused by all known runtime consumers. Removal is tracked in
+> [kure#539](https://github.com/go-kure/kure/issues/539). Application-level component patterns live
+> in [go-kure/launcher](https://github.com/go-kure/launcher).
+
 Generators provide a type-safe way to create application workloads from configuration. They implement the `ApplicationConfig` interface and are identified by GroupVersionKind (GVK) strings.
 
 ## Getting Started
