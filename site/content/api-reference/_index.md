@@ -15,7 +15,7 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 |---------|-------------|-----------|
 | [Stack](stack) | Cluster, Node, Bundle, Application domain model | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack) |
 | [Flux Engine](flux-engine) | FluxCD workflow implementation | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/fluxcd) |
-| [Generators](generators) | Application generator system (GVK) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/generators) |
+| [Generators](generators) | Application generator system (GVK) — **deprecated**, removal tracked in [#539](https://github.com/go-kure/kure/issues/539) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/generators) |
 | [Layout Engine](layout) | Manifest directory organization | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/layout) |
 
 ## Resource Operations
