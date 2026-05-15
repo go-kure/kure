@@ -1209,10 +1209,6 @@ pkg/
 │   ├── application_test.go
 │   ├── bundle_test.go
 │   └── ...
-├── patch/
-│   ├── apply_test.go
-│   ├── set_test.go
-│   └── ...
 └── ...
 ```
 
@@ -1432,9 +1428,6 @@ func assertError(t *testing.T, err error, expectedType errors.ErrorType) {
 
 Additional design documentation available in the repository:
 
-- `pkg/patch/DESIGN.md`: Detailed patch system specification
-- `pkg/patch/PATCH_ENGINE_DESIGN.md`: Patch engine implementation details
-- `pkg/patch/PATH_RESOLUTION.md`: JSONPath resolution algorithms
 - `pkg/stack/layout/README.md`: Layout system overview
 - `pkg/stack/workflow.go`: Workflow interface definitions
 
