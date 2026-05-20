@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 
@@ -871,6 +872,39 @@ func TestEndToEndUmbrellaFromCluster_Separate(t *testing.T) {
 		if !kustNames[want] {
 			t.Errorf("flux-system missing Kustomization %q, got %v", want, kustNames)
 		}
+	}
+}
+
+func TestGenerateFromBundle_NamedDependsOn(t *testing.T) {
+	b := &stack.Bundle{
+		Name: "app-post",
+		SourceRef: &stack.SourceRef{
+			Kind:      "GitRepository",
+			Name:      "demo",
+			Namespace: "flux-system",
+		},
+		NamedDependsOn: []string{"app-main", "app-pre"},
+	}
+	objs, err := fluxstack.Engine().GenerateFromBundle(b)
+	if err != nil {
+		t.Fatalf("GenerateFromBundle: %v", err)
+	}
+	var kust *kustv1.Kustomization
+	for _, o := range objs {
+		if k, ok := o.(*kustv1.Kustomization); ok {
+			kust = k
+			break
+		}
+	}
+	if kust == nil {
+		t.Fatal("no Kustomization in output")
+	}
+	got := make([]string, len(kust.Spec.DependsOn))
+	for i, d := range kust.Spec.DependsOn {
+		got[i] = d.Name
+	}
+	if !slices.Contains(got, "app-main") || !slices.Contains(got, "app-pre") {
+		t.Errorf("unexpected DependsOn: %v", got)
 	}
 }
 

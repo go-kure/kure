@@ -149,6 +149,10 @@ func deepCopyBundle(b *Bundle) *Bundle {
 		newBundle.DependsOn = make([]*Bundle, len(b.DependsOn))
 		copy(newBundle.DependsOn, b.DependsOn)
 	}
+	if b.NamedDependsOn != nil {
+		newBundle.NamedDependsOn = make([]string, len(b.NamedDependsOn))
+		copy(newBundle.NamedDependsOn, b.NamedDependsOn)
+	}
 	// Same shallow-copy strategy for Children (umbrella) bundle references.
 	if b.Children != nil {
 		newBundle.Children = make([]*Bundle, len(b.Children))

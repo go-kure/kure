@@ -28,6 +28,10 @@ type Bundle struct {
 	ParentPath string
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []*Bundle
+	// NamedDependsOn lists names of kustomizations this bundle depends on, by name.
+	// Unlike DependsOn, names need not resolve to in-scope Bundle objects.
+	// Both fields are merged into Kustomization.Spec.DependsOn.
+	NamedDependsOn []string
 	// Children holds bundles whose Flux Kustomization CRs are rendered into
 	// this bundle's tar path and whose readiness is aggregated into this
 	// bundle's HealthChecks. When non-empty, this bundle acts as an umbrella:
@@ -199,6 +203,23 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 			depNames[dep.Name] = true
 		}
 	}
+	// Validate NamedDependsOn: empty names, duplicates, cross-field duplicates.
+	namedDepNames := make(map[string]bool, len(a.NamedDependsOn))
+	for _, name := range a.NamedDependsOn {
+		if name == "" {
+			return errors.ResourceValidationError("Bundle", a.Name, "namedDependsOn",
+				"named dependency has empty name", nil)
+		}
+		if namedDepNames[name] {
+			return errors.ResourceValidationError("Bundle", a.Name, "namedDependsOn",
+				fmt.Sprintf("duplicate named dependency %q", name), nil)
+		}
+		if depNames[name] {
+			return errors.ResourceValidationError("Bundle", a.Name, "namedDependsOn",
+				fmt.Sprintf("dependency %q appears in both DependsOn and NamedDependsOn", name), nil)
+		}
+		namedDepNames[name] = true
+	}
 	childNames := make(map[string]bool, len(a.Children))
 	for i, c := range a.Children {
 		if c == nil {
@@ -226,9 +247,17 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q also appears in dependsOn", c.Name), nil)
 		}
+		if namedDepNames[c.Name] {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("child %q also appears in namedDependsOn", c.Name), nil)
+		}
 		if slices.Contains(c.DependsOn, a) {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q depends on parent %q", c.Name, a.Name), nil)
+		}
+		if slices.Contains(c.NamedDependsOn, a.Name) {
+			return errors.ResourceValidationError("Bundle", a.Name, "children",
+				fmt.Sprintf("child %q has parent %q in namedDependsOn", c.Name, a.Name), nil)
 		}
 		if err := c.validateChildren(visited); err != nil {
 			return err

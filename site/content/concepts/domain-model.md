@@ -30,7 +30,7 @@ Nodes map to **directory structures** in the GitOps repository. Each node can al
 
 A deployment unit corresponding to a single GitOps reconciliation resource (e.g., a Flux Kustomization or ArgoCD Application). Bundles contain applications and support:
 
-- **Dependency ordering** via `DependsOn` (e.g., "deploy cert-manager before my app")
+- **Dependency ordering** via `DependsOn` (pointer-based, in-scope bundles) or `NamedDependsOn` (name-based, for cross-scope or hook-phase chains)
 - **Umbrella composition** via `Children` (see below)
 - **Reconciliation settings**: interval, pruning, timeouts
 - **Labels and annotations** for metadata
