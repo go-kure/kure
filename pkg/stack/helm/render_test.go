@@ -1,6 +1,12 @@
 package helm
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -126,6 +132,70 @@ func TestAssembleManifests_EmptyInput(t *testing.T) {
 	if len(out) != 0 {
 		t.Errorf("expected empty output for empty input, got: %q", out)
 	}
+}
+
+func TestRenderChart_HTTP(t *testing.T) {
+	chartBuf := buildMinimalChartTar(t, "testchart", "0.1.0")
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/index.yaml":
+			w.Header().Set("Content-Type", "application/yaml")
+			fmt.Fprint(w, minimalIndexYAML("testchart", "0.1.0", srvURL+"/testchart-0.1.0.tgz"))
+		case "/testchart-0.1.0.tgz":
+			w.Header().Set("Content-Type", "application/gzip")
+			w.Write(chartBuf)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	got, err := RenderChart(srvURL+"/testchart", "0.1.0", nil)
+	if err != nil {
+		t.Fatalf("RenderChart HTTP: %v", err)
+	}
+	if len(got) == 0 {
+		t.Error("expected non-empty YAML output")
+	}
+}
+
+func TestRenderChart_UnsupportedScheme_ReturnsError(t *testing.T) {
+	_, err := RenderChart("ftp://example.com/chart", "1.0.0", nil)
+	if err == nil {
+		t.Fatal("expected error for unsupported scheme")
+	}
+}
+
+func buildMinimalChartTar(t *testing.T, name, version string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	files := map[string]string{
+		name + "/Chart.yaml":        fmt.Sprintf("apiVersion: v2\nname: %s\nversion: %s\n", name, version),
+		name + "/templates/cm.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n",
+	}
+	for path, content := range files {
+		hdr := &tar.Header{Name: path, Mode: 0o600, Size: int64(len(content))}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatalf("tar header: %v", err)
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			t.Fatalf("tar write: %v", err)
+		}
+	}
+	tw.Close()
+	gz.Close()
+	return buf.Bytes()
+}
+
+func minimalIndexYAML(name, version, url string) string {
+	return fmt.Sprintf(
+		"apiVersion: v1\nentries:\n  %s:\n  - name: %s\n    version: %s\n    urls:\n      - %s\ngenerated: \"2024-01-01T00:00:00Z\"\n",
+		name, name, version, url,
+	)
 }
 
 func TestAssembleManifests_StableOrder(t *testing.T) {

@@ -6,7 +6,7 @@ Client-side Helm chart rendering and hook-phase splitting for GitOps deployment.
 
 This package provides two utilities:
 
-- **`RenderChart`** — pulls a Helm chart from an OCI registry and renders its
+- **`RenderChart`** — pulls a Helm chart from an OCI registry or HTTP Helm repository and renders its
   templates locally (equivalent to `helm template`), returning multi-document YAML.
 - **`SplitByHookWeight`** — groups rendered Helm manifests by hook phase and weight
   for ordered FluxCD Kustomization generation.
@@ -14,6 +14,8 @@ This package provides two utilities:
 No Kubernetes cluster connection is required.
 
 ## RenderChart
+
+**OCI registry:**
 
 ```go
 import "github.com/go-kure/kure/pkg/stack/helm"
@@ -34,11 +36,26 @@ if err != nil {
 // manifests is multi-doc YAML suitable for kubectl apply -f -
 ```
 
+**HTTP/HTTPS repository:**
+
 ```go
-// RenderChart pulls a Helm chart from an OCI registry and renders it
-// client-side, returning multi-doc YAML.
+manifests, err := helm.RenderChart(
+    "https://charts.bitnami.com/bitnami/redis", // repo base URL + chart name
+    "19.0.0",
+    map[string]any{"replicaCount": 3},
+)
+```
+
+The chart name is the last path segment; the rest is the repository base URL.
+
+## API
+
+```go
+// RenderChart pulls a Helm chart and renders it client-side, returning multi-doc YAML.
 //
-// chartURL is an OCI URL of the form oci://registry/repo/chart.
+// OCI registries: chartURL must start with "oci://".
+// HTTP repositories: chartURL must start with "http://" or "https://", with the
+// chart name as the last path segment (e.g. "https://charts.example.com/myapp").
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
 func RenderChart(chartURL, version string, values map[string]any) ([]byte, error)
@@ -89,9 +106,10 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
 
 ## Notes
 
-- Authentication uses the local Docker credential store (`~/.docker/config.json`)
-  if credentials are needed for the registry.
+- OCI authentication uses the local Docker credential store (`~/.docker/config.json`).
 - The rendered output excludes Helm partial templates (files starting with `_`)
   and any templates that produce empty output.
 - The `.Release.Name` is set to `"release"` and `.Release.Namespace` to
   `"default"`. Charts that rely on these values will receive those defaults.
+- Comma-separated hook annotations (e.g. `"pre-install,post-install"`) are
+  treated as a single opaque phase and placed in the unknown group.

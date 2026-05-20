@@ -3,6 +3,7 @@ package helm
 import (
 	"bytes"
 	"maps"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,18 +13,33 @@ import (
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/engine"
+	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/registry"
+	repov1 "helm.sh/helm/v4/pkg/repo/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
 
-// RenderChart pulls a Helm chart from an OCI registry and renders it
-// client-side (equivalent to `helm template`), returning multi-doc YAML.
+// RenderChart pulls a Helm chart and renders it client-side (equivalent to `helm template`),
+// returning multi-doc YAML.
 //
-// chartURL is an OCI URL of the form oci://registry/repo/chart.
+// OCI registries: chartURL must start with "oci://".
+// HTTP repositories: chartURL must start with "http://" or "https://", with the
+// chart name as the last path segment (e.g. "https://charts.example.com/myapp").
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
 func RenderChart(chartURL, version string, values map[string]any) ([]byte, error) {
+	switch {
+	case strings.HasPrefix(chartURL, "oci://"):
+		return renderOCI(chartURL, version, values)
+	case strings.HasPrefix(chartURL, "http://"), strings.HasPrefix(chartURL, "https://"):
+		return renderHTTP(chartURL, version, values)
+	default:
+		return nil, errors.Errorf("unsupported chart URL %q: must start with oci://, http://, or https://", chartURL)
+	}
+}
+
+func renderOCI(chartURL, version string, values map[string]any) ([]byte, error) {
 	client, err := registry.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "create registry client")
@@ -33,6 +49,40 @@ func RenderChart(chartURL, version string, values map[string]any) ([]byte, error
 		return nil, errors.Wrapf(err, "pull chart %s:%s", chartURL, version)
 	}
 	chrt, err := loader.LoadArchive(bytes.NewReader(result.Chart.Data))
+	if err != nil {
+		return nil, errors.Wrap(err, "load chart archive")
+	}
+	return renderChart(chrt, values)
+}
+
+func renderHTTP(chartURL, version string, values map[string]any) ([]byte, error) {
+	last := strings.LastIndex(chartURL, "/")
+	if last <= 0 {
+		return nil, errors.Errorf("invalid HTTP chart URL %q: expected https://repo-base/chart-name", chartURL)
+	}
+	repoURL, chartName := chartURL[:last], chartURL[last+1:]
+
+	getters := getter.Getters()
+	archiveURL, err := repov1.FindChartInRepoURL(repoURL, chartName, getters,
+		repov1.WithChartVersion(version))
+	if err != nil {
+		return nil, errors.Wrapf(err, "find chart %s/%s@%s", repoURL, chartName, version)
+	}
+
+	parsed, err := url.Parse(archiveURL)
+	if err != nil {
+		return nil, errors.Wrapf(err, "parse archive URL %q", archiveURL)
+	}
+	g, err := getters.ByScheme(parsed.Scheme)
+	if err != nil {
+		return nil, errors.Wrapf(err, "no getter for scheme %q", parsed.Scheme)
+	}
+	buf, err := g.Get(archiveURL)
+	if err != nil {
+		return nil, errors.Wrapf(err, "download chart %s", archiveURL)
+	}
+
+	chrt, err := loader.LoadArchive(buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
 	}
