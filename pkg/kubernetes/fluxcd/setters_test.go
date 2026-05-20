@@ -254,6 +254,28 @@ func TestSetHelmRepositoryProvider(t *testing.T) {
 	}
 }
 
+func TestHelmRepository_HTTP(t *testing.T) {
+	hr := CreateHelmRepository("bitnami", "flux-system")
+	SetHelmRepositoryURL(hr, "https://charts.bitnami.com/bitnami")
+	SetHelmRepositoryType(hr, "default")
+	SetHelmRepositoryInterval(hr, metav1.Duration{Duration: 10 * time.Minute})
+	SetHelmRepositoryTimeout(hr, &metav1.Duration{Duration: 60 * time.Second})
+	SetHelmRepositoryPassCredentials(hr, true)
+	SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "bitnami-auth"})
+	goldenTest(t, "helmrepository_http.yaml", hr)
+}
+
+func TestHelmRepository_OCI(t *testing.T) {
+	hr := CreateHelmRepository("ghcr-charts", "flux-system")
+	SetHelmRepositoryURL(hr, "oci://ghcr.io/example/charts")
+	SetHelmRepositoryType(hr, "oci")
+	SetHelmRepositoryProvider(hr, "generic")
+	SetHelmRepositoryInsecure(hr, false)
+	SetHelmRepositoryInterval(hr, metav1.Duration{Duration: 5 * time.Minute})
+	SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "ghcr-auth"})
+	goldenTest(t, "helmrepository_oci.yaml", hr)
+}
+
 // Bucket setters
 
 func TestSetBucketProvider(t *testing.T) {
