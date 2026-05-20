@@ -143,9 +143,7 @@ fluxcd.SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
         },
     },
 })
-_ = fluxcd.SetHelmReleaseValuesFromMap(hr, map[string]any{
-    "replicaCount": 3,
-})
+fluxcd.SetHelmReleaseValues(hr, &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount":3}`)})
 fluxcd.AddHelmReleaseValuesFrom(hr, helmv2.ValuesReference{
     Kind: "ConfigMap",
     Name: "redis-defaults",

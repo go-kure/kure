@@ -25,6 +25,7 @@ import (
 
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+    sourcev1 "github.com/fluxcd/source-controller/api/v1"
     "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
 )
 
