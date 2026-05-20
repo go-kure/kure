@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	jsonPkg "encoding/json"
 	"testing"
 	"time"
 
@@ -1700,6 +1701,62 @@ func TestSetHelmReleaseUpgradeCleanupOnFail(t *testing.T) {
 	if !obj.Spec.Upgrade.CleanupOnFail {
 		t.Error("expected Upgrade.CleanupOnFail true")
 	}
+}
+
+func TestSetHelmReleaseValuesFromMap(t *testing.T) {
+	hr := CreateHelmRelease("redis", "apps")
+	err := SetHelmReleaseValuesFromMap(hr, map[string]any{
+		"replicaCount": 3,
+		"image":        map[string]any{"tag": "latest"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hr.Spec.Values == nil {
+		t.Fatal("values nil")
+	}
+	var got map[string]any
+	_ = jsonPkg.Unmarshal(hr.Spec.Values.Raw, &got)
+	if got["replicaCount"] != float64(3) {
+		t.Errorf("got %v", got["replicaCount"])
+	}
+}
+
+func TestHelmRelease_FullSpec(t *testing.T) {
+	hr := CreateHelmRelease("redis", "apps")
+	SetHelmReleaseReleaseName(hr, "redis-prod")
+	SetHelmReleaseTargetNamespace(hr, "apps")
+	SetHelmReleaseInterval(hr, metav1.Duration{Duration: 5 * time.Minute})
+	SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
+		Spec: helmv2.HelmChartTemplateSpec{
+			Chart:   "redis",
+			Version: "19.0.0",
+			SourceRef: helmv2.CrossNamespaceObjectReference{
+				Kind:      "HelmRepository",
+				Name:      "bitnami",
+				Namespace: "flux-system",
+			},
+		},
+	})
+	_ = SetHelmReleaseValuesFromMap(hr, map[string]any{
+		"replicaCount": 3,
+		"auth":         map[string]any{"enabled": true},
+	})
+	AddHelmReleaseValuesFrom(hr, helmv2.ValuesReference{
+		Kind: "ConfigMap", Name: "redis-defaults",
+	})
+	SetHelmReleaseDriftDetection(hr, CreateDriftDetection(helmv2.DriftDetectionEnabled))
+	SetHelmReleaseCommonMetadata(hr, &helmv2.CommonMetadata{
+		Labels: map[string]string{"app": "redis"},
+	})
+	SetHelmReleaseInstallCRDs(hr, helmv2.CreateReplace)
+	SetHelmReleaseInstallRemediation(hr, CreateInstallRemediation(3))
+	SetHelmReleaseUpgradeCRDs(hr, helmv2.CreateReplace)
+	SetHelmReleaseUpgradeRemediation(hr, CreateUpgradeRemediation(3))
+	k := CreatePostRendererKustomize()
+	AddPostRendererKustomizeImage(k, kustomize.Image{Name: "redis", NewTag: "7.0"})
+	AddHelmReleasePostRenderer(hr, helmv2.PostRenderer{Kustomize: k})
+	goldenTest(t, "helmrelease_full_spec.yaml", hr)
 }
 
 // Provider setters
