@@ -1,6 +1,8 @@
 package fluxcd
 
 import (
+	"encoding/json"
+
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	imagev1 "github.com/fluxcd/image-automation-controller/api/v1"
@@ -749,6 +751,16 @@ func AddHelmReleaseValuesFrom(obj *helmv2.HelmRelease, ref helmv2.ValuesReferenc
 // SetHelmReleaseValues sets the values for the release.
 func SetHelmReleaseValues(obj *helmv2.HelmRelease, values *apiextensionsv1.JSON) {
 	obj.Spec.Values = values
+}
+
+// SetHelmReleaseValuesFromMap marshals values to JSON and sets them on the HelmRelease.
+func SetHelmReleaseValuesFromMap(obj *helmv2.HelmRelease, values map[string]any) error {
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return err
+	}
+	obj.Spec.Values = &apiextensionsv1.JSON{Raw: raw}
+	return nil
 }
 
 // AddHelmReleasePostRenderer appends a post renderer.

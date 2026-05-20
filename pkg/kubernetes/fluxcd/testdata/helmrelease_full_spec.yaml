@@ -1,0 +1,42 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: redis
+  namespace: apps
+spec:
+  chart:
+    spec:
+      chart: redis
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+      version: 19.0.0
+  commonMetadata:
+    labels:
+      app: redis
+  driftDetection:
+    mode: enabled
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  interval: 5m0s
+  postRenderers:
+    - kustomize:
+        images:
+          - name: redis
+            newTag: "7.0"
+  releaseName: redis-prod
+  targetNamespace: apps
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  values:
+    auth:
+      enabled: true
+    replicaCount: 3
+  valuesFrom:
+    - kind: ConfigMap
+      name: redis-defaults
