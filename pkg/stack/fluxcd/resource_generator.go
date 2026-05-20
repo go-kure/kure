@@ -300,6 +300,11 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 			Name: dep.Name,
 		})
 	}
+	for _, name := range b.NamedDependsOn {
+		kust.Spec.DependsOn = append(kust.Spec.DependsOn, kustv1.DependencyReference{
+			Name: name,
+		})
+	}
 
 	return kust
 }

@@ -640,6 +640,41 @@ func TestBundleValidateUmbrellaChildren(t *testing.T) {
 			t.Fatal("expected empty grandchild name to fail")
 		}
 	})
+
+	t.Run("NamedDependsOn empty name rejected", func(t *testing.T) {
+		b := &Bundle{Name: "b", NamedDependsOn: []string{""}}
+		if err := b.Validate(); err == nil {
+			t.Fatal("expected empty NamedDependsOn name to fail")
+		}
+	})
+	t.Run("NamedDependsOn duplicate rejected", func(t *testing.T) {
+		b := &Bundle{Name: "b", NamedDependsOn: []string{"x", "x"}}
+		if err := b.Validate(); err == nil {
+			t.Fatal("expected duplicate NamedDependsOn to fail")
+		}
+	})
+	t.Run("NamedDependsOn/DependsOn cross-field duplicate rejected", func(t *testing.T) {
+		dep := &Bundle{Name: "shared"}
+		b := &Bundle{Name: "b", DependsOn: []*Bundle{dep}, NamedDependsOn: []string{"shared"}}
+		if err := b.Validate(); err == nil {
+			t.Fatal("expected cross-field duplicate to fail")
+		}
+	})
+	t.Run("NamedDependsOn/Children overlap rejected", func(t *testing.T) {
+		child := &Bundle{Name: "c"}
+		b := &Bundle{Name: "b", NamedDependsOn: []string{"c"}, Children: []*Bundle{child}}
+		if err := b.Validate(); err == nil {
+			t.Fatal("expected child in NamedDependsOn to fail")
+		}
+	})
+	t.Run("child NamedDependsOn containing parent rejected", func(t *testing.T) {
+		parent := &Bundle{Name: "p"}
+		child := &Bundle{Name: "c", NamedDependsOn: []string{"p"}}
+		parent.Children = []*Bundle{child}
+		if err := parent.Validate(); err == nil {
+			t.Fatal("expected child->parent NamedDependsOn to fail")
+		}
+	})
 }
 
 func TestBundleIsUmbrella(t *testing.T) {

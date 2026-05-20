@@ -45,17 +45,20 @@ A tree structure for organizing bundles into logical groups. Nodes can have chil
 node := &stack.Node{
     Name:     "infrastructure",
     Children: []*stack.Node{childNode},
-    Bundle:   []*stack.Bundle{monitoringBundle},
+    Bundle:   monitoringBundle,
 }
 ```
 
 ### Bundle
 
-A deployment unit corresponding to a single GitOps resource (e.g., a Flux Kustomization). Bundles support dependency ordering via `DependsOn`.
+A deployment unit corresponding to a single GitOps resource (e.g., a Flux Kustomization). Bundles support dependency ordering via `DependsOn` (pointer-based) or `NamedDependsOn` (name-based, for cross-scope references).
 
 ```go
 bundle, err := stack.NewBundle("monitoring", apps, labels)
-bundle.DependsOn = []string{"cert-manager"}
+// Pointer-based — when you hold the bundle object:
+bundle.DependsOn = []*stack.Bundle{certManagerBundle}
+// Name-based — when you only know the name (e.g. a hook-phase bundle):
+bundle.NamedDependsOn = []string{"cert-manager"}
 bundle.Interval = "10m"
 ```
 
