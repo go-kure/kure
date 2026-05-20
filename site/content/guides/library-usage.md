@@ -20,29 +20,29 @@ Kure provides typed builder functions for Kubernetes and FluxCD resources.
 ### FluxCD Resources
 
 ```go
-import "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
+import (
+    "time"
+
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+    "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
+)
 
 // Create a GitRepository source
-repo := fluxcd.GitRepository(&fluxcd.GitRepositoryConfig{
-    Name:      "my-repo",
-    Namespace: "flux-system",
-    URL:       "https://github.com/org/repo",
-    Branch:    "main",
-    Interval:  "5m",
-})
+repo := fluxcd.CreateGitRepository("my-repo", "flux-system")
+fluxcd.SetGitRepositoryURL(repo, "https://github.com/org/repo")
+fluxcd.SetGitRepositoryReference(repo, &sourcev1.GitRepositoryRef{Branch: "main"})
+fluxcd.SetGitRepositoryInterval(repo, metav1.Duration{Duration: 5 * time.Minute})
 
 // Create a Kustomization that references the source
-ks := fluxcd.Kustomization(&fluxcd.KustomizationConfig{
-    Name:      "my-app",
-    Namespace: "flux-system",
-    Path:      "./clusters/production",
-    Interval:  "10m",
-    Prune:     true,
-    SourceRef: kustv1.CrossNamespaceSourceReference{
-        Kind: "GitRepository",
-        Name: "my-repo",
-    },
+ks := fluxcd.CreateKustomization("my-app", "flux-system")
+fluxcd.SetKustomizationSourceRef(ks, kustv1.CrossNamespaceSourceReference{
+    Kind: "GitRepository",
+    Name: "my-repo",
 })
+fluxcd.SetKustomizationPath(ks, "./clusters/production")
+fluxcd.SetKustomizationInterval(ks, metav1.Duration{Duration: 10 * time.Minute})
+fluxcd.SetKustomizationPrune(ks, true)
 ```
 
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.
