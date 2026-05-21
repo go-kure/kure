@@ -124,6 +124,9 @@ func assembleManifests(rendered map[string]string) []byte {
 		if strings.HasPrefix(filepath.Base(name), "_") {
 			continue
 		}
+		if filepath.Base(name) == "NOTES.txt" {
+			continue // skip Helm info file — not a Kubernetes manifest
+		}
 		content := strings.TrimSpace(rendered[name])
 		if content == "" {
 			continue
