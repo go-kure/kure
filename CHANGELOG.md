@@ -1,6 +1,53 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.5] - 2026-05-21
+
+### Added
+
+- Add GitRepository setter gaps
+- Add Kustomization setter gaps
+- Add HelmRelease Install/Upgrade flag setters
+- Add ExternalArtifact builder
+- Add ArtifactGenerator builder (source-watcher)
+- Add NamedDependsOn to Bundle for name-based kustomization chaining
+- Add SplitByHookWeight utility for helm hook-phase ordering
+- Add SetHelmReleaseValuesFromMap; add HelmRelease golden test
+- Extend RenderChart to support HTTP Helm repositories
+
+### Changed
+
+- Remove CLI layer (cmd/, pkg/cmd/, pkg/cli/)
+
+### Dependencies
+
+- Upgrade flux-operator to v0.48.0
+- Bump sigs.k8s.io/controller-runtime
+- Bump github.com/cilium/cilium from 1.19.3 to 1.19.4
+- Bump github.com/google/cel-go from 0.28.0 to 0.28.1
+
+### Documentation
+
+- Update README for new CRDs and setter coverage
+- Add Organization Resources section referencing go-kure/.github
+- Replace oci-layout.md with redirect to go-kure/.github
+- Mark generators deprecated and pkg/patch moved to launcher
+- Remove stale pkg/patch references from ARCHITECTURE.md
+- Document HTTP RenderChart as public-only; explain Helm v4.2.0 bump
+
+### Fixed
+
+- Address PR review findings — stale site content and doc cleanup
+- Bump cnpg from 1.29.0 to 1.29.1 (CVE-2026-44477)
+- Bump prometheus-operator from 0.90.1 to 0.91.0
+- Upgrade FluxCD ecosystem to v2.8.7 (CVE-2026-45022)
+- Remove SetHelmReleaseValuesFromMap from README (not yet added); fix sourcev1 import in guide
+- Pre-release review — deepCopyBundle missing fields, renderHTTP guard, coverage gaps, docs
+
+### Testing
+
+- Add HelmRepository golden tests; rewrite pkg/kubernetes/fluxcd README for current API
+
 ## [0.2.0-alpha.4] - 2026-05-11
 
 ### Added
@@ -39,6 +86,10 @@ All notable changes to this project will be documented in this file.
 
 - Add missing tests for CRD subpackage setters
 - Suppress staticcheck SA1019 on intentional deprecated field usage
+
+### Release
+
+- V0.2.0-alpha.4
 
 ## [0.2.0-alpha.3] - 2026-05-06
 
