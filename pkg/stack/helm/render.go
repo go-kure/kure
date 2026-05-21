@@ -23,9 +23,14 @@ import (
 // RenderChart pulls a Helm chart and renders it client-side (equivalent to `helm template`),
 // returning multi-doc YAML.
 //
-// OCI registries: chartURL must start with "oci://".
+// OCI registries: chartURL must start with "oci://". Authentication uses the
+// local Docker credential store (~/.docker/config.json).
+//
 // HTTP repositories: chartURL must start with "http://" or "https://", with the
 // chart name as the last path segment (e.g. "https://charts.example.com/myapp").
+// Only public unauthenticated repositories are supported; basic auth, client TLS,
+// and other credential mechanisms are not.
+//
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
 func RenderChart(chartURL, version string, values map[string]any) ([]byte, error) {
