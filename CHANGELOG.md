@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.8] - 2026-05-21
+
+### Fixed
+
+- Skip NOTES.txt in assembleManifests
+
 ## [0.2.0-alpha.7] - 2026-05-21
 
 ### Fixed
