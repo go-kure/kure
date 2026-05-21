@@ -48,6 +48,10 @@ All notable changes to this project will be documented in this file.
 
 - Add HelmRepository golden tests; rewrite pkg/kubernetes/fluxcd README for current API
 
+### Release
+
+- V0.2.0-alpha.5
+
 ## [0.2.0-alpha.4] - 2026-05-11
 
 ### Added
