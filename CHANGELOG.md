@@ -1,11 +1,17 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.7] - 2026-05-21
+
+### Fixed
+
+- Cliff.toml skips release-bot commits; group chore as Maintenance; add alpha.6 CHANGELOG section
+
 ## [0.2.0-alpha.6] - 2026-05-21
 
 ### Maintenance
 
-- Add goreleaser config for library-only release (kure is a Go library, no binary builds)
+- Add goreleaser config for library-only release
 
 ## [0.2.0-alpha.5] - 2026-05-21
 
@@ -50,13 +56,15 @@ All notable changes to this project will be documented in this file.
 - Remove SetHelmReleaseValuesFromMap from README (not yet added); fix sourcev1 import in guide
 - Pre-release review — deepCopyBundle missing fields, renderHTTP guard, coverage gaps, docs
 
+### Maintenance
+
+- Tidy go.sum
+- Update controller-runtime to 0.24.1 in versions.yaml
+- Regenerate compatibility.md for controller-runtime 0.24.1
+
 ### Testing
 
 - Add HelmRepository golden tests; rewrite pkg/kubernetes/fluxcd README for current API
-
-### Release
-
-- V0.2.0-alpha.5
 
 ## [0.2.0-alpha.4] - 2026-05-11
 
@@ -92,14 +100,14 @@ All notable changes to this project will be documented in this file.
 - Propagate SetNestedField errors
 - Complete migration by removing all stale internal package imports
 
+### Maintenance
+
+- Bump Go 1.26.2 → 1.26.3 for stdlib security fixes
+
 ### Testing
 
 - Add missing tests for CRD subpackage setters
 - Suppress staticcheck SA1019 on intentional deprecated field usage
-
-### Release
-
-- V0.2.0-alpha.4
 
 ## [0.2.0-alpha.3] - 2026-05-06
 
@@ -141,10 +149,6 @@ All notable changes to this project will be documented in this file.
 
 - Add default label/annotation assertions in TestCreateConfigMap
 
-### Release
-
-- V0.2.0-alpha.3
-
 ## [0.2.0-alpha.2] - 2026-05-05
 
 ### Added
@@ -155,9 +159,9 @@ All notable changes to this project will be documented in this file.
 
 - Use kure errors package instead of fmt.Errorf
 
-### Release
+### Maintenance
 
-- V0.2.0-alpha.2
+- Fix gofmt alignment in cnpg types
 
 ## [0.2.0-alpha.1] - 2026-05-04
 
@@ -189,9 +193,11 @@ All notable changes to this project will be documented in this file.
 
 - Use kustomize.config.k8s.io domain in generated kustomization.yaml
 
-### Release
+### Maintenance
 
-- V0.2.0-alpha.1
+- Bump dorny/paths-filter from v3 to v4
+- Refactor builders to sealed-interface idiom
+- Remove pkg/stack/v1alpha1 and deprecated generator aliases
 
 ## [0.2.0-alpha.0] - 2026-05-01
 
@@ -222,15 +228,15 @@ All notable changes to this project will be documented in this file.
 - Repair 5 broken links on deployed docs site
 - Support unnamed root node — merge resources at cluster root
 
+### Maintenance
+
+- Extract pkg/launcher, pkg/patch, cmd/kurel, pkg/cmd/kurel to go-kure/launcher
+
 ### Testing
 
 - Add missing tests for Patches/PostBuild and stable helm output
 - Add OCI layout pattern tests (Namespace:"."/layer naming/3-layer structure)
 - Assert spec.path and sourceRef in Layer 2 Kustomization tests
-
-### Release
-
-- V0.2.0-alpha.0
 
 ## [0.1.0-rc.11] - 2026-04-20
 
@@ -252,19 +258,16 @@ All notable changes to this project will be documented in this file.
 - Rename infra to platform in OCI layout design doc
 - Register oci-layout.md in docs site scripts
 
-### Release
+### Maintenance
 
-- V0.1.0-rc.11
+- Update issue template labels to post-rename names
+- Update versions.yaml for plugin-barman-cloud 0.12.0
 
 ## [0.1.0-rc.10] - 2026-04-15
 
 ### Added
 
 - Add builders for Role, RoleBinding, ClusterRole, ClusterRoleBinding
-
-### Release
-
-- V0.1.0-rc.10
 
 ## [0.1.0-rc.9] - 2026-04-15
 
@@ -277,9 +280,9 @@ All notable changes to this project will be documented in this file.
 
 - Bump github.com/cert-manager/cert-manager
 
-### Release
+### Maintenance
 
-- V0.1.0-rc.9
+- Update versions.yaml for cert-manager v1.20.2
 
 ## [0.1.0-rc.8] - 2026-04-14
 
@@ -300,19 +303,11 @@ All notable changes to this project will be documented in this file.
 
 - Sort manifest keys for stable output
 
-### Release
-
-- V0.1.0-rc.8
-
 ## [0.1.0-rc.7] - 2026-04-12
 
 ### Fixed
 
 - Honor FileNaming in WriteToDisk, WriteManifest, and package walker
-
-### Release
-
-- V0.1.0-rc.7
 
 ## [0.1.0-rc.6] - 2026-04-12
 
@@ -324,19 +319,11 @@ All notable changes to this project will be documented in this file.
 
 - Force FilePerResource for FluxIntegrated kustomization refs
 
-### Release
-
-- V0.1.0-rc.6
-
 ## [0.1.0-rc.5] - 2026-04-11
 
 ### Added
 
 - Emit full Flux Operator install bundle in flux-operator mode
-
-### Release
-
-- V0.1.0-rc.5
 
 ## [0.1.0-rc.4] - 2026-04-10
 
@@ -362,13 +349,15 @@ All notable changes to this project will be documented in this file.
 - Switch to claude-max-proxy
 - Nest child nodes under root node layout when ClusterName is set
 
+### Maintenance
+
+- Bump codecov/codecov-action from 5 to 6 in the actions group
+- Add mise tasks for versions:check and versions:generate
+- Update versions.yaml for fluxcd 2.8.5
+
 ### Testing
 
 - Move gotk network tests to integration, use flux-operator in workflow test
-
-### Release
-
-- V0.1.0-rc.4
 
 ## [0.1.0-rc.3] - 2026-03-22
 
@@ -392,10 +381,6 @@ All notable changes to this project will be documented in this file.
 - Resolve broken links on versioned doc subsites
 - Disable setup-go built-in cache to prevent double-caching
 - Resolve broken dependency-updates link on contributing guide page
-
-### Release
-
-- V0.1.0-rc.3
 
 ## [0.1.0-rc.2] - 2026-03-20
 
@@ -432,10 +417,9 @@ All notable changes to this project will be documented in this file.
 - Increase lint timeout and scope cache to modules only
 - Gate release on pre-release tests and fix CGO_ENABLED
 
-### Release
+### Maintenance
 
-- V0.1.0-rc.1
-- V0.1.0-rc.2
+- Revert unrelated settings.json changes from ci/selfhosted-runners
 
 ## [0.1.0-rc.0] - 2026-03-09
 
@@ -455,13 +439,14 @@ All notable changes to this project will be documented in this file.
 
 - Simplify SetSecretImmutable and remove unnecessary Immutable pre-allocation
 
+### Maintenance
+
+- Sync versions.yaml for prometheus-operator v0.89.0
+- Sync versions.yaml for gateway-api v1.5.0
+
 ### Testing
 
 - Add golden file tests for InitContainer builders
-
-### Release
-
-- V0.1.0-rc.0
 
 ## [0.1.0-beta.7] - 2026-03-08
 
@@ -507,14 +492,16 @@ All notable changes to this project will be documented in this file.
 - Use centralized sentinel errors and add missing Prometheus helpers
 - Remove trailing blank line in bootstrap generator test
 
+### Maintenance
+
+- Explicitly enable unused linter (#288)
+- Document gosimple inclusion via staticcheck (#290)
+- Align golangci-lint config with Crane linter set (#293)
+
 ### Testing
 
 - Add comprehensive tests for public facade
 - Add tests and docs for externalsecrets facade
-
-### Release
-
-- V0.1.0-beta.7
 
 ## [0.1.0-beta.6] - 2026-03-06
 
@@ -611,6 +598,16 @@ All notable changes to this project will be documented in this file.
 - Remove output flag and use sigstore.json extension for cosign v3
 - Add release-notes.md to .gitignore
 
+### Maintenance
+
+- Bump the actions group with 2 updates
+- Align golangci-lint config with Wharf standard
+- Replace generic code review with two-pass PR review workflow
+- Bump the actions group with 3 updates
+- Add CNPG to versions.yaml and dependency governance
+- Update versions.yaml for completed dependency upgrades
+- Update PR review model to gpt-5.4
+
 ### Performance
 
 - Add lint-fast Makefile target
@@ -622,15 +619,6 @@ All notable changes to this project will be documented in this file.
 ### Pr-review
 
 - Fix broken pipe and stale assessment comment
-
-### Release
-
-- V0.1.0-beta.1
-- V0.1.0-beta.2
-- V0.1.0-beta.3
-- V0.1.0-beta.4
-- V0.1.0-beta.5
-- V0.1.0-beta.6
 
 ## [0.1.0-beta.0] - 2026-02-17
 
@@ -662,11 +650,6 @@ All notable changes to this project will be documented in this file.
 - Add implementation workflow checklist
 - Document ApplicationConfig breaking change (#178)
 
-### Release
-
-- V0.1.0-alpha.4
-- V0.1.0-beta.0
-
 ## [0.1.0-alpha.3] - 2026-02-12
 
 ### Documentation
@@ -676,10 +659,6 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Install syft in release workflow for SBOM generation
-
-### Release
-
-- V0.1.0-alpha.3
 
 ## [0.1.0-alpha.2] - 2026-02-12
 
@@ -723,9 +702,9 @@ All notable changes to this project will be documented in this file.
 - Anchor GO_VERSION patterns to avoid matching HUGO_VERSION
 - Add rollup build gate job to satisfy branch protection check
 
-### Release
+### Maintenance
 
-- V0.1.0-alpha.2
+- Use individual usernames in CODEOWNERS
 
 ## [0.1.0-alpha.1] - 2026-01-30
 
@@ -899,6 +878,17 @@ All notable changes to this project will be documented in this file.
 - Improve dependabot wildcard pattern matching in validation
 - Block FluxCD major version updates in dependabot
 
+### Maintenance
+
+- Log errors via log package
+- Update Claude settings - always save to .claude/settings.json
+- Go fmt
+- Standardize Go version and improve workflow organization
+- Align repo with crane scaffold and wharf standards
+- Enhance dependabot configuration
+- Migrate tasks to GitHub issues
+- Bump the actions group across 1 directory with 7 updates
+
 ### Testing
 
 - Check errors
@@ -922,9 +912,5 @@ All notable changes to this project will be documented in this file.
 - Add setter function tests for internal packages
 - Add comprehensive IO table and printer tests
 - Add comprehensive appworkload internal tests
-
-### Release
-
-- V0.1.0-alpha.0
 
 
