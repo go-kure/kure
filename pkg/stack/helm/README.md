@@ -36,7 +36,7 @@ if err != nil {
 // manifests is multi-doc YAML suitable for kubectl apply -f -
 ```
 
-**HTTP/HTTPS repository:**
+**HTTP/HTTPS repository (public only):**
 
 ```go
 manifests, err := helm.RenderChart(
@@ -47,15 +47,21 @@ manifests, err := helm.RenderChart(
 ```
 
 The chart name is the last path segment; the rest is the repository base URL.
+HTTP repositories must be publicly accessible — basic auth, client TLS, and
+other credential mechanisms are not supported.
 
 ## API
 
 ```go
 // RenderChart pulls a Helm chart and renders it client-side, returning multi-doc YAML.
 //
-// OCI registries: chartURL must start with "oci://".
+// OCI registries: chartURL must start with "oci://". Authentication uses the
+// local Docker credential store (~/.docker/config.json).
+//
 // HTTP repositories: chartURL must start with "http://" or "https://", with the
 // chart name as the last path segment (e.g. "https://charts.example.com/myapp").
+// Only public unauthenticated repositories are supported.
+//
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
 func RenderChart(chartURL, version string, values map[string]any) ([]byte, error)
