@@ -107,11 +107,11 @@ infrastructure:
       Versioned independently from the CNPG operator.
 
   controller-runtime:
-    current: "0.24.0"
+    current: "0.24.1"
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.24"
     max_dependabot: null
-    notes: "v0.24.0 requires k8s.io/* v0.36.0 (Kubernetes 1.36)"
+    notes: "v0.24.1 fixes Apply typed error handling regression; requires k8s.io/* v0.36.0 (Kubernetes 1.36)"
     related_packages:
       - "sigs.k8s.io/kustomize/api"
       - "sigs.k8s.io/yaml"
