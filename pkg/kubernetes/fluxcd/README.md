@@ -143,7 +143,9 @@ fluxcd.SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
         },
     },
 })
-fluxcd.SetHelmReleaseValues(hr, &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount":3}`)})
+_ = fluxcd.SetHelmReleaseValuesFromMap(hr, map[string]any{"replicaCount": 3}) // handle err
+// Alternative — pre-marshalled JSON:
+// fluxcd.SetHelmReleaseValues(hr, &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount":3}`)})
 fluxcd.AddHelmReleaseValuesFrom(hr, helmv2.ValuesReference{
     Kind: "ConfigMap",
     Name: "redis-defaults",
@@ -184,8 +186,22 @@ Additional setters: `SetHelmReleaseKubeConfig`, `SetHelmReleaseSuspend`,
 `SetHelmReleaseMaxHistory`, `SetHelmReleaseServiceAccountName`, `SetHelmReleasePersistentClient`,
 `SetHelmReleaseInstall`, `SetHelmReleaseUpgrade`, `SetHelmReleaseRollback`,
 `SetHelmReleaseUninstall`, `SetHelmReleaseTest`, `SetHelmReleaseValues`,
-`SetHelmReleaseCommonMetadata`, `AddHelmReleaseHealthCheckExpr`, `SetHelmReleaseWaitStrategy`,
-plus fine-grained `SetHelmReleaseInstall*` and `SetHelmReleaseUpgrade*` flag setters.
+`SetHelmReleaseValuesFromMap`, `SetHelmReleaseCommonMetadata`, `AddHelmReleaseHealthCheckExpr`,
+`SetHelmReleaseWaitStrategy`.
+
+Install flag setters: `SetHelmReleaseInstallTimeout`, `SetHelmReleaseInstallCRDs`,
+`SetHelmReleaseInstallCreateNamespace`, `SetHelmReleaseInstallDisableSchemaValidation`,
+`SetHelmReleaseInstallDisableOpenAPIValidation`, `SetHelmReleaseInstallDisableHooks`,
+`SetHelmReleaseInstallDisableWait`, `SetHelmReleaseInstallDisableWaitForJobs`,
+`SetHelmReleaseInstallDisableTakeOwnership`, `SetHelmReleaseInstallReplace`,
+`SetHelmReleaseInstallRemediation`.
+
+Upgrade flag setters: `SetHelmReleaseUpgradeTimeout`, `SetHelmReleaseUpgradeCRDs`,
+`SetHelmReleaseUpgradeDisableSchemaValidation`, `SetHelmReleaseUpgradeDisableOpenAPIValidation`,
+`SetHelmReleaseUpgradeDisableHooks`, `SetHelmReleaseUpgradeDisableWait`,
+`SetHelmReleaseUpgradeDisableWaitForJobs`, `SetHelmReleaseUpgradeDisableTakeOwnership`,
+`SetHelmReleaseUpgradeForce`, `SetHelmReleaseUpgradePreserveValues`,
+`SetHelmReleaseUpgradeCleanupOnFail`, `SetHelmReleaseUpgradeRemediation`.
 
 ## Notification Controllers
 

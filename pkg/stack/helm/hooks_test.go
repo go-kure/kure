@@ -165,3 +165,20 @@ func TestSplitByHookWeight_CommaAnnotation_TreatedAsUnknown(t *testing.T) {
 		t.Errorf("[2]: %q (want comma annotation as unknown, last)", groups[2].Phase)
 	}
 }
+
+func TestSplitByHookWeight_AllExcluded(t *testing.T) {
+	objs := []client.Object{
+		hookObj("a", "pre-delete", "0"),
+		hookObj("b", "test", "0"),
+		hookObj("c", "post-delete", "0"),
+	}
+	groups := helm.SplitByHookWeight(objs)
+	// Non-empty input that filters to nothing should return a non-nil empty slice
+	// (distinct from the nil returned for empty/nil input — see hooks.go).
+	if groups == nil {
+		t.Fatal("want non-nil empty slice for all-excluded input, got nil")
+	}
+	if len(groups) != 0 {
+		t.Fatalf("want 0 groups when all objects have excluded phases, got %d", len(groups))
+	}
+}

@@ -66,6 +66,9 @@ func renderHTTP(chartURL, version string, values map[string]any) ([]byte, error)
 		return nil, errors.Errorf("invalid HTTP chart URL %q: expected https://repo-base/chart-name", chartURL)
 	}
 	repoURL, chartName := chartURL[:last], chartURL[last+1:]
+	if chartName == "" {
+		return nil, errors.Errorf("invalid HTTP chart URL %q: missing chart name after last /", chartURL)
+	}
 
 	getters := getter.Getters()
 	archiveURL, err := repov1.FindChartInRepoURL(repoURL, chartName, getters,
