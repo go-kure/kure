@@ -760,3 +760,53 @@ func TestDeepCopyBundle_PreservesChildren(t *testing.T) {
 		t.Fatalf("appending to copy must not affect original; got %d", len(original.Children))
 	}
 }
+
+func TestDeepCopyBundle_PreservesNewFields(t *testing.T) {
+	force := true
+	suspend := false
+	b := &Bundle{
+		Name:    "src",
+		Force:   &force,
+		Suspend: &suspend,
+		HealthChecks: []HealthCheck{
+			{APIVersion: "apps/v1", Kind: "Deployment", Name: "app", Namespace: "default"},
+		},
+		Patches: []Patch{
+			{Patch: "patch-content", Target: &PatchSelector{Kind: "Deployment"}},
+		},
+		PostBuild: &PostBuild{
+			Substitute:     map[string]string{"VAR": "val"},
+			SubstituteFrom: []SubstituteRef{{Kind: "ConfigMap", Name: "cfg"}},
+		},
+	}
+	got := deepCopyBundle(b)
+	if got.Force == nil {
+		t.Fatal("Force not copied (nil)")
+	}
+	if *got.Force != force {
+		t.Errorf("Force value: got %v, want %v", *got.Force, force)
+	}
+	if got.Suspend == nil {
+		t.Fatal("Suspend not copied (nil)")
+	}
+	if *got.Suspend != suspend {
+		t.Errorf("Suspend value: got %v, want %v", *got.Suspend, suspend)
+	}
+	if len(got.HealthChecks) != 1 || got.HealthChecks[0].Kind != "Deployment" {
+		t.Error("HealthChecks not copied")
+	}
+	if len(got.Patches) != 1 || got.Patches[0].Patch != "patch-content" {
+		t.Error("Patches not copied")
+	}
+	if got.PostBuild == nil {
+		t.Fatal("PostBuild not copied (nil)")
+	}
+	if got.PostBuild.Substitute["VAR"] != "val" {
+		t.Error("PostBuild.Substitute not copied")
+	}
+	// Pointer isolation: mutate through the copy's pointer; original must be unaffected.
+	*got.Force = false
+	if *b.Force != true {
+		t.Error("Force bool copy is shared, not isolated")
+	}
+}

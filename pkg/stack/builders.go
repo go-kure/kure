@@ -120,6 +120,11 @@ func deepCopyNode(n *Node) *Node {
 //
 // Invariant: callers must not mutate existing Application or Bundle objects
 // after branching; they may only append new entries to the copied slices.
+//
+// Patches and PostBuild use the same shallow strategy: Target *PatchSelector
+// pointers and PostBuild.Substitute map / SubstituteFrom slice backing are
+// shared. If fluent setters for Patches or PostBuild are added later,
+// deepCopyBundle must be revisited for true deep copy of those nested values.
 func deepCopyBundle(b *Bundle) *Bundle {
 	if b == nil {
 		return nil
@@ -152,6 +157,26 @@ func deepCopyBundle(b *Bundle) *Bundle {
 	if b.NamedDependsOn != nil {
 		newBundle.NamedDependsOn = make([]string, len(b.NamedDependsOn))
 		copy(newBundle.NamedDependsOn, b.NamedDependsOn)
+	}
+	if b.Force != nil {
+		v := *b.Force
+		newBundle.Force = &v
+	}
+	if b.Suspend != nil {
+		v := *b.Suspend
+		newBundle.Suspend = &v
+	}
+	if b.HealthChecks != nil {
+		newBundle.HealthChecks = make([]HealthCheck, len(b.HealthChecks))
+		copy(newBundle.HealthChecks, b.HealthChecks)
+	}
+	if b.Patches != nil {
+		newBundle.Patches = make([]Patch, len(b.Patches))
+		copy(newBundle.Patches, b.Patches)
+	}
+	if b.PostBuild != nil {
+		pb := *b.PostBuild
+		newBundle.PostBuild = &pb
 	}
 	// Same shallow-copy strategy for Children (umbrella) bundle references.
 	if b.Children != nil {

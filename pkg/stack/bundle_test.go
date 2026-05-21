@@ -748,3 +748,28 @@ func TestBundleSetParent(t *testing.T) {
 		t.Errorf("expected empty ParentPath, got %q", child.ParentPath)
 	}
 }
+
+func TestNewBundle_Constructor(t *testing.T) {
+	apps := []*Application{{Name: "app"}}
+	labels := map[string]string{"env": "prod"}
+	b, err := NewBundle("my-bundle", apps, labels)
+	if err != nil {
+		t.Fatalf("NewBundle: %v", err)
+	}
+	if b.Name != "my-bundle" {
+		t.Errorf("Name: got %q", b.Name)
+	}
+	if len(b.Applications) != 1 || b.Applications[0].Name != "app" {
+		t.Error("Applications not set")
+	}
+	if b.Labels["env"] != "prod" {
+		t.Error("Labels not set")
+	}
+}
+
+func TestNewBundle_ValidationError(t *testing.T) {
+	_, err := NewBundle("", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for empty name")
+	}
+}

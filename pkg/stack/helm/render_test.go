@@ -168,6 +168,13 @@ func TestRenderChart_UnsupportedScheme_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestRenderChart_HTTP_EmptyChartName(t *testing.T) {
+	_, err := RenderChart("https://charts.example.com/", "1.0.0", nil)
+	if err == nil {
+		t.Fatal("expected error for URL with trailing slash and empty chart name")
+	}
+}
+
 func buildMinimalChartTar(t *testing.T, name, version string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
