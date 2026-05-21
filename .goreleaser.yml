@@ -1,0 +1,21 @@
+version: 2
+project_name: kure
+
+# kure is a Go library — no binary builds.
+builds:
+  - skip: true
+
+# Nothing to checksum without build artifacts.
+checksum:
+  disable: true
+
+release:
+  github:
+    owner: go-kure
+    name: kure
+  draft: false
+  prerelease: auto
+
+# Disable built-in changelog — we use git-cliff for CHANGELOG.md.
+changelog:
+  disable: true
