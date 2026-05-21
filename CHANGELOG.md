@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.6] - 2026-05-21
+
+### Maintenance
+
+- Add goreleaser config for library-only release (kure is a Go library, no binary builds)
+
 ## [0.2.0-alpha.5] - 2026-05-21
 
 ### Added

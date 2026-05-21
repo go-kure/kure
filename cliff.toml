@@ -38,7 +38,13 @@ commit_parsers = [
     { message = "^build", group = "Build" },
     { message = "^ci", group = "CI" },
     { message = "^chore\\(deps\\)", group = "Dependencies" },
-    { message = "^chore", skip = true },
+    # Skip release-bot and version-bump commits — internal release machinery.
+    { message = "^release", skip = true },
+    { message = "^chore: bump version", skip = true },
+    { message = "^chore: start next cycle", skip = true },
+    # Group remaining chore commits so releases with only chore changes still
+    # produce a CHANGELOG section (required by release validation).
+    { message = "^chore", group = "Maintenance" },
     # Catch unconventional commits and skip them (case-insensitive)
     { message = "(?i)^wip", skip = true },
     { message = "(?i)^demo", skip = true },
