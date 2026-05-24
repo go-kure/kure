@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.9] - 2026-05-24
+
+### Fixed
+
+- Raise default reconciliation interval to 60m
+
+### Testing
+
+- Update default interval assertions to 60m
+
 ## [0.2.0-alpha.8] - 2026-05-21
 
 ### Fixed
