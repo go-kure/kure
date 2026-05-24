@@ -33,7 +33,7 @@ type ResourceGenerator struct {
 func NewResourceGenerator() *ResourceGenerator {
 	return &ResourceGenerator{
 		Mode:             layout.KustomizationExplicit,
-		DefaultInterval:  5 * time.Minute,
+		DefaultInterval:  60 * time.Minute,
 		DefaultNamespace: "flux-system",
 	}
 }

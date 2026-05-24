@@ -31,7 +31,7 @@ type BootstrapGenerator struct {
 func NewBootstrapGenerator() *BootstrapGenerator {
 	return &BootstrapGenerator{
 		DefaultNamespace: "flux-system",
-		DefaultInterval:  10 * time.Minute,
+		DefaultInterval:  60 * time.Minute,
 	}
 }
 
