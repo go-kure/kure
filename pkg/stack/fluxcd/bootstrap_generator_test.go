@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"testing"
+	"time"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,8 +37,8 @@ func TestNewBootstrapGenerator(t *testing.T) {
 		t.Errorf("DefaultNamespace = %q, want %q", bg.DefaultNamespace, "flux-system")
 	}
 
-	if bg.DefaultInterval != 10*60*1e9 { // 10 minutes in nanoseconds
-		t.Errorf("DefaultInterval = %v, want 10 minutes", bg.DefaultInterval)
+	if bg.DefaultInterval != 60*time.Minute {
+		t.Errorf("DefaultInterval = %v, want 60 minutes", bg.DefaultInterval)
 	}
 }
 

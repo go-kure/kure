@@ -18,8 +18,8 @@ func TestResourceGenerator_NewDefaults(t *testing.T) {
 	if gen.Mode != layout.KustomizationExplicit {
 		t.Errorf("Mode = %q, want %q", gen.Mode, layout.KustomizationExplicit)
 	}
-	if gen.DefaultInterval != 5*time.Minute {
-		t.Errorf("DefaultInterval = %v, want %v", gen.DefaultInterval, 5*time.Minute)
+	if gen.DefaultInterval != 60*time.Minute {
+		t.Errorf("DefaultInterval = %v, want %v", gen.DefaultInterval, 60*time.Minute)
 	}
 	if gen.DefaultNamespace != "flux-system" {
 		t.Errorf("DefaultNamespace = %q, want %q", gen.DefaultNamespace, "flux-system")
