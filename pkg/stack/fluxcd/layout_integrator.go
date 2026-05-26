@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -129,6 +132,83 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 		}
 	}
 
+	// In FluxIntegrated mode, emit Kustomization CRs for all eligible direct
+	// children of layoutNode and recurse into their subtrees.
+	//
+	// "Eligible" mirrors the writer condition: !UmbrellaChild &&
+	// ApplicationFileMode != AppFileSingle. Stack-node children are skipped
+	// because processNodeForIntegratedFlux handles them recursively below.
+	//
+	// This covers two cases with the same code:
+	//   (a) Flat/nodeOnly: app layouts are direct children of the node layout;
+	//       writers reference each as flux-system-kustomization-{name}.yaml
+	//       from the node kustomization.yaml, so a CR is required at that level.
+	//   (b) Augmenter sub-layouts: hook-group children of app layouts;
+	//       generateChildFluxCRs recurses and places those CRs in the app
+	//       layout's Resources.
+	if node.Bundle != nil {
+		var eligibleChildren []*layout.ManifestLayout
+		for _, child := range layoutNode.Children {
+			if child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle {
+				continue
+			}
+			if li.isStackNodeChild(child.Name, node) {
+				continue
+			}
+			eligibleChildren = append(eligibleChildren, child)
+		}
+
+		if len(eligibleChildren) > 0 {
+			// Determine which eligible children need a NEW CR (not already placed
+			// by GenerateFromBundle, e.g. umbrella bundle layouts already have one).
+			var newCRChildren []*layout.ManifestLayout
+			for _, child := range eligibleChildren {
+				if !li.hasKustomizationCR(layoutNode.Resources, child.Name) {
+					newCRChildren = append(newCRChildren, child)
+				}
+			}
+
+			// Resolve sourceRef once; used for both new CRs and recursion.
+			var sr kustv1.CrossNamespaceSourceReference
+			if node.Bundle.SourceRef != nil &&
+				node.Bundle.SourceRef.Kind != "" &&
+				node.Bundle.SourceRef.Name != "" {
+				sr = kustv1.CrossNamespaceSourceReference{
+					Kind:      node.Bundle.SourceRef.Kind,
+					Name:      node.Bundle.SourceRef.Name,
+					Namespace: node.Bundle.SourceRef.Namespace,
+				}
+			}
+
+			// A new CR without spec.sourceRef is invalid — fail fast.
+			// Children that already have CRs (e.g. umbrella bundle layouts) are
+			// exempt from this check; they were placed by GenerateFromBundle which
+			// handles absent SourceRef separately.
+			if len(newCRChildren) > 0 && sr.Kind == "" {
+				return errors.ResourceValidationError(
+					"Bundle", node.Bundle.Name, "sourceRef",
+					"FluxIntegrated mode requires a SourceRef with Kind and Name on bundles "+
+						"whose layout has eligible children without existing Kustomization CRs; "+
+						"omitting it produces invalid Flux Kustomization CRs",
+					nil,
+				)
+			}
+
+			// Emit CRs and recurse only when a sourceRef is available.
+			if sr.Kind != "" {
+				for _, child := range eligibleChildren {
+					if !li.hasKustomizationCR(layoutNode.Resources, child.Name) {
+						layoutNode.Resources = append(layoutNode.Resources,
+							li.Generator.createKustomizationForLayout(child, sr))
+					}
+					if err := li.generateChildFluxCRs(child, sr); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+
 	// Process child nodes — always search from root for path-based matching
 	for _, child := range node.Children {
 		if err := li.processNodeForIntegratedFlux(root, child, clusterName); err != nil {
@@ -136,6 +216,56 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 		}
 	}
 
+	return nil
+}
+
+// isStackNodeChild returns true when name matches a direct child stack.Node of
+// node. Used to skip ManifestLayout.Children that correspond to child nodes
+// already processed by the recursive processNodeForIntegratedFlux call.
+func (li *LayoutIntegrator) isStackNodeChild(name string, node *stack.Node) bool {
+	for _, child := range node.Children {
+		if child.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// hasKustomizationCR returns true when resources already contains a
+// *kustv1.Kustomization with the given name.
+func (li *LayoutIntegrator) hasKustomizationCR(resources []client.Object, name string) bool {
+	for _, r := range resources {
+		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// generateChildFluxCRs places a Kustomization CR in parent.Resources for each
+// eligible child of parent, then recurses. A child is eligible when:
+//   - !child.UmbrellaChild
+//   - child.ApplicationFileMode != layout.AppFileSingle
+//
+// These conditions match exactly what the writers use to emit
+// flux-system-kustomization-{child.Name}.yaml from the parent kustomization.yaml,
+// ensuring every reference the writers produce has a backing CR.
+func (li *LayoutIntegrator) generateChildFluxCRs(
+	parent *layout.ManifestLayout,
+	sourceRef kustv1.CrossNamespaceSourceReference,
+) error {
+	for _, child := range parent.Children {
+		if child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle {
+			continue
+		}
+		if !li.hasKustomizationCR(parent.Resources, child.Name) {
+			parent.Resources = append(parent.Resources,
+				li.Generator.createKustomizationForLayout(child, sourceRef))
+		}
+		if err := li.generateChildFluxCRs(child, sourceRef); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
