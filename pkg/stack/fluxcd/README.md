@@ -168,6 +168,19 @@ subdirectory. The child subdirectory still exists and still contains its own
 `kustomization.yaml` plus workload YAML files — but **no** Flux CR files, so
 Flux does not double-apply the child's resources.
 
+## Non-Bundle Child Layout CRs
+
+In `FluxIntegrated` mode the layout integrator generates `Kustomization` CRs for **all eligible children** of each node layout, not only the node's own bundle. A child is eligible when `!UmbrellaChild && ApplicationFileMode != AppFileSingle`.
+
+This covers two cases with the same code path:
+
+- **Flat/nodeOnly layouts** — app layouts are direct children of the node layout. Each eligible app layout gets a `Kustomization` CR placed in the node layout's `Resources`, with `spec.path` set to `child.FullRepoPath()`.
+- **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. Each eligible child gets a CR placed in the app layout's `Resources`. `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
+
+The integrator applies this rule recursively: it covers children at any depth, always placing the CR in the immediate parent's `Resources`.
+
+If the ancestor bundle has a nil, empty, or incomplete `SourceRef` (missing `Kind` or `Name`) and eligible children without existing CRs are present, `IntegrateWithLayout` returns a hard error. A `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently.
+
 ## Validation
 
 All cluster-level entry points (`GenerateFromCluster`, `CreateLayoutWithResources`)

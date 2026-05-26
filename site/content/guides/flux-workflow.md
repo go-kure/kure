@@ -200,6 +200,65 @@ In `FluxSeparate` placement, all Kustomization CRs (the umbrella's own plus
 every descendant) are written to the shared `flux-system/` directory as a
 flat list.
 
+## Augmenter-Added Child Layouts
+
+A `LayoutAugmenter` can attach sub-`ManifestLayout` children to a per-app layout after resource generation. In `FluxIntegrated` mode kure automatically emits a Flux `Kustomization` CR for each eligible child.
+
+### Eligibility
+
+A child layout receives a CR when:
+- `!child.UmbrellaChild`
+- `child.ApplicationFileMode != AppFileSingle`
+- The ancestor bundle's `SourceRef` has both `Kind` and `Name` set (nil, empty struct, or missing either field is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
+
+### Ordered reconciliation with DependsOn
+
+Set `ManifestLayout.DependsOn` to a list of sibling layout names to express reconciliation order between hook groups. The integrator translates these into `spec.dependsOn` entries on the emitted CR:
+
+```go
+preInstall := &layout.ManifestLayout{
+    Name: "nginx-00-pre-install",
+    // ...
+}
+hooks := &layout.ManifestLayout{
+    Name:      "nginx-01-hooks",
+    DependsOn: []string{"nginx-00-pre-install"},
+    // ...
+}
+```
+
+This produces a `nginx-01-hooks` Kustomization CR with:
+
+```yaml
+spec:
+  dependsOn:
+    - name: nginx-00-pre-install
+```
+
+Flux reconciles `nginx-01-hooks` only after `nginx-00-pre-install` is healthy.
+
+### Naming uniqueness
+
+The child layout `Name` becomes the Flux `Kustomization` CR's `metadata.name`. Since all `Kustomization` CRs live in the `flux-system` namespace, names must be **globally unique across the cluster**. The recommended convention is `{appName}-{hookGroupDir}` (e.g. `nginx-00-pre-install`, `nginx-01-hooks`). Augmenters are responsible for enforcing this uniqueness.
+
+### Disk layout
+
+```
+clusters/production/prod/
+  flux-system-kustomization-nginx.yaml      # app CR (placed at node level)
+  kustomization.yaml                        # references nginx CR
+  nginx/
+    flux-system-kustomization-nginx-00-pre-install.yaml
+    flux-system-kustomization-nginx-01-hooks.yaml
+    kustomization.yaml                      # references hook CRs
+    nginx-00-pre-install/
+      workload-*.yaml
+      kustomization.yaml
+    nginx-01-hooks/
+      workload-*.yaml
+      kustomization.yaml
+```
+
 ## Bootstrap
 
 Generate Flux system bootstrap manifests. Two modes are available:
