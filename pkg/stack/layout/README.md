@@ -124,7 +124,30 @@ type LayoutAugmenter interface {
 }
 ```
 
-When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles` and `ConfigMapGenerators`. Only invoked on per-app layouts produced by the non-flat (`GroupByName`) walker paths; `GroupFlat` and umbrella layouts merge resources into shared parent layouts and are not currently augmented.
+When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles`, `ConfigMapGenerators`, and sub-`ManifestLayout` children. Only invoked on per-app layouts produced by the non-flat (`GroupByName`) walker paths; `GroupFlat` and umbrella layouts merge resources into shared parent layouts and are not currently augmented.
+
+#### Sub-Layout Children and Flux Integration
+
+Augmenters may attach sub-layouts as `Children` of a per-app `ManifestLayout`. In `FluxIntegrated` mode each such child that is eligible (see below) receives a Flux `Kustomization` CR automatically placed in the parent layout's `Resources`.
+
+**Eligibility for CR generation.** A child layout receives a Flux `Kustomization` CR when ALL of the following hold:
+
+- The ancestor node bundle's layout operates in `FluxIntegrated` mode.
+- `!child.UmbrellaChild`
+- `child.ApplicationFileMode != AppFileSingle`
+- The ancestor bundle has a non-nil, non-empty `SourceRef` with both `Kind` and `Name` set. A nil, empty struct, or incomplete `SourceRef` (missing either field) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
+
+This rule mirrors exactly what the writers use to emit `flux-system-kustomization-{child.Name}.yaml` from the parent's `kustomization.yaml`, so every file reference the writers produce has a backing CR. The integrator applies this rule recursively: it covers both direct children of the node layout and augmenter-added sub-layouts at any depth.
+
+#### Naming Constraint
+
+Child layout `Name` is used as the Flux `Kustomization` CR name in `FluxIntegrated` mode (matching the filename emitted by the writers: `flux-system-kustomization-{child.Name}.yaml`). Flux `Kustomization` CRs live in the `flux-system` namespace, so names must be **globally unique across all apps in the cluster** — two CRs with the same `metadata.name` collide.
+
+Augmenters are responsible for ensuring uniqueness. The recommended convention is to prefix each child name with the app name: `{appName}-{hookGroupDir}` (e.g. `nginx-00-pre-install`).
+
+#### DependsOn
+
+Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegrated` mode the layout integrator translates these into `spec.dependsOn` entries on the child's `Kustomization` CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install).
 
 ### ClusterName-Aware Layouts
 
