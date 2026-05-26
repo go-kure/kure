@@ -1,6 +1,13 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-alpha.10] - 2026-05-26
+
+### Added
+
+- App-scoped augmentation in nodeOnly and cluster-name paths
+- App-scoped augmentation in WalkClusterByPackage nodeOnly path
+
 ## [0.2.0-alpha.9] - 2026-05-24
 
 ### Fixed
