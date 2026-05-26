@@ -75,6 +75,11 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 	}
 	sort.Strings(sortedFileNames)
 
+	listedInResources := make(map[string]struct{}, len(sortedFileNames))
+	for _, f := range sortedFileNames {
+		listedInResources[f] = struct{}{}
+	}
+
 	// Write resource files
 	for _, fileName := range sortedFileNames {
 		objs := fileGroups[fileName]
@@ -139,7 +144,9 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 				// Always use FilePerResource here — each child must have a
 				// unique filename; FilePerKind would drop child.Name.
 				fluxKustName := nameFn("flux-system", "kustomization", child.Name, FilePerResource)
-				kustomBuf.WriteString(fmt.Sprintf("  - %s\n", fluxKustName))
+				if _, dup := listedInResources[fluxKustName]; !dup {
+					kustomBuf.WriteString(fmt.Sprintf("  - %s\n", fluxKustName))
+				}
 			} else {
 				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {
 					continue
