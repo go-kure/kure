@@ -1,10 +1,17 @@
 package fluxcd_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -787,4 +794,252 @@ func TestIntegrateWithLayout_RepeatedCallSucceeds(t *testing.T) {
 	if err := integrator.IntegrateWithLayout(walked, cluster, layout.LayoutRules{}); err != nil {
 		t.Fatalf("second IntegrateWithLayout: %v (alias state was destroyed by the first pass)", err)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Augmenter child layout CR generation (#571)
+// ---------------------------------------------------------------------------
+
+// TestAugmenterChildrenGetFluxCRs verifies that:
+//
+//	(a) direct app-layout children of the node layout receive CRs in
+//	    nodeLayout.Resources (flat/nodeOnly path), and
+//	(b) augmenter sub-layouts (children of app layouts) receive CRs in
+//	    app.Resources with correct DependsOn wiring.
+func TestAugmenterChildrenGetFluxCRs(t *testing.T) {
+	root, nodeLayout, app, preInstall, hooks, cluster := buildAugmenterTestTree()
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	if err := li.IntegrateWithLayout(root, cluster, layout.LayoutRules{}); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	// (a) nodeLayout.Resources must contain a CR for the direct child "myapp".
+	if !augHasCR(nodeLayout.Resources, "myapp") {
+		t.Error("expected CR for 'myapp' in nodeLayout.Resources (flat path)")
+	}
+
+	// (b) app.Resources must contain CRs for both augmenter sub-layouts.
+	if len(app.Resources) != 2 {
+		t.Fatalf("expected 2 CRs in app.Resources, got %d", len(app.Resources))
+	}
+	k0 := augMustKustomization(t, app.Resources[0])
+	if k0.Name != preInstall.Name {
+		t.Errorf("unexpected first CR name: got %q, want %q", k0.Name, preInstall.Name)
+	}
+	if len(k0.Spec.DependsOn) != 0 {
+		t.Errorf("expected no dependsOn on pre-install CR, got %v", k0.Spec.DependsOn)
+	}
+	k1 := augMustKustomization(t, app.Resources[1])
+	if k1.Name != hooks.Name {
+		t.Errorf("unexpected second CR name: got %q, want %q", k1.Name, hooks.Name)
+	}
+	if len(k1.Spec.DependsOn) != 1 || k1.Spec.DependsOn[0].Name != preInstall.Name {
+		t.Errorf("unexpected dependsOn on hooks CR: %v", k1.Spec.DependsOn)
+	}
+	// spec.path must equal FullRepoPath().
+	if k0.Spec.Path != preInstall.FullRepoPath() {
+		t.Errorf("spec.path: got %q, want %q", k0.Spec.Path, preInstall.FullRepoPath())
+	}
+}
+
+// TestAugmenterChildrenNoDuplicateInKustomizationYAML verifies that WriteToDisk
+// does not emit the same flux-system-kustomization-*.yaml filename twice in
+// either the node-level or app-level kustomization.yaml.
+func TestAugmenterChildrenNoDuplicateInKustomizationYAML(t *testing.T) {
+	root, nodeLayout, app, preInstall, _, cluster := buildAugmenterTestTree()
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	if err := li.IntegrateWithLayout(root, cluster, layout.LayoutRules{}); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	dir := t.TempDir()
+	if err := root.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk: %v", err)
+	}
+
+	// Node-level kustomization.yaml must reference "myapp" exactly once.
+	augAssertOnce(t, dir, nodeLayout.FullRepoPath(), "flux-system-kustomization-myapp.yaml")
+
+	// App-level kustomization.yaml must reference the pre-install CR exactly once.
+	augAssertOnce(t, dir, app.FullRepoPath(),
+		"flux-system-kustomization-"+preInstall.Name+".yaml")
+}
+
+// TestAugmenterChildrenWriteToTar verifies no duplicate entries in the tar
+// output. Crane consumes WriteToTar for OCI artifacts.
+func TestAugmenterChildrenWriteToTar(t *testing.T) {
+	root, nodeLayout, app, preInstall, _, cluster := buildAugmenterTestTree()
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	if err := li.IntegrateWithLayout(root, cluster, layout.LayoutRules{}); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := root.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar: %v", err)
+	}
+
+	files := map[string]string{}
+	tr := tar.NewReader(&buf)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("tar.Next: %v", err)
+		}
+		if strings.HasSuffix(hdr.Name, "kustomization.yaml") {
+			data, _ := io.ReadAll(tr)
+			files[hdr.Name] = string(data)
+		}
+	}
+
+	nodeKust := augFindKust(t, files, nodeLayout.FullRepoPath())
+	augAssertCount(t, nodeKust, "flux-system-kustomization-myapp.yaml", 1)
+
+	appKust := augFindKust(t, files, app.FullRepoPath())
+	augAssertCount(t, appKust, "flux-system-kustomization-"+preInstall.Name+".yaml", 1)
+}
+
+// TestAugmenterChildrenErrorWhenNoSourceRef verifies that IntegrateWithLayout
+// returns a blocking error when augmenter children need CRs but the bundle
+// has a nil, empty, or incomplete SourceRef.
+func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
+	cases := []struct {
+		name string
+		sr   *stack.SourceRef
+	}{
+		{"nil", nil},
+		{"empty struct", &stack.SourceRef{}},
+		{"missing Kind", &stack.SourceRef{Name: "flux-system"}},
+		{"missing Name", &stack.SourceRef{Kind: "GitRepository"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			appChild := &layout.ManifestLayout{
+				Name:          "myapp",
+				Namespace:     "clusters/prod",
+				FluxPlacement: layout.FluxIntegrated,
+				Children: []*layout.ManifestLayout{{
+					Name:          "myapp-00-pre-install",
+					Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
+					FluxPlacement: layout.FluxIntegrated,
+				}},
+			}
+			bundle := &stack.Bundle{Name: "apps", SourceRef: tc.sr}
+			node := &stack.Node{Name: "prod", Bundle: bundle}
+			cluster := &stack.Cluster{Node: node}
+			nodeLayout := &layout.ManifestLayout{
+				Name:          "prod",
+				FluxPlacement: layout.FluxIntegrated,
+				Children:      []*layout.ManifestLayout{appChild},
+			}
+			root := &layout.ManifestLayout{Children: []*layout.ManifestLayout{nodeLayout}}
+
+			li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+			if err := li.IntegrateWithLayout(root, cluster, layout.LayoutRules{}); err == nil {
+				t.Fatalf("sourceRef=%v: expected error, got nil", tc.sr)
+			}
+		})
+	}
+}
+
+// --- shared test helpers for augmenter tests ---
+
+// buildAugmenterTestTree constructs a layout+cluster tree simulating crane's
+// augmentLayoutTemplate output: a node layout with one app layout, which has
+// two hook-group sub-layouts (pre-install and hooks with DependsOn).
+//
+// Root is intentionally unnamed so findLayoutNode accumulates the path for
+// nodeLayout as "prod", matching node.GetPath() == "prod".
+func buildAugmenterTestTree() (root, nodeLayout, app, preInstall, hooks *layout.ManifestLayout, cluster *stack.Cluster) {
+	preInstall = &layout.ManifestLayout{
+		Name:          "myapp-00-pre-install",
+		Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
+		FluxPlacement: layout.FluxIntegrated,
+	}
+	hooks = &layout.ManifestLayout{
+		Name:          "myapp-01-hooks",
+		Namespace:     "clusters/prod/myapp/myapp-01-hooks",
+		FluxPlacement: layout.FluxIntegrated,
+		DependsOn:     []string{"myapp-00-pre-install"},
+	}
+	app = &layout.ManifestLayout{
+		Name:          "myapp",
+		Namespace:     "clusters/prod",
+		FluxPlacement: layout.FluxIntegrated,
+		Children:      []*layout.ManifestLayout{preInstall, hooks},
+	}
+	sr := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
+	bundle := &stack.Bundle{Name: "apps", SourceRef: sr}
+	node := &stack.Node{Name: "prod", Bundle: bundle}
+	cluster = &stack.Cluster{Node: node}
+	nodeLayout = &layout.ManifestLayout{
+		Name:          "prod",
+		FluxPlacement: layout.FluxIntegrated,
+		Children:      []*layout.ManifestLayout{app},
+	}
+	root = &layout.ManifestLayout{Children: []*layout.ManifestLayout{nodeLayout}}
+	return
+}
+
+func augHasCR(resources []client.Object, name string) bool {
+	for _, r := range resources {
+		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func augMustKustomization(t *testing.T, obj client.Object) *kustv1.Kustomization {
+	t.Helper()
+	k, ok := obj.(*kustv1.Kustomization)
+	if !ok {
+		t.Fatalf("expected *kustv1.Kustomization, got %T", obj)
+	}
+	return k
+}
+
+func augAssertOnce(t *testing.T, baseDir, layoutPath, target string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(baseDir, layoutPath, "kustomization.yaml"))
+	if err != nil {
+		t.Fatalf("read kustomization.yaml under %s: %v", layoutPath, err)
+	}
+	if count := strings.Count(string(data), target); count != 1 {
+		t.Errorf("expected exactly 1 reference to %q in %s/kustomization.yaml, got %d:\n%s",
+			target, layoutPath, count, data)
+	}
+}
+
+func augFindKust(t *testing.T, files map[string]string, layoutPath string) string {
+	t.Helper()
+	key := filepath.ToSlash(filepath.Join(layoutPath, "kustomization.yaml"))
+	for k, v := range files {
+		if strings.HasSuffix(k, key) {
+			return v
+		}
+	}
+	t.Fatalf("kustomization.yaml not found for layout path %q; available: %v", layoutPath, augKeysOf(files))
+	return ""
+}
+
+func augAssertCount(t *testing.T, content, target string, want int) {
+	t.Helper()
+	if got := strings.Count(content, target); got != want {
+		t.Errorf("expected %d reference(s) to %q, got %d:\n%s", want, target, got, content)
+	}
+}
+
+func augKeysOf(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
