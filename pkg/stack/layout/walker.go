@@ -91,20 +91,8 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 	// resources so WriteToDisk writes a single directory (no path collision).
 	if c.Node.Name == "" {
 		if c.Node.Bundle != nil {
-			for _, app := range c.Node.Bundle.Applications {
-				if app == nil {
-					continue
-				}
-				objsPtr, err := app.Generate()
-				if err != nil {
-					return nil, err
-				}
-				for _, o := range objsPtr {
-					if o == nil {
-						continue
-					}
-					clusterLayout.Resources = append(clusterLayout.Resources, *o)
-				}
+			if err := processFlatBundleApps(c.Node.Bundle.Applications, clusterLayout, []string{rules.ClusterName}, rules.FluxPlacement, rules.FileNaming); err != nil {
+				return nil, err
 			}
 			if len(c.Node.Bundle.Children) > 0 {
 				c.Node.Bundle.InitializeUmbrella()
@@ -145,20 +133,8 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 
 	if c.Node.Bundle != nil {
 		// Add only the root node's bundle resources (not child resources)
-		for _, app := range c.Node.Bundle.Applications {
-			if app == nil {
-				continue
-			}
-			objsPtr, err := app.Generate()
-			if err != nil {
-				return nil, err
-			}
-			for _, o := range objsPtr {
-				if o == nil {
-					continue
-				}
-				rootLayout.Resources = append(rootLayout.Resources, *o)
-			}
+		if err := processFlatBundleApps(c.Node.Bundle.Applications, rootLayout, []string{rules.ClusterName, c.Node.Name}, rules.FluxPlacement, rules.FileNaming); err != nil {
+			return nil, err
 		}
 
 		// Umbrella children of the root node's bundle become sub-layouts of
@@ -275,20 +251,8 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 
 	if nodeOnly {
 		if b := n.Bundle; b != nil {
-			for _, app := range b.Applications {
-				if app == nil {
-					continue
-				}
-				objsPtr, err := app.Generate()
-				if err != nil {
-					return nil, err
-				}
-				for _, o := range objsPtr {
-					if o == nil {
-						continue
-					}
-					ml.Resources = append(ml.Resources, *o)
-				}
+			if err := processFlatBundleApps(b.Applications, ml, currentPath, fluxPlacement, fileNaming); err != nil {
+				return nil, err
 			}
 			// Umbrella: umbrella child sub-layouts live directly under the
 			// node layout in nodeOnly mode (no intermediate bundle layer).
@@ -419,20 +383,8 @@ func walkUmbrellaChildLayouts(children []*stack.Bundle, currentPath []string, fi
 			Mode:          KustomizationExplicit,
 			UmbrellaChild: true,
 		}
-		for _, app := range cb.Applications {
-			if app == nil {
-				continue
-			}
-			objsPtr, err := app.Generate()
-			if err != nil {
-				return nil, err
-			}
-			for _, o := range objsPtr {
-				if o == nil {
-					continue
-				}
-				ml.Resources = append(ml.Resources, *o)
-			}
+		if err := processFlatBundleApps(cb.Applications, ml, append(append([]string(nil), currentPath...), cb.Name), fluxPlacement, fileNaming); err != nil {
+			return nil, err
 		}
 		if len(cb.Children) > 0 {
 			cb.InitializeUmbrella()
@@ -461,6 +413,61 @@ func augmentAppLayout(app *stack.Application, ml *ManifestLayout) error {
 	}
 	if err := augmenter.AugmentLayout(ml); err != nil {
 		return errors.Wrapf(err, "augment layout for application %q", app.Name)
+	}
+	return nil
+}
+
+// isAugmenter reports whether app.Config implements LayoutAugmenter.
+func isAugmenter(app *stack.Application) bool {
+	if app == nil || app.Config == nil {
+		return false
+	}
+	_, ok := app.Config.(LayoutAugmenter)
+	return ok
+}
+
+// processFlatBundleApps places each application from a flat bundle into either
+// a per-app sub-layout (when its Config implements LayoutAugmenter) or into
+// the parent layout's flat Resources (otherwise). The per-app sub-layout path
+// lets augmenters (e.g. values.yaml + configMapGenerator emitters) mutate
+// their own ManifestLayout without colliding with sibling apps that share the
+// same bundle.
+//
+// parentPath is the slice of path segments leading to and including the
+// parent layout's on-disk directory; per-app sub-layouts get
+// Namespace = filepath.Join(parentPath..., app.Name).
+func processFlatBundleApps(apps []*stack.Application, parent *ManifestLayout, parentPath []string, fluxPlacement FluxPlacement, fileNaming FileNamingMode) error {
+	for _, app := range apps {
+		if app == nil {
+			continue
+		}
+		objsPtr, err := app.Generate()
+		if err != nil {
+			return err
+		}
+		var objs []client.Object
+		for _, o := range objsPtr {
+			if o == nil {
+				continue
+			}
+			objs = append(objs, *o)
+		}
+		if isAugmenter(app) {
+			appLayout := &ManifestLayout{
+				Name:          app.Name,
+				Namespace:     filepath.Join(append(append([]string(nil), parentPath...), app.Name)...),
+				Resources:     objs,
+				Mode:          KustomizationExplicit,
+				FluxPlacement: fluxPlacement,
+				FileNaming:    fileNaming,
+			}
+			if err := augmentAppLayout(app, appLayout); err != nil {
+				return err
+			}
+			parent.Children = append(parent.Children, appLayout)
+			continue
+		}
+		parent.Resources = append(parent.Resources, objs...)
 	}
 	return nil
 }

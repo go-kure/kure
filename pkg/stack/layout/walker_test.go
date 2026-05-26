@@ -2,6 +2,9 @@ package layout_test
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -24,10 +27,14 @@ func (f *fakeConfig) Generate(*stack.Application) ([]*client.Object, error) {
 
 // fakeAugmentingConfig implements both stack.ApplicationConfig and
 // layout.LayoutAugmenter. It records the layout it was called with.
+// extraFileName and cmgName default to "values.yaml" and "augmented-values";
+// override per-instance to verify multi-app no-collision in shared bundles.
 type fakeAugmentingConfig struct {
-	objs       []*client.Object
-	augmentErr error
-	called     *layout.ManifestLayout
+	objs          []*client.Object
+	augmentErr    error
+	called        *layout.ManifestLayout
+	extraFileName string
+	cmgName       string
 }
 
 func (f *fakeAugmentingConfig) Generate(*stack.Application) ([]*client.Object, error) {
@@ -39,10 +46,18 @@ func (f *fakeAugmentingConfig) AugmentLayout(ml *layout.ManifestLayout) error {
 	if f.augmentErr != nil {
 		return f.augmentErr
 	}
-	ml.ExtraFiles = append(ml.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
+	name := f.extraFileName
+	if name == "" {
+		name = "values.yaml"
+	}
+	cmg := f.cmgName
+	if cmg == "" {
+		cmg = "augmented-values"
+	}
+	ml.ExtraFiles = append(ml.ExtraFiles, layout.ExtraFile{Name: name, Content: []byte("k: v\n")})
 	ml.ConfigMapGenerators = append(ml.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{
-		Name:  "augmented-values",
-		Files: []string{"values.yaml"},
+		Name:  cmg,
+		Files: []string{name},
 	})
 	return nil
 }
@@ -847,5 +862,274 @@ func TestWalkCluster_LayoutAugmenter_Error(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped wantErr, got: %v", err)
+	}
+}
+
+// makeCM returns a client.Object pointer for a ConfigMap with the given name.
+// Test helper used by the app-scoped augmentation cases below.
+func makeCM(name string) *client.Object {
+	u := &unstructured.Unstructured{}
+	u.SetAPIVersion("v1")
+	u.SetKind("ConfigMap")
+	u.SetName(name)
+	u.SetNamespace("default")
+	var o client.Object = u
+	return &o
+}
+
+// TestWalkCluster_NodeOnly_SingleAugmenter verifies that a single augmenter
+// app in a flat (nodeOnly) bundle gets its own per-app sub-layout with the
+// augmenter's ExtraFile + ConfigMapGenerator attached. Before app-scoped
+// augmentation, the augmenter was never invoked on this path.
+func TestWalkCluster_NodeOnly_SingleAugmenter(t *testing.T) {
+	cfg := &fakeAugmentingConfig{objs: []*client.Object{makeCM("a")}}
+	app := stack.NewApplication("a", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	node := &stack.Node{Name: "apps", Bundle: bundle}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	// root/apps node ML is at ml.Children[0]
+	if len(ml.Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(ml.Children))
+	}
+	nodeML := ml.Children[0]
+	if len(nodeML.Children) != 1 {
+		t.Fatalf("expected one per-app sub-layout under nodeML, got %d", len(nodeML.Children))
+	}
+	appLayout := nodeML.Children[0]
+	if appLayout.Name != "a" {
+		t.Errorf("appLayout.Name = %q, want %q", appLayout.Name, "a")
+	}
+	if cfg.called != appLayout {
+		t.Errorf("AugmentLayout was not called with the per-app layout")
+	}
+	if len(appLayout.ExtraFiles) != 1 || appLayout.ExtraFiles[0].Name != "values.yaml" {
+		t.Errorf("ExtraFiles missing or wrong: %+v", appLayout.ExtraFiles)
+	}
+	if len(appLayout.ConfigMapGenerators) != 1 || appLayout.ConfigMapGenerators[0].Name != "augmented-values" {
+		t.Errorf("CMG missing or wrong: %+v", appLayout.ConfigMapGenerators)
+	}
+}
+
+// TestWalkCluster_NodeOnly_MultiAugmenter verifies that two augmenter apps in
+// the same flat bundle get separate sub-layouts so their ExtraFiles and
+// ConfigMapGenerators do not collide. A shared-ML augmenter call would have
+// caused the second app's values.yaml to overwrite the first.
+func TestWalkCluster_NodeOnly_MultiAugmenter(t *testing.T) {
+	cfgA := &fakeAugmentingConfig{
+		objs:          []*client.Object{makeCM("a")},
+		extraFileName: "a-values.yaml",
+		cmgName:       "a-values",
+	}
+	cfgB := &fakeAugmentingConfig{
+		objs:          []*client.Object{makeCM("b")},
+		extraFileName: "b-values.yaml",
+		cmgName:       "b-values",
+	}
+	appA := stack.NewApplication("a", "ns", cfgA)
+	appB := stack.NewApplication("b", "ns", cfgB)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{appA, appB}}
+	node := &stack.Node{Name: "apps", Bundle: bundle}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	nodeML := ml.Children[0]
+	if len(nodeML.Children) != 2 {
+		t.Fatalf("expected 2 per-app sub-layouts, got %d", len(nodeML.Children))
+	}
+	byName := map[string]*layout.ManifestLayout{}
+	for _, c := range nodeML.Children {
+		byName[c.Name] = c
+	}
+	for _, name := range []string{"a", "b"} {
+		c, ok := byName[name]
+		if !ok {
+			t.Fatalf("missing sub-layout for app %q", name)
+		}
+		if len(c.ExtraFiles) != 1 {
+			t.Errorf("app %q: ExtraFiles len = %d, want 1", name, len(c.ExtraFiles))
+		}
+		wantFile := name + "-values.yaml"
+		if got := c.ExtraFiles[0].Name; got != wantFile {
+			t.Errorf("app %q: ExtraFile name = %q, want %q", name, got, wantFile)
+		}
+		if len(c.ConfigMapGenerators) != 1 {
+			t.Errorf("app %q: CMG len = %d, want 1", name, len(c.ConfigMapGenerators))
+		}
+	}
+}
+
+// TestWalkCluster_NodeOnly_MixedBundle verifies that an augmenter app and a
+// non-augmenter app sharing the same flat bundle co-exist correctly: the
+// augmenter app gets its own sub-layout, the non-augmenter app's resources
+// stay flat in the parent ml.Resources (preserving existing behavior for
+// configs that don't implement LayoutAugmenter).
+func TestWalkCluster_NodeOnly_MixedBundle(t *testing.T) {
+	augCfg := &fakeAugmentingConfig{objs: []*client.Object{makeCM("a")}}
+	plainCfg := &fakeConfig{objs: []*client.Object{makeCM("b")}}
+	appA := stack.NewApplication("a", "ns", augCfg)
+	appB := stack.NewApplication("b", "ns", plainCfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{appA, appB}}
+	node := &stack.Node{Name: "apps", Bundle: bundle}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	nodeML := ml.Children[0]
+	if len(nodeML.Children) != 1 {
+		t.Fatalf("expected 1 augmenter sub-layout, got %d", len(nodeML.Children))
+	}
+	if nodeML.Children[0].Name != "a" {
+		t.Errorf("augmenter sub-layout name = %q, want %q", nodeML.Children[0].Name, "a")
+	}
+	if len(nodeML.Resources) != 1 {
+		t.Fatalf("expected non-augmenter app's resource in nodeML.Resources, got %d", len(nodeML.Resources))
+	}
+	if nodeML.Resources[0].GetName() != "b" {
+		t.Errorf("flat resource = %q, want %q", nodeML.Resources[0].GetName(), "b")
+	}
+}
+
+// TestWalkCluster_ClusterName_UnnamedRoot_Augmenter verifies that an augmenter
+// app placed in the unnamed root node (Node.Name == "") of a cluster with
+// rules.ClusterName set goes through the walkClusterWithClusterName unnamed-
+// root branch and still gets a per-app sub-layout.
+func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter(t *testing.T) {
+	cfg := &fakeAugmentingConfig{objs: []*client.Object{makeCM("a")}}
+	app := stack.NewApplication("a", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	root := &stack.Node{Name: "", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "."
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if len(ml.Children) != 1 {
+		t.Fatalf("expected 1 per-app sub-layout under synthetic root, got %d", len(ml.Children))
+	}
+	if cfg.called == nil {
+		t.Errorf("AugmentLayout was not called")
+	}
+	if cfg.called != ml.Children[0] {
+		t.Errorf("AugmentLayout received the wrong layout")
+	}
+	if len(ml.Children[0].ExtraFiles) != 1 {
+		t.Errorf("ExtraFiles missing: %+v", ml.Children[0].ExtraFiles)
+	}
+}
+
+// TestWalkCluster_ClusterName_UnnamedRoot_Augmenter_WriteToDisk is the
+// writer-level regression for the synthetic-root case via the
+// ManifestLayout.WriteToDisk method path (used by crane runtime via
+// WriteToTar and by the test harness via WriteToDisk). When all apps in
+// the unnamed root become augmenter-driven per-app sub-layouts, the
+// synthetic root has Children but zero local Resources; the writer must
+// still emit a kustomization.yaml that references those children so
+// they aren't stranded on disk.
+func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter_WriteToDisk(t *testing.T) {
+	cfgA := &fakeAugmentingConfig{
+		objs:          []*client.Object{makeCM("a")},
+		extraFileName: "a-values.yaml",
+		cmgName:       "a-values",
+	}
+	cfgB := &fakeAugmentingConfig{
+		objs:          []*client.Object{makeCM("b")},
+		extraFileName: "b-values.yaml",
+		cmgName:       "b-values",
+	}
+	appA := stack.NewApplication("a", "ns", cfgA)
+	appB := stack.NewApplication("b", "ns", cfgB)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{appA, appB}}
+	root := &stack.Node{Name: "", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "demo"
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	dir := t.TempDir()
+	if err := ml.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk: %v", err)
+	}
+
+	rootKust := filepath.Join(dir, "demo", "kustomization.yaml")
+	data, err := os.ReadFile(rootKust)
+	if err != nil {
+		t.Fatalf("synthetic-root kustomization.yaml missing: %v", err)
+	}
+	got := string(data)
+	for _, name := range []string{"a", "b"} {
+		if !strings.Contains(got, name) {
+			t.Errorf("synthetic-root kustomization.yaml does not reference child %q. got:\n%s", name, got)
+		}
+	}
+	// Each per-app sub-directory must exist on disk too.
+	for _, name := range []string{"a", "b"} {
+		appDir := filepath.Join(dir, "demo", name)
+		if _, err := os.Stat(appDir); err != nil {
+			t.Errorf("app dir for %q missing: %v", name, err)
+		}
+	}
+}
+
+// Note: WriteManifest (write.go) intentionally skips the synthetic-root
+// kustomization.yaml when the root has no local files (see
+// TestWriteManifest_ClusterRootEmptyContainerNoKustomization). That writer is
+// not used by crane runtime; ManifestLayout.WriteToDisk and WriteToTar — the
+// writers crane uses — always emit synthetic-root kustomization.yaml when
+// children exist, which is what the *_WriteToDisk test above asserts.
+
+// TestWalkCluster_ClusterName_NamedRoot_Augmenter verifies that an augmenter
+// app in a named root node bundle goes through the walkClusterWithClusterName
+// named-root branch and gets its own per-app sub-layout under the root
+// layout.
+func TestWalkCluster_ClusterName_NamedRoot_Augmenter(t *testing.T) {
+	cfg := &fakeAugmentingConfig{objs: []*client.Object{makeCM("a")}}
+	app := stack.NewApplication("a", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	root := &stack.Node{Name: "root", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "demo"
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	// Find the root node layout under the cluster layout.
+	if len(ml.Children) != 1 {
+		t.Fatalf("expected 1 child under clusterLayout, got %d", len(ml.Children))
+	}
+	rootML := ml.Children[0]
+	if len(rootML.Children) != 1 {
+		t.Fatalf("expected 1 per-app sub-layout under rootML, got %d", len(rootML.Children))
+	}
+	appLayout := rootML.Children[0]
+	if cfg.called != appLayout {
+		t.Errorf("AugmentLayout was not called with the per-app layout")
+	}
+	if len(appLayout.ExtraFiles) != 1 {
+		t.Errorf("ExtraFiles missing: %+v", appLayout.ExtraFiles)
 	}
 }
