@@ -68,6 +68,11 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	}
 	sort.Strings(sortedFileNames)
 
+	listedInResources := make(map[string]struct{}, len(sortedFileNames))
+	for _, f := range sortedFileNames {
+		listedInResources[f] = struct{}{}
+	}
+
 	for _, fileName := range sortedFileNames {
 		objs := fileGroups[fileName]
 		f, err := os.Create(filepath.Join(fullPath, fileName))
@@ -168,7 +173,9 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 				// Always use FilePerResource — each child must have a unique filename.
 				if ml.FluxPlacement == FluxIntegrated {
 					fluxKustName := manifestFileName("flux-system", "kustomization", child.Name, FilePerResource)
-					writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
+					if _, dup := listedInResources[fluxKustName]; !dup {
+						writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
+					}
 				} else {
 					writeStr(fmt.Sprintf("  - %s\n", child.Name))
 				}

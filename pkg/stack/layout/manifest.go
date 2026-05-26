@@ -281,6 +281,11 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	}
 	sort.Strings(sortedFileNames)
 
+	listedInResources := make(map[string]struct{}, len(sortedFileNames))
+	for _, f := range sortedFileNames {
+		listedInResources[f] = struct{}{}
+	}
+
 	for _, fileName := range sortedFileNames {
 		objs := fileGroups[fileName]
 		f, err := os.Create(filepath.Join(fullPath, fileName))
@@ -375,7 +380,9 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 				// the parent directory uses FilePerKind.
 				nameFn := ml.resolveManifestFileName()
 				fluxKustName := nameFn("flux-system", "kustomization", child.Name, FilePerResource)
-				writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
+				if _, dup := listedInResources[fluxKustName]; !dup {
+					writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
+				}
 			} else {
 				// For package-aware layouts, use relative path
 				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {

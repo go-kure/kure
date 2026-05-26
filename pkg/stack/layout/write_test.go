@@ -1248,3 +1248,71 @@ func TestWriteToDisk_FileNamingKindName_FluxIntegrated(t *testing.T) {
 		t.Errorf("should not have namespace-prefixed flux reference, got:\n%s", content)
 	}
 }
+
+// TestWriteManifest_NoDuplicateFluxEntries guards against the duplicate-entry bug
+// where a Kustomization CR already in Resources AND a matching child layout entry
+// both produce the same flux-system-kustomization-*.yaml reference in kustomization.yaml.
+func TestWriteManifest_NoDuplicateFluxEntries(t *testing.T) {
+	cr := testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "myapp", "flux-system")
+	child := &ManifestLayout{
+		Name:          "myapp",
+		Namespace:     "clusters/prod/apps/myapp",
+		FluxPlacement: FluxIntegrated,
+	}
+	parent := &ManifestLayout{
+		Name:          "prod",
+		FluxPlacement: FluxIntegrated,
+		Resources:     []client.Object{cr},
+		Children:      []*ManifestLayout{child},
+	}
+
+	dir := t.TempDir()
+	cfg := DefaultLayoutConfig()
+	if err := WriteManifest(dir, cfg, parent); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+
+	// parent.Namespace="" → FullRepoPath()="cluster/prod"; ManifestsDir="clusters"
+	kustPath := filepath.Join(dir, "clusters", "cluster", "prod", "kustomization.yaml")
+	data, err := os.ReadFile(kustPath)
+	if err != nil {
+		t.Fatalf("read kustomization.yaml at %s: %v", kustPath, err)
+	}
+	const target = "flux-system-kustomization-myapp.yaml"
+	if count := strings.Count(string(data), target); count != 1 {
+		t.Errorf("expected 1 reference to %q, got %d:\n%s", target, count, data)
+	}
+}
+
+// TestWriteToDisk_NoDuplicateFluxEntries is the WriteToDisk counterpart.
+func TestWriteToDisk_NoDuplicateFluxEntries(t *testing.T) {
+	cr := testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "myapp", "flux-system")
+	child := &ManifestLayout{
+		Name:          "myapp",
+		Namespace:     "prod/apps/myapp",
+		FluxPlacement: FluxIntegrated,
+	}
+	parent := &ManifestLayout{
+		Name:          "prod",
+		Namespace:     "cl",
+		FluxPlacement: FluxIntegrated,
+		Resources:     []client.Object{cr},
+		Children:      []*ManifestLayout{child},
+	}
+
+	dir := t.TempDir()
+	if err := parent.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk: %v", err)
+	}
+
+	// parent.FullRepoPath() = "cl/prod"
+	kustPath := filepath.Join(dir, "cl", "prod", "kustomization.yaml")
+	data, err := os.ReadFile(kustPath)
+	if err != nil {
+		t.Fatalf("read kustomization.yaml: %v", err)
+	}
+	const target = "flux-system-kustomization-myapp.yaml"
+	if count := strings.Count(string(data), target); count != 1 {
+		t.Errorf("expected 1 reference to %q, got %d:\n%s", target, count, data)
+	}
+}

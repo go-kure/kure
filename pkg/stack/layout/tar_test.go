@@ -736,3 +736,48 @@ func fileNames(files map[string][]byte) []string {
 	sort.Strings(names)
 	return names
 }
+
+// TestWriteToTar_NoDuplicateFluxEntries guards against the duplicate-entry bug
+// in WriteToTar: when a Kustomization CR is in Resources AND the same child
+// appears in Children, the kustomization.yaml must reference the file only once.
+// Crane uses WriteToTar for OCI artifacts — skipping this path leaves production broken.
+func TestWriteToTar_NoDuplicateFluxEntries(t *testing.T) {
+	cr := &unstructured.Unstructured{}
+	cr.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
+	cr.SetKind("Kustomization")
+	cr.SetName("myapp")
+	cr.SetNamespace("flux-system")
+
+	child := &ManifestLayout{
+		Name:          "myapp",
+		Namespace:     "prod/apps/myapp",
+		FluxPlacement: FluxIntegrated,
+	}
+	parent := &ManifestLayout{
+		Name:          "prod",
+		Namespace:     "cl",
+		FluxPlacement: FluxIntegrated,
+		Resources:     []client.Object{cr},
+		Children:      []*ManifestLayout{child},
+	}
+
+	var buf bytes.Buffer
+	if err := parent.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar: %v", err)
+	}
+
+	files := extractTarFiles(t, &buf)
+
+	// parent.FullRepoPath()="cl/prod" → kustomization.yaml at "cl/prod/kustomization.yaml"
+	kustKey := "cl/prod/kustomization.yaml"
+	kustData, ok := files[kustKey]
+	if !ok {
+		t.Fatalf("kustomization.yaml not found at %q; available: %v", kustKey, fileNames(files))
+	}
+
+	const target = "flux-system-kustomization-myapp.yaml"
+	if count := strings.Count(string(kustData), target); count != 1 {
+		t.Errorf("expected 1 reference to %q in tar kustomization.yaml, got %d:\n%s",
+			target, count, kustData)
+	}
+}
