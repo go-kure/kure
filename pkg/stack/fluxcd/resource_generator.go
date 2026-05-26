@@ -309,6 +309,36 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 	return kust
 }
 
+// createKustomizationForLayout creates a Flux Kustomization CR for a
+// ManifestLayout child in FluxIntegrated mode. The CR name equals ml.Name;
+// spec.path is ml.FullRepoPath(); spec.dependsOn is populated from ml.DependsOn.
+func (g *ResourceGenerator) createKustomizationForLayout(
+	ml *layout.ManifestLayout,
+	sourceRef kustv1.CrossNamespaceSourceReference,
+) client.Object {
+	kust := &kustv1.Kustomization{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: kustv1.GroupVersion.String(),
+			Kind:       "Kustomization",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ml.Name,
+			Namespace: g.DefaultNamespace,
+		},
+		Spec: kustv1.KustomizationSpec{
+			Interval:  metav1.Duration{Duration: g.DefaultInterval},
+			Path:      ml.FullRepoPath(),
+			Prune:     true,
+			SourceRef: sourceRef,
+		},
+	}
+	for _, dep := range ml.DependsOn {
+		kust.Spec.DependsOn = append(kust.Spec.DependsOn,
+			kustv1.DependencyReference{Name: dep})
+	}
+	return kust
+}
+
 // createSource creates a Flux source resource based on the source reference.
 // When the SourceRef has a URL, the corresponding source CRD is created.
 // When URL is empty, only a reference is used (the source already exists in the cluster).
