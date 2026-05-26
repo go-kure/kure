@@ -42,6 +42,11 @@ type ManifestLayout struct {
 	// child's Flux Kustomization CR at the parent layout node rather than in
 	// the child's own directory.
 	UmbrellaChild bool
+	// DependsOn lists sibling layout names whose Kustomization CRs must reconcile
+	// before this layout's CR. In FluxIntegrated mode the layout integrator
+	// translates these into spec.dependsOn on the emitted Kustomization CR.
+	// Augmenters (LayoutAugmenter) set this field; the integrator reads it.
+	DependsOn []string
 	// flattenInfo carries the redirects produced by FlattenSingleTier when
 	// this layout absorbed a collapsed child. Set only on the absorbing
 	// layout; never serialised. Consulted by the Flux integrator's
