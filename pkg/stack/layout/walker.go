@@ -535,20 +535,12 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 
 		if nodeOnly {
 			if b := n.Bundle; b != nil {
-				for _, app := range b.Applications {
-					if app == nil {
-						continue
-					}
-					objsPtr, err := app.Generate()
-					if err != nil {
-						return nil, err
-					}
-					for _, o := range objsPtr {
-						if o == nil {
-							continue
-						}
-						ml.Resources = append(ml.Resources, *o)
-					}
+				// FluxUnset is passed because the non-nodeOnly branch of this
+				// package-aware walker also leaves FluxPlacement unset on
+				// per-app layouts. The per-app sublayout created for
+				// augmenter apps matches that convention.
+				if err := processFlatBundleApps(b.Applications, ml, currentPath, FluxUnset, fileNaming); err != nil {
+					return nil, err
 				}
 			}
 		} else {

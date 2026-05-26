@@ -1100,6 +1100,78 @@ func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter_WriteToDisk(t *testing.T)
 // writers crane uses — always emit synthetic-root kustomization.yaml when
 // children exist, which is what the *_WriteToDisk test above asserts.
 
+// TestWalkClusterByPackage_NodeOnly_Augmenter is the WalkClusterByPackage
+// equivalent of the nodeOnly augmenter case. walkNodeForPackageInternal had
+// the same dead-augmenter pattern as walkNode's nodeOnly branch; under
+// DefaultLayoutRules every app's resources were appended directly to the
+// node ML and the LayoutAugmenter was never invoked. After the fix, an
+// augmenter app in a per-package node bundle gets its own sub-layout with
+// ExtraFiles + ConfigMapGenerators attached.
+func TestWalkClusterByPackage_NodeOnly_Augmenter(t *testing.T) {
+	pkgRef := &schema.GroupVersionKind{
+		Group:   "source.toolkit.fluxcd.io",
+		Version: "v1",
+		Kind:    "OCIRepository",
+	}
+
+	cfg := &fakeAugmentingConfig{objs: []*client.Object{makeCM("a")}}
+	app := stack.NewApplication("a", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	node := &stack.Node{Name: "apps", Bundle: bundle, PackageRef: pkgRef}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	packages, err := layout.WalkClusterByPackage(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("walk cluster by package: %v", err)
+	}
+	pkgLayout, ok := packages[pkgRef.String()]
+	if !ok || pkgLayout == nil {
+		t.Fatalf("package layout for %s missing", pkgRef.String())
+	}
+
+	// Walk down to the apps node and confirm the augmenter sub-layout exists.
+	// Tree shape: root → apps; the apps node's ML carries the augmented child.
+	var appsLayout *layout.ManifestLayout
+	var find func(ml *layout.ManifestLayout)
+	find = func(ml *layout.ManifestLayout) {
+		if ml == nil {
+			return
+		}
+		if ml.Name == "apps" {
+			appsLayout = ml
+			return
+		}
+		for _, c := range ml.Children {
+			find(c)
+			if appsLayout != nil {
+				return
+			}
+		}
+	}
+	find(pkgLayout)
+	if appsLayout == nil {
+		t.Fatalf("apps node layout not found in package tree")
+	}
+	if len(appsLayout.Children) != 1 {
+		t.Fatalf("expected one per-app sub-layout under apps node, got %d", len(appsLayout.Children))
+	}
+	appLayout := appsLayout.Children[0]
+	if appLayout.Name != "a" {
+		t.Errorf("appLayout.Name = %q, want %q", appLayout.Name, "a")
+	}
+	if cfg.called != appLayout {
+		t.Errorf("AugmentLayout was not called with the per-app layout")
+	}
+	if len(appLayout.ExtraFiles) != 1 {
+		t.Errorf("ExtraFiles missing: %+v", appLayout.ExtraFiles)
+	}
+	if len(appLayout.ConfigMapGenerators) != 1 {
+		t.Errorf("CMG missing: %+v", appLayout.ConfigMapGenerators)
+	}
+}
+
 // TestWalkCluster_ClusterName_NamedRoot_Augmenter verifies that an augmenter
 // app in a named root node bundle goes through the walkClusterWithClusterName
 // named-root branch and gets its own per-app sub-layout under the root
