@@ -183,7 +183,8 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 			// A new CR without spec.sourceRef is invalid — fail fast.
 			// Children that already have CRs (e.g. umbrella bundle layouts) are
 			// exempt from this check; they were placed by GenerateFromBundle which
-			// handles absent SourceRef separately.
+			// handles absent SourceRef separately. Descendant children are validated
+			// inside generateChildFluxCRs as it recurses.
 			if len(newCRChildren) > 0 && sr.Kind == "" {
 				return errors.ResourceValidationError(
 					"Bundle", node.Bundle.Name, "sourceRef",
@@ -194,16 +195,18 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 				)
 			}
 
-			// Emit CRs and recurse only when a sourceRef is available.
-			if sr.Kind != "" {
-				for _, child := range eligibleChildren {
-					if !li.hasKustomizationCR(layoutNode.Resources, child.Name) {
-						layoutNode.Resources = append(layoutNode.Resources,
-							li.Generator.createKustomizationForLayout(child, sr))
-					}
-					if err := li.generateChildFluxCRs(child, sr); err != nil {
-						return err
-					}
+			// Emit direct-child CRs and recurse into all eligible children.
+			// Recursion is unconditional: even when sr is empty (all direct children
+			// already have CRs), grandchildren may need new CRs — generateChildFluxCRs
+			// will error if it encounters one that needs a CR but sr is invalid.
+			for _, child := range eligibleChildren {
+				if !li.hasKustomizationCR(layoutNode.Resources, child.Name) {
+					// sr.Kind is guaranteed non-empty here (checked above).
+					layoutNode.Resources = append(layoutNode.Resources,
+						li.Generator.createKustomizationForLayout(child, sr))
+				}
+				if err := li.generateChildFluxCRs(child, sr); err != nil {
+					return err
 				}
 			}
 		}
@@ -259,6 +262,15 @@ func (li *LayoutIntegrator) generateChildFluxCRs(
 			continue
 		}
 		if !li.hasKustomizationCR(parent.Resources, child.Name) {
+			if sourceRef.Kind == "" {
+				return errors.ResourceValidationError(
+					"ManifestLayout", child.Name, "sourceRef",
+					"FluxIntegrated mode requires a SourceRef with Kind and Name; "+
+						"this descendant layout needs a Kustomization CR but the "+
+						"ancestor bundle has no valid SourceRef",
+					nil,
+				)
+			}
 			parent.Resources = append(parent.Resources,
 				li.Generator.createKustomizationForLayout(child, sourceRef))
 		}

@@ -948,6 +948,51 @@ func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
 	}
 }
 
+// TestAugmenterGrandchildErrorWhenNoSourceRef verifies the edge case where a
+// direct eligible child ALREADY has a Kustomization CR (placed externally, as
+// GenerateFromBundle does for bundle sub-layouts), so newCRChildren is empty
+// and the fast-path error check does not fire — but that child has its own
+// eligible sub-layout (grandchild) that needs a new CR. With an empty/nil
+// SourceRef on the ancestor bundle, generateChildFluxCRs must still error
+// rather than silently skipping the grandchild and leaving a dangling writer
+// reference.
+func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
+	grandchild := &layout.ManifestLayout{
+		Name:          "myapp-00-pre-install",
+		Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
+		FluxPlacement: layout.FluxIntegrated,
+	}
+	appLayout := &layout.ManifestLayout{
+		Name:          "myapp",
+		Namespace:     "clusters/prod",
+		FluxPlacement: layout.FluxIntegrated,
+		Children:      []*layout.ManifestLayout{grandchild},
+	}
+
+	// Pre-place a CR for "myapp" so newCRChildren is empty — the fast-path
+	// error check for direct children is skipped.
+	existingCR := &kustv1.Kustomization{}
+	existingCR.Name = "myapp"
+	existingCR.Namespace = "flux-system"
+
+	bundle := &stack.Bundle{Name: "apps", SourceRef: nil}
+	node := &stack.Node{Name: "prod", Bundle: bundle}
+	cluster := &stack.Cluster{Node: node}
+
+	nodeLayout := &layout.ManifestLayout{
+		Name:          "prod",
+		FluxPlacement: layout.FluxIntegrated,
+		Resources:     []client.Object{existingCR},
+		Children:      []*layout.ManifestLayout{appLayout},
+	}
+	root := &layout.ManifestLayout{Children: []*layout.ManifestLayout{nodeLayout}}
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	if err := li.IntegrateWithLayout(root, cluster, layout.LayoutRules{}); err == nil {
+		t.Fatal("expected error: grandchild needs a CR but ancestor bundle has no SourceRef")
+	}
+}
+
 // --- shared test helpers for augmenter tests ---
 
 // buildAugmenterTestTree constructs a layout+cluster tree simulating crane's
