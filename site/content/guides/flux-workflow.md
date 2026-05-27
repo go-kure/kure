@@ -211,6 +211,8 @@ A child layout receives a CR when:
 - `child.ApplicationFileMode != AppFileSingle`
 - The ancestor bundle's `SourceRef` has both `Kind` and `Name` set (nil, empty struct, or missing either field is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
 
+`CreateLayoutWithResources` validates SourceRef completeness for all bundles before layout walking. Both the node bundle and every umbrella child bundle must have `SourceRef.Kind` and `SourceRef.Name` set when `FluxIntegrated` mode is active. `FluxSeparate` and non-Flux callers are unaffected.
+
 ### Ordered reconciliation with DependsOn
 
 Set `ManifestLayout.DependsOn` to a list of sibling layout names to express reconciliation order between hook groups. The integrator translates these into `spec.dependsOn` entries on the emitted CR:
