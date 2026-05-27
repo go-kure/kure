@@ -368,9 +368,9 @@ func TestLayoutIntegrator_SeparateMode_EmptyCluster(t *testing.T) {
 // layout node not found". This matches the shape of examples/demo/clusters/
 // basic/cluster.yaml.
 func TestCreateLayoutWithResources_ClusterNameWithChildNodes(t *testing.T) {
-	rootBundle := &stack.Bundle{Name: "root-bundle"}
-	appsBundle := &stack.Bundle{Name: "apps-bundle"}
-	infraBundle := &stack.Bundle{Name: "infra-bundle"}
+	rootBundle := &stack.Bundle{Name: "root-bundle", SourceRef: testSR()}
+	appsBundle := &stack.Bundle{Name: "apps-bundle", SourceRef: testSR()}
+	infraBundle := &stack.Bundle{Name: "infra-bundle", SourceRef: testSR()}
 
 	appsNode := &stack.Node{Name: "apps", Bundle: appsBundle}
 	infraNode := &stack.Node{Name: "infra", Bundle: infraBundle}
@@ -445,10 +445,11 @@ func TestCreateLayoutWithResources_UmbrellaIntegratedPlacement(t *testing.T) {
 	// lands at the bundle layout (where the bundle-dir kustomization.yaml
 	// references them via UmbrellaChild). Child sub-layouts carry no Flux CRs.
 	umbrella := &stack.Bundle{
-		Name: "platform",
+		Name:      "platform",
+		SourceRef: testSR(),
 		Children: []*stack.Bundle{
-			{Name: "infra"},
-			{Name: "services"},
+			{Name: "infra", SourceRef: testSR()},
+			{Name: "services", SourceRef: testSR()},
 		},
 	}
 	node := &stack.Node{Name: "apps", Bundle: umbrella}
@@ -528,9 +529,10 @@ func TestCreateLayoutWithResources_UmbrellaNodeOnlyPlacement(t *testing.T) {
 	// In nodeOnly (GroupFlat) mode, the umbrella child Flux CRs should land
 	// at the node layout directly (no intermediate bundle layer).
 	umbrella := &stack.Bundle{
-		Name: "platform",
+		Name:      "platform",
+		SourceRef: testSR(),
 		Children: []*stack.Bundle{
-			{Name: "infra"},
+			{Name: "infra", SourceRef: testSR()},
 		},
 	}
 	node := &stack.Node{Name: "apps", Bundle: umbrella}
@@ -579,12 +581,14 @@ func TestCreateLayoutWithResources_UmbrellaNestedIntegratedPlacement(t *testing.
 	// Flux CR should land at the infra umbrella child layout, not the
 	// platform bundle layout or the grandchild sub-layout.
 	umbrella := &stack.Bundle{
-		Name: "platform",
+		Name:      "platform",
+		SourceRef: testSR(),
 		Children: []*stack.Bundle{
 			{
-				Name: "infra",
+				Name:      "infra",
+				SourceRef: testSR(),
 				Children: []*stack.Bundle{
-					{Name: "networking"},
+					{Name: "networking", SourceRef: testSR()},
 				},
 			},
 		},
@@ -667,7 +671,8 @@ func TestCreateLayoutWithResources_UmbrellaChildWithSource(t *testing.T) {
 	// When an umbrella child has a SourceRef with URL, the Source CR should
 	// be placed at the parent layout alongside the child Kustomization.
 	umbrella := &stack.Bundle{
-		Name: "platform",
+		Name:      "platform",
+		SourceRef: testSR(),
 		Children: []*stack.Bundle{
 			{
 				Name: "ext",
@@ -1087,4 +1092,9 @@ func augKeysOf(m map[string]string) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// testSR returns a minimal valid SourceRef for use in FluxIntegrated fixtures.
+func testSR() *stack.SourceRef {
+	return &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
 }
