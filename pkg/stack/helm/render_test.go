@@ -205,6 +205,105 @@ func minimalIndexYAML(name, version, url string) string {
 	)
 }
 
+func TestRenderChart_OCI_PullError(t *testing.T) {
+	_, err := RenderChart("oci://localhost:0/nonexistent/chart", "1.0.0", nil)
+	if err == nil {
+		t.Fatal("expected error for unreachable OCI registry")
+	}
+}
+
+func TestRenderChart_HTTP_SlashOnlyPath(t *testing.T) {
+	_, err := RenderChart("http://", "1.0.0", nil)
+	if err == nil {
+		t.Fatal("expected error for bare http:// URL with no path")
+	}
+}
+
+func TestRenderChart_HTTP_LoadArchiveError(t *testing.T) {
+	corrupt := []byte("not a gzip archive")
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/index.yaml":
+			fmt.Fprint(w, minimalIndexYAML("badchart", "0.1.0", srvURL+"/badchart-0.1.0.tgz"))
+		default:
+			w.Write(corrupt)
+		}
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	_, err := RenderChart(srvURL+"/badchart", "0.1.0", nil)
+	if err == nil {
+		t.Fatal("expected error for corrupt chart archive")
+	}
+}
+
+func TestRenderChart_TemplateError(t *testing.T) {
+	chrt := minimalChart("testchart", []*common.File{
+		{
+			Name: "templates/bad.yaml",
+			Data: []byte(`{{ .Values.undefined | required "must set undefined" }}`),
+		},
+	}, nil)
+
+	_, err := renderChart(chrt, nil)
+	if err == nil {
+		t.Fatal("expected error for template that calls required on missing value")
+	}
+}
+
+func TestRenderChart_HTTP_BadIndexYAML(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/index.yaml" {
+			fmt.Fprint(w, "this: is: not: valid: yaml: !!!")
+		} else {
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	_, err := RenderChart(srv.URL+"/anychart", "0.1.0", nil)
+	if err == nil {
+		t.Fatal("expected error for malformed index.yaml")
+	}
+}
+
+func TestRenderChart_HTTP_DownloadError(t *testing.T) {
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/index.yaml":
+			fmt.Fprint(w, minimalIndexYAML("mychart", "0.1.0", srvURL+"/mychart-0.1.0.tgz"))
+		default:
+			// return HTTP 500 to cause download error
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	_, err := RenderChart(srvURL+"/mychart", "0.1.0", nil)
+	if err == nil {
+		t.Fatal("expected error when chart download fails")
+	}
+}
+
+func TestAssembleManifests_SkipsNotesTxt(t *testing.T) {
+	rendered := map[string]string{
+		"mychart/templates/deployment.yaml": "kind: Deployment",
+		"mychart/NOTES.txt":                 "Some helpful notes",
+	}
+	out := assembleManifests(rendered)
+	yaml := string(out)
+	if strings.Contains(yaml, "helpful notes") {
+		t.Errorf("NOTES.txt should not appear in output, got:\n%s", yaml)
+	}
+	if !strings.Contains(yaml, "Deployment") {
+		t.Errorf("expected Deployment in output, got:\n%s", yaml)
+	}
+}
+
 func TestAssembleManifests_StableOrder(t *testing.T) {
 	rendered := map[string]string{
 		"mychart/templates/z-last.yaml":   "kind: Z",
