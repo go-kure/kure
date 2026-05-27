@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.1] - 2026-05-27
+
+### Fixed
+
+- Rules.FluxPlacement is the sole controller of placement
+
 ## [0.2.0-beta.0] - 2026-05-27
 
 ### Added
