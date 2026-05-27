@@ -13,6 +13,76 @@ import (
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
+func TestFullRepoPathWithPackage_NoPackageRef(t *testing.T) {
+	ml := &layout.ManifestLayout{Name: "prod", Namespace: "clusters"}
+	got := ml.FullRepoPathWithPackage()
+	if got == "" {
+		t.Error("expected non-empty path even without PackageRef")
+	}
+	// Without PackageRef, must match FullRepoPath
+	if got != ml.FullRepoPath() {
+		t.Errorf("without PackageRef expected FullRepoPath() result %q, got %q", ml.FullRepoPath(), got)
+	}
+}
+
+func TestFullRepoPathWithPackage_OCIRepository(t *testing.T) {
+	ml := &layout.ManifestLayout{
+		Name:      "prod",
+		Namespace: "clusters",
+		PackageRef: &schema.GroupVersionKind{
+			Group:   "source.toolkit.fluxcd.io",
+			Version: "v1",
+			Kind:    "OCIRepository",
+		},
+	}
+	got := ml.FullRepoPathWithPackage()
+	if got == "" {
+		t.Error("expected non-empty path with OCIRepository PackageRef")
+	}
+	if !strings.HasPrefix(got, "oci/") {
+		t.Errorf("expected 'oci/' prefix for OCIRepository, got %q", got)
+	}
+}
+
+func TestFullRepoPathWithPackage_GitRepository(t *testing.T) {
+	ml := &layout.ManifestLayout{
+		Name:      "prod",
+		Namespace: "clusters",
+		PackageRef: &schema.GroupVersionKind{
+			Group:   "source.toolkit.fluxcd.io",
+			Version: "v1",
+			Kind:    "GitRepository",
+		},
+	}
+	got := ml.FullRepoPathWithPackage()
+	if got == "" {
+		t.Error("expected non-empty path with GitRepository PackageRef")
+	}
+	if !strings.HasPrefix(got, "git/") {
+		t.Errorf("expected 'git/' prefix for GitRepository, got %q", got)
+	}
+}
+
+func TestFullRepoPathWithPackage_OtherKind(t *testing.T) {
+	ml := &layout.ManifestLayout{
+		Name:      "prod",
+		Namespace: "clusters",
+		PackageRef: &schema.GroupVersionKind{
+			Group:   "source.toolkit.fluxcd.io",
+			Version: "v1",
+			Kind:    "HelmRepository",
+		},
+	}
+	got := ml.FullRepoPathWithPackage()
+	if got == "" {
+		t.Error("expected non-empty path with HelmRepository PackageRef")
+	}
+	// Other kinds use lowercase kind as prefix
+	if !strings.HasPrefix(got, "helmrepository/") {
+		t.Errorf("expected 'helmrepository/' prefix for HelmRepository, got %q", got)
+	}
+}
+
 func TestManifestLayoutWrite(t *testing.T) {
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("v1")
@@ -388,6 +458,100 @@ func TestWritePackagesToDisk(t *testing.T) {
 	ociSecret := filepath.Join(dir, "oci-packages", "oci-package", "default-secret-secret1.yaml")
 	if _, err := os.Stat(ociSecret); err != nil {
 		t.Errorf("Expected OCI secret file not found: %v", err)
+	}
+}
+
+func TestSanitizePackageKey_BucketKind(t *testing.T) {
+	// "Bucket" package key should sanitize to "bucket-packages"
+	packages := map[string]*layout.ManifestLayout{
+		"source.toolkit.fluxcd.io/v1beta2, Kind=Bucket": {
+			Name:      "test",
+			Namespace: ".",
+		},
+	}
+	dir := t.TempDir()
+	if err := layout.WritePackagesToDisk(packages, dir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "bucket-packages" {
+		t.Errorf("expected bucket-packages directory, got %v", entries)
+	}
+}
+
+func TestWriteToDisk_UmbrellaChildNotInKustomization(t *testing.T) {
+	// The parent's kustomization.yaml should NOT reference UmbrellaChild
+	// sub-layouts — they are managed by their own Flux Kustomization CRs.
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cfg")
+	obj.SetNamespace("default")
+
+	umbrellaChild := &layout.ManifestLayout{
+		Name:          "leaf",
+		Namespace:     "apps/leaf",
+		UmbrellaChild: true,
+		Resources:     []client.Object{obj},
+	}
+	// Parent has no resources but has an umbrella child
+	parent := &layout.ManifestLayout{
+		Name:      "apps",
+		Namespace: "clusters",
+		Children:  []*layout.ManifestLayout{umbrellaChild},
+	}
+
+	dir := t.TempDir()
+	if err := parent.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk: %v", err)
+	}
+
+	// Parent dir is basePath/clusters/apps (FullRepoPath = clusters/apps)
+	kustomPath := filepath.Join(dir, "clusters", "apps", "kustomization.yaml")
+	data, err := os.ReadFile(kustomPath)
+	if err != nil {
+		t.Fatalf("read kustomization.yaml: %v", err)
+	}
+	content := string(data)
+	// Parent kustomization.yaml must NOT list the umbrella child directory
+	if strings.Contains(content, "leaf") {
+		t.Errorf("parent kustomization.yaml should not reference umbrella child 'leaf', got:\n%s", content)
+	}
+}
+
+func TestWritePackagesToDisk_NilLayoutSkipped(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cfg")
+	obj.SetNamespace("default")
+
+	packages := map[string]*layout.ManifestLayout{
+		"present": {
+			Name:      "present",
+			Namespace: ".",
+			Resources: []client.Object{obj},
+		},
+		"nil-entry": nil,
+	}
+
+	dir := t.TempDir()
+	if err := layout.WritePackagesToDisk(packages, dir); err != nil {
+		t.Fatalf("unexpected error with nil layout entry: %v", err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	// Only the non-nil package should create a directory
+	for _, entry := range entries {
+		if entry.Name() == "nil-entry" {
+			t.Errorf("nil layout entry should not create directory %q", entry.Name())
+		}
 	}
 }
 

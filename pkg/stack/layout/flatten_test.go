@@ -5,6 +5,7 @@ import (
 
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -308,6 +309,208 @@ func TestApplyFlattenPathRewrites_IsIdempotent(t *testing.T) {
 	}
 	if root.flattenInfo == nil {
 		t.Errorf("flattenInfo must remain populated for repeated integration calls")
+	}
+}
+
+func TestCanFlatten_Nil(t *testing.T) {
+	if canFlatten(nil) {
+		t.Error("canFlatten(nil) should return false")
+	}
+}
+
+func TestCanFlatten_NilChild(t *testing.T) {
+	parent := &ManifestLayout{
+		Name:      "",
+		Namespace: "cluster",
+		Children:  []*ManifestLayout{nil},
+	}
+	if canFlatten(parent) {
+		t.Error("canFlatten with nil child should return false")
+	}
+}
+
+func TestFlattenSingleTier_InheritsChildMode(t *testing.T) {
+	// When parent has KustomizationUnset and child has a set Mode, the parent
+	// should inherit the child's Mode after collapsing.
+	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
+	rules := LayoutRules{FlattenSingleTier: true}
+
+	parent := &ManifestLayout{
+		Name:      "",
+		Namespace: "arc-runners",
+		Mode:      KustomizationUnset,
+		Children: []*ManifestLayout{{
+			Name:                "apps",
+			Namespace:           "arc-runners/apps",
+			Mode:                KustomizationExplicit,
+			FilePer:             FilePerResource,
+			ApplicationFileMode: AppFileSingle,
+			FileNaming:          FileNamingKindName,
+		}},
+	}
+	flattenSingleTier(parent, cluster, rules)
+	if parent.Mode != KustomizationExplicit {
+		t.Errorf("expected Mode=KustomizationExplicit after inherit, got %v", parent.Mode)
+	}
+	if parent.FilePer != FilePerResource {
+		t.Errorf("expected FilePer=FilePerResource after inherit, got %v", parent.FilePer)
+	}
+	if parent.ApplicationFileMode != AppFileSingle {
+		t.Errorf("expected ApplicationFileMode=AppFileSingle after inherit, got %v", parent.ApplicationFileMode)
+	}
+	if parent.FileNaming != FileNamingKindName {
+		t.Errorf("expected FileNaming=FileNamingKindName after inherit, got %v", parent.FileNaming)
+	}
+}
+
+func TestCollectPathRewrites_NilRoot(t *testing.T) {
+	// collectPathRewrites with nil root should return nil without panic
+	result := collectPathRewrites(nil)
+	if result != nil {
+		t.Errorf("expected nil for nil root, got %v", result)
+	}
+}
+
+func TestRewriteFluxPaths_Nil(t *testing.T) {
+	// Must not panic with nil layout
+	rewriteFluxPaths(nil, map[string]string{"a": "b"})
+}
+
+func TestFindByNodeAlias_Nil(t *testing.T) {
+	if got := FindByNodeAlias(nil, "path"); got != nil {
+		t.Errorf("expected nil for nil layout, got %v", got)
+	}
+}
+
+func TestCollectPackageRefs_NilNode(t *testing.T) {
+	packages := make(map[string]*k8sschema.GroupVersionKind)
+	// Must not panic or error when called with nil node
+	collectPackageRefs(nil, nil, packages)
+	if len(packages) != 0 {
+		t.Errorf("expected empty map for nil node, got %v", packages)
+	}
+}
+
+func TestWalkNodeForPackageInternal_Nil(t *testing.T) {
+	got, err := walkNodeForPackageInternal(nil, nil, false, FilePerResource, nil, nil, "default", "")
+	if err != nil {
+		t.Fatalf("unexpected error for nil node: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil for nil node, got %v", got)
+	}
+}
+
+func TestWalkNode_Nil(t *testing.T) {
+	// walkNode(nil, ...) should return nil without error
+	got, err := walkNode(nil, nil, false, false, FilePerResource, nil, FluxSeparate, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil for nil node, got %v", got)
+	}
+}
+
+func TestWalkUmbrellaChildLayouts_NilChild(t *testing.T) {
+	// Passing a nil child bundle in the slice should be silently skipped.
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cfg")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app", "ns", &flattenFakeConfig{objs: []*client.Object{&o}})
+	realChild := &stack.Bundle{Name: "real", Applications: []*stack.Application{app}}
+
+	results, err := walkUmbrellaChildLayouts(
+		[]*stack.Bundle{nil, realChild},
+		[]string{"cluster"},
+		FilePerResource,
+		FluxSeparate,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error with nil child: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result (nil child skipped), got %d", len(results))
+	}
+}
+
+func TestCollectPathRewrites_MultipleChildren(t *testing.T) {
+	// Build a tree with rewrites in two separate children so the merge branch
+	// in collectPathRewrites is exercised.
+	childA := &ManifestLayout{
+		Name:      "a",
+		Namespace: "cluster/a",
+		flattenInfo: &flattenInfo{
+			pathRewrites: map[string]string{"cluster/a/apps": "cluster/a"},
+		},
+	}
+	childB := &ManifestLayout{
+		Name:      "b",
+		Namespace: "cluster/b",
+		flattenInfo: &flattenInfo{
+			pathRewrites: map[string]string{"cluster/b/apps": "cluster/b"},
+		},
+	}
+	root := &ManifestLayout{
+		Name:     "",
+		Children: []*ManifestLayout{childA, childB},
+	}
+
+	// ApplyFlattenPathRewrites calls collectPathRewrites internally
+	kustA := &kustomizev1.Kustomization{}
+	kustA.Spec.Path = "cluster/a/apps"
+	childA.Resources = []client.Object{kustA}
+
+	kustB := &kustomizev1.Kustomization{}
+	kustB.Spec.Path = "cluster/b/apps"
+	childB.Resources = []client.Object{kustB}
+
+	ApplyFlattenPathRewrites(root)
+
+	if kustA.Spec.Path != "cluster/a" {
+		t.Errorf("childA rewrite failed: got %q, want %q", kustA.Spec.Path, "cluster/a")
+	}
+	if kustB.Spec.Path != "cluster/b" {
+		t.Errorf("childB rewrite failed: got %q, want %q", kustB.Spec.Path, "cluster/b")
+	}
+}
+
+func TestFindNodeByLayoutName_Nil(t *testing.T) {
+	got := findNodeByLayoutName(nil, "any")
+	if got != nil {
+		t.Errorf("expected nil for nil node, got %v", got)
+	}
+}
+
+func TestFindNodeByLayoutName_RootMatch(t *testing.T) {
+	root := &stack.Node{Name: "root"}
+	got := findNodeByLayoutName(root, "root")
+	if got == nil || got.Name != "root" {
+		t.Errorf("expected root node, got %v", got)
+	}
+}
+
+func TestFindNodeByLayoutName_DeepMatch(t *testing.T) {
+	grandchild := &stack.Node{Name: "leaf"}
+	child := &stack.Node{Name: "middle", Children: []*stack.Node{grandchild}}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{child}}
+
+	got := findNodeByLayoutName(root, "leaf")
+	if got == nil || got.Name != "leaf" {
+		t.Errorf("expected 'leaf' node, got %v", got)
+	}
+}
+
+func TestFindNodeByLayoutName_NoMatch(t *testing.T) {
+	root := &stack.Node{Name: "root", Children: []*stack.Node{{Name: "child"}}}
+	got := findNodeByLayoutName(root, "nonexistent")
+	if got != nil {
+		t.Errorf("expected nil for no match, got %v", got)
 	}
 }
 

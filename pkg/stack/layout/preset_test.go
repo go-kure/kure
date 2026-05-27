@@ -98,12 +98,65 @@ func TestConfigForPreset_CentralizedControlPlane(t *testing.T) {
 	if fname != "deployment.yaml" {
 		t.Errorf("expected deployment.yaml, got %s", fname)
 	}
+
+	// CentralizedControlPlane uses kustomization-{name}.yaml for Flux KS files
+	if cfg.KustomizationFileName == nil {
+		t.Fatal("KustomizationFileName should not be nil")
+	}
+	ksName := cfg.KustomizationFileName("prod")
+	if ksName != "kustomization-prod.yaml" {
+		t.Errorf("expected kustomization-prod.yaml, got %s", ksName)
+	}
 }
 
 func TestConfigForPreset_Unknown(t *testing.T) {
 	_, err := ConfigForPreset(LayoutPreset("unknown"))
 	if err == nil {
 		t.Error("expected error for unknown preset")
+	}
+}
+
+func TestConfigForPreset_SiblingControlPlane(t *testing.T) {
+	cfg, err := ConfigForPreset(PresetSiblingControlPlane)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ManifestsDir == "" {
+		t.Error("expected non-empty ManifestsDir")
+	}
+	if cfg.ManifestFileName == nil {
+		t.Fatal("ManifestFileName should not be nil")
+	}
+	fname := cfg.ManifestFileName("ns", "deployment", "myapp", FilePerResource)
+	if fname == "" {
+		t.Error("ManifestFileName should return non-empty name")
+	}
+	if cfg.KustomizationFileName == nil {
+		t.Fatal("KustomizationFileName should not be nil")
+	}
+	if got := cfg.KustomizationFileName("test"); got == "" {
+		t.Error("KustomizationFileName should return non-empty name")
+	}
+}
+
+func TestConfigForPreset_ParentDeployedControl(t *testing.T) {
+	cfg, err := ConfigForPreset(PresetParentDeployedControl)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ManifestsDir == "" {
+		t.Error("expected non-empty ManifestsDir")
+	}
+	if cfg.ManifestFileName == nil {
+		t.Fatal("ManifestFileName should not be nil")
+	}
+	if cfg.KustomizationFileName == nil {
+		t.Fatal("KustomizationFileName should not be nil")
+	}
+	// ParentDeployedControl uses flux-ks-{name}.yaml pattern
+	fname := cfg.KustomizationFileName("prod")
+	if fname != "flux-ks-prod.yaml" {
+		t.Errorf("expected flux-ks-prod.yaml, got %s", fname)
 	}
 }
 

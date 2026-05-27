@@ -7,8 +7,61 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/stack"
 )
+
+func TestIsAugmenter_Nil(t *testing.T) {
+	if isAugmenter(nil) {
+		t.Error("isAugmenter(nil) should return false")
+	}
+}
+
+func TestIsAugmenter_NilConfig(t *testing.T) {
+	app := stack.NewApplication("app", "ns", nil)
+	if isAugmenter(app) {
+		t.Error("isAugmenter with nil Config should return false")
+	}
+}
+
+func TestProcessFlatBundleApps_NilObjectPointer(t *testing.T) {
+	// App returns a slice containing a nil *client.Object pointer — should be skipped.
+	nilObjPtr := (*client.Object)(nil)
+	app := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{nilObjPtr}})
+	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
+
+	err := processFlatBundleApps([]*stack.Application{app}, parent, []string{"ns"}, FluxSeparate, "")
+	if err != nil {
+		t.Fatalf("unexpected error with nil object pointer: %v", err)
+	}
+	// Nil object pointers are skipped; no resources added.
+	if len(parent.Resources) != 0 {
+		t.Errorf("expected 0 resources when only nil pointers returned, got %d", len(parent.Resources))
+	}
+}
+
+func TestProcessFlatBundleApps_NilApp(t *testing.T) {
+	// Passing a nil app in the slice should be skipped without error.
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cfg")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	plainApp := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{&o}})
+	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
+
+	err := processFlatBundleApps([]*stack.Application{nil, plainApp}, parent, []string{"ns"}, FluxSeparate, "")
+	if err != nil {
+		t.Fatalf("unexpected error with nil app entry: %v", err)
+	}
+	if len(parent.Resources) != 1 {
+		t.Errorf("expected 1 resource from non-nil app, got %d", len(parent.Resources))
+	}
+}
 
 func TestRenderConfigMapGeneratorBlock_Empty(t *testing.T) {
 	if got := renderConfigMapGeneratorBlock(nil); got != "" {

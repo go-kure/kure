@@ -62,6 +62,64 @@ func (f *fakeAugmentingConfig) AugmentLayout(ml *layout.ManifestLayout) error {
 	return nil
 }
 
+// TestWalkCluster_DefaultFill verifies that WalkCluster fills in default values
+// for GroupUnset/FilePerUnset/FluxUnset when an empty LayoutRules is passed,
+// exercising the default-fill branches in WalkCluster.
+func TestWalkCluster_DefaultFill(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app", "ns", &fakeConfig{objs: []*client.Object{&o}})
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	root := &stack.Node{Name: "root", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	// Empty rules — all fields GroupUnset/FilePerUnset/FluxUnset — triggers all
+	// default-fill branches.
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("unexpected error with empty rules: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("expected non-nil layout with default rules")
+	}
+}
+
+func TestWalkCluster_NilCluster(t *testing.T) {
+	ml, err := layout.WalkCluster(nil, layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("unexpected error for nil cluster: %v", err)
+	}
+	if ml != nil {
+		t.Errorf("expected nil for nil cluster, got %v", ml)
+	}
+}
+
+func TestWalkCluster_NilNode(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: nil}
+	ml, err := layout.WalkCluster(c, layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("unexpected error for nil node: %v", err)
+	}
+	if ml != nil {
+		t.Errorf("expected nil for nil node, got %v", ml)
+	}
+}
+
+func TestWalkClusterByPackage_NilCluster(t *testing.T) {
+	layouts, err := layout.WalkClusterByPackage(nil, layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("unexpected error for nil cluster: %v", err)
+	}
+	if layouts != nil {
+		t.Errorf("expected nil for nil cluster, got %v", layouts)
+	}
+}
+
 func TestWalkCluster(t *testing.T) {
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("v1")
@@ -1169,6 +1227,120 @@ func TestWalkClusterByPackage_NodeOnly_Augmenter(t *testing.T) {
 	}
 	if len(appLayout.ConfigMapGenerators) != 1 {
 		t.Errorf("CMG missing: %+v", appLayout.ConfigMapGenerators)
+	}
+}
+
+// TestWalkCluster_ClusterName_UnnamedRoot_WithChildNodes verifies that when
+// a cluster has an unnamed root node (Node.Name == "") with ClusterName set
+// and the unnamed root has child nodes, those child nodes are walked and
+// nested directly under the cluster-level layout.
+func TestWalkCluster_ClusterName_UnnamedRoot_WithChildNodes(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app", "ns", &fakeConfig{objs: []*client.Object{&o}})
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	childNode := &stack.Node{Name: "apps", Bundle: bundle}
+	root := &stack.Node{Name: "", Children: []*stack.Node{childNode}}
+	childNode.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "demo"
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("nil layout returned")
+	}
+	// Unnamed root with children: child nodes appear directly under cluster layout
+	if len(ml.Children) == 0 {
+		t.Fatalf("expected child node layouts under cluster layout, got 0")
+	}
+}
+
+// TestWalkCluster_ClusterName_UnnamedRoot_WithUmbrella verifies that an
+// unnamed root node with a bundle that has umbrella children produces
+// umbrella child sub-layouts under the cluster layout.
+func TestWalkCluster_ClusterName_UnnamedRoot_WithUmbrella(t *testing.T) {
+	childApp := makeUmbrellaApp("child-app", "cm-child")
+	childBundle := &stack.Bundle{
+		Name:         "leaf",
+		Applications: []*stack.Application{childApp},
+	}
+	umbrella := &stack.Bundle{
+		Name:     "platform",
+		Children: []*stack.Bundle{childBundle},
+	}
+	// Unnamed root node with umbrella bundle
+	root := &stack.Node{Name: "", Bundle: umbrella}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "demo"
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("nil layout returned")
+	}
+	// Umbrella child appears under the cluster layout (unnamed root)
+	if len(ml.Children) == 0 {
+		t.Fatalf("expected umbrella child layouts under cluster layout, got 0")
+	}
+}
+
+// TestWalkCluster_ClusterName_NamedRoot_WithUmbrella verifies that a named
+// root node with a bundle that has umbrella children produces umbrella child
+// sub-layouts nested under the root node layout.
+func TestWalkCluster_ClusterName_NamedRoot_WithUmbrella(t *testing.T) {
+	childApp := makeUmbrellaApp("child-app", "cm-child")
+	childBundle := &stack.Bundle{
+		Name:         "leaf",
+		Applications: []*stack.Application{childApp},
+	}
+	umbrella := &stack.Bundle{
+		Name:     "platform",
+		Children: []*stack.Bundle{childBundle},
+	}
+	root := &stack.Node{Name: "flux-system", Bundle: umbrella}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "demo"
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	if ml == nil {
+		t.Fatalf("nil layout returned")
+	}
+	if len(ml.Children) != 1 {
+		t.Fatalf("expected 1 child (root node layout), got %d", len(ml.Children))
+	}
+	rootML := ml.Children[0]
+	if rootML.Name != "flux-system" {
+		t.Fatalf("expected root layout name 'flux-system', got %q", rootML.Name)
+	}
+	// Umbrella child should be nested under root node layout
+	if len(rootML.Children) == 0 {
+		t.Fatalf("expected umbrella child layouts under root node layout, got 0")
+	}
+	var found bool
+	for _, c := range rootML.Children {
+		if c.UmbrellaChild && c.Name == "leaf" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("umbrella child 'leaf' not found under root node layout")
 	}
 }
 
