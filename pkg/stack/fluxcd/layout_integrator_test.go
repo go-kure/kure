@@ -931,6 +931,152 @@ func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Umbrella child augmenter sub-layout CR generation (#578)
+// ---------------------------------------------------------------------------
+
+// buildUmbrellaAugmenterTree constructs a layout+cluster tree simulating
+// helm-multi-tier with FluxIntegrated: a platform umbrella node with a
+// platform-apps umbrella child layout, which has a redis sub-layout added by
+// Crane's helmchart augmenter (invisible to the bundle model).
+//
+// parentSR and childSR allow tests to use distinct SourceRefs to verify
+// correct SourceRef ownership. Pass testSR() for both in the common case.
+func buildUmbrellaAugmenterTree(parentSR, childSR *stack.SourceRef) (
+	root, platformLayout, platformApps, redis *layout.ManifestLayout,
+	cluster *stack.Cluster,
+) {
+	redis = &layout.ManifestLayout{
+		Name:          "redis",
+		Namespace:     "platform/platform-apps/redis",
+		FluxPlacement: layout.FluxIntegrated,
+		Mode:          layout.KustomizationExplicit,
+	}
+	platformApps = &layout.ManifestLayout{
+		Name:          "platform-apps",
+		Namespace:     "platform/platform-apps",
+		FluxPlacement: layout.FluxIntegrated,
+		Mode:          layout.KustomizationExplicit,
+		UmbrellaChild: true,
+		Children:      []*layout.ManifestLayout{redis},
+	}
+	platformLayout = &layout.ManifestLayout{
+		Name:      "platform",
+		Namespace: "platform",
+		Children:  []*layout.ManifestLayout{platformApps},
+	}
+	root = &layout.ManifestLayout{
+		Children: []*layout.ManifestLayout{platformLayout},
+	}
+	umbrella := &stack.Bundle{
+		Name:      "platform",
+		SourceRef: parentSR,
+		Children: []*stack.Bundle{
+			{Name: "platform-apps", SourceRef: childSR},
+		},
+	}
+	platformNode := &stack.Node{Name: "platform", Bundle: umbrella}
+	cluster = &stack.Cluster{Name: "demo", Node: platformNode}
+	return
+}
+
+// TestUmbrellaChildAugmenterSubLayoutGetFluxCR verifies that IntegrateWithLayout
+// places a Kustomization CR in an umbrella child layout's Resources for any
+// augmenter-added sub-layout. Simulates helm-multi-tier: platform-apps is an
+// umbrella child, redis is added by the helmchart augmenter as a layout child
+// of platform-apps but is not in the umbrella bundle model.
+func TestUmbrellaChildAugmenterSubLayoutGetFluxCR(t *testing.T) {
+	root, _, platformApps, _, cluster := buildUmbrellaAugmenterTree(testSR(), testSR())
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	if !augHasCR(platformApps.Resources, "redis") {
+		t.Errorf("expected Kustomization CR for 'redis' in platform-apps.Resources; got %d resources", len(platformApps.Resources))
+	}
+}
+
+// TestUmbrellaChildAugmenterSubLayoutNoDanglingReference verifies that
+// WriteToDisk does not produce a dangling reference in
+// platform-apps/kustomization.yaml when redis is an augmenter-added sub-layout.
+// The test derives the expected CR filename directly from kustomization.yaml to
+// avoid coupling to a specific FileNaming mode.
+func TestUmbrellaChildAugmenterSubLayoutNoDanglingReference(t *testing.T) {
+	root, _, platformApps, _, cluster := buildUmbrellaAugmenterTree(testSR(), testSR())
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	dir := t.TempDir()
+	if err := root.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk: %v", err)
+	}
+
+	// Read kustomization.yaml and extract the redis CR filename from the
+	// resources section. Fail if not exactly one redis entry is found.
+	kustPath := filepath.Join(dir, platformApps.FullRepoPath(), "kustomization.yaml")
+	kustData, err := os.ReadFile(kustPath)
+	if err != nil {
+		t.Fatalf("read platform-apps/kustomization.yaml: %v", err)
+	}
+	var redisEntries []string
+	for line := range strings.SplitSeq(string(kustData), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") && strings.Contains(trimmed, "redis") {
+			redisEntries = append(redisEntries, strings.TrimPrefix(trimmed, "- "))
+		}
+	}
+	if len(redisEntries) == 0 {
+		t.Fatalf("platform-apps/kustomization.yaml contains no redis resource entry:\n%s", kustData)
+	}
+	if len(redisEntries) > 1 {
+		t.Fatalf("platform-apps/kustomization.yaml contains %d redis resource entries (want 1): %v", len(redisEntries), redisEntries)
+	}
+
+	// The referenced CR file must exist on disk — this is the dangling reference check.
+	crFile := redisEntries[0]
+	crPath := filepath.Join(dir, platformApps.FullRepoPath(), crFile)
+	if _, err := os.Stat(crPath); os.IsNotExist(err) {
+		t.Errorf("dangling reference: kustomization.yaml references %q but the file does not exist", crFile)
+	}
+}
+
+// TestUmbrellaChildAugmenterSubLayoutUsesChildSourceRef verifies that the
+// Kustomization CR emitted for an augmenter-added sub-layout under an umbrella
+// child uses the child bundle's SourceRef, not the parent umbrella bundle's.
+func TestUmbrellaChildAugmenterSubLayoutUsesChildSourceRef(t *testing.T) {
+	parentSR := &stack.SourceRef{Kind: "GitRepository", Name: "parent-source", Namespace: "flux-system"}
+	childSR := &stack.SourceRef{Kind: "GitRepository", Name: "child-source", Namespace: "flux-system"}
+	root, _, platformApps, _, cluster := buildUmbrellaAugmenterTree(parentSR, childSR)
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	var redisCR *kustv1.Kustomization
+	for _, r := range platformApps.Resources {
+		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == "redis" {
+			redisCR = k
+			break
+		}
+	}
+	if redisCR == nil {
+		t.Fatal("Kustomization CR for 'redis' not found in platform-apps.Resources")
+	}
+	if redisCR.Spec.SourceRef.Name != "child-source" {
+		t.Errorf("redis CR sourceRef.name: got %q, want %q (child-source, not parent-source)",
+			redisCR.Spec.SourceRef.Name, "child-source")
+	}
+}
+
 // TestAugmenterGrandchildErrorWhenNoSourceRef verifies the edge case where a
 // direct eligible child ALREADY has a Kustomization CR (placed externally, as
 // GenerateFromBundle does for bundle sub-layouts), so newCRChildren is empty

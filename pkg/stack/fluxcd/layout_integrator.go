@@ -328,14 +328,37 @@ func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.Manif
 			}
 		}
 
+		childLayoutNode := findUmbrellaChildLayout(parentLayout, child.Name)
+
 		if len(child.Children) > 0 {
-			childLayoutNode := findUmbrellaChildLayout(parentLayout, child.Name)
 			if childLayoutNode == nil {
 				return errors.ResourceValidationError("Bundle", child.Name, "umbrella",
 					"nested umbrella child layout not found", nil)
 			}
 			if err := li.placeUmbrellaChildrenFlux(childLayoutNode, child); err != nil {
 				return err
+			}
+		}
+
+		// Emit CRs for augmenter-added non-umbrella layout children of this
+		// umbrella child layout. placeUmbrellaChildrenFlux only walks the
+		// bundle model; layout children injected by augmenters (e.g., Crane's
+		// helmchart augmenter) are invisible to it. Use the child bundle's own
+		// SourceRef so that each CR points to the correct source, not the
+		// parent umbrella's source.
+		if childLayoutNode != nil {
+			var childSR kustv1.CrossNamespaceSourceReference
+			if child.SourceRef != nil && child.SourceRef.Kind != "" && child.SourceRef.Name != "" {
+				childSR = kustv1.CrossNamespaceSourceReference{
+					Kind:      child.SourceRef.Kind,
+					Name:      child.SourceRef.Name,
+					Namespace: child.SourceRef.Namespace,
+				}
+			}
+			if err := li.generateChildFluxCRs(childLayoutNode, childSR); err != nil {
+				return errors.ResourceValidationError("Bundle", child.Name, "umbrella",
+					fmt.Sprintf("failed to generate child Flux CRs for augmenter sub-layouts under %q: %v",
+						child.Name, err), err)
 			}
 		}
 	}
