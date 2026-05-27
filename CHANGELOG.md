@@ -1,6 +1,37 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.0] - 2026-05-27
+
+### Added
+
+- Add DependsOn field to ManifestLayout
+- Add createKustomizationForLayout to ResourceGenerator
+- Emit Flux CRs for augmenter-added child layouts in FluxIntegrated mode
+- Add validateSourceRefsForFluxIntegrated
+- Call validateSourceRefsForFluxIntegrated in CreateLayoutWithResources
+
+### Dependencies
+
+- Bump Flux 2.8.8 and MetalLB 0.16.0 (coordinated batch)
+
+### Documentation
+
+- Document augmenter child layout Flux CR generation, DependsOn, and naming constraint
+- Document early SourceRef validation in FluxIntegrated mode
+
+### Fixed
+
+- Skip duplicate kustomization.yaml entries for FluxIntegrated children
+- Recurse into grandchildren even when direct child already has a CR
+
+### Testing
+
+- End-to-end tests for augmenter child layout CR generation
+- Add SourceRef to existing FluxIntegrated fixtures
+- White-box unit tests for validateSourceRefsForFluxIntegrated
+- Integration tests for SourceRef validation wiring in CreateLayoutWithResources
+
 ## [0.2.0-alpha.10] - 2026-05-26
 
 ### Added
