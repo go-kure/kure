@@ -257,14 +257,14 @@ sc := kubernetes.RestrictedSecurityContext()
 psc := kubernetes.RestrictedPodSecurityContext()
 
 // Level-based selection
-sc := kubernetes.SecurityContextForLevel(kubernetes.PSALevelBaseline)
-psc := kubernetes.PodSecurityContextForLevel(kubernetes.PSALevelRestricted)
+sc := kubernetes.SecurityContextForLevel(kubernetes.PSABaseline)
+psc := kubernetes.PodSecurityContextForLevel(kubernetes.PSARestricted)
 
 // Validate a container against a PSA level
-err := kubernetes.ValidateContainerPSA(container, kubernetes.PSALevelRestricted)
+err := kubernetes.ValidateContainerPSA(container, kubernetes.PSARestricted)
 
 // Validate an entire PodSpec
-violations := kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSALevelRestricted)
+violations := kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSARestricted)
 ```
 
 ## ResourceRequirements Builder

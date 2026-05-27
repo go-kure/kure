@@ -35,22 +35,24 @@ Each generator is registered with a GVK identifier that uniquely identifies its 
 
 | GVK | Generator | Output |
 |-----|-----------|--------|
-| `generators/AppWorkload` | AppWorkload | Deployment, Service, ConfigMap |
-| `generators/FluxHelm` | FluxHelm | HelmRelease, HelmRepository |
-| `generators/KurelPackage` | KurelPackage | Kubernetes resources from kurel packages |
+| `generators.gokure.dev/v1alpha1 / AppWorkload` | AppWorkload | Deployment, Service, ConfigMap |
+| `generators.gokure.dev/v1alpha1 / FluxHelm` | FluxHelm | HelmRelease, HelmRepository |
+| `generators.gokure.dev/v1alpha1 / KurelPackage` | KurelPackage | Kubernetes resources from kurel packages |
 
 ## Using Generators
 
 ### From Code
 
 ```go
-import "github.com/go-kure/kure/pkg/stack/generators"
+import (
+    "github.com/go-kure/kure/pkg/stack"
+)
 
-// Look up generator by GVK
-factory, err := generators.GetGenerator("generators/AppWorkload")
-
-// Create config from YAML data
-config, err := factory.FromConfig(yamlData)
+// Look up a registered generator by apiVersion + kind
+config, err := stack.CreateApplicationConfig("generators.gokure.dev/v1alpha1", "AppWorkload")
+if err != nil {
+    // handle: type not registered
+}
 
 // Use in the domain model
 app := stack.NewApplication("my-app", "default", config)
@@ -61,7 +63,7 @@ app := stack.NewApplication("my-app", "default", config)
 Generators can be configured via YAML files:
 
 ```yaml
-apiVersion: generators/v1
+apiVersion: generators.gokure.dev/v1alpha1
 kind: AppWorkload
 metadata:
   name: web-frontend
@@ -79,8 +81,9 @@ spec:
 ### Listing Available Generators
 
 ```go
-// List all registered generator GVKs
-gvks := generators.ListRegistered()
+import "github.com/go-kure/kure/pkg/stack"
+
+gvks := stack.ListApplicationConfigGVKs()
 ```
 
 ## Built-in Generators
@@ -113,10 +116,16 @@ Generates Kubernetes resource objects from kurel packages. `Generate()` delegate
 Register your own generators:
 
 ```go
-generators.Register("mycompany/CustomApp", &MyGeneratorFactory{})
-```
+import (
+    "github.com/go-kure/kure/pkg/gvk"
+    "github.com/go-kure/kure/pkg/stack"
+)
 
-The factory must implement the generator interface, providing a `FromConfig` method that returns an `ApplicationConfig`.
+stack.RegisterApplicationConfig(
+    gvk.GVK{Group: "mycompany", Version: "v1", Kind: "CustomApp"},
+    func() stack.ApplicationConfig { return &MyGeneratorConfig{} },
+)
+```
 
 ## Further Reading
 

@@ -54,13 +54,20 @@
 //
 // Use the workflow to generate all manifests for a cluster:
 //
-//	workflow := fluxcd.NewFluxWorkflow()
-//	manifests, err := workflow.Generate(cluster)
+//	// _ "github.com/go-kure/kure/pkg/stack/fluxcd" must be imported to register the provider
+//	wf, err := stack.NewWorkflow("flux")
 //
 // # Layout Generation
 //
 // The [github.com/go-kure/kure/pkg/stack/layout] subpackage handles writing
-// the generated manifests to disk following the conventions expected by
+// generated manifests to disk. Use [Workflow.CreateLayoutWithResources] to
+// produce a [ManifestLayoutResult], then call WriteToDisk to write all files:
+//
+//	ml, _ := wf.CreateLayoutWithResources(cluster, layout.LayoutRules{})
+//	_ = ml.WriteToDisk("./clusters/prod")
+//
+// The [github.com/go-kure/kure/pkg/stack/layout] subpackage also exposes
+// lower-level layout primitives following the conventions expected by
 // GitOps tools.
 //
 // # Package References
@@ -95,12 +102,11 @@
 //			End().
 //		Build()
 //
-//	// Generate Flux manifests
-//	workflow := fluxcd.NewFluxWorkflow()
-//	manifests, _ := workflow.Generate(cluster)
-//
-//	// Write to disk using layout package
-//	layout.WriteCluster(cluster, "./clusters/prod", manifests)
+//	// Generate Flux manifests and write to disk
+//	// (requires: _ "github.com/go-kure/kure/pkg/stack/fluxcd" side-effect import)
+//	wf, _ := stack.NewWorkflow("flux")
+//	ml, _ := wf.CreateLayoutWithResources(cluster, layout.LayoutRules{})
+//	_ = ml.WriteToDisk("./clusters/prod")
 //
 // # Dual Access Pattern (Exported Fields and Getter/Setter Methods)
 //

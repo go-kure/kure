@@ -6,22 +6,20 @@ The `logger` package provides structured logging for Kure. All logging in the pr
 
 ## Overview
 
-The logger provides a simple interface for structured key-value logging with support for different log levels. It wraps an underlying structured logger and provides convenience functions.
+The logger provides a simple printf-style interface with support for different log levels. It wraps an underlying logger and provides convenience functions.
 
 ## Usage
 
 ```go
 import "github.com/go-kure/kure/pkg/logger"
 
-// Default logger
 log := logger.Default()
+log.Info("loading package: %s", "/path/to/package")
+log.Error("failed to parse %s: %v", "config.yaml", err)
+log.Debug("parsed %d resources", count)
 
-// Log with context
-log.Info("loading package", "path", "/path/to/package")
-log.Error("failed to parse", "error", err, "file", "config.yaml")
-
-// No-op logger (for quiet mode)
-log := logger.Noop()
+// No-op logger for quiet mode
+log = logger.Noop()
 ```
 
 ## Log Levels
@@ -35,7 +33,7 @@ log := logger.Noop()
 
 ## Conventions
 
-- Use key-value pairs for structured data: `log.Info("msg", "key1", val1, "key2", val2)`
+- Use printf-style format strings: `log.Info("processed %d items in %s", n, name)`
 - Use `logger.Noop()` when verbose output is disabled
 - Pass the logger through function parameters or options structs
 - Use `logger.Default()` only at initialization points (CLI entry, tests)

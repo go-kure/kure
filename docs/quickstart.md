@@ -19,28 +19,24 @@ package main
 
 import (
     "os"
+    "time"
 
-    "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
     "github.com/go-kure/kure/pkg/io"
+    "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
     kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func main() {
-    // Create a Flux Kustomization
-    ks := fluxcd.NewKustomization(&fluxcd.KustomizationConfig{
-        Name:      "hello-world",
-        Namespace: "flux-system",
-        Interval:  "5m",
-        Path:      "./clusters/production",
-        SourceRef: kustv1.CrossNamespaceSourceReference{
-            Kind: "GitRepository",
-            Name: "flux-system",
-        },
+    ks := fluxcd.CreateKustomization("hello-world", "flux-system")
+    fluxcd.SetKustomizationSourceRef(ks, kustv1.CrossNamespaceSourceReference{
+        Kind: "GitRepository",
+        Name: "flux-system",
     })
+    fluxcd.SetKustomizationPath(ks, "./clusters/production")
+    fluxcd.SetKustomizationInterval(ks, metav1.Duration{Duration: 5 * time.Minute})
 
-    // Print YAML to stdout
-    printer := io.NewYAMLPrinter()
-    printer.PrintObj(ks, os.Stdout)
+    io.Marshal(os.Stdout, ks)
 }
 ```
 
