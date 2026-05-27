@@ -36,7 +36,7 @@ require (
 	github.com/controlplaneio-fluxcd/flux-operator v0.48.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
 	github.com/fluxcd/flux2/v2 v2.8.7
-	github.com/fluxcd/helm-controller/api v1.5.4
+	github.com/fluxcd/helm-controller/api v1.5.5
 	github.com/fluxcd/image-automation-controller/api v1.1.3
 	github.com/fluxcd/kustomize-controller/api v1.8.5
 	github.com/fluxcd/notification-controller/api v1.8.4
