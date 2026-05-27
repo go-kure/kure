@@ -71,6 +71,12 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 		return nil, err
 	}
 
+	if li.FluxPlacement == layout.FluxIntegrated {
+		if err := validateSourceRefsForFluxIntegrated(c); err != nil {
+			return nil, err
+		}
+	}
+
 	// Generate the base manifest layout first
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
