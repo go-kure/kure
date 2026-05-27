@@ -35,6 +35,7 @@ func main() {
     })
     fluxcd.SetKustomizationPath(ks, "./clusters/production")
     fluxcd.SetKustomizationInterval(ks, metav1.Duration{Duration: 5 * time.Minute})
+    fluxcd.SetKustomizationPrune(ks, true)
 
     io.Marshal(os.Stdout, ks)
 }
