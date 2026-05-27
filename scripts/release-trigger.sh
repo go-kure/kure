@@ -34,7 +34,9 @@ for _arg in "$@"; do
             if [ -n "$SUBCOMMAND" ] && [ -z "$ARG" ]; then
                 ARG="$_arg"
             else
-                echo "ERROR: unexpected argument: $_arg" >&2; exit 1
+                echo "ERROR: unexpected argument: '$_arg'" >&2
+                echo "       Usage: release-trigger.sh [promote <type>|bump <scope>] [--do-it]" >&2
+                exit 1
             fi
             ;;
     esac

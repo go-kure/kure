@@ -477,6 +477,7 @@ main() {
     # Auto-infer type from VERSION if not specified
     if [ -z "$RELEASE_TYPE" ] || [ "$RELEASE_TYPE" = "auto" ]; then
         current=$(read_version)
+        validate_version "$current"
         case "$current" in
             *-alpha.*) RELEASE_TYPE=alpha ;;
             *-beta.*)  RELEASE_TYPE=beta ;;

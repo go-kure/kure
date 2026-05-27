@@ -227,33 +227,15 @@ Advance the version cycle without creating a tag. Use before starting a new prer
 
 1. **test** - Full test run with race detection
 2. **validate** - Strict tag format, changelog, and version progression validation
-3. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
-4. **post-release** - Go proxy refresh
+3. **goreleaser** - Build release artifacts, generate SBOM, sign with cosign
+4. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
+5. **post-release** - Go proxy refresh
 
 ### Configuration
 
-- Go Version: `1.26.3`
+- Go Version: read from `mise.toml`
 - Tag Format: `^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$`
-- Changelog: Required (must have `## v0.1.0` section)
-
-### CI Status Check
-
-Publish workflow verifies CI passed before releasing:
-
-```yaml
-check-ci:
-  name: Verify CI passed
-  steps:
-    - name: Check CI status for this commit
-      run: |
-        # Wait up to 5 minutes for CI to complete
-        for i in {1..30}; do
-          STATUS=$(gh api repos/.../commits/$COMMIT_SHA/status --jq '.state')
-          if [ "$STATUS" = "success" ]; then exit 0; fi
-          if [ "$STATUS" = "failure" ]; then exit 1; fi
-          sleep 10
-        done
-```
+- Changelog: Required (must have `## [0.1.0]` section — version without `v` prefix, in square brackets)
 
 ### Release Management
 
