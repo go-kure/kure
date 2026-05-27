@@ -18,17 +18,24 @@ Kure maintains two version concepts for each dependency:
 | Tool | Build Version | Deployment Compatibility | Notes |
 |------|---------------|-------------------------|-------|
 | cert-manager | 1.20.2 | 1.14 - 1.20 | Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias). |
-| fluxcd | 2.8.7 | 2.4 - 2.8 | v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
+| fluxcd | 2.8.8 | 2.4 - 2.8 | v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
 image-automation-controller promoted to v1.
-v2.8.7 fixes CVE-2026-45022 (go-git v5.19.0) in source-controller
-and image-automation-controller; fixes non-namespaced resource
-ssa:IfNotPresent delete/recreate loop in kustomize-controller.
+v2.8.8 fixes CVE-2026-45571 and CVE-2026-45570 (go-git v5.19.1) in
+source-controller and image-automation-controller. helm-controller fixes:
+unbounded memory growth (retryingRoundTripper per reconcile), HTTP
+artifact fetch timeout, non-CRD objects under crds/ force-applied, test
+action failing for release names >53 chars. Moves Helm back to upstream
+v4.2.0. OCI semver build-metadata tag support in source-controller.
 All github.com/fluxcd/* packages upgraded together. |
-| flux-operator | 0.48.0 | 0.23 - 0.48 | Upgraded alongside FluxCD 2.8.7 ecosystem. |
+| flux-operator | 0.48.0 | 0.23 - 0.48 | Upgraded alongside FluxCD 2.8.8 ecosystem. |
 | source-watcher | 2.1.1 | 2.0 - 2.1 | Optional FluxCD controller for source composition/decomposition.
 Manages ArtifactGenerator CRD (source.extensions.fluxcd.io/v1beta1).
 Not in default Flux installation; requires --components-extra=source-watcher. |
-| metallb | 0.15.3 | 0.14 - 0.15 | Stable v1beta1 APIs, patch release |
+| metallb | 0.16.0 | 0.14 - 0.16 | v1beta1 APIs stable across this range. v0.16.0 is a minor release:
+BGP config-parsing refactor (selectedNodes/selectedPools rewrite),
+node-specific ConfigurationState validation, security fixes via
+govulncheck. No changes to the v1beta1 API types that kure imports
+(IPAddressPool, BGPPeer, BGPAdvertisement, L2Advertisement, BFDProfile). |
 | prometheus-operator | 0.91.0 | 0.75 - 0.91 | Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
 Only the /pkg/apis/monitoring submodule is imported — not the full operator.
 Stable v1 APIs (monitoring.coreos.com/v1). |
