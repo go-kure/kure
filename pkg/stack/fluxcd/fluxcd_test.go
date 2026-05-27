@@ -693,11 +693,11 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
 	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	integrator.SetFluxPlacement(layout.FluxIntegrated)
 
 	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
 		BundleGrouping:      layout.GroupFlat,
 		ApplicationGrouping: layout.GroupFlat,
+		FluxPlacement:       layout.FluxIntegrated,
 	})
 	if err != nil {
 		t.Fatalf("CreateLayoutWithResources: %v", err)
@@ -836,11 +836,11 @@ func TestEndToEndUmbrellaFromCluster_Separate(t *testing.T) {
 	cluster := &stack.Cluster{Name: "demo", Node: root}
 
 	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	integrator.SetFluxPlacement(layout.FluxSeparate)
 
 	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
 		BundleGrouping:      layout.GroupFlat,
 		ApplicationGrouping: layout.GroupFlat,
+		FluxPlacement:       layout.FluxSeparate,
 	})
 	if err != nil {
 		t.Fatalf("CreateLayoutWithResources: %v", err)

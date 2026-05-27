@@ -25,7 +25,9 @@ func EngineWithMode(mode layout.KustomizationMode) *WorkflowEngine {
 	return engine
 }
 
-// EngineWithConfig returns a WorkflowEngine with custom configuration.
-func EngineWithConfig(mode layout.KustomizationMode, placement layout.FluxPlacement) *WorkflowEngine {
-	return NewWorkflowEngineWithConfig(mode, placement)
+// EngineWithConfig returns a WorkflowEngine with a specific kustomization
+// mode. Placement is no longer a constructor argument; set it on
+// layout.LayoutRules.FluxPlacement at call time.
+func EngineWithConfig(mode layout.KustomizationMode) *WorkflowEngine {
+	return NewWorkflowEngineWithConfig(mode)
 }

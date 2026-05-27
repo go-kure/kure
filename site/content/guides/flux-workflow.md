@@ -50,11 +50,12 @@ import (
 
 engine := fluxcd.EngineWithConfig(
     layout.KustomizationExplicit,  // List files in kustomization.yaml
-    layout.FluxSeparate,           // Flux resources in separate tree
 )
 ```
 
-See the [Flux Engine reference](/api-reference/flux-engine) for configuration options.
+Placement is configured per call on `layout.LayoutRules.FluxPlacement` (see Step 3
+below). `FluxUnset` normalizes to `FluxSeparate`. See the
+[Flux Engine reference](/api-reference/flux-engine) for configuration options.
 
 ## Step 3: Generate Resources with Layout
 
@@ -65,6 +66,7 @@ rules := layout.LayoutRules{
     BundleGrouping:      layout.GroupByName,
     ApplicationGrouping: layout.GroupByName,
     FilePer:             layout.FilePerResource,
+    FluxPlacement:       layout.FluxSeparate, // Flux resources in separate tree
 }
 
 // Generate layout with Flux resources integrated

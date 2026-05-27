@@ -37,12 +37,15 @@ func NewWorkflowEngine() *WorkflowEngine {
 }
 
 // NewWorkflowEngineWithConfig creates a workflow engine with custom configuration.
-func NewWorkflowEngineWithConfig(mode layout.KustomizationMode, placement layout.FluxPlacement) *WorkflowEngine {
+//
+// Placement is no longer a constructor argument; set it on
+// layout.LayoutRules.FluxPlacement at call time. See LayoutIntegrator for
+// the normalization semantics.
+func NewWorkflowEngineWithConfig(mode layout.KustomizationMode) *WorkflowEngine {
 	resourceGen := NewResourceGenerator()
 	resourceGen.Mode = mode
 
 	layoutInteg := NewLayoutIntegrator(resourceGen)
-	layoutInteg.FluxPlacement = placement
 
 	bootstrapGen := NewBootstrapGenerator()
 
@@ -115,11 +118,6 @@ func (we *WorkflowEngine) GetVersion() string {
 // SetKustomizationMode configures how Kustomization paths are generated.
 func (we *WorkflowEngine) SetKustomizationMode(mode layout.KustomizationMode) {
 	we.ResourceGen.Mode = mode
-}
-
-// SetFluxPlacement configures where Flux resources are placed in layouts.
-func (we *WorkflowEngine) SetFluxPlacement(placement layout.FluxPlacement) {
-	we.LayoutInteg.SetFluxPlacement(placement)
 }
 
 // GetResourceGenerator returns the underlying resource generator for advanced configuration.

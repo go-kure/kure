@@ -20,7 +20,9 @@ be reused to create divergent cluster configurations.
 ### 2. Create a Workflow Engine (`FluxCD`)
 
 Kure supports pluggable workflow engines. This example uses `fluxcd.NewWorkflowEngineWithConfig`
-to create a FluxCD engine with explicit Kustomization mode and separate Flux resource placement.
+to create a FluxCD engine with explicit Kustomization mode. Flux resource placement
+(integrated vs separate) is configured per call on `layout.LayoutRules.FluxPlacement`
+in Step 3, not on the engine.
 
 ### 3. Generate a Layout (`CreateLayoutWithResources`)
 
