@@ -35,19 +35,19 @@ require (
 	github.com/cloudnative-pg/plugin-barman-cloud v0.12.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.48.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
-	github.com/fluxcd/flux2/v2 v2.8.7
-	github.com/fluxcd/helm-controller/api v1.5.4
-	github.com/fluxcd/image-automation-controller/api v1.1.3
+	github.com/fluxcd/flux2/v2 v2.8.8
+	github.com/fluxcd/helm-controller/api v1.5.5
+	github.com/fluxcd/image-automation-controller/api v1.1.4
 	github.com/fluxcd/kustomize-controller/api v1.8.5
 	github.com/fluxcd/notification-controller/api v1.8.4
 	github.com/fluxcd/pkg/apis/acl v0.9.0
 	github.com/fluxcd/pkg/apis/kustomize v1.16.0
 	github.com/fluxcd/pkg/apis/meta v1.26.0
-	github.com/fluxcd/source-controller/api v1.8.4
+	github.com/fluxcd/source-controller/api v1.8.5
 	github.com/fluxcd/source-watcher/api/v2 v2.1.1
 	github.com/google/cel-go v0.28.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.91.0
-	go.universe.tf/metallb v0.15.3
+	go.universe.tf/metallb v0.16.0
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.2.0
 	k8s.io/api v0.36.0
