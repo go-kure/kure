@@ -14,22 +14,29 @@ import (
 
 // LayoutIntegrator implements the workflow.LayoutIntegrator interface for Flux.
 // It handles integration of Flux resources with manifest layouts.
+//
+// Placement (FluxIntegrated vs FluxSeparate) is configured via
+// layout.LayoutRules.FluxPlacement on each call. CreateLayoutWithResources
+// normalizes FluxUnset to FluxSeparate before invoking the SourceRef
+// validation gate, WalkCluster, and IntegrateWithLayout, so all three
+// observers agree on the effective placement.
 type LayoutIntegrator struct {
 	// ResourceGenerator generates the Flux resources
 	Generator *ResourceGenerator
-	// FluxPlacement controls where Flux resources are placed in the layout
-	FluxPlacement layout.FluxPlacement
 }
 
 // NewLayoutIntegrator creates a FluxCD layout integrator.
 func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 	return &LayoutIntegrator{
-		Generator:     generator,
-		FluxPlacement: layout.FluxIntegrated,
+		Generator: generator,
 	}
 }
 
 // IntegrateWithLayout adds Flux resources to an existing manifest layout.
+//
+// Placement is driven by rules.FluxPlacement. FluxUnset is treated as
+// FluxSeparate to match DefaultLayoutRules and the walker's normalization
+// in pkg/stack/layout/walker.go:42-44.
 //
 // If the layout was post-processed by FlattenSingleTier (recorded as
 // flattenInfo on the absorbing layouts), this method consults nodeAliases
@@ -41,14 +48,16 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 		return nil
 	}
 
+	rules = normalizeRulesPlacement(rules)
+
 	var err error
-	switch li.FluxPlacement {
+	switch rules.FluxPlacement {
 	case layout.FluxIntegrated:
 		err = li.addIntegratedFluxToLayout(ml, c, rules)
 	case layout.FluxSeparate:
 		err = li.addSeparateFluxToLayout(ml, c, rules)
 	default:
-		return errors.NewValidationError("fluxPlacement", string(li.FluxPlacement), "LayoutIntegrator",
+		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
 			[]string{string(layout.FluxIntegrated), string(layout.FluxSeparate)})
 	}
 	if err != nil {
@@ -60,6 +69,11 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 }
 
 // CreateLayoutWithResources creates a new layout that includes Flux resources.
+//
+// rules.FluxPlacement is normalized once at the top of this method
+// (FluxUnset -> FluxSeparate) and the normalized rules are passed to the
+// SourceRef validation gate, WalkCluster, and IntegrateWithLayout. This
+// guarantees a single placement authority per call.
 func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
 	if c == nil {
 		return nil, nil
@@ -71,7 +85,9 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 		return nil, err
 	}
 
-	if li.FluxPlacement == layout.FluxIntegrated {
+	rules = normalizeRulesPlacement(rules)
+
+	if rules.FluxPlacement == layout.FluxIntegrated {
 		if err := validateSourceRefsForFluxIntegrated(c); err != nil {
 			return nil, err
 		}
@@ -418,7 +434,14 @@ func (li *LayoutIntegrator) findLayoutNodeByPath(ml *layout.ManifestLayout, targ
 	return nil
 }
 
-// SetFluxPlacement configures where Flux resources should be placed in layouts.
-func (li *LayoutIntegrator) SetFluxPlacement(placement layout.FluxPlacement) {
-	li.FluxPlacement = placement
+// normalizeRulesPlacement returns a copy of rules with FluxPlacement set to
+// FluxSeparate when it was FluxUnset. The integrator, the SourceRef
+// validation gate, and the walker all read from this normalized value so
+// they cannot disagree on what "unset" means. Mirrors the walker behaviour
+// in pkg/stack/layout/walker.go:42-44.
+func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
+	if rules.FluxPlacement == layout.FluxUnset {
+		rules.FluxPlacement = layout.FluxSeparate
+	}
+	return rules
 }

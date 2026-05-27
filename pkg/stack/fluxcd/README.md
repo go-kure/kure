@@ -27,11 +27,11 @@ engine := fluxcd.Engine()
 // Generate all Flux resources for a cluster
 objects, err := engine.GenerateFromCluster(cluster)
 
-// Or with custom configuration
-engine = fluxcd.EngineWithConfig(
-    layout.KustomizationExplicit,
-    layout.FluxSeparate,
-)
+// Or with a specific kustomization mode
+engine = fluxcd.EngineWithConfig(layout.KustomizationExplicit)
+
+// Placement is set on the LayoutRules passed to the layout call,
+// not on the engine — see Layout Integration below.
 ```
 
 ## Engine Construction
@@ -43,12 +43,18 @@ engine := fluxcd.Engine()
 // Engine with specific kustomization mode
 engine := fluxcd.EngineWithMode(layout.KustomizationExplicit)
 
-// Engine with full configuration
-engine := fluxcd.EngineWithConfig(mode, placement)
+// Engine with a specific kustomization mode (alias)
+engine := fluxcd.EngineWithConfig(mode)
 
 // Engine with custom components
 engine := fluxcd.NewWorkflowEngine()
 ```
+
+Placement (FluxIntegrated vs FluxSeparate) is configured per call on
+`layout.LayoutRules.FluxPlacement`. `FluxUnset` is normalized to
+`FluxSeparate` by `LayoutIntegrator.CreateLayoutWithResources` — matching
+`layout.DefaultLayoutRules()` and the walker. See
+[Layout Integration](#layout-integration).
 
 ## Resource Generation
 
@@ -190,9 +196,10 @@ bundle's `Children`, shared umbrella ownership, or multi-package umbrellas —
 fail fast with a validation error rather than producing malformed output.
 
 `CreateLayoutWithResources` additionally calls `validateSourceRefsForFluxIntegrated`
-when `FluxPlacement == FluxIntegrated`. This checks that every bundle reachable
-from the cluster node tree — node bundles and umbrella child bundles recursively
-— has a complete `SourceRef` with both `Kind` and `Name` set. A nil,
+when `rules.FluxPlacement == FluxIntegrated` (after normalization — `FluxUnset`
+becomes `FluxSeparate` and skips this gate). This checks that every bundle
+reachable from the cluster node tree — node bundles and umbrella child bundles
+recursively — has a complete `SourceRef` with both `Kind` and `Name` set. A nil,
 zero-value, or partially-populated `SourceRef` is rejected before layout walking
 begins. The integrator also enforces this at CR-creation time as defense in
 depth. `FluxSeparate` and non-Flux paths are unaffected.
