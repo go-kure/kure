@@ -1513,3 +1513,311 @@ func TestValidate_Extension_WithPatches(t *testing.T) {
 		}
 	})
 }
+
+// --- Filesystem-backed tests for gatherResourcesFromSource, generateKurelYAML,
+//     generateValues, and processExtension ---
+
+func TestGeneratePackageFiles_FromLocalDirectory(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\ndata: {}\n")
+	if err := os.WriteFile(filepath.Join(dir, "cm.yaml"), content, 0o600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	cfg := &ConfigV1Alpha1{
+		Package:   PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Resources: []ResourceSource{{Source: dir}},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	if len(files) == 0 {
+		t.Error("expected at least one file in output")
+	}
+	// kurel.yaml must always be present
+	if _, ok := files["kurel.yaml"]; !ok {
+		t.Error("expected kurel.yaml in output")
+	}
+	// the resource file should be under resources/
+	if _, ok := files["resources/cm.yaml"]; !ok {
+		t.Error("expected resources/cm.yaml in output")
+	}
+}
+
+func TestGeneratePackageFiles_SingleFile(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: single\ndata: {}\n")
+	filePath := filepath.Join(dir, "single.yaml")
+	if err := os.WriteFile(filePath, content, 0o600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	cfg := &ConfigV1Alpha1{
+		Package:   PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Resources: []ResourceSource{{Source: filePath}}, // single file, not a directory
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	if _, ok := files["resources/single.yaml"]; !ok {
+		t.Error("expected resources/single.yaml in output")
+	}
+}
+
+func TestGeneratePackageFiles_NonexistentSource(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		Package:   PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Resources: []ResourceSource{{Source: "/tmp/nonexistent-kure-test-dir-99999"}},
+	}
+	app := &stack.Application{Name: "test-app"}
+	_, err := cfg.GeneratePackageFiles(app)
+	if err == nil {
+		t.Fatal("expected error for nonexistent source directory")
+	}
+}
+
+func TestGeneratePackageFiles_DuplicateResourceConflict(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+	content := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: dup\ndata: {}\n")
+	// Both directories contain a file with the same name → conflict
+	if err := os.WriteFile(filepath.Join(dir1, "dup.yaml"), content, 0o600); err != nil {
+		t.Fatalf("setup dir1: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir2, "dup.yaml"), content, 0o600); err != nil {
+		t.Fatalf("setup dir2: %v", err)
+	}
+
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Resources: []ResourceSource{
+			{Source: dir1},
+			{Source: dir2},
+		},
+	}
+	app := &stack.Application{Name: "test-app"}
+	_, err := cfg.GeneratePackageFiles(app)
+	if err == nil {
+		t.Fatal("expected error for duplicate resource files across sources")
+	}
+}
+
+func TestGeneratePackageFiles_WithValues_Defaults(t *testing.T) {
+	dir := t.TempDir()
+	valuesFile := filepath.Join(dir, "values.yaml")
+	valuesContent := []byte("replicas: 3\nimage: myapp:latest\n")
+	if err := os.WriteFile(valuesFile, valuesContent, 0o600); err != nil {
+		t.Fatalf("setup values: %v", err)
+	}
+
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Values:  &ValuesConfig{Defaults: valuesFile},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	if _, ok := files["values/values.yaml"]; !ok {
+		t.Error("expected values/values.yaml in output")
+	}
+}
+
+func TestGeneratePackageFiles_WithValues_NonexistentDefaults(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Values:  &ValuesConfig{Defaults: "/tmp/nonexistent-values-99999.yaml"},
+	}
+	app := &stack.Application{Name: "test-app"}
+	_, err := cfg.GeneratePackageFiles(app)
+	if err == nil {
+		t.Fatal("expected error for nonexistent defaults file")
+	}
+}
+
+func TestGeneratePackageFiles_WithValues_Schema(t *testing.T) {
+	dir := t.TempDir()
+	schemaFile := filepath.Join(dir, "schema.json")
+	schemaContent := []byte(`{"type":"object","properties":{"replicas":{"type":"integer"}}}`)
+	if err := os.WriteFile(schemaFile, schemaContent, 0o600); err != nil {
+		t.Fatalf("setup schema: %v", err)
+	}
+
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Values:  &ValuesConfig{Schema: schemaFile},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	if _, ok := files["values/values.schema.json"]; !ok {
+		t.Error("expected values/values.schema.json in output")
+	}
+}
+
+func TestGeneratePackageFiles_WithValues_NonexistentSchema(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Values:  &ValuesConfig{Schema: "/tmp/nonexistent-schema-99999.json"},
+	}
+	app := &stack.Application{Name: "test-app"}
+	_, err := cfg.GeneratePackageFiles(app)
+	if err == nil {
+		t.Fatal("expected error for nonexistent schema file")
+	}
+}
+
+func TestGeneratePackageFiles_WithExtension_Resources(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ext-cm\ndata: {}\n")
+	if err := os.WriteFile(filepath.Join(dir, "ext-cm.yaml"), content, 0o600); err != nil {
+		t.Fatalf("setup extension resources: %v", err)
+	}
+
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Extensions: []Extension{
+			{
+				Name:      "my-ext",
+				Resources: []ResourceSource{{Source: dir}},
+			},
+		},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	// Extension resources are under extensions/<name>/resources-<i>/
+	found := false
+	for k := range files {
+		if len(k) > 17 && k[:17] == "extensions/my-ext" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected extension files under extensions/my-ext/")
+	}
+}
+
+func TestGeneratePackageFiles_WithExtension_Patches(t *testing.T) {
+	validPatch := `[{"op":"replace","path":"/spec/replicas","value":3}]`
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Extensions: []Extension{
+			{
+				Name: "my-ext",
+				Patches: []PatchDefinition{
+					{Target: PatchTarget{Kind: "Deployment", Name: "my-app"}, Patch: validPatch, Type: "json"},
+				},
+			},
+		},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	if _, ok := files["extensions/my-ext/patches/patch-000.yaml"]; !ok {
+		t.Error("expected extension patch file in output")
+	}
+}
+
+func TestGeneratePackageFiles_WithDependenciesAndBuild(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Dependencies: []Dependency{
+			{Name: "dep-one", Version: ">=1.0.0", Repository: "oci://registry.example.com/deps"},
+		},
+		Build: &BuildConfig{
+			OutputDir: "/tmp/output",
+			Format:    "directory",
+		},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	kurelYAMLBytes, ok := files["kurel.yaml"]
+	if !ok {
+		t.Fatal("expected kurel.yaml in output")
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(kurelYAMLBytes, &doc); err != nil {
+		t.Fatalf("unmarshal kurel.yaml: %v", err)
+	}
+	spec, _ := doc["spec"].(map[string]any)
+	if _, hasDeps := spec["dependencies"]; !hasDeps {
+		t.Error("expected dependencies in kurel.yaml spec")
+	}
+	if _, hasBuild := spec["build"]; !hasBuild {
+		t.Error("expected build in kurel.yaml spec")
+	}
+}
+
+func TestGeneratePackageFiles_RecurseSubdirectory(t *testing.T) {
+	dir := t.TempDir()
+	subdir := filepath.Join(dir, "sub")
+	if err := os.Mkdir(subdir, 0o700); err != nil {
+		t.Fatalf("setup subdir: %v", err)
+	}
+	content := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: sub-cm\ndata: {}\n")
+	if err := os.WriteFile(filepath.Join(subdir, "sub-cm.yaml"), content, 0o600); err != nil {
+		t.Fatalf("setup sub resource: %v", err)
+	}
+
+	// With recurse=true, should pick up files in subdirectories
+	cfg := &ConfigV1Alpha1{
+		Package:   PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Resources: []ResourceSource{{Source: dir, Recurse: true}},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles with recurse: %v", err)
+	}
+	if _, ok := files["resources/sub/sub-cm.yaml"]; !ok {
+		t.Error("expected resources/sub/sub-cm.yaml with recurse=true")
+	}
+}
+
+func TestGeneratePackageFiles_IncludeExcludePatterns(t *testing.T) {
+	dir := t.TempDir()
+	yamlContent := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: included\ndata: {}\n")
+	testContent := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: excluded\ndata: {}\n")
+	if err := os.WriteFile(filepath.Join(dir, "included.yaml"), yamlContent, 0o600); err != nil {
+		t.Fatalf("setup included: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "excluded-test.yaml"), testContent, 0o600); err != nil {
+		t.Fatalf("setup excluded: %v", err)
+	}
+
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Resources: []ResourceSource{{
+			Source:   dir,
+			Includes: []string{"*.yaml"},
+			Excludes: []string{"*-test.yaml"},
+		}},
+	}
+	app := &stack.Application{Name: "test-app"}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles: %v", err)
+	}
+	if _, ok := files["resources/included.yaml"]; !ok {
+		t.Error("expected resources/included.yaml in output")
+	}
+	if _, ok := files["resources/excluded-test.yaml"]; ok {
+		t.Error("expected resources/excluded-test.yaml to be excluded")
+	}
+}
