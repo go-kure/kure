@@ -25,6 +25,7 @@ MOUNTED_FILES=(
   "pkg/stack/layout/README.md"
   "pkg/io/README.md"
   "pkg/errors/README.md"
+  "pkg/kubernetes/README.md"
   "pkg/kubernetes/fluxcd/README.md"
   "pkg/kubernetes/prometheus/README.md"
   "pkg/kubernetes/volsync/README.md"

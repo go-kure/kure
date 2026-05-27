@@ -1,7 +1,7 @@
 # Stack Module Design Document
 
 > **Last Updated**: 2025-08-08  
-> **Status**: Implemented - Phase 2 Complete
+> **Status**: Implemented — Phase 2 was removed (see Phase 2 section below)
 
 ## Overview
 
@@ -93,6 +93,8 @@ type ApplicationConfig interface {
 - `generators.gokure.dev/v1alpha1/FluxHelm` - Flux HelmRelease resources
 
 ## Planned GVK Integration
+
+> **REMOVED**: The following section describes a feature (versioned stack structs as GVK types) that was designed and partially implemented but then removed. It is preserved for historical context. Do not implement from this spec.
 
 ### Motivation
 

@@ -44,7 +44,7 @@ err := yaml.Unmarshal(data, wrapper)
 
 ```go
 conversions := gvk.NewConversionRegistry()
-conversions.RegisterConversion(oldGVK, newGVK, func(old OldType) (NewType, error) {
+conversions.Register(oldGVK, newGVK, func(old OldType) (NewType, error) {
     return NewType{Field: old.Field}, nil
 })
 ```

@@ -14,7 +14,7 @@
 //   - [ResourceValidationError]: Validation failures for Kubernetes resources
 //   - [FileError]: File operation failures (read, write, parse)
 //   - [ValidationError]: General validation failures with field details
-//   - [ConfigurationError]: Configuration-related errors
+//   - [ConfigError]: Configuration-related errors
 //
 // # Predefined Errors
 //
@@ -50,19 +50,18 @@
 // Resource validation errors include structured fields:
 //
 //	err := errors.ResourceValidationError(
-//	    "Deployment",           // Kind
-//	    "my-app",              // Name
-//	    "spec.replicas",       // Field
-//	    "must be positive",    // Message
-//	    originalErr,           // Wrapped error (optional)
+//	    "Deployment",           // resourceType
+//	    "my-app",              // name
+//	    "spec.replicas",       // field
+//	    "must be positive",    // reason
+//	    originalErr,           // cause (optional)
 //	)
 //
 // These errors can be introspected for automated handling:
 //
 //	var resErr *errors.ResourceError
 //	if errors.As(err, &resErr) {
-//	    fmt.Printf("Resource: %s/%s\n", resErr.Kind, resErr.Name)
-//	    fmt.Printf("Field: %s\n", resErr.Field)
+//	    fmt.Printf("Resource: %s/%s\n", resErr.ResourceType, resErr.Name)
 //	}
 //
 // # File Errors

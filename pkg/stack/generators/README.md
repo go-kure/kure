@@ -12,9 +12,9 @@ Generators use the GroupVersionKind (GVK) type system to identify and instantiat
 
 | Generator | GVK | Description |
 |-----------|-----|-------------|
-| **AppWorkload** | `generators/AppWorkload` | General-purpose application workload with Deployment, Service, ConfigMap |
-| **FluxHelm** | `generators/FluxHelm` | HelmRelease-based application using Flux |
-| **KurelPackage** | `generators/KurelPackage` | Kurel package reference for pre-built application packages |
+| **AppWorkload** | `generators.gokure.dev/v1alpha1 / AppWorkload` | General-purpose application workload with Deployment, Service, ConfigMap |
+| **FluxHelm** | `generators.gokure.dev/v1alpha1 / FluxHelm` | HelmRelease-based application using Flux |
+| **KurelPackage** | `generators.gokure.dev/v1alpha1 / KurelPackage` | Kurel package reference for pre-built application packages |
 
 ## Usage
 
@@ -35,7 +35,7 @@ app := stack.NewApplication("my-app", "default", config)
 Generators are typically configured via YAML:
 
 ```yaml
-apiVersion: generators/v1
+apiVersion: generators.gokure.dev/v1alpha1
 kind: AppWorkload
 metadata:
   name: my-web-app
