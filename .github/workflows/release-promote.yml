@@ -1,0 +1,30 @@
+name: Release / Promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: 'Target release type'
+        required: true
+        type: choice
+        options:
+          - beta
+          - rc
+          - stable
+      dry_run:
+        description: 'Dry run (preview only, no changes)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release-promote:
+    uses: go-kure/.github/.github/workflows/release-promote.yml@main
+    with:
+      to: ${{ inputs.to }}
+      dry_run: ${{ inputs.dry_run }}
+    secrets: inherit

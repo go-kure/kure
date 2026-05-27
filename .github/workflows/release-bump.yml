@@ -1,8 +1,15 @@
-name: Release / Create
+name: Release / Bump
 
 on:
   workflow_dispatch:
     inputs:
+      scope:
+        description: 'Version scope to bump'
+        required: true
+        type: choice
+        options:
+          - minor
+          - major
       dry_run:
         description: 'Dry run (preview only, no changes)'
         required: false
@@ -14,8 +21,9 @@ permissions:
   actions: read
 
 jobs:
-  release-create:
-    uses: go-kure/.github/.github/workflows/release-create.yml@main
+  release-bump:
+    uses: go-kure/.github/.github/workflows/release-bump.yml@main
     with:
+      scope: ${{ inputs.scope }}
       dry_run: ${{ inputs.dry_run }}
     secrets: inherit

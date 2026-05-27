@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-05-10
+**Last Updated:** 2026-05-27
 
 ---
 
@@ -14,8 +14,10 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Deploy Docs](#deploy-docs-workflow) | `deploy-docs.yml` | push to main (docs paths), `workflow_dispatch` | Multi-version docs deployment |
 | [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
 | [Auto-Rebase](#auto-rebase-workflow) | `auto-rebase.yml` | push to main | Rebase all open PRs when main is updated |
-| [Release](#release-workflow) | `release.yml` | version tags | Release with versioned docs deploy (shared org workflow) |
-| [Create Release](#create-release-workflow) | `release-create.yml` | `workflow_dispatch` | Pre-release test gate + tag creation |
+| [Release / Create](#release--create-workflow) | `release-create.yml` | manual | Auto-infer release type from VERSION, create tag |
+| [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
+| [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major), no tag |
+| [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via ccproxy |
 
 ---
@@ -112,14 +114,114 @@ PR-only jobs (parallel, no blocking):
 
 ---
 
-## Release Workflow
+## Release / Create Workflow
 
-**File:** `.github/workflows/release.yml`
-**Name:** `Release`
+**File:** `.github/workflows/release-create.yml`
+**Name:** `Release / Create`
 
 ### Triggers
 
-- Push tags: `v*` (e.g., v1.0.0, v0.1.0-alpha.0)
+- Manual dispatch with input: `dry_run` (boolean)
+
+### How It Works
+
+The release type is **auto-inferred from the VERSION file** by `release.sh`. No `type` or `scope` inputs are needed. The regression guard in `release.sh` blocks invalid transitions automatically.
+
+### Pre-release Test Gate
+
+The workflow runs a full test suite (with race detection) **before** creating the tag. This prevents tags from being pushed when tests fail.
+
+```
+workflow_dispatch
+  → test job (go test -race ./...)
+    → release job (needs: test)
+      → release.sh (auto-infer type from VERSION) → creates tag + pushes
+        → triggers release-publish.yml (tag push)
+```
+
+If the pre-release test fails, the release job never runs and no tag is created.
+
+### Jobs
+
+1. **test** — Full test run with race detection and CGO enabled (`build-essential` + `CGO_ENABLED=1`)
+2. **release** — Runs `scripts/release.sh` to generate changelog, commit, create tag, and push
+
+### Authentication
+
+Uses a GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`) so that the tag push triggers subsequent workflows (tag-triggered `release-publish.yml`).
+
+### Usage
+
+```bash
+# Preview release (auto-infer from VERSION)
+./scripts/release-trigger.sh
+
+# Create release via CI:
+#   Actions > "Release / Create" > Run workflow (type is auto-inferred)
+```
+
+---
+
+## Release / Promote Workflow
+
+**File:** `.github/workflows/release-promote.yml`
+**Name:** `Release / Promote`
+
+### Triggers
+
+- Manual dispatch with inputs: `to` (beta/rc/stable) and `dry_run`
+
+### Purpose
+
+Explicit type transition (e.g., beta → rc). The regression guard in `release.sh` blocks invalid downgrade transitions (e.g., rc → beta will fail with an error).
+
+### Usage
+
+```bash
+# Preview promotion to rc
+./scripts/release-trigger.sh promote rc
+
+# Execute via CI:
+#   Actions > "Release / Promote" > to=rc > Run workflow
+./scripts/release-trigger.sh promote rc --do-it
+```
+
+---
+
+## Release / Bump Workflow
+
+**File:** `.github/workflows/release-bump.yml`
+**Name:** `Release / Bump`
+
+### Triggers
+
+- Manual dispatch with inputs: `scope` (minor/major) and `dry_run`
+
+### Purpose
+
+Advance the version cycle without creating a tag. Use before starting a new prerelease cycle (e.g., after a stable release, to begin the next minor version's alpha).
+
+### Usage
+
+```bash
+# Preview minor version bump
+./scripts/release-trigger.sh bump minor
+
+# Execute via CI:
+#   Actions > "Release / Bump" > scope=minor > Run workflow
+./scripts/release-trigger.sh bump minor --do-it
+```
+
+---
+
+## Release / Publish Workflow
+
+**File:** `.github/workflows/release-publish.yml`
+**Name:** `Release / Publish`
+
+### Triggers
+
+- Push tags: `v*` (e.g., v1.0.0, v0.1.0-beta.2)
 
 ### Jobs
 
@@ -136,7 +238,7 @@ PR-only jobs (parallel, no blocking):
 
 ### CI Status Check
 
-Release workflow verifies CI passed before releasing:
+Publish workflow verifies CI passed before releasing:
 
 ```yaml
 check-ci:
@@ -156,46 +258,20 @@ check-ci:
 ### Release Management
 
 ```bash
-# Preview release plan locally (dry-run)
-make release TYPE=alpha
+# Preview release (auto-infer from VERSION)
+./scripts/release-trigger.sh
 
-# Create release via CI:
-#   Actions > "Create Release" > type=alpha > Run workflow
+# Preview type promotion
+./scripts/release-trigger.sh promote rc
+
+# Preview version bump
+./scripts/release-trigger.sh bump minor
+
+# Execute via CI (add --do-it to any of the above)
+./scripts/release-trigger.sh --do-it
+./scripts/release-trigger.sh promote rc --do-it
+./scripts/release-trigger.sh bump minor --do-it
 ```
-
----
-
-## Create Release Workflow
-
-**File:** `.github/workflows/release-create.yml`
-**Name:** `Create Release`
-
-### Triggers
-
-- Manual dispatch with inputs: `type` (alpha/beta/rc/stable/bump), `scope` (minor/major), `dry_run`
-
-### Pre-release Test Gate
-
-The workflow runs a full test suite (with race detection) **before** creating the tag. This prevents tags from being pushed when tests fail.
-
-```
-workflow_dispatch
-  → test job (go test -race ./...)
-    → release job (needs: test)
-      → release.sh → creates tag + pushes
-        → triggers release.yml (tag push)
-```
-
-If the pre-release test fails, the release job never runs and no tag is created.
-
-### Jobs
-
-1. **test** — Full test run with race detection and CGO enabled (`build-essential` + `CGO_ENABLED=1`)
-2. **release** — Runs `scripts/release.sh` to generate changelog, commit, create tag, and push
-
-### Authentication
-
-Uses a GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`) so that the tag push triggers subsequent workflows (tag-triggered `release.yml`).
 
 ---
 
