@@ -166,6 +166,26 @@ func TestSplitByHookWeight_CommaAnnotation_TreatedAsUnknown(t *testing.T) {
 	}
 }
 
+func TestSplitByHookWeight_MultipleUnknownPhases_SortedAlphabetically(t *testing.T) {
+	// Two unknown phases get the same phaseOrder(5), so the secondary sort by
+	// phase string is exercised (hooks.go line 86-88).
+	objs := []client.Object{
+		hookObj("z-hook", "zzz-unknown", "0"),
+		hookObj("a-hook", "aaa-unknown", "0"),
+	}
+	groups := helm.SplitByHookWeight(objs)
+	if len(groups) != 2 {
+		t.Fatalf("want 2, got %d", len(groups))
+	}
+	// aaa-unknown < zzz-unknown alphabetically
+	if groups[0].Phase != "aaa-unknown" {
+		t.Errorf("want aaa-unknown first, got %q", groups[0].Phase)
+	}
+	if groups[1].Phase != "zzz-unknown" {
+		t.Errorf("want zzz-unknown second, got %q", groups[1].Phase)
+	}
+}
+
 func TestSplitByHookWeight_AllExcluded(t *testing.T) {
 	objs := []client.Object{
 		hookObj("a", "pre-delete", "0"),
