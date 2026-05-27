@@ -738,3 +738,17 @@ func TestGenerateFromBundle_PostBuild(t *testing.T) {
 		}
 	})
 }
+
+func TestResourceGenerator_GetName(t *testing.T) {
+	rg := fluxstack.NewResourceGenerator()
+	if rg.GetName() == "" {
+		t.Error("expected non-empty name")
+	}
+}
+
+func TestResourceGenerator_GetVersion(t *testing.T) {
+	rg := fluxstack.NewResourceGenerator()
+	if rg.GetVersion() == "" {
+		t.Error("expected non-empty version")
+	}
+}

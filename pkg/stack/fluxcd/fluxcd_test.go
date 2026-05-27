@@ -919,3 +919,88 @@ func fileNamesFromFluxcd(files map[string][]byte) []string {
 	}
 	return names
 }
+
+func TestFluxWorkflowFactory_Init(t *testing.T) {
+	// stack.NewWorkflow("flux") invokes the factory registered in init(),
+	// covering the lambda body "return Engine()".
+	w, err := stack.NewWorkflow("flux")
+	if err != nil {
+		t.Fatalf("NewWorkflow(flux): %v", err)
+	}
+	if w == nil {
+		t.Fatal("expected non-nil workflow")
+	}
+}
+
+func TestEngineWithConfig(t *testing.T) {
+	e := fluxstack.EngineWithConfig(layout.KustomizationExplicit)
+	if e == nil {
+		t.Fatal("expected non-nil engine")
+	}
+	if e.ResourceGen.Mode != layout.KustomizationExplicit {
+		t.Errorf("expected KustomizationExplicit, got %v", e.ResourceGen.Mode)
+	}
+}
+
+func TestNewWorkflowEngineWithConfig(t *testing.T) {
+	e := fluxstack.NewWorkflowEngineWithConfig(layout.KustomizationRecursive)
+	if e == nil {
+		t.Fatal("expected non-nil engine")
+	}
+	if e.ResourceGen.Mode != layout.KustomizationRecursive {
+		t.Errorf("expected KustomizationRecursive, got %v", e.ResourceGen.Mode)
+	}
+	if e.LayoutInteg == nil || e.BootstrapGen == nil {
+		t.Error("expected all components initialized")
+	}
+}
+
+func TestWorkflowEngine_GenerateFromCluster_Delegation(t *testing.T) {
+	we := fluxstack.NewWorkflowEngine()
+	objs, err := we.GenerateFromCluster(nil)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(objs) != 0 {
+		t.Errorf("expected empty result for nil cluster, got %d objects", len(objs))
+	}
+}
+
+func TestWorkflowEngine_IntegrateWithLayout_NilInputs(t *testing.T) {
+	we := fluxstack.NewWorkflowEngine()
+	if err := we.IntegrateWithLayout(nil, nil, layout.LayoutRules{}); err != nil {
+		t.Errorf("expected nil error for nil inputs, got %v", err)
+	}
+}
+
+func TestWorkflowEngine_CreateLayoutWithResources_BadRules(t *testing.T) {
+	we := fluxstack.NewWorkflowEngine()
+	_, err := we.CreateLayoutWithResources(&stack.Cluster{}, badFluxRules{})
+	if err == nil {
+		t.Fatal("expected error for wrong rules type")
+	}
+}
+
+func TestWorkflowEngine_GenerateBootstrap_Disabled(t *testing.T) {
+	we := fluxstack.NewWorkflowEngine()
+	objs, err := we.GenerateBootstrap(&stack.BootstrapConfig{Enabled: false}, nil)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(objs) != 0 {
+		t.Errorf("expected empty result when bootstrap disabled, got %d", len(objs))
+	}
+}
+
+func TestWorkflowEngine_SupportedBootstrapModes_Delegation(t *testing.T) {
+	we := fluxstack.NewWorkflowEngine()
+	modes := we.SupportedBootstrapModes()
+	if len(modes) == 0 {
+		t.Error("expected at least one supported bootstrap mode")
+	}
+}
+
+// badFluxRules satisfies stack.LayoutRulesProvider but is not layout.LayoutRules.
+type badFluxRules struct{}
+
+func (badFluxRules) Validate() error { return nil }
