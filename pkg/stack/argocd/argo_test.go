@@ -523,3 +523,49 @@ func TestGenerateFromBundle_ClientObjectInterface(t *testing.T) {
 		t.Error("copied object should implement GetName method")
 	}
 }
+
+func TestArgoWorkflowFactory_Init(t *testing.T) {
+	// stack.NewWorkflow("argocd") invokes the factory registered in init(),
+	// covering the lambda body "return Engine()".
+	w, err := stack.NewWorkflow("argocd")
+	if err != nil {
+		t.Fatalf("NewWorkflow(argocd): %v", err)
+	}
+	if w == nil {
+		t.Fatal("expected non-nil workflow")
+	}
+}
+
+func TestCreateLayoutWithResources_BadRulesType(t *testing.T) {
+	w := Engine()
+	_, err := w.CreateLayoutWithResources(&stack.Cluster{}, badArgoRules{})
+	if err == nil {
+		t.Fatal("expected error for wrong rules type")
+	}
+}
+
+func TestCreateLayoutWithResources_InvalidCluster(t *testing.T) {
+	w := Engine()
+	// A bundle with an empty Name fails Bundle.Validate → ValidateCluster returns error.
+	invalidCluster := &stack.Cluster{
+		Name: "test",
+		Node: &stack.Node{
+			Name:   "node",
+			Bundle: &stack.Bundle{Name: ""},
+		},
+	}
+	rules := layout.LayoutRules{
+		NodeGrouping:  layout.GroupByName,
+		FilePer:       layout.FilePerResource,
+		FluxPlacement: layout.FluxSeparate,
+	}
+	_, err := w.CreateLayoutWithResources(invalidCluster, rules)
+	if err == nil {
+		t.Fatal("expected error from ValidateCluster for invalid bundle")
+	}
+}
+
+// badArgoRules satisfies stack.LayoutRulesProvider but is not layout.LayoutRules.
+type badArgoRules struct{}
+
+func (badArgoRules) Validate() error { return nil }
