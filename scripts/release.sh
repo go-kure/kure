@@ -8,7 +8,8 @@
 #   RELEASE_TYPE=alpha ./scripts/release.sh  # Via env var (CI)
 #
 # Environment:
-#   RELEASE_TYPE   Release type: alpha|beta|rc|stable|bump (or positional arg)
+#   RELEASE_TYPE   Release type: auto|alpha|beta|rc|stable|bump (or positional arg)
+#                  When unset or 'auto', infers from VERSION file.
 #   RELEASE_SCOPE  Bump scope: minor|major (or positional arg after "bump")
 #   DRY_RUN        1 = preview without changes (default: 0)
 #   CI             Set by CI runners; enables push and git identity setup
@@ -156,6 +157,15 @@ transition_prerelease() {
     echo "${base}-${target}.0"
 }
 
+type_order() {
+    case "$1" in
+        alpha) echo 0 ;;
+        beta)  echo 1 ;;
+        rc)    echo 2 ;;
+        *)     echo 99 ;;
+    esac
+}
+
 # ── Validation ────────────────────────────────────────────────────────────
 
 validate_version() {
@@ -272,11 +282,23 @@ release_prerelease() {
 
     current_type=$(prerelease_type "$current")
 
-    # Determine release version
+    # Regression guard: block downgrade transitions
+    if [ -n "$current_type" ] && [ "$current_type" != "$target_type" ]; then
+        current_order=$(type_order "$current_type")
+        target_order=$(type_order "$target_type")
+        if [ "$target_order" -lt "$current_order" ]; then
+            die "Requested type '$target_type' is a regression from current type '$current_type'.
+To restart from $target_type, use release-bump to advance to the next cycle first."
+        fi
+    fi
+
+    # Block prerelease creation from stable version
     if [ -z "$current_type" ]; then
-        # No prerelease suffix — start new prerelease cycle
-        release_version=$(start_prerelease "$current" "$target_type")
-    elif [ "$current_type" = "$target_type" ]; then
+        die "No prerelease in VERSION ($current). Use release-bump to start a new cycle."
+    fi
+
+    # Determine release version
+    if [ "$current_type" = "$target_type" ]; then
         # Same type — current version IS the release version
         release_version="$current"
     else
@@ -452,7 +474,19 @@ EOF
 }
 
 main() {
-    [ -n "$RELEASE_TYPE" ] || usage
+    # Auto-infer type from VERSION if not specified
+    if [ -z "$RELEASE_TYPE" ] || [ "$RELEASE_TYPE" = "auto" ]; then
+        current=$(read_version)
+        case "$current" in
+            *-alpha.*) RELEASE_TYPE=alpha ;;
+            *-beta.*)  RELEASE_TYPE=beta ;;
+            *-rc.*)    RELEASE_TYPE=rc ;;
+            *)
+                die "No prerelease in VERSION ($current). Use release-bump to start a new cycle."
+                ;;
+        esac
+        log_info "Auto-detected release type: $RELEASE_TYPE"
+    fi
 
     if [ "$DRY_RUN" = "1" ]; then
         log_warn "DRY_RUN mode — no changes will be made"

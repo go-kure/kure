@@ -2,16 +2,14 @@
 # Release trigger — dry-run by default, --do-it to execute via CI.
 #
 # Usage:
-#   ./scripts/release-trigger.sh                    # Preview current release
-#   ./scripts/release-trigger.sh beta               # Preview promotion to beta
-#   ./scripts/release-trigger.sh stable              # Preview stable release
-#   ./scripts/release-trigger.sh bump minor          # Preview minor version bump
-#   ./scripts/release-trigger.sh --do-it             # Execute release via CI
-#   ./scripts/release-trigger.sh beta --do-it        # Execute beta promotion via CI
-#   ./scripts/release-trigger.sh bump minor --do-it  # Execute minor bump via CI
+#   ./scripts/release-trigger.sh                         # Preview release (auto-infer from VERSION)
+#   ./scripts/release-trigger.sh promote <rc|beta|stable> # Preview type promotion
+#   ./scripts/release-trigger.sh bump <minor|major>      # Preview version bump
+#   ./scripts/release-trigger.sh --do-it                 # Execute release via CI
+#   ./scripts/release-trigger.sh promote rc --do-it      # Execute promotion via CI
+#   ./scripts/release-trigger.sh bump minor --do-it      # Execute bump via CI
 #
-# The script shows a preview of what will happen, then exits. Pass --do-it
-# to trigger the CI pipeline that performs the actual release.
+# The script shows a dry-run preview, then exits. Pass --do-it to trigger CI.
 #
 # See: https://gitlab.com/autops/wharf/meta/-/blob/main/standards/release-process.md
 
@@ -20,65 +18,75 @@ set -eu
 # ── Parse arguments ──────────────────────────────────────────────────────
 
 DO_IT=0
-TYPE=""
-SCOPE=""
-for arg in "$@"; do
-    case "$arg" in
+SUBCOMMAND=""
+ARG=""
+
+for _arg in "$@"; do
+    case "$_arg" in
         --do-it) DO_IT=1 ;;
+        promote|bump)
+            if [ -n "$SUBCOMMAND" ]; then
+                echo "ERROR: unexpected argument: $_arg" >&2; exit 1
+            fi
+            SUBCOMMAND="$_arg"
+            ;;
         *)
-            if [ -z "$TYPE" ]; then
-                TYPE="$arg"
+            if [ -n "$SUBCOMMAND" ] && [ -z "$ARG" ]; then
+                ARG="$_arg"
             else
-                SCOPE="$arg"
+                echo "ERROR: unexpected argument: $_arg" >&2; exit 1
             fi
             ;;
     esac
 done
 
-# ── Auto-detect type from VERSION ────────────────────────────────────────
+# ── Validate subcommand arguments ────────────────────────────────────────
 
-if [ -z "$TYPE" ]; then
-    VERSION=$(cat VERSION 2>/dev/null) || { echo "ERROR: VERSION file not found"; exit 1; }
-    case "$VERSION" in
-        *-alpha.*) TYPE=alpha ;;
-        *-beta.*)  TYPE=beta ;;
-        *-rc.*)    TYPE=rc ;;
-        *)
-            echo "ERROR: VERSION $VERSION has no prerelease suffix."
-            echo "Specify type: mise run release <alpha|beta|rc|stable|bump>"
-            exit 1
-            ;;
+if [ "$SUBCOMMAND" = "promote" ]; then
+    case "$ARG" in
+        beta|rc|stable) ;;
+        "") echo "ERROR: 'promote' requires a target: beta, rc, or stable" >&2; exit 1 ;;
+        *)  echo "ERROR: invalid promote target '$ARG' (use: beta, rc, stable)" >&2; exit 1 ;;
+    esac
+elif [ "$SUBCOMMAND" = "bump" ]; then
+    case "$ARG" in
+        minor|major) ;;
+        "") echo "ERROR: 'bump' requires a scope: minor or major" >&2; exit 1 ;;
+        *)  echo "ERROR: invalid bump scope '$ARG' (use: minor, major)" >&2; exit 1 ;;
     esac
 fi
 
 # ── Show dry-run preview ────────────────────────────────────────────────
 
-if [ "$TYPE" = "bump" ]; then
+if [ "$SUBCOMMAND" = "bump" ]; then
     echo "=== Version Bump Preview ==="
+    echo ""
+    DRY_RUN=1 RELEASE_TYPE=bump RELEASE_SCOPE="$ARG" ./scripts/release.sh
 else
     echo "=== Release Preview ==="
+    echo ""
+    if [ "$SUBCOMMAND" = "promote" ]; then
+        DRY_RUN=1 RELEASE_TYPE="$ARG" ./scripts/release.sh
+    else
+        DRY_RUN=1 ./scripts/release.sh
+    fi
 fi
 echo ""
-DRY_RUN=1 ./scripts/release.sh "$TYPE" $SCOPE
-echo ""
 
-# ── If not --do-it, show how to proceed and exit ────────────────────────
+# ── If not --do-it, show how to proceed and exit ─────────────────────────
 
 if [ "$DO_IT" != "1" ]; then
     echo "---"
-    if [ "$TYPE" = "bump" ]; then
-        CMD="mise run release bump${SCOPE:+ $SCOPE}"
+    if [ "$SUBCOMMAND" = "bump" ]; then
+        echo "To execute, run:"
+        echo "  mise run release bump $ARG -- --do-it"
+    elif [ "$SUBCOMMAND" = "promote" ]; then
+        echo "To execute, run:"
+        echo "  mise run release promote $ARG -- --do-it"
     else
-        # Show type only if it differs from auto-detected
-        AUTO_TYPE=$(sed -n 's/.*-\(alpha\|beta\|rc\).*/\1/p' VERSION 2>/dev/null || true)
-        if [ "$TYPE" = "$AUTO_TYPE" ]; then
-            CMD="mise run release"
-        else
-            CMD="mise run release $TYPE"
-        fi
+        echo "To execute, run:"
+        echo "  mise run release -- --do-it"
     fi
-    echo "To execute, run:"
-    echo "  $CMD -- --do-it"
     exit 0
 fi
 
@@ -89,26 +97,40 @@ echo ""
 
 REMOTE=$(git remote get-url origin 2>/dev/null || true)
 if echo "$REMOTE" | grep -q github.com; then
-    echo "Dispatching GitHub workflow: release-create.yml (type=${TYPE})"
-    if [ -n "$SCOPE" ]; then
-        gh workflow run release-create.yml --field "type=${TYPE}" --field "scope=${SCOPE}"
+    if [ "$SUBCOMMAND" = "bump" ]; then
+        echo "Dispatching GitHub workflow: release-bump.yml (scope=${ARG})"
+        gh workflow run release-bump.yml --field "scope=${ARG}"
+        echo ""
+        echo "Watch progress:"
+        echo "  gh run list --workflow=release-bump.yml"
+    elif [ "$SUBCOMMAND" = "promote" ]; then
+        echo "Dispatching GitHub workflow: release-promote.yml (to=${ARG})"
+        gh workflow run release-promote.yml --field "to=${ARG}"
+        echo ""
+        echo "Watch progress:"
+        echo "  gh run list --workflow=release-promote.yml"
     else
-        gh workflow run release-create.yml --field "type=${TYPE}"
+        echo "Dispatching GitHub workflow: release-create.yml"
+        gh workflow run release-create.yml
+        echo ""
+        echo "Watch progress:"
+        echo "  gh run list --workflow=release-create.yml"
     fi
-    echo ""
-    echo "Watch progress:"
-    echo "  gh run list --workflow=release-create.yml"
 elif echo "$REMOTE" | grep -q gitlab; then
-    echo "Creating GitLab pipeline on main (RELEASE_TYPE=${TYPE})"
-    if [ -n "$SCOPE" ]; then
-        glab ci run --branch main --variables-env "RELEASE_TYPE:${TYPE},RELEASE_SCOPE:${SCOPE}"
+    if [ "$SUBCOMMAND" = "bump" ]; then
+        echo "Creating GitLab pipeline on main (BUMP_SCOPE=${ARG})"
+        glab ci run --branch main --variables-env "BUMP_SCOPE:${ARG}"
+    elif [ "$SUBCOMMAND" = "promote" ]; then
+        echo "Creating GitLab pipeline on main (PROMOTE_TO=${ARG})"
+        glab ci run --branch main --variables-env "PROMOTE_TO:${ARG}"
     else
-        glab ci run --branch main --variables-env "RELEASE_TYPE:${TYPE}"
+        echo "Creating GitLab pipeline on main (RELEASE_CREATE=1)"
+        glab ci run --branch main --variables-env "RELEASE_CREATE:1"
     fi
     echo ""
     echo "Watch progress:"
     echo "  glab ci status"
 else
-    echo "ERROR: unsupported remote: $REMOTE"
+    echo "ERROR: unsupported remote: $REMOTE" >&2
     exit 1
 fi

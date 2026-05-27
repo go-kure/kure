@@ -1,4 +1,4 @@
-name: Release
+name: Release / Publish
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   release:
-    uses: go-kure/.github/.github/workflows/release.yml@main
+    uses: go-kure/.github/.github/workflows/release-publish.yml@main
     with:
       go_module: github.com/go-kure/kure
     secrets: inherit
