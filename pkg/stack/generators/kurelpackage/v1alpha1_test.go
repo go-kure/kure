@@ -3,6 +3,7 @@ package kurelpackage
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -1025,4 +1026,48 @@ data:
 	if obj.GetName() != "test-cm" {
 		t.Errorf("object name = %q, want %q", obj.GetName(), "test-cm")
 	}
+}
+
+func TestGeneratePackageFiles_WithValues(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Values: &ValuesConfig{
+			Values: map[string]any{"replicas": 2, "image": "nginx:latest"},
+		},
+	}
+	app := &stack.Application{Config: cfg}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles with Values: %v", err)
+	}
+	if _, ok := files["values/values.yaml"]; !ok {
+		t.Fatalf("expected values/values.yaml in output, got keys: %v", mapKeys(files))
+	}
+}
+
+func TestGeneratePackageFiles_WithExtension(t *testing.T) {
+	cfg := &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "test-pkg", Version: "1.0.0"},
+		Extensions: []Extension{
+			{Name: "extra"},
+		},
+	}
+	app := &stack.Application{Config: cfg}
+	files, err := cfg.GeneratePackageFiles(app)
+	if err != nil {
+		t.Fatalf("GeneratePackageFiles with extension: %v", err)
+	}
+	if _, ok := files["extensions/extra/extension.yaml"]; !ok {
+		t.Fatalf("expected extension file in output, got keys: %v", mapKeys(files))
+	}
+}
+
+// mapKeys returns sorted keys of a map for readable error messages.
+func mapKeys(m map[string][]byte) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
