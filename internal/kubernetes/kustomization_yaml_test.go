@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"sigs.k8s.io/kustomize/api/types"
@@ -49,5 +50,21 @@ func TestKustomizationFileFunctions(t *testing.T) {
 	}
 	if k.Namespace != "demo" {
 		t.Errorf("namespace not set")
+	}
+}
+
+func TestMarshalKustomization_Basic(t *testing.T) {
+	ks := CreateKustomizationFile()
+	AddKustomizationResource(ks, "deployment.yaml")
+
+	out, err := MarshalKustomization(ks)
+	if err != nil {
+		t.Fatalf("MarshalKustomization error: %v", err)
+	}
+	if len(out) == 0 {
+		t.Error("expected non-empty YAML output")
+	}
+	if !strings.Contains(string(out), "deployment.yaml") {
+		t.Errorf("expected 'deployment.yaml' in output, got:\n%s", out)
 	}
 }

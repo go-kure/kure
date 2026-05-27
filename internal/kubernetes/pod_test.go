@@ -164,3 +164,14 @@ func TestSetPodPriorityClassName(t *testing.T) {
 		t.Errorf("priority class name not set")
 	}
 }
+
+func TestSetPodSpec(t *testing.T) {
+	pod := CreatePod("test", "default")
+	spec := &corev1.PodSpec{
+		RestartPolicy: corev1.RestartPolicyAlways,
+	}
+	SetPodSpec(pod, spec)
+	if pod.Spec.RestartPolicy != corev1.RestartPolicyAlways {
+		t.Errorf("expected RestartPolicyAlways, got %v", pod.Spec.RestartPolicy)
+	}
+}
