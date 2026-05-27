@@ -667,18 +667,22 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 	// output has the right directory shape, kustomization.yaml references, and
 	// the umbrella parent Kustomization CR with HealthChecks.
 	umbrella := &stack.Bundle{
-		Name: "platform",
+		Name:      "platform",
+		SourceRef: testSR(),
 		Children: []*stack.Bundle{
 			{
 				Name:         "Y-infra",
+				SourceRef:    testSR(),
 				Applications: []*stack.Application{fakeUmbrellaApp("infra-app", "cm-infra")},
 			},
 			{
 				Name:         "Y-services",
+				SourceRef:    testSR(),
 				Applications: []*stack.Application{fakeUmbrellaApp("services-app", "cm-services")},
 			},
 			{
 				Name:         "Y-apps",
+				SourceRef:    testSR(),
 				Applications: []*stack.Application{fakeUmbrellaApp("apps-app", "cm-apps")},
 			},
 		},

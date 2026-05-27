@@ -73,7 +73,8 @@ func TestWorkflowInterface(t *testing.T) {
 				Node: &stack.Node{
 					Name: "root",
 					Bundle: &stack.Bundle{
-						Name: "test-bundle",
+						Name:      "test-bundle",
+						SourceRef: &stack.SourceRef{Kind: "GitRepository", Name: "flux-system"},
 					},
 				},
 				GitOps: &stack.GitOpsConfig{
