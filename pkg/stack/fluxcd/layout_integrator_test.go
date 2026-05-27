@@ -1094,6 +1094,38 @@ func augKeysOf(m map[string]string) []string {
 	return keys
 }
 
+func TestCreateLayoutWithResources_FluxIntegrated_RejectsInvalidSourceRef(t *testing.T) {
+	// Validator fires before WalkCluster; no ApplicationConfig needed.
+	c := &stack.Cluster{
+		Name: "test",
+		Node: &stack.Node{
+			Name:   "prod",
+			Bundle: &stack.Bundle{Name: "apps"},
+		},
+	}
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+
+	if _, err := li.CreateLayoutWithResources(c, rules); err == nil {
+		t.Fatal("expected error for FluxIntegrated with nil SourceRef, got nil")
+	}
+}
+
+func TestCreateLayoutWithResources_FluxSeparate_AllowsMissingSourceRef(t *testing.T) {
+	bundle := &stack.Bundle{Name: "apps"}
+	bundle.Applications = []*stack.Application{fakeUmbrellaApp("myapp", "my-cm")}
+	node := &stack.Node{Name: "prod", Bundle: bundle}
+	c := &stack.Cluster{Node: node, Name: "test-cluster"}
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	li.SetFluxPlacement(layout.FluxSeparate)
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxSeparate}
+
+	if _, err := li.CreateLayoutWithResources(c, rules); err != nil {
+		t.Fatalf("FluxSeparate: unexpected error for nil SourceRef: %v", err)
+	}
+}
+
 // testSR returns a minimal valid SourceRef for use in FluxIntegrated fixtures.
 func testSR() *stack.SourceRef {
 	return &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
