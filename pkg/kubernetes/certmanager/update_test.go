@@ -195,3 +195,73 @@ func TestAddClusterIssuerLabel(t *testing.T) {
 		t.Error("expected label 'env' to be 'prod'")
 	}
 }
+
+func TestSetCertificateRenewBefore(t *testing.T) {
+	cfg := &CertificateConfig{
+		Name:       "test-cert",
+		Namespace:  "default",
+		SecretName: "tls",
+		IssuerRef:  cmmeta.IssuerReference{Name: "issuer"},
+	}
+	cert := Certificate(cfg)
+
+	dur := &metav1.Duration{Duration: 24 * 3600_000_000_000} // 24h
+	SetCertificateRenewBefore(cert, dur)
+	if cert.Spec.RenewBefore == nil || cert.Spec.RenewBefore.Duration != dur.Duration {
+		t.Errorf("expected RenewBefore %v, got %v", dur.Duration, cert.Spec.RenewBefore)
+	}
+}
+
+func TestAddIssuerAnnotation(t *testing.T) {
+	cfg := &IssuerConfig{
+		Name:      "test-issuer",
+		Namespace: "default",
+	}
+	issuer := Issuer(cfg)
+
+	AddIssuerAnnotation(issuer, "example.com/key", "value")
+	if issuer.Annotations["example.com/key"] != "value" {
+		t.Errorf("expected annotation 'value', got %q", issuer.Annotations["example.com/key"])
+	}
+}
+
+func TestAddClusterIssuerAnnotation(t *testing.T) {
+	cfg := &ClusterIssuerConfig{
+		Name: "test-cluster-issuer",
+	}
+	ci := ClusterIssuer(cfg)
+
+	AddClusterIssuerAnnotation(ci, "example.com/key", "value")
+	if ci.Annotations["example.com/key"] != "value" {
+		t.Errorf("expected annotation 'value', got %q", ci.Annotations["example.com/key"])
+	}
+}
+
+func TestIssuerVariant_MarkerMethods(t *testing.T) {
+	var v IssuerVariant
+	v = &ACMEConfig{}
+	v.isIssuerVariant()
+	v = &CAConfig{}
+	v.isIssuerVariant()
+	_ = v
+}
+
+func TestACMESolver_MarkerMethods(t *testing.T) {
+	var s ACMESolver
+	s = &HTTP01SolverConfig{}
+	s.isACMESolver()
+	s = &DNS01SolverConfig{}
+	s.isACMESolver()
+	_ = s
+}
+
+func TestDNS01Provider_MarkerMethods(t *testing.T) {
+	var p DNS01Provider
+	p = &CloudflareProviderConfig{}
+	p.isDNS01Provider()
+	p = &Route53ProviderConfig{}
+	p.isDNS01Provider()
+	p = &GoogleProviderConfig{}
+	p.isDNS01Provider()
+	_ = p
+}
