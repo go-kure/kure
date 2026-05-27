@@ -1071,3 +1071,445 @@ func mapKeys(m map[string][]byte) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// validBaseKurelConfig returns a minimal valid ConfigV1Alpha1 for validation tests.
+func validBaseKurelConfig() *ConfigV1Alpha1 {
+	return &ConfigV1Alpha1{
+		Package: PackageMetadata{Name: "my-package", Version: "1.0.0"},
+	}
+}
+
+func TestValidate_PackageName(t *testing.T) {
+	tests := []struct {
+		name    string
+		pkgName string
+		wantErr bool
+	}{
+		{"empty name", "", true},
+		{"uppercase letters", "MyPackage", true},
+		{"starts with hyphen", "-mypackage", true},
+		{"ends with hyphen", "mypackage-", true},
+		{"valid lowercase", "my-package", false},
+		{"valid alphanumeric", "mypkg123", false},
+		{"single char", "a", false},
+		{"too long (254 chars)", string(make([]byte, 254)), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &ConfigV1Alpha1{
+				Package: PackageMetadata{Name: tt.pkgName, Version: "1.0.0"},
+			}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_PackageVersion(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		wantErr bool
+	}{
+		{"empty version", "", true},
+		{"not semver", "v1.0", true},
+		{"not semver with v prefix", "v1.0.0", true},
+		{"valid semver", "1.0.0", false},
+		{"valid semver with pre-release", "1.0.0-alpha.1", false},
+		{"valid semver with build meta", "1.0.0+build123", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &ConfigV1Alpha1{
+				Package: PackageMetadata{Name: "my-package", Version: tt.version},
+			}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_ResourceSource(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  ResourceSource
+		wantErr bool
+	}{
+		{"empty Source field", ResourceSource{}, true},
+		{"nonexistent path", ResourceSource{Source: "/tmp/nonexistent-kurel-path-99999"}, true},
+		{"valid existing path", ResourceSource{Source: "/tmp"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseKurelConfig()
+			cfg.Resources = []ResourceSource{tt.source}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_ResourceSource_Patterns(t *testing.T) {
+	t.Run("valid include pattern", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Resources = []ResourceSource{{Source: "/tmp", Includes: []string{"*.yaml"}}}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("valid exclude pattern", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Resources = []ResourceSource{{Source: "/tmp", Excludes: []string{"*.bak"}}}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("invalid include pattern", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Resources = []ResourceSource{{Source: "/tmp", Includes: []string{"[invalid"}}}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for malformed include pattern")
+		}
+	})
+	t.Run("invalid exclude pattern", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Resources = []ResourceSource{{Source: "/tmp", Excludes: []string{"[invalid"}}}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for malformed exclude pattern")
+		}
+	})
+}
+
+func TestValidate_ValuesConfig(t *testing.T) {
+	t.Run("all empty fields is invalid", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Values = &ValuesConfig{}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for all-empty ValuesConfig")
+		}
+	})
+	t.Run("inline values is valid", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Values = &ValuesConfig{Values: map[string]any{"k": "v"}}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("defaults file exists is valid", func(t *testing.T) {
+		f := filepath.Join(t.TempDir(), "values.yaml")
+		os.WriteFile(f, []byte("replicas: 1"), 0o600) //nolint:errcheck
+		cfg := validBaseKurelConfig()
+		cfg.Values = &ValuesConfig{Defaults: f}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("defaults file missing is invalid", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Values = &ValuesConfig{Defaults: "/tmp/nonexistent-defaults-12345.yaml"}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for nonexistent defaults file")
+		}
+	})
+	t.Run("schema file exists is valid", func(t *testing.T) {
+		f := filepath.Join(t.TempDir(), "schema.json")
+		os.WriteFile(f, []byte(`{"type":"object"}`), 0o600) //nolint:errcheck
+		cfg := validBaseKurelConfig()
+		cfg.Values = &ValuesConfig{Schema: f}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("schema file missing is invalid", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Values = &ValuesConfig{Schema: "/tmp/nonexistent-schema-12345.json"}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for nonexistent schema file")
+		}
+	})
+}
+
+func TestValidate_Dependency(t *testing.T) {
+	tests := []struct {
+		name    string
+		dep     Dependency
+		wantErr bool
+	}{
+		{"empty Name", Dependency{Version: "1.0.0"}, true},
+		{"empty Version", Dependency{Name: "dep-a"}, true},
+		{"invalid Name format", Dependency{Name: "DEP_A", Version: "1.0.0"}, true},
+		{"invalid Version constraint", Dependency{Name: "dep-a", Version: "not-a-version"}, true},
+		{"valid dependency exact", Dependency{Name: "dep-a", Version: "1.0.0"}, false},
+		{"valid dependency caret constraint", Dependency{Name: "dep-a", Version: "^1.0.0"}, false},
+		{"valid dependency gte constraint", Dependency{Name: "dep-a", Version: ">=1.2.3"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseKurelConfig()
+			cfg.Dependencies = []Dependency{tt.dep}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_Extension(t *testing.T) {
+	tests := []struct {
+		name    string
+		ext     Extension
+		wantErr bool
+	}{
+		{"empty Name", Extension{}, true},
+		{"invalid Name format (uppercase)", Extension{Name: "MyExt"}, true},
+		{"valid extension no when", Extension{Name: "my-ext"}, false},
+		{"valid extension with valid CEL when", Extension{Name: "my-ext", When: ".Values.enabled == true"}, false},
+		{"extension with empty CEL when (whitespace)", Extension{Name: "my-ext", When: "   "}, true},
+		{"extension when without .Values reference", Extension{Name: "my-ext", When: "true == true"}, true},
+		{"extension with invalid CEL syntax", Extension{Name: "my-ext", When: ".Values.enabled ==="}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseKurelConfig()
+			cfg.Extensions = []Extension{tt.ext}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_Extension_WithResources(t *testing.T) {
+	t.Run("extension with valid resource", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Extensions = []Extension{
+			{Name: "my-ext", Resources: []ResourceSource{{Source: "/tmp"}}},
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("extension with invalid resource (nonexistent)", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Extensions = []Extension{
+			{Name: "my-ext", Resources: []ResourceSource{{Source: "/tmp/nonexistent-ext-path-99999"}}},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for nonexistent extension resource path")
+		}
+	})
+}
+
+func TestValidate_PatchDefinition(t *testing.T) {
+	validJSONPatch := `
+- op: replace
+  path: /spec/replicas
+  value: 3
+`
+	validStrategicPatch := "spec:\n  replicas: 3\n"
+
+	tests := []struct {
+		name    string
+		patch   PatchDefinition
+		wantErr bool
+	}{
+		{
+			"missing target Kind",
+			PatchDefinition{Target: PatchTarget{Name: "my-deploy"}, Patch: validJSONPatch},
+			true,
+		},
+		{
+			"missing target Name",
+			PatchDefinition{Target: PatchTarget{Kind: "Deployment"}, Patch: validJSONPatch},
+			true,
+		},
+		{
+			"missing patch content",
+			PatchDefinition{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}},
+			true,
+		},
+		{
+			"invalid patch type",
+			PatchDefinition{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}, Patch: validJSONPatch, Type: "unsupported"},
+			true,
+		},
+		{
+			"valid json patch (default type)",
+			PatchDefinition{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}, Patch: validJSONPatch},
+			false,
+		},
+		{
+			"valid json patch (explicit type)",
+			PatchDefinition{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}, Patch: validJSONPatch, Type: "json"},
+			false,
+		},
+		{
+			"valid strategic merge patch",
+			PatchDefinition{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}, Patch: validStrategicPatch, Type: "strategic"},
+			false,
+		},
+		{
+			"empty strategic merge patch",
+			PatchDefinition{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}, Patch: "{}", Type: "strategic"},
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseKurelConfig()
+			cfg.Patches = []PatchDefinition{tt.patch}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_JSONPatch_Operations(t *testing.T) {
+	validTarget := PatchTarget{Kind: "Deployment", Name: "my-deploy"}
+
+	tests := []struct {
+		name    string
+		patch   string
+		wantErr bool
+	}{
+		{
+			"add op with value",
+			"- op: add\n  path: /spec/replicas\n  value: 3\n",
+			false,
+		},
+		{
+			"remove op (no value needed)",
+			"- op: remove\n  path: /spec/selector\n",
+			false,
+		},
+		{
+			"move op with from",
+			"- op: move\n  path: /spec/newField\n  from: /spec/oldField\n",
+			false,
+		},
+		{
+			"copy op with from",
+			"- op: copy\n  path: /spec/newField\n  from: /spec/oldField\n",
+			false,
+		},
+		{
+			"test op with value",
+			"- op: test\n  path: /spec/replicas\n  value: 3\n",
+			false,
+		},
+		{
+			"invalid op",
+			"- op: badop\n  path: /spec/replicas\n",
+			true,
+		},
+		{
+			"path without leading slash",
+			"- op: remove\n  path: spec/selector\n",
+			true,
+		},
+		{
+			"missing op field",
+			"- path: /spec/replicas\n  value: 3\n",
+			true,
+		},
+		{
+			"add op missing value",
+			"- op: add\n  path: /spec/replicas\n",
+			true,
+		},
+		{
+			"replace op with value",
+			"- op: replace\n  path: /spec/replicas\n  value: 5\n",
+			false,
+		},
+		{
+			"replace op missing value",
+			"- op: replace\n  path: /spec/replicas\n",
+			true,
+		},
+		{
+			"move op missing from",
+			"- op: move\n  path: /spec/newField\n",
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseKurelConfig()
+			cfg.Patches = []PatchDefinition{{Target: validTarget, Patch: tt.patch}}
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_BuildConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		build   BuildConfig
+		wantErr bool
+	}{
+		{"empty build config", BuildConfig{}, false},
+		{"format directory", BuildConfig{Format: "directory"}, false},
+		{"format oci without registry", BuildConfig{Format: "oci"}, true},
+		{"format oci without repository", BuildConfig{Format: "oci", Registry: "registry.example.com"}, true},
+		{"format oci valid", BuildConfig{Format: "oci", Registry: "registry.example.com", Repository: "myrepo"}, false},
+		{"invalid format", BuildConfig{Format: "tarball"}, true},
+		{"valid outputDir with existing parent", BuildConfig{OutputDir: "/tmp/output"}, false},
+		{"invalid outputDir with nonexistent parent", BuildConfig{OutputDir: "/tmp/nonexistent-parent-99999/output"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseKurelConfig()
+			cfg.Build = &tt.build
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_Extension_WithPatches(t *testing.T) {
+	validJSONPatch := "- op: replace\n  path: /spec/replicas\n  value: 3\n"
+	t.Run("extension with valid patch", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Extensions = []Extension{
+			{
+				Name: "my-ext",
+				Patches: []PatchDefinition{
+					{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}, Patch: validJSONPatch},
+				},
+			},
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("extension with invalid patch", func(t *testing.T) {
+		cfg := validBaseKurelConfig()
+		cfg.Extensions = []Extension{
+			{
+				Name: "my-ext",
+				Patches: []PatchDefinition{
+					{Target: PatchTarget{Kind: "Deployment", Name: "my-deploy"}, Patch: validJSONPatch, Type: "invalid"},
+				},
+			},
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Error("expected error for invalid extension patch type")
+		}
+	})
+}
