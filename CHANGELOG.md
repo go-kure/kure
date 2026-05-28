@@ -1,6 +1,45 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.2] - 2026-05-28
+
+### CI
+
+- Redesign release workflows — Create/Promote/Bump/Publish
+- Raise coverage threshold to 90%, document targets in AGENTS.md
+- Enforce per-package 90% coverage gate; fix smoke-test assertion
+
+### Documentation
+
+- Remove deprecated kurel/CLI content from docs site
+- Rewrite homepage with improved UX and structure
+- Remove stale generator registry references
+
+### Fixed
+
+- Emit CRs for augmenter-added sub-layouts of umbrella children
+- Correct broken and wrong API examples across package docs
+- Add missing SetKustomizationPrune to quickstart example
+- Improve error messages and docs accuracy in release tooling
+
+### Maintenance
+
+- Remove pkg/stack/generators and ApplicationWrapper
+- Tidy go.mod after removing pkg/stack/generators
+
+### Testing
+
+- Cover WorkflowEngine delegation methods, EngineWithConfig, init factory, GetName/GetVersion
+- Cover RenewBefore setter, Issuer/ClusterIssuer annotations, sealed interface markers
+- Cover init factory invocation and CreateLayoutWithResources branches
+- Cover generateValues and processExtension via GeneratePackageFiles
+- Table-driven validation tests covering validateResourceSource, Dependency, ValuesConfig, Extension, Patch
+- Filesystem-backed tests for gatherResourcesFromSource and generateKurelYAML
+- Raise coverage from 83.1% to 90.2%
+- Cover renderOCI error path, renderHTTP error paths, corrupt archive
+- Cover MarshalKustomization and SetPodSpec
+- Cover gap functions to reach 95% total coverage
+
 ## [0.2.0-beta.1] - 2026-05-27
 
 ### Fixed
