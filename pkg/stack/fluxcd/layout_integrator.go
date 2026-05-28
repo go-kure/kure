@@ -15,7 +15,7 @@ import (
 // LayoutIntegrator implements the workflow.LayoutIntegrator interface for Flux.
 // It handles integration of Flux resources with manifest layouts.
 //
-// Placement (FluxIntegrated vs FluxSeparate) is configured via
+// Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured via
 // layout.LayoutRules.FluxPlacement on each call. CreateLayoutWithResources
 // normalizes FluxUnset to FluxSeparate before invoking the SourceRef
 // validation gate, WalkCluster, and IntegrateWithLayout, so all three
@@ -52,13 +52,17 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 
 	var err error
 	switch rules.FluxPlacement {
-	case layout.FluxIntegrated:
+	case layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle:
+		// Both place Flux CRs inline. They differ only in granularity, handled
+		// inside addIntegratedFluxToLayout: PerLayout emits a CR for every
+		// layout node (incl. augmenter-added child layouts); PerBundle stops at
+		// bundle/node boundaries and lets kustomize include child directories.
 		err = li.addIntegratedFluxToLayout(ml, c, rules)
 	case layout.FluxSeparate:
 		err = li.addSeparateFluxToLayout(ml, c, rules)
 	default:
 		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
-			[]string{string(layout.FluxIntegrated), string(layout.FluxSeparate)})
+			[]string{string(layout.FluxIntegratedPerLayout), string(layout.FluxIntegratedPerBundle), string(layout.FluxSeparate)})
 	}
 	if err != nil {
 		return err
@@ -87,7 +91,10 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 
 	rules = normalizeRulesPlacement(rules)
 
-	if rules.FluxPlacement == layout.FluxIntegrated {
+	// Both inline modes emit bundle/node Flux CRs that carry a spec.sourceRef,
+	// so both require every reachable bundle to have a valid SourceRef.
+	if rules.FluxPlacement == layout.FluxIntegratedPerLayout ||
+		rules.FluxPlacement == layout.FluxIntegratedPerBundle {
 		if err := validateSourceRefsForFluxIntegrated(c); err != nil {
 			return nil, err
 		}
@@ -110,14 +117,22 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 }
 
 // addIntegratedFluxToLayout places Flux Kustomizations alongside their target manifests.
+//
+// PerLayout emits a Flux Kustomization CR for every eligible layout child
+// (including augmenter-added sub-layouts), so the writer references each child
+// as a CR file. PerBundle emits CRs only at bundle/node boundaries
+// (GenerateFromBundle + umbrella bundle children); non-bundle layout children
+// get no CR and the writer references them as directories — a single kustomize
+// build per bundle.
 func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
-	return li.processNodeForIntegratedFlux(ml, c.Node, c.Name)
+	emitPerChildCRs := rules.FluxPlacement == layout.FluxIntegratedPerLayout
+	return li.processNodeForIntegratedFlux(ml, c.Node, c.Name, emitPerChildCRs)
 }
 
 // processNodeForIntegratedFlux recursively processes nodes to add integrated Flux resources.
 // The root parameter is always the top-level layout so that path-based lookups
 // resolve against the full tree (node paths are absolute).
-func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLayout, node *stack.Node, clusterName string) error {
+func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLayout, node *stack.Node, clusterName string, emitPerChildCRs bool) error {
 	// Find the corresponding layout node
 	layoutNode := li.findLayoutNode(root, node)
 	if layoutNode == nil {
@@ -154,7 +169,7 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 		}
 	}
 
-	// In FluxIntegrated mode, emit Kustomization CRs for all eligible direct
+	// In FluxIntegratedPerLayout mode, emit Kustomization CRs for all eligible direct
 	// children of layoutNode and recurse into their subtrees.
 	//
 	// "Eligible" mirrors the writer condition: !UmbrellaChild &&
@@ -168,7 +183,11 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 	//   (b) Augmenter sub-layouts: hook-group children of app layouts;
 	//       generateChildFluxCRs recurses and places those CRs in the app
 	//       layout's Resources.
-	if node.Bundle != nil {
+	//
+	// Skipped entirely in FluxIntegratedPerBundle mode: there, a bundle's
+	// interior is a single kustomize build and the writer references children as
+	// directories, so no per-child CRs are emitted.
+	if emitPerChildCRs && node.Bundle != nil {
 		var eligibleChildren []*layout.ManifestLayout
 		for _, child := range layoutNode.Children {
 			if child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle {
@@ -210,7 +229,7 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 			if len(newCRChildren) > 0 && sr.Kind == "" {
 				return errors.ResourceValidationError(
 					"Bundle", node.Bundle.Name, "sourceRef",
-					"FluxIntegrated mode requires a SourceRef with Kind and Name on bundles "+
+					"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name on bundles "+
 						"whose layout has eligible children without existing Kustomization CRs; "+
 						"omitting it produces invalid Flux Kustomization CRs",
 					nil,
@@ -236,7 +255,7 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 
 	// Process child nodes — always search from root for path-based matching
 	for _, child := range node.Children {
-		if err := li.processNodeForIntegratedFlux(root, child, clusterName); err != nil {
+		if err := li.processNodeForIntegratedFlux(root, child, clusterName, emitPerChildCRs); err != nil {
 			return err
 		}
 	}
@@ -287,7 +306,7 @@ func (li *LayoutIntegrator) generateChildFluxCRs(
 			if sourceRef.Kind == "" {
 				return errors.ResourceValidationError(
 					"ManifestLayout", child.Name, "sourceRef",
-					"FluxIntegrated mode requires a SourceRef with Kind and Name; "+
+					"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
 						"this descendant layout needs a Kustomization CR but the "+
 						"ancestor bundle has no valid SourceRef",
 					nil,

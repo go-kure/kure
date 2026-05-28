@@ -154,7 +154,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 			if child.UmbrellaChild {
 				// Umbrella children are not referenced from the parent
 				// kustomization.yaml's Children loop:
-				//   - FluxIntegrated: the child's Kustomization CR is
+				//   - FluxIntegratedPerLayout: the child's Kustomization CR is
 				//     already in ml.Resources (placed there by the
 				//     LayoutIntegrator), so the Resources loop above
 				//     emits the filename exactly once.
@@ -169,9 +169,9 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else {
-				// For FluxIntegrated mode, reference Flux Kustomization YAML files instead of directories.
+				// For FluxIntegratedPerLayout mode, reference Flux Kustomization YAML files instead of directories.
 				// Always use FilePerResource — each child must have a unique filename.
-				if ml.FluxPlacement == FluxIntegrated {
+				if ml.FluxPlacement == FluxIntegratedPerLayout {
 					fluxKustName := manifestFileName("flux-system", "kustomization", child.Name, FilePerResource)
 					if _, dup := listedInResources[fluxKustName]; !dup {
 						writeStr(fmt.Sprintf("  - %s\n", fluxKustName))

@@ -57,7 +57,7 @@ func LayoutRulesForPreset(p LayoutPreset) (LayoutRules, error) {
 			ApplicationGrouping: GroupFlat,
 			ApplicationFileMode: AppFilePerResource,
 			FilePer:             FilePerResource,
-			FluxPlacement:       FluxIntegrated,
+			FluxPlacement:       FluxIntegratedPerLayout,
 		}, nil
 
 	default:

@@ -663,7 +663,7 @@ func extractTarFilesFluxcd(t *testing.T, buf *bytes.Buffer) map[string][]byte {
 func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 	// Build a cluster with a Node whose Bundle is an umbrella with 3 children,
 	// each holding one Application. Use PresetParentDeployedControl equivalent
-	// (GroupFlat + FluxIntegrated) via LayoutRules and assert that the tar
+	// (GroupFlat + FluxIntegratedPerLayout) via LayoutRules and assert that the tar
 	// output has the right directory shape, kustomization.yaml references, and
 	// the umbrella parent Kustomization CR with HealthChecks.
 	umbrella := &stack.Bundle{
@@ -697,7 +697,7 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
 		BundleGrouping:      layout.GroupFlat,
 		ApplicationGrouping: layout.GroupFlat,
-		FluxPlacement:       layout.FluxIntegrated,
+		FluxPlacement:       layout.FluxIntegratedPerLayout,
 	})
 	if err != nil {
 		t.Fatalf("CreateLayoutWithResources: %v", err)

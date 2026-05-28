@@ -115,7 +115,7 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 | BundleGrouping | `GroupByName`, `GroupFlat` | Create subdirectories per bundle or flatten |
 | ApplicationGrouping | `GroupByName`, `GroupFlat` | Create subdirectories per app or flatten |
 | FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
-| FluxPlacement | `FluxSeparate`, `FluxIntegrated` | Separate or inline Flux resources |
+| FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout` | Separate or inline Flux resources |
 
 ## Umbrella Bundles — Readiness Aggregation
 
@@ -174,7 +174,7 @@ the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
 
 ### Disk layout
 
-In `FluxIntegrated` placement, the umbrella children's Flux Kustomization CRs
+In `FluxIntegratedPerLayout` placement, the umbrella children's Flux Kustomization CRs
 live alongside the parent's, and the parent's `kustomization.yaml` references
 each child via the CR file (not the child subdirectory):
 
@@ -204,7 +204,7 @@ flat list.
 
 ## Augmenter-Added Child Layouts
 
-A `LayoutAugmenter` can attach sub-`ManifestLayout` children to a per-app layout after resource generation. In `FluxIntegrated` mode kure automatically emits a Flux `Kustomization` CR for each eligible child.
+A `LayoutAugmenter` can attach sub-`ManifestLayout` children to a per-app layout after resource generation. In `FluxIntegratedPerLayout` mode kure automatically emits a Flux `Kustomization` CR for each eligible child.
 
 ### Eligibility
 
@@ -213,7 +213,7 @@ A child layout receives a CR when:
 - `child.ApplicationFileMode != AppFileSingle`
 - The ancestor bundle's `SourceRef` has both `Kind` and `Name` set (nil, empty struct, or missing either field is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
 
-`CreateLayoutWithResources` validates SourceRef completeness for all bundles before layout walking. Both the node bundle and every umbrella child bundle must have `SourceRef.Kind` and `SourceRef.Name` set when `FluxIntegrated` mode is active. `FluxSeparate` and non-Flux callers are unaffected.
+`CreateLayoutWithResources` validates SourceRef completeness for all bundles before layout walking. Both the node bundle and every umbrella child bundle must have `SourceRef.Kind` and `SourceRef.Name` set when `FluxIntegratedPerLayout` mode is active. `FluxSeparate` and non-Flux callers are unaffected.
 
 ### Ordered reconciliation with DependsOn
 

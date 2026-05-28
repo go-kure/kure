@@ -310,7 +310,7 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 }
 
 // createKustomizationForLayout creates a Flux Kustomization CR for a
-// ManifestLayout child in FluxIntegrated mode. The CR name equals ml.Name;
+// ManifestLayout child in FluxIntegratedPerLayout mode. The CR name equals ml.Name;
 // spec.path is ml.FullRepoPath(); spec.dependsOn is populated from ml.DependsOn.
 func (g *ResourceGenerator) createKustomizationForLayout(
 	ml *layout.ManifestLayout,

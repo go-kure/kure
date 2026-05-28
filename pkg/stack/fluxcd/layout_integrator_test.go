@@ -104,7 +104,7 @@ func TestLayoutIntegrator_IntegrateWithLayout_Integrated(t *testing.T) {
 	}
 
 	rules := layout.DefaultLayoutRules()
-	rules.FluxPlacement = layout.FluxIntegrated
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
 	err := integrator.IntegrateWithLayout(ml, cluster, rules)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -284,7 +284,7 @@ func TestLayoutIntegrator_IntegrateWithNestedNodes(t *testing.T) {
 	}
 
 	rules := layout.DefaultLayoutRules()
-	rules.FluxPlacement = layout.FluxIntegrated
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
 	err := integrator.IntegrateWithLayout(rootLayout, cluster, rules)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -363,7 +363,7 @@ func TestCreateLayoutWithResources_ClusterNameWithChildNodes(t *testing.T) {
 
 	rules := layout.DefaultLayoutRules()
 	rules.ClusterName = "demo"
-	rules.FluxPlacement = layout.FluxIntegrated
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
 
 	ml, err := integrator.CreateLayoutWithResources(cluster, rules)
 	if err != nil {
@@ -416,7 +416,7 @@ func TestCreateLayoutWithResources_InvalidUmbrellaRejected(t *testing.T) {
 func TestCreateLayoutWithResources_UmbrellaIntegratedPlacement(t *testing.T) {
 	// Integrated placement: the umbrella bundle's own Flux CR goes to the
 	// node layout (existing behavior, referenced via the bundle-named
-	// FluxIntegrated child reference), while each umbrella child's Flux CR
+	// FluxIntegratedPerLayout child reference), while each umbrella child's Flux CR
 	// lands at the bundle layout (where the bundle-dir kustomization.yaml
 	// references them via UmbrellaChild). Child sub-layouts carry no Flux CRs.
 	umbrella := &stack.Bundle{
@@ -437,7 +437,7 @@ func TestCreateLayoutWithResources_UmbrellaIntegratedPlacement(t *testing.T) {
 	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
 		BundleGrouping:      layout.GroupByName,
 		ApplicationGrouping: layout.GroupByName,
-		FluxPlacement:       layout.FluxIntegrated,
+		FluxPlacement:       layout.FluxIntegratedPerLayout,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -520,7 +520,7 @@ func TestCreateLayoutWithResources_UmbrellaNodeOnlyPlacement(t *testing.T) {
 	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
 		BundleGrouping:      layout.GroupFlat,
 		ApplicationGrouping: layout.GroupFlat,
-		FluxPlacement:       layout.FluxIntegrated,
+		FluxPlacement:       layout.FluxIntegratedPerLayout,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -578,7 +578,7 @@ func TestCreateLayoutWithResources_UmbrellaNestedIntegratedPlacement(t *testing.
 	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
 		BundleGrouping:      layout.GroupByName,
 		ApplicationGrouping: layout.GroupByName,
-		FluxPlacement:       layout.FluxIntegrated,
+		FluxPlacement:       layout.FluxIntegratedPerLayout,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -670,7 +670,7 @@ func TestCreateLayoutWithResources_UmbrellaChildWithSource(t *testing.T) {
 	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
 		BundleGrouping:      layout.GroupByName,
 		ApplicationGrouping: layout.GroupByName,
-		FluxPlacement:       layout.FluxIntegrated,
+		FluxPlacement:       layout.FluxIntegratedPerLayout,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -737,7 +737,7 @@ func TestIntegrateWithLayout_AppliesFlattenPathRewrites(t *testing.T) {
 func TestIntegrateWithLayout_RepeatedCallSucceeds(t *testing.T) {
 	generator := fluxstack.NewResourceGenerator()
 	integrator := fluxstack.NewLayoutIntegrator(generator)
-	integratedRules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	integratedRules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 
 	cluster := &stack.Cluster{
 		Name: "arc-runners",
@@ -789,7 +789,7 @@ func TestAugmenterChildrenGetFluxCRs(t *testing.T) {
 	root, nodeLayout, app, preInstall, hooks, cluster := buildAugmenterTestTree()
 
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
@@ -830,7 +830,7 @@ func TestAugmenterChildrenNoDuplicateInKustomizationYAML(t *testing.T) {
 	root, nodeLayout, app, preInstall, _, cluster := buildAugmenterTestTree()
 
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
@@ -854,7 +854,7 @@ func TestAugmenterChildrenWriteToTar(t *testing.T) {
 	root, nodeLayout, app, preInstall, _, cluster := buildAugmenterTestTree()
 
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
@@ -887,6 +887,94 @@ func TestAugmenterChildrenWriteToTar(t *testing.T) {
 	augAssertCount(t, appKust, "flux-system-kustomization-"+preInstall.Name+".yaml", 1)
 }
 
+// TestAugmenterChildrenPerBundleNoChildCRs verifies that FluxIntegratedPerBundle
+// places bundle/node CRs but emits NO per-child CRs for augmenter sub-layouts or
+// for the app layout itself — the bundle's interior is a single kustomize build.
+func TestAugmenterChildrenPerBundleNoChildCRs(t *testing.T) {
+	root, nodeLayout, app, _, _, cluster := buildAugmenterTestTree()
+	augStampPlacement(root, layout.FluxIntegratedPerBundle)
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerBundle}
+	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	// No per-child CRs for the app's augmenter sub-layouts.
+	if len(app.Resources) != 0 {
+		t.Errorf("PerBundle: expected no CRs in app.Resources, got %d", len(app.Resources))
+	}
+	// No CR for the app layout itself at the node level (eligibleChildren skipped).
+	if augHasCR(nodeLayout.Resources, app.Name) {
+		t.Errorf("PerBundle: did not expect a CR for %q in nodeLayout.Resources", app.Name)
+	}
+}
+
+// TestAugmenterChildrenPerBundleWriteToTarUsesDirRefs verifies that in
+// FluxIntegratedPerBundle mode the writer references children as directories
+// (not kustomization-<child>.yaml CR files), and produces no dangling CR-file
+// references. Exercises the tar path that production stack-compile uses.
+func TestAugmenterChildrenPerBundleWriteToTarUsesDirRefs(t *testing.T) {
+	root, nodeLayout, app, preInstall, _, cluster := buildAugmenterTestTree()
+	augStampPlacement(root, layout.FluxIntegratedPerBundle)
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerBundle}
+	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := root.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar: %v", err)
+	}
+
+	files := map[string]string{}
+	tr := tar.NewReader(&buf)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("tar.Next: %v", err)
+		}
+		if strings.HasSuffix(hdr.Name, "kustomization.yaml") {
+			data, _ := io.ReadAll(tr)
+			files[hdr.Name] = string(data)
+		}
+	}
+
+	// Node kustomization.yaml references the app as a directory, not a CR file.
+	nodeKust := augFindKust(t, files, nodeLayout.FullRepoPath())
+	augAssertCount(t, nodeKust, "flux-system-kustomization-"+app.Name+".yaml", 0)
+	augAssertCount(t, nodeKust, "- "+app.Name+"\n", 1)
+
+	// App kustomization.yaml references the augmenter sub-layout as a directory.
+	appKust := augFindKust(t, files, app.FullRepoPath())
+	augAssertCount(t, appKust, "flux-system-kustomization-"+preInstall.Name+".yaml", 0)
+	augAssertCount(t, appKust, "- "+preInstall.Name+"\n", 1)
+}
+
+// TestCreateLayoutWithResources_FluxIntegratedPerBundle_RejectsInvalidSourceRef
+// verifies the SourceRef gate fires for PerBundle too — it emits inline bundle
+// CRs that carry a spec.sourceRef.
+func TestCreateLayoutWithResources_FluxIntegratedPerBundle_RejectsInvalidSourceRef(t *testing.T) {
+	c := &stack.Cluster{
+		Name: "test",
+		Node: &stack.Node{
+			Name:   "prod",
+			Bundle: &stack.Bundle{Name: "apps"},
+		},
+	}
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerBundle}
+
+	if _, err := li.CreateLayoutWithResources(c, rules); err == nil {
+		t.Fatal("expected error for FluxIntegratedPerBundle with nil SourceRef, got nil")
+	}
+}
+
 // TestAugmenterChildrenErrorWhenNoSourceRef verifies that IntegrateWithLayout
 // returns a blocking error when augmenter children need CRs but the bundle
 // has a nil, empty, or incomplete SourceRef.
@@ -905,11 +993,11 @@ func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
 			appChild := &layout.ManifestLayout{
 				Name:          "myapp",
 				Namespace:     "clusters/prod",
-				FluxPlacement: layout.FluxIntegrated,
+				FluxPlacement: layout.FluxIntegratedPerLayout,
 				Children: []*layout.ManifestLayout{{
 					Name:          "myapp-00-pre-install",
 					Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
-					FluxPlacement: layout.FluxIntegrated,
+					FluxPlacement: layout.FluxIntegratedPerLayout,
 				}},
 			}
 			bundle := &stack.Bundle{Name: "apps", SourceRef: tc.sr}
@@ -917,13 +1005,13 @@ func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
 			cluster := &stack.Cluster{Node: node}
 			nodeLayout := &layout.ManifestLayout{
 				Name:          "prod",
-				FluxPlacement: layout.FluxIntegrated,
+				FluxPlacement: layout.FluxIntegratedPerLayout,
 				Children:      []*layout.ManifestLayout{appChild},
 			}
 			root := &layout.ManifestLayout{Children: []*layout.ManifestLayout{nodeLayout}}
 
 			li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-			rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+			rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 			if err := li.IntegrateWithLayout(root, cluster, rules); err == nil {
 				t.Fatalf("sourceRef=%v: expected error, got nil", tc.sr)
 			}
@@ -936,7 +1024,7 @@ func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // buildUmbrellaAugmenterTree constructs a layout+cluster tree simulating
-// helm-multi-tier with FluxIntegrated: a platform umbrella node with a
+// helm-multi-tier with FluxIntegratedPerLayout: a platform umbrella node with a
 // platform-apps umbrella child layout, which has a redis sub-layout added by
 // Crane's helmchart augmenter (invisible to the bundle model).
 //
@@ -949,13 +1037,13 @@ func buildUmbrellaAugmenterTree(parentSR, childSR *stack.SourceRef) (
 	redis = &layout.ManifestLayout{
 		Name:          "redis",
 		Namespace:     "platform/platform-apps/redis",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Mode:          layout.KustomizationExplicit,
 	}
 	platformApps = &layout.ManifestLayout{
 		Name:          "platform-apps",
 		Namespace:     "platform/platform-apps",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Mode:          layout.KustomizationExplicit,
 		UmbrellaChild: true,
 		Children:      []*layout.ManifestLayout{redis},
@@ -989,7 +1077,7 @@ func TestUmbrellaChildAugmenterSubLayoutGetFluxCR(t *testing.T) {
 	root, _, platformApps, _, cluster := buildUmbrellaAugmenterTree(testSR(), testSR())
 
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
@@ -1008,7 +1096,7 @@ func TestUmbrellaChildAugmenterSubLayoutNoDanglingReference(t *testing.T) {
 	root, _, platformApps, _, cluster := buildUmbrellaAugmenterTree(testSR(), testSR())
 
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
@@ -1056,7 +1144,7 @@ func TestUmbrellaChildAugmenterSubLayoutUsesChildSourceRef(t *testing.T) {
 	root, _, platformApps, _, cluster := buildUmbrellaAugmenterTree(parentSR, childSR)
 
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
 		t.Fatalf("IntegrateWithLayout: %v", err)
 	}
@@ -1089,12 +1177,12 @@ func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
 	grandchild := &layout.ManifestLayout{
 		Name:          "myapp-00-pre-install",
 		Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 	}
 	appLayout := &layout.ManifestLayout{
 		Name:          "myapp",
 		Namespace:     "clusters/prod",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Children:      []*layout.ManifestLayout{grandchild},
 	}
 
@@ -1110,14 +1198,14 @@ func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
 
 	nodeLayout := &layout.ManifestLayout{
 		Name:          "prod",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Resources:     []client.Object{existingCR},
 		Children:      []*layout.ManifestLayout{appLayout},
 	}
 	root := &layout.ManifestLayout{Children: []*layout.ManifestLayout{nodeLayout}}
 
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 	if err := li.IntegrateWithLayout(root, cluster, rules); err == nil {
 		t.Fatal("expected error: grandchild needs a CR but ancestor bundle has no SourceRef")
 	}
@@ -1135,18 +1223,18 @@ func buildAugmenterTestTree() (root, nodeLayout, app, preInstall, hooks *layout.
 	preInstall = &layout.ManifestLayout{
 		Name:          "myapp-00-pre-install",
 		Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 	}
 	hooks = &layout.ManifestLayout{
 		Name:          "myapp-01-hooks",
 		Namespace:     "clusters/prod/myapp/myapp-01-hooks",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 		DependsOn:     []string{"myapp-00-pre-install"},
 	}
 	app = &layout.ManifestLayout{
 		Name:          "myapp",
 		Namespace:     "clusters/prod",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Children:      []*layout.ManifestLayout{preInstall, hooks},
 	}
 	sr := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
@@ -1155,7 +1243,7 @@ func buildAugmenterTestTree() (root, nodeLayout, app, preInstall, hooks *layout.
 	cluster = &stack.Cluster{Node: node}
 	nodeLayout = &layout.ManifestLayout{
 		Name:          "prod",
-		FluxPlacement: layout.FluxIntegrated,
+		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Children:      []*layout.ManifestLayout{app},
 	}
 	root = &layout.ManifestLayout{Children: []*layout.ManifestLayout{nodeLayout}}
@@ -1219,6 +1307,17 @@ func augKeysOf(m map[string]string) []string {
 	return keys
 }
 
+// augStampPlacement recursively sets FluxPlacement on every layout in the tree,
+// mirroring what WalkCluster does in production (it stamps rules.FluxPlacement
+// onto each ManifestLayout). The writer reads ml.FluxPlacement, so hand-built
+// test trees must stamp the placement they intend to exercise.
+func augStampPlacement(ml *layout.ManifestLayout, p layout.FluxPlacement) {
+	ml.FluxPlacement = p
+	for _, c := range ml.Children {
+		augStampPlacement(c, p)
+	}
+}
+
 func TestCreateLayoutWithResources_FluxIntegrated_RejectsInvalidSourceRef(t *testing.T) {
 	// Validator fires before WalkCluster; no ApplicationConfig needed.
 	c := &stack.Cluster{
@@ -1229,10 +1328,10 @@ func TestCreateLayoutWithResources_FluxIntegrated_RejectsInvalidSourceRef(t *tes
 		},
 	}
 	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegrated}
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerLayout}
 
 	if _, err := li.CreateLayoutWithResources(c, rules); err == nil {
-		t.Fatal("expected error for FluxIntegrated with nil SourceRef, got nil")
+		t.Fatal("expected error for FluxIntegratedPerLayout with nil SourceRef, got nil")
 	}
 }
 
@@ -1252,8 +1351,8 @@ func TestCreateLayoutWithResources_FluxSeparate_AllowsMissingSourceRef(t *testin
 
 // TestIntegrateWithLayout_RulesFluxSeparate_NoDuplicateChildCRs is a
 // regression guard for #576. Before the fix, IntegrateWithLayout read
-// li.FluxPlacement (constructor default = FluxIntegrated) and ignored
-// rules.FluxPlacement, so the FluxIntegrated emission block ran even when
+// li.FluxPlacement (constructor default = FluxIntegratedPerLayout) and ignored
+// rules.FluxPlacement, so the FluxIntegratedPerLayout emission block ran even when
 // the caller asked for FluxSeparate via rules. That produced duplicate
 // Kustomization CRs for augmenter-added child layouts. After the fix,
 // rules.FluxPlacement is the sole authority and the FluxSeparate path must
@@ -1268,16 +1367,16 @@ func TestIntegrateWithLayout_RulesFluxSeparate_NoDuplicateChildCRs(t *testing.T)
 	}
 
 	// FluxSeparate must not emit augmenter-child CRs into app.Resources
-	// (that emission only fires on the FluxIntegrated code path).
+	// (that emission only fires on the FluxIntegratedPerLayout code path).
 	if augHasCR(app.Resources, preInstall.Name) {
-		t.Errorf("FluxSeparate emitted a Kustomization CR for augmenter child %q at app.Resources; FluxIntegrated leaked into the FluxSeparate path", preInstall.Name)
+		t.Errorf("FluxSeparate emitted a Kustomization CR for augmenter child %q at app.Resources; FluxIntegratedPerLayout leaked into the FluxSeparate path", preInstall.Name)
 	}
 	if augHasCR(app.Resources, hooks.Name) {
-		t.Errorf("FluxSeparate emitted a Kustomization CR for augmenter child %q at app.Resources; FluxIntegrated leaked into the FluxSeparate path", hooks.Name)
+		t.Errorf("FluxSeparate emitted a Kustomization CR for augmenter child %q at app.Resources; FluxIntegratedPerLayout leaked into the FluxSeparate path", hooks.Name)
 	}
 }
 
-// testSR returns a minimal valid SourceRef for use in FluxIntegrated fixtures.
+// testSR returns a minimal valid SourceRef for use in FluxIntegratedPerLayout fixtures.
 func testSR() *stack.SourceRef {
 	return &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
 }

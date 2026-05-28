@@ -43,7 +43,7 @@ type ManifestLayout struct {
 	// the child's own directory.
 	UmbrellaChild bool
 	// DependsOn lists sibling layout names whose Kustomization CRs must reconcile
-	// before this layout's CR. In FluxIntegrated mode the layout integrator
+	// before this layout's CR. In FluxIntegratedPerLayout mode the layout integrator
 	// translates these into spec.dependsOn on the emitted Kustomization CR.
 	// Augmenters (LayoutAugmenter) set this field; the integrator reads it.
 	DependsOn []string
@@ -63,7 +63,7 @@ type ManifestLayout struct {
 // layout-tree paths (cluster-name-prefixed); a single map cannot serve both.
 type flattenInfo struct {
 	// nodeAliases maps node.GetPath() of the collapsed child node to the
-	// absorbing layout. Used by findLayoutNode (FluxIntegrated mode only).
+	// absorbing layout. Used by findLayoutNode (FluxIntegratedPerLayout mode only).
 	nodeAliases map[string]*ManifestLayout
 	// pathRewrites maps pre-collapse layout repo path → post-collapse layout
 	// repo path. Used to rewrite Spec.Path strings on Flux Kustomization
@@ -360,7 +360,7 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 			if child.UmbrellaChild {
 				// Umbrella children are not referenced from the parent
 				// kustomization.yaml's Children loop:
-				//   - FluxIntegrated: the child's Kustomization CR is
+				//   - FluxIntegratedPerLayout: the child's Kustomization CR is
 				//     already in ml.Resources (placed there by the
 				//     LayoutIntegrator), so the Resources loop above
 				//     emits the filename exactly once.
@@ -374,8 +374,8 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 			}
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
-			} else if ml.FluxPlacement == FluxIntegrated {
-				// FluxIntegrated: reference Flux Kustomization YAML files.
+			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
+				// FluxIntegratedPerLayout: reference Flux Kustomization YAML files.
 				// Use FilePerResource to force per-resource naming even when
 				// the parent directory uses FilePerKind.
 				nameFn := ml.resolveManifestFileName()

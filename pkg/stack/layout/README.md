@@ -20,7 +20,7 @@ The layout module transforms Kure's in-memory stack representation (Clusters →
 - **BundleGrouping**: How bundles within nodes are organized  
 - **ApplicationGrouping**: How applications within bundles are organized
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
-- **FluxPlacement**: Where Flux Kustomizations go (FluxSeparate vs FluxIntegrated)
+- **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; children included as directories)
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
 - **ClusterName**: Optional cluster name prefix for cluster-aware directory paths
 
@@ -77,7 +77,7 @@ clusters/
 - Uses `spec.path: ./clusters/cluster-name/node` format
 - Auto-generates kustomization.yaml files
 - Supports recursive discovery of manifests
-- Handles FluxSeparate vs FluxIntegrated placement modes
+- Handles FluxSeparate vs FluxIntegratedPerLayout placement modes
 
 ### ArgoCD Integration  
 - Uses `spec.source.path: clusters/cluster-name/node` format
@@ -128,11 +128,11 @@ When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-a
 
 #### Sub-Layout Children and Flux Integration
 
-Augmenters may attach sub-layouts as `Children` of a per-app `ManifestLayout`. In `FluxIntegrated` mode each such child that is eligible (see below) receives a Flux `Kustomization` CR automatically placed in the parent layout's `Resources`.
+Augmenters may attach sub-layouts as `Children` of a per-app `ManifestLayout`. In `FluxIntegratedPerLayout` mode each such child that is eligible (see below) receives a Flux `Kustomization` CR automatically placed in the parent layout's `Resources`.
 
 **Eligibility for CR generation.** A child layout receives a Flux `Kustomization` CR when ALL of the following hold:
 
-- The ancestor node bundle's layout operates in `FluxIntegrated` mode.
+- The ancestor node bundle's layout operates in `FluxIntegratedPerLayout` mode.
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
 - The ancestor bundle has a non-nil, non-empty `SourceRef` with both `Kind` and `Name` set. A nil, empty struct, or incomplete `SourceRef` (missing either field) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
@@ -141,13 +141,13 @@ This rule mirrors exactly what the writers use to emit `flux-system-kustomizatio
 
 #### Naming Constraint
 
-Child layout `Name` is used as the Flux `Kustomization` CR name in `FluxIntegrated` mode (matching the filename emitted by the writers: `flux-system-kustomization-{child.Name}.yaml`). Flux `Kustomization` CRs live in the `flux-system` namespace, so names must be **globally unique across all apps in the cluster** — two CRs with the same `metadata.name` collide.
+Child layout `Name` is used as the Flux `Kustomization` CR name in `FluxIntegratedPerLayout` mode (matching the filename emitted by the writers: `flux-system-kustomization-{child.Name}.yaml`). Flux `Kustomization` CRs live in the `flux-system` namespace, so names must be **globally unique across all apps in the cluster** — two CRs with the same `metadata.name` collide.
 
 Augmenters are responsible for ensuring uniqueness. The recommended convention is to prefix each child name with the app name: `{appName}-{hookGroupDir}` (e.g. `nginx-00-pre-install`).
 
 #### DependsOn
 
-Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegrated` mode the layout integrator translates these into `spec.dependsOn` entries on the child's `Kustomization` CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install).
+Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegratedPerLayout` mode the layout integrator translates these into `spec.dependsOn` entries on the child's `Kustomization` CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install).
 
 ### ClusterName-Aware Layouts
 
@@ -168,7 +168,7 @@ Conservative collapse preconditions — ALL must hold:
 
 Multi-tier apps with sub-Kustomizations are unaffected: the precondition that the child be terminal preserves them. Empty containers (`only-Children`) are also unaffected: the precondition requiring the parent to have no own resources doesn't apply to them.
 
-When the layout participates in Flux integration, the flatten helper records redirect tables (`nodeAliases` for `findLayoutNode` lookups, `pathRewrites` for `Spec.Path` rewriting). `IntegrateWithLayout` consults the aliases during integrated placement and calls `ApplyFlattenPathRewrites(root)` before returning, regardless of placement mode (FluxIntegrated or FluxSeparate). Direct callers using `WalkCluster` + `IntegrateWithLayout` (without going through `CreateLayoutWithResources`) get the rewrite for free.
+When the layout participates in Flux integration, the flatten helper records redirect tables (`nodeAliases` for `findLayoutNode` lookups, `pathRewrites` for `Spec.Path` rewriting). `IntegrateWithLayout` consults the aliases during integrated placement and calls `ApplyFlattenPathRewrites(root)` before returning, regardless of placement mode (FluxIntegratedPerLayout or FluxSeparate). Direct callers using `WalkCluster` + `IntegrateWithLayout` (without going through `CreateLayoutWithResources`) get the rewrite for free.
 
 Scoped to `WalkCluster`. `WalkClusterByPackage` is unaffected — its synthetic unnamed wrappers express package boundaries that the flatten helper would otherwise erroneously collapse.
 
@@ -182,7 +182,7 @@ Three named presets provide pre-configured LayoutRules for common deployment pat
 |--------|---------|---------------|--------------|------------|
 | `CentralizedControlPlane` | A | FluxSeparate | GroupFlat | FileNamingKindName |
 | `SiblingControlPlane` | B | FluxSeparate | GroupByName | FileNamingDefault |
-| `ParentDeployedControl` | C | FluxIntegrated | GroupByName | FileNamingDefault |
+| `ParentDeployedControl` | C | FluxIntegratedPerLayout | GroupByName | FileNamingDefault |
 
 ```go
 rules, err := layout.LayoutRulesForPreset(layout.PresetCentralizedControlPlane)

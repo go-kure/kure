@@ -158,7 +158,7 @@ func TestWriteToTar_FluxIntegrated(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "flux-root",
 		Namespace:     "cl/flux-system",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		FilePer:       FilePerResource,
 		Mode:          KustomizationExplicit,
 		Children:      []*ManifestLayout{child},
@@ -182,7 +182,7 @@ func TestWriteToTar_FluxIntegrated(t *testing.T) {
 
 func TestWriteToTar_UmbrellaChild(t *testing.T) {
 	// Mirrors the layout produced by the Flux LayoutIntegrator in
-	// FluxIntegrated mode: the umbrella parent carries the child's
+	// FluxIntegratedPerLayout mode: the umbrella parent carries the child's
 	// Kustomization CR in Resources (placed there by placeUmbrellaChildrenFlux),
 	// and an UmbrellaChild sub-layout in Children (carrying the child's
 	// workloads). Verifies:
@@ -341,7 +341,7 @@ func TestWriteToTar_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "flux-root",
 		Namespace:     "cl/flux-system",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		FilePer:       FilePerResource,
 		FileNaming:    FileNamingKindName,
 		Mode:          KustomizationExplicit,
@@ -372,7 +372,7 @@ func TestWriteToTar_FileNamingKindName_FluxIntegrated(t *testing.T) {
 }
 
 func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
-	// Regression: FilePerKind must not collapse FluxIntegrated kustomization
+	// Regression: FilePerKind must not collapse FluxIntegratedPerLayout kustomization
 	// references — each child needs a unique filename including child.Name.
 	childA := &ManifestLayout{
 		Name:      "team-a",
@@ -402,7 +402,7 @@ func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "flux-root",
 		Namespace:     "cl/flux-system",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		FilePer:       FilePerKind,
 		Mode:          KustomizationExplicit,
 		Children:      []*ManifestLayout{childA, childB},
@@ -751,12 +751,12 @@ func TestWriteToTar_NoDuplicateFluxEntries(t *testing.T) {
 	child := &ManifestLayout{
 		Name:          "myapp",
 		Namespace:     "prod/apps/myapp",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 	}
 	parent := &ManifestLayout{
 		Name:          "prod",
 		Namespace:     "cl",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		Resources:     []client.Object{cr},
 		Children:      []*ManifestLayout{child},
 	}

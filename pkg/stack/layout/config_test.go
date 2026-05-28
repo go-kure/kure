@@ -59,13 +59,13 @@ func TestResolveKustomizationMode_PerFluxPlacement(t *testing.T) {
 	cfg := layout.Config{
 		KustomizationMode: layout.KustomizationExplicit,
 		FluxKustomizationMode: map[layout.FluxPlacement]layout.KustomizationMode{
-			layout.FluxIntegrated: layout.KustomizationRecursive,
+			layout.FluxIntegratedPerLayout: layout.KustomizationRecursive,
 		},
 	}
-	// FluxIntegrated should use the override
-	mode := cfg.ResolveKustomizationMode(layout.FluxIntegrated)
+	// FluxIntegratedPerLayout should use the override
+	mode := cfg.ResolveKustomizationMode(layout.FluxIntegratedPerLayout)
 	if mode != layout.KustomizationRecursive {
-		t.Errorf("expected KustomizationRecursive for FluxIntegrated, got %s", mode)
+		t.Errorf("expected KustomizationRecursive for FluxIntegratedPerLayout, got %s", mode)
 	}
 	// FluxSeparate should fall back to global
 	mode = cfg.ResolveKustomizationMode(layout.FluxSeparate)

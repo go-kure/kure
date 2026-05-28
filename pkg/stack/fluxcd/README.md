@@ -50,7 +50,7 @@ engine := fluxcd.EngineWithConfig(mode)
 engine := fluxcd.NewWorkflowEngine()
 ```
 
-Placement (FluxIntegrated vs FluxSeparate) is configured per call on
+Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured per call on
 `layout.LayoutRules.FluxPlacement`. `FluxUnset` is normalized to
 `FluxSeparate` by `LayoutIntegrator.CreateLayoutWithResources` — matching
 `layout.DefaultLayoutRules()` and the walker. See
@@ -124,8 +124,9 @@ Controls how kustomization.yaml files reference resources:
 
 Controls where Flux Kustomization resources are placed:
 
-- `FluxSeparate` - Flux resources in a separate directory tree
-- `FluxIntegrated` - Flux resources alongside application manifests
+- `FluxSeparate` - Flux resources collected in a separate directory tree; children referenced as directories
+- `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout node (incl. augmenter-added child layouts), placed alongside its manifests; children referenced as `kustomization-<child>.yaml` CR files. Finest granularity.
+- `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle/node boundaries only**; a bundle's interior (incl. augmenter-added child layouts) is a single kustomize build, with children referenced as directories. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 ## Umbrella Bundles
 
@@ -153,12 +154,12 @@ umbrella contains.
 `LayoutIntegrator` places umbrella child Flux CRs at the **parent** layout
 node:
 
-- **FluxIntegrated, non-nodeOnly**: the walker creates a bundle sub-layout
+- **FluxIntegratedPerLayout, non-nodeOnly**: the walker creates a bundle sub-layout
   under the node layout. Umbrella child Kustomization CRs (and their Source
   CRs, if the child has a `SourceRef.URL`) are appended to the bundle
   sub-layout's `Resources`. Nested umbrella children are placed at their
   enclosing umbrella child's layout node.
-- **FluxIntegrated, nodeOnly (GroupFlat)**: there is no intermediate bundle
+- **FluxIntegratedPerLayout, nodeOnly (GroupFlat)**: there is no intermediate bundle
   layer, so umbrella children become direct sub-layouts of the node layout,
   and their Flux CRs sit at the node layout alongside the umbrella self CR.
 - **FluxSeparate**: `GenerateFromCluster` walks the full umbrella closure, so
@@ -176,7 +177,7 @@ Flux does not double-apply the child's resources.
 
 ## Non-Bundle Child Layout CRs
 
-In `FluxIntegrated` mode the layout integrator generates `Kustomization` CRs for **all eligible children** of each node layout, not only the node's own bundle. A child is eligible when `!UmbrellaChild && ApplicationFileMode != AppFileSingle`.
+In `FluxIntegratedPerLayout` mode the layout integrator generates `Kustomization` CRs for **all eligible children** of each node layout, not only the node's own bundle. A child is eligible when `!UmbrellaChild && ApplicationFileMode != AppFileSingle`.
 
 This covers two cases with the same code path:
 
@@ -196,7 +197,7 @@ bundle's `Children`, shared umbrella ownership, or multi-package umbrellas —
 fail fast with a validation error rather than producing malformed output.
 
 `CreateLayoutWithResources` additionally calls `validateSourceRefsForFluxIntegrated`
-when `rules.FluxPlacement == FluxIntegrated` (after normalization — `FluxUnset`
+when `rules.FluxPlacement == FluxIntegratedPerLayout` (after normalization — `FluxUnset`
 becomes `FluxSeparate` and skips this gate). This checks that every bundle
 reachable from the cluster node tree — node bundles and umbrella child bundles
 recursively — has a complete `SourceRef` with both `Kind` and `Name` set. A nil,

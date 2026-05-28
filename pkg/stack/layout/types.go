@@ -79,8 +79,19 @@ type FluxPlacement string
 const (
 	// FluxSeparate places all Flux Kustomizations in a separate directory.
 	FluxSeparate FluxPlacement = "separate"
-	// FluxIntegrated distributes Flux Kustomizations across their target nodes.
-	FluxIntegrated FluxPlacement = "integrated"
+	// FluxIntegratedPerLayout places a Flux Kustomization CR inline for every
+	// layout node, including augmenter-added child layouts. Children are
+	// referenced from the parent kustomization.yaml as kustomization-<child>.yaml
+	// CR files. Finest granularity; use when each child should be reconciled by
+	// its own Flux Kustomization (e.g. hook-group dependsOn).
+	FluxIntegratedPerLayout FluxPlacement = "integrated"
+	// FluxIntegratedPerBundle places Flux Kustomization CRs inline at bundle/node
+	// boundaries only; a bundle's interior (including augmenter-added child
+	// layouts) is a single kustomize build, with children referenced as
+	// directories. Coarser than PerLayout: Flux reconciles per bundle, kustomize
+	// handles the interior. Use when the unit of Flux reconciliation is the
+	// bundle, not each layout node.
+	FluxIntegratedPerBundle FluxPlacement = "integrated-per-bundle"
 	// FluxUnset indicates no flux placement preference.
 	FluxUnset FluxPlacement = ""
 )
@@ -187,10 +198,10 @@ func (lr LayoutRules) Validate() error {
 	}
 
 	switch lr.FluxPlacement {
-	case FluxSeparate, FluxIntegrated, FluxUnset:
+	case FluxSeparate, FluxIntegratedPerLayout, FluxIntegratedPerBundle, FluxUnset:
 		// valid
 	default:
-		return errors.NewValidationError("FluxPlacement", string(lr.FluxPlacement), "LayoutRules", []string{string(FluxSeparate), string(FluxIntegrated)})
+		return errors.NewValidationError("FluxPlacement", string(lr.FluxPlacement), "LayoutRules", []string{string(FluxSeparate), string(FluxIntegratedPerLayout), string(FluxIntegratedPerBundle)})
 	}
 
 	switch lr.FileNaming {
