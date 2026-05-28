@@ -31,8 +31,6 @@ MOUNTED_FILES=(
   "pkg/kubernetes/volsync/README.md"
   "pkg/logger/README.md"
   "examples/patches/README.md"
-  "examples/generators/README.md"
-  "examples/kurel/frigate/README.md"
 )
 
 missing=0

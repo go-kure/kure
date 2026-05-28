@@ -17,52 +17,9 @@ Frigate is a complete and local NVR designed for Home Assistant with AI object d
 
 ## Installation
 
-### Basic Installation
-
-```bash
-kurel build examples/kurel/frigate | kubectl apply -f -
-```
-
-### Installation with Custom Values
-
-1. Create a values file `my-values.yaml`:
-
-```yaml
-app:
-  namespace: my-frigate
-  image:
-    tag: 0.13.0
-
-service:
-  loadBalancerIP: 10.0.0.100
-
-ingress:
-  hostname: frigate.mydomain.com
-
-storage:
-  size: 200Gi
-```
-
-2. Build and deploy:
-
-```bash
-kurel build examples/kurel/frigate --values my-values.yaml | kubectl apply -f -
-```
-
-### Using Patches
-
-Apply environment-specific patches:
-
-```bash
-# For production environment
-kurel build examples/kurel/frigate --patch production | kubectl apply -f -
-
-# For development environment
-kurel build examples/kurel/frigate --patch development | kubectl apply -f -
-
-# For high availability setup
-kurel build examples/kurel/frigate --patch high-availability | kubectl apply -f -
-```
+> **Deprecated**: The `kurel` CLI that powered this package has moved to
+> [go-kure/launcher](https://github.com/go-kure/launcher). Refer to the launcher
+> documentation for the equivalent OAM-native workflow.
 
 ## Configuration
 

@@ -46,13 +46,13 @@ Kure separates concerns through interfaces:
 
 This allows new application types and GitOps tools to be added without modifying the core domain model.
 
-## "Kurel Just Generates YAML"
+## Historical: "Kurel Just Generates YAML"
 
-The kurel package system follows a simple principle: it takes base manifests, applies patches, resolves variables, and writes YAML files. It's not a runtime system, not a controller, not an orchestrator.
+> **Note (2026-05-15)**: This section describes the historical kurel prototype. The current kurel is
+> an OAM-native package manager in [go-kure/launcher](https://github.com/go-kure/launcher) — it uses
+> OAM Application/Component/Trait semantics rather than the patch-and-variables model below.
 
-> **Note (2026-05-15)**: This describes the historical kurel prototype. The current kurel is an
-> OAM-native package manager in [go-kure/launcher](https://github.com/go-kure/launcher) — it uses
-> OAM Application/Component/Trait semantics rather than the patch-and-variables model above.
+The original kurel package system followed a simple principle: it takes base manifests, applies patches, resolves variables, and writes YAML files. It's not a runtime system, not a controller, not an orchestrator.
 
 This constraint keeps the system simple and auditable. You can always inspect exactly what will be deployed by looking at the generated output.
 
@@ -65,7 +65,7 @@ Rather than a single monolithic configuration format, Kure composes small, focus
 | `stack` | Domain model (what to deploy) |
 | `stack/fluxcd` | Flux resource generation (how to deploy) |
 | `stack/layout` | Directory organization (where to write) |
-| `patch` | Resource modification (how to customize) |
+| [`launcher/pkg/patch`](https://github.com/go-kure/launcher) | Resource modification (how to customize) |
 | `io` | Serialization (how to read/write) |
 
 Each package can be used independently or composed together for complete workflows.

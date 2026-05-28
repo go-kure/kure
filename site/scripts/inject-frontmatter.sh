@@ -49,8 +49,6 @@ inject_fm "$KURE_ROOT/docs/oci-layout.md"                   "concepts/oci-layout
 
 # Examples
 inject_fm "$KURE_ROOT/examples/patches/README.md"           "examples/patches.md"                         "Patches"                      10
-inject_fm "$KURE_ROOT/examples/generators/README.md"        "examples/generators.md"                      "Generators"                   20
-inject_fm "$KURE_ROOT/examples/kurel/frigate/README.md"     "examples/kurel-frigate.md"                   "Kurel Frigate"                30
 
 
 # API Reference — package READMEs

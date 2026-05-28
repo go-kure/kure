@@ -1,9 +1,5 @@
 # Kure Architecture Documentation
 
-**Version:** 2.0.0  
-**Date:** August 2025  
-**Status:** Complete  
-
 ## Executive Summary
 
 Kure is a Go library for programmatically building Kubernetes resources used by GitOps tools (Flux, cert-manager, MetalLB, External Secrets). The library emphasizes strongly-typed object construction over templating engines, providing a composable, type-safe approach to generating Kubernetes manifests.
@@ -49,7 +45,6 @@ graph TB
         DM[Domain Model]
         WF[Workflow Engines]
         RB[Resource Builders]
-        PS[Patch System]
         LO[Layout Engine]
     end
     
@@ -559,89 +554,9 @@ This is the kure idiom for one-of: setting two variants is a compile error (sing
 
 ## Patch System Architecture
 
-> **Note (2026-05-15)**: `pkg/patch` moved to `go-kure/launcher`. The section below describes the
-> historical implementation that lived in kure before the launcher extraction (ADR-018).
-
-### Design Philosophy
-
-The patch system implements declarative, JSONPath-based patching with structure preservation:
-
-```
-Original YAML + Patch Declarations → Modified YAML (preserving comments/formatting)
-```
-
-### Patch File Format
-
-Patches use a TOML-inspired format (`.kpatch` files) that's optimized for Kubernetes resources:
-
-```toml
-# examples/patches/resources.kpatch
-
-[deployment.app]
-replicas: 3
-
-[deployment.app.containers.name=main]
-image.repository: ghcr.io/example/app
-image.tag: "${values.version}"
-resources.requests.cpu: 250m
-
-[service.app.ports.name=http]
-port: 80
-```
-
-### Path Resolution Engine
-
-The patch engine implements sophisticated path resolution:
-
-```go
-// pkg/patch/apply.go
-
-type PatchEngine struct {
-    preserveStructure bool
-    variables        map[string]interface{}
-}
-
-func (pe *PatchEngine) Apply(yamlContent []byte, patchContent []byte) ([]byte, error) {
-    // 1. Parse YAML with structure preservation
-    // 2. Parse patch declarations  
-    // 3. Resolve JSONPaths with type inference
-    // 4. Apply modifications preserving formatting
-    // 5. Return modified YAML
-}
-```
-
-### List Selector System
-
-Advanced list manipulation through selector syntax:
-
-| Selector Type       | Example                     | Operation                    |
-|--------------------|-----------------------------|-----------------------------|
-| By index           | `spec.containers.0`         | Replace at index 0          |
-| By key-value       | `spec.containers.name=main` | Replace item with name=main |
-| Insert before      | `spec.containers.-3`        | Insert before index 3       |
-| Insert after       | `spec.containers.+2`        | Insert after index 2        |
-| Append to list     | `spec.containers.-`         | Append to end              |
-
-### Variable Substitution
-
-The patch system supports typed variable substitution:
-
-```toml
-[deployment.app]
-enabled: ${features.web_enabled}        # Boolean feature flags
-replicas: ${values.replica_count}       # Numeric values  
-
-[service.app]
-hostname: "${values.name}.${values.domain}"  # String interpolation
-```
-
-### Type Inference
-
-Patches automatically infer Kubernetes field types:
-
-- Resource field types from OpenAPI schema
-- List element types from existing content
-- Scalar types from variable context
+> **Note (2026-05-15)**: `pkg/patch` moved to [go-kure/launcher](https://github.com/go-kure/launcher)
+> as part of the launcher extraction (ADR-018). See the launcher repository for current patch system
+> documentation.
 
 ---
 

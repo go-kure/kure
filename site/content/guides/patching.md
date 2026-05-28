@@ -5,7 +5,12 @@ weight = 40
 
 # Patching Resources
 
-Kure's patch system lets you declaratively modify Kubernetes resources using JSONPath expressions. Patches are applied after resource generation, making them useful for environment-specific customization.
+The patch system in [go-kure/launcher](https://github.com/go-kure/launcher) lets you
+declaratively modify Kubernetes resources using JSONPath expressions. Patches are applied
+after resource generation, making them useful for environment-specific customization.
+
+> **Note**: `pkg/patch` lives in `go-kure/launcher`, not in kure itself.
+> <!-- TODO: update link when launcher docs site is published -->
 
 ## When to Patch vs Configure
 
@@ -45,7 +50,7 @@ patches:
 ## Applying Patches
 
 ```go
-import "github.com/go-kure/kure/pkg/patch"
+import "github.com/go-kure/launcher/pkg/patch"
 
 // Load patches from file
 file, _ := os.Open("patches/production.kpatch")
@@ -161,7 +166,7 @@ SMP and field-level patches can coexist in the same file. SMP patches are applie
 ### Enabling Kind-Aware Merging
 
 ```go
-import "github.com/go-kure/kure/pkg/patch"
+import "github.com/go-kure/launcher/pkg/patch"
 
 // Create a kind lookup for schema-aware merging
 lookup, err := patch.DefaultKindLookup()
@@ -187,4 +192,9 @@ for _, r := range reports {
 
 - [Patch reference](https://pkg.go.dev/github.com/go-kure/launcher/pkg/patch) for API details
 - [Patch examples](/examples/patches) for working samples
-- [Kurel packages](/guides/kurel-packages/) for patch-based package customization
+
+## See Also
+
+- [go-kure/launcher](https://github.com/go-kure/launcher) — the project that owns `pkg/patch`
+  and the full patch runtime
+<!-- TODO: link to launcher docs site once published -->
