@@ -86,6 +86,13 @@ make test-short
 make test-integration
 ```
 
+#### Coverage Thresholds
+
+- **CI gate (enforced):** 90% total — PRs fail if total coverage drops below this
+- **Target:** 95% total, ≥90% per package — maintain this as the working standard
+- Check per-package detail: `GOWORK=off go test ./... -covermode=atomic 2>&1 | grep "coverage:"`
+- Check total: `GOWORK=off go test ./... -coverprofile=/tmp/cov.out -covermode=atomic 2>/dev/null && go tool cover -func=/tmp/cov.out | tail -1`
+
 ### Code Quality
 
 ```bash
