@@ -1,6 +1,8 @@
-# Kure Patch Module Examples (TOML Format)
+# Patch Examples (TOML Format)
 
-This directory demonstrates the new TOML-style patch system with cert-manager as an example.
+This directory demonstrates the TOML-style patch system from
+[go-kure/launcher](https://github.com/go-kure/launcher/tree/main/pkg/patch),
+using cert-manager resources as an example.
 
 ## Files
 

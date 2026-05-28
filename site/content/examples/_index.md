@@ -12,8 +12,6 @@ Practical examples of using Kure to generate Kubernetes configurations.
 These examples include full documentation:
 
 - [Patches](patches) - Declarative patching with TOML and YAML formats
-- [Generators](generators) - Resource generation using the GVK system
-- [Kurel Frigate](kurel-frigate) - Building a complete kurel package
 
 ## Additional Examples
 

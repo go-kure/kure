@@ -53,8 +53,7 @@ io.Marshal(os.Stdout, ks)
 
 - **Comprehensive Resource Support**: Core Kubernetes, FluxCD, cert-manager, External Secrets, MetalLB
 - **Hierarchical Organization**: Cluster, Node, Bundle, Application structure for clean GitOps layouts
-- **Declarative Patching**: JSONPath-based patching system for resource customization
-- **Kurel Package System**: Reusable application packages with patch-based customization
+- **Declarative Patching**: JSONPath-based patching via [go-kure/launcher](https://github.com/go-kure/launcher)
 
 ArgoCD support is planned but not yet production-ready.
 

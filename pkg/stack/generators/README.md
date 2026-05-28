@@ -1,5 +1,9 @@
 # Generators - Application Generator System
 
+> **Deprecated (2026-05-15)**: This package is slated for removal in
+> [kure#539](https://github.com/go-kure/kure/issues/539). Application-level component
+> patterns live in [go-kure/launcher](https://github.com/go-kure/launcher).
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/stack/generators.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/generators)
 
 The `generators` package provides a type-safe system for creating Kubernetes application workloads from configuration. Generators implement the `stack.ApplicationConfig` interface, allowing them to be used as applications within the domain model.
@@ -14,7 +18,6 @@ Generators use the GroupVersionKind (GVK) type system to identify and instantiat
 |-----------|-----|-------------|
 | **AppWorkload** | `generators.gokure.dev/v1alpha1 / AppWorkload` | General-purpose application workload with Deployment, Service, ConfigMap |
 | **FluxHelm** | `generators.gokure.dev/v1alpha1 / FluxHelm` | HelmRelease-based application using Flux |
-| **KurelPackage** | `generators.gokure.dev/v1alpha1 / KurelPackage` | Kurel package reference for pre-built application packages |
 
 ## Usage
 
@@ -87,10 +90,6 @@ Generates Flux HelmRelease resources for Helm-based applications:
 - HelmRelease with chart reference
 - HelmRepository source (if needed)
 - Values configuration
-
-### kurelpackage
-
-Generates Kubernetes resource objects from kurel packages. The `Generate()` method delegates to `GeneratePackageFiles()`, extracts files under the `resources/` prefix, and parses each one into typed `client.Object` values. Non-resource files (kurel.yaml, patches, values, extensions) are excluded — they are package metadata. This makes KurelPackage configs usable in the stack generation pipeline alongside other generators.
 
 ## Related Packages
 

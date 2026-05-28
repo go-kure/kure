@@ -33,12 +33,6 @@ title = 'Go Kure'
   [[module.mounts]]
     source = ".generated/examples/patches.md"
     target = "content/examples/patches.md"
-  [[module.mounts]]
-    source = ".generated/examples/generators.md"
-    target = "content/examples/generators.md"
-  [[module.mounts]]
-    source = ".generated/examples/kurel-frigate.md"
-    target = "content/examples/kurel-frigate.md"
   # API Reference — package READMEs
   [[module.mounts]]
     source = ".generated/api-reference/stack.md"

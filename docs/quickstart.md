@@ -64,37 +64,6 @@ spec:
     name: flux-system
 ```
 
-## Build a Kurel Package
-
-Kurel packages provide a structured way to define reusable Kubernetes applications. Try building the example Frigate package:
-
-```bash
-cd examples/kurel/frigate
-kurel build .
-```
-
-This generates Kubernetes manifests from the package definition. Inspect the package structure:
-
-```
-frigate/
-  kurel.yaml         # Package metadata
-  parameters.yaml    # Configurable parameters
-  resources/         # Base Kubernetes resources
-  patches/           # Optional patches
-```
-
-Validate a package before deployment:
-
-```bash
-kurel validate .
-```
-
-View package information:
-
-```bash
-kurel info .
-```
-
 ## Deploy with Flux
 
 Once you have generated manifests, deploy them using Flux:
@@ -127,4 +96,3 @@ flux reconcile kustomization flux-system --with-source
 - **Examples**: Explore the `examples/` directory for more complex configurations
 - **API Reference**: See the full API at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure)
 - **Patching**: Learn about declarative patching in the [README](https://github.com/go-kure/kure#declarative-patching)
-- **CLI Reference**: Run `kure --help` and `kurel --help` for all available commands
