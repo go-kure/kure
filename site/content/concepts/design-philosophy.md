@@ -42,7 +42,6 @@ Kure separates concerns through interfaces:
 
 - **`ApplicationConfig`** — how an application generates its resources
 - **`Workflow`** — how a GitOps tool creates reconciliation resources
-- **Generator registry** — pluggable application types via GVK
 
 This allows new application types and GitOps tools to be added without modifying the core domain model.
 
