@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.3] - 2026-05-28
+
+### Added
+
+- Add FluxIntegratedPerBundle placement mode
+
+### Fixed
+
+- Gate umbrella-child augmenter CRs by per-bundle mode
+
 ## [0.2.0-beta.2] - 2026-05-28
 
 ### CI
