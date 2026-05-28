@@ -84,6 +84,33 @@ func TestValidateCluster_NoUmbrellaMultiPackageAllowed(t *testing.T) {
 	}
 }
 
+func TestValidateCluster_NodeWithNilChild(t *testing.T) {
+	// A node tree with a nil child pointer should not panic.
+	root := &Node{
+		Name:     "root",
+		Bundle:   &Bundle{Name: "bundle"},
+		Children: []*Node{nil, {Name: "valid", Bundle: &Bundle{Name: "child"}}},
+	}
+	c := &Cluster{Name: "c", Node: root}
+	// Should not panic — the walkNodes nil guard should handle this.
+	if err := ValidateCluster(c); err != nil {
+		t.Fatalf("unexpected error with nil child node: %v", err)
+	}
+}
+
+func TestValidateCluster_UmbrellaWithNilChild(t *testing.T) {
+	// An umbrella bundle with a nil child entry in Children produces a validation error
+	// from Bundle.Validate but the nil guard in collectUmbrella prevents a panic.
+	root := &Bundle{
+		Name:     "root",
+		Children: []*Bundle{nil, {Name: "valid"}},
+	}
+	c := &Cluster{Name: "c", Node: &Node{Name: "n", Bundle: root}}
+	// Bundle.Validate catches nil children as invalid, so an error is expected.
+	// Either outcome is acceptable — the test just ensures no panic.
+	_ = ValidateCluster(c)
+}
+
 func TestValidateCluster_InvalidBundleBubblesUp(t *testing.T) {
 	// Parent has Wait=false but has Children — invalid per Bundle.Validate.
 	falseVal := false

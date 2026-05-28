@@ -83,6 +83,21 @@ func TestSetBucketSpec(t *testing.T) {
 	}
 }
 
+func TestSetHelmChartSpec(t *testing.T) {
+	chart := CreateHelmChart("my-chart", "flux-system")
+	newSpec := sourcev1.HelmChartSpec{
+		Chart:   "nginx",
+		Version: "1.0.0",
+	}
+	SetHelmChartSpec(chart, newSpec)
+	if chart.Spec.Chart != "nginx" {
+		t.Errorf("expected Chart 'nginx', got %s", chart.Spec.Chart)
+	}
+	if chart.Spec.Version != "1.0.0" {
+		t.Errorf("expected Version '1.0.0', got %s", chart.Spec.Version)
+	}
+}
+
 func TestSetOCIRepositorySpec(t *testing.T) {
 	ociRepo := CreateOCIRepository("test-oci", "flux-system")
 	SetOCIRepositoryURL(ociRepo, "oci://registry.example.com/repo")

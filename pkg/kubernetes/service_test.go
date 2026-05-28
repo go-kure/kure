@@ -179,6 +179,22 @@ func TestServiceMetadataFunctions(t *testing.T) {
 	}
 }
 
+// TestAddServiceLabel_NilMaps exercises the nil-map init paths for Labels
+// and Annotations when the Service was not created via CreateService.
+func TestAddServiceLabelAnnotation_NilMaps(t *testing.T) {
+	svc := &corev1.Service{}
+	AddServiceLabel(svc, "env", "prod")
+	if svc.Labels["env"] != "prod" {
+		t.Errorf("expected label env=prod, got %v", svc.Labels)
+	}
+
+	svc2 := &corev1.Service{}
+	AddServiceAnnotation(svc2, "note", "test")
+	if svc2.Annotations["note"] != "test" {
+		t.Errorf("expected annotation note=test, got %v", svc2.Annotations)
+	}
+}
+
 func TestAddServicePort_Success(t *testing.T) {
 	svc := CreateService("test", "default")
 	port := corev1.ServicePort{
