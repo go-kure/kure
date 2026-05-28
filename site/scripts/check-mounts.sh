@@ -21,7 +21,6 @@ MOUNTED_FILES=(
   "docs/dependency-updates.md"
   "pkg/stack/README.md"
   "pkg/stack/fluxcd/README.md"
-  "pkg/stack/generators/README.md"
   "pkg/stack/layout/README.md"
   "pkg/io/README.md"
   "pkg/errors/README.md"

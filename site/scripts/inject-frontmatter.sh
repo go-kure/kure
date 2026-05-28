@@ -54,7 +54,6 @@ inject_fm "$KURE_ROOT/examples/patches/README.md"           "examples/patches.md
 # API Reference — package READMEs
 inject_fm "$KURE_ROOT/pkg/stack/README.md"                  "api-reference/stack.md"                      "Stack"                        10
 inject_fm "$KURE_ROOT/pkg/stack/fluxcd/README.md"           "api-reference/flux-engine.md"                "Flux Engine"                  20
-inject_fm "$KURE_ROOT/pkg/stack/generators/README.md"       "api-reference/generators.md"                 "Generators"                   30
 inject_fm "$KURE_ROOT/pkg/stack/layout/README.md"           "api-reference/layout.md"                     "Layout Engine"                40
 inject_fm "$KURE_ROOT/pkg/io/README.md"                     "api-reference/io.md"                         "IO"                           70
 inject_fm "$KURE_ROOT/pkg/errors/README.md"                 "api-reference/errors.md"                     "Errors"                       80
