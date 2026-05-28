@@ -41,9 +41,6 @@ title = 'Go Kure'
     source = ".generated/api-reference/flux-engine.md"
     target = "content/api-reference/flux-engine.md"
   [[module.mounts]]
-    source = ".generated/api-reference/generators.md"
-    target = "content/api-reference/generators.md"
-  [[module.mounts]]
     source = ".generated/api-reference/layout.md"
     target = "content/api-reference/layout.md"
   [[module.mounts]]
