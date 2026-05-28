@@ -125,7 +125,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 			if child.UmbrellaChild {
 				// Umbrella children are not referenced from the parent
 				// kustomization.yaml's Children loop:
-				//   - FluxIntegrated: the child's Kustomization CR is
+				//   - FluxIntegratedPerLayout: the child's Kustomization CR is
 				//     already in ml.Resources (placed there by the
 				//     LayoutIntegrator), so the Resources loop above
 				//     emits the filename exactly once.
@@ -139,8 +139,8 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 			}
 			if child.ApplicationFileMode == AppFileSingle {
 				kustomBuf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
-			} else if ml.FluxPlacement == FluxIntegrated {
-				// FluxIntegrated: reference Flux Kustomization YAML files.
+			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
+				// FluxIntegratedPerLayout: reference Flux Kustomization YAML files.
 				// Always use FilePerResource here — each child must have a
 				// unique filename; FilePerKind would drop child.Name.
 				fluxKustName := nameFn("flux-system", "kustomization", child.Name, FilePerResource)

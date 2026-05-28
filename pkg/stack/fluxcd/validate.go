@@ -47,7 +47,7 @@ func validateBundleSourceRefs(b *stack.Bundle) error {
 	if b.SourceRef == nil || b.SourceRef.Kind == "" || b.SourceRef.Name == "" {
 		return errors.ResourceValidationError(
 			"Bundle", b.Name, "sourceRef",
-			"FluxIntegrated mode requires a SourceRef with Kind and Name; "+
+			"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
 				"omitting it produces a Kustomization CR without spec.sourceRef, which Flux rejects",
 			nil,
 		)

@@ -55,8 +55,8 @@ func TestLayoutRulesForPreset_ParentDeployedControl(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if rules.FluxPlacement != FluxIntegrated {
-		t.Errorf("expected FluxPlacement=%s, got %s", FluxIntegrated, rules.FluxPlacement)
+	if rules.FluxPlacement != FluxIntegratedPerLayout {
+		t.Errorf("expected FluxPlacement=%s, got %s", FluxIntegratedPerLayout, rules.FluxPlacement)
 	}
 
 	if err := rules.Validate(); err != nil {

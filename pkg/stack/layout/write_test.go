@@ -449,7 +449,7 @@ func TestWriteManifest_FluxIntegrated(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "flux-root",
 		Namespace:     "cl/flux-system",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		Children:      []*ManifestLayout{childA, childB},
 	}
 
@@ -467,7 +467,7 @@ func TestWriteManifest_FluxIntegrated(t *testing.T) {
 	}
 
 	content := string(data)
-	// FluxIntegrated: children referenced as flux-system-kustomization-<name>.yaml
+	// FluxIntegratedPerLayout: children referenced as flux-system-kustomization-<name>.yaml
 	if !strings.Contains(content, "flux-system-kustomization-team-a.yaml") {
 		t.Errorf("expected flux kustomization reference for team-a, got:\n%s", content)
 	}
@@ -537,7 +537,7 @@ func TestWriteToDisk_FluxIntegrated(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "flux-root",
 		Namespace:     "cl/flux-system",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		Children:      []*ManifestLayout{childA, childB},
 	}
 
@@ -553,7 +553,7 @@ func TestWriteToDisk_FluxIntegrated(t *testing.T) {
 	}
 
 	content := string(data)
-	// FluxIntegrated: children referenced as flux-system-kustomization-<name>.yaml
+	// FluxIntegratedPerLayout: children referenced as flux-system-kustomization-<name>.yaml
 	if !strings.Contains(content, "flux-system-kustomization-team-a.yaml") {
 		t.Errorf("expected flux kustomization reference for team-a, got:\n%s", content)
 	}
@@ -743,7 +743,7 @@ func TestWriteManifest_FileNamingDefault_Unchanged(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestWriteManifest_FluxKustomizationMode_PerPlacement(t *testing.T) {
-	// Parent with FluxIntegrated, child with resources
+	// Parent with FluxIntegratedPerLayout, child with resources
 	child := &ManifestLayout{
 		Name:      "team-a",
 		Namespace: "cl/ns/root/team-a",
@@ -756,14 +756,14 @@ func TestWriteManifest_FluxKustomizationMode_PerPlacement(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "root",
 		Namespace:     "cl/ns",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		Resources:     []client.Object{testObject("v1", "ConfigMap", "root-cfg", "ns")},
 		Children:      []*ManifestLayout{child},
 	}
 
 	cfg := DefaultLayoutConfig()
 	cfg.FluxKustomizationMode = map[FluxPlacement]KustomizationMode{
-		FluxIntegrated: KustomizationRecursive,
+		FluxIntegratedPerLayout: KustomizationRecursive,
 	}
 	dir := t.TempDir()
 
@@ -815,7 +815,7 @@ func TestWriteManifest_FluxKustomizationMode_NoOverride(t *testing.T) {
 
 	cfg := DefaultLayoutConfig()
 	cfg.FluxKustomizationMode = map[FluxPlacement]KustomizationMode{
-		FluxIntegrated: KustomizationRecursive,
+		FluxIntegratedPerLayout: KustomizationRecursive,
 	}
 	dir := t.TempDir()
 
@@ -951,7 +951,7 @@ func TestWriteToDisk_KustomizationGenerated(t *testing.T) {
 
 func TestWriteManifest_UmbrellaChild(t *testing.T) {
 	// Mirrors the layout produced by the Flux LayoutIntegrator in
-	// FluxIntegrated mode: the parent carries the child's Kustomization CR
+	// FluxIntegratedPerLayout mode: the parent carries the child's Kustomization CR
 	// in Resources (via placeUmbrellaChildrenFlux) and an UmbrellaChild
 	// sub-layout in Children. Asserts the parent kustomization.yaml
 	// references the child CR filename exactly once (no duplication), and
@@ -1036,7 +1036,7 @@ func TestWriteManifest_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "flux-root",
 		Namespace:     "cl/flux-system",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		FileNaming:    FileNamingKindName,
 		Children:      []*ManifestLayout{child},
 	}
@@ -1222,7 +1222,7 @@ func TestWriteToDisk_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	root := &ManifestLayout{
 		Name:          "flux-root",
 		Namespace:     "cl/flux-system",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		FilePer:       FilePerResource,
 		FileNaming:    FileNamingKindName,
 		Mode:          KustomizationExplicit,
@@ -1257,11 +1257,11 @@ func TestWriteManifest_NoDuplicateFluxEntries(t *testing.T) {
 	child := &ManifestLayout{
 		Name:          "myapp",
 		Namespace:     "clusters/prod/apps/myapp",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 	}
 	parent := &ManifestLayout{
 		Name:          "prod",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		Resources:     []client.Object{cr},
 		Children:      []*ManifestLayout{child},
 	}
@@ -1290,12 +1290,12 @@ func TestWriteToDisk_NoDuplicateFluxEntries(t *testing.T) {
 	child := &ManifestLayout{
 		Name:          "myapp",
 		Namespace:     "prod/apps/myapp",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 	}
 	parent := &ManifestLayout{
 		Name:          "prod",
 		Namespace:     "cl",
-		FluxPlacement: FluxIntegrated,
+		FluxPlacement: FluxIntegratedPerLayout,
 		Resources:     []client.Object{cr},
 		Children:      []*ManifestLayout{child},
 	}

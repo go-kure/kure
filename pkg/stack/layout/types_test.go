@@ -44,7 +44,7 @@ func TestLayoutRules_Validate(t *testing.T) {
 				ApplicationGrouping: layout.GroupByName,
 				ApplicationFileMode: layout.AppFileSingle,
 				FilePer:             layout.FilePerKind,
-				FluxPlacement:       layout.FluxIntegrated,
+				FluxPlacement:       layout.FluxIntegratedPerLayout,
 			},
 			wantErr: false,
 		},
