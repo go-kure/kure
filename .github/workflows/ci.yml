@@ -388,7 +388,7 @@ jobs:
           exit 0
         fi
         COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-        THRESHOLD=85
+        THRESHOLD=90
         echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
         echo "Current coverage: ${COVERAGE}%"
         echo "Required threshold: ${THRESHOLD}%"
@@ -418,7 +418,7 @@ jobs:
 
           **Total Coverage:** ${{ steps.coverage.outputs.coverage }}%
 
-          Coverage threshold: 85%
+          Coverage threshold: 90%
 
   # =============================================================================
   # Stage 4: Build Gate (parallel with coverage-check)
