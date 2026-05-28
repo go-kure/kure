@@ -99,16 +99,15 @@ func TestValidateCluster_NodeWithNilChild(t *testing.T) {
 }
 
 func TestValidateCluster_UmbrellaWithNilChild(t *testing.T) {
-	// An umbrella bundle with a nil child entry in Children produces a validation error
-	// from Bundle.Validate but the nil guard in collectUmbrella prevents a panic.
+	// Bundle.Validate rejects a nil child entry — ValidateCluster must surface that error.
 	root := &Bundle{
 		Name:     "root",
 		Children: []*Bundle{nil, {Name: "valid"}},
 	}
 	c := &Cluster{Name: "c", Node: &Node{Name: "n", Bundle: root}}
-	// Bundle.Validate catches nil children as invalid, so an error is expected.
-	// Either outcome is acceptable — the test just ensures no panic.
-	_ = ValidateCluster(c)
+	if err := ValidateCluster(c); err == nil {
+		t.Fatal("expected error for umbrella bundle with nil child entry")
+	}
 }
 
 func TestValidateCluster_InvalidBundleBubblesUp(t *testing.T) {

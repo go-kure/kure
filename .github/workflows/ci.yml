@@ -389,6 +389,7 @@ jobs:
         fi
         COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
         THRESHOLD=90
+        PKG_THRESHOLD=90
         echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
         echo "Current coverage: ${COVERAGE}%"
         echo "Required threshold: ${THRESHOLD}%"
@@ -399,6 +400,52 @@ jobs:
         else
           echo "::notice::Test coverage ${COVERAGE}% meets required threshold"
         fi
+
+        # Per-package coverage check — fail if any non-examples package is below PKG_THRESHOLD
+        echo ""
+        echo "Checking per-package coverage (threshold: ${PKG_THRESHOLD}%)..."
+        awk '
+        NR == 1 { next }
+        {
+          split($1, a, ":")
+          file = a[1]
+          n = split(file, parts, "/")
+          pkg = ""
+          for (i = 1; i < n; i++) {
+            if (i > 1) pkg = pkg "/"
+            pkg = pkg parts[i]
+          }
+          total_stmts[pkg] += $2
+          if ($3 > 0) covered_stmts[pkg] += $2
+        }
+        END {
+          for (pkg in total_stmts) {
+            if (total_stmts[pkg] > 0) {
+              pct = int(covered_stmts[pkg] / total_stmts[pkg] * 100)
+              print pkg " " pct
+            }
+          }
+        }
+        ' coverage/coverage.out | sort > /tmp/pkg_coverage.txt
+
+        FAILED=0
+        while read pkg pct; do
+          case "$pkg" in
+            */examples/*) continue ;;
+          esac
+          if [ "$pct" -lt "$PKG_THRESHOLD" ]; then
+            echo "::error::Package ${pkg} coverage ${pct}% is below per-package threshold of ${PKG_THRESHOLD}%"
+            FAILED=1
+          else
+            echo "  ${pkg}: ${pct}%"
+          fi
+        done < /tmp/pkg_coverage.txt
+
+        if [ "$FAILED" -eq 1 ]; then
+          echo "::error::One or more packages are below the per-package coverage threshold of ${PKG_THRESHOLD}%"
+          exit 1
+        fi
+        echo "All packages meet the per-package coverage threshold."
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v6
