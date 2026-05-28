@@ -197,8 +197,10 @@ bundle's `Children`, shared umbrella ownership, or multi-package umbrellas —
 fail fast with a validation error rather than producing malformed output.
 
 `CreateLayoutWithResources` additionally calls `validateSourceRefsForFluxIntegrated`
-when `rules.FluxPlacement == FluxIntegratedPerLayout` (after normalization — `FluxUnset`
-becomes `FluxSeparate` and skips this gate). This checks that every bundle
+for **both inline placements** (`FluxIntegratedPerLayout` and
+`FluxIntegratedPerBundle`) — both emit bundle/node CRs that carry a `spec.sourceRef`.
+(After normalization `FluxUnset` becomes `FluxSeparate`, which skips this gate.)
+This checks that every bundle
 reachable from the cluster node tree — node bundles and umbrella child bundles
 recursively — has a complete `SourceRef` with both `Kind` and `Name` set. A nil,
 zero-value, or partially-populated `SourceRef` is rejected before layout walking
