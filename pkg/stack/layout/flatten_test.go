@@ -376,6 +376,30 @@ func TestRewriteFluxPaths_Nil(t *testing.T) {
 	rewriteFluxPaths(nil, map[string]string{"a": "b"})
 }
 
+func TestRewriteFluxPaths_NonKustomizationSkipped(t *testing.T) {
+	// A non-Kustomization object in Resources must be skipped (the !ok branch).
+	kust := &kustomizev1.Kustomization{}
+	kust.Spec.Path = "cluster/apps"
+
+	nonKust := &unstructured.Unstructured{}
+	nonKust.SetAPIVersion("v1")
+	nonKust.SetKind("ConfigMap")
+	nonKust.SetName("config")
+
+	root := &ManifestLayout{
+		Namespace: "cluster",
+		Resources: []client.Object{nonKust, kust},
+		flattenInfo: &flattenInfo{
+			pathRewrites: map[string]string{"cluster/apps": "cluster"},
+		},
+	}
+	ApplyFlattenPathRewrites(root)
+	// The Kustomization must be rewritten; the ConfigMap must not cause a panic.
+	if kust.Spec.Path != "cluster" {
+		t.Errorf("kust.Spec.Path = %q, want %q", kust.Spec.Path, "cluster")
+	}
+}
+
 func TestFindByNodeAlias_Nil(t *testing.T) {
 	if got := FindByNodeAlias(nil, "path"); got != nil {
 		t.Errorf("expected nil for nil layout, got %v", got)

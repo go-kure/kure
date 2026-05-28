@@ -107,4 +107,24 @@ func TestServiceAccountNilGuards(t *testing.T) {
 	assertPanics(t, func() { SetServiceAccountSecrets(nil, nil) })
 	assertPanics(t, func() { SetServiceAccountImagePullSecrets(nil, nil) })
 	assertPanics(t, func() { SetServiceAccountAutomountToken(nil, true) })
+
+	// Nil-map init guards: plain struct (not CreateServiceAccount) has nil maps and
+	// nil AutomountServiceAccountToken pointer.
+	bare := &corev1.ServiceAccount{}
+	SetServiceAccountAutomountToken(bare, true)
+	if bare.AutomountServiceAccountToken == nil || !*bare.AutomountServiceAccountToken {
+		t.Error("automount token not initialized on bare ServiceAccount")
+	}
+
+	bare2 := &corev1.ServiceAccount{}
+	AddServiceAccountLabel(bare2, "team", "ops")
+	if bare2.Labels["team"] != "ops" {
+		t.Error("label not added to bare ServiceAccount")
+	}
+
+	bare3 := &corev1.ServiceAccount{}
+	AddServiceAccountAnnotation(bare3, "owner", "ops")
+	if bare3.Annotations["owner"] != "ops" {
+		t.Error("annotation not added to bare ServiceAccount")
+	}
 }

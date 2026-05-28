@@ -143,6 +143,28 @@ func TestResourceRequirementsInvalidQuantity(t *testing.T) {
 	}
 }
 
+// TestSetResourceRequest_NilMaps exercises the Requests==nil and Limits==nil
+// init paths when rr was constructed without CreateResourceRequirements.
+func TestSetResource_NilMaps(t *testing.T) {
+	// Requests map is nil — the nil guard must initialize it.
+	rr := &corev1.ResourceRequirements{}
+	if err := SetResourceRequestCPU(rr, "100m"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rr.Requests == nil {
+		t.Error("expected Requests to be initialized")
+	}
+
+	// Limits map is nil — the nil guard must initialize it.
+	rr2 := &corev1.ResourceRequirements{}
+	if err := SetResourceLimitCPU(rr2, "500m"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rr2.Limits == nil {
+		t.Error("expected Limits to be initialized")
+	}
+}
+
 func TestResourceRequirementsMultipleValues(t *testing.T) {
 	rr := CreateResourceRequirements()
 	if err := SetResourceRequestCPU(rr, "100m"); err != nil {

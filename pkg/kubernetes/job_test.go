@@ -161,4 +161,10 @@ func TestJobNilGuards(t *testing.T) {
 	assertPanics(t, func() { SetJobBackoffLimit(nil, 1) })
 	assertPanics(t, func() { SetJobTTLSecondsAfterFinished(nil, 1) })
 	assertPanics(t, func() { SetJobActiveDeadlineSeconds(nil, &ad) })
+
+	// Secondary nil guard: spec == nil with valid receiver.
+	job := CreateJob("test", "default")
+	if err := SetJobPodSpec(job, nil); err == nil {
+		t.Error("SetJobPodSpec(job, nil) should return error")
+	}
 }

@@ -177,6 +177,9 @@ func TestVersionComparator(t *testing.T) {
 		{"v1beta1", "v1", -1},
 		{"v1", "v1alpha1", 1},
 		{"v2alpha1", "v1", 1},
+		// Four-part version exercises the i>=3 break guard in parseVersion;
+		// the 4th component is ignored so both parse to [1,2,3,0] = equal.
+		{"1.2.3.4", "1.2.3.5", 0},
 	}
 
 	for _, tt := range tests {

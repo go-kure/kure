@@ -734,6 +734,203 @@ func TestMultipleDependencies(t *testing.T) {
 	}
 }
 
+// --- Error path tests for node-not-found branches ---
+
+// makeOrphanNodeBuilder creates a nodeBuilderImpl whose nodePath does not match
+// any node in the cluster, which causes ensureOwned to return nil for the node.
+func makeOrphanNodeBuilder(clusterName string) *nodeBuilderImpl {
+	return &nodeBuilderImpl{
+		cluster:  &Cluster{Name: clusterName, Node: &Node{Name: "real"}},
+		nodePath: "nonexistent/path", // intentionally bogus
+	}
+}
+
+func makeOrphanBundleBuilder(clusterName string) *bundleBuilderImpl {
+	return &bundleBuilderImpl{
+		cluster:  &Cluster{Name: clusterName, Node: &Node{Name: "real"}},
+		nodePath: "nonexistent/path", // intentionally bogus — node lookup fails
+	}
+}
+
+func TestWithChild_NodeNotFound(t *testing.T) {
+	nb := makeOrphanNodeBuilder("test")
+	_, err := nb.WithChild("child").Build()
+	if err == nil {
+		t.Fatal("expected error when parent node not found")
+	}
+	if !strings.Contains(err.Error(), "parent node not found") {
+		t.Errorf("expected 'parent node not found' in error, got: %v", err)
+	}
+}
+
+func TestWithChild_EmptyName(t *testing.T) {
+	_, err := NewClusterBuilder("test").WithNode("root").WithChild("").Build()
+	if err == nil {
+		t.Fatal("expected error for empty child name")
+	}
+	if !strings.Contains(err.Error(), "child node name must not be empty") {
+		t.Errorf("expected 'child node name must not be empty', got: %v", err)
+	}
+}
+
+func TestWithBundle_NodeNotFound(t *testing.T) {
+	nb := makeOrphanNodeBuilder("test")
+	_, err := nb.WithBundle("bundle").Build()
+	if err == nil {
+		t.Fatal("expected error when node not found for bundle")
+	}
+	if !strings.Contains(err.Error(), "node not found") {
+		t.Errorf("expected 'node not found' in error, got: %v", err)
+	}
+}
+
+func TestWithBundle_EmptyName(t *testing.T) {
+	_, err := NewClusterBuilder("test").WithNode("root").WithBundle("").Build()
+	if err == nil {
+		t.Fatal("expected error for empty bundle name")
+	}
+	if !strings.Contains(err.Error(), "bundle name must not be empty") {
+		t.Errorf("expected 'bundle name must not be empty', got: %v", err)
+	}
+}
+
+func TestWithPackageRef_NodeNotFound(t *testing.T) {
+	nb := makeOrphanNodeBuilder("test")
+	ref := &schema.GroupVersionKind{Group: "g", Version: "v", Kind: "K"}
+	_, err := nb.WithPackageRef(ref).Build()
+	if err == nil {
+		t.Fatal("expected error when node not found for package ref")
+	}
+	if !strings.Contains(err.Error(), "cannot set package ref") {
+		t.Errorf("expected 'cannot set package ref' in error, got: %v", err)
+	}
+}
+
+func TestWithApplication_BundleNotFound(t *testing.T) {
+	bb := makeOrphanBundleBuilder("test")
+	_, err := bb.WithApplication("app", NewMockApplicationConfig("app")).Build()
+	if err == nil {
+		t.Fatal("expected error when bundle not found for application")
+	}
+	if !strings.Contains(err.Error(), "bundle not found") {
+		t.Errorf("expected 'bundle not found' in error, got: %v", err)
+	}
+}
+
+func TestWithDependency_BundleNotFound(t *testing.T) {
+	bb := makeOrphanBundleBuilder("test")
+	dep := &Bundle{Name: "dep"}
+	_, err := bb.WithDependency(dep).Build()
+	if err == nil {
+		t.Fatal("expected error when bundle not found for dependency")
+	}
+	if !strings.Contains(err.Error(), "cannot add dependency") {
+		t.Errorf("expected 'cannot add dependency' in error, got: %v", err)
+	}
+}
+
+func TestWithSourceRef_BundleNotFound(t *testing.T) {
+	bb := makeOrphanBundleBuilder("test")
+	sr := &SourceRef{Kind: "GitRepository", Name: "repo", Namespace: "ns"}
+	_, err := bb.WithSourceRef(sr).Build()
+	if err == nil {
+		t.Fatal("expected error when bundle not found for source ref")
+	}
+	if !strings.Contains(err.Error(), "cannot set source ref") {
+		t.Errorf("expected 'cannot set source ref' in error, got: %v", err)
+	}
+}
+
+func TestFindNodeByPath_Recursive(t *testing.T) {
+	// Build a two-level tree and verify findNodeByPath can reach both levels.
+	cluster, err := NewClusterBuilder("test").
+		WithNode("root").
+		WithChild("child").
+		Build()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// findNodeByPath is package-internal, but we can exercise it indirectly by
+	// using WithPackageRef on a child node, which requires the CoW code to call
+	// findNodeByPath on the deep-copied subtree.
+	ref := &schema.GroupVersionKind{Group: "g", Version: "v", Kind: "K"}
+	childPath := cluster.Node.Children[0].GetPath()
+	nb := &nodeBuilderImpl{
+		cluster:  cluster,
+		nodePath: childPath,
+	}
+	result, err := nb.WithPackageRef(ref).Build()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Node.Children[0].PackageRef == nil {
+		t.Fatal("expected package ref on child node")
+	}
+	if result.Node.Children[0].PackageRef.Kind != "K" {
+		t.Errorf("expected Kind 'K', got %s", result.Node.Children[0].PackageRef.Kind)
+	}
+}
+
+func TestDeepCopyCluster_Nil(t *testing.T) {
+	result := deepCopyCluster(nil)
+	if result != nil {
+		t.Errorf("expected nil for nil input, got %v", result)
+	}
+}
+
+func TestDeepCopyNode_Nil(t *testing.T) {
+	result := deepCopyNode(nil)
+	if result != nil {
+		t.Errorf("expected nil for nil node input, got %v", result)
+	}
+}
+
+func TestDeepCopyBundle_Nil(t *testing.T) {
+	result := deepCopyBundle(nil)
+	if result != nil {
+		t.Errorf("expected nil for nil input, got %v", result)
+	}
+}
+
+func TestDeepCopyBundle_NamedDependsOn(t *testing.T) {
+	b := &Bundle{
+		Name:           "bundle",
+		NamedDependsOn: []string{"dep1", "dep2"},
+	}
+	got := deepCopyBundle(b)
+	if got == nil {
+		t.Fatal("expected non-nil copy")
+	}
+	if len(got.NamedDependsOn) != 2 {
+		t.Fatalf("expected 2 NamedDependsOn, got %d", len(got.NamedDependsOn))
+	}
+	// Slice independence: mutating copy doesn't affect original.
+	got.NamedDependsOn = append(got.NamedDependsOn, "dep3")
+	if len(b.NamedDependsOn) != 2 {
+		t.Error("appending to copy affected original")
+	}
+}
+
+func TestFindNodeByPath_NilRoot(t *testing.T) {
+	result := findNodeByPath(nil, "any/path")
+	if result != nil {
+		t.Errorf("expected nil for nil root, got %v", result)
+	}
+}
+
+func TestInitializeUmbrella_NilChild(t *testing.T) {
+	// Bundle with a nil entry in Children should not panic
+	b := &Bundle{
+		Name:     "umbrella",
+		Children: []*Bundle{nil, {Name: "valid"}},
+	}
+	// Should not panic
+	b.InitializeUmbrella()
+	if b.Children[1].parent == nil {
+		t.Error("expected valid child to have parent set")
+	}
+}
+
 func TestDeepCopyBundle_PreservesChildren(t *testing.T) {
 	child1 := &Bundle{Name: "child1"}
 	child2 := &Bundle{Name: "child2"}

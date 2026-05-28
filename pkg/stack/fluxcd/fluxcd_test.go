@@ -1000,6 +1000,30 @@ func TestWorkflowEngine_SupportedBootstrapModes_Delegation(t *testing.T) {
 	}
 }
 
+func TestWorkflowEngine_CreateLayoutWithResources_Success(t *testing.T) {
+	we := fluxstack.NewWorkflowEngine()
+	bundle := &stack.Bundle{
+		Name:      "test-bundle",
+		SourceRef: testSR(),
+	}
+	node := &stack.Node{Name: "test-node", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "test-cluster", Node: node}
+
+	rules := layout.LayoutRules{
+		BundleGrouping:      layout.GroupFlat,
+		ApplicationGrouping: layout.GroupFlat,
+		FluxPlacement:       layout.FluxSeparate,
+	}
+
+	result, err := we.CreateLayoutWithResources(cluster, rules)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
 // badFluxRules satisfies stack.LayoutRulesProvider but is not layout.LayoutRules.
 type badFluxRules struct{}
 

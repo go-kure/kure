@@ -203,6 +203,104 @@ spec:
 	})
 }
 
+func TestMarshalYAML_WithSpec(t *testing.T) {
+	// Unmarshal first to populate Spec, then re-marshal to exercise the non-nil Spec branch.
+	yamlContent := `
+apiVersion: generators.gokure.dev/v1alpha1
+kind: AppWorkload
+metadata:
+  name: spec-test
+  namespace: default
+spec:
+  workload: Deployment
+  replicas: 1
+  containers:
+    - name: app
+      image: nginx:latest
+`
+	var wrapper stack.ApplicationWrapper
+	if err := yaml.Unmarshal([]byte(yamlContent), &wrapper); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if wrapper.Spec == nil {
+		t.Fatal("expected non-nil spec after unmarshal")
+	}
+
+	// Marshal with non-nil Spec — exercises the `if w.Spec != nil` branch
+	data, err := yaml.Marshal(&wrapper)
+	if err != nil {
+		t.Fatalf("marshal with spec: %v", err)
+	}
+
+	var result map[string]any
+	if err := yaml.Unmarshal(data, &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if _, hasSpec := result["spec"]; !hasSpec {
+		t.Error("expected 'spec' key when Spec is non-nil")
+	}
+}
+
+func TestListApplicationConfigGVKs(t *testing.T) {
+	gvks := stack.ListApplicationConfigGVKs()
+	// The test imports register AppWorkload and FluxHelm, so at least those should be present.
+	if len(gvks) == 0 {
+		t.Fatal("expected at least one registered GVK, got none")
+	}
+	found := false
+	for _, g := range gvks {
+		if g.Kind == "AppWorkload" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected AppWorkload in registered GVKs")
+	}
+}
+
+func TestHasApplicationConfigGVK(t *testing.T) {
+	t.Run("registered GVK returns true", func(t *testing.T) {
+		if !stack.HasApplicationConfigGVK("generators.gokure.dev/v1alpha1", "AppWorkload") {
+			t.Error("expected HasApplicationConfigGVK to return true for AppWorkload")
+		}
+	})
+
+	t.Run("unregistered GVK returns false", func(t *testing.T) {
+		if stack.HasApplicationConfigGVK("unknown.example.com/v1", "DoesNotExist") {
+			t.Error("expected HasApplicationConfigGVK to return false for unregistered type")
+		}
+	})
+}
+
+func TestMarshalYAML_NilSpec(t *testing.T) {
+	wrapper := stack.ApplicationWrapper{
+		APIVersion: "generators.gokure.dev/v1alpha1",
+		Kind:       "AppWorkload",
+		Metadata: stack.ApplicationMetadata{
+			Name:      "no-spec",
+			Namespace: "default",
+		},
+		// Spec is intentionally nil
+	}
+
+	data, err := yaml.Marshal(&wrapper)
+	if err != nil {
+		t.Fatalf("marshal with nil Spec should not error: %v", err)
+	}
+
+	var result map[string]any
+	if err := yaml.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if _, hasSpec := result["spec"]; hasSpec {
+		t.Error("nil Spec should not produce a 'spec' key in marshaled output")
+	}
+	if result["apiVersion"] != "generators.gokure.dev/v1alpha1" {
+		t.Errorf("apiVersion not preserved, got %v", result["apiVersion"])
+	}
+}
+
 func TestApplicationWrappers(t *testing.T) {
 	t.Run("Multiple Applications", func(t *testing.T) {
 		yamlContent := `

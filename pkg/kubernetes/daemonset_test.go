@@ -197,4 +197,10 @@ func TestDaemonSetNilGuards(t *testing.T) {
 	assertPanics(t, func() { SetDaemonSetNodeSelector(nil, nil) })
 	assertPanics(t, func() { SetDaemonSetUpdateStrategy(nil, appsv1.DaemonSetUpdateStrategy{}) })
 	assertPanics(t, func() { SetDaemonSetRevisionHistoryLimit(nil, &rhl) })
+
+	// Secondary nil guard: spec == nil with valid receiver.
+	ds := CreateDaemonSet("test", "default")
+	if err := SetDaemonSetPodSpec(ds, nil); err == nil {
+		t.Error("SetDaemonSetPodSpec(ds, nil) should return error")
+	}
 }
