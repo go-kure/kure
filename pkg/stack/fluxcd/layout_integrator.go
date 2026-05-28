@@ -162,7 +162,7 @@ func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLa
 			if bl := findBundleLayout(layoutNode, node.Bundle.Name); bl != nil {
 				parentForChildren = bl
 			}
-			if err := li.placeUmbrellaChildrenFlux(parentForChildren, node.Bundle); err != nil {
+			if err := li.placeUmbrellaChildrenFlux(parentForChildren, node.Bundle, emitPerChildCRs); err != nil {
 				return errors.ResourceValidationError("Node", node.Name, "umbrella",
 					fmt.Sprintf("failed to place umbrella child Flux resources: %v", err), err)
 			}
@@ -327,7 +327,7 @@ func (li *LayoutIntegrator) generateChildFluxCRs(
 // SourceRef has a URL) at the PARENT layout node. Nested umbrella
 // grandchildren are placed at their immediate enclosing umbrella child's
 // layout node, which the walker has already marked with UmbrellaChild=true.
-func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.ManifestLayout, umbrella *stack.Bundle) error {
+func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.ManifestLayout, umbrella *stack.Bundle, emitPerChildCRs bool) error {
 	umbrella.InitializeUmbrella()
 	for _, child := range umbrella.Children {
 		if child == nil {
@@ -354,7 +354,7 @@ func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.Manif
 				return errors.ResourceValidationError("Bundle", child.Name, "umbrella",
 					"nested umbrella child layout not found", nil)
 			}
-			if err := li.placeUmbrellaChildrenFlux(childLayoutNode, child); err != nil {
+			if err := li.placeUmbrellaChildrenFlux(childLayoutNode, child, emitPerChildCRs); err != nil {
 				return err
 			}
 		}
@@ -365,7 +365,12 @@ func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.Manif
 		// helmchart augmenter) are invisible to it. Use the child bundle's own
 		// SourceRef so that each CR points to the correct source, not the
 		// parent umbrella's source.
-		if childLayoutNode != nil {
+		//
+		// Skipped in FluxIntegratedPerBundle mode: there the umbrella child's
+		// interior is a single kustomize build and the writer references those
+		// augmenter sub-layouts as directories, so emitting per-child CRs here
+		// would duplicate reconciliation (a CR file ref plus a directory ref).
+		if emitPerChildCRs && childLayoutNode != nil {
 			var childSR kustv1.CrossNamespaceSourceReference
 			if child.SourceRef != nil && child.SourceRef.Kind != "" && child.SourceRef.Name != "" {
 				childSR = kustv1.CrossNamespaceSourceReference{

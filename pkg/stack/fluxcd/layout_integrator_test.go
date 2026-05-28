@@ -1087,6 +1087,52 @@ func TestUmbrellaChildAugmenterSubLayoutGetFluxCR(t *testing.T) {
 	}
 }
 
+// TestUmbrellaChildAugmenterSubLayoutPerBundleNoCR verifies that in
+// FluxIntegratedPerBundle mode an umbrella child's augmenter-added sub-layout
+// gets NO per-child Flux CR and is referenced as a directory exactly once — no
+// duplicate CR-file + directory reference. This guards the per-bundle gating in
+// placeUmbrellaChildrenFlux (the augmenter-emission path).
+func TestUmbrellaChildAugmenterSubLayoutPerBundleNoCR(t *testing.T) {
+	root, _, platformApps, _, cluster := buildUmbrellaAugmenterTree(testSR(), testSR())
+	augStampPlacement(root, layout.FluxIntegratedPerBundle)
+
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	rules := layout.LayoutRules{FluxPlacement: layout.FluxIntegratedPerBundle}
+	if err := li.IntegrateWithLayout(root, cluster, rules); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+
+	// No per-child CR for the augmenter sub-layout.
+	if augHasCR(platformApps.Resources, "redis") {
+		t.Errorf("PerBundle: did not expect a Kustomization CR for 'redis' in platform-apps.Resources")
+	}
+
+	dir := t.TempDir()
+	if err := root.WriteToDisk(dir); err != nil {
+		t.Fatalf("WriteToDisk: %v", err)
+	}
+	kustData, err := os.ReadFile(filepath.Join(dir, platformApps.FullRepoPath(), "kustomization.yaml"))
+	if err != nil {
+		t.Fatalf("read platform-apps/kustomization.yaml: %v", err)
+	}
+	var redisEntries []string
+	for line := range strings.SplitSeq(string(kustData), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") && strings.Contains(trimmed, "redis") {
+			redisEntries = append(redisEntries, strings.TrimPrefix(trimmed, "- "))
+		}
+	}
+	if len(redisEntries) != 1 {
+		t.Fatalf("PerBundle: expected exactly 1 redis entry (directory), got %v:\n%s", redisEntries, kustData)
+	}
+	if strings.HasPrefix(redisEntries[0], "kustomization-") {
+		t.Errorf("PerBundle: redis should be a directory reference, got CR file %q", redisEntries[0])
+	}
+	if _, err := os.Stat(filepath.Join(dir, platformApps.FullRepoPath(), redisEntries[0])); os.IsNotExist(err) {
+		t.Errorf("PerBundle: directory reference %q does not resolve on disk", redisEntries[0])
+	}
+}
+
 // TestUmbrellaChildAugmenterSubLayoutNoDanglingReference verifies that
 // WriteToDisk does not produce a dangling reference in
 // platform-apps/kustomization.yaml when redis is an augmenter-added sub-layout.
