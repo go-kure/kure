@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.4] - 2026-06-02
+
+### Fixed
+
+- Collapse cluster-name double-nesting when ClusterName == root node name
+
+### Maintenance
+
+- Set dependabot rebase-strategy to auto
+
 ## [0.2.0-beta.3] - 2026-05-28
 
 ### Added
