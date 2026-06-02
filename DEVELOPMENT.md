@@ -50,8 +50,8 @@ The `main` branch is protected — all changes must go through pull requests.
 
 Enforced via the `main-protection` [repository ruleset](https://github.com/go-kure/kure/rules/12903081):
 
-- **Required status checks** (strict): `lint`, `test`, `build`, `rebase-check`
-- **Auto-rebase**: open PRs are automatically rebased when main is updated (via `auto-rebase.yml`)
+- **Required status checks**: `lint`, `test`, `build`
+- **Merge queue**: merging goes through a GitHub merge queue (rebase method) that rebases and tests the merged result before landing — no manual rebasing, no auto-rebase force-pushes
 - **Pull requests required**: all changes must go through a PR
 - **Conversation resolution**: all review threads must be resolved
 - **Linear history**: enforced (rebase only, no merge commits)
@@ -163,13 +163,6 @@ The project uses several GitHub Actions workflows:
 - **Triggers**: Push, PRs
 - **Purpose**: Static analysis with JetBrains Qodana
 - **Uses**: `make deps` for setup
-
-### Auto-Rebase (`.github/workflows/auto-rebase.yml`)
-- **Triggers**: Push to main
-- **Purpose**: Automatically rebases all open PRs targeting main
-- **Uses**: `peter-evans/rebase@v4`
-- **Excludes**: Dependabot PRs (`dependencies` label), draft PRs
-- **Auth**: Requires `AUTO_REBASE_PAT` secret (PAT needed to trigger CI on rebased branches)
 
 ### Create Release (`.github/workflows/release-create.yml`)
 - **Triggers**: Manual (`workflow_dispatch`)
