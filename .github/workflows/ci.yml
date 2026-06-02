@@ -5,6 +5,7 @@ on:
     branches: [main, develop, 'release/*']
   pull_request:
     branches: [main, develop]
+  merge_group:  # required: checks must report on the merge queue's temporary branch
   schedule:
     - cron: '0 4 * * *'  # 4am UTC daily - catch external changes
   workflow_dispatch:
@@ -63,13 +64,17 @@ jobs:
     name: detect-changes
     runs-on: autops-kube-kure
     timeout-minutes: 2
+    # On merge_group there is no PR base to diff against; dorny/paths-filter would
+    # error. Skip the filter and force both outputs to 'true' so every gating job
+    # runs in the queue — otherwise required checks never report and merges hang.
     outputs:
-      go: ${{ steps.filter.outputs.go }}
-      docs: ${{ steps.filter.outputs.docs }}
+      go: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.go }}
+      docs: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.docs }}
 
     steps:
     - uses: actions/checkout@v6
     - uses: dorny/paths-filter@v4
+      if: github.event_name != 'merge_group'
       id: filter
       with:
         filters: |
