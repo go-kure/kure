@@ -2,6 +2,7 @@ package layout
 
 import (
 	"path/filepath"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -9,6 +10,19 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 )
+
+// layoutPathSegments splits a layout's canonical repo path into directory
+// segments for use as the ancestor path of its descendants. FullRepoPath()
+// returns slash-normalised paths and already suffix-dedups (so a root whose
+// ClusterName equals its node Name yields a single segment), which avoids the
+// double-counting that occurs when threading raw []string{ClusterName, Name}.
+func layoutPathSegments(ml *ManifestLayout) []string {
+	p := ml.FullRepoPath()
+	if p == "." || p == "" {
+		return nil
+	}
+	return strings.Split(p, "/")
+}
 
 // WalkCluster traverses a stack.Cluster and builds a ManifestLayout tree that
 // mirrors the node and bundle hierarchy. Behaviour is controlled via
@@ -121,19 +135,29 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 		return clusterLayout, nil
 	}
 
-	// Build the root node layout. Done unconditionally (even when the root
-	// node has no Bundle) so child-node subtrees can be nested underneath it.
+	// Build the root node layout following the walker's path invariant
+	// (Namespace = parent path, Name = this segment). The root's parent is the
+	// cluster layer, so Namespace = ClusterName; FullRepoPath() then appends the
+	// node Name and suffix-dedups when ClusterName == Node.Name (avoiding the
+	// old <cluster>/<node> double-count). Done unconditionally (even when the
+	// root node has no Bundle) so child-node subtrees can be nested underneath.
 	rootLayout := &ManifestLayout{
-		Name:       c.Node.Name,
-		Namespace:  filepath.Join(rules.ClusterName, c.Node.Name),
-		FilePer:    filePer,
-		FileNaming: rules.FileNaming,
-		Children:   []*ManifestLayout{},
+		Name:          c.Node.Name,
+		Namespace:     rules.ClusterName,
+		FilePer:       filePer,
+		FluxPlacement: rules.FluxPlacement,
+		FileNaming:    rules.FileNaming,
+		Children:      []*ManifestLayout{},
 	}
+
+	// Canonical root path segments — descendants derive their ancestor path
+	// from this (not from raw []string{ClusterName, Node.Name}) so they collapse
+	// the duplicate segment exactly as the root does.
+	rootSegments := layoutPathSegments(rootLayout)
 
 	if c.Node.Bundle != nil {
 		// Add only the root node's bundle resources (not child resources)
-		if err := processFlatBundleApps(c.Node.Bundle.Applications, rootLayout, []string{rules.ClusterName, c.Node.Name}, rules.FluxPlacement, rules.FileNaming); err != nil {
+		if err := processFlatBundleApps(c.Node.Bundle.Applications, rootLayout, rootSegments, rules.FluxPlacement, rules.FileNaming); err != nil {
 			return nil, err
 		}
 
@@ -143,7 +167,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 			c.Node.Bundle.InitializeUmbrella()
 			umbrellaChildren, err := walkUmbrellaChildLayouts(
 				c.Node.Bundle.Children,
-				[]string{rules.ClusterName, c.Node.Name},
+				rootSegments,
 				filePer,
 				rules.FluxPlacement,
 				rules.FileNaming,
@@ -160,13 +184,23 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 	// stack.Node.GetPath() (rootName/childName/...) when the Flux integrator
 	// searches for the corresponding layout node.
 	for _, child := range c.Node.Children {
-		childLayout, err := walkNode(child, []string{rules.ClusterName, c.Node.Name}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
+		childLayout, err := walkNode(child, rootSegments, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
 		if err != nil {
 			return nil, err
 		}
 		if childLayout != nil {
 			rootLayout.Children = append(rootLayout.Children, childLayout)
 		}
+	}
+
+	// Elide the synthetic cluster wrapper when it would occupy the same
+	// directory as the root layout (e.g. ClusterName == Node.Name → both resolve
+	// to "<name>"). Without this, clusterLayout and rootLayout share a
+	// FullRepoPath() and WriteToDisk/WriteToTar emit a duplicate
+	// kustomization.yaml. When the paths differ (e.g. ClusterName="." or a
+	// distinct cluster name), keep the wrapper as before.
+	if clusterLayout.FullRepoPath() == rootLayout.FullRepoPath() {
+		return rootLayout, nil
 	}
 
 	clusterLayout.Children = append(clusterLayout.Children, rootLayout)
