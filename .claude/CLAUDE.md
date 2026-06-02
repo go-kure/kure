@@ -92,7 +92,7 @@ git push -u origin <type>/<description>
 gh pr create
 ```
 
-Required checks: `lint`, `test`, `build`, `rebase-check`. Branches are automatically rebased when main is updated. See `AGENTS.md` § Git Workflow for full details.
+Required checks: `lint`, `test`, `build`. Merging goes through a GitHub merge queue (rebase method), which rebases and tests the merged result before landing — no manual rebasing needed. See `AGENTS.md` § Git Workflow for full details.
 
 ## Quick Commands
 
