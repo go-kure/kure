@@ -1,7 +1,10 @@
 package layout_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -349,8 +352,13 @@ func TestWalkCluster_ClusterNameWithChildNodes(t *testing.T) {
 	if rootLayout.Name != "flux-system" {
 		t.Fatalf("expected root layout name %q, got %q", "flux-system", rootLayout.Name)
 	}
-	if rootLayout.Namespace != "demo/flux-system" {
-		t.Fatalf("expected root layout namespace %q, got %q", "demo/flux-system", rootLayout.Namespace)
+	// Namespace follows the path invariant (parent path = cluster name); the
+	// node Name is appended by FullRepoPath(), which yields "demo/flux-system".
+	if rootLayout.Namespace != "demo" {
+		t.Fatalf("expected root layout namespace %q, got %q", "demo", rootLayout.Namespace)
+	}
+	if got := rootLayout.FullRepoPath(); got != "demo/flux-system" {
+		t.Fatalf("expected root layout repo path %q, got %q", "demo/flux-system", got)
 	}
 
 	// The child node layout must be nested under rootLayout, not under
@@ -1375,5 +1383,229 @@ func TestWalkCluster_ClusterName_NamedRoot_Augmenter(t *testing.T) {
 	}
 	if len(appLayout.ExtraFiles) != 1 {
 		t.Errorf("ExtraFiles missing: %+v", appLayout.ExtraFiles)
+	}
+}
+
+// collectRepoPaths walks a layout tree and returns every node's FullRepoPath.
+func collectRepoPaths(ml *layout.ManifestLayout) []string {
+	if ml == nil {
+		return nil
+	}
+	paths := []string{ml.FullRepoPath()}
+	for _, c := range ml.Children {
+		paths = append(paths, collectRepoPaths(c)...)
+	}
+	return paths
+}
+
+// collectTarNames reads a tar archive and returns all entry names.
+func collectTarNames(t *testing.T, r io.Reader) []string {
+	t.Helper()
+	var names []string
+	tr := tar.NewReader(r)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("tar read: %v", err)
+		}
+		names = append(names, hdr.Name)
+	}
+	return names
+}
+
+// multiTierUmbrellaCluster builds a single named root node whose bundle is an
+// umbrella with two tier children — the shape crane produces for a multi-tier
+// OAM app (root Node.Name == app name; tiers as umbrella children).
+func multiTierUmbrellaCluster(rootName string) *stack.Cluster {
+	services := &stack.Bundle{Name: "platform-services", Applications: []*stack.Application{makeUmbrellaApp("svc", "cm-svc")}}
+	apps := &stack.Bundle{Name: "platform-apps", Applications: []*stack.Application{makeUmbrellaApp("app", "cm-app")}}
+	umbrella := &stack.Bundle{
+		Name:         rootName,
+		Applications: []*stack.Application{makeUmbrellaApp("root", "cm-root")},
+		Children:     []*stack.Bundle{services, apps},
+	}
+	return &stack.Cluster{Name: rootName, Node: &stack.Node{Name: rootName, Bundle: umbrella}}
+}
+
+// TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest is the crane#239
+// regression guard: when ClusterName == root Node.Name the layout must collapse
+// to a single <name>/ level (not <name>/<name>/), the synthetic cluster wrapper
+// must be elided, and WriteToTar must not emit a duplicate kustomization.yaml.
+func TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest(t *testing.T) {
+	cluster := multiTierUmbrellaCluster("platform")
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "platform" // == root Node.Name
+	rules.FileNaming = layout.FileNamingKindName
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	// The synthetic cluster wrapper is elided: the returned root IS the node
+	// layout, rooted at a single "platform" level.
+	if ml.Name != "platform" {
+		t.Errorf("expected returned root name %q (wrapper elided), got %q", "platform", ml.Name)
+	}
+	if got := ml.FullRepoPath(); got != "platform" {
+		t.Errorf("expected root repo path %q, got %q", "platform", got)
+	}
+
+	// No layout in the tree may double-nest the app segment.
+	for _, p := range collectRepoPaths(ml) {
+		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
+			t.Errorf("double-nested layout path %q (crane#239 regression)", p)
+		}
+	}
+
+	// Tier umbrella children live one level under the root.
+	want := map[string]string{
+		"platform-services": "platform/platform-services",
+		"platform-apps":     "platform/platform-apps",
+	}
+	for _, c := range ml.Children {
+		if exp, ok := want[c.Name]; ok {
+			if got := c.FullRepoPath(); got != exp {
+				t.Errorf("tier %q repo path = %q, want %q", c.Name, got, exp)
+			}
+			delete(want, c.Name)
+		}
+	}
+	for name := range want {
+		t.Errorf("missing tier umbrella child %q under root layout", name)
+	}
+
+	// WriteToTar must not duplicate platform/kustomization.yaml and must not
+	// emit any platform/platform/ path.
+	var buf bytes.Buffer
+	if err := ml.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar: %v", err)
+	}
+	names := collectTarNames(t, &buf)
+	rootKust, hasServicesDir := 0, false
+	for _, n := range names {
+		if n == "platform/kustomization.yaml" {
+			rootKust++
+		}
+		if strings.HasPrefix(n, "platform/platform-services/") {
+			hasServicesDir = true
+		}
+		if n == "platform/platform/" || strings.HasPrefix(n, "platform/platform/") {
+			t.Errorf("tar contains double-nested path %q (crane#239 regression)", n)
+		}
+	}
+	if rootKust != 1 {
+		t.Errorf("expected exactly one platform/kustomization.yaml in tar, got %d (names: %v)", rootKust, names)
+	}
+	if !hasServicesDir {
+		t.Errorf("expected a file under platform/platform-services/ in tar (names: %v)", names)
+	}
+}
+
+// TestWalkCluster_ClusterNameEqualsNodeName_ChildNode covers the equal-path
+// case with a normal child NODE (not an umbrella child): the child node layout
+// must sit at <root>/<child>, not <root>/<root>/<child>, and the root layout
+// carries the requested FluxPlacement.
+func TestWalkCluster_ClusterNameEqualsNodeName_ChildNode(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	obj.SetNamespace("default")
+	var o client.Object = obj
+
+	app := stack.NewApplication("app", "ns", &fakeConfig{objs: []*client.Object{&o}})
+	appsNode := &stack.Node{Name: "apps", Bundle: &stack.Bundle{Name: "apps-bundle", Applications: []*stack.Application{app}}}
+	rootNode := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "root-bundle"}, Children: []*stack.Node{appsNode}}
+	appsNode.SetParent(rootNode)
+	cluster := &stack.Cluster{Name: "platform", Node: rootNode}
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "platform" // == root Node.Name
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	// Wrapper elided → returned root is the node layout, carrying FluxPlacement.
+	if ml.Name != "platform" {
+		t.Errorf("expected returned root name %q, got %q", "platform", ml.Name)
+	}
+	if ml.FluxPlacement != layout.FluxIntegratedPerLayout {
+		t.Errorf("root layout FluxPlacement = %v, want FluxIntegratedPerLayout", ml.FluxPlacement)
+	}
+
+	for _, p := range collectRepoPaths(ml) {
+		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
+			t.Errorf("double-nested layout path %q (crane#239 regression)", p)
+		}
+	}
+
+	// The child node layout sits one level under the root.
+	var appsLayout *layout.ManifestLayout
+	for _, c := range ml.Children {
+		if c.Name == "apps" {
+			appsLayout = c
+		}
+	}
+	if appsLayout == nil {
+		t.Fatalf("missing child node layout %q under root (children: %v)", "apps", ml.Children)
+	}
+	if got := appsLayout.FullRepoPath(); got != "platform/apps" {
+		t.Errorf("child node repo path = %q, want %q", got, "platform/apps")
+	}
+}
+
+// TestWalkCluster_ClusterNameDot_ProductionShape proves the fix does NOT alter
+// the production layout shape (crane app.compile uses ClusterName="."): the
+// cluster wrapper is kept (root kustomization.yaml at the archive root), the
+// umbrella roots at platform/, and there is no platform/platform/.
+func TestWalkCluster_ClusterNameDot_ProductionShape(t *testing.T) {
+	cluster := multiTierUmbrellaCluster("platform")
+
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "." // production app.compile
+	rules.FileNaming = layout.FileNamingKindName
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+
+	ml, err := layout.WalkCluster(cluster, rules)
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	// Cluster wrapper kept (its path "." differs from the root layout "platform").
+	if ml.Name != "" {
+		t.Errorf("expected synthetic cluster wrapper (empty Name) at root, got %q", ml.Name)
+	}
+
+	var buf bytes.Buffer
+	if err := ml.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar: %v", err)
+	}
+	names := collectTarNames(t, &buf)
+	hasRootKust, hasServicesDir := false, false
+	for _, n := range names {
+		if n == "kustomization.yaml" {
+			hasRootKust = true
+		}
+		if strings.HasPrefix(n, "platform/platform-services/") {
+			hasServicesDir = true
+		}
+		if n == "platform/platform/" || strings.HasPrefix(n, "platform/platform/") {
+			t.Errorf("tar contains double-nested path %q", n)
+		}
+	}
+	if !hasRootKust {
+		t.Errorf("expected root kustomization.yaml in tar (names: %v)", names)
+	}
+	if !hasServicesDir {
+		t.Errorf("expected a file under platform/platform-services/ in tar (names: %v)", names)
 	}
 }

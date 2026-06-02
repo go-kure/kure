@@ -1426,3 +1426,71 @@ func TestIntegrateWithLayout_RulesFluxSeparate_NoDuplicateChildCRs(t *testing.T)
 func testSR() *stack.SourceRef {
 	return &stack.SourceRef{Kind: "GitRepository", Name: "flux-system", Namespace: "flux-system"}
 }
+
+// collectKustPaths walks a layout tree and maps every Flux Kustomization CR's
+// name to its Spec.Path.
+func collectKustPaths(ml *layout.ManifestLayout, out map[string]string) {
+	if ml == nil {
+		return
+	}
+	for _, r := range ml.Resources {
+		if k, ok := r.(*kustv1.Kustomization); ok {
+			out[k.Name] = k.Spec.Path
+		}
+	}
+	for _, c := range ml.Children {
+		collectKustPaths(c, out)
+	}
+}
+
+// TestCreateLayoutWithResources_ClusterNameEqualsNodeName_SpecPath is the
+// crane#239 Flux-integration guard: with ClusterName == root Node.Name and an
+// umbrella bundle (multi-tier app), the emitted Flux Kustomization spec.path
+// values must collapse to a single <name>/ level (not <name>/<name>/), matching
+// the written directories.
+func TestCreateLayoutWithResources_ClusterNameEqualsNodeName_SpecPath(t *testing.T) {
+	umbrella := &stack.Bundle{
+		Name:      "platform",
+		SourceRef: testSR(),
+		Children: []*stack.Bundle{
+			{Name: "platform-services", SourceRef: testSR()},
+			{Name: "platform-apps", SourceRef: testSR()},
+		},
+	}
+	cluster := &stack.Cluster{Name: "platform", Node: &stack.Node{Name: "platform", Bundle: umbrella}}
+
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
+		ClusterName:         "platform", // == root Node.Name
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+		FluxPlacement:       layout.FluxIntegratedPerLayout,
+	})
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+
+	paths := map[string]string{}
+	collectKustPaths(ml, paths)
+
+	want := map[string]string{
+		"platform":          "platform",
+		"platform-services": "platform/platform-services",
+		"platform-apps":     "platform/platform-apps",
+	}
+	for name, exp := range want {
+		got, ok := paths[name]
+		if !ok {
+			t.Errorf("missing Flux Kustomization CR %q (got: %v)", name, paths)
+			continue
+		}
+		if got != exp {
+			t.Errorf("Kustomization %q spec.path = %q, want %q", name, got, exp)
+		}
+	}
+	for name, p := range paths {
+		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
+			t.Errorf("Kustomization %q has double-nested spec.path %q (crane#239 regression)", name, p)
+		}
+	}
+}
