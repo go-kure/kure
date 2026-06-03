@@ -59,7 +59,7 @@ infrastructure:
       - "github.com/fluxcd/source-controller"
 
   metallb:
-    current: "0.16.0"
+    current: "0.16.1"
     go_module: "go.universe.tf/metallb"
     supported_range: "0.14 - 0.16"
     max_dependabot: null  # No restriction needed

@@ -31,7 +31,7 @@ All github.com/fluxcd/* packages upgraded together. |
 | source-watcher | 2.1.1 | 2.0 - 2.1 | Optional FluxCD controller for source composition/decomposition.
 Manages ArtifactGenerator CRD (source.extensions.fluxcd.io/v1beta1).
 Not in default Flux installation; requires --components-extra=source-watcher. |
-| metallb | 0.16.0 | 0.14 - 0.16 | v1beta1 APIs stable across this range. v0.16.0 is a minor release:
+| metallb | 0.16.1 | 0.14 - 0.16 | v1beta1 APIs stable across this range. v0.16.0 is a minor release:
 BGP config-parsing refactor (selectedNodes/selectedPools rewrite),
 node-specific ConfigurationState validation, security fixes via
 govulncheck. No changes to the v1beta1 API types that kure imports
