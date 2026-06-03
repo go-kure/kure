@@ -1,6 +1,24 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.5] - 2026-06-03
+
+### Added
+
+- Add shared CRD/scope classifier
+
+### CI
+
+- Add merge_group trigger and harden change detection for merge queue
+
+### Dependencies
+
+- Bump github.com/cloudnative-pg/machinery
+
+### Maintenance
+
+- Remove rebase-check job and auto-rebase workflow
+
 ## [0.2.0-beta.4] - 2026-06-02
 
 ### Fixed
