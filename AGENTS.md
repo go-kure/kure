@@ -354,23 +354,39 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 
 ## Documentation Synchronization
 
-Kure uses a 4-layer documentation model designed so that most content stays in sync automatically.
+**Documentation sync is mandatory and CI-enforced.** This repo follows the go-kure
+organization documentation-sync standard (`go-kure/.github` → `docs/standards.md`).
 
-### Layer 1: Package READMEs (auto-synced)
+### Single source of truth
 
-Each `pkg/` package has a `README.md` that lives alongside the code. These are automatically mounted to the documentation site via `inject-frontmatter.sh`. When you change a package, update its README in the same PR.
-
-### Layer 2: Cross-cutting guides (manually synced)
-
-Hand-authored guides in `site/content/guides/` describe multi-package workflows. They focus on the flow (which steps, in what order) and link to package READMEs for specifics. Use the reverse mapping table below to know which guides to review.
-
-### Layer 3: API reference (external)
-
-Links to pkg.go.dev. Updated automatically when the module is published.
+`site/docs-map.yaml` is the normative map of code→docs. Every public package appears
+there exactly once (`mount:` to publish, or `mounted: false` + `reason:`). The site
+mounts, the AGENTS reverse-mapping table below, and the `api-reference/_index.md` nav
+are all generated from or validated against it — **never hand-edit them**. To change
+what's published, edit `docs-map.yaml` and run `bash site/scripts/gen-docs-tables.sh`.
 
 ### Rule
 
-**Code and documentation changes must be in the same PR.** If you modify a package's public API, update its README and check the guides listed in the reverse mapping.
+**Code and documentation changes must be in the same PR.** If you change a package,
+update its `README.md` (and any guides listed in the reverse mapping) in the same PR.
+Removing/renaming a package or symbol must repoint every reference; a 404 in the
+rendered site is a CI failure.
+
+### Enforcement
+
+- `site/scripts/check-doc-sync.sh` — every public package is mapped; READMEs and
+  mount targets exist; generated tables are current (blocking, `docs-build` job).
+- `site/scripts/check-links.sh` — all internal links resolve in the rendered site
+  (lychee, blocking, `docs-build` job).
+- `site/scripts/check-doc-gate.sh` — a mapped package's source change must touch its
+  mapped docs (the `doc-gate` job). Bypass only with the maintainer-restricted
+  `docs-skip` label.
+
+### Cross-cutting guides
+
+Hand-authored guides in `site/content/guides/` describe multi-package workflows; use
+the reverse mapping table below to know which to review. Full Go API reference lives
+on pkg.go.dev.
 
 ### Reverse Mapping: Code to Docs
 

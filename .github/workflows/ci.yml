@@ -460,7 +460,7 @@ jobs:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, docs-build, coverage-check]
+    needs: [validate, test, docs-build, coverage-check, doc-gate]
     if: always()
     steps:
     - name: Check build results
@@ -469,7 +469,8 @@ jobs:
         tt="${{ needs.test.result }}"
         db="${{ needs.docs-build.result }}"
         cc="${{ needs.coverage-check.result }}"
-        for result in "$vl" "$tt" "$db" "$cc"; do
+        dg="${{ needs.doc-gate.result }}"
+        for result in "$vl" "$tt" "$db" "$cc" "$dg"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
             exit 1
@@ -592,6 +593,30 @@ jobs:
         path: site/public/
         retention-days: 7
 
+    - name: Cache lychee
+      id: lychee-cache
+      uses: actions/cache@v5
+      with:
+        path: ~/bin/lychee
+        key: lychee-0.24.2-linux-amd64
+
+    - name: Install lychee
+      if: steps.lychee-cache.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ~/bin
+        curl -fsSL -o /tmp/lychee.tar.gz \
+          https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz
+        tar xzf /tmp/lychee.tar.gz -C /tmp
+        install -m755 /tmp/lychee-x86_64-unknown-linux-gnu/lychee ~/bin/lychee
+        echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Add lychee to PATH
+      if: steps.lychee-cache.outputs.cache-hit == 'true'
+      run: echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Check internal links (rendered site)
+      run: bash site/scripts/check-links.sh
+
   # =============================================================================
   # PR-only Jobs (parallel, non-blocking)
   # =============================================================================
@@ -645,15 +670,16 @@ jobs:
           echo "::warning::Changes detected in pkg/ directory. Review for potential breaking changes to public API."
         fi
 
-  docs-check:
-    name: Docs Check
+  # Layer 3 change-gate: a mapped package's source change must touch its mapped
+  # docs in the same PR. Always runs on PRs (so a pkg-only change can't skip it);
+  # the maintainer-restricted `docs-skip` label bypasses via the script. On
+  # merge_group this is skipped (the PR already passed it), which the build gate
+  # accepts. Required via the `build` aggregate job.
+  doc-gate:
+    name: doc-gate
     runs-on: autops-kube-kure
     timeout-minutes: 5
-    needs: [changes]
-    if: |
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.draft == false &&
-      needs.changes.outputs.docs == 'true'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
 
     steps:
     - name: Checkout code
@@ -661,38 +687,30 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Check for documentation updates
-      id: docs-changed
-      uses: tj-actions/changed-files@v47
+    - name: Cache yq
+      id: yq-cache
+      uses: actions/cache@v5
       with:
-        files: |
-          **.md
-          docs/**
-          examples/**
+        path: ~/bin/yq
+        key: yq-4.44.6-linux-amd64
 
-    - name: Validate documentation
-      if: steps.docs-changed.outputs.any_changed == 'true'
+    - name: Install yq
+      if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
-        echo "Documentation files changed:"
-        echo "${{ steps.docs-changed.outputs.all_changed_files }}"
+        mkdir -p ~/bin
+        curl -fsSL -o ~/bin/yq \
+          https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64
+        chmod +x ~/bin/yq
+        echo "$HOME/bin" >> $GITHUB_PATH
 
-        # Check for broken links in markdown files (basic check)
-        for file in ${{ steps.docs-changed.outputs.all_changed_files }}; do
-          if [[ $file == *.md ]]; then
-            if grep -q "](http" "$file"; then
-              echo "External links found in $file - manual verification recommended"
-            fi
-          fi
-        done
+    - name: Add yq to PATH
+      if: steps.yq-cache.outputs.cache-hit == 'true'
+      run: echo "$HOME/bin" >> $GITHUB_PATH
 
-    - name: Check if public API changes need documentation
+    - name: Enforce docs-with-code (Layer 3)
       run: |
-        # Check if pkg/ changes exist but no documentation updates
-        if git diff --name-only origin/main...HEAD | grep -q "^pkg/"; then
-          if ! git diff --name-only origin/main...HEAD | grep -qE "\.(md|txt)$"; then
-            echo "::warning::Public API changes detected but no documentation updates found. Consider updating README.md or adding examples."
-          fi
-        fi
+        bash site/scripts/check-doc-gate.sh "origin/${{ github.base_ref }}" . \
+          "--skip=${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}"
 
   # =============================================================================
   # Stage 5: Mirror to GitLab (main only, after all checks pass)

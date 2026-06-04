@@ -1,4 +1,6 @@
 .generated/
 public/
+public-lc/
+.linkcheck/
 resources/
 .hugo_build.lock
