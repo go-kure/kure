@@ -40,7 +40,6 @@ kure/
 │   └── stack/        # Core domain model
 │       ├── argocd/   # ArgoCD workflow
 │       ├── fluxcd/   # FluxCD workflow
-│       ├── generators/  # Application generators
 │       └── layout/   # Manifest organization
 ├── examples/         # Sample configurations
 ├── docs/             # Documentation
@@ -379,7 +378,6 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 |-----------------|---------------------|------------------|
 | `pkg/stack/` | `api-reference/stack` | `guides/flux-workflow`, `concepts/domain-model` |
 | `pkg/stack/fluxcd/` | `api-reference/flux-engine` | `guides/flux-workflow` |
-| `pkg/stack/generators/` | `api-reference/generators` | `guides/generators` |
 | `pkg/stack/layout/` | `api-reference/layout` | `guides/flux-workflow` |
 | `pkg/io/` | `api-reference/io` | `guides/library-usage` |
 | `pkg/errors/` | `api-reference/errors` | — |

@@ -9,7 +9,6 @@ This directory contains examples for Kure, organized by purpose.
 These directories have documentation mounted to the docs site:
 
 - [`patches/`](patches/) — Declarative patching with TOML and YAML formats
-- [`generators/`](generators/) — Resource generation using the GVK system
 - [`kurel/frigate/`](kurel/frigate/) — Building a complete kurel package
 
 ### Go API Tutorial
