@@ -125,7 +125,9 @@ mise run verify
 - When updating GitHub workflows, also update docs/github-workflows.md
 - Always use pkg/logger for logging
 - Each pkg/ package has a README.md mounted to the docs site — update it when changing public APIs
-- Code and documentation changes must be in the same PR
+- Code and documentation changes must be in the same PR (mandatory, CI-enforced; org standard in go-kure/.github docs/standards.md)
+- `site/docs-map.yaml` is the single source of code→docs mapping; the AGENTS reverse-map table + site nav are generated from it (`bash site/scripts/gen-docs-tables.sh`) — never hand-edit them
+- Doc-sync is enforced by check-doc-sync.sh (structure), check-links.sh (rendered links), and the doc-gate job (source change must touch its docs; bypass only via maintainer `docs-skip` label)
 - See AGENTS.md "Reverse Mapping" table to know which guides to review when changing a package
 ## Crane Integration
 
