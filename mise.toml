@@ -63,11 +63,12 @@ description = "Build the docs site (includes CLI reference generation)"
 run = "bash site/scripts/build.sh"
 
 [tasks."site:check"]
-description = "Check docs site health (mounts + unmapped)"
-run = """
-bash site/scripts/check-mounts.sh
-bash site/scripts/check-unmapped-docs.sh
-"""
+description = "Validate code↔docs mapping against docs-map.yaml"
+run = "bash site/scripts/check-doc-sync.sh"
+
+[tasks."site:gen"]
+description = "Regenerate doc tables from docs-map.yaml"
+run = "bash site/scripts/gen-docs-tables.sh"
 
 [tasks."site:clean"]
 description = "Remove generated site artifacts"

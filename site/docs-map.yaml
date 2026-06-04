@@ -1,0 +1,123 @@
+# docs-map.yaml — Normative source for kure's code↔docs mapping.
+#
+# This file is the SINGLE source of truth. The following are derived from it and
+# must never be hand-edited:
+#   - site/scripts/inject-frontmatter.sh consumes `packages[].mount` + `extra_mounts`
+#     to mount READMEs/docs into the Hugo site (.generated/).
+#   - site/scripts/gen-docs-tables.sh regenerates the AGENTS.md "Reverse Mapping"
+#     table and site/content/api-reference/_index.md nav between BEGIN/END markers.
+#   - site/scripts/check-doc-sync.sh validates that every public Go package appears
+#     here exactly once and that all referenced files exist.
+#
+# To publish a package: add a `mount:` block. To intentionally leave it
+# unpublished: set `mounted: false` with a `reason:`.
+
+repo_type: go-library
+
+# Directories scanned for public packages. Every dir under these roots that holds
+# non-test .go files MUST appear in `packages` exactly once.
+code_roots:
+  - pkg
+
+packages:
+  # ─── Core Domain ───
+  - path: pkg/stack
+    readme: pkg/stack/README.md
+    guides: [guides/flux-workflow, concepts/domain-model]
+    mount: {target: api-reference/stack.md, title: Stack, weight: 10, group: Core Domain, desc: "Cluster, Node, Bundle, Application domain model"}
+  - path: pkg/stack/fluxcd
+    readme: pkg/stack/fluxcd/README.md
+    guides: [guides/flux-workflow]
+    mount: {target: api-reference/flux-engine.md, title: Flux Engine, weight: 20, group: Core Domain, desc: "FluxCD workflow implementation"}
+  - path: pkg/stack/layout
+    readme: pkg/stack/layout/README.md
+    guides: [guides/flux-workflow]
+    mount: {target: api-reference/layout.md, title: Layout Engine, weight: 40, group: Core Domain, desc: "Manifest directory organization"}
+
+  # ─── Resource Operations ───
+  - path: pkg/io
+    readme: pkg/io/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/io.md, title: IO, weight: 70, group: Resource Operations, desc: "YAML/JSON serialization and resource printing"}
+  - path: pkg/manifest
+    readme: pkg/manifest/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/manifest.md, title: Manifest Classification, weight: 75, group: Resource Operations, desc: "CRD recognition and object scope classification"}
+  - path: pkg/kubernetes
+    readme: pkg/kubernetes/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/kubernetes-builders.md, title: Kubernetes Builders, weight: 95, group: Resource Operations, desc: "Core K8s resource constructors (GVK, HPA, PDB)"}
+  - path: pkg/kubernetes/certmanager
+    readme: pkg/kubernetes/certmanager/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/certmanager-builders.md, title: Cert-Manager Builders, weight: 100, group: Resource Operations, desc: "cert-manager CRD constructors (Certificate, Issuer, ClusterIssuer)"}
+  - path: pkg/kubernetes/cilium
+    readme: pkg/kubernetes/cilium/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/cilium-builders.md, title: Cilium Builders, weight: 101, group: Resource Operations, desc: "Cilium CRD constructors (network policies and related resources)"}
+  - path: pkg/kubernetes/cnpg
+    readme: pkg/kubernetes/cnpg/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/cnpg-builders.md, title: CloudNativePG Builders, weight: 102, group: Resource Operations, desc: "CloudNativePG and Barman Cloud CRD constructors"}
+  - path: pkg/kubernetes/externalsecrets
+    readme: pkg/kubernetes/externalsecrets/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/externalsecrets-builders.md, title: External Secrets Builders, weight: 103, group: Resource Operations, desc: "External Secrets Operator constructors (ExternalSecret, SecretStore)"}
+  - path: pkg/kubernetes/fluxcd
+    readme: pkg/kubernetes/fluxcd/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/fluxcd-builders.md, title: FluxCD Builders, weight: 104, group: Resource Operations, desc: "Low-level Flux resource constructors"}
+  - path: pkg/kubernetes/metallb
+    readme: pkg/kubernetes/metallb/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/metallb-builders.md, title: MetalLB Builders, weight: 105, group: Resource Operations, desc: "MetalLB constructors (IPAddressPool, L2Advertisement)"}
+  - path: pkg/kubernetes/prometheus
+    readme: pkg/kubernetes/prometheus/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/prometheus-builders.md, title: Prometheus Builders, weight: 106, group: Resource Operations, desc: "Prometheus Operator CRD constructors (ServiceMonitor, PodMonitor, PrometheusRule)"}
+  - path: pkg/kubernetes/volsync
+    readme: pkg/kubernetes/volsync/README.md
+    guides: [guides/library-usage]
+    mount: {target: api-reference/volsync-builders.md, title: VolSync Builders, weight: 107, group: Resource Operations, desc: "VolSync backup/restore CRD constructors"}
+
+  # ─── Utilities ───
+  - path: pkg/errors
+    readme: pkg/errors/README.md
+    guides: []
+    mount: {target: api-reference/errors.md, title: Errors, weight: 80, group: Utilities, desc: "Structured error types"}
+  - path: pkg/logger
+    readme: pkg/logger/README.md
+    guides: []
+    mount: {target: api-reference/logger.md, title: Logger, weight: 110, group: Utilities, desc: "Structured logging"}
+
+  # ─── Intentionally unpublished ───
+  - path: pkg/gvk
+    readme: pkg/gvk/README.md
+    mounted: false
+    reason: "Low-level GVK helpers; surfaced through the Kubernetes Builders page rather than a standalone reference."
+  - path: pkg/stack/argocd
+    readme: pkg/stack/argocd/README.md
+    mounted: false
+    reason: "ArgoCD support is not yet production-ready; the Flux workflow is the supported GitOps integration."
+  - path: pkg/stack/helm
+    readme: pkg/stack/helm/README.md
+    mounted: false
+    reason: "Internal-facing Helm workflow helpers; not yet part of the published API-reference surface."
+
+# Non-package docs mounted into the site. Not gated by code changes.
+extra_mounts:
+  - {source: docs/quickstart.md, target: getting-started/quickstart.md, title: Quickstart, weight: 10}
+  - {source: docs/ARCHITECTURE.md, target: concepts/architecture.md, title: Architecture, weight: 10}
+  - {source: docs/oci-layout.md, target: concepts/oci-layout.md, title: OCI Artifact Layout, weight: 20}
+  - {source: examples/patches/README.md, target: examples/patches.md, title: Patches, weight: 10}
+  - {source: docs/compatibility.md, target: api-reference/compatibility.md, title: Compatibility Matrix, weight: 120}
+  - {source: DEVELOPMENT.md, target: contributing/guide.md, title: Development Guide, weight: 10}
+  - {source: docs/github-workflows.md, target: contributing/github-workflows.md, title: GitHub Workflows, weight: 20}
+  - {source: docs/dependency-updates.md, target: contributing/dependency-updates.md, title: Dependency Updates, weight: 30}
+  - {source: CHANGELOG.md, target: changelog/releases.md, title: Releases, weight: 10}
+
+# Extra reverse-map rows for non-package paths (no README mount, review-only).
+review_mappings:
+  - {change: "`.github/workflows/`", reference: "—", guides: "`contributing/github-workflows`"}
+  - {change: "`go.mod` / `versions.yaml`", reference: "—", guides: "`docs/dependency-updates`, `docs/compatibility`"}
+  - {change: "`scripts/gen-versions-toml.sh`", reference: "—", guides: "`contributing/github-workflows`"}
