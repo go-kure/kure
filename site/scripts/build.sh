@@ -10,7 +10,7 @@ SITE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 KURE_ROOT="${1:-$(cd "$SITE_DIR/.." && pwd)}"
 
 echo "=== Validating docs map (code↔docs sync) ==="
-bash "$SITE_DIR/scripts/check-doc-sync.sh"
+bash "$SITE_DIR/scripts/check-doc-sync.sh" "$KURE_ROOT"
 
 echo ""
 echo "=== Injecting front matter ==="
