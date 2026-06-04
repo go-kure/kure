@@ -61,7 +61,8 @@ jobs:
           docs:
             - 'site/**'
             - 'docs/**'
-            - '*.md'
+            - '**.md'
+            - 'pkg/**'
             - 'scripts/**'
             - '.github/workflows/ci.yml'
 
@@ -548,14 +549,31 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-hugo-
 
-    - name: Check mounted files exist
-      run: bash site/scripts/check-mounts.sh
+    - name: Cache yq
+      id: yq-cache
+      uses: actions/cache@v5
+      with:
+        path: ~/bin/yq
+        key: yq-4.44.6-linux-amd64
+
+    - name: Install yq
+      if: steps.yq-cache.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ~/bin
+        curl -fsSL -o ~/bin/yq \
+          https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64
+        chmod +x ~/bin/yq
+        echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Add yq to PATH
+      if: steps.yq-cache.outputs.cache-hit == 'true'
+      run: echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Validate docs map (code↔docs sync)
+      run: bash site/scripts/check-doc-sync.sh
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
-
-    - name: Check for unmapped docs
-      run: bash site/scripts/check-unmapped-docs.sh
 
     - name: Generate versions config overlay
       run: bash scripts/gen-versions-toml.sh --version dev

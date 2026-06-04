@@ -14,75 +14,13 @@ title = 'Go Kure'
   [[module.imports]]
     path = 'github.com/McShelby/hugo-theme-relearn'
 
-  # === Generated content (from inject-frontmatter.sh) ===
-
-  # Getting started
+  # === Generated content (from inject-frontmatter.sh, driven by docs-map.yaml) ===
+  # Mounted wholesale: every file inject-frontmatter.sh writes into .generated/
+  # is published. The set of files is controlled entirely by docs-map.yaml, so
+  # there is no per-file mount list to keep in sync here.
   [[module.mounts]]
-    source = ".generated/getting-started/quickstart.md"
-    target = "content/getting-started/quickstart.md"
-
-  # Concepts
-  [[module.mounts]]
-    source = ".generated/concepts/architecture.md"
-    target = "content/concepts/architecture.md"
-  [[module.mounts]]
-    source = ".generated/concepts/oci-layout.md"
-    target = "content/concepts/oci-layout.md"
-
-  # Examples
-  [[module.mounts]]
-    source = ".generated/examples/patches.md"
-    target = "content/examples/patches.md"
-  # API Reference — package READMEs
-  [[module.mounts]]
-    source = ".generated/api-reference/stack.md"
-    target = "content/api-reference/stack.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/flux-engine.md"
-    target = "content/api-reference/flux-engine.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/layout.md"
-    target = "content/api-reference/layout.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/io.md"
-    target = "content/api-reference/io.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/errors.md"
-    target = "content/api-reference/errors.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/kubernetes-builders.md"
-    target = "content/api-reference/kubernetes-builders.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/fluxcd-builders.md"
-    target = "content/api-reference/fluxcd-builders.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/prometheus-builders.md"
-    target = "content/api-reference/prometheus-builders.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/volsync-builders.md"
-    target = "content/api-reference/volsync-builders.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/logger.md"
-    target = "content/api-reference/logger.md"
-  [[module.mounts]]
-    source = ".generated/api-reference/compatibility.md"
-    target = "content/api-reference/compatibility.md"
-
-  # Contributing
-  [[module.mounts]]
-    source = ".generated/contributing/guide.md"
-    target = "content/contributing/guide.md"
-  [[module.mounts]]
-    source = ".generated/contributing/github-workflows.md"
-    target = "content/contributing/github-workflows.md"
-  [[module.mounts]]
-    source = ".generated/contributing/dependency-updates.md"
-    target = "content/contributing/dependency-updates.md"
-
-  # Changelog
-  [[module.mounts]]
-    source = ".generated/changelog/releases.md"
-    target = "content/changelog/releases.md"
+    source = ".generated"
+    target = "content"
 
   # === Hand-authored content ===
   [[module.mounts]]

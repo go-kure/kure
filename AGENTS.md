@@ -374,21 +374,32 @@ Links to pkg.go.dev. Updated automatically when the module is published.
 
 ### Reverse Mapping: Code to Docs
 
+This table is generated from `site/docs-map.yaml`. Do not edit it by hand — edit
+the map and run `bash site/scripts/gen-docs-tables.sh`.
+
+<!-- BEGIN GENERATED: reverse-mapping (source: site/docs-map.yaml) -->
 | Package Changed | Auto-Synced (README) | Guides to Review |
 |-----------------|---------------------|------------------|
 | `pkg/stack/` | `api-reference/stack` | `guides/flux-workflow`, `concepts/domain-model` |
 | `pkg/stack/fluxcd/` | `api-reference/flux-engine` | `guides/flux-workflow` |
 | `pkg/stack/layout/` | `api-reference/layout` | `guides/flux-workflow` |
 | `pkg/io/` | `api-reference/io` | `guides/library-usage` |
-| `pkg/errors/` | `api-reference/errors` | — |
+| `pkg/manifest/` | `api-reference/manifest` | `guides/library-usage` |
 | `pkg/kubernetes/` | `api-reference/kubernetes-builders` | `guides/library-usage` |
+| `pkg/kubernetes/certmanager/` | `api-reference/certmanager-builders` | `guides/library-usage` |
+| `pkg/kubernetes/cilium/` | `api-reference/cilium-builders` | `guides/library-usage` |
+| `pkg/kubernetes/cnpg/` | `api-reference/cnpg-builders` | `guides/library-usage` |
+| `pkg/kubernetes/externalsecrets/` | `api-reference/externalsecrets-builders` | `guides/library-usage` |
 | `pkg/kubernetes/fluxcd/` | `api-reference/fluxcd-builders` | `guides/library-usage` |
 | `pkg/kubernetes/metallb/` | `api-reference/metallb-builders` | `guides/library-usage` |
-| `pkg/kubernetes/externalsecrets/` | `api-reference/externalsecrets-builders` | `guides/library-usage` |
+| `pkg/kubernetes/prometheus/` | `api-reference/prometheus-builders` | `guides/library-usage` |
+| `pkg/kubernetes/volsync/` | `api-reference/volsync-builders` | `guides/library-usage` |
+| `pkg/errors/` | `api-reference/errors` | — |
 | `pkg/logger/` | `api-reference/logger` | — |
 | `.github/workflows/` | — | `contributing/github-workflows` |
 | `go.mod` / `versions.yaml` | — | `docs/dependency-updates`, `docs/compatibility` |
 | `scripts/gen-versions-toml.sh` | — | `contributing/github-workflows` |
+<!-- END GENERATED: reverse-mapping -->
 
 ## Implementation Workflow
 
