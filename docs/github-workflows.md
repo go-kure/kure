@@ -17,7 +17,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
 | [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major), no tag |
 | [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
-| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via ccproxy |
+| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via claude-max-proxy |
 
 ---
 
@@ -303,17 +303,17 @@ managed centrally in `go-kure/.github` (`governance/repository-settings-policy.y
 
 ### How It Works
 
-Uses a two-pass AI review system via ccproxy (ported from the GitLab `mr-review.yml` template):
+Uses a two-pass AI review system via the in-cluster claude-max-proxy (ported from the GitLab `mr-review.yml` template):
 
-1. **Pass 1 — Review:** Sends the PR diff + project context (`AGENTS.md`, `.claude/CLAUDE.md`) to the review model (default: `gpt-5.3-codex`). Anti-hallucination rules prevent the model from inventing standards or referencing code not in the diff. The model returns up to 3 findings ranked by severity in a structured table. Posted as a PR comment.
+1. **Pass 1 — Review:** Sends the PR diff + project context (`AGENTS.md`, `.claude/CLAUDE.md`) to the review model (default: `claude-opus-4`). Anti-hallucination rules prevent the model from inventing standards or referencing code not in the diff. The model returns up to 3 findings ranked by severity in a structured table. Posted as a PR comment.
 
 2. **Pass 2 — Assessment:** If the review found issues (not LGTM), sends the review + diff to an assessment model (default: `claude-sonnet-4-6`) which fact-checks each finding against the actual diff and project context. Includes standards verification — claims about "standards violations" are checked against actually-provided standards. Catches hallucinations and false positives. Posted as a second PR comment.
 
 ### Requirements
 
 - **Self-hosted runner:** Runs on `autops-kube` label (ARC runner with in-cluster access)
-- **ccproxy:** Reachable at `http://openclaw-ccproxy.openclaw.svc:8000` from the runner pod
-- **No API keys needed:** ccproxy handles model authentication
+- **claude-max-proxy:** Reachable at `http://openclaw-claude-proxy.openclaw.svc:3456` from the runner pod
+- **No API keys needed:** the proxy handles model authentication
 
 ### Configuration
 
@@ -321,7 +321,7 @@ Configurable via repository variables or workflow env defaults:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PR_REVIEW_MODEL` | `gpt-5.3-codex` | Model for code review pass |
+| `PR_REVIEW_MODEL` | `claude-opus-4` | Model for code review pass (cosmetic label; backend ignores the model field) |
 | `PR_REVIEW_MAX_DIFF_CHARS` | `50000` | Truncation threshold for large diffs |
 | `PR_REVIEW_MAX_TOKENS` | `1500` | Max response tokens for review |
 | `PR_REVIEW_CONTEXT` | kure project description | Additional system prompt context |
