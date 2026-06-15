@@ -26,7 +26,7 @@ replace (
 )
 
 require (
-	github.com/backube/volsync v0.15.0
+	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.20.2
 	github.com/cilium/cilium v1.19.4
 	github.com/cloudnative-pg/barman-cloud v0.5.1
