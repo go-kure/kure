@@ -44,7 +44,7 @@ jobs:
 
     steps:
     - name: Checkout kure repo
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -141,7 +141,7 @@ jobs:
         mv public public-root
 
     - name: Checkout go-kure.github.io
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         repository: go-kure/go-kure.github.io
         token: ${{ secrets.DEPLOY_TOKEN }}
