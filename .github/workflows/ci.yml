@@ -46,7 +46,7 @@ jobs:
       docs: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.docs }}
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: dorny/paths-filter@v4
       if: github.event_name != 'merge_group'
       id: filter
@@ -81,7 +81,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
@@ -93,7 +93,7 @@ jobs:
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -101,7 +101,7 @@ jobs:
           ${{ runner.os }}-gomod-
 
     - name: Cache Go build cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.cache/go-build
         key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
@@ -116,7 +116,7 @@ jobs:
 
     - name: Cache yq
       id: yq-cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/bin/yq
         key: yq-4.44.6-linux-amd64
@@ -139,7 +139,7 @@ jobs:
 
     - name: Cache goimports
       id: goimports-cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/go/bin/goimports
         key: goimports-${{ hashFiles('**/go.sum') }}
@@ -198,7 +198,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Install build tools
       run: command -v gcc &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential)
@@ -210,7 +210,7 @@ jobs:
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -218,7 +218,7 @@ jobs:
           ${{ runner.os }}-gomod-
 
     - name: Cache Go build cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.cache/go-build
         key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
@@ -267,7 +267,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
@@ -279,7 +279,7 @@ jobs:
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -288,7 +288,7 @@ jobs:
 
     - name: Cache govulncheck binary
       id: govulncheck-cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/go/bin/govulncheck
         key: govulncheck-${{ env.GOVULNCHECK_VERSION }}
@@ -348,7 +348,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Set up Go
       uses: actions/setup-go@v6
@@ -492,7 +492,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
@@ -509,7 +509,7 @@ jobs:
 
     - name: Restore Hugo from cache
       id: hugo-cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ${{ runner.temp }}/hugo-bin
         key: hugo-${{ steps.hugo-version.outputs.version }}-linux-amd64
@@ -535,7 +535,7 @@ jobs:
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -543,7 +543,7 @@ jobs:
           ${{ runner.os }}-gomod-
 
     - name: Cache Hugo modules
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ${{ runner.temp }}/hugo_cache
         key: ${{ runner.os }}-hugo-${{ hashFiles('site/go.sum') }}
@@ -552,7 +552,7 @@ jobs:
 
     - name: Cache yq
       id: yq-cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/bin/yq
         key: yq-4.44.6-linux-amd64
@@ -595,7 +595,7 @@ jobs:
 
     - name: Cache lychee
       id: lychee-cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/bin/lychee
         key: lychee-0.24.2-linux-amd64
@@ -629,7 +629,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -683,13 +683,13 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
     - name: Cache yq
       id: yq-cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/bin/yq
         key: yq-4.44.6-linux-amd64
@@ -725,7 +725,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
