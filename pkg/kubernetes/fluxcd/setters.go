@@ -272,7 +272,10 @@ func SetHelmChartSuspend(hc *sourcev1.HelmChart, suspend bool) {
 }
 
 // SetHelmChartVerify configures OCI signature verification for the chart.
-func SetHelmChartVerify(hc *sourcev1.HelmChart, verify *sourcev1.OCIRepositoryVerification) {
+//
+// source-controller/api v1.9 split the verification types: HelmChart.Spec.Verify
+// is now *HelmChartVerification (distinct from OCIRepository's *OCIRepositoryVerification).
+func SetHelmChartVerify(hc *sourcev1.HelmChart, verify *sourcev1.HelmChartVerification) {
 	hc.Spec.Verify = verify
 }
 
@@ -1141,13 +1144,19 @@ func AddReceiverEvent(receiver *notificationv1.Receiver, event string) {
 }
 
 // AddReceiverResource registers a resource reference on the receiver.
+//
+// notification-controller/api v1.9 changed Receiver.Spec.Resources to []ReceiverResource,
+// which embeds CrossNamespaceObjectReference plus an optional CEL Filter. The reference is
+// wrapped with no filter to preserve prior behavior.
 func AddReceiverResource(receiver *notificationv1.Receiver, ref notificationv1.CrossNamespaceObjectReference) {
-	receiver.Spec.Resources = append(receiver.Spec.Resources, ref)
+	receiver.Spec.Resources = append(receiver.Spec.Resources, notificationv1.ReceiverResource{CrossNamespaceObjectReference: ref})
 }
 
 // SetReceiverSecretRef adds a Secret reference to the receiver.
+//
+// notification-controller/api v1.9 changed Receiver.Spec.SecretRef to a pointer.
 func SetReceiverSecretRef(receiver *notificationv1.Receiver, ref meta.LocalObjectReference) {
-	receiver.Spec.SecretRef = ref
+	receiver.Spec.SecretRef = &ref
 }
 
 // SetReceiverSuspend toggles the suspend flag for the receiver.

@@ -476,7 +476,7 @@ func TestSetHelmChartSuspend(t *testing.T) {
 
 func TestSetHelmChartVerify(t *testing.T) {
 	obj := CreateHelmChart("chart", "ns")
-	verify := &sourcev1.OCIRepositoryVerification{Provider: "cosign"}
+	verify := &sourcev1.HelmChartVerification{Provider: "cosign"}
 	SetHelmChartVerify(obj, verify)
 	if obj.Spec.Verify != verify {
 		t.Error("Verify not set")
