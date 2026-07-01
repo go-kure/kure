@@ -275,7 +275,7 @@ func TestSetReceiverSpec(t *testing.T) {
 
 	newSpec := notificationv1.ReceiverSpec{
 		Type:      "gitlab",
-		SecretRef: meta.LocalObjectReference{Name: "gitlab-secret"},
+		SecretRef: &meta.LocalObjectReference{Name: "gitlab-secret"},
 		Events:    []string{"merge", "push"},
 	}
 

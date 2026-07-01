@@ -35,24 +35,24 @@ require (
 	github.com/cloudnative-pg/plugin-barman-cloud v0.13.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.48.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
-	github.com/fluxcd/flux2/v2 v2.8.8
-	github.com/fluxcd/helm-controller/api v1.5.5
-	github.com/fluxcd/image-automation-controller/api v1.1.4
-	github.com/fluxcd/kustomize-controller/api v1.8.5
-	github.com/fluxcd/notification-controller/api v1.8.4
-	github.com/fluxcd/pkg/apis/acl v0.9.0
-	github.com/fluxcd/pkg/apis/kustomize v1.16.0
-	github.com/fluxcd/pkg/apis/meta v1.26.0
-	github.com/fluxcd/source-controller/api v1.8.5
-	github.com/fluxcd/source-watcher/api/v2 v2.1.1
+	github.com/fluxcd/flux2/v2 v2.9.0
+	github.com/fluxcd/helm-controller/api v1.6.1
+	github.com/fluxcd/image-automation-controller/api v1.2.1
+	github.com/fluxcd/kustomize-controller/api v1.9.1
+	github.com/fluxcd/notification-controller/api v1.9.1
+	github.com/fluxcd/pkg/apis/acl v0.10.0
+	github.com/fluxcd/pkg/apis/kustomize v1.19.1
+	github.com/fluxcd/pkg/apis/meta v1.30.1
+	github.com/fluxcd/source-controller/api v1.9.1
+	github.com/fluxcd/source-watcher/api/v2 v2.2.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.91.0
 	go.universe.tf/metallb v0.16.1
 	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v4 v4.2.0
-	k8s.io/api v0.36.1
-	k8s.io/apiextensions-apiserver v0.36.1
-	k8s.io/apimachinery v0.36.1
-	k8s.io/cli-runtime v0.36.0
+	helm.sh/helm/v4 v4.2.2
+	k8s.io/api v0.36.2
+	k8s.io/apiextensions-apiserver v0.36.2
+	k8s.io/apimachinery v0.36.2
+	k8s.io/cli-runtime v0.36.2
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/gateway-api v1.5.1
 	sigs.k8s.io/kustomize/api v0.21.1
@@ -61,8 +61,8 @@ require (
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
@@ -86,10 +86,10 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/extism/go-sdk v1.7.1 // indirect
-	github.com/fluxcd/pkg/kustomize v1.30.0 // indirect
-	github.com/fluxcd/pkg/tar v1.0.0 // indirect
+	github.com/fluxcd/pkg/kustomize v1.35.1 // indirect
+	github.com/fluxcd/pkg/tar v1.2.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -166,7 +166,7 @@ require (
 	github.com/spf13/viper v1.21.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tetratelabs/wabin v0.0.0-20230304001439-f6f874872834 // indirect
-	github.com/tetratelabs/wazero v1.11.0 // indirect
+	github.com/tetratelabs/wazero v1.12.0 // indirect
 	github.com/thoas/go-funk v0.9.3 // indirect
 	github.com/vishvananda/netlink v1.3.2-0.20260109214200-c6faf428e8f8 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
@@ -183,27 +183,27 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
-	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/tools v0.45.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	google.golang.org/grpc v1.81.1 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/client-go v0.36.1 // indirect
+	k8s.io/client-go v0.36.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260502001324-b7f5293f4787 // indirect
+	k8s.io/kube-openapi v0.0.0-20260603220949-865597e52e25 // indirect
 	k8s.io/streaming v0.36.1 // indirect
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2 // indirect
-	oras.land/oras-go/v2 v2.6.0 // indirect
+	oras.land/oras-go/v2 v2.6.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

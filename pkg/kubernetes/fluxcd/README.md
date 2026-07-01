@@ -82,6 +82,11 @@ Additional setters: `SetHelmChartReconcileStrategy`, `AddHelmChartValuesFile`,
 `SetHelmChartValuesFiles`, `SetHelmChartIgnoreMissingValuesFiles`,
 `SetHelmChartSuspend`, `SetHelmChartVerify`.
 
+> **Note (Flux 2.9):** `source-controller/api` v1.9 split the verification types.
+> `SetHelmChartVerify` now takes `*sourcev1.HelmChartVerification` (previously
+> `*sourcev1.OCIRepositoryVerification`); `SetOCIRepositoryVerify` still takes
+> `*sourcev1.OCIRepositoryVerification`. The API version is unchanged (both v1).
+
 ### Bucket
 
 ```go
