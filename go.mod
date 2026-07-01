@@ -28,7 +28,7 @@ replace (
 require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.20.3
-	github.com/cilium/cilium v1.19.4
+	github.com/cilium/cilium v1.19.5
 	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260609065833-bd68198c31dc
 	github.com/cloudnative-pg/cloudnative-pg v1.29.1
 	github.com/cloudnative-pg/machinery v0.5.0
@@ -76,7 +76,7 @@ require (
 	github.com/cilium/ebpf v0.20.1-0.20260218191617-ee67e7f43dd9 // indirect
 	github.com/cilium/hive v0.0.0-20260108104938-97756f6ff54c // indirect
 	github.com/cilium/proxy v0.0.0-20250623105955-2136f59a4ea1 // indirect
-	github.com/cilium/statedb v0.5.6 // indirect
+	github.com/cilium/statedb v0.5.8 // indirect
 	github.com/cilium/stream v0.0.1 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cloudnative-pg/cnpg-i v0.5.0 // indirect
