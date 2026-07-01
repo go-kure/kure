@@ -45,7 +45,7 @@ require (
 	github.com/fluxcd/pkg/apis/meta v1.30.1
 	github.com/fluxcd/source-controller/api v1.9.1
 	github.com/fluxcd/source-watcher/api/v2 v2.2.1
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.91.0
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.92.0
 	go.universe.tf/metallb v0.16.1
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.2.2
