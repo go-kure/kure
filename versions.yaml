@@ -78,12 +78,13 @@ infrastructure:
 
   prometheus-operator:
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
-    supported_range: "0.75 - 0.91"
+    supported_range: "0.75 - 0.92"
     max_dependabot: null
     notes: |
       Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
       Only the /pkg/apis/monitoring submodule is imported — not the full operator.
-      Stable v1 APIs (monitoring.coreos.com/v1).
+      Stable v1 APIs (monitoring.coreos.com/v1). v0.92 is a routine minor with no changes
+      to the imported v1 types (build + tests pass unchanged).
 
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
