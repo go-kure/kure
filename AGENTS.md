@@ -8,8 +8,8 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 
 ### Technology Stack
 
-- **Language**: Go 1.26.1
-- **Core Dependencies**: Kubernetes APIs (v0.35.1), Flux v2.8.2, cert-manager v1.20.0, MetalLB v0.15.3
+- **Language**: Go (see `go.mod` / [`docs/compatibility.md`](docs/compatibility.md) for the exact version)
+- **Core Dependencies**: Kubernetes APIs, Flux, cert-manager, MetalLB and more — see the generated [`docs/compatibility.md`](docs/compatibility.md) for exact build versions (do not hardcode versions here; they drift)
 - **Testing**: 105 test files with 100% pass rate
 - **Build System**: Comprehensive Makefile with 40+ targets, mise for cross-repo consistency
 
@@ -339,12 +339,16 @@ Fluent builders follow an immutable pattern - each `With*` method returns a new 
 
 ### Core Dependencies
 
-- Kubernetes client libraries (v0.35.1)
-- Flux controller APIs (v2.8.2)
-- cert-manager (v1.20.0)
-- External Secrets (v1.3)
-- MetalLB (v0.15.3)
+- Kubernetes client libraries
+- Flux controller APIs
+- cert-manager
+- External Secrets
+- MetalLB
 - controller-runtime for Kubernetes integration
+
+Exact build versions and supported ranges live in the generated
+[`docs/compatibility.md`](docs/compatibility.md) (sourced from `go.mod` + `versions.yaml`) —
+never hardcode them here.
 
 ### Version Management
 

@@ -8,11 +8,14 @@ Kure tracks dependency versions in three places:
 
 | File | Purpose |
 |------|---------|
-| `go.mod` | Go module dependencies (authoritative for build) |
-| `versions.yaml` | Version metadata: current version, supported range, constraints |
-| `docs/compatibility.md` | Generated from `versions.yaml` — never edit directly |
+| `go.mod` | Go module dependencies — authoritative for the build version (the pin) |
+| `versions.yaml` | Version metadata: supported range, dependabot caps, notes (no build version) |
+| `docs/compatibility.md` | Generated from `versions.yaml` + `go.mod` — never edit directly |
 
-The `sync-versions.sh` script validates consistency between `go.mod` and `versions.yaml`, and regenerates `docs/compatibility.md`.
+The `sync-versions.sh check` command reads each dependency's build version from `go.mod`
+and asserts it falls within the `supported_range` declared in `versions.yaml`; `generate`
+regenerates `docs/compatibility.md`. There is no hand-maintained "current" version to keep
+in sync (see [#593](https://github.com/go-kure/kure/issues/593)).
 
 ## Update Risk Levels
 
@@ -25,7 +28,9 @@ go get <module>@v<new-version>
 go mod tidy
 ```
 
-Update `versions.yaml` `current` field. No `supported_range` change needed.
+No `versions.yaml` change is needed for an in-range patch — the build version comes from
+`go.mod`, and `sync-versions.sh check` passes as long as the new version stays within
+`supported_range`. (This is what lets in-range Dependabot patch bumps go green untouched.)
 
 ### Minor Updates (Medium Risk)
 
@@ -33,7 +38,8 @@ Minor bumps (e.g., v1.19 → v1.20) may add new APIs or deprecate existing ones.
 
 1. Review the upstream changelog for breaking changes
 2. Check if Kure uses any deprecated APIs
-3. Update `go.mod`, `versions.yaml` (both `current` and `supported_range`)
+3. Update `go.mod`; if the new version lands **outside** `supported_range`, widen the
+   range and update `notes` in `versions.yaml` (only after confirming API compatibility)
 4. Run `make verify` to catch compile-time breakage
 
 ### Major Updates (High Risk)
@@ -82,7 +88,7 @@ When multiple Dependabot PRs accumulate, bundle them into a single PR:
 1. Create a feature branch: `git checkout -b chore/bundle-dependency-updates main`
 2. Run `go get` for all dependencies (Flux packages first for coordinated upgrades)
 3. Run `go mod tidy`
-4. Update `versions.yaml` entries
+4. Update `versions.yaml` `supported_range` / `notes` for any bump that lands outside its range
 5. Regenerate docs: `./scripts/sync-versions.sh generate`
 6. Validate: `./scripts/sync-versions.sh check`
 7. Run full verification: `make verify && make test-race`
@@ -102,7 +108,7 @@ When multiple Dependabot PRs accumulate, bundle them into a single PR:
 
 Before merging any dependency update:
 
-- [ ] `./scripts/sync-versions.sh check` — versions.yaml ↔ go.mod consistency
+- [ ] `./scripts/sync-versions.sh check` — go.mod build versions within `supported_range`
 - [ ] `make verify` — tidy + lint + test
 - [ ] `make test-race` — race condition detection
 - [ ] k8s.io replace directives unchanged (unless intentionally bumping)

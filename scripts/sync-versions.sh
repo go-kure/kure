@@ -6,9 +6,10 @@
 #   ./scripts/sync-versions.sh generate   - Generate docs from versions.yaml
 #
 # This script ensures that:
-# 1. go.mod versions match versions.yaml "current" field EXACTLY
+# 1. each go.mod dependency version falls WITHIN versions.yaml "supported_range"
+#    (the build version is read from go.mod; there is no "current" field to sync)
 # 2. dependabot.yml ignore rules match versions.yaml "max_dependabot" field
-# 3. Documentation is generated from versions.yaml
+# 3. Documentation is generated from versions.yaml + go.mod
 
 set -euo pipefail
 
@@ -56,12 +57,44 @@ get_gomod_version() {
     echo "$version"
 }
 
-# Validate that go.mod versions match versions.yaml current field
+# True (exit 0) if the version string is a Go pseudo-version (untagged module
+# pinned to a commit, e.g. v0.0.0-20260213133823-31b0c7c37342). Such versions
+# carry no meaningful semver and are skipped by the range guard.
+is_pseudo_version() {
+    [[ "$1" =~ -[0-9]{14}-[0-9a-f]{12}$ ]]
+}
+
+# Turn a "major.minor" string into a comparable integer key (major*1000+minor).
+mm_key() {
+    local mm="$1"
+    local major="${mm%%.*}"
+    local minor="${mm#*.}"
+    minor="${minor%%.*}"
+    echo $((10#$major * 1000 + 10#$minor))
+}
+
+# Extract "major.minor" from a full version, applying version_basis normalization.
+# For version_basis == kubernetes, k8s.io/* modules are v0.N.x but the range is
+# expressed in cluster terms (1.N), so 0.N is normalized to 1.N.
+version_mm() {
+    local version="$1" basis="$2"
+    local ver="${version#v}"
+    ver="${ver%%-*}"   # drop any prerelease/build suffix
+    local major="${ver%%.*}"
+    local rest="${ver#*.}"
+    local minor="${rest%%.*}"
+    if [[ "$basis" == "kubernetes" && "$major" == "0" ]]; then
+        major=1
+    fi
+    echo "${major}.${minor}"
+}
+
+# Validate that each go.mod dependency version falls within supported_range
 validate_gomod() {
     local errors=0
     info "Validating go.mod versions..."
 
-    # Check Go version
+    # Check Go version (mise.toml is authoritative; versions.yaml mirrors it)
     local go_current
     go_current=$(yq '.go.current' "$VERSIONS_FILE")
     local gomod_go_version
@@ -69,20 +102,20 @@ validate_gomod() {
 
     if [[ "$gomod_go_version" != "$go_current" ]]; then
         error "Go version mismatch: go.mod has '$gomod_go_version', versions.yaml expects '$go_current'"
-        ((errors++))
+        errors=$((errors + 1))
     else
         success "Go version matches: $go_current"
     fi
 
-    # Check infrastructure dependencies
+    # Check infrastructure dependencies against their supported_range
     local deps
     deps=$(yq '.infrastructure | keys | .[]' "$VERSIONS_FILE")
 
     while IFS= read -r dep; do
-        local go_module
+        local go_module supported basis
         go_module=$(yq ".infrastructure.${dep}.go_module" "$VERSIONS_FILE")
-        local expected_version
-        expected_version=$(yq ".infrastructure.${dep}.current" "$VERSIONS_FILE")
+        supported=$(yq ".infrastructure.${dep}.supported_range" "$VERSIONS_FILE")
+        basis=$(yq ".infrastructure.${dep}.version_basis // \"semver\"" "$VERSIONS_FILE")
 
         if [[ "$go_module" == "null" ]]; then
             continue
@@ -90,8 +123,6 @@ validate_gomod() {
 
         local actual_version
         actual_version=$(get_gomod_version "$go_module")
-
-        # Remove 'v' prefix if present for comparison
         actual_version="${actual_version#v}"
 
         if [[ -z "$actual_version" ]]; then
@@ -99,11 +130,37 @@ validate_gomod() {
             continue
         fi
 
-        if [[ "$actual_version" != "$expected_version" ]]; then
-            error "Version mismatch for $go_module: go.mod has 'v$actual_version', versions.yaml expects '$expected_version'"
-            ((errors++))
+        if is_pseudo_version "$actual_version"; then
+            info "$dep: $actual_version (pseudo-version — range check skipped)"
+            continue
+        fi
+
+        if [[ "$supported" == "null" || -z "$supported" ]]; then
+            warning "$dep: no supported_range declared — skipping range check"
+            continue
+        fi
+
+        # Parse supported_range: "A.B - C.D" (range) or "A.B" (single major.minor)
+        local lo_mm hi_mm
+        if [[ "$supported" == *" - "* ]]; then
+            lo_mm="${supported%% - *}"
+            hi_mm="${supported##* - }"
         else
-            success "$dep: $actual_version"
+            lo_mm="$supported"
+            hi_mm="$supported"
+        fi
+
+        local ver_mm ver_key lo_key hi_key
+        ver_mm=$(version_mm "$actual_version" "$basis")
+        ver_key=$(mm_key "$ver_mm")
+        lo_key=$(mm_key "$lo_mm")
+        hi_key=$(mm_key "$hi_mm")
+
+        if (( ver_key < lo_key || ver_key > hi_key )); then
+            error "$dep $ver_mm (go.mod $go_module v$actual_version) is outside supported_range \"$supported\". Update supported_range + notes in versions.yaml after confirming API compatibility."
+            errors=$((errors + 1))
+        else
+            success "$dep: v$actual_version within supported_range \"$supported\""
         fi
     done <<< "$deps"
 
@@ -178,16 +235,19 @@ generate_docs() {
     info "Generating compatibility documentation..."
 
     cat > "$DOCS_FILE" << 'EOF'
+<!-- Generated by scripts/sync-versions.sh from versions.yaml + go.mod. Do not edit by hand. -->
 # Kure Compatibility Matrix
 
 This document describes the versions of infrastructure tools that Kure supports.
+It is generated from `versions.yaml` (deployment compatibility metadata) plus
+`go.mod` (the build versions).
 
 ## Version Philosophy
 
 Kure maintains two version concepts for each dependency:
 
-1. **Build Version** (`current` in versions.yaml): The exact library version Kure imports in go.mod
-2. **Deployment Compatibility** (`supported_range`): The range of deployed tool versions that Kure can generate YAML for
+1. **Build Version** (read from go.mod): The exact library version Kure imports and builds against
+2. **Deployment Compatibility** (`supported_range` in versions.yaml): The range of deployed tool versions that Kure can generate YAML for
 
 ## Go Version
 
@@ -206,8 +266,8 @@ EOF
     deps=$(yq '.infrastructure | keys | .[]' "$VERSIONS_FILE")
 
     while IFS= read -r dep; do
-        local current
-        current=$(yq ".infrastructure.${dep}.current" "$VERSIONS_FILE")
+        local go_module
+        go_module=$(yq ".infrastructure.${dep}.go_module" "$VERSIONS_FILE")
         local supported
         supported=$(yq ".infrastructure.${dep}.supported_range" "$VERSIONS_FILE")
         local notes
@@ -216,8 +276,18 @@ EOF
         if [[ "$notes" == "null" ]]; then
             notes=""
         fi
+        # Collapse multi-line notes into a single Markdown table cell
+        notes="${notes//$'\n'/ }"
 
-        echo "| $dep | $current | $supported | $notes |" >> "$DOCS_FILE"
+        # Build version comes from go.mod (the pin), not versions.yaml
+        local build_version
+        build_version=$(get_gomod_version "$go_module")
+        build_version="${build_version#v}"
+        if [[ -z "$build_version" ]]; then
+            build_version="(transitive)"
+        fi
+
+        echo "| $dep | $build_version | $supported | $notes |" >> "$DOCS_FILE"
     done <<< "$deps"
 
     cat >> "$DOCS_FILE" << 'EOF'
@@ -225,7 +295,9 @@ EOF
 ## Understanding the Matrix
 
 ### Build Version (go.mod)
-The version Kure imports and builds against. This is validated by CI to match `versions.yaml`.
+The version Kure imports and builds against — read directly from `go.mod`, the single
+source of truth for the pin. CI (`sync-versions.sh check`) asserts it falls within the
+declared `supported_range`.
 
 ### Deployment Compatibility
 The range of versions that Kure can generate valid YAML for. Kure may generate YAML compatible with older or newer versions than it builds against.
@@ -238,9 +310,11 @@ For example:
 
 When upgrading a dependency:
 
-1. Update `versions.yaml` with new `current` and `supported_range`
-2. Run `go get <module>@<version>` to update go.mod
-3. Update code for any API changes
+1. Run `go get <module>@<version>` to update go.mod
+2. Update code for any API changes
+3. If the new version lands **outside** `supported_range`, widen the range and update
+   `notes` in `versions.yaml` (only after confirming API compatibility). In-range patch
+   bumps need no `versions.yaml` change.
 4. Run `./scripts/sync-versions.sh generate` to update docs
 5. Run `./scripts/sync-versions.sh check` to validate consistency
 
@@ -264,8 +338,8 @@ main() {
         check)
             info "=== Version Consistency Check ==="
             info ""
-            validate_gomod
-            local gomod_result=$?
+            local gomod_result=0
+            validate_gomod || gomod_result=$?
             validate_dependabot
 
             if [[ $gomod_result -eq 0 ]]; then
