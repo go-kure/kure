@@ -1,6 +1,46 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.6] - 2026-07-01
+
+### Added
+
+- Single-source docs map with blocking sync enforcement
+- Enforce link integrity + docs-with-code gate; agentic cascade
+- Adopt Flux 2.9 API set (#607)
+
+### CI
+
+- Cap govulncheck memory with GOMEMLIMIT to avoid runner OOM
+
+### Dependencies
+
+- Bump go.universe.tf/metallb from 0.16.0 to 0.16.1
+- Sync metallb 0.16.1 in versions.yaml and compatibility docs
+- Bump github.com/backube/volsync from 0.15.0 to 0.16.0
+- Bump github.com/cloudnative-pg/plugin-barman-cloud
+- Widen cnpg-barman-cloud supported_range to 0.13
+- Bump github.com/cert-manager/cert-manager
+- Bump flux-operator to v0.53.0 + re-vendor install bundle
+- Bump prometheus-operator to 0.92 + widen supported_range
+- Bump github.com/cilium/cilium from 1.19.4 to 1.19.5
+
+### Documentation
+
+- Remove stale references to removed generators package
+- Correct backend to claude-max-proxy:3456
+- Drop hardcoded versions from the illustrative example
+
+### Fixed
+
+- Harden check-doc-sync; adopt canonical validator
+- Derive build versions from go.mod, guard supported_range (#593)
+
+### Maintenance
+
+- Bump codecov/codecov-action from 6 to 7 in the actions group
+- Bump the actions group across 1 directory with 2 updates
+
 ## [0.2.0-beta.5] - 2026-06-03
 
 ### Added
