@@ -43,9 +43,9 @@ declared `supported_range`.
 ### Deployment Compatibility
 The range of versions that Kure can generate valid YAML for. Kure may generate YAML compatible with older or newer versions than it builds against.
 
-For example:
-- Kure builds against cert-manager 1.16.2
-- But generates YAML compatible with cert-manager 1.14.x, 1.15.x, and 1.16.x
+For example, Kure may build against a single cert-manager patch release while the
+generated YAML stays valid across several older and newer minor releases within its
+supported range.
 
 ## Upgrading Dependencies
 
