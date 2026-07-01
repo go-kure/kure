@@ -50,9 +50,12 @@ infrastructure:
 
   flux-operator:
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
-    supported_range: "0.23 - 0.48"
+    supported_range: "0.23 - 0.53"
     max_dependabot: null
-    notes: "Upgraded alongside FluxCD 2.8.8 ecosystem."
+    notes: |
+      Upgraded alongside the FluxCD 2.9 ecosystem. The vendored install bundle
+      (pkg/stack/fluxcd/flux_operator_install.yaml) and FluxOperatorVersion constant
+      are pinned in lockstep with this module version.
 
   source-watcher:
     go_module: "github.com/fluxcd/source-watcher/api/v2"
