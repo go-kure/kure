@@ -100,6 +100,11 @@ Generate Flux system bootstrap manifests. Two modes are supported:
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
+The `"flux-operator"` bundle is vendored from the upstream flux-operator release and pinned
+in lockstep with the `github.com/controlplaneio-fluxcd/flux-operator` Go module
+(`FluxOperatorVersion`, currently **v0.53.0**). See `flux_operator_install.go` for the
+refresh procedure.
+
 ```go
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
