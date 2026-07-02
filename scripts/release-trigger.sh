@@ -4,7 +4,7 @@
 # Usage:
 #   ./scripts/release-trigger.sh                         # Preview release (auto-infer from VERSION)
 #   ./scripts/release-trigger.sh promote <rc|beta|stable> # Preview type promotion
-#   ./scripts/release-trigger.sh bump <minor|major>      # Preview version bump
+#   ./scripts/release-trigger.sh bump <minor|major|prerelease> # Preview version bump
 #   ./scripts/release-trigger.sh --do-it                 # Execute release via CI
 #   ./scripts/release-trigger.sh promote rc --do-it      # Execute promotion via CI
 #   ./scripts/release-trigger.sh bump minor --do-it      # Execute bump via CI
@@ -52,9 +52,9 @@ if [ "$SUBCOMMAND" = "promote" ]; then
     esac
 elif [ "$SUBCOMMAND" = "bump" ]; then
     case "$ARG" in
-        minor|major) ;;
-        "") echo "ERROR: 'bump' requires a scope: minor or major" >&2; exit 1 ;;
-        *)  echo "ERROR: invalid bump scope '$ARG' (use: minor, major)" >&2; exit 1 ;;
+        minor|major|prerelease) ;;
+        "") echo "ERROR: 'bump' requires a scope: minor, major, or prerelease" >&2; exit 1 ;;
+        *)  echo "ERROR: invalid bump scope '$ARG' (use: minor, major, prerelease)" >&2; exit 1 ;;
     esac
 fi
 

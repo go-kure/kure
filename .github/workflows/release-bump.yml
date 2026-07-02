@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: 'Version scope to bump'
+        description: 'Version scope to bump (minor/major start a new cycle; prerelease increments the prerelease number)'
         required: true
         type: choice
         options:
           - minor
           - major
+          - prerelease
       dry_run:
         description: 'Dry run (preview only, no changes)'
         required: false

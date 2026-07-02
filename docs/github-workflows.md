@@ -15,7 +15,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
 | [Release / Create](#release--create-workflow) | `release-create.yml` | manual | Auto-infer release type from VERSION, create tag |
 | [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
-| [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major), no tag |
+| [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major/prerelease), no tag |
 | [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via claude-max-proxy |
 
@@ -197,7 +197,7 @@ Explicit type transition (e.g., beta → rc). The regression guard in `release.s
 
 ### Triggers
 
-- Manual dispatch with inputs: `scope` (minor/major) and `dry_run`
+- Manual dispatch with inputs: `scope` (minor/major/prerelease) and `dry_run`
 
 ### Purpose
 

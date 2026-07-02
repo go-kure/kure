@@ -10,7 +10,7 @@
 # Environment:
 #   RELEASE_TYPE   Release type: auto|alpha|beta|rc|stable|bump (or positional arg)
 #                  When unset or 'auto', infers from VERSION file.
-#   RELEASE_SCOPE  Bump scope: minor|major (or positional arg after "bump")
+#   RELEASE_SCOPE  Bump scope: minor|major|prerelease (or positional arg after "bump")
 #   DRY_RUN        1 = preview without changes (default: 0)
 #   CI             Set by CI runners; enables push and git identity setup
 #
@@ -398,7 +398,7 @@ release_stable() {
 
 release_bump() {
     scope="$1"
-    [ -n "$scope" ] || die "bump requires scope: minor or major"
+    [ -n "$scope" ] || die "bump requires scope: minor, major, or prerelease"
 
     current=$(read_version)
     validate_version "$current"
@@ -406,12 +406,26 @@ release_bump() {
     base=$(base_part "$current")
 
     case "$scope" in
-        minor) new_base=$(bump_minor "$base") ;;
-        major) new_base=$(bump_major "$base") ;;
-        *)     die "Invalid bump scope: $scope (use 'minor' or 'major')" ;;
+        minor)
+            next_version=$(start_prerelease "$(bump_minor "$base")" "alpha")
+            commit_msg="chore: start next cycle: $next_version"
+            ;;
+        major)
+            next_version=$(start_prerelease "$(bump_major "$base")" "alpha")
+            commit_msg="chore: start next cycle: $next_version"
+            ;;
+        prerelease)
+            is_prerelease "$current" \
+                || die "Cannot bump prerelease: $current is not a prerelease — use minor or major to start a new cycle."
+            next_version=$(bump_prerelease "$current")
+            commit_msg="chore: bump prerelease: $current -> $next_version"
+            ;;
+        *)
+            die "Invalid bump scope: $scope (use 'minor', 'major', or 'prerelease')"
+            ;;
     esac
 
-    next_version=$(start_prerelease "$new_base" "alpha")
+    validate_version "$next_version"
 
     log_info "Current version:  $current"
     log_info "Next dev version: $next_version"
@@ -419,15 +433,17 @@ release_bump() {
 
     if [ "$DRY_RUN" != "1" ]; then
         validate_git_state
+        # Invariant: a bump must never leave VERSION equal to an existing tag.
+        check_tag_exists "$next_version"
     fi
 
     write_version "$next_version"
     if [ "$DRY_RUN" = "1" ]; then
-        log_info "[DRY_RUN] Would commit: chore: start next cycle: $next_version"
+        log_info "[DRY_RUN] Would commit: $commit_msg"
     else
         git add "$VERSION_FILE"
-        git commit -m "chore: start next cycle: $next_version"
-        log_success "Started $scope version cycle at $next_version"
+        git commit -m "$commit_msg"
+        log_success "Bumped version to $next_version"
     fi
 
     # Bump doesn't create a tag — just push the version commit
@@ -452,11 +468,12 @@ Types:
   beta        Create a beta prerelease
   rc          Create a release candidate
   stable      Create a stable release
-  bump        Bump minor or major version (requires scope)
+  bump        Bump minor, major, or prerelease version (requires scope)
 
 Scope (for bump only):
   minor       Bump minor version and start alpha cycle
   major       Bump major version and start alpha cycle
+  prerelease  Increment the prerelease number (e.g. alpha.7 -> alpha.8)
 
 Environment:
   DRY_RUN=1         Preview changes without making them
@@ -468,6 +485,7 @@ Examples:
   $0 alpha                       # Create alpha release
   DRY_RUN=1 $0 stable            # Preview stable release
   $0 bump minor                  # Start next minor version cycle
+  $0 bump prerelease             # Increment prerelease number (alpha.N -> alpha.N+1)
   RELEASE_TYPE=alpha $0          # CI-style invocation
 EOF
     exit 1

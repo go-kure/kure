@@ -363,7 +363,7 @@ changelog-preview: ## Preview unreleased changelog entries
 release: ## Preview release (dry-run)
 	@if [ -z "$(TYPE)" ]; then \
 		echo "Usage: make release TYPE={alpha|beta|rc|stable}"; \
-		echo "       make release TYPE=bump SCOPE={minor|major}"; \
+		echo "       make release TYPE=bump SCOPE={minor|major|prerelease}"; \
 		exit 1; \
 	fi
 	@DRY_RUN=1 ./scripts/release.sh $(TYPE) $(SCOPE)
