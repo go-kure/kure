@@ -100,13 +100,31 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gomod-
 
-    - name: Cache Go build cache
-      uses: actions/cache@v6
+    - name: Read Go version from go.mod
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go ' go.mod | awk '{print $2}')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
+    # Source-aware Go build cache (was go.sum-only → froze at an old snapshot). Warmed on
+    # push-to-main, restored by PR + queue via fallback. Split restore/save + matched-key log;
+    # distinct job prefix so lint and test don't overwrite each other's entry.
+    - name: Restore Go build cache
+      id: gocache
+      uses: actions/cache/restore@v6
       with:
         path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-validate-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-${{ hashFiles('**/*.go', 'go.mod', 'go.sum', 'Makefile', '**/testdata/**') }}
         restore-keys: |
-          ${{ runner.os }}-gobuild-
+          ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-validate-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-
+          ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-validate-
+
+    - name: Log Go build cache restore
+      run: |
+        echo "cache-hit=${{ steps.gocache.outputs.cache-hit }}"
+        echo "primary-key=${{ steps.gocache.outputs.cache-primary-key }}"
+        echo "matched-key=${{ steps.gocache.outputs.cache-matched-key }}"
 
     - name: Install dependencies
       run: make deps
@@ -183,6 +201,13 @@ jobs:
           make lint
         fi
 
+    - name: Save Go build cache
+      if: success() && steps.gocache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.cache/go-build
+        key: ${{ steps.gocache.outputs.cache-primary-key }}
+
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
   # =============================================================================
@@ -217,13 +242,29 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gomod-
 
-    - name: Cache Go build cache
-      uses: actions/cache@v6
+    - name: Read Go version from go.mod
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go ' go.mod | awk '{print $2}')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
+    # Source-aware Go build cache (see the validate job for rationale). Distinct prefix.
+    - name: Restore Go build cache
+      id: gocache
+      uses: actions/cache/restore@v6
       with:
         path: ~/.cache/go-build
-        key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-test-race-cover-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-${{ hashFiles('**/*.go', 'go.mod', 'go.sum', 'Makefile', '**/testdata/**') }}
         restore-keys: |
-          ${{ runner.os }}-gobuild-
+          ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-test-race-cover-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-
+          ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-test-race-cover-
+
+    - name: Log Go build cache restore
+      run: |
+        echo "cache-hit=${{ steps.gocache.outputs.cache-hit }}"
+        echo "primary-key=${{ steps.gocache.outputs.cache-primary-key }}"
+        echo "matched-key=${{ steps.gocache.outputs.cache-matched-key }}"
 
     - name: Install dependencies
       run: make deps
@@ -233,6 +274,13 @@ jobs:
         set -euo pipefail
         mkdir -p coverage
         go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 15m ./... 2>&1 | tee /tmp/gotest.log
+
+    - name: Save Go build cache
+      if: success() && steps.gocache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.cache/go-build
+        key: ${{ steps.gocache.outputs.cache-primary-key }}
 
     - name: Upload test log
       uses: actions/upload-artifact@v7
@@ -293,6 +341,31 @@ jobs:
         path: ~/go/bin/govulncheck
         key: govulncheck-${{ env.GOVULNCHECK_VERSION }}
 
+    - name: Read Go version from go.mod
+      id: go-version
+      run: |
+        GO_VER=$(grep '^go ' go.mod | awk '{print $2}')
+        echo "version=$GO_VER" >> $GITHUB_OUTPUT
+        echo "Using Go version: $GO_VER"
+
+    # Source-aware Go build cache. govulncheck's scan compiles the module, so a warm cache
+    # helps here too (this job had no build cache before). Distinct prefix.
+    - name: Restore Go build cache
+      id: gocache
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.cache/go-build
+        key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-security-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-${{ hashFiles('**/*.go', 'go.mod', 'go.sum', 'Makefile', '**/testdata/**') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-security-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-
+          ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-security-
+
+    - name: Log Go build cache restore
+      run: |
+        echo "cache-hit=${{ steps.gocache.outputs.cache-hit }}"
+        echo "primary-key=${{ steps.gocache.outputs.cache-primary-key }}"
+        echo "matched-key=${{ steps.gocache.outputs.cache-matched-key }}"
+
     - name: Install govulncheck
       if: steps.govulncheck-cache.outputs.cache-hit != 'true'
       run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
@@ -324,6 +397,13 @@ jobs:
         else
           echo ":white_check_mark: **govulncheck** — no vulnerabilities found" >> "$GITHUB_STEP_SUMMARY"
         fi
+
+    - name: Save Go build cache
+      if: success() && steps.gocache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/.cache/go-build
+        key: ${{ steps.gocache.outputs.cache-primary-key }}
 
     - name: Check for outdated dependencies
       run: make outdated

@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-06-02
+**Last Updated:** 2026-07-02
 
 ---
 
@@ -477,28 +477,56 @@ source of truth (kept in sync with `mise.toml` via `make check-go-version`).
 
 ### Caching
 
-CI jobs use explicit `actions/cache@v5` steps with `cache: false` on `setup-go` to
-control cache keys precisely. Two separate Go caches are maintained:
+CI jobs use explicit `actions/cache` steps with `cache: false` on `setup-go` to control
+cache keys precisely. Two Go caches are maintained.
+
+**Module cache** — dependency-only, one combined step per Go job:
 
 ```yaml
-# Module cache: stable, invalidates only when go.sum changes
 - name: Cache Go modules
-  uses: actions/cache@v5
+  uses: actions/cache@v6
   with:
     path: ~/go/pkg/mod
     key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
     restore-keys: |
       ${{ runner.os }}-gomod-
+```
 
-# Build cache: invalidates when go.sum changes, shared across commits with same deps
-- name: Cache Go build cache
-  uses: actions/cache@v5
+**Go build cache** (`~/.cache/go-build`) — split `actions/cache/restore` + `actions/cache/save`
+so the log shows exact vs fallback restore (`cache-matched-key`). The key is **source-aware**
+(was `go.sum`-only, which froze the cache at an old snapshot and never refreshed as source
+changed) and **split by job purpose** so `validate` (non-race) and `test` (race+coverage) never
+overwrite each other's entry:
+
+```yaml
+- name: Restore Go build cache
+  id: gocache
+  uses: actions/cache/restore@v6
   with:
     path: ~/.cache/go-build
-    key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
+    key: ${{ runner.os }}-${{ runner.arch }}-go-<GOVER>-gocache-<purpose>-deps-<go.sum hash>-src-<source hash>
     restore-keys: |
-      ${{ runner.os }}-gobuild-
+      ${{ runner.os }}-${{ runner.arch }}-go-<GOVER>-gocache-<purpose>-deps-<go.sum hash>-src-
+      ${{ runner.os }}-${{ runner.arch }}-go-<GOVER>-gocache-<purpose>-
+# ... compile / test ...
+- name: Save Go build cache
+  if: success() && steps.gocache.outputs.cache-hit != 'true'
+  uses: actions/cache/save@v6
+  with:
+    path: ~/.cache/go-build
+    key: ${{ steps.gocache.outputs.cache-primary-key }}
 ```
+
+Purpose prefixes: `gocache-validate-`, `gocache-test-race-cover-`, `gocache-security-`. `<GOVER>`
+comes from a `Read Go version from go.mod` step. The source hash covers `**/*.go`, `go.mod`,
+`go.sum`, `Makefile`, `**/testdata/**`. Save runs only on a non-exact (fallback/miss) restore and
+only when the run succeeded, so a broken build never publishes a cache.
+
+**Cross-ref scoping.** GitHub caches are ref-scoped: a `merge_group` (queue) run cannot restore a
+`pull_request` run's cache — only the default branch (`main`) is shared. So these caches are warmed
+by push-to-main and restored by PR + queue via restore-key fallback. This lowers both runs'
+absolute cost but does not deduplicate the PR↔queue build (inherent to the merge queue). Measured
+in launcher: warmed cycles cut `test` ~50%, `build`/`lint` ~30%.
 
 Tool binaries are also cached to avoid reinstalling on every run:
 - `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
