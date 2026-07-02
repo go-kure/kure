@@ -309,3 +309,5 @@ func TestConversionRegistryConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 }
+
+// warm-cache confirmation probe: trivial change to measure fallback restore. Revert.
