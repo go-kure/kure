@@ -316,10 +316,15 @@ To restart from $target_type, use release-bump to advance to the next cycle firs
     log_info "Next dev version: $next_version"
     echo ""
 
+    # Tag-collision checks run even in DRY_RUN so the preview fails loudly instead of
+    # printing a false "complete" while the real CI run dies on the collision.
+    check_tag_exists "$release_version"
+    # Invariant: a release must never leave VERSION pointing at an existing tag
+    # (mirrors release_bump) — guards a stale VERSION or an out-of-band tag.
+    check_tag_exists "$next_version"
     if [ "$DRY_RUN" != "1" ]; then
         validate_git_state
         check_local_replaces
-        check_tag_exists "$release_version"
     fi
 
     # Write release version if different from current
@@ -369,10 +374,15 @@ release_stable() {
     log_info "Next dev version: $next_version"
     echo ""
 
+    # Tag-collision checks run even in DRY_RUN so the preview fails loudly instead of
+    # printing a false "complete" while the real CI run dies on the collision.
+    check_tag_exists "$release_version"
+    # Invariant: a release must never leave VERSION pointing at an existing tag
+    # (mirrors release_bump) — guards a stale VERSION or an out-of-band tag.
+    check_tag_exists "$next_version"
     if [ "$DRY_RUN" != "1" ]; then
         validate_git_state
         check_local_replaces
-        check_tag_exists "$release_version"
     fi
 
     write_version "$release_version"
@@ -431,10 +441,11 @@ release_bump() {
     log_info "Next dev version: $next_version"
     echo ""
 
+    # Invariant (checked even in DRY_RUN so the preview catches collisions): a bump
+    # must never leave VERSION equal to an existing tag.
+    check_tag_exists "$next_version"
     if [ "$DRY_RUN" != "1" ]; then
         validate_git_state
-        # Invariant: a bump must never leave VERSION equal to an existing tag.
-        check_tag_exists "$next_version"
     fi
 
     write_version "$next_version"
