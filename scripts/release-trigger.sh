@@ -24,6 +24,7 @@ ARG=""
 for _arg in "$@"; do
     case "$_arg" in
         --do-it) DO_IT=1 ;;
+        --) ;;  # tolerate a stray separator (e.g. `mise run release -- --do-it`)
         promote|bump)
             if [ -n "$SUBCOMMAND" ]; then
                 echo "ERROR: unexpected argument: $_arg" >&2; exit 1
@@ -60,6 +61,12 @@ fi
 
 # ── Show dry-run preview ────────────────────────────────────────────────
 
+if [ "$DO_IT" = "1" ]; then
+    echo "NOTE: showing a dry-run preview first (no changes are made here);"
+    echo "      the REAL release is then dispatched to CI below."
+    echo ""
+fi
+
 if [ "$SUBCOMMAND" = "bump" ]; then
     echo "=== Version Bump Preview ==="
     echo ""
@@ -81,19 +88,21 @@ if [ "$DO_IT" != "1" ]; then
     echo "---"
     if [ "$SUBCOMMAND" = "bump" ]; then
         echo "To execute, run:"
-        echo "  mise run release bump $ARG -- --do-it"
+        echo "  mise run release bump $ARG --do-it"
     elif [ "$SUBCOMMAND" = "promote" ]; then
         echo "To execute, run:"
-        echo "  mise run release promote $ARG -- --do-it"
+        echo "  mise run release promote $ARG --do-it"
     else
         echo "To execute, run:"
-        echo "  mise run release -- --do-it"
+        echo "  mise run release --do-it"
     fi
     exit 0
 fi
 
 # ── Trigger CI ───────────────────────────────────────────────────────────
 
+echo "Preview above made NO changes. Dispatching the REAL release to CI now…"
+echo ""
 echo "=== Triggering CI ==="
 echo ""
 
