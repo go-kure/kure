@@ -40,4 +40,4 @@ log = logger.Noop()
 
 ## Related Packages
 
-All Kure packages use this logger. See the [errors](../errors/) package for error handling patterns.
+All Kure packages use this logger. See the [errors](/api-reference/errors/) package for error handling patterns.

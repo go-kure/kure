@@ -326,4 +326,4 @@ kubernetes.SetConfigMapAnnotations(cm, map[string]string{"managed-by": "crane"})
 
 - [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors
 - [prometheus](/api-reference/prometheus-builders/) - Prometheus Operator CRD builders
-- [errors](../errors/) - Structured error types used for nil-check sentinels
+- [errors](/api-reference/errors/) - Structured error types used for nil-check sentinels

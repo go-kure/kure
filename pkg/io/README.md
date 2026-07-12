@@ -144,5 +144,5 @@ err := io.ValidateOutputFormat("table")
 
 ## Related Packages
 
-- [errors](../errors/) - Error types for parse failures
+- [errors](/api-reference/errors/) - Error types for parse failures
 - [kubernetes](/api-reference/kubernetes-builders/) - Scheme registration for type-aware parsing

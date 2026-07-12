@@ -65,6 +65,6 @@ err = engine.IntegrateWithLayout(ml, cluster, layout.LayoutRules{})
 
 ## Related Packages
 
-- [stack/fluxcd](../fluxcd/) — full-featured FluxCD engine including bootstrap
-- [stack](../) — domain model and Workflow interface
-- [stack/layout](../layout/) — manifest layout generation
+- [stack/fluxcd](/api-reference/flux-engine/) — full-featured FluxCD engine including bootstrap
+- [stack](/api-reference/stack/) — domain model and Workflow interface
+- [stack/layout](/api-reference/layout/) — manifest layout generation
