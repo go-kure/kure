@@ -30,7 +30,7 @@ require (
 	github.com/cert-manager/cert-manager v1.20.3
 	github.com/cilium/cilium v1.19.5
 	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260609065833-bd68198c31dc
-	github.com/cloudnative-pg/cloudnative-pg v1.29.1
+	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/cloudnative-pg/machinery v0.5.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.13.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.53.0
@@ -130,7 +130,7 @@ require (
 	github.com/ianlancetaylor/demangle v0.0.0-20240805132620-81f5be970eca // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0 // indirect
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mackerelio/go-osstat v0.2.6 // indirect
@@ -202,8 +202,8 @@ require (
 	k8s.io/client-go v0.36.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260603220949-865597e52e25 // indirect
-	k8s.io/streaming v0.36.1 // indirect
-	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2 // indirect
+	k8s.io/streaming v0.36.2 // indirect
+	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect
 	oras.land/oras-go/v2 v2.6.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
