@@ -63,8 +63,7 @@ build_nav() {
     yq ".packages[] | select(.mount and .mount.group == \"${group}\") | [.path, .mount.target, .mount.title, .mount.weight, .mount.desc] | @tsv" "$DOCS_MAP" \
     | sort -t"$(printf '\t')" -k4 -n \
     | while IFS=$'\t' read -r path target title weight desc; do
-        local base="${target#api-reference/}"; base="${base%.md}"
-        echo "| [${title}](${base}) | ${desc} | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/${path}) |"
+        echo "| [${title}](/${target%.md}/) | ${desc} | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/${path}) |"
       done
   done
 }

@@ -27,7 +27,7 @@ import (
 
 ## Next Steps
 
-- Follow the [Quickstart](quickstart) guide
+- Follow the [Quickstart](/getting-started/quickstart/) guide
 - Read about the [Domain Model](/concepts/domain-model) and [Design Philosophy](/concepts/design-philosophy)
 - Explore the [Guides](/guides) for common workflows
 - Try the [Examples](/examples)

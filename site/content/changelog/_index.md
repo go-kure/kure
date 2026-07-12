@@ -7,4 +7,4 @@ weight = 70
 
 Track changes across Kure releases.
 
-- [Releases](releases) - Version history and release notes
+- [Releases](/changelog/releases/) - Version history and release notes

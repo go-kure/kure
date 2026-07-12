@@ -11,7 +11,7 @@ Practical examples of using Kure to generate Kubernetes configurations.
 
 These examples include full documentation:
 
-- [Patches](patches) - Declarative patching with TOML and YAML formats
+- [Patches](/examples/patches/) - Declarative patching with TOML and YAML formats
 
 ## Additional Examples
 
