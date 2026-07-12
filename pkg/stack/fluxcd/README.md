@@ -214,6 +214,6 @@ depth. `FluxSeparate` and non-Flux paths are unaffected.
 
 ## Related Packages
 
-- [stack](../) - Core domain model
-- [stack/layout](../layout/) - Manifest directory organization
+- [stack](/api-reference/stack/) - Core domain model
+- [stack/layout](/api-reference/layout/) - Manifest directory organization
 - [kubernetes/fluxcd](/api-reference/fluxcd-builders/) - Low-level Flux resource builders
