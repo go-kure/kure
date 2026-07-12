@@ -16,37 +16,37 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 
 | Package | Description | Reference |
 |---------|-------------|-----------|
-| [Stack](stack) | Cluster, Node, Bundle, Application domain model | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack) |
-| [Flux Engine](flux-engine) | FluxCD workflow implementation | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/fluxcd) |
-| [Layout Engine](layout) | Manifest directory organization | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/layout) |
+| [Stack](/api-reference/stack/) | Cluster, Node, Bundle, Application domain model | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack) |
+| [Flux Engine](/api-reference/flux-engine/) | FluxCD workflow implementation | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/fluxcd) |
+| [Layout Engine](/api-reference/layout/) | Manifest directory organization | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/stack/layout) |
 
 ## Resource Operations
 
 | Package | Description | Reference |
 |---------|-------------|-----------|
-| [IO](io) | YAML/JSON serialization and resource printing | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/io) |
-| [Manifest Classification](manifest) | CRD recognition and object scope classification | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/manifest) |
-| [Kubernetes Builders](kubernetes-builders) | Core K8s resource constructors (GVK, HPA, PDB) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes) |
-| [Cert-Manager Builders](certmanager-builders) | cert-manager CRD constructors (Certificate, Issuer, ClusterIssuer) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/certmanager) |
-| [Cilium Builders](cilium-builders) | Cilium CRD constructors (network policies and related resources) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/cilium) |
-| [CloudNativePG Builders](cnpg-builders) | CloudNativePG and Barman Cloud CRD constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/cnpg) |
-| [External Secrets Builders](externalsecrets-builders) | External Secrets Operator constructors (ExternalSecret, SecretStore) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/externalsecrets) |
-| [FluxCD Builders](fluxcd-builders) | Low-level Flux resource constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/fluxcd) |
-| [MetalLB Builders](metallb-builders) | MetalLB constructors (IPAddressPool, L2Advertisement) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/metallb) |
-| [Prometheus Builders](prometheus-builders) | Prometheus Operator CRD constructors (ServiceMonitor, PodMonitor, PrometheusRule) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/prometheus) |
-| [VolSync Builders](volsync-builders) | VolSync backup/restore CRD constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/volsync) |
+| [IO](/api-reference/io/) | YAML/JSON serialization and resource printing | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/io) |
+| [Manifest Classification](/api-reference/manifest/) | CRD recognition and object scope classification | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/manifest) |
+| [Kubernetes Builders](/api-reference/kubernetes-builders/) | Core K8s resource constructors (GVK, HPA, PDB) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes) |
+| [Cert-Manager Builders](/api-reference/certmanager-builders/) | cert-manager CRD constructors (Certificate, Issuer, ClusterIssuer) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/certmanager) |
+| [Cilium Builders](/api-reference/cilium-builders/) | Cilium CRD constructors (network policies and related resources) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/cilium) |
+| [CloudNativePG Builders](/api-reference/cnpg-builders/) | CloudNativePG and Barman Cloud CRD constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/cnpg) |
+| [External Secrets Builders](/api-reference/externalsecrets-builders/) | External Secrets Operator constructors (ExternalSecret, SecretStore) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/externalsecrets) |
+| [FluxCD Builders](/api-reference/fluxcd-builders/) | Low-level Flux resource constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/fluxcd) |
+| [MetalLB Builders](/api-reference/metallb-builders/) | MetalLB constructors (IPAddressPool, L2Advertisement) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/metallb) |
+| [Prometheus Builders](/api-reference/prometheus-builders/) | Prometheus Operator CRD constructors (ServiceMonitor, PodMonitor, PrometheusRule) | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/prometheus) |
+| [VolSync Builders](/api-reference/volsync-builders/) | VolSync backup/restore CRD constructors | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes/volsync) |
 
 ## Utilities
 
 | Package | Description | Reference |
 |---------|-------------|-----------|
-| [Errors](errors) | Structured error types | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/errors) |
-| [Logger](logger) | Structured logging | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/logger) |
+| [Errors](/api-reference/errors/) | Structured error types | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/errors) |
+| [Logger](/api-reference/logger/) | Structured logging | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/logger) |
 <!-- END GENERATED: api-reference-nav -->
 
 ## Compatibility
 
-- [Compatibility Matrix](compatibility) - Supported Kubernetes and dependency versions
+- [Compatibility Matrix](/api-reference/compatibility/) - Supported Kubernetes and dependency versions
 
 ## ArgoCD
 

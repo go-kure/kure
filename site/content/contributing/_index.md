@@ -7,8 +7,8 @@ weight = 70
 
 Resources for contributing to Kure.
 
-- [Development Guide](guide) - Setup, testing, code quality, and CI/CD workflows
-- [GitHub Workflows](github-workflows) - CI/CD pipeline documentation
+- [Development Guide](/contributing/guide/) - Setup, testing, code quality, and CI/CD workflows
+- [GitHub Workflows](/contributing/github-workflows/) - CI/CD pipeline documentation
 
 ## Quick Start
 
