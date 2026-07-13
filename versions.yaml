@@ -26,9 +26,13 @@ infrastructure:
   cert-manager:
     go_module: "github.com/cert-manager/cert-manager"
     # Kure generates YAML compatible with these deployed versions
-    supported_range: "1.14 - 1.20"
+    supported_range: "1.14 - 1.21"
     max_dependabot: null  # No restriction needed
-    notes: "Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias)."
+    notes: |
+      Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias).
+      v1.21 removed the deprecated ObjectReference type (#8625); kure already uses
+      IssuerReference (plus LocalObjectReference/SecretKeySelector from meta/v1), so the
+      imported certmanager/v1 + acme/v1 + meta/v1 surface is unaffected — build + tests pass.
 
   fluxcd:
     go_module: "github.com/fluxcd/flux2/v2"
@@ -101,13 +105,15 @@ infrastructure:
 
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
-    supported_range: "1.24 - 1.29"
+    supported_range: "1.24 - 1.30"
     max_dependabot: null
     notes: |
       CloudNativePG operator for PostgreSQL on Kubernetes.
       Cluster CR (with managed roles), Database CR (postgresql.cnpg.io/v1),
       ObjectStore CR (barmancloud.cnpg.io/v1), and ScheduledBackups.
       ObjectStore lives in a separate module (plugin-barman-cloud).
+      v1.30 is a routine minor with no changes to the imported postgresql.cnpg.io/v1
+      types (Cluster, Database, Pooler, ScheduledBackup) — build + tests pass unchanged.
     related_packages:
       - "github.com/cloudnative-pg/plugin-barman-cloud"
       - "github.com/cloudnative-pg/barman-cloud"
@@ -134,11 +140,13 @@ infrastructure:
 
   gateway-api:
     go_module: "sigs.k8s.io/gateway-api"
-    supported_range: "1.0 - 1.5"
+    supported_range: "1.0 - 1.6"
     max_dependabot: null
     notes: |
       Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders.
       Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0).
+      v1.6 is a routine minor with no changes to the imported
+      gateway.networking.k8s.io/v1 HTTPRoute type — build + tests pass unchanged.
 
   kubernetes:
     go_module: "k8s.io/api"
