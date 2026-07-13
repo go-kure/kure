@@ -1,6 +1,33 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.7] - 2026-07-13
+
+### Added
+
+- Add prerelease bump scope
+
+### Dependencies
+
+- Bump github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring
+- Bump helm.sh/helm/v4 from 4.2.2 to 4.2.3
+- Bump fluxcd ecosystem to 2.9.1 / controllers 1.9.2
+- Bump cert-manager 1.21, gateway-api 1.6, cnpg 1.30
+
+### Fixed
+
+- Run tag-collision checks in preview + guard next dev version
+- Resolve section-nav links under the version slot
+- Make README cross-package links root-absolute
+
+### Maintenance
+
+- Bump Go to 1.26.5
+
+### Performance
+
+- Source-aware Go build cache, split by job purpose
+
 ## [0.2.0-beta.6] - 2026-07-01
 
 ### Added
