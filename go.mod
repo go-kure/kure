@@ -37,7 +37,7 @@ require (
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
 	github.com/fluxcd/flux2/v2 v2.9.1
 	github.com/fluxcd/helm-controller/api v1.6.2
-	github.com/fluxcd/image-automation-controller/api v1.2.2
+	github.com/fluxcd/image-automation-controller/api v1.2.3
 	github.com/fluxcd/kustomize-controller/api v1.9.2
 	github.com/fluxcd/notification-controller/api v1.9.2
 	github.com/fluxcd/pkg/apis/acl v0.10.0
