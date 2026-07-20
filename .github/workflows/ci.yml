@@ -87,7 +87,7 @@ jobs:
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: false
@@ -229,7 +229,7 @@ jobs:
       run: command -v gcc &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential)
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: false
@@ -321,7 +321,7 @@ jobs:
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: false
@@ -431,7 +431,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: false
@@ -609,7 +609,7 @@ jobs:
       run: sudo install ${{ runner.temp }}/hugo-bin/hugo /usr/local/bin/hugo
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: false
