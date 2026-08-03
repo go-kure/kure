@@ -27,5 +27,5 @@ rm -rf "$LC_DIR"
 ( cd "$SITE_DIR" && hugo --baseURL "/" --destination "$LC_DIR" --quiet )
 
 echo "=== lychee (internal links, offline) ==="
-lychee --offline --root-dir "$LC_DIR" --no-progress "$LC_DIR/**/*.html"
+find "$LC_DIR" -type f -name '*.html' -print0 | xargs -0 lychee --offline --root-dir "$LC_DIR" --no-progress
 echo "check-links: OK (internal links resolve)"
