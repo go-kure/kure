@@ -12,10 +12,25 @@ Kure tracks dependency versions in three places:
 | `versions.yaml` | Version metadata: supported range, dependabot caps, notes (no build version) |
 | `docs/compatibility.md` | Generated from `versions.yaml` + `go.mod` — never edit directly |
 
-The `sync-versions.sh check` command reads each dependency's build version from `go.mod`
-and asserts it falls within the `supported_range` declared in `versions.yaml`; `generate`
-regenerates `docs/compatibility.md`. There is no hand-maintained "current" version to keep
-in sync (see [#593](https://github.com/go-kure/kure/issues/593)).
+The `sync-versions.sh check` command performs two assertions, and CI runs it on every
+change to `go.mod` or `versions.yaml`:
+
+1. **Range** — each dependency's build version, read from `go.mod`, falls within the
+   `supported_range` declared in `versions.yaml`.
+2. **Drift** — the committed `docs/compatibility.md` is byte-identical to what
+   `generate` would produce right now. It regenerates into a temp file and diffs;
+   your working tree is never touched. On failure it prints the diff (`-` is what is
+   committed, `+` is what `versions.yaml` + `go.mod` currently imply) and tells you to
+   run `generate`.
+
+`generate` regenerates `docs/compatibility.md` in place. There is no hand-maintained
+"current" version to keep in sync (see
+[#593](https://github.com/go-kure/kure/issues/593)).
+
+The drift assertion exists because the matrix is generated but committed: before it, any
+bump that moved a build version or a `supported_range` left the committed matrix silently
+stale until someone happened to re-run `generate`, and the staleness was caught only by
+human review — on three separate dependency PRs.
 
 ## Update Risk Levels
 
@@ -67,6 +82,13 @@ All `github.com/fluxcd/*` packages must be upgraded together. Flux releases coor
 - `image-automation-controller/api`
 - `pkg/apis/meta`, `pkg/apis/kustomize`
 
+Dependabot enforces this with the `fluxcd-ecosystem` group in
+`.github/dependabot.yml`, which covers `github.com/fluxcd/*` and
+`github.com/controlplaneio-fluxcd/*`. Ungrouped, one upstream release arrived as five
+separate PRs whose `go.mod` changes conflicted with each other in the merge queue and
+had to be consolidated by hand. Minor and major updates for both patterns are ignored
+(see the `ignore:` block), so the group only ever carries patches.
+
 ### Kubernetes (`k8s.io/*`)
 
 All `k8s.io/` packages must stay at the same patch release. Kure uses `replace` directives in `go.mod` to enforce this. See the comment block in `go.mod` for details.
@@ -108,11 +130,11 @@ When multiple Dependabot PRs accumulate, bundle them into a single PR:
 
 Before merging any dependency update:
 
-- [ ] `./scripts/sync-versions.sh check` — go.mod build versions within `supported_range`
+- [ ] `./scripts/sync-versions.sh check` — build versions within `supported_range`, and
+      `docs/compatibility.md` not stale (run `generate` first if it reports drift)
 - [ ] `make verify` — tidy + lint + test
 - [ ] `make test-race` — race condition detection
 - [ ] k8s.io replace directives unchanged (unless intentionally bumping)
-- [ ] `docs/compatibility.md` regenerated if `versions.yaml` changed
 
 ## See Also
 
