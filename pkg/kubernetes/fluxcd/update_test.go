@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -410,14 +411,7 @@ func TestFluxInstanceHelpers(t *testing.T) {
 	component := fluxv1.Component("source-controller")
 	AddFluxInstanceComponent(instance, component)
 
-	found := false
-	for _, c := range instance.Spec.Components {
-		if c == component {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(instance.Spec.Components, component) {
 		t.Errorf("expected component %q to be added", component)
 	}
 
@@ -464,10 +458,10 @@ func TestResourceSetHelpers(t *testing.T) {
 		"test-input": &apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 	}
 	AddResourceSetInput(resourceSet, input)
-	if resourceSet.Spec.Inputs == nil {
-		t.Fatal("expected Inputs to be initialized")
+	if len(resourceSet.Spec.Inputs) != 1 {
+		t.Fatalf("expected 1 input set, got %d", len(resourceSet.Spec.Inputs))
 	}
-	gotInput, ok := resourceSet.Spec.Inputs["test-input"]
+	gotInput, ok := resourceSet.Spec.Inputs[0]["test-input"]
 	if !ok || gotInput == nil {
 		t.Fatal("expected input 'test-input' to be added")
 	}
@@ -479,11 +473,11 @@ func TestResourceSetHelpers(t *testing.T) {
 		Name: "input-provider",
 	}
 	AddResourceSetInputFrom(resourceSet, inputRef)
-	if len(resourceSet.Spec.InputFrom) != 1 {
-		t.Fatalf("expected 1 input reference, got %d", len(resourceSet.Spec.InputFrom))
+	if len(resourceSet.Spec.InputsFrom) != 1 {
+		t.Fatalf("expected 1 input reference, got %d", len(resourceSet.Spec.InputsFrom))
 	}
-	if resourceSet.Spec.InputFrom[0].Name != "input-provider" {
-		t.Errorf("expected input reference name %q, got %q", "input-provider", resourceSet.Spec.InputFrom[0].Name)
+	if resourceSet.Spec.InputsFrom[0].Name != "input-provider" {
+		t.Errorf("expected input reference name %q, got %q", "input-provider", resourceSet.Spec.InputsFrom[0].Name)
 	}
 
 	SetResourceSetWait(resourceSet, true)
