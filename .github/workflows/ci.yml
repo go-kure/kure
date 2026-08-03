@@ -5,6 +5,12 @@ on:
     branches: [main, develop, 'release/*']
   pull_request:
     branches: [main, develop]
+    # ready_for_review is NOT in the default set (opened, synchronize, reopened).
+    # Several jobs below gate on `pull_request.draft == false`, so a PR opened as a
+    # draft skips lint/test/Security; without this type, `gh pr ready` then fires no
+    # event at all and those checks stay un-run while `build` shows green — which
+    # reads as a pass but never compiled a test file.
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:  # required: checks must report on the merge queue's temporary branch
   schedule:
     - cron: '0 4 * * *'  # 4am UTC daily - catch external changes

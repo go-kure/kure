@@ -29,10 +29,18 @@ This document provides an overview of all GitHub Actions workflows used in the k
 ### Triggers
 
 - Push to: `main`, `develop`, `release/*`
-- Pull requests to: `main`, `develop`
+- Pull requests to: `main`, `develop`, on types
+  `opened`, `synchronize`, `reopened`, **`ready_for_review`**
 - Merge group (merge queue's temporary branch — required checks must report here)
 - Schedule: 4am UTC daily (catch external changes)
 - Manual dispatch
+
+`ready_for_review` is not in GitHub's default type set. It is declared explicitly
+because several jobs gate on `github.event.pull_request.draft == false`: a PR opened
+as a draft skips `lint`, `test` and `Security`, and without this type `gh pr ready`
+fires no event, so those checks stay un-run indefinitely while `build` shows green.
+That combination reads as a pass but never compiled a test file — see
+[Draft PRs and un-run checks](#draft-prs-and-un-run-checks).
 
 ### Concurrency
 
@@ -109,10 +117,38 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Fail fast** - Jobs depend on validate, so lint failure stops everything
 - **Artifact sharing** - Coverage uploaded as artifact, reused by coverage-check; both upload and download use `continue-on-error: true` to tolerate `ACTIONS_RESULTS_URL` failures on in-cluster ARC runners
 - **PR comments** - Coverage report comment on PRs
-- **Skip draft PRs** - `if: github.event.pull_request.draft == false`
+- **Skip draft PRs** - `if: github.event.pull_request.draft == false`, re-triggered by the
+  `ready_for_review` type (see [below](#draft-prs-and-un-run-checks))
 - **Sensitive file check** - Warn about potential secrets in code
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
+
+### Draft PRs and un-run checks
+
+`lint`, `test` and `Security` are gated on `github.event.pull_request.draft == false`,
+so a PR opened as a draft runs none of them. `build` still runs, and `build` does **not**
+compile test files — a draft PR can therefore show a green `build` while containing code
+that does not compile under `go test`.
+
+Declaring `ready_for_review` in `on.pull_request.types` makes `gh pr ready` re-trigger the
+full suite. Two related cases are **not** covered, because GitHub emits neither
+`synchronize` nor `ready_for_review` for them:
+
+| Situation | Event GitHub sends | Remedy |
+|---|---|---|
+| PR marked ready for review | `ready_for_review` | covered — CI re-runs |
+| PR **retargeted** to another base branch | `edited` (with `changes.base`) | close and reopen the PR, which sends `reopened` |
+| PR title or body edited | `edited` | none needed — no code changed |
+
+`edited` is deliberately not in the type list: it fires on every title and body edit, which
+would run the full suite for text-only changes. A retarget is rare enough to handle by hand.
+
+Before trusting a green PR, confirm the required checks actually **ran**. A check that was
+skipped reports differently from one that passed:
+
+```bash
+gh pr checks <number>          # look for "skipping", not just the absence of "fail"
+```
 
 ---
 
