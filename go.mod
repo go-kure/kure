@@ -29,10 +29,10 @@ require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.21.0
 	github.com/cilium/cilium v1.19.6
-	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260609065833-bd68198c31dc
+	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260720143032-950b0f57e122
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/cloudnative-pg/machinery v0.5.0
-	github.com/cloudnative-pg/plugin-barman-cloud v0.13.0
+	github.com/cloudnative-pg/plugin-barman-cloud v0.14.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.53.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
 	github.com/fluxcd/flux2/v2 v2.9.3
@@ -79,7 +79,7 @@ require (
 	github.com/cilium/statedb v0.5.9 // indirect
 	github.com/cilium/stream v0.0.1 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
-	github.com/cloudnative-pg/cnpg-i v0.5.0 // indirect
+	github.com/cloudnative-pg/cnpg-i v0.6.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dylibso/observe-sdk/go v0.0.0-20240819160327-2d926c5d788a // indirect
