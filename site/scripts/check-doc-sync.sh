@@ -81,9 +81,9 @@ if [[ "$docs_only" != "true" ]]; then
     while IFS= read -r dir; do
       rel="${dir#"$ROOT"/}"
       if ! printf '%s\n' "${map_paths[@]}" | grep -qxF "$rel"; then
-        fail "public package not in docs-map.yaml: $rel (add an entry with mount: to publish it, or with reason: to keep it unmounted)"
+        fail "public package not in docs-map.yaml: $rel (add a mount: block, or mounted: false with a reason:)"
       fi
-    done < <(find "$ROOT/$croot" -type f -name '*.go' ! -name '*_test.go' -exec dirname {} \; | sort -u)
+    done < <(find "$ROOT/$croot" -type f -name '*.go' ! -name '*_test.go' -exec dirname {} + | sort -u)
   done
 fi
 
