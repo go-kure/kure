@@ -58,6 +58,13 @@ jobs:
             - 'go.sum'
             - 'Makefile'
             - '.github/workflows/**'
+            # The only `sync-versions.sh check` invocation lives in the `validate`
+            # job, which is gated on this filter. Without these three entries a PR
+            # touching only version metadata skipped the range and drift guards
+            # entirely and still reported success.
+            - 'versions.yaml'
+            - 'docs/compatibility.md'
+            - 'scripts/sync-versions.sh'
           docs:
             - 'site/**'
             - 'docs/**'
