@@ -442,15 +442,37 @@ func TestResourceSetHelpers(t *testing.T) {
 		"test-input": &apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 	}
 	AddResourceSetInput(resourceSet, input)
+	if resourceSet.Spec.Inputs == nil {
+		t.Fatal("expected Inputs to be initialized")
+	}
+	gotInput, ok := resourceSet.Spec.Inputs["test-input"]
+	if !ok || gotInput == nil {
+		t.Fatal("expected input 'test-input' to be added")
+	}
+	if string(gotInput.Raw) != `"value"` {
+		t.Errorf("expected input raw value %q, got %q", `"value"`, string(gotInput.Raw))
+	}
 
 	inputRef := fluxv1.InputProviderReference{
 		Name: "input-provider",
 	}
 	AddResourceSetInputFrom(resourceSet, inputRef)
+	if len(resourceSet.Spec.InputFrom) != 1 {
+		t.Fatalf("expected 1 input reference, got %d", len(resourceSet.Spec.InputFrom))
+	}
+	if resourceSet.Spec.InputFrom[0].Name != "input-provider" {
+		t.Errorf("expected input reference name %q, got %q", "input-provider", resourceSet.Spec.InputFrom[0].Name)
+	}
 
 	SetResourceSetWait(resourceSet, true)
+	if !resourceSet.Spec.Wait {
+		t.Error("expected Wait to be true")
+	}
 
 	SetResourceSetServiceAccountName(resourceSet, "flux")
+	if resourceSet.Spec.ServiceAccountName != "flux" {
+		t.Errorf("expected ServiceAccountName %q, got %q", "flux", resourceSet.Spec.ServiceAccountName)
+	}
 }
 
 func TestProviderHelpers(t *testing.T) {
