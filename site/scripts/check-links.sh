@@ -7,7 +7,7 @@
 # here (--offline); flaky external checks belong in a separate non-blocking job.
 #
 # Usage: bash scripts/check-links.sh [KURE_ROOT]
-# Requires: hugo, yq, lychee.
+# Requires: bash, hugo, yq, lychee.
 
 set -euo pipefail
 
