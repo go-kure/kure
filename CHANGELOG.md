@@ -1,6 +1,23 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.9] - 2026-08-03
+
+### Dependencies
+
+- Bump cilium 1.20.0, plugin-barman-cloud 0.14.0, cert-manager 1.21.1
+- Bump prometheus-operator monitoring API to v0.93.0
+
+### Fixed
+
+- Align unmapped-package message with the documented convention
+- Drop the lychee invocation change, keep the Requires note
+- Correct ResourceSet assertions so the package compiles
+
+### Maintenance
+
+- Bump actions/setup-go from 6 to 7 in the actions group
+
 ## [0.2.0-beta.8] - 2026-08-03
 
 ### Dependencies
