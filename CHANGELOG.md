@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.8] - 2026-08-03
+
+### Dependencies
+
+- Bump oras.land/oras-go/v2 from 2.6.1 to 2.6.2
+- Bump google.golang.org/grpc from 1.81.1 to 1.82.1
+- Bump Flux ecosystem, cilium, gateway-api and k8s.io to v0.36.3
+
 ## [0.2.0-beta.7] - 2026-07-13
 
 ### Added
