@@ -231,7 +231,11 @@ validate_dependabot() {
 }
 
 # Generate compatibility documentation
+# $1: output path. The drift check passes a temp file here so it can compare
+# without touching the working tree; `generate` passes $DOCS_FILE itself.
 generate_docs() {
+    local DOCS_FILE="$1"
+
     info "Generating compatibility documentation..."
 
     cat > "$DOCS_FILE" << 'EOF'
@@ -328,6 +332,38 @@ EOF
     success "Generated $DOCS_FILE"
 }
 
+# Assert docs/compatibility.md matches what generate_docs would produce right now.
+#
+# Without this, `check` validated ranges only, so any bump that changed a build
+# version or a supported_range left the committed matrix silently stale until
+# someone happened to re-run `generate`. That drift was reported as a review
+# finding on three separate dependency PRs before this guard existed.
+validate_docs_drift() {
+    info ""
+    info "Validating generated documentation is current..."
+
+    local expected
+    expected=$(mktemp)
+    # shellcheck disable=SC2064  # expand $expected now, not at trap time
+    trap "rm -f '$expected' '$expected.diff'" RETURN
+
+    generate_docs "$expected" >/dev/null
+
+    if diff -u "$DOCS_FILE" "$expected" > "$expected.diff" 2>&1; then
+        success "$(basename "$DOCS_FILE") is up to date"
+        rm -f "$expected.diff"
+        return 0
+    fi
+
+    error "$(basename "$DOCS_FILE") is out of date — run: ./scripts/sync-versions.sh generate"
+    # Label the diff from the reader's point of view: '-' is what is committed,
+    # '+' is what versions.yaml + go.mod currently imply.
+    sed -e "1s|.*|--- committed: ${DOCS_FILE#"$REPO_ROOT"/}|" \
+        -e "2s|.*|+++ expected (regenerated)|" "$expected.diff" >&2
+    rm -f "$expected.diff"
+    return 1
+}
+
 # Main command router
 main() {
     local command="${1:-check}"
@@ -341,6 +377,7 @@ main() {
             local gomod_result=0
             validate_gomod || gomod_result=$?
             validate_dependabot
+            validate_docs_drift || gomod_result=1
 
             if [[ $gomod_result -eq 0 ]]; then
                 info ""
@@ -353,7 +390,7 @@ main() {
             fi
             ;;
         generate)
-            generate_docs
+            generate_docs "$DOCS_FILE"
             success "Documentation generated successfully"
             exit 0
             ;;

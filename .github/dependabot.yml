@@ -39,6 +39,18 @@ updates:
         update-types:
           - "patch"
 
+      # FluxCD ecosystem — the controller API modules are released together and
+      # kure imports them as one surface, so they must be reviewed and bumped as
+      # one unit. Ungrouped, a single upstream release arrives as five separate
+      # PRs whose go.mod changes conflict with each other in the merge queue.
+      # Minor/major are ignored below, so this group only ever carries patches.
+      fluxcd-ecosystem:
+        patterns:
+          - "github.com/fluxcd/*"
+          - "github.com/controlplaneio-fluxcd/*"
+        update-types:
+          - "patch"
+
     ignore:
       # FluxCD ecosystem — cap at current series
       - dependency-name: "github.com/fluxcd/*"
@@ -46,7 +58,7 @@ updates:
       - dependency-name: "github.com/controlplaneio-fluxcd/*"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
-      # cert-manager — allow patch updates within 1.19.x
+      # cert-manager — allow minor and patch, block major
       - dependency-name: "github.com/cert-manager/cert-manager"
         update-types: ["version-update:semver-major"]
 
