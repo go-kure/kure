@@ -597,7 +597,11 @@ The `docs-build` job uses two separate caches:
 The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files change:
 
 - `go:` filter — triggers lint/test/security/build jobs. Includes `**.go`, `go.mod`, `go.sum`,
-  `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated.
+  `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated,
+  plus `versions.yaml`, `docs/compatibility.md` and `scripts/sync-versions.sh`. Those last
+  three are here because the only `sync-versions.sh check` invocation lives in the
+  `validate` job: without them a PR touching just version metadata skipped both the
+  supported-range guard and the compatibility-matrix drift guard and still reported success.
 - `docs:` filter — triggers docs-build/docs-check jobs. Includes `site/**`, `docs/**`, `*.md`,
   `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
   the docs build).

@@ -12,8 +12,10 @@ Kure tracks dependency versions in three places:
 | `versions.yaml` | Version metadata: supported range, dependabot caps, notes (no build version) |
 | `docs/compatibility.md` | Generated from `versions.yaml` + `go.mod` — never edit directly |
 
-The `sync-versions.sh check` command performs two assertions, and CI runs it on every
-change to `go.mod` or `versions.yaml`:
+The `sync-versions.sh check` command performs two assertions. It runs in CI's `validate`
+job, which is gated on the `go` paths-filter in `.github/workflows/ci.yml` — that filter
+includes `versions.yaml`, `docs/compatibility.md` and `scripts/sync-versions.sh` precisely
+so a version-metadata-only PR cannot skip it:
 
 1. **Range** — each dependency's build version, read from `go.mod`, falls within the
    `supported_range` declared in `versions.yaml`.
