@@ -8,6 +8,8 @@ The `cilium` package provides strongly-typed constructor functions for creating 
 
 Each function takes a configuration struct and returns a fully initialized Cilium custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification.
 
+All builders emit `cilium.io/v2`. That requires **Cilium 1.18 or newer** on the target cluster: BGPv2, `CiliumCIDRGroup` and `CiliumLoadBalancerIPPool` were served only as `cilium.io/v2alpha1` through 1.17 and were promoted to `v2` in 1.18. The tested range is tracked in [the compatibility matrix](/api-reference/compatibility/).
+
 ## Supported Resources
 
 ### CiliumNetworkPolicy
