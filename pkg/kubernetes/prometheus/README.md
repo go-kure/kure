@@ -38,7 +38,7 @@ sm := prometheus.ServiceMonitor(&prometheus.ServiceMonitorConfig{
 | `JobLabel` | `string` | Label to use as the Prometheus `job` label |
 | `TargetLabels` | `[]string` | Service labels to transfer to scraped metrics |
 | `NamespaceSelector` | `*monitoringv1.NamespaceSelector` | Namespaces to select Services from |
-| `SampleLimit` | `*uint64` | Per-scrape sample limit |
+| `SampleLimit` | `*int64` | Per-scrape sample limit |
 | `Labels` | `map[string]string` | Additional labels for the resource |
 
 ### PodMonitor
@@ -65,7 +65,7 @@ pm := prometheus.PodMonitor(&prometheus.PodMonitorConfig{
 | `JobLabel` | `string` | Label to use as the Prometheus `job` label |
 | `PodTargetLabels` | `[]string` | Pod labels to transfer to scraped metrics |
 | `NamespaceSelector` | `*monitoringv1.NamespaceSelector` | Namespaces to select Pods from |
-| `SampleLimit` | `*uint64` | Per-scrape sample limit |
+| `SampleLimit` | `*int64` | Per-scrape sample limit |
 | `Labels` | `map[string]string` | Additional labels for the resource |
 
 ### PrometheusRule

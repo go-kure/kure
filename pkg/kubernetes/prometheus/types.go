@@ -14,7 +14,7 @@ type ServiceMonitorConfig struct {
 	JobLabel          string                          `yaml:"jobLabel,omitempty"`
 	TargetLabels      []string                        `yaml:"targetLabels,omitempty"`
 	NamespaceSelector *monitoringv1.NamespaceSelector `yaml:"namespaceSelector,omitempty"`
-	SampleLimit       *uint64                         `yaml:"sampleLimit,omitempty"`
+	SampleLimit       *int64                          `yaml:"sampleLimit,omitempty"`
 	Labels            map[string]string               `yaml:"labels,omitempty"`
 }
 
@@ -27,7 +27,7 @@ type PodMonitorConfig struct {
 	JobLabel            string                            `yaml:"jobLabel,omitempty"`
 	PodTargetLabels     []string                          `yaml:"podTargetLabels,omitempty"`
 	NamespaceSelector   *monitoringv1.NamespaceSelector   `yaml:"namespaceSelector,omitempty"`
-	SampleLimit         *uint64                           `yaml:"sampleLimit,omitempty"`
+	SampleLimit         *int64                            `yaml:"sampleLimit,omitempty"`
 	Labels              map[string]string                 `yaml:"labels,omitempty"`
 }
 

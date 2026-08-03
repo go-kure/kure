@@ -85,13 +85,18 @@ infrastructure:
 
   prometheus-operator:
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
-    supported_range: "0.75 - 0.92"
+    supported_range: "0.75 - 0.93"
     max_dependabot: null
     notes: |
       Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
       Only the /pkg/apis/monitoring submodule is imported — not the full operator.
-      Stable v1 APIs (monitoring.coreos.com/v1). v0.92 is a routine minor with no changes
-      to the imported v1 types (build + tests pass unchanged).
+      Stable v1 APIs (monitoring.coreos.com/v1). v0.93 retyped the six scrape-limit fields
+      on ServiceMonitorSpec/PodMonitorSpec (SampleLimit, TargetLimit, LabelLimit,
+      LabelNameLengthLimit, LabelValueLengthLimit, KeepDroppedTargets) from *uint64 to
+      *int64; kure imports only SampleLimit, so its public SampleLimit config field and
+      SetServiceMonitorSampleLimit/SetPodMonitorSampleLimit signatures moved to int64 in
+      lockstep. Wire format (monitoring.coreos.com/v1 JSON) is unchanged, so generated
+      YAML still applies to clusters across this range.
 
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
