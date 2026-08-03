@@ -83,7 +83,7 @@ if [[ "$docs_only" != "true" ]]; then
       if ! printf '%s\n' "${map_paths[@]}" | grep -qxF "$rel"; then
         fail "public package not in docs-map.yaml: $rel (add a mount: or mounted:false entry)"
       fi
-    done < <(find "$ROOT/$croot" -type f -name '*.go' ! -name '*_test.go' -printf '%h\n' | sort -u)
+    done < <(find "$ROOT/$croot" -type f -name '*.go' ! -name '*_test.go' -exec dirname {} \; | sort -u)
   done
 fi
 
