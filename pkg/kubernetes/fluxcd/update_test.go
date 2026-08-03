@@ -537,14 +537,29 @@ func TestResourceSetAdvancedHelpers(t *testing.T) {
 
 	resource := &apiextensionsv1.JSON{Raw: []byte(`{"apiVersion": "v1", "kind": "ConfigMap"}`)}
 	AddResourceSetResource(resourceSet, resource)
+	if len(resourceSet.Spec.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(resourceSet.Spec.Resources))
+	}
+	if string(resourceSet.Spec.Resources[0].Raw) != string(resource.Raw) {
+		t.Errorf("expected resource %s, got %s", string(resource.Raw), string(resourceSet.Spec.Resources[0].Raw))
+	}
 
 	template := "{{ .Values.configMap }}"
 	SetResourceSetResourcesTemplate(resourceSet, template)
+	if resourceSet.Spec.ResourcesTemplate != template {
+		t.Errorf("expected ResourcesTemplate %q, got %q", template, resourceSet.Spec.ResourcesTemplate)
+	}
 
 	dependency := fluxv1.Dependency{
 		Name: "prerequisite-resource",
 	}
 	AddResourceSetDependency(resourceSet, dependency)
+	if len(resourceSet.Spec.DependsOn) != 1 {
+		t.Fatalf("expected 1 dependency, got %d", len(resourceSet.Spec.DependsOn))
+	}
+	if resourceSet.Spec.DependsOn[0].Name != dependency.Name {
+		t.Errorf("expected dependency name %q, got %q", dependency.Name, resourceSet.Spec.DependsOn[0].Name)
+	}
 
 	commonMetadata := &fluxv1.CommonMetadata{
 		Labels: map[string]string{
@@ -552,4 +567,10 @@ func TestResourceSetAdvancedHelpers(t *testing.T) {
 		},
 	}
 	SetResourceSetCommonMetadata(resourceSet, commonMetadata)
+	if resourceSet.Spec.CommonMetadata == nil {
+		t.Fatal("expected CommonMetadata to be set, got nil")
+	}
+	if resourceSet.Spec.CommonMetadata.Labels["app"] != "test" {
+		t.Errorf("expected CommonMetadata label app=%q, got %q", "test", resourceSet.Spec.CommonMetadata.Labels["app"])
+	}
 }
