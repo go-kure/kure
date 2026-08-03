@@ -34,6 +34,26 @@ infrastructure:
       IssuerReference (plus LocalObjectReference/SecretKeySelector from meta/v1), so the
       imported certmanager/v1 + acme/v1 + meta/v1 surface is unaffected — build + tests pass.
 
+  cilium:
+    go_module: "github.com/cilium/cilium"
+    supported_range: "1.18 - 1.20"
+    max_dependabot: null
+    notes: |
+      Cilium CRDs. Every builder in pkg/kubernetes/cilium emits
+      ciliumv2.SchemeGroupVersion — i.e. cilium.io/v2 — for all thirteen resources
+      (CiliumNetworkPolicy, CiliumClusterwideNetworkPolicy, CiliumCIDRGroup,
+      CiliumEgressGatewayPolicy, CiliumLocalRedirectPolicy, CiliumLoadBalancerIPPool,
+      CiliumEnvoyConfig, CiliumClusterwideEnvoyConfig, and the five BGPv2 types).
+      The floor is 1.18: BGPv2, CiliumCIDRGroup and CiliumLoadBalancerIPPool were
+      served only as cilium.io/v2alpha1 up to and including 1.17 and were promoted
+      to v2 in 1.18, so generated YAML does not apply to older clusters.
+      v1.20 is a routine minor with no changes to the imported cilium.io/v2 spec
+      types or to policy/api — build + tests pass unchanged.
+    related_packages:
+      - "github.com/cilium/hive"
+      - "github.com/cilium/statedb"
+      - "github.com/cilium/proxy"
+
   fluxcd:
     go_module: "github.com/fluxcd/flux2/v2"
     supported_range: "2.4 - 2.9"
