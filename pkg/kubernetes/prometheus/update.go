@@ -31,7 +31,7 @@ func SetServiceMonitorNamespaceSelector(obj *monitoringv1.ServiceMonitor, ns mon
 }
 
 // SetServiceMonitorSampleLimit sets the per-scrape sample limit.
-func SetServiceMonitorSampleLimit(obj *monitoringv1.ServiceMonitor, limit uint64) {
+func SetServiceMonitorSampleLimit(obj *monitoringv1.ServiceMonitor, limit int64) {
 	obj.Spec.SampleLimit = &limit
 }
 
@@ -66,7 +66,7 @@ func SetPodMonitorNamespaceSelector(obj *monitoringv1.PodMonitor, ns monitoringv
 }
 
 // SetPodMonitorSampleLimit sets the per-scrape sample limit.
-func SetPodMonitorSampleLimit(obj *monitoringv1.PodMonitor, limit uint64) {
+func SetPodMonitorSampleLimit(obj *monitoringv1.PodMonitor, limit int64) {
 	obj.Spec.SampleLimit = &limit
 }
 

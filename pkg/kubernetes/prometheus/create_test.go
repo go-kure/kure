@@ -57,7 +57,7 @@ func TestServiceMonitor(t *testing.T) {
 	})
 
 	t.Run("with namespace selector and sample limit", func(t *testing.T) {
-		limit := uint64(5000)
+		limit := int64(5000)
 		cfg := &ServiceMonitorConfig{
 			Name:      "test",
 			Namespace: "ns",
