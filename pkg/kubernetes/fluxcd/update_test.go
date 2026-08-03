@@ -410,13 +410,35 @@ func TestFluxInstanceHelpers(t *testing.T) {
 	component := fluxv1.Component("source-controller")
 	AddFluxInstanceComponent(instance, component)
 
+	found := false
+	for _, c := range instance.Spec.Components {
+		if c == component {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected component %q to be added", component)
+	}
+
 	dist := fluxv1.Distribution{
 		Version:  "v2.2.0",
 		Registry: "quay.io/fluxcd",
 	}
 	SetFluxInstanceDistribution(instance, dist)
 
+	if instance.Spec.Distribution.Version != dist.Version {
+		t.Errorf("expected Distribution.Version %q, got %q", dist.Version, instance.Spec.Distribution.Version)
+	}
+	if instance.Spec.Distribution.Registry != dist.Registry {
+		t.Errorf("expected Distribution.Registry %q, got %q", dist.Registry, instance.Spec.Distribution.Registry)
+	}
+
 	SetFluxInstanceWait(instance, true)
+
+	if instance.Spec.Wait == nil || !*instance.Spec.Wait {
+		t.Error("expected Wait to be true")
+	}
 }
 
 func TestFluxReportHelpers(t *testing.T) {
