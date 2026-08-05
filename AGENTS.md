@@ -378,13 +378,17 @@ rendered site is a CI failure.
 
 ### Enforcement
 
-- `site/scripts/check-doc-sync.sh` — every public package is mapped; READMEs and
-  mount targets exist; generated tables are current (blocking, `docs-build` job).
-- `site/scripts/check-links.sh` — all internal links resolve in the rendered site
+CI runs the canonical scripts from `go-kure/.github` via composite actions (`check-doc-sync`,
+`check-links`, `check-doc-gate` under `.github/actions/`); kure no longer vendors its own copies.
+`mise run site:check` reads the canonical `check-doc-sync.sh` from the sibling `../dot-github`
+checkout for local use.
+
+- `check-doc-sync` — every public package is mapped; READMEs and mount targets exist;
+  generated tables are current (blocking, `docs-build` job).
+- `check-links` — all internal links resolve in a root-relative Hugo build of the site
   (lychee, blocking, `docs-build` job).
-- `site/scripts/check-doc-gate.sh` — a mapped package's source change must touch its
-  mapped docs (the `doc-gate` job). Bypass only with the maintainer-restricted
-  `docs-skip` label.
+- `check-doc-gate` — a mapped package's source change must touch its mapped docs
+  (the `doc-gate` job). Bypass only with the maintainer-restricted `docs-skip` label.
 
 ### Cross-cutting guides
 

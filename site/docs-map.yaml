@@ -6,8 +6,9 @@
 #     to mount READMEs/docs into the Hugo site (.generated/).
 #   - site/scripts/gen-docs-tables.sh regenerates the AGENTS.md "Reverse Mapping"
 #     table and site/content/api-reference/_index.md nav between BEGIN/END markers.
-#   - site/scripts/check-doc-sync.sh validates that every public Go package appears
-#     here exactly once and that all referenced files exist.
+#   - check-doc-sync.sh (canonical, go-kure/.github, via .github/actions/check-doc-sync)
+#     validates that every public Go package appears here exactly once and that all
+#     referenced files exist.
 #
 # To publish a package: add a `mount:` block. To intentionally leave it
 # unpublished: set `mounted: false` with a `reason:`.
