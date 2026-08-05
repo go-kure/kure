@@ -64,7 +64,17 @@ run = "bash site/scripts/build.sh"
 
 [tasks."site:check"]
 description = "Validate code↔docs mapping against docs-map.yaml"
-run = "bash site/scripts/check-doc-sync.sh"
+# Canonical script lives in go-kure/.github; kure no longer vendors a copy. Reads it
+# out of the sibling checkout's origin/main — in the standard workspace every repo
+# sits under wharf/, with go-kure/.github cloned as ../dot-github (the leading dot
+# would collide as a directory name otherwise). That checkout may be parked on any
+# branch, hence the fetch+archive instead of a bare path into its working tree.
+run = """
+git -C ../dot-github fetch -q origin main
+d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
+git -C ../dot-github archive origin/main scripts | tar -x -C "$d"
+bash "$d/scripts/check-doc-sync.sh" .
+"""
 
 [tasks."site:gen"]
 description = "Regenerate doc tables from docs-map.yaml"

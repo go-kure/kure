@@ -664,7 +664,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Validate docs map (code↔docs sync)
-      run: bash site/scripts/check-doc-sync.sh
+      uses: go-kure/.github/.github/actions/check-doc-sync@main
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
@@ -707,8 +707,16 @@ jobs:
       if: steps.lychee-cache.outputs.cache-hit == 'true'
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
+    - name: Build Hugo site (root-relative, for link check)
+      working-directory: site
+      env:
+        HUGO_CACHEDIR: ${{ runner.temp }}/hugo_cache
+      run: hugo --baseURL "/" --destination .linkcheck --quiet
+
     - name: Check internal links (rendered site)
-      run: bash site/scripts/check-links.sh
+      uses: go-kure/.github/.github/actions/check-links@main
+      with:
+        built-dir: site/.linkcheck
 
   # =============================================================================
   # PR-only Jobs (parallel, non-blocking)
@@ -801,9 +809,10 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Enforce docs-with-code (Layer 3)
-      run: |
-        bash site/scripts/check-doc-gate.sh "origin/${{ github.base_ref }}" . \
-          "--skip=${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}"
+      uses: go-kure/.github/.github/actions/check-doc-gate@main
+      with:
+        base-ref: origin/${{ github.base_ref }}
+        skip: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}
 
   # =============================================================================
   # Stage 5: Mirror to GitLab (main only, after all checks pass)
