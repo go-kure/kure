@@ -100,8 +100,8 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check | Aggregation gate — fails if any required job failed |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches |
-| `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only) |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
+| `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
 | `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
 ### Configuration
@@ -122,6 +122,9 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Sensitive file check** - Warn about potential secrets in code
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
+- **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
+  `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
+  longer vendors its own copies under `site/scripts/`
 
 ### Draft PRs and un-run checks
 
