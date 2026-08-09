@@ -325,7 +325,14 @@ jobs:
   security:
     name: Security
     runs-on: autops-kube-kure
-    timeout-minutes: 5
+    # Was 5 min, sized for -scan package (<60s). -scan symbol replaced it (see the
+    # "Run govulncheck" step) and this repo has already timed out once on a full
+    # symbol scan of this dependency graph (10+ min, commit 700cab3) before a
+    # security-job-specific build cache existed. That cache (added in this PR)
+    # should make repeat runs fast, but a cold/partial cache on a large source
+    # change is the case that bit before — 15 min is headroom for that, not the
+    # expected runtime.
+    timeout-minutes: 15
     needs: [changes]
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
@@ -397,19 +404,32 @@ jobs:
 
     - name: Run govulncheck
       run: |
-        # Human-readable report for the log. Never gates: with a known allowlisted
-        # finding govulncheck exits non-zero, and the gate step below is the sole
-        # enforcement point.
-        ~/go/bin/govulncheck -scan symbol ./... || true
-
-        # Machine-readable scan for gating. In JSON mode govulncheck can exit 0
-        # even with reachable findings, so its exit code is deliberately ignored
-        # here — govulncheck-gate.sh treats an unparseable or empty report as an
-        # error, which is what actually catches a crashed scan.
-        ~/go/bin/govulncheck -scan symbol -format json ./... > govulncheck.json 2> govulncheck.err || true
+        # A separate human-readable `-scan symbol ./...` run used to precede this
+        # one, purely for the log. Dropped: it re-ran the exact same, potentially
+        # slow scan a second time for no signal the gate step below doesn't already
+        # print (every reachable and allowed OSV ID, plus a fix hint).
+        #
+        # In JSON mode a completed scan exits 0 whether or not it found anything
+        # reachable — reachable findings alone do not produce a nonzero exit here.
+        # So a nonzero exit means govulncheck itself failed (package load error,
+        # vuln-db fetch failure, a Go/govulncheck version mismatch, …), and the
+        # report file can still be non-empty, parseable JSON with zero findings in
+        # that case — a silently "clean" result from a scan that never completed.
+        # That is caught here explicitly: the gate can only tell "empty/unparseable"
+        # from "well-formed", not "well-formed but cut short".
+        set +e
+        ~/go/bin/govulncheck -scan symbol -format json ./... > govulncheck.json 2> govulncheck.err
+        scan_rc=$?
+        set -e
+        if [ "$scan_rc" -ne 0 ]; then
+          echo "::error::govulncheck exited $scan_rc — scan did not complete"
+          cat govulncheck.err
+          exit 1
+        fi
         if [ ! -s govulncheck.json ]; then
           echo "::error::govulncheck produced no JSON output"
           cat govulncheck.err
+          exit 1
         fi
 
     - name: Gate on reachable vulnerabilities

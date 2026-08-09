@@ -97,7 +97,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint; caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
-| `security` | `Security` | 5 min | changes | govulncheck (`-scan symbol`, v1.3.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
+| `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.3.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
 | `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, security | Aggregation gate — fails if any required job failed |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
@@ -109,7 +109,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 - Go Version: read from `go.mod` (`go-version-file: go.mod`)
 - Golangci-lint Version: `v2.10.1`
-- govulncheck Version: `v1.1.4` (pinned, cached binary, `-scan package` mode)
+- govulncheck Version: `v1.3.0` (pinned, cached binary, `-scan symbol` mode)
 - Coverage Threshold: `85%`
 
 ### Features
@@ -571,7 +571,7 @@ in launcher: warmed cycles cut `test` ~50%, `build`/`lint` ~30%.
 Tool binaries are also cached to avoid reinstalling on every run:
 - `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
 - `yq` — keyed by pinned version (`4.44.6`)
-- `govulncheck` — keyed by pinned version (`v1.1.4`)
+- `govulncheck` — keyed by pinned version (`v1.3.0`)
 
 Cache and artifact traffic is routed through an in-cluster falcondev cache server backed by
 Garage S3. Two layers work together:
