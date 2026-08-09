@@ -25,6 +25,23 @@ replace (
 	k8s.io/client-go => k8s.io/client-go v0.36.3
 )
 
+// THROWAWAY: one-off proof that the CI vulnerability gate blocks on a real
+// reachable advisory. Forces the already-transitive golang.org/x/text down to
+// v0.3.5, which reintroduces GO-2026-5970 (CVE-2026-56852, infinite loop on
+// invalid input in x/text/unicode/norm) on a call path this repo already
+// ships: pkg/stack/helm/render.go's RenderChart -> renderHTTP -> Helm's HTTP
+// getter -> net/http -> x/net/http2 -> x/net/idna -> x/text/unicode/norm. No
+// synthetic reproducer file needed — this is a real path through code kure
+// already runs, just at a dependency version old enough to be vulnerable.
+//
+// (A plain `go get x/text@v0.3.5` was tried first and cascaded into
+// downgrading cert-manager, cilium and dozens of unrelated requirements,
+// because kure's graph already floors x/text well above v0.3.6 — a replace
+// pins only the resolved version, not anyone else's stated requirement.)
+//
+// Remove this line and its commit once the red run is recorded.
+replace golang.org/x/text => golang.org/x/text v0.3.5
+
 require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.21.1
