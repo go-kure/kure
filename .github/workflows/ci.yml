@@ -229,7 +229,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Check action pins
-      uses: go-kure/.github/.github/actions/check-action-pins@16cb56abeb01d7995a15ab8873814ba96c494d7e # main
+      uses: go-kure/.github/.github/actions/check-action-pins@1793023365e5af6923e9bb6b424fcea1dca1279e # main
 
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
@@ -413,7 +413,7 @@ jobs:
         fi
 
     - name: Gate on reachable vulnerabilities
-      uses: go-kure/.github/.github/actions/govulncheck-gate@main
+      uses: go-kure/.github/.github/actions/govulncheck-gate@1793023365e5af6923e9bb6b424fcea1dca1279e # main
       with:
         report: govulncheck.json
         # Accepted-risk advisories: reachable under symbol scan but not exploitable in
