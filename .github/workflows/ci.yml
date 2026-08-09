@@ -22,7 +22,7 @@ permissions:
 
 env:
   GOLANGCI_LINT_VERSION: 'v2.10.1'
-  GOVULNCHECK_VERSION: 'v1.1.4'
+  GOVULNCHECK_VERSION: 'v1.3.0'
   # The runner binary patch (Runner.Worker.dll) renames all occurrences of
   # ACTIONS_RESULTS_URL to ACTIONS_RESULTS_ORL, including the name the Worker
   # injects into step process environments.  Workflow env overrides runner-injected
@@ -341,7 +341,9 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Install build tools
-      run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
+      run: |
+        command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
+        command -v jq &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends jq)
 
     - name: Set up Go
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -395,31 +397,38 @@ jobs:
 
     - name: Run govulncheck
       run: |
-        set +e
-        OUTPUT=$(~/go/bin/govulncheck -scan package ./... 2>&1)
-        EXIT_CODE=$?
-        echo "$OUTPUT"
+        # Human-readable report for the log. Never gates: with a known allowlisted
+        # finding govulncheck exits non-zero, and the gate step below is the sole
+        # enforcement point.
+        ~/go/bin/govulncheck -scan symbol ./... || true
 
-        if [ $EXIT_CODE -eq 3 ]; then
-          # Exit code 3 = vulnerabilities found; report but do not block CI.
-          # Track and fix via dedicated dependency-update issues.
-          echo "::warning::govulncheck found vulnerabilities — see step summary"
-          {
-            echo "## :shield: govulncheck found vulnerabilities"
-            echo ""
-            echo '```'
-            echo "$OUTPUT"
-            echo '```'
-            echo ""
-            echo "**Action:** Open a dependency-update issue and fix before next release."
-          } >> "$GITHUB_STEP_SUMMARY"
-        elif [ $EXIT_CODE -ne 0 ]; then
-          # Exit code 1/2 = tool error; fail the job.
-          echo "::error::govulncheck failed with exit code $EXIT_CODE"
-          exit $EXIT_CODE
-        else
-          echo ":white_check_mark: **govulncheck** — no vulnerabilities found" >> "$GITHUB_STEP_SUMMARY"
+        # Machine-readable scan for gating. In JSON mode govulncheck can exit 0
+        # even with reachable findings, so its exit code is deliberately ignored
+        # here — govulncheck-gate.sh treats an unparseable or empty report as an
+        # error, which is what actually catches a crashed scan.
+        ~/go/bin/govulncheck -scan symbol -format json ./... > govulncheck.json 2> govulncheck.err || true
+        if [ ! -s govulncheck.json ]; then
+          echo "::error::govulncheck produced no JSON output"
+          cat govulncheck.err
         fi
+
+    - name: Gate on reachable vulnerabilities
+      uses: go-kure/.github/.github/actions/govulncheck-gate@main
+      with:
+        report: govulncheck.json
+        # Accepted-risk advisories: reachable under symbol scan but not exploitable in
+        # kure's use. Every entry MUST name the advisory, the reachable path, and why no
+        # bump clears it. An entry with no justification is a bug, not a waiver.
+        #
+        # GO-2026-5377: privilege escalation in the external-secrets *controller*
+        #   reconciler. kure only imports the apis module for CRD deepcopy/scheme
+        #   registration; every reachable trace runs through generated
+        #   DeepCopyObject/DeepCopyInto boilerplate (pkg/io/runtime.go:54) or package
+        #   init (pkg/kubernetes/externalsecrets/create.go:4), never a reconciler.
+        #   No upstream fix in the Go vuln DB (Fixed in: N/A), and the apis module is
+        #   untagged so no bump can clear it. Same finding, same reasoning as
+        #   launcher's identical allowlist entry — see launcher/docs/github-workflows.md.
+        allowlist: 'GO-2026-5377'
 
     - name: Save Go build cache
       if: success() && steps.gocache.outputs.cache-hit != 'true'
