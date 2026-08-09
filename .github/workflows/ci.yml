@@ -52,8 +52,8 @@ jobs:
       docs: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.docs }}
 
     steps:
-    - uses: actions/checkout@v7
-    - uses: dorny/paths-filter@v4
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
       if: github.event_name != 'merge_group'
       id: filter
       with:
@@ -94,19 +94,19 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
     - name: Set up Go
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -125,7 +125,7 @@ jobs:
     # distinct job prefix so lint and test don't overwrite each other's entry.
     - name: Restore Go build cache
       id: gocache
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
         key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-validate-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-${{ hashFiles('**/*.go', 'go.mod', 'go.sum', 'Makefile', '**/testdata/**') }}
@@ -147,7 +147,7 @@ jobs:
 
     - name: Cache yq
       id: yq-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
         key: yq-4.44.6-linux-amd64
@@ -170,7 +170,7 @@ jobs:
 
     - name: Cache goimports
       id: goimports-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/bin/goimports
         key: goimports-${{ hashFiles('**/go.sum') }}
@@ -216,10 +216,20 @@ jobs:
 
     - name: Save Go build cache
       if: success() && steps.gocache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
         key: ${{ steps.gocache.outputs.cache-primary-key }}
+
+  action-pins:
+    name: action-pins
+    runs-on: autops-kube-kure
+    timeout-minutes: 2
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - name: Check action pins
+      uses: go-kure/.github/.github/actions/check-action-pins@main
 
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
@@ -236,19 +246,19 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Install build tools
       run: command -v gcc &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential)
 
     - name: Set up Go
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -265,7 +275,7 @@ jobs:
     # Source-aware Go build cache (see the validate job for rationale). Distinct prefix.
     - name: Restore Go build cache
       id: gocache
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
         key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-test-race-cover-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-${{ hashFiles('**/*.go', 'go.mod', 'go.sum', 'Makefile', '**/testdata/**') }}
@@ -290,13 +300,13 @@ jobs:
 
     - name: Save Go build cache
       if: success() && steps.gocache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
         key: ${{ steps.gocache.outputs.cache-primary-key }}
 
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       if: always()
       continue-on-error: true
       with:
@@ -305,7 +315,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Upload coverage artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       continue-on-error: true
       with:
         name: coverage
@@ -328,19 +338,19 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
 
     - name: Set up Go
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -349,7 +359,7 @@ jobs:
 
     - name: Cache govulncheck binary
       id: govulncheck-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/bin/govulncheck
         key: govulncheck-${{ env.GOVULNCHECK_VERSION }}
@@ -365,7 +375,7 @@ jobs:
     # helps here too (this job had no build cache before). Distinct prefix.
     - name: Restore Go build cache
       id: gocache
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
         key: ${{ runner.os }}-${{ runner.arch }}-go-${{ steps.go-version.outputs.version }}-gocache-security-deps-${{ hashFiles('go.mod', 'go.sum') }}-src-${{ hashFiles('**/*.go', 'go.mod', 'go.sum', 'Makefile', '**/testdata/**') }}
@@ -413,7 +423,7 @@ jobs:
 
     - name: Save Go build cache
       if: success() && steps.gocache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
         key: ${{ steps.gocache.outputs.cache-primary-key }}
@@ -441,17 +451,17 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Set up Go
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: go.mod
         cache: false
 
     - name: Download coverage artifact
       id: download-coverage
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
       continue-on-error: true
       with:
         name: coverage
@@ -526,7 +536,7 @@ jobs:
         echo "All packages meet the per-package coverage threshold."
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
       with:
         files: ./coverage/coverage.out
         flags: unittests
@@ -535,7 +545,7 @@ jobs:
 
     - name: Comment coverage on PR
       if: github.event_name == 'pull_request'
-      uses: marocchino/sticky-pull-request-comment@v3
+      uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
       with:
         header: coverage
         message: |
@@ -553,7 +563,7 @@ jobs:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, docs-build, coverage-check, doc-gate]
+    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, security]
     if: always()
     steps:
     - name: Check build results
@@ -563,7 +573,9 @@ jobs:
         db="${{ needs.docs-build.result }}"
         cc="${{ needs.coverage-check.result }}"
         dg="${{ needs.doc-gate.result }}"
-        for result in "$vl" "$tt" "$db" "$cc" "$dg"; do
+        ap="${{ needs.action-pins.result }}"
+        sc="${{ needs.security.result }}"
+        for result in "$vl" "$tt" "$db" "$cc" "$dg" "$ap" "$sc"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
             exit 1
@@ -585,7 +597,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Install build tools
       run: command -v make &>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make)
@@ -602,7 +614,7 @@ jobs:
 
     - name: Restore Hugo from cache
       id: hugo-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ${{ runner.temp }}/hugo-bin
         key: hugo-${{ steps.hugo-version.outputs.version }}-linux-amd64
@@ -622,13 +634,13 @@ jobs:
       run: sudo install ${{ runner.temp }}/hugo-bin/hugo /usr/local/bin/hugo
 
     - name: Set up Go
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -636,7 +648,7 @@ jobs:
           ${{ runner.os }}-gomod-
 
     - name: Cache Hugo modules
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ${{ runner.temp }}/hugo_cache
         key: ${{ runner.os }}-hugo-${{ hashFiles('site/go.sum') }}
@@ -645,7 +657,7 @@ jobs:
 
     - name: Cache yq
       id: yq-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
         key: yq-4.44.6-linux-amd64
@@ -680,7 +692,7 @@ jobs:
       run: hugo --config hugo.toml,versions.toml --minify --baseURL "https://www.gokure.dev/kure/"
 
     - name: Upload docs artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: docs-site
         path: site/public/
@@ -688,7 +700,7 @@ jobs:
 
     - name: Cache lychee
       id: lychee-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/lychee
         key: lychee-0.24.2-linux-amd64
@@ -730,13 +742,13 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
 
     - name: Get changed files
       id: changed-files
-      uses: tj-actions/changed-files@v47
+      uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47
       with:
         files: |
           **.go
@@ -784,13 +796,13 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
 
     - name: Cache yq
       id: yq-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
         key: yq-4.44.6-linux-amd64
@@ -827,7 +839,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
 

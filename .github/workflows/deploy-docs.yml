@@ -44,7 +44,7 @@ jobs:
 
     steps:
     - name: Checkout kure repo
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
 
@@ -85,14 +85,14 @@ jobs:
         echo "version=$GO_VER" >> $GITHUB_OUTPUT
 
     - name: Set up Go
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
     - name: Cache yq
       id: yq-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
         key: yq-4.44.6-linux-amd64
@@ -141,7 +141,7 @@ jobs:
         mv public public-root
 
     - name: Checkout go-kure.github.io
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         repository: go-kure/go-kure.github.io
         token: ${{ secrets.DEPLOY_TOKEN }}
