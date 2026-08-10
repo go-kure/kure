@@ -39,6 +39,16 @@ updates:
         update-types:
           - "patch"
 
+      # CloudNativePG — the operator, machinery, barman-cloud and the
+      # plugin move together upstream. Minor is included because no ignore:
+      # entry below blocks CNPG minors, unlike the k8s and fluxcd groups.
+      cnpg-ecosystem:
+        patterns:
+          - "github.com/cloudnative-pg/*"
+        update-types:
+          - "minor"
+          - "patch"
+
       # FluxCD ecosystem — the controller API modules are released together and
       # kure imports them as one surface, so they must be reviewed and bumped as
       # one unit. Ungrouped, a single upstream release arrives as five separate
