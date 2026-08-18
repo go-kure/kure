@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-07-02
+**Last Updated:** 2026-08-18
 
 ---
 
@@ -17,7 +17,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
 | [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major/prerelease), no tag |
 | [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
-| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via claude-max-proxy |
+| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
 
 ---
 
@@ -339,6 +339,10 @@ managed centrally in `go-kure/.github` (`governance/repository-settings-policy.y
 ### Triggers
 
 - Pull requests: `opened`, `synchronize`, `ready_for_review`, `reopened`
+- `merge_group` (no filters): required so this check reports on the merge queue's temporary
+  ref once it becomes a required status check — the queue payload has no `pull_request` field,
+  so the existing draft/fork skip below evaluates false and the job reports `skipped`/success
+  as a no-op
 - Skips draft PRs and fork PRs (self-hosted runner security)
 
 ### How It Works
