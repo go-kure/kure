@@ -3,6 +3,11 @@ name: PR Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
+  # Required so this check reports (as `skipped`/success, via the callee's existing draft/fork
+  # `if:`) on the merge queue's temporary ref. A required context that never triggers stays
+  # pending forever and stalls every queue entry for check_response_timeout_minutes (60), then
+  # ejects it — see governance/repository-settings-policy.yaml and dot-github's Phase 2 plan.
+  merge_group:
 
 permissions:
   contents: read
