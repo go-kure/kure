@@ -45,9 +45,9 @@ release-notes.md
 **/temp/
 
 # Go workspace files are local development state, never repository content.
-# A go.work here carries ../ replace paths that do not exist in CI, and the
-# go.work.sum beside it can supply an h1: hash missing from this repo's own
-# go.sum — masking a broken standalone build until CI (which runs GOWORK=off)
-# fails on "missing go.sum entry".
+# A go.work here can carry ../ replace paths that do not exist outside this
+# machine, and the go.work.sum beside it can supply an h1: hash missing from
+# this repo's own go.sum — masking a broken standalone build until CI, which
+# has no go.work, fails on "missing go.sum entry".
 go.work
 go.work.sum
