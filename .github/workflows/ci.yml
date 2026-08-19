@@ -19,9 +19,9 @@ permissions:
 
 env:
   GOLANGCI_LINT_VERSION: 'v2.10.1'
-  # Kept in step with the Wharf-side pin (meta/versions.env REQUIRED_GOVULNCHECK_VERSION,
-  # ci-templates/go-vuln.yml). Nothing checks the two forges against each other, so a
-  # bump on one side has to be mirrored here by hand.
+  # Several repos across both forges install this same scanner and share the
+  # govulncheck-gate action, but nothing compares their pins. A bump therefore has
+  # to be mirrored by hand in each workflow that installs it, this one included.
   GOVULNCHECK_VERSION: 'v1.7.0'
   # The runner binary patch (Runner.Worker.dll) renames all occurrences of
   # ACTIONS_RESULTS_URL to ACTIONS_RESULTS_ORL, including the name the Worker
