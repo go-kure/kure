@@ -19,7 +19,10 @@ permissions:
 
 env:
   GOLANGCI_LINT_VERSION: 'v2.10.1'
-  GOVULNCHECK_VERSION: 'v1.3.0'
+  # Kept in step with the Wharf-side pin (meta/versions.env REQUIRED_GOVULNCHECK_VERSION,
+  # ci-templates/go-vuln.yml). Nothing checks the two forges against each other, so a
+  # bump on one side has to be mirrored here by hand.
+  GOVULNCHECK_VERSION: 'v1.7.0'
   # The runner binary patch (Runner.Worker.dll) renames all occurrences of
   # ACTIONS_RESULTS_URL to ACTIONS_RESULTS_ORL, including the name the Worker
   # injects into step process environments.  Workflow env overrides runner-injected
