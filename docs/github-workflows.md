@@ -64,7 +64,7 @@ concurrency:
     │
     ▼
 ┌───────────────────┐
-│ coverage-check    │  ← 80% threshold enforcement
+│ coverage-check    │  ← 90% total + 90% per-package enforcement
 └─────────┬─────────┘
           │
     │
@@ -95,7 +95,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.7.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
-| `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
+| `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, security | Aggregation gate — fails if any required job failed |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
@@ -107,7 +107,10 @@ temporary branch — the merged result — before the PR is allowed to land.
 - Go Version: read from `go.mod` (`go-version-file: go.mod`)
 - Golangci-lint Version: `v2.10.1`
 - govulncheck Version: `v1.7.0` (pinned, cached binary, `-scan symbol` mode)
-- Coverage Threshold: `85%`
+- Coverage Threshold (total): `90%` — the overall figure from `go tool cover -func`
+- Coverage Threshold (per-package): `90%` — checked separately for every package, and a single
+  package below it fails the job even when the total passes. Packages whose import path contains
+  `/examples/` are exempt.
 
 ### Features
 
