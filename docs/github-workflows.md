@@ -125,9 +125,9 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 ### Draft PRs
 
-No job carries a `draft == false` condition (removed 2026-08-19 for parity with the GitLab
-original this workflow was ported from, `meta/ci-templates/mr-review.yml` in `autops/wharf`,
-which reviews/tests every merge-request pipeline regardless of draft status). A draft PR gets
+No job carries a `draft == false` condition (removed 2026-08-19 for parity with the downstream
+GitLab CI template this workflow was ported from, which reviews/tests every merge-request
+pipeline regardless of draft status). A draft PR gets
 the identical `lint`/`test`/`Security`/`coverage-check`/`build` run as a ready one; draft blocks
 merge only, via branch protection — it does not change what CI runs.
 
