@@ -117,7 +117,8 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **gotestfmt** - Nice formatted test output
 - **Fail fast** - Jobs depend on validate, so lint failure stops everything
 - **Artifact sharing** - Coverage is uploaded as an artifact and reused by `coverage-check`; upload,
-  download, and missing-file failures are blocking so the coverage gates cannot pass without data
+  download, missing-file, and invalid-profile failures are blocking so the coverage gates cannot
+  pass without valid data
 - **PR comments** - Coverage report comment on PRs
 - **Runs on draft PRs** - no draft gate on any job (see [below](#draft-prs))
 - **Sensitive file check** - Print at most ten potential matches and emit one warning only when
