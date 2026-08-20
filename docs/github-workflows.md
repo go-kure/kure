@@ -116,10 +116,12 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 - **gotestfmt** - Nice formatted test output
 - **Fail fast** - Jobs depend on validate, so lint failure stops everything
-- **Artifact sharing** - Coverage uploaded as artifact, reused by coverage-check; both upload and download use `continue-on-error: true` to tolerate `ACTIONS_RESULTS_URL` failures on in-cluster ARC runners
+- **Artifact sharing** - Coverage is uploaded as an artifact and reused by `coverage-check`; upload,
+  download, and missing-file failures are blocking so the coverage gates cannot pass without data
 - **PR comments** - Coverage report comment on PRs
 - **Runs on draft PRs** - no draft gate on any job (see [below](#draft-prs))
-- **Sensitive file check** - Warn about potential secrets in code
+- **Sensitive file check** - Print at most ten potential matches and emit one warning only when
+  matches exist; this check remains informational and does not block CI
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
