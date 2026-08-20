@@ -497,7 +497,15 @@ jobs:
           echo "::error::Coverage artifact not available"
           exit 1
         fi
-        COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+        if ! COVERAGE_REPORT=$(go tool cover -func=coverage/coverage.out); then
+          echo "::error::Coverage profile is invalid"
+          exit 1
+        fi
+        COVERAGE=$(printf '%s\n' "$COVERAGE_REPORT" | awk 'END { gsub(/%/, "", $3); print $3 }')
+        if ! [[ "$COVERAGE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+          echo "::error::Could not parse total coverage from coverage profile"
+          exit 1
+        fi
         THRESHOLD=90
         PKG_THRESHOLD=90
         echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
