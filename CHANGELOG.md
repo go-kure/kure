@@ -360,7 +360,7 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
-- Add crane state analysis review (2026-05-06)
+- Add downstream consumer state analysis review (2026-05-06)
 - Note that GenerateFluxInstance does not check config.Enabled
 - Add Namespace builder section to README
 - Add OCI HelmRepository example to README
@@ -725,7 +725,7 @@ All notable changes to this project will be documented in this file.
 
 - Explicitly enable unused linter (#288)
 - Document gosimple inclusion via staticcheck (#290)
-- Align golangci-lint config with Crane linter set (#293)
+- Align golangci-lint config with the downstream consumer linter set (#293)
 
 ### Testing
 
@@ -830,7 +830,7 @@ All notable changes to this project will be documented in this file.
 ### Maintenance
 
 - Bump the actions group with 2 updates
-- Align golangci-lint config with Wharf standard
+- Align golangci-lint config with the downstream platform standard
 - Replace generic code review with two-pass PR review workflow
 - Bump the actions group with 3 updates
 - Add CNPG to versions.yaml and dependency governance
@@ -1065,8 +1065,8 @@ All notable changes to this project will be documented in this file.
 - Add task #1 for CEL validation enhancement
 - Add workflow guidelines to tasks.md
 - Remove references to non-existent demo-internals make target
-- Add HPA and PDB builder tasks for Crane OAM support
-- Add Crane integration documentation
+- Add HPA and PDB builder tasks for downstream OAM support
+- Add downstream consumer integration documentation
 - Add tasks README and update task 03 status
 - Add quickstart guide
 - Expand README with end-to-end examples
@@ -1113,7 +1113,7 @@ All notable changes to this project will be documented in this file.
 - Update Claude settings - always save to .claude/settings.json
 - Go fmt
 - Standardize Go version and improve workflow organization
-- Align repo with crane scaffold and wharf standards
+- Align repo with the downstream scaffold and platform standards
 - Enhance dependabot configuration
 - Migrate tasks to GitHub issues
 - Bump the actions group across 1 directory with 7 updates
@@ -1141,5 +1141,4 @@ All notable changes to this project will be documented in this file.
 - Add setter function tests for internal packages
 - Add comprehensive IO table and printer tests
 - Add comprehensive appworkload internal tests
-
 

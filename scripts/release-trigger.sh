@@ -11,7 +11,7 @@
 #
 # The script shows a dry-run preview, then exits. Pass --do-it to trigger CI.
 #
-# See: https://gitlab.com/autops/wharf/meta/-/blob/main/standards/release-process.md
+# See: https://github.com/go-kure/.github/blob/main/standards/release-process.md
 
 set -eu
 

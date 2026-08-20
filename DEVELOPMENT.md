@@ -297,7 +297,7 @@ Key environment variables the Makefile respects:
 
 ### Active Linters
 
-The `.golangci.yml` enables these linters, aligned with Crane and the Wharf standard (`meta/standards/golangci-lint.md`):
+The `.golangci.yml` enables these linters, aligned with the shared Go standard:
 
 | Linter | Category | Purpose |
 |--------|----------|---------|
@@ -371,41 +371,19 @@ bash site/scripts/check-mounts.sh
 mise run site:build
 ```
 
-## Crane Integration
+## Consumer Compatibility
 
-Kure is a dependency of the Crane project (`~/src/autops/wharf/crane`).
+Kure's public packages are consumed by external projects. Keep public APIs stable when possible,
+describe integration requirements as reusable library capabilities, and follow the organization
+API stability contract for deprecations or breaking changes.
 
-### Relationship
-
-- **Crane** transforms OAM → Kure domain model → Kubernetes manifests
-- **Kure** provides the domain model and manifest generation engine
-- Both repos are **co-developed** with local replace directives
-
-### Key Files
-
-- Crane's requirements: `~/src/autops/wharf/crane/PLAN.md`
-- Crane's agent guide: `~/src/autops/wharf/crane/AGENTS.md`
-
-### When Making Changes
-
-1. Check if change affects Crane's integration
-2. Keep public API (`pkg/stack/`) stable when possible
-3. Update Crane if breaking changes are necessary
-4. Test with `go mod tidy` in Crane to verify compatibility
-
-### Go Workspaces
-
-Crane uses Go workspaces for local development. The workspace file lives in the parent directory:
+For local co-development, a consumer can use a Go workspace without adding a committed replace
+directive:
 
 ```bash
-# From wharf/ directory
 go work init
-go work use ./crane ./kure
+go work use ./kure ./consumer
 ```
 
-This allows Crane to use your local Kure changes without pushing.
-
-**Before pushing Kure changes that Crane depends on:**
-1. Push Kure changes first
-2. In Crane: `GOWORK=off go get github.com/go-kure/kure@main`
-3. Commit the updated go.mod/go.sum in Crane
+Before publishing a Kure change needed by a consumer, verify Kure with `GOWORK=off`, then update
+and verify the consumer against the released Kure version in its own repository.

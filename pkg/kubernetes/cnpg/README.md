@@ -6,7 +6,7 @@ The `cnpg` package provides strongly-typed constructor functions for creating Cl
 
 ## Overview
 
-Each function takes a configuration struct and returns a fully initialized custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification.
+Each function takes a configuration struct and returns a fully initialized custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification. Domain-friendly option structs keep operator API types out of consumer configuration.
 
 ## Supported Resources
 

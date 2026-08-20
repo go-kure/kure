@@ -63,17 +63,16 @@ concurrency:
 └───┬───┘ └───────────┘
     │
     ▼
-┌───────────────────┐
-│ coverage-check    │  ← 90% total + 90% per-package enforcement
-└─────────┬─────────┘
-          │
-    │
-    ▼
-┌───────┐
-│ build │  ← Aggregation gate
-└───┬───┘
-    │
-    ▼
+┌───────────────────┐   ┌───────────────────┐
+│ coverage-check    │   │ forbidden-terms   │  ← Unconditional full-tree policy guard
+└─────────┬─────────┘   └─────────┬─────────┘
+          └────────────┬───────────┘
+                       ▼
+                 ┌───────┐
+                 │ build │  ← Aggregation gate
+                 └───┬───┘
+                     │
+                     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ mirror-to-gitlab (main push only, after all checks)         │
 └─────────────────────────────────────────────────────────────┘
@@ -93,10 +92,11 @@ temporary branch — the merged result — before the PR is allowed to land.
 |-----|------------|---------|--------------|---------|
 | `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint; caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
+| `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.7.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
-| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, security | Aggregation gate — fails if any required job failed |
+| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
 | `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
@@ -111,6 +111,8 @@ temporary branch — the merged result — before the PR is allowed to land.
 - Coverage Threshold (per-package): `90%` — checked separately for every package, and a single
   package below it fails the job even when the total passes. Packages whose import path contains
   `/examples/` are exempt.
+- GitLab mirror URL: repository variable `GITLAB_MIRROR_URL`; the deploy key remains in the
+  `GITLAB_DEPLOY_KEY` repository secret.
 
 ### Features
 
@@ -128,6 +130,9 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
   `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
   longer vendors its own copies under `site/scripts/`
+- **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
+  tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
+  action
 
 ### Draft PRs
 

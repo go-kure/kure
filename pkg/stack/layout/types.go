@@ -134,7 +134,7 @@ type LayoutRules struct {
 	// (Namespace has no path separator) with no own Resources.
 	//
 	// Typical case: flat single-bundle apps where the caller wraps the bundle
-	// in an extra Node (e.g. crane's "apps" Node). Multi-tier apps with sub-
+	// in an extra Node (e.g. the caller's "apps" Node). Multi-tier apps with sub-
 	// Kustomizations are unaffected — the collapse rules require the
 	// intermediate to be terminal.
 	//

@@ -14,7 +14,7 @@
 | 3 | refactor: enable unused linter and remove dead code | refactor | medium | 3 | medium | create |
 | 4 | security: enable gosec linter for automated security scanning | security | high | 3 | medium | create |
 | 5 | refactor: enable gosimple linter and simplify flagged code | refactor | low | 3 | low | create |
-| 6 | refactor: align golangci-lint config with crane linter set | refactor | medium | 3 | medium | create |
+| 6 | refactor: align golangci-lint config with the downstream consumer linter set | refactor | medium | 3 | medium | create |
 | 7 | chore: document k8s.io replace directives in go.mod | chore | low | 3 | low | create |
 | 8 | docs: add doc.go examples for CRD builder packages | docs | medium | 4 | low | create |
 | 9 | docs: add integration example (Cluster-to-Disk pipeline) | docs | medium | 4 | medium | create |
@@ -62,7 +62,7 @@ The following 22 action plan items map directly to 40 existing GitHub issues. No
 
 - **Labels**: `type/refactor`, `priority/high`, `phase/3`, `effort/high`
 - **Blocked by**: none
-- **Blocks**: "refactor: align golangci-lint config with crane linter set"
+- **Blocks**: "refactor: align golangci-lint config with the downstream consumer linter set"
 - **Fleet phase**: 3
 - **Existing issue**: none
 - **Dedup recommendation**: create
@@ -71,7 +71,7 @@ The following 22 action plan items map directly to 40 existing GitHub issues. No
 
 The deep code review's top recommendation is enabling the `errcheck` linter. The current `.golangci.yml` disables it with the comment "Too many unchecked errors in existing code," which indicates accumulated technical debt. `errcheck` is the most impactful Go linter — it catches unhandled errors that become silent failures at runtime.
 
-Crane's `.golangci.yml` already enables `errcheck`. Enabling it in kure achieves lint parity across the wharf fleet's Go repositories and eliminates a class of latent bugs. The deep review's lint assessment rated this area 3 out of 5 stars — the only area of the codebase below 4 stars — specifically because 18 linters are disabled while only 6 are enabled.
+The downstream consumer's `.golangci.yml` already enables `errcheck`. Enabling it in kure achieves lint parity across the downstream fleet's Go repositories and eliminates a class of latent bugs. The deep review's lint assessment rated this area 3 out of 5 stars — the only area of the codebase below 4 stars — specifically because 18 linters are disabled while only 6 are enabled.
 
 This is the highest-effort lint item due to the volume of violations implied by the disable comment. The fix should be done as a single dedicated PR containing only errcheck fixes to keep the diff reviewable and bisectable.
 
@@ -87,7 +87,7 @@ This is the highest-effort lint item due to the volume of violations implied by 
 ### Dependencies
 
 - **Requires**: none
-- **Cross-repo**: crane already enables errcheck (reference config); meta should document kure's lint baseline once aligned
+- **Cross-repo**: the downstream consumer already enables errcheck (reference config); meta should document kure's lint baseline once aligned
 
 ---
 
@@ -95,14 +95,14 @@ This is the highest-effort lint item due to the volume of violations implied by 
 
 - **Labels**: `type/refactor`, `priority/high`, `phase/3`, `effort/low`
 - **Blocked by**: none
-- **Blocks**: "refactor: align golangci-lint config with crane linter set"
+- **Blocks**: "refactor: align golangci-lint config with the downstream consumer linter set"
 - **Fleet phase**: 3
 - **Existing issue**: none
 - **Dedup recommendation**: create
 
 ### Description
 
-The `ineffassign` linter detects assignments to variables that are immediately overwritten without being read. These are often real bugs where a computed value is silently discarded. The deep code review flags this as "should be enabled" and notes that crane already enables it.
+The `ineffassign` linter detects assignments to variables that are immediately overwritten without being read. These are often real bugs where a computed value is silently discarded. The deep code review flags this as "should be enabled" and notes that the downstream consumer already enables it.
 
 The violation count is expected to be low since `ineffassign` catches logical errors that are typically few in number. This makes it a high-value, low-effort lint enablement. It can be done in parallel with the `errcheck` item or sequentially for reviewability.
 
@@ -125,7 +125,7 @@ The violation count is expected to be low since `ineffassign` catches logical er
 
 - **Labels**: `type/refactor`, `priority/medium`, `phase/3`, `effort/medium`
 - **Blocked by**: none
-- **Blocks**: "refactor: align golangci-lint config with crane linter set"
+- **Blocks**: "refactor: align golangci-lint config with the downstream consumer linter set"
 - **Fleet phase**: 3
 - **Existing issue**: none
 - **Dedup recommendation**: create
@@ -156,7 +156,7 @@ Some utility functions may be genuinely needed for the public API surface in `pk
 
 - **Labels**: `type/security`, `priority/high`, `phase/3`, `effort/medium`
 - **Blocked by**: none
-- **Blocks**: "refactor: align golangci-lint config with crane linter set"
+- **Blocks**: "refactor: align golangci-lint config with the downstream consumer linter set"
 - **Fleet phase**: 3
 - **Existing issue**: none
 - **Dedup recommendation**: create
@@ -189,7 +189,7 @@ After enabling, triage findings into genuine issues (fix them) and false positiv
 
 - **Labels**: `type/refactor`, `priority/low`, `phase/3`, `effort/low`
 - **Blocked by**: none
-- **Blocks**: "refactor: align golangci-lint config with crane linter set"
+- **Blocks**: "refactor: align golangci-lint config with the downstream consumer linter set"
 - **Fleet phase**: 3
 - **Existing issue**: none
 - **Dedup recommendation**: create
@@ -216,7 +216,7 @@ Most `gosimple` suggestions genuinely improve clarity and align with Go communit
 
 ---
 
-## Issue 6: refactor: align golangci-lint config with crane linter set
+## Issue 6: refactor: align golangci-lint config with the downstream consumer linter set
 
 - **Labels**: `type/refactor`, `priority/medium`, `phase/3`, `effort/medium`
 - **Blocked by**: "enable errcheck", "enable ineffassign", "enable unused", "enable gosec", "enable gosimple"
@@ -227,15 +227,15 @@ Most `gosimple` suggestions genuinely improve clarity and align with Go communit
 
 ### Description
 
-After enabling the five core linters (errcheck, ineffassign, unused, gosec, gosimple), incrementally enable the additional linters that crane's `.golangci.yml` uses. The deep code review identifies that crane enables: `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, and `whitespace` in addition to the baseline linters.
+After enabling the five core linters (errcheck, ineffassign, unused, gosec, gosimple), incrementally enable the additional linters that the downstream consumer's `.golangci.yml` uses. The deep code review identifies that the downstream consumer enables: `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, and `whitespace` in addition to the baseline linters.
 
-Enable each linter one at a time, fixing violations in dedicated commits (or small PRs) to keep diffs reviewable. This achieves lint parity across the wharf fleet's Go repositories (crane, kure, pkg). Once complete, the active linter set should be documented in `DEVELOPMENT.md` for contributor reference.
+Enable each linter one at a time, fixing violations in dedicated commits (or small PRs) to keep diffs reviewable. This achieves lint parity across the downstream fleet's Go repositories. Once complete, the active linter set should be documented in `DEVELOPMENT.md` for contributor reference.
 
-The fleet plan's consolidated phase plan (item #46) calls for kure lint alignment with crane in Phase 3, after the individual linter enablements.
+The fleet plan's consolidated phase plan (item #46) calls for kure lint alignment with the downstream consumer in Phase 3, after the individual linter enablements.
 
 ### Acceptance Criteria
 
-- [ ] All linters from crane's `.golangci.yml` enabled in kure: `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, `whitespace`
+- [ ] All linters from the downstream consumer's `.golangci.yml` enabled in kure: `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, `whitespace`
 - [ ] Zero violations across all newly enabled linters
 - [ ] Active linter set documented in `DEVELOPMENT.md` (or `docs/development/`)
 - [ ] Tests pass: `make verify`
@@ -244,7 +244,7 @@ The fleet plan's consolidated phase plan (item #46) calls for kure lint alignmen
 ### Dependencies
 
 - **Requires**: Issues 1-5 (errcheck, ineffassign, unused, gosec, gosimple must be completed first)
-- **Cross-repo**: crane's `.golangci.yml` is the reference config; meta should document the fleet lint baseline after alignment
+- **Cross-repo**: the downstream consumer's `.golangci.yml` is the reference config; meta should document the fleet lint baseline after alignment
 
 ---
 
@@ -399,7 +399,7 @@ Add an example showing the preferred pattern vs the discouraged pattern to make 
 
 At 6,535 lines of source code, `pkg/launcher` is the largest single package in kure. The deep code review identifies that `interfaces.go` defines 9 distinct interfaces — `PackageLoader`, `Resolver`, `PatchProcessor`, `SchemaGenerator`, `Validator`, `Builder`, and others — each representing a clear boundary within the package. The review recommends splitting into sub-packages such as `launcher/loader`, `launcher/resolver`, and `launcher/builder` (or similar groupings based on the interface boundaries).
 
-Splitting improves navigability, testability, and allows consumers to import only the interfaces they need. It also makes the package's internal architecture self-documenting through the directory structure. However, this is a **breaking change** for crane, which imports `pkg/launcher` directly — crane's imports must be updated in a coordinated PR.
+Splitting improves navigability, testability, and allows consumers to import only the interfaces they need. It also makes the package's internal architecture self-documenting through the directory structure. However, this is a **breaking change** for the downstream consumer, which imports `pkg/launcher` directly — the downstream consumer's imports must be updated in a coordinated PR.
 
 The split should preserve all existing public types and functions (no removed API surface). Tests should be moved to their new package locations and continue to pass. Internal implementation details can be restructured freely.
 
@@ -409,14 +409,14 @@ The split should preserve all existing public types and functions (no removed AP
 - [ ] All existing tests pass in their new package locations
 - [ ] Public API surface preserved — no removed types or functions
 - [ ] `internal/` implementation details restructured as appropriate
-- [ ] Crane's imports updated in a coordinated PR
+- [ ] The downstream consumer's imports updated in a coordinated PR
 - [ ] Tests pass: `make verify`
 - [ ] No regressions in existing functionality
 
 ### Dependencies
 
 - **Requires**: none (Phase 5 strategic item)
-- **Cross-repo**: crane imports `pkg/launcher` — import paths will change; requires a coordinated crane PR
+- **Cross-repo**: the downstream consumer imports `pkg/launcher` — import paths will change and require a coordinated consumer PR
 
 ---
 
@@ -463,7 +463,7 @@ This is a code clarity improvement with no behavioral change.
 
 ### Description
 
-The deep code review notes the `v1alpha1` package (1,278 lines of converters and serialization) and raises the question of when it graduates to `v1beta1` or `v1`. Kure's public API surface is growing with builder promotions (#241), and the `v1alpha1` label sets expectations about stability. Without a documented graduation path, consumers (primarily crane) cannot plan for the eventual API migration.
+The deep code review notes the `v1alpha1` package (1,278 lines of converters and serialization) and raises the question of when it graduates to `v1beta1` or `v1`. Kure's public API surface is growing with builder promotions (#241), and the `v1alpha1` label sets expectations about stability. Without a documented graduation path, consumers (primarily the downstream consumer) cannot plan for the eventual API migration.
 
 This is a **planning document only** — no code changes required. Define graduation criteria such as: stability duration (e.g., 6 months without breaking changes), API coverage threshold, consumer count, and test coverage requirements. Document the timeline and inventory of breaking changes that graduation would introduce.
 
@@ -480,7 +480,7 @@ The planning should happen after the builder promotion (#241) is complete, since
 ### Dependencies
 
 - **Requires**: #241 (promote internal K8s builders) should be completed first to finalize the public API surface
-- **Cross-repo**: crane uses `v1alpha1` types — graduation is a breaking change requiring coordinated migration
+- **Cross-repo**: the downstream consumer uses `v1alpha1` types — graduation is a breaking change requiring coordinated migration
 
 ---
 

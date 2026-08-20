@@ -29,6 +29,7 @@ Each level maps to a concept in GitOps deployment:
 ### Cluster
 
 The root of the hierarchy, representing a complete cluster configuration.
+Exported fields remain available for compatibility, while getter and setter methods support consumers that prefer method-based access.
 
 ```go
 cluster := stack.NewCluster("production", rootNode)

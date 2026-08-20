@@ -21,7 +21,7 @@ import (
 //     particularly useful in tests, internal code, and YAML
 //     serialization/deserialization (struct tags operate on exported fields).
 //   - Getter/setter methods provide an encapsulated API surface for library
-//     consumers (e.g. Crane) who may prefer method-based access or who want
+//     consumers who may prefer method-based access or who want
 //     to program against a future interface without depending on concrete
 //     field layout.
 //

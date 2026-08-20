@@ -431,7 +431,7 @@ func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
 
 // TestWriteToTar_NamespaceDot_TarRoot verifies that Namespace:"." on a layout
 // node produces paths relative to the archive root (no extra prefix directory).
-// This is the convention used by crane when emitting OCI artifact layouts;
+// This is the convention used by OCI artifact producers;
 // see docs/oci-layout.md §Kure responsibilities.
 func TestWriteToTar_NamespaceDot_TarRoot(t *testing.T) {
 	child := &ManifestLayout{
@@ -740,7 +740,7 @@ func fileNames(files map[string][]byte) []string {
 // TestWriteToTar_NoDuplicateFluxEntries guards against the duplicate-entry bug
 // in WriteToTar: when a Kustomization CR is in Resources AND the same child
 // appears in Children, the kustomization.yaml must reference the file only once.
-// Crane uses WriteToTar for OCI artifacts — skipping this path leaves production broken.
+// OCI artifact producers use WriteToTar, so skipping this path leaves production broken.
 func TestWriteToTar_NoDuplicateFluxEntries(t *testing.T) {
 	cr := &unstructured.Unstructured{}
 	cr.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")

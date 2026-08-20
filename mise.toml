@@ -66,7 +66,7 @@ run = "bash site/scripts/build.sh"
 description = "Validate code↔docs mapping against docs-map.yaml"
 # Canonical script lives in go-kure/.github; kure no longer vendors a copy. Reads it
 # out of the sibling checkout's origin/main — in the standard workspace every repo
-# sits under wharf/, with go-kure/.github cloned as ../dot-github (the leading dot
+# sits under a common parent, with go-kure/.github cloned as ../dot-github (the leading dot
 # would collide as a directory name otherwise). That checkout may be parked on any
 # branch, hence the fetch+archive instead of a bare path into its working tree.
 run = """

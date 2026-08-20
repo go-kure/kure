@@ -229,6 +229,29 @@ jobs:
     - name: Check action pins
       uses: go-kure/.github/.github/actions/check-action-pins@1793023365e5af6923e9bb6b424fcea1dca1279e # main
 
+  forbidden-terms:
+    name: forbidden-terms
+    runs-on: autops-kube-kure
+    timeout-minutes: 2
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    # This job has no path or event filter: full-tree PR and merge-queue scans
+    # must use identical scope.
+    - name: Check for downstream references
+      uses: go-kure/.github/.github/actions/check-forbidden-terms@0dcc16c25857eff4c08609db3b6155b963820fc8 # main
+
+    - name: Checkout canonical guard
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        repository: go-kure/.github
+        ref: 0dcc16c25857eff4c08609db3b6155b963820fc8
+        path: .tmp/go-kure-dot-github
+
+    - name: Verify vendored guard matches canonical
+      run: diff -u .tmp/go-kure-dot-github/scripts/check-forbidden-terms.sh site/scripts/check-forbidden-terms.sh
+
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
   # =============================================================================
@@ -593,7 +616,7 @@ jobs:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, security]
+    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security]
     if: always()
     steps:
     - name: Check build results
@@ -604,7 +627,12 @@ jobs:
         cc="${{ needs.coverage-check.result }}"
         dg="${{ needs.doc-gate.result }}"
         ap="${{ needs.action-pins.result }}"
+        ft="${{ needs.forbidden-terms.result }}"
         sc="${{ needs.security.result }}"
+        if [ "$ft" != "success" ]; then
+          echo "Forbidden-terms job did not succeed (result: $ft)"
+          exit 1
+        fi
         for result in "$vl" "$tt" "$db" "$cc" "$dg" "$ap" "$sc"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
@@ -874,8 +902,14 @@ jobs:
     - name: Push to GitLab mirror
       env:
         GITLAB_DEPLOY_KEY: ${{ secrets.GITLAB_DEPLOY_KEY }}
+        GITLAB_MIRROR_URL: ${{ vars.GITLAB_MIRROR_URL }}
       run: |
         set -euo pipefail
+
+        if [ -z "$GITLAB_MIRROR_URL" ]; then
+          echo "::error::GITLAB_MIRROR_URL repository variable is not configured"
+          exit 1
+        fi
 
         # SSH setup
         mkdir -p ~/.ssh
@@ -884,7 +918,7 @@ jobs:
         ssh-keyscan -t ed25519 gitlab.com >> ~/.ssh/known_hosts 2>/dev/null
 
         # Add GitLab remote
-        git remote add gitlab git@gitlab.com:autops/wharf/kure.git
+        git remote add gitlab "$GITLAB_MIRROR_URL"
 
         # Divergence detection
         echo "Fetching GitLab main branch for comparison..."

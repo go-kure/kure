@@ -23,5 +23,5 @@ jobs:
   pr-review:
     uses: go-kure/.github/.github/workflows/pr-review.yml@main
     with:
-      pr_review_context: "Go library for programmatically building Kubernetes resources. Uses typed builders instead of templates. Part of the Wharf platform."
+      pr_review_context: "Upstream Go library for programmatically building Kubernetes resources. Uses typed builders instead of templates."
     secrets: inherit
