@@ -67,7 +67,7 @@ Major bumps (e.g., v1 → v2) likely have breaking API changes.
 2. Assess impact on all callers (check with `grep -r` for imports)
 3. Update code to use new APIs
 4. Update `versions.yaml` and documentation
-5. Consider impact on Crane (see `AGENTS.md` § Crane Integration)
+5. Consider impact on external consumers (see `AGENTS.md` § Consumer Compatibility)
 
 ## Coordinated Upgrade Rules
 

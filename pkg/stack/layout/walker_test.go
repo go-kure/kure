@@ -1104,8 +1104,8 @@ func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter(t *testing.T) {
 
 // TestWalkCluster_ClusterName_UnnamedRoot_Augmenter_WriteToDisk is the
 // writer-level regression for the synthetic-root case via the
-// ManifestLayout.WriteToDisk method path (used by crane runtime via
-// WriteToTar and by the test harness via WriteToDisk). When all apps in
+// ManifestLayout.WriteToDisk method path (used by archive-producing runtimes
+// via WriteToTar and by the test harness via WriteToDisk). When all apps in
 // the unnamed root become augmenter-driven per-app sub-layouts, the
 // synthetic root has Children but zero local Resources; the writer must
 // still emit a kustomization.yaml that references those children so
@@ -1162,8 +1162,8 @@ func TestWalkCluster_ClusterName_UnnamedRoot_Augmenter_WriteToDisk(t *testing.T)
 // Note: WriteManifest (write.go) intentionally skips the synthetic-root
 // kustomization.yaml when the root has no local files (see
 // TestWriteManifest_ClusterRootEmptyContainerNoKustomization). That writer is
-// not used by crane runtime; ManifestLayout.WriteToDisk and WriteToTar — the
-// writers crane uses — always emit synthetic-root kustomization.yaml when
+// not used by archive-producing runtimes; ManifestLayout.WriteToDisk and
+// WriteToTar always emit synthetic-root kustomization.yaml when
 // children exist, which is what the *_WriteToDisk test above asserts.
 
 // TestWalkClusterByPackage_NodeOnly_Augmenter is the WalkClusterByPackage
@@ -1417,7 +1417,7 @@ func collectTarNames(t *testing.T, r io.Reader) []string {
 }
 
 // multiTierUmbrellaCluster builds a single named root node whose bundle is an
-// umbrella with two tier children — the shape crane produces for a multi-tier
+// umbrella with two tier children — the shape a multi-tier producer emits for an
 // OAM app (root Node.Name == app name; tiers as umbrella children).
 func multiTierUmbrellaCluster(rootName string) *stack.Cluster {
 	services := &stack.Bundle{Name: "platform-services", Applications: []*stack.Application{makeUmbrellaApp("svc", "cm-svc")}}
@@ -1430,7 +1430,7 @@ func multiTierUmbrellaCluster(rootName string) *stack.Cluster {
 	return &stack.Cluster{Name: rootName, Node: &stack.Node{Name: rootName, Bundle: umbrella}}
 }
 
-// TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest is the crane#239
+// TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest is the equal-root-name
 // regression guard: when ClusterName == root Node.Name the layout must collapse
 // to a single <name>/ level (not <name>/<name>/), the synthetic cluster wrapper
 // must be elided, and WriteToTar must not emit a duplicate kustomization.yaml.
@@ -1459,7 +1459,7 @@ func TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest(t *testing.T) {
 	// No layout in the tree may double-nest the app segment.
 	for _, p := range collectRepoPaths(ml) {
 		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
-			t.Errorf("double-nested layout path %q (crane#239 regression)", p)
+			t.Errorf("double-nested layout path %q (equal-root-name regression)", p)
 		}
 	}
 
@@ -1496,7 +1496,7 @@ func TestWalkCluster_ClusterNameEqualsNodeName_NoDoubleNest(t *testing.T) {
 			hasServicesDir = true
 		}
 		if n == "platform/platform/" || strings.HasPrefix(n, "platform/platform/") {
-			t.Errorf("tar contains double-nested path %q (crane#239 regression)", n)
+			t.Errorf("tar contains double-nested path %q (equal-root-name regression)", n)
 		}
 	}
 	if rootKust != 1 {
@@ -1544,7 +1544,7 @@ func TestWalkCluster_ClusterNameEqualsNodeName_ChildNode(t *testing.T) {
 
 	for _, p := range collectRepoPaths(ml) {
 		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
-			t.Errorf("double-nested layout path %q (crane#239 regression)", p)
+			t.Errorf("double-nested layout path %q (equal-root-name regression)", p)
 		}
 	}
 
@@ -1564,7 +1564,7 @@ func TestWalkCluster_ClusterNameEqualsNodeName_ChildNode(t *testing.T) {
 }
 
 // TestWalkCluster_ClusterNameDot_ProductionShape proves the fix does NOT alter
-// the production layout shape (crane app.compile uses ClusterName="."): the
+// the production layout shape used by callers that set ClusterName=".": the
 // cluster wrapper is kept (root kustomization.yaml at the archive root), the
 // umbrella roots at platform/, and there is no platform/platform/.
 func TestWalkCluster_ClusterNameDot_ProductionShape(t *testing.T) {

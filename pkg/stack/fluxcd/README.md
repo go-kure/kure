@@ -133,6 +133,8 @@ Controls where Flux Kustomization resources are placed:
 - `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout node (incl. augmenter-added child layouts), placed alongside its manifests; children referenced as `kustomization-<child>.yaml` CR files. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle/node boundaries only**; a bundle's interior (incl. augmenter-added child layouts) is a single kustomize build, with children referenced as directories. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
+External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
+
 ## Umbrella Bundles
 
 A `Bundle` with a non-empty `Children` slice becomes an **umbrella**: a parent

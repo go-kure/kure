@@ -166,8 +166,8 @@ func TestSetNamespacePSALabels_SkipEmpty(t *testing.T) {
 	}
 }
 
-func TestSetNamespacePSALabels_CranePattern(t *testing.T) {
-	// Mirrors the pattern used in crane's namespace.go: enforce+warn+audit all "restricted", no version
+func TestSetNamespacePSALabels_CommonPattern(t *testing.T) {
+	// Exercises the common enforce+warn+audit pattern: all "restricted", no version.
 	ns := CreateNamespace("myapp")
 	SetNamespacePSALabels(ns, PSARestricted, PSARestricted, PSARestricted, "")
 

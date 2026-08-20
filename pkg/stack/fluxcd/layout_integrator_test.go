@@ -849,7 +849,7 @@ func TestAugmenterChildrenNoDuplicateInKustomizationYAML(t *testing.T) {
 }
 
 // TestAugmenterChildrenWriteToTar verifies no duplicate entries in the tar
-// output. Crane consumes WriteToTar for OCI artifacts.
+// output used by OCI artifact consumers.
 func TestAugmenterChildrenWriteToTar(t *testing.T) {
 	root, nodeLayout, app, preInstall, _, cluster := buildAugmenterTestTree()
 
@@ -1026,7 +1026,7 @@ func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
 // buildUmbrellaAugmenterTree constructs a layout+cluster tree simulating
 // helm-multi-tier with FluxIntegratedPerLayout: a platform umbrella node with a
 // platform-apps umbrella child layout, which has a redis sub-layout added by
-// Crane's helmchart augmenter (invisible to the bundle model).
+// an external helm-chart augmenter (invisible to the bundle model).
 //
 // parentSR and childSR allow tests to use distinct SourceRefs to verify
 // correct SourceRef ownership. Pass testSR() for both in the common case.
@@ -1259,8 +1259,8 @@ func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
 
 // --- shared test helpers for augmenter tests ---
 
-// buildAugmenterTestTree constructs a layout+cluster tree simulating crane's
-// augmentLayoutTemplate output: a node layout with one app layout, which has
+// buildAugmenterTestTree constructs a layout+cluster tree simulating an
+// external augmenter: a node layout with one app layout, which has
 // two hook-group sub-layouts (pre-install and hooks with DependsOn).
 //
 // Root is intentionally unnamed so findLayoutNode accumulates the path for
@@ -1444,7 +1444,7 @@ func collectKustPaths(ml *layout.ManifestLayout, out map[string]string) {
 }
 
 // TestCreateLayoutWithResources_ClusterNameEqualsNodeName_SpecPath is the
-// crane#239 Flux-integration guard: with ClusterName == root Node.Name and an
+// equal-root-name Flux integration guard: with ClusterName == root Node.Name and an
 // umbrella bundle (multi-tier app), the emitted Flux Kustomization spec.path
 // values must collapse to a single <name>/ level (not <name>/<name>/), matching
 // the written directories.
@@ -1490,7 +1490,7 @@ func TestCreateLayoutWithResources_ClusterNameEqualsNodeName_SpecPath(t *testing
 	}
 	for name, p := range paths {
 		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
-			t.Errorf("Kustomization %q has double-nested spec.path %q (crane#239 regression)", name, p)
+			t.Errorf("Kustomization %q has double-nested spec.path %q (equal-root-name regression)", name, p)
 		}
 	}
 }

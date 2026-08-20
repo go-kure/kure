@@ -99,8 +99,8 @@ func (bg *BootstrapGenerator) generateGotkBootstrap(config *stack.BootstrapConfi
 //
 // Prior to kure v0.1.0-rc.5 only the FluxInstance was emitted, which
 // required every caller to provide the Flux Operator install bundle
-// separately (see crane's bootstrap-chain design §9). Emitting the full
-// set here makes the generator self-sufficient so callers can return a
+// separately. Emitting the full set here makes the generator self-sufficient
+// so callers can return a
 // single apply-ready bundle.
 func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.BootstrapConfig, rootNode *stack.Node) ([]client.Object, error) {
 	installObjs, err := FluxOperatorInstallObjects()

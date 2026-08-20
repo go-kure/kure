@@ -361,8 +361,8 @@ func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.Manif
 
 		// Emit CRs for augmenter-added non-umbrella layout children of this
 		// umbrella child layout. placeUmbrellaChildrenFlux only walks the
-		// bundle model; layout children injected by augmenters (e.g., Crane's
-		// helmchart augmenter) are invisible to it. Use the child bundle's own
+		// bundle model; layout children injected by external augmenters are
+		// invisible to it. Use the child bundle's own
 		// SourceRef so that each CR points to the correct source, not the
 		// parent umbrella's source.
 		//

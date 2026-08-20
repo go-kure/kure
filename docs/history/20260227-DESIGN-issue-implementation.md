@@ -118,7 +118,7 @@ The old `.golangci.yml` had `unused.go: "1.24"` setting which is no longer neede
 
 ### Current State
 
-**NOT done.** The `gosec` linter is **not present** in the current `.golangci.yml` on either `main` or the `chore/align-golangci-lint` branch. Neither crane's `.golangci.yml` (`/home/serge/src/autops/wharf/crane/.golangci.yml`) enables `gosec` either — it is not in crane's linter list. The issue spec states this should be enabled for kure because it "generates RBAC rules, certificates, security contexts, and network policies."
+**NOT done.** The `gosec` linter is **not present** in the current `.golangci.yml` on either `main` or the `chore/align-golangci-lint` branch. Neither the downstream consumer's `.golangci.yml` (`<downstream-consumer-checkout>/.golangci.yml`) enables `gosec` either — it is not in the downstream consumer's linter list. The issue spec states this should be enabled for kure because it "generates RBAC rules, certificates, security contexts, and network policies."
 
 The codebase does not have any `//nolint:gosec` annotations currently (confirmed by grep returning zero results in Go files).
 
@@ -204,12 +204,12 @@ The branch diff does not show extensive gosimple-specific changes, suggesting th
 
 ---
 
-## Issue 6: refactor: align golangci-lint config with crane linter set
+## Issue 6: refactor: align golangci-lint config with the downstream consumer linter set
 
 ### Current State
 
-**Substantially done on branch `chore/align-golangci-lint`.** The current kure `.golangci.yml` is now **identical** to crane's `/home/serge/src/autops/wharf/crane/.golangci.yml` except for:
-- `goimports.local-prefixes`: kure uses `github.com/go-kure/kure`, crane uses `gitlab.com/autops/wharf/crane` (correct difference)
+**Substantially done on branch `chore/align-golangci-lint`.** The current kure `.golangci.yml` is now **identical** to the downstream consumer's `<downstream-consumer-checkout>/.golangci.yml` except for:
+- `goimports.local-prefixes`: kure uses `github.com/go-kure/kure`, the downstream consumer uses `<downstream-consumer-module>` (correct difference)
 
 Both configs now enable the same 16 linters:
 ```
@@ -218,16 +218,16 @@ bodyclose, durationcheck, errorlint, exhaustive, gofmt, goimports,
 misspell, nilerr, unconvert, whitespace
 ```
 
-The one gap versus the issue spec is `gosec`, which is not in crane's config either. The issue spec's acceptance criteria lists `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, `whitespace` as the linters to add -- all are already present.
+The one gap versus the issue spec is `gosec`, which is not in the downstream consumer's config either. The issue spec's acceptance criteria lists `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, `whitespace` as the linters to add -- all are already present.
 
 ### Implementation Approach
 
-1. **File**: `.golangci.yml` — Already aligned with crane. No changes needed.
+1. **File**: `.golangci.yml` — Already aligned with the downstream consumer. No changes needed.
 2. **File**: `DEVELOPMENT.md` — Add a section documenting the active linter set. Insert after the "Contributing Workflow" section (around line 50):
    ```markdown
    ### Linting
 
-   Kure uses golangci-lint with the following enabled linters (aligned with crane):
+   Kure uses golangci-lint with the following enabled linters (aligned with the downstream consumer):
 
    **Default linters**: errcheck, gosimple, govet, ineffassign, staticcheck, unused
    **Additional linters**: bodyclose, durationcheck, errorlint, exhaustive, gofmt, goimports, misspell, nilerr, unconvert, whitespace
@@ -238,7 +238,7 @@ The one gap versus the issue spec is `gosec`, which is not in crane's config eit
 
 ### Refined Acceptance Criteria
 
-- [x] All crane linters enabled in kure (bodyclose, durationcheck, errorlint, exhaustive, misspell, nilerr, whitespace)
+- [x] All the downstream consumer linters enabled in kure (bodyclose, durationcheck, errorlint, exhaustive, misspell, nilerr, whitespace)
 - [x] Zero violations across all linters
 - [ ] Active linter set documented in `DEVELOPMENT.md`
 - [ ] PR merged to main
@@ -257,7 +257,7 @@ The one gap versus the issue spec is `gosec`, which is not in crane's config eit
 
 ### Current State
 
-The `go.mod` file (`/home/serge/src/autops/wharf/kure/go.mod`) contains four replace directives at lines 5-10:
+The `go.mod` file (`go.mod`) contains four replace directives at lines 5-10:
 
 ```go
 replace (
@@ -316,9 +316,9 @@ The replace directives exist because the `k8s.io` modules use a non-standard ver
 
 The three CRD builder packages have minimal `doc.go` files:
 
-- `/home/serge/src/autops/wharf/kure/internal/certmanager/doc.go` (3 lines): `// Package certmanager provides helpers for building cert-manager resources`
-- `/home/serge/src/autops/wharf/kure/internal/externalsecrets/doc.go` (2 lines): `// Package externalsecrets contains helpers for constructing resources used by the External Secrets Operator.`
-- `/home/serge/src/autops/wharf/kure/internal/metallb/doc.go` (2 lines): `// Package metallb provides constructors for MetalLB custom resources`
+- `internal/certmanager/doc.go` (3 lines): `// Package certmanager provides helpers for building cert-manager resources`
+- `internal/externalsecrets/doc.go` (2 lines): `// Package externalsecrets contains helpers for constructing resources used by the External Secrets Operator.`
+- `internal/metallb/doc.go` (2 lines): `// Package metallb provides constructors for MetalLB custom resources`
 
 None of these packages have `example_test.go` files. The existing builder functions are:
 
@@ -428,9 +428,9 @@ None of these packages have `example_test.go` files. The existing builder functi
 
 ### Current State
 
-The `examples/` directory exists at `/home/serge/src/autops/wharf/kure/examples/` with 8 subdirectories: `app-workloads`, `bootstrap`, `clusters`, `generators`, `kurel`, `multi-oci`, `patches`, `validation`. The `clusters/basic/` directory contains YAML config files (`cluster.yaml`, `cluster-flux-operator.yaml`, `cluster-argocd.yaml`) but these are declarative YAML consumed by `cmd/demo/main.go` -- not a standalone Go program.
+The `examples/` directory exists at `examples/` with 8 subdirectories: `app-workloads`, `bootstrap`, `clusters`, `generators`, `kurel`, `multi-oci`, `patches`, `validation`. The `clusters/basic/` directory contains YAML config files (`cluster.yaml`, `cluster-flux-operator.yaml`, `cluster-argocd.yaml`) but these are declarative YAML consumed by `cmd/demo/main.go` -- not a standalone Go program.
 
-The `cmd/demo/main.go` (`/home/serge/src/autops/wharf/kure/cmd/demo/main.go`, 529 lines) provides the closest existing reference for a full pipeline. Its `runClusterExample()` function (lines 193-273) demonstrates: Cluster decode -> Bundle creation -> Node setup -> FluxWorkflow -> LayoutWithResources -> WriteManifest. However, it reads YAML from disk rather than constructing the domain model programmatically using the fluent builder API.
+The `cmd/demo/main.go` (`cmd/demo/main.go`, 529 lines) provides the closest existing reference for a full pipeline. Its `runClusterExample()` function (lines 193-273) demonstrates: Cluster decode -> Bundle creation -> Node setup -> FluxWorkflow -> LayoutWithResources -> WriteManifest. However, it reads YAML from disk rather than constructing the domain model programmatically using the fluent builder API.
 
 Key pipeline components:
 - `stack.NewClusterBuilder(name)` — fluent builder in `pkg/stack/builders.go` (line 183)
@@ -525,13 +525,13 @@ Key pipeline components:
 
 ### Current State
 
-`AGENTS.md` (`/home/serge/src/autops/wharf/kure/AGENTS.md`) contains the following at line 186:
+`AGENTS.md` (`AGENTS.md`) contains the following at line 186:
 
 ```
 **Never use `fmt.Errorf` directly** - always use the errors package.
 ```
 
-The `pkg/errors/errors.go` (`/home/serge/src/autops/wharf/kure/pkg/errors/errors.go`) implementation at lines 10-28 shows that the errors package itself wraps `fmt.Errorf`:
+The `pkg/errors/errors.go` (`pkg/errors/errors.go`) implementation at lines 10-28 shows that the errors package itself wraps `fmt.Errorf`:
 
 ```go
 func Wrap(err error, message string) error {
@@ -644,7 +644,7 @@ Additionally, the `pkg/stack/builders.go` file uses `fmt.Errorf` directly at lin
 - `ExtensionLoader` — extension handling
 - `ProgressReporter`, `FileWriter`, `OutputWriter` — I/O abstractions
 
-**Crane does NOT import `pkg/launcher`** (confirmed by grep returning zero results in `/home/serge/src/autops/wharf/crane`). The issue spec was wrong about this being a breaking change for crane. However, `pkg/cmd/kure/generate/`, `pkg/cmd/kure/patch.go`, `pkg/cmd/kure/initialize/init.go`, and `pkg/cmd/kurel/cmd.go` import launcher internally.
+**The downstream consumer does NOT import `pkg/launcher`** (confirmed by grep returning zero results in `<downstream-consumer-checkout>`). The issue spec was wrong about this being a breaking change for the downstream consumer. However, `pkg/cmd/kure/generate/`, `pkg/cmd/kure/patch.go`, `pkg/cmd/kure/initialize/init.go`, and `pkg/cmd/kurel/cmd.go` import launcher internally.
 
 ### Implementation Approach
 
@@ -703,7 +703,7 @@ pkg/launcher/
    - `launcher.NewBuilder(log)` -> `builder.NewBuilder(log)`
    - `launcher.NewCLI(log)` -> `cli.NewCLI(log)`
 
-3. **Phase 3: Add re-export aliases** in root `pkg/launcher/` for backward compatibility (optional, since crane doesn't import it):
+3. **Phase 3: Add re-export aliases** in root `pkg/launcher/` for backward compatibility (optional, since the downstream consumer doesn't import it):
    ```go
    // Deprecated: Use loader.NewPackageLoader instead.
    var NewPackageLoader = loader.NewPackageLoader
@@ -727,7 +727,7 @@ pkg/launcher/
 - [ ] Internal consumers (`pkg/cmd/`) updated to use new import paths
 - [ ] No exported API removed from `pkg/launcher/` root (backward-compatible re-exports)
 - [ ] `make verify` passes
-- [ ] No crane import breakage (confirmed: crane does not import `pkg/launcher`)
+- [ ] No downstream consumer import breakage (confirmed: the downstream consumer does not import `pkg/launcher`)
 
 ### Effort Estimate
 
@@ -742,7 +742,7 @@ pkg/launcher/
 
 ### Current State
 
-The label propagation code is in `pkg/stack/bundle.go` (`/home/serge/src/autops/wharf/kure/pkg/stack/bundle.go`) at lines 89-118:
+The label propagation code is in `pkg/stack/bundle.go` (`pkg/stack/bundle.go`) at lines 89-118:
 
 ```go
 func (a *Bundle) Generate() ([]*client.Object, error) {
@@ -779,7 +779,7 @@ func (a *Bundle) Generate() ([]*client.Object, error) {
 
 The issue is at line 103: `obj := *r` dereferences the `*client.Object` (a pointer to an interface). Since `client.Object` is an interface backed by a pointer to a concrete struct (e.g., `*appsv1.Deployment`), `obj` receives a copy of the interface value but the underlying concrete pointer is shared. Calling `obj.SetLabels(labels)` at line 113 modifies the original object.
 
-The test file is `pkg/stack/bundle_test.go` (`/home/serge/src/autops/wharf/kure/pkg/stack/bundle_test.go`). The existing tests verify label propagation behavior and will confirm the refactor has no behavioral change.
+The test file is `pkg/stack/bundle_test.go` (`pkg/stack/bundle_test.go`). The existing tests verify label propagation behavior and will confirm the refactor has no behavioral change.
 
 ### Implementation Approach
 
@@ -832,7 +832,7 @@ The test file is `pkg/stack/bundle_test.go` (`/home/serge/src/autops/wharf/kure/
 
 ### Current State
 
-The `v1alpha1` package is at `/home/serge/src/autops/wharf/kure/pkg/stack/v1alpha1/` with 4,122 total lines across 10 files (5 source + 5 test):
+The `v1alpha1` package is at `pkg/stack/v1alpha1/` with 4,122 total lines across 10 files (5 source + 5 test):
 
 | File | Lines | Content |
 |------|-------|---------|
@@ -849,7 +849,7 @@ The `v1alpha1` package is at `/home/serge/src/autops/wharf/kure/pkg/stack/v1alph
 
 The `ClusterConfig` type (`cluster.go` line 12) uses `APIVersion: "stack.gokure.dev/v1alpha1"` and `Kind: "Cluster"`. It has `ConvertTo(version)` and `ConvertFrom(from)` methods (lines 130-148) that only support `v1alpha1` to `v1alpha1` conversion currently.
 
-The package depends on `internal/gvk` for `gvk.BaseMetadata` type and uses `pkg/errors` for error handling. Crane does not appear to directly import `v1alpha1` types (grep confirms no direct import), but crane may consume them indirectly through `pkg/stack` converters.
+The package depends on `internal/gvk` for `gvk.BaseMetadata` type and uses `pkg/errors` for error handling. The downstream consumer does not appear to directly import `v1alpha1` types (grep confirms no direct import), but may consume them indirectly through `pkg/stack` converters.
 
 ### Implementation Approach
 
@@ -862,12 +862,12 @@ The package depends on `internal/gvk` for `gvk.BaseMetadata` type and uses `pkg/
    - API version: `stack.gokure.dev/v1alpha1`
    - Types: ClusterConfig, NodeConfig, BundleConfig
    - Converters: v1alpha1 <-> internal domain model
-   - Consumer: crane (indirect via pkg/stack converters)
+   - Consumer: the downstream consumer (indirect via pkg/stack converters)
 
    ## Graduation Criteria for v1beta1
    1. **Stability**: 6+ months without breaking changes to the v1alpha1 API
    2. **Coverage**: >80% test coverage on v1alpha1 types and converters
-   3. **Consumers**: 2+ consumers using the API (crane + at least one external)
+   3. **Consumers**: 2+ consumers using the API (the downstream consumer + at least one external)
    4. **Completeness**: All planned builder promotions (#241) complete
    5. **Documentation**: Full API reference on gokure.dev
 
@@ -885,7 +885,7 @@ The package depends on `internal/gvk` for `gvk.BaseMetadata` type and uses `pkg/
    ## Migration Strategy
    - v1alpha1 and v1beta1 will coexist during migration
    - Converters between versions will be provided
-   - Crane migration PR will be coordinated
+   - The downstream consumer migration PR will be coordinated
    ```
 
 2. **No code changes** — planning document only.
@@ -911,7 +911,7 @@ The package depends on `internal/gvk` for `gvk.BaseMetadata` type and uses `pkg/
 
 ### Current State
 
-The `deepCopyBundle` function is in `pkg/stack/builders.go` (`/home/serge/src/autops/wharf/kure/pkg/stack/builders.go`) at lines 112-138:
+The `deepCopyBundle` function is in `pkg/stack/builders.go` (`pkg/stack/builders.go`) at lines 112-138:
 
 ```go
 func deepCopyBundle(b *Bundle) *Bundle {
@@ -995,7 +995,7 @@ Similarly, `Labels` and `Annotations` maps at lines 121-122 are assigned by refe
 
 ### Current State
 
-The `Cluster` type in `pkg/stack/cluster.go` (`/home/serge/src/autops/wharf/kure/pkg/stack/cluster.go`) has exported fields and matching getter/setter methods at lines 9-79:
+The `Cluster` type in `pkg/stack/cluster.go` (`pkg/stack/cluster.go`) has exported fields and matching getter/setter methods at lines 9-79:
 
 ```go
 type Cluster struct {
@@ -1026,7 +1026,7 @@ func (n *Node) GetBundle() *Bundle                      { return n.Bundle }
 
 The getters/setters add no validation -- they are pure pass-through. The `Bundle` type in `bundle.go` does NOT have this duality (only `GetParent`/`SetParent`/`GetPath`/`GetParentPath` which do have logic beyond simple field access).
 
-The `doc.go` for the stack package is at `/home/serge/src/autops/wharf/kure/pkg/stack/doc.go`.
+The `doc.go` for the stack package is at `pkg/stack/doc.go`.
 
 ### Implementation Approach
 

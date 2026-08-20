@@ -140,7 +140,7 @@ type ExternalClusterOptions struct {
 }
 
 // ClusterOptions is the domain-friendly input for Cluster construction.
-// It covers all fields used by crane's postgresql component handler without
+// It covers the fields needed by downstream database integrations without
 // exposing cnpgv1, barmanApi, or machinery API types to callers.
 type ClusterOptions struct {
 	Instances   int32
@@ -175,8 +175,8 @@ type ClusterConfig struct {
 }
 
 // ScheduledBackupConfig describes a CNPG ScheduledBackup resource.
-// It retains the raw spec type since crane does not use it; promoting it to
-// domain types is deferred until there is a concrete caller.
+// It retains the raw spec type; promoting it to domain types is deferred until
+// there is a concrete caller that needs the abstraction.
 type ScheduledBackupConfig struct {
 	Name      string                     `yaml:"name"`
 	Namespace string                     `yaml:"namespace"`
@@ -184,7 +184,7 @@ type ScheduledBackupConfig struct {
 }
 
 // PgBouncerOptions is the domain-friendly configuration for the PgBouncer
-// connection pooler. It covers the fields used by crane without exposing the
+// connection pooler. It covers common consumer fields without exposing the
 // cnpgv1.PgBouncerSpec type to callers.
 type PgBouncerOptions struct {
 	// PoolMode is the connection pooling mode: "session" or "transaction".

@@ -22,6 +22,16 @@ body = """
 """
 footer = ""
 trim = true
+# Scrub downstream platform references that leak in from historical commit
+# subjects so generated changelogs remain suitable for the upstream project.
+# Ordered specific to catch-all to preserve useful context where possible.
+postprocessors = [
+    { pattern = '(?i)wharf\.zone/component', replace = "the platform component label" },
+    { pattern = '(?i)wharf\.zone', replace = "the platform domain" },
+    { pattern = '(?i)\bfrom crane\b', replace = "from the downstream operator" },
+    { pattern = '(?i)\bwith crane\b', replace = "with the downstream operator" },
+    { pattern = '(?i)\b(wharf|crane|barge|harbor|rudder)\b', replace = "the downstream operator" },
+]
 
 [git]
 conventional_commits = true

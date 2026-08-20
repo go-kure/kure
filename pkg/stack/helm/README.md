@@ -21,7 +21,7 @@ No Kubernetes cluster connection is required.
 import "github.com/go-kure/kure/pkg/stack/helm"
 
 manifests, err := helm.RenderChart(
-    "oci://registry.wharf.zone/charts/cilium", // OCI chart URL
+    "oci://registry.example.com/charts/cilium", // OCI chart URL
     "1.16.5",                                   // chart version
     map[string]any{                             // value overrides (merged on top of chart defaults)
         "kubeProxyReplacement": true,

@@ -229,45 +229,18 @@ key := cmmeta.SecretKeySelector{
 - Provide granular role and binding builders
 - Test RBAC configurations thoroughly
 
-## Crane Integration
+## Consumer Compatibility
 
-Kure is a dependency of Crane (`/home/serge/src/autops/wharf/crane`).
+Kure is an upstream library with external consumers. Keep the dependency direction one-way:
+consumers may depend on Kure, while Kure must describe integration needs through generic public
+contracts rather than consumer-specific types, identifiers, or documentation.
 
-### Relationship
+### Before Modifying Public APIs
 
-- **Crane** transforms OAM → Kure domain model → Kubernetes manifests
-- **Kure** provides the domain model and manifest generation engine
-- Both repos are **co-developed** with local replace directives
-
-### Key Interfaces Crane Depends On
-
-| Interface | Location | Crane Usage |
-|-----------|----------|-------------|
-| `Application` | `pkg/stack/application.go` | Workload container with ApplicationConfig |
-| `ApplicationConfig` | `pkg/stack/application.go` | Component handlers implement this |
-| `Bundle` | `pkg/stack/bundle.go` | Deployment unit with DependsOn |
-| `Cluster` | `pkg/stack/cluster.go` | Target cluster representation |
-| `Node` | `pkg/stack/cluster.go` | Organizational unit in hierarchy |
-
-### Development Priority
-
-When Crane needs something from Kure:
-1. Crane defines the requirement (what interface/behavior is needed)
-2. Kure implements it
-3. Crane consumes the new capability
-4. Both repos stay in sync
-
-### Key Files
-
-- Crane's requirements: `/home/serge/src/autops/wharf/crane/PLAN.md`
-- Crane's agent guide: `/home/serge/src/autops/wharf/crane/AGENTS.md`
-
-### Before Modifying Kure APIs
-
-1. **Check Crane's PLAN.md** - Does the change align with Crane's needs?
-2. **Consider Crane impact** - Will this break or help Crane's integration?
-3. **Keep interfaces stable** - Crane depends on kure's public APIs
-4. **Update both repos** - Changes may require Crane updates
+1. Follow the organization API stability contract.
+2. Keep interfaces stable when possible.
+3. Describe requirements in terms of reusable library capabilities.
+4. Coordinate breaking migrations in each consuming repository.
 
 ## Integration Patterns
 
@@ -457,5 +430,4 @@ The go-kure org governance, design documents, and community files are maintained
 Refer to:
 1. `DEVELOPMENT.md` - Detailed development workflow
 2. `docs/dependency-updates.md` - Dependency upgrade procedures
-3. Crane's `PLAN.md` - Authoritative requirements for API design
-4. Crane's `AGENTS.md` - Crane integration details
+3. The organization API stability and package-structure design documents
