@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-08-19
+**Last Updated:** 2026-08-21
 
 ---
 
@@ -70,12 +70,7 @@ concurrency:
                        ▼
                  ┌───────┐
                  │ build │  ← Aggregation gate
-                 └───┬───┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│ mirror-to-gitlab (main push only, after all checks)         │
-└─────────────────────────────────────────────────────────────┘
+                 └───────┘
 
 PR-only jobs (parallel, no blocking):
 ┌─────────────────┐  ┌────────────┐
@@ -100,7 +95,6 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
 | `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
-| `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
 ### Configuration
 
@@ -111,8 +105,6 @@ temporary branch — the merged result — before the PR is allowed to land.
 - Coverage Threshold (per-package): `90%` — checked separately for every package, and a single
   package below it fails the job even when the total passes. Packages whose import path contains
   `/examples/` are exempt.
-- GitLab mirror URL: repository variable `GITLAB_MIRROR_URL`; the deploy key remains in the
-  `GITLAB_DEPLOY_KEY` repository secret.
 
 ### Features
 
