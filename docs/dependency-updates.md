@@ -9,8 +9,9 @@ Kure tracks dependency versions in three places:
 | File | Purpose |
 |------|---------|
 | `go.mod` | Go module dependencies — authoritative for the build version (the pin) |
-| `versions.yaml` | Version metadata: supported range, dependabot caps, notes (no build version) |
+| `versions.yaml` | Version metadata: supported range, notes (no build version) |
 | `docs/compatibility.md` | Generated from `versions.yaml` + `go.mod` — never edit directly |
+| `renovate.json` | Bot policy: update gates and caps, on top of the shared `go-kure/.github` preset |
 
 The `sync-versions.sh check` command performs two assertions. It runs in CI's `validate`
 job, which is gated on the `go` paths-filter in `.github/workflows/ci.yml` — that filter
@@ -47,7 +48,7 @@ go mod tidy
 
 No `versions.yaml` change is needed for an in-range patch — the build version comes from
 `go.mod`, and `sync-versions.sh check` passes as long as the new version stays within
-`supported_range`. (This is what lets in-range Dependabot patch bumps go green untouched.)
+`supported_range`. (This is what lets in-range Renovate patch bumps go green untouched.)
 
 ### Minor Updates (Medium Risk)
 
@@ -84,12 +85,13 @@ All `github.com/fluxcd/*` packages must be upgraded together. Flux releases coor
 - `image-automation-controller/api`
 - `pkg/apis/meta`, `pkg/apis/kustomize`
 
-Dependabot enforces this with the `fluxcd-ecosystem` group in
-`.github/dependabot.yml`, which covers `github.com/fluxcd/*` and
+Renovate enforces this with the `fluxcd` group in the shared
+`go-kure/.github` preset, which covers `github.com/fluxcd/*` and
 `github.com/controlplaneio-fluxcd/*`. Ungrouped, one upstream release arrived as five
 separate PRs whose `go.mod` changes conflicted with each other in the merge queue and
-had to be consolidated by hand. Minor and major updates for both patterns are ignored
-(see the `ignore:` block), so the group only ever carries patches.
+had to be consolidated by hand. Flux minors are additionally dashboard-gated by
+`renovate.json` (majors are gated org-wide by the preset), so the group only ever
+carries patches unless a pending minor is deliberately approved on the dashboard.
 
 ### Kubernetes (`k8s.io/*`)
 
@@ -105,9 +107,11 @@ go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 
 `cloudnative-pg`, `barman-cloud`, `machinery`, and `plugin-barman-cloud` are related but versioned independently. Check compatibility notes in `versions.yaml` before upgrading.
 
-## Bundling Dependabot PRs
+## Bundling Renovate PRs
 
-When multiple Dependabot PRs accumulate, bundle them into a single PR:
+Renovate's ecosystem groups already land related bumps as one PR, so bundling is
+rarely needed. When separate PRs still accumulate (e.g. several groups at once),
+bundle them into a single PR:
 
 1. Create a feature branch: `git checkout -b chore/bundle-dependency-updates main`
 2. Run `go get` for all dependencies (Flux packages first for coordinated upgrades)
@@ -117,7 +121,7 @@ When multiple Dependabot PRs accumulate, bundle them into a single PR:
 6. Validate: `./scripts/sync-versions.sh check`
 7. Run full verification: `make verify && make test-race`
 8. Commit, push, and create PR
-9. Reference all Dependabot PR numbers in the PR body to auto-close them
+9. Reference all Renovate PR numbers in the PR body to auto-close them
 
 ## Dangerous Upgrades to Watch For
 
@@ -140,6 +144,6 @@ Before merging any dependency update:
 
 ## See Also
 
-- [Development Guide § Dependabot Management](/contributing/guide/#dependabot-management) — PR commands for managing Dependabot PRs
+- [Development Guide § Renovate Management](/contributing/guide/#renovate-management) — dashboard workflow for managing Renovate PRs
 - [Compatibility Matrix](/api-reference/compatibility/) — Generated compatibility matrix
 - [versions.yaml](https://github.com/go-kure/kure/blob/main/versions.yaml) — Version source of truth

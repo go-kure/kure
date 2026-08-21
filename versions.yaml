@@ -4,12 +4,14 @@
 # This file holds the human-judgment metadata that no tool can derive:
 #
 #   supported_range: Versions the generated YAML works with (documented + guarded)
-#   max_dependabot:  Optional cap mirrored into .github/dependabot.yml ignore rules
 #   notes / related_packages: context for reviewers
 #
 # scripts/sync-versions.sh reads the build version from go.mod and asserts its
 # major.minor falls within supported_range. There is no "current" field to keep
-# in sync — that removes the recurring Dependabot lint failure (issue #593).
+# in sync — that removes the recurring dependency-bot lint failure (issue #593).
+# Bot-side update caps live in renovate.json (repo rules on top of the shared
+# go-kure/.github preset), not here; the retired max_dependabot field mirrored
+# caps into .github/dependabot.yml before the Renovate migration.
 #
 # version_basis (optional, default "semver"):
 #   Set to "kubernetes" when the go module is versioned v0.N.x but supported_range
@@ -27,7 +29,6 @@ infrastructure:
     go_module: "github.com/cert-manager/cert-manager"
     # Kure generates YAML compatible with these deployed versions
     supported_range: "1.14 - 1.21"
-    max_dependabot: null  # No restriction needed
     notes: |
       Stable v1 APIs. v1.20 deprecated ObjectReference in favor of IssuerReference (type alias).
       v1.21 removed the deprecated ObjectReference type (#8625); kure already uses
@@ -37,7 +38,6 @@ infrastructure:
   cilium:
     go_module: "github.com/cilium/cilium"
     supported_range: "1.18 - 1.20"
-    max_dependabot: null
     notes: |
       Cilium CRDs. Every builder in pkg/kubernetes/cilium emits
       ciliumv2.SchemeGroupVersion — i.e. cilium.io/v2 — for all thirteen resources
@@ -57,7 +57,6 @@ infrastructure:
   fluxcd:
     go_module: "github.com/fluxcd/flux2/v2"
     supported_range: "2.4 - 2.9"
-    max_dependabot: null
     notes: |
       v1beta2 APIs removed in 2.8, DependsOn uses DependencyReference.
       image-automation-controller promoted to v1.
@@ -75,7 +74,6 @@ infrastructure:
   flux-operator:
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
     supported_range: "0.23 - 0.53"
-    max_dependabot: null
     notes: |
       Upgraded alongside the FluxCD 2.9 ecosystem. The vendored install bundle
       (pkg/stack/fluxcd/flux_operator_install.yaml) and FluxOperatorVersion constant
@@ -84,7 +82,6 @@ infrastructure:
   source-watcher:
     go_module: "github.com/fluxcd/source-watcher/api/v2"
     supported_range: "2.0 - 2.2"
-    max_dependabot: null
     notes: |
       Optional FluxCD controller for source composition/decomposition.
       Manages ArtifactGenerator CRD (source.extensions.fluxcd.io/v1beta1).
@@ -95,7 +92,6 @@ infrastructure:
   metallb:
     go_module: "go.universe.tf/metallb"
     supported_range: "0.14 - 0.16"
-    max_dependabot: null  # No restriction needed
     notes: |
       v1beta1 APIs stable across this range. v0.16.0 is a minor release:
       BGP config-parsing refactor (selectedNodes/selectedPools rewrite),
@@ -106,7 +102,6 @@ infrastructure:
   prometheus-operator:
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
     supported_range: "0.75 - 0.93"
-    max_dependabot: null
     notes: |
       Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
       Only the /pkg/apis/monitoring submodule is imported — not the full operator.
@@ -121,7 +116,6 @@ infrastructure:
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
     supported_range: "1.3"
-    max_dependabot: null
     notes: |
       Module path changed from root to /apis submodule in v1.0 (#5494).
       No semver tags for apis submodule — go.mod pins a pseudo-version to a release
@@ -131,7 +125,6 @@ infrastructure:
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
     supported_range: "1.24 - 1.30"
-    max_dependabot: null
     notes: |
       CloudNativePG operator for PostgreSQL on Kubernetes.
       Cluster CR (with managed roles), Database CR (postgresql.cnpg.io/v1),
@@ -147,7 +140,6 @@ infrastructure:
   cnpg-barman-cloud:
     go_module: "github.com/cloudnative-pg/plugin-barman-cloud"
     supported_range: "0.9 - 0.14"
-    max_dependabot: null
     notes: |
       Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
       Versioned independently from the CNPG operator.
@@ -157,7 +149,6 @@ infrastructure:
   controller-runtime:
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.24"
-    max_dependabot: null
     notes: "v0.24.1 fixes Apply typed error handling regression; requires k8s.io/* v0.36.0 (Kubernetes 1.36)"
     related_packages:
       - "sigs.k8s.io/kustomize/api"
@@ -166,7 +157,6 @@ infrastructure:
   gateway-api:
     go_module: "sigs.k8s.io/gateway-api"
     supported_range: "1.0 - 1.6"
-    max_dependabot: null
     notes: |
       Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders.
       Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0).

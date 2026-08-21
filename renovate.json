@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>go-kure/.github//renovate/shared"],
+  "packageRules": [
+    {
+      "description": "Regenerate docs/compatibility.md on the bot's own branch after any gomod or mise bump — the committed matrix is generated from versions.yaml + go.mod, and CI's validate job fails on drift (sync-versions.sh check). Dependabot could not run this step, which left its PRs permanently red (#665, #667). The script is a no-op when nothing derived changes, so matching both managers is safe.",
+      "matchManagers": ["gomod", "mise"],
+      "postUpgradeTasks": {
+        "commands": ["./scripts/sync-versions.sh generate"],
+        "fileFilters": ["docs/compatibility.md"],
+        "executionMode": "branch"
+      }
+    },
+    {
+      "description": "Flux minors are capped at the current series, preserving the intent of the retired Dependabot ignore rules: a fluxcd minor moves supported_range and the API surface together (see versions.yaml notes) and must be a deliberate coordinated upgrade, not a bot proposal. Dashboard-gated rather than disabled so the pending series stays visible. Majors are already gated org-wide by the shared preset.",
+      "matchPackageNames": [
+        "github.com/fluxcd/**",
+        "github.com/controlplaneio-fluxcd/**"
+      ],
+      "matchUpdateTypes": ["minor"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}
