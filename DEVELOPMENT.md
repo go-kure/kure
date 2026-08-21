@@ -198,28 +198,27 @@ The pushed tag triggers the release pipeline below.
   - Performance benchmarks (when labeled)
   - Documentation validation
 
-## Dependabot Management
+## Renovate Management
 
-### Handling PRs
+Dependency updates come from Renovate (`renovate.json`, extending the shared
+`go-kure/.github` preset). The **Dependency Dashboard issue** is the control
+surface:
 
-Use `@dependabot` commands in PR comments (not `gh pr close`):
+- **Gated updates** (every major, all Go-toolchain updates, Flux minors) sit
+  under *Pending Approval* — tick the checkbox to let Renovate open the PR.
+  Nothing gated is ever proposed on its own.
+- **Deferring an update**: leave its dashboard checkbox unticked; there is
+  nothing to close. To reopen a closed/ignored update, tick its checkbox on
+  the dashboard.
+- **Rebasing a PR**: tick the "rebase/retry" checkbox in the PR body, or the
+  per-PR entry on the dashboard. Renovate also rebases automatically when the
+  PR falls behind the base branch.
+- **Closing a PR**: closing it normally tells Renovate not to recreate that
+  version; the dashboard lists it under *Closed/Ignored*.
 
-| Command | Effect |
-|---------|--------|
-| `@dependabot close` | Close PR, prevent recreation |
-| `@dependabot ignore this dependency` | Close PR, ignore dependency permanently |
-| `@dependabot ignore this major version` | Ignore major version updates |
-| `@dependabot ignore this minor version` | Ignore minor version updates |
-| `@dependabot rebase` | Rebase the PR |
-| `@dependabot recreate` | Recreate the PR from scratch |
-
-### Deferring Updates
-
-When an update requires a blocked dependency (e.g., newer Go version):
-1. Comment `@dependabot close` with explanation and link to blocking issue
-2. Do not use `gh pr close` directly - Dependabot will recreate the PR
-
-Reference: [GitHub Docs - Dependabot PR Commands](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-pull-request-comment-commands)
+Renovate regenerates `docs/compatibility.md` on its own branch after gomod or
+mise bumps (`postUpgradeTasks` running `./scripts/sync-versions.sh generate`),
+so its PRs pass the `validate` drift check without manual help.
 
 For the full dependency update process (review, bundling, version tracking), see [Dependency Updates](/contributing/dependency-updates/).
 

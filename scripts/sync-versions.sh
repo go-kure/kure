@@ -8,8 +8,7 @@
 # This script ensures that:
 # 1. each go.mod dependency version falls WITHIN versions.yaml "supported_range"
 #    (the build version is read from go.mod; there is no "current" field to sync)
-# 2. dependabot.yml ignore rules match versions.yaml "max_dependabot" field
-# 3. Documentation is generated from versions.yaml + go.mod
+# 2. Documentation is generated from versions.yaml + go.mod
 
 set -euo pipefail
 
@@ -17,7 +16,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSIONS_FILE="$REPO_ROOT/versions.yaml"
 GO_MOD_FILE="$REPO_ROOT/go.mod"
-DEPENDABOT_FILE="$REPO_ROOT/.github/dependabot.yml"
 DOCS_FILE="$REPO_ROOT/docs/compatibility.md"
 
 # Colors for output
@@ -167,69 +165,6 @@ validate_gomod() {
     return $errors
 }
 
-# Validate that dependabot.yml ignore rules match versions.yaml
-validate_dependabot() {
-    local errors=0
-    info ""
-    info "Validating dependabot.yml ignore rules..."
-
-    # This is a basic check - full validation would parse YAML
-    # For now, just check that key dependencies are present in ignore list
-
-    local deps
-    deps=$(yq '.infrastructure | to_entries | .[] | select((.value.max_dependabot == null) | not) | .key' "$VERSIONS_FILE") || true
-
-    if [[ -z "$deps" ]]; then
-        success "No max_dependabot constraints to validate"
-        return 0
-    fi
-
-    while IFS= read -r dep; do
-        [[ -z "$dep" ]] && continue
-        local go_module
-        go_module=$(yq ".infrastructure.${dep}.go_module" "$VERSIONS_FILE")
-        local max_version
-        max_version=$(yq ".infrastructure.${dep}.max_dependabot" "$VERSIONS_FILE")
-
-        # Check if dependency appears in dependabot ignore section
-        # Match both exact names and wildcard patterns (e.g., github.com/fluxcd/*)
-        # We check multiple wildcard levels to catch patterns like github.com/org/*
-        local matched=false
-
-        # Check exact match (look for dependency-name: "module")
-        if grep -qE "dependency-name:.*\"$go_module\"" "$DEPENDABOT_FILE" 2>/dev/null; then
-            matched=true
-        else
-            # Check wildcard patterns by iteratively removing path components
-            local module_path="$go_module"
-            while [[ "$module_path" == */* ]]; do
-                # Remove last component and add wildcard (escape * for grep)
-                local parent_pattern
-                parent_pattern=$(echo "$module_path" | sed 's|/[^/]*$|/\\*|')
-                if grep -qE "dependency-name:.*\"$parent_pattern\"" "$DEPENDABOT_FILE" 2>/dev/null; then
-                    matched=true
-                    break
-                fi
-                # Move up one level
-                module_path=$(echo "$module_path" | sed 's|/[^/]*$||')
-            done
-        fi
-
-        if [[ "$matched" == "true" ]]; then
-            success "$dep: ignore rule present"
-        else
-            warning "Dependency $go_module (max: $max_version) not found in dependabot ignore rules"
-            errors=$((errors + 1))
-        fi
-    done <<< "$deps"
-
-    if [[ $errors -eq 0 ]]; then
-        success "Dependabot ignore rules look consistent"
-    fi
-
-    return 0  # Don't fail on dependabot warnings for now
-}
-
 # Generate compatibility documentation
 # $1: output path. The drift check passes a temp file here so it can compare
 # without touching the working tree; `generate` passes $DOCS_FILE itself.
@@ -376,7 +311,6 @@ main() {
             info ""
             local gomod_result=0
             validate_gomod || gomod_result=$?
-            validate_dependabot
             validate_docs_drift || gomod_result=1
 
             if [[ $gomod_result -eq 0 ]]; then
