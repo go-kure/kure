@@ -20,6 +20,25 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
+// RenderOption customizes the release identity used to render a chart.
+// The zero value of common.ReleaseOptions is not a valid Helm release, so
+// RenderChart seeds Name "release" and Namespace "default" before applying
+// options — the defaults renderChart always used prior to this option's
+// introduction.
+type RenderOption func(*common.ReleaseOptions)
+
+// WithReleaseName sets the release name used during rendering (e.g. for
+// {{ .Release.Name }} and the generated resource name helpers).
+func WithReleaseName(name string) RenderOption {
+	return func(o *common.ReleaseOptions) { o.Name = name }
+}
+
+// WithNamespace sets the release namespace used during rendering (e.g. for
+// {{ .Release.Namespace }}).
+func WithNamespace(namespace string) RenderOption {
+	return func(o *common.ReleaseOptions) { o.Namespace = namespace }
+}
+
 // RenderChart pulls a Helm chart and renders it client-side (equivalent to `helm template`),
 // returning multi-doc YAML.
 //
@@ -33,18 +52,21 @@ import (
 //
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
-func RenderChart(chartURL, version string, values map[string]any) ([]byte, error) {
+// opts customizes the release identity (name, namespace); see WithReleaseName
+// and WithNamespace. Without opts, rendering uses release "release" in
+// namespace "default".
+func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	switch {
 	case strings.HasPrefix(chartURL, "oci://"):
-		return renderOCI(chartURL, version, values)
+		return renderOCI(chartURL, version, values, opts...)
 	case strings.HasPrefix(chartURL, "http://"), strings.HasPrefix(chartURL, "https://"):
-		return renderHTTP(chartURL, version, values)
+		return renderHTTP(chartURL, version, values, opts...)
 	default:
 		return nil, errors.Errorf("unsupported chart URL %q: must start with oci://, http://, or https://", chartURL)
 	}
 }
 
-func renderOCI(chartURL, version string, values map[string]any) ([]byte, error) {
+func renderOCI(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	client, err := registry.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "create registry client")
@@ -57,10 +79,10 @@ func renderOCI(chartURL, version string, values map[string]any) ([]byte, error) 
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
 	}
-	return renderChart(chrt, values)
+	return renderChart(chrt, values, opts...)
 }
 
-func renderHTTP(chartURL, version string, values map[string]any) ([]byte, error) {
+func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	last := strings.LastIndex(chartURL, "/")
 	if last <= 0 {
 		return nil, errors.Errorf("invalid HTTP chart URL %q: expected https://repo-base/chart-name", chartURL)
@@ -94,17 +116,21 @@ func renderHTTP(chartURL, version string, values map[string]any) ([]byte, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
 	}
-	return renderChart(chrt, values)
+	return renderChart(chrt, values, opts...)
 }
 
 // renderChart renders an already-loaded chart with the given values.
 // Exported for testing without OCI connectivity.
-func renderChart(chrt chartpkg.Charter, values map[string]any) ([]byte, error) {
-	renderVals, err := util.ToRenderValues(chrt, values, common.ReleaseOptions{
+func renderChart(chrt chartpkg.Charter, values map[string]any, opts ...RenderOption) ([]byte, error) {
+	releaseOpts := common.ReleaseOptions{
 		Name:      "release",
 		Namespace: "default",
 		IsInstall: true,
-	}, common.DefaultCapabilities)
+	}
+	for _, opt := range opts {
+		opt(&releaseOpts)
+	}
+	renderVals, err := util.ToRenderValues(chrt, values, releaseOpts, common.DefaultCapabilities)
 	if err != nil {
 		return nil, errors.Wrap(err, "build render values")
 	}
