@@ -21,7 +21,7 @@ No Kubernetes cluster connection is required.
 import "github.com/go-kure/kure/pkg/stack/helm"
 
 manifests, err := helm.RenderChart(
-    "oci://registry.wharf.zone/charts/cilium", // OCI chart URL
+    "oci://registry.example.com/charts/cilium", // OCI chart URL
     "1.16.5",                                   // chart version
     map[string]any{                             // value overrides (merged on top of chart defaults)
         "kubeProxyReplacement": true,
@@ -50,6 +50,21 @@ The chart name is the last path segment; the rest is the repository base URL.
 HTTP repositories must be publicly accessible — basic auth, client TLS, and
 other credential mechanisms are not supported.
 
+**Release identity (optional):**
+
+By default rendering uses release name `"release"` in namespace `"default"`.
+Pass `RenderOption`s to override either:
+
+```go
+manifests, err := helm.RenderChart(
+    "oci://registry.example.com/charts/cilium",
+    "1.16.5",
+    values,
+    helm.WithReleaseName("my-cilium"),
+    helm.WithNamespace("kube-system"),
+)
+```
+
 ## API
 
 ```go
@@ -64,7 +79,17 @@ other credential mechanisms are not supported.
 //
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
-func RenderChart(chartURL, version string, values map[string]any) ([]byte, error)
+// opts customizes the release identity; see WithReleaseName and WithNamespace.
+func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error)
+
+// RenderOption customizes the release identity used to render a chart.
+type RenderOption func(*renderOptions)
+
+// WithReleaseName sets the release name used during rendering.
+func WithReleaseName(name string) RenderOption
+
+// WithNamespace sets the release namespace used during rendering.
+func WithNamespace(namespace string) RenderOption
 ```
 
 ## SplitByHookWeight
@@ -115,7 +140,7 @@ func SplitByHookWeight(objects []client.Object) []HookGroup
 - OCI authentication uses the local Docker credential store (`~/.docker/config.json`).
 - The rendered output excludes Helm partial templates (files starting with `_`)
   and any templates that produce empty output.
-- The `.Release.Name` is set to `"release"` and `.Release.Namespace` to
-  `"default"`. Charts that rely on these values will receive those defaults.
+- The `.Release.Name` defaults to `"release"` and `.Release.Namespace` to
+  `"default"`; override either with `WithReleaseName`/`WithNamespace`.
 - Comma-separated hook annotations (e.g. `"pre-install,post-install"`) are
   treated as a single opaque phase and placed in the unknown group.

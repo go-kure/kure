@@ -77,6 +77,56 @@ metadata:
 	}
 }
 
+func TestRenderChart_ReleaseOptions(t *testing.T) {
+	chrt := minimalChart("testchart", []*common.File{
+		{
+			Name: "templates/configmap.yaml",
+			Data: []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}`),
+		},
+	}, nil)
+
+	out, err := renderChart(chrt, nil, WithReleaseName("my-release"), WithNamespace("my-ns"))
+	if err != nil {
+		t.Fatalf("renderChart returned error: %v", err)
+	}
+	yaml := string(out)
+	if !strings.Contains(yaml, "name: my-release") {
+		t.Errorf("expected overridden release name in output, got:\n%s", yaml)
+	}
+	if !strings.Contains(yaml, "namespace: my-ns") {
+		t.Errorf("expected overridden release namespace in output, got:\n%s", yaml)
+	}
+}
+
+func TestRenderChart_ReleaseOptions_Defaults(t *testing.T) {
+	chrt := minimalChart("testchart", []*common.File{
+		{
+			Name: "templates/configmap.yaml",
+			Data: []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}`),
+		},
+	}, nil)
+
+	out, err := renderChart(chrt, nil)
+	if err != nil {
+		t.Fatalf("renderChart returned error: %v", err)
+	}
+	yaml := string(out)
+	if !strings.Contains(yaml, "name: release") {
+		t.Errorf("expected default release name in output, got:\n%s", yaml)
+	}
+	if !strings.Contains(yaml, "namespace: default") {
+		t.Errorf("expected default release namespace in output, got:\n%s", yaml)
+	}
+}
+
 func TestAssembleManifests_SkipsPartials(t *testing.T) {
 	rendered := map[string]string{
 		"mychart/templates/deployment.yaml": "kind: Deployment",

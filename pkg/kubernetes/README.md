@@ -6,7 +6,7 @@ The `kubernetes` package provides GVK utilities, scheme registration, and strong
 
 ## Overview
 
-This package exposes helpers that other Kure packages (and external consumers such as Crane) use to construct and inspect Kubernetes objects without dealing with low-level struct details.
+This package exposes helpers that other Kure packages and external consumers use to construct and inspect Kubernetes objects without dealing with low-level struct details.
 
 ## Import
 
@@ -319,7 +319,7 @@ kubernetes.SetConfigMapImmutable(cm, true)
 kubernetes.AddConfigMapLabel(cm, "env", "prod")
 kubernetes.AddConfigMapAnnotation(cm, "owner", "platform")
 kubernetes.SetConfigMapLabels(cm, map[string]string{"app": "my-config"})
-kubernetes.SetConfigMapAnnotations(cm, map[string]string{"managed-by": "crane"})
+kubernetes.SetConfigMapAnnotations(cm, map[string]string{"managed-by": "controller"})
 ```
 
 ## Related Packages

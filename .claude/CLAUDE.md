@@ -7,7 +7,7 @@
 - Development workflow
 - Code conventions
 - Testing patterns
-- Crane integration details
+- Consumer compatibility guidance
 - Common tasks
 
 ## Claude-Specific Notes
@@ -129,14 +129,10 @@ mise run verify
 - `site/docs-map.yaml` is the single source of code→docs mapping; the AGENTS reverse-map table + site nav are generated from it (`bash site/scripts/gen-docs-tables.sh`) — never hand-edit them
 - Doc-sync is enforced by the canonical check-doc-sync (structure), check-links (rendered links) and check-doc-gate (source change must touch its docs; bypass only via maintainer `docs-skip` label) scripts, consumed from go-kure/.github via composite actions — kure no longer vendors its own copies
 - See AGENTS.md "Reverse Mapping" table to know which guides to review when changing a package
-## Crane Integration
+## Consumer Compatibility
 
-Kure is a dependency of Crane (`/home/serge/src/autops/wharf/crane`).
-
-Before modifying kure's public APIs (`pkg/stack/`):
-1. Check Crane's `PLAN.md` for requirements
-2. Consider impact on Crane's integration
+Before modifying Kure's public APIs (`pkg/`):
+1. Follow the organization API stability contract
+2. Consider impact on external consumers
 3. Keep interfaces stable when possible
-4. Update Crane if breaking changes are necessary
-
-Reference: `/home/serge/src/autops/wharf/crane/PLAN.md` - Authoritative requirements document
+4. Coordinate breaking migrations in the consuming repository

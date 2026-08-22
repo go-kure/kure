@@ -1,13 +1,13 @@
 # Kure — Action Plan
 
 > **Generated**: 2026-02-27
-> **Source**: `20260227-HISTORY-deep-code-review.md`, `wharf-fleet-status-report.md`
+> **Source**: `20260227-HISTORY-deep-code-review.md` and the downstream fleet status report
 
 ## Summary
 
-This action plan captures **42 actionable items** distilled from the kure deep code review (2026-02-26), the wharf fleet status report (2026-02-26), and 51 existing open GitHub issues. The items span 8 categories: 1 bug fix, 14 features, 9 chores (including dependency upgrades), 6 refactors, 1 testing item, 1 CI item, 5 documentation items, and 1 security item. Four items are rated critical, twelve high, nineteen medium, and seven low priority.
+This action plan captures **42 actionable items** distilled from the kure deep code review (2026-02-26), the downstream fleet status report (2026-02-26), and 51 existing open GitHub issues. The items span 8 categories: 1 bug fix, 14 features, 9 chores (including dependency upgrades), 6 refactors, 1 testing item, 1 CI item, 5 documentation items, and 1 security item. Four items are rated critical, twelve high, nineteen medium, and seven low priority.
 
-The dominant themes are: **(1) lint strictness** — the deep review's top recommendation is enabling disabled linters, which will flush out latent bugs; **(2) public API promotion** — kure has mature internal builders that crane needs exposed; **(3) FluxCD API migration** — three Flux CRDs need v1beta2-to-v1 migration before v1beta2 scheme registrations can be removed; **(4) CNPG expansion** — four new CNPG builders are needed for crane's database component support; and **(5) HelmRelease completeness** — eight HelmRelease enhancements are required for crane's Helm-based deployment support. Cross-repo coordination is required for API promotion (#241), domain naming standardization, and the v1alpha1 graduation path.
+The dominant themes are: **(1) lint strictness** — the deep review's top recommendation is enabling disabled linters, which will flush out latent bugs; **(2) public API promotion** — kure has mature internal builders that the downstream consumer needs exposed; **(3) FluxCD API migration** — three Flux CRDs need v1beta2-to-v1 migration before v1beta2 scheme registrations can be removed; **(4) CNPG expansion** — four new CNPG builders are needed for the downstream consumer's database component support; and **(5) HelmRelease completeness** — eight HelmRelease enhancements are required for the downstream consumer's Helm-based deployment support. Cross-repo coordination is required for API promotion (#241), domain naming standardization, and the v1alpha1 graduation path.
 
 ---
 
@@ -20,7 +20,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: low
 - **Dependencies**: none
-- **Cross-repo**: crane will benefit immediately; no crane changes needed
+- **Cross-repo**: the downstream consumer will benefit immediately; no consumer changes needed
 - **Existing issues**: #264
 - **Description**: The `LayoutRules.FluxPlacement` field is set by callers but never checked by the layout write functions, making it a silent no-op. The write path must inspect FluxPlacement and adjust file placement or kustomization.yaml generation accordingly. This is the only open bug in the kure issue tracker.
 - **Acceptance criteria**:
@@ -37,7 +37,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: high
 - **Dependencies**: none
-- **Cross-repo**: meta standards should document kure's lint baseline once aligned; crane already enables errcheck
+- **Cross-repo**: meta standards should document kure's lint baseline once aligned; the downstream consumer already enables errcheck
 - **Existing issues**: none
 - **Description**: The deep review's top recommendation. `errcheck` is the most impactful Go linter — it catches unhandled errors that become silent failures. The existing lint config disables it with the note "Too many unchecked errors in existing code." Enable the linter, fix all violations across the codebase, and commit as a single dedicated PR. This is the highest-effort lint item due to the volume of violations implied by the disable comment.
 - **Acceptance criteria**:
@@ -91,18 +91,18 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
   - [ ] Justified `//nolint` comments where simplification hurts readability
   - [ ] All tests pass
 
-### Refactor: Align golangci-lint config with crane's expanded linter set
+### Refactor: Align golangci-lint config with the downstream consumer's expanded linter set
 
 - **Type**: refactor
 - **Fleet Phase**: 3
 - **Priority**: medium
 - **Effort**: medium
 - **Dependencies**: errcheck, ineffassign, unused, gosimple items above
-- **Cross-repo**: crane's `.golangci.yml` is the reference; meta should document the fleet lint baseline
+- **Cross-repo**: the downstream consumer's `.golangci.yml` is the reference; meta should document the fleet lint baseline
 - **Existing issues**: none
-- **Description**: After enabling the four core linters above, incrementally enable the additional linters that crane uses: `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, and `whitespace`. Enable them one at a time, fixing violations in dedicated PRs to keep diffs reviewable. This achieves lint parity across the wharf fleet's Go repos.
+- **Description**: After enabling the four core linters above, incrementally enable the additional linters that the downstream consumer uses: `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, and `whitespace`. Enable them one at a time, fixing violations in dedicated PRs to keep diffs reviewable. This achieves lint parity across the downstream fleet's Go repos.
 - **Acceptance criteria**:
-  - [ ] All linters from crane's config enabled in kure
+  - [ ] All linters from the downstream consumer's config enabled in kure
   - [ ] Zero violations across all enabled linters
   - [ ] Documented in DEVELOPMENT.md which linters are active and why
 
@@ -113,13 +113,13 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: medium
 - **Effort**: high
 - **Dependencies**: none
-- **Cross-repo**: crane imports `pkg/launcher` — import paths will change
+- **Cross-repo**: the downstream consumer imports `pkg/launcher` — import paths will change
 - **Existing issues**: none
 - **Description**: At 6,535 lines with 9 interfaces, `pkg/launcher` is the largest single package. The review recommends splitting into `launcher/loader`, `launcher/resolver`, `launcher/builder` (or similar) sub-packages based on the existing interface boundaries: `PackageLoader`, `Resolver`, `PatchProcessor`, `SchemaGenerator`, `Validator`, `Builder`. This improves navigability, testability, and allows consumers to import only what they need. This is a breaking change for any external consumers.
 - **Acceptance criteria**:
   - [ ] `pkg/launcher` split into 3+ sub-packages along interface boundaries
   - [ ] All existing tests pass in their new locations
-  - [ ] Crane's imports updated in a coordinated PR
+  - [ ] The downstream consumer's imports updated in a coordinated PR
   - [ ] Public API surface is preserved (no removed types/functions)
 
 ### Refactor: Simplify Bundle.Generate() label propagation
@@ -146,9 +146,9 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: critical
 - **Effort**: medium
 - **Dependencies**: none
-- **Cross-repo**: crane needs this for database component type support
+- **Cross-repo**: the downstream consumer needs this for database component type support
 - **Existing issues**: #259
-- **Description**: Implement a builder for the CloudNativePG `Database` custom resource. This is a critical-priority item needed for crane's CNPG component handler to manage database lifecycle.
+- **Description**: Implement a builder for the CloudNativePG `Database` custom resource. This is a critical-priority item needed for the downstream consumer's CNPG component handler to manage database lifecycle.
 - **Acceptance criteria**:
   - [ ] `Create`, `Set*`, `Add*` functions following kure builder conventions
   - [ ] Comprehensive unit tests with table-driven patterns
@@ -161,9 +161,9 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: critical
 - **Effort**: medium
 - **Dependencies**: none
-- **Cross-repo**: crane needs this for backup configuration
+- **Cross-repo**: the downstream consumer needs this for backup configuration
 - **Existing issues**: #260
-- **Description**: Implement a builder for the CloudNativePG `ObjectStore` custom resource (`barmancloud.cnpg.io/v1`). Required for crane to configure CNPG backup destinations (S3, Azure Blob, GCS).
+- **Description**: Implement a builder for the CloudNativePG `ObjectStore` custom resource (`barmancloud.cnpg.io/v1`). Required for the downstream consumer to configure CNPG backup destinations (S3, Azure Blob, GCS).
 - **Acceptance criteria**:
   - [ ] Builder covers all ObjectStore spec fields
   - [ ] Support for S3, Azure, and GCS configurations
@@ -176,7 +176,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: medium
 - **Dependencies**: CNPG Database CR builder, CNPG ObjectStore CR builder
-- **Cross-repo**: crane's CNPG component handler
+- **Cross-repo**: the downstream consumer's CNPG component handler
 - **Existing issues**: #261, #262
 - **Description**: Add ScheduledBackup plugin method with advanced configuration knobs, and managed roles builder for CNPG. The ScheduledBackup depends on ObjectStore being available; managed roles depend on Database.
 - **Acceptance criteria**:
@@ -191,7 +191,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: medium
 - **Dependencies**: none
-- **Cross-repo**: crane's Helm component handler
+- **Cross-repo**: the downstream consumer's Helm component handler
 - **Existing issues**: #267
 - **Description**: Add support for `chartRef` field in HelmRelease, enabling OCIRepository as a chart source instead of the traditional `HelmRepository` + `chart` + `version` pattern. This is the modern Flux approach for OCI-delivered Helm charts.
 - **Acceptance criteria**:
@@ -206,7 +206,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: medium
 - **Dependencies**: none
-- **Cross-repo**: crane's Helm component handler
+- **Cross-repo**: the downstream consumer's Helm component handler
 - **Existing issues**: #268, #234
 - **Description**: Add `targetNamespace` and `releaseName` overrides to HelmRelease builder, and expose the `valuesFrom` field to support ConfigMap/Secret value sources. These are commonly needed for multi-tenant Helm deployments.
 - **Acceptance criteria**:
@@ -221,7 +221,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: low
 - **Dependencies**: none
-- **Cross-repo**: crane's Helm component handler
+- **Cross-repo**: the downstream consumer's Helm component handler
 - **Existing issues**: #233
 - **Description**: Allow callers to override the `sourceRef.name` in the FluxHelm generator instead of always deriving it from conventions. Needed when the HelmRepository name differs from the chart repository name.
 - **Acceptance criteria**:
@@ -236,7 +236,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: medium
 - **Effort**: medium
 - **Dependencies**: HelmRelease chartRef item above
-- **Cross-repo**: crane's Helm component handler
+- **Cross-repo**: the downstream consumer's Helm component handler
 - **Existing issues**: #270, #269, #236, #235
 - **Description**: Four medium-priority HelmRelease enhancements that complete the Flux HelmRelease API surface: (1) `driftDetection` mode configuration, (2) `postRenderers` support for Kustomize overlays on Helm output, (3) `remediation` configuration for install/upgrade failure handling, (4) CRD lifecycle policy fields (create, update, delete). These can be implemented as a batch or individually.
 - **Acceptance criteria**:
@@ -253,7 +253,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: high
 - **Dependencies**: Audit internal vs public API duality (below)
-- **Cross-repo**: crane currently uses internal builders via kure — promotion changes import paths
+- **Cross-repo**: the downstream consumer currently uses internal builders via kure — promotion changes import paths
 - **Existing issues**: #241, #245
 - **Description**: Kure has mature resource builders in `internal/kubernetes` that are duplicated (in reduced form) in `pkg/kubernetes`. The review identifies this duality. Item #245 audits what to promote; #241 executes the promotion. This requires defining promotion criteria (stability, test coverage, API surface completeness), then moving builders from internal to pkg with stable API contracts. This is a significant public API commitment — promoted builders become part of kure's semver contract.
 - **Acceptance criteria**:
@@ -261,7 +261,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
   - [ ] Builders promoted: Deployment, StatefulSet, DaemonSet, Job, CronJob, Service, Ingress, HPA, PDB (minimum set)
   - [ ] All promoted builders have comprehensive tests, doc.go examples, and README.md entries
   - [ ] `internal/kubernetes` deprecated functions removed or redirected
-  - [ ] Crane updated to use new import paths
+  - [ ] The downstream consumer updated to use new import paths
 
 ### Feature: InitContainer support for Deployment/StatefulSet/DaemonSet builders
 
@@ -270,9 +270,9 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: low
 - **Dependencies**: none (can be done in internal/ first, promoted later)
-- **Cross-repo**: crane's SecurityContextMutator needs InitContainer coverage (fleet report finding)
+- **Cross-repo**: the downstream consumer's SecurityContextMutator needs InitContainer coverage (fleet report finding)
 - **Existing issues**: #272
-- **Description**: Add `AddInitContainer` functions to Deployment, StatefulSet, and DaemonSet builders. This is also a prerequisite for crane's `SecurityContextMutator` to cover init containers — the fleet report identified that crane's mutator only covers Deployment and CronJob, missing StatefulSet and DaemonSet entirely. Kure providing complete builders enables crane to fix its coverage gap.
+- **Description**: Add `AddInitContainer` functions to Deployment, StatefulSet, and DaemonSet builders. This is also a prerequisite for the downstream consumer's `SecurityContextMutator` to cover init containers — the fleet report identified that the downstream consumer's mutator only covers Deployment and CronJob, missing StatefulSet and DaemonSet entirely. Kure providing complete builders enables the downstream consumer to fix its coverage gap.
 - **Acceptance criteria**:
   - [ ] `AddDeploymentInitContainer`, `AddStatefulSetInitContainer`, `AddDaemonSetInitContainer` functions
   - [ ] Init containers included in PodSpec output
@@ -285,9 +285,9 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: medium
 - **Dependencies**: none
-- **Cross-repo**: crane generates default-deny NetworkPolicy — kure builder would replace inline construction
+- **Cross-repo**: the downstream consumer generates default-deny NetworkPolicy — kure builder would replace inline construction
 - **Existing issues**: #242
-- **Description**: Add builders for Kubernetes `NetworkPolicy` (networking.k8s.io/v1) and Gateway API `HTTPRoute` (gateway.networking.k8s.io/v1). NetworkPolicy is needed for crane's default-deny security model. HTTPRoute supports the Gateway API migration from Ingress.
+- **Description**: Add builders for Kubernetes `NetworkPolicy` (networking.k8s.io/v1) and Gateway API `HTTPRoute` (gateway.networking.k8s.io/v1). NetworkPolicy is needed for the downstream consumer's default-deny security model. HTTPRoute supports the Gateway API migration from Ingress.
 - **Acceptance criteria**:
   - [ ] `CreateNetworkPolicy` with ingress/egress rule builders
   - [ ] `CreateHTTPRoute` with match, filter, and backend ref builders
@@ -300,9 +300,9 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: medium
 - **Effort**: medium
 - **Dependencies**: Promote internal K8s builders
-- **Cross-repo**: crane's PSA enforcement uses these; fleet report identifies coverage gap
+- **Cross-repo**: the downstream consumer's PSA enforcement uses these; fleet report identifies coverage gap
 - **Existing issues**: #243, #244
-- **Description**: Add Pod Security Admission (PSA) helpers that generate security contexts conforming to `restricted`, `baseline`, and `privileged` profiles. Add a `ResourceRequirements` builder for CPU/memory requests and limits. These support crane's security-by-default approach identified in the fleet report.
+- **Description**: Add Pod Security Admission (PSA) helpers that generate security contexts conforming to `restricted`, `baseline`, and `privileged` profiles. Add a `ResourceRequirements` builder for CPU/memory requests and limits. These support the downstream consumer's security-by-default approach identified in the fleet report.
 - **Acceptance criteria**:
   - [ ] `PSARestricted()`, `PSABaseline()` helpers returning `SecurityContext`
   - [ ] `CreateResourceRequirements` with CPU and memory request/limit setters
@@ -315,7 +315,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high (flat root, presets) / medium (naming, ref mode)
 - **Effort**: high
 - **Dependencies**: FluxPlacement bug fix (#264) should be done first
-- **Cross-repo**: crane's layout generation
+- **Cross-repo**: the downstream consumer's layout generation
 - **Existing issues**: #240, #263, #266, #265
 - **Description**: Four layout system enhancements: (1) Flat root output via `NodeGrouping=GroupFlat` (#240, high) — needed for simplified single-cluster layouts; (2) Configurable layout presets with Pattern A as default (#263, high) — codifies common layout patterns; (3) `{kind}-{name}.yaml` file naming (#266, medium) — alternative to current naming scheme; (4) Configurable kustomization.yaml reference mode per FluxPlacement (#265, medium) — controls how kustomizations reference their sources.
 - **Acceptance criteria**:
@@ -332,7 +332,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: medium
 - **Effort**: low
 - **Dependencies**: none
-- **Cross-repo**: crane's Flux kustomization generation
+- **Cross-repo**: the downstream consumer's Flux kustomization generation
 - **Existing issues**: #237, #258
 - **Description**: Add `HealthChecks` field to Bundle for configuring Flux health assessment on generated Kustomizations, and support `kustomize.toolkit.fluxcd.io/prune: disabled` annotation on resources that should not be garbage-collected.
 - **Acceptance criteria**:
@@ -366,16 +366,16 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: high
 - **Dependencies**: FluxCD 2.8 upgrade (#128)
-- **Cross-repo**: crane uses these APIs — coordinated migration required
+- **Cross-repo**: the downstream consumer uses these APIs — coordinated migration required
 - **Existing issues**: #249 (OCIRepository), #250 (notification), #251 (image-automation), #252 (remove v1beta2 scheme)
-- **Description**: Three Flux CRD groups need v1beta2-to-v1 migration: OCIRepository, notification-controller APIs (Alert, Provider, Receiver), and image-automation APIs (ImageUpdateAutomation, ImagePolicy, ImageRepository). After all three are migrated, the v1beta2 scheme registrations can be removed (#252). This is a breaking change that requires a coordinated crane update.
+- **Description**: Three Flux CRD groups need v1beta2-to-v1 migration: OCIRepository, notification-controller APIs (Alert, Provider, Receiver), and image-automation APIs (ImageUpdateAutomation, ImagePolicy, ImageRepository). After all three are migrated, the v1beta2 scheme registrations can be removed (#252). This is a breaking change that requires a coordinated consumer update.
 - **Acceptance criteria**:
   - [ ] OCIRepository builders use `source.toolkit.fluxcd.io/v1`
   - [ ] Notification builders use `notification.toolkit.fluxcd.io/v1`
   - [ ] Image automation builders use `image.toolkit.fluxcd.io/v1`
   - [ ] v1beta2 scheme registrations removed
   - [ ] All existing tests updated to v1 API shapes
-  - [ ] Crane's imports and usage updated in coordinated PR
+  - [ ] The downstream consumer's imports and usage updated in coordinated PR
 
 ### Chore: Upgrade FluxCD ecosystem to 2.8
 
@@ -384,7 +384,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: high
 - **Effort**: medium
 - **Dependencies**: none
-- **Cross-repo**: crane's FluxCD dependency must be upgraded in lockstep
+- **Cross-repo**: the downstream consumer's FluxCD dependency must be upgraded in lockstep
 - **Existing issues**: #128
 - **Description**: Upgrade all FluxCD dependencies (source-controller, kustomize-controller, helm-controller, notification-controller, image-automation-controller) to the 2.8 release line. This is a prerequisite for the v1beta2-to-v1 API migration and Flux 2.8 feature builders (#255).
 - **Acceptance criteria**:
@@ -400,7 +400,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: medium
 - **Effort**: medium
 - **Dependencies**: none
-- **Cross-repo**: crane may use these builders — verify compatibility
+- **Cross-repo**: the downstream consumer may use these builders — verify compatibility
 - **Existing issues**: #246 (cert-manager 1.19), #247 (metallb 0.15.3), #248 (external-secrets 1.3)
 - **Description**: Three CRD ecosystem dependency upgrades. External-secrets 1.3 is a **breaking change** due to a Go module path change. Cert-manager 1.19 and metallb 0.15.3 are minor upgrades. The deep review notes that these packages could benefit from `doc.go` examples — combine the upgrade with documentation improvements.
 - **Acceptance criteria**:
@@ -416,7 +416,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: medium
 - **Effort**: medium
 - **Dependencies**: K8s 1.35 upgrade (#129)
-- **Cross-repo**: crane's K8s dependency must align
+- **Cross-repo**: the downstream consumer's K8s dependency must align
 - **Existing issues**: #253, #129
 - **Description**: Upgrade `k8s.io/api` and related modules to v0.35 and validate compatibility across K8s 1.33-1.35 range. The deep review notes four `k8s.io/*` replace directives in `go.mod` that pin specific versions — document why each is needed and whether the upgrade removes the need for any of them.
 - **Acceptance criteria**:
@@ -460,7 +460,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 - **Priority**: low
 - **Effort**: low
 - **Dependencies**: public API promotion (#241)
-- **Cross-repo**: crane uses `v1alpha1` types — graduation is a breaking change
+- **Cross-repo**: the downstream consumer uses `v1alpha1` types — graduation is a breaking change
 - **Existing issues**: none
 - **Description**: The deep review notes the `v1alpha1` package (1,278 lines of converters and serialization) and asks when it graduates to `v1beta1` or `v1`. Define graduation criteria (stability duration, API coverage, consumer count) and document the timeline. This does not require code changes — it is a planning document.
 - **Acceptance criteria**:
@@ -605,7 +605,7 @@ The dominant themes are: **(1) lint strictness** — the deep review's top recom
 
 The deep code review identified the following items that are not covered by the fleet status report. These are kure-specific code quality findings that don't have fleet-wide implications:
 
-1. **golangci-lint strictness** — The review's top recommendation; the fleet report mentions linting only for barge
+1. **golangci-lint strictness** — The review's top recommendation; the fleet report mentions linting only for the downstream component
 2. **Launcher package decomposition** — Internal structural concern not visible at fleet level
 3. **Bundle.Generate() label propagation clarity** — Code-level readability issue
 4. **deepCopyBundle shallow copy documentation** — Implementation detail documentation
@@ -620,11 +620,11 @@ The deep code review identified the following items that are not covered by the 
 
 The fleet status report identifies the following items relevant to kure that the deep code review did not cover:
 
-1. **Domain naming standardization** (`wharf.zone` labels, `zone.wharf` events) — kure generates resources with labels; if the fleet standardizes on `wharf.zone`, kure's label generation may need updating
+1. **Domain naming standardization** (`platform.example/*` labels, `events.platform.example` events) — kure generates resources with labels; if the fleet standardizes on a shared domain, kure's label generation may need updating
 2. **Release tag creation** — The fleet report emphasizes zero release tags across all repos; the review doesn't mention kure's release status
-3. **Shared code extraction to wharf/pkg** (#24 in fleet plan) — kure provides types consumed by wharf/pkg; expanding pkg with shared NATS/CloudEvents code may introduce new kure dependencies
-4. **Crane's SecurityContextMutator/LabelMutator coverage gaps** — The fleet report identifies that crane's mutators miss StatefulSet/DaemonSet; kure needs to ensure its builders for these types are complete and promoted for crane to fix this
-5. **Cosign/ORAS signing support** — The fleet report mentions crane's Cosign stub; kure issue #134 tracks OCI publishing with cosign support
+3. **Shared code extraction to a downstream library** (#24 in fleet plan) — kure provides types consumed by that library; expanding it with shared NATS/CloudEvents code may introduce new kure dependencies
+4. **The downstream consumer's SecurityContextMutator/LabelMutator coverage gaps** — The fleet report identifies that the downstream consumer's mutators miss StatefulSet/DaemonSet; kure needs to ensure its builders for these types are complete and promoted for the downstream consumer to fix this
+5. **Cosign/ORAS signing support** — The fleet report mentions the downstream consumer's Cosign stub; kure issue #134 tracks OCI publishing with cosign support
 
 ---
 
@@ -642,7 +642,7 @@ Phase 3 (Standards)           │                   │
   unused linter ──────────┤   │                   │
   gosec linter ───────────┤   │                   │
   gosimple linter ────────┼→ lint alignment       │
-                          │   with crane          │
+                          │   with the downstream consumer          │
   #128 FluxCD 2.8 ───────┼→ #249 OCIRepo v1 ─┐   │
                           │  #250 Notif v1 ───┤   │
                           │  #251 ImageAuto v1─┼→ #252 remove v1beta2
@@ -650,7 +650,7 @@ Phase 3 (Standards)           │                   │
   #260+#259 ──────────────┼→ #261 ScheduledBackup
                           │  #262 Managed Roles
                           │
-  #245 Audit API ─────────┼→ #241 Promote K8s builders ──→ crane import update
+  #245 Audit API ─────────┼→ #241 Promote K8s builders ──→ the downstream consumer import update
                           │  #272 InitContainer support
                           │  #242 NetworkPolicy + HTTPRoute
                           │
@@ -682,8 +682,8 @@ Phase 4 (Enhancement)     │
   integration example     │
                           │
 Phase 5 (Strategic)       │
-  launcher split ─────────┼→ crane import update
-  v1alpha1 graduation ────┼→ crane type update
+  launcher split ─────────┼→ the downstream consumer import update
+  v1alpha1 graduation ────┼→ the downstream consumer type update
   #133 Go 1.26            │
   Bundle.Generate() cleanup│
   deepCopyBundle docs     │
@@ -692,37 +692,37 @@ Phase 5 (Strategic)       │
 
 ## Cross-Repo Coordination
 
-### crane (most coordination needed)
+### Downstream consumer (most coordination needed)
 
-| Action Item | Kure Change | Crane Impact |
+| Action Item | Kure Change | Downstream consumer impact |
 |------------|-------------|--------------|
 | Promote internal K8s builders (#241) | Move builders from `internal/` to `pkg/` | Update all imports from internal path to public path |
 | InitContainer support (#272) | Add builder functions | Update SecurityContextMutator to cover init containers on all workload types |
-| NetworkPolicy builder (#242) | Add `pkg/kubernetes` builder | Replace crane's inline NetworkPolicy construction |
-| FluxCD v1beta2→v1 migration (#249-251) | Update all Flux builders to v1 | Update crane's Flux resource generation to v1 types |
-| HelmRelease enhancements (#233-236, 267-270) | Add builder functions | Update crane's Helm component handler to use new fields |
+| NetworkPolicy builder (#242) | Add `pkg/kubernetes` builder | Replace the downstream consumer's inline NetworkPolicy construction |
+| FluxCD v1beta2→v1 migration (#249-251) | Update all Flux builders to v1 | Update the downstream consumer's Flux resource generation to v1 types |
+| HelmRelease enhancements (#233-236, 267-270) | Add builder functions | Update the downstream consumer's Helm component handler to use new fields |
 | CNPG builders (#259-262) | Add CNPG resource builders | Implement CNPG component handler using kure builders |
-| Layout enhancements (#240, 263-266) | Add layout modes and presets | Update crane's layout configuration to use new modes |
+| Layout enhancements (#240, 263-266) | Add layout modes and presets | Update the downstream consumer's layout configuration to use new modes |
 | Launcher split | Change `pkg/launcher` to sub-packages | Update import paths |
 | v1alpha1 graduation | New API version package | Update type references |
 
-### pkg (wharf/pkg shared library)
+### Shared downstream library
 
 | Action Item | Coordination |
 |------------|-------------|
-| Shared code extraction (fleet #24) | If NATS/CloudEvents types are added to wharf/pkg, kure's `pkg/stack` types and wharf/pkg types must not create circular dependencies |
-| Release tags (fleet #1-3) | wharf/pkg release unblocks crane release; kure's release is independent (GitHub) |
+| Shared code extraction (fleet #24) | If NATS/CloudEvents types are added to the shared library, kure's `pkg/stack` types and the shared types must not create circular dependencies |
+| Release tags (fleet #1-3) | The shared library release unblocks the downstream consumer release; kure's release is independent (GitHub) |
 
 ### meta (standards)
 
 | Action Item | Coordination |
 |------------|-------------|
-| Lint alignment | Document the fleet-wide lint baseline in `meta/standards/` after kure aligns with crane |
+| Lint alignment | Document the fleet-wide lint baseline in `meta/standards/` after kure aligns with the downstream consumer |
 | gosec requirement | Add gosec to the standard Go lint template in meta CI |
 | Domain naming | If `meta/standards/cross-repo.md` is updated with the naming decision, kure should follow for any label generation |
 
-### barge
+### Downstream component
 
 | Action Item | Coordination |
 |------------|-------------|
-| Domain naming standardization | No direct dependency — kure and barge don't interact, but both should use `wharf.zone` labels |
+| Domain naming standardization | No direct dependency — kure and the downstream component don't interact, but both should use the shared label domain |

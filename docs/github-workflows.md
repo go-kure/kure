@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-07-02
+**Last Updated:** 2026-08-21
 
 ---
 
@@ -17,7 +17,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
 | [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major/prerelease), no tag |
 | [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
-| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request | Two-pass AI code review via claude-max-proxy |
+| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
 
 ---
 
@@ -29,18 +29,15 @@ This document provides an overview of all GitHub Actions workflows used in the k
 ### Triggers
 
 - Push to: `main`, `develop`, `release/*`
-- Pull requests to: `main`, `develop`, on types
-  `opened`, `synchronize`, `reopened`, **`ready_for_review`**
+- Pull requests to: `main`, `develop`, on GitHub's default types
+  `opened`, `synchronize`, `reopened`
 - Merge group (merge queue's temporary branch — required checks must report here)
 - Schedule: 4am UTC daily (catch external changes)
 - Manual dispatch
 
-`ready_for_review` is not in GitHub's default type set. It is declared explicitly
-because several jobs gate on `github.event.pull_request.draft == false`: a PR opened
-as a draft skips `lint`, `test` and `Security`, and without this type `gh pr ready`
-fires no event, so those checks stay un-run indefinitely while `build` shows green.
-That combination reads as a pass but never compiled a test file — see
-[Draft PRs and un-run checks](#draft-prs-and-un-run-checks).
+Every job runs on draft PRs the same as ready ones (2026-08-19, GitLab `mr-review` parity — see
+[Draft PRs](#draft-prs)), so `ready_for_review` is not declared: it would only re-trigger a suite
+that already ran.
 
 ### Concurrency
 
@@ -66,20 +63,14 @@ concurrency:
 └───┬───┘ └───────────┘
     │
     ▼
-┌───────────────────┐
-│ coverage-check    │  ← 80% threshold enforcement
-└─────────┬─────────┘
-          │
-    │
-    ▼
-┌───────┐
-│ build │  ← Aggregation gate
-└───┬───┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────┐
-│ mirror-to-gitlab (main push only, after all checks)         │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────┐   ┌───────────────────┐
+│ coverage-check    │   │ forbidden-terms   │  ← Unconditional full-tree policy guard
+└─────────┬─────────┘   └─────────┬─────────┘
+          └────────────┬───────────┘
+                       ▼
+                 ┌───────┐
+                 │ build │  ← Aggregation gate
+                 └───────┘
 
 PR-only jobs (parallel, no blocking):
 ┌─────────────────┐  ┌────────────┐
@@ -96,63 +87,63 @@ temporary branch — the merged result — before the PR is allowed to land.
 |-----|------------|---------|--------------|---------|
 | `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint; caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
+| `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
-| `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.3.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
-| `coverage-check` | `Coverage Check` | 5 min | test | 85% threshold, Codecov upload, PR comment |
-| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, security | Aggregation gate — fails if any required job failed |
+| `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.7.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
+| `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
+| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
 | `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
-| `mirror-to-gitlab` | `Mirror to GitLab` | 5 min | build, security, docs-build | Push main and tags to GitLab mirror; fails on divergence (main only) |
 
 ### Configuration
 
 - Go Version: read from `go.mod` (`go-version-file: go.mod`)
 - Golangci-lint Version: `v2.10.1`
-- govulncheck Version: `v1.3.0` (pinned, cached binary, `-scan symbol` mode)
-- Coverage Threshold: `85%`
+- govulncheck Version: `v1.7.0` (pinned, cached binary, `-scan symbol` mode)
+- Coverage Threshold (total): `90%` — the overall figure from `go tool cover -func`
+- Coverage Threshold (per-package): `90%` — checked separately for every package, and a single
+  package below it fails the job even when the total passes. Packages whose import path contains
+  `/examples/` are exempt.
 
 ### Features
 
 - **gotestfmt** - Nice formatted test output
 - **Fail fast** - Jobs depend on validate, so lint failure stops everything
-- **Artifact sharing** - Coverage uploaded as artifact, reused by coverage-check; both upload and download use `continue-on-error: true` to tolerate `ACTIONS_RESULTS_URL` failures on in-cluster ARC runners
+- **Artifact sharing** - Coverage is uploaded as an artifact and reused by `coverage-check`; upload,
+  download, missing-file, and invalid-profile failures are blocking so the coverage gates cannot
+  pass without valid data
 - **PR comments** - Coverage report comment on PRs
-- **Skip draft PRs** - `if: github.event.pull_request.draft == false`, re-triggered by the
-  `ready_for_review` type (see [below](#draft-prs-and-un-run-checks))
-- **Sensitive file check** - Warn about potential secrets in code
+- **Runs on draft PRs** - no draft gate on any job (see [below](#draft-prs))
+- **Sensitive file check** - Print at most ten potential matches and emit one warning only when
+  matches exist; this check remains informational and does not block CI
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
   `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
   longer vendors its own copies under `site/scripts/`
+- **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
+  tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
+  action
 
-### Draft PRs and un-run checks
+### Draft PRs
 
-`lint`, `test` and `Security` are gated on `github.event.pull_request.draft == false`,
-so a PR opened as a draft runs none of them. `build` still runs, and `build` does **not**
-compile test files — a draft PR can therefore show a green `build` while containing code
-that does not compile under `go test`.
+No job carries a `draft == false` condition (removed 2026-08-19 for parity with the downstream
+GitLab CI template this workflow was ported from, which reviews/tests every merge-request
+pipeline regardless of draft status). A draft PR gets
+the identical `lint`/`test`/`Security`/`coverage-check`/`build` run as a ready one; draft blocks
+merge only, via branch protection — it does not change what CI runs.
 
-Declaring `ready_for_review` in `on.pull_request.types` makes `gh pr ready` re-trigger the
-full suite. Two related cases are **not** covered, because GitHub emits neither
-`synchronize` nor `ready_for_review` for them:
+One retargeting case is still **not** covered, because GitHub sends neither `synchronize` nor
+any type in this workflow's list for it:
 
 | Situation | Event GitHub sends | Remedy |
 |---|---|---|
-| PR marked ready for review | `ready_for_review` | covered — CI re-runs |
 | PR **retargeted** to another base branch | `edited` (with `changes.base`) | close and reopen the PR, which sends `reopened` |
 | PR title or body edited | `edited` | none needed — no code changed |
 
 `edited` is deliberately not in the type list: it fires on every title and body edit, which
 would run the full suite for text-only changes. A retarget is rare enough to handle by hand.
-
-Before trusting a green PR, confirm the required checks actually **ran**. A check that was
-skipped reports differently from one that passed:
-
-```bash
-gh pr checks <number>          # look for "skipping", not just the absence of "fail"
-```
 
 ---
 
@@ -338,8 +329,21 @@ managed centrally in `go-kure/.github` (`governance/repository-settings-policy.y
 
 ### Triggers
 
-- Pull requests: `opened`, `synchronize`, `ready_for_review`, `reopened`
-- Skips draft PRs and fork PRs (self-hosted runner security)
+- Pull requests: `opened`, `synchronize`, `reopened`, `ready_for_review`
+- `merge_group` (no filters): required so this check reports on the merge queue's temporary
+  ref once it becomes a required status check — the queue payload has no `pull_request` field,
+  so the existing fork skip below evaluates false and the job reports `skipped`/success as a
+  no-op
+- Runs on draft PRs (2026-08-19, GitLab `mr-review` parity — see [Draft PRs](#draft-prs)) —
+  **effective once go-kure/.github#75 merges**; until then the callee (`pr-review.yml@main`)
+  still gates on `draft == false`, so a draft PR here still gets a skipped reviewer job, and
+  `ready_for_review` below is what actually triggers the review; skips fork PRs (self-hosted
+  runner security)
+- `ready_for_review` is kept here (unlike `ci.yml`, which omits it) because the reviewer itself
+  lives in `go-kure/.github` and is called `@main`: its no-longer-draft-gated behavior only takes
+  effect once that repo's own parity change merges, an async window this caller can't see. Without
+  the type, a PR whose branch already dropped it and gets marked ready with no further push gets no
+  re-trigger until that merge lands. Costs one redundant run at ready-time once the rollout is done.
 
 ### How It Works
 
@@ -571,7 +575,7 @@ in launcher: warmed cycles cut `test` ~50%, `build`/`lint` ~30%.
 Tool binaries are also cached to avoid reinstalling on every run:
 - `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
 - `yq` — keyed by pinned version (`4.44.6`)
-- `govulncheck` — keyed by pinned version (`v1.3.0`)
+- `govulncheck` — keyed by pinned version (`v1.7.0`)
 
 Cache and artifact traffic is routed through an in-cluster falcondev cache server backed by
 Garage S3. Two layers work together:

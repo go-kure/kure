@@ -31,7 +31,7 @@ The layout module transforms Kure's in-memory stack representation (Clusters →
 ### 4. Writing System
 - **WriteManifest()**: Config-driven writing — uses `Config` to resolve file naming, kustomization mode, and directory structure
 - **WriteToDisk()**: Self-contained method on ManifestLayout — uses the layout's own `FileNaming` and `FluxPlacement` fields
-- **WriteToTar()**: Same as WriteToDisk but writes to a tar archive (used by Crane for OCI artifacts)
+- **WriteToTar()**: Same as WriteToDisk but writes to a tar archive for OCI artifact consumers
 - **WritePackagesToDisk()**: Package-based writing with sanitized directory names
 - All writers auto-generate kustomization.yaml files with proper resource references
 
@@ -155,7 +155,7 @@ Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory,
 
 ### Flatten Single Tier (opt-in)
 
-`LayoutRules.FlattenSingleTier` collapses one vestigial intermediate directory layer when the wrapping Node adds no semantic value. Typical case: a flat single-bundle app whose caller wraps the Bundle in an extra Node (e.g. crane's `apps` Node), producing `cluster-name/apps/manifests.yaml` where the `apps/` layer is redundant. Enabling the flag yields `cluster-name/manifests.yaml` directly.
+`LayoutRules.FlattenSingleTier` collapses one vestigial intermediate directory layer when the wrapping Node adds no semantic value. Typical case: a flat single-bundle app whose caller wraps the Bundle in an extra `apps` Node, producing `cluster-name/apps/manifests.yaml` where the `apps/` layer is redundant. Enabling the flag yields `cluster-name/manifests.yaml` directly.
 
 Conservative collapse preconditions — ALL must hold:
 

@@ -119,7 +119,7 @@
 //
 //   - Internal and test code benefits from direct field access, which is
 //     concise and idiomatic in Go.
-//   - External library consumers (e.g. Crane) can use getter/setter methods
+//   - External library consumers can use getter/setter methods
 //     to decouple from the concrete field layout, making it easier to
 //     introduce validation or indirection in a future version without
 //     breaking callers.

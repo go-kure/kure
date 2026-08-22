@@ -198,28 +198,27 @@ The pushed tag triggers the release pipeline below.
   - Performance benchmarks (when labeled)
   - Documentation validation
 
-## Dependabot Management
+## Renovate Management
 
-### Handling PRs
+Dependency updates come from Renovate (`renovate.json`, extending the shared
+`go-kure/.github` preset). The **Dependency Dashboard issue** is the control
+surface:
 
-Use `@dependabot` commands in PR comments (not `gh pr close`):
+- **Gated updates** (every major, all Go-toolchain updates, Flux minors) sit
+  under *Pending Approval* — tick the checkbox to let Renovate open the PR.
+  Nothing gated is ever proposed on its own.
+- **Deferring an update**: leave its dashboard checkbox unticked; there is
+  nothing to close. To reopen a closed/ignored update, tick its checkbox on
+  the dashboard.
+- **Rebasing a PR**: tick the "rebase/retry" checkbox in the PR body, or the
+  per-PR entry on the dashboard. Renovate also rebases automatically when the
+  PR falls behind the base branch.
+- **Closing a PR**: closing it normally tells Renovate not to recreate that
+  version; the dashboard lists it under *Closed/Ignored*.
 
-| Command | Effect |
-|---------|--------|
-| `@dependabot close` | Close PR, prevent recreation |
-| `@dependabot ignore this dependency` | Close PR, ignore dependency permanently |
-| `@dependabot ignore this major version` | Ignore major version updates |
-| `@dependabot ignore this minor version` | Ignore minor version updates |
-| `@dependabot rebase` | Rebase the PR |
-| `@dependabot recreate` | Recreate the PR from scratch |
-
-### Deferring Updates
-
-When an update requires a blocked dependency (e.g., newer Go version):
-1. Comment `@dependabot close` with explanation and link to blocking issue
-2. Do not use `gh pr close` directly - Dependabot will recreate the PR
-
-Reference: [GitHub Docs - Dependabot PR Commands](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-pull-request-comment-commands)
+Renovate regenerates `docs/compatibility.md` on its own branch after gomod or
+mise bumps (`postUpgradeTasks` running `./scripts/sync-versions.sh generate`),
+so its PRs pass the `validate` drift check without manual help.
 
 For the full dependency update process (review, bundling, version tracking), see [Dependency Updates](/contributing/dependency-updates/).
 
@@ -297,7 +296,7 @@ Key environment variables the Makefile respects:
 
 ### Active Linters
 
-The `.golangci.yml` enables these linters, aligned with Crane and the Wharf standard (`meta/standards/golangci-lint.md`):
+The `.golangci.yml` enables these linters, aligned with the shared Go standard:
 
 | Linter | Category | Purpose |
 |--------|----------|---------|
@@ -371,41 +370,19 @@ bash site/scripts/check-mounts.sh
 mise run site:build
 ```
 
-## Crane Integration
+## Consumer Compatibility
 
-Kure is a dependency of the Crane project (`~/src/autops/wharf/crane`).
+Kure's public packages are consumed by external projects. Keep public APIs stable when possible,
+describe integration requirements as reusable library capabilities, and follow the organization
+API stability contract for deprecations or breaking changes.
 
-### Relationship
-
-- **Crane** transforms OAM → Kure domain model → Kubernetes manifests
-- **Kure** provides the domain model and manifest generation engine
-- Both repos are **co-developed** with local replace directives
-
-### Key Files
-
-- Crane's requirements: `~/src/autops/wharf/crane/PLAN.md`
-- Crane's agent guide: `~/src/autops/wharf/crane/AGENTS.md`
-
-### When Making Changes
-
-1. Check if change affects Crane's integration
-2. Keep public API (`pkg/stack/`) stable when possible
-3. Update Crane if breaking changes are necessary
-4. Test with `go mod tidy` in Crane to verify compatibility
-
-### Go Workspaces
-
-Crane uses Go workspaces for local development. The workspace file lives in the parent directory:
+For local co-development, a consumer can use a Go workspace without adding a committed replace
+directive:
 
 ```bash
-# From wharf/ directory
 go work init
-go work use ./crane ./kure
+go work use ./kure ./consumer
 ```
 
-This allows Crane to use your local Kure changes without pushing.
-
-**Before pushing Kure changes that Crane depends on:**
-1. Push Kure changes first
-2. In Crane: `GOWORK=off go get github.com/go-kure/kure@main`
-3. Commit the updated go.mod/go.sum in Crane
+Before publishing a Kure change needed by a consumer, verify Kure with `GOWORK=off`, then update
+and verify the consumer against the released Kure version in its own repository.

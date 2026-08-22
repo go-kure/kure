@@ -19,7 +19,7 @@
 #   - VERSION file at repository root
 #   - cliff.toml configuration
 #
-# See: https://gitlab.com/autops/wharf/meta/-/blob/main/standards/release-process.md
+# See: https://github.com/go-kure/.github/blob/main/standards/release-process.md
 
 set -eu
 
@@ -207,8 +207,8 @@ check_tag_exists() {
 
 setup_ci() {
     log_info "CI mode: configuring git identity"
-    git config user.name "wharf-release-bot"
-    git config user.email "wharf-release-bot@noreply"
+    git config user.name "kure-release-bot"
+    git config user.email "kure-release-bot@noreply"
 
     log_info "Validating HEAD matches origin/main..."
     git fetch origin main
@@ -260,6 +260,15 @@ git_tag() {
     fi
 }
 
+# Release workflows push directly to main, bypassing the merge queue. Check the
+# generated tree immediately before every push so a changelog or source update
+# cannot bypass the repository's CI guard.
+check_forbidden_terms() {
+    log_info "Checking tree for downstream references..."
+    bash site/scripts/check-forbidden-terms.sh --full-tree \
+        || die "release aborted: tree contains downstream references; fix the offending source or changelog postprocessor"
+}
+
 git_push() {
     tag="$1"
     if [ "$DRY_RUN" = "1" ]; then
@@ -267,6 +276,7 @@ git_push() {
         return
     fi
     if [ "${CI:-}" = "true" ]; then
+        check_forbidden_terms
         log_info "Pushing release..."
         git push --atomic origin HEAD:main "$tag"
         log_success "Pushed main + $tag"
@@ -459,6 +469,7 @@ release_bump() {
 
     # Bump doesn't create a tag — just push the version commit
     if [ "$DRY_RUN" != "1" ] && [ "${CI:-}" = "true" ]; then
+        check_forbidden_terms
         log_info "Pushing version bump..."
         git push origin HEAD:main
         log_success "Pushed main"

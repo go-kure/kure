@@ -2,7 +2,18 @@ name: PR Review
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    # ready_for_review kept (2026-08-19): the callee (pr-review.yml) is pinned @main, so its
+    # no-longer-draft-gated behavior only lands here once that reusable workflow's own PR
+    # merges to main — an async rollout window this caller cannot see. A PR whose own branch
+    # already dropped this type, marked ready with no further push, gets no re-trigger at all
+    # until that merge completes. Cost is one redundant run at ready-time once the rollout is
+    # done; ci.yml has no such gap (self-contained per-branch, not pinned) and correctly omits it.
+    types: [opened, synchronize, reopened, ready_for_review]
+  # Required so this check reports (as `skipped`/success, via the callee's existing fork `if:`)
+  # on the merge queue's temporary ref. A required context that never triggers stays pending
+  # forever and stalls every queue entry for check_response_timeout_minutes (60), then ejects
+  # it — see governance/repository-settings-policy.yaml and dot-github's Phase 2 plan.
+  merge_group:
 
 permissions:
   contents: read
@@ -12,5 +23,5 @@ jobs:
   pr-review:
     uses: go-kure/.github/.github/workflows/pr-review.yml@main
     with:
-      pr_review_context: "Go library for programmatically building Kubernetes resources. Uses typed builders instead of templates. Part of the Wharf platform."
+      pr_review_context: "Upstream Go library for programmatically building Kubernetes resources. Uses typed builders instead of templates."
     secrets: inherit

@@ -5,12 +5,9 @@ on:
     branches: [main, develop, 'release/*']
   pull_request:
     branches: [main, develop]
-    # ready_for_review is NOT in the default set (opened, synchronize, reopened).
-    # Several jobs below gate on `pull_request.draft == false`, so a PR opened as a
-    # draft skips lint/test/Security; without this type, `gh pr ready` then fires no
-    # event at all and those checks stay un-run while `build` shows green — which
-    # reads as a pass but never compiled a test file.
-    types: [opened, synchronize, reopened, ready_for_review]
+    # No draft gate below (2026-08-19, GitLab mr-review parity) — every job runs
+    # on a draft PR the same as a ready one, so ready_for_review buys nothing
+    # here and is left out of the default set (opened, synchronize, reopened).
   merge_group:  # required: checks must report on the merge queue's temporary branch
   schedule:
     - cron: '0 4 * * *'  # 4am UTC daily - catch external changes
@@ -22,7 +19,10 @@ permissions:
 
 env:
   GOLANGCI_LINT_VERSION: 'v2.10.1'
-  GOVULNCHECK_VERSION: 'v1.3.0'
+  # Several repos across both forges install this same scanner and share the
+  # govulncheck-gate action, but nothing compares their pins. A bump therefore has
+  # to be mirrored by hand in each workflow that installs it, this one included.
+  GOVULNCHECK_VERSION: 'v1.7.0'
   # The runner binary patch (Runner.Worker.dll) renames all occurrences of
   # ACTIONS_RESULTS_URL to ACTIONS_RESULTS_ORL, including the name the Worker
   # injects into step process environments.  Workflow env overrides runner-injected
@@ -88,9 +88,7 @@ jobs:
     runs-on: autops-kube-kure
     timeout-minutes: 15
     needs: [changes]
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'pull_request' || needs.changes.outputs.go == 'true')
+    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
 
     steps:
     - name: Checkout code
@@ -231,6 +229,29 @@ jobs:
     - name: Check action pins
       uses: go-kure/.github/.github/actions/check-action-pins@1793023365e5af6923e9bb6b424fcea1dca1279e # main
 
+  forbidden-terms:
+    name: forbidden-terms
+    runs-on: autops-kube-kure
+    timeout-minutes: 2
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    # This job has no path or event filter: full-tree PR and merge-queue scans
+    # must use identical scope.
+    - name: Check for downstream references
+      uses: go-kure/.github/.github/actions/check-forbidden-terms@0dcc16c25857eff4c08609db3b6155b963820fc8 # main
+
+    - name: Checkout canonical guard
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        repository: go-kure/.github
+        ref: 0dcc16c25857eff4c08609db3b6155b963820fc8
+        path: .tmp/go-kure-dot-github
+
+    - name: Verify vendored guard matches canonical
+      run: diff -u .tmp/go-kure-dot-github/scripts/check-forbidden-terms.sh site/scripts/check-forbidden-terms.sh
+
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
   # =============================================================================
@@ -240,9 +261,7 @@ jobs:
     runs-on: autops-kube-kure
     timeout-minutes: 20
     needs: [changes]
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'pull_request' || needs.changes.outputs.go == 'true')
+    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
 
     steps:
     - name: Checkout code
@@ -316,10 +335,10 @@ jobs:
 
     - name: Upload coverage artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-      continue-on-error: true
       with:
         name: coverage
         path: coverage/coverage.out
+        if-no-files-found: error
         retention-days: 7
 
   security:
@@ -334,9 +353,7 @@ jobs:
     # expected runtime.
     timeout-minutes: 15
     needs: [changes]
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'pull_request' || needs.changes.outputs.go == 'true')
+    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
 
     # GOMEMLIMIT keeps Go's GC under the runner pod memory limit so govulncheck (peaks ~3.8Gi
     # on large module graphs) doesn't get OOMKilled. Pairs with the 6Gi ARC runner limit.
@@ -463,7 +480,9 @@ jobs:
     - name: Check for sensitive files
       run: |
         # Check for common sensitive patterns
-        if grep -r -i "password\|secret\|token\|key" --include="*.go" --include="*.yaml" --include="*.yml" . | grep -v "test" | grep -v "_test.go" | grep -E "(=|:)" | head -10; then
+        matches=$(grep -r -i "password\|secret\|token\|key" --include="*.go" --include="*.yaml" --include="*.yml" . | grep -v "test" | grep -v "_test.go" | grep -E "(=|:)" | head -10 || true)
+        if [ -n "$matches" ]; then
+          printf '%s\n' "$matches"
           echo "::warning::Potential sensitive information found in code. Please review."
         fi
 
@@ -476,7 +495,6 @@ jobs:
     runs-on: autops-kube-kure
     timeout-minutes: 5
     needs: test
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
     steps:
     - name: Checkout code
@@ -491,7 +509,6 @@ jobs:
     - name: Download coverage artifact
       id: download-coverage
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-      continue-on-error: true
       with:
         name: coverage
         path: coverage/
@@ -500,11 +517,18 @@ jobs:
       id: coverage
       run: |
         if [ ! -f coverage/coverage.out ]; then
-          echo "::warning::Coverage artifact not available (artifact upload may have failed on runner)"
-          echo "coverage=0" >> $GITHUB_OUTPUT
-          exit 0
+          echo "::error::Coverage artifact not available"
+          exit 1
         fi
-        COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+        if ! COVERAGE_REPORT=$(go tool cover -func=coverage/coverage.out); then
+          echo "::error::Coverage profile is invalid"
+          exit 1
+        fi
+        COVERAGE=$(printf '%s\n' "$COVERAGE_REPORT" | awk 'END { gsub(/%/, "", $3); print $3 }')
+        if ! [[ "$COVERAGE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+          echo "::error::Could not parse total coverage from coverage profile"
+          exit 1
+        fi
         THRESHOLD=90
         PKG_THRESHOLD=90
         echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
@@ -592,7 +616,7 @@ jobs:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, security]
+    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security]
     if: always()
     steps:
     - name: Check build results
@@ -603,7 +627,12 @@ jobs:
         cc="${{ needs.coverage-check.result }}"
         dg="${{ needs.doc-gate.result }}"
         ap="${{ needs.action-pins.result }}"
+        ft="${{ needs.forbidden-terms.result }}"
         sc="${{ needs.security.result }}"
+        if [ "$ft" != "success" ]; then
+          echo "Forbidden-terms job did not succeed (result: $ft)"
+          exit 1
+        fi
         for result in "$vl" "$tt" "$db" "$cc" "$dg" "$ap" "$sc"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
@@ -620,9 +649,7 @@ jobs:
     runs-on: autops-kube-kure
     timeout-minutes: 15
     needs: [changes]
-    if: |
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'pull_request' || needs.changes.outputs.docs == 'true')
+    if: github.event_name != 'pull_request' || needs.changes.outputs.docs == 'true'
 
     steps:
     - name: Checkout code
@@ -767,7 +794,7 @@ jobs:
     name: Analyze Changes
     runs-on: autops-kube-kure
     timeout-minutes: 5
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request'
 
     steps:
     - name: Checkout code
@@ -821,7 +848,7 @@ jobs:
     name: doc-gate
     runs-on: autops-kube-kure
     timeout-minutes: 5
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request'
 
     steps:
     - name: Checkout code
@@ -854,69 +881,3 @@ jobs:
       with:
         base-ref: origin/${{ github.base_ref }}
         skip: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}
-
-  # =============================================================================
-  # Stage 5: Mirror to GitLab (main only, after all checks pass)
-  # =============================================================================
-
-  mirror-to-gitlab:
-    name: Mirror to GitLab
-    runs-on: autops-kube-kure
-    timeout-minutes: 5
-    needs: [build, security, docs-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      with:
-        fetch-depth: 0
-
-    - name: Push to GitLab mirror
-      env:
-        GITLAB_DEPLOY_KEY: ${{ secrets.GITLAB_DEPLOY_KEY }}
-      run: |
-        set -euo pipefail
-
-        # SSH setup
-        mkdir -p ~/.ssh
-        echo "$GITLAB_DEPLOY_KEY" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
-        ssh-keyscan -t ed25519 gitlab.com >> ~/.ssh/known_hosts 2>/dev/null
-
-        # Add GitLab remote
-        git remote add gitlab git@gitlab.com:autops/wharf/kure.git
-
-        # Divergence detection
-        echo "Fetching GitLab main branch for comparison..."
-        if git fetch gitlab main 2>/dev/null; then
-          GITLAB_SHA=$(git rev-parse FETCH_HEAD)
-          GITHUB_SHA=$(git rev-parse HEAD)
-
-          if [ "$GITLAB_SHA" = "$GITHUB_SHA" ]; then
-            echo "GitLab main is already up to date (${GITHUB_SHA:0:7})"
-          elif git merge-base --is-ancestor FETCH_HEAD HEAD; then
-            echo "GitLab main is behind GitHub main (fast-forward)"
-            echo "  GitLab: ${GITLAB_SHA:0:7}"
-            echo "  GitHub: ${GITHUB_SHA:0:7}"
-          else
-            echo "::error::GitLab main has diverged from GitHub main — manual intervention required"
-            echo "  GitHub main: ${GITHUB_SHA:0:7}"
-            echo "  GitLab main: ${GITLAB_SHA:0:7}"
-            MERGE_BASE=$(git merge-base FETCH_HEAD HEAD 2>/dev/null || echo "none")
-            echo "  Common ancestor: ${MERGE_BASE:0:7}"
-            exit 1
-          fi
-        else
-          echo "Could not fetch GitLab main (first push or empty repository)"
-        fi
-
-        # Push main branch
-        echo "Pushing main branch to GitLab..."
-        git push gitlab HEAD:main
-
-        # Push tags (force to ensure GitHub is source of truth)
-        echo "Pushing tags to GitLab..."
-        git push --force gitlab 'refs/tags/*:refs/tags/*'
-
-        echo "Mirror sync complete"

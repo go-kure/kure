@@ -4,7 +4,7 @@ import "fmt"
 
 // LayoutPreset identifies a named layout pattern that configures all layout
 // dimensions into a known-valid combination. Presets are based on the layout
-// patterns defined in the Wharf FluxCD layout research.
+// patterns defined in the multi-tier FluxCD layout research.
 type LayoutPreset string
 
 const (

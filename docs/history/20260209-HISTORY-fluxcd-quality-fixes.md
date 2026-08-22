@@ -2,12 +2,12 @@
 
 > **Status:** Completed 2026-02-09
 > **Archived from:** `PLAN.md`
-> **Related:** crane `docs/development/20260209-HISTORY-fluxcd-integration.md`
+> **Related:** the downstream consumer `docs/development/20260209-HISTORY-fluxcd-integration.md`
 
 ## Goal
 
 Fix existing issues in kure's FluxCD workflow engine and add features
-needed for crane's integration: source CRD creation, in-memory layout
+needed for the downstream consumer's integration: source CRD creation, in-memory layout
 generation (tar), and clean YAML serialization.
 
 ## Status Summary
@@ -64,7 +64,7 @@ path as it recurses and compares against `node.GetPath()`.
 
 ## Step K4: Move YAML cleanup into EncodeObjectsToYAML - Done
 
-**Problem:** Crane's `serialize.go` has cleanup logic (strip null
+**Problem:** the downstream consumer's `serialize.go` has cleanup logic (strip null
 creationTimestamp, empty status) that should be the default.
 
 **File:** `pkg/io/yaml.go`

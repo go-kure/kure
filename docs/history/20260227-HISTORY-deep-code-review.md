@@ -1,6 +1,6 @@
 > **Status:** Completed 2026-02-26
 > **Archived from:** `_reviews/kure-deep-review.md`
-> **Related:** `_reviews/wharf-fleet-status-report.md`
+> **Related:** the downstream fleet status report
 
 # Kure — Deep Dive Code Review
 
@@ -11,7 +11,7 @@
 
 ## Summary
 
-Kure is a **80,169-line Go library** (source + tests) that provides programmatic Kubernetes resource construction for GitOps workflows. It's the foundational library that Crane builds on. The codebase is mature, well-tested (139 test files), well-documented, and follows strong engineering practices. This is genuinely impressive work for what is effectively a two-person project.
+Kure is a **80,169-line Go library** (source + tests) that provides programmatic Kubernetes resource construction for GitOps workflows. It's the foundational library that the downstream consumer builds on. The codebase is mature, well-tested (139 test files), well-documented, and follows strong engineering practices. This is genuinely impressive work for what is effectively a two-person project.
 
 **Rating**: ★★★★★ — Production-grade library quality.
 
@@ -26,7 +26,7 @@ The hierarchical domain model is the core strength. It cleanly maps to how GitOp
 **What works well:**
 - `Node` provides a tree structure with runtime parent references and serializable `ParentPath` — smart design that avoids circular references in serialization while maintaining efficient runtime traversal
 - `Bundle` represents a Flux Kustomization boundary with `DependsOn` for ordering
-- `Application` + `ApplicationConfig` interface is the primary extension point — Crane implements this to plug in OAM component types
+- `Application` + `ApplicationConfig` interface is the primary extension point — the downstream consumer implements this to plug in OAM component types
 - `InitializePathMap()` builds a shared lookup map across the tree — O(1) path lookups after initialization
 
 **The fluent builder** (`NewClusterBuilder`) uses a proper **copy-on-write pattern** where each `With*` method returns a new builder backed by a deep copy. This is thread-safe and enables branching. The deep copy functions (`deepCopyCluster`, `deepCopyNode`, `deepCopyBundle`) are correct — they properly copy slices while sharing immutable references like `PackageRef`.
@@ -161,7 +161,7 @@ Notably disabled:
 - **`gosec`** — Security linting is important for a library that generates Kubernetes resources.
 - **`gosimple`** — The note "Some simplifications reduce readability" is debatable.
 
-**Recommendation**: Enable at minimum `errcheck`, `ineffassign`, and `unused`. Fix violations in a dedicated PR. These catch real bugs. Crane's config enables all three plus `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, and `whitespace` — consider aligning.
+**Recommendation**: Enable at minimum `errcheck`, `ineffassign`, and `unused`. Fix violations in a dedicated PR. These catch real bugs. The downstream consumer's config enables all three plus `bodyclose`, `durationcheck`, `errorlint`, `exhaustive`, `misspell`, `nilerr`, and `whitespace` — consider aligning.
 
 ---
 
@@ -175,7 +175,7 @@ Notably disabled:
 4. **AGENTS.md is exceptional**: 400+ lines covering architecture, conventions, workflow, integration points, and a documentation sync reverse mapping table
 5. **DEVELOPMENT.md** is equally thorough with CI/CD documentation
 6. **Benchmark and fuzz tests** in critical paths (kubernetes builders, patch system)
-7. **`GOWORK=off`** in Makefile ensures isolated module testing — important when co-developing with crane
+7. **`GOWORK=off`** in Makefile ensures isolated module testing — important when co-developing with the downstream consumer
 
 ### Areas for Improvement
 
@@ -214,7 +214,7 @@ The `go.sum` is properly committed. No vendored dependencies. Module path `githu
 
 ## Priority Recommendations
 
-1. **🟡 Tighten golangci-lint** — Enable `errcheck`, `ineffassign`, `unused`, and `gosec`. Fix violations incrementally. Align with crane's lint config.
+1. **🟡 Tighten golangci-lint** — Enable `errcheck`, `ineffassign`, `unused`, and `gosec`. Fix violations incrementally. Align with the downstream consumer's lint config.
 
 2. **🟢 Consider splitting pkg/launcher** — At 6.5K lines, it's the single largest package. Sub-packages would improve navigability.
 

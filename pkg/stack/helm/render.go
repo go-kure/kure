@@ -20,6 +20,32 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
+// renderOptions holds the release identity used to render a chart. It is
+// kure's own type rather than Helm's common.ReleaseOptions so that the public
+// RenderOption signature stays independent of Helm's package layout (the
+// release-options type already moved once, from v3 chartutil to v4 common).
+type renderOptions struct {
+	releaseName string
+	namespace   string
+}
+
+// RenderOption customizes the release identity used to render a chart.
+// Without options, rendering uses release "release" in namespace "default" —
+// the defaults renderChart always used prior to this option's introduction.
+type RenderOption func(*renderOptions)
+
+// WithReleaseName sets the release name used during rendering (e.g. for
+// {{ .Release.Name }} and the generated resource name helpers).
+func WithReleaseName(name string) RenderOption {
+	return func(o *renderOptions) { o.releaseName = name }
+}
+
+// WithNamespace sets the release namespace used during rendering (e.g. for
+// {{ .Release.Namespace }}).
+func WithNamespace(namespace string) RenderOption {
+	return func(o *renderOptions) { o.namespace = namespace }
+}
+
 // RenderChart pulls a Helm chart and renders it client-side (equivalent to `helm template`),
 // returning multi-doc YAML.
 //
@@ -33,18 +59,21 @@ import (
 //
 // version is the chart version tag (e.g. "1.16.5").
 // values are merged on top of the chart's default values.
-func RenderChart(chartURL, version string, values map[string]any) ([]byte, error) {
+// opts customizes the release identity (name, namespace); see WithReleaseName
+// and WithNamespace. Without opts, rendering uses release "release" in
+// namespace "default".
+func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	switch {
 	case strings.HasPrefix(chartURL, "oci://"):
-		return renderOCI(chartURL, version, values)
+		return renderOCI(chartURL, version, values, opts...)
 	case strings.HasPrefix(chartURL, "http://"), strings.HasPrefix(chartURL, "https://"):
-		return renderHTTP(chartURL, version, values)
+		return renderHTTP(chartURL, version, values, opts...)
 	default:
 		return nil, errors.Errorf("unsupported chart URL %q: must start with oci://, http://, or https://", chartURL)
 	}
 }
 
-func renderOCI(chartURL, version string, values map[string]any) ([]byte, error) {
+func renderOCI(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	client, err := registry.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "create registry client")
@@ -57,10 +86,10 @@ func renderOCI(chartURL, version string, values map[string]any) ([]byte, error) 
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
 	}
-	return renderChart(chrt, values)
+	return renderChart(chrt, values, opts...)
 }
 
-func renderHTTP(chartURL, version string, values map[string]any) ([]byte, error) {
+func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error) {
 	last := strings.LastIndex(chartURL, "/")
 	if last <= 0 {
 		return nil, errors.Errorf("invalid HTTP chart URL %q: expected https://repo-base/chart-name", chartURL)
@@ -94,15 +123,22 @@ func renderHTTP(chartURL, version string, values map[string]any) ([]byte, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "load chart archive")
 	}
-	return renderChart(chrt, values)
+	return renderChart(chrt, values, opts...)
 }
 
 // renderChart renders an already-loaded chart with the given values.
-// Exported for testing without OCI connectivity.
-func renderChart(chrt chartpkg.Charter, values map[string]any) ([]byte, error) {
+// Kept as a separate function so tests can render without OCI connectivity.
+func renderChart(chrt chartpkg.Charter, values map[string]any, opts ...RenderOption) ([]byte, error) {
+	ro := renderOptions{
+		releaseName: "release",
+		namespace:   "default",
+	}
+	for _, opt := range opts {
+		opt(&ro)
+	}
 	renderVals, err := util.ToRenderValues(chrt, values, common.ReleaseOptions{
-		Name:      "release",
-		Namespace: "default",
+		Name:      ro.releaseName,
+		Namespace: ro.namespace,
 		IsInstall: true,
 	}, common.DefaultCapabilities)
 	if err != nil {
