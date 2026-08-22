@@ -20,23 +20,30 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
+// renderOptions holds the release identity used to render a chart. It is
+// kure's own type rather than Helm's common.ReleaseOptions so that the public
+// RenderOption signature stays independent of Helm's package layout (the
+// release-options type already moved once, from v3 chartutil to v4 common).
+type renderOptions struct {
+	releaseName string
+	namespace   string
+}
+
 // RenderOption customizes the release identity used to render a chart.
-// The zero value of common.ReleaseOptions is not a valid Helm release, so
-// RenderChart seeds Name "release" and Namespace "default" before applying
-// options — the defaults renderChart always used prior to this option's
-// introduction.
-type RenderOption func(*common.ReleaseOptions)
+// Without options, rendering uses release "release" in namespace "default" —
+// the defaults renderChart always used prior to this option's introduction.
+type RenderOption func(*renderOptions)
 
 // WithReleaseName sets the release name used during rendering (e.g. for
 // {{ .Release.Name }} and the generated resource name helpers).
 func WithReleaseName(name string) RenderOption {
-	return func(o *common.ReleaseOptions) { o.Name = name }
+	return func(o *renderOptions) { o.releaseName = name }
 }
 
 // WithNamespace sets the release namespace used during rendering (e.g. for
 // {{ .Release.Namespace }}).
 func WithNamespace(namespace string) RenderOption {
-	return func(o *common.ReleaseOptions) { o.Namespace = namespace }
+	return func(o *renderOptions) { o.namespace = namespace }
 }
 
 // RenderChart pulls a Helm chart and renders it client-side (equivalent to `helm template`),
@@ -120,17 +127,20 @@ func renderHTTP(chartURL, version string, values map[string]any, opts ...RenderO
 }
 
 // renderChart renders an already-loaded chart with the given values.
-// Exported for testing without OCI connectivity.
+// Kept as a separate function so tests can render without OCI connectivity.
 func renderChart(chrt chartpkg.Charter, values map[string]any, opts ...RenderOption) ([]byte, error) {
-	releaseOpts := common.ReleaseOptions{
-		Name:      "release",
-		Namespace: "default",
-		IsInstall: true,
+	ro := renderOptions{
+		releaseName: "release",
+		namespace:   "default",
 	}
 	for _, opt := range opts {
-		opt(&releaseOpts)
+		opt(&ro)
 	}
-	renderVals, err := util.ToRenderValues(chrt, values, releaseOpts, common.DefaultCapabilities)
+	renderVals, err := util.ToRenderValues(chrt, values, common.ReleaseOptions{
+		Name:      ro.releaseName,
+		Namespace: ro.namespace,
+		IsInstall: true,
+	}, common.DefaultCapabilities)
 	if err != nil {
 		return nil, errors.Wrap(err, "build render values")
 	}

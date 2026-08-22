@@ -83,7 +83,7 @@ manifests, err := helm.RenderChart(
 func RenderChart(chartURL, version string, values map[string]any, opts ...RenderOption) ([]byte, error)
 
 // RenderOption customizes the release identity used to render a chart.
-type RenderOption func(*common.ReleaseOptions)
+type RenderOption func(*renderOptions)
 
 // WithReleaseName sets the release name used during rendering.
 func WithReleaseName(name string) RenderOption
