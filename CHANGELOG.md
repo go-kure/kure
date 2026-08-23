@@ -1,6 +1,71 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.0-beta.10] - 2026-08-23
+
+### Added
+
+- Add release-identity RenderOption to RenderChart (the downstream operator#378)
+
+### Build
+
+- Bump Go to 1.26.6 for stdlib CVE fixes
+- Migrate dependency updates from Dependabot to Renovate
+
+### CI
+
+- Re-trigger CI when a draft PR is marked ready for review
+- Group the fluxcd ecosystem and fail check on stale compatibility docs
+- Run the version guards for version-metadata-only PRs
+- Add merge_group trigger to pr-review.yml
+- Run checks + AI review on draft PRs (GitLab mr-review parity)
+- Bump govulncheck to v1.7.0
+- Reword the govulncheck pin comment to drop downstream names
+- Remove the dead GitHub->GitLab mirror job
+
+### Changed
+
+- Keep Helm's ReleaseOptions out of the public RenderOption type
+
+### Dependencies
+
+- Group the cloudnative-pg modules
+- Bump helm.sh/helm/v4 from 4.2.3 to 4.2.4
+- Bump github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring
+
+### Documentation
+
+- Track cilium in versions.yaml with a 1.18 floor
+- Document the doc-sync composite actions in docs-build/docs-check
+- Qualify draft-review claim on rollout dependency (codex confirm-round, wording)
+- Correct the documented coverage thresholds
+- Correct the go.work ignore rationale
+- Regenerate compatibility.md for prometheus-operator 0.93.1
+
+### Fixed
+
+- Consume canonical doc-sync scripts from go-kure/.github
+- Fix build.sh's own dangling reference to the vendored script
+- Block CI on reachable vulnerabilities
+- Pin the govulncheck-gate ref; refresh the stale check-action-pins pin
+- Address govulncheck-gate review findings on the security job
+- Reword the GitLab-parity note to avoid the downstream repo name
+- Keep ready_for_review in pr-review caller (A6 finding)
+- Make CI safety checks signal correctly
+- Reject invalid coverage profiles
+
+### Maintenance
+
+- Pin third-party actions to commit SHAs
+- Pin first-party composite actions to a commit SHA
+- Bump tj-actions/changed-files in the actions group
+- Git-ignore go.work and go.work.sum
+- Enforce downstream-reference policy
+
+### Testing
+
+- Temporary reproducer proving the vulnerability gate blocks
+
 ## [0.2.0-beta.9] - 2026-08-03
 
 ### Dependencies
