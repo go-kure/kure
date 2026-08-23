@@ -51,3 +51,7 @@ release-notes.md
 # has no go.work, fails on "missing go.sum entry".
 go.work
 go.work.sum
+
+# Local, machine-specific Claude Code settings (permissions, additionalDirectories).
+# Never track this — see .claude/settings.json for the repo-shared config.
+.claude/settings.local.json
