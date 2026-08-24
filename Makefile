@@ -143,7 +143,9 @@ lint: ## Run linters with golangci-lint
 	pinned="$(GOLANGCI_LINT_VERSION:v%=%)"; \
 	if [ "$$installed" != "$$pinned" ]; then \
 		echo "$(COLOR_RED)golangci-lint missing or version mismatch (found: $${installed:-none}, want: $$pinned). Installing $(GOLANGCI_LINT_VERSION)...$(COLOR_RESET)"; \
-		curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
+		tmp="$$(mktemp)"; \
+		curl -sSfL https://golangci-lint.run/install.sh -o "$$tmp" && sh "$$tmp" -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); rc=$$?; rm -f "$$tmp"; \
+		[ $$rc -eq 0 ] || { echo "$(COLOR_RED)golangci-lint install failed$(COLOR_RESET)"; exit 1; }; \
 	fi
 	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint --version
 	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run --timeout=10m $(LINT_FLAGS) ./...
@@ -196,7 +198,9 @@ vuln: ## Run vulnerability check with govulncheck
 tools: ## Install development tools
 	@echo "$(COLOR_YELLOW)Installing development tools...$(COLOR_RESET)"
 	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
+		tmp="$$(mktemp)"; \
+		curl -sSfL https://golangci-lint.run/install.sh -o "$$tmp" && sh "$$tmp" -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); rc=$$?; rm -f "$$tmp"; \
+		[ $$rc -eq 0 ] || { echo "golangci-lint install failed"; exit 1; }; \
 		echo "Installed golangci-lint $(GOLANGCI_LINT_VERSION)"; \
 	fi
 	@if ! command -v goimports >/dev/null 2>&1; then \
