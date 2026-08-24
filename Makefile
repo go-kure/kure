@@ -139,12 +139,14 @@ $(COVERAGE_DIR):
 .PHONY: lint
 lint: ## Run linters with golangci-lint
 	@echo "$(COLOR_YELLOW)Running linting...$(COLOR_RESET)"
-	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		echo "$(COLOR_RED)golangci-lint not found. Installing...$(COLOR_RESET)"; \
+	@installed="$$(PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint --version 2>/dev/null | sed -n 's/.*version \([0-9.]*\).*/\1/p')"; \
+	pinned="$(GOLANGCI_LINT_VERSION:v%=%)"; \
+	if [ "$$installed" != "$$pinned" ]; then \
+		echo "$(COLOR_RED)golangci-lint missing or version mismatch (found: $${installed:-none}, want: $$pinned). Installing $(GOLANGCI_LINT_VERSION)...$(COLOR_RESET)"; \
 		curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
 	fi
-	@PATH="$$PATH:$$(go env GOPATH)/bin" golangci-lint --version
-	@PATH="$$PATH:$$(go env GOPATH)/bin" golangci-lint run --timeout=10m $(LINT_FLAGS) ./...
+	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint --version
+	@PATH="$$(go env GOPATH)/bin:$$PATH" golangci-lint run --timeout=10m $(LINT_FLAGS) ./...
 	@echo "$(COLOR_GREEN)Linting passed$(COLOR_RESET)"
 
 .PHONY: lint-fast
