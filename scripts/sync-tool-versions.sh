@@ -23,8 +23,12 @@ if [ -z "$MISE_VAL" ]; then
 	exit 1
 fi
 
-sed -i -E "s/^GOLANGCI_LINT_VERSION := v[0-9.]+/GOLANGCI_LINT_VERSION := v$MISE_VAL/" Makefile
-sed -i -E "s/^([[:space:]]*GOLANGCI_LINT_VERSION: )'v[0-9.]+'/\\1'v$MISE_VAL'/" .github/workflows/ci.yml
+# Both patterns below match anything scripts/check-tool-versions.sh's own count/extraction
+# regexes accept (arbitrary spacing around ":=", arbitrary indentation and quote style in
+# ci.yml) — a narrower syncer than checker means a validly-formatted variant the checker
+# tolerates still leaves the syncer rewriting nothing, and its own self-verify below aborting.
+sed -i -E "s/^(GOLANGCI_LINT_VERSION[[:space:]]*:=[[:space:]]*)v[0-9.]+/\\1v$MISE_VAL/" Makefile
+sed -i -E "s/^([[:space:]]*GOLANGCI_LINT_VERSION:[[:space:]]*)[\"']?v[0-9.]+[\"']?([[:space:]]*)\$/\\1'v$MISE_VAL'\\2/" .github/workflows/ci.yml
 # shellcheck disable=SC2016 # literal markdown backticks, not unexpanded vars
 sed -i -E "s/^- Golangci-lint Version: \`v[0-9.]+\`\$/- Golangci-lint Version: \`v$MISE_VAL\`/" docs/github-workflows.md
 
