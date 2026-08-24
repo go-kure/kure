@@ -507,7 +507,7 @@ The development version shows a warning banner linking to the latest stable vers
 
 | Target | Tasks | Use Case |
 |--------|-------|----------|
-| `precommit` | fmt, tidy, lint, test | Fast local checks (~10s) |
+| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs | Fast local checks (~10s) |
 | `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln | Comprehensive CI pipeline (~2min) |
 
 ---

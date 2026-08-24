@@ -26,7 +26,7 @@ description = "Quick pre-commit check"
 run = "make check"
 
 [tasks.verify]
-description = "Run all checks (tidy, lint, test)"
+description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs)"
 depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs"]
 
 [tasks.check-tool-versions]

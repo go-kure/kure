@@ -24,10 +24,26 @@ if [ ! -f "$DOC" ]; then
 	exit 1
 fi
 
-# Every line pairing "govulncheck" (case-insensitive) with a version gets that version
-# rewritten — same selection rule as the checker, so a line the checker would flag is a line
-# this can actually fix.
-sed -i -E "/govulncheck/I s/v[0-9]+\.[0-9]+(\.[0-9]+)?/v$CI_VAL/" "$DOC"
+# Rewrite only the version immediately following the FIRST "govulncheck" on each line — a
+# version-shaped token before it (another tool's pin) must stay untouched, and a line can
+# legitimately mention govulncheck twice (e.g. "govulncheck ... v1.7.0 ... govulncheck-gate
+# action"), so a sed `.*` greedy match to the LAST occurrence would skip past the actual pin.
+# awk's index()/match() give genuine first-occurrence, single-token splitting that sed's
+# regex-only approach can't (POSIX ERE has no non-greedy quantifier).
+awk -v ver="$CI_VAL" '
+{
+	line = $0
+	idx = index(tolower(line), "govulncheck")
+	if (idx > 0) {
+		prefix = substr(line, 1, idx + length("govulncheck") - 1)
+		rest = substr(line, idx + length("govulncheck"))
+		if (match(rest, /v[0-9]+\.[0-9]+(\.[0-9]+)?/)) {
+			rest = substr(rest, 1, RSTART - 1) "v" ver substr(rest, RSTART + RLENGTH)
+		}
+		line = prefix rest
+	}
+	print line
+}' "$DOC" > "$DOC.tmp" && mv "$DOC.tmp" "$DOC"
 
 echo "Synced govulncheck doc mentions to v$CI_VAL ($DOC)"
 
