@@ -83,6 +83,15 @@
       ],
       "matchUpdateTypes": ["minor"],
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Keep docs/github-workflows.md's govulncheck version mentions in sync with the GOVULNCHECK_VERSION pin the customManager above bumps in ci.yml. A separate rule from the gomod/mise one above: this fires on the customManager's own update (matched by its depName, since custom regex managers aren't covered by matchManagers: [gomod, mise]), not on a gomod or mise bump.",
+      "matchPackageNames": ["golang.org/x/vuln"],
+      "postUpgradeTasks": {
+        "commands": ["sh scripts/sync-govulncheck-docs.sh"],
+        "fileFilters": ["docs/github-workflows.md"],
+        "executionMode": "branch"
+      }
     }
   ]
 }
