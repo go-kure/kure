@@ -27,10 +27,17 @@ fi
 # regexes accept (arbitrary spacing around ":=", arbitrary indentation and quote style in
 # ci.yml) — a narrower syncer than checker means a validly-formatted variant the checker
 # tolerates still leaves the syncer rewriting nothing, and its own self-verify below aborting.
-sed -i -E "s/^(GOLANGCI_LINT_VERSION[[:space:]]*:=[[:space:]]*)v[0-9.]+/\\1v$MISE_VAL/" Makefile
-sed -i -E "s/^([[:space:]]*GOLANGCI_LINT_VERSION:[[:space:]]*)[\"']?v[0-9.]+[\"']?([[:space:]]*)\$/\\1'v$MISE_VAL'\\2/" .github/workflows/ci.yml
+#
+# Temp-file + mv, not `sed -i -E` — this script declares itself #!/bin/sh (portable POSIX),
+# but BSD/macOS sed's `-i` takes the backup suffix as its next argument, so `-i -E` parses
+# `-E` as that suffix: the substitution then runs as a literal BRE (no groups), nothing
+# matches, and a stray `Makefile-E`/`ci.yml-E` is left behind. The self-verify below would
+# then fail with a misleading "a target file's format probably drifted" — sync-govulncheck-docs.sh
+# already avoids this the same way.
+sed -E "s/^(GOLANGCI_LINT_VERSION[[:space:]]*:=[[:space:]]*)v[0-9.]+/\\1v$MISE_VAL/" Makefile > Makefile.tmp && mv Makefile.tmp Makefile
+sed -E "s/^([[:space:]]*GOLANGCI_LINT_VERSION:[[:space:]]*)[\"']?v[0-9.]+[\"']?([[:space:]]*)\$/\\1'v$MISE_VAL'\\2/" .github/workflows/ci.yml > .github/workflows/ci.yml.tmp && mv .github/workflows/ci.yml.tmp .github/workflows/ci.yml
 # shellcheck disable=SC2016 # literal markdown backticks, not unexpanded vars
-sed -i -E "s/^- Golangci-lint Version: \`v[0-9.]+\`\$/- Golangci-lint Version: \`v$MISE_VAL\`/" docs/github-workflows.md
+sed -E "s/^- Golangci-lint Version: \`v[0-9.]+\`\$/- Golangci-lint Version: \`v$MISE_VAL\`/" docs/github-workflows.md > docs/github-workflows.md.tmp && mv docs/github-workflows.md.tmp docs/github-workflows.md
 
 echo "Synced golangci-lint pins to $MISE_VAL (Makefile, ci.yml, docs/github-workflows.md)"
 
