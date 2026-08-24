@@ -1,13 +1,35 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>go-kure/.github//renovate/shared"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The canonical-guard checkout in ci.yml pins go-kure/.github by SHA in `ref:`, invisible to the github-actions manager. Without this the vendored guard is byte-compared against a stale revision (go-kure/kure#689).",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": ["repository: go-kure/\\.github\\s+ref: (?<currentDigest>[0-9a-f]{40})"],
+      "depNameTemplate": "go-kure/.github",
+      "packageNameTemplate": "https://github.com/go-kure/.github.git",
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "git-refs"
+    }
+  ],
   "packageRules": [
     {
-      "description": "Regenerate docs/compatibility.md on the bot's own branch after any gomod or mise bump — the committed matrix is generated from versions.yaml + go.mod, and CI's validate job fails on drift (sync-versions.sh check). Dependabot could not run this step, which left its PRs permanently red (#665, #667). The script is a no-op when nothing derived changes, so matching both managers is safe.",
+      "description": "Regenerate docs/compatibility.md on the bot's own branch after any gomod or mise bump — the committed matrix is generated from versions.yaml + go.mod, and CI's validate job fails on drift (sync-versions.sh check). Dependabot could not run this step, which left its PRs permanently red (#665, #667). The script is a no-op when nothing derived changes, so matching both managers is safe. go.mod is included because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive.",
       "matchManagers": ["gomod", "mise"],
       "postUpgradeTasks": {
         "commands": ["./scripts/sync-versions.sh generate"],
-        "fileFilters": ["docs/compatibility.md"],
+        "fileFilters": ["docs/compatibility.md", "go.mod"],
+        "executionMode": "branch"
+      }
+    },
+    {
+      "description": "Fold the go-kure/.github ref: customManager dependency into the same group as the github-actions uses: bump (shared.json's own github-actions group only matches matchManagers: [\"github-actions\"]), and re-vendor scripts/check-forbidden-terms.sh whenever it moves.",
+      "matchDepNames": ["go-kure/.github"],
+      "groupName": "github-actions",
+      "postUpgradeTasks": {
+        "commands": ["./scripts/vendor-guard.sh"],
+        "fileFilters": ["site/scripts/check-forbidden-terms.sh"],
         "executionMode": "branch"
       }
     },

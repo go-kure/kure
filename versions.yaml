@@ -120,7 +120,7 @@ infrastructure:
       Module path changed from root to /apis submodule in v1.0 (#5494).
       No semver tags for apis submodule — go.mod pins a pseudo-version to a release
       commit, so the range guard skips it (pseudo-versions can't map to semver).
-      v1.3.2+ commit: 31b0c7c3734255a92dfe5cf9e1e204de127eb24c (includes controller-runtime v0.23.1 compat)
+      v1.3.2+, at the pseudo-version pinned in go.mod (includes controller-runtime v0.23.1 compat).
 
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"

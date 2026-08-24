@@ -13,21 +13,30 @@ Kure tracks dependency versions in three places:
 | `docs/compatibility.md` | Generated from `versions.yaml` + `go.mod` — never edit directly |
 | `renovate.json` | Bot policy: update gates and caps, on top of the shared `go-kure/.github` preset |
 
-The `sync-versions.sh check` command performs two assertions. It runs in CI's `validate`
+The `sync-versions.sh check` command performs four assertions. It runs in CI's `validate`
 job, which is gated on the `go` paths-filter in `.github/workflows/ci.yml` — that filter
 includes `versions.yaml`, `docs/compatibility.md` and `scripts/sync-versions.sh` precisely
 so a version-metadata-only PR cannot skip it:
 
 1. **Range** — each dependency's build version, read from `go.mod`, falls within the
    `supported_range` declared in `versions.yaml`.
-2. **Drift** — the committed `docs/compatibility.md` is byte-identical to what
+2. **go.mod pin comment** — the `// Current pin: vX.Y.Z (Kubernetes 1.N)` comment above
+   the `k8s.io/api` replace directive matches that directive's actual version. A drifted
+   comment used to be caught only by AI review, on every single Kubernetes bump.
+3. **No raw commit SHAs in `versions.yaml` notes** — a `notes:` block may not contain a
+   bare 40- or 12-hex commit SHA literal. When a dependency has no semver tags (e.g.
+   external-secrets, pinned to a `go.mod` pseudo-version), reference "the pseudo-version
+   pinned in `go.mod`" instead of writing out the commit by hand — the literal drifts
+   silently the next time the pin moves. This is **not** a ban on patch-level semver in
+   justification prose (e.g. metallb's "v0.16.0 is a minor release…" stays fine).
+4. **Drift** — the committed `docs/compatibility.md` is byte-identical to what
    `generate` would produce right now. It regenerates into a temp file and diffs;
    your working tree is never touched. On failure it prints the diff (`-` is what is
    committed, `+` is what `versions.yaml` + `go.mod` currently imply) and tells you to
    run `generate`.
 
-`generate` regenerates `docs/compatibility.md` in place. There is no hand-maintained
-"current" version to keep in sync (see
+`generate` regenerates `docs/compatibility.md` and the `go.mod` pin comment in place.
+There is no other hand-maintained "current" version to keep in sync (see
 [#593](https://github.com/go-kure/kure/issues/593)).
 
 The drift assertion exists because the matrix is generated but committed: before it, any
@@ -107,6 +116,22 @@ go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 
 `cloudnative-pg`, `barman-cloud`, `machinery`, and `plugin-barman-cloud` are related but versioned independently. Check compatibility notes in `versions.yaml` before upgrading.
 
+### Vendored `go-kure/.github` Guard
+
+`.github/workflows/ci.yml`'s `forbidden-terms` job pins `go-kure/.github` twice: once as
+the `check-forbidden-terms` action's `uses:` digest (tracked by Renovate's
+`github-actions` manager) and once as a second checkout's `ref:`, which that manager
+cannot see. Left alone, the two drift apart and the job byte-compares the vendored
+`site/scripts/check-forbidden-terms.sh` against a stale revision.
+
+`renovate.json` closes the gap with a `customManagers` regex entry that tracks the
+`ref:` SHA as a `go-kure/.github` `git-refs` dependency, grouped with the `github-actions`
+bump via a `packageRules` entry (`matchDepNames: ["go-kure/.github"]`) so both pins move
+in the same PR. That same rule's `postUpgradeTasks` runs `./scripts/vendor-guard.sh` on
+the bot's branch, which re-fetches `scripts/check-forbidden-terms.sh` from
+`go-kure/.github` at the new `ref:` SHA and re-vendors it to `site/scripts/`. The script
+is idempotent — a re-run against an already-synced tree makes no further change.
+
 ## Bundling Renovate PRs
 
 Renovate's ecosystem groups already land related bumps as one PR, so bundling is
@@ -136,8 +161,9 @@ bundle them into a single PR:
 
 Before merging any dependency update:
 
-- [ ] `./scripts/sync-versions.sh check` — build versions within `supported_range`, and
-      `docs/compatibility.md` not stale (run `generate` first if it reports drift)
+- [ ] `./scripts/sync-versions.sh check` — build versions within `supported_range`, the
+      `go.mod` pin comment and `versions.yaml` notes match (run `generate` first if it
+      reports drift; reword any raw commit SHA in `notes:` to reference `go.mod` instead)
 - [ ] `make verify` — tidy + lint + test
 - [ ] `make test-race` — race condition detection
 - [ ] k8s.io replace directives unchanged (unless intentionally bumping)
