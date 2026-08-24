@@ -151,7 +151,12 @@ sync_gomod_pin_comment() {
 # the real pin — only caught by AI reviewers, not CI.
 validate_gomod_pin_comment() {
     local current expected
-    current=$(get_gomod_pin_comment)
+    # get_gomod_pin_comment's grep|head pipeline exits non-zero exactly when
+    # the comment is absent -- the case this function exists to report. Under
+    # this script's `set -e`/pipefail that would abort here instead of
+    # reaching the explicit -z branch below; guard it the same way
+    # expected_gomod_pin_comment's caller already does.
+    current=$(get_gomod_pin_comment || true)
     expected=$(expected_gomod_pin_comment) || return 1
 
     if [[ -z "$current" ]]; then
