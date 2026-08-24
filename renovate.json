@@ -4,6 +4,15 @@
   "customManagers": [
     {
       "customType": "regex",
+      "description": "govulncheck pin in ci.yml's env: block — invisible to the github-actions manager, which only reads uses: refs, not env: values.",
+      "managerFilePatterns": [".github/workflows/ci.yml"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+GOVULNCHECK_VERSION: ['\"]?(?<currentValue>v[\\d.]+)['\"]?"
+      ],
+      "datasourceTemplate": "{{{datasource}}}"
+    },
+    {
+      "customType": "regex",
       "description": "The canonical-guard checkout in ci.yml pins go-kure/.github by SHA in `ref:`, invisible to the github-actions manager. Without this the vendored guard is byte-compared against a stale revision (go-kure/kure#689).",
       "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
       "matchStrings": ["repository: go-kure/\\.github[\\s\\S]*?ref: (?<currentDigest>[0-9a-f]{40})"],
@@ -39,11 +48,20 @@
       }
     },
     {
-      "description": "Regenerate docs/compatibility.md on the bot's own branch after any gomod or mise bump — the committed matrix is generated from versions.yaml + go.mod, and CI's validate job fails on drift (sync-versions.sh check). Dependabot could not run this step, which left its PRs permanently red (#665, #667). The script is a no-op when nothing derived changes, so matching both managers is safe. go.mod is included because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive.",
+      "description": "Regenerate docs/compatibility.md, and keep golangci-lint's Makefile/ci.yml/docs pins in sync with mise.toml, on the bot's own branch after any gomod or mise bump. The compatibility matrix is generated from versions.yaml + go.mod, and CI's validate job fails on drift (sync-versions.sh check); the golangci-lint pins are plain strings only scripts/sync-tool-versions.sh keeps in step with mise.toml, the only copy the mise datasource actually bumps. Dependabot could not run this step, which left its PRs permanently red (#665, #667). Both scripts are no-ops when nothing derived changes, so matching both managers is safe. go.mod is included because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive.",
       "matchManagers": ["gomod", "mise"],
       "postUpgradeTasks": {
-        "commands": ["./scripts/sync-versions.sh generate"],
-        "fileFilters": ["docs/compatibility.md", "go.mod"],
+        "commands": [
+          "./scripts/sync-versions.sh generate",
+          "sh scripts/sync-tool-versions.sh"
+        ],
+        "fileFilters": [
+          "docs/compatibility.md",
+          "go.mod",
+          "Makefile",
+          ".github/workflows/ci.yml",
+          "docs/github-workflows.md"
+        ],
         "executionMode": "branch"
       }
     },

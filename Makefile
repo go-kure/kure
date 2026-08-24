@@ -296,6 +296,14 @@ check-go-version: ## Verify Go version consistency across all files
 		exit 1; \
 	fi
 
+.PHONY: check-tool-versions
+check-tool-versions: ## Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml
+	sh scripts/check-tool-versions.sh
+
+.PHONY: sync-tool-versions
+sync-tool-versions: ## Sync golangci-lint pins (Makefile/ci.yml/docs) from mise.toml
+	sh scripts/sync-tool-versions.sh
+
 # =============================================================================
 # Development Environment
 # =============================================================================
@@ -328,7 +336,7 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 # =============================================================================
 
 .PHONY: check
-check: lint vet test-short ## Quick code quality check (lint, vet, short tests)
+check: lint vet test-short check-tool-versions ## Quick code quality check (lint, vet, short tests, tool pins)
 
 .PHONY: precommit
 precommit: fmt tidy lint test ## Run fast pre-commit checks (fmt, tidy, lint, test)

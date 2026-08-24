@@ -22,6 +22,7 @@ env:
   # Several repos across both forges install this same scanner and share the
   # govulncheck-gate action, but nothing compares their pins. A bump therefore has
   # to be mirrored by hand in each workflow that installs it, this one included.
+  # renovate: datasource=go depName=golang.org/x/vuln
   GOVULNCHECK_VERSION: 'v1.7.0'
   # The runner binary patch (Runner.Worker.dll) renames all occurrences of
   # ACTIONS_RESULTS_URL to ACTIONS_RESULTS_ORL, including the name the Worker
@@ -77,6 +78,14 @@ jobs:
             # gate accepts `skipped` deps), so a broken release-pinning script
             # could land with a green build.
             - 'scripts/sync-eso-pin.sh'
+            # check-tool-versions (golangci-lint pin parity) reads all of these;
+            # a PR touching only one must not be able to skip the lint job it
+            # runs in — that would leave the checker unexercised on exactly the
+            # class of edit most likely to break it.
+            - 'mise.toml'
+            - 'scripts/check-tool-versions.sh'
+            - 'scripts/sync-tool-versions.sh'
+            - 'docs/github-workflows.md'
           docs:
             - 'site/**'
             - 'docs/**'
@@ -148,6 +157,9 @@ jobs:
 
     - name: Check Go version consistency
       run: make check-go-version
+
+    - name: Check tool version parity
+      run: make check-tool-versions
 
     - name: Cache yq
       id: yq-cache
@@ -923,3 +935,4 @@ jobs:
       with:
         base-ref: origin/${{ github.base_ref }}
         skip: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}
+
