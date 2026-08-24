@@ -69,13 +69,18 @@ cnpg.SetScheduledBackupImmediate(backup, true)
 ### Monitoring
 
 ```go
-cluster := cnpg.Cluster(&cnpg.ClusterConfig{
+cluster, err := cnpg.Cluster(&cnpg.ClusterConfig{
     Name:      "pg-main",
     Namespace: "databases",
-    Monitoring: &cnpg.MonitoringOptions{
-        EnablePodMonitor: true,
+    Options: &cnpg.ClusterOptions{
+        Monitoring: &cnpg.MonitoringOptions{
+            EnablePodMonitor: true,
+        },
     },
 })
+if err != nil {
+    // handle error
+}
 ```
 
 `MonitoringOptions.EnablePodMonitor` opts into the operator's built-in `PodMonitor` creation via
