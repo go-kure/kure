@@ -86,6 +86,10 @@ jobs:
             - 'scripts/check-tool-versions.sh'
             - 'scripts/sync-tool-versions.sh'
             - 'docs/github-workflows.md'
+            # check-govulncheck-docs (govulncheck version parity, ci.yml vs the doc) reads
+            # these two scripts plus ci.yml/docs/github-workflows.md, both already listed above.
+            - 'scripts/check-govulncheck-docs.sh'
+            - 'scripts/sync-govulncheck-docs.sh'
           docs:
             - 'site/**'
             - 'docs/**'
@@ -160,6 +164,9 @@ jobs:
 
     - name: Check tool version parity
       run: make check-tool-versions
+
+    - name: Check govulncheck docs
+      run: make check-govulncheck-docs
 
     - name: Cache yq
       id: yq-cache

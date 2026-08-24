@@ -304,6 +304,14 @@ check-tool-versions: ## Verify golangci-lint pin parity (Makefile/ci.yml/docs) a
 sync-tool-versions: ## Sync golangci-lint pins (Makefile/ci.yml/docs) from mise.toml
 	sh scripts/sync-tool-versions.sh
 
+.PHONY: check-govulncheck-docs
+check-govulncheck-docs: ## Verify govulncheck version parity (docs/github-workflows.md) against ci.yml
+	sh scripts/check-govulncheck-docs.sh
+
+.PHONY: sync-govulncheck-docs
+sync-govulncheck-docs: ## Sync govulncheck doc mentions (docs/github-workflows.md) from ci.yml
+	sh scripts/sync-govulncheck-docs.sh
+
 # =============================================================================
 # Development Environment
 # =============================================================================
@@ -336,10 +344,10 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 # =============================================================================
 
 .PHONY: check
-check: lint vet test-short check-tool-versions ## Quick code quality check (lint, vet, short tests, tool pins)
+check: lint vet test-short check-tool-versions check-govulncheck-docs ## Quick code quality check (lint, vet, short tests, tool pins)
 
 .PHONY: precommit
-precommit: fmt tidy lint test check-tool-versions ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins)
+precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins)
 
 .PHONY: ci
 ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln ## Run comprehensive CI pipeline
