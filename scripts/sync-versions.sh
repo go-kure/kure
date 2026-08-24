@@ -87,6 +87,110 @@ version_mm() {
     echo "${major}.${minor}"
 }
 
+# Read go.mod's "// Current pin: vX.Y.Z (Kubernetes 1.N)" comment, if present.
+get_gomod_pin_comment() {
+    grep -E '^// Current pin: ' "$GO_MOD_FILE" | head -n1
+}
+
+# Compute the "// Current pin: ..." comment that go.mod's k8s.io/api replace
+# directive implies — the single source of truth for the pin
+# (docs/dependency-updates.md). Reuses version_mm's kubernetes basis, which
+# maps v0.N.x -> "1.N".
+expected_gomod_pin_comment() {
+    local api_version
+    api_version=$(get_gomod_version "k8s.io/api")
+    if [[ -z "$api_version" ]]; then
+        error "k8s.io/api replace directive not found in go.mod"
+        return 1
+    fi
+    local k8s_mm
+    k8s_mm=$(version_mm "$api_version" "kubernetes")
+    printf '// Current pin: %s (Kubernetes %s)\n' "$api_version" "$k8s_mm"
+}
+
+# Rewrite go.mod's "// Current pin: ..." comment to match the k8s.io/api
+# replace directive. A no-op (byte-for-byte) when already in sync. If the
+# comment line is missing entirely (e.g. hand-edited away), insert it
+# immediately above the "replace (" block rather than silently leaving it
+# absent — otherwise `generate` would report success while
+# validate_gomod_pin_comment kept failing with no fix available.
+sync_gomod_pin_comment() {
+    local expected
+    expected=$(expected_gomod_pin_comment) || return 1
+
+    local tmp
+    tmp=$(mktemp)
+    if grep -qE '^// Current pin: ' "$GO_MOD_FILE"; then
+        awk -v repl="$expected" '
+            /^\/\/ Current pin: / { print repl; next }
+            { print }
+        ' "$GO_MOD_FILE" > "$tmp"
+    else
+        awk -v repl="$expected" '
+            !inserted && /^replace \(/ { print repl; print "//"; inserted=1 }
+            { print }
+        ' "$GO_MOD_FILE" > "$tmp"
+    fi
+    mv "$tmp" "$GO_MOD_FILE"
+}
+
+# Assert go.mod's "// Current pin: ..." comment matches the k8s.io/api
+# replace directive it sits above. Without this, a version bump that moved
+# the replace directive left the hand-written comment silently drifted from
+# the real pin — only caught by AI reviewers, not CI.
+validate_gomod_pin_comment() {
+    local current expected
+    current=$(get_gomod_pin_comment)
+    expected=$(expected_gomod_pin_comment) || return 1
+
+    if [[ -z "$current" ]]; then
+        error "go.mod is missing the '// Current pin: ' comment above the k8s.io replace block"
+        return 1
+    fi
+
+    if [[ "$current" != "$expected" ]]; then
+        error "go.mod pin comment out of date: has '$current', expected '$expected'. Run: ./scripts/sync-versions.sh generate"
+        return 1
+    fi
+
+    success "go.mod pin comment matches: $expected"
+    return 0
+}
+
+# Reject a raw commit SHA (40- or 12-hex, the pseudo-version suffix length)
+# inside any infrastructure notes: block in versions.yaml. This is the actual
+# drift vector this check exists for: a hand-written note pins a commit that
+# the go.mod pseudo-version already encodes, and the note silently goes stale
+# when the pin moves. Deliberately NOT a ban on patch-level semver prose (e.g.
+# metallb's "v0.16.0 is a minor release...") — only a bare hex commit SHA.
+validate_no_sha_in_notes() {
+    local errors=0
+    info ""
+    info "Validating no raw commit SHAs in versions.yaml notes..."
+
+    local deps
+    deps=$(yq '.infrastructure | keys | .[]' "$VERSIONS_FILE")
+
+    while IFS= read -r dep; do
+        local notes
+        notes=$(yq ".infrastructure.${dep}.notes" "$VERSIONS_FILE")
+        [[ "$notes" == "null" ]] && continue
+
+        local hit
+        hit=$(printf '%s' "$notes" | grep -oiE '\b[0-9a-f]{40}\b|\b[0-9a-f]{12}\b' | head -n1 || true)
+        if [[ -n "$hit" ]]; then
+            error "$dep: notes contains a raw commit SHA ($hit) — reference the pseudo-version pinned in go.mod instead, not the literal commit"
+            errors=$((errors + 1))
+        fi
+    done <<< "$deps"
+
+    if [[ $errors -eq 0 ]]; then
+        success "No raw commit SHAs in versions.yaml notes"
+    fi
+
+    return $errors
+}
+
 # Validate that each go.mod dependency version falls within supported_range
 validate_gomod() {
     local errors=0
@@ -311,6 +415,8 @@ main() {
             info ""
             local gomod_result=0
             validate_gomod || gomod_result=$?
+            validate_gomod_pin_comment || gomod_result=1
+            validate_no_sha_in_notes || gomod_result=1
             validate_docs_drift || gomod_result=1
 
             if [[ $gomod_result -eq 0 ]]; then
@@ -324,6 +430,7 @@ main() {
             fi
             ;;
         generate)
+            sync_gomod_pin_comment
             generate_docs "$DOCS_FILE"
             success "Documentation generated successfully"
             exit 0

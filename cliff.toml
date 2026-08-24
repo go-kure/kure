@@ -26,10 +26,16 @@ trim = true
 # subjects so generated changelogs remain suitable for the upstream project.
 # Ordered specific to catch-all to preserve useful context where possible.
 postprocessors = [
+    # allow-term:wharf — this pattern's source text names the term it scrubs from
+    # generated changelogs (go-kure/.github check-forbidden-terms.sh).
     { pattern = '(?i)wharf\.zone/component', replace = "the platform component label" },
+    # allow-term:wharf — ditto.
     { pattern = '(?i)wharf\.zone', replace = "the platform domain" },
+    # allow-term:crane — ditto.
     { pattern = '(?i)\bfrom crane\b', replace = "from the downstream operator" },
+    # allow-term:crane — ditto.
     { pattern = '(?i)\bwith crane\b', replace = "with the downstream operator" },
+    # allow-term:wharf allow-term:crane allow-term:barge allow-term:harbor allow-term:rudder (catch-all scrub, every downstream term)
     { pattern = '(?i)\b(wharf|crane|barge|harbor|rudder)\b', replace = "the downstream operator" },
 ]
 
