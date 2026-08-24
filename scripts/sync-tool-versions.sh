@@ -15,6 +15,9 @@ cd "$ROOT"
 
 MISE="mise.toml"
 MISE_VAL="$(grep -E '^golangci-lint = "' "$MISE" | head -1 | cut -d'"' -f2)"
+# See the matching comment in check-tool-versions.sh: strip a possible "v" prefix so this
+# doesn't write "v$MISE_VAL" as "vv2.13.1" into every target.
+MISE_VAL="${MISE_VAL#v}"
 if [ -z "$MISE_VAL" ]; then
 	echo "Error: golangci-lint not found in $MISE [tools]"
 	exit 1
