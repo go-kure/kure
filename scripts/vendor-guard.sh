@@ -25,14 +25,25 @@ CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
 VENDORED="$REPO_ROOT/site/scripts/check-forbidden-terms.sh"
 
 # Pull the `ref:` SHA out of the "Checkout canonical guard" step — the
-# unmanaged pin the customManager in renovate.json tracks. `grep -A3` after
-# the `repository:` line lands on the very next `ref:` line; anchoring on
-# both means a reordered or removed YAML block fails loudly here instead of
-# silently reading a stale or wrong SHA. `|| true` on the whole pipeline is
-# required under `pipefail`: if either grep finds no match, that grep's
-# non-zero status becomes the pipeline's status even though the final awk
-# still exits 0, which would otherwise abort here under `set -e` before the
-# empty-$sha check below ever runs — verified by direct probe.
+# unmanaged pin the customManager in renovate.json tracks. If a second
+# `repository: go-kure/.github` checkout is ever added, `grep -A3 | grep -m1`
+# would silently pick a `ref:` from whichever block happened to match first
+# in the concatenated output, possibly the wrong one -- refuse instead of
+# guessing.
+repo_count="$(grep -c 'repository: go-kure/\.github' "$CI_WORKFLOW" || true)"
+if [[ "$repo_count" -gt 1 ]]; then
+    echo "vendor-guard: $repo_count 'repository: go-kure/.github' checkout blocks in $CI_WORKFLOW -- ambiguous, refusing to guess which ref: to track" >&2
+    exit 1
+fi
+
+# `grep -A3` after the `repository:` line lands on the very next `ref:`
+# line; anchoring on both means a reordered or removed YAML block fails
+# loudly here instead of silently reading a stale or wrong SHA. `|| true` on
+# the whole pipeline is required under `pipefail`: if either grep finds no
+# match, that grep's non-zero status becomes the pipeline's status even
+# though the final awk still exits 0, which would otherwise abort here
+# under `set -e` before the empty-$sha check below ever runs — verified by
+# direct probe.
 sha="$(grep -A3 'repository: go-kure/\.github' "$CI_WORKFLOW" | grep -m1 'ref:' | awk '{print $2}' || true)"
 
 if [[ -z "$sha" ]]; then
