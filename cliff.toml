@@ -26,8 +26,7 @@ trim = true
 # subjects so generated changelogs remain suitable for the upstream project.
 # Ordered specific to catch-all to preserve useful context where possible.
 postprocessors = [
-    # allow-term:wharf — this pattern's source text names the term it scrubs from
-    # generated changelogs (go-kure/.github check-forbidden-terms.sh).
+    # allow-term:wharf — names the term this pattern scrubs from changelogs (go-kure/.github check-forbidden-terms.sh).
     { pattern = '(?i)wharf\.zone/component', replace = "the platform component label" },
     # allow-term:wharf — ditto.
     { pattern = '(?i)wharf\.zone', replace = "the platform domain" },
