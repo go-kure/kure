@@ -9,6 +9,9 @@
 # 1. each go.mod dependency version falls WITHIN versions.yaml "supported_range"
 #    (the build version is read from go.mod; there is no "current" field to sync)
 # 2. Documentation is generated from versions.yaml + go.mod
+# 3. go.mod's "// Current pin: ..." comment matches its k8s.io/api replace directive
+# 4. versions.yaml notes never carry a raw commit SHA (must reference a vendor-guard-checked
+#    ref: pin instead, see scripts/vendor-guard.sh)
 
 set -euo pipefail
 
@@ -55,6 +58,22 @@ get_gomod_version() {
     echo "$version"
 }
 
+# Extract a module's version from go.mod's replace directive ONLY -- no
+# require-section fallback. Unlike get_gomod_version (used generically for
+# range checks, where a module may legitimately have no replace directive),
+# the pin comment specifically asserts the k8s.io/api *replace* directive's
+# version, per its own doc comment. If the require fallback were used here,
+# deleting the replace line while require still lists the same version
+# (as it always does when the replace target is unmodified) would make
+# expected_gomod_pin_comment silently recompute the same "expected" value
+# from require, and validate_gomod_pin_comment would report a match despite
+# the replace directive itself being gone -- exactly the drift this check
+# exists to catch. Returns empty if no replace directive matches.
+get_gomod_replace_version() {
+    local module="$1"
+    grep -E "^\s*${module} =>" "$GO_MOD_FILE" | awk '{print $NF}' | head -n1
+}
+
 # True (exit 0) if the version string is a Go pseudo-version (untagged module
 # pinned to a commit, e.g. v0.0.0-20260213133823-31b0c7c37342). Such versions
 # carry no meaningful semver and are skipped by the range guard.
@@ -98,7 +117,7 @@ get_gomod_pin_comment() {
 # maps v0.N.x -> "1.N".
 expected_gomod_pin_comment() {
     local api_version
-    api_version=$(get_gomod_version "k8s.io/api")
+    api_version=$(get_gomod_replace_version "k8s.io/api")
     if [[ -z "$api_version" ]]; then
         error "k8s.io/api replace directive not found in go.mod"
         return 1
