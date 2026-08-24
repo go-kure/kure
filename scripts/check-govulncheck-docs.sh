@@ -28,7 +28,10 @@ if [ "$ci_count" -ne 1 ]; then
 	echo "✗ govulncheck: expected exactly 1 GOVULNCHECK_VERSION assignment in .github/workflows/ci.yml, found $ci_count"
 	exit 1
 fi
-CI_VAL="$(grep -E '^[[:space:]]*GOVULNCHECK_VERSION:' .github/workflows/ci.yml | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//')"
+# Trim trailing whitespace too — a stray space before the line end (e.g. "v1.7.0 ") would
+# otherwise survive into CI_VAL and propagate into sync-govulncheck-docs.sh's rewrite, embedding
+# a space in every doc mention it touches before this checker's own self-verify catches it dirty.
+CI_VAL="$(grep -E '^[[:space:]]*GOVULNCHECK_VERSION:' .github/workflows/ci.yml | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//; s/[[:space:]]+$//')"
 if [ -z "$CI_VAL" ]; then
 	echo "✗ govulncheck: GOVULNCHECK_VERSION not found in .github/workflows/ci.yml"
 	exit 1

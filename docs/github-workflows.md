@@ -85,7 +85,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 | Job | Check Name | Timeout | Dependencies | Purpose |
 |-----|------------|---------|--------------|---------|
-| `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint; `sync-versions.sh check`; `bash -n` syntax-check on the version-sync scripts; caches goimports + yq binaries |
+| `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint, tool-version parity (golangci-lint pin across Makefile/ci.yml/docs), govulncheck doc parity; `sync-versions.sh check`; `bash -n` syntax-check on the version-sync scripts; caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
 | `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
@@ -615,7 +615,8 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
   Also includes `mise.toml`, `scripts/check-tool-versions.sh`, `scripts/sync-tool-versions.sh`
   and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
   job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity
-  guard.
+  guard. Same reasoning covers `scripts/check-govulncheck-docs.sh` and
+  `scripts/sync-govulncheck-docs.sh` — `check-govulncheck-docs` also runs only in `validate`.
 - `docs:` filter — triggers docs-build/docs-check jobs. Includes `site/**`, `docs/**`, `*.md`,
   `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
   the docs build).

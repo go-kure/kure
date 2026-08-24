@@ -12,7 +12,9 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-CI_VAL="$(grep -E '^[[:space:]]*GOVULNCHECK_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//')"
+# Trim trailing whitespace too — an untrimmed value would embed a literal space in every doc
+# mention this script rewrites, via the ver substitution below.
+CI_VAL="$(grep -E '^[[:space:]]*GOVULNCHECK_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//; s/[[:space:]]+$//')"
 if [ -z "$CI_VAL" ]; then
 	echo "Error: GOVULNCHECK_VERSION not found in .github/workflows/ci.yml"
 	exit 1
