@@ -46,7 +46,13 @@ LINE_COUNT=0
 # survive past the loop — a `LINES | while read` here would silently drop every increment.
 while IFS= read -r line; do
 	lineno="${line%%:*}"
-	val="$(printf '%s\n' "$line" | grep -oE 'v[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 | sed -E 's/^v//')"
+	# Extract from the text after the FIRST "govulncheck" on the line, not the whole line and
+	# not a greedy match to the LAST occurrence — a line can legitimately mention govulncheck
+	# twice (e.g. "govulncheck ... v1.7.0 ... govulncheck-gate action"), and a greedy `.*` would
+	# skip past the actual pin looking for the later mention. `#*govulncheck` is shell parameter
+	# expansion's shortest-prefix removal, i.e. genuinely first-occurrence, unlike sed's `.*`.
+	after="${line#*govulncheck}"
+	val="$(printf '%s\n' "$after" | grep -oE 'v[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 | sed -E 's/^v//')"
 	LINE_COUNT=$((LINE_COUNT + 1))
 	if [ "$val" != "$CI_VAL" ]; then
 		echo "✗ $DOC:$lineno has v$val (expected v$CI_VAL from .github/workflows/ci.yml)"
