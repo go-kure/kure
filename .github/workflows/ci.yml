@@ -18,7 +18,7 @@ permissions:
   pull-requests: write
 
 env:
-  GOLANGCI_LINT_VERSION: 'v2.10.1'
+  GOLANGCI_LINT_VERSION: 'v2.13.1'
   # Several repos across both forges install this same scanner and share the
   # govulncheck-gate action, but nothing compares their pins. A bump therefore has
   # to be mirrored by hand in each workflow that installs it, this one included.

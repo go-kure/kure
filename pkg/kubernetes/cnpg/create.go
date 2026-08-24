@@ -159,7 +159,7 @@ func Cluster(cfg *ClusterConfig) (*cnpgv1.Cluster, error) {
 	}
 
 	if opts.Monitoring != nil && opts.Monitoring.EnablePodMonitor {
-		mon := &cnpgv1.MonitoringConfiguration{EnablePodMonitor: true}
+		mon := &cnpgv1.MonitoringConfiguration{EnablePodMonitor: true} //nolint:staticcheck // SA1019: EnablePodMonitor is the only API this upstream type exposes for opting into PodMonitor creation today; migrating callers to a manually-created PodMonitor is a separate change
 		for _, cq := range opts.Monitoring.CustomQueriesConfigMap {
 			mon.CustomQueriesConfigMap = append(mon.CustomQueriesConfigMap, cnpgv1.ConfigMapKeySelector{
 				LocalObjectReference: machineryapi.LocalObjectReference{Name: cq.Name},

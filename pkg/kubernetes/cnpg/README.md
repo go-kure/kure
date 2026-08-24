@@ -66,6 +66,24 @@ cnpg.SetScheduledBackupMethod(backup, cnpgv1.BackupMethodBarmanObjectStore)
 cnpg.SetScheduledBackupImmediate(backup, true)
 ```
 
+### Monitoring
+
+```go
+cluster := cnpg.Cluster(&cnpg.ClusterConfig{
+    Name:      "pg-main",
+    Namespace: "databases",
+    Monitoring: &cnpg.MonitoringOptions{
+        EnablePodMonitor: true,
+    },
+})
+```
+
+`MonitoringOptions.EnablePodMonitor` opts into the operator's built-in `PodMonitor` creation via
+the upstream `MonitoringConfiguration.EnablePodMonitor` field. That upstream field is deprecated
+(no replacement API exists yet upstream) — the operator's own deprecation notice recommends
+creating the `PodMonitor` resource manually instead once that path lands. Until then this is the
+only way to request pod-level metrics scraping through this builder.
+
 ## Modifier Functions
 
 All `Add*` and `Set*` functions from the internal package are re-exported here:
