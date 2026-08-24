@@ -28,7 +28,7 @@ TEST_PACKAGES := ./...
 COVERAGE_THRESHOLD := 80
 
 # Linting configuration
-GOLANGCI_LINT_VERSION := v2.10.1
+GOLANGCI_LINT_VERSION := v2.13.1
 
 # Colors for output
 COLOR_RESET := \033[0m
@@ -143,6 +143,7 @@ lint: ## Run linters with golangci-lint
 		echo "$(COLOR_RED)golangci-lint not found. Installing...$(COLOR_RESET)"; \
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION); \
 	fi
+	@PATH="$$PATH:$$(go env GOPATH)/bin" golangci-lint --version
 	@PATH="$$PATH:$$(go env GOPATH)/bin" golangci-lint run --timeout=10m $(LINT_FLAGS) ./...
 	@echo "$(COLOR_GREEN)Linting passed$(COLOR_RESET)"
 
