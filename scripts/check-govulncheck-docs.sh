@@ -18,7 +18,17 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-CI_VAL="$(grep -E '^[[:space:]]*GOVULNCHECK_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//')"
+# Exactly one match required — a second GOVULNCHECK_VERSION assignment (e.g. a job-level env
+# override in the security job) would still silently win under `head -1`'s first-match pick,
+# while the govulncheck install step actually consumes whichever one GitHub Actions resolves for
+# that job — the same duplicate-pin risk scripts/check-tool-versions.sh already guards against
+# for GOLANGCI_LINT_VERSION.
+ci_count="$(grep -cE '^[[:space:]]*GOVULNCHECK_VERSION:' .github/workflows/ci.yml || true)"
+if [ "$ci_count" -ne 1 ]; then
+	echo "✗ govulncheck: expected exactly 1 GOVULNCHECK_VERSION assignment in .github/workflows/ci.yml, found $ci_count"
+	exit 1
+fi
+CI_VAL="$(grep -E '^[[:space:]]*GOVULNCHECK_VERSION:' .github/workflows/ci.yml | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//')"
 if [ -z "$CI_VAL" ]; then
 	echo "✗ govulncheck: GOVULNCHECK_VERSION not found in .github/workflows/ci.yml"
 	exit 1
@@ -49,9 +59,19 @@ while IFS= read -r line; do
 	# Extract from the text after the FIRST "govulncheck" on the line, not the whole line and
 	# not a greedy match to the LAST occurrence — a line can legitimately mention govulncheck
 	# twice (e.g. "govulncheck ... v1.7.0 ... govulncheck-gate action"), and a greedy `.*` would
-	# skip past the actual pin looking for the later mention. `#*govulncheck` is shell parameter
-	# expansion's shortest-prefix removal, i.e. genuinely first-occurrence, unlike sed's `.*`.
-	after="${line#*govulncheck}"
+	# skip past the actual pin looking for the later mention. The line SELECTION above is
+	# case-insensitive (`grep -inE`), so extraction must be too — a case-sensitive shell
+	# `${line#*govulncheck}` would fail to strip a differently-cased mention (e.g.
+	# "Govulncheck"), leaving the whole line (including the "NN:" prefix) as `after` and
+	# producing a false mismatch. `index(tolower(...))` mirrors sync-govulncheck-docs.sh's own
+	# case-insensitive first-occurrence split, so checker and syncer agree on what "the text
+	# after govulncheck" means.
+	after="$(printf '%s\n' "$line" | awk '
+		{
+			idx = index(tolower($0), "govulncheck")
+			if (idx > 0) print substr($0, idx + length("govulncheck"))
+		}
+	')"
 	val="$(printf '%s\n' "$after" | grep -oE 'v[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 | sed -E 's/^v//')"
 	LINE_COUNT=$((LINE_COUNT + 1))
 	if [ "$val" != "$CI_VAL" ]; then
