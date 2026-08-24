@@ -19,6 +19,9 @@ cd "$ROOT"
 
 MISE="mise.toml"
 MISE_VAL="$(grep -E '^golangci-lint = "' "$MISE" | head -1 | cut -d'"' -f2)"
+# mise tolerates a "v"-prefixed pin (golangci-lint's own release tags carry one); strip it so a
+# future Renovate bump that writes "vX.Y.Z" here can't double-prefix every target's "v$MISE_VAL".
+MISE_VAL="${MISE_VAL#v}"
 if [ -z "$MISE_VAL" ]; then
 	echo "✗ golangci-lint: not found in $MISE [tools]"
 	exit 1
