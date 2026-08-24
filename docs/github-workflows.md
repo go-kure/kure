@@ -612,6 +612,10 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
   metadata or the release-pinning script skipped both the supported-range guard and the
   compatibility-matrix drift guard (or, for `sync-eso-pin.sh`, all of `validate`/`test`)
   and still reported success — the `build` gate accepts a `skipped` dependency as passing.
+  Also includes `mise.toml`, `scripts/check-tool-versions.sh`, `scripts/sync-tool-versions.sh`
+  and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
+  job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity
+  guard.
 - `docs:` filter — triggers docs-build/docs-check jobs. Includes `site/**`, `docs/**`, `*.md`,
   `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
   the docs build).
