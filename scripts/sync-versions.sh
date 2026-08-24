@@ -113,7 +113,10 @@ expected_gomod_pin_comment() {
 # comment line is missing entirely (e.g. hand-edited away), insert it
 # immediately above the "replace (" block rather than silently leaving it
 # absent — otherwise `generate` would report success while
-# validate_gomod_pin_comment kept failing with no fix available.
+# validate_gomod_pin_comment kept failing with no fix available. If no
+# "replace (" block anchor exists at all (e.g. a single-line replace
+# directive), fail loudly instead of silently leaving the comment absent —
+# exactly the loop this function exists to prevent.
 sync_gomod_pin_comment() {
     local expected
     expected=$(expected_gomod_pin_comment) || return 1
@@ -126,12 +129,20 @@ sync_gomod_pin_comment() {
             { print }
         ' "$GO_MOD_FILE" > "$tmp"
     else
-        awk -v repl="$expected" '
+        if ! awk -v repl="$expected" '
             !inserted && /^replace \(/ { print repl; print "//"; inserted=1 }
             { print }
-        ' "$GO_MOD_FILE" > "$tmp"
+            END { exit !inserted }
+        ' "$GO_MOD_FILE" > "$tmp"; then
+            rm -f "$tmp"
+            error "go.mod has no 'replace (' block to anchor the pin comment above — insert '// Current pin: ...' by hand"
+            return 1
+        fi
     fi
-    mv "$tmp" "$GO_MOD_FILE"
+    # mktemp creates the file mode 0600; mv would install that mode over
+    # go.mod, silently stripping its group/other read permission. Preserve
+    # the original file's mode instead of replacing the inode.
+    cat "$tmp" > "$GO_MOD_FILE" && rm -f "$tmp"
 }
 
 # Assert go.mod's "// Current pin: ..." comment matches the k8s.io/api
