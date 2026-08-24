@@ -339,7 +339,7 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 check: lint vet test-short check-tool-versions ## Quick code quality check (lint, vet, short tests, tool pins)
 
 .PHONY: precommit
-precommit: fmt tidy lint test ## Run fast pre-commit checks (fmt, tidy, lint, test)
+precommit: fmt tidy lint test check-tool-versions ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins)
 
 .PHONY: ci
 ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln ## Run comprehensive CI pipeline
