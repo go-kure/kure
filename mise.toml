@@ -27,7 +27,15 @@ run = "make check"
 
 [tasks.verify]
 description = "Run all checks (tidy, lint, test)"
-depends = ["tidy", "lint", "test"]
+depends = ["tidy", "lint", "test", "check-tool-versions"]
+
+[tasks.check-tool-versions]
+description = "Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml"
+run = "sh scripts/check-tool-versions.sh"
+
+[tasks.sync-tool-versions]
+description = "Sync golangci-lint pins (Makefile/ci.yml/docs) from mise.toml"
+run = "sh scripts/sync-tool-versions.sh"
 
 [tasks.changelog]
 description = "Generate changelog from git history"
