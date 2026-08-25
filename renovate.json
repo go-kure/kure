@@ -38,6 +38,12 @@
       "enabled": false
     },
     {
+      "description": "barman-cloud's version is set by minimum-version selection from plugin-barman-cloud's own go.mod, not by an independent choice -- upstream pins it by pseudo-version, so every upstream commit reads as a new digest and the shared preset's go-patch rule automerges it unreviewed (go-kure/kure#688 merged in 11 minutes). Disable the standalone gomod bump; postUpdateOptions gomodTidy re-raises the require whenever the plugin bump lands, which is the update path that should exist.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/cloudnative-pg/barman-cloud"],
+      "enabled": false
+    },
+    {
       "description": "Filter the github-releases datasource to plain vX.Y.Z tags only (extractVersion, undocumented as a customManagers field, applies as a packageRules match here instead) -- upstream also cuts non-matching helm-chart-X.Y.Z tags, which must never satisfy this dependency. Then re-pin external-secrets to the new release's commit, regenerate go.mod/go.sum and versions.yaml's upstream_release_commit, and regenerate docs, on the customManager's own branch whenever upstream_release bumps.",
       "matchDepNames": ["external-secrets/external-secrets"],
       "extractVersion": "^(?<version>v\\d+\\.\\d+\\.\\d+)$",

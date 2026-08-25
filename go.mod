@@ -29,7 +29,7 @@ require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.21.1
 	github.com/cilium/cilium v1.20.1
-	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260806065336-5aa56cd49543
+	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260720143032-950b0f57e122
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/cloudnative-pg/machinery v0.5.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.14.0
