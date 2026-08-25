@@ -28,13 +28,13 @@ replace (
 require (
 	github.com/backube/volsync v0.16.0
 	github.com/cert-manager/cert-manager v1.21.1
-	github.com/cilium/cilium v1.20.0
+	github.com/cilium/cilium v1.20.1
 	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260806065336-5aa56cd49543
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/cloudnative-pg/machinery v0.5.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.14.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.53.0
-	github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342
+	github.com/external-secrets/external-secrets/apis v0.0.0-20260824214743-7460a7a34f8d
 	github.com/fluxcd/flux2/v2 v2.9.3
 	github.com/fluxcd/helm-controller/api v1.6.3
 	github.com/fluxcd/image-automation-controller/api v1.2.3
