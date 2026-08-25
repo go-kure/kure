@@ -77,6 +77,16 @@ get_gomod_replace_version() {
 # True (exit 0) if the version string is a Go pseudo-version (untagged module
 # pinned to a commit, e.g. v0.0.0-20260213133823-31b0c7c37342). Such versions
 # carry no meaningful semver and are skipped by the range guard.
+#
+# NOTE: this only matches pseudo-version form 1 (vX.0.0-<ts>-<hash>, the
+# untagged-repo case). Forms 2 and 3 (vX.Y.Z-pre.0.<ts>-<hash> and
+# vX.Y.(Z+1)-0.<ts>-<hash> -- the shapes you get when the module *does* have
+# tags but the pin sits between two of them) never match, and version_mm()
+# below parses their leading "X.Y" correctly regardless. That is deliberate
+# for barman-cloud (versions.yaml): widening this regex to also match forms
+# 2/3 would route it into the pseudo-version skip branch and silently
+# disable its range check. Do not widen without re-auditing every
+# infrastructure entry whose pin is a form-2/3 pseudo-version.
 is_pseudo_version() {
     [[ "$1" =~ -[0-9]{14}-[0-9a-f]{12}$ ]]
 }

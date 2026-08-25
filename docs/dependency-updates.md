@@ -121,6 +121,44 @@ bump that moved a build version or a `supported_range` left the committed matrix
 stale until someone happened to re-run `generate`, and the staleness was caught only by
 human review — on three separate dependency PRs.
 
+### MVS-floor dependencies (tagged upstream, but never chosen directly)
+
+A different shape of pseudo-version problem: the upstream repo **does** cut releases, but
+nothing in kure ever picks one — the pin is set by Go's minimum-version selection from a
+*different* dependency's `go.mod`. `github.com/cloudnative-pg/barman-cloud` is the example:
+kure imports it directly, but `github.com/cloudnative-pg/plugin-barman-cloud` also requires
+it, at a pseudo-version *past* barman-cloud's last real tag — so MVS floors kure's pin above
+any tag that exists, and a hand-chosen tag would actually be a **downgrade** the build
+cannot use.
+
+This needs no release-tracking machinery, because there is no release to track — the pin
+should simply always equal the floor:
+
+```yaml
+barman-cloud:
+  go_module: "github.com/cloudnative-pg/barman-cloud"
+  supported_range: "0.5"      # major.minor only -- see is_pseudo_version() note below
+```
+
+- The pin itself is **derived, never hand-written**: `go mod edit -droprequire=<module> &&
+  go mod tidy` re-computes it from whatever the floor-setting dependency currently
+  requires. Re-run this whenever the floor-setting dependency (here,
+  `plugin-barman-cloud`) bumps.
+- `supported_range` is expressed in plain `major.minor` because this dependency's
+  pseudo-version does **not** match `is_pseudo_version()`'s regex (see the comment above
+  that function in `scripts/sync-versions.sh`) — it falls through to the ordinary range
+  path, so the check runs unmodified, unlike the release-pinned case above where the range
+  check is substituted onto `upstream_release`.
+- `renovate.json` disables the standalone `gomod` bump for the module
+  (`matchPackageNames` + `enabled: false`, same shape as the release-pinned rule above).
+  The shared preset's `postUpdateOptions: ["gomodTidy"]` re-raises the require to the new
+  floor automatically whenever the floor-setting dependency's own PR runs `go mod tidy` —
+  so the pin still moves, inside that dependency's own reviewable PR, never on its own.
+- Without the `versions.yaml` entry, `validate_gomod()`'s loop — keyed on `.infrastructure`
+  keys — never visits the module at all: not skipped, not warned, invisible. That silence
+  is what let `barman-cloud` digest-bump unreviewed for months before this pattern existed
+  (the shared preset's `go-patch` group automerges `gomod` patch/digest bumps).
+
 ## Update Risk Levels
 
 ### Patch Updates (Low Risk)

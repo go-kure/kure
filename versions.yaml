@@ -25,6 +25,20 @@ go:
 
 # Infrastructure dependencies
 infrastructure:
+  barman-cloud:
+    go_module: "github.com/cloudnative-pg/barman-cloud"
+    supported_range: "0.5"
+    notes: |
+      Barman Cloud object-store API types (BarmanObjectStoreConfiguration,
+      S3Credentials) — a separate module from both the CNPG operator and the
+      barman-cloud *plugin* (cnpg-barman-cloud-plugin, below). Kure imports pkg/api
+      directly.
+      Pinned to the pseudo-version plugin-barman-cloud v0.14.0 itself
+      requires, i.e. the minimum-version-selection floor, not an
+      independently chosen commit. It moves only when the plugin moves;
+      renovate.json disables the standalone gomod bump for it (see the rule
+      there).
+
   cert-manager:
     go_module: "github.com/cert-manager/cert-manager"
     # Kure generates YAML compatible with these deployed versions
@@ -145,7 +159,10 @@ infrastructure:
       CloudNativePG operator for PostgreSQL on Kubernetes.
       Cluster CR (with managed roles), Database CR (postgresql.cnpg.io/v1),
       ObjectStore CR (barmancloud.cnpg.io/v1), and ScheduledBackups.
-      ObjectStore lives in a separate module (plugin-barman-cloud).
+      ObjectStore lives in a separate module (plugin-barman-cloud, entry
+      cnpg-barman-cloud-plugin below), which in turn requires its own
+      separate barman-cloud module (entry barman-cloud above) for the
+      underlying object-store API types — two distinct CNPG modules, not one.
       v1.30 is a routine minor with no changes to the imported postgresql.cnpg.io/v1
       types (Cluster, Database, Pooler, ScheduledBackup) — build + tests pass unchanged.
     related_packages:
@@ -153,12 +170,14 @@ infrastructure:
       - "github.com/cloudnative-pg/barman-cloud"
       - "github.com/cloudnative-pg/machinery"
 
-  cnpg-barman-cloud:
+  cnpg-barman-cloud-plugin:
     go_module: "github.com/cloudnative-pg/plugin-barman-cloud"
     supported_range: "0.9 - 0.14"
     notes: |
       Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
-      Versioned independently from the CNPG operator.
+      Versioned independently from the CNPG operator. Not to be confused with
+      the barman-cloud entry above, a separate module this plugin itself
+      depends on for object-store API types.
       v0.14 is a routine minor with no changes to the imported ObjectStore v1 type
       (build + tests pass unchanged).
 
