@@ -11,9 +11,10 @@ Kure tracks dependency versions in three places:
 | `go.mod` | Go module dependencies — authoritative for the build version (the pin) |
 | `versions.yaml` | Version metadata: supported range, notes (no build version) |
 | `docs/compatibility.md` | Generated from `versions.yaml` + `go.mod` — never edit directly |
+| `pkg/versions/versions_gen.go` | Generated from `versions.yaml` — never edit directly; run `mise run versions:generate` |
 | `renovate.json` | Bot policy: update gates and caps, on top of the shared `go-kure/.github` preset |
 
-The `sync-versions.sh check` command performs four assertions. It runs in CI's `validate`
+The `sync-versions.sh check` command performs five assertions. It runs in CI's `validate`
 job, which is gated on the `go` paths-filter in `.github/workflows/ci.yml` — that filter
 includes `versions.yaml`, `docs/compatibility.md` and `scripts/sync-versions.sh` precisely
 so a version-metadata-only PR cannot skip it:
@@ -39,6 +40,9 @@ so a version-metadata-only PR cannot skip it:
    your working tree is never touched. On failure it prints the diff (`-` is what is
    committed, `+` is what `versions.yaml` + `go.mod` currently imply) and tells you to
    run `generate`.
+5. **Go API drift** — the committed `pkg/versions/versions_gen.go` is byte-identical to
+   what `generate_go_api` would produce right now. Same regenerate-into-a-temp-file-and-diff
+   shape as item 4 above.
 
 ### Release-pinned dependencies (untagged Go submodules)
 

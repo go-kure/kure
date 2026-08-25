@@ -90,6 +90,10 @@ packages:
     readme: pkg/logger/README.md
     guides: []
     mount: {target: api-reference/logger.md, title: Logger, weight: 110, group: Utilities, desc: "Structured logging"}
+  - path: pkg/versions
+    readme: pkg/versions/README.md
+    guides: []
+    mount: {target: api-reference/versions.md, title: Versions, weight: 115, group: Utilities, desc: "Supported-version metadata for infrastructure dependencies"}
 
   # ─── Intentionally unpublished ───
   - path: pkg/gvk

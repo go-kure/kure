@@ -42,6 +42,7 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 |---------|-------------|-----------|
 | [Errors](/api-reference/errors/) | Structured error types | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/errors) |
 | [Logger](/api-reference/logger/) | Structured logging | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/logger) |
+| [Versions](/api-reference/versions/) | Supported-version metadata for infrastructure dependencies | [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure/pkg/versions) |
 <!-- END GENERATED: api-reference-nav -->
 
 ## Compatibility
