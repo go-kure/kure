@@ -11,9 +11,33 @@
       "packageNameTemplate": "https://github.com/go-kure/.github.git",
       "currentValueTemplate": "main",
       "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
+      "description": "external-secrets' /apis submodule has no semver tags, so the gomod manager (disabled below) can only see main HEAD. Track the *release* upstream_release is pinned to instead, so a PR opens when upstream cuts a release rather than on every commit. Upstream interleaves vX.Y.Z and helm-chart-X.Y.Z release tags; the matching packageRules entry below (extractVersion is a packageRules-only field, invalid directly inside a customManagers object) filters to the former only.",
+      "managerFilePatterns": ["/^versions\\.yaml$/"],
+      "matchStrings": ["external-secrets:[\\s\\S]*?upstream_release: \"(?<currentValue>v[0-9.]+)\""],
+      "depNameTemplate": "external-secrets/external-secrets",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
+    {
+      "description": "external-secrets' /apis submodule is untagged, so the gomod manager's @latest is upstream main HEAD -- every commit reads as a new version (go-kure/kure's release-pinning plan). Disable the raw gomod bump; the customManager above tracks upstream_release instead and re-pins via sync-eso-pin.sh.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/external-secrets/external-secrets/apis"],
+      "enabled": false
+    },
+    {
+      "description": "Filter the github-releases datasource to plain vX.Y.Z tags only (extractVersion, undocumented as a customManagers field, applies as a packageRules match here instead) -- upstream also cuts non-matching helm-chart-X.Y.Z tags, which must never satisfy this dependency. Then re-pin external-secrets to the new release's commit, regenerate go.mod/go.sum and versions.yaml's upstream_release_commit, and regenerate docs, on the customManager's own branch whenever upstream_release bumps.",
+      "matchDepNames": ["external-secrets/external-secrets"],
+      "extractVersion": "^(?<version>v\\d+\\.\\d+\\.\\d+)$",
+      "postUpgradeTasks": {
+        "commands": ["./scripts/sync-eso-pin.sh"],
+        "fileFilters": ["go.mod", "go.sum", "versions.yaml", "docs/compatibility.md"],
+        "executionMode": "branch"
+      }
+    },
     {
       "description": "Regenerate docs/compatibility.md on the bot's own branch after any gomod or mise bump — the committed matrix is generated from versions.yaml + go.mod, and CI's validate job fails on drift (sync-versions.sh check). Dependabot could not run this step, which left its PRs permanently red (#665, #667). The script is a no-op when nothing derived changes, so matching both managers is safe. go.mod is included because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive.",
       "matchManagers": ["gomod", "mise"],
