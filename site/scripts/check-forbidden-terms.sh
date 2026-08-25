@@ -16,8 +16,8 @@
 #                      convenience only — MUST NOT gate CI (it diverges PR vs. queue).
 #
 # Scope (both modes): docs/  site/content/  pkg/**  cmd/**  scripts/**  **/*.md
-#   .github/workflows/**  and .github/actions/**. The guard script itself is
-#   excluded from its own scan.
+#   .github/workflows/**  .github/actions/**  and any tracked **/*.{json,yml,yaml,toml}.
+#   The guard script itself is excluded from its own scan.
 #
 # Forbidden terms (case-insensitive, whole word):
 #   wharf  crane  barge  harbor  rudder
@@ -53,6 +53,20 @@ in_scope() {
   case "$f" in
     docs/*|site/content/*|pkg/*|cmd/*|scripts/*|.github/workflows/*|.github/actions/*) return 0 ;;
     *.md) return 0 ;;
+    # TRACKED CONFIG IS IN SCOPE TOO.
+    #
+    # The list above is a path allowlist, and `renovate/shared.json` matched none
+    # of its prefixes. The guard therefore ran, reported OK, and never opened the
+    # one tracked file that named the downstream platform — six times, in a
+    # PUBLIC repository, while the `forbidden-terms` job sat green. A guard that
+    # cannot see a file is not a guard that file passed.
+    #
+    # Config carries downstream names as readily as prose does: package matchers,
+    # group names, image references, repository lists. Matching by extension
+    # rather than by directory means a new config file is in scope the moment it
+    # is added, instead of the next time someone remembers to extend a prefix
+    # list.
+    *.json|*.yml|*.yaml|*.toml) return 0 ;;
   esac
   return 1
 }
