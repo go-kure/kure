@@ -56,7 +56,7 @@ if [ "$mk_count" -ne 1 ]; then
 	echo "✗ Makefile: expected exactly 1 GOLANGCI_LINT_VERSION assignment, found $mk_count"
 	ERRORS=$((ERRORS + 1))
 else
-	mk_val="$(grep -E '^GOLANGCI_LINT_VERSION[[:space:]]*:=[[:space:]]*v' Makefile | sed -E 's/^GOLANGCI_LINT_VERSION[[:space:]]*:=[[:space:]]*v//')"
+	mk_val="$(grep -E '^GOLANGCI_LINT_VERSION[[:space:]]*:=[[:space:]]*v' Makefile | sed -E 's/^GOLANGCI_LINT_VERSION[[:space:]]*:=[[:space:]]*v//; s/[[:space:]]+$//')"
 	check "Makefile" "Makefile" "$mk_val"
 fi
 
