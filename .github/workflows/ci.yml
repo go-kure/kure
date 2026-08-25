@@ -213,7 +213,12 @@ jobs:
         fi
 
     - name: Save Go build cache
-      if: success() && steps.gocache.outputs.cache-hit != 'true'
+      # Default-branch only: a PR's own gocache entry is dead the moment it merges (GitHub
+      # scopes a cache to the branch that wrote it and its descendants), so saving from
+      # feature branches only inflates the shared actions-cache bucket for no restore benefit.
+      # Restores still fall back to the main-branch entry via restore-keys above.
+      # See ginsys/opsmaster docs/arc-runners.md "Purge / retention" (2026-08-25 growth incident).
+      if: success() && steps.gocache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
@@ -318,7 +323,12 @@ jobs:
         go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 15m ./... 2>&1 | tee /tmp/gotest.log
 
     - name: Save Go build cache
-      if: success() && steps.gocache.outputs.cache-hit != 'true'
+      # Default-branch only: a PR's own gocache entry is dead the moment it merges (GitHub
+      # scopes a cache to the branch that wrote it and its descendants), so saving from
+      # feature branches only inflates the shared actions-cache bucket for no restore benefit.
+      # Restores still fall back to the main-branch entry via restore-keys above.
+      # See ginsys/opsmaster docs/arc-runners.md "Purge / retention" (2026-08-25 growth incident).
+      if: success() && steps.gocache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
@@ -468,7 +478,12 @@ jobs:
         allowlist: 'GO-2026-5377'
 
     - name: Save Go build cache
-      if: success() && steps.gocache.outputs.cache-hit != 'true'
+      # Default-branch only: a PR's own gocache entry is dead the moment it merges (GitHub
+      # scopes a cache to the branch that wrote it and its descendants), so saving from
+      # feature branches only inflates the shared actions-cache bucket for no restore benefit.
+      # Restores still fall back to the main-branch entry via restore-keys above.
+      # See ginsys/opsmaster docs/arc-runners.md "Purge / retention" (2026-08-25 growth incident).
+      if: success() && steps.gocache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.cache/go-build
