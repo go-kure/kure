@@ -172,6 +172,14 @@ jobs:
     - name: Validate version consistency
       run: ./scripts/sync-versions.sh check
 
+    # sync-eso-pin.sh has no other CI coverage: it's a Renovate postUpgradeTasks command,
+    # not something `sync-versions.sh check`/`make lint` (Go-only) ever invokes or parses —
+    # a syntax error here would only surface the next time Renovate runs it. Cheap floor:
+    # catch a broken script before it merges, not full shellcheck (a repo-wide tooling
+    # decision, out of scope for this one script).
+    - name: Syntax-check version-sync scripts
+      run: bash -n scripts/sync-eso-pin.sh scripts/sync-versions.sh
+
     - name: Cache goimports
       id: goimports-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
