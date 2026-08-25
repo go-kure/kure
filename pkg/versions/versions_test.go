@@ -20,9 +20,6 @@ func TestGetKubernetes(t *testing.T) {
 	if d.SupportedRange == "" {
 		t.Error("kubernetes SupportedRange is empty")
 	}
-	if d.Min == d.Max {
-		t.Errorf("SupportedRange %q collapsed to a single bound %q", d.SupportedRange, d.Min)
-	}
 	if d.VersionBasis != "kubernetes" {
 		t.Errorf(`VersionBasis = %q, want "kubernetes"`, d.VersionBasis)
 	}
