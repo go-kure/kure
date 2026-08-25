@@ -105,8 +105,8 @@ github.com/evanphx/json-patch v5.9.11+incompatible h1:ixHHqfcGvxhWkniF1tWxBHA0yb
 github.com/evanphx/json-patch v5.9.11+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/evanphx/json-patch/v5 v5.9.11 h1:/8HVnzMq13/3x9TPvjG08wUGqBTmZBsCWzjTM0wiaDU=
 github.com/evanphx/json-patch/v5 v5.9.11/go.mod h1:3j+LviiESTElxA4p3EMKAB9HXj3/XEtnUf6OZxqIQTM=
-github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342 h1:/pfjvNZGHTIisL12xKJRVzSLt8AYUW6pWuxrImxjrxY=
-github.com/external-secrets/external-secrets/apis v0.0.0-20260213133823-31b0c7c37342/go.mod h1:Ne6H/bciRDZLiH8IB17B1BiIi7BtOoGN2TCRNsrCBsI=
+github.com/external-secrets/external-secrets/apis v0.0.0-20260807160437-378bdb622ed9 h1:FtmDlIF1Ty2qoeJLVa0dktZ+d+7GQvMnDtKzskp7xc8=
+github.com/external-secrets/external-secrets/apis v0.0.0-20260807160437-378bdb622ed9/go.mod h1:5GcFUHfOeptmLo4hCGlzWQf50wGxTszFJGuMN3IlkhE=
 github.com/extism/go-sdk v1.7.1 h1:lWJos6uY+tRFdlIHR+SJjwFDApY7OypS/2nMhiVQ9Sw=
 github.com/extism/go-sdk v1.7.1/go.mod h1:IT+Xdg5AZM9hVtpFUA+uZCJMge/hbvshl8bwzLtFyKA=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=

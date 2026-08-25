@@ -268,8 +268,42 @@ validate_gomod() {
         fi
 
         if is_pseudo_version "$actual_version"; then
-            info "$dep: $actual_version (pseudo-version — range check skipped)"
-            continue
+            local upstream_release
+            upstream_release=$(yq ".infrastructure.${dep}.upstream_release // \"\"" "$VERSIONS_FILE")
+
+            if [[ -z "$upstream_release" || "$upstream_release" == "null" ]]; then
+                info "$dep: $actual_version (pseudo-version, no upstream_release declared — range check skipped)"
+                continue
+            fi
+
+            # A dep declaring upstream_release is pinned to a named release, not
+            # tracking main HEAD (see scripts/sync-eso-pin.sh). Assert the pin
+            # hasn't drifted off that release before substituting it for the
+            # range check below -- this is the actual drift guard, offline
+            # (no network needed: the release's commit is a structured field,
+            # not re-resolved from the tag here).
+            local upstream_release_commit
+            upstream_release_commit=$(yq ".infrastructure.${dep}.upstream_release_commit // \"\"" "$VERSIONS_FILE")
+            if [[ -z "$upstream_release_commit" || "$upstream_release_commit" == "null" ]]; then
+                error "$dep: upstream_release is set but upstream_release_commit is missing in versions.yaml"
+                errors=$((errors + 1))
+                continue
+            fi
+
+            # go.mod's pseudo-version suffix is a 12-char abbreviated commit
+            # digest; it must prefix the full commit declared for the release.
+            local pin_digest="${actual_version: -12}"
+            if [[ "$upstream_release_commit" != "$pin_digest"* ]]; then
+                error "$dep: go.mod pin digest '$pin_digest' does not match declared release $upstream_release (upstream_release_commit '$upstream_release_commit') — the pin has drifted off the declared release. Run: ./scripts/sync-eso-pin.sh"
+                errors=$((errors + 1))
+                continue
+            fi
+            success "$dep: pin digest '$pin_digest' matches declared release $upstream_release"
+
+            # Substitute the release version and fall through to the ordinary
+            # range-parsing logic below, so supported_range is enforced for
+            # this dep for the first time instead of always being skipped.
+            actual_version="${upstream_release#v}"
         fi
 
         if [[ "$supported" == "null" || -z "$supported" ]]; then

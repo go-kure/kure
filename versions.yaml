@@ -115,12 +115,17 @@ infrastructure:
 
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
-    supported_range: "1.3"
+    upstream_release: "v2.9.0"
+    upstream_release_commit: "378bdb622ed9712ef4a58370f6a17af033b7d343"
+    supported_range: "2.9"
     notes: |
       Module path changed from root to /apis submodule in v1.0 (#5494).
-      No semver tags for apis submodule — go.mod pins a pseudo-version to a release
-      commit, so the range guard skips it (pseudo-versions can't map to semver).
-      v1.3.2+, at the pseudo-version pinned in go.mod (includes controller-runtime v0.23.1 compat).
+      No semver tags for apis submodule — go.mod pins a pseudo-version, so
+      upstream_release + upstream_release_commit above pin it to a named release
+      instead of tracking main HEAD. sync-versions.sh substitutes upstream_release
+      for the range check and asserts the pseudo-version's embedded 12-char digest
+      prefixes upstream_release_commit, so the pin can no longer drift off the
+      declared release. Re-pin with scripts/sync-eso-pin.sh.
 
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
