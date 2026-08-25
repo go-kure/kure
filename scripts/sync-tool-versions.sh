@@ -18,7 +18,7 @@ MISE="mise.toml"
 # discipline as the checker, require exactly one match -- head -1 previously let a duplicate pin
 # resolve silently to whichever occurrence sorted first, then propagate that guess into every
 # target file instead of refusing to sync an invalid mise.toml.
-MISE_TOOLS="$(awk '/^\[tools\]/{f=1;next} /^\[/{f=0} f' "$MISE")"
+MISE_TOOLS="$(awk '/^[[:space:]]*\[[[:space:]]*tools[[:space:]]*\]/{f=1;next} /^[[:space:]]*\[/{f=0} f' "$MISE")"
 # Same pattern check-tool-versions.sh's MISE_PATTERN accepts (any "=" spacing, either TOML
 # quote style) -- a narrower extraction here than the checker's count/match means a validly
 # formatted variant the checker accepts still leaves this script finding nothing to sync.
