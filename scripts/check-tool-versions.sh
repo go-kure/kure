@@ -72,7 +72,7 @@ if [ "$ci_count" -ne 1 ]; then
 	echo "✗ ci.yml: expected exactly 1 GOLANGCI_LINT_VERSION assignment, found $ci_count"
 	ERRORS=$((ERRORS + 1))
 else
-	ci_val="$(grep -E "$CI_PATTERN" .github/workflows/ci.yml | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//')"
+	ci_val="$(grep -E "$CI_PATTERN" .github/workflows/ci.yml | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d "\"'" | sed -E 's/^v//; s/[[:space:]]+$//')"
 	check "ci.yml" ".github/workflows/ci.yml" "$ci_val"
 fi
 
