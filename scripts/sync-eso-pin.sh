@@ -102,7 +102,7 @@ fi
 # peeled line — same lightweight-vs-annotated distinction as the API path.
 if [[ -z "$commit" || "$commit" == "null" ]]; then
     echo "sync-eso-pin: GitHub API lookup failed or rate-limited, falling back to git ls-remote" >&2
-    ls_remote_out="$(git ls-remote "https://github.com/${UPSTREAM_REPO}" "refs/tags/${release}" "refs/tags/${release}^{}")"
+    ls_remote_out="$(git ls-remote "https://github.com/${UPSTREAM_REPO}" "refs/tags/${release}" "refs/tags/${release}^{}" 2>/dev/null || true)"
     commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${release}^{}" '$2 == r {print $1; found=1} END {exit !found}' || true)"
     if [[ -z "$commit" ]]; then
         commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${release}" '$2 == r {print $1}' | head -n1)"
