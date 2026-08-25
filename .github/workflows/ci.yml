@@ -188,6 +188,10 @@ jobs:
       if: steps.yq-cache.outputs.cache-hit == 'true'
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
+    # sync-versions.sh check's MVS-floor guard (validate_mvs_floors) needs a populated
+    # module cache to read a floor module's own go.mod -- it degrades to a warning
+    # otherwise. "Install dependencies" (make deps, above) must run before this step;
+    # do not reorder them.
     - name: Validate version consistency
       run: ./scripts/sync-versions.sh check
 

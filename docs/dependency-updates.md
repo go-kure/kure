@@ -14,7 +14,7 @@ Kure tracks dependency versions across the following files:
 | `pkg/versions/versions_gen.go` | Generated from `versions.yaml` — never edit directly; run `mise run versions:generate` |
 | `renovate.json` | Bot policy: update gates and caps, on top of the shared `go-kure/.github` preset |
 
-The `sync-versions.sh check` command performs five assertions. It runs in CI's `validate`
+The `sync-versions.sh check` command performs six assertions. It runs in CI's `validate`
 job, which is gated on the `go` paths-filter in `.github/workflows/ci.yml` — that filter
 includes `versions.yaml`, `docs/compatibility.md` and `scripts/sync-versions.sh` precisely
 so a version-metadata-only PR cannot skip it:
@@ -43,6 +43,10 @@ so a version-metadata-only PR cannot skip it:
 5. **Go API drift** — the committed `pkg/versions/versions_gen.go` is byte-identical to
    what `generate_go_api` would produce right now. Same regenerate-into-a-temp-file-and-diff
    shape as item 4 above.
+6. **MVS-floor equality** — for a dependency declaring `floor_module` (see "MVS-floor
+   dependencies" below), the go.mod pin exactly equals what `floor_module`'s own go.mod
+   currently requires. Degrades to a warning when Go or the module cache is unavailable
+   (offline dev machine); a reachable mismatch is always an error.
 
 ### Release-pinned dependencies (untagged Go submodules)
 
@@ -141,6 +145,7 @@ should simply always equal the floor:
 ```yaml
 barman-cloud:
   go_module: "github.com/cloudnative-pg/barman-cloud"
+  floor_module: "github.com/cloudnative-pg/plugin-barman-cloud"
   supported_range: "0.5"      # major.minor only -- see is_pseudo_version() note below
 ```
 
@@ -148,6 +153,13 @@ barman-cloud:
   go mod tidy` re-computes it from whatever the floor-setting dependency currently
   requires. Re-run this whenever the floor-setting dependency (here,
   `plugin-barman-cloud`) bumps.
+- `sync-versions.sh check` mechanically asserts this: with `floor_module` set, it reads
+  `floor_module`'s own `go.mod` and asserts it requires `go_module` at exactly the pin's
+  version — not just the `major.minor` range check the other assertions apply. It
+  degrades to a warning when Go or the module cache is unavailable (offline dev machine),
+  since that is "could not check," not "checked and it's wrong" — but never when the
+  check actually runs and finds a mismatch. A plugin **downgrade** will legitimately fail
+  this guard until the pin is re-derived with the `-droprequire` + `tidy` recipe above.
 - `supported_range` is expressed in plain `major.minor` because this dependency's
   pseudo-version does **not** match `is_pseudo_version()`'s regex (see the comment above
   that function in `scripts/sync-versions.sh`) — it falls through to the ordinary range
