@@ -48,12 +48,13 @@ pseudo-version, and `@latest` resolves to upstream `main` HEAD — every upstrea
 looks like a new version, and `supported_range` is unverifiable and unenforceable (there
 is no semver to compare).
 
-Such a dependency's `versions.yaml` entry adds two structured fields to pin it to a
+Such a dependency's `versions.yaml` entry adds structured fields to pin it to a
 *named release* instead of `main` HEAD:
 
 ```yaml
 external-secrets:
   go_module: "github.com/external-secrets/external-secrets/apis"
+  upstream_repo: "external-secrets/external-secrets"
   upstream_release: "v2.9.0"
   upstream_release_commit: "378bdb622ed9712ef4a58370f6a17af033b7d343"
   supported_range: "2.9"
@@ -66,8 +67,23 @@ external-secrets:
   run, with no network access. If the pin ever drifted off the declared release (hand
   edit, bad rebase, …), this assertion fails — the actual drift guard, separate from and
   in addition to the range check.
+- `upstream_repo` — the `owner/repo` the tag lives in. Used only by the second,
+  best-effort check below; a dependency with no `upstream_repo` skips it and keeps only
+  the offline digest check.
 - `supported_range` is then enforced for the dependency for the first time, against
   `upstream_release` rather than being skipped as unparseable.
+
+The offline digest check proves go.mod matches `upstream_release_commit`, but not that
+`upstream_release_commit` is actually the commit `upstream_release` names upstream — a
+hand edit that bumps `upstream_release` (and `supported_range`) without re-running
+`sync-eso-pin.sh` would satisfy it while `upstream_release_commit` (and go.mod) stay on
+the old release. `sync-versions.sh check` closes that gap with a second, **best-effort
+online** check: it resolves `upstream_repo`@`upstream_release` live via the GitHub API
+(falling back to `git ls-remote`, same resolution as `sync-eso-pin.sh` below, including
+the annotated-vs-lightweight tag peel) and compares it to `upstream_release_commit`. A
+live mismatch is an error. Network failure (offline dev machine, GitHub rate limit) is a
+warning only — the offline digest check above already covers the common case and this
+must never break an otherwise-valid offline run.
 
 `scripts/sync-eso-pin.sh` re-pins such a dependency: it reads `upstream_release`,
 resolves the tag to a commit via the GitHub API (falling back to `git ls-remote`),

@@ -115,6 +115,7 @@ infrastructure:
 
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
+    upstream_repo: "external-secrets/external-secrets"
     upstream_release: "v2.9.0"
     upstream_release_commit: "378bdb622ed9712ef4a58370f6a17af033b7d343"
     supported_range: "2.9"
@@ -125,7 +126,17 @@ infrastructure:
       instead of tracking main HEAD. sync-versions.sh substitutes upstream_release
       for the range check and asserts the pseudo-version's embedded 12-char digest
       prefixes upstream_release_commit, so the pin can no longer drift off the
-      declared release. Re-pin with scripts/sync-eso-pin.sh.
+      declared release; it also best-effort verifies upstream_release_commit
+      against upstream_repo@upstream_release live (network permitting) to catch
+      a hand-edited upstream_release that skipped scripts/sync-eso-pin.sh.
+      Re-pin with scripts/sync-eso-pin.sh.
+      v2.9.0 changed SecretStoreSpec.RefreshInterval from int to
+      *intstr.IntOrString — a breaking change in kure's own public
+      SetSecretStoreSpec/SetClusterSecretStoreSpec signatures (both take
+      esv1.SecretStoreSpec by value). Kure is pre-1.0 (v0.2.0-beta) and does
+      not populate that field itself, so this repo's own build is unaffected;
+      external consumers constructing SecretStoreSpec{RefreshInterval: <int>}
+      will fail to compile against this bump.
 
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
