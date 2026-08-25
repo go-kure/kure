@@ -606,10 +606,12 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
 
 - `go:` filter — triggers lint/test/security/build jobs. Includes `**.go`, `go.mod`, `go.sum`,
   `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated,
-  plus `versions.yaml`, `docs/compatibility.md` and `scripts/sync-versions.sh`. Those last
-  three are here because the only `sync-versions.sh check` invocation lives in the
-  `validate` job: without them a PR touching just version metadata skipped both the
-  supported-range guard and the compatibility-matrix drift guard and still reported success.
+  plus `versions.yaml`, `docs/compatibility.md`, `scripts/sync-versions.sh` and
+  `scripts/sync-eso-pin.sh`. Those last four are here because the only `sync-versions.sh
+  check` invocation lives in the `validate` job: without them a PR touching just version
+  metadata or the release-pinning script skipped both the supported-range guard and the
+  compatibility-matrix drift guard (or, for `sync-eso-pin.sh`, all of `validate`/`test`)
+  and still reported success — the `build` gate accepts a `skipped` dependency as passing.
 - `docs:` filter — triggers docs-build/docs-check jobs. Includes `site/**`, `docs/**`, `*.md`,
   `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
   the docs build).

@@ -84,16 +84,26 @@ echo "sync-eso-pin: resolving ${UPSTREAM_REPO}@${release} to a commit..."
 # via git/tags/<sha> before its .object.sha is usable. v2.9.0 today is
 # lightweight (verified), but upstream's tagging convention is not a promise;
 # resolve correctly for either shape rather than relying on today's shape.
+# Bounded, not best-effort: unlike sync-versions.sh's resolve_tag_commit
+# (which can gracefully warn and fall through on a network failure), this
+# resolution is required for the script to do its job, so a longer timeout
+# than that best-effort check's is appropriate. It must still be bounded —
+# a black-holed/stalled connection with no deadline blocks curl (and this
+# Renovate postUpgradeTasks command) indefinitely rather than failing fast
+# into the script's own diagnostic below.
+CURL_TIMEOUT_ARGS=(--connect-timeout 10 --max-time 30)
+LS_REMOTE_TIMEOUT=30
+
 commit=""
 obj_type=""
-api_response="$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/git/ref/tags/${release}" 2>/dev/null || true)"
+api_response="$(curl -fsSL "${CURL_TIMEOUT_ARGS[@]}" "https://api.github.com/repos/${UPSTREAM_REPO}/git/ref/tags/${release}" 2>/dev/null || true)"
 if [[ -n "$api_response" ]]; then
     commit="$(printf '%s' "$api_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
     obj_type="$(printf '%s' "$api_response" | yq -p json '.object.type // ""' 2>/dev/null || true)"
 fi
 if [[ "$obj_type" == "tag" && -n "$commit" && "$commit" != "null" ]]; then
     echo "sync-eso-pin: ${release} is an annotated tag (object ${commit}), peeling to its commit" >&2
-    tag_response="$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/git/tags/${commit}" 2>/dev/null || true)"
+    tag_response="$(curl -fsSL "${CURL_TIMEOUT_ARGS[@]}" "https://api.github.com/repos/${UPSTREAM_REPO}/git/tags/${commit}" 2>/dev/null || true)"
     commit="$(printf '%s' "$tag_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
 fi
 
@@ -102,7 +112,7 @@ fi
 # peeled line — same lightweight-vs-annotated distinction as the API path.
 if [[ -z "$commit" || "$commit" == "null" ]]; then
     echo "sync-eso-pin: GitHub API lookup failed or rate-limited, falling back to git ls-remote" >&2
-    ls_remote_out="$(git ls-remote "https://github.com/${UPSTREAM_REPO}" "refs/tags/${release}" "refs/tags/${release}^{}" 2>/dev/null || true)"
+    ls_remote_out="$(timeout "$LS_REMOTE_TIMEOUT" git ls-remote "https://github.com/${UPSTREAM_REPO}" "refs/tags/${release}" "refs/tags/${release}^{}" 2>/dev/null || true)"
     commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${release}^{}" '$2 == r {print $1; found=1} END {exit !found}' || true)"
     if [[ -z "$commit" ]]; then
         commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${release}" '$2 == r {print $1}' | head -n1)"
