@@ -191,14 +191,15 @@ jobs:
     - name: Validate version consistency
       run: ./scripts/sync-versions.sh check
 
-    # sync-eso-pin.sh has no other CI coverage: it's a Renovate postUpgradeTasks command,
-    # not something `sync-versions.sh check`/`make lint` (Go-only) ever invokes or parses —
-    # a syntax error here would only surface the next time Renovate runs it. Cheap floor:
-    # catch a broken script before it merges, not full shellcheck (a repo-wide tooling
-    # decision, out of scope for this one script).
+    # sync-eso-pin.sh, sync-tool-versions.sh and sync-govulncheck-docs.sh have no other CI
+    # coverage: they're Renovate postUpgradeTasks commands, not something
+    # `sync-versions.sh check`/`make check-tool-versions`/`make check-govulncheck-docs` ever
+    # invokes or parses — a syntax error here would only surface the next time Renovate runs
+    # it. Cheap floor: catch a broken script before it merges, not full shellcheck (a
+    # repo-wide tooling decision, out of scope for these scripts).
     - name: Syntax-check version-sync scripts
       run: |
-        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh; do
+        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh; do
           bash -n "$f"
         done
 
