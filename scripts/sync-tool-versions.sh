@@ -14,11 +14,21 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 MISE="mise.toml"
+# Restrict to the [tools] table (see the matching comment in check-tool-versions.sh) and, same
+# discipline as the checker, require exactly one match -- head -1 previously let a duplicate pin
+# resolve silently to whichever occurrence sorted first, then propagate that guess into every
+# target file instead of refusing to sync an invalid mise.toml.
+MISE_TOOLS="$(awk '/^\[tools\]/{f=1;next} /^\[/{f=0} f' "$MISE")"
 # Same pattern check-tool-versions.sh's MISE_PATTERN accepts (any "=" spacing, either TOML
 # quote style) -- a narrower extraction here than the checker's count/match means a validly
 # formatted variant the checker accepts still leaves this script finding nothing to sync.
 MISE_PATTERN='^golangci-lint[[:space:]]*=[[:space:]]*["'\'']'
-MISE_VAL="$(grep -E "$MISE_PATTERN" "$MISE" | head -1 | sed -E "s/^golangci-lint[[:space:]]*=[[:space:]]*[\"']//; s/[\"'].*//")"
+mise_count="$(printf '%s\n' "$MISE_TOOLS" | grep -cE "$MISE_PATTERN" || true)"
+if [ "$mise_count" -ne 1 ]; then
+	echo "Error: expected exactly 1 golangci-lint [tools] entry in $MISE, found $mise_count"
+	exit 1
+fi
+MISE_VAL="$(printf '%s\n' "$MISE_TOOLS" | grep -E "$MISE_PATTERN" | sed -E "s/^golangci-lint[[:space:]]*=[[:space:]]*[\"']//; s/[\"'].*//")"
 # See the matching comment in check-tool-versions.sh: strip a possible "v" prefix so this
 # doesn't write "v$MISE_VAL" as "vv2.13.1" into every target.
 MISE_VAL="${MISE_VAL#v}"
