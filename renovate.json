@@ -44,7 +44,7 @@
       "enabled": false
     },
     {
-      "description": "Filter the github-releases datasource to plain vX.Y.Z tags only (extractVersion, undocumented as a customManagers field, applies as a packageRules match here instead) -- upstream also cuts non-matching helm-chart-X.Y.Z tags, which must never satisfy this dependency. Then re-pin external-secrets to the new release's commit, regenerate go.mod/go.sum and versions.yaml's upstream_release_commit, and regenerate docs, on the customManager's own branch whenever upstream_release bumps.",
+      "description": "Filter the github-releases datasource to plain vX.Y.Z tags only (extractVersion, undocumented as a customManagers field, applies as a packageRules match here instead) -- upstream also cuts non-matching helm-chart-X.Y.Z tags, which must never satisfy this dependency. Then re-pin external-secrets to the new release's commit, regenerate go.mod/go.sum and versions.yaml's upstream_release_commit, and regenerate docs/compatibility.md, pkg/versions/versions_gen.go and go.mod's pin comment (via sync-versions.sh generate), on the customManager's own branch whenever upstream_release bumps.",
       "matchDepNames": ["external-secrets/external-secrets"],
       "extractVersion": "^(?<version>v\\d+\\.\\d+\\.\\d+)$",
       "postUpgradeTasks": {

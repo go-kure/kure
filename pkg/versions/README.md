@@ -28,8 +28,11 @@ for _, d := range versions.All() {
 Exported: `Name`, `GoModule`, `SupportedRange`, `Min`, `Max`, `VersionBasis`.
 
 Not exported: `notes`, `related_packages`, `upstream_repo`, `upstream_release`,
-`upstream_release_commit`, the go.mod build version — all change on every routine dependency bump;
-exporting them would make this API's content churn instead of staying stable.
+`upstream_release_commit`, the go.mod build version. The build version moves on every
+dependency bump; the others can change too (reviewer prose edits, a release-pinned
+dependency getting re-pinned) but not on every routine bump — an in-range patch bump
+needs no `versions.yaml` change at all. Excluding all of them either way keeps this
+API's content stable rather than tied to prose or pin churn.
 
 ## Regenerating
 

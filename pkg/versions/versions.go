@@ -6,9 +6,12 @@
 // fails if the generated file has drifted from versions.yaml.
 //
 // Only machine-readable fields are exported. Reviewer prose (notes,
-// related_packages) and the release-pinning fields are omitted: they change
-// on every routine dependency bump, and exporting them would make this API's
-// content churn instead of staying stable.
+// related_packages), the release-pinning fields, and the go.mod build
+// version are omitted: the build version moves on every dependency bump, and
+// the others can change too (prose edits, a release-pinned dependency being
+// re-pinned) even though not every routine bump touches them. Excluding all
+// of them keeps this API's content stable rather than tied to prose or pin
+// churn.
 package versions
 
 // Dependency is one infrastructure entry's machine-readable metadata.
