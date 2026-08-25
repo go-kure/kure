@@ -49,12 +49,12 @@
       "extractVersion": "^(?<version>v\\d+\\.\\d+\\.\\d+)$",
       "postUpgradeTasks": {
         "commands": ["./scripts/sync-eso-pin.sh"],
-        "fileFilters": ["go.mod", "go.sum", "versions.yaml", "docs/compatibility.md"],
+        "fileFilters": ["go.mod", "go.sum", "versions.yaml", "docs/compatibility.md", "pkg/versions/versions_gen.go"],
         "executionMode": "branch"
       }
     },
     {
-      "description": "Regenerate docs/compatibility.md, and keep golangci-lint's Makefile/ci.yml/docs pins in sync with mise.toml, on the bot's own branch after any gomod or mise bump. The compatibility matrix is generated from versions.yaml + go.mod, and CI's validate job fails on drift (sync-versions.sh check); the golangci-lint pins are plain strings only scripts/sync-tool-versions.sh keeps in step with mise.toml, the only copy the mise datasource actually bumps. Dependabot could not run this step, which left its PRs permanently red (#665, #667). Both scripts are no-ops when nothing derived changes, so matching both managers is safe. go.mod is included because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive.",
+      "description": "Regenerate docs/compatibility.md and pkg/versions/versions_gen.go (the published Go API's generated data), and keep golangci-lint's Makefile/ci.yml/docs pins in sync with mise.toml, on the bot's own branch after any gomod or mise bump. Both are generated from versions.yaml (+ go.mod for the compatibility matrix), and CI's validate job fails on drift for either (sync-versions.sh check); the golangci-lint pins are plain strings only scripts/sync-tool-versions.sh keeps in step with mise.toml, the only copy the mise datasource actually bumps. Dependabot could not run this step, which left its PRs permanently red (#665, #667). Both scripts are no-ops when nothing derived changes, so matching both managers is safe. go.mod is included because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive.",
       "matchManagers": ["gomod", "mise"],
       "postUpgradeTasks": {
         "commands": [
@@ -63,6 +63,7 @@
         ],
         "fileFilters": [
           "docs/compatibility.md",
+          "pkg/versions/versions_gen.go",
           "go.mod",
           "Makefile",
           ".github/workflows/ci.yml",
