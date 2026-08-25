@@ -196,10 +196,17 @@ jobs:
     # `sync-versions.sh check`/`make check-tool-versions`/`make check-govulncheck-docs` ever
     # invokes or parses — a syntax error here would only surface the next time Renovate runs
     # it. Cheap floor: catch a broken script before it merges, not full shellcheck (a
-    # repo-wide tooling decision, out of scope for these scripts).
+    # repo-wide tooling decision, out of scope for these scripts). Dispatched per each
+    # script's own shebang/renovate.json invocation, not uniformly via bash -n: renovate.json
+    # runs sync-tool-versions.sh and sync-govulncheck-docs.sh with `sh` (not bash), and bash
+    # accepts bashisms POSIX sh would reject, so a bash -n pass on a #!/bin/sh script doesn't
+    # prove sh can actually parse it.
     - name: Syntax-check version-sync scripts
       run: |
-        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh; do
+        for f in scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh; do
+          sh -n "$f"
+        done
+        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh; do
           bash -n "$f"
         done
 
