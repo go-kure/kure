@@ -81,6 +81,43 @@ is_pseudo_version() {
     [[ "$1" =~ -[0-9]{14}-[0-9a-f]{12}$ ]]
 }
 
+# Resolve <repo>@<tag> to a commit SHA via the GitHub API, peeling an
+# annotated tag's object SHA to the commit it points at (same logic as
+# scripts/sync-eso-pin.sh — kept duplicated rather than shared, since the two
+# scripts have different failure-handling needs: this one is best-effort and
+# must never hard-fail an offline `check` run, sync-eso-pin.sh must). Falls
+# back to `git ls-remote`. Prints the commit SHA on success, prints nothing
+# and returns non-zero on any failure (network, rate limit, unknown tag) —
+# callers must treat that as "could not verify," not "verification failed."
+resolve_tag_commit() {
+    local repo="$1" tag="$2"
+    local commit="" obj_type=""
+    local api_response
+    api_response="$(curl -fsSL --max-time 5 "https://api.github.com/repos/${repo}/git/ref/tags/${tag}" 2>/dev/null || true)"
+    if [[ -n "$api_response" ]]; then
+        commit="$(printf '%s' "$api_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
+        obj_type="$(printf '%s' "$api_response" | yq -p json '.object.type // ""' 2>/dev/null || true)"
+    fi
+    if [[ "$obj_type" == "tag" && -n "$commit" && "$commit" != "null" ]]; then
+        local tag_response
+        tag_response="$(curl -fsSL --max-time 5 "https://api.github.com/repos/${repo}/git/tags/${commit}" 2>/dev/null || true)"
+        commit="$(printf '%s' "$tag_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
+    fi
+    if [[ -z "$commit" || "$commit" == "null" ]]; then
+        local ls_remote_out
+        ls_remote_out="$(timeout 5 git ls-remote "https://github.com/${repo}" "refs/tags/${tag}" "refs/tags/${tag}^{}" 2>/dev/null || true)"
+        commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${tag}^{}" '$2 == r {print $1; found=1} END {exit !found}' || true)"
+        if [[ -z "$commit" ]]; then
+            commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${tag}" '$2 == r {print $1}' | head -n1)"
+        fi
+    fi
+    if [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+        printf '%s' "$commit"
+        return 0
+    fi
+    return 1
+}
+
 # Turn a "major.minor" string into a comparable integer key (major*1000+minor).
 mm_key() {
     local mm="$1"
@@ -279,9 +316,15 @@ validate_gomod() {
             # A dep declaring upstream_release is pinned to a named release, not
             # tracking main HEAD (see scripts/sync-eso-pin.sh). Assert the pin
             # hasn't drifted off that release before substituting it for the
-            # range check below -- this is the actual drift guard, offline
-            # (no network needed: the release's commit is a structured field,
-            # not re-resolved from the tag here).
+            # range check below. The digest comparison right below is offline
+            # (no network needed: upstream_release_commit is a structured field,
+            # not re-resolved from the tag here) and is the check that always
+            # runs. It proves go.mod matches upstream_release_commit, but not
+            # that upstream_release_commit is actually the commit upstream's
+            # <upstream_release> tag points to — a hand-edit that bumps
+            # upstream_release without re-running sync-eso-pin.sh would pass it
+            # even though upstream_release_commit is now stale. The second,
+            # best-effort online check further down closes that gap.
             local upstream_release_commit
             upstream_release_commit=$(yq ".infrastructure.${dep}.upstream_release_commit // \"\"" "$VERSIONS_FILE")
             if [[ -z "$upstream_release_commit" || "$upstream_release_commit" == "null" ]]; then
@@ -299,6 +342,28 @@ validate_gomod() {
                 continue
             fi
             success "$dep: pin digest '$pin_digest' matches declared release $upstream_release"
+
+            # Best-effort online check: confirm upstream_release_commit is
+            # actually the commit <upstream_repo>'s <upstream_release> tag
+            # resolves to today. Network failure (offline dev machine, GitHub
+            # rate limit) is a warning, not an error — this must never break
+            # an otherwise-valid offline `check` run. A confirmed mismatch is
+            # an error: the field pair is stale independent of go.mod.
+            local upstream_repo
+            upstream_repo=$(yq ".infrastructure.${dep}.upstream_repo // \"\"" "$VERSIONS_FILE")
+            if [[ -n "$upstream_repo" && "$upstream_repo" != "null" ]]; then
+                local resolved_commit
+                if resolved_commit=$(resolve_tag_commit "$upstream_repo" "$upstream_release"); then
+                    if [[ "$resolved_commit" != "$upstream_release_commit" ]]; then
+                        error "$dep: upstream_release_commit '$upstream_release_commit' does not match the commit $upstream_repo@$upstream_release resolves to today ('$resolved_commit') — versions.yaml was hand-edited out of sync. Run: ./scripts/sync-eso-pin.sh"
+                        errors=$((errors + 1))
+                        continue
+                    fi
+                    success "$dep: upstream_release_commit confirmed against live $upstream_repo@$upstream_release"
+                else
+                    warning "$dep: could not verify upstream_release_commit against $upstream_repo@$upstream_release live (no network or rate-limited) — offline digest check above still holds"
+                fi
+            fi
 
             # Substitute the release version and fall through to the ordinary
             # range-parsing logic below, so supported_range is enforced for

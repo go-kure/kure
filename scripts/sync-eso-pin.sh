@@ -47,14 +47,28 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSIONS_FILE="$REPO_ROOT/versions.yaml"
 
 # Only external-secrets declares upstream_release today, but nothing here is
-# specific to it beyond these three constants — a second untagged-submodule
-# dependency can reuse this script by adding its own entry and pointing a
-# copy (or a parameterized call) at these three values.
+# specific to it beyond DEP — a second untagged-submodule dependency can
+# reuse this script by adding its own versions.yaml entry (go_module,
+# upstream_repo, upstream_release, upstream_release_commit) and pointing a
+# copy (or a parameterized call) at its DEP key. GO_MODULE and UPSTREAM_REPO
+# are read from versions.yaml, not hardcoded here, so there is exactly one
+# place declaring them — a second copy here could drift from versions.yaml
+# the same way sync-versions.sh's drift guard exists to catch for the pin
+# itself.
 DEP="external-secrets"
-GO_MODULE="github.com/external-secrets/external-secrets/apis"
-UPSTREAM_REPO="external-secrets/external-secrets"
 
 cd "$REPO_ROOT"
+
+GO_MODULE="$(yq ".infrastructure.${DEP}.go_module // \"\"" "$VERSIONS_FILE")"
+UPSTREAM_REPO="$(yq ".infrastructure.${DEP}.upstream_repo // \"\"" "$VERSIONS_FILE")"
+if [[ -z "$GO_MODULE" || "$GO_MODULE" == "null" ]]; then
+    echo "sync-eso-pin: versions.yaml has no 'go_module' set for '$DEP'" >&2
+    exit 1
+fi
+if [[ -z "$UPSTREAM_REPO" || "$UPSTREAM_REPO" == "null" ]]; then
+    echo "sync-eso-pin: versions.yaml has no 'upstream_repo' set for '$DEP'" >&2
+    exit 1
+fi
 
 release="$(yq ".infrastructure.${DEP}.upstream_release // \"\"" "$VERSIONS_FILE")"
 if [[ -z "$release" || "$release" == "null" ]]; then
