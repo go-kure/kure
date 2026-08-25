@@ -18,15 +18,17 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 MISE="mise.toml"
-# Exactly one match required, same discipline as the Makefile/ci.yml checks below — a
-# duplicate `golangci-lint = "..."` key is invalid TOML (mise cannot parse it at all), but
-# `head -1` would silently accept the first one and report parity anyway.
-mise_count="$(grep -cE '^golangci-lint = "' "$MISE" || true)"
+# Exactly one match required, same discipline as the Makefile/ci.yml checks below, and
+# tolerant of ANY spacing around "=" (TOML permits "golangci-lint=", "golangci-lint =", etc.)
+# for the same reason those checks are: a duplicate key in a spacing this pattern couldn't see
+# would be invisible to the count while still being invalid TOML mise can't parse at all.
+MISE_PATTERN='^golangci-lint[[:space:]]*=[[:space:]]*"'
+mise_count="$(grep -cE "$MISE_PATTERN" "$MISE" || true)"
 if [ "$mise_count" -ne 1 ]; then
 	echo "✗ $MISE: expected exactly 1 golangci-lint [tools] entry, found $mise_count"
 	exit 1
 fi
-MISE_VAL="$(grep -E '^golangci-lint = "' "$MISE" | cut -d'"' -f2)"
+MISE_VAL="$(grep -E "$MISE_PATTERN" "$MISE" | cut -d'"' -f2)"
 # mise tolerates a "v"-prefixed pin (golangci-lint's own release tags carry one); strip it so a
 # future Renovate bump that writes "vX.Y.Z" here can't double-prefix every target's "v$MISE_VAL".
 MISE_VAL="${MISE_VAL#v}"
