@@ -390,11 +390,19 @@ validate_mvs_floors() {
         # unguarded `x=$(...)` still aborts the whole script on a non-zero
         # pipeline exit (go mod edit or yq failing), instead of falling
         # into the empty/error branch below the way step 3's `go list`
-        # does via `|| gomod_rc=$?`.
-        local required
-        required=$(go mod edit -json "$gomod_path" | yq -p json ".Require[]? | select(.Path == \"$go_module\") | .Version" 2>/dev/null) || required=""
+        # does via `|| gomod_rc=$?`. Capture the pipe's own status too, so
+        # the two ways `required` can end up empty -- the requirement
+        # genuinely absent vs. `go mod edit`/`yq` itself failing to read
+        # $gomod_path -- get distinct, accurate error text instead of the
+        # tool-failure case being misreported as a confirmed absence.
+        local required required_pipe_rc=0
+        required=$(go mod edit -json "$gomod_path" | yq -p json ".Require[]? | select(.Path == \"$go_module\") | .Version" 2>/dev/null) || required_pipe_rc=$?
         if [[ -z "$required" || "$required" == "null" ]]; then
-            error "$dep: $floor_module's go.mod does not require $go_module at all -- the floor_module claim in versions.yaml does not hold. Point floor_module at the module that actually raises the pin, or drop it."
+            if [[ $required_pipe_rc -ne 0 ]]; then
+                error "$dep: could not read $floor_module's go.mod requirements (go mod edit or yq failed against $gomod_path, rc=$required_pipe_rc) -- cannot confirm the floor_module claim in versions.yaml"
+            else
+                error "$dep: $floor_module's go.mod does not require $go_module at all -- the floor_module claim in versions.yaml does not hold. Point floor_module at the module that actually raises the pin, or drop it."
+            fi
             errors=$((errors + 1))
             continue
         fi
