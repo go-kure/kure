@@ -64,18 +64,35 @@ fi
 
 echo "sync-eso-pin: resolving ${UPSTREAM_REPO}@${release} to a commit..."
 
-# Primary: GitHub API tag ref lookup (unauthenticated, works for public repos,
-# subject to the low unauthenticated rate limit).
+# `refs/tags/<tag>` resolves to a commit SHA directly for a *lightweight* tag,
+# but to a tag *object* SHA for an *annotated* tag — go get needs the commit,
+# not the tag object, so an annotated tag must be peeled one level further
+# via git/tags/<sha> before its .object.sha is usable. v2.9.0 today is
+# lightweight (verified), but upstream's tagging convention is not a promise;
+# resolve correctly for either shape rather than relying on today's shape.
 commit=""
+obj_type=""
 api_response="$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/git/ref/tags/${release}" 2>/dev/null || true)"
 if [[ -n "$api_response" ]]; then
     commit="$(printf '%s' "$api_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
+    obj_type="$(printf '%s' "$api_response" | yq -p json '.object.type // ""' 2>/dev/null || true)"
+fi
+if [[ "$obj_type" == "tag" && -n "$commit" && "$commit" != "null" ]]; then
+    echo "sync-eso-pin: ${release} is an annotated tag (object ${commit}), peeling to its commit" >&2
+    tag_response="$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/git/tags/${commit}" 2>/dev/null || true)"
+    commit="$(printf '%s' "$tag_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
 fi
 
-# Fallback: git ls-remote, no rate limit, no auth.
+# Fallback: git ls-remote, no rate limit, no auth. Query both the plain ref
+# and its peeled form (`^{}`, only present for annotated tags) and prefer the
+# peeled line — same lightweight-vs-annotated distinction as the API path.
 if [[ -z "$commit" || "$commit" == "null" ]]; then
     echo "sync-eso-pin: GitHub API lookup failed or rate-limited, falling back to git ls-remote" >&2
-    commit="$(git ls-remote "https://github.com/${UPSTREAM_REPO}" "refs/tags/${release}" | awk '{print $1}' | head -n1)"
+    ls_remote_out="$(git ls-remote "https://github.com/${UPSTREAM_REPO}" "refs/tags/${release}" "refs/tags/${release}^{}")"
+    commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${release}^{}" '$2 == r {print $1; found=1} END {exit !found}' || true)"
+    if [[ -z "$commit" ]]; then
+        commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${release}" '$2 == r {print $1}' | head -n1)"
+    fi
 fi
 
 if [[ -z "$commit" || "$commit" == "null" ]]; then
