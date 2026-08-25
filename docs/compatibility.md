@@ -12,6 +12,9 @@ Kure maintains two version concepts for each dependency:
 1. **Build Version** (read from go.mod): The exact library version Kure imports and builds against
 2. **Deployment Compatibility** (`supported_range` in versions.yaml): The range of deployed tool versions that Kure can generate YAML for
 
+Consumers that need these values programmatically should import
+`github.com/go-kure/kure/pkg/versions` rather than parsing `versions.yaml`.
+
 ## Go Version
 
 **Current:** Go 1.26.6

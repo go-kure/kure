@@ -393,6 +393,7 @@ the map and run `bash site/scripts/gen-docs-tables.sh`.
 | `pkg/kubernetes/volsync/` | `api-reference/volsync-builders` | `guides/library-usage` |
 | `pkg/errors/` | `api-reference/errors` | — |
 | `pkg/logger/` | `api-reference/logger` | — |
+| `pkg/versions/` | `api-reference/versions` | — |
 | `.github/workflows/` | — | `contributing/github-workflows` |
 | `go.mod` / `versions.yaml` | — | `docs/dependency-updates`, `docs/compatibility` |
 | `scripts/gen-versions-toml.sh` | — | `contributing/github-workflows` |
