@@ -24,6 +24,34 @@ type LayoutAugmenter interface {
 	AugmentLayout(layout *ManifestLayout) error
 }
 
+// LayoutIntentAugmenter is an optional companion to LayoutAugmenter for a
+// config whose desire for its own per-app layout varies per instance rather
+// than being fixed for the whole type. Implementing LayoutAugmenter alone is
+// a per-type, presence-only signal: the method either exists or it doesn't,
+// so a config that only wants its own layout for some instance
+// configurations has no way to express that without a separate wrapper type
+// per case. LayoutIntentAugmenter lets such a config implement AugmentLayout
+// unconditionally and answer "do I want the walker to carve me a directory"
+// per instance instead.
+//
+// WantsOwnLayout() gates placement only, on the flat-bundle walker path
+// (processFlatBundleApps): false is treated as-if-absent for that decision —
+// the app's resources merge flat into the parent layout instead of getting a
+// per-app child, and AugmentLayout is not invoked because no per-app layout
+// exists to pass it. It has no effect on the GroupByName or by-package
+// walker paths, where an app already gets its own layout and AugmentLayout
+// already runs unconditionally, regardless of augmenter status.
+//
+// A config that does not implement this interface keeps LayoutAugmenter's
+// existing presence-only behaviour unchanged.
+//
+// The interface lives in the layout package for the same import-cycle
+// reason as LayoutAugmenter above.
+type LayoutIntentAugmenter interface {
+	LayoutAugmenter
+	WantsOwnLayout() bool
+}
+
 // renderConfigMapGeneratorBlock renders the kustomization.yaml
 // configMapGenerator: section for the given specs. Returns the empty string
 // when no specs are present, so callers can append unconditionally.

@@ -65,6 +65,29 @@ func (f *fakeAugmentingConfig) AugmentLayout(ml *layout.ManifestLayout) error {
 	return nil
 }
 
+// fakeIntentAugmentingConfig implements stack.ApplicationConfig,
+// layout.LayoutAugmenter and layout.LayoutIntentAugmenter, with a settable
+// WantsOwnLayout() result. It records the layout it was called with, same as
+// fakeAugmentingConfig.
+type fakeIntentAugmentingConfig struct {
+	objs     []*client.Object
+	wantsOwn bool
+	called   *layout.ManifestLayout
+}
+
+func (f *fakeIntentAugmentingConfig) Generate(*stack.Application) ([]*client.Object, error) {
+	return f.objs, nil
+}
+
+func (f *fakeIntentAugmentingConfig) AugmentLayout(ml *layout.ManifestLayout) error {
+	f.called = ml
+	return nil
+}
+
+func (f *fakeIntentAugmentingConfig) WantsOwnLayout() bool {
+	return f.wantsOwn
+}
+
 // TestWalkCluster_DefaultFill verifies that WalkCluster fills in default values
 // for GroupUnset/FilePerUnset/FluxUnset when an empty LayoutRules is passed,
 // exercising the default-fill branches in WalkCluster.
@@ -1068,6 +1091,103 @@ func TestWalkCluster_NodeOnly_MixedBundle(t *testing.T) {
 	}
 	if nodeML.Resources[0].GetName() != "b" {
 		t.Errorf("flat resource = %q, want %q", nodeML.Resources[0].GetName(), "b")
+	}
+}
+
+// TestWalkCluster_NodeOnly_IntentFalse verifies that a flat-bundle app whose
+// config implements LayoutIntentAugmenter with WantsOwnLayout() == false is
+// treated as-if-absent for placement: its resources land flat in the parent
+// layout's Resources, no per-app sub-layout is created, and AugmentLayout is
+// never called (no layout exists to pass it).
+func TestWalkCluster_NodeOnly_IntentFalse(t *testing.T) {
+	cfg := &fakeIntentAugmentingConfig{objs: []*client.Object{makeCM("a")}, wantsOwn: false}
+	app := stack.NewApplication("a", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	node := &stack.Node{Name: "apps", Bundle: bundle}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	nodeML := ml.Children[0]
+	if len(nodeML.Children) != 0 {
+		t.Fatalf("expected no per-app sub-layout when WantsOwnLayout() is false, got %d", len(nodeML.Children))
+	}
+	if len(nodeML.Resources) != 1 || nodeML.Resources[0].GetName() != "a" {
+		t.Fatalf("expected app's resource flat in nodeML.Resources, got %+v", nodeML.Resources)
+	}
+	if cfg.called != nil {
+		t.Errorf("AugmentLayout should not be called when WantsOwnLayout() is false, got called with %+v", cfg.called)
+	}
+}
+
+// TestWalkCluster_NodeOnly_IntentTrue verifies that a flat-bundle app whose
+// config implements LayoutIntentAugmenter with WantsOwnLayout() == true
+// behaves exactly like a plain LayoutAugmenter: own per-app sub-layout,
+// AugmentLayout called with it. Parity with
+// TestWalkCluster_NodeOnly_SingleAugmenter.
+func TestWalkCluster_NodeOnly_IntentTrue(t *testing.T) {
+	cfg := &fakeIntentAugmentingConfig{objs: []*client.Object{makeCM("a")}, wantsOwn: true}
+	app := stack.NewApplication("a", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	node := &stack.Node{Name: "apps", Bundle: bundle}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{node}}
+	node.SetParent(root)
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	nodeML := ml.Children[0]
+	if len(nodeML.Children) != 1 {
+		t.Fatalf("expected one per-app sub-layout, got %d", len(nodeML.Children))
+	}
+	appLayout := nodeML.Children[0]
+	if appLayout.Name != "a" {
+		t.Errorf("appLayout.Name = %q, want %q", appLayout.Name, "a")
+	}
+	if cfg.called != appLayout {
+		t.Errorf("AugmentLayout was not called with the per-app layout")
+	}
+}
+
+// TestWalkCluster_GroupByName_Augmenter_IntentFalse verifies that WantsOwnLayout() ==
+// false has NO effect on the GroupByName walker path: the app already gets
+// its own layout there regardless of augmenter status, and AugmentLayout
+// still runs against it — cfg.called must be non-nil. This is the regression
+// guard for the footgun the design section rejects: gating augmentAppLayout
+// itself by intent would silently drop ExtraFiles/ConfigMapGenerators on
+// this path even though a layout exists and is willing to receive them.
+// Modeled on TestWalkCluster_LayoutAugmenter.
+func TestWalkCluster_GroupByName_Augmenter_IntentFalse(t *testing.T) {
+	cfg := &fakeIntentAugmentingConfig{objs: []*client.Object{makeCM("a")}, wantsOwn: false}
+	app := stack.NewApplication("app", "ns", cfg)
+	bundle := &stack.Bundle{Name: "bundle", Applications: []*stack.Application{app}}
+	root := &stack.Node{Name: "root", Bundle: bundle}
+	cluster := &stack.Cluster{Name: "demo", Node: root}
+
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{
+		BundleGrouping:      layout.GroupByName,
+		ApplicationGrouping: layout.GroupByName,
+	})
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+
+	bundleLayout := ml.Children[0]
+	if len(bundleLayout.Children) != 1 {
+		t.Fatalf("expected one app layout, got %d", len(bundleLayout.Children))
+	}
+	appLayout := bundleLayout.Children[0]
+	if cfg.called == nil {
+		t.Errorf("AugmentLayout must still be called on the GroupByName path when WantsOwnLayout() is false")
+	}
+	if cfg.called != appLayout {
+		t.Errorf("AugmentLayout was not called with the per-app layout")
 	}
 }
 

@@ -451,18 +451,29 @@ func augmentAppLayout(app *stack.Application, ml *ManifestLayout) error {
 	return nil
 }
 
-// isAugmenter reports whether app.Config implements LayoutAugmenter.
+// wantsOwnLayout reports whether an augmenting config wants its own layout.
+// Absent companion interface ⇒ true (today's presence-only behaviour).
+func wantsOwnLayout(cfg stack.ApplicationConfig) bool {
+	if intent, ok := cfg.(LayoutIntentAugmenter); ok {
+		return intent.WantsOwnLayout()
+	}
+	return true
+}
+
+// isAugmenter reports whether app.Config implements LayoutAugmenter and
+// wants its own layout.
 func isAugmenter(app *stack.Application) bool {
 	if app == nil || app.Config == nil {
 		return false
 	}
 	_, ok := app.Config.(LayoutAugmenter)
-	return ok
+	return ok && wantsOwnLayout(app.Config)
 }
 
 // processFlatBundleApps places each application from a flat bundle into either
-// a per-app sub-layout (when its Config implements LayoutAugmenter) or into
-// the parent layout's flat Resources (otherwise). The per-app sub-layout path
+// a per-app sub-layout (when its Config implements LayoutAugmenter and wants
+// its own layout) or into the parent layout's flat Resources (otherwise). The
+// per-app sub-layout path
 // lets augmenters (e.g. values.yaml + configMapGenerator emitters) mutate
 // their own ManifestLayout without colliding with sibling apps that share the
 // same bundle.

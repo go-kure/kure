@@ -26,6 +26,50 @@ func TestIsAugmenter_NilConfig(t *testing.T) {
 	}
 }
 
+// intentAugmentingConfig implements stack.ApplicationConfig, LayoutAugmenter
+// and LayoutIntentAugmenter, with a settable WantsOwnLayout() result.
+type intentAugmentingConfig struct {
+	objs      []*client.Object
+	wantsOwn  bool
+	augmented bool
+}
+
+func (f *intentAugmentingConfig) Generate(*stack.Application) ([]*client.Object, error) {
+	return f.objs, nil
+}
+
+func (f *intentAugmentingConfig) AugmentLayout(ml *ManifestLayout) error {
+	f.augmented = true
+	return nil
+}
+
+func (f *intentAugmentingConfig) WantsOwnLayout() bool {
+	return f.wantsOwn
+}
+
+func TestIsAugmenter_IntentFalse(t *testing.T) {
+	app := stack.NewApplication("app", "ns", &intentAugmentingConfig{wantsOwn: false})
+	if isAugmenter(app) {
+		t.Error("isAugmenter should return false when WantsOwnLayout() is false")
+	}
+}
+
+func TestIsAugmenter_IntentTrue(t *testing.T) {
+	app := stack.NewApplication("app", "ns", &intentAugmentingConfig{wantsOwn: true})
+	if !isAugmenter(app) {
+		t.Error("isAugmenter should return true when WantsOwnLayout() is true")
+	}
+}
+
+func TestWantsOwnLayout_AbsentCompanion(t *testing.T) {
+	// flattenFakeConfig implements only stack.ApplicationConfig, not
+	// LayoutIntentAugmenter — absent companion must default to true.
+	cfg := &flattenFakeConfig{}
+	if !wantsOwnLayout(cfg) {
+		t.Error("wantsOwnLayout should default to true for a config without LayoutIntentAugmenter")
+	}
+}
+
 func TestProcessFlatBundleApps_NilObjectPointer(t *testing.T) {
 	// App returns a slice containing a nil *client.Object pointer — should be skipped.
 	nilObjPtr := (*client.Object)(nil)
