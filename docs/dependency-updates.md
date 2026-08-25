@@ -80,10 +80,18 @@ hand edit that bumps `upstream_release` (and `supported_range`) without re-runni
 the old release. `sync-versions.sh check` closes that gap with a second, **best-effort
 online** check: it resolves `upstream_repo`@`upstream_release` live via the GitHub API
 (falling back to `git ls-remote`, same resolution as `sync-eso-pin.sh` below, including
-the annotated-vs-lightweight tag peel) and compares it to `upstream_release_commit`. A
-live mismatch is an error. Network failure (offline dev machine, GitHub rate limit) is a
-warning only — the offline digest check above already covers the common case and this
-must never break an otherwise-valid offline run.
+the annotated-vs-lightweight tag peel) and compares it to `upstream_release_commit`. It
+distinguishes three outcomes, not two — collapsing "server unreachable" and "tag
+definitively doesn't exist" into one signal would let a typo'd `upstream_release`
+downgrade to a mere warning:
+- resolved and matches `upstream_release_commit` — pass.
+- resolved and differs — **error**: the field pair is stale independent of go.mod.
+- a reachable server confirms the tag does not exist (API 404, or `git ls-remote`
+  enumerates the repo's refs with none matching) — **error**: likely a typo in
+  `upstream_release`, not a network problem, so must not be downgraded to a warning.
+- neither path could reach the server at all (offline dev machine, DNS/connect failure,
+  GitHub rate limit) — **warning** only. The offline digest check above already covers
+  the common case, and this must never break an otherwise-valid offline run.
 
 `scripts/sync-eso-pin.sh` re-pins such a dependency: it reads `upstream_release`,
 resolves the tag to a commit via the GitHub API (falling back to `git ls-remote`),

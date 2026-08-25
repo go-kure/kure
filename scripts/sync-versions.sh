@@ -86,36 +86,70 @@ is_pseudo_version() {
 # scripts/sync-eso-pin.sh — kept duplicated rather than shared, since the two
 # scripts have different failure-handling needs: this one is best-effort and
 # must never hard-fail an offline `check` run, sync-eso-pin.sh must). Falls
-# back to `git ls-remote`. Prints the commit SHA on success, prints nothing
-# and returns non-zero on any failure (network, rate limit, unknown tag) —
-# callers must treat that as "could not verify," not "verification failed."
+# back to `git ls-remote`.
+#
+# Prints the commit SHA and returns 0 on success. On failure, distinguishes
+# two outcomes callers must NOT collapse into one:
+#   - return 1: a reachable server definitively reported the tag does not
+#     exist (API 404, or ls-remote succeeded with no matching ref). This is
+#     a real configuration error — e.g. a typo'd upstream_release — and
+#     must not be downgraded to "could not verify."
+#   - return 2: neither path could reach the server at all (DNS/connect/TLS
+#     failure, timeout, rate limit). This is the "could not verify" case.
 resolve_tag_commit() {
     local repo="$1" tag="$2"
-    local commit="" obj_type=""
-    local api_response
-    api_response="$(curl -fsSL --max-time 5 "https://api.github.com/repos/${repo}/git/ref/tags/${tag}" 2>/dev/null || true)"
-    if [[ -n "$api_response" ]]; then
-        commit="$(printf '%s' "$api_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
-        obj_type="$(printf '%s' "$api_response" | yq -p json '.object.type // ""' 2>/dev/null || true)"
+    local commit="" obj_type="" api_tag_missing=0
+
+    local raw http_code body
+    raw="$(curl -sS --max-time 5 -w $'\n%{http_code}' "https://api.github.com/repos/${repo}/git/ref/tags/${tag}" 2>/dev/null)"
+    if [[ $? -eq 0 && -n "$raw" ]]; then
+        http_code="${raw##*$'\n'}"
+        body="${raw%$'\n'*}"
+        if [[ "$http_code" == "200" ]]; then
+            commit="$(printf '%s' "$body" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
+            obj_type="$(printf '%s' "$body" | yq -p json '.object.type // ""' 2>/dev/null || true)"
+        elif [[ "$http_code" == "404" ]]; then
+            api_tag_missing=1
+        fi
+        # any other http_code (403 rate-limit, 5xx, ...) is inconclusive,
+        # falls through to the ls-remote fallback below.
     fi
+
     if [[ "$obj_type" == "tag" && -n "$commit" && "$commit" != "null" ]]; then
         local tag_response
         tag_response="$(curl -fsSL --max-time 5 "https://api.github.com/repos/${repo}/git/tags/${commit}" 2>/dev/null || true)"
         commit="$(printf '%s' "$tag_response" | yq -p json '.object.sha // ""' 2>/dev/null || true)"
     fi
+
     if [[ -z "$commit" || "$commit" == "null" ]]; then
+        if [[ $api_tag_missing -eq 1 ]]; then
+            return 1
+        fi
         local ls_remote_out
-        ls_remote_out="$(timeout 5 git ls-remote "https://github.com/${repo}" "refs/tags/${tag}" "refs/tags/${tag}^{}" 2>/dev/null || true)"
+        ls_remote_out="$(timeout 5 git ls-remote "https://github.com/${repo}" "refs/tags/${tag}" "refs/tags/${tag}^{}" 2>/dev/null)"
+        local ls_remote_rc=$?
         commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${tag}^{}" '$2 == r {print $1; found=1} END {exit !found}' || true)"
         if [[ -z "$commit" ]]; then
             commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${tag}" '$2 == r {print $1}' | head -n1)"
         fi
+        if [[ -z "$commit" ]]; then
+            # ls-remote reaching the server (exit 0) with zero matching lines is
+            # itself a definitive "tag does not exist," same as the API's 404 —
+            # unless the API already proved reachability via a *different*
+            # inconclusive status (api_reachable tracks 200/404 only), a clean
+            # ls-remote exit is the strongest signal available.
+            if [[ $ls_remote_rc -eq 0 ]]; then
+                return 1
+            fi
+            return 2
+        fi
     fi
+
     if [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
         printf '%s' "$commit"
         return 0
     fi
-    return 1
+    return 2
 }
 
 # Turn a "major.minor" string into a comparable integer key (major*1000+minor).
@@ -345,21 +379,28 @@ validate_gomod() {
 
             # Best-effort online check: confirm upstream_release_commit is
             # actually the commit <upstream_repo>'s <upstream_release> tag
-            # resolves to today. Network failure (offline dev machine, GitHub
-            # rate limit) is a warning, not an error — this must never break
-            # an otherwise-valid offline `check` run. A confirmed mismatch is
+            # resolves to today. resolve_tag_commit distinguishes "tag
+            # definitively doesn't exist" (rc=1 — a real error, e.g. a
+            # typo'd upstream_release) from "couldn't reach the server at
+            # all" (rc=2 — a warning; this must never break an otherwise-
+            # valid offline `check` run). A confirmed live mismatch is also
             # an error: the field pair is stale independent of go.mod.
             local upstream_repo
             upstream_repo=$(yq ".infrastructure.${dep}.upstream_repo // \"\"" "$VERSIONS_FILE")
             if [[ -n "$upstream_repo" && "$upstream_repo" != "null" ]]; then
-                local resolved_commit
-                if resolved_commit=$(resolve_tag_commit "$upstream_repo" "$upstream_release"); then
+                local resolved_commit resolve_rc=0
+                resolved_commit=$(resolve_tag_commit "$upstream_repo" "$upstream_release") || resolve_rc=$?
+                if [[ $resolve_rc -eq 0 ]]; then
                     if [[ "$resolved_commit" != "$upstream_release_commit" ]]; then
                         error "$dep: upstream_release_commit '$upstream_release_commit' does not match the commit $upstream_repo@$upstream_release resolves to today ('$resolved_commit') — versions.yaml was hand-edited out of sync. Run: ./scripts/sync-eso-pin.sh"
                         errors=$((errors + 1))
                         continue
                     fi
                     success "$dep: upstream_release_commit confirmed against live $upstream_repo@$upstream_release"
+                elif [[ $resolve_rc -eq 1 ]]; then
+                    error "$dep: tag $upstream_release does not exist in $upstream_repo (confirmed reachable) — check upstream_release for a typo"
+                    errors=$((errors + 1))
+                    continue
                 else
                     warning "$dep: could not verify upstream_release_commit against $upstream_repo@$upstream_release live (no network or rate-limited) — offline digest check above still holds"
                 fi
