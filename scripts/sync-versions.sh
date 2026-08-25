@@ -640,6 +640,14 @@ generate_go_api() {
 
     printf '}\n' >> "$tmp"
 
+    # mktemp creates $tmp at mode 0600 (owner-only); mv preserves that mode
+    # onto $out. Without this, a regenerated versions_gen.go would go from
+    # the committed file's normal 0644 to owner-read-only on disk -- git
+    # itself is unaffected (it only tracks the executable bit, and `generate`
+    # is never run in CI), but a local `generate` would leave the working
+    # copy unreadable to anything not running as the same user.
+    chmod 644 "$tmp"
+
     # Only now does $out change -- atomically, and only on full success.
     mv "$tmp" "$out"
     success "Generated $out"
