@@ -17,6 +17,12 @@
 #   Set to "kubernetes" when the go module is versioned v0.N.x but supported_range
 #   is expressed in cluster terms (1.N). The guard then normalizes v0.N -> 1.N
 #   before comparing. Only k8s.io/api needs this today.
+#
+# floor_module (optional):
+#   Set when go_module's pin is not independently chosen but is instead the
+#   minimum-version-selection floor set by a different module's own go.mod.
+#   The guard asserts the pin equals exactly what floor_module currently
+#   requires for go_module. Only barman-cloud needs this today.
 
 # Go version (mise.toml is authoritative for tooling)
 go:
@@ -27,17 +33,17 @@ go:
 infrastructure:
   barman-cloud:
     go_module: "github.com/cloudnative-pg/barman-cloud"
+    floor_module: "github.com/cloudnative-pg/plugin-barman-cloud"
     supported_range: "0.5"
     notes: |
       Barman Cloud object-store API types (BarmanObjectStoreConfiguration,
       S3Credentials) — a separate module from both the CNPG operator and the
       barman-cloud *plugin* (cnpg-barman-cloud-plugin, below). Kure imports pkg/api
       directly.
-      Pinned to the pseudo-version plugin-barman-cloud v0.14.0 itself
-      requires, i.e. the minimum-version-selection floor, not an
-      independently chosen commit. It moves only when the plugin moves;
-      renovate.json disables the standalone gomod bump for it (see the rule
-      there).
+      The pin is derived from floor_module's own requirement, not chosen from
+      barman-cloud's tags — a hand-picked tag would be a downgrade Go's
+      minimum-version selection wouldn't let the build use. renovate.json
+      disables the standalone gomod bump for it (see the rule there).
 
   cert-manager:
     go_module: "github.com/cert-manager/cert-manager"

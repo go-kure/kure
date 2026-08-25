@@ -14,6 +14,8 @@
 #    ref: pin instead, see scripts/vendor-guard.sh)
 # 5. pkg/versions/versions_gen.go (the published Go API's generated data) matches
 #    versions.yaml -- see generate_go_api / validate_go_api_drift
+# 6. a versions.yaml entry declaring floor_module has its go.mod pin exactly equal
+#    to what floor_module's own go.mod currently requires -- see validate_mvs_floors
 
 set -euo pipefail
 
@@ -306,6 +308,100 @@ validate_no_sha_in_notes() {
     if [[ $errors -eq 0 ]]; then
         success "No raw commit SHAs in versions.yaml notes"
     fi
+
+    return $errors
+}
+
+# Validate that each versions.yaml entry declaring a floor_module has its
+# go.mod pin exactly equal to what floor_module's own go.mod currently
+# requires for go_module. Some dependencies (barman-cloud) are never chosen
+# directly: Go's minimum-version selection floors the pin above any tag that
+# exists, from a *different* module's requirement, so the range check in
+# validate_gomod() cannot catch a pin that has drifted off that floor onto
+# some other v0.5.x pseudo-version the floor module does not itself require.
+#
+# GOWORK=off: this repo is normally checked out inside a multi-module
+# workspace (go.work listing sibling modules on a newer Go toolchain); every
+# `go` invocation here must ignore that workspace or it fails outright.
+# -mod=readonly: this guard only ever reads go.mod state, never rewrites it.
+#
+# Three-way outcome, same discipline as resolve_tag_commit(): success,
+# definitive error, or (only for the "can we even ask the question" step)
+# a warning -- never a hard failure purely because Go or the module cache
+# was unavailable. In CI, `make deps` runs before this check
+# (.github/workflows/ci.yml) and always populates the module cache, so the
+# warning path there can never mask a real mismatch.
+validate_mvs_floors() {
+    local errors=0
+    info ""
+    info "Validating MVS-floor dependencies..."
+
+    local deps
+    deps=$(yq '.infrastructure | keys | .[]' "$VERSIONS_FILE")
+
+    while IFS= read -r dep; do
+        local go_module floor_module
+        go_module=$(yq ".infrastructure.${dep}.go_module" "$VERSIONS_FILE")
+        floor_module=$(yq ".infrastructure.${dep}.floor_module // \"\"" "$VERSIONS_FILE")
+
+        if [[ -z "$floor_module" || "$floor_module" == "null" ]]; then
+            continue
+        fi
+
+        # Step 1: the pin itself. Do NOT strip the leading "v" -- this
+        # comparison is exact-string against the floor module's own
+        # requirement, unlike validate_gomod()'s major.minor range check.
+        local actual
+        actual=$(get_gomod_version "$go_module")
+        if [[ -z "$actual" ]]; then
+            error "$dep: floor_module is set but $go_module was not found in go.mod"
+            errors=$((errors + 1))
+            continue
+        fi
+
+        # Step 2: the floor module itself must be a go.mod dependency.
+        local floor_pin
+        floor_pin=$(get_gomod_version "$floor_module")
+        if [[ -z "$floor_pin" ]]; then
+            error "$dep: floor_module $floor_module (claimed to set the floor for $go_module) was not found in go.mod"
+            errors=$((errors + 1))
+            continue
+        fi
+
+        # Step 3: locate the floor module's own go.mod so we can read what
+        # IT requires for $go_module. Unreachable (no go, cold cache, no
+        # network) degrades to a warning -- this is the "can we even ask"
+        # step, not the comparison itself.
+        local gomod_path gomod_rc=0
+        gomod_path=$(GOWORK=off go list -mod=readonly -m -f '{{.GoMod}}' "$floor_module" 2>/dev/null) || gomod_rc=$?
+        if [[ $gomod_rc -ne 0 || -z "$gomod_path" || ! -f "$gomod_path" ]]; then
+            warning "$dep: could not resolve $floor_module's own go.mod (no Go, cold module cache, or no network) -- skipping MVS-floor equality check"
+            continue
+        fi
+
+        # Step 4: extract what the floor module's go.mod requires for
+        # $go_module. Double-quoted filter: $go_module must be interpolated
+        # by bash here, the same idiom used for ${dep} in
+        # validate_no_sha_in_notes()/generate_docs() -- a single-quoted
+        # filter would embed the literal text "$go_module" instead of its
+        # value and never match, always falling into the empty/error case
+        # below regardless of the true state.
+        local required
+        required=$(go mod edit -json "$gomod_path" | yq -p json ".Require[]? | select(.Path == \"$go_module\") | .Version" 2>/dev/null)
+        if [[ -z "$required" || "$required" == "null" ]]; then
+            error "$dep: $floor_module's go.mod does not require $go_module at all -- the floor_module claim in versions.yaml does not hold. Point floor_module at the module that actually raises the pin, or drop it."
+            errors=$((errors + 1))
+            continue
+        fi
+
+        # Step 5: exact-string equality.
+        if [[ "$required" == "$actual" ]]; then
+            success "$dep: pin $actual matches the floor set by $floor_module"
+        else
+            error "$dep: pin $actual does not match $floor_module's requirement $required. Either $floor_module moved (re-derive with: go mod edit -droprequire=$go_module && go mod tidy), or some other dependency now raises the pin above the floor and the floor_module claim in versions.yaml is stale."
+            errors=$((errors + 1))
+        fi
+    done <<< "$deps"
 
     return $errors
 }
@@ -757,6 +853,7 @@ main() {
             validate_gomod || gomod_result=$?
             validate_gomod_pin_comment || gomod_result=1
             validate_no_sha_in_notes || gomod_result=1
+            validate_mvs_floors || gomod_result=1
             validate_docs_drift || gomod_result=1
             validate_go_api_drift || gomod_result=1
 
