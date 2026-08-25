@@ -55,10 +55,15 @@ Such a dependency's `versions.yaml` entry adds structured fields to pin it to a
 external-secrets:
   go_module: "github.com/external-secrets/external-secrets/apis"
   upstream_repo: "external-secrets/external-secrets"
-  upstream_release: "v2.9.0"
-  upstream_release_commit: "378bdb622ed9712ef4a58370f6a17af033b7d343"
-  supported_range: "2.9"
+  upstream_release: "vX.Y.Z"          # the upstream tag this pin tracks
+  upstream_release_commit: "<40-char commit that tag resolves to>"
+  supported_range: "X.Y"
 ```
+
+(Values shown as placeholders deliberately — `sync-eso-pin.sh` only rewrites `versions.yaml`
+and regenerates `docs/compatibility.md`, never this guide, so a literal example version here
+would go stale the next time Renovate advances the pin. See the live entry in
+[`versions.yaml`](../versions.yaml) for the current values.)
 
 - `upstream_release` — the upstream tag the pin tracks.
 - `upstream_release_commit` — the full commit that tag resolves to. This is what makes
