@@ -19,7 +19,10 @@ includes `versions.yaml`, `docs/compatibility.md` and `scripts/sync-versions.sh`
 so a version-metadata-only PR cannot skip it:
 
 1. **Range** — each dependency's build version, read from `go.mod`, falls within the
-   `supported_range` declared in `versions.yaml`.
+   `supported_range` declared in `versions.yaml`. For a dependency pinned to a Go
+   pseudo-version (no semver tags upstream) that also declares `upstream_release` (see
+   "Release-pinned dependencies" below), the declared release is substituted for the
+   range check instead of being skipped — `supported_range` is enforced for these too.
 2. **go.mod pin comment** — the `// Current pin: vX.Y.Z (Kubernetes 1.N)` comment above
    the `k8s.io/api` replace directive matches that directive's actual version. A drifted
    comment used to be caught only by AI review, on every single Kubernetes bump.
@@ -29,11 +32,56 @@ so a version-metadata-only PR cannot skip it:
    pinned in `go.mod`" instead of writing out the commit by hand — the literal drifts
    silently the next time the pin moves. This is **not** a ban on patch-level semver in
    justification prose (e.g. metallb's "v0.16.0 is a minor release…" stays fine).
+   `upstream_release`/`upstream_release_commit` (below) are structured fields, not
+   prose, so this ban does not apply to them.
 4. **Drift** — the committed `docs/compatibility.md` is byte-identical to what
    `generate` would produce right now. It regenerates into a temp file and diffs;
    your working tree is never touched. On failure it prints the diff (`-` is what is
    committed, `+` is what `versions.yaml` + `go.mod` currently imply) and tells you to
    run `generate`.
+
+### Release-pinned dependencies (untagged Go submodules)
+
+Some upstream Go modules version their CRD types in a submodule (e.g. `external-secrets`'
+`/apis`) that upstream never tags. Go can then only express the dependency as a
+pseudo-version, and `@latest` resolves to upstream `main` HEAD — every upstream commit
+looks like a new version, and `supported_range` is unverifiable and unenforceable (there
+is no semver to compare).
+
+Such a dependency's `versions.yaml` entry adds two structured fields to pin it to a
+*named release* instead of `main` HEAD:
+
+```yaml
+external-secrets:
+  go_module: "github.com/external-secrets/external-secrets/apis"
+  upstream_release: "v2.9.0"
+  upstream_release_commit: "378bdb622ed9712ef4a58370f6a17af033b7d343"
+  supported_range: "2.9"
+```
+
+- `upstream_release` — the upstream tag the pin tracks.
+- `upstream_release_commit` — the full commit that tag resolves to. This is what makes
+  the check work **offline**: `sync-versions.sh check` asserts that go.mod's
+  pseudo-version's embedded 12-char commit digest is a prefix of this field, on every
+  run, with no network access. If the pin ever drifted off the declared release (hand
+  edit, bad rebase, …), this assertion fails — the actual drift guard, separate from and
+  in addition to the range check.
+- `supported_range` is then enforced for the dependency for the first time, against
+  `upstream_release` rather than being skipped as unparseable.
+
+`scripts/sync-eso-pin.sh` re-pins such a dependency: it reads `upstream_release`,
+resolves the tag to a commit via the GitHub API (falling back to `git ls-remote`),
+`go get`s that exact commit (never hand-constructs the pseudo-version string — Go
+verifies its embedded timestamp against the commit), runs `go mod tidy`, writes the
+resolved commit back to `upstream_release_commit`, and regenerates
+`docs/compatibility.md`. It is idempotent: a re-run with `upstream_release` unchanged
+leaves the tree untouched. `renovate.json` disables the raw `gomod` manager for this
+module (its `@latest` is `main` HEAD, not useful) and instead tracks
+`upstream_release` via a `customManagers` regex entry on `versions.yaml`, filtered to
+plain `vX.Y.Z` release tags (upstream also cuts non-matching `helm-chart-X.Y.Z` tags),
+wired to run `sync-eso-pin.sh` as a `postUpgradeTasks` command — so a PR opens when
+upstream cuts a release, arriving already re-pinned and range-checked, rather than on
+every upstream commit.
 
 `generate` regenerates `docs/compatibility.md` and the `go.mod` pin comment in place.
 There is no other hand-maintained "current" version to keep in sync (see
