@@ -18,20 +18,24 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 MISE="mise.toml"
+# Restrict to the [tools] table -- mise.toml can define other tables ([env], [tasks], ...) whose
+# keys aren't tool pins at all; a file-wide grep would count a same-named key in another table as
+# a spurious duplicate, or extract that table's value instead of the real pin.
+MISE_TOOLS="$(awk '/^\[tools\]/{f=1;next} /^\[/{f=0} f' "$MISE")"
 # Exactly one match required, same discipline as the Makefile/ci.yml checks below, and
 # tolerant of ANY spacing around "=" (TOML permits "golangci-lint=", "golangci-lint =", etc.)
 # and either TOML quote style ("..." or '...', both valid literal/basic strings) -- a duplicate
 # key in a spacing or quoting this pattern couldn't see would be invisible to the count while
 # still being invalid TOML mise can't parse at all.
 MISE_PATTERN='^golangci-lint[[:space:]]*=[[:space:]]*["'\'']'
-mise_count="$(grep -cE "$MISE_PATTERN" "$MISE" || true)"
+mise_count="$(printf '%s\n' "$MISE_TOOLS" | grep -cE "$MISE_PATTERN" || true)"
 if [ "$mise_count" -ne 1 ]; then
 	echo "✗ $MISE: expected exactly 1 golangci-lint [tools] entry, found $mise_count"
 	exit 1
 fi
 # Strip the leading key/quote, then everything from the closing quote (whichever style opened
 # it) onward -- cut -d'"' can't do this once the quote character itself varies.
-MISE_VAL="$(grep -E "$MISE_PATTERN" "$MISE" | sed -E "s/^golangci-lint[[:space:]]*=[[:space:]]*[\"']//; s/[\"'].*//")"
+MISE_VAL="$(printf '%s\n' "$MISE_TOOLS" | grep -E "$MISE_PATTERN" | sed -E "s/^golangci-lint[[:space:]]*=[[:space:]]*[\"']//; s/[\"'].*//")"
 # mise tolerates a "v"-prefixed pin (golangci-lint's own release tags carry one); strip it so a
 # future Renovate bump that writes "vX.Y.Z" here can't double-prefix every target's "v$MISE_VAL".
 MISE_VAL="${MISE_VAL#v}"
