@@ -14,11 +14,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 MISE="mise.toml"
-# Restrict to the [tools] table (see the matching comment in check-tool-versions.sh) and, same
-# discipline as the checker, require exactly one match -- head -1 previously let a duplicate pin
-# resolve silently to whichever occurrence sorted first, then propagate that guess into every
-# target file instead of refusing to sync an invalid mise.toml.
-MISE_TOOLS="$(awk '/^[[:space:]]*\[[[:space:]]*tools[[:space:]]*\]/{f=1;next} /^[[:space:]]*\[/{f=0} f' "$MISE")"
+# Restrict to the [tools] table (see the matching comment in check-tool-versions.sh, including
+# its whitespace- and quoted-key-tolerant header match) and, same discipline as the checker,
+# require exactly one match -- head -1 previously let a duplicate pin resolve silently to
+# whichever occurrence sorted first, then propagate that guess into every target file instead of
+# refusing to sync an invalid mise.toml.
+MISE_TOOLS="$(awk '/^[[:space:]]*\[[[:space:]]*["'\'']?tools["'\'']?[[:space:]]*\]/{f=1;next} /^[[:space:]]*\[/{f=0} f' "$MISE")"
 # Same pattern check-tool-versions.sh's MISE_PATTERN accepts (any "=" spacing, either TOML
 # quote style) -- a narrower extraction here than the checker's count/match means a validly
 # formatted variant the checker accepts still leaves this script finding nothing to sync.
