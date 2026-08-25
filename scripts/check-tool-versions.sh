@@ -21,7 +21,7 @@ MISE="mise.toml"
 # Restrict to the [tools] table -- mise.toml can define other tables ([env], [tasks], ...) whose
 # keys aren't tool pins at all; a file-wide grep would count a same-named key in another table as
 # a spurious duplicate, or extract that table's value instead of the real pin.
-MISE_TOOLS="$(awk '/^\[tools\]/{f=1;next} /^\[/{f=0} f' "$MISE")"
+MISE_TOOLS="$(awk '/^[[:space:]]*\[[[:space:]]*tools[[:space:]]*\]/{f=1;next} /^[[:space:]]*\[/{f=0} f' "$MISE")"
 # Exactly one match required, same discipline as the Makefile/ci.yml checks below, and
 # tolerant of ANY spacing around "=" (TOML permits "golangci-lint=", "golangci-lint =", etc.)
 # and either TOML quote style ("..." or '...', both valid literal/basic strings) -- a duplicate
