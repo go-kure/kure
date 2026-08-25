@@ -27,8 +27,8 @@
 #      `upstream_release_commit` field — the offline half of the drift guard
 #      in scripts/sync-versions.sh, which asserts go.mod's pseudo-version
 #      digest prefixes this field on every `check` run.
-#   6. `./scripts/sync-versions.sh generate` to refresh docs/compatibility.md
-#      and the go.mod pin comment.
+#   6. `./scripts/sync-versions.sh generate` to refresh docs/compatibility.md,
+#      pkg/versions/versions_gen.go, and the go.mod pin comment.
 #
 # Idempotent: a re-run with `upstream_release` unchanged resolves the same
 # commit, so `go get`/`go mod tidy` produce no further change, and step 5

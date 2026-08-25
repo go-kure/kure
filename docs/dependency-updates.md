@@ -4,7 +4,7 @@ This guide covers the process for updating Kure's dependencies, including versio
 
 ## Version Management Overview
 
-Kure tracks dependency versions in three places:
+Kure tracks dependency versions across the following files:
 
 | File | Purpose |
 |------|---------|

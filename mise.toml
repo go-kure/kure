@@ -63,7 +63,7 @@ description = "Validate version consistency across all files"
 run = "./scripts/sync-versions.sh check"
 
 [tasks."versions:generate"]
-description = "Generate docs from versions.yaml"
+description = "Generate docs and the pkg/versions Go API from versions.yaml"
 run = "./scripts/sync-versions.sh generate"
 
 [tasks."site:dev"]
