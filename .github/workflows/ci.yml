@@ -472,9 +472,19 @@ jobs:
         #   registration; every reachable trace runs through generated
         #   DeepCopyObject/DeepCopyInto boilerplate (pkg/io/runtime.go:54) or package
         #   init (pkg/kubernetes/externalsecrets/create.go:4), never a reconciler.
-        #   No upstream fix in the Go vuln DB (Fixed in: N/A), and the apis module is
-        #   untagged so no bump can clear it. Same finding, same reasoning as
-        #   launcher's identical allowlist entry — see launcher/docs/github-workflows.md.
+        #   The fix landed upstream at v2.4.1 (github.com/external-secrets/
+        #   external-secrets/releases/tag/v2.4.1) and kure now pins v2.9.0
+        #   (versions.yaml upstream_release), well past it -- but the waiver stays
+        #   structurally necessary, not just untagged: the Go vuln DB entry's
+        #   standard `ranges` block is `{"introduced": "0"}` with no `fixed` event;
+        #   the v2.4.1 fix exists only inside a `custom_ranges` annotation the DB
+        #   itself flags as "could not be automatically mapped to standard Go
+        #   module versions" (vuln.go.dev/ID/GO-2026-5377.json). Standard
+        #   govulncheck matching consumes `ranges`, not `custom_ranges`, so it
+        #   flags every version as affected regardless of the real fix commit --
+        #   confirmed empirically: still reachable at the v2.9.0 pin. Same finding,
+        #   same reasoning as launcher's identical allowlist entry — see
+        #   launcher/docs/github-workflows.md.
         allowlist: 'GO-2026-5377'
 
     - name: Save Go build cache
