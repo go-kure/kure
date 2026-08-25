@@ -178,7 +178,10 @@ jobs:
     # catch a broken script before it merges, not full shellcheck (a repo-wide tooling
     # decision, out of scope for this one script).
     - name: Syntax-check version-sync scripts
-      run: bash -n scripts/sync-eso-pin.sh scripts/sync-versions.sh
+      run: |
+        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh; do
+          bash -n "$f"
+        done
 
     - name: Cache goimports
       id: goimports-cache
