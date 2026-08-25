@@ -11,18 +11,18 @@ go 1.26.6
 // k8s.io minor versions (v0.30–v0.36). Without explicit pins, `go mod tidy`
 // could pull in mismatched versions during dependency updates.
 //
-// Current pin: v0.36.3 (Kubernetes 1.36)
+// Current pin: v0.36.4 (Kubernetes 1.36)
 //
 // Removal condition: these directives can be removed when ALL direct and
 // transitive dependencies converge on the same k8s.io minor version, making
 // Go's MVS sufficient to maintain lockstep. Check with:
 //   go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 replace (
-	k8s.io/api => k8s.io/api v0.36.3
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.3
-	k8s.io/apimachinery => k8s.io/apimachinery v0.36.3
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.36.3
-	k8s.io/client-go => k8s.io/client-go v0.36.3
+	k8s.io/api => k8s.io/api v0.36.4
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.4
+	k8s.io/apimachinery => k8s.io/apimachinery v0.36.4
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.36.4
+	k8s.io/client-go => k8s.io/client-go v0.36.4
 )
 
 require (
@@ -49,10 +49,10 @@ require (
 	go.universe.tf/metallb v0.16.1
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.2.4
-	k8s.io/api v0.36.3
-	k8s.io/apiextensions-apiserver v0.36.3
-	k8s.io/apimachinery v0.36.3
-	k8s.io/cli-runtime v0.36.3
+	k8s.io/api v0.36.4
+	k8s.io/apiextensions-apiserver v0.36.4
+	k8s.io/apimachinery v0.36.4
+	k8s.io/cli-runtime v0.36.4
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/gateway-api v1.6.1
 	sigs.k8s.io/kustomize/api v0.21.1
@@ -197,10 +197,10 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/client-go v0.36.3 // indirect
+	k8s.io/client-go v0.36.4 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260603220949-865597e52e25 // indirect
-	k8s.io/streaming v0.36.3 // indirect
+	k8s.io/streaming v0.36.4 // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	oras.land/oras-go/v2 v2.6.2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect

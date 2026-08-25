@@ -32,7 +32,7 @@ Kure maintains two version concepts for each dependency:
 | cnpg-barman-cloud | 0.14.0 | 0.9 - 0.14 | Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1). Versioned independently from the CNPG operator. v0.14 is a routine minor with no changes to the imported ObjectStore v1 type (build + tests pass unchanged). |
 | controller-runtime | 0.24.1 | 0.22 - 0.24 | v0.24.1 fixes Apply typed error handling regression; requires k8s.io/* v0.36.0 (Kubernetes 1.36) |
 | gateway-api | 1.6.1 | 1.0 - 1.6 | Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders. Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0). v1.6 is a routine minor with no changes to the imported gateway.networking.k8s.io/v1 HTTPRoute type — build + tests pass unchanged. |
-| kubernetes | 0.36.3 | 1.33 - 1.36 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range |
+| kubernetes | 0.36.4 | 1.33 - 1.36 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range |
 
 ## Understanding the Matrix
 
