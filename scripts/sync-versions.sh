@@ -651,6 +651,34 @@ validate_docs_drift() {
     return 1
 }
 
+# Assert pkg/versions/versions_gen.go matches what generate_go_api would
+# produce right now. Same reasoning as validate_docs_drift: without this, a
+# bump that changed a supported_range leaves the committed Go API silently
+# stale, and a consumer pinning kure by module version reads the old range.
+validate_go_api_drift() {
+    info ""
+    info "Validating generated Go version API is current..."
+
+    local expected
+    expected=$(mktemp)
+    # shellcheck disable=SC2064  # expand $expected now, not at trap time
+    trap "rm -f '$expected' '$expected.diff'" RETURN
+
+    generate_go_api "$expected" >/dev/null || return 1
+
+    if diff -u "$GO_API_FILE" "$expected" > "$expected.diff" 2>&1; then
+        success "$(basename "$GO_API_FILE") is up to date"
+        rm -f "$expected.diff"
+        return 0
+    fi
+
+    error "$(basename "$GO_API_FILE") is out of date — run: ./scripts/sync-versions.sh generate"
+    sed -e "1s|.*|--- committed: ${GO_API_FILE#"$REPO_ROOT"/}|" \
+        -e "2s|.*|+++ expected (regenerated)|" "$expected.diff" >&2
+    rm -f "$expected.diff"
+    return 1
+}
+
 # Main command router
 main() {
     local command="${1:-check}"
@@ -666,6 +694,7 @@ main() {
             validate_gomod_pin_comment || gomod_result=1
             validate_no_sha_in_notes || gomod_result=1
             validate_docs_drift || gomod_result=1
+            validate_go_api_drift || gomod_result=1
 
             if [[ $gomod_result -eq 0 ]]; then
                 info ""
