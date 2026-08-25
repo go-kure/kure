@@ -124,7 +124,28 @@ type LayoutAugmenter interface {
 }
 ```
 
-When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles`, `ConfigMapGenerators`, and sub-`ManifestLayout` children. Only invoked on per-app layouts produced by the non-flat (`GroupByName`) walker paths; `GroupFlat` and umbrella layouts merge resources into shared parent layouts and are not currently augmented.
+When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles`, `ConfigMapGenerators`, and sub-`ManifestLayout` children. It runs on per-app layouts on every walker path that creates one, including the flat-bundle (`GroupFlat`) path and umbrella children — an augmenter app there gets its own per-app sub-layout instead of merging flat into the parent.
+
+`LayoutIntentAugmenter` is an optional companion to `LayoutAugmenter`, for a config whose desire for its own layout varies per instance rather than being fixed for the whole type:
+
+```go
+type LayoutIntentAugmenter interface {
+    LayoutAugmenter
+    WantsOwnLayout() bool
+}
+```
+
+`WantsOwnLayout()` gates placement only, and only on the flat-bundle walker path:
+
+| Walker path | `WantsOwnLayout()` absent, `true`, or `false` |
+|---|---|
+| `GroupByName` and by-package | own layout + `AugmentLayout`, unconditionally — identical to today's behaviour in every case |
+
+| Flat bundle (`GroupFlat`, incl. umbrella children) | `WantsOwnLayout()` absent or `true` | `WantsOwnLayout() == false` |
+|---|---|---|
+| | own child layout + `AugmentLayout` | resources merged flat into parent, `AugmentLayout` **not** called (no layout exists to pass it) |
+
+A config that implements only `LayoutAugmenter` keeps today's presence-only behaviour unchanged.
 
 #### Sub-Layout Children and Flux Integration
 
