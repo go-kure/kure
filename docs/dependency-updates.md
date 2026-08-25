@@ -63,7 +63,7 @@ external-secrets:
 (Values shown as placeholders deliberately — `sync-eso-pin.sh` only rewrites `versions.yaml`
 and regenerates `docs/compatibility.md`, never this guide, so a literal example version here
 would go stale the next time Renovate advances the pin. See the live entry in
-[`versions.yaml`](../versions.yaml) for the current values.)
+[`versions.yaml`](https://github.com/go-kure/kure/blob/main/versions.yaml) for the current values.)
 
 - `upstream_release` — the upstream tag the pin tracks.
 - `upstream_release_commit` — the full commit that tag resolves to. This is what makes
