@@ -356,7 +356,7 @@ check: lint vet test-short check-tool-versions check-govulncheck-docs ## Quick c
 precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs versions-test ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, versions guard)
 
 .PHONY: ci
-ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs ## Run comprehensive CI pipeline
+ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs versions-test ## Run comprehensive CI pipeline
 
 # =============================================================================
 # Cleanup

@@ -13,7 +13,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 
 new_fixture
-yq_set '.infrastructure.notes-dep.notes' "pinned at $(printf 'b%.0s' $(seq 40))"
+yq_set '.infrastructure.notes-dep.notes' "pinned at $(printf 'b%.0s' {1..40})"
 run_generate
 assert_rc 0
 run_check
