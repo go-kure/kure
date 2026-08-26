@@ -24,6 +24,9 @@
 #                                 the one it lives in -- do not set it outside the test harness.
 #   SYNC_VERSIONS_PROBE_TIMEOUT - override the 10s timeout on the validate_mvs_floors `go list`
 #                                 probe, so the harness's timeout case runs in ~1s instead of 10s.
+#   SYNC_VERSIONS_TIMEOUT_CMD   - override the resolved `timeout`/`gtimeout` binary name (even to
+#                                 "" for none), so the harness can exercise the unbounded fallback
+#                                 without making a real `timeout` unresolvable on PATH.
 
 set -euo pipefail
 
@@ -52,6 +55,66 @@ check_dependencies() {
         error "yq is required but not installed. Install with: brew install yq"
         exit 1
     fi
+}
+
+# Resolved once, from the start of the `check)` branch in main() -- not from
+# check_dependencies, and not for `generate` (see below). Empty means "no
+# bounded-execution binary available" -- run_bounded then runs the command
+# unbounded.
+TIMEOUT_BIN=""
+
+resolve_timeout_bin() {
+    # Test-only override: set (even to "") it wins, so the harness can exercise
+    # the unbounded fallback without making `timeout` unresolvable on PATH --
+    # a PATH truncation would also drop yq and trip check_dependencies first.
+    if [[ -n "${SYNC_VERSIONS_TIMEOUT_CMD+set}" ]]; then
+        TIMEOUT_BIN="$SYNC_VERSIONS_TIMEOUT_CMD"
+    else
+        local candidate
+        for candidate in timeout gtimeout; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+                TIMEOUT_BIN="$candidate"
+                break
+            fi
+        done
+    fi
+    # Empty either way it got here means run_bounded runs unbounded -- warn
+    # once regardless of which branch produced it (a warning inside the
+    # override branch only would never fire for case 35's SYNC_VERSIONS_TIMEOUT_CMD="").
+    if [[ -z "$TIMEOUT_BIN" ]]; then
+        warning "no 'timeout' (or 'gtimeout') on PATH -- the MVS-floor go.mod probe and the git ls-remote tag lookup will run unbounded, so a stalled module proxy or git remote can hang this script. Install GNU coreutils to restore the bound."
+    fi
+}
+
+# run_bounded <seconds> <command...> -- bound the command when a timeout
+# binary exists, otherwise run it as-is. Keeps the caller's exit status and
+# stdout unchanged in both cases, so every rc test downstream is unaffected.
+run_bounded() {
+    local seconds="$1"
+    shift
+    if [[ -n "$TIMEOUT_BIN" ]]; then
+        "$TIMEOUT_BIN" "$seconds" "$@"
+    else
+        "$@"
+    fi
+}
+
+# make_temp <what> [mktemp-args...] -- echo a usable temp path or fail loudly.
+# Callers must use `|| return 1`: an unchecked empty path turns into an
+# ambiguous redirect or a `rm -f ''` RETURN trap instead of an explanation.
+make_temp() {
+    local what="$1"
+    shift
+    local path
+    path=$(mktemp "$@") || {
+        error "$what: mktemp failed -- no writable temporary directory (check \$TMPDIR and free space)"
+        return 1
+    }
+    if [[ -z "$path" || ! -e "$path" ]]; then
+        error "$what: mktemp produced an unusable path ('$path')"
+        return 1
+    fi
+    printf '%s' "$path"
 }
 
 # Extract version from go.mod for a given module
@@ -149,7 +212,7 @@ resolve_tag_commit() {
             return 1
         fi
         local ls_remote_out
-        ls_remote_out="$(timeout 5 git ls-remote "https://github.com/${repo}" "refs/tags/${tag}" "refs/tags/${tag}^{}" 2>/dev/null)"
+        ls_remote_out="$(run_bounded 5 git ls-remote "https://github.com/${repo}" "refs/tags/${tag}" "refs/tags/${tag}^{}" 2>/dev/null)"
         local ls_remote_rc=$?
         commit="$(printf '%s\n' "$ls_remote_out" | awk -v r="refs/tags/${tag}^{}" '$2 == r {print $1; found=1} END {exit !found}' || true)"
         if [[ -z "$commit" ]]; then
@@ -235,7 +298,7 @@ sync_gomod_pin_comment() {
     expected=$(expected_gomod_pin_comment) || return 1
 
     local tmp
-    tmp=$(mktemp)
+    tmp=$(make_temp "sync_gomod_pin_comment") || return 1
     if grep -qE '^// Current pin: ' "$GO_MOD_FILE"; then
         awk -v repl="$expected" '
             /^\/\/ Current pin: / { print repl; next }
@@ -338,10 +401,13 @@ validate_no_sha_in_notes() {
 # that invokes the script by absolute path from outside the checkout has no
 # enclosing go.mod, silently degrading to the warning branch below instead of
 # actually running the check.
-# timeout 10: this is the one external-resolution call in this function, and
-# a stalled module-proxy connection would otherwise hang here indefinitely
-# instead of reaching the warning branch promptly -- same discipline as
-# resolve_tag_commit()'s `timeout 5 git ls-remote` / `curl --max-time 5`.
+# run_bounded ... 10: this is the one external-resolution call in this
+# function, and a stalled module-proxy connection would otherwise hang here
+# indefinitely instead of reaching the warning branch promptly -- same
+# discipline as resolve_tag_commit()'s `run_bounded 5 git ls-remote` /
+# `curl --max-time 5`. When no `timeout`/`gtimeout` binary is on PATH,
+# run_bounded degrades to running the command unbounded (resolve_timeout_bin
+# warns once at startup); this probe can then hang on a stalled proxy.
 #
 # Three-way outcome, same discipline as resolve_tag_commit(): success,
 # definitive error, or (only for the "can we even ask the question" step)
@@ -391,7 +457,7 @@ validate_mvs_floors() {
         # network) degrades to a warning -- this is the "can we even ask"
         # step, not the comparison itself.
         local gomod_path gomod_rc=0
-        gomod_path=$(timeout "${SYNC_VERSIONS_PROBE_TIMEOUT:-10}" env GOWORK=off go list -C "$REPO_ROOT" -mod=readonly -m -f '{{.GoMod}}' "$floor_module" 2>/dev/null) || gomod_rc=$?
+        gomod_path=$(run_bounded "${SYNC_VERSIONS_PROBE_TIMEOUT:-10}" env GOWORK=off go list -C "$REPO_ROOT" -mod=readonly -m -f '{{.GoMod}}' "$floor_module" 2>/dev/null) || gomod_rc=$?
         if [[ $gomod_rc -ne 0 || -z "$gomod_path" || ! -f "$gomod_path" ]]; then
             warning "$dep: could not resolve $floor_module's own go.mod (no Go, cold module cache, or no network) -- skipping MVS-floor equality check"
             continue
@@ -745,7 +811,7 @@ generate_go_api() {
     # into a temp file was meant to prevent. Co-locating keeps `mv` a same-
     # filesystem rename(2), which is atomic.
     local tmp
-    tmp=$(mktemp "$(dirname "$out")/.versions_gen.XXXXXX")
+    tmp=$(make_temp "generate_go_api" "$(dirname "$out")/.versions_gen.XXXXXX") || return 1
 
     {
         printf '// Code generated by scripts/sync-versions.sh from versions.yaml. DO NOT EDIT.\n\n'
@@ -821,11 +887,11 @@ validate_docs_drift() {
     info "Validating generated documentation is current..."
 
     local expected
-    expected=$(mktemp)
+    expected=$(make_temp "validate_docs_drift") || return 1
     # shellcheck disable=SC2064  # expand $expected now, not at trap time
     trap "rm -f '$expected' '$expected.diff'" RETURN
 
-    generate_docs "$expected" >/dev/null
+    generate_docs "$expected" >/dev/null || return 1
 
     if diff -u "$DOCS_FILE" "$expected" > "$expected.diff" 2>&1; then
         success "$(basename "$DOCS_FILE") is up to date"
@@ -851,7 +917,7 @@ validate_go_api_drift() {
     info "Validating generated Go version API is current..."
 
     local expected
-    expected=$(mktemp)
+    expected=$(make_temp "validate_go_api_drift") || return 1
     # shellcheck disable=SC2064  # expand $expected now, not at trap time
     trap "rm -f '$expected' '$expected.diff'" RETURN
 
@@ -878,6 +944,7 @@ main() {
 
     case "$command" in
         check)
+            resolve_timeout_bin
             info "=== Version Consistency Check ==="
             info ""
             local gomod_result=0

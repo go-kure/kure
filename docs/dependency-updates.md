@@ -217,6 +217,26 @@ assert_err_contains '<the exact error substring the guard must emit>'
 failure path is, by this harness's own standard, unproven — the whole point is that CI
 should never again be able to report green while a guard silently stopped guarding.
 
+**Portable-environment prerequisites (`timeout`, `mktemp`).** The harness itself needs no
+network. Without a `timeout`/`gtimeout` binary on `PATH`, `sync-versions.sh check` runs its
+two bounded probes (the MVS-floor `go list` lookup and the tag-resolution `git ls-remote`
+fallback) unbounded instead, and says so once at startup — `generate` never reaches either
+probe, so it is unaffected either way. This is production-runtime graceful degradation, not
+a hard requirement — see `DEVELOPMENT.md`'s Prerequisites block for the full split.
+
+That degradation does **not** extend to the test harness itself: pre-existing case
+`09-mvs-floor-hang-timeout.sh` needs a real `timeout`/`gtimeout` on the machine *running the
+test suite* — it hangs a stubbed `go` and asserts `SYNC_VERSIONS_PROBE_TIMEOUT` bounds it. On
+a host with neither binary, that case (and therefore `run-tests.sh` / `mise run verify`)
+hangs instead of failing loudly. This is a test-harness-only prerequisite, narrower than and
+separate from production's graceful degradation.
+
+`mise registry` maps `coreutils` to `aqua:uutils/coreutils`; checked directly against a local
+install, that backend provisions one multi-call `coreutils` binary (a `timeout` applet is
+reachable only via `coreutils timeout ...`), never a standalone binary literally named
+`timeout` — so it is **not** pinned in `mise.toml` for this. `yq` remains the only
+externally-required tool mise provisions for this script.
+
 ## Update Risk Levels
 
 ### Patch Updates (Low Risk)

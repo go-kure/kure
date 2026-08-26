@@ -63,6 +63,24 @@ Enforced via the `main-protection` [repository ruleset](https://github.com/go-ku
 
 ### 1. Initial Setup
 
+**Prerequisites:**
+
+- `go` and `mise` — required
+- `make`, `git` — required
+- `bash` 4+ — required
+- `yq` — required by `scripts/sync-versions.sh`; pinned in `mise.toml`
+- `mktemp` — required by `scripts/sync-versions.sh` and `scripts/vendor-guard.sh`. An external
+  coreutils utility, not a bash builtin, but present on virtually every host with coreutils
+  installed; both scripts name the failure clearly on the rare host without it.
+- `timeout` (or macOS Homebrew's `gtimeout`) from GNU coreutils — split by scope, not one blanket
+  status:
+  - **optional for `scripts/sync-versions.sh check`** (production runtime): the two bounded
+    probes it uses degrade gracefully to running unbounded, with a startup warning, when neither
+    binary is found.
+  - **required to run the full local gate** (`mise run verify` / `scripts/test/run-tests.sh`):
+    pre-existing harness case `09-mvs-floor-hang-timeout.sh` needs a real `timeout`/`gtimeout` to
+    bound its stubbed probe — see `docs/dependency-updates.md`'s harness section for the caveat.
+
 ```bash
 # Install dependencies
 make deps

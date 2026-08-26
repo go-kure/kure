@@ -23,8 +23,11 @@ for case_file in "$TEST_DIR"/cases/*.sh; do
     # with `${VAR:-default}`, which preserves an inherited value -- so an
     # ambient STUB_GO_MODE/STUB_NET_MODE (say, left exported by a debugging
     # session) would silently run every case in a mode it never asked for,
-    # and an ambient SYNC_VERSIONS_REPO_ROOT/SYNC_VERSIONS_PROBE_TIMEOUT
-    # would reach sync-versions.sh directly. GOWORK is cleared for the same
+    # and an ambient SYNC_VERSIONS_REPO_ROOT/SYNC_VERSIONS_PROBE_TIMEOUT/
+    # SYNC_VERSIONS_TIMEOUT_CMD would reach sync-versions.sh directly -- an
+    # ambient SYNC_VERSIONS_TIMEOUT_CMD is exactly the GOWORK defect class:
+    # it would silently pin every case to one side of the timeout-resolver
+    # branch regardless of what the case itself sets. GOWORK is cleared for the same
     # reason: fixtures/stub-go/go's invocation-shape check for
     # sync-versions.sh:417's `GOWORK=off go mod edit` call works by testing
     # whether GOWORK=off reaches the stub -- an ambient GOWORK=off exported
@@ -36,6 +39,7 @@ for case_file in "$TEST_DIR"/cases/*.sh; do
     # working unchanged, since those all run after new_fixture.
     if out=$(env -u STUB_GO_MODE -u STUB_NET_MODE \
                  -u SYNC_VERSIONS_REPO_ROOT -u SYNC_VERSIONS_PROBE_TIMEOUT \
+                 -u SYNC_VERSIONS_TIMEOUT_CMD \
                  -u GOWORK \
                  bash "$case_file" 2>&1); then
         pass=$((pass + 1))
