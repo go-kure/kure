@@ -105,7 +105,14 @@ run_generate() { _run generate; }
 
 _run() {
     local errfile
-    errfile=$(mktemp)
+    errfile=$(mktemp) || {
+        echo "_run: mktemp failed -- refusing to run '$SYNC_VERSIONS $1' without a place to capture stderr" >&2
+        exit 1
+    }
+    if [[ -z "$errfile" || ! -f "$errfile" ]]; then
+        echo "_run: mktemp produced an unusable path ('$errfile') -- refusing to continue" >&2
+        exit 1
+    fi
     rc=0
     out=$("$SYNC_VERSIONS" "$1" 2>"$errfile") || rc=$?
     err=$(cat "$errfile")
