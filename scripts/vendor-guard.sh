@@ -58,7 +58,14 @@ fi
 
 url="https://raw.githubusercontent.com/go-kure/.github/${sha}/scripts/check-forbidden-terms.sh"
 
-fetched="$(mktemp)"
+fetched="$(mktemp)" || {
+    echo "vendor-guard: mktemp failed -- no writable temporary directory (check \$TMPDIR and free space)" >&2
+    exit 1
+}
+if [[ -z "$fetched" || ! -e "$fetched" ]]; then
+    echo "vendor-guard: mktemp produced an unusable path ('$fetched')" >&2
+    exit 1
+fi
 trap 'rm -f "$fetched"' EXIT
 
 if ! curl -fsSL "$url" -o "$fetched"; then
