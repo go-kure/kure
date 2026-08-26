@@ -25,9 +25,14 @@ new_fixture
 # directive, and the module effectively declared twice. Confirmed by
 # reproduction: the unscoped form left a malformed second entry inside
 # replace ( ... ), verified locally then reverted.
-sed -i '/^require (/,/^)/{/^)/i\
+#
+# Temp-file + mv, not `sed -i` -- BSD/macOS sed's `-i` takes the backup
+# suffix as its next (mandatory) argument and would otherwise consume this
+# script's own sed expression as that suffix, leaving go.mod unedited. Same
+# pattern as scripts/sync-tool-versions.sh's own file edits.
+sed '/^require (/,/^)/{/^)/i\
 	github.com/example/net-dep-range v1.5.0-20260101000000-aaaaaaaaaaaa
-}' "$FIXTURE/go.mod"
+}' "$FIXTURE/go.mod" > "$FIXTURE/go.mod.tmp" && mv "$FIXTURE/go.mod.tmp" "$FIXTURE/go.mod"
 
 yq eval -i '.infrastructure.net-dep-range = {
   "go_module": "github.com/example/net-dep-range",

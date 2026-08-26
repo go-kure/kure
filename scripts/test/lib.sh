@@ -80,8 +80,13 @@ yq_set() {
 }
 
 # gomod_sub <sed-expr> -- apply a sed substitution to $FIXTURE/go.mod.
+# Temp-file + mv, not `sed -i` -- BSD/macOS sed's `-i` takes the backup
+# suffix as its next (mandatory) argument, so `sed -i "$1"` would consume
+# $1 itself as that suffix and leave go.mod unedited on any non-GNU sed.
+# Same pattern as scripts/sync-tool-versions.sh's own Makefile/ci.yml/docs
+# edits, for the same reason.
 gomod_sub() {
-    sed -i "$1" "$FIXTURE/go.mod"
+    sed "$1" "$FIXTURE/go.mod" > "$FIXTURE/go.mod.tmp" && mv "$FIXTURE/go.mod.tmp" "$FIXTURE/go.mod"
 }
 
 # run_check / run_generate -- invoke sync-versions.sh against $FIXTURE,
