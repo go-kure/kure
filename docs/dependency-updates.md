@@ -184,8 +184,10 @@ pass. Nothing proves a guard actually **fails** when it should — a guard that 
 guarding (a dropped flag, a loosened regex, a silently-skipped branch) looks identical to
 one still doing its job. `scripts/test/` closes that gap with a hermetic, network-free
 mutation-matrix harness: each `scripts/test/cases/*.sh` file builds a synthetic fixture
-tree, mutates one thing, runs `sync-versions.sh`, and asserts both the exit code and the
-specific error text.
+tree, sets up exactly one scenario — a fixture mutation, a stub `go`/`curl`/`git` mode, or
+the unmutated baseline — runs `sync-versions.sh`, and asserts both the exit code and the
+specific message the guard must emit (`assert_err_contains` for a failure case,
+`assert_out_contains` for one that must stay green).
 
 Run it locally with:
 
