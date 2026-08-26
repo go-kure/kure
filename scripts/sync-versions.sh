@@ -16,11 +16,19 @@
 #    versions.yaml -- see generate_go_api / validate_go_api_drift
 # 6. a versions.yaml entry declaring floor_module has its go.mod pin exactly equal
 #    to what floor_module's own go.mod currently requires -- see validate_mvs_floors
+#
+# Test-only overrides (used by scripts/test/, never set in a real invocation):
+#   SYNC_VERSIONS_REPO_ROOT     - point REPO_ROOT at a synthetic fixture tree instead of the
+#                                 checkout this script lives in. Setting this in a real
+#                                 invocation makes the script validate a different tree than
+#                                 the one it lives in -- do not set it outside the test harness.
+#   SYNC_VERSIONS_PROBE_TIMEOUT - override the 10s timeout on the validate_mvs_floors `go list`
+#                                 probe, so the harness's timeout case runs in ~1s instead of 10s.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="${SYNC_VERSIONS_REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 VERSIONS_FILE="$REPO_ROOT/versions.yaml"
 GO_MOD_FILE="$REPO_ROOT/go.mod"
 DOCS_FILE="$REPO_ROOT/docs/compatibility.md"
@@ -383,7 +391,7 @@ validate_mvs_floors() {
         # network) degrades to a warning -- this is the "can we even ask"
         # step, not the comparison itself.
         local gomod_path gomod_rc=0
-        gomod_path=$(timeout 10 env GOWORK=off go list -C "$REPO_ROOT" -mod=readonly -m -f '{{.GoMod}}' "$floor_module" 2>/dev/null) || gomod_rc=$?
+        gomod_path=$(timeout "${SYNC_VERSIONS_PROBE_TIMEOUT:-10}" env GOWORK=off go list -C "$REPO_ROOT" -mod=readonly -m -f '{{.GoMod}}' "$floor_module" 2>/dev/null) || gomod_rc=$?
         if [[ $gomod_rc -ne 0 || -z "$gomod_path" || ! -f "$gomod_path" ]]; then
             warning "$dep: could not resolve $floor_module's own go.mod (no Go, cold module cache, or no network) -- skipping MVS-floor equality check"
             continue

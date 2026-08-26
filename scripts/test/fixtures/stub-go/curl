@@ -1,0 +1,53 @@
+#!/bin/bash
+# Stub `curl` for scripts/test/'s resolve_tag_commit() (sync-versions.sh:114-168).
+# Reproduces the -w $'\n%{http_code}' trailer real curl produces for the
+# ref-lookup call, and the plain JSON body for the tag-object peel call.
+# Mode selected by $STUB_NET_MODE (default "unreachable"). See
+# scripts/test/lib.sh's header comment for the full mode table.
+set -euo pipefail
+
+mode="${STUB_NET_MODE:-unreachable}"
+url="${@: -1}"
+
+: "${NETDEP_COMMIT:?NETDEP_COMMIT must be set (see lib.sh)}"
+: "${MISMATCH_COMMIT:?MISMATCH_COMMIT must be set (see lib.sh)}"
+: "${TAGOBJ_SHA:?TAGOBJ_SHA must be set (see lib.sh)}"
+
+if [[ "$url" == */git/ref/tags/* ]]; then
+    # First call: GET .../git/ref/tags/<tag> -- sync-versions.sh:127.
+    case "$mode" in
+        unreachable|ls-remote-match)
+            exit 1
+            ;;
+        mismatch)
+            printf '{"object":{"type":"commit","sha":"%s"}}\n200' "$MISMATCH_COMMIT"
+            ;;
+        match)
+            printf '{"object":{"type":"commit","sha":"%s"}}\n200' "$NETDEP_COMMIT"
+            ;;
+        notfound)
+            printf '\n404'
+            ;;
+        tag-object)
+            printf '{"object":{"type":"tag","sha":"%s"}}\n200' "$TAGOBJ_SHA"
+            ;;
+        *)
+            exit 1
+            ;;
+    esac
+elif [[ "$url" == */git/tags/* ]]; then
+    # Second call: GET .../git/tags/<tag-object-sha> -- the annotated-tag
+    # peel, sync-versions.sh:143. Only ever reached when the first call
+    # returned obj_type=="tag", i.e. mode=tag-object.
+    case "$mode" in
+        tag-object)
+            printf '{"object":{"sha":"%s"}}\n' "$NETDEP_COMMIT"
+            ;;
+        *)
+            exit 1
+            ;;
+    esac
+else
+    echo "stub-curl: unrecognized URL: $url" >&2
+    exit 1
+fi
