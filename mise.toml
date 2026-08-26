@@ -10,6 +10,14 @@ hugo = "0.165.0"
 # and never relied on mise for it, which is what let this go unnoticed: a
 # clean mise-managed checkout with no system yq failed `mise run verify`
 # with no explanation.
+#
+# NOT covered by scripts/check-tool-versions.sh / sync-tool-versions.sh --
+# those two scripts only track golangci-lint. Bumping this pin does NOT
+# propagate anywhere automatically. If you bump it, also update the 4
+# hardcoded "4.44.6" occurrences by hand: .github/workflows/ci.yml (three
+# "Cache yq"/"Install yq" step pairs, ~:177-194, :803-820, :948-965) and
+# .github/workflows/deploy-docs.yml (one pair, ~:93-110). Each of those
+# carries a matching comment pointing back here.
 yq = "4.44.6"
 
 [env]

@@ -312,6 +312,12 @@ check-govulncheck-docs: ## Verify govulncheck version parity (docs/github-workfl
 sync-govulncheck-docs: ## Sync govulncheck doc mentions (docs/github-workflows.md) from ci.yml
 	sh scripts/sync-govulncheck-docs.sh
 
+.PHONY: versions-test
+versions-test: ## Run sync-versions.sh guard tests (hermetic, no network)
+	@echo "$(COLOR_YELLOW)Running sync-versions.sh guard tests...$(COLOR_RESET)"
+	@bash scripts/test/run-tests.sh
+	@echo "$(COLOR_GREEN)Guard tests passed$(COLOR_RESET)"
+
 # =============================================================================
 # Development Environment
 # =============================================================================
@@ -347,7 +353,7 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 check: lint vet test-short check-tool-versions check-govulncheck-docs ## Quick code quality check (lint, vet, short tests, tool pins)
 
 .PHONY: precommit
-precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins)
+precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs versions-test ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, versions guard)
 
 .PHONY: ci
 ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs ## Run comprehensive CI pipeline

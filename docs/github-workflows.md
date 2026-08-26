@@ -498,12 +498,13 @@ The development version shows a warning banner linking to the latest stable vers
 | `test-coverage` | `go test -coverprofile=... ./...` | ✅ | - |
 | `test-integration` | `go test -tags=integration -timeout 5m ./...` | - | - |
 | `vuln` | `govulncheck ./...` | ✅ | - |
+| `versions-test` | `bash scripts/test/run-tests.sh` | - (CI runs the script directly, not via `make`) | ✅ |
 
 ## CI vs Pre-commit
 
 | Target | Tasks | Use Case |
 |--------|-------|----------|
-| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs | Fast local checks (~10s) |
+| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs, versions-test | Fast local checks (~10s) |
 | `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln, check-tool-versions, check-govulncheck-docs | Comprehensive CI pipeline (~2min) |
 
 ---

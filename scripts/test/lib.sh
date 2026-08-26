@@ -15,10 +15,10 @@ SYNC_VERSIONS="$TEST_DIR/../sync-versions.sh"
 # Generated, never hand-typed: a hand-typed 38-character placeholder in an
 # earlier draft of this harness is exactly the bug this generate-and-assert
 # pair exists to prevent.
-NETDEP_COMMIT=$(printf 'a%.0s' $(seq 40))
-MISMATCH_COMMIT=$(printf 'c%.0s' $(seq 40))
-TAGOBJ_SHA=$(printf 'd%.0s' $(seq 40))
-UPSTREAM_DIGEST_COMMIT=$(printf 'e%.0s' $(seq 40))
+NETDEP_COMMIT=$(printf 'a%.0s' {1..40})
+MISMATCH_COMMIT=$(printf 'c%.0s' {1..40})
+TAGOBJ_SHA=$(printf 'd%.0s' {1..40})
+UPSTREAM_DIGEST_COMMIT=$(printf 'e%.0s' {1..40})
 for _v in NETDEP_COMMIT MISMATCH_COMMIT TAGOBJ_SHA UPSTREAM_DIGEST_COMMIT; do
     _val="${!_v}"
     _len=${#_val}
@@ -50,7 +50,14 @@ FIXTURE=""
 # STUB_GO_MODE=ok and STUB_NET_MODE=unreachable -- both are the default for
 # every case, not an opt-in.
 new_fixture() {
-    FIXTURE=$(mktemp -d)
+    FIXTURE=$(mktemp -d) || {
+        echo "new_fixture: mktemp -d failed -- refusing to continue (would otherwise copy into an empty/unset path)" >&2
+        exit 1
+    }
+    if [[ -z "$FIXTURE" || ! -d "$FIXTURE" ]]; then
+        echo "new_fixture: mktemp -d produced an unusable path ('$FIXTURE') -- refusing to continue" >&2
+        exit 1
+    fi
     trap 'rm -rf "$FIXTURE"' EXIT
 
     cp -r "$FIXTURES_DIR/base/." "$FIXTURE/"
