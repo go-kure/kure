@@ -225,14 +225,24 @@ probe, so it is unaffected either way. This is production-runtime graceful degra
 a hard requirement — see `DEVELOPMENT.md`'s Prerequisites block for the full split.
 
 That degradation does **not** extend to the test harness itself: pre-existing case
-`09-mvs-floor-hang-timeout.sh` needs a real `timeout`/`gtimeout` on the machine *running the
-test suite* — it stubs `go list` to sleep 5s (faking a hang) and asserts
+`09-mvs-floor-hang-timeout.sh` and this PR's own `36-timeout-present-no-warning.sh` both need a
+real `timeout`/`gtimeout` on the machine *running the test suite* to pass — this is a
+test-harness-only prerequisite, narrower than and separate from production's graceful
+degradation, where a real stalled module proxy or git remote has no such bound.
+
+For case 09: it stubs `go list` to sleep 5s (faking a hang) and asserts
 `SYNC_VERSIONS_PROBE_TIMEOUT` bounds it to ~1s. On a host with neither binary, the probe isn't
-bounded, so the stub's 5s sleep runs to completion, `go list` "succeeds", and the case fails
-on its warning-text assertion (~5s), not by hanging indefinitely — the fixed-length stub bounds
-even the unbounded path in this one test. This is a test-harness-only prerequisite, narrower
-than and separate from production's graceful degradation, where a real stalled module proxy or
-git remote has no such bound.
+bounded, so the stub's 5s sleep runs to completion and `go list` "succeeds" (echoing a `go.mod`
+path) — but the case does **not** then fail on its warning-text assertion. The unbounded
+success reaches step 4 (`go mod edit -json` against that path), which the same stub fails for
+every mode but `ok`/`norequire`/`editfail`; `validate_mvs_floors` reports this as a hard
+**error** ("could not read ... go.mod requirements ... rc=3"), not the "could not resolve ...
+skipping" **warning** the case asserts, so `check` itself exits 1. The case therefore fails on
+its earlier `assert_rc 0`, not on the warning-text assertion, in ~6-11s (the 5s sleep plus the
+rest of `check`'s own guards) — confirmed by direct reproduction, not by hanging indefinitely.
+For case 36: with no real `timeout`/`gtimeout`, `resolve_timeout_bin` cannot resolve `TIMEOUT_BIN`
+and emits its startup warning, which is exactly the text `36-timeout-present-no-warning.sh`
+asserts is *absent* — so the case fails outright rather than skipping.
 
 `mise registry` maps `coreutils` to `aqua:uutils/coreutils`; checked directly against a local
 install, that backend provisions one multi-call `coreutils` binary (a `timeout` applet is

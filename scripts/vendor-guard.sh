@@ -59,10 +59,12 @@ fi
 url="https://raw.githubusercontent.com/go-kure/.github/${sha}/scripts/check-forbidden-terms.sh"
 
 fetched="$(mktemp)" || {
-    echo "vendor-guard: mktemp failed -- no writable temporary directory (check \$TMPDIR and free space)" >&2
+    echo "vendor-guard: mktemp failed -- either the mktemp binary is missing, or it could not create a file (check \$TMPDIR and free space)" >&2
     exit 1
 }
-if [[ -z "$fetched" || ! -e "$fetched" ]]; then
+# -f, not -e: this call takes no mktemp args, so it always creates a plain
+# file, never a directory.
+if [[ -z "$fetched" || ! -f "$fetched" ]]; then
     echo "vendor-guard: mktemp produced an unusable path ('$fetched')" >&2
     exit 1
 fi

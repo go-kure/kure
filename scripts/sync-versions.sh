@@ -100,17 +100,29 @@ run_bounded() {
 }
 
 # make_temp <what> [mktemp-args...] -- echo a usable temp path or fail loudly.
-# Callers must use `|| return 1`: an unchecked empty path turns into an
-# ambiguous redirect or a `rm -f ''` RETURN trap instead of an explanation.
+# Callers must use `|| return 1`: an unchecked empty path turns into a
+# redirect to an empty filename (bash: "line N: : No such file or directory",
+# not an "ambiguous redirect" -- that specific message needs an unquoted
+# multi-/zero-word expansion, which "$DOCS_FILE"/"$GO_API_FILE" never are)
+# or a `rm -f ''` RETURN trap instead of an explanation.
 make_temp() {
     local what="$1"
     shift
     local path
-    path=$(mktemp "$@") || {
-        error "$what: mktemp failed -- no writable temporary directory (check \$TMPDIR and free space)"
+    # ${1+"$@"}, not a bare "$@": with zero mktemp-args (every call site here
+    # except generate_go_api's), "$@" has zero positional params -- referencing
+    # it under `set -u` is only safe on bash >= 4.4 (earlier bash raises
+    # "$@: unbound variable"). ${1+"$@"} sidesteps that entirely: it expands to
+    # nothing when there are no positional params, to "$@" unchanged otherwise.
+    path=$(mktemp ${1+"$@"}) || {
+        error "$what: mktemp failed -- either the mktemp binary is missing, or it could not create a file (check \$TMPDIR and free space)"
         return 1
     }
-    if [[ -z "$path" || ! -e "$path" ]]; then
+    # -f, not -e: every call site here (see above) has mktemp create a plain
+    # file, never a directory -- a future caller passing mktemp's `-d` would
+    # need its own review of the downstream cat/mv usage, not a silent pass
+    # through this check.
+    if [[ -z "$path" || ! -f "$path" ]]; then
         error "$what: mktemp produced an unusable path ('$path')"
         return 1
     fi
@@ -886,10 +898,16 @@ validate_docs_drift() {
     info ""
     info "Validating generated documentation is current..."
 
-    local expected
+    local expected cleanup_cmd
     expected=$(make_temp "validate_docs_drift") || return 1
-    # shellcheck disable=SC2064  # expand $expected now, not at trap time
-    trap "rm -f '$expected' '$expected.diff'" RETURN
+    # %q-quote both paths before building the trap string: a literal single
+    # quote anywhere in $expected (e.g. from a TMPDIR containing one) would
+    # otherwise break out of the '...' quoting below and either error at trap
+    # time or silently skip the rm -f, leaking both temp files -- reproduced
+    # directly against TMPDIR="/tmp/quote'dir" before this fix.
+    printf -v cleanup_cmd 'rm -f %q %q' "$expected" "$expected.diff"
+    # shellcheck disable=SC2064  # expand $expected now (already %q-quoted), not at trap time
+    trap "$cleanup_cmd" RETURN
 
     generate_docs "$expected" >/dev/null || return 1
 
@@ -916,10 +934,13 @@ validate_go_api_drift() {
     info ""
     info "Validating generated Go version API is current..."
 
-    local expected
+    local expected cleanup_cmd
     expected=$(make_temp "validate_go_api_drift") || return 1
-    # shellcheck disable=SC2064  # expand $expected now, not at trap time
-    trap "rm -f '$expected' '$expected.diff'" RETURN
+    # See validate_docs_drift's identical comment: %q-quote before building
+    # the trap string so a literal single quote in $expected cannot break it.
+    printf -v cleanup_cmd 'rm -f %q %q' "$expected" "$expected.diff"
+    # shellcheck disable=SC2064  # expand $expected now (already %q-quoted), not at trap time
+    trap "$cleanup_cmd" RETURN
 
     generate_go_api "$expected" >/dev/null || return 1
 
