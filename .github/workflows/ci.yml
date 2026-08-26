@@ -72,6 +72,12 @@ jobs:
             - 'versions.yaml'
             - 'docs/compatibility.md'
             - 'scripts/sync-versions.sh'
+            # scripts/test/** is sync-versions.sh's own guard-test harness (run as
+            # the "Run sync-versions.sh guard tests" step below). Without this
+            # entry, a PR touching only a case file or the harness itself -- the
+            # exact changes this harness exists to enforce CI coverage of -- would
+            # skip `validate` and report success unexercised.
+            - 'scripts/test/**'
             # Renovate's postUpgradeTasks command for the external-secrets pin —
             # same reasoning as the three entries above: a PR touching only this
             # script would otherwise skip `validate`/`test` entirely (the `build`
@@ -210,9 +216,19 @@ jobs:
         for f in scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh; do
           sh -n "$f"
         done
-        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh; do
+        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/cases/*.sh; do
           bash -n "$f"
         done
+
+    # Runs the mutation matrix (scripts/test/cases/*.sh) that proves
+    # sync-versions.sh's six guards actually fail when they should, not just
+    # pass on the real repo -- see scripts/test/lib.sh and the fixtures/
+    # under it. Hermetic and network-independent (stub go/curl/git), so
+    # unlike "Validate version consistency" above it needs no populated
+    # module cache from make deps -- a statement about this step's own
+    # dependencies, not about step order, which still runs it after deps.
+    - name: Run sync-versions.sh guard tests
+      run: bash scripts/test/run-tests.sh
 
     - name: Cache goimports
       id: goimports-cache

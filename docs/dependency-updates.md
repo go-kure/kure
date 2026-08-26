@@ -175,6 +175,46 @@ barman-cloud:
   is what let `barman-cloud` digest-bump unreviewed for months before this pattern existed
   (the shared preset's `go-patch` group automerges `gomod` patch/digest bumps).
 
+### Testing the guards
+
+`scripts/sync-versions.sh` has six guards (`validate_gomod`, `validate_gomod_pin_comment`,
+`validate_no_sha_in_notes`, `validate_mvs_floors`, `validate_docs_drift`,
+`validate_go_api_drift`), and CI only ever runs them against a repo state where they all
+pass. Nothing proves a guard actually **fails** when it should — a guard that stops
+guarding (a dropped flag, a loosened regex, a silently-skipped branch) looks identical to
+one still doing its job. `scripts/test/` closes that gap with a hermetic, network-free
+mutation-matrix harness: each `scripts/test/cases/*.sh` file builds a synthetic fixture
+tree, mutates one thing, runs `sync-versions.sh`, and asserts both the exit code and the
+specific error text.
+
+Run it locally with:
+
+```bash
+mise run versions:test
+```
+
+It's part of `mise run verify` and runs in CI as its own step, gated on
+`scripts/test/**`/`scripts/sync-versions.sh`/`versions.yaml`/`docs/compatibility.md`
+changes (same path filter as `sync-versions.sh check` itself).
+
+**Adding a case:** every case follows the same shape — see `scripts/test/lib.sh` for the
+full helper reference (`new_fixture`, `yq_set`, `gomod_sub`, `run_check`/`run_generate`,
+the `assert_*` family, `with_stub_go`/`with_stub_net`):
+
+```bash
+source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
+
+new_fixture
+yq_set '.infrastructure.<dep>.<field>' '<mutated value>'   # or gomod_sub for go.mod
+run_check
+assert_rc 1
+assert_err_contains '<the exact error substring the guard must emit>'
+```
+
+**A new guard lands with a case proving it fails.** A guard with no case exercising its
+failure path is, by this harness's own standard, unproven — the whole point is that CI
+should never again be able to report green while a guard silently stopped guarding.
+
 ## Update Risk Levels
 
 ### Patch Updates (Low Risk)

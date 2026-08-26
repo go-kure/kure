@@ -27,7 +27,7 @@ run = "make check"
 
 [tasks.verify]
 description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs)"
-depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs"]
+depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs", "versions:test"]
 
 [tasks.check-tool-versions]
 description = "Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml"
@@ -65,6 +65,10 @@ run = "./scripts/sync-versions.sh check"
 [tasks."versions:generate"]
 description = "Generate docs and the pkg/versions Go API from versions.yaml"
 run = "./scripts/sync-versions.sh generate"
+
+[tasks."versions:test"]
+description = "Run scripts/sync-versions.sh guard tests (hermetic, no network)"
+run = "bash scripts/test/run-tests.sh"
 
 [tasks."site:dev"]
 description = "Start local docs dev server"

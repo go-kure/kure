@@ -1,0 +1,88 @@
+# Synthetic fixture for scripts/test/. Mirrors the real versions.yaml's shape
+# (see the repo root's own versions.yaml) but every entry is a fake module
+# invented for one specific case or group of cases -- see scripts/test/lib.sh
+# and the plan this harness implements for which rows use which entry.
+
+go:
+  current: "1.26.6"
+
+infrastructure:
+  # Rows 1-10 (validate_mvs_floors). floor-owner's own go.mod is the static
+  # fixtures/base/floor/go.mod; fixtures/stub-go/go answers `go list`/`go mod
+  # edit` for it without ever invoking a real go toolchain.
+  floor-dep:
+    go_module: "github.com/example/floor-dep"
+    floor_module: "github.com/example/floor-owner"
+    notes: "Synthetic MVS-floor dependency for scripts/test/ rows 1-10."
+
+  # Row 11 (below/above supported_range) -- two case files, each mutating
+  # this one entry's own fixture copy independently.
+  range-dep:
+    go_module: "github.com/example/range-dep"
+    supported_range: "2.0"
+    notes: "Synthetic range-check dependency for scripts/test/ row 11."
+
+  # Row 12 (inclusive range boundary) -- two case files, each needing
+  # run_generate before run_check since the pin mutation changes the
+  # committed docs/go-api build-version column.
+  boundary-dep:
+    go_module: "github.com/example/boundary-dep"
+    supported_range: "1.5 - 1.7"
+    notes: "Synthetic boundary dependency for scripts/test/ row 12."
+
+  # Row 13 (version_basis: kubernetes). A dedicated go_module, not k8s.io/api
+  # itself -- rows 18-20 mutate the real k8s.io/api replace directive, and
+  # coupling this entry to the same module would make those mutations also
+  # flip this entry's own range check, muddying what each case proves.
+  k8s-basis-dep:
+    go_module: "github.com/example/k8s-basis-dep"
+    version_basis: "kubernetes"
+    supported_range: "1.36"
+    notes: "Synthetic version_basis:kubernetes dependency for scripts/test/ row 13."
+
+  # Row 14 (pseudo-version, no upstream_release -- range check skipped).
+  pseudo-dep:
+    go_module: "github.com/example/pseudo-dep"
+    supported_range: "9.9"
+    notes: "Synthetic pseudo-version dependency for scripts/test/ row 14; supported_range is deliberately unsatisfiable to prove the range check never runs for it."
+
+  # Rows 15-17 (upstream_release digest checks). Deliberately has NO
+  # upstream_repo -- the live-check network path (rows 29-34) is owned by
+  # net-dep/net-dep-range, kept separate on purpose.
+  upstream-dep:
+    go_module: "github.com/example/upstream-dep"
+    upstream_release: "v3.4.0"
+    upstream_release_commit: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    supported_range: "3.4"
+    notes: "Synthetic upstream_release digest dependency for scripts/test/ rows 15-17."
+
+  # Rows 21-23 (validate_no_sha_in_notes). No go_module/floor_module -- both
+  # validate_gomod and validate_mvs_floors skip an entry lacking them, so
+  # this entry exists purely to carry a notes: field.
+  notes-dep:
+    notes: "notes-dep tracks upstream directly; no special pin logic."
+
+  # Rows 29-31, 33, 34 (validate_gomod's upstream_release live-check path).
+  net-dep:
+    go_module: "github.com/example/net-dep"
+    upstream_repo: "example/net-dep"
+    upstream_release: "v2.9.0"
+    upstream_release_commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    supported_range: "2.9"
+    notes: "Synthetic live-check dependency for scripts/test/ rows 29-31, 33, 34."
+
+  # Row 32's own net-dep-range entry is NOT here. sync-versions.sh:552
+  # substitutes actual_version with upstream_release unconditionally for any
+  # pseudo-version entry declaring upstream_release, on every resolve_rc
+  # (match, warning, or a plain unreachable default) -- not only when row 32's
+  # own case sets STUB_NET_MODE=match. A first draft put net-dep-range here,
+  # in the base fixture, with supported_range "1.5" bracketing the pin's own
+  # mm but excluding upstream_release's mm "2.9" -- and every other case
+  # (1, 7, 8, 9, 10, 12a, 12b, ...) inherited this entry through new_fixture,
+  # substituted the same way, and failed with "net-dep-range 2.9 ... is
+  # outside supported_range \"1.5\"" for a reason having nothing to do with
+  # what any of those cases were testing. Caught by actually running the
+  # harness (7 of 13 cases failed identically) rather than by more review of
+  # the plan text. Case 32 injects both this entry and its go.mod require
+  # line itself via direct yq/sed calls, so no other case's fixture ever sees
+  # it.

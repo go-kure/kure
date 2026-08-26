@@ -1,0 +1,84 @@
+#!/bin/bash
+# Stub `go` for scripts/test/. Intercepts the two calls validate_mvs_floors
+# makes (sync-versions.sh:394,417):
+#   env GOWORK=off go list -C "$REPO_ROOT" -mod=readonly -m -f '{{.GoMod}}' <module>
+#   GOWORK=off go mod edit -json <path>
+# Mode selected by $STUB_GO_MODE (default "ok"). See scripts/test/lib.sh's
+# header comment for the full mode table and rationale.
+set -euo pipefail
+
+mode="${STUB_GO_MODE:-ok}"
+
+# Canned answer for "what does floor-owner's go.mod require for floor-dep" --
+# fixed regardless of mode. Cases mutate the ACTUAL go.mod pin instead (see
+# fixtures/base/go.mod), never this constant, so a mismatch always means a
+# case mutated the real pin, not this stub. Must match lib.sh's
+# FLOOR_REQUIRE_PATH/FLOOR_REQUIRE_VERSION.
+FLOOR_REQUIRE_PATH="github.com/example/floor-dep"
+FLOOR_REQUIRE_VERSION="v0.5.1"
+
+if [[ "${1:-}" == "list" ]]; then
+    shift
+    root=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -C) root="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+    # Invocation-shape check: sync-versions.sh:394 must pass -C "$REPO_ROOT"
+    # -- dropping it (an oracle mutation this harness must be able to catch)
+    # makes this branch never match, degrading to the same failure as
+    # STUB_GO_MODE=missing regardless of the configured mode.
+    if [[ -z "$root" || "$root" != "${SYNC_VERSIONS_REPO_ROOT:-}" ]]; then
+        exit 1
+    fi
+    case "$mode" in
+        ok|norequire|editfail)
+            echo "$root/floor/go.mod"
+            exit 0
+            ;;
+        missing)
+            exit 1
+            ;;
+        badpath)
+            echo "$root/floor/does-not-exist.mod"
+            exit 0
+            ;;
+        hang)
+            sleep 5
+            echo "$root/floor/go.mod"
+            exit 0
+            ;;
+        *)
+            exit 1
+            ;;
+    esac
+elif [[ "${1:-}" == "mod" && "${2:-}" == "edit" ]]; then
+    # Invocation-shape check: sync-versions.sh:417 must run this with
+    # GOWORK=off in its environment -- dropping it (the other oracle
+    # mutation) makes this branch behave as editfail regardless of mode.
+    if [[ "${GOWORK:-}" != "off" ]]; then
+        exit 3
+    fi
+    case "$mode" in
+        ok)
+            printf '{"Require":[{"Path":"%s","Version":"%s"}]}\n' \
+                "$FLOOR_REQUIRE_PATH" "$FLOOR_REQUIRE_VERSION"
+            exit 0
+            ;;
+        norequire)
+            printf '{"Require":[]}\n'
+            exit 0
+            ;;
+        editfail)
+            exit 3
+            ;;
+        *)
+            exit 3
+            ;;
+    esac
+else
+    echo "stub-go: unhandled invocation: $*" >&2
+    exit 1
+fi

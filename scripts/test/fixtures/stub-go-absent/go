@@ -1,0 +1,7 @@
+#!/bin/bash
+# One-file always-fail `go` shim. Prepended ahead of PATH (including ahead
+# of fixtures/stub-go) by lib.sh's `with_stub_go absent`, so `go` is
+# unresolvable to any real go binary while fixtures/stub-go's curl/git stubs
+# stay reachable. See lib.sh for why this exists instead of truncating PATH.
+echo "stub-go-absent: go is not available" >&2
+exit 127

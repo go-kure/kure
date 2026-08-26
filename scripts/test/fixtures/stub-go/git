@@ -1,0 +1,30 @@
+#!/bin/bash
+# Stub `git` for scripts/test/'s resolve_tag_commit() ls-remote fallback
+# (sync-versions.sh:152). Only handles `ls-remote <url> <ref> <ref^{}>`;
+# anything else is unhandled. Mode selected by $STUB_NET_MODE (default
+# "unreachable").
+set -euo pipefail
+
+mode="${STUB_NET_MODE:-unreachable}"
+
+if [[ "${1:-}" != "ls-remote" ]]; then
+    echo "stub-git: unhandled invocation: $*" >&2
+    exit 1
+fi
+shift
+# Remaining args: <url> <ref1> [<ref2>] -- sync-versions.sh:152 passes both
+# "refs/tags/<tag>" and "refs/tags/<tag>^{}"; the peeled form is what a
+# successful match returns (the annotated-tag dereference), matched first by
+# the caller's own awk pass.
+ref2="${3:-${2:-}}"
+
+: "${NETDEP_COMMIT:?NETDEP_COMMIT must be set (see lib.sh)}"
+
+case "$mode" in
+    ls-remote-match)
+        printf '%s\t%s\n' "$NETDEP_COMMIT" "$ref2"
+        ;;
+    *)
+        exit 1
+        ;;
+esac
