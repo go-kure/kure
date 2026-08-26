@@ -85,7 +85,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 | Job | Check Name | Timeout | Dependencies | Purpose |
 |-----|------------|---------|--------------|---------|
-| `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint, tool-version parity (golangci-lint pin across Makefile/ci.yml/docs), govulncheck doc parity; `sync-versions.sh check`; syntax-check on the version-sync scripts, `sh -n` or `bash -n` per each script's own shebang; caches goimports + yq binaries |
+| `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint, tool-version parity (golangci-lint pin across Makefile/ci.yml/docs), govulncheck doc parity; `sync-versions.sh check`; syntax-check on the version-sync scripts, `sh -n` or `bash -n` per each script's own shebang; `scripts/test/run-tests.sh` (hermetic mutation-matrix guard tests for `sync-versions.sh`'s own six guards, no network); caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
 | `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
@@ -602,12 +602,15 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
 
 - `go:` filter — triggers lint/test/security/build jobs. Includes `**.go`, `go.mod`, `go.sum`,
   `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated,
-  plus `versions.yaml`, `docs/compatibility.md`, `scripts/sync-versions.sh` and
-  `scripts/sync-eso-pin.sh`. Those last four are here because the only `sync-versions.sh
-  check` invocation lives in the `validate` job: without them a PR touching just version
-  metadata or the release-pinning script skipped both the supported-range guard and the
-  compatibility-matrix drift guard (or, for `sync-eso-pin.sh`, all of `validate`/`test`)
-  and still reported success — the `build` gate accepts a `skipped` dependency as passing.
+  plus `versions.yaml`, `docs/compatibility.md`, `scripts/sync-versions.sh`,
+  `scripts/test/**` and `scripts/sync-eso-pin.sh`. Those last five are here because the only
+  `sync-versions.sh check` invocation lives in the `validate` job: without them a PR touching
+  just version metadata, `sync-versions.sh`'s own guard-test harness (`scripts/test/**` — a
+  case file or the harness itself, the exact changes it exists to enforce CI coverage of), or
+  the release-pinning script skipped the supported-range guard, the compatibility-matrix drift
+  guard, and/or the "Run sync-versions.sh guard tests" step (or, for `sync-eso-pin.sh`, all of
+  `validate`/`test`) and still reported success — the `build` gate accepts a `skipped`
+  dependency as passing.
   Also includes `mise.toml`, `scripts/check-tool-versions.sh`, `scripts/sync-tool-versions.sh`
   and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
   job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity
