@@ -18,18 +18,25 @@ for case_file in "$TEST_DIR"/cases/*.sh; do
     # (an unguarded assert calling `exit 1`) must not take the runner down
     # with it.
     #
-    # `env -u` clears the four harness control variables from the CALLER's
+    # `env -u` clears the harness control variables from the CALLER's
     # environment before each case. lib.sh applies its documented defaults
     # with `${VAR:-default}`, which preserves an inherited value -- so an
     # ambient STUB_GO_MODE/STUB_NET_MODE (say, left exported by a debugging
     # session) would silently run every case in a mode it never asked for,
     # and an ambient SYNC_VERSIONS_REPO_ROOT/SYNC_VERSIONS_PROBE_TIMEOUT
-    # would reach sync-versions.sh directly. Clearing them here rather than
-    # hard-assigning in lib.sh keeps `with_stub_go`/`with_stub_net` and case
-    # 9's own SYNC_VERSIONS_PROBE_TIMEOUT override working unchanged, since
-    # those all run after new_fixture.
+    # would reach sync-versions.sh directly. GOWORK is cleared for the same
+    # reason: fixtures/stub-go/go's invocation-shape check for
+    # sync-versions.sh:417's `GOWORK=off go mod edit` call works by testing
+    # whether GOWORK=off reaches the stub -- an ambient GOWORK=off exported
+    # by the caller (a documented AGENTS.md workflow) would already satisfy
+    # that test regardless of whether sync-versions.sh itself still sets it,
+    # silently disabling detection of that oracle mutation. Clearing them
+    # here rather than hard-assigning in lib.sh keeps `with_stub_go`/
+    # `with_stub_net` and case 9's own SYNC_VERSIONS_PROBE_TIMEOUT override
+    # working unchanged, since those all run after new_fixture.
     if out=$(env -u STUB_GO_MODE -u STUB_NET_MODE \
                  -u SYNC_VERSIONS_REPO_ROOT -u SYNC_VERSIONS_PROBE_TIMEOUT \
+                 -u GOWORK \
                  bash "$case_file" 2>&1); then
         pass=$((pass + 1))
         printf 'PASS %s\n' "$name"
