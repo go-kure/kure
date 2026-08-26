@@ -324,6 +324,16 @@ validate_no_sha_in_notes() {
 # workspace (go.work listing sibling modules on a newer Go toolchain); every
 # `go` invocation here must ignore that workspace or it fails outright.
 # -mod=readonly: this guard only ever reads go.mod state, never rewrites it.
+# -C "$REPO_ROOT": `go list -m` resolves against the module of the *current
+# directory*, not any path baked into the command -- every other file this
+# script touches goes through $REPO_ROOT, so this probe must too, or a caller
+# that invokes the script by absolute path from outside the checkout has no
+# enclosing go.mod, silently degrading to the warning branch below instead of
+# actually running the check.
+# timeout 10: this is the one external-resolution call in this function, and
+# a stalled module-proxy connection would otherwise hang here indefinitely
+# instead of reaching the warning branch promptly -- same discipline as
+# resolve_tag_commit()'s `timeout 5 git ls-remote` / `curl --max-time 5`.
 #
 # Three-way outcome, same discipline as resolve_tag_commit(): success,
 # definitive error, or (only for the "can we even ask the question" step)
@@ -373,7 +383,7 @@ validate_mvs_floors() {
         # network) degrades to a warning -- this is the "can we even ask"
         # step, not the comparison itself.
         local gomod_path gomod_rc=0
-        gomod_path=$(GOWORK=off go list -mod=readonly -m -f '{{.GoMod}}' "$floor_module" 2>/dev/null) || gomod_rc=$?
+        gomod_path=$(timeout 10 env GOWORK=off go list -C "$REPO_ROOT" -mod=readonly -m -f '{{.GoMod}}' "$floor_module" 2>/dev/null) || gomod_rc=$?
         if [[ $gomod_rc -ne 0 || -z "$gomod_path" || ! -f "$gomod_path" ]]; then
             warning "$dep: could not resolve $floor_module's own go.mod (no Go, cold module cache, or no network) -- skipping MVS-floor equality check"
             continue
