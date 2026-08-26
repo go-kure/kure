@@ -4,6 +4,13 @@ go = "1.26.6"
 golangci-lint = "2.13.1"
 git-cliff = "2.13.1"
 hugo = "0.165.0"
+# Pin matches .github/workflows/ci.yml's own yq install (v4.44.6) -- required
+# by scripts/sync-versions.sh and its versions:test guard harness, both now
+# on `mise run verify`'s dependency graph. CI installs yq as a separate step
+# and never relied on mise for it, which is what let this go unnoticed: a
+# clean mise-managed checkout with no system yq failed `mise run verify`
+# with no explanation.
+yq = "4.44.6"
 
 [env]
 GOBIN = "{{config_root}}/.bin"

@@ -18,8 +18,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 
 new_fixture
 
-sed -i '/^)/i\
-	github.com/example/net-dep-range v1.5.0-20260101000000-aaaaaaaaaaaa' "$FIXTURE/go.mod"
+# Range-restricted to the require ( ... ) block's own closing paren: a bare
+# /^)/ also matches the replace ( ... ) block's closing paren above it (both
+# fixtures/base/go.mod blocks close with a bare ")"), inserting this require
+# line into the replace block too -- with no "=>" target, an invalid replace
+# directive, and the module effectively declared twice. Confirmed by
+# reproduction: the unscoped form left a malformed second entry inside
+# replace ( ... ), verified locally then reverted.
+sed -i '/^require (/,/^)/{/^)/i\
+	github.com/example/net-dep-range v1.5.0-20260101000000-aaaaaaaaaaaa
+}' "$FIXTURE/go.mod"
 
 yq eval -i '.infrastructure.net-dep-range = {
   "go_module": "github.com/example/net-dep-range",
