@@ -226,10 +226,13 @@ a hard requirement — see `DEVELOPMENT.md`'s Prerequisites block for the full s
 
 That degradation does **not** extend to the test harness itself: pre-existing case
 `09-mvs-floor-hang-timeout.sh` needs a real `timeout`/`gtimeout` on the machine *running the
-test suite* — it hangs a stubbed `go` and asserts `SYNC_VERSIONS_PROBE_TIMEOUT` bounds it. On
-a host with neither binary, that case (and therefore `run-tests.sh` / `mise run verify`)
-hangs instead of failing loudly. This is a test-harness-only prerequisite, narrower than and
-separate from production's graceful degradation.
+test suite* — it stubs `go list` to sleep 5s (faking a hang) and asserts
+`SYNC_VERSIONS_PROBE_TIMEOUT` bounds it to ~1s. On a host with neither binary, the probe isn't
+bounded, so the stub's 5s sleep runs to completion, `go list` "succeeds", and the case fails
+on its warning-text assertion (~5s), not by hanging indefinitely — the fixed-length stub bounds
+even the unbounded path in this one test. This is a test-harness-only prerequisite, narrower
+than and separate from production's graceful degradation, where a real stalled module proxy or
+git remote has no such bound.
 
 `mise registry` maps `coreutils` to `aqua:uutils/coreutils`; checked directly against a local
 install, that backend provisions one multi-call `coreutils` binary (a `timeout` applet is

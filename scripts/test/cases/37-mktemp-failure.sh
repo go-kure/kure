@@ -23,3 +23,12 @@ out=$(TMPDIR="$FIXTURE/no-such-dir" "$SYNC_VERSIONS" check 2>&1 1>/dev/null)
 rc=$?
 [[ $rc -eq 1 ]] || { echo "FAIL: expected rc 1, got $rc" >&2; exit 1; }
 [[ "$out" == *"mktemp failed"* ]] || { echo "FAIL: stderr missing 'mktemp failed': $out" >&2; exit 1; }
+# Discriminator: if the `|| return 1` guarding make_temp's result were ever
+# dropped, execution would continue on an empty/unusable path and reach a
+# downstream ambiguous redirect inside generate_docs/generate_go_api, whose
+# failure is reported by the *shell* (not mktemp) with this exact phrasing --
+# it never appears when the guard stops execution right after mktemp itself
+# fails. Without this check, rc==1 and "mktemp failed" alone hold in both the
+# guard-intact and guard-removed cases (mktemp's own message is unconditional),
+# so this case would pass vacuously against that regression.
+[[ "$out" != *"sync-versions.sh: line"* ]] || { echo "FAIL: guard did not stop execution -- downstream redirect failure leaked into stderr: $out" >&2; exit 1; }
