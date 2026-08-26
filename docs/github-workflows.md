@@ -329,21 +329,17 @@ managed centrally in `go-kure/.github` (`governance/repository-settings-policy.y
 
 ### Triggers
 
-- Pull requests: `opened`, `synchronize`, `reopened`, `ready_for_review`
+- Pull requests: `opened`, `synchronize`, `reopened`, on GitHub's default types
 - `merge_group` (no filters): required so this check reports on the merge queue's temporary
   ref once it becomes a required status check — the queue payload has no `pull_request` field,
   so the existing fork skip below evaluates false and the job reports `skipped`/success as a
   no-op
-- Runs on draft PRs (2026-08-19, GitLab `mr-review` parity — see [Draft PRs](#draft-prs)) —
-  **effective once go-kure/.github#75 merges**; until then the callee (`pr-review.yml@main`)
-  still gates on `draft == false`, so a draft PR here still gets a skipped reviewer job, and
-  `ready_for_review` below is what actually triggers the review; skips fork PRs (self-hosted
-  runner security)
-- `ready_for_review` is kept here (unlike `ci.yml`, which omits it) because the reviewer itself
-  lives in `go-kure/.github` and is called `@main`: its no-longer-draft-gated behavior only takes
-  effect once that repo's own parity change merges, an async window this caller can't see. Without
-  the type, a PR whose branch already dropped it and gets marked ready with no further push gets no
-  re-trigger until that merge lands. Costs one redundant run at ready-time once the rollout is done.
+- Runs on draft PRs the same as ready ones (2026-08-19, GitLab `mr-review` parity — see
+  [Draft PRs](#draft-prs)); skips fork PRs (self-hosted runner security)
+- `ready_for_review` is not declared, same reasoning as `ci.yml`: it was kept as a rollout-window
+  safety net while the callee (`pr-review.yml@main`, in `go-kure/.github`) still gated on
+  `draft == false` (its own parity fix landed 2026-08-19, `46dfc88`) and dropped once that window
+  closed.
 
 ### How It Works
 
