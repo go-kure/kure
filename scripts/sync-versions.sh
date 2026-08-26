@@ -396,7 +396,7 @@ validate_mvs_floors() {
         # $gomod_path -- get distinct, accurate error text instead of the
         # tool-failure case being misreported as a confirmed absence.
         local required required_pipe_rc=0
-        required=$(go mod edit -json "$gomod_path" | yq -p json ".Require[]? | select(.Path == \"$go_module\") | .Version" 2>/dev/null) || required_pipe_rc=$?
+        required=$(GOWORK=off go mod edit -json "$gomod_path" | yq -p json ".Require[]? | select(.Path == \"$go_module\") | .Version" 2>/dev/null) || required_pipe_rc=$?
         if [[ -z "$required" || "$required" == "null" ]]; then
             if [[ $required_pipe_rc -ne 0 ]]; then
                 error "$dep: could not read $floor_module's go.mod requirements (go mod edit or yq failed against $gomod_path, rc=$required_pipe_rc) -- cannot confirm the floor_module claim in versions.yaml"
