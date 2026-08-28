@@ -1,7 +1,7 @@
 [tools]
 # Use exact versions for reproducibility across environments
 go = "1.26.6"
-golangci-lint = "2.13.1"
+golangci-lint = "2.13.2"
 git-cliff = "2.13.1"
 hugo = "0.165.0"
 # Pin matches .github/workflows/ci.yml's own yq install (v4.44.6) -- required
@@ -18,7 +18,7 @@ hugo = "0.165.0"
 # "Cache yq"/"Install yq" step pairs, ~:177-194, :803-820, :948-965) and
 # .github/workflows/deploy-docs.yml (one pair, ~:93-110). Each of those
 # carries a matching comment pointing back here.
-yq = "4.44.6"
+yq = "4.53.6"
 
 [env]
 GOBIN = "{{config_root}}/.bin"
