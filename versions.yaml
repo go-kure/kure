@@ -136,7 +136,7 @@ infrastructure:
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
     upstream_repo: "external-secrets/external-secrets"
-    upstream_release: "v2.9.0"
+    upstream_release: "v2.10.0"
     upstream_release_commit: "378bdb622ed9712ef4a58370f6a17af033b7d343"
     supported_range: "2.9"
     notes: |
