@@ -359,16 +359,40 @@ jobs:
       with:
         fetch-depth: 0
 
+    # Binds the ack to the SHA it was actually reviewed at: any new push
+    # (synchronize) strips the label, so a stale ack from a prior commit
+    # can't silently cover a later, unreviewed diff. A maintainer re-adds
+    # the label (a fresh 'labeled' event) once they've reviewed the new
+    # head. Fixes chatgpt-codex-connector's go-kure/kure#729 P1 review
+    # finding (2026-08-30): the ack was previously derived from the event
+    # payload's label snapshot alone, with nothing to invalidate it across
+    # pushes.
+    - name: Strip stale pin-impact-ack on new commits
+      if: github.event.action == 'synchronize'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: gh pr edit "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --remove-label pin-impact-ack
+
     - name: Render and gate on go-kure/.github pin impact
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         BASE_REF: ${{ github.base_ref }}
-        # Maintainer-controlled override, same convention as check-doc-gate's
-        # docs-skip label: add 'pin-impact-ack' after reviewing a real hit to
-        # merge anyway. See check-pin-impact.sh's PIN_IMPACT_ACK handling.
-        PIN_IMPACT_ACK: ${{ contains(github.event.pull_request.labels.*.name, 'pin-impact-ack') }}
-      run: ./scripts/check-pin-impact.sh --base-ref "origin/$BASE_REF" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        # Live-query current labels rather than trusting the event payload
+        # snapshot, so the strip above (same run, same job) is reflected
+        # immediately instead of one run later. Maintainer-controlled
+        # override, same convention as check-doc-gate's docs-skip label:
+        # add 'pin-impact-ack' after reviewing a real hit to merge anyway.
+        # See check-pin-impact.sh's PIN_IMPACT_ACK handling.
+        if gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name' | grep -qx pin-impact-ack; then
+          export PIN_IMPACT_ACK=true
+        else
+          export PIN_IMPACT_ACK=false
+        fi
+        ./scripts/check-pin-impact.sh --base-ref "origin/$BASE_REF" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
