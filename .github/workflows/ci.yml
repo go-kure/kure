@@ -326,6 +326,28 @@ jobs:
     - name: Verify vendored guard matches canonical
       run: diff -u .tmp/go-kure-dot-github/scripts/check-forbidden-terms.sh site/scripts/check-forbidden-terms.sh
 
+  pin-impact:
+    name: pin-impact
+    runs-on: autops-kube-kure
+    timeout-minutes: 3
+    # PR-only, like doc-gate: needs a base-ref diff, which merge_group events
+    # don't carry the same way pull_request events do. By the time a PR
+    # reaches the merge queue this job has already gated it via `build`
+    # (see `build`'s needs: list below) against the same base it will
+    # actually merge onto, so a merge_group re-run adds no new information.
+    if: github.event_name == 'pull_request'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: 0
+
+    - name: Render and gate on go-kure/.github pin impact
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BASE_REF: ${{ github.base_ref }}
+      run: ./scripts/check-pin-impact.sh --base-ref "origin/$BASE_REF" | tee -a "$GITHUB_STEP_SUMMARY"
+
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
   # =============================================================================
@@ -710,7 +732,7 @@ jobs:
     name: build
     runs-on: autops-kube-kure
     timeout-minutes: 1
-    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security]
+    needs: [validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact]
     if: always()
     steps:
     - name: Check build results
@@ -723,11 +745,12 @@ jobs:
         ap="${{ needs.action-pins.result }}"
         ft="${{ needs.forbidden-terms.result }}"
         sc="${{ needs.security.result }}"
+        pi="${{ needs.pin-impact.result }}"
         if [ "$ft" != "success" ]; then
           echo "Forbidden-terms job did not succeed (result: $ft)"
           exit 1
         fi
-        for result in "$vl" "$tt" "$db" "$cc" "$dg" "$ap" "$sc"; do
+        for result in "$vl" "$tt" "$db" "$cc" "$dg" "$ap" "$sc" "$pi"; do
           if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
             echo "Required job failed or was cancelled (result: $result)"
             exit 1
