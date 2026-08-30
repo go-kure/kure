@@ -60,8 +60,8 @@ NEW_SHA=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base-ref) BASE_REF="${2:-}"; [[ -n "$BASE_REF" ]] || { echo "check-pin-impact: --base-ref needs a REF" >&2; exit 2; }; shift 2 ;;
-    --old) OLD_SHA="${2:-}"; shift 2 ;;
-    --new) NEW_SHA="${2:-}"; shift 2 ;;
+    --old) OLD_SHA="${2:-}"; [[ -n "$OLD_SHA" ]] || { echo "check-pin-impact: --old needs a SHA" >&2; exit 2; }; shift 2 ;;
+    --new) NEW_SHA="${2:-}"; [[ -n "$NEW_SHA" ]] || { echo "check-pin-impact: --new needs a SHA" >&2; exit 2; }; shift 2 ;;
     -h|--help) sed -n '2,44p' "$0"; exit 0 ;;
     *) echo "check-pin-impact: unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -285,6 +285,24 @@ compare_json="$(curl -fsSL --connect-timeout 10 --max-time 30 \
   echo "check-pin-impact: GitHub compare API request failed" >&2
   exit 1
 }
+
+# The three-dot compare above diffs from merge-base(OLD_SHA, NEW_SHA) to
+# NEW_SHA, not literally OLD_SHA to NEW_SHA — GitHub's compare REST endpoint
+# has no two-dot form to fall back to (confirmed: it 404s). If NEW_SHA is an
+# ancestor of OLD_SHA (a hand-edited pin rollback — pins to go-kure/.github
+# are maintained by hand, not just bumped forward by Renovate) the merge base
+# is NEW_SHA itself, so `files` comes back empty and this would silently
+# report "inert" regardless of what actually changed between the two — the
+# exact false negative this script exists to prevent (kure-bot review
+# finding on go-kure/launcher#363, 2026-08-30; reproduced against real
+# go-kure/.github history: a 5-commit rollback pair reports `files: 0`,
+# `status: "behind"`). Only a strict fast-forward (NEW_SHA a descendant of
+# OLD_SHA) makes the three-dot form correct, so require `status: "ahead"`.
+compare_status="$(printf '%s' "$compare_json" | grep -oE '"status":[[:space:]]*"[^"]*"' | head -1 | sed -E 's/^"status":[[:space:]]*"//; s/"$//')"
+if [[ "$compare_status" != "ahead" ]]; then
+  echo "check-pin-impact: OLD_SHA...NEW_SHA compare status is '${compare_status:-unknown}', not 'ahead' — NEW_SHA is not a strict descendant of OLD_SHA (a pin rollback, or unrelated history), so this compare would under-report; refusing to guess" >&2
+  exit 1
+fi
 
 changed_count="$(printf '%s' "$compare_json" | grep -c '"filename"' || true)"
 if [[ "$changed_count" -ge 295 ]]; then
