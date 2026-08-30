@@ -73,10 +73,15 @@ concurrency:
                  └───────┘
 
 PR-only jobs (parallel, no blocking):
-┌─────────────────┐  ┌────────────┐
-│ analyze-changes │  │ docs-check │
-└─────────────────┘  └────────────┘
+┌─────────────────┐  ┌────────────┐  ┌─────────────┐
+│ analyze-changes │  │ docs-check │  │ pin-impact  │
+└─────────────────┘  └────────────┘  └─────────────┘
 ```
+
+`pin-impact` is PR-only like `docs-check` in the diagram above, but — like `action-pins`/
+`forbidden-terms`/`doc-gate` — it does feed the `build` aggregation gate (see the Jobs Detail
+table); the diagram groups it with the other PR-only jobs for layout only, not to say it's
+unblocking.
 
 On `merge_group` events (merge queue), `lint`/`test`/`build` run against the queue's
 temporary branch — the merged result — before the PR is allowed to land.
@@ -91,10 +96,11 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.7.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
-| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
+| `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
 | `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
+| `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
 ### Configuration
 
@@ -125,6 +131,10 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
   action
+- **Pin-impact gate** - `pin-impact` renders a `go-kure/.github` pin bump's real effect (which
+  `scripts/*.sh` a referenced action actually runs, whether the compare touches any of them) into
+  the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed
+  (go-kure/kure#719, 2026-08-30)
 
 ### Draft PRs
 
