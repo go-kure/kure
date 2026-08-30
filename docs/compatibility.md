@@ -39,7 +39,7 @@ API's content stable; read them from `go.mod` instead.
 | cnpg-barman-cloud-plugin | 0.14.0 | 0.9 - 0.14 | Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1). Versioned independently from the CNPG operator. Not to be confused with the barman-cloud entry above, a separate module this plugin itself depends on for object-store API types. v0.14 is a routine minor with no changes to the imported ObjectStore v1 type (build + tests pass unchanged). |
 | controller-runtime | 0.24.1 | 0.22 - 0.24 | v0.24.1 fixes Apply typed error handling regression; requires k8s.io/* v0.36.0 (Kubernetes 1.36) |
 | gateway-api | 1.6.1 | 1.0 - 1.6 | Gateway API v1 types (HTTPRoute). Used by pkg/kubernetes HTTPRoute builders. Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0). v1.6 is a routine minor with no changes to the imported gateway.networking.k8s.io/v1 HTTPRoute type — build + tests pass unchanged. |
-| kubernetes | 0.37.0 | 1.33 - 1.36 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range |
+| kubernetes | 0.37.0 | 1.33 - 1.37 | Go 1.26 baseline; generated YAML uses stable APIs compatible across this range. v1.37 added corev1.VolumeMount.BindMountOptions ([]string), making VolumeMount no longer comparable with ==/!=; kure's own code never compares VolumeMount values (only pkg/kubernetes/container_test.go did, fixed to use reflect.DeepEqual). Build + tests otherwise pass unchanged. |
 
 ## Understanding the Matrix
 

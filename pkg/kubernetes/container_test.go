@@ -477,7 +477,7 @@ func TestAdditionalContainerFunctions(t *testing.T) {
 
 	mount := corev1.VolumeMount{Name: "data", MountPath: "/data"}
 	AddContainerVolumeMount(c, mount)
-	if len(c.VolumeMounts) != 1 || c.VolumeMounts[0] != mount {
+	if len(c.VolumeMounts) != 1 || !reflect.DeepEqual(c.VolumeMounts[0], mount) {
 		t.Errorf("volume mount not added")
 	}
 

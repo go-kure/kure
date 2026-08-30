@@ -209,8 +209,13 @@ infrastructure:
     # k8s.io/* modules are versioned v0.N.x; the range below is in cluster terms (1.N).
     version_basis: kubernetes
     # What K8s cluster versions kure-generated YAML works with
-    supported_range: "1.33 - 1.36"
-    notes: "Go 1.26 baseline; generated YAML uses stable APIs compatible across this range"
+    supported_range: "1.33 - 1.37"
+    notes: |
+      Go 1.26 baseline; generated YAML uses stable APIs compatible across this range.
+      v1.37 added corev1.VolumeMount.BindMountOptions ([]string), making VolumeMount
+      no longer comparable with ==/!=; kure's own code never compares VolumeMount
+      values (only pkg/kubernetes/container_test.go did, fixed to use
+      reflect.DeepEqual). Build + tests otherwise pass unchanged.
     related_packages:
       - "k8s.io/apimachinery"
       - "k8s.io/apiextensions-apiserver"
