@@ -334,7 +334,15 @@ jobs:
     # don't carry the same way pull_request events do. By the time a PR
     # reaches the merge queue this job has already gated it via `build`
     # (see `build`'s needs: list below) against the same base it will
-    # actually merge onto, so a merge_group re-run adds no new information.
+    # actually merge onto — usually no new information from a merge_group
+    # re-run. The gap this doesn't cover: two PRs landing in the same queue
+    # batch where one adds a go-kure/.github action reference (or a script
+    # gains a new `source`) and the other bumps the pin, and neither alone
+    # sees both changes — narrow, and re-running here needs deriving the
+    # merge group's own base/head from `github.event.merge_group.*` rather
+    # than `github.base_ref`, which this job doesn't do today. Tracked:
+    # go-kure/kure#730 (chatgpt-codex-connector review on go-kure/kure#729,
+    # 2026-08-30).
     if: github.event_name == 'pull_request'
     steps:
     - name: Checkout code
@@ -347,6 +355,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         BASE_REF: ${{ github.base_ref }}
+        # Maintainer-controlled override, same convention as check-doc-gate's
+        # docs-skip label: add 'pin-impact-ack' after reviewing a real hit to
+        # merge anyway. See check-pin-impact.sh's PIN_IMPACT_ACK handling.
+        PIN_IMPACT_ACK: ${{ contains(github.event.pull_request.labels.*.name, 'pin-impact-ack') }}
       run: ./scripts/check-pin-impact.sh --base-ref "origin/$BASE_REF" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # =============================================================================
