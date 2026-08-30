@@ -14,7 +14,7 @@ that file so consumers do not have to read it off disk and decode key paths by h
 import "github.com/go-kure/kure/pkg/versions"
 
 k8s, ok := versions.Get("kubernetes")   // ok == false if the key was renamed or removed
-fmt.Println(k8s.SupportedRange, k8s.Min, k8s.Max) // "1.33 - 1.36" "1.33" "1.36"
+fmt.Println(k8s.SupportedRange, k8s.Min, k8s.Max) // "1.33 - 1.37" "1.33" "1.37"
 
 eso, ok := versions.Get("external-secrets")
 fmt.Println(eso.SupportedRange, eso.Min, eso.Max) // "2.9 - 2.10" "2.9" "2.10"
