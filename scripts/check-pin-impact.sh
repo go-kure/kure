@@ -203,17 +203,35 @@ while IFS= read -r name; do
     echo "check-pin-impact: could not fetch ${action_path} at ${NEW_SHA:0:8} — refusing to under-report" >&2
     exit 1
   }
+
+  # Fail closed if this action.yml isn't fully accounted for by the
+  # scripts/*.sh pattern below (found by the kure-bot review on
+  # go-kure/kure#729, 2026-08-30): a nested `uses:` step pulls in code this
+  # script does not audit at all, and a `run:` step whose content contains
+  # no scripts/*.sh reference (`${{ github.action_path }}/foo.sh`, a
+  # non-.sh entrypoint) would otherwise silently contribute nothing to the
+  # consumed set — exactly the false "no impact" this script exists to
+  # prevent. Mirrors the unrecognized-`source`-expression check below.
+  if printf '%s\n' "$content" | grep -qE '^[[:space:]]*uses:'; then
+    echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} contains a nested 'uses:' step — this script does not audit external actions transitively, refusing to under-report" >&2
+    exit 1
+  fi
+  scripts_found="$(printf '%s\n' "$content" | { grep -oE 'scripts/[A-Za-z0-9_./-]+\.sh' || true; } | sort -u)"
+  if [[ -z "$scripts_found" ]] && printf '%s\n' "$content" | grep -qE '^[[:space:]]*run:'; then
+    echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has a 'run:' step but no recognized scripts/*.sh reference — refusing to under-report" >&2
+    exit 1
+  fi
   while IFS= read -r script; do
     [[ -n "$script" ]] || continue
     add_consumed "$script"
     enqueue "$script"
-  done < <(printf '%s\n' "$content" | grep -oE 'scripts/[A-Za-z0-9_./-]+\.sh' | sort -u)
+  done <<<"$scripts_found"
 done <<<"$action_names"
 
 # The forbidden-terms job's second checkout byte-compares this file against
 # kure's own vendored copy independently of everything above — included here
-# too so it shows in the same report, and because that job is not (yet) a
-# required check (see the "make it required" step in the accompanying plan).
+# too so it shows in the same report; defense-in-depth; not the only thing
+# that catches a change here.
 guard_script="scripts/check-forbidden-terms.sh"
 add_consumed "$guard_script"
 enqueue "$guard_script"
