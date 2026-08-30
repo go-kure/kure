@@ -59,7 +59,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 DOTGITHUB_REPO="go-kure/.github"
-WORKFLOW_FILES=(.github/workflows/*.yml)
+WORKFLOW_FILES=(.github/workflows/*.yml .github/workflows/*.yaml)
 
 BASE_REF=""
 OLD_SHA=""
@@ -247,6 +247,26 @@ while IFS= read -r name; do
   scripts_found="$(printf '%s\n' "$content" | { grep -oE 'scripts/[A-Za-z0-9_./-]+\.sh' || true; } | sort -u)"
   if [[ -z "$scripts_found" ]] && printf '%s\n' "$content" | grep -qE '^[[:space:]]*(-[[:space:]]+)?run:'; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has a 'run:' step but no recognized scripts/*.sh reference — refusing to under-report" >&2
+    exit 1
+  fi
+  # A single 'run:' step can itself invoke more than one command (a
+  # multiline `run: |` block) — the check above only asks "does this file
+  # mention scripts/*.sh at all", so a second, unrecognized executable
+  # invoked in the same block (`${{ github.action_path }}/tool`, a bare
+  # `python other.py`) would silently contribute nothing to the consumed set
+  # (found by chatgpt-codex-connector review on go-kure/launcher#363,
+  # 2026-08-30). Every dot-github action.yml invokes its script(s) the same
+  # way — `$GITHUB_ACTION_PATH/../../../scripts/<name>.sh` — confirmed
+  # against every action.yml this script currently resolves, so a mismatch
+  # between "how many $GITHUB_ACTION_PATH-relative references exist" and
+  # "how many of them look like a recognized scripts/*.sh path" means
+  # something this scan doesn't recognize is also being invoked from the
+  # same action-relative root.
+  action_path_refs="$(printf '%s\n' "$content" | { grep -oE '\$\{?GITHUB_ACTION_PATH\}?/[^"[:space:]]+' || true; } | sort -u)"
+  action_path_ref_count="$(printf '%s\n' "$action_path_refs" | grep -c . || true)"
+  scripts_found_count="$(printf '%s\n' "$scripts_found" | grep -c . || true)"
+  if [[ "$action_path_ref_count" -ne "$scripts_found_count" ]]; then
+    echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has ${action_path_ref_count} \$GITHUB_ACTION_PATH reference(s) but only ${scripts_found_count} recognized scripts/*.sh match(es) — refusing to guess what the rest invoke" >&2
     exit 1
   fi
   while IFS= read -r script; do
