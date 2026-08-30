@@ -190,7 +190,9 @@ fi
 # --- Fetch helper: raw file content at a SHA, or empty+nonzero on failure ---
 fetch() {
   local sha="$1" path="$2"
-  curl -fsSL --connect-timeout 10 --max-time 30 \
+  local -a auth_args=()
+  [[ -n "${GITHUB_TOKEN:-}" ]] && auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  curl -fsSL --connect-timeout 10 --max-time 30 "${auth_args[@]}" \
     "https://raw.githubusercontent.com/${DOTGITHUB_REPO}/${sha}/${path}"
 }
 
@@ -322,7 +324,7 @@ while [[ ${#queue[@]} -gt 0 ]]; do
   # too, at the cost of not catching every conceivable compound shape — an
   # unrecognized one still aborts via the branch below, so under-reporting
   # isn't the failure mode this trades away.
-  candidate_lines="$(printf '%s\n' "$content" | grep -vE '^[[:space:]]*#' | grep -E '(^|[;&|]|\bthen\b|\bdo\b)[[:space:]]*(source|\.)[[:space:]]' || true)"
+  candidate_lines="$(printf '%s\n' "$content" | grep -vE '^[[:space:]]*#' | grep -E '(^|[;&|]|\b(then|do|if|elif|while|until)\b)[[:space:]]*(source|\.)[[:space:]]' || true)"
   [[ -n "$candidate_lines" ]] || continue
 
   while IFS= read -r line; do
@@ -380,7 +382,7 @@ if [[ "$compare_status" != "ahead" ]]; then
   exit 1
 fi
 
-changed_count="$(printf '%s' "$compare_json" | grep -c '"filename"' || true)"
+changed_count="$(printf '%s' "$compare_json" | { grep -o '"filename"' || true; } | wc -l)"
 if [[ "$changed_count" -ge 295 ]]; then
   echo "check-pin-impact: compare reports $changed_count changed files, near GitHub's ~300-file pagination cap — this script does not paginate and would under-report; verify by hand" >&2
   exit 1

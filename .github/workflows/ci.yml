@@ -367,8 +367,15 @@ jobs:
     # finding (2026-08-30): the ack was previously derived from the event
     # payload's label snapshot alone, with nothing to invalidate it across
     # pushes.
+    #
+    # Skipped on a fork PR: GITHUB_TOKEN is read-only there regardless of
+    # this workflow's permissions block, so the mutation would fail and
+    # hard-fail the job on every push (chatgpt-codex-connector P1 finding,
+    # go-kure/launcher#363, 2026-08-30). The render step below likewise
+    # never honours the label on a fork head, since a stale ack could
+    # never be invalidated there.
     - name: Strip stale pin-impact-ack on new commits
-      if: github.event.action == 'synchronize'
+      if: github.event.action == 'synchronize' && github.event.pull_request.head.repo.full_name == github.repository
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: gh pr edit "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --remove-label pin-impact-ack
@@ -377,22 +384,32 @@ jobs:
       shell: bash
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        BASE_REF: ${{ github.base_ref }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The PR's base at the time it was opened/last synced, not the
+        # branch's current (possibly since-advanced) tip — avoids comparing
+        # against a base go-kure/kure never actually merged onto (chatgpt-
+        # codex-connector P2 finding, go-kure/launcher#363, 2026-08-30).
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
+        IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
       run: |
         # Live-query current labels rather than trusting the event payload
         # snapshot, so the strip above (same run, same job) is reflected
-        # immediately instead of one run later. Maintainer-controlled
-        # override, same convention as check-doc-gate's docs-skip label:
-        # add 'pin-impact-ack' after reviewing a real hit to merge anyway.
-        # See check-pin-impact.sh's PIN_IMPACT_ACK handling.
-        if gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name' | grep -qx pin-impact-ack; then
+        # immediately instead of one run later. On a fork PR, skip the
+        # query entirely and never honour the label (see the strip step's
+        # comment above). Maintainer-controlled override, same convention
+        # as check-doc-gate's docs-skip label: add 'pin-impact-ack' after
+        # reviewing a real hit to merge anyway. See check-pin-impact.sh's
+        # PIN_IMPACT_ACK handling.
+        if [[ "$IS_FORK" == "true" ]]; then
+          export PIN_IMPACT_ACK=false
+        elif gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name' | grep -qx pin-impact-ack; then
           export PIN_IMPACT_ACK=true
         else
           export PIN_IMPACT_ACK=false
         fi
-        ./scripts/check-pin-impact.sh --base-ref "origin/$BASE_REF" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+        ./scripts/check-pin-impact.sh --base-ref "$BASE_SHA" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
