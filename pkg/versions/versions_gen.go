@@ -113,9 +113,9 @@ var infrastructure = []Dependency{
 	{
 		Name:           "kubernetes",
 		GoModule:       "k8s.io/api",
-		SupportedRange: "1.33 - 1.36",
+		SupportedRange: "1.33 - 1.37",
 		Min:            "1.33",
-		Max:            "1.36",
+		Max:            "1.37",
 		VersionBasis:   "kubernetes",
 	},
 }
