@@ -343,10 +343,11 @@ jobs:
         fetch-depth: 0
 
     - name: Render and gate on go-kure/.github pin impact
+      shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         BASE_REF: ${{ github.base_ref }}
-      run: ./scripts/check-pin-impact.sh --base-ref "origin/$BASE_REF" | tee -a "$GITHUB_STEP_SUMMARY"
+      run: ./scripts/check-pin-impact.sh --base-ref "origin/$BASE_REF" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # =============================================================================
   # Stage 2: Tests and Security (parallel with lint)
