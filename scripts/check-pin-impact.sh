@@ -286,8 +286,23 @@ while [[ ${#queue[@]} -gt 0 ]]; do
   }
   script_dir="$(dirname "$script")"
 
-  # Lines that look like they source another file at all.
-  candidate_lines="$(printf '%s\n' "$content" | grep -E '^[[:space:]]*(source|\.)[[:space:]]' || true)"
+  # Lines that look like they source another file at all — not just at the
+  # very start of the line: a `source`/`.` inside a compound command (`if
+  # cond; then source "$SCRIPT_DIR/x.sh"; fi`) was previously invisible to
+  # this check entirely, never even reaching the "unrecognized expression"
+  # abort below — a silent miss, not a fail-closed one (found by
+  # chatgpt-codex-connector review on go-kure/kure#729, 2026-08-30).
+  # Comment lines are excluded first: without that, the English word
+  # "source" inside a comment or string (e.g. real content in
+  # check-doc-sync.sh: `fail "extra_mounts source not found: $src"`) would
+  # false-positive as a candidate and abort the run on nothing — confirmed
+  # against that exact file. Restricting the "preceded by" side to a real
+  # separator (line start, `;`/`&`/`|`, or `then`/`do`) rather than any
+  # whitespace keeps that same false-positive class out of non-comment code
+  # too, at the cost of not catching every conceivable compound shape — an
+  # unrecognized one still aborts via the branch below, so under-reporting
+  # isn't the failure mode this trades away.
+  candidate_lines="$(printf '%s\n' "$content" | grep -vE '^[[:space:]]*#' | grep -E '(^|[;&|]|\bthen\b|\bdo\b)[[:space:]]*(source|\.)[[:space:]]' || true)"
   [[ -n "$candidate_lines" ]] || continue
 
   while IFS= read -r line; do

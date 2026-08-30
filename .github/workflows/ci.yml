@@ -8,6 +8,15 @@ on:
     # No draft gate below (2026-08-19, GitLab mr-review parity) — every job runs
     # on a draft PR the same as a ready one, so ready_for_review buys nothing
     # here and is left out of the default set (opened, synchronize, reopened).
+    # labeled/unlabeled added (2026-08-30, chatgpt-codex-connector review on
+    # go-kure/kure#729): without them, adding the pin-impact job's
+    # 'pin-impact-ack' override label doesn't start a new run, so the
+    # required `build` check stays failed until an unrelated push — the
+    # acknowledgement path existed but nothing re-evaluated it. This does
+    # mean ANY label add/remove on a PR reruns the whole pipeline, not just
+    # pin-impact — accepted: label changes are rare, deliberate maintainer
+    # actions, not routine PR activity.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   merge_group:  # required: checks must report on the merge queue's temporary branch
   schedule:
     - cron: '0 4 * * *'  # 4am UTC daily - catch external changes
