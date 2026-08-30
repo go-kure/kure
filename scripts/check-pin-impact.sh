@@ -43,6 +43,13 @@
 # than silently under-reporting the consumed set. A false "no impact" is the
 # one failure mode this script exists to prevent.
 #
+# A genuine hit (a consumed path did change) is not necessarily wrong to
+# merge — the pin bump may have been reviewed and found fine. There is no
+# reviewer-facing way to express that short of a maintainer adding the
+# `pin-impact-ack` label to the PR (same convention as check-doc-gate's
+# `docs-skip`), which this script honours via PIN_IMPACT_ACK=true — a
+# deliberate, audited override, never a silent pass.
+#
 # Usage: check-pin-impact.sh --base-ref origin/main
 #        check-pin-impact.sh --old <40-hex> --new <40-hex>
 
@@ -216,6 +223,19 @@ while IFS= read -r name; do
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} contains a nested 'uses:' step — this script does not audit external actions transitively, refusing to under-report" >&2
     exit 1
   fi
+  # A single scripts/*.sh match anywhere in the file would satisfy the
+  # empty-check below even if a SECOND `run:` step invokes something this
+  # scan doesn't recognize (a non-.sh entrypoint) — that step's real
+  # dependency would then silently contribute nothing to the consumed set
+  # (found by chatgpt-codex-connector review on go-kure/kure#729,
+  # 2026-08-30). This script only audits at whole-action.yml granularity, so
+  # more than one `run:` step is unauditable — refuse to guess which one a
+  # given scripts/*.sh reference belongs to.
+  run_step_count="$(printf '%s\n' "$content" | grep -cE '^[[:space:]]*run:' || true)"
+  if [[ "$run_step_count" -gt 1 ]]; then
+    echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has ${run_step_count} 'run:' steps — this script cannot confidently attribute scripts/*.sh references to individual steps, refusing to guess" >&2
+    exit 1
+  fi
   scripts_found="$(printf '%s\n' "$content" | { grep -oE 'scripts/[A-Za-z0-9_./-]+\.sh' || true; } | sort -u)"
   if [[ -z "$scripts_found" ]] && printf '%s\n' "$content" | grep -qE '^[[:space:]]*run:'; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has a 'run:' step but no recognized scripts/*.sh reference — refusing to under-report" >&2
@@ -266,6 +286,19 @@ while [[ ${#queue[@]} -gt 0 ]]; do
     [[ -n "$line" ]] || continue
     if [[ "$line" =~ ^[[:space:]]*(source|\.)[[:space:]]+\"?\$\{?SCRIPT_DIR\}?/([A-Za-z0-9_./-]+\.sh)\"?[[:space:]]*$ ]]; then
       target="${script_dir}/${BASH_REMATCH[2]}"
+      # A '.'/'..' segment in the matched suffix (e.g. `$SCRIPT_DIR/../x.sh`)
+      # would store this uncanonicalized path in `consumed`, but GitHub's
+      # compare response names the canonical repo path — the exact-string
+      # comparison below would then never match a later change to the file
+      # actually sourced (found by chatgpt-codex-connector review on
+      # go-kure/kure#729, 2026-08-30). Only single-hop sibling sourcing
+      # (`$SCRIPT_DIR/x.sh`) is resolved automatically by design (see the
+      # fixed-point comment above); a dot-segment target is exactly the kind
+      # of shape that resolution deliberately doesn't claim to handle.
+      if [[ "$target" == *".."* || "$target" == *"/./"* ]]; then
+        echo "check-pin-impact: sourced path in ${script} has a '.'/'..' segment — refusing to guess its normalized form: $target" >&2
+        exit 1
+      fi
       add_consumed "$target"
       enqueue "$target"
     else
@@ -336,9 +369,21 @@ done
 
 echo ""
 if [[ ${#affected[@]} -gt 0 ]]; then
-  echo "check-pin-impact: FAIL — $(( ${#affected[@]} )) consumed path(s) changed:" >&2
+  echo "check-pin-impact: $(( ${#affected[@]} )) consumed path(s) changed:" >&2
   printf '  %s\n' "${affected[@]}" >&2
   echo "This pin bump touches code kure actually executes — review the diff before merging." >&2
+  # Maintainer override: add the 'pin-impact-ack' label to the PR once the
+  # diff above has been reviewed and judged fine. Deliberately requires a
+  # human action visible on the PR (a label), not a script flag anyone could
+  # pass — this script's whole job is to make an unreviewed impact
+  # unmergeable, not to make a reviewed one unmergeable too (P1 gap found by
+  # chatgpt-codex-connector review on go-kure/kure#729, 2026-08-30: no
+  # acknowledgement path existed at all).
+  if [[ "${PIN_IMPACT_ACK:-false}" == "true" ]]; then
+    echo "check-pin-impact: ACKNOWLEDGED via 'pin-impact-ack' label — merging despite the above; a maintainer reviewed this impact."
+    exit 0
+  fi
+  echo "check-pin-impact: FAIL — add the 'pin-impact-ack' label after review to merge anyway." >&2
   exit 1
 fi
 

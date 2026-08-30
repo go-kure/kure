@@ -134,7 +134,9 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Pin-impact gate** - `pin-impact` renders a `go-kure/.github` pin bump's real effect (which
   `scripts/*.sh` a referenced action actually runs, whether the compare touches any of them) into
   the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed
-  (go-kure/kure#719, 2026-08-30)
+  (go-kure/kure#719, 2026-08-30). A maintainer who has reviewed a real hit and judged it safe adds
+  the `pin-impact-ack` label to merge anyway — same convention as `check-doc-gate`'s `docs-skip`
+  label; there is no other override
 
 ### Draft PRs
 
