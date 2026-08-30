@@ -211,6 +211,14 @@ while IFS= read -r name; do
     exit 1
   }
 
+  # A YAML step's first key can sit right after the list dash (`- uses:
+  # foo`, no separate `- name:` line) — a shape none of the three checks
+  # below recognized (found by chatgpt-codex-connector review on
+  # go-kure/launcher#363, 2026-08-30, reproduced locally: `printf '  - uses:
+  # x\n' | grep -qE '^[[:space:]]*uses:'` doesn't match). Every match below
+  # allows an optional `- ` list-item marker before the keyword so a step
+  # written either way is recognized the same.
+  #
   # Fail closed if this action.yml isn't fully accounted for by the
   # scripts/*.sh pattern below (found by the kure-bot review on
   # go-kure/kure#729, 2026-08-30): a nested `uses:` step pulls in code this
@@ -219,7 +227,7 @@ while IFS= read -r name; do
   # non-.sh entrypoint) would otherwise silently contribute nothing to the
   # consumed set — exactly the false "no impact" this script exists to
   # prevent. Mirrors the unrecognized-`source`-expression check below.
-  if printf '%s\n' "$content" | grep -qE '^[[:space:]]*uses:'; then
+  if printf '%s\n' "$content" | grep -qE '^[[:space:]]*(-[[:space:]]+)?uses:'; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} contains a nested 'uses:' step — this script does not audit external actions transitively, refusing to under-report" >&2
     exit 1
   fi
@@ -231,13 +239,13 @@ while IFS= read -r name; do
   # 2026-08-30). This script only audits at whole-action.yml granularity, so
   # more than one `run:` step is unauditable — refuse to guess which one a
   # given scripts/*.sh reference belongs to.
-  run_step_count="$(printf '%s\n' "$content" | grep -cE '^[[:space:]]*run:' || true)"
+  run_step_count="$(printf '%s\n' "$content" | grep -cE '^[[:space:]]*(-[[:space:]]+)?run:' || true)"
   if [[ "$run_step_count" -gt 1 ]]; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has ${run_step_count} 'run:' steps — this script cannot confidently attribute scripts/*.sh references to individual steps, refusing to guess" >&2
     exit 1
   fi
   scripts_found="$(printf '%s\n' "$content" | { grep -oE 'scripts/[A-Za-z0-9_./-]+\.sh' || true; } | sort -u)"
-  if [[ -z "$scripts_found" ]] && printf '%s\n' "$content" | grep -qE '^[[:space:]]*run:'; then
+  if [[ -z "$scripts_found" ]] && printf '%s\n' "$content" | grep -qE '^[[:space:]]*(-[[:space:]]+)?run:'; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has a 'run:' step but no recognized scripts/*.sh reference — refusing to under-report" >&2
     exit 1
   fi
