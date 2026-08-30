@@ -183,7 +183,7 @@ jobs:
     - name: Check govulncheck docs
       run: make check-govulncheck-docs
 
-    # Version pinned here (4.44.6) is a separate copy from mise.toml's own `yq` pin --
+    # Version pinned here (4.53.6) is a separate copy from mise.toml's own `yq` pin --
     # scripts/check-tool-versions.sh does not cover yq (golangci-lint only). Bumping
     # one without the other silently desyncs mise's toolchain from CI. If you bump
     # this, also update mise.toml's `yq` pin and the other 3 occurrences of this exact
@@ -193,14 +193,14 @@ jobs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
-        key: yq-4.44.6-linux-amd64
+        key: yq-4.53.6-linux-amd64
 
     - name: Install yq
       if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o ~/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64
+          https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
 
@@ -906,7 +906,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-hugo-
 
-    # Version pinned here (4.44.6) is a separate copy from mise.toml's own `yq` pin --
+    # Version pinned here (4.53.6) is a separate copy from mise.toml's own `yq` pin --
     # scripts/check-tool-versions.sh does not cover yq (golangci-lint only). Bumping
     # one without the other silently desyncs mise's toolchain from CI. If you bump
     # this, also update mise.toml's `yq` pin and the other 3 occurrences of this exact
@@ -916,14 +916,14 @@ jobs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
-        key: yq-4.44.6-linux-amd64
+        key: yq-4.53.6-linux-amd64
 
     - name: Install yq
       if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o ~/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64
+          https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
 
@@ -1056,7 +1056,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    # Version pinned here (4.44.6) is a separate copy from mise.toml's own `yq` pin --
+    # Version pinned here (4.53.6) is a separate copy from mise.toml's own `yq` pin --
     # scripts/check-tool-versions.sh does not cover yq (golangci-lint only). Bumping
     # one without the other silently desyncs mise's toolchain from CI. If you bump
     # this, also update mise.toml's `yq` pin and the other 3 occurrences of this exact
@@ -1066,14 +1066,14 @@ jobs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
-        key: yq-4.44.6-linux-amd64
+        key: yq-4.53.6-linux-amd64
 
     - name: Install yq
       if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o ~/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64
+          https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
 

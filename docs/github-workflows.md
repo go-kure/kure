@@ -583,7 +583,7 @@ in launcher: warmed cycles cut `test` ~50%, `build`/`lint` ~30%.
 
 Tool binaries are also cached to avoid reinstalling on every run:
 - `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
-- `yq` — keyed by pinned version (`4.44.6`)
+- `yq` — keyed by pinned version (`4.53.6`)
 - `govulncheck` — keyed by pinned version (`v1.7.0`)
 
 Cache and artifact traffic is routed through an in-cluster falcondev cache server backed by
