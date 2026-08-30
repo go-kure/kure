@@ -28,7 +28,6 @@
 go:
   current: "1.26.6"
   # mise.toml is the source of truth for Go version
-
 # Infrastructure dependencies
 infrastructure:
   barman-cloud:
@@ -44,7 +43,6 @@ infrastructure:
       barman-cloud's tags — a hand-picked tag would be a downgrade Go's
       minimum-version selection wouldn't let the build use. renovate.json
       disables the standalone gomod bump for it (see the rule there).
-
   cert-manager:
     go_module: "github.com/cert-manager/cert-manager"
     # Kure generates YAML compatible with these deployed versions
@@ -54,7 +52,6 @@ infrastructure:
       v1.21 removed the deprecated ObjectReference type (#8625); kure already uses
       IssuerReference (plus LocalObjectReference/SecretKeySelector from meta/v1), so the
       imported certmanager/v1 + acme/v1 + meta/v1 surface is unaffected — build + tests pass.
-
   cilium:
     go_module: "github.com/cilium/cilium"
     supported_range: "1.18 - 1.20"
@@ -73,7 +70,6 @@ infrastructure:
       - "github.com/cilium/hive"
       - "github.com/cilium/statedb"
       - "github.com/cilium/proxy"
-
   fluxcd:
     go_module: "github.com/fluxcd/flux2/v2"
     supported_range: "2.4 - 2.9"
@@ -90,7 +86,6 @@ infrastructure:
     related_packages:
       - "github.com/fluxcd/*"
       - "github.com/controlplaneio-fluxcd/*"
-
   flux-operator:
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
     supported_range: "0.23 - 0.53"
@@ -98,7 +93,6 @@ infrastructure:
       Upgraded alongside the FluxCD 2.9 ecosystem. The vendored install bundle
       (pkg/stack/fluxcd/flux_operator_install.yaml) and FluxOperatorVersion constant
       are pinned in lockstep with this module version.
-
   source-watcher:
     go_module: "github.com/fluxcd/source-watcher/api/v2"
     supported_range: "2.0 - 2.2"
@@ -108,7 +102,6 @@ infrastructure:
       Not in default Flux installation; requires --components-extra=source-watcher.
     related_packages:
       - "github.com/fluxcd/source-controller"
-
   metallb:
     go_module: "go.universe.tf/metallb"
     supported_range: "0.14 - 0.16"
@@ -118,7 +111,6 @@ infrastructure:
       node-specific ConfigurationState validation, security fixes via
       govulncheck. No changes to the v1beta1 API types that kure imports
       (IPAddressPool, BGPPeer, BGPAdvertisement, L2Advertisement, BFDProfile).
-
   prometheus-operator:
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
     supported_range: "0.75 - 0.93"
@@ -132,13 +124,12 @@ infrastructure:
       SetServiceMonitorSampleLimit/SetPodMonitorSampleLimit signatures moved to int64 in
       lockstep. Wire format (monitoring.coreos.com/v1 JSON) is unchanged, so generated
       YAML still applies to clusters across this range.
-
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
     upstream_repo: "external-secrets/external-secrets"
     upstream_release: "v2.10.0"
-    upstream_release_commit: "378bdb622ed9712ef4a58370f6a17af033b7d343"
-    supported_range: "2.9"
+    upstream_release_commit: "279f56c84d5d4058c3bfdeeaf5b1c2febb8851c0"
+    supported_range: "2.9 - 2.10"
     notes: |
       Module path changed from root to /apis submodule in v1.0 (#5494).
       No semver tags for apis submodule — go.mod pins a pseudo-version, so
@@ -157,7 +148,8 @@ infrastructure:
       not populate that field itself, so this repo's own build is unaffected;
       external consumers constructing SecretStoreSpec{RefreshInterval: <int>}
       will fail to compile against this bump.
-
+      v2.10.0 adds providers/features only (no further apis type changes per
+      the upstream changelog); build + tests pass unchanged.
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
     supported_range: "1.24 - 1.30"
@@ -175,7 +167,6 @@ infrastructure:
       - "github.com/cloudnative-pg/plugin-barman-cloud"
       - "github.com/cloudnative-pg/barman-cloud"
       - "github.com/cloudnative-pg/machinery"
-
   cnpg-barman-cloud-plugin:
     go_module: "github.com/cloudnative-pg/plugin-barman-cloud"
     supported_range: "0.9 - 0.14"
@@ -186,7 +177,6 @@ infrastructure:
       depends on for object-store API types.
       v0.14 is a routine minor with no changes to the imported ObjectStore v1 type
       (build + tests pass unchanged).
-
   controller-runtime:
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.24"
@@ -194,7 +184,6 @@ infrastructure:
     related_packages:
       - "sigs.k8s.io/kustomize/api"
       - "sigs.k8s.io/yaml"
-
   gateway-api:
     go_module: "sigs.k8s.io/gateway-api"
     supported_range: "1.0 - 1.6"
@@ -203,7 +192,6 @@ infrastructure:
       Kure generates gateway.networking.k8s.io/v1 resources (GA since v1.0).
       v1.6 is a routine minor with no changes to the imported
       gateway.networking.k8s.io/v1 HTTPRoute type — build + tests pass unchanged.
-
   kubernetes:
     go_module: "k8s.io/api"
     # k8s.io/* modules are versioned v0.N.x; the range below is in cluster terms (1.N).
