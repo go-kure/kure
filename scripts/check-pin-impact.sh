@@ -215,11 +215,11 @@ while IFS= read -r name; do
 
   # A YAML step's first key can sit right after the list dash (`- uses:
   # foo`, no separate `- name:` line) — a shape none of the three checks
-  # below recognized (found by chatgpt-codex-connector review on
-  # go-kure/launcher#363, 2026-08-30, reproduced locally: `printf '  - uses:
-  # x\n' | grep -qE '^[[:space:]]*uses:'` doesn't match). Every match below
-  # allows an optional `- ` list-item marker before the keyword so a step
-  # written either way is recognized the same.
+  # below recognized (found by chatgpt-codex-connector review, 2026-08-30,
+  # reproduced locally: `printf '  - uses: x\n' | grep -qE
+  # '^[[:space:]]*uses:'` doesn't match). Every match below allows an
+  # optional `- ` list-item marker before the keyword so a step written
+  # either way is recognized the same.
   #
   # Fail closed if this action.yml isn't fully accounted for by the
   # scripts/*.sh pattern below (found by the kure-bot review on
@@ -256,8 +256,8 @@ while IFS= read -r name; do
   # mention scripts/*.sh at all", so a second, unrecognized executable
   # invoked in the same block (`${{ github.action_path }}/tool`, a bare
   # `python other.py`) would silently contribute nothing to the consumed set
-  # (found by chatgpt-codex-connector review on go-kure/launcher#363,
-  # 2026-08-30). Every dot-github action.yml invokes its script(s) the same
+  # (found by chatgpt-codex-connector review, 2026-08-30). Every dot-github
+  # action.yml invokes its script(s) the same
   # way — `$GITHUB_ACTION_PATH/../../../scripts/<name>.sh` — confirmed
   # against every action.yml this script currently resolves, so a mismatch
   # between "how many $GITHUB_ACTION_PATH-relative references exist" and
@@ -372,8 +372,8 @@ compare_json="$(curl -fsSL --connect-timeout 10 --max-time 30 \
 # is NEW_SHA itself, so `files` comes back empty and this would silently
 # report "inert" regardless of what actually changed between the two — the
 # exact false negative this script exists to prevent (kure-bot review
-# finding on go-kure/launcher#363, 2026-08-30; reproduced against real
-# go-kure/.github history: a 5-commit rollback pair reports `files: 0`,
+# finding, 2026-08-30; reproduced against real go-kure/.github history: a
+# 5-commit rollback pair reports `files: 0`,
 # `status: "behind"`). Only a strict fast-forward (NEW_SHA a descendant of
 # OLD_SHA) makes the three-dot form correct, so require `status: "ahead"`.
 compare_status="$(printf '%s' "$compare_json" | grep -oE '"status":[[:space:]]*"[^"]*"' | head -1 | sed -E 's/^"status":[[:space:]]*"//; s/"$//')"

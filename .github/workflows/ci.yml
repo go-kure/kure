@@ -230,7 +230,7 @@ jobs:
         for f in scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh; do
           sh -n "$f"
         done
-        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/cases/*.sh; do
+        for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/cases/*.sh scripts/check-pin-impact.sh; do
           bash -n "$f"
         done
 
@@ -339,19 +339,22 @@ jobs:
     name: pin-impact
     runs-on: autops-kube-kure
     timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: write
     # PR-only, like doc-gate: needs a base-ref diff, which merge_group events
     # don't carry the same way pull_request events do. By the time a PR
     # reaches the merge queue this job has already gated it via `build`
     # (see `build`'s needs: list below) against the same base it will
     # actually merge onto — usually no new information from a merge_group
-    # re-run. The gap this doesn't cover: two PRs landing in the same queue
-    # batch where one adds a go-kure/.github action reference (or a script
-    # gains a new `source`) and the other bumps the pin, and neither alone
-    # sees both changes — narrow, and re-running here needs deriving the
+    # re-run. The gap this doesn't cover isn't limited to two PRs sharing a
+    # queue batch: any push to main (a shared-action reference added, or a
+    # script gaining a new `source`) between this PR's last `pull_request`
+    # run and its merge_group run is invisible here too, even at the
+    # documented batch size of one — re-running here needs deriving the
     # merge group's own base/head from `github.event.merge_group.*` rather
     # than `github.base_ref`, which this job doesn't do today. Tracked:
-    # go-kure/kure#730 (chatgpt-codex-connector review on go-kure/kure#729,
-    # 2026-08-30).
+    # go-kure/kure#730.
     if: github.event_name == 'pull_request'
     steps:
     - name: Checkout code
@@ -360,22 +363,31 @@ jobs:
         fetch-depth: 0
 
     # Binds the ack to the SHA it was actually reviewed at: any new push
-    # (synchronize) strips the label, so a stale ack from a prior commit
-    # can't silently cover a later, unreviewed diff. A maintainer re-adds
-    # the label (a fresh 'labeled' event) once they've reviewed the new
-    # head. Fixes chatgpt-codex-connector's go-kure/kure#729 P1 review
+    # (synchronize) or reopen strips the label, so a stale ack from a prior
+    # commit can't silently cover a later, unreviewed diff. A maintainer
+    # re-adds the label (a fresh 'labeled' event) once they've reviewed the
+    # new head. Fixes chatgpt-codex-connector's go-kure/kure#729 P1 review
     # finding (2026-08-30): the ack was previously derived from the event
     # payload's label snapshot alone, with nothing to invalidate it across
-    # pushes.
+    # pushes. Reopen added after a follow-up finding: a closed-then-reopened
+    # PR carries no synchronize event of its own, so a label added before
+    # close would otherwise survive unreviewed into the reopened PR.
     #
     # Skipped on a fork PR: GITHUB_TOKEN is read-only there regardless of
     # this workflow's permissions block, so the mutation would fail and
-    # hard-fail the job on every push (chatgpt-codex-connector P1 finding,
-    # go-kure/launcher#363, 2026-08-30). The render step below likewise
-    # never honours the label on a fork head, since a stale ack could
-    # never be invalidated there.
+    # hard-fail the job on every push (chatgpt-codex-connector P1 finding).
+    # The render step below likewise never honours the label on a fork
+    # head, since a stale ack could never be invalidated there.
+    #
+    # continue-on-error: a failed strip must not silently leave a stale
+    # label in effect — the render step below treats "strip attempted but
+    # failed" as equivalent to "ack absent" (fail closed), rather than
+    # letting this step's exit code fail the whole job on a transient API
+    # error (kure-bot unchecked-err finding).
     - name: Strip stale pin-impact-ack on new commits
-      if: github.event.action == 'synchronize' && github.event.pull_request.head.repo.full_name == github.repository
+      id: strip-ack
+      if: (github.event.action == 'synchronize' || github.event.action == 'reopened') && github.event.pull_request.head.repo.full_name == github.repository
+      continue-on-error: true
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: gh pr edit "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --remove-label pin-impact-ack
@@ -388,21 +400,24 @@ jobs:
         # The PR's base at the time it was opened/last synced, not the
         # branch's current (possibly since-advanced) tip — avoids comparing
         # against a base go-kure/kure never actually merged onto (chatgpt-
-        # codex-connector P2 finding, go-kure/launcher#363, 2026-08-30).
+        # codex-connector P2 finding).
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
         IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        STRIP_FAILED: ${{ steps.strip-ack.outcome == 'failure' }}
       run: |
         # Live-query current labels rather than trusting the event payload
         # snapshot, so the strip above (same run, same job) is reflected
         # immediately instead of one run later. On a fork PR, skip the
         # query entirely and never honour the label (see the strip step's
-        # comment above). Maintainer-controlled override, same convention
+        # comment above). If the strip step ran but failed, fail closed
+        # too — a stale label may still be attached and this run can't
+        # prove otherwise. Maintainer-controlled override, same convention
         # as check-doc-gate's docs-skip label: add 'pin-impact-ack' after
         # reviewing a real hit to merge anyway. See check-pin-impact.sh's
         # PIN_IMPACT_ACK handling.
-        if [[ "$IS_FORK" == "true" ]]; then
+        if [[ "$IS_FORK" == "true" || "$STRIP_FAILED" == "true" ]]; then
           export PIN_IMPACT_ACK=false
         elif gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name' | grep -qx pin-impact-ack; then
           export PIN_IMPACT_ACK=true
