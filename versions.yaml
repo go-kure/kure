@@ -216,6 +216,11 @@ infrastructure:
       no longer comparable with ==/!=; kure's own code never compares VolumeMount
       values (only pkg/kubernetes/container_test.go did, fixed to use
       reflect.DeepEqual). Build + tests otherwise pass unchanged.
+      VolumeMount is also kure's own public API (AddContainerVolumeMount takes one
+      by value): external consumers that compare VolumeMount values or use them as
+      map keys will fail to compile against this bump, the same class of break as
+      external-secrets' SecretStoreSpec.RefreshInterval above. Kure is pre-1.0
+      (v0.2.0-beta) and does not do either itself.
     related_packages:
       - "k8s.io/apimachinery"
       - "k8s.io/apiextensions-apiserver"
