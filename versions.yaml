@@ -180,7 +180,13 @@ infrastructure:
   controller-runtime:
     go_module: "sigs.k8s.io/controller-runtime"
     supported_range: "0.22 - 0.24"
-    notes: "v0.24.1 fixes Apply typed error handling regression; requires k8s.io/* v0.36.0 (Kubernetes 1.36)"
+    notes: |
+      v0.24.1 fixes Apply typed error handling regression. Its own go.mod pins
+      k8s.io/* v0.36.0 (Kubernetes 1.36) -- the latest release as of the k8s v0.37.0
+      bump above; Go's MVS resolves the shared k8s.io/* modules to v0.37.0 here
+      since kure now requires that directly. controller-runtime's client-go usage
+      is compatible with the newer minor (build + tests pass unchanged); no
+      v0.24.x+ release yet declares k8s.io/* v0.37.0 itself.
     related_packages:
       - "sigs.k8s.io/kustomize/api"
       - "sigs.k8s.io/yaml"
