@@ -4,21 +4,19 @@ go = "1.26.6"
 golangci-lint = "2.13.2"
 git-cliff = "2.13.1"
 hugo = "0.165.0"
-# Pin matches .github/workflows/ci.yml's own yq install (v4.53.6) -- required
-# by scripts/sync-versions.sh and its versions:test guard harness, both now
-# on `mise run verify`'s dependency graph. CI installs yq as a separate step
-# and never relied on mise for it, which is what let this go unnoticed: a
-# clean mise-managed checkout with no system yq failed `mise run verify`
-# with no explanation.
+# Required by scripts/sync-versions.sh and its versions:test guard harness,
+# both now on `mise run verify`'s dependency graph -- a clean mise-managed
+# checkout with no system yq once failed `mise run verify` with no
+# explanation, which is why this entry exists at all (not just for CI).
 #
-# NOT covered by scripts/check-tool-versions.sh / sync-tool-versions.sh --
-# those two scripts only track golangci-lint. Bumping this pin does NOT
-# propagate anywhere automatically. If you bump it, also update the 4
-# hardcoded "4.53.6" occurrences by hand: .github/workflows/ci.yml (three
-# "Cache yq"/"Install yq" step pairs, ~:177-194, :803-820, :948-965) and
-# .github/workflows/deploy-docs.yml (one pair, ~:93-110). Each of those
-# carries a matching comment pointing back here.
+# CI reads this value directly from mise.toml at run time (ci.yml's and
+# deploy-docs.yml's "Read yq version from mise.toml" steps) -- bumping this
+# pin alone is sufficient, no other file needs a manual update.
 yq = "4.53.6"
+
+# CI reads this value directly from mise.toml at run time too (same
+# mechanism as yq above, ci.yml's "Read lychee version from mise.toml" step).
+lychee = "0.24.2"
 
 [env]
 GOBIN = "{{config_root}}/.bin"

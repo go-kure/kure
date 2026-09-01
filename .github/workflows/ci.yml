@@ -183,24 +183,31 @@ jobs:
     - name: Check govulncheck docs
       run: make check-govulncheck-docs
 
-    # Version pinned here (4.53.6) is a separate copy from mise.toml's own `yq` pin --
-    # scripts/check-tool-versions.sh does not cover yq (golangci-lint only). Bumping
-    # one without the other silently desyncs mise's toolchain from CI. If you bump
-    # this, also update mise.toml's `yq` pin and the other 3 occurrences of this exact
-    # cache-key/download-URL pair (2 more in this file, 1 in deploy-docs.yml).
+    - name: Read yq version from mise.toml
+      id: yq-version
+      run: |
+        YQ_VER=$(grep '^yq = ' mise.toml | sed 's/yq = "\(.*\)"/\1/')
+        if [ -z "$YQ_VER" ]; then
+          echo "::error::Failed to parse yq version from mise.toml"
+          exit 1
+        fi
+        echo "version=$YQ_VER" >> $GITHUB_OUTPUT
+
+    # Cache key derives from the read-step output above, so a mise-pin bump
+    # can never silently keep restoring a stale cached binary.
     - name: Cache yq
       id: yq-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
-        key: yq-4.53.6-linux-amd64
+        key: yq-${{ steps.yq-version.outputs.version }}-linux-amd64
 
     - name: Install yq
       if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o ~/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
+          https://github.com/mikefarah/yq/releases/download/v${{ steps.yq-version.outputs.version }}/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
 
@@ -906,24 +913,31 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-hugo-
 
-    # Version pinned here (4.53.6) is a separate copy from mise.toml's own `yq` pin --
-    # scripts/check-tool-versions.sh does not cover yq (golangci-lint only). Bumping
-    # one without the other silently desyncs mise's toolchain from CI. If you bump
-    # this, also update mise.toml's `yq` pin and the other 3 occurrences of this exact
-    # cache-key/download-URL pair (2 more in this file, 1 in deploy-docs.yml).
+    - name: Read yq version from mise.toml
+      id: yq-version
+      run: |
+        YQ_VER=$(grep '^yq = ' mise.toml | sed 's/yq = "\(.*\)"/\1/')
+        if [ -z "$YQ_VER" ]; then
+          echo "::error::Failed to parse yq version from mise.toml"
+          exit 1
+        fi
+        echo "version=$YQ_VER" >> $GITHUB_OUTPUT
+
+    # Cache key derives from the read-step output above, so a mise-pin bump
+    # can never silently keep restoring a stale cached binary.
     - name: Cache yq
       id: yq-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
-        key: yq-4.53.6-linux-amd64
+        key: yq-${{ steps.yq-version.outputs.version }}-linux-amd64
 
     - name: Install yq
       if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o ~/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
+          https://github.com/mikefarah/yq/releases/download/v${{ steps.yq-version.outputs.version }}/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
 
@@ -954,19 +968,29 @@ jobs:
         path: site/public/
         retention-days: 7
 
+    - name: Read lychee version from mise.toml
+      id: lychee-version
+      run: |
+        LYCHEE_VER=$(grep '^lychee = ' mise.toml | sed 's/lychee = "\(.*\)"/\1/')
+        if [ -z "$LYCHEE_VER" ]; then
+          echo "::error::Failed to parse lychee version from mise.toml"
+          exit 1
+        fi
+        echo "version=$LYCHEE_VER" >> $GITHUB_OUTPUT
+
     - name: Cache lychee
       id: lychee-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/lychee
-        key: lychee-0.24.2-linux-amd64
+        key: lychee-${{ steps.lychee-version.outputs.version }}-linux-amd64
 
     - name: Install lychee
       if: steps.lychee-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o /tmp/lychee.tar.gz \
-          https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz
+          https://github.com/lycheeverse/lychee/releases/download/lychee-v${{ steps.lychee-version.outputs.version }}/lychee-x86_64-unknown-linux-gnu.tar.gz
         tar xzf /tmp/lychee.tar.gz -C /tmp
         install -m755 /tmp/lychee-x86_64-unknown-linux-gnu/lychee ~/bin/lychee
         echo "$HOME/bin" >> $GITHUB_PATH
@@ -1056,24 +1080,31 @@ jobs:
       with:
         fetch-depth: 0
 
-    # Version pinned here (4.53.6) is a separate copy from mise.toml's own `yq` pin --
-    # scripts/check-tool-versions.sh does not cover yq (golangci-lint only). Bumping
-    # one without the other silently desyncs mise's toolchain from CI. If you bump
-    # this, also update mise.toml's `yq` pin and the other 3 occurrences of this exact
-    # cache-key/download-URL pair (2 more in this file, 1 in deploy-docs.yml).
+    - name: Read yq version from mise.toml
+      id: yq-version
+      run: |
+        YQ_VER=$(grep '^yq = ' mise.toml | sed 's/yq = "\(.*\)"/\1/')
+        if [ -z "$YQ_VER" ]; then
+          echo "::error::Failed to parse yq version from mise.toml"
+          exit 1
+        fi
+        echo "version=$YQ_VER" >> $GITHUB_OUTPUT
+
+    # Cache key derives from the read-step output above, so a mise-pin bump
+    # can never silently keep restoring a stale cached binary.
     - name: Cache yq
       id: yq-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
-        key: yq-4.53.6-linux-amd64
+        key: yq-${{ steps.yq-version.outputs.version }}-linux-amd64
 
     - name: Install yq
       if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o ~/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
+          https://github.com/mikefarah/yq/releases/download/v${{ steps.yq-version.outputs.version }}/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
 
