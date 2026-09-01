@@ -14,6 +14,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 MISE="mise.toml"
+VERSIONS="versions.yaml"
 
 if [ ! -f "$MISE" ]; then
 	echo "Error: $MISE not found"
@@ -26,6 +27,23 @@ if [ -z "$GO_VER" ]; then
 	exit 1
 fi
 echo "Syncing to Go version: $GO_VER"
+
+# versions.yaml's go.current mirrors mise.toml the same way go.mod does --
+# scripts/sync-versions.sh's validate_gomod() compares go.mod's directive
+# against THIS field, not against mise.toml directly, and generate_go_api()
+# / the compatibility.md generator both emit THIS field's value verbatim
+# (pkg/versions/versions_gen.go's GoVersion const, docs/compatibility.md's
+# "Current: Go ..." line) -- never go.mod's. A version bump that updated
+# go.mod but not this field would trade one CI failure (check-go-version)
+# for another (sync-versions.sh check's validate_gomod), and would leave
+# both generated artifacts one step stale if generate ran first. Written
+# with yq -i, the same tool sync-eso-pin.sh already uses for its own
+# versions.yaml writes.
+if [ ! -f "$VERSIONS" ]; then
+	echo "Error: $VERSIONS not found"
+	exit 1
+fi
+yq -i ".go.current = \"$GO_VER\"" "$VERSIONS"
 
 # A glob with no match expands to its own literal pattern string under
 # POSIX sh (no nullglob) -- passing that straight to sed would try to open a

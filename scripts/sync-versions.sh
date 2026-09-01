@@ -791,10 +791,11 @@ generate_go_api() {
     local go_current
     go_current=$(yq '.go.current' "$VERSIONS_FILE")
 
-    # go.current is hand-maintained (never Renovate-edited) and always a
-    # plain Go version string in practice, but guard it the same as the
-    # per-dependency fields below rather than trust that invariant silently:
-    # it is emitted by a raw %s outside the loop's own guard.
+    # go.current is kept in sync with mise.toml by scripts/sync-go-version.sh,
+    # including on Renovate's own branches via postUpgradeTasks -- it is
+    # bot-written text, not purely hand-maintained, so it is guarded the same
+    # as the per-dependency fields below rather than trusted silently: it is
+    # emitted by a raw %s outside the loop's own guard.
     if go_string_literal_unsafe "$go_current"; then
         error "versions.yaml go.current cannot be emitted as a Go string literal: $go_current"
         return 1

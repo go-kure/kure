@@ -54,18 +54,19 @@
       }
     },
     {
-      "description": "Regenerate docs/compatibility.md and pkg/versions/versions_gen.go (the published Go API's generated data), keep golangci-lint's Makefile/ci.yml/docs pins in sync with mise.toml, and keep go.mod's own go directive in sync with mise.toml's go pin, on the bot's own branch after any gomod or mise bump. The first two are generated from versions.yaml (+ go.mod for the compatibility matrix), and CI's validate job fails on drift for either (sync-versions.sh check); the golangci-lint pins are plain strings only scripts/sync-tool-versions.sh keeps in step with mise.toml; go.mod's go directive is plain text only scripts/sync-go-version.sh keeps in step, checked by make check-go-version — a mise-only Go bump left go.mod behind with no postUpgradeTasks command to fix it (go-kure/kure#734). mise.toml is the only copy the mise datasource actually bumps. Dependabot could not run this step, which left its PRs permanently red (#665, #667). All three scripts are no-ops when nothing derived changes, so matching both managers is safe. go.mod is included in fileFilters because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive, and sync-go-version.sh rewrites its go directive on line 3.",
+      "description": "Keep go.mod's go directive AND versions.yaml's go.current in sync with mise.toml's go pin (sync-go-version.sh, checked by make check-go-version and by sync-versions.sh check's validate_gomod respectively), keep golangci-lint's Makefile/ci.yml/docs pins in sync with mise.toml (sync-tool-versions.sh), then regenerate docs/compatibility.md and pkg/versions/versions_gen.go (the published Go API's generated data, sync-versions.sh generate) from the now-current versions.yaml + go.mod, on the bot's own branch after any gomod or mise bump. sync-go-version.sh must run FIRST: generate emits versions.yaml's go.current verbatim into both generated artifacts (never go.mod directly), so generating before that field is updated would leave both one step stale even once go.mod itself was fixed — a mise-only Go bump originally left go.mod (and versions.yaml) behind with no postUpgradeTasks command to fix either, and CI's validate job fails on drift for any of these (go-kure/kure#734). mise.toml is the only copy the mise datasource actually bumps. Dependabot could not run this step, which left its PRs permanently red (#665, #667). All three scripts are no-ops when nothing derived changes, so matching both managers is safe. go.mod and versions.yaml are both included in fileFilters because generate also rewrites go.mod's `// Current pin:` comment from the k8s.io/api replace directive, and sync-go-version.sh rewrites go.mod's go directive on line 3 and versions.yaml's go.current.",
       "matchManagers": ["gomod", "mise"],
       "postUpgradeTasks": {
         "commands": [
+          "sh scripts/sync-go-version.sh",
           "./scripts/sync-versions.sh generate",
-          "sh scripts/sync-tool-versions.sh",
-          "sh scripts/sync-go-version.sh"
+          "sh scripts/sync-tool-versions.sh"
         ],
         "fileFilters": [
           "docs/compatibility.md",
           "pkg/versions/versions_gen.go",
           "go.mod",
+          "versions.yaml",
           "Makefile",
           ".github/workflows/ci.yml",
           "docs/github-workflows.md"
