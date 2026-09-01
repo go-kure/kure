@@ -528,6 +528,32 @@ The development version shows a warning banner linking to the latest stable vers
 All jobs use `go-version-file: go.mod` — the `go` directive in `go.mod` is the single
 source of truth (kept in sync with `mise.toml` via `make check-go-version`).
 
+### yq and lychee Versions
+
+Both are read from `mise.toml` at run time by a dedicated step, the same shape as the Hugo
+version read in `deploy-docs.yml`:
+
+```yaml
+- name: Read yq version from mise.toml
+  id: yq-version
+  run: |
+    YQ_VER=$(grep '^yq = ' mise.toml | sed 's/yq = "\(.*\)"/\1/')
+    if [ -z "$YQ_VER" ]; then
+      echo "::error::Failed to parse yq version from mise.toml"
+      exit 1
+    fi
+    echo "version=$YQ_VER" >> $GITHUB_OUTPUT
+```
+
+`${{ steps.yq-version.outputs.version }}` (or `steps.lychee-version...` for lychee) feeds both the
+cache key and the download URL everywhere the version used to be hardcoded — three yq sites plus
+one lychee site in `ci.yml`, one yq site in `deploy-docs.yml`. Bumping `mise.toml`'s `yq`/`lychee`
+pin is sufficient on its own; no other file needs a manual update, and no tool-version-parity
+checker needs to know about either (there is nothing left in `ci.yml`/`deploy-docs.yml` for one to
+compare against). `lychee` previously had no `mise.toml` entry at all — its CI-pinned version was
+the only copy anywhere; it now has one, matching the parity `yq` already had before this section
+was written.
+
 ### Caching
 
 CI jobs use explicit `actions/cache` steps with `cache: false` on `setup-go` to control
@@ -583,7 +609,8 @@ in launcher: warmed cycles cut `test` ~50%, `build`/`lint` ~30%.
 
 Tool binaries are also cached to avoid reinstalling on every run:
 - `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
-- `yq` — keyed by pinned version (`4.53.6`)
+- `yq`, `lychee` — keyed by the version a "Read `<tool>` version from mise.toml" step reads at run
+  time (see [yq and lychee Versions](#yq-and-lychee-versions) below), never a hardcoded literal
 - `govulncheck` — keyed by pinned version (`v1.7.0`)
 
 Cache and artifact traffic is routed through an in-cluster falcondev cache server backed by

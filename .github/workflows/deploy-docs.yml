@@ -90,24 +90,26 @@ jobs:
         go-version: ${{ steps.go-version.outputs.version }}
         check-latest: true
 
-    # Version pinned here (4.53.6) is a separate copy from mise.toml's own `yq` pin --
-    # scripts/check-tool-versions.sh does not cover yq (golangci-lint only). Bumping
-    # one without the other silently desyncs mise's toolchain from CI. If you bump
-    # this, also update mise.toml's `yq` pin and the other 3 occurrences of this exact
-    # cache-key/download-URL pair (all 3 in ci.yml).
+    - name: Read yq version from mise.toml
+      id: yq-version
+      run: |
+        YQ_VER=$(grep '^yq = ' mise.toml | sed 's/yq = "\(.*\)"/\1/')
+        [[ -z "$YQ_VER" ]] && echo "::error::Failed to read yq version from mise.toml" && exit 1
+        echo "version=$YQ_VER" >> $GITHUB_OUTPUT
+
     - name: Cache yq
       id: yq-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/bin/yq
-        key: yq-4.53.6-linux-amd64
+        key: yq-${{ steps.yq-version.outputs.version }}-linux-amd64
 
     - name: Install yq
       if: steps.yq-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p ~/bin
         curl -fsSL -o ~/bin/yq \
-          https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
+          https://github.com/mikefarah/yq/releases/download/v${{ steps.yq-version.outputs.version }}/yq_linux_amd64
         chmod +x ~/bin/yq
         echo "$HOME/bin" >> $GITHUB_PATH
 
