@@ -215,25 +215,7 @@ tools: ## Install development tools
 
 .PHONY: sync-go-version
 sync-go-version: ## Sync Go version from mise.toml to all files
-	@echo "$(COLOR_YELLOW)Syncing Go version from mise.toml...$(COLOR_RESET)"
-	@if [ ! -f mise.toml ]; then \
-		echo "$(COLOR_RED)Error: mise.toml not found$(COLOR_RESET)"; \
-		exit 1; \
-	fi
-	@GO_VER=$$(grep '^go = ' mise.toml | cut -d'"' -f2); \
-	if [ -z "$$GO_VER" ]; then \
-		echo "$(COLOR_RED)Error: Could not extract Go version from mise.toml$(COLOR_RESET)"; \
-		exit 1; \
-	fi; \
-	echo "Syncing to Go version: $$GO_VER"; \
-	sed -i -E "s/^([[:space:]]*)GO_VERSION: '[^']*'/\1GO_VERSION: '$$GO_VER'/" .github/workflows/*.yml .github/workflows/*.yaml; \
-	sed -i "s/go-version: '[^']*'/go-version: '$$GO_VER'/" .github/workflows/*.yml .github/workflows/*.yaml; \
-	sed -i "s/go-version: \$${{ env.GO_VERSION }}/go-version: \$${{ env.GO_VERSION }}/" .github/workflows/*.yml .github/workflows/*.yaml; \
-	sed -i "3s/go .*/go $$GO_VER/" go.mod; \
-	if [ -f docs/github-workflows.md ]; then \
-		sed -i "s/Go Version: \`[0-9][^']*\`/Go Version: \`$$GO_VER\`/g" docs/github-workflows.md; \
-	fi; \
-	echo "$(COLOR_GREEN)Go version synced to $$GO_VER$(COLOR_RESET)"
+	sh scripts/sync-go-version.sh
 
 .PHONY: check-go-version
 check-go-version: ## Verify Go version consistency across all files

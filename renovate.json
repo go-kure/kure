@@ -54,12 +54,13 @@
       }
     },
     {
-      "description": "Regenerate docs/compatibility.md and pkg/versions/versions_gen.go (the published Go API's generated data), and keep golangci-lint's Makefile/ci.yml/docs pins in sync with mise.toml, on the bot's own branch after any gomod or mise bump. Both are generated from versions.yaml (+ go.mod for the compatibility matrix), and CI's validate job fails on drift for either (sync-versions.sh check); the golangci-lint pins are plain strings only scripts/sync-tool-versions.sh keeps in step with mise.toml, the only copy the mise datasource actually bumps. Dependabot could not run this step, which left its PRs permanently red (#665, #667). Both scripts are no-ops when nothing derived changes, so matching both managers is safe. go.mod is included because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive.",
+      "description": "Regenerate docs/compatibility.md and pkg/versions/versions_gen.go (the published Go API's generated data), keep golangci-lint's Makefile/ci.yml/docs pins in sync with mise.toml, and keep go.mod's own go directive in sync with mise.toml's go pin, on the bot's own branch after any gomod or mise bump. The first two are generated from versions.yaml (+ go.mod for the compatibility matrix), and CI's validate job fails on drift for either (sync-versions.sh check); the golangci-lint pins are plain strings only scripts/sync-tool-versions.sh keeps in step with mise.toml; go.mod's go directive is plain text only scripts/sync-go-version.sh keeps in step, checked by make check-go-version — a mise-only Go bump left go.mod behind with no postUpgradeTasks command to fix it (go-kure/kure#734). mise.toml is the only copy the mise datasource actually bumps. Dependabot could not run this step, which left its PRs permanently red (#665, #667). All three scripts are no-ops when nothing derived changes, so matching both managers is safe. go.mod is included in fileFilters because generate also rewrites its `// Current pin:` comment from the k8s.io/api replace directive, and sync-go-version.sh rewrites its go directive on line 3.",
       "matchManagers": ["gomod", "mise"],
       "postUpgradeTasks": {
         "commands": [
           "./scripts/sync-versions.sh generate",
-          "sh scripts/sync-tool-versions.sh"
+          "sh scripts/sync-tool-versions.sh",
+          "sh scripts/sync-go-version.sh"
         ],
         "fileFilters": [
           "docs/compatibility.md",

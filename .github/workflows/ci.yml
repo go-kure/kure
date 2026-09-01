@@ -101,6 +101,12 @@ jobs:
             - 'scripts/check-tool-versions.sh'
             - 'scripts/sync-tool-versions.sh'
             - 'docs/github-workflows.md'
+            # check-go-version (mise.toml vs go.mod Go version parity) reads
+            # mise.toml (already listed above) and go.mod (base list); this is
+            # its syncer counterpart, same reasoning as sync-tool-versions.sh
+            # above — a PR touching only this script must not be able to skip
+            # the job that exercises it.
+            - 'scripts/sync-go-version.sh'
             # check-govulncheck-docs (govulncheck version parity, ci.yml vs the doc) reads
             # these two scripts plus ci.yml/docs/github-workflows.md, both already listed above.
             - 'scripts/check-govulncheck-docs.sh'
