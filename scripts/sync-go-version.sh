@@ -59,7 +59,7 @@ for f in .github/workflows/*.yml .github/workflows/*.yaml; do
 	sed -i "s/go-version: '[^']*'/go-version: '$GO_VER'/" "$f"
 	sed -i "s/go-version: \${{ env.GO_VERSION }}/go-version: \${{ env.GO_VERSION }}/" "$f"
 done
-sed -i "3s/go .*/go $GO_VER/" go.mod
+sed -i -E "s/^go [0-9]+(\.[0-9]+)*\$/go $GO_VER/" go.mod
 if [ -f docs/github-workflows.md ]; then
 	sed -i "s/Go Version: \`[0-9][^']*\`/Go Version: \`$GO_VER\`/g" docs/github-workflows.md
 fi
