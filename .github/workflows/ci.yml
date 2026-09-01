@@ -240,7 +240,7 @@ jobs:
     # prove sh can actually parse it.
     - name: Syntax-check version-sync scripts
       run: |
-        for f in scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh; do
+        for f in scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh scripts/sync-go-version.sh; do
           sh -n "$f"
         done
         for f in scripts/sync-eso-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/cases/*.sh scripts/check-pin-impact.sh; do
