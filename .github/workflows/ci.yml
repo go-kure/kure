@@ -323,7 +323,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Check action pins
-      uses: go-kure/.github/.github/actions/check-action-pins@b3513acef22f27ca3eb9e61117b8d7f12a155bcc # main
+      uses: go-kure/.github/.github/actions/check-action-pins@97329b905584fc6080e91ea6e1a4c7561d56baec # main
 
   forbidden-terms:
     name: forbidden-terms
@@ -336,13 +336,13 @@ jobs:
     # This job has no path or event filter: full-tree PR and merge-queue scans
     # must use identical scope.
     - name: Check for downstream references
-      uses: go-kure/.github/.github/actions/check-forbidden-terms@b3513acef22f27ca3eb9e61117b8d7f12a155bcc # main
+      uses: go-kure/.github/.github/actions/check-forbidden-terms@97329b905584fc6080e91ea6e1a4c7561d56baec # main
 
     - name: Checkout canonical guard
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         repository: go-kure/.github
-        ref: b3513acef22f27ca3eb9e61117b8d7f12a155bcc
+        ref: 97329b905584fc6080e91ea6e1a4c7561d56baec
         path: .tmp/go-kure-dot-github
 
     - name: Verify vendored guard matches canonical
@@ -642,7 +642,7 @@ jobs:
         fi
 
     - name: Gate on reachable vulnerabilities
-      uses: go-kure/.github/.github/actions/govulncheck-gate@b3513acef22f27ca3eb9e61117b8d7f12a155bcc # main
+      uses: go-kure/.github/.github/actions/govulncheck-gate@97329b905584fc6080e91ea6e1a4c7561d56baec # main
       with:
         report: govulncheck.json
         # Accepted-risk advisories: reachable under symbol scan but not exploitable in
@@ -952,7 +952,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Validate docs map (code↔docs sync)
-      uses: go-kure/.github/.github/actions/check-doc-sync@b3513acef22f27ca3eb9e61117b8d7f12a155bcc # main
+      uses: go-kure/.github/.github/actions/check-doc-sync@97329b905584fc6080e91ea6e1a4c7561d56baec # main
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
@@ -1012,7 +1012,7 @@ jobs:
       run: hugo --baseURL "/" --destination .linkcheck --quiet
 
     - name: Check internal links (rendered site)
-      uses: go-kure/.github/.github/actions/check-links@b3513acef22f27ca3eb9e61117b8d7f12a155bcc # main
+      uses: go-kure/.github/.github/actions/check-links@97329b905584fc6080e91ea6e1a4c7561d56baec # main
       with:
         built-dir: site/.linkcheck
 
@@ -1119,7 +1119,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Enforce docs-with-code (Layer 3)
-      uses: go-kure/.github/.github/actions/check-doc-gate@b3513acef22f27ca3eb9e61117b8d7f12a155bcc # main
+      uses: go-kure/.github/.github/actions/check-doc-gate@97329b905584fc6080e91ea6e1a4c7561d56baec # main
       with:
         base-ref: origin/${{ github.base_ref }}
         skip: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}
