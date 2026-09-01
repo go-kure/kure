@@ -14,17 +14,20 @@ that file so consumers do not have to read it off disk and decode key paths by h
 import "github.com/go-kure/kure/pkg/versions"
 
 k8s, ok := versions.Get("kubernetes")   // ok == false if the key was renamed or removed
-fmt.Println(k8s.SupportedRange, k8s.Min, k8s.Max) // "1.33 - 1.37" "1.33" "1.37"
-
-eso, ok := versions.Get("external-secrets")
-fmt.Println(eso.SupportedRange, eso.Min, eso.Max) // "2.9 - 2.10" "2.9" "2.10"
+fmt.Println(k8s.SupportedRange, k8s.Min, k8s.Max)
 
 for _, d := range versions.All() {
     fmt.Printf("%s: %s (%s)\n", d.Name, d.SupportedRange, d.GoModule)
 }
+
+fmt.Println(versions.GoVersion) // versions.yaml's go.current
 ```
 
-`GoVersion` holds `versions.yaml`'s `go.current`.
+None of these values are repeated here: `SupportedRange`, `Min`, `Max` and `GoVersion` all move
+on a routine dependency or toolchain bump, and a literal example printed in this file would go
+stale the next time one does. `pkg/versions/versions_gen.go` is the generated, authoritative
+record of whatever kure currently supports — read it directly, or call `Get`/`All` at runtime,
+rather than trusting a number written here.
 
 ## What is exported, and what is not
 
