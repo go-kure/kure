@@ -216,6 +216,7 @@ tools: ## Install development tools
 .PHONY: sync-go-version
 sync-go-version: ## Sync Go version from mise.toml to all files
 	sh scripts/sync-go-version.sh
+	./scripts/sync-versions.sh generate
 
 .PHONY: check-go-version
 check-go-version: ## Verify Go version consistency across all files
