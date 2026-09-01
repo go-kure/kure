@@ -2,7 +2,7 @@
 # Use exact versions for reproducibility across environments
 go = "1.26.6"
 golangci-lint = "2.13.2"
-git-cliff = "2.13.1"
+git-cliff = "2.14.1"
 hugo = "0.165.0"
 # Required by scripts/sync-versions.sh and its versions:test guard harness,
 # both now on `mise run verify`'s dependency graph -- a clean mise-managed
