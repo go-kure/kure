@@ -241,8 +241,11 @@ mise bumps (`postUpgradeTasks` running `./scripts/sync-versions.sh generate`),
 so its PRs pass the `validate` drift check without manual help. The same
 `postUpgradeTasks` rule also runs `sh scripts/sync-tool-versions.sh`, which
 keeps the golangci-lint pin in `Makefile`, `.github/workflows/ci.yml` and
-`docs/github-workflows.md` in step with `mise.toml` — a bot PR touching those
-files, or a `check-tool-versions` failure on one, is this same automation.
+`docs/github-workflows.md` in step with `mise.toml`, and `sh
+scripts/sync-go-version.sh`, which keeps `go.mod`'s own `go` directive in step
+with `mise.toml`'s `go` pin — a bot PR touching those files, or a
+`check-tool-versions`/`check-go-version` failure on one, is this same
+automation.
 
 For the full dependency update process (review, bundling, version tracking), see [Dependency Updates](/contributing/dependency-updates/).
 

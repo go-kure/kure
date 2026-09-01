@@ -1,0 +1,49 @@
+#!/bin/sh
+# sync-go-version.sh — propagate the mise.toml [tools].go version into go.mod,
+# every .github/workflows/*.yml(.yaml) GO_VERSION/go-version mirror, and
+# docs/github-workflows.md. Ported verbatim from the Makefile's sync-go-version
+# recipe (same sed patterns, same order) so Renovate's postUpgradeTasks can
+# call it directly — postUpgradeTasks runs plain commands, not make targets,
+# matching the convention already used for sync-tool-versions.sh,
+# sync-govulncheck-docs.sh and sync-eso-pin.sh in this repo.
+#
+# Run scripts/../Makefile's check-go-version afterwards (or 'make check-go-version').
+set -eu
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+MISE="mise.toml"
+
+if [ ! -f "$MISE" ]; then
+	echo "Error: $MISE not found"
+	exit 1
+fi
+
+GO_VER="$(grep '^go = ' "$MISE" | cut -d'"' -f2)"
+if [ -z "$GO_VER" ]; then
+	echo "Error: could not extract Go version from $MISE"
+	exit 1
+fi
+echo "Syncing to Go version: $GO_VER"
+
+# A glob with no match expands to its own literal pattern string under
+# POSIX sh (no nullglob) -- passing that straight to sed would try to open a
+# file named literally ".github/workflows/*.yaml" and, under set -eu, abort
+# the whole script right there, before the go.mod sed below ever runs. The
+# Makefile recipe this was ported from had the same unguarded glob but never
+# hit this: make's default recipe shell isn't -e, so a failing sed there just
+# warned on stderr and fell through to the next command. Guard explicitly so
+# this script's own set -eu can't silently skip go.mod.
+for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+	[ -e "$f" ] || continue
+	sed -i -E "s/^([[:space:]]*)GO_VERSION: '[^']*'/\1GO_VERSION: '$GO_VER'/" "$f"
+	sed -i "s/go-version: '[^']*'/go-version: '$GO_VER'/" "$f"
+	sed -i "s/go-version: \${{ env.GO_VERSION }}/go-version: \${{ env.GO_VERSION }}/" "$f"
+done
+sed -i "3s/go .*/go $GO_VER/" go.mod
+if [ -f docs/github-workflows.md ]; then
+	sed -i "s/Go Version: \`[0-9][^']*\`/Go Version: \`$GO_VER\`/g" docs/github-workflows.md
+fi
+
+echo "Go version synced to $GO_VER"
