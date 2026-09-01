@@ -57,9 +57,13 @@ for f in .github/workflows/*.yml .github/workflows/*.yaml; do
 	[ -e "$f" ] || continue
 	sed -i -E "s/^([[:space:]]*)GO_VERSION: '[^']*'/\1GO_VERSION: '$GO_VER'/" "$f"
 	sed -i "s/go-version: '[^']*'/go-version: '$GO_VER'/" "$f"
-	sed -i "s/go-version: \${{ env.GO_VERSION }}/go-version: \${{ env.GO_VERSION }}/" "$f"
 done
-sed -i -E "s/^go [0-9]+(\.[0-9]+)*\$/go $GO_VER/" go.mod
+sed -i -E "s/^go [^[:space:]]+/go $GO_VER/" go.mod
+GOMOD_VER="$(grep -E '^go ' go.mod | head -1 | awk '{print $2}')"
+if [ "$GOMOD_VER" != "$GO_VER" ]; then
+	echo "Error: go.mod's go directive reads '$GOMOD_VER' after sync, expected $GO_VER"
+	exit 1
+fi
 if [ -f docs/github-workflows.md ]; then
 	sed -i "s/Go Version: \`[0-9][^']*\`/Go Version: \`$GO_VER\`/g" docs/github-workflows.md
 fi
