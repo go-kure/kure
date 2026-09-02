@@ -136,11 +136,13 @@ temporary branch — the merged result — before the PR is allowed to land.
   the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed
   (go-kure/kure#719, 2026-08-30). A maintainer who has reviewed a real hit and judged it safe adds
   the `pin-impact-ack` label to merge anyway — same convention as `check-doc-gate`'s `docs-skip`
-  label; there is no other override. **Rerun gotcha:** re-running a stale/failed run (`gh run
-  rerun`, or the Actions UI) replays that run's *original* triggering event rather than picking up
-  a label added since — this silently strips a freshly-added `pin-impact-ack` again before the gate
-  re-checks it, even though nothing was pushed. Re-add the label instead of rerunning the stale
-  run; full writeup in `go-kure/.github`'s `docs/standards.md` § "Pin-impact-ack"
+  label; there is no other override. **Rerun gotcha:** the `strip-ack` step only runs when the
+  triggering event's action was `synchronize` or `reopened`; re-running a stale/failed run of one of
+  *those* (`gh run rerun`, or the Actions UI) replays that same original action and silently strips
+  a freshly-added `pin-impact-ack` again before the gate re-checks it, even though nothing was
+  pushed. A rerun of an `opened`/`labeled`/`unlabeled`-triggered run is unaffected — `strip-ack`
+  skips it either way. Add (or re-add) the label rather than rerunning; full writeup in
+  `go-kure/.github`'s `docs/standards.md` § "Pin-impact-ack"
 
 ### Draft PRs
 
