@@ -3,7 +3,7 @@
 package versions
 
 // GoVersion is the go.current field of versions.yaml.
-const GoVersion string = "1.26.6" // doc-gate:trivial
+const GoVersion string = "1.26.8" // doc-gate:trivial
 
 var infrastructure = []Dependency{
 	{

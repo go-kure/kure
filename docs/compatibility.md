@@ -20,7 +20,7 @@ API's content stable; read them from `go.mod` instead.
 
 ## Go Version
 
-**Current:** Go 1.26.6
+**Current:** Go 1.26.8
 
 ## Infrastructure Dependencies
 

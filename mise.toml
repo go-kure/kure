@@ -1,6 +1,6 @@
 [tools]
 # Use exact versions for reproducibility across environments
-go = "1.26.6"
+go = "1.26.8"
 golangci-lint = "2.13.2"
 git-cliff = "2.14.1"
 hugo = "0.165.0"
