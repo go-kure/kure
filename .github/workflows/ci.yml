@@ -397,6 +397,16 @@ jobs:
     # failed" as equivalent to "ack absent" (fail closed), rather than
     # letting this step's exit code fail the whole job on a transient API
     # error (kure-bot unchecked-err finding).
+    #
+    # Gotcha: the `if:` below reads `github.event.action`, which is frozen
+    # at whatever triggered this run *originally*. Re-running an old failed
+    # run (`gh run rerun`) replays that same frozen action and strips a
+    # freshly-added ack again before the gate re-checks it — even though
+    # nothing was actually pushed. It then fails exactly as before, which
+    # reads as "the ack didn't take"; it did, the rerun undid it. Re-add
+    # the label and leave the resulting fresh `labeled`-triggered run
+    # alone instead of rerunning the stale one. Full writeup:
+    # go-kure/.github's docs/standards.md § "Pin-impact-ack".
     - name: Strip stale pin-impact-ack on new commits
       id: strip-ack
       if: (github.event.action == 'synchronize' || github.event.action == 'reopened') && github.event.pull_request.head.repo.full_name == github.repository
