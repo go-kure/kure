@@ -31,7 +31,7 @@ require (
 	github.com/cilium/cilium v1.20.1
 	github.com/cloudnative-pg/barman-cloud v0.5.2-0.20260720143032-950b0f57e122
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/cloudnative-pg/machinery v0.5.0
+	github.com/cloudnative-pg/machinery v0.6.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.14.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.53.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260828112654-279f56c84d5d
@@ -89,7 +89,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/analysis v0.25.2 // indirect
