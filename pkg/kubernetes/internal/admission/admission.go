@@ -25,9 +25,20 @@
 // The contract also exempts a fixed set of generic metadata helpers by name
 // (§5); callers pass those in.
 //
+// A field write counts only when it is rooted in a parameter, directly or
+// through a local that aliases one (spec := &o.Spec; labels := o.Labels): a
+// write into a temporary the helper built itself reaches no caller-visible
+// object and admits nothing. An append or map insert into a local counts as
+// class a only when the body assigns that local to a rooted field later in
+// source order.
+//
 // The classifier is syntactic with type information (go/packages): it never
 // executes code, and it is deliberately conservative, so an unusual but
 // legitimate helper shows up as inadmissible rather than slipping through.
+// Its dataflow is bounded to what is described above; it does not follow
+// control flow (a write-back on one branch only, a loop, a closure), calls,
+// or aliases created any other way. A helper written to evade it is caught by
+// its own unit test and by review, not by this package.
 package admission
 
 import (
@@ -197,8 +208,9 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		nilClear    string
 		writes      = map[string]bool{}
 		locals      = nilLocals(fn, info)
-		localOps    = map[string]bool{} // locals that received an append or a map insert
-		writtenBack = map[string]bool{} // locals assigned to a field afterwards
+		rooted      = rootedNames(fn)        // parameters and locals aliasing them
+		localOps    = map[string]token.Pos{} // local -> first append or map insert into it
+		writtenBack = map[string]token.Pos{} // local -> last assignment of it to a field
 	)
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		s, ok := n.(*ast.AssignStmt)
@@ -212,14 +224,20 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			} else if len(s.Rhs) == 1 {
 				rhs = s.Rhs[0]
 			}
+			fieldWrite := isFieldWrite(lhs) && rooted[rootIdent(lhs)]
 			if isMapIndex(lhs, info) || isAppend(rhs, info) {
-				if isFieldWrite(lhs) {
+				switch {
+				case fieldWrite:
 					appendOrMap = true
-				} else if id := rootIdent(lhs); id != nil {
-					localOps[id.Name] = true
+				case !isFieldWrite(lhs):
+					if name := rootIdent(lhs); name != "" {
+						if _, seen := localOps[name]; !seen {
+							localOps[name] = s.Pos()
+						}
+					}
 				}
 			}
-			if !isFieldWrite(lhs) {
+			if !fieldWrite {
 				continue
 			}
 			writes[types.ExprString(lhs)] = true
@@ -232,7 +250,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 				continue
 			}
 			if id, ok := ast.Unparen(rhs).(*ast.Ident); ok {
-				writtenBack[id.Name] = true
+				writtenBack[id.Name] = s.Pos()
 			}
 			if nilClear == "" && isNillable(info.TypeOf(lhs)) && isNilValue(rhs, info, locals) {
 				nilClear = types.ExprString(lhs)
@@ -248,8 +266,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		}
 		return true
 	})
-	for name := range localOps {
-		if writtenBack[name] {
+	for name, opPos := range localOps {
+		if back, ok := writtenBack[name]; ok && back > opPos {
 			appendOrMap = true
 		}
 	}
@@ -284,21 +302,77 @@ func isFieldWrite(lhs ast.Expr) bool {
 	return false
 }
 
-// rootIdent returns the local at the root of an index chain (labels in
-// labels[k], tmp in tmp), or nil when the chain is not rooted in one.
-func rootIdent(e ast.Expr) *ast.Ident {
+// rootIdent returns the name of the identifier at the root of a selector,
+// index, dereference or address-of chain (o in o.Spec.Items[i], labels in
+// labels[k], spec in *spec), or "" when the chain is not rooted in one.
+func rootIdent(e ast.Expr) string {
 	for {
 		switch v := e.(type) {
 		case *ast.Ident:
-			return v
+			return v.Name
+		case *ast.SelectorExpr:
+			e = v.X
 		case *ast.IndexExpr:
+			e = v.X
+		case *ast.StarExpr:
 			e = v.X
 		case *ast.ParenExpr:
 			e = v.X
+		case *ast.UnaryExpr:
+			if v.Op != token.AND {
+				return ""
+			}
+			e = v.X
 		default:
-			return nil
+			return ""
 		}
 	}
+}
+
+// rootedNames returns the names through which fn can reach a caller's
+// object: its parameters, and every local whose defining or assigned value
+// is a selector, index, dereference or address-of chain rooted in one of
+// them (spec := &o.Spec; labels := o.Labels). A local built from anything
+// else (tmp := &Obj{}, x := f()) is a temporary: writes into it reach no
+// caller-visible object and admit nothing.
+func rootedNames(fn *ast.FuncDecl) map[string]bool {
+	rooted := map[string]bool{}
+	for _, field := range fn.Type.Params.List {
+		for _, name := range field.Names {
+			rooted[name.Name] = true
+		}
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch s := n.(type) {
+		case *ast.DeclStmt:
+			gd, ok := s.Decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.VAR {
+				return true
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok || len(vs.Values) != len(vs.Names) {
+					continue
+				}
+				for i, id := range vs.Names {
+					if rooted[rootIdent(vs.Values[i])] {
+						rooted[id.Name] = true
+					}
+				}
+			}
+		case *ast.AssignStmt:
+			if len(s.Lhs) != len(s.Rhs) {
+				return true
+			}
+			for i, lhs := range s.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && rooted[rootIdent(s.Rhs[i])] {
+					rooted[id.Name] = true
+				}
+			}
+		}
+		return true
+	})
+	return rooted
 }
 
 // nilInLiteral returns the key of the first keyed element of lit, or of a

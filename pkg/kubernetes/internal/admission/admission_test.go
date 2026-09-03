@@ -148,6 +148,47 @@ func AddLabelParenLocal(o *Obj, k, v string) {
 	o.Labels = labels
 }
 
+// class a through a pointer alias of a field
+func AddItemViaAlias(o *Obj, s string) {
+	spec := &o.Spec
+	spec.Items = append(spec.Items, s)
+}
+
+// class b through a declared alias of the object
+func SetReplicasViaAlias(o *Obj, n int32) {
+	var obj = o
+	obj.Spec.Replicas = &n
+}
+
+// inadmissible: the write-back precedes the append, so the appended slice is lost
+func AddItemWriteBackFirst(o *Obj, s string) {
+	items := o.Spec.Items
+	o.Spec.Items = items
+	items = append(items, s)
+	_ = items
+}
+
+// inadmissible: only a temporary is appended to
+func AddItemToTemp(o *Obj, s string) {
+	tmp := Obj{}
+	tmp.Spec.Items = append(tmp.Spec.Items, s)
+	_ = o
+}
+
+// inadmissible: only a temporary gets the pointer assignment
+func SetRefOnTemp(o *Obj, n string) {
+	tmp := &Obj{}
+	tmp.Spec.Ref = &Ref{Name: n}
+	_ = o
+}
+
+// inadmissible: only a temporary gets the composite
+func SetNestedRefOnTemp(o *Obj, n string) {
+	var tmp Obj
+	tmp.Spec.Nested.Ref = Ref{Name: n, Kind: n}
+	_ = o
+}
+
 // inadmissible: append to a local that is never written back
 func AddItemLocalOnly(o *Obj, s string) {
 	tmp := o.Spec.Items
@@ -234,6 +275,12 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetSpecNestedNil":       Inadmissible,
 		"AddItemViaLocal":        Append,
 		"AddLabelParenLocal":     Append,
+		"AddItemViaAlias":        Append,
+		"SetReplicasViaAlias":    Pointer,
+		"AddItemWriteBackFirst":  Inadmissible,
+		"AddItemToTemp":          Inadmissible,
+		"SetRefOnTemp":           Inadmissible,
+		"SetNestedRefOnTemp":     Inadmissible,
 		"AddItemLocalOnly":       Inadmissible,
 		"AddLabelLocalOnly":      Inadmissible,
 		"AddLabelLocalThenName":  Inadmissible,
