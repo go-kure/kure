@@ -25,12 +25,14 @@
 // The contract also exempts a fixed set of generic metadata helpers by name
 // (§5); callers pass those in.
 //
-// A field write counts only when it is rooted in a parameter, directly or
-// through a local that aliases one (spec := &o.Spec; labels := o.Labels): a
-// write into a temporary the helper built itself reaches no caller-visible
-// object and admits nothing. An append or map insert into a local counts as
-// class a only when the body assigns that local to a rooted field later in
-// source order.
+// A field write counts only when, at the position of the write, it is rooted
+// in a parameter, directly or through a local that aliases one (spec :=
+// &o.Spec; labels := o.Labels): a write into a temporary the helper built
+// itself reaches no caller-visible object and admits nothing. An append or
+// map insert into a local counts as class a only when the body assigns that
+// same local to a rooted field later in source order. Locals are tracked as
+// type-checker objects, so a shadowing declaration is a different local and
+// a name shared by two blocks conflates nothing.
 //
 // The classifier is syntactic with type information (go/packages): it never
 // executes code, and it is deliberately conservative, so an unusual but
@@ -208,9 +210,9 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		nilClear    string
 		writes      = map[string]bool{}
 		locals      = nilLocals(fn, info)
-		rooted      = rootedNames(fn)        // parameters and locals aliasing them
-		localOps    = map[string]token.Pos{} // local -> first append or map insert into it
-		writtenBack = map[string]token.Pos{} // local -> last assignment of it to a field
+		rooted      = rootedObjects(fn, info)      // parameters and locals aliasing them, by position
+		localOps    = map[types.Object]token.Pos{} // local -> first append or map insert into it
+		writtenBack = map[types.Object]token.Pos{} // local -> last assignment of it to a field
 	)
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		s, ok := n.(*ast.AssignStmt)
@@ -224,15 +226,15 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			} else if len(s.Rhs) == 1 {
 				rhs = s.Rhs[0]
 			}
-			fieldWrite := isFieldWrite(lhs) && rooted[rootIdent(lhs)]
+			fieldWrite := isFieldWrite(lhs) && rooted.at(rootObj(lhs, info), s.Pos())
 			if isMapIndex(lhs, info) || isAppend(rhs, info) {
 				switch {
 				case fieldWrite:
 					appendOrMap = true
 				case !isFieldWrite(lhs):
-					if name := rootIdent(lhs); name != "" {
-						if _, seen := localOps[name]; !seen {
-							localOps[name] = s.Pos()
+					if obj := rootObj(lhs, info); obj != nil {
+						if _, seen := localOps[obj]; !seen {
+							localOps[obj] = s.Pos()
 						}
 					}
 				}
@@ -250,7 +252,9 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 				continue
 			}
 			if id, ok := ast.Unparen(rhs).(*ast.Ident); ok {
-				writtenBack[id.Name] = s.Pos()
+				if obj := info.ObjectOf(id); obj != nil {
+					writtenBack[obj] = s.Pos()
+				}
 			}
 			if nilClear == "" && isNillable(info.TypeOf(lhs)) && isNilValue(rhs, info, locals) {
 				nilClear = types.ExprString(lhs)
@@ -266,8 +270,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		}
 		return true
 	})
-	for name, opPos := range localOps {
-		if back, ok := writtenBack[name]; ok && back > opPos {
+	for obj, opPos := range localOps {
+		if back, ok := writtenBack[obj]; ok && back > opPos {
 			appendOrMap = true
 		}
 	}
@@ -302,14 +306,14 @@ func isFieldWrite(lhs ast.Expr) bool {
 	return false
 }
 
-// rootIdent returns the name of the identifier at the root of a selector,
-// index, dereference or address-of chain (o in o.Spec.Items[i], labels in
-// labels[k], spec in *spec), or "" when the chain is not rooted in one.
-func rootIdent(e ast.Expr) string {
+// rootIdent returns the identifier at the root of a selector, index,
+// dereference or address-of chain (o in o.Spec.Items[i], labels in
+// labels[k], spec in *spec), or nil when the chain is not rooted in one.
+func rootIdent(e ast.Expr) *ast.Ident {
 	for {
 		switch v := e.(type) {
 		case *ast.Ident:
-			return v.Name
+			return v
 		case *ast.SelectorExpr:
 			e = v.X
 		case *ast.IndexExpr:
@@ -320,26 +324,68 @@ func rootIdent(e ast.Expr) string {
 			e = v.X
 		case *ast.UnaryExpr:
 			if v.Op != token.AND {
-				return ""
+				return nil
 			}
 			e = v.X
 		default:
-			return ""
+			return nil
 		}
 	}
 }
 
-// rootedNames returns the names through which fn can reach a caller's
-// object: its parameters, and every local whose defining or assigned value
-// is a selector, index, dereference or address-of chain rooted in one of
-// them (spec := &o.Spec; labels := o.Labels). A local built from anything
-// else (tmp := &Obj{}, x := f()) is a temporary: writes into it reach no
-// caller-visible object and admit nothing.
-func rootedNames(fn *ast.FuncDecl) map[string]bool {
-	rooted := map[string]bool{}
+// rootObj returns the object the root identifier of e denotes, or nil.
+// Objects, not names, identify locals: a shadowing declaration is a
+// different object.
+func rootObj(e ast.Expr, info *types.Info) types.Object {
+	if id := rootIdent(e); id != nil {
+		return info.ObjectOf(id)
+	}
+	return nil
+}
+
+// roots records, per object, the positions at which it starts or stops
+// being a way to reach a caller's object, in source order.
+type roots map[types.Object][]rootEvent
+
+type rootEvent struct {
+	pos    token.Pos
+	rooted bool
+}
+
+func (r roots) add(obj types.Object, pos token.Pos, rooted bool) {
+	if obj != nil {
+		r[obj] = append(r[obj], rootEvent{pos: pos, rooted: rooted})
+	}
+}
+
+// at reports whether obj reaches a caller's object at position pos: the
+// state set by the last event at or before pos.
+func (r roots) at(obj types.Object, pos token.Pos) bool {
+	if obj == nil {
+		return false
+	}
+	rooted := false
+	for _, e := range r[obj] {
+		if e.pos > pos {
+			break
+		}
+		rooted = e.rooted
+	}
+	return rooted
+}
+
+// rootedObjects returns the objects through which fn can reach a caller's
+// object, with the position from which each does: its parameters from the
+// start, and every local from the point where it is declared or assigned a
+// selector, index, dereference or address-of chain rooted in one of them
+// (spec := &o.Spec; labels := o.Labels). A local declared or assigned from
+// anything else (tmp := &Obj{}, x := f()) is a temporary from that point:
+// writes into it reach no caller-visible object and admit nothing.
+func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
+	r := roots{}
 	for _, field := range fn.Type.Params.List {
 		for _, name := range field.Names {
-			rooted[name.Name] = true
+			r.add(info.Defs[name], fn.Pos(), true)
 		}
 	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
@@ -351,33 +397,32 @@ func rootedNames(fn *ast.FuncDecl) map[string]bool {
 			}
 			for _, spec := range gd.Specs {
 				vs, ok := spec.(*ast.ValueSpec)
-				if !ok || len(vs.Values) != len(vs.Names) {
+				if !ok {
 					continue
 				}
 				for i, id := range vs.Names {
-					if rooted[rootIdent(vs.Values[i])] {
-						rooted[id.Name] = true
-					}
+					rooted := len(vs.Values) == len(vs.Names) && r.at(rootObj(vs.Values[i], info), s.Pos())
+					r.add(info.Defs[id], s.Pos(), rooted)
 				}
 			}
 		case *ast.AssignStmt:
-			if len(s.Lhs) != len(s.Rhs) {
-				return true
-			}
 			for i, lhs := range s.Lhs {
-				if id, ok := lhs.(*ast.Ident); ok && rooted[rootIdent(s.Rhs[i])] {
-					rooted[id.Name] = true
+				id, ok := lhs.(*ast.Ident)
+				if !ok {
+					continue
 				}
+				rooted := len(s.Lhs) == len(s.Rhs) && r.at(rootObj(s.Rhs[i], info), s.Pos())
+				r.add(info.ObjectOf(id), s.Pos(), rooted)
 			}
 		}
 		return true
 	})
-	return rooted
+	return r
 }
 
 // nilInLiteral returns the key of the first keyed element of lit, or of a
 // literal nested in it, whose value is nil; "" when there is none.
-func nilInLiteral(lit *ast.CompositeLit, info *types.Info, locals map[string]bool) string {
+func nilInLiteral(lit *ast.CompositeLit, info *types.Info, locals map[types.Object]bool) string {
 	for _, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
 		if !ok {
@@ -423,10 +468,10 @@ func isAppend(rhs ast.Expr, info *types.Info) bool {
 
 // isNilValue reports whether e is the nil identifier, a conversion of a nil
 // value to a named type ((*T)(nil)), or a local that nilLocals proved nil.
-func isNilValue(e ast.Expr, info *types.Info, locals map[string]bool) bool {
+func isNilValue(e ast.Expr, info *types.Info, locals map[types.Object]bool) bool {
 	switch v := ast.Unparen(e).(type) {
 	case *ast.Ident:
-		return v.Name == "nil" || locals[v.Name]
+		return v.Name == "nil" || (info.ObjectOf(v) != nil && locals[info.ObjectOf(v)])
 	case *ast.CallExpr:
 		if tv, ok := info.Types[v.Fun]; ok && tv.IsType() && len(v.Args) == 1 {
 			return isNilValue(v.Args[0], info, locals)
@@ -454,8 +499,13 @@ func isNillable(t types.Type) bool {
 // reassigned to something else later still counts: the classifier is
 // deliberately conservative, and a helper that needs such a local is better
 // written without it.
-func nilLocals(fn *ast.FuncDecl, info *types.Info) map[string]bool {
-	locals := map[string]bool{}
+func nilLocals(fn *ast.FuncDecl, info *types.Info) map[types.Object]bool {
+	locals := map[types.Object]bool{}
+	mark := func(id *ast.Ident) {
+		if obj := info.ObjectOf(id); obj != nil {
+			locals[obj] = true
+		}
+	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch s := n.(type) {
 		case *ast.DeclStmt:
@@ -472,10 +522,10 @@ func nilLocals(fn *ast.FuncDecl, info *types.Info) map[string]bool {
 					switch {
 					case len(vs.Values) == 0:
 						if isNillable(info.TypeOf(id)) {
-							locals[id.Name] = true
+							mark(id)
 						}
 					case len(vs.Values) == len(vs.Names) && isNilValue(vs.Values[i], info, locals):
-						locals[id.Name] = true
+						mark(id)
 					}
 				}
 			}
@@ -485,7 +535,7 @@ func nilLocals(fn *ast.FuncDecl, info *types.Info) map[string]bool {
 			}
 			for i, lhs := range s.Lhs {
 				if id, ok := lhs.(*ast.Ident); ok && isNilValue(s.Rhs[i], info, locals) {
-					locals[id.Name] = true
+					mark(id)
 				}
 			}
 		}
