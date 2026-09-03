@@ -46,6 +46,7 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 
 | Constructor | Removed default |
 |---|---|
+| `CreateConfigMap` | `data` and `binaryData` initialised to empty maps. They never rendered, but a fresh object accepted `cm.Data[k] = v` directly; both are now nil, so write through `AddConfigMapData`/`AddConfigMapBinaryData` (which nil-init) or `SetConfigMapData`/`SetConfigMapBinaryData`, or assign a map literal first |
 | `CreateCronJob` | `spec.schedule` from the third argument; `spec.jobTemplate.spec.template.metadata.labels.app: <name>`; `spec.jobTemplate.spec.template.spec.restartPolicy: Never` |
 | `CreateDaemonSet` | `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>` |
 | `CreateDeployment` | `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>` |

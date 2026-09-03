@@ -7,14 +7,19 @@
 //   - class b: assign a pointer-typed field (the nil-init of a pointer
 //     intermediate before writing through it is itself such an assignment);
 //   - class c: write a composite literal with two or more fields, or a nested
-//     literal, or write two or more distinct fields.
+//     literal.
 //
-// Anything else is inadmissible: a bare single-field forwarder, a helper with
-// no field write, a helper that only delegates. A body that assigns the
-// literal nil to a field is inadmissible whatever else it does: that clears a
-// field the caller did not name, which the purity rule (§4) forbids. A nil
-// check on its own admits nothing; in particular the receiver guard
-// (`if obj == nil { panic(...) }`) does not turn a bare forwarder into class b.
+// Anything else is inadmissible: a bare single-field forwarder, several bare
+// forwarders in one body (two field writes without a literal are two
+// forwarders, not a composite), a helper with no field write, a helper that
+// only delegates. A body that assigns nil to a nillable field is inadmissible
+// whatever else it does: that clears a field the caller did not name, which
+// the purity rule (§4) forbids. nil is recognised as the literal, a conversion
+// of it ((*T)(nil)) and a local declared without a value or assigned nil
+// anywhere in the body; a nil that arrives through a function call or a
+// parameter is not traced. A nil check on its own admits nothing; in
+// particular the receiver guard (`if obj == nil { panic(...) }`) does not turn
+// a bare forwarder into class b.
 // The contract also exempts a fixed set of generic metadata helpers by name
 // (§5); callers pass those in.
 //
@@ -189,6 +194,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		bigLiteral  bool
 		nilClear    string
 		writes      = map[string]bool{}
+		locals      = nilLocals(fn, info)
 	)
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		s, ok := n.(*ast.AssignStmt)
@@ -209,7 +215,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 				continue
 			}
 			writes[types.ExprString(lhs)] = true
-			if rhs != nil && isNilIdent(rhs) && nilClear == "" {
+			if rhs != nil && nilClear == "" && isNillable(info.TypeOf(lhs)) && isNilValue(rhs, info, locals) {
 				nilClear = types.ExprString(lhs)
 			}
 			if t := info.TypeOf(lhs); t != nil {
@@ -234,7 +240,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	case bigLiteral:
 		return Composite, "composite literal with two or more fields or nested (class c)"
 	case len(writes) >= 2:
-		return Composite, fmt.Sprintf("%d distinct field writes (class c)", len(writes))
+		return Inadmissible, fmt.Sprintf("%d bare field writes and no composite literal (a forwarder per field, not class c)", len(writes))
 	case len(writes) == 1:
 		return Inadmissible, "single bare field assignment (a forwarder for the struct field)"
 	}
@@ -277,9 +283,72 @@ func isAppend(rhs ast.Expr, info *types.Info) bool {
 	return ok && b.Name() == "append"
 }
 
-func isNilIdent(e ast.Expr) bool {
-	id, ok := ast.Unparen(e).(*ast.Ident)
-	return ok && id.Name == "nil"
+// isNilValue reports whether e is the nil identifier, a conversion of a nil
+// value to a named type ((*T)(nil)), or a local that nilLocals proved nil.
+func isNilValue(e ast.Expr, info *types.Info, locals map[string]bool) bool {
+	switch v := ast.Unparen(e).(type) {
+	case *ast.Ident:
+		return v.Name == "nil" || locals[v.Name]
+	case *ast.CallExpr:
+		if tv, ok := info.Types[v.Fun]; ok && tv.IsType() && len(v.Args) == 1 {
+			return isNilValue(v.Args[0], info, locals)
+		}
+	}
+	return false
+}
+
+// isNillable reports whether t can hold nil (pointer, map, slice, interface,
+// chan, func), so that assigning a nil value to it is a clear rather than a
+// zero-value write to a scalar.
+func isNillable(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	switch t.Underlying().(type) {
+	case *types.Pointer, *types.Map, *types.Slice, *types.Interface, *types.Chan, *types.Signature:
+		return true
+	}
+	return false
+}
+
+// nilLocals returns the names of locals in fn that are declared without a
+// value (var x *T) or assigned a nil value anywhere in the body. A local
+// reassigned to something else later still counts: the classifier is
+// deliberately conservative, and a helper that needs such a local is better
+// written without it.
+func nilLocals(fn *ast.FuncDecl, info *types.Info) map[string]bool {
+	locals := map[string]bool{}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch s := n.(type) {
+		case *ast.DeclStmt:
+			gd, ok := s.Decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.VAR {
+				return true
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok || len(vs.Values) != 0 {
+					continue
+				}
+				for _, id := range vs.Names {
+					if isNillable(info.TypeOf(id)) {
+						locals[id.Name] = true
+					}
+				}
+			}
+		case *ast.AssignStmt:
+			if len(s.Lhs) != len(s.Rhs) {
+				return true
+			}
+			for i, lhs := range s.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && isNilValue(s.Rhs[i], info, locals) {
+					locals[id.Name] = true
+				}
+			}
+		}
+		return true
+	})
+	return locals
 }
 
 // compositeOf returns the composite literal in rhs, looking through & and

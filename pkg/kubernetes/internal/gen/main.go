@@ -135,8 +135,10 @@ func render(root string) (map[string][]byte, error) {
 }
 
 // findOrphans walks root for generated files that no current package renders:
-// the leftovers of a package whose every kind left the scheme. A missing root
-// is not an error (nothing can be orphaned there).
+// the leftovers of a package whose every kind left the scheme. Only a regular
+// file carrying the generated header is ever treated as generated; a symlink
+// or a hand-written file under a generated name is an error, never a deletion
+// candidate. A missing root is not an error (nothing can be orphaned there).
 func findOrphans(root string, files map[string][]byte) ([]string, error) {
 	generated := map[string]bool{createFile: true, createTestFile: true, registryFile: true}
 	var orphans []string
@@ -149,6 +151,16 @@ func findOrphans(root string, files map[string][]byte) ([]string, error) {
 		}
 		if d.IsDir() || !generated[d.Name()] {
 			return nil
+		}
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("%s is not a regular file (a symlink?); generated files are written and removed in place", path)
+		}
+		have, err := os.ReadFile(path) //nolint:gosec // path comes from walking the generator's own output root
+		if err != nil {
+			return err
+		}
+		if !bytes.HasPrefix(have, []byte(header)) {
+			return fmt.Errorf("%s carries a generated file name but not the generated header; rename it", path)
 		}
 		if _, rendered := files[path]; !rendered {
 			orphans = append(orphans, path)

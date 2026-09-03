@@ -69,10 +69,13 @@ func TestRun_OrphanedPackageFilesFailCheckAndAreRemovedByGenerate(t *testing.T) 
 	orphan := filepath.Join(gone, createFile)
 	orphanTest := filepath.Join(gone, createTestFile)
 	keep := filepath.Join(gone, "sugar.go")
-	for _, f := range []string{orphan, orphanTest, keep} {
-		if err := os.WriteFile(f, []byte("package gone\n"), 0o600); err != nil {
+	for _, f := range []string{orphan, orphanTest} {
+		if err := os.WriteFile(f, []byte(header+"package gone\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := os.WriteFile(keep, []byte("package gone\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
 	stderr.Reset()
@@ -100,6 +103,63 @@ func TestRun_OrphanedPackageFilesFailCheckAndAreRemovedByGenerate(t *testing.T) 
 	stderr.Reset()
 	if rc := run([]string{"-check", "-root", root}, &stderr); rc != 0 {
 		t.Fatalf("check after removing orphans: rc=%d stderr=%s", rc, stderr.String())
+	}
+}
+
+func TestRun_HandWrittenFileUnderGeneratedNameIsAnError(t *testing.T) {
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatal(stderr.String())
+	}
+	dir := filepath.Join(root, "hand")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	impostor := filepath.Join(dir, createFile)
+	if err := os.WriteFile(impostor, []byte("package hand\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"-check", "-root", root}, {"-root", root}} {
+		stderr.Reset()
+		if rc := run(args, &stderr); rc != 1 {
+			t.Errorf("%v: rc=%d, want 1; stderr=%s", args, rc, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "not the generated header") {
+			t.Errorf("%v: stderr should explain the header mismatch: %s", args, stderr.String())
+		}
+		if _, err := os.Stat(impostor); err != nil {
+			t.Errorf("%v: hand-written file must survive: %v", args, err)
+		}
+	}
+}
+
+func TestRun_SymlinkUnderGeneratedNameIsAnError(t *testing.T) {
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatal(stderr.String())
+	}
+	target := filepath.Join(t.TempDir(), "target.go")
+	if err := os.WriteFile(target, []byte(header+"package elsewhere\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "linked")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, createFile)); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if rc := run([]string{"-root", root}, &stderr); rc != 1 {
+		t.Errorf("rc=%d, want 1 for a symlink under a generated name; stderr=%s", rc, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "not a regular file") {
+		t.Errorf("stderr should name the symlink: %s", stderr.String())
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Errorf("symlink target must survive: %v", err)
 	}
 }
 
@@ -141,7 +201,7 @@ func TestRun_OrphanRemovalFailureIsReported(t *testing.T) {
 	if err := os.MkdirAll(gone, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(gone, createFile), []byte("package gone\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(gone, createFile), []byte(header+"package gone\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(gone, 0o500); err != nil { // readable, not writable: Remove fails
