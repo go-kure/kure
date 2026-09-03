@@ -55,7 +55,8 @@ var packageRoutes = []struct{ prefix, pkg string }{
 
 // Registered returns every object kind in the scheme, sorted by package, kind,
 // group and version. A kind is an object when its pointer type implements
-// client.Object; list kinds and apimachinery's meta types are excluded.
+// client.Object and not client.ObjectList; apimachinery's meta types are
+// excluded.
 func Registered() ([]Kind, error) {
 	if err := kubernetes.RegisterSchemes(); err != nil {
 		return nil, err
@@ -66,9 +67,13 @@ func Registered() ([]Kind, error) {
 // classify filters and routes the scheme's known types into Kinds.
 func classify(known map[schema.GroupVersionKind]reflect.Type) ([]Kind, error) {
 	clientObject := reflect.TypeOf((*client.Object)(nil)).Elem()
+	clientObjectList := reflect.TypeOf((*client.ObjectList)(nil)).Elem()
 	var out []Kind
 	for gvk, typ := range known {
-		if strings.HasSuffix(gvk.Kind, "List") {
+		// A list kind is one whose type is a list (it carries ListMeta), not
+		// one whose Kind happens to be spelled with a List suffix: a singular
+		// resource named that way must still get a wrapper.
+		if reflect.PointerTo(typ).Implements(clientObjectList) {
 			continue
 		}
 		if !reflect.PointerTo(typ).Implements(clientObject) {

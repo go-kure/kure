@@ -208,6 +208,57 @@ func TestRun_SymlinkUnderGeneratedNameIsAnError(t *testing.T) {
 	}
 }
 
+// A symlink at a path the generator renders must be refused before the
+// rendered-path shortcut, in both modes: os.WriteFile would follow it and
+// overwrite the target instead of replacing the link.
+func TestRun_SymlinkAtRenderedPathIsAnError(t *testing.T) {
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatal(stderr.String())
+	}
+	files, err := render(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var victim string
+	for path := range files {
+		if filepath.Base(path) == createFile {
+			victim = path
+			break
+		}
+	}
+	if victim == "" {
+		t.Fatalf("render produced no %s", createFile)
+	}
+	target := filepath.Join(t.TempDir(), "target.go")
+	if err := os.WriteFile(target, []byte(header+"package elsewhere\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(victim); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, victim); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"-check", "-root", root}, {"-root", root}} {
+		stderr.Reset()
+		if rc := run(args, &stderr); rc != 1 {
+			t.Errorf("%v: rc=%d, want 1 for a symlink at a rendered path; stderr=%s", args, rc, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "not a regular file") {
+			t.Errorf("%v: stderr should name the symlink: %s", args, stderr.String())
+		}
+	}
+	have, err := os.ReadFile(target) //nolint:gosec // test-owned temp path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(have) != header+"package elsewhere\n" {
+		t.Errorf("the symlink target must not be overwritten, got %q", have)
+	}
+}
+
 func TestFindOrphans_MissingRootHasNone(t *testing.T) {
 	orphans, err := findOrphans(filepath.Join(t.TempDir(), "absent"), map[string][]byte{})
 	if err != nil || len(orphans) != 0 {

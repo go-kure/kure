@@ -15,7 +15,45 @@ go get github.com/go-kure/kure
 
 ## Creating Resources
 
-Kure provides typed builder functions for Kubernetes and FluxCD resources.
+A constructor gives you an object with an identity and nothing else: its
+`apiVersion` and `kind` from the scheme, its `metadata.name`, and its
+`metadata.namespace` for a namespaced kind. From there the upstream Go struct is
+the API, so you set fields on it directly.
+
+```go
+import (
+    appsv1 "k8s.io/api/apps/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/utils/ptr"
+    "github.com/go-kure/kure/pkg/kubernetes"
+)
+
+dep := kubernetes.CreateDeployment("web", "default")   // identity only
+dep.Spec.Replicas = ptr.To[int32](3)
+dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}
+dep.Spec.Template.Spec.ServiceAccountName = "web"
+```
+
+`kubernetes.Create[appsv1.Deployment]("web", "default")` is the generic form;
+the per-kind wrappers are generated from the scheme and carry the scope in
+their signature, so a cluster-scoped kind takes only a name
+(`kubernetes.CreateNamespace("platform")`).
+
+Kure adds a helper only where a plain assignment is awkward: appending to a
+list, inserting into a map, setting a pointer field, or composing a small
+upstream struct. A helper never defaults, never validates, and never touches a
+field you did not name.
+
+```go
+kubernetes.AddLabel(dep, "tier", "frontend")       // works on any kind
+kubernetes.SetDeploymentReplicas(dep, 3)
+```
+
+The [Kubernetes Builders](/api-reference/kubernetes-builders) page is the
+normative contract: what constructors emit, which helpers exist and why, and
+the [migration notes](/concepts/builder-contract-release-1/) for the
+constructor defaults that earlier releases injected and no longer do. If you
+upgraded and a field you relied on is now empty, that page lists it.
 
 ### FluxCD Resources
 
