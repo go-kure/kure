@@ -120,6 +120,55 @@ func SetRefViaAssignedNil(o *Obj) {
 	o.Spec.Ref = r
 }
 
+// inadmissible: a local declared with an explicit nil clears the field
+func SetRefViaInitNil(o *Obj) {
+	var r *Ref = nil
+	o.Spec.Ref = r
+}
+
+// inadmissible: an explicit nil inside the literal clears that field
+func SetSpecWithNilRef(o *Obj, n string) { o.Spec = Spec{Name: n, Ref: nil} }
+
+// inadmissible: a typed nil two literals down
+func SetSpecNestedNil(o *Obj, n string) {
+	o.Spec = Spec{Nested: Inner{A: n, Ref: Ref{Name: n}}, Ref: (*Ref)(nil)}
+}
+
+// class a through a local slice variable
+func AddItemViaLocal(o *Obj, s string) {
+	items := o.Spec.Items
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// class a through a parenthesised local map index, written back
+func AddLabelParenLocal(o *Obj, k, v string) {
+	labels := map[string]string{}
+	(labels)[k] = v
+	o.Labels = labels
+}
+
+// inadmissible: append to a local that is never written back
+func AddItemLocalOnly(o *Obj, s string) {
+	tmp := o.Spec.Items
+	tmp = append(tmp, s)
+	_ = tmp
+}
+
+// inadmissible: map insert into a local that is never written back
+func AddLabelLocalOnly(o *Obj, k, v string) {
+	labels := map[string]string{}
+	labels[k] = v
+	_ = labels
+}
+
+// inadmissible: a local map op plus an unrelated bare write is still a forwarder
+func AddLabelLocalThenName(o *Obj, k, v string) {
+	labels := map[string]string{}
+	labels[k] = v
+	o.Spec.Name = k
+}
+
 // class b: a nil-valued scalar local is not a clear (only nillable fields count)
 func SetNameFromZeroLocal(o *Obj) {
 	var n string
@@ -180,6 +229,14 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefViaNilLocal":      Inadmissible,
 		"SetRefViaAssignedNil":   Inadmissible,
 		"SetNameFromZeroLocal":   Pointer,
+		"SetRefViaInitNil":       Inadmissible,
+		"SetSpecWithNilRef":      Inadmissible,
+		"SetSpecNestedNil":       Inadmissible,
+		"AddItemViaLocal":        Append,
+		"AddLabelParenLocal":     Append,
+		"AddItemLocalOnly":       Inadmissible,
+		"AddLabelLocalOnly":      Inadmissible,
+		"AddLabelLocalThenName":  Inadmissible,
 		"SetExempted":            Exempt,
 	}
 	got := map[string]Finding{}

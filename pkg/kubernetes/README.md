@@ -80,9 +80,9 @@ body does one of:
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
 and two such assignments in one body are two forwarders, not a composite. A nil
-receiver guard admits nothing on its own. A body that assigns `nil` to any field
-(the literal, a typed conversion of it, or a local known to be nil) is inadmissible
-whatever else it does, because it clears a field the caller did not name (§4); a
+receiver guard admits nothing on its own. A body that assigns `nil` to any field,
+directly or as a keyed value inside a literal (the literal `nil`, a typed conversion
+of it, or a local known to be nil), is inadmissible whatever else it does, because it clears a field the caller did not name (§4); a
 helper that must replace one member of a one-of takes the whole one-of as its
 argument instead.
 
