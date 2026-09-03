@@ -79,8 +79,10 @@ body does one of:
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
-and two such assignments in one body are two forwarders, not a composite. A nil
-receiver guard admits nothing on its own. A body that assigns `nil` to any field,
+and two such assignments in one body are two forwarders, not a composite. A helper
+that returns anything, an `error` included, is inadmissible whatever its body does
+(§4 allows no error return: a nil receiver panics). A nil receiver guard admits
+nothing on its own. A body that assigns `nil` to any field,
 directly or as a keyed value inside a literal (the literal `nil`, a typed conversion
 of it, or a local known to be nil), is inadmissible whatever else it does, because it clears a field the caller did not name (§4); a
 helper that must replace one member of a one-of takes the whole one-of as its
@@ -134,8 +136,10 @@ completeness claim and no coverage oracle.
 ## 8. Feature-gated and deprecated fields
 
 Ordinary fields. kure cannot know a target cluster's gates, so withholding a field
-would be a policy judgement inside a pure library. Maturity is labelled by the
-generated kinds table, never enforced.
+would be a policy judgement inside a pure library. Maturity is a label, never
+enforced; it arrives with the generated kinds/scope/maturity tables of the later
+work item in the builder-contract epic (the current kind registry records scope
+only).
 
 ## Identity test
 

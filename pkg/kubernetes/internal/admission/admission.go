@@ -13,7 +13,10 @@
 // Anything else is inadmissible: a bare single-field forwarder, several bare
 // forwarders in one body (two field writes without a literal are two
 // forwarders, not a composite), a helper with no field write, a helper that
-// only delegates. A body that assigns nil to a nillable field is inadmissible
+// only delegates. A helper that returns anything is inadmissible whatever its
+// body does: the purity rule (§4) allows no error return, and a nil receiver
+// panics rather than being reported, so a result slot has nothing to carry.
+// Validation that does not surface as a result is not detected. A body that assigns nil to a nillable field is inadmissible
 // whatever else it does: that clears a field the caller did not name, which
 // the purity rule (§4) forbids. nil is recognised as the literal, a conversion
 // of it ((*T)(nil)), a local declared without a value or declared or assigned
@@ -203,6 +206,9 @@ func isSugarHelper(fn *ast.FuncDecl) bool {
 // literal-nil field assignment is checked first and makes the whole body
 // inadmissible, whatever else it does.
 func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
+	if fn.Type.Results != nil && len(fn.Type.Results.List) > 0 {
+		return Inadmissible, "returns a value; sugar returns nothing and panics on a nil receiver instead of reporting it (purity §4)"
+	}
 	var (
 		appendOrMap bool
 		ptrAssign   bool
