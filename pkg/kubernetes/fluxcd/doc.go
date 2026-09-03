@@ -25,17 +25,17 @@
 // creating a Kustomization and a GitRepository looks like:
 //
 //	repo := fluxcd.CreateGitRepository("app-repo", "flux-system")
-//	fluxcd.SetGitRepositoryURL(repo, "https://github.com/example/app")
-//	fluxcd.SetGitRepositoryInterval(repo, metav1.Duration{Duration: time.Minute})
+//	repo.Spec.URL = "https://github.com/example/app"
+//	repo.Spec.Interval = metav1.Duration{Duration: time.Minute}
 //	fluxcd.SetGitRepositoryReference(repo, &sourcev1.GitRepositoryRef{Branch: "main"})
 //
 //	ks := fluxcd.CreateKustomization("app", "flux-system")
-//	fluxcd.SetKustomizationSourceRef(ks, kustv1.CrossNamespaceSourceReference{
+//	ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
 //	        Kind: "GitRepository",
 //	        Name: "app-repo",
-//	})
-//	fluxcd.SetKustomizationPath(ks, "./deploy")
-//	fluxcd.SetKustomizationPrune(ks, true)
+//	}
+//	ks.Spec.Path = "./deploy"
+//	ks.Spec.Prune = true
 //
 // # Update helpers
 //
@@ -44,5 +44,5 @@
 // replace the entire spec at once:
 //
 //	hr := fluxcd.CreateHelmRelease("my-app", "default")
-//	fluxcd.SetHelmReleaseSpec(hr, helmv2.HelmReleaseSpec{Chart: chart})
+//	hr.Spec = helmv2.HelmReleaseSpec{Chart: chart}
 package fluxcd

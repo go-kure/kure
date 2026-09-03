@@ -56,36 +56,12 @@ func TestBGPPeerSetters(t *testing.T) {
 	obj.Spec.MyASN = 64500
 	obj.Spec.ASN = 64501
 	obj.Spec.Address = "10.0.0.1"
-	SetBGPPeerPort(obj, 179)
-	SetBGPPeerSrcAddress(obj, "10.0.0.2")
-	SetBGPPeerRouterID(obj, "10.0.0.2")
-	SetBGPPeerPassword(obj, "secret")
-	SetBGPPeerBFDProfile(obj, "full-bfd")
-	SetBGPPeerEBGPMultiHop(obj, true)
 	AddBGPPeerNodeSelector(obj, metallbv1beta1.NodeSelector{
 		MatchLabels: map[string]string{"role": "worker"},
 	})
 
 	if obj.Spec.MyASN != 64500 {
 		t.Errorf("expected MyASN 64500, got %d", obj.Spec.MyASN)
-	}
-	if obj.Spec.Port != 179 {
-		t.Errorf("expected Port 179, got %d", obj.Spec.Port)
-	}
-	if obj.Spec.SrcAddress != "10.0.0.2" {
-		t.Errorf("expected SrcAddress '10.0.0.2', got %s", obj.Spec.SrcAddress)
-	}
-	if obj.Spec.RouterID != "10.0.0.2" {
-		t.Errorf("expected RouterID '10.0.0.2', got %s", obj.Spec.RouterID)
-	}
-	if !obj.Spec.EBGPMultiHop {
-		t.Error("expected EBGPMultiHop true")
-	}
-	if obj.Spec.Password != "secret" {
-		t.Errorf("expected Password 'secret', got %s", obj.Spec.Password)
-	}
-	if obj.Spec.BFDProfile != "full-bfd" {
-		t.Errorf("expected BFDProfile 'full-bfd', got %s", obj.Spec.BFDProfile)
 	}
 	if len(obj.Spec.NodeSelectors) != 1 {
 		t.Fatalf("expected 1 node selector, got %d", len(obj.Spec.NodeSelectors))
@@ -98,16 +74,8 @@ func TestBGPAdvertisementSetters(t *testing.T) {
 	AddBGPAdvertisementIPAddressPool(obj, "pool-2")
 	AddBGPAdvertisementPeer(obj, "peer-1")
 	AddBGPAdvertisementCommunity(obj, "65535:65282")
-	SetBGPAdvertisementLocalPref(obj, 100)
-
-	if len(obj.Spec.IPAddressPools) != 2 {
-		t.Fatalf("expected 2 IP address pools, got %d", len(obj.Spec.IPAddressPools))
-	}
 	if len(obj.Spec.Peers) != 1 {
 		t.Fatalf("expected 1 peer, got %d", len(obj.Spec.Peers))
-	}
-	if obj.Spec.LocalPref != 100 {
-		t.Errorf("expected LocalPref 100, got %d", obj.Spec.LocalPref)
 	}
 }
 

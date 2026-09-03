@@ -10,7 +10,7 @@ func ExternalSecret(cfg *ExternalSecretConfig) *esv1.ExternalSecret {
 		return nil
 	}
 	obj := CreateExternalSecret(cfg.Name, cfg.Namespace)
-	SetExternalSecretSecretStoreRef(obj, cfg.SecretStoreRef)
+	obj.Spec.SecretStoreRef = cfg.SecretStoreRef
 	for _, d := range cfg.Data {
 		AddExternalSecretData(obj, d)
 	}
@@ -27,7 +27,7 @@ func SecretStore(cfg *SecretStoreConfig) *esv1.SecretStore {
 		SetSecretStoreProvider(obj, cfg.Provider)
 	}
 	if cfg.Controller != "" {
-		SetSecretStoreController(obj, cfg.Controller)
+		obj.Spec.Controller = cfg.Controller
 	}
 	return obj
 }
@@ -42,7 +42,7 @@ func ClusterSecretStore(cfg *ClusterSecretStoreConfig) *esv1.ClusterSecretStore 
 		SetClusterSecretStoreProvider(obj, cfg.Provider)
 	}
 	if cfg.Controller != "" {
-		SetClusterSecretStoreController(obj, cfg.Controller)
+		obj.Spec.Controller = cfg.Controller
 	}
 	return obj
 }

@@ -29,13 +29,13 @@ import (
 
 func main() {
     ks := fluxcd.CreateKustomization("hello-world", "flux-system")
-    fluxcd.SetKustomizationSourceRef(ks, kustv1.CrossNamespaceSourceReference{
+    ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
         Kind: "GitRepository",
         Name: "flux-system",
-    })
-    fluxcd.SetKustomizationPath(ks, "./clusters/production")
-    fluxcd.SetKustomizationInterval(ks, metav1.Duration{Duration: 5 * time.Minute})
-    fluxcd.SetKustomizationPrune(ks, true)
+    }
+    ks.Spec.Path = "./clusters/production"
+    ks.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
+    ks.Spec.Prune = true
 
     io.Marshal(os.Stdout, ks)
 }

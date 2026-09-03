@@ -2,36 +2,7 @@ package kubernetes
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
-
-// CreateContainer returns a Container populated with the provided name, image,
-// command and arguments. All collection fields are initialized and basic
-// resource requests and limits are set.
-func CreateContainer(name string, image string, command []string, args []string) *corev1.Container {
-	obj := corev1.Container{
-		Name:    name,
-		Image:   image,
-		Command: command,
-		Args:    args,
-		Ports:   []corev1.ContainerPort{},
-		EnvFrom: []corev1.EnvFromSource{},
-		Env:     []corev1.EnvVar{},
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				"memory": resource.MustParse("256Mi"),
-			},
-			Requests: corev1.ResourceList{
-				"cpu":    resource.MustParse("100m"),
-				"memory": resource.MustParse("256Mi"),
-			},
-		},
-		VolumeMounts:    []corev1.VolumeMount{},
-		VolumeDevices:   []corev1.VolumeDevice{},
-		ImagePullPolicy: corev1.PullIfNotPresent,
-	}
-	return &obj
-}
 
 // AddContainerPort appends a container port to the Ports slice.
 func AddContainerPort(container *corev1.Container, port corev1.ContainerPort) {
@@ -97,22 +68,6 @@ func SetContainerStartupProbe(container *corev1.Container, startupProbe corev1.P
 	container.StartupProbe = &startupProbe
 }
 
-// SetContainerResources sets resource requirements on the container.
-func SetContainerResources(container *corev1.Container, resources corev1.ResourceRequirements) {
-	if container == nil {
-		panic("SetContainerResources: container must not be nil")
-	}
-	container.Resources = resources
-}
-
-// SetContainerImagePullPolicy sets the image pull policy.
-func SetContainerImagePullPolicy(container *corev1.Container, imagePullPolicy corev1.PullPolicy) {
-	if container == nil {
-		panic("SetContainerImagePullPolicy: container must not be nil")
-	}
-	container.ImagePullPolicy = imagePullPolicy
-}
-
 // SetContainerSecurityContext sets the security context on the container.
 func SetContainerSecurityContext(container *corev1.Container, securityContext corev1.SecurityContext) {
 	if container == nil {
@@ -121,45 +76,6 @@ func SetContainerSecurityContext(container *corev1.Container, securityContext co
 	container.SecurityContext = &securityContext
 }
 
-func SetContainerWorkingDir(container *corev1.Container, dir string) {
-	container.WorkingDir = dir
-}
-
 func SetContainerLifecycle(container *corev1.Container, lifecycle *corev1.Lifecycle) {
 	container.Lifecycle = lifecycle
-}
-
-func SetContainerTerminationMessagePath(container *corev1.Container, path string) {
-	container.TerminationMessagePath = path
-}
-
-func SetContainerTerminationMessagePolicy(container *corev1.Container, policy corev1.TerminationMessagePolicy) {
-	container.TerminationMessagePolicy = policy
-}
-
-func SetContainerStdin(container *corev1.Container, stdin bool) {
-	container.Stdin = stdin
-}
-
-func SetContainerStdinOnce(container *corev1.Container, once bool) {
-	container.StdinOnce = once
-}
-
-func SetContainerTTY(container *corev1.Container, tty bool) {
-	container.TTY = tty
-}
-
-// SetContainerImage sets the image on the container.
-func SetContainerImage(container *corev1.Container, image string) {
-	container.Image = image
-}
-
-// SetContainerCommand replaces the command slice on the container.
-func SetContainerCommand(container *corev1.Container, command []string) {
-	container.Command = command
-}
-
-// SetContainerArgs replaces the args slice on the container.
-func SetContainerArgs(container *corev1.Container, args []string) {
-	container.Args = args
 }

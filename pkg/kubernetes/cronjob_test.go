@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,12 +33,8 @@ func TestCronJobNilErrors(t *testing.T) {
 	}
 
 	// Functions that now panic on nil receiver
-	assertPanics(t, func() { SetCronJobServiceAccountName(nil, "sa") })
 	assertPanics(t, func() { SetCronJobSecurityContext(nil, nil) })
 	assertPanics(t, func() { SetCronJobAffinity(nil, nil) })
-	assertPanics(t, func() { SetCronJobNodeSelector(nil, nil) })
-	assertPanics(t, func() { SetCronJobSchedule(nil, "* * * * *") })
-	assertPanics(t, func() { SetCronJobConcurrencyPolicy(nil, batchv1.ForbidConcurrent) })
 	assertPanics(t, func() { SetCronJobSuspend(nil, true) })
 	assertPanics(t, func() { SetCronJobSuccessfulJobsHistoryLimit(nil, 3) })
 	assertPanics(t, func() { SetCronJobFailedJobsHistoryLimit(nil, 1) })
@@ -195,11 +190,6 @@ func TestCronJobFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	SetCronJobServiceAccountName(cj, "sa")
-	if cj.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName != "sa" {
-		t.Errorf("service account name not set")
-	}
-
 	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
 	SetCronJobSecurityContext(cj, sc)
 	if cj.Spec.JobTemplate.Spec.Template.Spec.SecurityContext != sc {
@@ -210,22 +200,6 @@ func TestCronJobFunctions(t *testing.T) {
 	SetCronJobAffinity(cj, aff)
 	if cj.Spec.JobTemplate.Spec.Template.Spec.Affinity != aff {
 		t.Errorf("affinity not set")
-	}
-
-	ns := map[string]string{"role": "db"}
-	SetCronJobNodeSelector(cj, ns)
-	if !reflect.DeepEqual(cj.Spec.JobTemplate.Spec.Template.Spec.NodeSelector, ns) {
-		t.Errorf("node selector not set")
-	}
-
-	SetCronJobSchedule(cj, "*/5 * * * *")
-	if cj.Spec.Schedule != "*/5 * * * *" {
-		t.Errorf("schedule not updated")
-	}
-
-	SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent)
-	if cj.Spec.ConcurrencyPolicy != batchv1.ForbidConcurrent {
-		t.Errorf("concurrency policy not set")
 	}
 
 	SetCronJobSuspend(cj, true)

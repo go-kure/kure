@@ -3,7 +3,6 @@ package certmanager
 import (
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
-	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,11 +27,6 @@ func AddCertificateAnnotation(obj *certv1.Certificate, key, value string) {
 // AddCertificateDNSName appends a DNS name to the Certificate spec.
 func AddCertificateDNSName(obj *certv1.Certificate, dns string) {
 	obj.Spec.DNSNames = append(obj.Spec.DNSNames, dns)
-}
-
-// SetCertificateIssuerRef sets the issuer reference for the certificate.
-func SetCertificateIssuerRef(obj *certv1.Certificate, ref cmmeta.IssuerReference) {
-	obj.Spec.IssuerRef = ref
 }
 
 // SetCertificateDuration sets the desired certificate duration.

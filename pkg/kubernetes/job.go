@@ -65,7 +65,7 @@ func SetJobServiceAccountName(job *batchv1.Job, name string) {
 	if job == nil {
 		panic("SetJobServiceAccountName: job must not be nil")
 	}
-	SetPodSpecServiceAccountName(&job.Spec.Template.Spec, name)
+	job.Spec.Template.Spec.ServiceAccountName = name
 }
 
 func SetJobSecurityContext(job *batchv1.Job, sc *corev1.PodSecurityContext) {
@@ -86,7 +86,7 @@ func SetJobNodeSelector(job *batchv1.Job, selector map[string]string) {
 	if job == nil {
 		panic("SetJobNodeSelector: job must not be nil")
 	}
-	SetPodSpecNodeSelector(&job.Spec.Template.Spec, selector)
+	job.Spec.Template.Spec.NodeSelector = selector
 }
 
 func SetJobCompletions(job *batchv1.Job, completions int32) {

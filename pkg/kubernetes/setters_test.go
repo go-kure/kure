@@ -3,14 +3,12 @@ package kubernetes
 import (
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Container setter tests
 func TestAddContainerPort_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	port := corev1.ContainerPort{ContainerPort: 8080}
 	AddContainerPort(container, port)
 	if len(container.Ports) != 1 {
@@ -19,7 +17,7 @@ func TestAddContainerPort_Success(t *testing.T) {
 }
 
 func TestAddContainerEnv_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	env := corev1.EnvVar{Name: "KEY", Value: "value"}
 	AddContainerEnv(container, env)
 	if len(container.Env) != 1 {
@@ -28,7 +26,7 @@ func TestAddContainerEnv_Success(t *testing.T) {
 }
 
 func TestAddContainerEnvFrom_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	envFrom := corev1.EnvFromSource{}
 	AddContainerEnvFrom(container, envFrom)
 	if len(container.EnvFrom) != 1 {
@@ -37,7 +35,7 @@ func TestAddContainerEnvFrom_Success(t *testing.T) {
 }
 
 func TestAddContainerVolumeMount_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	mount := corev1.VolumeMount{Name: "vol", MountPath: "/data"}
 	AddContainerVolumeMount(container, mount)
 	if len(container.VolumeMounts) != 1 {
@@ -46,7 +44,7 @@ func TestAddContainerVolumeMount_Success(t *testing.T) {
 }
 
 func TestAddContainerVolumeDevice_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	device := corev1.VolumeDevice{Name: "dev", DevicePath: "/dev/sda"}
 	AddContainerVolumeDevice(container, device)
 	if len(container.VolumeDevices) != 1 {
@@ -55,7 +53,7 @@ func TestAddContainerVolumeDevice_Success(t *testing.T) {
 }
 
 func TestSetContainerLivenessProbe_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	probe := corev1.Probe{}
 	SetContainerLivenessProbe(container, probe)
 	if container.LivenessProbe == nil {
@@ -64,7 +62,7 @@ func TestSetContainerLivenessProbe_Success(t *testing.T) {
 }
 
 func TestSetContainerReadinessProbe_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	probe := corev1.Probe{}
 	SetContainerReadinessProbe(container, probe)
 	if container.ReadinessProbe == nil {
@@ -73,7 +71,7 @@ func TestSetContainerReadinessProbe_Success(t *testing.T) {
 }
 
 func TestSetContainerStartupProbe_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	probe := corev1.Probe{}
 	SetContainerStartupProbe(container, probe)
 	if container.StartupProbe == nil {
@@ -81,26 +79,8 @@ func TestSetContainerStartupProbe_Success(t *testing.T) {
 	}
 }
 
-func TestSetContainerResources_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
-	resources := corev1.ResourceRequirements{
-		Limits: corev1.ResourceList{
-			"cpu": resource.MustParse("1"),
-		},
-	}
-	SetContainerResources(container, resources)
-}
-
-func TestSetContainerImagePullPolicy_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
-	SetContainerImagePullPolicy(container, corev1.PullAlways)
-	if container.ImagePullPolicy != corev1.PullAlways {
-		t.Fatal("expected ImagePullPolicy to be set")
-	}
-}
-
 func TestSetContainerSecurityContext_Success(t *testing.T) {
-	container := CreateContainer("test", "nginx", nil, nil)
+	container := &corev1.Container{Name: "test", Image: "nginx"}
 	sc := corev1.SecurityContext{}
 	SetContainerSecurityContext(container, sc)
 	if container.SecurityContext == nil {
@@ -124,7 +104,7 @@ func TestSetDaemonSetPodSpec_Success(t *testing.T) {
 
 func TestAddDaemonSetContainer_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
-	container := CreateContainer("app", "nginx", nil, nil)
+	container := &corev1.Container{Name: "app", Image: "nginx"}
 	err := AddDaemonSetContainer(ds, container)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -133,7 +113,7 @@ func TestAddDaemonSetContainer_Success(t *testing.T) {
 
 func TestAddDaemonSetInitContainer_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
-	container := CreateContainer("init", "busybox", nil, nil)
+	container := &corev1.Container{Name: "init", Image: "busybox"}
 	err := AddDaemonSetInitContainer(ds, container)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -203,12 +183,6 @@ func TestSetDaemonSetNodeSelector_Success(t *testing.T) {
 	SetDaemonSetNodeSelector(ds, selector)
 }
 
-func TestSetDaemonSetUpdateStrategy_Success(t *testing.T) {
-	ds := CreateDaemonSet("test", "default")
-	strategy := appsv1.DaemonSetUpdateStrategy{}
-	SetDaemonSetUpdateStrategy(ds, strategy)
-}
-
 func TestSetDaemonSetRevisionHistoryLimit_Success(t *testing.T) {
 	ds := CreateDaemonSet("test", "default")
 	limit := int32(5)
@@ -234,7 +208,7 @@ func TestSetJobPodSpec_Success(t *testing.T) {
 
 func TestAddJobContainer_Success(t *testing.T) {
 	job := CreateJob("test", "default")
-	container := CreateContainer("app", "nginx", nil, nil)
+	container := &corev1.Container{Name: "app", Image: "nginx"}
 	err := AddJobContainer(job, container)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -243,7 +217,7 @@ func TestAddJobContainer_Success(t *testing.T) {
 
 func TestAddJobInitContainer_Success(t *testing.T) {
 	job := CreateJob("test", "default")
-	container := CreateContainer("init", "busybox", nil, nil)
+	container := &corev1.Container{Name: "init", Image: "busybox"}
 	err := AddJobInitContainer(job, container)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -363,34 +337,12 @@ func TestSetStatefulSetReplicas_Success(t *testing.T) {
 	}
 }
 
-func TestSetStatefulSetServiceName_Success(t *testing.T) {
-	ss := CreateStatefulSet("test", "default")
-	SetStatefulSetServiceName(ss, "headless")
-	if ss.Spec.ServiceName != "headless" {
-		t.Fatal("expected ServiceName to be set")
-	}
-}
-
-func TestSetStatefulSetUpdateStrategy_Success(t *testing.T) {
-	ss := CreateStatefulSet("test", "default")
-	strategy := appsv1.StatefulSetUpdateStrategy{Type: appsv1.RollingUpdateStatefulSetStrategyType}
-	SetStatefulSetUpdateStrategy(ss, strategy)
-}
-
 func TestSetStatefulSetRevisionHistoryLimit_Success(t *testing.T) {
 	ss := CreateStatefulSet("test", "default")
 	limit := int32(5)
 	SetStatefulSetRevisionHistoryLimit(ss, &limit)
 	if ss.Spec.RevisionHistoryLimit == nil || *ss.Spec.RevisionHistoryLimit != 5 {
 		t.Fatal("expected RevisionHistoryLimit to be 5")
-	}
-}
-
-func TestSetStatefulSetPodManagementPolicy_Success(t *testing.T) {
-	ss := CreateStatefulSet("test", "default")
-	SetStatefulSetPodManagementPolicy(ss, appsv1.ParallelPodManagement)
-	if ss.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
-		t.Fatal("expected PodManagementPolicy to be set")
 	}
 }
 

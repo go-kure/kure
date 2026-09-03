@@ -1,29 +1,14 @@
 package kubernetes
 
 import (
-	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestCreatePodSpec(t *testing.T) {
-	spec := CreatePodSpec()
-
-	if spec.RestartPolicy != corev1.RestartPolicyAlways {
-		t.Errorf("unexpected restart policy %v", spec.RestartPolicy)
-	}
-	if spec.TerminationGracePeriodSeconds == nil {
-		t.Errorf("expected TerminationGracePeriodSeconds to be set")
-	}
-	if len(spec.Containers) != 0 {
-		t.Errorf("expected no containers")
-	}
-}
-
 func TestPodSpecFunctions(t *testing.T) {
-	spec := CreatePodSpec()
+	spec := &corev1.PodSpec{}
 
 	c := corev1.Container{Name: "c"}
 	if err := AddPodSpecContainer(spec, &c); err != nil {
@@ -81,11 +66,6 @@ func TestPodSpecFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	SetPodSpecServiceAccountName(spec, "sa")
-	if spec.ServiceAccountName != "sa" {
-		t.Errorf("service account not set")
-	}
-
 	sc := &corev1.PodSecurityContext{}
 	SetPodSpecSecurityContext(spec, sc)
 	if spec.SecurityContext != sc {
@@ -98,66 +78,15 @@ func TestPodSpecFunctions(t *testing.T) {
 		t.Errorf("affinity not set")
 	}
 
-	sel := map[string]string{"role": "db"}
-	SetPodSpecNodeSelector(spec, sel)
-	if !reflect.DeepEqual(spec.NodeSelector, sel) {
-		t.Errorf("node selector not set")
-	}
-
-	SetPodSpecPriorityClassName(spec, "high")
-	if spec.PriorityClassName != "high" {
-		t.Errorf("priority class name not set")
-	}
-
-	SetPodSpecHostNetwork(spec, true)
-	if !spec.HostNetwork {
-		t.Errorf("host network not set")
-	}
-
-	SetPodSpecHostPID(spec, true)
-	if !spec.HostPID {
-		t.Errorf("host pid not set")
-	}
-
-	SetPodSpecHostIPC(spec, true)
-	if !spec.HostIPC {
-		t.Errorf("host ipc not set")
-	}
-
-	SetPodSpecDNSPolicy(spec, corev1.DNSClusterFirstWithHostNet)
-	if spec.DNSPolicy != corev1.DNSClusterFirstWithHostNet {
-		t.Errorf("dns policy not set")
-	}
-
 	dnsCfg := &corev1.PodDNSConfig{Nameservers: []string{"8.8.8.8"}}
 	SetPodSpecDNSConfig(spec, dnsCfg)
 	if spec.DNSConfig != dnsCfg {
 		t.Errorf("dns config not set")
 	}
 
-	SetPodSpecHostname(spec, "myhost")
-	if spec.Hostname != "myhost" {
-		t.Errorf("hostname not set")
-	}
-
-	SetPodSpecSubdomain(spec, "sub")
-	if spec.Subdomain != "sub" {
-		t.Errorf("subdomain not set")
-	}
-
-	SetPodSpecRestartPolicy(spec, corev1.RestartPolicyOnFailure)
-	if spec.RestartPolicy != corev1.RestartPolicyOnFailure {
-		t.Errorf("restart policy not set")
-	}
-
 	SetPodSpecTerminationGracePeriod(spec, 15)
 	if spec.TerminationGracePeriodSeconds == nil || *spec.TerminationGracePeriodSeconds != 15 {
 		t.Errorf("termination grace period not set")
-	}
-
-	SetPodSpecSchedulerName(spec, "sched")
-	if spec.SchedulerName != "sched" {
-		t.Errorf("scheduler name not set")
 	}
 }
 
@@ -200,19 +129,8 @@ func TestPodSpecNilGuards(t *testing.T) {
 	})
 
 	// Functions now panic on nil receiver
-	assertPanics(t, func() { SetPodSpecServiceAccountName(nil, "sa") })
 	assertPanics(t, func() { SetPodSpecSecurityContext(nil, &corev1.PodSecurityContext{}) })
 	assertPanics(t, func() { SetPodSpecAffinity(nil, &corev1.Affinity{}) })
-	assertPanics(t, func() { SetPodSpecNodeSelector(nil, map[string]string{"k": "v"}) })
-	assertPanics(t, func() { SetPodSpecPriorityClassName(nil, "high") })
-	assertPanics(t, func() { SetPodSpecHostNetwork(nil, true) })
-	assertPanics(t, func() { SetPodSpecHostPID(nil, true) })
-	assertPanics(t, func() { SetPodSpecHostIPC(nil, true) })
-	assertPanics(t, func() { SetPodSpecDNSPolicy(nil, corev1.DNSClusterFirst) })
 	assertPanics(t, func() { SetPodSpecDNSConfig(nil, &corev1.PodDNSConfig{}) })
-	assertPanics(t, func() { SetPodSpecHostname(nil, "host") })
-	assertPanics(t, func() { SetPodSpecSubdomain(nil, "sub") })
-	assertPanics(t, func() { SetPodSpecRestartPolicy(nil, corev1.RestartPolicyAlways) })
 	assertPanics(t, func() { SetPodSpecTerminationGracePeriod(nil, 30) })
-	assertPanics(t, func() { SetPodSpecSchedulerName(nil, "sched") })
 }

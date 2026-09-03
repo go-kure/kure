@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,14 +33,10 @@ func TestDeploymentNilErrors(t *testing.T) {
 	}
 
 	// Functions that now panic on nil receiver
-	assertPanics(t, func() { SetDeploymentServiceAccountName(nil, "sa") })
 	assertPanics(t, func() { SetDeploymentSecurityContext(nil, &corev1.PodSecurityContext{}) })
 	assertPanics(t, func() { SetDeploymentAffinity(nil, &corev1.Affinity{}) })
-	assertPanics(t, func() { SetDeploymentNodeSelector(nil, map[string]string{}) })
 	assertPanics(t, func() { SetDeploymentReplicas(nil, 3) })
-	assertPanics(t, func() { SetDeploymentStrategy(nil, appsv1.DeploymentStrategy{}) })
 	assertPanics(t, func() { SetDeploymentRevisionHistoryLimit(nil, 5) })
-	assertPanics(t, func() { SetDeploymentMinReadySeconds(nil, 10) })
 	assertPanics(t, func() { SetDeploymentProgressDeadlineSeconds(nil, 60) })
 }
 
@@ -192,11 +187,6 @@ func TestDeploymentFunctions(t *testing.T) {
 		t.Errorf("topology constraint not added")
 	}
 
-	SetDeploymentServiceAccountName(dep, "sa")
-	if dep.Spec.Template.Spec.ServiceAccountName != "sa" {
-		t.Errorf("service account name not set")
-	}
-
 	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
 	SetDeploymentSecurityContext(dep, sc)
 	if dep.Spec.Template.Spec.SecurityContext != sc {
@@ -209,31 +199,14 @@ func TestDeploymentFunctions(t *testing.T) {
 		t.Errorf("affinity not set")
 	}
 
-	ns := map[string]string{"role": "db"}
-	SetDeploymentNodeSelector(dep, ns)
-	if !reflect.DeepEqual(dep.Spec.Template.Spec.NodeSelector, ns) {
-		t.Errorf("node selector not set")
-	}
-
 	SetDeploymentReplicas(dep, 3)
 	if dep.Spec.Replicas == nil || *dep.Spec.Replicas != 3 {
 		t.Errorf("replicas not set")
 	}
 
-	strategy := appsv1.DeploymentStrategy{Type: appsv1.RollingUpdateDeploymentStrategyType}
-	SetDeploymentStrategy(dep, strategy)
-	if dep.Spec.Strategy.Type != appsv1.RollingUpdateDeploymentStrategyType {
-		t.Errorf("strategy not set")
-	}
-
 	SetDeploymentRevisionHistoryLimit(dep, 5)
 	if dep.Spec.RevisionHistoryLimit == nil || *dep.Spec.RevisionHistoryLimit != 5 {
 		t.Errorf("revision history limit not set")
-	}
-
-	SetDeploymentMinReadySeconds(dep, 10)
-	if dep.Spec.MinReadySeconds != 10 {
-		t.Errorf("min ready seconds not set")
 	}
 
 	SetDeploymentProgressDeadlineSeconds(dep, 60)

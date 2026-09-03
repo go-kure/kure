@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestAddContainerEnvFrom(t *testing.T) {
@@ -143,140 +142,6 @@ func compareEnvFromSources(got, want []corev1.EnvFromSource) error {
 	}
 
 	return nil
-}
-func TestCreateContainer(t *testing.T) {
-	tests := []struct {
-		name           string
-		inputName      string
-		inputImage     string
-		inputCommand   []string
-		inputArgs      []string
-		expectedResult corev1.Container
-	}{
-		{
-			name:         "simple container",
-			inputName:    "test-container",
-			inputImage:   "test-image",
-			inputCommand: []string{"echo"},
-			inputArgs:    []string{"hello"},
-			expectedResult: corev1.Container{
-				Name:    "test-container",
-				Image:   "test-image",
-				Command: []string{"echo"},
-				Args:    []string{"hello"},
-				Ports:   []corev1.ContainerPort{},
-				EnvFrom: []corev1.EnvFromSource{},
-				Env:     []corev1.EnvVar{},
-				Resources: corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						"memory": resource.MustParse("256Mi"),
-					},
-					Requests: corev1.ResourceList{
-						"cpu":    resource.MustParse("100m"),
-						"memory": resource.MustParse("256Mi"),
-					},
-				},
-				VolumeMounts:    []corev1.VolumeMount{},
-				VolumeDevices:   []corev1.VolumeDevice{},
-				LivenessProbe:   &corev1.Probe{},
-				ReadinessProbe:  &corev1.Probe{},
-				StartupProbe:    &corev1.Probe{},
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				SecurityContext: &corev1.SecurityContext{},
-			},
-		},
-		{
-			name:         "container with empty command and args",
-			inputName:    "container-no-cmd",
-			inputImage:   "empty-cmd-image",
-			inputCommand: nil,
-			inputArgs:    nil,
-			expectedResult: corev1.Container{
-				Name:    "container-no-cmd",
-				Image:   "empty-cmd-image",
-				Command: nil,
-				Args:    nil,
-				Ports:   []corev1.ContainerPort{},
-				EnvFrom: []corev1.EnvFromSource{},
-				Env:     []corev1.EnvVar{},
-				Resources: corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						"memory": resource.MustParse("256Mi"),
-					},
-					Requests: corev1.ResourceList{
-						"cpu":    resource.MustParse("100m"),
-						"memory": resource.MustParse("256Mi"),
-					},
-				},
-				VolumeMounts:    []corev1.VolumeMount{},
-				VolumeDevices:   []corev1.VolumeDevice{},
-				LivenessProbe:   &corev1.Probe{},
-				ReadinessProbe:  &corev1.Probe{},
-				StartupProbe:    &corev1.Probe{},
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				SecurityContext: &corev1.SecurityContext{},
-			},
-		},
-		{
-			name:         "container with args only",
-			inputName:    "args-only",
-			inputImage:   "args-only-image",
-			inputCommand: []string{},
-			inputArgs:    []string{"arg1", "arg2"},
-			expectedResult: corev1.Container{
-				Name:    "args-only",
-				Image:   "args-only-image",
-				Command: []string{},
-				Args:    []string{"arg1", "arg2"},
-				Ports:   []corev1.ContainerPort{},
-				EnvFrom: []corev1.EnvFromSource{},
-				Env:     []corev1.EnvVar{},
-				Resources: corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						"memory": resource.MustParse("256Mi"),
-					},
-					Requests: corev1.ResourceList{
-						"cpu":    resource.MustParse("100m"),
-						"memory": resource.MustParse("256Mi"),
-					},
-				},
-				VolumeMounts:    []corev1.VolumeMount{},
-				VolumeDevices:   []corev1.VolumeDevice{},
-				LivenessProbe:   &corev1.Probe{},
-				ReadinessProbe:  &corev1.Probe{},
-				StartupProbe:    &corev1.Probe{},
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				SecurityContext: &corev1.SecurityContext{},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := CreateContainer(tt.inputName, tt.inputImage, tt.inputCommand, tt.inputArgs)
-			assertContainerEqual(t, result, &tt.expectedResult)
-		})
-	}
-}
-func assertContainerEqual(t *testing.T, got, want *corev1.Container) {
-	t.Helper()
-
-	if got.Name != want.Name {
-		t.Errorf("container name mismatch: got %q, want %q", got.Name, want.Name)
-	}
-	if got.Image != want.Image {
-		t.Errorf("container image mismatch: got %q, want %q", got.Image, want.Image)
-	}
-	if got.ImagePullPolicy != want.ImagePullPolicy {
-		t.Errorf("image pull policy mismatch: got %v, want %v", got.ImagePullPolicy, want.ImagePullPolicy)
-	}
-
-	if !reflect.DeepEqual(got.Command, want.Command) {
-		t.Errorf("command mismatch: got %v, want %v", got.Command, want.Command)
-	}
-	if !reflect.DeepEqual(got.Args, want.Args) {
-		t.Errorf("args mismatch: got %v, want %v", got.Args, want.Args)
-	}
 }
 func TestAddContainerPort(t *testing.T) {
 	tests := []struct {
@@ -503,17 +368,6 @@ func TestAdditionalContainerFunctions(t *testing.T) {
 		t.Errorf("startup probe not set")
 	}
 
-	resources := corev1.ResourceRequirements{}
-	SetContainerResources(c, resources)
-	if !reflect.DeepEqual(c.Resources, resources) {
-		t.Errorf("resources not set")
-	}
-
-	SetContainerImagePullPolicy(c, corev1.PullAlways)
-	if c.ImagePullPolicy != corev1.PullAlways {
-		t.Errorf("image pull policy not set")
-	}
-
 	sc := corev1.SecurityContext{RunAsUser: new(int64)}
 	SetContainerSecurityContext(c, sc)
 	if c.SecurityContext == nil || *c.SecurityContext != sc {
@@ -524,40 +378,10 @@ func TestAdditionalContainerFunctions(t *testing.T) {
 func TestContainerMiscFunctions(t *testing.T) {
 	c := &corev1.Container{}
 
-	SetContainerWorkingDir(c, "/work")
-	if c.WorkingDir != "/work" {
-		t.Errorf("working dir not set")
-	}
-
 	lc := &corev1.Lifecycle{}
 	SetContainerLifecycle(c, lc)
 	if c.Lifecycle != lc {
 		t.Errorf("lifecycle not set")
-	}
-
-	SetContainerTerminationMessagePath(c, "/tmp/msg")
-	if c.TerminationMessagePath != "/tmp/msg" {
-		t.Errorf("termination message path not set")
-	}
-
-	SetContainerTerminationMessagePolicy(c, corev1.TerminationMessageReadFile)
-	if c.TerminationMessagePolicy != corev1.TerminationMessageReadFile {
-		t.Errorf("termination message policy not set")
-	}
-
-	SetContainerStdin(c, true)
-	if !c.Stdin {
-		t.Errorf("stdin not set")
-	}
-
-	SetContainerStdinOnce(c, true)
-	if !c.StdinOnce {
-		t.Errorf("stdin once not set")
-	}
-
-	SetContainerTTY(c, true)
-	if !c.TTY {
-		t.Errorf("tty not set")
 	}
 }
 
@@ -570,28 +394,5 @@ func TestContainerNilGuards(t *testing.T) {
 	assertPanics(t, func() { SetContainerLivenessProbe(nil, corev1.Probe{}) })
 	assertPanics(t, func() { SetContainerReadinessProbe(nil, corev1.Probe{}) })
 	assertPanics(t, func() { SetContainerStartupProbe(nil, corev1.Probe{}) })
-	assertPanics(t, func() { SetContainerResources(nil, corev1.ResourceRequirements{}) })
-	assertPanics(t, func() { SetContainerImagePullPolicy(nil, corev1.PullAlways) })
 	assertPanics(t, func() { SetContainerSecurityContext(nil, corev1.SecurityContext{}) })
-}
-
-func TestContainerSetters(t *testing.T) {
-	c := &corev1.Container{}
-
-	SetContainerImage(c, "nginx")
-	if c.Image != "nginx" {
-		t.Errorf("image not set")
-	}
-
-	cmd := []string{"/bin/sh"}
-	SetContainerCommand(c, cmd)
-	if !reflect.DeepEqual(c.Command, cmd) {
-		t.Errorf("command not set")
-	}
-
-	args := []string{"-c", "echo"}
-	SetContainerArgs(c, args)
-	if !reflect.DeepEqual(c.Args, args) {
-		t.Errorf("args not set")
-	}
 }

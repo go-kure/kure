@@ -142,10 +142,10 @@ infrastructure:
       a hand-edited upstream_release that skipped scripts/sync-eso-pin.sh.
       Re-pin with scripts/sync-eso-pin.sh.
       v2.9.0 changed SecretStoreSpec.RefreshInterval from int to
-      *intstr.IntOrString — a breaking change in kure's own public
-      SetSecretStoreSpec/SetClusterSecretStoreSpec signatures (both take
-      esv1.SecretStoreSpec by value). Kure is pre-1.0 (v0.2.0-beta) and does
-      not populate that field itself, so this repo's own build is unaffected;
+      *intstr.IntOrString — a breaking change for callers that assign a whole
+      esv1.SecretStoreSpec to a SecretStore or ClusterSecretStore. Kure is
+      pre-1.0 (v0.2.0-beta) and does not populate that field itself, so this
+      repo's own build is unaffected;
       external consumers constructing SecretStoreSpec{RefreshInterval: <int>}
       will fail to compile against this bump.
       v2.10.0 adds providers/features only (no further apis type changes per

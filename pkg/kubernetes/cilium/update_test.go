@@ -20,14 +20,6 @@ func TestSetCiliumNetworkPolicySpec(t *testing.T) {
 	}
 }
 
-func TestSetCiliumNetworkPolicySpecs(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
-	SetCiliumNetworkPolicySpecs(obj, api.Rules{&api.Rule{Description: "r1"}, &api.Rule{Description: "r2"}})
-	if len(obj.Specs) != 2 {
-		t.Fatalf("expected 2 Specs, got %d", len(obj.Specs))
-	}
-}
-
 func TestAddCiliumNetworkPolicySpec(t *testing.T) {
 	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
 	AddCiliumNetworkPolicySpec(obj, &api.Rule{Description: "r1"})
@@ -114,14 +106,6 @@ func TestSetCiliumNetworkPolicyEnableDefaultDeny(t *testing.T) {
 	}
 	if obj.Spec.EnableDefaultDeny.Egress == nil || *obj.Spec.EnableDefaultDeny.Egress {
 		t.Error("expected EnableDefaultDeny.Egress to be false")
-	}
-}
-
-func TestSetCiliumClusterwideNetworkPolicySpecs(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
-	SetCiliumClusterwideNetworkPolicySpecs(obj, api.Rules{&api.Rule{Description: "r1"}, &api.Rule{Description: "r2"}})
-	if len(obj.Specs) != 2 {
-		t.Fatalf("expected 2 Specs, got %d", len(obj.Specs))
 	}
 }
 
@@ -238,31 +222,6 @@ func TestAddCiliumCIDRGroupCIDR(t *testing.T) {
 	}
 }
 
-func TestSetCiliumCIDRGroupCIDRs(t *testing.T) {
-	obj := CiliumCIDRGroup(&CiliumCIDRGroupConfig{
-		Name:          "g",
-		ExternalCIDRs: []api.CIDR{"10.0.0.0/8"},
-	})
-	SetCiliumCIDRGroupCIDRs(obj, []api.CIDR{"172.16.0.0/12"})
-	if len(obj.Spec.ExternalCIDRs) != 1 {
-		t.Fatalf("expected 1 CIDR after replace, got %d", len(obj.Spec.ExternalCIDRs))
-	}
-	if string(obj.Spec.ExternalCIDRs[0]) != "172.16.0.0/12" {
-		t.Errorf("unexpected CIDR: %s", obj.Spec.ExternalCIDRs[0])
-	}
-}
-
-func TestSetCiliumEgressGatewayPolicySpec(t *testing.T) {
-	obj := CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{Name: "p"})
-	spec := ciliumv2.CiliumEgressGatewayPolicySpec{
-		DestinationCIDRs: []ciliumv2.CIDR{"10.0.0.0/8"},
-	}
-	SetCiliumEgressGatewayPolicySpec(obj, spec)
-	if len(obj.Spec.DestinationCIDRs) != 1 {
-		t.Fatalf("expected 1 DestinationCIDR, got %d", len(obj.Spec.DestinationCIDRs))
-	}
-}
-
 func TestAddCiliumEgressGatewayPolicySelectorRule(t *testing.T) {
 	obj := CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{Name: "p"})
 	rule := ciliumv2.EgressRule{}
@@ -308,57 +267,6 @@ func TestAddCiliumEgressGatewayPolicyEgressGateway(t *testing.T) {
 	}
 }
 
-func TestSetCiliumLocalRedirectPolicySpec(t *testing.T) {
-	obj := CiliumLocalRedirectPolicy(&CiliumLocalRedirectPolicyConfig{Name: "p", Namespace: "ns"})
-	spec := ciliumv2.CiliumLocalRedirectPolicySpec{Description: "redirect spec"}
-	SetCiliumLocalRedirectPolicySpec(obj, spec)
-	if obj.Spec.Description != "redirect spec" {
-		t.Errorf("unexpected Description: %s", obj.Spec.Description)
-	}
-}
-
-func TestSetCiliumLocalRedirectPolicyFrontend(t *testing.T) {
-	obj := CiliumLocalRedirectPolicy(&CiliumLocalRedirectPolicyConfig{Name: "p", Namespace: "ns"})
-	frontend := ciliumv2.RedirectFrontend{AddressMatcher: &ciliumv2.Frontend{IP: "1.2.3.4"}}
-	SetCiliumLocalRedirectPolicyFrontend(obj, frontend)
-	if obj.Spec.RedirectFrontend.AddressMatcher == nil || obj.Spec.RedirectFrontend.AddressMatcher.IP != "1.2.3.4" {
-		t.Errorf("unexpected RedirectFrontend: %v", obj.Spec.RedirectFrontend)
-	}
-}
-
-func TestSetCiliumLocalRedirectPolicyBackend(t *testing.T) {
-	obj := CiliumLocalRedirectPolicy(&CiliumLocalRedirectPolicyConfig{Name: "p", Namespace: "ns"})
-	backend := ciliumv2.RedirectBackend{LocalEndpointSelector: slimv1.LabelSelector{}}
-	SetCiliumLocalRedirectPolicyBackend(obj, backend)
-}
-
-func TestSetCiliumLocalRedirectPolicyDescription(t *testing.T) {
-	obj := CiliumLocalRedirectPolicy(&CiliumLocalRedirectPolicyConfig{Name: "p", Namespace: "ns"})
-	SetCiliumLocalRedirectPolicyDescription(obj, "test redirect")
-	if obj.Spec.Description != "test redirect" {
-		t.Errorf("unexpected Description: %s", obj.Spec.Description)
-	}
-}
-
-func TestSetCiliumLocalRedirectPolicySkipRedirectFromBackend(t *testing.T) {
-	obj := CiliumLocalRedirectPolicy(&CiliumLocalRedirectPolicyConfig{Name: "p", Namespace: "ns"})
-	SetCiliumLocalRedirectPolicySkipRedirectFromBackend(obj, true)
-	if !obj.Spec.SkipRedirectFromBackend {
-		t.Error("expected SkipRedirectFromBackend to be true")
-	}
-}
-
-func TestSetCiliumLoadBalancerIPPoolSpec(t *testing.T) {
-	obj := CiliumLoadBalancerIPPool(&CiliumLoadBalancerIPPoolConfig{Name: "p"})
-	spec := ciliumv2.CiliumLoadBalancerIPPoolSpec{
-		Blocks: []ciliumv2.CiliumLoadBalancerIPPoolIPBlock{{Cidr: "10.0.0.0/8"}},
-	}
-	SetCiliumLoadBalancerIPPoolSpec(obj, spec)
-	if len(obj.Spec.Blocks) != 1 {
-		t.Fatalf("expected 1 block, got %d", len(obj.Spec.Blocks))
-	}
-}
-
 func TestSetCiliumLoadBalancerIPPoolServiceSelector(t *testing.T) {
 	obj := CiliumLoadBalancerIPPool(&CiliumLoadBalancerIPPoolConfig{Name: "p"})
 	sel := &slimv1.LabelSelector{MatchLabels: map[string]string{"svc": "lb"}}
@@ -374,31 +282,6 @@ func TestAddCiliumLoadBalancerIPPoolBlock(t *testing.T) {
 	AddCiliumLoadBalancerIPPoolBlock(obj, ciliumv2.CiliumLoadBalancerIPPoolIPBlock{Cidr: "172.16.0.0/12"})
 	if len(obj.Spec.Blocks) != 2 {
 		t.Fatalf("expected 2 blocks, got %d", len(obj.Spec.Blocks))
-	}
-}
-
-func TestSetCiliumLoadBalancerIPPoolDisabled(t *testing.T) {
-	obj := CiliumLoadBalancerIPPool(&CiliumLoadBalancerIPPoolConfig{Name: "p"})
-	SetCiliumLoadBalancerIPPoolDisabled(obj, true)
-	if !obj.Spec.Disabled {
-		t.Error("expected Disabled to be true")
-	}
-}
-
-func TestSetCiliumLoadBalancerIPPoolAllowFirstLastIPs(t *testing.T) {
-	obj := CiliumLoadBalancerIPPool(&CiliumLoadBalancerIPPoolConfig{Name: "p"})
-	SetCiliumLoadBalancerIPPoolAllowFirstLastIPs(obj, ciliumv2.AllowFirstLastIPYes)
-	if obj.Spec.AllowFirstLastIPs != ciliumv2.AllowFirstLastIPYes {
-		t.Errorf("unexpected AllowFirstLastIPs: %s", obj.Spec.AllowFirstLastIPs)
-	}
-}
-
-func TestSetCiliumEnvoyConfigSpec(t *testing.T) {
-	obj := CiliumEnvoyConfig(&CiliumEnvoyConfigConfig{Name: "p", Namespace: "ns"})
-	spec := ciliumv2.CiliumEnvoyConfigSpec{Resources: []ciliumv2.XDSResource{{}, {}}}
-	SetCiliumEnvoyConfigSpec(obj, spec)
-	if len(obj.Spec.Resources) != 2 {
-		t.Fatalf("expected 2 resources, got %d", len(obj.Spec.Resources))
 	}
 }
 
@@ -438,15 +321,6 @@ func TestSetCiliumEnvoyConfigNodeSelector(t *testing.T) {
 	}
 }
 
-func TestSetCiliumClusterwideEnvoyConfigSpec(t *testing.T) {
-	obj := CiliumClusterwideEnvoyConfig(&CiliumClusterwideEnvoyConfigConfig{Name: "p"})
-	spec := ciliumv2.CiliumEnvoyConfigSpec{Resources: []ciliumv2.XDSResource{{}}}
-	SetCiliumClusterwideEnvoyConfigSpec(obj, spec)
-	if len(obj.Spec.Resources) != 1 {
-		t.Fatalf("expected 1 resource, got %d", len(obj.Spec.Resources))
-	}
-}
-
 func TestAddCiliumClusterwideEnvoyConfigService(t *testing.T) {
 	obj := CiliumClusterwideEnvoyConfig(&CiliumClusterwideEnvoyConfigConfig{Name: "p"})
 	svc := &ciliumv2.ServiceListener{Name: "svc", Namespace: "ns"}
@@ -483,17 +357,6 @@ func TestSetCiliumClusterwideEnvoyConfigNodeSelector(t *testing.T) {
 	}
 }
 
-func TestSetCiliumBGPClusterConfigSpec(t *testing.T) {
-	obj := CiliumBGPClusterConfig(&CiliumBGPClusterConfigConfig{Name: "p"})
-	spec := ciliumv2.CiliumBGPClusterConfigSpec{
-		BGPInstances: []ciliumv2.CiliumBGPInstance{{Name: "inst"}},
-	}
-	SetCiliumBGPClusterConfigSpec(obj, spec)
-	if len(obj.Spec.BGPInstances) != 1 {
-		t.Fatalf("expected 1 BGP instance, got %d", len(obj.Spec.BGPInstances))
-	}
-}
-
 func TestSetCiliumBGPClusterConfigNodeSelector(t *testing.T) {
 	obj := CiliumBGPClusterConfig(&CiliumBGPClusterConfigConfig{Name: "p"})
 	sel := &slimv1.LabelSelector{MatchLabels: map[string]string{"bgp": "enabled"}}
@@ -509,16 +372,6 @@ func TestAddCiliumBGPClusterConfigBGPInstance(t *testing.T) {
 	AddCiliumBGPClusterConfigBGPInstance(obj, ciliumv2.CiliumBGPInstance{Name: "inst-2"})
 	if len(obj.Spec.BGPInstances) != 2 {
 		t.Fatalf("expected 2 BGP instances, got %d", len(obj.Spec.BGPInstances))
-	}
-}
-
-func TestSetCiliumBGPPeerConfigSpec(t *testing.T) {
-	obj := CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{Name: "p"})
-	ref := "bgp-secret"
-	spec := ciliumv2.CiliumBGPPeerConfigSpec{AuthSecretRef: &ref}
-	SetCiliumBGPPeerConfigSpec(obj, spec)
-	if obj.Spec.AuthSecretRef == nil || *obj.Spec.AuthSecretRef != "bgp-secret" {
-		t.Errorf("unexpected AuthSecretRef: %v", obj.Spec.AuthSecretRef)
 	}
 }
 
@@ -580,19 +433,6 @@ func TestAddCiliumBGPPeerConfigFamily(t *testing.T) {
 	}
 }
 
-func TestSetCiliumBGPAdvertisementSpec(t *testing.T) {
-	obj := CiliumBGPAdvertisement(&CiliumBGPAdvertisementConfig{Name: "p"})
-	spec := ciliumv2.CiliumBGPAdvertisementSpec{
-		Advertisements: []ciliumv2.BGPAdvertisement{
-			{AdvertisementType: ciliumv2.BGPServiceAdvert},
-		},
-	}
-	SetCiliumBGPAdvertisementSpec(obj, spec)
-	if len(obj.Spec.Advertisements) != 1 {
-		t.Fatalf("expected 1 advertisement, got %d", len(obj.Spec.Advertisements))
-	}
-}
-
 func TestAddCiliumBGPAdvertisementEntry(t *testing.T) {
 	obj := CiliumBGPAdvertisement(&CiliumBGPAdvertisementConfig{Name: "p"})
 	AddCiliumBGPAdvertisementEntry(obj, ciliumv2.BGPAdvertisement{AdvertisementType: ciliumv2.BGPServiceAdvert})
@@ -602,36 +442,11 @@ func TestAddCiliumBGPAdvertisementEntry(t *testing.T) {
 	}
 }
 
-func TestSetCiliumBGPNodeConfigSpec(t *testing.T) {
-	obj := CiliumBGPNodeConfig(&CiliumBGPNodeConfigConfig{Name: "p"})
-	spec := ciliumv2.CiliumBGPNodeSpec{
-		BGPInstances: []ciliumv2.CiliumBGPNodeInstance{{Name: "inst"}},
-	}
-	SetCiliumBGPNodeConfigSpec(obj, spec)
-	if len(obj.Spec.BGPInstances) != 1 {
-		t.Fatalf("expected 1 BGP node instance, got %d", len(obj.Spec.BGPInstances))
-	}
-}
-
 func TestAddCiliumBGPNodeConfigBGPInstance(t *testing.T) {
 	obj := CiliumBGPNodeConfig(&CiliumBGPNodeConfigConfig{Name: "p"})
 	AddCiliumBGPNodeConfigBGPInstance(obj, ciliumv2.CiliumBGPNodeInstance{Name: "inst-1"})
 	if len(obj.Spec.BGPInstances) != 1 {
 		t.Fatalf("expected 1 BGP node instance, got %d", len(obj.Spec.BGPInstances))
-	}
-}
-
-func TestSetCiliumBGPNodeConfigOverrideSpec(t *testing.T) {
-	obj := CiliumBGPNodeConfigOverride(&CiliumBGPNodeConfigOverrideConfig{Name: "p"})
-	routerID := "10.0.0.1"
-	spec := ciliumv2.CiliumBGPNodeConfigOverrideSpec{
-		BGPInstances: []ciliumv2.CiliumBGPNodeConfigInstanceOverride{
-			{Name: "inst", RouterID: &routerID},
-		},
-	}
-	SetCiliumBGPNodeConfigOverrideSpec(obj, spec)
-	if len(obj.Spec.BGPInstances) != 1 {
-		t.Fatalf("expected 1 BGP instance override, got %d", len(obj.Spec.BGPInstances))
 	}
 }
 

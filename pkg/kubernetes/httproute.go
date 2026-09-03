@@ -12,28 +12,12 @@ func AddHTTPRouteHostname(route *gwapiv1.HTTPRoute, hostname gwapiv1.Hostname) {
 	route.Spec.Hostnames = append(route.Spec.Hostnames, hostname)
 }
 
-// SetHTTPRouteHostnames replaces all hostnames on the HTTPRoute.
-func SetHTTPRouteHostnames(route *gwapiv1.HTTPRoute, hostnames []gwapiv1.Hostname) {
-	if route == nil {
-		panic("SetHTTPRouteHostnames: route must not be nil")
-	}
-	route.Spec.Hostnames = hostnames
-}
-
 // AddHTTPRouteParentRef appends a parent reference (typically a Gateway) to the HTTPRoute.
 func AddHTTPRouteParentRef(route *gwapiv1.HTTPRoute, ref gwapiv1.ParentReference) {
 	if route == nil {
 		panic("AddHTTPRouteParentRef: route must not be nil")
 	}
 	route.Spec.ParentRefs = append(route.Spec.ParentRefs, ref)
-}
-
-// SetHTTPRouteParentRefs replaces the parent references on the HTTPRoute.
-func SetHTTPRouteParentRefs(route *gwapiv1.HTTPRoute, refs []gwapiv1.ParentReference) {
-	if route == nil {
-		panic("SetHTTPRouteParentRefs: route must not be nil")
-	}
-	route.Spec.ParentRefs = refs
 }
 
 // AddHTTPRouteRule appends a routing rule to the HTTPRoute.
@@ -44,22 +28,9 @@ func AddHTTPRouteRule(route *gwapiv1.HTTPRoute, rule gwapiv1.HTTPRouteRule) {
 	route.Spec.Rules = append(route.Spec.Rules, rule)
 }
 
-// SetHTTPRouteRules replaces the routing rules on the HTTPRoute.
-func SetHTTPRouteRules(route *gwapiv1.HTTPRoute, rules []gwapiv1.HTTPRouteRule) {
-	if route == nil {
-		panic("SetHTTPRouteRules: route must not be nil")
-	}
-	route.Spec.Rules = rules
-}
-
 // AddHTTPRouteRuleMatch appends a match condition to an HTTPRouteRule.
 func AddHTTPRouteRuleMatch(rule *gwapiv1.HTTPRouteRule, match gwapiv1.HTTPRouteMatch) {
 	rule.Matches = append(rule.Matches, match)
-}
-
-// SetHTTPRouteRuleMatches replaces the match conditions on an HTTPRouteRule.
-func SetHTTPRouteRuleMatches(rule *gwapiv1.HTTPRouteRule, matches []gwapiv1.HTTPRouteMatch) {
-	rule.Matches = matches
 }
 
 // AddHTTPRouteRuleFilter appends a filter to an HTTPRouteRule.
@@ -67,17 +38,7 @@ func AddHTTPRouteRuleFilter(rule *gwapiv1.HTTPRouteRule, filter gwapiv1.HTTPRout
 	rule.Filters = append(rule.Filters, filter)
 }
 
-// SetHTTPRouteRuleFilters replaces the filters on an HTTPRouteRule.
-func SetHTTPRouteRuleFilters(rule *gwapiv1.HTTPRouteRule, filters []gwapiv1.HTTPRouteFilter) {
-	rule.Filters = filters
-}
-
 // AddHTTPRouteRuleBackendRef appends a backend reference to an HTTPRouteRule.
 func AddHTTPRouteRuleBackendRef(rule *gwapiv1.HTTPRouteRule, ref gwapiv1.HTTPBackendRef) {
 	rule.BackendRefs = append(rule.BackendRefs, ref)
-}
-
-// SetHTTPRouteRuleBackendRefs replaces the backend references on an HTTPRouteRule.
-func SetHTTPRouteRuleBackendRefs(rule *gwapiv1.HTTPRouteRule, refs []gwapiv1.HTTPBackendRef) {
-	rule.BackendRefs = refs
 }

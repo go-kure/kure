@@ -69,19 +69,19 @@ import (
 
 // Create a GitRepository source
 repo := fluxcd.CreateGitRepository("my-repo", "flux-system")
-fluxcd.SetGitRepositoryURL(repo, "https://github.com/org/repo")
+repo.Spec.URL = "https://github.com/org/repo"
 fluxcd.SetGitRepositoryReference(repo, &sourcev1.GitRepositoryRef{Branch: "main"})
-fluxcd.SetGitRepositoryInterval(repo, metav1.Duration{Duration: 5 * time.Minute})
+repo.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 
 // Create a Kustomization that references the source
 ks := fluxcd.CreateKustomization("my-app", "flux-system")
-fluxcd.SetKustomizationSourceRef(ks, kustv1.CrossNamespaceSourceReference{
+ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
     Kind: "GitRepository",
     Name: "my-repo",
-})
-fluxcd.SetKustomizationPath(ks, "./clusters/production")
-fluxcd.SetKustomizationInterval(ks, metav1.Duration{Duration: 10 * time.Minute})
-fluxcd.SetKustomizationPrune(ks, true)
+}
+ks.Spec.Path = "./clusters/production"
+ks.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
+ks.Spec.Prune = true
 ```
 
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.

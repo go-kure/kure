@@ -248,7 +248,7 @@ cilium.AddCiliumNetworkPolicyEgressDenyRule(policy, egressDenyRule)
 
 // CIDR groups
 cilium.AddCiliumCIDRGroupCIDR(group, "203.0.113.0/24")
-cilium.SetCiliumCIDRGroupCIDRs(group, newCIDRSlice)
+group.Spec.ExternalCIDRs = newCIDRSlice
 
 // Egress gateway
 cilium.AddCiliumEgressGatewayPolicySelectorRule(cegp, selectorRule)
@@ -258,7 +258,7 @@ cilium.SetCiliumEgressGatewayPolicyEgressGateway(cegp, &egressGateway)
 // LB IP pool
 cilium.AddCiliumLoadBalancerIPPoolBlock(pool, block)
 cilium.SetCiliumLoadBalancerIPPoolServiceSelector(pool, selector)
-cilium.SetCiliumLoadBalancerIPPoolDisabled(pool, true)
+pool.Spec.Disabled = true
 
 // Envoy config
 cilium.AddCiliumEnvoyConfigService(cec, serviceListener)

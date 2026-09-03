@@ -4,19 +4,6 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 )
 
-// CreateIngressRule creates a new IngressRule for the given host with an empty
-// HTTP paths list.
-func CreateIngressRule(host string) *netv1.IngressRule {
-	return &netv1.IngressRule{
-		Host: host,
-		IngressRuleValue: netv1.IngressRuleValue{
-			HTTP: &netv1.HTTPIngressRuleValue{
-				Paths: []netv1.HTTPIngressPath{},
-			},
-		},
-	}
-}
-
 // CreateIngressPath creates an HTTPIngressPath with the given path, path type,
 // service name, and service port name.
 func CreateIngressPath(path string, pathType *netv1.PathType, servicename string, serviceportname string) netv1.HTTPIngressPath {

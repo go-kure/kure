@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -157,36 +156,15 @@ func TestStatefulSetFunctions(t *testing.T) {
 		t.Errorf("node selector not set")
 	}
 
-	strategy := appsv1.StatefulSetUpdateStrategy{Type: appsv1.RollingUpdateStatefulSetStrategyType}
-	SetStatefulSetUpdateStrategy(sts, strategy)
-	if sts.Spec.UpdateStrategy.Type != appsv1.RollingUpdateStatefulSetStrategyType {
-		t.Errorf("update strategy not set")
-	}
-
 	SetStatefulSetReplicas(sts, 3)
 	if sts.Spec.Replicas == nil || *sts.Spec.Replicas != 3 {
 		t.Errorf("replicas not set")
-	}
-
-	SetStatefulSetServiceName(sts, "svc")
-	if sts.Spec.ServiceName != "svc" {
-		t.Errorf("service name not set")
-	}
-
-	SetStatefulSetPodManagementPolicy(sts, appsv1.ParallelPodManagement)
-	if sts.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
-		t.Errorf("pod management policy not set")
 	}
 
 	rhl := int32(4)
 	SetStatefulSetRevisionHistoryLimit(sts, &rhl)
 	if sts.Spec.RevisionHistoryLimit == nil || *sts.Spec.RevisionHistoryLimit != 4 {
 		t.Errorf("revision history limit not set")
-	}
-
-	SetStatefulSetMinReadySeconds(sts, 5)
-	if sts.Spec.MinReadySeconds != 5 {
-		t.Errorf("min ready seconds not set")
 	}
 }
 
@@ -222,10 +200,6 @@ func TestStatefulSetNilGuards(t *testing.T) {
 	assertPanics(t, func() { SetStatefulSetSecurityContext(nil, nil) })
 	assertPanics(t, func() { SetStatefulSetAffinity(nil, nil) })
 	assertPanics(t, func() { SetStatefulSetNodeSelector(nil, nil) })
-	assertPanics(t, func() { SetStatefulSetUpdateStrategy(nil, appsv1.StatefulSetUpdateStrategy{}) })
 	assertPanics(t, func() { SetStatefulSetReplicas(nil, 1) })
-	assertPanics(t, func() { SetStatefulSetServiceName(nil, "svc") })
-	assertPanics(t, func() { SetStatefulSetPodManagementPolicy(nil, appsv1.OrderedReadyPodManagement) })
 	assertPanics(t, func() { SetStatefulSetRevisionHistoryLimit(nil, &rhl) })
-	assertPanics(t, func() { SetStatefulSetMinReadySeconds(nil, 1) })
 }

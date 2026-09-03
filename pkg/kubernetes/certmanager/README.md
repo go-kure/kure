@@ -94,7 +94,7 @@ Update existing resources:
 
 ```go
 // Update Certificate spec
-certmanager.SetCertificateSpec(cert, newSpec)
+cert.Spec = newSpec
 
 // Add labels and annotations
 certmanager.AddCertificateLabel(cert, "app", "my-app")

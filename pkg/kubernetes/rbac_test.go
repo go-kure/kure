@@ -22,19 +22,6 @@ func TestAddRoleRule(t *testing.T) {
 	}
 }
 
-func TestSetRoleBindingRoleRef(t *testing.T) {
-	rb := CreateRoleBinding("rb", "ns")
-	ref := rbacv1.RoleRef{
-		APIGroup: "rbac.authorization.k8s.io",
-		Kind:     "Role",
-		Name:     "my-role",
-	}
-	SetRoleBindingRoleRef(rb, ref)
-	if rb.RoleRef != ref {
-		t.Errorf("role ref not set correctly")
-	}
-}
-
 func TestAddRoleBindingSubject(t *testing.T) {
 	rb := CreateRoleBinding("rb", "ns")
 	subj := rbacv1.Subject{
@@ -64,19 +51,6 @@ func TestAddClusterRoleRule(t *testing.T) {
 	}
 }
 
-func TestSetClusterRoleBindingRoleRef(t *testing.T) {
-	crb := CreateClusterRoleBinding("crb")
-	ref := rbacv1.RoleRef{
-		APIGroup: "rbac.authorization.k8s.io",
-		Kind:     "ClusterRole",
-		Name:     "my-cr",
-	}
-	SetClusterRoleBindingRoleRef(crb, ref)
-	if crb.RoleRef != ref {
-		t.Errorf("role ref not set correctly")
-	}
-}
-
 func TestAddClusterRoleBindingSubject(t *testing.T) {
 	crb := CreateClusterRoleBinding("crb")
 	subj := rbacv1.Subject{
@@ -92,14 +66,11 @@ func TestAddClusterRoleBindingSubject(t *testing.T) {
 
 func TestRBACNilGuards(t *testing.T) {
 	rule := rbacv1.PolicyRule{}
-	ref := rbacv1.RoleRef{}
 	subj := rbacv1.Subject{}
 
 	// All RBAC functions now panic on nil receiver
 	assertPanics(t, func() { AddRoleRule(nil, rule) })
-	assertPanics(t, func() { SetRoleBindingRoleRef(nil, ref) })
 	assertPanics(t, func() { AddRoleBindingSubject(nil, subj) })
 	assertPanics(t, func() { AddClusterRoleRule(nil, rule) })
-	assertPanics(t, func() { SetClusterRoleBindingRoleRef(nil, ref) })
 	assertPanics(t, func() { AddClusterRoleBindingSubject(nil, subj) })
 }

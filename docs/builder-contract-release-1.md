@@ -18,7 +18,7 @@ Two signatures changed:
 
 | Before | After | Set the removed value with |
 |---|---|---|
-| `CreateCronJob(name, namespace, schedule)` | `CreateCronJob(name, namespace)` | `SetCronJobSchedule(cj, schedule)` or `cj.Spec.Schedule = schedule` |
+| `CreateCronJob(name, namespace, schedule)` | `CreateCronJob(name, namespace)` | `cj.Spec.Schedule = schedule` |
 | `CreateIngress(name, namespace, classname)` | `CreateIngress(name, namespace)` | `SetIngressClassName(ing, classname)` |
 
 ## Constructor defaults removed by the contract PR
@@ -78,3 +78,342 @@ identity-only; their removal changes no output.
 (`barmancloud.cnpg.io/v1`) are now registered in `kubernetes.Scheme`. kure built
 these kinds before but could not resolve their GVK; `GetGroupVersionKind` now
 succeeds for them.
+
+## Bare field forwarders removed by the prune PR
+
+A helper that does nothing but assign one argument to one struct field is not
+sugar under the contract — the assignment is already the shortest way to write
+it. All 257 such forwarders are removed. The tables below give the replacement
+expression for each; the field is exactly the one the helper wrote, so the
+rewrite is mechanical and never changes behaviour.
+
+At the start of this work item `pkg/kubernetes/testdata/admission_exclusions.txt`
+held 344 tolerated helpers, classified by why the admission test rejected them:
+257 bare field forwarders, 51 that return a value, 24 that write no field at all
+(they delegate, or are no-ops), 10 that return early instead of writing, and 2
+that clear a sibling field the caller did not name. This PR removes the 257; the
+remaining 87 are the subject of the later work items. Six of the 24 delegators
+now read as bare field assignments rather than delegations, because the helper
+they delegated to was one of the 257 and their bodies were inlined:
+`SetDaemonSetServiceAccountName`, `SetDaemonSetNodeSelector`,
+`SetJobServiceAccountName`, `SetJobNodeSelector`,
+`SetStatefulSetServiceAccountName` and `SetStatefulSetNodeSelector`. They are
+folded onto the PodSpec helpers in the next PR.
+
+### Sub-type constructors (9)
+
+A sub-type that is not a `client.Object` gets no constructor: a struct literal
+is both shorter and the only form that shows every field being set.
+
+| Removed | Replacement |
+|---|---|
+| `CreateContainer(name, image, command, args)` | `&corev1.Container{Name: name, Image: image, Command: command, Args: args}` |
+| `CreatePodSpec()` | `&corev1.PodSpec{}` |
+| `CreateVolumeClaimTemplate(name, storageClass, size, accessModes)` | a `corev1.PersistentVolumeClaim` literal |
+| `CreateIngressRule(host)` | `&netv1.IngressRule{Host: host}` |
+| `CreateACMEIssuer(cfg)` | a `cmacme.ACMEIssuer` literal |
+| `CreateACMEHTTP01Solver(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
+| `CreateACMEDNS01SolverCloudflare(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
+| `CreateACMEDNS01SolverRoute53(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
+| `CreateACMEDNS01SolverGoogle(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
+
+The four cert-manager solver constructors and `CreateACMEIssuer` were only ever
+called from `certmanager.Issuer`/`ClusterIssuer`, which now build the literals
+inline.
+
+### `pkg/kubernetes` (76)
+
+| Removed | Replacement |
+|---|---|
+| `SetClusterRoleBindingRoleRef(crb, roleRef)` | `crb.RoleRef = roleRef` |
+| `SetContainerArgs(container, args)` | `container.Args = args` |
+| `SetContainerCommand(container, command)` | `container.Command = command` |
+| `SetContainerImage(container, image)` | `container.Image = image` |
+| `SetContainerImagePullPolicy(container, imagePullPolicy)` | `container.ImagePullPolicy = imagePullPolicy` |
+| `SetContainerResources(container, resources)` | `container.Resources = resources` |
+| `SetContainerStdin(container, stdin)` | `container.Stdin = stdin` |
+| `SetContainerStdinOnce(container, once)` | `container.StdinOnce = once` |
+| `SetContainerTTY(container, tty)` | `container.TTY = tty` |
+| `SetContainerTerminationMessagePath(container, path)` | `container.TerminationMessagePath = path` |
+| `SetContainerTerminationMessagePolicy(container, policy)` | `container.TerminationMessagePolicy = policy` |
+| `SetContainerWorkingDir(container, dir)` | `container.WorkingDir = dir` |
+| `SetCronJobConcurrencyPolicy(cron, policy)` | `cron.Spec.ConcurrencyPolicy = policy` |
+| `SetCronJobNodeSelector(cron, nodeSelector)` | `cron.Spec.JobTemplate.Spec.Template.Spec.NodeSelector = nodeSelector` |
+| `SetCronJobSchedule(cron, schedule)` | `cron.Spec.Schedule = schedule` |
+| `SetCronJobServiceAccountName(cron, serviceAccountName)` | `cron.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName = serviceAccountName` |
+| `SetDaemonSetUpdateStrategy(ds, strategy)` | `ds.Spec.UpdateStrategy = strategy` |
+| `SetDeploymentMinReadySeconds(deployment, secs)` | `deployment.Spec.MinReadySeconds = secs` |
+| `SetDeploymentNodeSelector(deployment, nodeSelector)` | `deployment.Spec.Template.Spec.NodeSelector = nodeSelector` |
+| `SetDeploymentServiceAccountName(deployment, serviceAccountName)` | `deployment.Spec.Template.Spec.ServiceAccountName = serviceAccountName` |
+| `SetDeploymentStrategy(deployment, strategy)` | `deployment.Spec.Strategy = strategy` |
+| `SetHPAAnnotations(hpa, annotations)` | `hpa.Annotations = annotations` |
+| `SetHPALabels(hpa, labels)` | `hpa.Labels = labels` |
+| `SetHTTPRouteHostnames(route, hostnames)` | `route.Spec.Hostnames = hostnames` |
+| `SetHTTPRouteParentRefs(route, refs)` | `route.Spec.ParentRefs = refs` |
+| `SetHTTPRouteRuleBackendRefs(rule, refs)` | `rule.BackendRefs = refs` |
+| `SetHTTPRouteRuleFilters(rule, filters)` | `rule.Filters = filters` |
+| `SetHTTPRouteRuleMatches(rule, matches)` | `rule.Matches = matches` |
+| `SetHTTPRouteRules(route, rules)` | `route.Spec.Rules = rules` |
+| `SetNamespaceAnnotations(ns, annotations)` | `ns.Annotations = annotations` |
+| `SetNamespaceFinalizers(ns, finalizers)` | `ns.Spec.Finalizers = finalizers` |
+| `SetNamespaceLabels(ns, labels)` | `ns.Labels = labels` |
+| `SetNetworkPolicyEgressPeers(rule, peers)` | `rule.To = peers` |
+| `SetNetworkPolicyEgressPorts(rule, ports)` | `rule.Ports = ports` |
+| `SetNetworkPolicyEgressRules(np, rules)` | `np.Spec.Egress = rules` |
+| `SetNetworkPolicyIngressPeers(rule, peers)` | `rule.From = peers` |
+| `SetNetworkPolicyIngressPorts(rule, ports)` | `rule.Ports = ports` |
+| `SetNetworkPolicyIngressRules(np, rules)` | `np.Spec.Ingress = rules` |
+| `SetNetworkPolicyPodSelector(np, selector)` | `np.Spec.PodSelector = selector` |
+| `SetNetworkPolicyPolicyTypes(np, types)` | `np.Spec.PolicyTypes = types` |
+| `SetPDBAnnotations(pdb, annotations)` | `pdb.Annotations = annotations` |
+| `SetPDBLabels(pdb, labels)` | `pdb.Labels = labels` |
+| `SetPVCResources(pvc, resources)` | `pvc.Spec.Resources = resources` |
+| `SetPVCVolumeName(pvc, volumeName)` | `pvc.Spec.VolumeName = volumeName` |
+| `SetPodSpecDNSPolicy(spec, policy)` | `spec.DNSPolicy = policy` |
+| `SetPodSpecHostIPC(spec, hostIPC)` | `spec.HostIPC = hostIPC` |
+| `SetPodSpecHostNetwork(spec, hostNetwork)` | `spec.HostNetwork = hostNetwork` |
+| `SetPodSpecHostPID(spec, hostPID)` | `spec.HostPID = hostPID` |
+| `SetPodSpecHostname(spec, hostname)` | `spec.Hostname = hostname` |
+| `SetPodSpecNodeSelector(spec, selector)` | `spec.NodeSelector = selector` |
+| `SetPodSpecPriorityClassName(spec, class)` | `spec.PriorityClassName = class` |
+| `SetPodSpecRestartPolicy(spec, policy)` | `spec.RestartPolicy = policy` |
+| `SetPodSpecSchedulerName(spec, scheduler)` | `spec.SchedulerName = scheduler` |
+| `SetPodSpecServiceAccountName(spec, name)` | `spec.ServiceAccountName = name` |
+| `SetPodSpecSubdomain(spec, subdomain)` | `spec.Subdomain = subdomain` |
+| `SetRoleBindingRoleRef(rb, roleRef)` | `rb.RoleRef = roleRef` |
+| `SetServiceAccountAnnotations(sa, annotations)` | `sa.Annotations = annotations` |
+| `SetServiceAccountImagePullSecrets(sa, secrets)` | `sa.ImagePullSecrets = secrets` |
+| `SetServiceAccountLabels(sa, labels)` | `sa.Labels = labels` |
+| `SetServiceAccountSecrets(sa, secrets)` | `sa.Secrets = secrets` |
+| `SetServiceAnnotations(svc, anns)` | `svc.Annotations = anns` |
+| `SetServiceClusterIP(service, ip)` | `service.Spec.ClusterIP = ip` |
+| `SetServiceExternalName(svc, name)` | `svc.Spec.ExternalName = name` |
+| `SetServiceExternalTrafficPolicy(service, trafficPolicy)` | `service.Spec.ExternalTrafficPolicy = trafficPolicy` |
+| `SetServiceHealthCheckNodePort(svc, port)` | `svc.Spec.HealthCheckNodePort = port` |
+| `SetServiceIPFamilies(svc, fams)` | `svc.Spec.IPFamilies = fams` |
+| `SetServiceLabels(svc, labels)` | `svc.Labels = labels` |
+| `SetServiceLoadBalancerSourceRanges(svc, ranges)` | `svc.Spec.LoadBalancerSourceRanges = ranges` |
+| `SetServicePublishNotReadyAddresses(svc, publish)` | `svc.Spec.PublishNotReadyAddresses = publish` |
+| `SetServiceSelector(service, selector)` | `service.Spec.Selector = selector` |
+| `SetServiceSessionAffinity(service, affinity)` | `service.Spec.SessionAffinity = affinity` |
+| `SetServiceType(service, type_)` | `service.Spec.Type = type_` |
+| `SetStatefulSetMinReadySeconds(sts, secs)` | `sts.Spec.MinReadySeconds = secs` |
+| `SetStatefulSetPodManagementPolicy(sts, policy)` | `sts.Spec.PodManagementPolicy = policy` |
+| `SetStatefulSetServiceName(sts, svc)` | `sts.Spec.ServiceName = svc` |
+| `SetStatefulSetUpdateStrategy(sts, strategy)` | `sts.Spec.UpdateStrategy = strategy` |
+
+### `pkg/kubernetes/certmanager` (4)
+
+| Removed | Replacement |
+|---|---|
+| `SetCertificateIssuerRef(obj, ref)` | `obj.Spec.IssuerRef = ref` |
+| `SetCertificateSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetClusterIssuerSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetIssuerSpec(obj, spec)` | `obj.Spec = spec` |
+
+### `pkg/kubernetes/cilium` (19)
+
+| Removed | Replacement |
+|---|---|
+| `SetCiliumBGPAdvertisementSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumBGPClusterConfigSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumBGPNodeConfigOverrideSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumBGPNodeConfigSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumBGPPeerConfigSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumCIDRGroupCIDRs(obj, cidrs)` | `obj.Spec.ExternalCIDRs = cidrs` |
+| `SetCiliumClusterwideEnvoyConfigSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumClusterwideNetworkPolicySpecs(obj, specs)` | `obj.Specs = specs` |
+| `SetCiliumEgressGatewayPolicySpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumEnvoyConfigSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumLoadBalancerIPPoolAllowFirstLastIPs(obj, allow)` | `obj.Spec.AllowFirstLastIPs = allow` |
+| `SetCiliumLoadBalancerIPPoolDisabled(obj, disabled)` | `obj.Spec.Disabled = disabled` |
+| `SetCiliumLoadBalancerIPPoolSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumLocalRedirectPolicyBackend(obj, backend)` | `obj.Spec.RedirectBackend = backend` |
+| `SetCiliumLocalRedirectPolicyDescription(obj, desc)` | `obj.Spec.Description = desc` |
+| `SetCiliumLocalRedirectPolicyFrontend(obj, frontend)` | `obj.Spec.RedirectFrontend = frontend` |
+| `SetCiliumLocalRedirectPolicySkipRedirectFromBackend(obj, skip)` | `obj.Spec.SkipRedirectFromBackend = skip` |
+| `SetCiliumLocalRedirectPolicySpec(obj, spec)` | `obj.Spec = spec` |
+| `SetCiliumNetworkPolicySpecs(obj, specs)` | `obj.Specs = specs` |
+
+### `pkg/kubernetes/cnpg` (9)
+
+| Removed | Replacement |
+|---|---|
+| `SetDatabaseClusterRef(obj, clusterName)` | `obj.Spec.ClusterRef = corev1.LocalObjectReference{Name: clusterName}` |
+| `SetDatabaseEnsure(obj, ensure)` | `obj.Spec.Ensure = ensure` |
+| `SetDatabaseOwner(obj, owner)` | `obj.Spec.Owner = owner` |
+| `SetDatabaseReclaimPolicy(obj, policy)` | `obj.Spec.ReclaimPolicy = policy` |
+| `SetObjectStoreDestinationPath(obj, path)` | `obj.Spec.Configuration.DestinationPath = path` |
+| `SetObjectStoreEndpointURL(obj, url)` | `obj.Spec.Configuration.EndpointURL = url` |
+| `SetObjectStoreRetentionPolicy(obj, policy)` | `obj.Spec.RetentionPolicy = policy` |
+| `SetScheduledBackupBackupOwnerReference(obj, ref)` | `obj.Spec.BackupOwnerReference = ref` |
+| `SetScheduledBackupMethod(obj, method)` | `obj.Spec.Method = method` |
+
+### `pkg/kubernetes/externalsecrets` (7)
+
+| Removed | Replacement |
+|---|---|
+| `SetClusterSecretStoreController(obj, controller)` | `obj.Spec.Controller = controller` |
+| `SetClusterSecretStoreSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetExternalSecretSecretStoreRef(obj, ref)` | `obj.Spec.SecretStoreRef = ref` |
+| `SetExternalSecretSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetSecretStoreController(obj, controller)` | `obj.Spec.Controller = controller` |
+| `SetSecretStoreSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetTarget(obj, target)` | `obj.Spec.Target = target` |
+
+### `pkg/kubernetes/fluxcd` (118)
+
+| Removed | Replacement |
+|---|---|
+| `SetAlertEventSeverity(alert, sev)` | `alert.Spec.EventSeverity = sev` |
+| `SetAlertProviderRef(alert, ref)` | `alert.Spec.ProviderRef = ref` |
+| `SetAlertSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetAlertSummary(alert, summary)` | `alert.Spec.Summary = summary` |
+| `SetAlertSuspend(alert, suspend)` | `alert.Spec.Suspend = suspend` |
+| `SetArtifactGeneratorSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetBucketEndpoint(b, endpoint)` | `b.Spec.Endpoint = endpoint` |
+| `SetBucketInsecure(b, insecure)` | `b.Spec.Insecure = insecure` |
+| `SetBucketInterval(b, interval)` | `b.Spec.Interval = interval` |
+| `SetBucketName(b, name)` | `b.Spec.BucketName = name` |
+| `SetBucketPrefix(b, prefix)` | `b.Spec.Prefix = prefix` |
+| `SetBucketProvider(b, provider)` | `b.Spec.Provider = provider` |
+| `SetBucketRegion(b, region)` | `b.Spec.Region = region` |
+| `SetBucketSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetBucketSuspend(b, suspend)` | `b.Spec.Suspend = suspend` |
+| `SetCommitAuthor(spec, author)` | `spec.Author = author` |
+| `SetCommitMessageTemplate(spec, tpl)` | `spec.MessageTemplate = tpl` |
+| `SetCommitMessageTemplateValues(spec, values)` | `spec.MessageTemplateValues = values` |
+| `SetCopyOperationStrategy(op, strategy)` | `op.Strategy = strategy` |
+| `SetCustomHealthCheckFailed(chk, expr)` | `chk.HealthCheckExpressions.Failed = expr` |
+| `SetCustomHealthCheckInProgress(chk, expr)` | `chk.HealthCheckExpressions.InProgress = expr` |
+| `SetExternalArtifactSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetFluxInstanceDistribution(obj, dist)` | `obj.Spec.Distribution = dist` |
+| `SetFluxInstanceDistributionVariant(obj, variant)` | `obj.Spec.Distribution.Variant = variant` |
+| `SetFluxInstanceSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetFluxReportDistribution(fr, dist)` | `fr.Spec.Distribution = dist` |
+| `SetFluxReportSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetGitCheckoutReference(spec, ref)` | `spec.Reference = ref` |
+| `SetGitRepositoryInterval(gr, interval)` | `gr.Spec.Interval = interval` |
+| `SetGitRepositoryProvider(gr, provider)` | `gr.Spec.Provider = provider` |
+| `SetGitRepositoryRecurseSubmodules(gr, recurse)` | `gr.Spec.RecurseSubmodules = recurse` |
+| `SetGitRepositoryServiceAccountName(gr, name)` | `gr.Spec.ServiceAccountName = name` |
+| `SetGitRepositorySparseCheckout(gr, paths)` | `gr.Spec.SparseCheckout = paths` |
+| `SetGitRepositorySpec(obj, spec)` | `obj.Spec = spec` |
+| `SetGitRepositorySuspend(gr, suspend)` | `gr.Spec.Suspend = suspend` |
+| `SetGitRepositoryURL(gr, url)` | `gr.Spec.URL = url` |
+| `SetGitSpecCommit(spec, commit)` | `spec.Commit = commit` |
+| `SetHelmChartChart(hc, chart)` | `hc.Spec.Chart = chart` |
+| `SetHelmChartIgnoreMissingValuesFiles(hc, ignore)` | `hc.Spec.IgnoreMissingValuesFiles = ignore` |
+| `SetHelmChartInterval(hc, interval)` | `hc.Spec.Interval = interval` |
+| `SetHelmChartReconcileStrategy(hc, strategy)` | `hc.Spec.ReconcileStrategy = strategy` |
+| `SetHelmChartSourceRef(hc, ref)` | `hc.Spec.SourceRef = ref` |
+| `SetHelmChartSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetHelmChartSuspend(hc, suspend)` | `hc.Spec.Suspend = suspend` |
+| `SetHelmChartValuesFiles(hc, files)` | `hc.Spec.ValuesFiles = files` |
+| `SetHelmChartVersion(hc, version)` | `hc.Spec.Version = version` |
+| `SetHelmReleaseInterval(obj, interval)` | `obj.Spec.Interval = interval` |
+| `SetHelmReleaseReleaseName(obj, name)` | `obj.Spec.ReleaseName = name` |
+| `SetHelmReleaseServiceAccountName(obj, name)` | `obj.Spec.ServiceAccountName = name` |
+| `SetHelmReleaseSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetHelmReleaseStorageNamespace(obj, ns)` | `obj.Spec.StorageNamespace = ns` |
+| `SetHelmReleaseSuspend(obj, suspend)` | `obj.Spec.Suspend = suspend` |
+| `SetHelmReleaseTargetNamespace(obj, ns)` | `obj.Spec.TargetNamespace = ns` |
+| `SetHelmRepositoryInsecure(hr, insecure)` | `hr.Spec.Insecure = insecure` |
+| `SetHelmRepositoryInterval(hr, interval)` | `hr.Spec.Interval = interval` |
+| `SetHelmRepositoryPassCredentials(hr, v)` | `hr.Spec.PassCredentials = v` |
+| `SetHelmRepositoryProvider(hr, provider)` | `hr.Spec.Provider = provider` |
+| `SetHelmRepositorySpec(obj, spec)` | `obj.Spec = spec` |
+| `SetHelmRepositorySuspend(hr, suspend)` | `hr.Spec.Suspend = suspend` |
+| `SetHelmRepositoryType(hr, typ)` | `hr.Spec.Type = typ` |
+| `SetHelmRepositoryURL(hr, url)` | `hr.Spec.URL = url` |
+| `SetImageRefDigest(ref, digest)` | `ref.Digest = digest` |
+| `SetImageRefName(ref, name)` | `ref.Name = name` |
+| `SetImageRefTag(ref, tag)` | `ref.Tag = tag` |
+| `SetImageUpdateAutomationInterval(auto, interval)` | `auto.Spec.Interval = interval` |
+| `SetImageUpdateAutomationSourceRef(auto, ref)` | `auto.Spec.SourceRef = ref` |
+| `SetImageUpdateAutomationSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetImageUpdateAutomationSuspend(auto, suspend)` | `auto.Spec.Suspend = suspend` |
+| `SetKustomizationDeletionPolicy(k, policy)` | `k.Spec.DeletionPolicy = policy` |
+| `SetKustomizationForce(k, force)` | `k.Spec.Force = force` |
+| `SetKustomizationIgnoreMissingComponents(k, ignore)` | `k.Spec.IgnoreMissingComponents = ignore` |
+| `SetKustomizationInterval(k, interval)` | `k.Spec.Interval = interval` |
+| `SetKustomizationNamePrefix(k, prefix)` | `k.Spec.NamePrefix = prefix` |
+| `SetKustomizationNameSuffix(k, suffix)` | `k.Spec.NameSuffix = suffix` |
+| `SetKustomizationPath(k, path)` | `k.Spec.Path = path` |
+| `SetKustomizationPrune(k, prune)` | `k.Spec.Prune = prune` |
+| `SetKustomizationServiceAccountName(k, name)` | `k.Spec.ServiceAccountName = name` |
+| `SetKustomizationSourceRef(k, ref)` | `k.Spec.SourceRef = ref` |
+| `SetKustomizationSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetKustomizationSuspend(k, suspend)` | `k.Spec.Suspend = suspend` |
+| `SetKustomizationTargetNamespace(k, namespace)` | `k.Spec.TargetNamespace = namespace` |
+| `SetKustomizationWait(k, wait)` | `k.Spec.Wait = wait` |
+| `SetOCIRepositoryInsecure(or, insecure)` | `or.Spec.Insecure = insecure` |
+| `SetOCIRepositoryInterval(or, interval)` | `or.Spec.Interval = interval` |
+| `SetOCIRepositoryProvider(or, provider)` | `or.Spec.Provider = provider` |
+| `SetOCIRepositoryServiceAccountName(or, name)` | `or.Spec.ServiceAccountName = name` |
+| `SetOCIRepositorySpec(obj, spec)` | `obj.Spec = spec` |
+| `SetOCIRepositorySuspend(or, suspend)` | `or.Spec.Suspend = suspend` |
+| `SetOCIRepositoryURL(or, url)` | `or.Spec.URL = url` |
+| `SetObservedPolicies(auto, policies)` | `auto.Status.ObservedPolicies = policies` |
+| `SetOutputArtifactOriginRevision(out, originRevision)` | `out.OriginRevision = originRevision` |
+| `SetOutputArtifactRevision(out, revision)` | `out.Revision = revision` |
+| `SetProviderAddress(provider, address)` | `provider.Spec.Address = address` |
+| `SetProviderChannel(provider, channel)` | `provider.Spec.Channel = channel` |
+| `SetProviderProxy(provider, proxy)` | `provider.Spec.Proxy = proxy` |
+| `SetProviderSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetProviderSuspend(provider, suspend)` | `provider.Spec.Suspend = suspend` |
+| `SetProviderType(provider, t)` | `provider.Spec.Type = t` |
+| `SetProviderUsername(provider, username)` | `provider.Spec.Username = username` |
+| `SetPushBranch(spec, branch)` | `spec.Branch = branch` |
+| `SetPushOptions(spec, opts)` | `spec.Options = opts` |
+| `SetPushRefspec(spec, refspec)` | `spec.Refspec = refspec` |
+| `SetReceiverSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetReceiverSuspend(receiver, suspend)` | `receiver.Spec.Suspend = suspend` |
+| `SetReceiverType(receiver, t)` | `receiver.Spec.Type = t` |
+| `SetResourceSetInputProviderServiceAccountName(obj, name)` | `obj.Spec.ServiceAccountName = name` |
+| `SetResourceSetInputProviderSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetResourceSetInputProviderType(obj, typ)` | `obj.Spec.Type = typ` |
+| `SetResourceSetInputProviderURL(obj, url)` | `obj.Spec.URL = url` |
+| `SetResourceSetResourcesTemplate(rs, tpl)` | `rs.Spec.ResourcesTemplate = tpl` |
+| `SetResourceSetServiceAccountName(rs, name)` | `rs.Spec.ServiceAccountName = name` |
+| `SetResourceSetSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetResourceSetWait(rs, wait)` | `rs.Spec.Wait = wait` |
+| `SetScheduleTimeZone(s, tz)` | `s.TimeZone = tz` |
+| `SetScheduleWindow(s, d)` | `s.Window = d` |
+| `SetSourceReferenceNamespace(ref, namespace)` | `ref.Namespace = namespace` |
+| `SetUpdateStrategyName(spec, name)` | `spec.Strategy = name` |
+| `SetUpdateStrategyPath(spec, path)` | `spec.Path = path` |
+
+### `pkg/kubernetes/metallb` (15)
+
+| Removed | Replacement |
+|---|---|
+| `SetBFDProfileSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetBGPAdvertisementLocalPref(obj, pref)` | `obj.Spec.LocalPref = pref` |
+| `SetBGPAdvertisementSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetBGPPeerBFDProfile(obj, profile)` | `obj.Spec.BFDProfile = profile` |
+| `SetBGPPeerEBGPMultiHop(obj, multi)` | `obj.Spec.EBGPMultiHop = multi` |
+| `SetBGPPeerHoldTime(obj, d)` | `obj.Spec.HoldTime = d` |
+| `SetBGPPeerKeepaliveTime(obj, d)` | `obj.Spec.KeepaliveTime = d` |
+| `SetBGPPeerPassword(obj, pw)` | `obj.Spec.Password = pw` |
+| `SetBGPPeerPort(obj, port)` | `obj.Spec.Port = port` |
+| `SetBGPPeerRouterID(obj, id)` | `obj.Spec.RouterID = id` |
+| `SetBGPPeerSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetBGPPeerSrcAddress(obj, addr)` | `obj.Spec.SrcAddress = addr` |
+| `SetIPAddressPoolAvoidBuggyIPs(obj, avoid)` | `obj.Spec.AvoidBuggyIPs = avoid` |
+| `SetIPAddressPoolSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetL2AdvertisementSpec(obj, spec)` | `obj.Spec = spec` |
+
+### `pkg/kubernetes/prometheus` (9)
+
+| Removed | Replacement |
+|---|---|
+| `SetPodMonitorJobLabel(obj, label)` | `obj.Spec.JobLabel = label` |
+| `SetPodMonitorNamespaceSelector(obj, ns)` | `obj.Spec.NamespaceSelector = ns` |
+| `SetPodMonitorSelector(obj, selector)` | `obj.Spec.Selector = selector` |
+| `SetPodMonitorSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetPrometheusRuleSpec(obj, spec)` | `obj.Spec = spec` |
+| `SetServiceMonitorJobLabel(obj, label)` | `obj.Spec.JobLabel = label` |
+| `SetServiceMonitorNamespaceSelector(obj, ns)` | `obj.Spec.NamespaceSelector = ns` |
+| `SetServiceMonitorSelector(obj, selector)` | `obj.Spec.Selector = selector` |
+| `SetServiceMonitorSpec(obj, spec)` | `obj.Spec = spec` |

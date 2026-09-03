@@ -72,7 +72,7 @@ func SetDaemonSetServiceAccountName(ds *appsv1.DaemonSet, name string) {
 	if ds == nil {
 		panic("SetDaemonSetServiceAccountName: ds must not be nil")
 	}
-	SetPodSpecServiceAccountName(&ds.Spec.Template.Spec, name)
+	ds.Spec.Template.Spec.ServiceAccountName = name
 }
 
 // SetDaemonSetSecurityContext sets the pod security context.
@@ -96,15 +96,7 @@ func SetDaemonSetNodeSelector(ds *appsv1.DaemonSet, ns map[string]string) {
 	if ds == nil {
 		panic("SetDaemonSetNodeSelector: ds must not be nil")
 	}
-	SetPodSpecNodeSelector(&ds.Spec.Template.Spec, ns)
-}
-
-// SetDaemonSetUpdateStrategy sets the update strategy.
-func SetDaemonSetUpdateStrategy(ds *appsv1.DaemonSet, strategy appsv1.DaemonSetUpdateStrategy) {
-	if ds == nil {
-		panic("SetDaemonSetUpdateStrategy: ds must not be nil")
-	}
-	ds.Spec.UpdateStrategy = strategy
+	ds.Spec.Template.Spec.NodeSelector = ns
 }
 
 // SetDaemonSetRevisionHistoryLimit sets the revision history limit.

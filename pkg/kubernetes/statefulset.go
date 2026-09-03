@@ -80,7 +80,7 @@ func SetStatefulSetServiceAccountName(sts *appsv1.StatefulSet, name string) {
 	if sts == nil {
 		panic("SetStatefulSetServiceAccountName: sts must not be nil")
 	}
-	SetPodSpecServiceAccountName(&sts.Spec.Template.Spec, name)
+	sts.Spec.Template.Spec.ServiceAccountName = name
 }
 
 // SetStatefulSetSecurityContext sets the pod security context.
@@ -104,15 +104,7 @@ func SetStatefulSetNodeSelector(sts *appsv1.StatefulSet, ns map[string]string) {
 	if sts == nil {
 		panic("SetStatefulSetNodeSelector: sts must not be nil")
 	}
-	SetPodSpecNodeSelector(&sts.Spec.Template.Spec, ns)
-}
-
-// SetStatefulSetUpdateStrategy sets the update strategy for the StatefulSet.
-func SetStatefulSetUpdateStrategy(sts *appsv1.StatefulSet, strategy appsv1.StatefulSetUpdateStrategy) {
-	if sts == nil {
-		panic("SetStatefulSetUpdateStrategy: sts must not be nil")
-	}
-	sts.Spec.UpdateStrategy = strategy
+	sts.Spec.Template.Spec.NodeSelector = ns
 }
 
 // SetStatefulSetReplicas sets the replica count.
@@ -126,34 +118,10 @@ func SetStatefulSetReplicas(sts *appsv1.StatefulSet, replicas int32) {
 	*sts.Spec.Replicas = replicas
 }
 
-// SetStatefulSetServiceName sets the service name used by the StatefulSet.
-func SetStatefulSetServiceName(sts *appsv1.StatefulSet, svc string) {
-	if sts == nil {
-		panic("SetStatefulSetServiceName: sts must not be nil")
-	}
-	sts.Spec.ServiceName = svc
-}
-
-// SetStatefulSetPodManagementPolicy sets the pod management policy.
-func SetStatefulSetPodManagementPolicy(sts *appsv1.StatefulSet, policy appsv1.PodManagementPolicyType) {
-	if sts == nil {
-		panic("SetStatefulSetPodManagementPolicy: sts must not be nil")
-	}
-	sts.Spec.PodManagementPolicy = policy
-}
-
 // SetStatefulSetRevisionHistoryLimit sets the revision history limit.
 func SetStatefulSetRevisionHistoryLimit(sts *appsv1.StatefulSet, limit *int32) {
 	if sts == nil {
 		panic("SetStatefulSetRevisionHistoryLimit: sts must not be nil")
 	}
 	sts.Spec.RevisionHistoryLimit = limit
-}
-
-// SetStatefulSetMinReadySeconds sets the minimum ready seconds.
-func SetStatefulSetMinReadySeconds(sts *appsv1.StatefulSet, secs int32) {
-	if sts == nil {
-		panic("SetStatefulSetMinReadySeconds: sts must not be nil")
-	}
-	sts.Spec.MinReadySeconds = secs
 }

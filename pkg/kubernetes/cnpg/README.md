@@ -47,8 +47,8 @@ db := cnpg.Database(&cnpg.DatabaseConfig{
     Spec:      cnpgv1.DatabaseSpec{Name: "appdb"},
 })
 
-cnpg.SetDatabaseClusterRef(db, "pg-main")
-cnpg.SetDatabaseOwner(db, "appuser")
+db.Spec.ClusterRef = corev1.LocalObjectReference{Name: "pg-main"}
+db.Spec.Owner = "appuser"
 cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{Name: "pgcrypto"})
 ```
 
@@ -61,9 +61,9 @@ store := cnpg.ObjectStore(&cnpg.ObjectStoreConfig{
     Spec:      barmanv1.ObjectStoreSpec{},
 })
 
-cnpg.SetObjectStoreDestinationPath(store, "s3://my-bucket/backups")
+store.Spec.Configuration.DestinationPath = "s3://my-bucket/backups"
 cnpg.SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{...})
-cnpg.SetObjectStoreRetentionPolicy(store, "30d")
+store.Spec.RetentionPolicy = "30d"
 ```
 
 ### ScheduledBackup
@@ -75,7 +75,7 @@ backup := cnpg.ScheduledBackup(&cnpg.ScheduledBackupConfig{
     Spec:      cnpgv1.ScheduledBackupSpec{Schedule: "0 2 * * *"},
 })
 
-cnpg.SetScheduledBackupMethod(backup, cnpgv1.BackupMethodBarmanObjectStore)
+backup.Spec.Method = cnpgv1.BackupMethodBarmanObjectStore
 cnpg.SetScheduledBackupImmediate(backup, true)
 ```
 
@@ -115,10 +115,10 @@ cnpg.AddDatabaseAnnotation(db, "note", "production")
 cnpg.AddClusterManagedRole(cluster, role)
 
 // Database
-cnpg.SetDatabaseClusterRef(db, "pg-main")
-cnpg.SetDatabaseOwner(db, "appuser")
-cnpg.SetDatabaseReclaimPolicy(db, cnpgv1.DatabaseReclaimDelete)
-cnpg.SetDatabaseEnsure(db, cnpgv1.EnsurePresent)
+db.Spec.ClusterRef = corev1.LocalObjectReference{Name: "pg-main"}
+db.Spec.Owner = "appuser"
+db.Spec.ReclaimPolicy = cnpgv1.DatabaseReclaimDelete
+db.Spec.Ensure = cnpgv1.EnsurePresent
 
 // ObjectStore
 cnpg.SetObjectStoreWalConfig(store, walConfig)
@@ -126,7 +126,7 @@ cnpg.SetObjectStoreDataConfig(store, dataConfig)
 
 // ScheduledBackup
 cnpg.SetScheduledBackupSuspend(backup, true)
-cnpg.SetScheduledBackupBackupOwnerReference(backup, "self")
+backup.Spec.BackupOwnerReference = "self"
 ```
 
 ## Related Packages

@@ -3,73 +3,11 @@ package certmanager
 import (
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
-	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
-	corev1 "k8s.io/api/core/v1"
 )
-
-// CreateACMEIssuer returns an ACMEIssuer with the mandatory fields set.
-func CreateACMEIssuer(server, email string, key cmmeta.SecretKeySelector) *cmacme.ACMEIssuer {
-	return &cmacme.ACMEIssuer{
-		Email:                       email,
-		Server:                      server,
-		PrivateKey:                  key,
-		Solvers:                     []cmacme.ACMEChallengeSolver{},
-		SkipTLSVerify:               false,
-		DisableAccountKeyGeneration: false,
-	}
-}
 
 // AddACMEIssuerSolver appends a challenge solver to the issuer.
 func AddACMEIssuerSolver(issuer *cmacme.ACMEIssuer, solver cmacme.ACMEChallengeSolver) {
 	issuer.Solvers = append(issuer.Solvers, solver)
-}
-
-// CreateACMEHTTP01Solver creates a solver using HTTP01 via ingress class.
-func CreateACMEHTTP01Solver(serviceType corev1.ServiceType, class string) cmacme.ACMEChallengeSolver {
-	solver := cmacme.ACMEChallengeSolver{
-		HTTP01: &cmacme.ACMEChallengeSolverHTTP01{
-			Ingress: &cmacme.ACMEChallengeSolverHTTP01Ingress{
-				ServiceType: serviceType,
-			},
-		},
-	}
-	if class != "" {
-		solver.HTTP01.Ingress.IngressClassName = &class
-	}
-	return solver
-}
-
-// CreateACMEDNS01SolverCloudflare creates a DNS01 solver for Cloudflare.
-func CreateACMEDNS01SolverCloudflare(email string, token cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver {
-	provider := &cmacme.ACMEChallengeSolverDNS01{
-		Cloudflare: &cmacme.ACMEIssuerDNS01ProviderCloudflare{
-			Email:    email,
-			APIToken: &token,
-		},
-	}
-	return cmacme.ACMEChallengeSolver{DNS01: provider}
-}
-
-// CreateACMEDNS01SolverRoute53 creates a DNS01 solver for AWS Route53.
-func CreateACMEDNS01SolverRoute53(region string, key cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver {
-	provider := &cmacme.ACMEChallengeSolverDNS01{
-		Route53: &cmacme.ACMEIssuerDNS01ProviderRoute53{
-			Region:          region,
-			SecretAccessKey: key,
-		},
-	}
-	return cmacme.ACMEChallengeSolver{DNS01: provider}
-}
-
-// CreateACMEDNS01SolverGoogle creates a DNS01 solver for Google CloudDNS.
-func CreateACMEDNS01SolverGoogle(project string, sa *cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver {
-	provider := &cmacme.ACMEChallengeSolverDNS01{
-		CloudDNS: &cmacme.ACMEIssuerDNS01ProviderCloudDNS{
-			Project:        project,
-			ServiceAccount: sa,
-		},
-	}
-	return cmacme.ACMEChallengeSolver{DNS01: provider}
 }
 
 // Certificate converts the config to a cert-manager Certificate object.
@@ -79,7 +17,7 @@ func Certificate(cfg *CertificateConfig) *certv1.Certificate {
 	}
 	obj := CreateCertificate(cfg.Name, cfg.Namespace)
 	obj.Spec.SecretName = cfg.SecretName
-	SetCertificateIssuerRef(obj, cfg.IssuerRef)
+	obj.Spec.IssuerRef = cfg.IssuerRef
 	for _, dns := range cfg.DNSNames {
 		AddCertificateDNSName(obj, dns)
 	}
@@ -140,7 +78,11 @@ func applyIssuerVariant(v IssuerVariant, setACME func(*cmacme.ACMEIssuer), setCA
 
 // buildACMEIssuer converts an ACMEConfig to an ACMEIssuer, including solvers.
 func buildACMEIssuer(cfg *ACMEConfig) *cmacme.ACMEIssuer {
-	acme := CreateACMEIssuer(cfg.Server, cfg.Email, cfg.PrivateKey)
+	acme := &cmacme.ACMEIssuer{
+		Server:     cfg.Server,
+		Email:      cfg.Email,
+		PrivateKey: cfg.PrivateKey,
+	}
 	for _, s := range cfg.Solvers {
 		solver := buildACMESolver(&s)
 		if solver.HTTP01 != nil || solver.DNS01 != nil {
@@ -160,7 +102,7 @@ func buildACMESolver(cfg *ACMESolverConfig) cmacme.ACMEChallengeSolver {
 	switch s := cfg.Solver.(type) {
 	case *HTTP01SolverConfig:
 		if s != nil {
-			return CreateACMEHTTP01Solver(s.ServiceType, s.IngressClass)
+			return buildHTTP01Solver(s)
 		}
 	case *DNS01SolverConfig:
 		if s != nil {
@@ -170,6 +112,18 @@ func buildACMESolver(cfg *ACMESolverConfig) cmacme.ACMEChallengeSolver {
 	return cmacme.ACMEChallengeSolver{}
 }
 
+// buildHTTP01Solver converts an HTTP01SolverConfig to an ACMEChallengeSolver.
+// An empty ingress class leaves IngressClassName nil rather than pointing at
+// the empty string, which cert-manager reads as a class named "".
+func buildHTTP01Solver(cfg *HTTP01SolverConfig) cmacme.ACMEChallengeSolver {
+	ingress := &cmacme.ACMEChallengeSolverHTTP01Ingress{ServiceType: cfg.ServiceType}
+	if cfg.IngressClass != "" {
+		class := cfg.IngressClass
+		ingress.IngressClassName = &class
+	}
+	return cmacme.ACMEChallengeSolver{HTTP01: &cmacme.ACMEChallengeSolverHTTP01{Ingress: ingress}}
+}
+
 // buildDNS01Solver converts a DNS01SolverConfig to an ACMEChallengeSolver.
 // Provider is a sealed sum (Cloudflare/Route53/Google); each case guards
 // against typed-nil.
@@ -177,15 +131,31 @@ func buildDNS01Solver(cfg *DNS01SolverConfig) cmacme.ACMEChallengeSolver {
 	switch p := cfg.Provider.(type) {
 	case *CloudflareProviderConfig:
 		if p != nil && p.APIToken != nil {
-			return CreateACMEDNS01SolverCloudflare(p.Email, *p.APIToken)
+			token := *p.APIToken
+			return cmacme.ACMEChallengeSolver{DNS01: &cmacme.ACMEChallengeSolverDNS01{
+				Cloudflare: &cmacme.ACMEIssuerDNS01ProviderCloudflare{
+					Email:    p.Email,
+					APIToken: &token,
+				},
+			}}
 		}
 	case *Route53ProviderConfig:
 		if p != nil && p.SecretAccessKey != nil {
-			return CreateACMEDNS01SolverRoute53(p.Region, *p.SecretAccessKey)
+			return cmacme.ACMEChallengeSolver{DNS01: &cmacme.ACMEChallengeSolverDNS01{
+				Route53: &cmacme.ACMEIssuerDNS01ProviderRoute53{
+					Region:          p.Region,
+					SecretAccessKey: *p.SecretAccessKey,
+				},
+			}}
 		}
 	case *GoogleProviderConfig:
 		if p != nil {
-			return CreateACMEDNS01SolverGoogle(p.Project, p.ServiceAccount)
+			return cmacme.ACMEChallengeSolver{DNS01: &cmacme.ACMEChallengeSolverDNS01{
+				CloudDNS: &cmacme.ACMEIssuerDNS01ProviderCloudDNS{
+					Project:        p.Project,
+					ServiceAccount: p.ServiceAccount,
+				},
+			}}
 		}
 	}
 	return cmacme.ACMEChallengeSolver{}

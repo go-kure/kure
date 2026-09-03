@@ -14,8 +14,6 @@ func TestHPANilErrors(t *testing.T) {
 	assertPanics(t, func() { AddHPAMemoryMetric(nil, 80) })
 	assertPanics(t, func() { AddHPACustomMetric(nil, autoscalingv2.MetricSpec{}) })
 	assertPanics(t, func() { SetHPABehavior(nil, &autoscalingv2.HorizontalPodAutoscalerBehavior{}) })
-	assertPanics(t, func() { SetHPALabels(nil, map[string]string{}) })
-	assertPanics(t, func() { SetHPAAnnotations(nil, map[string]string{}) })
 }
 
 func TestHPAScaleTargetRef(t *testing.T) {
@@ -73,21 +71,5 @@ func TestHPABehavior(t *testing.T) {
 	SetHPABehavior(hpa, behavior)
 	if hpa.Spec.Behavior == nil || hpa.Spec.Behavior.ScaleDown == nil {
 		t.Errorf("behavior not set correctly")
-	}
-}
-
-func TestHPALabelsAndAnnotations(t *testing.T) {
-	hpa := CreateHorizontalPodAutoscaler("test", "default")
-
-	labels := map[string]string{"env": "prod"}
-	SetHPALabels(hpa, labels)
-	if hpa.Labels["env"] != "prod" {
-		t.Errorf("labels not set correctly")
-	}
-
-	annotations := map[string]string{"note": "test"}
-	SetHPAAnnotations(hpa, annotations)
-	if hpa.Annotations["note"] != "test" {
-		t.Errorf("annotations not set correctly")
 	}
 }
