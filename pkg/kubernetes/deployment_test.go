@@ -9,125 +9,67 @@ import (
 )
 
 func TestDeploymentNilErrors(t *testing.T) {
-	// Functions with secondary nil checks — still return error on nil receiver
-	if err := SetDeploymentPodSpec(nil, &corev1.PodSpec{}); err == nil {
-		t.Error("expected error for nil Deployment on SetDeploymentPodSpec")
-	}
-	if err := AddDeploymentContainer(nil, &corev1.Container{Name: "c"}); err == nil {
-		t.Error("expected error for nil Deployment on AddDeploymentContainer")
-	}
-	if err := AddDeploymentInitContainer(nil, &corev1.Container{Name: "c"}); err == nil {
-		t.Error("expected error for nil Deployment on AddDeploymentInitContainer")
-	}
-	if err := AddDeploymentVolume(nil, &corev1.Volume{Name: "v"}); err == nil {
-		t.Error("expected error for nil Deployment on AddDeploymentVolume")
-	}
-	if err := AddDeploymentImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}); err == nil {
-		t.Error("expected error for nil Deployment on AddDeploymentImagePullSecret")
-	}
-	if err := AddDeploymentToleration(nil, &corev1.Toleration{Key: "k"}); err == nil {
-		t.Error("expected error for nil Deployment on AddDeploymentToleration")
-	}
-	if err := AddDeploymentTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{}); err == nil {
-		t.Error("expected error for nil Deployment on AddDeploymentTopologySpreadConstraints")
-	}
-
-	// Functions that now panic on nil receiver
-	assertPanics(t, func() { SetDeploymentSecurityContext(nil, &corev1.PodSecurityContext{}) })
-	assertPanics(t, func() { SetDeploymentAffinity(nil, &corev1.Affinity{}) })
 	assertPanics(t, func() { SetDeploymentReplicas(nil, 3) })
 	assertPanics(t, func() { SetDeploymentRevisionHistoryLimit(nil, 5) })
 	assertPanics(t, func() { SetDeploymentProgressDeadlineSeconds(nil, 60) })
 }
 
-func TestDeploymentNilArgErrors(t *testing.T) {
+// TestDeploymentPodTemplate covers the caller idiom the per-kind pod-template
+// passthroughs were folded into: the PodSpec helpers applied to
+// &dep.Spec.Template.Spec.
+func TestDeploymentPodTemplate(t *testing.T) {
 	dep := CreateDeployment("test", "default")
-	if err := SetDeploymentPodSpec(dep, nil); err == nil {
-		t.Error("expected error for nil PodSpec")
-	}
-	if err := AddDeploymentContainer(dep, nil); err == nil {
-		t.Error("expected error for nil Container")
-	}
-	if err := AddDeploymentInitContainer(dep, nil); err == nil {
-		t.Error("expected error for nil InitContainer")
-	}
-	if err := AddDeploymentVolume(dep, nil); err == nil {
-		t.Error("expected error for nil Volume")
-	}
-	if err := AddDeploymentImagePullSecret(dep, nil); err == nil {
-		t.Error("expected error for nil ImagePullSecret")
-	}
-	if err := AddDeploymentToleration(dep, nil); err == nil {
-		t.Error("expected error for nil Toleration")
-	}
-}
+	spec := &dep.Spec.Template.Spec
 
-func TestDeploymentTopologySpreadConstraints(t *testing.T) {
-	t.Run("nil constraint", func(t *testing.T) {
-		dep := CreateDeployment("test", "default")
-		if err := AddDeploymentTopologySpreadConstraints(dep, nil); err != nil {
-			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
-		}
-		if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 0 {
-			t.Errorf("expected no constraints, got %d", len(dep.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-	})
+	AddPodSpecContainer(spec, &corev1.Container{Name: "c"})
+	AddPodSpecInitContainer(spec, &corev1.Container{Name: "init"})
+	AddPodSpecVolume(spec, &corev1.Volume{Name: "vol"})
+	AddPodSpecImagePullSecret(spec, &corev1.LocalObjectReference{Name: "secret"})
+	AddPodSpecToleration(spec, &corev1.Toleration{Key: "k"})
 
-	t.Run("append single constraint", func(t *testing.T) {
-		dep := CreateDeployment("test", "default")
-		c := corev1.TopologySpreadConstraint{
-			MaxSkew:           1,
-			TopologyKey:       "topology.kubernetes.io/zone",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
-			},
-		}
-		if err := AddDeploymentTopologySpreadConstraints(dep, &c); err != nil {
-			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
-		}
-		if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
-			t.Fatalf("expected 1 constraint, got %d", len(dep.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-		if !reflect.DeepEqual(dep.Spec.Template.Spec.TopologySpreadConstraints[0], c) {
-			t.Errorf("constraint mismatch: got %+v, want %+v", dep.Spec.Template.Spec.TopologySpreadConstraints[0], c)
-		}
-	})
+	c := corev1.TopologySpreadConstraint{
+		MaxSkew:           1,
+		TopologyKey:       "topology.kubernetes.io/zone",
+		WhenUnsatisfiable: corev1.DoNotSchedule,
+		LabelSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "test"},
+		},
+	}
+	AddPodSpecTopologySpreadConstraints(spec, &c)
 
-	t.Run("append additional constraint", func(t *testing.T) {
-		dep := CreateDeployment("test", "default")
-		first := corev1.TopologySpreadConstraint{
-			MaxSkew:           1,
-			TopologyKey:       "zone",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
-			},
-		}
-		second := corev1.TopologySpreadConstraint{
-			MaxSkew:           2,
-			TopologyKey:       "hostname",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
-			},
-		}
-		if err := AddDeploymentTopologySpreadConstraints(dep, &first); err != nil {
-			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
-		}
-		if err := AddDeploymentTopologySpreadConstraints(dep, &second); err != nil {
-			t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
-		}
-		if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 2 {
-			t.Fatalf("expected 2 constraints, got %d", len(dep.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-		if !reflect.DeepEqual(dep.Spec.Template.Spec.TopologySpreadConstraints[0], first) {
-			t.Errorf("first constraint mismatch")
-		}
-		if !reflect.DeepEqual(dep.Spec.Template.Spec.TopologySpreadConstraints[1], second) {
-			t.Errorf("second constraint mismatch")
-		}
-	})
+	sc := &corev1.PodSecurityContext{}
+	SetPodSpecSecurityContext(spec, sc)
+	aff := &corev1.Affinity{}
+	SetPodSpecAffinity(spec, aff)
+
+	tmpl := dep.Spec.Template.Spec
+	if len(tmpl.Containers) != 1 || tmpl.Containers[0].Name != "c" {
+		t.Errorf("container not added to the pod template")
+	}
+	if len(tmpl.InitContainers) != 1 {
+		t.Errorf("init container not added to the pod template")
+	}
+	if len(tmpl.Volumes) != 1 {
+		t.Errorf("volume not added to the pod template")
+	}
+	if len(tmpl.ImagePullSecrets) != 1 {
+		t.Errorf("image pull secret not added to the pod template")
+	}
+	if len(tmpl.Tolerations) != 1 {
+		t.Errorf("toleration not added to the pod template")
+	}
+	if len(tmpl.TopologySpreadConstraints) != 1 {
+		t.Fatalf("expected 1 constraint, got %d", len(tmpl.TopologySpreadConstraints))
+	}
+	if !reflect.DeepEqual(tmpl.TopologySpreadConstraints[0], c) {
+		t.Errorf("constraint mismatch: got %+v, want %+v", tmpl.TopologySpreadConstraints[0], c)
+	}
+	if tmpl.SecurityContext != sc {
+		t.Errorf("security context not set on the pod template")
+	}
+	if tmpl.Affinity != aff {
+		t.Errorf("affinity not set on the pod template")
+	}
 }
 
 func TestDeploymentFunctions(t *testing.T) {
@@ -137,66 +79,6 @@ func TestDeploymentFunctions(t *testing.T) {
 	}
 	if dep.Kind != "Deployment" {
 		t.Errorf("unexpected kind %q", dep.Kind)
-	}
-
-	c := corev1.Container{Name: "c"}
-	if err := AddDeploymentContainer(dep, &c); err != nil {
-		t.Fatalf("AddDeploymentContainer returned error: %v", err)
-	}
-	if len(dep.Spec.Template.Spec.Containers) != 1 || dep.Spec.Template.Spec.Containers[0].Name != "c" {
-		t.Errorf("container not added")
-	}
-
-	ic := corev1.Container{Name: "init"}
-	if err := AddDeploymentInitContainer(dep, &ic); err != nil {
-		t.Fatalf("AddDeploymentInitContainer returned error: %v", err)
-	}
-	if len(dep.Spec.Template.Spec.InitContainers) != 1 {
-		t.Errorf("init container not added")
-	}
-
-	v := corev1.Volume{Name: "vol"}
-	if err := AddDeploymentVolume(dep, &v); err != nil {
-		t.Fatalf("AddDeploymentVolume returned error: %v", err)
-	}
-	if len(dep.Spec.Template.Spec.Volumes) != 1 {
-		t.Errorf("volume not added")
-	}
-
-	secret := corev1.LocalObjectReference{Name: "secret"}
-	if err := AddDeploymentImagePullSecret(dep, &secret); err != nil {
-		t.Fatalf("AddDeploymentImagePullSecret returned error: %v", err)
-	}
-	if len(dep.Spec.Template.Spec.ImagePullSecrets) != 1 {
-		t.Errorf("image pull secret not added")
-	}
-
-	tol := corev1.Toleration{Key: "k"}
-	if err := AddDeploymentToleration(dep, &tol); err != nil {
-		t.Fatalf("AddDeploymentToleration returned error: %v", err)
-	}
-	if len(dep.Spec.Template.Spec.Tolerations) != 1 {
-		t.Errorf("toleration not added")
-	}
-
-	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.ScheduleAnyway, LabelSelector: &metav1.LabelSelector{}}
-	if err := AddDeploymentTopologySpreadConstraints(dep, &tsc); err != nil {
-		t.Fatalf("AddDeploymentTopologySpreadConstraints returned error: %v", err)
-	}
-	if len(dep.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
-		t.Errorf("topology constraint not added")
-	}
-
-	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
-	SetDeploymentSecurityContext(dep, sc)
-	if dep.Spec.Template.Spec.SecurityContext != sc {
-		t.Errorf("security context not set")
-	}
-
-	aff := &corev1.Affinity{}
-	SetDeploymentAffinity(dep, aff)
-	if dep.Spec.Template.Spec.Affinity != aff {
-		t.Errorf("affinity not set")
 	}
 
 	SetDeploymentReplicas(dep, 3)
@@ -215,15 +97,14 @@ func TestDeploymentFunctions(t *testing.T) {
 	}
 }
 
-func TestSetDeploymentPodSpec(t *testing.T) {
+// TestDeploymentPodSpecAssignment covers the replacement for the removed
+// SetDeploymentPodSpec: a whole PodSpec goes on by assignment.
+func TestDeploymentPodSpecAssignment(t *testing.T) {
 	dep := CreateDeployment("test", "default")
-	spec := &corev1.PodSpec{
+	dep.Spec.Template.Spec = corev1.PodSpec{
 		Containers: []corev1.Container{
 			{Name: "test", Image: "nginx"},
 		},
-	}
-	if err := SetDeploymentPodSpec(dep, spec); err != nil {
-		t.Fatalf("expected no error, got %v", err)
 	}
 	if len(dep.Spec.Template.Spec.Containers) != 1 {
 		t.Fatal("expected PodSpec to be assigned")

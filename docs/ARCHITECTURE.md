@@ -431,11 +431,11 @@ Resource builders follow a consistent functional pattern across all Kubernetes r
 // Pattern: Create* functions for constructors
 func CreateDeployment(name, namespace string) *appsv1.Deployment
 
-// Pattern: Add* functions for collection modifications  
-func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) error
+// Pattern: Add* functions for collection modifications
+func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container)
 
 // Pattern: Set* functions for field assignments
-func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32) error
+func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32)
 ```
 
 ### Implementation Structure
@@ -470,13 +470,22 @@ func CreateDeployment(name, namespace string) *appsv1.Deployment {
     return Create[appsv1.Deployment](name, namespace)
 }
 
-// pkg/kubernetes/deployment.go (admissible sugar: slice append)
+// pkg/kubernetes/podspec.go (admissible sugar: slice append)
 
-func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) {
-    deployment.Spec.Template.Spec.Containers = append(
-        deployment.Spec.Template.Spec.Containers, *container)
+func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container) {
+    if spec == nil {
+        panic("AddPodSpecContainer: spec must not be nil")
+    }
+    if container == nil {
+        panic("AddPodSpecContainer: container must not be nil")
+    }
+    spec.Containers = append(spec.Containers, *container)
 }
 ```
+
+There is one helper per pod-template field, on `corev1.PodSpec`, not one per
+workload kind: a Deployment's containers are appended with
+`AddPodSpecContainer(&dep.Spec.Template.Spec, c)`.
 
 Constructors emit identity only (`apiVersion`, `kind`, `metadata.name`,
 `metadata.namespace`); labels, selectors and every other value are written by
@@ -658,12 +667,16 @@ func CreateService(name, namespace string) *corev1.Service
 #### Helper Functions
 ```go
 // Adders for collection modifications
-func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) error
-func AddServicePort(service *corev1.Service, port corev1.ServicePort) error
+func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container)
+func AddServicePort(service *corev1.Service, port corev1.ServicePort)
 
 // Setters for field assignments
-func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32) error
+func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32)
 ```
+
+A helper is named for the type it mutates, not for the workload kind that
+embeds it: the pod-template helpers live on `PodSpec` and are reached through
+`&<workload>.Spec.Template.Spec`.
 
 #### Workflow Functions
 ```go
@@ -1142,34 +1155,23 @@ func TestCreateDeployment(t *testing.T) {
 
 #### Helper Function Testing
 ```go
-func TestAddDeploymentContainer(t *testing.T) {
+func TestAddPodSpecContainer(t *testing.T) {
     deployment := CreateDeployment("test-app", "default")
     container := &corev1.Container{
         Name:  "main",
         Image: "nginx:latest",
     }
-    
-    // Test successful addition
-    err := AddDeploymentContainer(deployment, container)
-    if err != nil {
-        t.Fatalf("unexpected error: %v", err)
-    }
-    
+
+    AddPodSpecContainer(&deployment.Spec.Template.Spec, container)
+
     // Validate container was added
     if len(deployment.Spec.Template.Spec.Containers) != 1 {
         t.Errorf("expected 1 container, got %d", len(deployment.Spec.Template.Spec.Containers))
     }
-    
-    // Test error conditions
-    err = AddDeploymentContainer(nil, container)
-    if err == nil {
-        t.Error("expected error for nil deployment")
-    }
-    
-    err = AddDeploymentContainer(deployment, nil)
-    if err == nil {
-        t.Error("expected error for nil container")
-    }
+
+    // A nil argument is a programming error, not a runtime condition
+    assertPanics(t, func() { AddPodSpecContainer(nil, container) })
+    assertPanics(t, func() { AddPodSpecContainer(&deployment.Spec.Template.Spec, nil) })
 }
 ```
 

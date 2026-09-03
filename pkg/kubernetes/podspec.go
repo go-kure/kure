@@ -2,92 +2,83 @@ package kubernetes
 
 import (
 	corev1 "k8s.io/api/core/v1"
-
-	"github.com/go-kure/kure/pkg/errors"
 )
 
 // AddPodSpecContainer appends a container to the PodSpec.
-func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container) error {
+func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("AddPodSpecContainer: spec must not be nil")
 	}
 	if container == nil {
-		return errors.ErrNilContainer
+		panic("AddPodSpecContainer: container must not be nil")
 	}
 	spec.Containers = append(spec.Containers, *container)
-	return nil
 }
 
 // AddPodSpecInitContainer appends an init container to the PodSpec.
-func AddPodSpecInitContainer(spec *corev1.PodSpec, container *corev1.Container) error {
+func AddPodSpecInitContainer(spec *corev1.PodSpec, container *corev1.Container) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("AddPodSpecInitContainer: spec must not be nil")
 	}
 	if container == nil {
-		return errors.ErrNilInitContainer
+		panic("AddPodSpecInitContainer: container must not be nil")
 	}
 	spec.InitContainers = append(spec.InitContainers, *container)
-	return nil
 }
 
 // AddPodSpecEphemeralContainer appends an ephemeral container to the PodSpec.
-func AddPodSpecEphemeralContainer(spec *corev1.PodSpec, container *corev1.EphemeralContainer) error {
+func AddPodSpecEphemeralContainer(spec *corev1.PodSpec, container *corev1.EphemeralContainer) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("AddPodSpecEphemeralContainer: spec must not be nil")
 	}
 	if container == nil {
-		return errors.ErrNilEphemeralContainer
+		panic("AddPodSpecEphemeralContainer: container must not be nil")
 	}
 	spec.EphemeralContainers = append(spec.EphemeralContainers, *container)
-	return nil
 }
 
 // AddPodSpecVolume appends a volume to the PodSpec.
-func AddPodSpecVolume(spec *corev1.PodSpec, volume *corev1.Volume) error {
+func AddPodSpecVolume(spec *corev1.PodSpec, volume *corev1.Volume) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("AddPodSpecVolume: spec must not be nil")
 	}
 	if volume == nil {
-		return errors.ErrNilVolume
+		panic("AddPodSpecVolume: volume must not be nil")
 	}
 	spec.Volumes = append(spec.Volumes, *volume)
-	return nil
 }
 
 // AddPodSpecImagePullSecret appends an image pull secret to the PodSpec.
-func AddPodSpecImagePullSecret(spec *corev1.PodSpec, secret *corev1.LocalObjectReference) error {
+func AddPodSpecImagePullSecret(spec *corev1.PodSpec, secret *corev1.LocalObjectReference) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("AddPodSpecImagePullSecret: spec must not be nil")
 	}
 	if secret == nil {
-		return errors.ErrNilImagePullSecret
+		panic("AddPodSpecImagePullSecret: secret must not be nil")
 	}
 	spec.ImagePullSecrets = append(spec.ImagePullSecrets, *secret)
-	return nil
 }
 
 // AddPodSpecToleration appends a toleration to the PodSpec.
-func AddPodSpecToleration(spec *corev1.PodSpec, toleration *corev1.Toleration) error {
+func AddPodSpecToleration(spec *corev1.PodSpec, toleration *corev1.Toleration) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("AddPodSpecToleration: spec must not be nil")
 	}
 	if toleration == nil {
-		return errors.ErrNilToleration
+		panic("AddPodSpecToleration: toleration must not be nil")
 	}
 	spec.Tolerations = append(spec.Tolerations, *toleration)
-	return nil
 }
 
-// AddPodSpecTopologySpreadConstraints appends a topology spread constraint if provided.
-func AddPodSpecTopologySpreadConstraints(spec *corev1.PodSpec, constraint *corev1.TopologySpreadConstraint) error {
+// AddPodSpecTopologySpreadConstraints appends a topology spread constraint to the PodSpec.
+func AddPodSpecTopologySpreadConstraints(spec *corev1.PodSpec, constraint *corev1.TopologySpreadConstraint) {
 	if spec == nil {
-		return errors.ErrNilPodSpec
+		panic("AddPodSpecTopologySpreadConstraints: spec must not be nil")
 	}
 	if constraint == nil {
-		return nil
+		panic("AddPodSpecTopologySpreadConstraints: constraint must not be nil")
 	}
 	spec.TopologySpreadConstraints = append(spec.TopologySpreadConstraints, *constraint)
-	return nil
 }
 
 // SetPodSpecSecurityContext sets the security context for the PodSpec.

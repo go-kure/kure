@@ -91,14 +91,15 @@ At the start of this work item `pkg/kubernetes/testdata/admission_exclusions.txt
 held 344 tolerated helpers, classified by why the admission test rejected them:
 257 bare field forwarders, 51 that return a value, 24 that write no field at all
 (they delegate, or are no-ops), 10 that return early instead of writing, and 2
-that clear a sibling field the caller did not name. This PR removes the 257; the
-remaining 87 are the subject of the later work items. Six of the 24 delegators
+that clear a sibling field the caller did not name. The 257 go first; folding the
+per-kind pod-template passthroughs (below) takes the remaining 87 down to 33,
+and the later work items empty the file. Six of the 24 delegators
 now read as bare field assignments rather than delegations, because the helper
 they delegated to was one of the 257 and their bodies were inlined:
 `SetDaemonSetServiceAccountName`, `SetDaemonSetNodeSelector`,
 `SetJobServiceAccountName`, `SetJobNodeSelector`,
 `SetStatefulSetServiceAccountName` and `SetStatefulSetNodeSelector`. They are
-folded onto the PodSpec helpers in the next PR.
+folded onto the PodSpec helpers below.
 
 ### Sub-type constructors (9)
 
@@ -417,3 +418,118 @@ inline.
 | `SetServiceMonitorNamespaceSelector(obj, ns)` | `obj.Spec.NamespaceSelector = ns` |
 | `SetServiceMonitorSelector(obj, selector)` | `obj.Spec.Selector = selector` |
 | `SetServiceMonitorSpec(obj, spec)` | `obj.Spec = spec` |
+
+## Per-kind pod-template passthroughs folded onto `PodSpec`
+
+A workload kind's pod template is a `corev1.PodSpec`. One helper per
+pod-template field, per workload kind, is five copies of the same line — so the
+`PodSpec`-level helper is the only one kept and the caller names the template it
+means. The 51 per-kind passthroughs below are removed.
+
+The `PodSpec` appenders lose their `error` return in the same change: they are
+void and panic on a nil `*PodSpec` or a nil element, matching the `SetPodSpec*`
+setters that already did. `AddPodSpecTopologySpreadConstraints` no longer
+silently ignores a nil constraint.
+
+The receiver expression is the same for every row of a kind:
+
+| Kind | Pod template |
+|---|---|
+| `Deployment` | `&dep.Spec.Template.Spec` |
+| `StatefulSet` | `&sts.Spec.Template.Spec` |
+| `DaemonSet` | `&ds.Spec.Template.Spec` |
+| `Job` | `&job.Spec.Template.Spec` |
+| `CronJob` | `&cj.Spec.JobTemplate.Spec.Template.Spec` |
+
+Below, `spec` stands for that expression.
+
+### `Deployment` (9)
+
+| Removed | Replacement |
+|---|---|
+| `SetDeploymentPodSpec(dep, s)` | `dep.Spec.Template.Spec = *s` |
+| `AddDeploymentContainer(dep, c)` | `AddPodSpecContainer(spec, c)` |
+| `AddDeploymentInitContainer(dep, c)` | `AddPodSpecInitContainer(spec, c)` |
+| `AddDeploymentVolume(dep, v)` | `AddPodSpecVolume(spec, v)` |
+| `AddDeploymentImagePullSecret(dep, s)` | `AddPodSpecImagePullSecret(spec, s)` |
+| `AddDeploymentToleration(dep, t)` | `AddPodSpecToleration(spec, t)` |
+| `AddDeploymentTopologySpreadConstraints(dep, c)` | `AddPodSpecTopologySpreadConstraints(spec, c)` |
+| `SetDeploymentSecurityContext(dep, sc)` | `SetPodSpecSecurityContext(spec, sc)` |
+| `SetDeploymentAffinity(dep, aff)` | `SetPodSpecAffinity(spec, aff)` |
+
+### `StatefulSet` (11)
+
+| Removed | Replacement |
+|---|---|
+| `SetStatefulSetPodSpec(sts, s)` | `sts.Spec.Template.Spec = *s` |
+| `AddStatefulSetContainer(sts, c)` | `AddPodSpecContainer(spec, c)` |
+| `AddStatefulSetInitContainer(sts, c)` | `AddPodSpecInitContainer(spec, c)` |
+| `AddStatefulSetVolume(sts, v)` | `AddPodSpecVolume(spec, v)` |
+| `AddStatefulSetImagePullSecret(sts, s)` | `AddPodSpecImagePullSecret(spec, s)` |
+| `AddStatefulSetToleration(sts, t)` | `AddPodSpecToleration(spec, t)` |
+| `AddStatefulSetTopologySpreadConstraints(sts, c)` | `AddPodSpecTopologySpreadConstraints(spec, c)` |
+| `SetStatefulSetSecurityContext(sts, sc)` | `SetPodSpecSecurityContext(spec, sc)` |
+| `SetStatefulSetAffinity(sts, aff)` | `SetPodSpecAffinity(spec, aff)` |
+| `SetStatefulSetServiceAccountName(sts, n)` | `spec.ServiceAccountName = n` |
+| `SetStatefulSetNodeSelector(sts, ns)` | `spec.NodeSelector = ns` |
+
+### `DaemonSet` (11)
+
+| Removed | Replacement |
+|---|---|
+| `SetDaemonSetPodSpec(ds, s)` | `ds.Spec.Template.Spec = *s` |
+| `AddDaemonSetContainer(ds, c)` | `AddPodSpecContainer(spec, c)` |
+| `AddDaemonSetInitContainer(ds, c)` | `AddPodSpecInitContainer(spec, c)` |
+| `AddDaemonSetVolume(ds, v)` | `AddPodSpecVolume(spec, v)` |
+| `AddDaemonSetImagePullSecret(ds, s)` | `AddPodSpecImagePullSecret(spec, s)` |
+| `AddDaemonSetToleration(ds, t)` | `AddPodSpecToleration(spec, t)` |
+| `AddDaemonSetTopologySpreadConstraints(ds, c)` | `AddPodSpecTopologySpreadConstraints(spec, c)` |
+| `SetDaemonSetSecurityContext(ds, sc)` | `SetPodSpecSecurityContext(spec, sc)` |
+| `SetDaemonSetAffinity(ds, aff)` | `SetPodSpecAffinity(spec, aff)` |
+| `SetDaemonSetServiceAccountName(ds, n)` | `spec.ServiceAccountName = n` |
+| `SetDaemonSetNodeSelector(ds, ns)` | `spec.NodeSelector = ns` |
+
+### `Job` (11)
+
+| Removed | Replacement |
+|---|---|
+| `SetJobPodSpec(job, s)` | `job.Spec.Template.Spec = *s` |
+| `AddJobContainer(job, c)` | `AddPodSpecContainer(spec, c)` |
+| `AddJobInitContainer(job, c)` | `AddPodSpecInitContainer(spec, c)` |
+| `AddJobVolume(job, v)` | `AddPodSpecVolume(spec, v)` |
+| `AddJobImagePullSecret(job, s)` | `AddPodSpecImagePullSecret(spec, s)` |
+| `AddJobToleration(job, t)` | `AddPodSpecToleration(spec, t)` |
+| `AddJobTopologySpreadConstraint(job, c)` | `AddPodSpecTopologySpreadConstraints(spec, c)` |
+| `SetJobSecurityContext(job, sc)` | `SetPodSpecSecurityContext(spec, sc)` |
+| `SetJobAffinity(job, aff)` | `SetPodSpecAffinity(spec, aff)` |
+| `SetJobServiceAccountName(job, n)` | `spec.ServiceAccountName = n` |
+| `SetJobNodeSelector(job, ns)` | `spec.NodeSelector = ns` |
+
+### `CronJob` (9)
+
+| Removed | Replacement |
+|---|---|
+| `SetCronJobPodSpec(cj, s)` | `cj.Spec.JobTemplate.Spec.Template.Spec = *s` |
+| `AddCronJobContainer(cj, c)` | `AddPodSpecContainer(spec, c)` |
+| `AddCronJobInitContainer(cj, c)` | `AddPodSpecInitContainer(spec, c)` |
+| `AddCronJobVolume(cj, v)` | `AddPodSpecVolume(spec, v)` |
+| `AddCronJobImagePullSecret(cj, s)` | `AddPodSpecImagePullSecret(spec, s)` |
+| `AddCronJobToleration(cj, t)` | `AddPodSpecToleration(spec, t)` |
+| `AddCronJobTopologySpreadConstraint(cj, c)` | `AddPodSpecTopologySpreadConstraints(spec, c)` |
+| `SetCronJobSecurityContext(cj, sc)` | `SetPodSpecSecurityContext(spec, sc)` |
+| `SetCronJobAffinity(cj, aff)` | `SetPodSpecAffinity(spec, aff)` |
+
+### Effect on the exclusion list
+
+Of the 51, 47 were on the exclusion list; `SetDeploymentSecurityContext`,
+`SetDeploymentAffinity`, `SetCronJobSecurityContext` and `SetCronJobAffinity`
+already passed as class (b) pointer assignments and are removed as duplicates,
+not as contract violations. Dropping those 47 plus the 7 `AddPodSpec*` helpers
+that no longer return an error takes the file from 87 tolerated helpers to 33.
+
+The `pkg/errors` sentinels those helpers returned (`ErrNilDeployment`,
+`ErrNilDaemonSet`, `ErrNilStatefulSet`, `ErrNilJob`, `ErrNilCronJob`,
+`ErrNilVolume`, `ErrNilToleration`, `ErrNilImagePullSecret`,
+`ErrNilInitContainer`, `ErrNilEphemeralContainer`, `ErrNilSpec`) are now unused
+inside the module. They stay exported for this release; retiring them is a
+separate `pkg/errors` change, not part of the builder surface.
