@@ -16,7 +16,17 @@
 // only delegates. A helper that returns anything is inadmissible whatever its
 // body does: the purity rule (§4) allows no error return, and a nil receiver
 // panics rather than being reported, so a result slot has nothing to carry.
-// Validation that does not surface as a result is not detected. A body that assigns nil to a nillable field is inadmissible
+// Validation that does not surface as a result is not detected. An admitted
+// operation does not cover the rest of the body: a bare write next to an
+// append, a pointer assignment or a literal is inadmissible when its value is
+// not a parameter (a literal, a call, a computed value, a local of the body's
+// own), because that sets a field the caller did not name (§4). A bare write
+// of a parameter next to an admitted operation forwards a value the caller
+// supplied and leaves the class alone. Writing through a pointer intermediate
+// the body just initialised (o.Spec.Ref.Name or *o.Spec.Replicas), a make of
+// the map or slice the body then inserts into or appends to, and assigning an
+// appended or inserted-into local back to its field are each part of their
+// class; none is bare. A body that assigns nil to a nillable field is inadmissible
 // whatever else it does: that clears a field the caller did not name, which
 // the purity rule (§4) forbids. nil is recognised as the literal, a conversion
 // of it ((*T)(nil)), a local declared without a value or declared or assigned
@@ -215,6 +225,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		bigLiteral  bool
 		nilClear    string
 		writes      = map[string]bool{}
+		ptrPaths    = map[string]bool{}         // pointer fields assigned, by expression, for writes through them
+		bareWrites  = map[string]types.Object{} // bare field writes -> the local assigned, if any
 		locals      = nilLocals(fn, info)
 		rooted      = rootedObjects(fn, info)      // parameters and locals aliasing them, by position
 		localOps    = map[types.Object]token.Pos{} // local -> first append or map insert into it
@@ -248,19 +260,36 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			if !fieldWrite {
 				continue
 			}
-			writes[types.ExprString(lhs)] = true
+			lhsPath := types.ExprString(lhs)
+			writes[lhsPath] = true
+			isPtr := false
 			if t := info.TypeOf(lhs); t != nil {
 				if _, ok := t.Underlying().(*types.Pointer); ok {
-					ptrAssign = true
+					ptrAssign, isPtr = true, true
+					ptrPaths[lhsPath] = true
 				}
+			}
+			var rhsObj types.Object
+			if rhs != nil {
+				if id, ok := ast.Unparen(rhs).(*ast.Ident); ok {
+					rhsObj = info.ObjectOf(id)
+				}
+			}
+			// A bare write is extra only when its value is not one the caller
+			// passed: a parameter (or a local rooted in one) is a forwarder for
+			// a caller-named value; a literal, a call or a computed value is a
+			// default. Container inits (make) and writes through a pointer the
+			// body initialised belong to classes a and b respectively.
+			callerValue := rhsObj != nil && rooted.at(rhsObj, s.Pos())
+			if !isPtr && !callerValue && !isMapIndex(lhs, info) && !isAppend(rhs, info) && !isMake(rhs, info) &&
+				compositeOf(rhs) == nil && !throughPointer(lhsPath, ptrPaths) {
+				bareWrites[lhsPath] = rhsObj
 			}
 			if rhs == nil {
 				continue
 			}
-			if id, ok := ast.Unparen(rhs).(*ast.Ident); ok {
-				if obj := info.ObjectOf(id); obj != nil {
-					writtenBack[obj] = s.Pos()
-				}
+			if rhsObj != nil {
+				writtenBack[rhsObj] = s.Pos()
 			}
 			if nilClear == "" && isNillable(info.TypeOf(lhs)) && isNilValue(rhs, info, locals) {
 				nilClear = types.ExprString(lhs)
@@ -281,10 +310,25 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			appendOrMap = true
 		}
 	}
+	// A bare write is one the admitted operation does not cover: neither the
+	// write-back of a local the body appended to or inserted into (class a),
+	// nor a write through a pointer the body initialised (class b).
+	var extra []string
+	for path, obj := range bareWrites {
+		if obj != nil {
+			if _, op := localOps[obj]; op {
+				continue
+			}
+		}
+		extra = append(extra, path)
+	}
+	sort.Strings(extra)
 
 	switch {
 	case nilClear != "":
 		return Inadmissible, fmt.Sprintf("assigns nil to %s, a field the caller did not name (purity §4)", nilClear)
+	case len(extra) > 0 && (appendOrMap || ptrAssign || bigLiteral):
+		return Inadmissible, fmt.Sprintf("bare write to %s alongside the admitted operation, a field the caller did not name (purity §4)", strings.Join(extra, ", "))
 	case appendOrMap:
 		return Append, "slice append or map insert (class a)"
 	case ptrAssign:
@@ -297,6 +341,33 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		return Inadmissible, "single bare field assignment (a forwarder for the struct field)"
 	}
 	return Inadmissible, "no field write (delegation or no-op)"
+}
+
+// throughPointer reports whether path writes through a pointer field the
+// body assigned earlier in source order: o.Spec.Ref.Name or *o.Spec.Ref after
+// o.Spec.Ref.
+func throughPointer(path string, ptrPaths map[string]bool) bool {
+	for p := range ptrPaths {
+		if strings.HasPrefix(path, p+".") || path == "*"+p {
+			return true
+		}
+	}
+	return false
+}
+
+// isMake reports whether e is a call to the builtin make: the nil-init of a
+// map or slice field before inserting into or appending to it.
+func isMake(e ast.Expr, info *types.Info) bool {
+	call, ok := ast.Unparen(e).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	id, ok := call.Fun.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	b, ok := info.ObjectOf(id).(*types.Builtin)
+	return ok && b.Name() == "make"
 }
 
 // isFieldWrite reports whether lhs writes through a selector or dereference,
