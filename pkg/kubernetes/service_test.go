@@ -1,7 +1,6 @@
 package kubernetes
 
 import (
-	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -11,26 +10,14 @@ import (
 func TestServiceNilErrors(t *testing.T) {
 	// All Service functions now panic on nil receiver
 	assertPanics(t, func() { AddServicePort(nil, corev1.ServicePort{}) })
-	assertPanics(t, func() { SetServiceSelector(nil, map[string]string{}) })
-	assertPanics(t, func() { SetServiceType(nil, corev1.ServiceTypeClusterIP) })
-	assertPanics(t, func() { SetServiceClusterIP(nil, "10.0.0.1") })
 	assertPanics(t, func() { AddServiceExternalIP(nil, "1.2.3.4") })
-	assertPanics(t, func() { SetServiceExternalTrafficPolicy(nil, corev1.ServiceExternalTrafficPolicyLocal) })
-	assertPanics(t, func() { SetServiceSessionAffinity(nil, corev1.ServiceAffinityClientIP) })
 	assertPanics(t, func() { SetServiceLoadBalancerClass(nil, "x") })
 	assertPanics(t, func() { AddServiceLabel(nil, "k", "v") })
 	assertPanics(t, func() { AddServiceAnnotation(nil, "k", "v") })
-	assertPanics(t, func() { SetServiceLabels(nil, nil) })
-	assertPanics(t, func() { SetServiceAnnotations(nil, nil) })
-	assertPanics(t, func() { SetServicePublishNotReadyAddresses(nil, true) })
 	assertPanics(t, func() { AddServiceLoadBalancerSourceRange(nil, "10.0.0.0/24") })
-	assertPanics(t, func() { SetServiceLoadBalancerSourceRanges(nil, nil) })
-	assertPanics(t, func() { SetServiceIPFamilies(nil, nil) })
 	assertPanics(t, func() { SetServiceIPFamilyPolicy(nil, nil) })
 	assertPanics(t, func() { SetServiceInternalTrafficPolicy(nil, nil) })
 	assertPanics(t, func() { SetServiceAllocateLoadBalancerNodePorts(nil, false) })
-	assertPanics(t, func() { SetServiceExternalName(nil, "example.com") })
-	assertPanics(t, func() { SetServiceHealthCheckNodePort(nil, 30000) })
 	assertPanics(t, func() { SetServiceSessionAffinityConfig(nil, nil) })
 }
 
@@ -46,35 +33,9 @@ func TestServiceFunctions(t *testing.T) {
 		t.Errorf("port not added correctly: %+v", svc.Spec.Ports)
 	}
 
-	selector := map[string]string{"app": "svc"}
-	SetServiceSelector(svc, selector)
-	if !reflect.DeepEqual(svc.Spec.Selector, selector) {
-		t.Errorf("selector not set: %+v", svc.Spec.Selector)
-	}
-
-	SetServiceType(svc, corev1.ServiceTypeNodePort)
-	if svc.Spec.Type != corev1.ServiceTypeNodePort {
-		t.Errorf("service type not set")
-	}
-
-	SetServiceExternalTrafficPolicy(svc, corev1.ServiceExternalTrafficPolicyLocal)
-	if svc.Spec.ExternalTrafficPolicy != corev1.ServiceExternalTrafficPolicyLocal {
-		t.Errorf("external traffic policy not set")
-	}
-
-	SetServiceSessionAffinity(svc, corev1.ServiceAffinityClientIP)
-	if svc.Spec.SessionAffinity != corev1.ServiceAffinityClientIP {
-		t.Errorf("session affinity not set")
-	}
-
 	SetServiceLoadBalancerClass(svc, "lb-class")
 	if svc.Spec.LoadBalancerClass == nil || *svc.Spec.LoadBalancerClass != "lb-class" {
 		t.Errorf("load balancer class not set")
-	}
-
-	SetServiceClusterIP(svc, "10.0.0.1")
-	if svc.Spec.ClusterIP != "10.0.0.1" {
-		t.Errorf("clusterIP not set")
 	}
 
 	AddServiceExternalIP(svc, "192.168.1.2")
@@ -82,25 +43,9 @@ func TestServiceFunctions(t *testing.T) {
 		t.Errorf("external IP not added")
 	}
 
-	SetServicePublishNotReadyAddresses(svc, true)
-	if !svc.Spec.PublishNotReadyAddresses {
-		t.Errorf("publish not ready addresses not set")
-	}
-
 	AddServiceLoadBalancerSourceRange(svc, "10.0.0.0/24")
 	if len(svc.Spec.LoadBalancerSourceRanges) != 1 || svc.Spec.LoadBalancerSourceRanges[0] != "10.0.0.0/24" {
 		t.Errorf("source range not added")
-	}
-
-	ranges := []string{"10.0.1.0/24", "10.0.2.0/24"}
-	SetServiceLoadBalancerSourceRanges(svc, ranges)
-	if !reflect.DeepEqual(svc.Spec.LoadBalancerSourceRanges, ranges) {
-		t.Errorf("source ranges not set")
-	}
-
-	SetServiceIPFamilies(svc, []corev1.IPFamily{corev1.IPv4Protocol})
-	if len(svc.Spec.IPFamilies) != 1 || svc.Spec.IPFamilies[0] != corev1.IPv4Protocol {
-		t.Errorf("ip families not set")
 	}
 
 	policy := corev1.IPFamilyPolicyPreferDualStack
@@ -118,16 +63,6 @@ func TestServiceFunctions(t *testing.T) {
 	SetServiceAllocateLoadBalancerNodePorts(svc, false)
 	if svc.Spec.AllocateLoadBalancerNodePorts == nil || *svc.Spec.AllocateLoadBalancerNodePorts {
 		t.Errorf("allocate LB node ports not set")
-	}
-
-	SetServiceExternalName(svc, "example.com")
-	if svc.Spec.ExternalName != "example.com" {
-		t.Errorf("external name not set")
-	}
-
-	SetServiceHealthCheckNodePort(svc, 30000)
-	if svc.Spec.HealthCheckNodePort != 30000 {
-		t.Errorf("health check node port not set")
 	}
 
 	cfg := &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: new(int32)}}
@@ -148,18 +83,6 @@ func TestServiceMetadataFunctions(t *testing.T) {
 	AddServiceAnnotation(svc, "a", "b")
 	if svc.Annotations["a"] != "b" {
 		t.Errorf("annotation not added")
-	}
-
-	labels := map[string]string{"x": "y"}
-	SetServiceLabels(svc, labels)
-	if !reflect.DeepEqual(svc.Labels, labels) {
-		t.Errorf("labels not set")
-	}
-
-	anns := map[string]string{"c": "d"}
-	SetServiceAnnotations(svc, anns)
-	if !reflect.DeepEqual(svc.Annotations, anns) {
-		t.Errorf("annotations not set")
 	}
 }
 

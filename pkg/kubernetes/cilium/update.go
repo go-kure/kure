@@ -12,11 +12,6 @@ func SetCiliumNetworkPolicySpec(obj *ciliumv2.CiliumNetworkPolicy, spec *api.Rul
 	obj.Spec = spec
 }
 
-// SetCiliumNetworkPolicySpecs replaces the multi-rule specs on the policy.
-func SetCiliumNetworkPolicySpecs(obj *ciliumv2.CiliumNetworkPolicy, specs api.Rules) {
-	obj.Specs = specs
-}
-
 // AddCiliumNetworkPolicySpec appends a rule to the multi-rule Specs list.
 func AddCiliumNetworkPolicySpec(obj *ciliumv2.CiliumNetworkPolicy, spec *api.Rule) {
 	obj.Specs = append(obj.Specs, spec)
@@ -97,12 +92,6 @@ func SetCiliumNetworkPolicyEnableDefaultDeny(obj *ciliumv2.CiliumNetworkPolicy, 
 // SetCiliumClusterwideNetworkPolicySpec sets the single-rule spec on the policy.
 func SetCiliumClusterwideNetworkPolicySpec(obj *ciliumv2.CiliumClusterwideNetworkPolicy, spec *api.Rule) {
 	obj.Spec = spec
-}
-
-// SetCiliumClusterwideNetworkPolicySpecs replaces the multi-rule specs on the
-// policy.
-func SetCiliumClusterwideNetworkPolicySpecs(obj *ciliumv2.CiliumClusterwideNetworkPolicy, specs api.Rules) {
-	obj.Specs = specs
 }
 
 // AddCiliumClusterwideNetworkPolicySpec appends a rule to the multi-rule Specs
@@ -198,16 +187,6 @@ func AddCiliumCIDRGroupCIDR(obj *ciliumv2.CiliumCIDRGroup, cidr api.CIDR) {
 	obj.Spec.ExternalCIDRs = append(obj.Spec.ExternalCIDRs, cidr)
 }
 
-// SetCiliumCIDRGroupCIDRs replaces the ExternalCIDRs list on the group.
-func SetCiliumCIDRGroupCIDRs(obj *ciliumv2.CiliumCIDRGroup, cidrs []api.CIDR) {
-	obj.Spec.ExternalCIDRs = cidrs
-}
-
-// SetCiliumEgressGatewayPolicySpec sets the full spec on the policy.
-func SetCiliumEgressGatewayPolicySpec(obj *ciliumv2.CiliumEgressGatewayPolicy, spec ciliumv2.CiliumEgressGatewayPolicySpec) {
-	obj.Spec = spec
-}
-
 // AddCiliumEgressGatewayPolicySelectorRule appends an egress selector rule.
 func AddCiliumEgressGatewayPolicySelectorRule(obj *ciliumv2.CiliumEgressGatewayPolicy, rule ciliumv2.EgressRule) {
 	obj.Spec.Selectors = append(obj.Spec.Selectors, rule)
@@ -233,36 +212,6 @@ func AddCiliumEgressGatewayPolicyEgressGateway(obj *ciliumv2.CiliumEgressGateway
 	obj.Spec.EgressGateways = append(obj.Spec.EgressGateways, gw)
 }
 
-// SetCiliumLocalRedirectPolicySpec sets the full spec on the policy.
-func SetCiliumLocalRedirectPolicySpec(obj *ciliumv2.CiliumLocalRedirectPolicy, spec ciliumv2.CiliumLocalRedirectPolicySpec) {
-	obj.Spec = spec
-}
-
-// SetCiliumLocalRedirectPolicyFrontend sets the redirect frontend.
-func SetCiliumLocalRedirectPolicyFrontend(obj *ciliumv2.CiliumLocalRedirectPolicy, frontend ciliumv2.RedirectFrontend) {
-	obj.Spec.RedirectFrontend = frontend
-}
-
-// SetCiliumLocalRedirectPolicyBackend sets the redirect backend.
-func SetCiliumLocalRedirectPolicyBackend(obj *ciliumv2.CiliumLocalRedirectPolicy, backend ciliumv2.RedirectBackend) {
-	obj.Spec.RedirectBackend = backend
-}
-
-// SetCiliumLocalRedirectPolicyDescription sets the description.
-func SetCiliumLocalRedirectPolicyDescription(obj *ciliumv2.CiliumLocalRedirectPolicy, desc string) {
-	obj.Spec.Description = desc
-}
-
-// SetCiliumLocalRedirectPolicySkipRedirectFromBackend sets the skip-redirect flag.
-func SetCiliumLocalRedirectPolicySkipRedirectFromBackend(obj *ciliumv2.CiliumLocalRedirectPolicy, skip bool) {
-	obj.Spec.SkipRedirectFromBackend = skip
-}
-
-// SetCiliumLoadBalancerIPPoolSpec sets the full spec on the pool.
-func SetCiliumLoadBalancerIPPoolSpec(obj *ciliumv2.CiliumLoadBalancerIPPool, spec ciliumv2.CiliumLoadBalancerIPPoolSpec) {
-	obj.Spec = spec
-}
-
 // SetCiliumLoadBalancerIPPoolServiceSelector sets the service selector.
 // Uses Cilium's slim LabelSelector (github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1).
 func SetCiliumLoadBalancerIPPoolServiceSelector(obj *ciliumv2.CiliumLoadBalancerIPPool, sel *slimv1.LabelSelector) {
@@ -272,21 +221,6 @@ func SetCiliumLoadBalancerIPPoolServiceSelector(obj *ciliumv2.CiliumLoadBalancer
 // AddCiliumLoadBalancerIPPoolBlock appends a CIDR block to the pool.
 func AddCiliumLoadBalancerIPPoolBlock(obj *ciliumv2.CiliumLoadBalancerIPPool, block ciliumv2.CiliumLoadBalancerIPPoolIPBlock) {
 	obj.Spec.Blocks = append(obj.Spec.Blocks, block)
-}
-
-// SetCiliumLoadBalancerIPPoolDisabled enables or disables the pool.
-func SetCiliumLoadBalancerIPPoolDisabled(obj *ciliumv2.CiliumLoadBalancerIPPool, disabled bool) {
-	obj.Spec.Disabled = disabled
-}
-
-// SetCiliumLoadBalancerIPPoolAllowFirstLastIPs controls first/last IP allocation.
-func SetCiliumLoadBalancerIPPoolAllowFirstLastIPs(obj *ciliumv2.CiliumLoadBalancerIPPool, allow ciliumv2.AllowFirstLastIPType) {
-	obj.Spec.AllowFirstLastIPs = allow
-}
-
-// SetCiliumEnvoyConfigSpec sets the full spec on the config.
-func SetCiliumEnvoyConfigSpec(obj *ciliumv2.CiliumEnvoyConfig, spec ciliumv2.CiliumEnvoyConfigSpec) {
-	obj.Spec = spec
 }
 
 // AddCiliumEnvoyConfigService appends a service listener.
@@ -310,11 +244,6 @@ func SetCiliumEnvoyConfigNodeSelector(obj *ciliumv2.CiliumEnvoyConfig, sel *slim
 	obj.Spec.NodeSelector = sel
 }
 
-// SetCiliumClusterwideEnvoyConfigSpec sets the full spec on the config.
-func SetCiliumClusterwideEnvoyConfigSpec(obj *ciliumv2.CiliumClusterwideEnvoyConfig, spec ciliumv2.CiliumEnvoyConfigSpec) {
-	obj.Spec = spec
-}
-
 // AddCiliumClusterwideEnvoyConfigService appends a service listener.
 func AddCiliumClusterwideEnvoyConfigService(obj *ciliumv2.CiliumClusterwideEnvoyConfig, svc *ciliumv2.ServiceListener) {
 	obj.Spec.Services = append(obj.Spec.Services, svc)
@@ -336,11 +265,6 @@ func SetCiliumClusterwideEnvoyConfigNodeSelector(obj *ciliumv2.CiliumClusterwide
 	obj.Spec.NodeSelector = sel
 }
 
-// SetCiliumBGPClusterConfigSpec sets the full spec on the config.
-func SetCiliumBGPClusterConfigSpec(obj *ciliumv2.CiliumBGPClusterConfig, spec ciliumv2.CiliumBGPClusterConfigSpec) {
-	obj.Spec = spec
-}
-
 // SetCiliumBGPClusterConfigNodeSelector sets the node selector.
 // Uses Cilium's slim LabelSelector (github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1).
 func SetCiliumBGPClusterConfigNodeSelector(obj *ciliumv2.CiliumBGPClusterConfig, sel *slimv1.LabelSelector) {
@@ -350,11 +274,6 @@ func SetCiliumBGPClusterConfigNodeSelector(obj *ciliumv2.CiliumBGPClusterConfig,
 // AddCiliumBGPClusterConfigBGPInstance appends a BGP instance.
 func AddCiliumBGPClusterConfigBGPInstance(obj *ciliumv2.CiliumBGPClusterConfig, instance ciliumv2.CiliumBGPInstance) {
 	obj.Spec.BGPInstances = append(obj.Spec.BGPInstances, instance)
-}
-
-// SetCiliumBGPPeerConfigSpec sets the full spec on the config.
-func SetCiliumBGPPeerConfigSpec(obj *ciliumv2.CiliumBGPPeerConfig, spec ciliumv2.CiliumBGPPeerConfigSpec) {
-	obj.Spec = spec
 }
 
 // SetCiliumBGPPeerConfigTransport sets the transport configuration.
@@ -387,29 +306,14 @@ func AddCiliumBGPPeerConfigFamily(obj *ciliumv2.CiliumBGPPeerConfig, family cili
 	obj.Spec.Families = append(obj.Spec.Families, family)
 }
 
-// SetCiliumBGPAdvertisementSpec sets the full spec on the advertisement.
-func SetCiliumBGPAdvertisementSpec(obj *ciliumv2.CiliumBGPAdvertisement, spec ciliumv2.CiliumBGPAdvertisementSpec) {
-	obj.Spec = spec
-}
-
 // AddCiliumBGPAdvertisementEntry appends a BGP advertisement entry.
 func AddCiliumBGPAdvertisementEntry(obj *ciliumv2.CiliumBGPAdvertisement, advert ciliumv2.BGPAdvertisement) {
 	obj.Spec.Advertisements = append(obj.Spec.Advertisements, advert)
 }
 
-// SetCiliumBGPNodeConfigSpec sets the full spec on the node config.
-func SetCiliumBGPNodeConfigSpec(obj *ciliumv2.CiliumBGPNodeConfig, spec ciliumv2.CiliumBGPNodeSpec) {
-	obj.Spec = spec
-}
-
 // AddCiliumBGPNodeConfigBGPInstance appends a BGP node instance.
 func AddCiliumBGPNodeConfigBGPInstance(obj *ciliumv2.CiliumBGPNodeConfig, instance ciliumv2.CiliumBGPNodeInstance) {
 	obj.Spec.BGPInstances = append(obj.Spec.BGPInstances, instance)
-}
-
-// SetCiliumBGPNodeConfigOverrideSpec sets the full spec on the override.
-func SetCiliumBGPNodeConfigOverrideSpec(obj *ciliumv2.CiliumBGPNodeConfigOverride, spec ciliumv2.CiliumBGPNodeConfigOverrideSpec) {
-	obj.Spec = spec
 }
 
 // AddCiliumBGPNodeConfigOverrideBGPInstance appends a BGP instance override.

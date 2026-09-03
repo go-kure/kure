@@ -1,7 +1,6 @@
 package kubernetes
 
 import (
-	"reflect"
 	"testing"
 
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -10,11 +9,8 @@ import (
 func TestHTTPRouteNilErrors(t *testing.T) {
 	// All HTTPRoute functions now panic on nil receiver
 	assertPanics(t, func() { AddHTTPRouteHostname(nil, "example.com") })
-	assertPanics(t, func() { SetHTTPRouteHostnames(nil, nil) })
 	assertPanics(t, func() { AddHTTPRouteParentRef(nil, gwapiv1.ParentReference{}) })
-	assertPanics(t, func() { SetHTTPRouteParentRefs(nil, nil) })
 	assertPanics(t, func() { AddHTTPRouteRule(nil, gwapiv1.HTTPRouteRule{}) })
-	assertPanics(t, func() { SetHTTPRouteRules(nil, nil) })
 }
 
 func TestHTTPRouteFunctions(t *testing.T) {
@@ -25,12 +21,6 @@ func TestHTTPRouteFunctions(t *testing.T) {
 		t.Errorf("hostname not added")
 	}
 
-	hostnames := []gwapiv1.Hostname{"a.example.com", "b.example.com"}
-	SetHTTPRouteHostnames(route, hostnames)
-	if !reflect.DeepEqual(route.Spec.Hostnames, hostnames) {
-		t.Errorf("hostnames not set")
-	}
-
 	gwName := gwapiv1.ObjectName("my-gw")
 	ref := gwapiv1.ParentReference{Name: gwName}
 	AddHTTPRouteParentRef(route, ref)
@@ -38,22 +28,10 @@ func TestHTTPRouteFunctions(t *testing.T) {
 		t.Errorf("parent ref not added")
 	}
 
-	refs := []gwapiv1.ParentReference{{Name: "gw-1"}, {Name: "gw-2"}}
-	SetHTTPRouteParentRefs(route, refs)
-	if len(route.Spec.ParentRefs) != 2 {
-		t.Errorf("parent refs not set")
-	}
-
 	rule := gwapiv1.HTTPRouteRule{}
 	AddHTTPRouteRule(route, rule)
 	if len(route.Spec.Rules) != 1 {
 		t.Errorf("rule not added")
-	}
-
-	rules := []gwapiv1.HTTPRouteRule{{}, {}}
-	SetHTTPRouteRules(route, rules)
-	if len(route.Spec.Rules) != 2 {
-		t.Errorf("rules not set")
 	}
 }
 
@@ -75,12 +53,6 @@ func TestHTTPRouteRuleHelpers(t *testing.T) {
 		if *rule.Matches[0].Path.Value != "/api" {
 			t.Errorf("match path mismatch")
 		}
-
-		matches := []gwapiv1.HTTPRouteMatch{{}, {}}
-		SetHTTPRouteRuleMatches(&rule, matches)
-		if len(rule.Matches) != 2 {
-			t.Errorf("matches not set")
-		}
 	})
 
 	t.Run("filters", func(t *testing.T) {
@@ -98,12 +70,6 @@ func TestHTTPRouteRuleHelpers(t *testing.T) {
 		}
 		if rule.Filters[0].Type != gwapiv1.HTTPRouteFilterRequestHeaderModifier {
 			t.Errorf("filter type mismatch")
-		}
-
-		filters := []gwapiv1.HTTPRouteFilter{filter, filter}
-		SetHTTPRouteRuleFilters(&rule, filters)
-		if len(rule.Filters) != 2 {
-			t.Errorf("filters not set")
 		}
 	})
 
@@ -126,12 +92,6 @@ func TestHTTPRouteRuleHelpers(t *testing.T) {
 		}
 		if rule.BackendRefs[0].Name != "my-svc" {
 			t.Errorf("backend ref name mismatch")
-		}
-
-		refs := []gwapiv1.HTTPBackendRef{ref, ref}
-		SetHTTPRouteRuleBackendRefs(&rule, refs)
-		if len(rule.BackendRefs) != 2 {
-			t.Errorf("backend refs not set")
 		}
 	})
 }

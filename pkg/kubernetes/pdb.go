@@ -31,19 +31,3 @@ func SetPDBSelector(pdb *policyv1.PodDisruptionBudget, selector *metav1.LabelSel
 	}
 	pdb.Spec.Selector = selector
 }
-
-// SetPDBLabels sets the labels on the PDB.
-func SetPDBLabels(pdb *policyv1.PodDisruptionBudget, labels map[string]string) {
-	if pdb == nil {
-		panic("SetPDBLabels: pdb must not be nil")
-	}
-	pdb.Labels = labels
-}
-
-// SetPDBAnnotations sets the annotations on the PDB.
-func SetPDBAnnotations(pdb *policyv1.PodDisruptionBudget, annotations map[string]string) {
-	if pdb == nil {
-		panic("SetPDBAnnotations: pdb must not be nil")
-	}
-	pdb.Annotations = annotations
-}

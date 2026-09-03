@@ -25,21 +25,6 @@ func AddNamespaceFinalizer(ns *corev1.Namespace, finalizer corev1.FinalizerName)
 	ns.Spec.Finalizers = append(ns.Spec.Finalizers, finalizer)
 }
 
-// SetNamespaceLabels replaces all labels on the Namespace.
-func SetNamespaceLabels(ns *corev1.Namespace, labels map[string]string) {
-	ns.Labels = labels
-}
-
-// SetNamespaceAnnotations replaces all annotations on the Namespace.
-func SetNamespaceAnnotations(ns *corev1.Namespace, annotations map[string]string) {
-	ns.Annotations = annotations
-}
-
-// SetNamespaceFinalizers replaces all finalizers on the Namespace spec.
-func SetNamespaceFinalizers(ns *corev1.Namespace, finalizers []corev1.FinalizerName) {
-	ns.Spec.Finalizers = finalizers
-}
-
 // SetNamespacePSALabels sets Pod Security Admission labels on the namespace.
 // enforce, warn, audit are PSA levels: use PSALevel constants (PSARestricted,
 // PSABaseline, PSAPrivileged) or an empty string to skip that mode.

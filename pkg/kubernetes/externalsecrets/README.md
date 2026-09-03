@@ -79,23 +79,23 @@ Update existing resources:
 
 ```go
 // Replace full spec
-externalsecrets.SetExternalSecretSpec(es, newSpec)
-externalsecrets.SetSecretStoreSpec(ss, newSpec)
-externalsecrets.SetClusterSecretStoreSpec(css, newSpec)
+es.Spec = newSpec
+ss.Spec = newSpec
+css.Spec = newSpec
 
 // Granular updates
 externalsecrets.AddExternalSecretData(es, data)
-externalsecrets.SetExternalSecretSecretStoreRef(es, ref)
+es.Spec.SecretStoreRef = ref
 externalsecrets.AddExternalSecretLabel(es, "app", "myapp")
 externalsecrets.AddExternalSecretAnnotation(es, "note", "value")
 
 externalsecrets.SetSecretStoreProvider(ss, provider)
-externalsecrets.SetSecretStoreController(ss, "my-controller")
+ss.Spec.Controller = "my-controller"
 externalsecrets.AddSecretStoreLabel(ss, "env", "prod")
 externalsecrets.AddSecretStoreAnnotation(ss, "desc", "value")
 
 externalsecrets.SetClusterSecretStoreProvider(css, provider)
-externalsecrets.SetClusterSecretStoreController(css, "global")
+css.Spec.Controller = "global"
 externalsecrets.AddClusterSecretStoreLabel(css, "team", "platform")
 externalsecrets.AddClusterSecretStoreAnnotation(css, "owner", "ops")
 ```

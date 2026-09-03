@@ -21,19 +21,9 @@ func SetPVCVolumeMode(pvc *corev1.PersistentVolumeClaim, mode corev1.PersistentV
 	pvc.Spec.VolumeMode = &mode
 }
 
-// SetPVCResources sets the resource requirements for the claim.
-func SetPVCResources(pvc *corev1.PersistentVolumeClaim, resources corev1.VolumeResourceRequirements) {
-	pvc.Spec.Resources = resources
-}
-
 // SetPVCSelector sets the selector for the claim.
 func SetPVCSelector(pvc *corev1.PersistentVolumeClaim, selector *metav1.LabelSelector) {
 	pvc.Spec.Selector = selector
-}
-
-// SetPVCVolumeName sets the bound volume name for the claim.
-func SetPVCVolumeName(pvc *corev1.PersistentVolumeClaim, volumeName string) {
-	pvc.Spec.VolumeName = volumeName
 }
 
 // SetPVCDataSource sets the data source for the claim.
@@ -58,30 +48,4 @@ type VolumeClaimTemplateOptions struct {
 	StorageRequest resource.Quantity
 	// Labels are optional metadata labels applied to the PVC template.
 	Labels map[string]string
-}
-
-// CreateVolumeClaimTemplate returns a PersistentVolumeClaim suitable for
-// embedding in StatefulSet.Spec.VolumeClaimTemplates. Only ObjectMeta.Name and
-// Spec are set; TypeMeta and Namespace are intentionally omitted because
-// StatefulSet embeds PVCs by name only and the owning StatefulSet provides the
-// namespace.
-func CreateVolumeClaimTemplate(name string, opts VolumeClaimTemplateOptions) corev1.PersistentVolumeClaim {
-	pvc := corev1.PersistentVolumeClaim{}
-	pvc.Name = name
-	if opts.Labels != nil {
-		pvc.Labels = opts.Labels
-	}
-	pvc.Spec = corev1.PersistentVolumeClaimSpec{
-		AccessModes: opts.AccessModes,
-		Resources: corev1.VolumeResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceStorage: opts.StorageRequest,
-			},
-		},
-	}
-	if opts.StorageClassName != "" {
-		sc := opts.StorageClassName
-		pvc.Spec.StorageClassName = &sc
-	}
-	return pvc
 }

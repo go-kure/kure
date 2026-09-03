@@ -23,32 +23,29 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 
 ```go
 gr := fluxcd.CreateGitRepository("my-repo", "flux-system")
-fluxcd.SetGitRepositoryURL(gr, "https://github.com/org/repo")
+gr.Spec.URL = "https://github.com/org/repo"
 fluxcd.SetGitRepositoryReference(gr, &sourcev1.GitRepositoryRef{Branch: "main"})
-fluxcd.SetGitRepositoryInterval(gr, metav1.Duration{Duration: 5 * time.Minute})
+gr.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 fluxcd.SetGitRepositorySecretRef(gr, &meta.LocalObjectReference{Name: "git-credentials"})
 ```
 
-Additional setters: `SetGitRepositoryProvider`, `SetGitRepositoryTimeout`, `SetGitRepositoryVerification`,
-`SetGitRepositoryProxySecretRef`, `SetGitRepositoryIgnore`, `SetGitRepositorySuspend`,
-`SetGitRepositoryRecurseSubmodules`, `AddGitRepositoryInclude`,
-`SetGitRepositorySparseCheckout`, `AddGitRepositorySparseCheckoutPath`,
-`SetGitRepositoryServiceAccountName`.
+Additional setters: `SetGitRepositoryTimeout`, `SetGitRepositoryVerification`,
+`SetGitRepositoryProxySecretRef`, `SetGitRepositoryIgnore`, `AddGitRepositoryInclude`,
+`AddGitRepositorySparseCheckoutPath`.
 
 ### OCIRepository
 
 ```go
 oci := fluxcd.CreateOCIRepository("my-manifests", "flux-system")
-fluxcd.SetOCIRepositoryURL(oci, "oci://registry.example.com/manifests")
+oci.Spec.URL = "oci://registry.example.com/manifests"
 fluxcd.SetOCIRepositoryReference(oci, &sourcev1.OCIRepositoryRef{Tag: "latest"})
-fluxcd.SetOCIRepositoryInterval(oci, metav1.Duration{Duration: 10 * time.Minute})
+oci.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetOCIRepositorySecretRef(oci, &meta.LocalObjectReference{Name: "registry-credentials"})
 ```
 
-Additional setters: `SetOCIRepositoryProvider`, `SetOCIRepositoryLayerSelector`,
-`SetOCIRepositoryVerify`, `SetOCIRepositoryServiceAccountName`, `SetOCIRepositoryCertSecretRef`,
-`SetOCIRepositoryProxySecretRef`, `SetOCIRepositoryTimeout`, `SetOCIRepositoryIgnore`,
-`SetOCIRepositoryInsecure`, `SetOCIRepositorySuspend`.
+Additional setters: `SetOCIRepositoryLayerSelector`, `SetOCIRepositoryVerify`,
+`SetOCIRepositoryCertSecretRef`, `SetOCIRepositoryProxySecretRef`, `SetOCIRepositoryTimeout`,
+`SetOCIRepositoryIgnore`.
 
 ### HelmRepository
 
@@ -56,11 +53,11 @@ Additional setters: `SetOCIRepositoryProvider`, `SetOCIRepositoryLayerSelector`,
 
 ```go
 hr := fluxcd.CreateHelmRepository("bitnami", "flux-system")
-fluxcd.SetHelmRepositoryURL(hr, "https://charts.bitnami.com/bitnami")
-fluxcd.SetHelmRepositoryType(hr, "default")
-fluxcd.SetHelmRepositoryInterval(hr, metav1.Duration{Duration: 10 * time.Minute})
+hr.Spec.URL = "https://charts.bitnami.com/bitnami"
+hr.Spec.Type = "default"
+hr.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetHelmRepositoryTimeout(hr, &metav1.Duration{Duration: 60 * time.Second})
-fluxcd.SetHelmRepositoryPassCredentials(hr, true)
+hr.Spec.PassCredentials = true
 fluxcd.SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "bitnami-auth"})
 ```
 
@@ -68,32 +65,29 @@ fluxcd.SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "bitnami-
 
 ```go
 hr := fluxcd.CreateHelmRepository("ghcr-charts", "flux-system")
-fluxcd.SetHelmRepositoryURL(hr, "oci://ghcr.io/example/charts")
-fluxcd.SetHelmRepositoryType(hr, "oci")
-fluxcd.SetHelmRepositoryProvider(hr, "generic") // OCI-only: generic, aws, azure, gcp
-fluxcd.SetHelmRepositoryInterval(hr, metav1.Duration{Duration: 5 * time.Minute})
+hr.Spec.URL = "oci://ghcr.io/example/charts"
+hr.Spec.Type = "oci"
+hr.Spec.Provider = "generic" // OCI-only: generic, aws, azure, gcp
+hr.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 fluxcd.SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "ghcr-auth"})
 ```
 
-Additional setters: `SetHelmRepositoryCertSecretRef`, `SetHelmRepositoryInsecure` (OCI only),
-`SetHelmRepositorySuspend`, `SetHelmRepositoryAccessFrom`.
+Additional setters: `SetHelmRepositoryCertSecretRef`, `SetHelmRepositoryAccessFrom`.
 
 ### HelmChart
 
 ```go
 hc := fluxcd.CreateHelmChart("redis", "flux-system")
-fluxcd.SetHelmChartChart(hc, "redis")
-fluxcd.SetHelmChartVersion(hc, "19.0.0")
-fluxcd.SetHelmChartSourceRef(hc, sourcev1.LocalHelmChartSourceReference{
+hc.Spec.Chart = "redis"
+hc.Spec.Version = "19.0.0"
+hc.Spec.SourceRef = sourcev1.LocalHelmChartSourceReference{
     Kind: "HelmRepository",
     Name: "bitnami",
-})
-fluxcd.SetHelmChartInterval(hc, metav1.Duration{Duration: 10 * time.Minute})
+}
+hc.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 ```
 
-Additional setters: `SetHelmChartReconcileStrategy`, `AddHelmChartValuesFile`,
-`SetHelmChartValuesFiles`, `SetHelmChartIgnoreMissingValuesFiles`,
-`SetHelmChartSuspend`, `SetHelmChartVerify`.
+Additional setters: `AddHelmChartValuesFile`, `SetHelmChartVerify`.
 
 > **Note (Flux 2.9):** `source-controller/api` v1.9 split the verification types.
 > `SetHelmChartVerify` now takes `*sourcev1.HelmChartVerification` (previously
@@ -104,15 +98,14 @@ Additional setters: `SetHelmChartReconcileStrategy`, `AddHelmChartValuesFile`,
 
 ```go
 b := fluxcd.CreateBucket("my-bucket", "flux-system")
-fluxcd.SetBucketEndpoint(b, "minio.example.com")
-fluxcd.SetBucketName(b, "manifests")
-fluxcd.SetBucketInterval(b, metav1.Duration{Duration: 10 * time.Minute})
+b.Spec.Endpoint = "minio.example.com"
+b.Spec.BucketName = "manifests"
+b.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetBucketSecretRef(b, &meta.LocalObjectReference{Name: "minio-credentials"})
 ```
 
-Additional setters: `SetBucketProvider`, `SetBucketSTS`, `SetBucketInsecure`, `SetBucketRegion`,
-`SetBucketPrefix`, `SetBucketCertSecretRef`, `SetBucketProxySecretRef`,
-`SetBucketTimeout`, `SetBucketIgnore`, `SetBucketSuspend`.
+Additional setters: `SetBucketSTS`, `SetBucketCertSecretRef`, `SetBucketProxySecretRef`,
+`SetBucketTimeout`, `SetBucketIgnore`.
 
 ## Deployment Controllers
 
@@ -120,25 +113,21 @@ Additional setters: `SetBucketProvider`, `SetBucketSTS`, `SetBucketInsecure`, `S
 
 ```go
 k := fluxcd.CreateKustomization("my-app", "flux-system")
-fluxcd.SetKustomizationSourceRef(k, kustv1.CrossNamespaceSourceReference{
+k.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
     Kind: "GitRepository",
     Name: "my-repo",
-})
-fluxcd.SetKustomizationPath(k, "./clusters/production/apps")
-fluxcd.SetKustomizationInterval(k, metav1.Duration{Duration: 10 * time.Minute})
-fluxcd.SetKustomizationPrune(k, true)
-fluxcd.SetKustomizationTargetNamespace(k, "production")
-fluxcd.SetKustomizationWait(k, true)
+}
+k.Spec.Path = "./clusters/production/apps"
+k.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
+k.Spec.Prune = true
+k.Spec.TargetNamespace = "production"
+k.Spec.Wait = true
 fluxcd.AddKustomizationDependsOn(k, kustv1.DependencyReference{Name: "cert-manager"})
 ```
 
 Additional setters: `SetKustomizationRetryInterval`, `SetKustomizationKubeConfig`,
-`SetKustomizationDeletionPolicy`, `AddKustomizationHealthCheck`,
-`AddKustomizationHealthCheckExpr`, `AddKustomizationComponent`,
-`SetKustomizationServiceAccountName`, `SetKustomizationSuspend`,
-`SetKustomizationTimeout`, `SetKustomizationForce`,
-`SetKustomizationIgnoreMissingComponents`, `AddKustomizationImage`,
-`AddKustomizationPatch`, `SetKustomizationNamePrefix`, `SetKustomizationNameSuffix`,
+`AddKustomizationHealthCheck`, `AddKustomizationHealthCheckExpr`, `AddKustomizationComponent`,
+`SetKustomizationTimeout`, `AddKustomizationImage`, `AddKustomizationPatch`,
 `SetKustomizationCommonMetadata`, `SetKustomizationDecryption`, `SetKustomizationPostBuild`.
 
 ### HelmRelease
@@ -147,9 +136,9 @@ Additional setters: `SetKustomizationRetryInterval`, `SetKustomizationKubeConfig
 
 ```go
 hr := fluxcd.CreateHelmRelease("redis", "apps")
-fluxcd.SetHelmReleaseReleaseName(hr, "redis-prod")
-fluxcd.SetHelmReleaseTargetNamespace(hr, "apps")
-fluxcd.SetHelmReleaseInterval(hr, metav1.Duration{Duration: 10 * time.Minute})
+hr.Spec.ReleaseName = "redis-prod"
+hr.Spec.TargetNamespace = "apps"
+hr.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
     Spec: helmv2.HelmChartTemplateSpec{
         Chart:   "redis",
@@ -199,13 +188,11 @@ fluxcd.AddPostRendererKustomizeImage(k, kustomize.Image{Name: "redis", NewTag: "
 fluxcd.AddHelmReleasePostRenderer(hr, helmv2.PostRenderer{Kustomize: k})
 ```
 
-Additional setters: `SetHelmReleaseKubeConfig`, `SetHelmReleaseSuspend`,
-`SetHelmReleaseStorageNamespace`, `AddHelmReleaseDependsOn`, `SetHelmReleaseTimeout`,
-`SetHelmReleaseMaxHistory`, `SetHelmReleaseServiceAccountName`, `SetHelmReleasePersistentClient`,
-`SetHelmReleaseInstall`, `SetHelmReleaseUpgrade`, `SetHelmReleaseRollback`,
-`SetHelmReleaseUninstall`, `SetHelmReleaseTest`, `SetHelmReleaseValues`,
-`SetHelmReleaseValuesFromMap`, `SetHelmReleaseCommonMetadata`, `AddHelmReleaseHealthCheckExpr`,
-`SetHelmReleaseWaitStrategy`.
+Additional setters: `SetHelmReleaseKubeConfig`, `AddHelmReleaseDependsOn`, `SetHelmReleaseTimeout`,
+`SetHelmReleaseMaxHistory`, `SetHelmReleasePersistentClient`, `SetHelmReleaseInstall`,
+`SetHelmReleaseUpgrade`, `SetHelmReleaseRollback`, `SetHelmReleaseUninstall`, `SetHelmReleaseTest`,
+`SetHelmReleaseValues`, `SetHelmReleaseValuesFromMap`, `SetHelmReleaseCommonMetadata`,
+`AddHelmReleaseHealthCheckExpr`, `SetHelmReleaseWaitStrategy`.
 
 Install flag setters: `SetHelmReleaseInstallTimeout`, `SetHelmReleaseInstallCRDs`,
 `SetHelmReleaseInstallCreateNamespace`, `SetHelmReleaseInstallDisableSchemaValidation`,
@@ -242,7 +229,7 @@ receiver := fluxcd.CreateReceiver("github-receiver", "flux-system")
 
 ```go
 instance := fluxcd.CreateFluxInstance("flux", "flux-system")
-fluxcd.SetFluxInstanceDistributionVariant(instance, "upstream-alpine")
+instance.Spec.Distribution.Variant = "upstream-alpine"
 // Additional: SetFluxInstance* for distribution, cluster, sharding, storage, kustomize, sync, wait.
 ```
 
@@ -270,11 +257,11 @@ Provided by the optional **source-watcher** component. Assembles a new artifact 
 ag := fluxcd.CreateArtifactGenerator("my-gen", "flux-system")
 
 src := fluxcd.CreateSourceReference("app", "my-oci-source", "OCIRepository")
-fluxcd.SetSourceReferenceNamespace(&src, "flux-system")
+src.Namespace = "flux-system"
 fluxcd.AddArtifactGeneratorSource(ag, src)
 
 out := fluxcd.CreateOutputArtifact("combined")
-fluxcd.SetOutputArtifactRevision(&out, "@app")
+out.Revision = "@app"
 cp := fluxcd.CreateCopyOperation("@app/manifests/**", "@artifact/manifests")
 fluxcd.AddOutputArtifactCopyOperation(&out, cp)
 fluxcd.AddArtifactGeneratorOutputArtifact(ag, out)

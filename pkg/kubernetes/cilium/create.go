@@ -13,7 +13,7 @@ func CiliumNetworkPolicy(cfg *CiliumNetworkPolicyConfig) *ciliumv2.CiliumNetwork
 	}
 	obj := CreateCiliumNetworkPolicy(cfg.Name, cfg.Namespace)
 	if cfg.Spec != nil {
-		SetCiliumNetworkPolicySpec(obj, cfg.Spec)
+		obj.Spec = cfg.Spec
 	}
 	for _, spec := range cfg.Specs {
 		AddCiliumNetworkPolicySpec(obj, spec)
@@ -28,7 +28,7 @@ func CiliumClusterwideNetworkPolicy(cfg *CiliumClusterwideNetworkPolicyConfig) *
 	}
 	obj := CreateCiliumClusterwideNetworkPolicy(cfg.Name)
 	if cfg.Spec != nil {
-		SetCiliumClusterwideNetworkPolicySpec(obj, cfg.Spec)
+		obj.Spec = cfg.Spec
 	}
 	for _, spec := range cfg.Specs {
 		AddCiliumClusterwideNetworkPolicySpec(obj, spec)
@@ -54,7 +54,7 @@ func CiliumEgressGatewayPolicy(cfg *CiliumEgressGatewayPolicyConfig) *ciliumv2.C
 		return nil
 	}
 	obj := CreateCiliumEgressGatewayPolicy(cfg.Name)
-	SetCiliumEgressGatewayPolicySpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -64,7 +64,7 @@ func CiliumLocalRedirectPolicy(cfg *CiliumLocalRedirectPolicyConfig) *ciliumv2.C
 		return nil
 	}
 	obj := CreateCiliumLocalRedirectPolicy(cfg.Name, cfg.Namespace)
-	SetCiliumLocalRedirectPolicySpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -74,7 +74,7 @@ func CiliumLoadBalancerIPPool(cfg *CiliumLoadBalancerIPPoolConfig) *ciliumv2.Cil
 		return nil
 	}
 	obj := CreateCiliumLoadBalancerIPPool(cfg.Name)
-	SetCiliumLoadBalancerIPPoolSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -84,7 +84,7 @@ func CiliumEnvoyConfig(cfg *CiliumEnvoyConfigConfig) *ciliumv2.CiliumEnvoyConfig
 		return nil
 	}
 	obj := CreateCiliumEnvoyConfig(cfg.Name, cfg.Namespace)
-	SetCiliumEnvoyConfigSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -94,7 +94,7 @@ func CiliumClusterwideEnvoyConfig(cfg *CiliumClusterwideEnvoyConfigConfig) *cili
 		return nil
 	}
 	obj := CreateCiliumClusterwideEnvoyConfig(cfg.Name)
-	SetCiliumClusterwideEnvoyConfigSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -104,7 +104,7 @@ func CiliumBGPClusterConfig(cfg *CiliumBGPClusterConfigConfig) *ciliumv2.CiliumB
 		return nil
 	}
 	obj := CreateCiliumBGPClusterConfig(cfg.Name)
-	SetCiliumBGPClusterConfigSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -114,7 +114,7 @@ func CiliumBGPPeerConfig(cfg *CiliumBGPPeerConfigConfig) *ciliumv2.CiliumBGPPeer
 		return nil
 	}
 	obj := CreateCiliumBGPPeerConfig(cfg.Name)
-	SetCiliumBGPPeerConfigSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -124,7 +124,7 @@ func CiliumBGPAdvertisement(cfg *CiliumBGPAdvertisementConfig) *ciliumv2.CiliumB
 		return nil
 	}
 	obj := CreateCiliumBGPAdvertisement(cfg.Name)
-	SetCiliumBGPAdvertisementSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -134,7 +134,7 @@ func CiliumBGPNodeConfig(cfg *CiliumBGPNodeConfigConfig) *ciliumv2.CiliumBGPNode
 		return nil
 	}
 	obj := CreateCiliumBGPNodeConfig(cfg.Name)
-	SetCiliumBGPNodeConfigSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }
 
@@ -144,6 +144,6 @@ func CiliumBGPNodeConfigOverride(cfg *CiliumBGPNodeConfigOverrideConfig) *cilium
 		return nil
 	}
 	obj := CreateCiliumBGPNodeConfigOverride(cfg.Name)
-	SetCiliumBGPNodeConfigOverrideSpec(obj, cfg.Spec)
+	obj.Spec = cfg.Spec
 	return obj
 }

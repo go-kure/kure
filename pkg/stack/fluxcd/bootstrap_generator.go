@@ -204,8 +204,8 @@ func (bg *BootstrapGenerator) generateGitSource(config *stack.BootstrapConfig, r
 	}
 
 	gr := pubfluxcd.CreateGitRepository(sourceName, bg.DefaultNamespace)
-	pubfluxcd.SetGitRepositoryURL(gr, config.SourceURL)
-	pubfluxcd.SetGitRepositoryInterval(gr, metav1.Duration{Duration: bg.DefaultInterval})
+	gr.Spec.URL = config.SourceURL
+	gr.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
 
 	if config.SourceRef != "" {
 		pubfluxcd.SetGitRepositoryReference(gr, &sourcev1.GitRepositoryRef{Branch: config.SourceRef})
@@ -231,8 +231,8 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 	}
 
 	or := pubfluxcd.CreateOCIRepository(sourceName, bg.DefaultNamespace)
-	pubfluxcd.SetOCIRepositoryURL(or, url)
-	pubfluxcd.SetOCIRepositoryInterval(or, metav1.Duration{Duration: bg.DefaultInterval})
+	or.Spec.URL = url
+	or.Spec.Interval = metav1.Duration{Duration: bg.DefaultInterval}
 	pubfluxcd.SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: ref})
 
 	return or
@@ -290,6 +290,6 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 	}
 
 	fi := pubfluxcd.CreateFluxInstance("flux-system", bg.DefaultNamespace)
-	pubfluxcd.SetFluxInstanceSpec(fi, spec)
+	fi.Spec = spec
 	return fi
 }

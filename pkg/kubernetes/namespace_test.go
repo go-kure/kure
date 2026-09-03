@@ -1,7 +1,6 @@
 package kubernetes
 
 import (
-	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -44,33 +43,6 @@ func TestAddNamespaceFinalizer(t *testing.T) {
 	AddNamespaceFinalizer(ns, corev1.FinalizerKubernetes)
 	if len(ns.Spec.Finalizers) != 1 || ns.Spec.Finalizers[0] != corev1.FinalizerKubernetes {
 		t.Errorf("expected finalizer %q, got %v", corev1.FinalizerKubernetes, ns.Spec.Finalizers)
-	}
-}
-
-func TestSetNamespaceLabels(t *testing.T) {
-	ns := CreateNamespace("demo")
-	newLabels := map[string]string{"a": "b"}
-	SetNamespaceLabels(ns, newLabels)
-	if !reflect.DeepEqual(ns.Labels, newLabels) {
-		t.Errorf("expected labels %v, got %v", newLabels, ns.Labels)
-	}
-}
-
-func TestSetNamespaceAnnotations(t *testing.T) {
-	ns := CreateNamespace("demo")
-	newAnn := map[string]string{"x": "y"}
-	SetNamespaceAnnotations(ns, newAnn)
-	if !reflect.DeepEqual(ns.Annotations, newAnn) {
-		t.Errorf("expected annotations %v, got %v", newAnn, ns.Annotations)
-	}
-}
-
-func TestSetNamespaceFinalizers(t *testing.T) {
-	ns := CreateNamespace("demo")
-	finals := []corev1.FinalizerName{"custom"}
-	SetNamespaceFinalizers(ns, finals)
-	if !reflect.DeepEqual(ns.Spec.Finalizers, finals) {
-		t.Errorf("expected finalizers %v, got %v", finals, ns.Spec.Finalizers)
 	}
 }
 

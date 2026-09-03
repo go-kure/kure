@@ -13,8 +13,6 @@ func TestPDBNilErrors(t *testing.T) {
 	assertPanics(t, func() { SetPDBMinAvailable(nil, val) })
 	assertPanics(t, func() { SetPDBMaxUnavailable(nil, val) })
 	assertPanics(t, func() { SetPDBSelector(nil, &metav1.LabelSelector{}) })
-	assertPanics(t, func() { SetPDBLabels(nil, map[string]string{}) })
-	assertPanics(t, func() { SetPDBAnnotations(nil, map[string]string{}) })
 }
 
 func TestPDBMutualExclusivity(t *testing.T) {
@@ -50,21 +48,5 @@ func TestPDBSelector(t *testing.T) {
 	SetPDBSelector(pdb, selector)
 	if pdb.Spec.Selector == nil || pdb.Spec.Selector.MatchLabels["app"] != "web" {
 		t.Errorf("selector not set correctly")
-	}
-}
-
-func TestPDBLabelsAndAnnotations(t *testing.T) {
-	pdb := CreatePodDisruptionBudget("test", "default")
-
-	labels := map[string]string{"env": "prod"}
-	SetPDBLabels(pdb, labels)
-	if pdb.Labels["env"] != "prod" {
-		t.Errorf("labels not set correctly")
-	}
-
-	annotations := map[string]string{"note": "test"}
-	SetPDBAnnotations(pdb, annotations)
-	if pdb.Annotations["note"] != "test" {
-		t.Errorf("annotations not set correctly")
 	}
 }

@@ -20,24 +20,9 @@ import (
 
 // GitRepository setters
 
-// SetGitRepositoryURL sets the repository clone URL.
-func SetGitRepositoryURL(gr *sourcev1.GitRepository, url string) {
-	gr.Spec.URL = url
-}
-
 // SetGitRepositorySecretRef attaches a Secret reference for authentication.
 func SetGitRepositorySecretRef(gr *sourcev1.GitRepository, ref *meta.LocalObjectReference) {
 	gr.Spec.SecretRef = ref
-}
-
-// SetGitRepositoryProvider specifies the hosting provider of the repository.
-func SetGitRepositoryProvider(gr *sourcev1.GitRepository, provider string) {
-	gr.Spec.Provider = provider
-}
-
-// SetGitRepositoryInterval sets the interval at which the repository is polled.
-func SetGitRepositoryInterval(gr *sourcev1.GitRepository, interval metav1.Duration) {
-	gr.Spec.Interval = interval
 }
 
 // SetGitRepositoryTimeout configures the timeout for Git operations.
@@ -65,24 +50,9 @@ func SetGitRepositoryIgnore(gr *sourcev1.GitRepository, ignore string) {
 	gr.Spec.Ignore = &ignore
 }
 
-// SetGitRepositorySuspend toggles reconciliation for the repository.
-func SetGitRepositorySuspend(gr *sourcev1.GitRepository, suspend bool) {
-	gr.Spec.Suspend = suspend
-}
-
-// SetGitRepositoryRecurseSubmodules enables or disables submodule recursion.
-func SetGitRepositoryRecurseSubmodules(gr *sourcev1.GitRepository, recurse bool) {
-	gr.Spec.RecurseSubmodules = recurse
-}
-
 // AddGitRepositoryInclude appends an include rule to the repository spec.
 func AddGitRepositoryInclude(gr *sourcev1.GitRepository, include sourcev1.GitRepositoryInclude) {
 	gr.Spec.Include = append(gr.Spec.Include, include)
-}
-
-// SetGitRepositorySparseCheckout sets the list of directories to use for sparse checkout.
-func SetGitRepositorySparseCheckout(gr *sourcev1.GitRepository, paths []string) {
-	gr.Spec.SparseCheckout = paths
 }
 
 // AddGitRepositorySparseCheckoutPath appends a directory path to the sparse checkout list.
@@ -90,17 +60,7 @@ func AddGitRepositorySparseCheckoutPath(gr *sourcev1.GitRepository, path string)
 	gr.Spec.SparseCheckout = append(gr.Spec.SparseCheckout, path)
 }
 
-// SetGitRepositoryServiceAccountName sets the service account name used for OIDC workload identity.
-func SetGitRepositoryServiceAccountName(gr *sourcev1.GitRepository, name string) {
-	gr.Spec.ServiceAccountName = name
-}
-
 // HelmRepository setters
-
-// SetHelmRepositoryURL sets the repository URL.
-func SetHelmRepositoryURL(hr *sourcev1.HelmRepository, url string) {
-	hr.Spec.URL = url
-}
 
 // SetHelmRepositorySecretRef attaches a Secret for authentication to the repository.
 func SetHelmRepositorySecretRef(hr *sourcev1.HelmRepository, ref *meta.LocalObjectReference) {
@@ -112,29 +72,9 @@ func SetHelmRepositoryCertSecretRef(hr *sourcev1.HelmRepository, ref *meta.Local
 	hr.Spec.CertSecretRef = ref
 }
 
-// SetHelmRepositoryPassCredentials toggles passing credentials to subdomains.
-func SetHelmRepositoryPassCredentials(hr *sourcev1.HelmRepository, v bool) {
-	hr.Spec.PassCredentials = v
-}
-
-// SetHelmRepositoryInterval sets how often the repository is polled.
-func SetHelmRepositoryInterval(hr *sourcev1.HelmRepository, interval metav1.Duration) {
-	hr.Spec.Interval = interval
-}
-
-// SetHelmRepositoryInsecure toggles skipping TLS verification.
-func SetHelmRepositoryInsecure(hr *sourcev1.HelmRepository, insecure bool) {
-	hr.Spec.Insecure = insecure
-}
-
 // SetHelmRepositoryTimeout configures the network timeout for repository requests.
 func SetHelmRepositoryTimeout(hr *sourcev1.HelmRepository, timeout *metav1.Duration) {
 	hr.Spec.Timeout = timeout
-}
-
-// SetHelmRepositorySuspend toggles reconciliation for the repository.
-func SetHelmRepositorySuspend(hr *sourcev1.HelmRepository, suspend bool) {
-	hr.Spec.Suspend = suspend
 }
 
 // SetHelmRepositoryAccessFrom sets access control for the repository.
@@ -142,51 +82,11 @@ func SetHelmRepositoryAccessFrom(hr *sourcev1.HelmRepository, access *acl.Access
 	hr.Spec.AccessFrom = access
 }
 
-// SetHelmRepositoryType sets the repository type.
-func SetHelmRepositoryType(hr *sourcev1.HelmRepository, typ string) {
-	hr.Spec.Type = typ
-}
-
-// SetHelmRepositoryProvider specifies the provider name for the repository.
-func SetHelmRepositoryProvider(hr *sourcev1.HelmRepository, provider string) {
-	hr.Spec.Provider = provider
-}
-
 // Bucket setters
-
-// SetBucketProvider sets the cloud provider for the bucket.
-func SetBucketProvider(b *sourcev1.Bucket, provider string) {
-	b.Spec.Provider = provider
-}
-
-// SetBucketName sets the bucket name.
-func SetBucketName(b *sourcev1.Bucket, name string) {
-	b.Spec.BucketName = name
-}
-
-// SetBucketEndpoint configures the bucket API endpoint.
-func SetBucketEndpoint(b *sourcev1.Bucket, endpoint string) {
-	b.Spec.Endpoint = endpoint
-}
 
 // SetBucketSTS sets the STS configuration for the bucket.
 func SetBucketSTS(b *sourcev1.Bucket, sts *sourcev1.BucketSTSSpec) {
 	b.Spec.STS = sts
-}
-
-// SetBucketInsecure toggles insecure TLS for bucket requests.
-func SetBucketInsecure(b *sourcev1.Bucket, insecure bool) {
-	b.Spec.Insecure = insecure
-}
-
-// SetBucketRegion sets the bucket region.
-func SetBucketRegion(b *sourcev1.Bucket, region string) {
-	b.Spec.Region = region
-}
-
-// SetBucketPrefix sets the bucket prefix path.
-func SetBucketPrefix(b *sourcev1.Bucket, prefix string) {
-	b.Spec.Prefix = prefix
 }
 
 // SetBucketSecretRef attaches credentials secret reference.
@@ -204,11 +104,6 @@ func SetBucketProxySecretRef(b *sourcev1.Bucket, ref *meta.LocalObjectReference)
 	b.Spec.ProxySecretRef = ref
 }
 
-// SetBucketInterval sets how often the bucket is checked for updates.
-func SetBucketInterval(b *sourcev1.Bucket, interval metav1.Duration) {
-	b.Spec.Interval = interval
-}
-
 // SetBucketTimeout configures the timeout for bucket operations.
 func SetBucketTimeout(b *sourcev1.Bucket, timeout *metav1.Duration) {
 	b.Spec.Timeout = timeout
@@ -219,56 +114,11 @@ func SetBucketIgnore(b *sourcev1.Bucket, ignore string) {
 	b.Spec.Ignore = &ignore
 }
 
-// SetBucketSuspend toggles reconciliation of the bucket source.
-func SetBucketSuspend(b *sourcev1.Bucket, suspend bool) {
-	b.Spec.Suspend = suspend
-}
-
 // HelmChart setters
-
-// SetHelmChartChart sets the chart name on the HelmChart.
-func SetHelmChartChart(hc *sourcev1.HelmChart, chart string) {
-	hc.Spec.Chart = chart
-}
-
-// SetHelmChartVersion sets the chart version to fetch.
-func SetHelmChartVersion(hc *sourcev1.HelmChart, version string) {
-	hc.Spec.Version = version
-}
-
-// SetHelmChartSourceRef sets the source reference for the chart.
-func SetHelmChartSourceRef(hc *sourcev1.HelmChart, ref sourcev1.LocalHelmChartSourceReference) {
-	hc.Spec.SourceRef = ref
-}
-
-// SetHelmChartInterval configures how often the chart is reconciled.
-func SetHelmChartInterval(hc *sourcev1.HelmChart, interval metav1.Duration) {
-	hc.Spec.Interval = interval
-}
-
-// SetHelmChartReconcileStrategy sets the reconcile strategy for templating.
-func SetHelmChartReconcileStrategy(hc *sourcev1.HelmChart, strategy string) {
-	hc.Spec.ReconcileStrategy = strategy
-}
 
 // AddHelmChartValuesFile appends a values file to the chart specification.
 func AddHelmChartValuesFile(hc *sourcev1.HelmChart, file string) {
 	hc.Spec.ValuesFiles = append(hc.Spec.ValuesFiles, file)
-}
-
-// SetHelmChartValuesFiles replaces the values files list.
-func SetHelmChartValuesFiles(hc *sourcev1.HelmChart, files []string) {
-	hc.Spec.ValuesFiles = files
-}
-
-// SetHelmChartIgnoreMissingValuesFiles toggles ignoring missing values files.
-func SetHelmChartIgnoreMissingValuesFiles(hc *sourcev1.HelmChart, ignore bool) {
-	hc.Spec.IgnoreMissingValuesFiles = ignore
-}
-
-// SetHelmChartSuspend toggles reconciliation of the chart.
-func SetHelmChartSuspend(hc *sourcev1.HelmChart, suspend bool) {
-	hc.Spec.Suspend = suspend
 }
 
 // SetHelmChartVerify configures OCI signature verification for the chart.
@@ -281,11 +131,6 @@ func SetHelmChartVerify(hc *sourcev1.HelmChart, verify *sourcev1.HelmChartVerifi
 
 // OCIRepository setters
 
-// SetOCIRepositoryURL sets the container registry URL.
-func SetOCIRepositoryURL(or *sourcev1.OCIRepository, url string) {
-	or.Spec.URL = url
-}
-
 // SetOCIRepositoryReference sets the tag or digest reference.
 func SetOCIRepositoryReference(or *sourcev1.OCIRepository, ref *sourcev1.OCIRepositoryRef) {
 	or.Spec.Reference = ref
@@ -294,11 +139,6 @@ func SetOCIRepositoryReference(or *sourcev1.OCIRepository, ref *sourcev1.OCIRepo
 // SetOCIRepositoryLayerSelector configures the layer selector used to pull images.
 func SetOCIRepositoryLayerSelector(or *sourcev1.OCIRepository, sel *sourcev1.OCILayerSelector) {
 	or.Spec.LayerSelector = sel
-}
-
-// SetOCIRepositoryProvider sets the provider name.
-func SetOCIRepositoryProvider(or *sourcev1.OCIRepository, provider string) {
-	or.Spec.Provider = provider
 }
 
 // SetOCIRepositorySecretRef attaches credentials secret reference.
@@ -311,11 +151,6 @@ func SetOCIRepositoryVerify(or *sourcev1.OCIRepository, verify *sourcev1.OCIRepo
 	or.Spec.Verify = verify
 }
 
-// SetOCIRepositoryServiceAccountName sets the service account used for pulls.
-func SetOCIRepositoryServiceAccountName(or *sourcev1.OCIRepository, name string) {
-	or.Spec.ServiceAccountName = name
-}
-
 // SetOCIRepositoryCertSecretRef configures the certificate secret reference.
 func SetOCIRepositoryCertSecretRef(or *sourcev1.OCIRepository, ref *meta.LocalObjectReference) {
 	or.Spec.CertSecretRef = ref
@@ -326,11 +161,6 @@ func SetOCIRepositoryProxySecretRef(or *sourcev1.OCIRepository, ref *meta.LocalO
 	or.Spec.ProxySecretRef = ref
 }
 
-// SetOCIRepositoryInterval sets how often the repository is pulled.
-func SetOCIRepositoryInterval(or *sourcev1.OCIRepository, interval metav1.Duration) {
-	or.Spec.Interval = interval
-}
-
 // SetOCIRepositoryTimeout configures the timeout for registry operations.
 func SetOCIRepositoryTimeout(or *sourcev1.OCIRepository, timeout *metav1.Duration) {
 	or.Spec.Timeout = timeout
@@ -339,16 +169,6 @@ func SetOCIRepositoryTimeout(or *sourcev1.OCIRepository, timeout *metav1.Duratio
 // SetOCIRepositoryIgnore configures ignore rules for the repository.
 func SetOCIRepositoryIgnore(or *sourcev1.OCIRepository, ignore string) {
 	or.Spec.Ignore = &ignore
-}
-
-// SetOCIRepositoryInsecure toggles insecure pulls from the repository.
-func SetOCIRepositoryInsecure(or *sourcev1.OCIRepository, insecure bool) {
-	or.Spec.Insecure = insecure
-}
-
-// SetOCIRepositorySuspend toggles reconciliation for the OCIRepository.
-func SetOCIRepositorySuspend(or *sourcev1.OCIRepository, suspend bool) {
-	or.Spec.Suspend = suspend
 }
 
 // ExternalArtifact setters
@@ -379,24 +199,9 @@ func CreateSourceReference(alias, name, kind string) sourceWatcherv1beta1.Source
 	}
 }
 
-// SetSourceReferenceNamespace sets the optional namespace on a SourceReference.
-func SetSourceReferenceNamespace(ref *sourceWatcherv1beta1.SourceReference, namespace string) {
-	ref.Namespace = namespace
-}
-
 // CreateOutputArtifact constructs an OutputArtifact with the given name.
 func CreateOutputArtifact(name string) sourceWatcherv1beta1.OutputArtifact {
 	return sourceWatcherv1beta1.OutputArtifact{Name: name}
-}
-
-// SetOutputArtifactRevision sets the revision on an OutputArtifact (format: "@<alias>").
-func SetOutputArtifactRevision(out *sourceWatcherv1beta1.OutputArtifact, revision string) {
-	out.Revision = revision
-}
-
-// SetOutputArtifactOriginRevision sets the origin revision on an OutputArtifact.
-func SetOutputArtifactOriginRevision(out *sourceWatcherv1beta1.OutputArtifact, originRevision string) {
-	out.OriginRevision = originRevision
 }
 
 // AddOutputArtifactCopyOperation appends a copy operation to an OutputArtifact.
@@ -415,46 +220,16 @@ func AddCopyOperationExclude(op *sourceWatcherv1beta1.CopyOperation, pattern str
 	op.Exclude = append(op.Exclude, pattern)
 }
 
-// SetCopyOperationStrategy sets the copy strategy (Overwrite, Merge, or Extract).
-func SetCopyOperationStrategy(op *sourceWatcherv1beta1.CopyOperation, strategy string) {
-	op.Strategy = strategy
-}
-
 // Kustomization setters
-
-// SetKustomizationInterval updates the reconciliation interval.
-func SetKustomizationInterval(k *kustv1.Kustomization, interval metav1.Duration) {
-	k.Spec.Interval = interval
-}
 
 // SetKustomizationRetryInterval sets the retry interval.
 func SetKustomizationRetryInterval(k *kustv1.Kustomization, interval metav1.Duration) {
 	k.Spec.RetryInterval = &interval
 }
 
-// SetKustomizationPath sets the path field.
-func SetKustomizationPath(k *kustv1.Kustomization, path string) {
-	k.Spec.Path = path
-}
-
 // SetKustomizationKubeConfig specifies a kubeconfig reference.
 func SetKustomizationKubeConfig(k *kustv1.Kustomization, ref *meta.KubeConfigReference) {
 	k.Spec.KubeConfig = ref
-}
-
-// SetKustomizationSourceRef sets the source reference.
-func SetKustomizationSourceRef(k *kustv1.Kustomization, ref kustv1.CrossNamespaceSourceReference) {
-	k.Spec.SourceRef = ref
-}
-
-// SetKustomizationPrune sets the prune option.
-func SetKustomizationPrune(k *kustv1.Kustomization, prune bool) {
-	k.Spec.Prune = prune
-}
-
-// SetKustomizationDeletionPolicy sets the deletion policy.
-func SetKustomizationDeletionPolicy(k *kustv1.Kustomization, policy string) {
-	k.Spec.DeletionPolicy = policy
 }
 
 // AddKustomizationHealthCheck appends a health check reference.
@@ -472,39 +247,9 @@ func AddKustomizationDependsOn(k *kustv1.Kustomization, ref kustv1.DependencyRef
 	k.Spec.DependsOn = append(k.Spec.DependsOn, ref)
 }
 
-// SetKustomizationServiceAccountName sets the service account name.
-func SetKustomizationServiceAccountName(k *kustv1.Kustomization, name string) {
-	k.Spec.ServiceAccountName = name
-}
-
-// SetKustomizationSuspend sets the suspend flag.
-func SetKustomizationSuspend(k *kustv1.Kustomization, suspend bool) {
-	k.Spec.Suspend = suspend
-}
-
-// SetKustomizationTargetNamespace overrides the target namespace.
-func SetKustomizationTargetNamespace(k *kustv1.Kustomization, namespace string) {
-	k.Spec.TargetNamespace = namespace
-}
-
 // SetKustomizationTimeout sets the timeout duration.
 func SetKustomizationTimeout(k *kustv1.Kustomization, timeout metav1.Duration) {
 	k.Spec.Timeout = &timeout
-}
-
-// SetKustomizationForce sets the force flag.
-func SetKustomizationForce(k *kustv1.Kustomization, force bool) {
-	k.Spec.Force = force
-}
-
-// SetKustomizationWait sets the wait flag.
-func SetKustomizationWait(k *kustv1.Kustomization, wait bool) {
-	k.Spec.Wait = wait
-}
-
-// SetKustomizationIgnoreMissingComponents silently ignores component paths not found in source.
-func SetKustomizationIgnoreMissingComponents(k *kustv1.Kustomization, ignore bool) {
-	k.Spec.IgnoreMissingComponents = ignore
 }
 
 // AddKustomizationHealthCheckExpr appends a CEL-based custom health check expression.
@@ -524,16 +269,6 @@ func CreateCustomHealthCheck(apiVersion, kind, current string) kustomize.CustomH
 	}
 }
 
-// SetCustomHealthCheckInProgress sets the in-progress CEL expression on a CustomHealthCheck.
-func SetCustomHealthCheckInProgress(chk *kustomize.CustomHealthCheck, expr string) {
-	chk.HealthCheckExpressions.InProgress = expr
-}
-
-// SetCustomHealthCheckFailed sets the failed CEL expression on a CustomHealthCheck.
-func SetCustomHealthCheckFailed(chk *kustomize.CustomHealthCheck, expr string) {
-	chk.HealthCheckExpressions.Failed = expr
-}
-
 // AddKustomizationImage appends an image transformation.
 func AddKustomizationImage(k *kustv1.Kustomization, img kustomize.Image) {
 	k.Spec.Images = append(k.Spec.Images, img)
@@ -542,16 +277,6 @@ func AddKustomizationImage(k *kustv1.Kustomization, img kustomize.Image) {
 // AddKustomizationPatch appends a strategic merge or JSON patch.
 func AddKustomizationPatch(k *kustv1.Kustomization, patch kustomize.Patch) {
 	k.Spec.Patches = append(k.Spec.Patches, patch)
-}
-
-// SetKustomizationNamePrefix sets the name prefix.
-func SetKustomizationNamePrefix(k *kustv1.Kustomization, prefix string) {
-	k.Spec.NamePrefix = prefix
-}
-
-// SetKustomizationNameSuffix sets the name suffix.
-func SetKustomizationNameSuffix(k *kustv1.Kustomization, suffix string) {
-	k.Spec.NameSuffix = suffix
 }
 
 // SetKustomizationCommonMetadata sets common labels and annotations.
@@ -646,34 +371,9 @@ func SetHelmReleaseChartRef(obj *helmv2.HelmRelease, ref *helmv2.CrossNamespaceS
 	obj.Spec.ChartRef = ref
 }
 
-// SetHelmReleaseInterval sets the reconcile interval.
-func SetHelmReleaseInterval(obj *helmv2.HelmRelease, interval metav1.Duration) {
-	obj.Spec.Interval = interval
-}
-
 // SetHelmReleaseKubeConfig sets the KubeConfig reference.
 func SetHelmReleaseKubeConfig(obj *helmv2.HelmRelease, cfg *meta.KubeConfigReference) {
 	obj.Spec.KubeConfig = cfg
-}
-
-// SetHelmReleaseSuspend configures the suspend flag.
-func SetHelmReleaseSuspend(obj *helmv2.HelmRelease, suspend bool) {
-	obj.Spec.Suspend = suspend
-}
-
-// SetHelmReleaseReleaseName sets the Helm release name.
-func SetHelmReleaseReleaseName(obj *helmv2.HelmRelease, name string) {
-	obj.Spec.ReleaseName = name
-}
-
-// SetHelmReleaseTargetNamespace sets the target namespace of the release.
-func SetHelmReleaseTargetNamespace(obj *helmv2.HelmRelease, ns string) {
-	obj.Spec.TargetNamespace = ns
-}
-
-// SetHelmReleaseStorageNamespace sets the storage namespace of the release.
-func SetHelmReleaseStorageNamespace(obj *helmv2.HelmRelease, ns string) {
-	obj.Spec.StorageNamespace = ns
 }
 
 // AddHelmReleaseDependsOn appends a dependency to the HelmRelease.
@@ -689,11 +389,6 @@ func SetHelmReleaseTimeout(obj *helmv2.HelmRelease, timeout metav1.Duration) {
 // SetHelmReleaseMaxHistory sets the maximum history to retain.
 func SetHelmReleaseMaxHistory(obj *helmv2.HelmRelease, h int) {
 	obj.Spec.MaxHistory = &h
-}
-
-// SetHelmReleaseServiceAccountName sets the service account name.
-func SetHelmReleaseServiceAccountName(obj *helmv2.HelmRelease, name string) {
-	obj.Spec.ServiceAccountName = name
 }
 
 // SetHelmReleasePersistentClient sets the persistent client flag.
@@ -1031,39 +726,14 @@ func CreateWaitStrategy(name helmv2.WaitStrategyName) *helmv2.WaitStrategy {
 
 // Provider setters
 
-// SetProviderType sets the notification provider type.
-func SetProviderType(provider *notificationv1beta3.Provider, t string) {
-	provider.Spec.Type = t
-}
-
 // SetProviderInterval configures the interval at which events are sent.
 func SetProviderInterval(provider *notificationv1beta3.Provider, d metav1.Duration) {
 	provider.Spec.Interval = &d
 }
 
-// SetProviderChannel specifies the target channel for notifications.
-func SetProviderChannel(provider *notificationv1beta3.Provider, channel string) {
-	provider.Spec.Channel = channel
-}
-
-// SetProviderUsername configures the username on the provider spec.
-func SetProviderUsername(provider *notificationv1beta3.Provider, username string) {
-	provider.Spec.Username = username
-}
-
-// SetProviderAddress sets the provider address.
-func SetProviderAddress(provider *notificationv1beta3.Provider, address string) {
-	provider.Spec.Address = address
-}
-
 // SetProviderTimeout sets the timeout for sending notifications.
 func SetProviderTimeout(provider *notificationv1beta3.Provider, d metav1.Duration) {
 	provider.Spec.Timeout = &d
-}
-
-// SetProviderProxy sets the HTTP proxy used when sending events.
-func SetProviderProxy(provider *notificationv1beta3.Provider, proxy string) {
-	provider.Spec.Proxy = proxy
 }
 
 // SetProviderSecretRef attaches a Secret reference to the provider.
@@ -1076,17 +746,7 @@ func SetProviderCertSecretRef(provider *notificationv1beta3.Provider, ref *meta.
 	provider.Spec.CertSecretRef = ref
 }
 
-// SetProviderSuspend sets the suspend flag on the provider.
-func SetProviderSuspend(provider *notificationv1beta3.Provider, suspend bool) {
-	provider.Spec.Suspend = suspend
-}
-
 // Alert setters
-
-// SetAlertProviderRef sets the provider reference for an alert.
-func SetAlertProviderRef(alert *notificationv1beta3.Alert, ref meta.LocalObjectReference) {
-	alert.Spec.ProviderRef = ref
-}
 
 // AddAlertEventSource appends an event source to the alert specification.
 func AddAlertEventSource(alert *notificationv1beta3.Alert, ref notificationv1.CrossNamespaceObjectReference) {
@@ -1111,27 +771,7 @@ func AddAlertEventMetadata(alert *notificationv1beta3.Alert, key, value string) 
 	alert.Spec.EventMetadata[key] = value
 }
 
-// SetAlertEventSeverity sets the severity level for events.
-func SetAlertEventSeverity(alert *notificationv1beta3.Alert, sev string) {
-	alert.Spec.EventSeverity = sev
-}
-
-// SetAlertSummary sets the alert summary message.
-func SetAlertSummary(alert *notificationv1beta3.Alert, summary string) {
-	alert.Spec.Summary = summary
-}
-
-// SetAlertSuspend toggles the suspend flag for the alert.
-func SetAlertSuspend(alert *notificationv1beta3.Alert, suspend bool) {
-	alert.Spec.Suspend = suspend
-}
-
 // Receiver setters
-
-// SetReceiverType sets the receiver type.
-func SetReceiverType(receiver *notificationv1.Receiver, t string) {
-	receiver.Spec.Type = t
-}
 
 // SetReceiverInterval configures how often resources are scanned.
 func SetReceiverInterval(receiver *notificationv1.Receiver, d metav1.Duration) {
@@ -1159,26 +799,11 @@ func SetReceiverSecretRef(receiver *notificationv1.Receiver, ref meta.LocalObjec
 	receiver.Spec.SecretRef = &ref
 }
 
-// SetReceiverSuspend toggles the suspend flag for the receiver.
-func SetReceiverSuspend(receiver *notificationv1.Receiver, suspend bool) {
-	receiver.Spec.Suspend = suspend
-}
-
 // ImageUpdateAutomation setters
-
-// SetImageUpdateAutomationSourceRef sets the source reference for the automation.
-func SetImageUpdateAutomationSourceRef(auto *imagev1.ImageUpdateAutomation, ref imagev1.CrossNamespaceSourceReference) {
-	auto.Spec.SourceRef = ref
-}
 
 // SetImageUpdateAutomationGitSpec sets the git specification for the automation.
 func SetImageUpdateAutomationGitSpec(auto *imagev1.ImageUpdateAutomation, spec *imagev1.GitSpec) {
 	auto.Spec.GitSpec = spec
-}
-
-// SetImageUpdateAutomationInterval sets the reconcile interval.
-func SetImageUpdateAutomationInterval(auto *imagev1.ImageUpdateAutomation, interval metav1.Duration) {
-	auto.Spec.Interval = interval
 }
 
 // SetImageUpdateAutomationPolicySelector sets the policy selector.
@@ -1189,11 +814,6 @@ func SetImageUpdateAutomationPolicySelector(auto *imagev1.ImageUpdateAutomation,
 // SetImageUpdateAutomationUpdateStrategy sets the update strategy.
 func SetImageUpdateAutomationUpdateStrategy(auto *imagev1.ImageUpdateAutomation, strategy *imagev1.UpdateStrategy) {
 	auto.Spec.Update = strategy
-}
-
-// SetImageUpdateAutomationSuspend sets the suspend flag.
-func SetImageUpdateAutomationSuspend(auto *imagev1.ImageUpdateAutomation, suspend bool) {
-	auto.Spec.Suspend = suspend
 }
 
 // CreateCrossNamespaceSourceReference creates a new cross namespace source reference.
@@ -1209,11 +829,6 @@ func CreateCrossNamespaceSourceReference(apiVersion, kind, name, namespace strin
 // CreateGitCheckoutSpec creates a new GitCheckoutSpec.
 func CreateGitCheckoutSpec(ref sourcev1.GitRepositoryRef) *imagev1.GitCheckoutSpec {
 	return &imagev1.GitCheckoutSpec{Reference: ref}
-}
-
-// SetGitCheckoutReference sets the reference of the checkout spec.
-func SetGitCheckoutReference(spec *imagev1.GitCheckoutSpec, ref sourcev1.GitRepositoryRef) {
-	spec.Reference = ref
 }
 
 // CreateCommitUser returns a CommitUser struct.
@@ -1236,16 +851,6 @@ func SetCommitSigningKey(spec *imagev1.CommitSpec, key *imagev1.SigningKey) {
 	spec.SigningKey = key
 }
 
-// SetCommitMessageTemplate sets the message template for a CommitSpec.
-func SetCommitMessageTemplate(spec *imagev1.CommitSpec, tpl string) {
-	spec.MessageTemplate = tpl
-}
-
-// SetCommitMessageTemplateValues replaces the message template values map.
-func SetCommitMessageTemplateValues(spec *imagev1.CommitSpec, values map[string]string) {
-	spec.MessageTemplateValues = values
-}
-
 // AddCommitMessageTemplateValue adds a single key/value pair to the template values map.
 func AddCommitMessageTemplateValue(spec *imagev1.CommitSpec, key, value string) {
 	if spec.MessageTemplateValues == nil {
@@ -1254,24 +859,10 @@ func AddCommitMessageTemplateValue(spec *imagev1.CommitSpec, key, value string) 
 	spec.MessageTemplateValues[key] = value
 }
 
-// SetCommitAuthor sets the author of the commit spec.
-func SetCommitAuthor(spec *imagev1.CommitSpec, author imagev1.CommitUser) {
-	spec.Author = author
-}
-
 // CreatePushSpec returns a PushSpec.
 func CreatePushSpec(branch, refspec string, options map[string]string) *imagev1.PushSpec {
 	return &imagev1.PushSpec{Branch: branch, Refspec: refspec, Options: options}
 }
-
-// SetPushBranch sets the branch for the push spec.
-func SetPushBranch(spec *imagev1.PushSpec, branch string) { spec.Branch = branch }
-
-// SetPushRefspec sets the refspec for the push spec.
-func SetPushRefspec(spec *imagev1.PushSpec, refspec string) { spec.Refspec = refspec }
-
-// SetPushOptions replaces the options map for the push spec.
-func SetPushOptions(spec *imagev1.PushSpec, opts map[string]string) { spec.Options = opts }
 
 // AddPushOption adds a single option to the push spec.
 func AddPushOption(spec *imagev1.PushSpec, key, value string) {
@@ -1291,9 +882,6 @@ func SetGitSpecCheckout(spec *imagev1.GitSpec, checkout *imagev1.GitCheckoutSpec
 	spec.Checkout = checkout
 }
 
-// SetGitSpecCommit sets the commit spec.
-func SetGitSpecCommit(spec *imagev1.GitSpec, commit imagev1.CommitSpec) { spec.Commit = commit }
-
 // SetGitSpecPush sets the push spec.
 func SetGitSpecPush(spec *imagev1.GitSpec, push *imagev1.PushSpec) { spec.Push = push }
 
@@ -1302,27 +890,10 @@ func CreateUpdateStrategy(strategy imagev1.UpdateStrategyName, path string) *ima
 	return &imagev1.UpdateStrategy{Strategy: strategy, Path: path}
 }
 
-// SetUpdateStrategyName sets the strategy name.
-func SetUpdateStrategyName(spec *imagev1.UpdateStrategy, name imagev1.UpdateStrategyName) {
-	spec.Strategy = name
-}
-
-// SetUpdateStrategyPath sets the update path.
-func SetUpdateStrategyPath(spec *imagev1.UpdateStrategy, path string) { spec.Path = path }
-
 // CreateImageRef constructs an ImageRef.
 func CreateImageRef(name, tag, digest string) imagev1.ImageRef {
 	return imagev1.ImageRef{Name: name, Tag: tag, Digest: digest}
 }
-
-// SetImageRefDigest sets the digest on an ImageRef.
-func SetImageRefDigest(ref *imagev1.ImageRef, digest string) { ref.Digest = digest }
-
-// SetImageRefTag sets the tag on an ImageRef.
-func SetImageRefTag(ref *imagev1.ImageRef, tag string) { ref.Tag = tag }
-
-// SetImageRefName sets the name on an ImageRef.
-func SetImageRefName(ref *imagev1.ImageRef, name string) { ref.Name = name }
 
 // AddObservedPolicy records an observed policy in the automation status.
 func AddObservedPolicy(auto *imagev1.ImageUpdateAutomation, name string, ref imagev1.ImageRef) {
@@ -1330,11 +901,6 @@ func AddObservedPolicy(auto *imagev1.ImageUpdateAutomation, name string, ref ima
 		auto.Status.ObservedPolicies = make(imagev1.ObservedPolicies)
 	}
 	auto.Status.ObservedPolicies[name] = ref
-}
-
-// SetObservedPolicies sets the observed policies map.
-func SetObservedPolicies(auto *imagev1.ImageUpdateAutomation, policies imagev1.ObservedPolicies) {
-	auto.Status.ObservedPolicies = policies
 }
 
 // ResourceSet setters
@@ -1354,24 +920,9 @@ func AddResourceSetResource(rs *fluxv1.ResourceSet, r *apiextensionsv1.JSON) {
 	rs.Spec.Resources = append(rs.Spec.Resources, r)
 }
 
-// SetResourceSetResourcesTemplate sets the resources template.
-func SetResourceSetResourcesTemplate(rs *fluxv1.ResourceSet, tpl string) {
-	rs.Spec.ResourcesTemplate = tpl
-}
-
 // AddResourceSetDependency appends a dependency.
 func AddResourceSetDependency(rs *fluxv1.ResourceSet, dep fluxv1.Dependency) {
 	rs.Spec.DependsOn = append(rs.Spec.DependsOn, dep)
-}
-
-// SetResourceSetServiceAccountName sets the service account name.
-func SetResourceSetServiceAccountName(rs *fluxv1.ResourceSet, name string) {
-	rs.Spec.ServiceAccountName = name
-}
-
-// SetResourceSetWait sets the wait flag.
-func SetResourceSetWait(rs *fluxv1.ResourceSet, wait bool) {
-	rs.Spec.Wait = wait
 }
 
 // SetResourceSetCommonMetadata sets the common metadata.
@@ -1380,21 +931,6 @@ func SetResourceSetCommonMetadata(rs *fluxv1.ResourceSet, cm *fluxv1.CommonMetad
 }
 
 // ResourceSetInputProvider setters
-
-// SetResourceSetInputProviderType sets the provider type.
-func SetResourceSetInputProviderType(obj *fluxv1.ResourceSetInputProvider, typ string) {
-	obj.Spec.Type = typ
-}
-
-// SetResourceSetInputProviderURL sets the provider URL.
-func SetResourceSetInputProviderURL(obj *fluxv1.ResourceSetInputProvider, url string) {
-	obj.Spec.URL = url
-}
-
-// SetResourceSetInputProviderServiceAccountName sets the service account name.
-func SetResourceSetInputProviderServiceAccountName(obj *fluxv1.ResourceSetInputProvider, name string) {
-	obj.Spec.ServiceAccountName = name
-}
 
 // SetResourceSetInputProviderSecretRef sets the secret reference.
 func SetResourceSetInputProviderSecretRef(obj *fluxv1.ResourceSetInputProvider, ref *meta.LocalObjectReference) {
@@ -1416,17 +952,6 @@ func AddResourceSetInputProviderSchedule(obj *fluxv1.ResourceSetInputProvider, s
 // AddFluxInstanceComponent appends a component to the FluxInstance spec.
 func AddFluxInstanceComponent(obj *fluxv1.FluxInstance, c fluxv1.Component) {
 	obj.Spec.Components = append(obj.Spec.Components, c)
-}
-
-// SetFluxInstanceDistribution sets the distribution of the FluxInstance.
-func SetFluxInstanceDistribution(obj *fluxv1.FluxInstance, dist fluxv1.Distribution) {
-	obj.Spec.Distribution = dist
-}
-
-// SetFluxInstanceDistributionVariant sets the distribution variant.
-// Valid values: upstream-alpine, enterprise-alpine, enterprise-distroless, enterprise-distroless-fips.
-func SetFluxInstanceDistributionVariant(obj *fluxv1.FluxInstance, variant string) {
-	obj.Spec.Distribution.Variant = variant
 }
 
 // SetFluxInstanceCommonMetadata sets the common metadata.
@@ -1471,11 +996,6 @@ func SetFluxInstanceSync(obj *fluxv1.FluxInstance, sync *fluxv1.Sync) {
 
 // FluxReport setters
 
-// SetFluxReportDistribution sets the distribution status.
-func SetFluxReportDistribution(fr *fluxv1.FluxReport, dist fluxv1.FluxDistributionStatus) {
-	fr.Spec.Distribution = dist
-}
-
 // SetFluxReportCluster sets the cluster info.
 func SetFluxReportCluster(fr *fluxv1.FluxReport, c *fluxv1.ClusterInfo) {
 	fr.Spec.Cluster = c
@@ -1506,14 +1026,4 @@ func SetFluxReportSyncStatus(fr *fluxv1.FluxReport, s *fluxv1.FluxSyncStatus) {
 // CreateSchedule returns a Schedule with the given cron expression.
 func CreateSchedule(cron string) fluxv1.Schedule {
 	return fluxv1.Schedule{Cron: cron}
-}
-
-// SetScheduleTimeZone sets the time zone on the schedule.
-func SetScheduleTimeZone(s *fluxv1.Schedule, tz string) {
-	s.TimeZone = tz
-}
-
-// SetScheduleWindow sets the execution window.
-func SetScheduleWindow(s *fluxv1.Schedule, d metav1.Duration) {
-	s.Window = d
 }

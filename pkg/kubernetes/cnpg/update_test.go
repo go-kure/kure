@@ -74,38 +74,6 @@ func TestAddDatabaseExtension(t *testing.T) {
 	}
 }
 
-func TestSetDatabaseClusterRef(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
-	SetDatabaseClusterRef(obj, "pg-main")
-	if obj.Spec.ClusterRef.Name != "pg-main" {
-		t.Errorf("expected cluster ref 'pg-main', got %s", obj.Spec.ClusterRef.Name)
-	}
-}
-
-func TestSetDatabaseOwner(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
-	SetDatabaseOwner(obj, "appuser")
-	if obj.Spec.Owner != "appuser" {
-		t.Errorf("expected owner 'appuser', got %s", obj.Spec.Owner)
-	}
-}
-
-func TestSetDatabaseReclaimPolicy(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
-	SetDatabaseReclaimPolicy(obj, cnpgv1.DatabaseReclaimDelete)
-	if obj.Spec.ReclaimPolicy != cnpgv1.DatabaseReclaimDelete {
-		t.Errorf("expected reclaim policy Delete, got %s", obj.Spec.ReclaimPolicy)
-	}
-}
-
-func TestSetDatabaseEnsure(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
-	SetDatabaseEnsure(obj, cnpgv1.EnsurePresent)
-	if obj.Spec.Ensure != cnpgv1.EnsurePresent {
-		t.Errorf("expected ensure Present, got %s", obj.Spec.Ensure)
-	}
-}
-
 func TestAddObjectStoreLabel(t *testing.T) {
 	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	AddObjectStoreLabel(obj, "env", "prod")
@@ -134,36 +102,12 @@ func TestAddObjectStoreEnvVar(t *testing.T) {
 	}
 }
 
-func TestSetObjectStoreDestinationPath(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
-	SetObjectStoreDestinationPath(obj, "s3://my-bucket/backups")
-	if obj.Spec.Configuration.DestinationPath != "s3://my-bucket/backups" {
-		t.Errorf("expected DestinationPath 's3://my-bucket/backups', got %s", obj.Spec.Configuration.DestinationPath)
-	}
-}
-
-func TestSetObjectStoreEndpointURL(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
-	SetObjectStoreEndpointURL(obj, "https://s3.example.com")
-	if obj.Spec.Configuration.EndpointURL != "https://s3.example.com" {
-		t.Errorf("expected EndpointURL 'https://s3.example.com', got %s", obj.Spec.Configuration.EndpointURL)
-	}
-}
-
 func TestSetObjectStoreS3Credentials(t *testing.T) {
 	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
 	creds := &barmanapi.S3Credentials{}
 	SetObjectStoreS3Credentials(obj, creds)
 	if obj.Spec.Configuration.AWS == nil {
 		t.Error("expected non-nil S3Credentials (AWS field)")
-	}
-}
-
-func TestSetObjectStoreRetentionPolicy(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
-	SetObjectStoreRetentionPolicy(obj, "30d")
-	if obj.Spec.RetentionPolicy != "30d" {
-		t.Errorf("expected RetentionPolicy '30d', got %s", obj.Spec.RetentionPolicy)
 	}
 }
 
@@ -207,14 +151,6 @@ func TestAddScheduledBackupAnnotation(t *testing.T) {
 	}
 }
 
-func TestSetScheduledBackupMethod(t *testing.T) {
-	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
-	SetScheduledBackupMethod(obj, cnpgv1.BackupMethodBarmanObjectStore)
-	if obj.Spec.Method != cnpgv1.BackupMethodBarmanObjectStore {
-		t.Errorf("expected method BarmanObjectStore, got %s", obj.Spec.Method)
-	}
-}
-
 func TestSetScheduledBackupPluginConfiguration(t *testing.T) {
 	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
 	params := map[string]string{"key": "value"}
@@ -232,14 +168,6 @@ func TestSetScheduledBackupImmediate(t *testing.T) {
 	SetScheduledBackupImmediate(obj, true)
 	if obj.Spec.Immediate == nil || !*obj.Spec.Immediate {
 		t.Error("expected Immediate to be true")
-	}
-}
-
-func TestSetScheduledBackupBackupOwnerReference(t *testing.T) {
-	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
-	SetScheduledBackupBackupOwnerReference(obj, "self")
-	if obj.Spec.BackupOwnerReference != "self" {
-		t.Errorf("expected BackupOwnerReference 'self', got %s", obj.Spec.BackupOwnerReference)
 	}
 }
 

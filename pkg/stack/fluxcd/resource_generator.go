@@ -355,8 +355,8 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 	switch ref.Kind {
 	case "GitRepository":
 		gr := pubfluxcd.CreateGitRepository(ref.Name, namespace)
-		pubfluxcd.SetGitRepositoryURL(gr, ref.URL)
-		pubfluxcd.SetGitRepositoryInterval(gr, metav1.Duration{Duration: g.DefaultInterval})
+		gr.Spec.URL = ref.URL
+		gr.Spec.Interval = metav1.Duration{Duration: g.DefaultInterval}
 		if ref.Branch != "" {
 			pubfluxcd.SetGitRepositoryReference(gr, &sourcev1.GitRepositoryRef{Branch: ref.Branch})
 		} else if ref.Tag != "" {
@@ -365,8 +365,8 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		return gr, nil
 	case "OCIRepository":
 		or := pubfluxcd.CreateOCIRepository(ref.Name, namespace)
-		pubfluxcd.SetOCIRepositoryURL(or, ref.URL)
-		pubfluxcd.SetOCIRepositoryInterval(or, metav1.Duration{Duration: g.DefaultInterval})
+		or.Spec.URL = ref.URL
+		or.Spec.Interval = metav1.Duration{Duration: g.DefaultInterval}
 		if ref.Tag != "" {
 			pubfluxcd.SetOCIRepositoryReference(or, &sourcev1.OCIRepositoryRef{Tag: ref.Tag})
 		}

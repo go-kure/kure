@@ -41,7 +41,7 @@
 // actual mutations while keeping the public API stable.  For example:
 //
 //	cert := certmanager.Certificate(&certmanager.CertificateConfig{...})
-//	certmanager.SetCertificateSpec(cert, certv1.CertificateSpec{SecretName: "new-secret"})
+//	cert.Spec = certv1.CertificateSpec{SecretName: "new-secret"}
 //
 // This package aims to provide a convenient typed interface for applications
 // that need to generate cert-manager manifests at runtime or as part of a build

@@ -6,24 +6,6 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
-// CreatePodSpec returns a PodSpec initialized with sensible defaults.
-func CreatePodSpec() *corev1.PodSpec {
-	obj := corev1.PodSpec{
-		Containers:                    []corev1.Container{},
-		InitContainers:                []corev1.Container{},
-		Volumes:                       []corev1.Volume{},
-		RestartPolicy:                 corev1.RestartPolicyAlways,
-		TerminationGracePeriodSeconds: new(int64),
-		SecurityContext:               &corev1.PodSecurityContext{},
-		ImagePullSecrets:              []corev1.LocalObjectReference{},
-		ServiceAccountName:            "",
-		NodeSelector:                  map[string]string{},
-		Affinity:                      &corev1.Affinity{},
-		Tolerations:                   []corev1.Toleration{},
-	}
-	return &obj
-}
-
 // AddPodSpecContainer appends a container to the PodSpec.
 func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container) error {
 	if spec == nil {
@@ -108,14 +90,6 @@ func AddPodSpecTopologySpreadConstraints(spec *corev1.PodSpec, constraint *corev
 	return nil
 }
 
-// SetPodSpecServiceAccountName sets the service account name.
-func SetPodSpecServiceAccountName(spec *corev1.PodSpec, name string) {
-	if spec == nil {
-		panic("SetPodSpecServiceAccountName: spec must not be nil")
-	}
-	spec.ServiceAccountName = name
-}
-
 // SetPodSpecSecurityContext sets the security context for the PodSpec.
 func SetPodSpecSecurityContext(spec *corev1.PodSpec, sc *corev1.PodSecurityContext) {
 	if spec == nil {
@@ -132,84 +106,12 @@ func SetPodSpecAffinity(spec *corev1.PodSpec, aff *corev1.Affinity) {
 	spec.Affinity = aff
 }
 
-// SetPodSpecNodeSelector sets the node selector map.
-func SetPodSpecNodeSelector(spec *corev1.PodSpec, selector map[string]string) {
-	if spec == nil {
-		panic("SetPodSpecNodeSelector: spec must not be nil")
-	}
-	spec.NodeSelector = selector
-}
-
-// SetPodSpecPriorityClassName sets the priority class name.
-func SetPodSpecPriorityClassName(spec *corev1.PodSpec, class string) {
-	if spec == nil {
-		panic("SetPodSpecPriorityClassName: spec must not be nil")
-	}
-	spec.PriorityClassName = class
-}
-
-// SetPodSpecHostNetwork configures host networking.
-func SetPodSpecHostNetwork(spec *corev1.PodSpec, hostNetwork bool) {
-	if spec == nil {
-		panic("SetPodSpecHostNetwork: spec must not be nil")
-	}
-	spec.HostNetwork = hostNetwork
-}
-
-// SetPodSpecHostPID configures host PID namespace usage.
-func SetPodSpecHostPID(spec *corev1.PodSpec, hostPID bool) {
-	if spec == nil {
-		panic("SetPodSpecHostPID: spec must not be nil")
-	}
-	spec.HostPID = hostPID
-}
-
-// SetPodSpecHostIPC configures host IPC namespace usage.
-func SetPodSpecHostIPC(spec *corev1.PodSpec, hostIPC bool) {
-	if spec == nil {
-		panic("SetPodSpecHostIPC: spec must not be nil")
-	}
-	spec.HostIPC = hostIPC
-}
-
-// SetPodSpecDNSPolicy sets the DNS policy.
-func SetPodSpecDNSPolicy(spec *corev1.PodSpec, policy corev1.DNSPolicy) {
-	if spec == nil {
-		panic("SetPodSpecDNSPolicy: spec must not be nil")
-	}
-	spec.DNSPolicy = policy
-}
-
 // SetPodSpecDNSConfig sets the DNS config.
 func SetPodSpecDNSConfig(spec *corev1.PodSpec, cfg *corev1.PodDNSConfig) {
 	if spec == nil {
 		panic("SetPodSpecDNSConfig: spec must not be nil")
 	}
 	spec.DNSConfig = cfg
-}
-
-// SetPodSpecHostname sets the hostname.
-func SetPodSpecHostname(spec *corev1.PodSpec, hostname string) {
-	if spec == nil {
-		panic("SetPodSpecHostname: spec must not be nil")
-	}
-	spec.Hostname = hostname
-}
-
-// SetPodSpecSubdomain sets the subdomain.
-func SetPodSpecSubdomain(spec *corev1.PodSpec, subdomain string) {
-	if spec == nil {
-		panic("SetPodSpecSubdomain: spec must not be nil")
-	}
-	spec.Subdomain = subdomain
-}
-
-// SetPodSpecRestartPolicy sets the restart policy.
-func SetPodSpecRestartPolicy(spec *corev1.PodSpec, policy corev1.RestartPolicy) {
-	if spec == nil {
-		panic("SetPodSpecRestartPolicy: spec must not be nil")
-	}
-	spec.RestartPolicy = policy
 }
 
 // SetPodSpecTerminationGracePeriod sets the termination grace period seconds.
@@ -221,12 +123,4 @@ func SetPodSpecTerminationGracePeriod(spec *corev1.PodSpec, secs int64) {
 		spec.TerminationGracePeriodSeconds = new(int64)
 	}
 	*spec.TerminationGracePeriodSeconds = secs
-}
-
-// SetPodSpecSchedulerName sets the scheduler name.
-func SetPodSpecSchedulerName(spec *corev1.PodSpec, scheduler string) {
-	if spec == nil {
-		panic("SetPodSpecSchedulerName: spec must not be nil")
-	}
-	spec.SchedulerName = scheduler
 }

@@ -98,15 +98,6 @@ func AddCronJobTopologySpreadConstraint(cron *batchv1.CronJob, topologySpreadCon
 	return nil
 }
 
-// SetCronJobServiceAccountName sets the service account name on the CronJob's
-// pod template.
-func SetCronJobServiceAccountName(cron *batchv1.CronJob, serviceAccountName string) {
-	if cron == nil {
-		panic("SetCronJobServiceAccountName: cron must not be nil")
-	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName = serviceAccountName
-}
-
 // SetCronJobSecurityContext sets the pod-level security context on the
 // CronJob's pod template.
 func SetCronJobSecurityContext(cron *batchv1.CronJob, securityContext *corev1.PodSecurityContext) {
@@ -122,31 +113,6 @@ func SetCronJobAffinity(cron *batchv1.CronJob, affinity *corev1.Affinity) {
 		panic("SetCronJobAffinity: cron must not be nil")
 	}
 	cron.Spec.JobTemplate.Spec.Template.Spec.Affinity = affinity
-}
-
-// SetCronJobNodeSelector sets the node selector map on the CronJob's pod
-// template.
-func SetCronJobNodeSelector(cron *batchv1.CronJob, nodeSelector map[string]string) {
-	if cron == nil {
-		panic("SetCronJobNodeSelector: cron must not be nil")
-	}
-	cron.Spec.JobTemplate.Spec.Template.Spec.NodeSelector = nodeSelector
-}
-
-// SetCronJobSchedule sets the cron schedule expression.
-func SetCronJobSchedule(cron *batchv1.CronJob, schedule string) {
-	if cron == nil {
-		panic("SetCronJobSchedule: cron must not be nil")
-	}
-	cron.Spec.Schedule = schedule
-}
-
-// SetCronJobConcurrencyPolicy sets the concurrency policy for the CronJob.
-func SetCronJobConcurrencyPolicy(cron *batchv1.CronJob, policy batchv1.ConcurrencyPolicy) {
-	if cron == nil {
-		panic("SetCronJobConcurrencyPolicy: cron must not be nil")
-	}
-	cron.Spec.ConcurrencyPolicy = policy
 }
 
 // SetCronJobSuspend sets whether the CronJob is suspended.

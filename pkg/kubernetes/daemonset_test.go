@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -151,12 +150,6 @@ func TestDaemonSetFunctions(t *testing.T) {
 		t.Errorf("node selector not set")
 	}
 
-	strategy := appsv1.DaemonSetUpdateStrategy{Type: appsv1.RollingUpdateDaemonSetStrategyType}
-	SetDaemonSetUpdateStrategy(ds, strategy)
-	if ds.Spec.UpdateStrategy.Type != appsv1.RollingUpdateDaemonSetStrategyType {
-		t.Errorf("update strategy not set")
-	}
-
 	rhl := int32(3)
 	SetDaemonSetRevisionHistoryLimit(ds, &rhl)
 	if ds.Spec.RevisionHistoryLimit == nil || *ds.Spec.RevisionHistoryLimit != 3 {
@@ -195,7 +188,6 @@ func TestDaemonSetNilGuards(t *testing.T) {
 	assertPanics(t, func() { SetDaemonSetSecurityContext(nil, nil) })
 	assertPanics(t, func() { SetDaemonSetAffinity(nil, nil) })
 	assertPanics(t, func() { SetDaemonSetNodeSelector(nil, nil) })
-	assertPanics(t, func() { SetDaemonSetUpdateStrategy(nil, appsv1.DaemonSetUpdateStrategy{}) })
 	assertPanics(t, func() { SetDaemonSetRevisionHistoryLimit(nil, &rhl) })
 
 	// Secondary nil guard: spec == nil with valid receiver.

@@ -1,7 +1,6 @@
 package kubernetes
 
 import (
-	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -22,24 +21,6 @@ func TestAddServiceAccountImagePullSecret(t *testing.T) {
 	AddServiceAccountImagePullSecret(sa, ref)
 	if len(sa.ImagePullSecrets) != 1 || sa.ImagePullSecrets[0] != ref {
 		t.Errorf("image pull secret not added")
-	}
-}
-
-func TestSetServiceAccountSecrets(t *testing.T) {
-	sa := CreateServiceAccount("sa", "ns")
-	secrets := []corev1.ObjectReference{{Name: "a"}, {Name: "b"}}
-	SetServiceAccountSecrets(sa, secrets)
-	if !reflect.DeepEqual(sa.Secrets, secrets) {
-		t.Errorf("secrets not set")
-	}
-}
-
-func TestSetServiceAccountImagePullSecrets(t *testing.T) {
-	sa := CreateServiceAccount("sa", "ns")
-	pulls := []corev1.LocalObjectReference{{Name: "x"}, {Name: "y"}}
-	SetServiceAccountImagePullSecrets(sa, pulls)
-	if !reflect.DeepEqual(sa.ImagePullSecrets, pulls) {
-		t.Errorf("image pull secrets not set")
 	}
 }
 
@@ -65,25 +46,11 @@ func TestServiceAccountMetadataFunctions(t *testing.T) {
 	if sa.Annotations["owner"] != "bob" {
 		t.Errorf("annotation not added")
 	}
-
-	newLabels := map[string]string{"a": "b"}
-	SetServiceAccountLabels(sa, newLabels)
-	if !reflect.DeepEqual(sa.Labels, newLabels) {
-		t.Errorf("labels not set")
-	}
-
-	newAnn := map[string]string{"x": "y"}
-	SetServiceAccountAnnotations(sa, newAnn)
-	if !reflect.DeepEqual(sa.Annotations, newAnn) {
-		t.Errorf("annotations not set")
-	}
 }
 
 func TestServiceAccountNilGuards(t *testing.T) {
 	assertPanics(t, func() { AddServiceAccountSecret(nil, corev1.ObjectReference{}) })
 	assertPanics(t, func() { AddServiceAccountImagePullSecret(nil, corev1.LocalObjectReference{}) })
-	assertPanics(t, func() { SetServiceAccountSecrets(nil, nil) })
-	assertPanics(t, func() { SetServiceAccountImagePullSecrets(nil, nil) })
 	assertPanics(t, func() { SetServiceAccountAutomountToken(nil, true) })
 
 	// Nil-map init guards: plain struct (not CreateServiceAccount) has nil maps and

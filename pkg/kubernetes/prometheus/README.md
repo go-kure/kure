@@ -116,16 +116,16 @@ Update existing resources after construction:
 ```go
 // ServiceMonitor modifiers
 prometheus.AddServiceMonitorEndpoint(sm, monitoringv1.Endpoint{Path: "/metrics", Port: "http"})
-prometheus.SetServiceMonitorJobLabel(sm, "app")
+sm.Spec.JobLabel = "app"
 prometheus.AddServiceMonitorTargetLabel(sm, "version")
-prometheus.SetServiceMonitorNamespaceSelector(sm, monitoringv1.NamespaceSelector{Any: true})
+sm.Spec.NamespaceSelector = monitoringv1.NamespaceSelector{Any: true}
 prometheus.SetServiceMonitorSampleLimit(sm, 10000)
 
 // PodMonitor modifiers
 prometheus.AddPodMonitorEndpoint(pm, monitoringv1.PodMetricsEndpoint{Path: "/metrics", Port: "http"})
-prometheus.SetPodMonitorJobLabel(pm, "app")
+pm.Spec.JobLabel = "app"
 prometheus.AddPodMonitorPodTargetLabel(pm, "version")
-prometheus.SetPodMonitorNamespaceSelector(pm, monitoringv1.NamespaceSelector{Any: true})
+pm.Spec.NamespaceSelector = monitoringv1.NamespaceSelector{Any: true}
 prometheus.SetPodMonitorSampleLimit(pm, 10000)
 
 // PrometheusRule modifiers

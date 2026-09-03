@@ -8,59 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestSetExternalSecretSpec(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	newSpec := esv1.ExternalSecretSpec{
-		SecretStoreRef: esv1.SecretStoreRef{
-			Name: "new-store",
-			Kind: "SecretStore",
-		},
-	}
-
-	SetExternalSecretSpec(es, newSpec)
-
-	if es.Spec.SecretStoreRef.Name != "new-store" {
-		t.Errorf("expected SecretStoreRef.Name 'new-store', got %s", es.Spec.SecretStoreRef.Name)
-	}
-}
-
-func TestSetSecretStoreSpec(t *testing.T) {
-	ss := SecretStore(&SecretStoreConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	newSpec := esv1.SecretStoreSpec{
-		Controller: "replaced",
-	}
-
-	SetSecretStoreSpec(ss, newSpec)
-
-	if ss.Spec.Controller != "replaced" {
-		t.Errorf("expected Controller 'replaced', got %s", ss.Spec.Controller)
-	}
-}
-
-func TestSetClusterSecretStoreSpec(t *testing.T) {
-	css := ClusterSecretStore(&ClusterSecretStoreConfig{
-		Name: "test",
-	})
-
-	newSpec := esv1.SecretStoreSpec{
-		Controller: "cluster-replaced",
-	}
-
-	SetClusterSecretStoreSpec(css, newSpec)
-
-	if css.Spec.Controller != "cluster-replaced" {
-		t.Errorf("expected Controller 'cluster-replaced', got %s", css.Spec.Controller)
-	}
-}
-
 func TestAddExternalSecretLabel(t *testing.T) {
 	es := ExternalSecret(&ExternalSecretConfig{
 		Name:      "test",
@@ -107,27 +54,6 @@ func TestAddExternalSecretData(t *testing.T) {
 	}
 	if es.Spec.Data[0].SecretKey != "api-key" {
 		t.Errorf("expected SecretKey 'api-key', got %s", es.Spec.Data[0].SecretKey)
-	}
-}
-
-func TestSetExternalSecretSecretStoreRef(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	ref := esv1.SecretStoreRef{
-		Name: "updated-store",
-		Kind: "ClusterSecretStore",
-	}
-
-	SetExternalSecretSecretStoreRef(es, ref)
-
-	if es.Spec.SecretStoreRef.Name != "updated-store" {
-		t.Errorf("expected SecretStoreRef.Name 'updated-store', got %s", es.Spec.SecretStoreRef.Name)
-	}
-	if es.Spec.SecretStoreRef.Kind != "ClusterSecretStore" {
-		t.Errorf("expected SecretStoreRef.Kind 'ClusterSecretStore', got %s", es.Spec.SecretStoreRef.Kind)
 	}
 }
 
@@ -179,19 +105,6 @@ func TestSetSecretStoreProvider(t *testing.T) {
 	}
 }
 
-func TestSetSecretStoreController(t *testing.T) {
-	ss := SecretStore(&SecretStoreConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	SetSecretStoreController(ss, "new-controller")
-
-	if ss.Spec.Controller != "new-controller" {
-		t.Errorf("expected Controller 'new-controller', got %s", ss.Spec.Controller)
-	}
-}
-
 func TestAddClusterSecretStoreLabel(t *testing.T) {
 	css := ClusterSecretStore(&ClusterSecretStoreConfig{
 		Name: "test",
@@ -237,18 +150,6 @@ func TestSetClusterSecretStoreProvider(t *testing.T) {
 	}
 }
 
-func TestSetClusterSecretStoreController(t *testing.T) {
-	css := ClusterSecretStore(&ClusterSecretStoreConfig{
-		Name: "test",
-	})
-
-	SetClusterSecretStoreController(css, "global")
-
-	if css.Spec.Controller != "global" {
-		t.Errorf("expected Controller 'global', got %s", css.Spec.Controller)
-	}
-}
-
 func TestSetRefreshInterval(t *testing.T) {
 	es := ExternalSecret(&ExternalSecretConfig{
 		Name:      "test",
@@ -263,26 +164,6 @@ func TestSetRefreshInterval(t *testing.T) {
 	}
 	if es.Spec.RefreshInterval.Duration != 5*time.Minute {
 		t.Errorf("expected 5m, got %s", es.Spec.RefreshInterval.Duration)
-	}
-}
-
-func TestSetTarget(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	target := esv1.ExternalSecretTarget{
-		Name:           "my-secret",
-		CreationPolicy: esv1.CreatePolicyOwner,
-	}
-	SetTarget(es, target)
-
-	if es.Spec.Target.Name != "my-secret" {
-		t.Errorf("expected Target.Name 'my-secret', got %s", es.Spec.Target.Name)
-	}
-	if es.Spec.Target.CreationPolicy != esv1.CreatePolicyOwner {
-		t.Errorf("expected CreationPolicy 'Owner', got %s", es.Spec.Target.CreationPolicy)
 	}
 }
 

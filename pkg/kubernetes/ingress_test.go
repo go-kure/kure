@@ -7,7 +7,7 @@ import (
 )
 
 func TestIngressNilErrors(t *testing.T) {
-	rule := CreateIngressRule("example.com")
+	rule := &netv1.IngressRule{Host: "example.com"}
 	// All Ingress functions now panic on nil receiver
 	assertPanics(t, func() { AddIngressRule(nil, rule) })
 	assertPanics(t, func() { AddIngressTLS(nil, netv1.IngressTLS{}) })
@@ -24,10 +24,7 @@ func TestIngressFunctions(t *testing.T) {
 		t.Errorf("unexpected kind %q", ing.Kind)
 	}
 
-	rule := CreateIngressRule("example.com")
-	if rule.Host != "example.com" {
-		t.Errorf("rule host mismatch")
-	}
+	rule := &netv1.IngressRule{Host: "example.com"}
 
 	pt := netv1.PathTypePrefix
 	path := CreateIngressPath("/", &pt, "svc", "http")

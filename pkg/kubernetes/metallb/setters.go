@@ -17,11 +17,6 @@ func SetIPAddressPoolAutoAssign(obj *metallbv1beta1.IPAddressPool, auto bool) {
 	obj.Spec.AutoAssign = &auto
 }
 
-// SetIPAddressPoolAvoidBuggyIPs sets the avoidBuggyIPs flag on the IPAddressPool spec.
-func SetIPAddressPoolAvoidBuggyIPs(obj *metallbv1beta1.IPAddressPool, avoid bool) {
-	obj.Spec.AvoidBuggyIPs = avoid
-}
-
 // SetIPAddressPoolAllocateTo sets the allocation policy on the IPAddressPool spec.
 func SetIPAddressPoolAllocateTo(obj *metallbv1beta1.IPAddressPool, alloc *metallbv1beta1.ServiceAllocation) {
 	obj.Spec.AllocateTo = alloc
@@ -32,46 +27,6 @@ func SetIPAddressPoolAllocateTo(obj *metallbv1beta1.IPAddressPool, alloc *metall
 // AddBGPPeerNodeSelector appends a node selector to the BGPPeer spec.
 func AddBGPPeerNodeSelector(obj *metallbv1beta1.BGPPeer, sel metallbv1beta1.NodeSelector) {
 	obj.Spec.NodeSelectors = append(obj.Spec.NodeSelectors, sel)
-}
-
-// SetBGPPeerPort sets the peer port on the BGPPeer spec.
-func SetBGPPeerPort(obj *metallbv1beta1.BGPPeer, port uint16) {
-	obj.Spec.Port = port
-}
-
-// SetBGPPeerHoldTime sets the hold time on the BGPPeer spec.
-func SetBGPPeerHoldTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) {
-	obj.Spec.HoldTime = d
-}
-
-// SetBGPPeerKeepaliveTime sets the keepalive time on the BGPPeer spec.
-func SetBGPPeerKeepaliveTime(obj *metallbv1beta1.BGPPeer, d metav1.Duration) {
-	obj.Spec.KeepaliveTime = d
-}
-
-// SetBGPPeerSrcAddress sets the source address on the BGPPeer spec.
-func SetBGPPeerSrcAddress(obj *metallbv1beta1.BGPPeer, addr string) {
-	obj.Spec.SrcAddress = addr
-}
-
-// SetBGPPeerRouterID sets the router ID on the BGPPeer spec.
-func SetBGPPeerRouterID(obj *metallbv1beta1.BGPPeer, id string) {
-	obj.Spec.RouterID = id
-}
-
-// SetBGPPeerEBGPMultiHop sets the eBGP multi-hop flag on the BGPPeer spec.
-func SetBGPPeerEBGPMultiHop(obj *metallbv1beta1.BGPPeer, multi bool) {
-	obj.Spec.EBGPMultiHop = multi
-}
-
-// SetBGPPeerPassword sets the password on the BGPPeer spec.
-func SetBGPPeerPassword(obj *metallbv1beta1.BGPPeer, pw string) {
-	obj.Spec.Password = pw
-}
-
-// SetBGPPeerBFDProfile sets the BFD profile name on the BGPPeer spec.
-func SetBGPPeerBFDProfile(obj *metallbv1beta1.BGPPeer, profile string) {
-	obj.Spec.BFDProfile = profile
 }
 
 // BGPAdvertisement setters
@@ -94,11 +49,6 @@ func AddBGPAdvertisementCommunity(obj *metallbv1beta1.BGPAdvertisement, c string
 // AddBGPAdvertisementPeer appends a peer name to the BGPAdvertisement spec.
 func AddBGPAdvertisementPeer(obj *metallbv1beta1.BGPAdvertisement, peer string) {
 	obj.Spec.Peers = append(obj.Spec.Peers, peer)
-}
-
-// SetBGPAdvertisementLocalPref sets the localPref value on the BGPAdvertisement spec.
-func SetBGPAdvertisementLocalPref(obj *metallbv1beta1.BGPAdvertisement, pref uint32) {
-	obj.Spec.LocalPref = pref
 }
 
 // L2Advertisement setters

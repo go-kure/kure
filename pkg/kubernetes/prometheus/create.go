@@ -18,13 +18,13 @@ func ServiceMonitor(cfg *ServiceMonitorConfig) *monitoringv1.ServiceMonitor {
 		AddServiceMonitorEndpoint(obj, ep)
 	}
 	if cfg.JobLabel != "" {
-		SetServiceMonitorJobLabel(obj, cfg.JobLabel)
+		obj.Spec.JobLabel = cfg.JobLabel
 	}
 	for _, label := range cfg.TargetLabels {
 		AddServiceMonitorTargetLabel(obj, label)
 	}
 	if cfg.NamespaceSelector != nil {
-		SetServiceMonitorNamespaceSelector(obj, *cfg.NamespaceSelector)
+		obj.Spec.NamespaceSelector = *cfg.NamespaceSelector
 	}
 	if cfg.SampleLimit != nil {
 		SetServiceMonitorSampleLimit(obj, *cfg.SampleLimit)
@@ -46,13 +46,13 @@ func PodMonitor(cfg *PodMonitorConfig) *monitoringv1.PodMonitor {
 		AddPodMonitorEndpoint(obj, ep)
 	}
 	if cfg.JobLabel != "" {
-		SetPodMonitorJobLabel(obj, cfg.JobLabel)
+		obj.Spec.JobLabel = cfg.JobLabel
 	}
 	for _, label := range cfg.PodTargetLabels {
 		AddPodMonitorPodTargetLabel(obj, label)
 	}
 	if cfg.NamespaceSelector != nil {
-		SetPodMonitorNamespaceSelector(obj, *cfg.NamespaceSelector)
+		obj.Spec.NamespaceSelector = *cfg.NamespaceSelector
 	}
 	if cfg.SampleLimit != nil {
 		SetPodMonitorSampleLimit(obj, *cfg.SampleLimit)

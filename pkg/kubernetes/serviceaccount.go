@@ -18,20 +18,6 @@ func AddServiceAccountImagePullSecret(sa *corev1.ServiceAccount, secret corev1.L
 	sa.ImagePullSecrets = append(sa.ImagePullSecrets, secret)
 }
 
-func SetServiceAccountSecrets(sa *corev1.ServiceAccount, secrets []corev1.ObjectReference) {
-	if sa == nil {
-		panic("SetServiceAccountSecrets: sa must not be nil")
-	}
-	sa.Secrets = secrets
-}
-
-func SetServiceAccountImagePullSecrets(sa *corev1.ServiceAccount, secrets []corev1.LocalObjectReference) {
-	if sa == nil {
-		panic("SetServiceAccountImagePullSecrets: sa must not be nil")
-	}
-	sa.ImagePullSecrets = secrets
-}
-
 func SetServiceAccountAutomountToken(sa *corev1.ServiceAccount, automount bool) {
 	if sa == nil {
 		panic("SetServiceAccountAutomountToken: sa must not be nil")
@@ -54,12 +40,4 @@ func AddServiceAccountAnnotation(sa *corev1.ServiceAccount, key, value string) {
 		sa.Annotations = make(map[string]string)
 	}
 	sa.Annotations[key] = value
-}
-
-func SetServiceAccountLabels(sa *corev1.ServiceAccount, labels map[string]string) {
-	sa.Labels = labels
-}
-
-func SetServiceAccountAnnotations(sa *corev1.ServiceAccount, annotations map[string]string) {
-	sa.Annotations = annotations
 }

@@ -15,20 +15,11 @@ import (
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourceWatcherv1beta1 "github.com/fluxcd/source-watcher/api/v2/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GitRepository setters
-
-func TestSetGitRepositoryURL(t *testing.T) {
-	obj := CreateGitRepository("repo", "ns")
-	SetGitRepositoryURL(obj, "https://github.com/example/repo")
-	if obj.Spec.URL != "https://github.com/example/repo" {
-		t.Errorf("got URL %q", obj.Spec.URL)
-	}
-}
 
 func TestSetGitRepositorySecretRef(t *testing.T) {
 	obj := CreateGitRepository("repo", "ns")
@@ -36,23 +27,6 @@ func TestSetGitRepositorySecretRef(t *testing.T) {
 	SetGitRepositorySecretRef(obj, ref)
 	if obj.Spec.SecretRef != ref {
 		t.Error("SecretRef not set")
-	}
-}
-
-func TestSetGitRepositoryProvider(t *testing.T) {
-	obj := CreateGitRepository("repo", "ns")
-	SetGitRepositoryProvider(obj, "github")
-	if obj.Spec.Provider != "github" {
-		t.Errorf("got provider %q", obj.Spec.Provider)
-	}
-}
-
-func TestSetGitRepositoryInterval(t *testing.T) {
-	obj := CreateGitRepository("repo", "ns")
-	d := metav1.Duration{Duration: 5 * time.Minute}
-	SetGitRepositoryInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
 	}
 }
 
@@ -100,22 +74,6 @@ func TestSetGitRepositoryIgnore(t *testing.T) {
 	}
 }
 
-func TestSetGitRepositorySuspend(t *testing.T) {
-	obj := CreateGitRepository("repo", "ns")
-	SetGitRepositorySuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
-func TestSetGitRepositoryRecurseSubmodules(t *testing.T) {
-	obj := CreateGitRepository("repo", "ns")
-	SetGitRepositoryRecurseSubmodules(obj, true)
-	if !obj.Spec.RecurseSubmodules {
-		t.Error("RecurseSubmodules not set")
-	}
-}
-
 func TestAddGitRepositoryInclude(t *testing.T) {
 	obj := CreateGitRepository("repo", "ns")
 	inc := sourcev1.GitRepositoryInclude{GitRepositoryRef: meta.LocalObjectReference{Name: "other-repo"}}
@@ -125,18 +83,6 @@ func TestAddGitRepositoryInclude(t *testing.T) {
 	}
 	if obj.Spec.Include[0].GitRepositoryRef.Name != "other-repo" {
 		t.Error("Include not set correctly")
-	}
-}
-
-func TestSetGitRepositorySparseCheckout(t *testing.T) {
-	obj := CreateGitRepository("repo", "ns")
-	paths := []string{"deploy/", "config/"}
-	SetGitRepositorySparseCheckout(obj, paths)
-	if len(obj.Spec.SparseCheckout) != 2 {
-		t.Fatalf("expected 2 sparse checkout paths, got %d", len(obj.Spec.SparseCheckout))
-	}
-	if obj.Spec.SparseCheckout[0] != "deploy/" {
-		t.Errorf("got SparseCheckout[0] %q", obj.Spec.SparseCheckout[0])
 	}
 }
 
@@ -152,23 +98,7 @@ func TestAddGitRepositorySparseCheckoutPath(t *testing.T) {
 	}
 }
 
-func TestSetGitRepositoryServiceAccountName(t *testing.T) {
-	obj := CreateGitRepository("repo", "ns")
-	SetGitRepositoryServiceAccountName(obj, "flux-sa")
-	if obj.Spec.ServiceAccountName != "flux-sa" {
-		t.Errorf("got ServiceAccountName %q", obj.Spec.ServiceAccountName)
-	}
-}
-
 // HelmRepository setters
-
-func TestSetHelmRepositoryURL(t *testing.T) {
-	obj := CreateHelmRepository("bitnami", "ns")
-	SetHelmRepositoryURL(obj, "https://charts.bitnami.com/bitnami")
-	if obj.Spec.URL != "https://charts.bitnami.com/bitnami" {
-		t.Errorf("got URL %q", obj.Spec.URL)
-	}
-}
 
 func TestSetHelmRepositorySecretRef(t *testing.T) {
 	obj := CreateHelmRepository("repo", "ns")
@@ -188,45 +118,12 @@ func TestSetHelmRepositoryCertSecretRef(t *testing.T) {
 	}
 }
 
-func TestSetHelmRepositoryPassCredentials(t *testing.T) {
-	obj := CreateHelmRepository("repo", "ns")
-	SetHelmRepositoryPassCredentials(obj, true)
-	if !obj.Spec.PassCredentials {
-		t.Error("PassCredentials not set")
-	}
-}
-
-func TestSetHelmRepositoryInterval(t *testing.T) {
-	obj := CreateHelmRepository("repo", "ns")
-	d := metav1.Duration{Duration: 10 * time.Minute}
-	SetHelmRepositoryInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
-	}
-}
-
-func TestSetHelmRepositoryInsecure(t *testing.T) {
-	obj := CreateHelmRepository("repo", "ns")
-	SetHelmRepositoryInsecure(obj, true)
-	if !obj.Spec.Insecure {
-		t.Error("Insecure not set")
-	}
-}
-
 func TestSetHelmRepositoryTimeout(t *testing.T) {
 	obj := CreateHelmRepository("repo", "ns")
 	d := metav1.Duration{Duration: 60 * time.Second}
 	SetHelmRepositoryTimeout(obj, &d)
 	if obj.Spec.Timeout == nil || *obj.Spec.Timeout != d {
 		t.Error("Timeout not set")
-	}
-}
-
-func TestSetHelmRepositorySuspend(t *testing.T) {
-	obj := CreateHelmRepository("repo", "ns")
-	SetHelmRepositorySuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
 	}
 }
 
@@ -239,69 +136,29 @@ func TestSetHelmRepositoryAccessFrom(t *testing.T) {
 	}
 }
 
-func TestSetHelmRepositoryType(t *testing.T) {
-	obj := CreateHelmRepository("repo", "ns")
-	SetHelmRepositoryType(obj, "oci")
-	if obj.Spec.Type != "oci" {
-		t.Errorf("got type %q", obj.Spec.Type)
-	}
-}
-
-func TestSetHelmRepositoryProvider(t *testing.T) {
-	obj := CreateHelmRepository("repo", "ns")
-	SetHelmRepositoryProvider(obj, "aws")
-	if obj.Spec.Provider != "aws" {
-		t.Errorf("got provider %q", obj.Spec.Provider)
-	}
-}
-
 func TestHelmRepository_HTTP(t *testing.T) {
 	hr := CreateHelmRepository("bitnami", "flux-system")
-	SetHelmRepositoryURL(hr, "https://charts.bitnami.com/bitnami")
-	SetHelmRepositoryType(hr, "default")
-	SetHelmRepositoryInterval(hr, metav1.Duration{Duration: 10 * time.Minute})
+	hr.Spec.URL = "https://charts.bitnami.com/bitnami"
+	hr.Spec.Type = "default"
+	hr.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
+	hr.Spec.PassCredentials = true
 	SetHelmRepositoryTimeout(hr, &metav1.Duration{Duration: 60 * time.Second})
-	SetHelmRepositoryPassCredentials(hr, true)
 	SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "bitnami-auth"})
 	goldenTest(t, "helmrepository_http.yaml", hr)
 }
 
 func TestHelmRepository_OCI(t *testing.T) {
 	hr := CreateHelmRepository("ghcr-charts", "flux-system")
-	SetHelmRepositoryURL(hr, "oci://ghcr.io/example/charts")
-	SetHelmRepositoryType(hr, "oci")
-	SetHelmRepositoryProvider(hr, "generic")
-	SetHelmRepositoryInsecure(hr, false)
-	SetHelmRepositoryInterval(hr, metav1.Duration{Duration: 5 * time.Minute})
+	hr.Spec.URL = "oci://ghcr.io/example/charts"
+	hr.Spec.Type = "oci"
+	hr.Spec.Provider = "generic"
+	hr.Spec.Insecure = false
+	hr.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 	SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "ghcr-auth"})
 	goldenTest(t, "helmrepository_oci.yaml", hr)
 }
 
 // Bucket setters
-
-func TestSetBucketProvider(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	SetBucketProvider(obj, "aws")
-	if obj.Spec.Provider != "aws" {
-		t.Errorf("got provider %q", obj.Spec.Provider)
-	}
-}
-
-func TestSetBucketName(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	SetBucketName(obj, "my-bucket")
-	if obj.Spec.BucketName != "my-bucket" {
-		t.Errorf("got BucketName %q", obj.Spec.BucketName)
-	}
-}
-
-func TestSetBucketEndpoint(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	SetBucketEndpoint(obj, "https://s3.example.com")
-	if obj.Spec.Endpoint != "https://s3.example.com" {
-		t.Errorf("got Endpoint %q", obj.Spec.Endpoint)
-	}
-}
 
 func TestSetBucketSTS(t *testing.T) {
 	obj := CreateBucket("bucket", "ns")
@@ -309,30 +166,6 @@ func TestSetBucketSTS(t *testing.T) {
 	SetBucketSTS(obj, sts)
 	if obj.Spec.STS != sts {
 		t.Error("STS not set")
-	}
-}
-
-func TestSetBucketInsecure(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	SetBucketInsecure(obj, true)
-	if !obj.Spec.Insecure {
-		t.Error("Insecure not set")
-	}
-}
-
-func TestSetBucketRegion(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	SetBucketRegion(obj, "us-east-1")
-	if obj.Spec.Region != "us-east-1" {
-		t.Errorf("got Region %q", obj.Spec.Region)
-	}
-}
-
-func TestSetBucketPrefix(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	SetBucketPrefix(obj, "kube/")
-	if obj.Spec.Prefix != "kube/" {
-		t.Errorf("got Prefix %q", obj.Spec.Prefix)
 	}
 }
 
@@ -363,15 +196,6 @@ func TestSetBucketProxySecretRef(t *testing.T) {
 	}
 }
 
-func TestSetBucketInterval(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	d := metav1.Duration{Duration: 5 * time.Minute}
-	SetBucketInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
-	}
-}
-
 func TestSetBucketTimeout(t *testing.T) {
 	obj := CreateBucket("bucket", "ns")
 	d := metav1.Duration{Duration: 30 * time.Second}
@@ -389,88 +213,13 @@ func TestSetBucketIgnore(t *testing.T) {
 	}
 }
 
-func TestSetBucketSuspend(t *testing.T) {
-	obj := CreateBucket("bucket", "ns")
-	SetBucketSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
 // HelmChart setters
-
-func TestSetHelmChartChart(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	SetHelmChartChart(obj, "nginx")
-	if obj.Spec.Chart != "nginx" {
-		t.Errorf("got Chart %q", obj.Spec.Chart)
-	}
-}
-
-func TestSetHelmChartVersion(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	SetHelmChartVersion(obj, "1.2.3")
-	if obj.Spec.Version != "1.2.3" {
-		t.Errorf("got Version %q", obj.Spec.Version)
-	}
-}
-
-func TestSetHelmChartSourceRef(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	ref := sourcev1.LocalHelmChartSourceReference{Kind: "HelmRepository", Name: "bitnami"}
-	SetHelmChartSourceRef(obj, ref)
-	if obj.Spec.SourceRef.Name != "bitnami" {
-		t.Errorf("got SourceRef.Name %q", obj.Spec.SourceRef.Name)
-	}
-}
-
-func TestSetHelmChartInterval(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	d := metav1.Duration{Duration: 5 * time.Minute}
-	SetHelmChartInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
-	}
-}
-
-func TestSetHelmChartReconcileStrategy(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	SetHelmChartReconcileStrategy(obj, "ChartVersion")
-	if obj.Spec.ReconcileStrategy != "ChartVersion" {
-		t.Errorf("got ReconcileStrategy %q", obj.Spec.ReconcileStrategy)
-	}
-}
 
 func TestAddHelmChartValuesFile(t *testing.T) {
 	obj := CreateHelmChart("chart", "ns")
 	AddHelmChartValuesFile(obj, "values-prod.yaml")
 	if len(obj.Spec.ValuesFiles) != 1 || obj.Spec.ValuesFiles[0] != "values-prod.yaml" {
 		t.Error("ValuesFiles not appended")
-	}
-}
-
-func TestSetHelmChartValuesFiles(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	files := []string{"values.yaml", "values-prod.yaml"}
-	SetHelmChartValuesFiles(obj, files)
-	if len(obj.Spec.ValuesFiles) != 2 {
-		t.Errorf("expected 2 files, got %d", len(obj.Spec.ValuesFiles))
-	}
-}
-
-func TestSetHelmChartIgnoreMissingValuesFiles(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	SetHelmChartIgnoreMissingValuesFiles(obj, true)
-	if !obj.Spec.IgnoreMissingValuesFiles {
-		t.Error("IgnoreMissingValuesFiles not set")
-	}
-}
-
-func TestSetHelmChartSuspend(t *testing.T) {
-	obj := CreateHelmChart("chart", "ns")
-	SetHelmChartSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
 	}
 }
 
@@ -484,14 +233,6 @@ func TestSetHelmChartVerify(t *testing.T) {
 }
 
 // OCIRepository setters
-
-func TestSetOCIRepositoryURL(t *testing.T) {
-	obj := CreateOCIRepository("oci-repo", "ns")
-	SetOCIRepositoryURL(obj, "oci://registry.example.com/repo")
-	if obj.Spec.URL != "oci://registry.example.com/repo" {
-		t.Errorf("got URL %q", obj.Spec.URL)
-	}
-}
 
 func TestSetOCIRepositoryReference(t *testing.T) {
 	obj := CreateOCIRepository("oci-repo", "ns")
@@ -508,14 +249,6 @@ func TestSetOCIRepositoryLayerSelector(t *testing.T) {
 	SetOCIRepositoryLayerSelector(obj, sel)
 	if obj.Spec.LayerSelector != sel {
 		t.Error("LayerSelector not set")
-	}
-}
-
-func TestSetOCIRepositoryProvider(t *testing.T) {
-	obj := CreateOCIRepository("oci-repo", "ns")
-	SetOCIRepositoryProvider(obj, "aws")
-	if obj.Spec.Provider != "aws" {
-		t.Errorf("got Provider %q", obj.Spec.Provider)
 	}
 }
 
@@ -537,14 +270,6 @@ func TestSetOCIRepositoryVerify(t *testing.T) {
 	}
 }
 
-func TestSetOCIRepositoryServiceAccountName(t *testing.T) {
-	obj := CreateOCIRepository("oci-repo", "ns")
-	SetOCIRepositoryServiceAccountName(obj, "flux-sa")
-	if obj.Spec.ServiceAccountName != "flux-sa" {
-		t.Errorf("got ServiceAccountName %q", obj.Spec.ServiceAccountName)
-	}
-}
-
 func TestSetOCIRepositoryCertSecretRef(t *testing.T) {
 	obj := CreateOCIRepository("oci-repo", "ns")
 	ref := &meta.LocalObjectReference{Name: "cert-secret"}
@@ -563,15 +288,6 @@ func TestSetOCIRepositoryProxySecretRef(t *testing.T) {
 	}
 }
 
-func TestSetOCIRepositoryInterval(t *testing.T) {
-	obj := CreateOCIRepository("oci-repo", "ns")
-	d := metav1.Duration{Duration: 5 * time.Minute}
-	SetOCIRepositoryInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
-	}
-}
-
 func TestSetOCIRepositoryTimeout(t *testing.T) {
 	obj := CreateOCIRepository("oci-repo", "ns")
 	d := metav1.Duration{Duration: 60 * time.Second}
@@ -586,22 +302,6 @@ func TestSetOCIRepositoryIgnore(t *testing.T) {
 	SetOCIRepositoryIgnore(obj, "*.tmp")
 	if obj.Spec.Ignore == nil || *obj.Spec.Ignore != "*.tmp" {
 		t.Error("Ignore not set")
-	}
-}
-
-func TestSetOCIRepositoryInsecure(t *testing.T) {
-	obj := CreateOCIRepository("oci-repo", "ns")
-	SetOCIRepositoryInsecure(obj, true)
-	if !obj.Spec.Insecure {
-		t.Error("Insecure not set")
-	}
-}
-
-func TestSetOCIRepositorySuspend(t *testing.T) {
-	obj := CreateOCIRepository("oci-repo", "ns")
-	SetOCIRepositorySuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
 	}
 }
 
@@ -668,34 +368,10 @@ func TestCreateSourceReference(t *testing.T) {
 	}
 }
 
-func TestSetSourceReferenceNamespace(t *testing.T) {
-	ref := CreateSourceReference("apps", "my-repo", "GitRepository")
-	SetSourceReferenceNamespace(&ref, "other-ns")
-	if ref.Namespace != "other-ns" {
-		t.Errorf("got Namespace %q", ref.Namespace)
-	}
-}
-
 func TestCreateOutputArtifact(t *testing.T) {
 	out := CreateOutputArtifact("merged")
 	if out.Name != "merged" {
 		t.Errorf("got Name %q", out.Name)
-	}
-}
-
-func TestSetOutputArtifactRevision(t *testing.T) {
-	out := CreateOutputArtifact("out")
-	SetOutputArtifactRevision(&out, "@apps")
-	if out.Revision != "@apps" {
-		t.Errorf("got Revision %q", out.Revision)
-	}
-}
-
-func TestSetOutputArtifactOriginRevision(t *testing.T) {
-	out := CreateOutputArtifact("out")
-	SetOutputArtifactOriginRevision(&out, "@apps")
-	if out.OriginRevision != "@apps" {
-		t.Errorf("got OriginRevision %q", out.OriginRevision)
 	}
 }
 
@@ -733,24 +409,7 @@ func TestAddCopyOperationExclude(t *testing.T) {
 	}
 }
 
-func TestSetCopyOperationStrategy(t *testing.T) {
-	op := CreateCopyOperation("@apps/", "@artifact/")
-	SetCopyOperationStrategy(&op, sourceWatcherv1beta1.MergeStrategy)
-	if op.Strategy != sourceWatcherv1beta1.MergeStrategy {
-		t.Errorf("got Strategy %q", op.Strategy)
-	}
-}
-
 // Kustomization setters
-
-func TestSetKustomizationInterval(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	d := metav1.Duration{Duration: 10 * time.Minute}
-	SetKustomizationInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
-	}
-}
 
 func TestSetKustomizationRetryInterval(t *testing.T) {
 	obj := CreateKustomization("ks", "ns")
@@ -761,14 +420,6 @@ func TestSetKustomizationRetryInterval(t *testing.T) {
 	}
 }
 
-func TestSetKustomizationPath(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationPath(obj, "./deploy/prod")
-	if obj.Spec.Path != "./deploy/prod" {
-		t.Errorf("got Path %q", obj.Spec.Path)
-	}
-}
-
 func TestSetKustomizationKubeConfig(t *testing.T) {
 	obj := CreateKustomization("ks", "ns")
 	secretRef := &meta.SecretKeyReference{Name: "kube-cfg"}
@@ -776,31 +427,6 @@ func TestSetKustomizationKubeConfig(t *testing.T) {
 	SetKustomizationKubeConfig(obj, ref)
 	if obj.Spec.KubeConfig != ref {
 		t.Error("KubeConfig not set")
-	}
-}
-
-func TestSetKustomizationSourceRef(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	ref := kustv1.CrossNamespaceSourceReference{Kind: "GitRepository", Name: "my-repo"}
-	SetKustomizationSourceRef(obj, ref)
-	if obj.Spec.SourceRef.Name != "my-repo" {
-		t.Errorf("got SourceRef.Name %q", obj.Spec.SourceRef.Name)
-	}
-}
-
-func TestSetKustomizationPrune(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationPrune(obj, true)
-	if !obj.Spec.Prune {
-		t.Error("Prune not set")
-	}
-}
-
-func TestSetKustomizationDeletionPolicy(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationDeletionPolicy(obj, "delete")
-	if obj.Spec.DeletionPolicy != "delete" {
-		t.Errorf("got DeletionPolicy %q", obj.Spec.DeletionPolicy)
 	}
 }
 
@@ -833,52 +459,12 @@ func TestAddKustomizationDependsOn(t *testing.T) {
 	}
 }
 
-func TestSetKustomizationServiceAccountName(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationServiceAccountName(obj, "flux-sa")
-	if obj.Spec.ServiceAccountName != "flux-sa" {
-		t.Errorf("got ServiceAccountName %q", obj.Spec.ServiceAccountName)
-	}
-}
-
-func TestSetKustomizationSuspend(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
-func TestSetKustomizationTargetNamespace(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationTargetNamespace(obj, "production")
-	if obj.Spec.TargetNamespace != "production" {
-		t.Errorf("got TargetNamespace %q", obj.Spec.TargetNamespace)
-	}
-}
-
 func TestSetKustomizationTimeout(t *testing.T) {
 	obj := CreateKustomization("ks", "ns")
 	d := metav1.Duration{Duration: 5 * time.Minute}
 	SetKustomizationTimeout(obj, d)
 	if obj.Spec.Timeout == nil || *obj.Spec.Timeout != d {
 		t.Error("Timeout not set")
-	}
-}
-
-func TestSetKustomizationForce(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationForce(obj, true)
-	if !obj.Spec.Force {
-		t.Error("Force not set")
-	}
-}
-
-func TestSetKustomizationWait(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationWait(obj, true)
-	if !obj.Spec.Wait {
-		t.Error("Wait not set")
 	}
 }
 
@@ -897,22 +483,6 @@ func TestAddKustomizationPatch(t *testing.T) {
 	AddKustomizationPatch(obj, patch)
 	if len(obj.Spec.Patches) != 1 {
 		t.Error("Patch not appended")
-	}
-}
-
-func TestSetKustomizationNamePrefix(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationNamePrefix(obj, "prod-")
-	if obj.Spec.NamePrefix != "prod-" {
-		t.Errorf("got NamePrefix %q", obj.Spec.NamePrefix)
-	}
-}
-
-func TestSetKustomizationNameSuffix(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationNameSuffix(obj, "-v2")
-	if obj.Spec.NameSuffix != "-v2" {
-		t.Errorf("got NameSuffix %q", obj.Spec.NameSuffix)
 	}
 }
 
@@ -1040,18 +610,6 @@ func TestAddCommonMetadataAnnotation_NilMap(t *testing.T) {
 	}
 }
 
-func TestSetKustomizationIgnoreMissingComponents(t *testing.T) {
-	obj := CreateKustomization("ks", "ns")
-	SetKustomizationIgnoreMissingComponents(obj, true)
-	if !obj.Spec.IgnoreMissingComponents {
-		t.Error("expected IgnoreMissingComponents to be true")
-	}
-	SetKustomizationIgnoreMissingComponents(obj, false)
-	if obj.Spec.IgnoreMissingComponents {
-		t.Error("expected IgnoreMissingComponents to be false")
-	}
-}
-
 func TestAddKustomizationHealthCheckExpr(t *testing.T) {
 	obj := CreateKustomization("ks", "ns")
 	chk := CreateCustomHealthCheck("example.io/v1", "MyApp", "status.ready == true")
@@ -1077,22 +635,6 @@ func TestCreateCustomHealthCheck(t *testing.T) {
 	}
 	if chk.HealthCheckExpressions.Current != "status.availableReplicas > 0" {
 		t.Errorf("got Current %q", chk.HealthCheckExpressions.Current)
-	}
-}
-
-func TestSetCustomHealthCheckInProgress(t *testing.T) {
-	chk := CreateCustomHealthCheck("apps/v1", "Deployment", "status.ready")
-	SetCustomHealthCheckInProgress(&chk, "status.observedGeneration < status.generation")
-	if chk.HealthCheckExpressions.InProgress != "status.observedGeneration < status.generation" {
-		t.Errorf("got InProgress %q", chk.HealthCheckExpressions.InProgress)
-	}
-}
-
-func TestSetCustomHealthCheckFailed(t *testing.T) {
-	chk := CreateCustomHealthCheck("apps/v1", "Deployment", "status.ready")
-	SetCustomHealthCheckFailed(&chk, "status.conditions.filter(c, c.type == 'Failed').size() > 0")
-	if chk.HealthCheckExpressions.Failed != "status.conditions.filter(c, c.type == 'Failed').size() > 0" {
-		t.Errorf("got Failed %q", chk.HealthCheckExpressions.Failed)
 	}
 }
 
@@ -1148,15 +690,6 @@ func TestSetHelmReleaseChartRef(t *testing.T) {
 	}
 }
 
-func TestSetHelmReleaseInterval(t *testing.T) {
-	obj := CreateHelmRelease("hr", "ns")
-	d := metav1.Duration{Duration: 10 * time.Minute}
-	SetHelmReleaseInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
-	}
-}
-
 func TestSetHelmReleaseKubeConfig(t *testing.T) {
 	obj := CreateHelmRelease("hr", "ns")
 	secretRef := &meta.SecretKeyReference{Name: "kube-cfg"}
@@ -1164,38 +697,6 @@ func TestSetHelmReleaseKubeConfig(t *testing.T) {
 	SetHelmReleaseKubeConfig(obj, cfg)
 	if obj.Spec.KubeConfig != cfg {
 		t.Error("KubeConfig not set")
-	}
-}
-
-func TestSetHelmReleaseSuspend(t *testing.T) {
-	obj := CreateHelmRelease("hr", "ns")
-	SetHelmReleaseSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
-func TestSetHelmReleaseReleaseName(t *testing.T) {
-	obj := CreateHelmRelease("hr", "ns")
-	SetHelmReleaseReleaseName(obj, "my-release")
-	if obj.Spec.ReleaseName != "my-release" {
-		t.Errorf("got ReleaseName %q", obj.Spec.ReleaseName)
-	}
-}
-
-func TestSetHelmReleaseTargetNamespace(t *testing.T) {
-	obj := CreateHelmRelease("hr", "ns")
-	SetHelmReleaseTargetNamespace(obj, "production")
-	if obj.Spec.TargetNamespace != "production" {
-		t.Errorf("got TargetNamespace %q", obj.Spec.TargetNamespace)
-	}
-}
-
-func TestSetHelmReleaseStorageNamespace(t *testing.T) {
-	obj := CreateHelmRelease("hr", "ns")
-	SetHelmReleaseStorageNamespace(obj, "storage-ns")
-	if obj.Spec.StorageNamespace != "storage-ns" {
-		t.Errorf("got StorageNamespace %q", obj.Spec.StorageNamespace)
 	}
 }
 
@@ -1222,14 +723,6 @@ func TestSetHelmReleaseMaxHistory(t *testing.T) {
 	SetHelmReleaseMaxHistory(obj, 5)
 	if obj.Spec.MaxHistory == nil || *obj.Spec.MaxHistory != 5 {
 		t.Error("MaxHistory not set")
-	}
-}
-
-func TestSetHelmReleaseServiceAccountName(t *testing.T) {
-	obj := CreateHelmRelease("hr", "ns")
-	SetHelmReleaseServiceAccountName(obj, "flux-sa")
-	if obj.Spec.ServiceAccountName != "flux-sa" {
-		t.Errorf("got ServiceAccountName %q", obj.Spec.ServiceAccountName)
 	}
 }
 
@@ -1724,9 +1217,9 @@ func TestSetHelmReleaseValuesFromMap(t *testing.T) {
 
 func TestHelmRelease_FullSpec(t *testing.T) {
 	hr := CreateHelmRelease("redis", "apps")
-	SetHelmReleaseReleaseName(hr, "redis-prod")
-	SetHelmReleaseTargetNamespace(hr, "apps")
-	SetHelmReleaseInterval(hr, metav1.Duration{Duration: 5 * time.Minute})
+	hr.Spec.ReleaseName = "redis-prod"
+	hr.Spec.TargetNamespace = "apps"
+	hr.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 	SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
 		Spec: helmv2.HelmChartTemplateSpec{
 			Chart:   "redis",
@@ -1761,14 +1254,6 @@ func TestHelmRelease_FullSpec(t *testing.T) {
 
 // Provider setters
 
-func TestSetProviderType(t *testing.T) {
-	obj := CreateProvider("slack", "ns")
-	SetProviderType(obj, "slack")
-	if obj.Spec.Type != "slack" {
-		t.Errorf("got Type %q", obj.Spec.Type)
-	}
-}
-
 func TestSetProviderInterval(t *testing.T) {
 	obj := CreateProvider("slack", "ns")
 	d := metav1.Duration{Duration: 5 * time.Minute}
@@ -1778,44 +1263,12 @@ func TestSetProviderInterval(t *testing.T) {
 	}
 }
 
-func TestSetProviderChannel(t *testing.T) {
-	obj := CreateProvider("slack", "ns")
-	SetProviderChannel(obj, "#alerts")
-	if obj.Spec.Channel != "#alerts" {
-		t.Errorf("got Channel %q", obj.Spec.Channel)
-	}
-}
-
-func TestSetProviderUsername(t *testing.T) {
-	obj := CreateProvider("slack", "ns")
-	SetProviderUsername(obj, "fluxbot")
-	if obj.Spec.Username != "fluxbot" {
-		t.Errorf("got Username %q", obj.Spec.Username)
-	}
-}
-
-func TestSetProviderAddress(t *testing.T) {
-	obj := CreateProvider("generic", "ns")
-	SetProviderAddress(obj, "https://hook.example.com/webhook")
-	if obj.Spec.Address != "https://hook.example.com/webhook" {
-		t.Errorf("got Address %q", obj.Spec.Address)
-	}
-}
-
 func TestSetProviderTimeout(t *testing.T) {
 	obj := CreateProvider("slack", "ns")
 	d := metav1.Duration{Duration: 30 * time.Second}
 	SetProviderTimeout(obj, d)
 	if obj.Spec.Timeout == nil || *obj.Spec.Timeout != d {
 		t.Error("Timeout not set")
-	}
-}
-
-func TestSetProviderProxy(t *testing.T) {
-	obj := CreateProvider("slack", "ns")
-	SetProviderProxy(obj, "https://proxy.example.com:8080")
-	if obj.Spec.Proxy != "https://proxy.example.com:8080" {
-		t.Errorf("got Proxy %q", obj.Spec.Proxy)
 	}
 }
 
@@ -1837,24 +1290,7 @@ func TestSetProviderCertSecretRef(t *testing.T) {
 	}
 }
 
-func TestSetProviderSuspend(t *testing.T) {
-	obj := CreateProvider("slack", "ns")
-	SetProviderSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
 // Alert setters
-
-func TestSetAlertProviderRef(t *testing.T) {
-	obj := CreateAlert("alert", "ns")
-	ref := meta.LocalObjectReference{Name: "slack-provider"}
-	SetAlertProviderRef(obj, ref)
-	if obj.Spec.ProviderRef.Name != "slack-provider" {
-		t.Errorf("got ProviderRef.Name %q", obj.Spec.ProviderRef.Name)
-	}
-}
 
 func TestAddAlertEventSource(t *testing.T) {
 	obj := CreateAlert("alert", "ns")
@@ -1897,39 +1333,7 @@ func TestAddAlertEventMetadata_NilMap(t *testing.T) {
 	}
 }
 
-func TestSetAlertEventSeverity(t *testing.T) {
-	obj := CreateAlert("alert", "ns")
-	SetAlertEventSeverity(obj, "error")
-	if obj.Spec.EventSeverity != "error" {
-		t.Errorf("got EventSeverity %q", obj.Spec.EventSeverity)
-	}
-}
-
-func TestSetAlertSummary(t *testing.T) {
-	obj := CreateAlert("alert", "ns")
-	SetAlertSummary(obj, "Flux reconciliation error")
-	if obj.Spec.Summary != "Flux reconciliation error" {
-		t.Errorf("got Summary %q", obj.Spec.Summary)
-	}
-}
-
-func TestSetAlertSuspend(t *testing.T) {
-	obj := CreateAlert("alert", "ns")
-	SetAlertSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
 // Receiver setters
-
-func TestSetReceiverType(t *testing.T) {
-	obj := CreateReceiver("receiver", "ns")
-	SetReceiverType(obj, "github")
-	if obj.Spec.Type != "github" {
-		t.Errorf("got Type %q", obj.Spec.Type)
-	}
-}
 
 func TestSetReceiverInterval(t *testing.T) {
 	obj := CreateReceiver("receiver", "ns")
@@ -1966,24 +1370,7 @@ func TestSetReceiverSecretRef(t *testing.T) {
 	}
 }
 
-func TestSetReceiverSuspend(t *testing.T) {
-	obj := CreateReceiver("receiver", "ns")
-	SetReceiverSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
 // ImageUpdateAutomation setters
-
-func TestSetImageUpdateAutomationSourceRef(t *testing.T) {
-	obj := CreateImageUpdateAutomation("iua", "ns")
-	ref := CreateCrossNamespaceSourceReference("source.toolkit.fluxcd.io/v1", "GitRepository", "app-repo", "flux-system")
-	SetImageUpdateAutomationSourceRef(obj, ref)
-	if obj.Spec.SourceRef.Name != "app-repo" {
-		t.Errorf("got SourceRef.Name %q", obj.Spec.SourceRef.Name)
-	}
-}
 
 func TestSetImageUpdateAutomationGitSpec(t *testing.T) {
 	obj := CreateImageUpdateAutomation("iua", "ns")
@@ -1993,15 +1380,6 @@ func TestSetImageUpdateAutomationGitSpec(t *testing.T) {
 	SetImageUpdateAutomationGitSpec(obj, gs)
 	if obj.Spec.GitSpec != gs {
 		t.Error("GitSpec not set")
-	}
-}
-
-func TestSetImageUpdateAutomationInterval(t *testing.T) {
-	obj := CreateImageUpdateAutomation("iua", "ns")
-	d := metav1.Duration{Duration: 5 * time.Minute}
-	SetImageUpdateAutomationInterval(obj, d)
-	if obj.Spec.Interval != d {
-		t.Error("Interval not set")
 	}
 }
 
@@ -2023,14 +1401,6 @@ func TestSetImageUpdateAutomationUpdateStrategy(t *testing.T) {
 	}
 }
 
-func TestSetImageUpdateAutomationSuspend(t *testing.T) {
-	obj := CreateImageUpdateAutomation("iua", "ns")
-	SetImageUpdateAutomationSuspend(obj, true)
-	if !obj.Spec.Suspend {
-		t.Error("Suspend not set")
-	}
-}
-
 func TestCreateCrossNamespaceSourceReference(t *testing.T) {
 	ref := CreateCrossNamespaceSourceReference("v1", "GitRepository", "repo", "flux-system")
 	if ref.APIVersion != "v1" || ref.Kind != "GitRepository" || ref.Name != "repo" || ref.Namespace != "flux-system" {
@@ -2043,16 +1413,6 @@ func TestCreateGitCheckoutSpec(t *testing.T) {
 	spec := CreateGitCheckoutSpec(gitRef)
 	if spec == nil || spec.Reference.Branch != "main" {
 		t.Errorf("unexpected GitCheckoutSpec: %+v", spec)
-	}
-}
-
-func TestSetGitCheckoutReference(t *testing.T) {
-	gitRef := sourcev1.GitRepositoryRef{Branch: "main"}
-	spec := CreateGitCheckoutSpec(gitRef)
-	newRef := sourcev1.GitRepositoryRef{Tag: "v1.0.0"}
-	SetGitCheckoutReference(spec, newRef)
-	if spec.Reference.Tag != "v1.0.0" {
-		t.Errorf("got Reference.Tag %q", spec.Reference.Tag)
 	}
 }
 
@@ -2088,25 +1448,6 @@ func TestSetCommitSigningKey(t *testing.T) {
 	}
 }
 
-func TestSetCommitMessageTemplate(t *testing.T) {
-	author := CreateCommitUser("Flux", "flux@example.com")
-	spec := CreateCommitSpec(author)
-	SetCommitMessageTemplate(&spec, "Update {{.AutomationObject}} images")
-	if spec.MessageTemplate != "Update {{.AutomationObject}} images" {
-		t.Errorf("got MessageTemplate %q", spec.MessageTemplate)
-	}
-}
-
-func TestSetCommitMessageTemplateValues(t *testing.T) {
-	author := CreateCommitUser("Flux", "flux@example.com")
-	spec := CreateCommitSpec(author)
-	values := map[string]string{"env": "prod"}
-	SetCommitMessageTemplateValues(&spec, values)
-	if spec.MessageTemplateValues["env"] != "prod" {
-		t.Error("MessageTemplateValues not set")
-	}
-}
-
 func TestAddCommitMessageTemplateValue(t *testing.T) {
 	author := CreateCommitUser("Flux", "flux@example.com")
 	spec := CreateCommitSpec(author)
@@ -2124,15 +1465,6 @@ func TestAddCommitMessageTemplateValue_NilMap(t *testing.T) {
 	}
 }
 
-func TestSetCommitAuthor(t *testing.T) {
-	spec := imagev1.CommitSpec{}
-	author := CreateCommitUser("Bot", "bot@example.com")
-	SetCommitAuthor(&spec, author)
-	if spec.Author.Name != "Bot" {
-		t.Errorf("got Author.Name %q", spec.Author.Name)
-	}
-}
-
 func TestCreatePushSpec(t *testing.T) {
 	opts := map[string]string{"force": "true"}
 	ps := CreatePushSpec("main", "refs/heads/main", opts)
@@ -2140,31 +1472,6 @@ func TestCreatePushSpec(t *testing.T) {
 		t.Errorf("unexpected PushSpec: %+v", ps)
 	}
 	if ps.Options["force"] != "true" {
-		t.Error("Options not set")
-	}
-}
-
-func TestSetPushBranch(t *testing.T) {
-	ps := CreatePushSpec("main", "", nil)
-	SetPushBranch(ps, "feature")
-	if ps.Branch != "feature" {
-		t.Errorf("got Branch %q", ps.Branch)
-	}
-}
-
-func TestSetPushRefspec(t *testing.T) {
-	ps := CreatePushSpec("", "", nil)
-	SetPushRefspec(ps, "refs/heads/main")
-	if ps.Refspec != "refs/heads/main" {
-		t.Errorf("got Refspec %q", ps.Refspec)
-	}
-}
-
-func TestSetPushOptions(t *testing.T) {
-	ps := CreatePushSpec("main", "", nil)
-	opts := map[string]string{"atomic": "true"}
-	SetPushOptions(ps, opts)
-	if ps.Options["atomic"] != "true" {
 		t.Error("Options not set")
 	}
 }
@@ -2216,18 +1523,6 @@ func TestSetGitSpecCheckout(t *testing.T) {
 	}
 }
 
-func TestSetGitSpecCommit(t *testing.T) {
-	author := CreateCommitUser("Flux", "flux@example.com")
-	commit := CreateCommitSpec(author)
-	gs := CreateGitSpec(commit, nil, nil)
-	newAuthor := CreateCommitUser("Bot", "bot@example.com")
-	newCommit := CreateCommitSpec(newAuthor)
-	SetGitSpecCommit(gs, newCommit)
-	if gs.Commit.Author.Name != "Bot" {
-		t.Error("Commit not updated")
-	}
-}
-
 func TestSetGitSpecPush(t *testing.T) {
 	author := CreateCommitUser("Flux", "flux@example.com")
 	commit := CreateCommitSpec(author)
@@ -2246,50 +1541,10 @@ func TestCreateUpdateStrategy(t *testing.T) {
 	}
 }
 
-func TestSetUpdateStrategyName(t *testing.T) {
-	s := CreateUpdateStrategy("Setters", "./")
-	SetUpdateStrategyName(s, "Regex")
-	if string(s.Strategy) != "Regex" {
-		t.Errorf("got Strategy %q", s.Strategy)
-	}
-}
-
-func TestSetUpdateStrategyPath(t *testing.T) {
-	s := CreateUpdateStrategy("Setters", "./")
-	SetUpdateStrategyPath(s, "./apps")
-	if s.Path != "./apps" {
-		t.Errorf("got Path %q", s.Path)
-	}
-}
-
 func TestCreateImageRef(t *testing.T) {
 	ref := CreateImageRef("nginx", "1.25", "sha256:abc")
 	if ref.Name != "nginx" || ref.Tag != "1.25" || ref.Digest != "sha256:abc" {
 		t.Errorf("unexpected ImageRef: %+v", ref)
-	}
-}
-
-func TestSetImageRefDigest(t *testing.T) {
-	ref := CreateImageRef("nginx", "1.25", "")
-	SetImageRefDigest(&ref, "sha256:abc")
-	if ref.Digest != "sha256:abc" {
-		t.Errorf("got Digest %q", ref.Digest)
-	}
-}
-
-func TestSetImageRefTag(t *testing.T) {
-	ref := CreateImageRef("nginx", "", "")
-	SetImageRefTag(&ref, "1.25")
-	if ref.Tag != "1.25" {
-		t.Errorf("got Tag %q", ref.Tag)
-	}
-}
-
-func TestSetImageRefName(t *testing.T) {
-	ref := CreateImageRef("", "", "")
-	SetImageRefName(&ref, "nginx")
-	if ref.Name != "nginx" {
-		t.Errorf("got Name %q", ref.Name)
 	}
 }
 
@@ -2308,17 +1563,6 @@ func TestAddObservedPolicy_NilMap(t *testing.T) {
 	AddObservedPolicy(obj, "nginx-policy", ref)
 	if obj.Status.ObservedPolicies["nginx-policy"].Name != "nginx" {
 		t.Error("ObservedPolicy not set after nil init")
-	}
-}
-
-func TestSetObservedPolicies(t *testing.T) {
-	obj := CreateImageUpdateAutomation("iua", "ns")
-	policies := imagev1.ObservedPolicies{
-		"nginx-policy": CreateImageRef("nginx", "1.25", ""),
-	}
-	SetObservedPolicies(obj, policies)
-	if obj.Status.ObservedPolicies["nginx-policy"].Name != "nginx" {
-		t.Error("ObservedPolicies not set")
 	}
 }
 
@@ -2351,36 +1595,12 @@ func TestAddResourceSetResource(t *testing.T) {
 	}
 }
 
-func TestSetResourceSetResourcesTemplate(t *testing.T) {
-	obj := CreateResourceSet("rs", "ns")
-	SetResourceSetResourcesTemplate(obj, "{{ .inputs | toJSON }}")
-	if obj.Spec.ResourcesTemplate != "{{ .inputs | toJSON }}" {
-		t.Errorf("got ResourcesTemplate %q", obj.Spec.ResourcesTemplate)
-	}
-}
-
 func TestAddResourceSetDependency(t *testing.T) {
 	obj := CreateResourceSet("rs", "ns")
 	dep := fluxv1.Dependency{Name: "infra-rs"}
 	AddResourceSetDependency(obj, dep)
 	if len(obj.Spec.DependsOn) != 1 || obj.Spec.DependsOn[0].Name != "infra-rs" {
 		t.Error("Dependency not appended")
-	}
-}
-
-func TestSetResourceSetServiceAccountName(t *testing.T) {
-	obj := CreateResourceSet("rs", "ns")
-	SetResourceSetServiceAccountName(obj, "flux-sa")
-	if obj.Spec.ServiceAccountName != "flux-sa" {
-		t.Errorf("got ServiceAccountName %q", obj.Spec.ServiceAccountName)
-	}
-}
-
-func TestSetResourceSetWait(t *testing.T) {
-	obj := CreateResourceSet("rs", "ns")
-	SetResourceSetWait(obj, true)
-	if !obj.Spec.Wait {
-		t.Error("Wait not set")
 	}
 }
 
@@ -2394,30 +1614,6 @@ func TestSetResourceSetCommonMetadata(t *testing.T) {
 }
 
 // ResourceSetInputProvider setters
-
-func TestSetResourceSetInputProviderType(t *testing.T) {
-	obj := CreateResourceSetInputProvider("ip", "ns")
-	SetResourceSetInputProviderType(obj, "GitHubOrg")
-	if obj.Spec.Type != "GitHubOrg" {
-		t.Errorf("got Type %q", obj.Spec.Type)
-	}
-}
-
-func TestSetResourceSetInputProviderURL(t *testing.T) {
-	obj := CreateResourceSetInputProvider("ip", "ns")
-	SetResourceSetInputProviderURL(obj, "https://api.github.com")
-	if obj.Spec.URL != "https://api.github.com" {
-		t.Errorf("got URL %q", obj.Spec.URL)
-	}
-}
-
-func TestSetResourceSetInputProviderServiceAccountName(t *testing.T) {
-	obj := CreateResourceSetInputProvider("ip", "ns")
-	SetResourceSetInputProviderServiceAccountName(obj, "flux-sa")
-	if obj.Spec.ServiceAccountName != "flux-sa" {
-		t.Errorf("got ServiceAccountName %q", obj.Spec.ServiceAccountName)
-	}
-}
 
 func TestSetResourceSetInputProviderSecretRef(t *testing.T) {
 	obj := CreateResourceSetInputProvider("ip", "ns")
@@ -2454,23 +1650,6 @@ func TestAddFluxInstanceComponent(t *testing.T) {
 	AddFluxInstanceComponent(obj, c)
 	if len(obj.Spec.Components) != 1 {
 		t.Fatalf("expected 1 component, got %d", len(obj.Spec.Components))
-	}
-}
-
-func TestSetFluxInstanceDistribution(t *testing.T) {
-	obj := CreateFluxInstance("flux", "flux-system")
-	dist := fluxv1.Distribution{Version: "v2.3.0", Registry: "ghcr.io/fluxcd"}
-	SetFluxInstanceDistribution(obj, dist)
-	if obj.Spec.Distribution.Version != "v2.3.0" {
-		t.Errorf("got Distribution.Version %q", obj.Spec.Distribution.Version)
-	}
-}
-
-func TestSetFluxInstanceDistributionVariant(t *testing.T) {
-	obj := CreateFluxInstance("flux", "flux-system")
-	SetFluxInstanceDistributionVariant(obj, "enterprise-distroless")
-	if obj.Spec.Distribution.Variant != "enterprise-distroless" {
-		t.Errorf("got Variant %q", obj.Spec.Distribution.Variant)
 	}
 }
 
@@ -2546,15 +1725,6 @@ func TestSetFluxInstanceSync(t *testing.T) {
 
 // FluxReport setters
 
-func TestSetFluxReportDistribution(t *testing.T) {
-	obj := CreateFluxReport("report", "flux-system")
-	dist := fluxv1.FluxDistributionStatus{Entitlement: "oss", Version: "v2.3.0"}
-	SetFluxReportDistribution(obj, dist)
-	if obj.Spec.Distribution.Version != "v2.3.0" {
-		t.Errorf("got Distribution.Version %q", obj.Spec.Distribution.Version)
-	}
-}
-
 func TestSetFluxReportCluster(t *testing.T) {
 	obj := CreateFluxReport("report", "flux-system")
 	c := &fluxv1.ClusterInfo{ServerVersion: "1.29"}
@@ -2606,22 +1776,5 @@ func TestCreateSchedule(t *testing.T) {
 	s := CreateSchedule("0 * * * *")
 	if s.Cron != "0 * * * *" {
 		t.Errorf("got Cron %q", s.Cron)
-	}
-}
-
-func TestSetScheduleTimeZone(t *testing.T) {
-	s := CreateSchedule("0 * * * *")
-	SetScheduleTimeZone(&s, "Europe/Brussels")
-	if s.TimeZone != "Europe/Brussels" {
-		t.Errorf("got TimeZone %q", s.TimeZone)
-	}
-}
-
-func TestSetScheduleWindow(t *testing.T) {
-	s := CreateSchedule("0 * * * *")
-	d := metav1.Duration{Duration: 10 * time.Minute}
-	SetScheduleWindow(&s, d)
-	if s.Window != d {
-		t.Error("Window not set")
 	}
 }

@@ -661,9 +661,8 @@ func CreateService(name, namespace string) *corev1.Service
 func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) error
 func AddServicePort(service *corev1.Service, port corev1.ServicePort) error
 
-// Setters for field assignments  
+// Setters for field assignments
 func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32) error
-func SetServiceType(service *corev1.Service, serviceType corev1.ServiceType) error
 ```
 
 #### Workflow Functions

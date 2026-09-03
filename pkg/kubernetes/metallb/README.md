@@ -88,12 +88,12 @@ Update existing resources:
 
 ```go
 // Replace full spec
-metallb.SetIPAddressPoolSpec(pool, newSpec)
-metallb.SetBGPPeerSpec(peer, newSpec)
+pool.Spec = newSpec
+peer.Spec = newSpec
 
 // Granular updates
 err := metallb.AddIPAddressPoolAddress(pool, "172.16.0.0/12")
-err := metallb.SetBGPPeerPort(peer, 1179)
+err := peer.Spec.Port = 1179
 err := metallb.AddBGPAdvertisementPeer(advert, "peer-2")
 err := metallb.AddL2AdvertisementInterface(l2, "eth1")
 err := metallb.SetBFDProfileDetectMultiplier(bfd, 5)

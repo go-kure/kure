@@ -50,10 +50,9 @@ identity test; a wrapper that sets anything beyond identity fails it too.
 
 Sub-types that are not `client.Object` (`Container`, `PodSpec`,
 `ResourceRequirements`, an `IngressRule`, a PVC used as a template) get no generated
-constructor. A struct literal is the idiom. The hand-written sub-type constructors still
-exported at this revision (`CreateContainer`, `CreatePodSpec`, `CreateIngressRule`,
-`CreateResourceRequirements`, the `fluxcd.Create*` and `certmanager.CreateACME*` helpers
-for spec fragments, among others) are legacy; the prune work item of the epic removes them.
+constructor. A struct literal is the idiom, and the hand-written constructors that used
+to wrap one are gone: build the value directly, as
+`&corev1.Container{Name: "app", Image: "nginx"}`.
 
 ### Regenerating the wrappers
 
@@ -208,20 +207,20 @@ kubernetes.AddDeploymentToleration(dep, &corev1.Toleration{Key: "dedicated", Val
 
 ```go
 cj := kubernetes.CreateCronJob("my-job", "default")
-kubernetes.SetCronJobSchedule(cj, "*/5 * * * *")
+cj.Spec.Schedule = "*/5 * * * *"
 cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 err := kubernetes.AddCronJobContainer(cj, &corev1.Container{Name: "worker", Image: "busybox:1.36"})
-kubernetes.SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent)
+cj.Spec.ConcurrencyPolicy = batchv1.ForbidConcurrent
 ```
 
 ### Service
 
 ```go
 svc := kubernetes.CreateService("my-app", "default")
-kubernetes.SetServiceSelector(svc, map[string]string{"app": "my-app"})
+svc.Spec.Selector = map[string]string{"app": "my-app"}
 kubernetes.AddServicePort(svc, corev1.ServicePort{Name: "http", Port: 80, TargetPort: intstr.FromInt32(8080)})
-kubernetes.SetServiceType(svc, corev1.ServiceTypeLoadBalancer)
+svc.Spec.Type = corev1.ServiceTypeLoadBalancer
 kubernetes.AddAnnotation(svc, "external-dns.alpha.kubernetes.io/hostname", "app.example.com")
 ```
 
@@ -231,7 +230,7 @@ kubernetes.AddAnnotation(svc, "external-dns.alpha.kubernetes.io/hostname", "app.
 ing := kubernetes.CreateIngress("my-app", "default")
 kubernetes.SetIngressClassName(ing, "nginx")
 
-rule := kubernetes.CreateIngressRule("app.example.com")
+rule := &netv1.IngressRule{Host: "app.example.com"}
 pt := netv1.PathTypePrefix
 path := kubernetes.CreateIngressPath("/", &pt, "my-app", "http")
 kubernetes.AddIngressRulePath(rule, path)

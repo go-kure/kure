@@ -81,19 +81,3 @@ func SetHPABehavior(hpa *autoscalingv2.HorizontalPodAutoscaler, behavior *autosc
 	}
 	hpa.Spec.Behavior = behavior
 }
-
-// SetHPALabels replaces the labels on the HPA with the provided map.
-func SetHPALabels(hpa *autoscalingv2.HorizontalPodAutoscaler, labels map[string]string) {
-	if hpa == nil {
-		panic("SetHPALabels: hpa must not be nil")
-	}
-	hpa.Labels = labels
-}
-
-// SetHPAAnnotations replaces the annotations on the HPA with the provided map.
-func SetHPAAnnotations(hpa *autoscalingv2.HorizontalPodAutoscaler, annotations map[string]string) {
-	if hpa == nil {
-		panic("SetHPAAnnotations: hpa must not be nil")
-	}
-	hpa.Annotations = annotations
-}

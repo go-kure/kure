@@ -12,53 +12,12 @@ func AddServicePort(service *corev1.Service, port corev1.ServicePort) {
 	service.Spec.Ports = append(service.Spec.Ports, port)
 }
 
-// SetServiceSelector sets the selector map on the Service spec.
-func SetServiceSelector(service *corev1.Service, selector map[string]string) {
-	if service == nil {
-		panic("SetServiceSelector: service must not be nil")
-	}
-	service.Spec.Selector = selector
-}
-
-// SetServiceType sets the service type (ClusterIP, NodePort, LoadBalancer, etc.).
-func SetServiceType(service *corev1.Service, type_ corev1.ServiceType) {
-	if service == nil {
-		panic("SetServiceType: service must not be nil")
-	}
-	service.Spec.Type = type_
-}
-
-// SetServiceClusterIP sets the clusterIP on the Service spec.
-func SetServiceClusterIP(service *corev1.Service, ip string) {
-	if service == nil {
-		panic("SetServiceClusterIP: service must not be nil")
-	}
-	service.Spec.ClusterIP = ip
-}
-
 // AddServiceExternalIP appends an external IP address to the Service spec.
 func AddServiceExternalIP(service *corev1.Service, ip string) {
 	if service == nil {
 		panic("AddServiceExternalIP: service must not be nil")
 	}
 	service.Spec.ExternalIPs = append(service.Spec.ExternalIPs, ip)
-}
-
-// SetServiceExternalTrafficPolicy sets the external traffic policy on the
-// Service spec.
-func SetServiceExternalTrafficPolicy(service *corev1.Service, trafficPolicy corev1.ServiceExternalTrafficPolicy) {
-	if service == nil {
-		panic("SetServiceExternalTrafficPolicy: service must not be nil")
-	}
-	service.Spec.ExternalTrafficPolicy = trafficPolicy
-}
-
-// SetServiceSessionAffinity sets the session affinity on the Service spec.
-func SetServiceSessionAffinity(service *corev1.Service, affinity corev1.ServiceAffinity) {
-	if service == nil {
-		panic("SetServiceSessionAffinity: service must not be nil")
-	}
-	service.Spec.SessionAffinity = affinity
 }
 
 // SetServiceLoadBalancerClass sets the load balancer class on the Service spec.
@@ -91,32 +50,6 @@ func AddServiceAnnotation(svc *corev1.Service, key, value string) {
 	svc.Annotations[key] = value
 }
 
-// SetServiceLabels replaces the labels on the Service with the provided map.
-func SetServiceLabels(svc *corev1.Service, labels map[string]string) {
-	if svc == nil {
-		panic("SetServiceLabels: svc must not be nil")
-	}
-	svc.Labels = labels
-}
-
-// SetServiceAnnotations replaces the annotations on the Service with the
-// provided map.
-func SetServiceAnnotations(svc *corev1.Service, anns map[string]string) {
-	if svc == nil {
-		panic("SetServiceAnnotations: svc must not be nil")
-	}
-	svc.Annotations = anns
-}
-
-// SetServicePublishNotReadyAddresses sets whether endpoints for not-ready pods
-// are published.
-func SetServicePublishNotReadyAddresses(svc *corev1.Service, publish bool) {
-	if svc == nil {
-		panic("SetServicePublishNotReadyAddresses: svc must not be nil")
-	}
-	svc.Spec.PublishNotReadyAddresses = publish
-}
-
 // AddServiceLoadBalancerSourceRange appends a CIDR to the allowed source ranges
 // for a load balancer Service.
 func AddServiceLoadBalancerSourceRange(svc *corev1.Service, cidr string) {
@@ -124,23 +57,6 @@ func AddServiceLoadBalancerSourceRange(svc *corev1.Service, cidr string) {
 		panic("AddServiceLoadBalancerSourceRange: svc must not be nil")
 	}
 	svc.Spec.LoadBalancerSourceRanges = append(svc.Spec.LoadBalancerSourceRanges, cidr)
-}
-
-// SetServiceLoadBalancerSourceRanges replaces the load balancer source ranges
-// on the Service spec.
-func SetServiceLoadBalancerSourceRanges(svc *corev1.Service, ranges []string) {
-	if svc == nil {
-		panic("SetServiceLoadBalancerSourceRanges: svc must not be nil")
-	}
-	svc.Spec.LoadBalancerSourceRanges = ranges
-}
-
-// SetServiceIPFamilies sets the IP families on the Service spec.
-func SetServiceIPFamilies(svc *corev1.Service, fams []corev1.IPFamily) {
-	if svc == nil {
-		panic("SetServiceIPFamilies: svc must not be nil")
-	}
-	svc.Spec.IPFamilies = fams
 }
 
 // SetServiceIPFamilyPolicy sets the IP family policy on the Service spec.
@@ -167,23 +83,6 @@ func SetServiceAllocateLoadBalancerNodePorts(svc *corev1.Service, allocate bool)
 		panic("SetServiceAllocateLoadBalancerNodePorts: svc must not be nil")
 	}
 	svc.Spec.AllocateLoadBalancerNodePorts = &allocate
-}
-
-// SetServiceExternalName sets the externalName field for ExternalName services.
-func SetServiceExternalName(svc *corev1.Service, name string) {
-	if svc == nil {
-		panic("SetServiceExternalName: svc must not be nil")
-	}
-	svc.Spec.ExternalName = name
-}
-
-// SetServiceHealthCheckNodePort sets the healthCheckNodePort field for
-// LoadBalancer services.
-func SetServiceHealthCheckNodePort(svc *corev1.Service, port int32) {
-	if svc == nil {
-		panic("SetServiceHealthCheckNodePort: svc must not be nil")
-	}
-	svc.Spec.HealthCheckNodePort = port
 }
 
 // SetServiceSessionAffinityConfig configures the session affinity options.
