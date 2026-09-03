@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/kinds"
 )
 
@@ -153,14 +154,14 @@ func findOrphans(root string, files map[string][]byte) ([]string, error) {
 			return nil
 		}
 		if !d.Type().IsRegular() {
-			return fmt.Errorf("%s is not a regular file (a symlink?); generated files are written and removed in place", path)
+			return errors.Errorf("%s is not a regular file (a symlink?); generated files are written and removed in place", path)
 		}
 		have, err := os.ReadFile(path) //nolint:gosec // path comes from walking the generator's own output root
 		if err != nil {
 			return err
 		}
 		if !bytes.HasPrefix(have, []byte(header)) {
-			return fmt.Errorf("%s carries a generated file name but not the generated header; rename it", path)
+			return errors.Errorf("%s carries a generated file name but not the generated header; rename it", path)
 		}
 		if _, rendered := files[path]; !rendered {
 			orphans = append(orphans, path)
@@ -168,7 +169,7 @@ func findOrphans(root string, files map[string][]byte) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("gen: scan %s for orphaned files: %w", root, err)
+		return nil, errors.Wrapf(err, "gen: scan %s for orphaned files", root)
 	}
 	sort.Strings(orphans)
 	return orphans, nil
@@ -181,7 +182,7 @@ func checkUniqueWrappers(pkg string, ks []kinds.Kind) error {
 	for _, k := range ks {
 		name := wrapperName(k)
 		if prev, dup := seen[name]; dup {
-			return fmt.Errorf("gen: %s would be generated twice in package %q (%s and %s); give one a version-qualified name", name, pkg, prev.GVK, k.GVK)
+			return errors.Errorf("gen: %s would be generated twice in package %q (%s and %s); give one a version-qualified name", name, pkg, prev.GVK, k.GVK)
 		}
 		seen[name] = k
 	}
@@ -200,7 +201,7 @@ func importAliases(all []kinds.Kind) (map[string]string, error) {
 		}
 		alias := aliasFor(k.ImportPath)
 		if other, clash := used[alias]; clash && other != k.ImportPath {
-			return nil, fmt.Errorf("gen: import alias %q for %s collides with %s", alias, k.ImportPath, other)
+			return nil, errors.Errorf("gen: import alias %q for %s collides with %s", alias, k.ImportPath, other)
 		}
 		aliases[k.ImportPath] = alias
 		used[alias] = k.ImportPath
