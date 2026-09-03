@@ -31,8 +31,8 @@
 // An exported Set*/Add* function is admitted by class: slice append or map
 // insert, pointer-typed field assignment (which covers nil-init of an
 // intermediate), or an upstream struct literal of two or more fields or with
-// a nested literal. A body that assigns nil to a field is inadmissible
-// whatever else it does. A test classifies every helper
+// a nested literal. A body that assigns nil to a field, or a helper that
+// returns anything, is inadmissible whatever else it does. A test classifies every helper
 // with go/ast and fails on anything outside those classes that is not listed
 // in testdata/admission_exclusions.txt; that list holds the legacy helpers
 // (bare forwarders, error-returning and validating setters) until the prune

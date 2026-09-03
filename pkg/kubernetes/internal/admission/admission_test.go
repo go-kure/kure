@@ -3,10 +3,15 @@ package admission
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 const fixtureSource = `package fixture
+
+import "errors"
+
+var errNil = errors.New("nil")
 
 type Ref struct{ Name, Kind string }
 
@@ -245,10 +250,27 @@ func AddLabelLocalThenName(o *Obj, k, v string) {
 	o.Spec.Name = k
 }
 
-// class b: a nil-valued scalar local is not a clear (only nillable fields count)
-func SetNameFromZeroLocal(o *Obj) {
-	var n string
-	o.Spec.Ref = &Ref{Name: n}
+// inadmissible as a bare forwarder, but not as a nil clear: a zero-valued
+// scalar local is not nil (only nillable fields count)
+func SetNameViaZeroLocal(o *Obj, n string) {
+	var name string
+	name = n
+	o.Spec.Name = name
+}
+
+// inadmissible: an error return is out of contract however admissible the body
+func AddItemWithError(o *Obj, s string) error {
+	if o == nil {
+		return errNil
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+	return nil
+}
+
+// inadmissible: any result is out of contract, not only error
+func SetReplicasReturning(o *Obj, n int32) *Obj {
+	o.Spec.Replicas = &n
+	return o
 }
 
 // exempt by name
@@ -304,7 +326,9 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefTypedNil":         Inadmissible,
 		"SetRefViaNilLocal":      Inadmissible,
 		"SetRefViaAssignedNil":   Inadmissible,
-		"SetNameFromZeroLocal":   Pointer,
+		"SetNameViaZeroLocal":    Inadmissible,
+		"AddItemWithError":       Inadmissible,
+		"SetReplicasReturning":   Inadmissible,
 		"SetRefViaInitNil":       Inadmissible,
 		"SetSpecWithNilRef":      Inadmissible,
 		"SetSpecNestedNil":       Inadmissible,
@@ -340,6 +364,18 @@ func TestClassify_Fixture(t *testing.T) {
 		}
 		if f.Package != "fixture" || f.Key() != "fixture."+name || f.Pos.Line == 0 {
 			t.Errorf("%s: bad finding metadata %+v", name, f)
+		}
+	}
+	// The reasons distinguish the rules a fixture exists for.
+	for name, want := range map[string]string{
+		"SetNameViaZeroLocal":  "single bare field assignment",
+		"AddItemWithError":     "returns a value",
+		"SetReplicasReturning": "returns a value",
+		"SetRefViaNilLocal":    "assigns nil",
+		"SetNameAndA":          "bare field writes",
+	} {
+		if reason := got[name].Reason; !strings.Contains(reason, want) {
+			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
 		}
 	}
 	for name := range got {
