@@ -11,57 +11,43 @@ func TestPodSpecFunctions(t *testing.T) {
 	spec := &corev1.PodSpec{}
 
 	c := corev1.Container{Name: "c"}
-	if err := AddPodSpecContainer(spec, &c); err != nil {
-		t.Fatalf("AddPodSpecContainer returned error: %v", err)
-	}
+	AddPodSpecContainer(spec, &c)
 	if len(spec.Containers) != 1 || spec.Containers[0].Name != "c" {
 		t.Errorf("container not added")
 	}
 
 	ic := corev1.Container{Name: "init"}
-	if err := AddPodSpecInitContainer(spec, &ic); err != nil {
-		t.Fatalf("AddPodSpecInitContainer returned error: %v", err)
-	}
+	AddPodSpecInitContainer(spec, &ic)
 	if len(spec.InitContainers) != 1 {
 		t.Errorf("init container not added")
 	}
 
 	ec := corev1.EphemeralContainer{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debug"}}
-	if err := AddPodSpecEphemeralContainer(spec, &ec); err != nil {
-		t.Fatalf("AddPodSpecEphemeralContainer returned error: %v", err)
-	}
+	AddPodSpecEphemeralContainer(spec, &ec)
 	if len(spec.EphemeralContainers) != 1 {
 		t.Errorf("ephemeral container not added")
 	}
 
 	v := corev1.Volume{Name: "vol"}
-	if err := AddPodSpecVolume(spec, &v); err != nil {
-		t.Fatalf("AddPodSpecVolume returned error: %v", err)
-	}
+	AddPodSpecVolume(spec, &v)
 	if len(spec.Volumes) != 1 {
 		t.Errorf("volume not added")
 	}
 
 	sec := corev1.LocalObjectReference{Name: "pull"}
-	if err := AddPodSpecImagePullSecret(spec, &sec); err != nil {
-		t.Fatalf("AddPodSpecImagePullSecret returned error: %v", err)
-	}
+	AddPodSpecImagePullSecret(spec, &sec)
 	if len(spec.ImagePullSecrets) != 1 {
 		t.Errorf("pull secret not added")
 	}
 
 	tol := corev1.Toleration{Key: "k"}
-	if err := AddPodSpecToleration(spec, &tol); err != nil {
-		t.Fatalf("AddPodSpecToleration returned error: %v", err)
-	}
+	AddPodSpecToleration(spec, &tol)
 	if len(spec.Tolerations) != 1 {
 		t.Errorf("toleration not added")
 	}
 
 	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}}
-	if err := AddPodSpecTopologySpreadConstraints(spec, &tsc); err != nil {
-		t.Fatalf("AddPodSpecTopologySpreadConstraints returned error: %v", err)
-	}
+	AddPodSpecTopologySpreadConstraints(spec, &tsc)
 	if len(spec.TopologySpreadConstraints) != 1 {
 		t.Errorf("topology constraint not added")
 	}
@@ -90,47 +76,55 @@ func TestPodSpecFunctions(t *testing.T) {
 	}
 }
 
-func TestPodSpecNilGuards(t *testing.T) {
-	// Functions that still return error (secondary nil checks) — keep error-based tests
-	t.Run("AddPodSpecContainer nil spec", func(t *testing.T) {
-		if err := AddPodSpecContainer(nil, &corev1.Container{Name: "c"}); err == nil {
-			t.Error("AddPodSpecContainer(nil) should return error")
-		}
-	})
-	t.Run("AddPodSpecInitContainer nil spec", func(t *testing.T) {
-		if err := AddPodSpecInitContainer(nil, &corev1.Container{Name: "c"}); err == nil {
-			t.Error("AddPodSpecInitContainer(nil) should return error")
-		}
-	})
-	t.Run("AddPodSpecEphemeralContainer nil spec", func(t *testing.T) {
-		if err := AddPodSpecEphemeralContainer(nil, &corev1.EphemeralContainer{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "e"}}); err == nil {
-			t.Error("AddPodSpecEphemeralContainer(nil) should return error")
-		}
-	})
-	t.Run("AddPodSpecVolume nil spec", func(t *testing.T) {
-		if err := AddPodSpecVolume(nil, &corev1.Volume{Name: "v"}); err == nil {
-			t.Error("AddPodSpecVolume(nil) should return error")
-		}
-	})
-	t.Run("AddPodSpecImagePullSecret nil spec", func(t *testing.T) {
-		if err := AddPodSpecImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}); err == nil {
-			t.Error("AddPodSpecImagePullSecret(nil) should return error")
-		}
-	})
-	t.Run("AddPodSpecToleration nil spec", func(t *testing.T) {
-		if err := AddPodSpecToleration(nil, &corev1.Toleration{Key: "k"}); err == nil {
-			t.Error("AddPodSpecToleration(nil) should return error")
-		}
-	})
-	t.Run("AddPodSpecTopologySpreadConstraints nil spec", func(t *testing.T) {
-		if err := AddPodSpecTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}}); err == nil {
-			t.Error("AddPodSpecTopologySpreadConstraints(nil) should return error")
-		}
-	})
+// TestPodSpecAppendersAccumulate covers repeated appends: the helpers add to
+// what is already on the field rather than replacing it.
+func TestPodSpecAppendersAccumulate(t *testing.T) {
+	spec := &corev1.PodSpec{}
 
-	// Functions now panic on nil receiver
+	AddPodSpecContainer(spec, &corev1.Container{Name: "first"})
+	AddPodSpecContainer(spec, &corev1.Container{Name: "second"})
+	if len(spec.Containers) != 2 {
+		t.Fatalf("expected 2 containers, got %d", len(spec.Containers))
+	}
+	if spec.Containers[0].Name != "first" || spec.Containers[1].Name != "second" {
+		t.Errorf("containers out of order: %q, %q", spec.Containers[0].Name, spec.Containers[1].Name)
+	}
+
+	AddPodSpecTopologySpreadConstraints(spec, &corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule})
+	AddPodSpecTopologySpreadConstraints(spec, &corev1.TopologySpreadConstraint{MaxSkew: 2, TopologyKey: "hostname", WhenUnsatisfiable: corev1.DoNotSchedule})
+	if len(spec.TopologySpreadConstraints) != 2 {
+		t.Fatalf("expected 2 constraints, got %d", len(spec.TopologySpreadConstraints))
+	}
+	if spec.TopologySpreadConstraints[1].TopologyKey != "hostname" {
+		t.Errorf("second constraint mismatch: %q", spec.TopologySpreadConstraints[1].TopologyKey)
+	}
+}
+
+func TestPodSpecNilGuards(t *testing.T) {
+	assertPanics(t, func() { AddPodSpecContainer(nil, &corev1.Container{Name: "c"}) })
+	assertPanics(t, func() { AddPodSpecInitContainer(nil, &corev1.Container{Name: "c"}) })
+	assertPanics(t, func() {
+		AddPodSpecEphemeralContainer(nil, &corev1.EphemeralContainer{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "e"}})
+	})
+	assertPanics(t, func() { AddPodSpecVolume(nil, &corev1.Volume{Name: "v"}) })
+	assertPanics(t, func() { AddPodSpecImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}) })
+	assertPanics(t, func() { AddPodSpecToleration(nil, &corev1.Toleration{Key: "k"}) })
+	assertPanics(t, func() { AddPodSpecTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{MaxSkew: 1}) })
+
 	assertPanics(t, func() { SetPodSpecSecurityContext(nil, &corev1.PodSecurityContext{}) })
 	assertPanics(t, func() { SetPodSpecAffinity(nil, &corev1.Affinity{}) })
 	assertPanics(t, func() { SetPodSpecDNSConfig(nil, &corev1.PodDNSConfig{}) })
 	assertPanics(t, func() { SetPodSpecTerminationGracePeriod(nil, 30) })
+}
+
+func TestPodSpecNilArgGuards(t *testing.T) {
+	spec := &corev1.PodSpec{}
+
+	assertPanics(t, func() { AddPodSpecContainer(spec, nil) })
+	assertPanics(t, func() { AddPodSpecInitContainer(spec, nil) })
+	assertPanics(t, func() { AddPodSpecEphemeralContainer(spec, nil) })
+	assertPanics(t, func() { AddPodSpecVolume(spec, nil) })
+	assertPanics(t, func() { AddPodSpecImagePullSecret(spec, nil) })
+	assertPanics(t, func() { AddPodSpecToleration(spec, nil) })
+	assertPanics(t, func() { AddPodSpecTopologySpreadConstraints(spec, nil) })
 }

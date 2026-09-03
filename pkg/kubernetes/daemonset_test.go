@@ -8,66 +8,71 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestAddDaemonSetTopologySpreadConstraints(t *testing.T) {
-	t.Run("nil constraint", func(t *testing.T) {
-		ds := CreateDaemonSet("test", "default")
-		if err := AddDaemonSetTopologySpreadConstraints(ds, nil); err != nil {
-			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
-		}
-		if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 0 {
-			t.Errorf("expected no constraints, got %d", len(ds.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-	})
+// TestDaemonSetPodTemplate covers the caller idiom the per-kind pod-template
+// passthroughs were folded into: the PodSpec helpers applied to
+// &ds.Spec.Template.Spec.
+func TestDaemonSetPodTemplate(t *testing.T) {
+	ds := CreateDaemonSet("app", "ns")
+	spec := &ds.Spec.Template.Spec
 
-	t.Run("append single constraint", func(t *testing.T) {
-		ds := CreateDaemonSet("test", "default")
-		c := corev1.TopologySpreadConstraint{
-			MaxSkew:           1,
-			TopologyKey:       "zone",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
-		}
-		if err := AddDaemonSetTopologySpreadConstraints(ds, &c); err != nil {
-			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
-		}
-		if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
-			t.Fatalf("expected 1 constraint, got %d", len(ds.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-		if !reflect.DeepEqual(ds.Spec.Template.Spec.TopologySpreadConstraints[0], c) {
-			t.Errorf("constraint mismatch: got %+v, want %+v", ds.Spec.Template.Spec.TopologySpreadConstraints[0], c)
-		}
-	})
+	AddPodSpecContainer(spec, &corev1.Container{Name: "c"})
+	AddPodSpecInitContainer(spec, &corev1.Container{Name: "init"})
+	AddPodSpecVolume(spec, &corev1.Volume{Name: "vol"})
+	AddPodSpecImagePullSecret(spec, &corev1.LocalObjectReference{Name: "secret"})
+	AddPodSpecToleration(spec, &corev1.Toleration{Key: "k"})
 
-	t.Run("append additional constraint", func(t *testing.T) {
-		ds := CreateDaemonSet("test", "default")
-		first := corev1.TopologySpreadConstraint{
-			MaxSkew:           1,
-			TopologyKey:       "zone",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
-		}
-		second := corev1.TopologySpreadConstraint{
-			MaxSkew:           2,
-			TopologyKey:       "hostname",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
-		}
-		if err := AddDaemonSetTopologySpreadConstraints(ds, &first); err != nil {
-			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
-		}
-		if err := AddDaemonSetTopologySpreadConstraints(ds, &second); err != nil {
-			t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
-		}
-		if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 2 {
-			t.Fatalf("expected 2 constraints, got %d", len(ds.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-		if !reflect.DeepEqual(ds.Spec.Template.Spec.TopologySpreadConstraints[0], first) {
-			t.Errorf("first constraint mismatch")
-		}
-		if !reflect.DeepEqual(ds.Spec.Template.Spec.TopologySpreadConstraints[1], second) {
-			t.Errorf("second constraint mismatch")
-		}
-	})
+	c := corev1.TopologySpreadConstraint{
+		MaxSkew:           1,
+		TopologyKey:       "zone",
+		WhenUnsatisfiable: corev1.DoNotSchedule,
+		LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+	}
+	AddPodSpecTopologySpreadConstraints(spec, &c)
+
+	sc := &corev1.PodSecurityContext{}
+	SetPodSpecSecurityContext(spec, sc)
+	aff := &corev1.Affinity{}
+	SetPodSpecAffinity(spec, aff)
+
+	// ServiceAccountName and NodeSelector are plain fields — assigned directly.
+	ds.Spec.Template.Spec.ServiceAccountName = "sa"
+	ns := map[string]string{"role": "db"}
+	ds.Spec.Template.Spec.NodeSelector = ns
+
+	tmpl := ds.Spec.Template.Spec
+	if len(tmpl.Containers) != 1 || tmpl.Containers[0].Name != "c" {
+		t.Errorf("container not added to the pod template")
+	}
+	if len(tmpl.InitContainers) != 1 {
+		t.Errorf("init container not added to the pod template")
+	}
+	if len(tmpl.Volumes) != 1 {
+		t.Errorf("volume not added to the pod template")
+	}
+	if len(tmpl.ImagePullSecrets) != 1 {
+		t.Errorf("image pull secret not added to the pod template")
+	}
+	if len(tmpl.Tolerations) != 1 {
+		t.Errorf("toleration not added to the pod template")
+	}
+	if len(tmpl.TopologySpreadConstraints) != 1 {
+		t.Fatalf("expected 1 constraint, got %d", len(tmpl.TopologySpreadConstraints))
+	}
+	if !reflect.DeepEqual(tmpl.TopologySpreadConstraints[0], c) {
+		t.Errorf("constraint mismatch: got %+v, want %+v", tmpl.TopologySpreadConstraints[0], c)
+	}
+	if tmpl.SecurityContext != sc {
+		t.Errorf("security context not set on the pod template")
+	}
+	if tmpl.Affinity != aff {
+		t.Errorf("affinity not set on the pod template")
+	}
+	if tmpl.ServiceAccountName != "sa" {
+		t.Errorf("service account name not set")
+	}
+	if !reflect.DeepEqual(tmpl.NodeSelector, ns) {
+		t.Errorf("node selector not set")
+	}
 }
 
 func TestDaemonSetFunctions(t *testing.T) {
@@ -77,77 +82,6 @@ func TestDaemonSetFunctions(t *testing.T) {
 	}
 	if ds.Kind != "DaemonSet" {
 		t.Errorf("unexpected kind %q", ds.Kind)
-	}
-
-	c := corev1.Container{Name: "c"}
-	if err := AddDaemonSetContainer(ds, &c); err != nil {
-		t.Fatalf("AddDaemonSetContainer returned error: %v", err)
-	}
-	if len(ds.Spec.Template.Spec.Containers) != 1 || ds.Spec.Template.Spec.Containers[0].Name != "c" {
-		t.Errorf("container not added")
-	}
-
-	ic := corev1.Container{Name: "init"}
-	if err := AddDaemonSetInitContainer(ds, &ic); err != nil {
-		t.Fatalf("AddDaemonSetInitContainer returned error: %v", err)
-	}
-	if len(ds.Spec.Template.Spec.InitContainers) != 1 {
-		t.Errorf("init container not added")
-	}
-
-	v := corev1.Volume{Name: "vol"}
-	if err := AddDaemonSetVolume(ds, &v); err != nil {
-		t.Fatalf("AddDaemonSetVolume returned error: %v", err)
-	}
-	if len(ds.Spec.Template.Spec.Volumes) != 1 {
-		t.Errorf("volume not added")
-	}
-
-	secret := corev1.LocalObjectReference{Name: "secret"}
-	if err := AddDaemonSetImagePullSecret(ds, &secret); err != nil {
-		t.Fatalf("AddDaemonSetImagePullSecret returned error: %v", err)
-	}
-	if len(ds.Spec.Template.Spec.ImagePullSecrets) != 1 {
-		t.Errorf("image pull secret not added")
-	}
-
-	tol := corev1.Toleration{Key: "k"}
-	if err := AddDaemonSetToleration(ds, &tol); err != nil {
-		t.Fatalf("AddDaemonSetToleration returned error: %v", err)
-	}
-	if len(ds.Spec.Template.Spec.Tolerations) != 1 {
-		t.Errorf("toleration not added")
-	}
-
-	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.ScheduleAnyway, LabelSelector: &metav1.LabelSelector{}}
-	if err := AddDaemonSetTopologySpreadConstraints(ds, &tsc); err != nil {
-		t.Fatalf("AddDaemonSetTopologySpreadConstraints returned error: %v", err)
-	}
-	if len(ds.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
-		t.Errorf("topology constraint not added")
-	}
-
-	SetDaemonSetServiceAccountName(ds, "sa")
-	if ds.Spec.Template.Spec.ServiceAccountName != "sa" {
-		t.Errorf("service account name not set")
-	}
-
-	sc := &corev1.PodSecurityContext{}
-	SetDaemonSetSecurityContext(ds, sc)
-	if ds.Spec.Template.Spec.SecurityContext != sc {
-		t.Errorf("security context not set")
-	}
-
-	aff := &corev1.Affinity{}
-	SetDaemonSetAffinity(ds, aff)
-	if ds.Spec.Template.Spec.Affinity != aff {
-		t.Errorf("affinity not set")
-	}
-
-	ns := map[string]string{"role": "db"}
-	SetDaemonSetNodeSelector(ds, ns)
-	if !reflect.DeepEqual(ds.Spec.Template.Spec.NodeSelector, ns) {
-		t.Errorf("node selector not set")
 	}
 
 	rhl := int32(3)
@@ -160,39 +94,5 @@ func TestDaemonSetFunctions(t *testing.T) {
 func TestDaemonSetNilGuards(t *testing.T) {
 	rhl := int32(1)
 
-	// Functions with secondary nil checks — still return errors
-	if err := SetDaemonSetPodSpec(nil, &corev1.PodSpec{}); err == nil {
-		t.Error("SetDaemonSetPodSpec(nil) should return error")
-	}
-	if err := AddDaemonSetContainer(nil, &corev1.Container{}); err == nil {
-		t.Error("AddDaemonSetContainer(nil) should return error")
-	}
-	if err := AddDaemonSetInitContainer(nil, &corev1.Container{}); err == nil {
-		t.Error("AddDaemonSetInitContainer(nil) should return error")
-	}
-	if err := AddDaemonSetVolume(nil, &corev1.Volume{}); err == nil {
-		t.Error("AddDaemonSetVolume(nil) should return error")
-	}
-	if err := AddDaemonSetImagePullSecret(nil, &corev1.LocalObjectReference{}); err == nil {
-		t.Error("AddDaemonSetImagePullSecret(nil) should return error")
-	}
-	if err := AddDaemonSetToleration(nil, &corev1.Toleration{}); err == nil {
-		t.Error("AddDaemonSetToleration(nil) should return error")
-	}
-	if err := AddDaemonSetTopologySpreadConstraints(nil, &corev1.TopologySpreadConstraint{}); err == nil {
-		t.Error("AddDaemonSetTopologySpreadConstraints(nil) should return error")
-	}
-
-	// Functions that now panic on nil receiver
-	assertPanics(t, func() { SetDaemonSetServiceAccountName(nil, "sa") })
-	assertPanics(t, func() { SetDaemonSetSecurityContext(nil, nil) })
-	assertPanics(t, func() { SetDaemonSetAffinity(nil, nil) })
-	assertPanics(t, func() { SetDaemonSetNodeSelector(nil, nil) })
 	assertPanics(t, func() { SetDaemonSetRevisionHistoryLimit(nil, &rhl) })
-
-	// Secondary nil guard: spec == nil with valid receiver.
-	ds := CreateDaemonSet("test", "default")
-	if err := SetDaemonSetPodSpec(ds, nil); err == nil {
-		t.Error("SetDaemonSetPodSpec(ds, nil) should return error")
-	}
 }

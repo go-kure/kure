@@ -9,32 +9,6 @@ import (
 )
 
 func TestCronJobNilErrors(t *testing.T) {
-	// Functions with secondary nil checks — still return errors
-	if err := SetCronJobPodSpec(nil, &corev1.PodSpec{}); err == nil {
-		t.Error("expected error for nil CronJob on SetCronJobPodSpec")
-	}
-	if err := AddCronJobContainer(nil, &corev1.Container{Name: "c"}); err == nil {
-		t.Error("expected error for nil CronJob on AddCronJobContainer")
-	}
-	if err := AddCronJobInitContainer(nil, &corev1.Container{Name: "c"}); err == nil {
-		t.Error("expected error for nil CronJob on AddCronJobInitContainer")
-	}
-	if err := AddCronJobVolume(nil, &corev1.Volume{Name: "v"}); err == nil {
-		t.Error("expected error for nil CronJob on AddCronJobVolume")
-	}
-	if err := AddCronJobImagePullSecret(nil, &corev1.LocalObjectReference{Name: "s"}); err == nil {
-		t.Error("expected error for nil CronJob on AddCronJobImagePullSecret")
-	}
-	if err := AddCronJobToleration(nil, &corev1.Toleration{Key: "k"}); err == nil {
-		t.Error("expected error for nil CronJob on AddCronJobToleration")
-	}
-	if err := AddCronJobTopologySpreadConstraint(nil, &corev1.TopologySpreadConstraint{}); err == nil {
-		t.Error("expected error for nil CronJob on AddCronJobTopologySpreadConstraint")
-	}
-
-	// Functions that now panic on nil receiver
-	assertPanics(t, func() { SetCronJobSecurityContext(nil, nil) })
-	assertPanics(t, func() { SetCronJobAffinity(nil, nil) })
 	assertPanics(t, func() { SetCronJobSuspend(nil, true) })
 	assertPanics(t, func() { SetCronJobSuccessfulJobsHistoryLimit(nil, 3) })
 	assertPanics(t, func() { SetCronJobFailedJobsHistoryLimit(nil, 1) })
@@ -43,94 +17,74 @@ func TestCronJobNilErrors(t *testing.T) {
 	assertPanics(t, func() { SetCronJobTimeZone(nil, &tz) })
 }
 
-func TestCronJobNilArgErrors(t *testing.T) {
-	cj := CreateCronJob("test", "default")
-	if err := SetCronJobPodSpec(cj, nil); err == nil {
-		t.Error("expected error for nil PodSpec")
-	}
-	if err := AddCronJobContainer(cj, nil); err == nil {
-		t.Error("expected error for nil Container")
-	}
-	if err := AddCronJobInitContainer(cj, nil); err == nil {
-		t.Error("expected error for nil InitContainer")
-	}
-	if err := AddCronJobVolume(cj, nil); err == nil {
-		t.Error("expected error for nil Volume")
-	}
-	if err := AddCronJobImagePullSecret(cj, nil); err == nil {
-		t.Error("expected error for nil ImagePullSecret")
-	}
-	if err := AddCronJobToleration(cj, nil); err == nil {
-		t.Error("expected error for nil Toleration")
-	}
-}
+// TestCronJobPodTemplate covers the caller idiom the per-kind pod-template
+// passthroughs were folded into. A CronJob nests its pod template one level
+// deeper than the other workload kinds.
+func TestCronJobPodTemplate(t *testing.T) {
+	cj := CreateCronJob("app", "ns")
+	spec := &cj.Spec.JobTemplate.Spec.Template.Spec
 
-func TestCronJobTopologySpreadConstraints(t *testing.T) {
-	t.Run("nil constraint", func(t *testing.T) {
-		cj := CreateCronJob("test", "default")
-		if err := AddCronJobTopologySpreadConstraint(cj, nil); err != nil {
-			t.Fatalf("AddCronJobTopologySpreadConstraint returned error: %v", err)
-		}
-		if len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints) != 0 {
-			t.Errorf("expected no constraints, got %d", len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-	})
+	AddPodSpecContainer(spec, &corev1.Container{Name: "c"})
+	AddPodSpecInitContainer(spec, &corev1.Container{Name: "init"})
+	AddPodSpecVolume(spec, &corev1.Volume{Name: "vol"})
+	AddPodSpecImagePullSecret(spec, &corev1.LocalObjectReference{Name: "secret"})
+	AddPodSpecToleration(spec, &corev1.Toleration{Key: "k"})
 
-	t.Run("append single constraint", func(t *testing.T) {
-		cj := CreateCronJob("test", "default")
-		c := corev1.TopologySpreadConstraint{
-			MaxSkew:           1,
-			TopologyKey:       "topology.kubernetes.io/zone",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
-			},
-		}
-		if err := AddCronJobTopologySpreadConstraint(cj, &c); err != nil {
-			t.Fatalf("AddCronJobTopologySpreadConstraint returned error: %v", err)
-		}
-		if len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
-			t.Fatalf("expected 1 constraint, got %d", len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-		if !reflect.DeepEqual(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints[0], c) {
-			t.Errorf("constraint mismatch: got %+v, want %+v", cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints[0], c)
-		}
-	})
+	first := corev1.TopologySpreadConstraint{
+		MaxSkew:           1,
+		TopologyKey:       "topology.kubernetes.io/zone",
+		WhenUnsatisfiable: corev1.DoNotSchedule,
+		LabelSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "test"},
+		},
+	}
+	second := corev1.TopologySpreadConstraint{
+		MaxSkew:           2,
+		TopologyKey:       "hostname",
+		WhenUnsatisfiable: corev1.DoNotSchedule,
+		LabelSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "test"},
+		},
+	}
+	AddPodSpecTopologySpreadConstraints(spec, &first)
+	AddPodSpecTopologySpreadConstraints(spec, &second)
 
-	t.Run("append additional constraint", func(t *testing.T) {
-		cj := CreateCronJob("test", "default")
-		first := corev1.TopologySpreadConstraint{
-			MaxSkew:           1,
-			TopologyKey:       "zone",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
-			},
-		}
-		second := corev1.TopologySpreadConstraint{
-			MaxSkew:           2,
-			TopologyKey:       "hostname",
-			WhenUnsatisfiable: corev1.DoNotSchedule,
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "test"},
-			},
-		}
-		if err := AddCronJobTopologySpreadConstraint(cj, &first); err != nil {
-			t.Fatalf("AddCronJobTopologySpreadConstraint returned error: %v", err)
-		}
-		if err := AddCronJobTopologySpreadConstraint(cj, &second); err != nil {
-			t.Fatalf("AddCronJobTopologySpreadConstraint returned error: %v", err)
-		}
-		if len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints) != 2 {
-			t.Fatalf("expected 2 constraints, got %d", len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints))
-		}
-		if !reflect.DeepEqual(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints[0], first) {
-			t.Errorf("first constraint mismatch")
-		}
-		if !reflect.DeepEqual(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints[1], second) {
-			t.Errorf("second constraint mismatch")
-		}
-	})
+	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
+	SetPodSpecSecurityContext(spec, sc)
+	aff := &corev1.Affinity{}
+	SetPodSpecAffinity(spec, aff)
+
+	tmpl := cj.Spec.JobTemplate.Spec.Template.Spec
+	if len(tmpl.Containers) != 1 || tmpl.Containers[0].Name != "c" {
+		t.Errorf("container not added to the pod template")
+	}
+	if len(tmpl.InitContainers) != 1 {
+		t.Errorf("init container not added to the pod template")
+	}
+	if len(tmpl.Volumes) != 1 {
+		t.Errorf("volume not added to the pod template")
+	}
+	if len(tmpl.ImagePullSecrets) != 1 {
+		t.Errorf("image pull secret not added to the pod template")
+	}
+	if len(tmpl.Tolerations) != 1 {
+		t.Errorf("toleration not added to the pod template")
+	}
+	if len(tmpl.TopologySpreadConstraints) != 2 {
+		t.Fatalf("expected 2 constraints, got %d", len(tmpl.TopologySpreadConstraints))
+	}
+	if !reflect.DeepEqual(tmpl.TopologySpreadConstraints[0], first) {
+		t.Errorf("first constraint mismatch")
+	}
+	if !reflect.DeepEqual(tmpl.TopologySpreadConstraints[1], second) {
+		t.Errorf("second constraint mismatch")
+	}
+	if tmpl.SecurityContext != sc {
+		t.Errorf("security context not set on the pod template")
+	}
+	if tmpl.Affinity != aff {
+		t.Errorf("affinity not set on the pod template")
+	}
 }
 
 func TestCronJobFunctions(t *testing.T) {
@@ -140,66 +94,6 @@ func TestCronJobFunctions(t *testing.T) {
 	}
 	if cj.Kind != "CronJob" {
 		t.Errorf("unexpected kind %q", cj.Kind)
-	}
-
-	c := corev1.Container{Name: "c"}
-	if err := AddCronJobContainer(cj, &c); err != nil {
-		t.Fatalf("AddCronJobContainer returned error: %v", err)
-	}
-	if len(cj.Spec.JobTemplate.Spec.Template.Spec.Containers) != 1 || cj.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Name != "c" {
-		t.Errorf("container not added")
-	}
-
-	ic := corev1.Container{Name: "init"}
-	if err := AddCronJobInitContainer(cj, &ic); err != nil {
-		t.Fatalf("AddCronJobInitContainer returned error: %v", err)
-	}
-	if len(cj.Spec.JobTemplate.Spec.Template.Spec.InitContainers) != 1 {
-		t.Errorf("init container not added")
-	}
-
-	v := corev1.Volume{Name: "vol"}
-	if err := AddCronJobVolume(cj, &v); err != nil {
-		t.Fatalf("AddCronJobVolume returned error: %v", err)
-	}
-	if len(cj.Spec.JobTemplate.Spec.Template.Spec.Volumes) != 1 {
-		t.Errorf("volume not added")
-	}
-
-	secret := corev1.LocalObjectReference{Name: "secret"}
-	if err := AddCronJobImagePullSecret(cj, &secret); err != nil {
-		t.Fatalf("AddCronJobImagePullSecret returned error: %v", err)
-	}
-	if len(cj.Spec.JobTemplate.Spec.Template.Spec.ImagePullSecrets) != 1 {
-		t.Errorf("image pull secret not added")
-	}
-
-	tol := corev1.Toleration{Key: "k"}
-	if err := AddCronJobToleration(cj, &tol); err != nil {
-		t.Fatalf("AddCronJobToleration returned error: %v", err)
-	}
-	if len(cj.Spec.JobTemplate.Spec.Template.Spec.Tolerations) != 1 {
-		t.Errorf("toleration not added")
-	}
-
-	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.ScheduleAnyway, LabelSelector: &metav1.LabelSelector{}}
-	if err := AddCronJobTopologySpreadConstraint(cj, &tsc); err != nil {
-		t.Fatalf("AddCronJobTopologySpreadConstraint returned error: %v", err)
-	}
-	if len(cj.Spec.JobTemplate.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
-		t.Errorf("topology constraint not added")
-	}
-
-	sc := &corev1.PodSecurityContext{RunAsUser: func(i int64) *int64 { return &i }(1)}
-	SetCronJobSecurityContext(cj, sc)
-	if cj.Spec.JobTemplate.Spec.Template.Spec.SecurityContext != sc {
-		t.Errorf("security context not set")
-	}
-
-	aff := &corev1.Affinity{}
-	SetCronJobAffinity(cj, aff)
-	if cj.Spec.JobTemplate.Spec.Template.Spec.Affinity != aff {
-		t.Errorf("affinity not set")
 	}
 
 	SetCronJobSuspend(cj, true)
@@ -229,15 +123,14 @@ func TestCronJobFunctions(t *testing.T) {
 	}
 }
 
-func TestSetCronJobPodSpec(t *testing.T) {
+// TestCronJobPodSpecAssignment covers the replacement for the removed
+// SetCronJobPodSpec: a whole PodSpec goes on by assignment.
+func TestCronJobPodSpecAssignment(t *testing.T) {
 	cj := CreateCronJob("test", "default")
-	spec := &corev1.PodSpec{
+	cj.Spec.JobTemplate.Spec.Template.Spec = corev1.PodSpec{
 		Containers: []corev1.Container{
 			{Name: "test", Image: "nginx"},
 		},
-	}
-	if err := SetCronJobPodSpec(cj, spec); err != nil {
-		t.Fatalf("expected no error, got %v", err)
 	}
 	if len(cj.Spec.JobTemplate.Spec.Template.Spec.Containers) != 1 {
 		t.Fatal("expected PodSpec to be assigned")

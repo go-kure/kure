@@ -198,10 +198,17 @@ kubernetes.AddLabel(dep, "app", "my-app")
 dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "my-app"}}
 dep.Spec.Template.Labels = map[string]string{"app": "my-app"}
 
-err := kubernetes.AddDeploymentContainer(dep, &corev1.Container{Name: "app", Image: "nginx:1.25"})
+podSpec := &dep.Spec.Template.Spec
+kubernetes.AddPodSpecContainer(podSpec, &corev1.Container{Name: "app", Image: "nginx:1.25"})
+kubernetes.AddPodSpecToleration(podSpec, &corev1.Toleration{Key: "dedicated", Value: "web"})
 kubernetes.SetDeploymentReplicas(dep, 3)
-kubernetes.AddDeploymentToleration(dep, &corev1.Toleration{Key: "dedicated", Value: "web"})
 ```
+
+There is no `AddDeploymentContainer`. A workload kind's pod template is a
+`corev1.PodSpec`, so the `PodSpec` helpers serve every kind — pass
+`&dep.Spec.Template.Spec` (a CronJob nests one level deeper:
+`&cj.Spec.JobTemplate.Spec.Template.Spec`). `ServiceAccountName` and
+`NodeSelector` are plain fields on that struct and are assigned directly.
 
 ### CronJob
 
@@ -210,7 +217,8 @@ cj := kubernetes.CreateCronJob("my-job", "default")
 cj.Spec.Schedule = "*/5 * * * *"
 cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 
-err := kubernetes.AddCronJobContainer(cj, &corev1.Container{Name: "worker", Image: "busybox:1.36"})
+kubernetes.AddPodSpecContainer(&cj.Spec.JobTemplate.Spec.Template.Spec,
+	&corev1.Container{Name: "worker", Image: "busybox:1.36"})
 cj.Spec.ConcurrencyPolicy = batchv1.ForbidConcurrent
 ```
 

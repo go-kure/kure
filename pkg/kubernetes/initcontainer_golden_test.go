@@ -89,45 +89,30 @@ func goldenTest(t *testing.T, filename string, obj client.Object) {
 
 func TestDeploymentInitContainer_Golden(t *testing.T) {
 	dep := CreateDeployment("my-app", "default")
-	if err := AddDeploymentContainer(dep, testAppContainer()); err != nil {
-		t.Fatal(err)
-	}
-	if err := AddDeploymentInitContainer(dep, testInitContainer()); err != nil {
-		t.Fatal(err)
-	}
-	if err := AddDeploymentVolume(dep, testDataVolume()); err != nil {
-		t.Fatal(err)
-	}
+	spec := &dep.Spec.Template.Spec
+	AddPodSpecContainer(spec, testAppContainer())
+	AddPodSpecInitContainer(spec, testInitContainer())
+	AddPodSpecVolume(spec, testDataVolume())
 
 	goldenTest(t, "deployment-with-init-container.yaml", dep)
 }
 
 func TestStatefulSetInitContainer_Golden(t *testing.T) {
 	sts := CreateStatefulSet("my-app", "default")
-	if err := AddStatefulSetContainer(sts, testAppContainer()); err != nil {
-		t.Fatal(err)
-	}
-	if err := AddStatefulSetInitContainer(sts, testInitContainer()); err != nil {
-		t.Fatal(err)
-	}
-	if err := AddStatefulSetVolume(sts, testDataVolume()); err != nil {
-		t.Fatal(err)
-	}
+	spec := &sts.Spec.Template.Spec
+	AddPodSpecContainer(spec, testAppContainer())
+	AddPodSpecInitContainer(spec, testInitContainer())
+	AddPodSpecVolume(spec, testDataVolume())
 
 	goldenTest(t, "statefulset-with-init-container.yaml", sts)
 }
 
 func TestDaemonSetInitContainer_Golden(t *testing.T) {
 	ds := CreateDaemonSet("my-app", "default")
-	if err := AddDaemonSetContainer(ds, testAppContainer()); err != nil {
-		t.Fatal(err)
-	}
-	if err := AddDaemonSetInitContainer(ds, testInitContainer()); err != nil {
-		t.Fatal(err)
-	}
-	if err := AddDaemonSetVolume(ds, testDataVolume()); err != nil {
-		t.Fatal(err)
-	}
+	spec := &ds.Spec.Template.Spec
+	AddPodSpecContainer(spec, testAppContainer())
+	AddPodSpecInitContainer(spec, testInitContainer())
+	AddPodSpecVolume(spec, testDataVolume())
 
 	goldenTest(t, "daemonset-with-init-container.yaml", ds)
 }

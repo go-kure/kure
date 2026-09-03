@@ -8,79 +8,67 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestJobFunctions(t *testing.T) {
+// TestJobPodTemplate covers the caller idiom the per-kind pod-template
+// passthroughs were folded into: the PodSpec helpers applied to
+// &job.Spec.Template.Spec.
+func TestJobPodTemplate(t *testing.T) {
 	job := CreateJob("job", "ns")
+	spec := &job.Spec.Template.Spec
 
-	c := corev1.Container{Name: "c"}
-	if err := AddJobContainer(job, &c); err != nil {
-		t.Fatalf("AddJobContainer returned error: %v", err)
-	}
-	if len(job.Spec.Template.Spec.Containers) != 1 || job.Spec.Template.Spec.Containers[0].Name != "c" {
-		t.Errorf("container not added")
-	}
-
-	ic := corev1.Container{Name: "init"}
-	if err := AddJobInitContainer(job, &ic); err != nil {
-		t.Fatalf("AddJobInitContainer returned error: %v", err)
-	}
-	if len(job.Spec.Template.Spec.InitContainers) != 1 {
-		t.Errorf("init container not added")
-	}
-
-	v := corev1.Volume{Name: "vol"}
-	if err := AddJobVolume(job, &v); err != nil {
-		t.Fatalf("AddJobVolume returned error: %v", err)
-	}
-	if len(job.Spec.Template.Spec.Volumes) != 1 {
-		t.Errorf("volume not added")
-	}
-
-	secret := corev1.LocalObjectReference{Name: "pull"}
-	if err := AddJobImagePullSecret(job, &secret); err != nil {
-		t.Fatalf("AddJobImagePullSecret returned error: %v", err)
-	}
-	if len(job.Spec.Template.Spec.ImagePullSecrets) != 1 {
-		t.Errorf("pull secret not added")
-	}
-
-	tol := corev1.Toleration{Key: "k"}
-	if err := AddJobToleration(job, &tol); err != nil {
-		t.Fatalf("AddJobToleration returned error: %v", err)
-	}
-	if len(job.Spec.Template.Spec.Tolerations) != 1 {
-		t.Errorf("toleration not added")
-	}
+	AddPodSpecContainer(spec, &corev1.Container{Name: "c"})
+	AddPodSpecInitContainer(spec, &corev1.Container{Name: "init"})
+	AddPodSpecVolume(spec, &corev1.Volume{Name: "vol"})
+	AddPodSpecImagePullSecret(spec, &corev1.LocalObjectReference{Name: "pull"})
+	AddPodSpecToleration(spec, &corev1.Toleration{Key: "k"})
 
 	tsc := corev1.TopologySpreadConstraint{MaxSkew: 1, TopologyKey: "zone", WhenUnsatisfiable: corev1.DoNotSchedule, LabelSelector: &metav1.LabelSelector{}}
-	if err := AddJobTopologySpreadConstraint(job, &tsc); err != nil {
-		t.Fatalf("AddJobTopologySpreadConstraint returned error: %v", err)
-	}
-	if len(job.Spec.Template.Spec.TopologySpreadConstraints) != 1 {
-		t.Errorf("topology constraint not added")
-	}
-
-	SetJobServiceAccountName(job, "sa")
-	if job.Spec.Template.Spec.ServiceAccountName != "sa" {
-		t.Errorf("service account not set")
-	}
+	AddPodSpecTopologySpreadConstraints(spec, &tsc)
 
 	sc := &corev1.PodSecurityContext{}
-	SetJobSecurityContext(job, sc)
-	if job.Spec.Template.Spec.SecurityContext != sc {
-		t.Errorf("security context not set")
-	}
-
+	SetPodSpecSecurityContext(spec, sc)
 	aff := &corev1.Affinity{}
-	SetJobAffinity(job, aff)
-	if job.Spec.Template.Spec.Affinity != aff {
-		t.Errorf("affinity not set")
-	}
+	SetPodSpecAffinity(spec, aff)
 
+	// ServiceAccountName and NodeSelector are plain fields — assigned directly.
+	job.Spec.Template.Spec.ServiceAccountName = "sa"
 	sel := map[string]string{"role": "db"}
-	SetJobNodeSelector(job, sel)
-	if !reflect.DeepEqual(job.Spec.Template.Spec.NodeSelector, sel) {
+	job.Spec.Template.Spec.NodeSelector = sel
+
+	tmpl := job.Spec.Template.Spec
+	if len(tmpl.Containers) != 1 || tmpl.Containers[0].Name != "c" {
+		t.Errorf("container not added to the pod template")
+	}
+	if len(tmpl.InitContainers) != 1 {
+		t.Errorf("init container not added to the pod template")
+	}
+	if len(tmpl.Volumes) != 1 {
+		t.Errorf("volume not added to the pod template")
+	}
+	if len(tmpl.ImagePullSecrets) != 1 {
+		t.Errorf("pull secret not added to the pod template")
+	}
+	if len(tmpl.Tolerations) != 1 {
+		t.Errorf("toleration not added to the pod template")
+	}
+	if len(tmpl.TopologySpreadConstraints) != 1 {
+		t.Errorf("topology constraint not added to the pod template")
+	}
+	if tmpl.SecurityContext != sc {
+		t.Errorf("security context not set on the pod template")
+	}
+	if tmpl.Affinity != aff {
+		t.Errorf("affinity not set on the pod template")
+	}
+	if tmpl.ServiceAccountName != "sa" {
+		t.Errorf("service account not set")
+	}
+	if !reflect.DeepEqual(tmpl.NodeSelector, sel) {
 		t.Errorf("node selector not set")
 	}
+}
+
+func TestJobFunctions(t *testing.T) {
+	job := CreateJob("job", "ns")
 
 	SetJobCompletions(job, 2)
 	if job.Spec.Completions == nil || *job.Spec.Completions != 2 {
@@ -112,43 +100,9 @@ func TestJobFunctions(t *testing.T) {
 func TestJobNilGuards(t *testing.T) {
 	ad := int64(1)
 
-	// Functions with secondary nil checks — still return errors
-	if err := SetJobPodSpec(nil, &corev1.PodSpec{}); err == nil {
-		t.Error("SetJobPodSpec(nil) should return error")
-	}
-	if err := AddJobContainer(nil, &corev1.Container{}); err == nil {
-		t.Error("AddJobContainer(nil) should return error")
-	}
-	if err := AddJobInitContainer(nil, &corev1.Container{}); err == nil {
-		t.Error("AddJobInitContainer(nil) should return error")
-	}
-	if err := AddJobVolume(nil, &corev1.Volume{}); err == nil {
-		t.Error("AddJobVolume(nil) should return error")
-	}
-	if err := AddJobImagePullSecret(nil, &corev1.LocalObjectReference{}); err == nil {
-		t.Error("AddJobImagePullSecret(nil) should return error")
-	}
-	if err := AddJobToleration(nil, &corev1.Toleration{}); err == nil {
-		t.Error("AddJobToleration(nil) should return error")
-	}
-	if err := AddJobTopologySpreadConstraint(nil, &corev1.TopologySpreadConstraint{}); err == nil {
-		t.Error("AddJobTopologySpreadConstraint(nil) should return error")
-	}
-
-	// Functions that now panic on nil receiver
-	assertPanics(t, func() { SetJobServiceAccountName(nil, "sa") })
-	assertPanics(t, func() { SetJobSecurityContext(nil, nil) })
-	assertPanics(t, func() { SetJobAffinity(nil, nil) })
-	assertPanics(t, func() { SetJobNodeSelector(nil, nil) })
 	assertPanics(t, func() { SetJobCompletions(nil, 1) })
 	assertPanics(t, func() { SetJobParallelism(nil, 1) })
 	assertPanics(t, func() { SetJobBackoffLimit(nil, 1) })
 	assertPanics(t, func() { SetJobTTLSecondsAfterFinished(nil, 1) })
 	assertPanics(t, func() { SetJobActiveDeadlineSeconds(nil, &ad) })
-
-	// Secondary nil guard: spec == nil with valid receiver.
-	job := CreateJob("test", "default")
-	if err := SetJobPodSpec(job, nil); err == nil {
-		t.Error("SetJobPodSpec(job, nil) should return error")
-	}
 }
