@@ -3,7 +3,8 @@
 //
 // A helper is admissible when its body does one of:
 //
-//   - class a: append to a slice or insert into a map;
+//   - class a: append to a slice field or insert into a map field, directly
+//     or through a local that the body assigns back to the field;
 //   - class b: assign a pointer-typed field (the nil-init of a pointer
 //     intermediate before writing through it is itself such an assignment);
 //   - class c: write a composite literal with two or more fields, or a nested
@@ -15,8 +16,9 @@
 // only delegates. A body that assigns nil to a nillable field is inadmissible
 // whatever else it does: that clears a field the caller did not name, which
 // the purity rule (§4) forbids. nil is recognised as the literal, a conversion
-// of it ((*T)(nil)) and a local declared without a value or assigned nil
-// anywhere in the body; a nil that arrives through a function call or a
+// of it ((*T)(nil)), a local declared without a value or declared or assigned
+// nil anywhere in the body, and any of those as a keyed value inside a struct
+// literal being assigned; a nil that arrives through a function call or a
 // parameter is not traced. A nil check on its own admits nothing; in
 // particular the receiver guard (`if obj == nil { panic(...) }`) does not turn
 // a bare forwarder into class b.
@@ -54,8 +56,8 @@ const (
 	Append
 	// Pointer is class b: pointer-typed field assignment or nil-init.
 	Pointer
-	// Composite is class c: composite literal of two or more fields, a nested
-	// literal, or two or more distinct field writes.
+	// Composite is class c: composite literal of two or more fields, or a
+	// nested literal.
 	Composite
 	// Exempt is a helper admitted by name (the generic metadata helpers).
 	Exempt
@@ -195,6 +197,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		nilClear    string
 		writes      = map[string]bool{}
 		locals      = nilLocals(fn, info)
+		localOps    = map[string]bool{} // locals that received an append or a map insert
+		writtenBack = map[string]bool{} // locals assigned to a field afterwards
 	)
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		s, ok := n.(*ast.AssignStmt)
@@ -209,26 +213,46 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 				rhs = s.Rhs[0]
 			}
 			if isMapIndex(lhs, info) || isAppend(rhs, info) {
-				appendOrMap = true
+				if isFieldWrite(lhs) {
+					appendOrMap = true
+				} else if id := rootIdent(lhs); id != nil {
+					localOps[id.Name] = true
+				}
 			}
 			if !isFieldWrite(lhs) {
 				continue
 			}
 			writes[types.ExprString(lhs)] = true
-			if rhs != nil && nilClear == "" && isNillable(info.TypeOf(lhs)) && isNilValue(rhs, info, locals) {
-				nilClear = types.ExprString(lhs)
-			}
 			if t := info.TypeOf(lhs); t != nil {
 				if _, ok := t.Underlying().(*types.Pointer); ok {
 					ptrAssign = true
 				}
 			}
-			if lit := compositeOf(rhs); lit != nil && (len(lit.Elts) >= 2 || hasNestedLiteral(lit)) {
-				bigLiteral = true
+			if rhs == nil {
+				continue
+			}
+			if id, ok := ast.Unparen(rhs).(*ast.Ident); ok {
+				writtenBack[id.Name] = true
+			}
+			if nilClear == "" && isNillable(info.TypeOf(lhs)) && isNilValue(rhs, info, locals) {
+				nilClear = types.ExprString(lhs)
+			}
+			if lit := compositeOf(rhs); lit != nil {
+				if len(lit.Elts) >= 2 || hasNestedLiteral(lit) {
+					bigLiteral = true
+				}
+				if key := nilInLiteral(lit, info, locals); key != "" && nilClear == "" {
+					nilClear = types.ExprString(lhs) + "." + key
+				}
 			}
 		}
 		return true
 	})
+	for name := range localOps {
+		if writtenBack[name] {
+			appendOrMap = true
+		}
+	}
 
 	switch {
 	case nilClear != "":
@@ -247,14 +271,54 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	return Inadmissible, "no field write (delegation or no-op)"
 }
 
-// isFieldWrite reports whether lhs writes through a selector, index or
-// dereference rather than to a local variable.
+// isFieldWrite reports whether lhs writes through a selector or dereference,
+// or indexes into one, rather than into a local variable: o.Labels[k] is a
+// field write, labels[k] is not.
 func isFieldWrite(lhs ast.Expr) bool {
-	switch lhs.(type) {
-	case *ast.SelectorExpr, *ast.IndexExpr, *ast.StarExpr:
+	switch e := ast.Unparen(lhs).(type) {
+	case *ast.SelectorExpr, *ast.StarExpr:
 		return true
+	case *ast.IndexExpr:
+		return isFieldWrite(e.X)
 	}
 	return false
+}
+
+// rootIdent returns the local at the root of an index chain (labels in
+// labels[k], tmp in tmp), or nil when the chain is not rooted in one.
+func rootIdent(e ast.Expr) *ast.Ident {
+	for {
+		switch v := e.(type) {
+		case *ast.Ident:
+			return v
+		case *ast.IndexExpr:
+			e = v.X
+		case *ast.ParenExpr:
+			e = v.X
+		default:
+			return nil
+		}
+	}
+}
+
+// nilInLiteral returns the key of the first keyed element of lit, or of a
+// literal nested in it, whose value is nil; "" when there is none.
+func nilInLiteral(lit *ast.CompositeLit, info *types.Info, locals map[string]bool) string {
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		if isNilValue(kv.Value, info, locals) {
+			return types.ExprString(kv.Key)
+		}
+		if inner := compositeOf(kv.Value); inner != nil {
+			if key := nilInLiteral(inner, info, locals); key != "" {
+				return types.ExprString(kv.Key) + "." + key
+			}
+		}
+	}
+	return ""
 }
 
 func isMapIndex(lhs ast.Expr, info *types.Info) bool {
@@ -327,11 +391,16 @@ func nilLocals(fn *ast.FuncDecl, info *types.Info) map[string]bool {
 			}
 			for _, spec := range gd.Specs {
 				vs, ok := spec.(*ast.ValueSpec)
-				if !ok || len(vs.Values) != 0 {
+				if !ok {
 					continue
 				}
-				for _, id := range vs.Names {
-					if isNillable(info.TypeOf(id)) {
+				for i, id := range vs.Names {
+					switch {
+					case len(vs.Values) == 0:
+						if isNillable(info.TypeOf(id)) {
+							locals[id.Name] = true
+						}
+					case len(vs.Values) == len(vs.Names) && isNilValue(vs.Values[i], info, locals):
 						locals[id.Name] = true
 					}
 				}
