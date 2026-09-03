@@ -189,6 +189,41 @@ func SetNestedRefOnTemp(o *Obj, n string) {
 	_ = o
 }
 
+// inadmissible: a temporary shadowing the parameter is still a temporary
+func SetRefOnShadow(o *Obj, n string) {
+	{
+		o := &Obj{}
+		o.Spec.Ref = &Ref{Name: n}
+	}
+	_ = o
+}
+
+// inadmissible: mutated before it is reassigned from the parameter
+func SetRefBeforeAlias(o *Obj, n string) {
+	tmp := &Obj{}
+	tmp.Spec.Ref = &Ref{Name: n}
+	tmp = o
+	_ = tmp
+}
+
+// class b: an alias reassigned from the parameter counts from that point on
+func SetRefAfterAlias(o *Obj, n string) {
+	tmp := &Obj{}
+	tmp = o
+	tmp.Spec.Ref = &Ref{Name: n}
+}
+
+// inadmissible: the appended local and the written-back local are different objects
+func AddItemShadowedLocal(o *Obj, s string) {
+	items := o.Spec.Items
+	{
+		items := []string{}
+		items = append(items, s)
+		_ = items
+	}
+	o.Spec.Items = items
+}
+
 // inadmissible: append to a local that is never written back
 func AddItemLocalOnly(o *Obj, s string) {
 	tmp := o.Spec.Items
@@ -278,6 +313,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemViaAlias":        Append,
 		"SetReplicasViaAlias":    Pointer,
 		"AddItemWriteBackFirst":  Inadmissible,
+		"SetRefOnShadow":         Inadmissible,
+		"SetRefBeforeAlias":      Inadmissible,
+		"SetRefAfterAlias":       Pointer,
+		"AddItemShadowedLocal":   Inadmissible,
 		"AddItemToTemp":          Inadmissible,
 		"SetRefOnTemp":           Inadmissible,
 		"SetNestedRefOnTemp":     Inadmissible,
