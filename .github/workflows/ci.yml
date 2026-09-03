@@ -116,6 +116,12 @@ jobs:
             # PR touching only the script must not skip the job that
             # exercises it.
             - 'scripts/gen-builders.sh'
+            # Go testdata is input to the tests, not documentation: the
+            # admission exclusion list is checked for stale and missing
+            # entries by pkg/kubernetes/admission_test.go, and `pkg/**` only
+            # matches the docs filter, so a PR editing just the list would
+            # otherwise skip both validate and test.
+            - 'pkg/**/testdata/**'
           docs:
             - 'site/**'
             - 'docs/**'

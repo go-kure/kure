@@ -150,6 +150,45 @@ func AddLabelMake(o *Obj, k, v string) {
 	o.Labels[k] = v
 }
 
+// inadmissible: the appended element is a constant the caller never supplied
+func AddItemConstant(o *Obj) { o.Spec.Items = append(o.Spec.Items, "fixed") }
+
+// inadmissible: the inserted value is a default
+func AddLabelConstant(o *Obj, k string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels[k] = "fixed"
+}
+
+// inadmissible: allocating a pointer nobody writes through leaves a zero value
+func SetReplicasZero(o *Obj) { o.Spec.Replicas = new(int32) }
+
+// inadmissible: a struct literal built entirely from constants is a default
+func SetNestedRefConstant(o *Obj) { o.Spec.Nested.Ref = Ref{Name: "a", Kind: "b"} }
+
+// inadmissible: a slice literal replaces the collection; class c is a struct literal
+func SetItemsLiteral(o *Obj, a, b string) { o.Spec.Items = []string{a, b} }
+
+// inadmissible: a by-value struct parameter is a copy, so the write reaches no caller
+func SetReplicasByValue(o Obj, n int32) { o.Spec.Replicas = &n }
+
+// inadmissible: silently skips the write instead of panicking on a nil receiver
+func SetReplicasNilReturn(o *Obj, n int32) {
+	if o == nil {
+		return
+	}
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the optional-argument idiom, as an early return
+func SetNameIfSet(o *Obj, n string) {
+	if n == "" {
+		return
+	}
+	o.Spec.Ref = &Ref{Name: n}
+}
+
 // inadmissible: a typed nil conversion is still a clear
 func SetRefTypedNil(o *Obj) { o.Spec.Ref = (*Ref)(nil) }
 
@@ -356,6 +395,14 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasAndName":     Pointer,
 		"SetReplicasThroughStar": Pointer,
 		"AddLabelMake":           Append,
+		"AddItemConstant":        Inadmissible,
+		"AddLabelConstant":       Inadmissible,
+		"SetReplicasZero":        Inadmissible,
+		"SetNestedRefConstant":   Inadmissible,
+		"SetItemsLiteral":        Inadmissible,
+		"SetReplicasByValue":     Inadmissible,
+		"SetReplicasNilReturn":   Inadmissible,
+		"SetNameIfSet":           Inadmissible,
 		"AddLabel":               Append,
 		"AddLabelViaLocal":       Append,
 		"SetReplicas":            Pointer,
@@ -423,6 +470,14 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemAndName":        "bare write to o.Spec.Name alongside",
 		"SetReplicasAndDefault": "bare write to o.Spec.Name alongside",
 		"SetReplicasAndDerived": "bare write to o.Spec.Name alongside",
+		"AddItemConstant":       "value the caller did not supply to o.Spec.Items",
+		"AddLabelConstant":      "value the caller did not supply to o.Labels[k]",
+		"SetReplicasZero":       "value the caller did not supply to o.Spec.Replicas",
+		"SetNestedRefConstant":  "value the caller did not supply to o.Spec.Nested.Ref",
+		"SetItemsLiteral":       "single bare field assignment",
+		"SetReplicasByValue":    "no field write",
+		"SetReplicasNilReturn":  "returns early instead of writing",
+		"SetNameIfSet":          "returns early instead of writing",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)

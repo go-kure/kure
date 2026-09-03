@@ -75,7 +75,14 @@ body does one of:
 - **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
   intermediate before assigning through it is the same thing);
 - **(c)** constructs an upstream struct literal setting two or more fields, or a
-  nested literal.
+  nested literal. A slice or map literal is not class (c): it replaces a collection
+  rather than composing a value.
+
+Every admitted operation carries a value the caller supplied. An append of a constant,
+a map insert of a constant, a struct literal built entirely from constants, or a pointer
+allocated (`new(T)`) and never written through, all set a value the caller never named
+and are inadmissible (§4). The zero-value init a helper guards a nil field with
+(`if o.Labels == nil { o.Labels = map[string]string{} }`) is not such a value.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
@@ -92,9 +99,16 @@ of it, or a local known to be nil), is inadmissible whatever else it does, becau
 helper that must replace one member of a one-of takes the whole one-of as its
 argument instead.
 
+A helper reaches the object it writes through a parameter that can carry the write back
+to the caller: a pointer, map, slice or interface. A struct taken by value is a copy, so
+a helper written that way changes nothing the caller can see and is inadmissible.
+
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
-outside (a)-(c). `pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers
+outside (a)-(c). It is syntactic and deliberately conservative: it does not follow
+control flow, so a write guarded by an optional-value condition
+(`if name != "" { ... }`, forbidden by §4) is not detected by the test. That idiom is
+caught by review and by the helper's own golden test. `pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers
 tolerated until the prune work item of the epic deletes them, or rewrites the
 class-shaped ones that only fail §4 (an `error` return) as void helpers; entries only ever leave,
 and a stale entry fails the test.

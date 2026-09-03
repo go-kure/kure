@@ -337,8 +337,13 @@ pkg/kubernetes/prometheus.SetServiceMonitorJobLabel
 pkg/kubernetes/prometheus.SetServiceMonitorNamespaceSelector
 pkg/kubernetes/prometheus.SetServiceMonitorSelector
 pkg/kubernetes/prometheus.SetServiceMonitorSpec
+pkg/kubernetes/volsync.AddSyncthingPeer
+pkg/kubernetes/volsync.SetReplicationDestinationManualTrigger
 pkg/kubernetes/volsync.SetReplicationDestinationMover
 pkg/kubernetes/volsync.SetReplicationDestinationPaused
+pkg/kubernetes/volsync.SetReplicationDestinationSchedule
+pkg/kubernetes/volsync.SetReplicationSourceManualTrigger
 pkg/kubernetes/volsync.SetReplicationSourceMover
 pkg/kubernetes/volsync.SetReplicationSourcePaused
+pkg/kubernetes/volsync.SetReplicationSourceSchedule
 pkg/kubernetes/volsync.SetReplicationSourceSourcePVC

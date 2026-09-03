@@ -668,7 +668,9 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
   Same reasoning covers `scripts/sync-go-version.sh` too — `check-go-version` (Go-version parity
   between `mise.toml` and `go.mod`) also runs only in `validate`. And `scripts/gen-builders.sh`:
   the generated-builders check (`scripts/gen-builders.sh check`) also runs only in `validate`,
-  and Renovate invokes the same script after Go module bumps.
+  and Renovate invokes the same script after Go module bumps. `pkg/**/testdata/**` is there for
+  the same reason: Go testdata is test input, and `pkg/**` alone matches only the `docs` filter,
+  so a PR editing just the admission exclusion list would skip the tests that check it.
 - `docs:` filter — triggers docs-build/docs-check jobs. Includes `site/**`, `docs/**`, `*.md`,
   `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
   the docs build).

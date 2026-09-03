@@ -7,10 +7,21 @@
 //     or through a local that the body assigns back to the field;
 //   - class b: assign a pointer-typed field (the nil-init of a pointer
 //     intermediate before writing through it is itself such an assignment);
-//   - class c: write a composite literal with two or more fields, or a nested
-//     literal.
+//   - class c: write an upstream struct literal with two or more fields, or a
+//     nested literal. A slice or map literal is not class c: it replaces a
+//     collection rather than composing a value.
 //
-// Anything else is inadmissible: a bare single-field forwarder, several bare
+// Every admitted operation must carry a value the caller supplied: an append
+// or map insert of a constant, a struct literal built only from constants, and
+// a pointer allocated with new(T) that nothing is written through, each set a
+// value the caller never named (§4). The zero-value init that guards a nil
+// field (make, new, an empty literal, followed by a write through it) is not
+// such a value.
+//
+// A helper that returns before writing is inadmissible whatever its body
+// does: `if obj == nil { return }` swallows the nil receiver §4 says must
+// panic, and `if v == "" { return }` is the optional-argument idiom §4
+// forbids. Anything else is inadmissible: a bare single-field forwarder, several bare
 // forwarders in one body (two field writes without a literal are two
 // forwarders, not a composite), a helper with no field write, a helper that
 // only delegates. A helper that returns anything is inadmissible whatever its
@@ -219,6 +230,9 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	if fn.Type.Results != nil && len(fn.Type.Results.List) > 0 {
 		return Inadmissible, "returns a value; sugar returns nothing and panics on a nil receiver instead of reporting it (purity §4)"
 	}
+	if hasEarlyReturn(fn.Body) {
+		return Inadmissible, "returns early instead of writing; a nil receiver panics and sugar has no conditional no-op (purity §4)"
+	}
 	var (
 		appendOrMap bool
 		ptrAssign   bool
@@ -226,9 +240,13 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		nilClear    string
 		writes      = map[string]bool{}
 		ptrPaths    = map[string]bool{}         // pointer fields assigned, by expression, for writes through them
+		ptrInit     = map[string]bool{}         // of those, the ones assigned a bare new(T)/&T{} with no value
+		ptrUsed     = map[string]bool{}         // pointer fields a later write goes through
 		bareWrites  = map[string]types.Object{} // bare field writes -> the local assigned, if any
+		defaulted   []string                    // admitted operations carrying a value the caller did not supply
 		locals      = nilLocals(fn, info)
-		rooted      = rootedObjects(fn, info)      // parameters and locals aliasing them, by position
+		rooted      = rootedObjects(fn, info)      // parameters writes reach the caller through, by position
+		supplied    = callerValues(fn, info)       // parameters and locals carrying one, for value provenance
 		localOps    = map[types.Object]token.Pos{} // local -> first append or map insert into it
 		writtenBack = map[types.Object]token.Pos{} // local -> last assignment of it to a field
 	)
@@ -262,11 +280,17 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			}
 			lhsPath := types.ExprString(lhs)
 			writes[lhsPath] = true
+			if p, through := throughPointer(lhsPath, ptrPaths); through {
+				ptrUsed[p] = true
+			}
 			isPtr := false
 			if t := info.TypeOf(lhs); t != nil {
 				if _, ok := t.Underlying().(*types.Pointer); ok {
 					ptrAssign, isPtr = true, true
 					ptrPaths[lhsPath] = true
+					if isZeroInit(rhs, info) {
+						ptrInit[lhsPath] = true
+					}
 				}
 			}
 			var rhsObj types.Object
@@ -275,14 +299,25 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 					rhsObj = info.ObjectOf(id)
 				}
 			}
+			// An admitted operation must carry a value the caller supplied. An
+			// append of a constant, a map insert of a constant, a pointer or
+			// literal built from nothing the caller passed is a default, which
+			// the purity rule (§4) forbids just as it forbids defaulting a
+			// second field. The zero-value init of a container or of a pointer
+			// intermediate is not a value: it is the guarded nil-init that
+			// classes a and b are written around.
+			if v := admittedValue(lhs, rhs, info); v != nil && !isZeroInit(v, info) && !mentionsSupplied(v, info, supplied) {
+				defaulted = append(defaulted, lhsPath)
+			}
 			// A bare write is extra only when its value is not one the caller
 			// passed: a parameter (or a local rooted in one) is a forwarder for
 			// a caller-named value; a literal, a call or a computed value is a
 			// default. Container inits (make) and writes through a pointer the
 			// body initialised belong to classes a and b respectively.
-			callerValue := rhsObj != nil && rooted.at(rhsObj, s.Pos())
+			callerValue := rhsObj != nil && supplied[rhsObj]
+			_, through := throughPointer(lhsPath, ptrPaths)
 			if !isPtr && !callerValue && !isMapIndex(lhs, info) && !isAppend(rhs, info) && !isMake(rhs, info) &&
-				compositeOf(rhs) == nil && !throughPointer(lhsPath, ptrPaths) {
+				compositeOf(rhs) == nil && !through {
 				bareWrites[lhsPath] = rhsObj
 			}
 			if rhs == nil {
@@ -295,7 +330,10 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 				nilClear = types.ExprString(lhs)
 			}
 			if lit := compositeOf(rhs); lit != nil {
-				if len(lit.Elts) >= 2 || hasNestedLiteral(lit) {
+				// Class c is an upstream struct literal. A slice or map
+				// literal replaces a collection rather than composing a
+				// value, so it is not class c whatever its length.
+				if isStructLit(lit, info) && (len(lit.Elts) >= 2 || hasNestedLiteral(lit)) {
 					bigLiteral = true
 				}
 				if key := nilInLiteral(lit, info, locals); key != "" && nilClear == "" {
@@ -323,10 +361,20 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		extra = append(extra, path)
 	}
 	sort.Strings(extra)
+	// A pointer intermediate the body allocates but never writes through
+	// leaves the caller a zero value it did not ask for.
+	for path := range ptrInit {
+		if !ptrUsed[path] {
+			defaulted = append(defaulted, path)
+		}
+	}
+	sort.Strings(defaulted)
 
 	switch {
 	case nilClear != "":
 		return Inadmissible, fmt.Sprintf("assigns nil to %s, a field the caller did not name (purity §4)", nilClear)
+	case len(defaulted) > 0:
+		return Inadmissible, fmt.Sprintf("writes a value the caller did not supply to %s (purity §4)", strings.Join(defaulted, ", "))
 	case len(extra) > 0 && (appendOrMap || ptrAssign || bigLiteral):
 		return Inadmissible, fmt.Sprintf("bare write to %s alongside the admitted operation, a field the caller did not name (purity §4)", strings.Join(extra, ", "))
 	case appendOrMap:
@@ -343,21 +391,84 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	return Inadmissible, "no field write (delegation or no-op)"
 }
 
-// throughPointer reports whether path writes through a pointer field the
-// body assigned earlier in source order: o.Spec.Ref.Name or *o.Spec.Ref after
-// o.Spec.Ref.
-func throughPointer(path string, ptrPaths map[string]bool) bool {
+// throughPointer reports whether path writes through a pointer field the body
+// assigned earlier in source order (o.Spec.Ref.Name or *o.Spec.Ref after
+// o.Spec.Ref), and returns that pointer field's path.
+func throughPointer(path string, ptrPaths map[string]bool) (string, bool) {
 	for p := range ptrPaths {
 		if strings.HasPrefix(path, p+".") || path == "*"+p {
-			return true
+			return p, true
 		}
 	}
-	return false
+	return "", false
 }
 
-// isMake reports whether e is a call to the builtin make: the nil-init of a
-// map or slice field before inserting into or appending to it.
-func isMake(e ast.Expr, info *types.Info) bool {
+// admittedValue returns the expression an admitted operation writes: the
+// element appended, the value inserted into a map, or the value assigned to a
+// field. It returns nil when the statement is not one of those, and for a
+// multi-element append (a splice, not a single caller value).
+func admittedValue(lhs, rhs ast.Expr, info *types.Info) ast.Expr {
+	if isAppend(rhs, info) {
+		call := ast.Unparen(rhs).(*ast.CallExpr)
+		if len(call.Args) != 2 {
+			return nil
+		}
+		return call.Args[1]
+	}
+	if rhs == nil {
+		return nil
+	}
+	if isMapIndex(lhs, info) || compositeOf(rhs) != nil {
+		return rhs
+	}
+	if t := info.TypeOf(lhs); t != nil {
+		if _, ok := t.Underlying().(*types.Pointer); ok {
+			return rhs
+		}
+	}
+	return nil
+}
+
+// isZeroInit reports whether e allocates an empty value rather than carrying
+// one: make(T), new(T), or a composite literal with no elements. These are the
+// guarded nil-inits classes a and b are written around, not values. make and
+// new are resolved as builtins, so a function of those names is not one.
+func isZeroInit(e ast.Expr, info *types.Info) bool {
+	if e == nil {
+		return false
+	}
+	if lit := compositeOf(e); lit != nil {
+		return len(lit.Elts) == 0
+	}
+	return isBuiltinCall(e, info, "make") || isBuiltinCall(e, info, "new")
+}
+
+// hasEarlyReturn reports whether body returns anywhere other than by falling
+// off its end. In a helper with no results every return is a guard that skips
+// the write: `if obj == nil { return }` swallows the nil receiver the contract
+// says must panic, and `if v == "" { return }` is the optional-argument idiom
+// §4 forbids. Returns inside a nested function literal belong to that
+// literal, not to the helper.
+func hasEarlyReturn(body *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		switch n.(type) {
+		case *ast.FuncLit:
+			return false
+		case *ast.ReturnStmt:
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// isBuiltinCall reports whether e calls the named builtin.
+func isBuiltinCall(e ast.Expr, info *types.Info, name string) bool {
 	call, ok := ast.Unparen(e).(*ast.CallExpr)
 	if !ok {
 		return false
@@ -367,8 +478,86 @@ func isMake(e ast.Expr, info *types.Info) bool {
 		return false
 	}
 	b, ok := info.ObjectOf(id).(*types.Builtin)
-	return ok && b.Name() == "make"
+	return ok && b.Name() == name
 }
+
+// mentionsSupplied reports whether e names any parameter, or a local carrying
+// one: the value it computes came at least in part from the caller.
+func mentionsSupplied(e ast.Expr, info *types.Info, supplied map[types.Object]bool) bool {
+	found := false
+	ast.Inspect(e, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		if id, ok := n.(*ast.Ident); ok && supplied[info.ObjectOf(id)] {
+			found = true
+		}
+		return !found
+	})
+	return found
+}
+
+// callerValues returns every object in fn that carries a value the caller
+// supplied: its parameters, and each local declared or assigned from an
+// expression naming one. Unlike the rooted set this ignores types, because a
+// scalar parameter is a caller-named value even though writes cannot reach
+// the caller through it.
+func callerValues(fn *ast.FuncDecl, info *types.Info) map[types.Object]bool {
+	supplied := map[types.Object]bool{}
+	for _, field := range fn.Type.Params.List {
+		for _, name := range field.Names {
+			if obj := info.Defs[name]; obj != nil {
+				supplied[obj] = true
+			}
+		}
+	}
+	// Locals are visited in source order, so a local's initialiser is seen
+	// before any use of it.
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch s := n.(type) {
+		case *ast.ValueSpec:
+			for i, id := range s.Names {
+				if i < len(s.Values) && mentionsSupplied(s.Values[i], info, supplied) {
+					if obj := info.Defs[id]; obj != nil {
+						supplied[obj] = true
+					}
+				}
+			}
+		case *ast.AssignStmt:
+			for i, lhs := range s.Lhs {
+				id, ok := lhs.(*ast.Ident)
+				if !ok || i >= len(s.Rhs) {
+					continue
+				}
+				if mentionsSupplied(s.Rhs[i], info, supplied) {
+					if obj := info.ObjectOf(id); obj != nil {
+						supplied[obj] = true
+					}
+				}
+			}
+		}
+		return true
+	})
+	return supplied
+}
+
+// isStructLit reports whether lit constructs a struct rather than a slice or
+// a map.
+func isStructLit(lit *ast.CompositeLit, info *types.Info) bool {
+	t := info.TypeOf(lit)
+	if t == nil {
+		return false
+	}
+	if p, ok := t.Underlying().(*types.Pointer); ok {
+		t = p.Elem()
+	}
+	_, ok := t.Underlying().(*types.Struct)
+	return ok
+}
+
+// isMake reports whether e is a call to the builtin make: the nil-init of a
+// map or slice field before inserting into or appending to it.
+func isMake(e ast.Expr, info *types.Info) bool { return isBuiltinCall(e, info, "make") }
 
 // isFieldWrite reports whether lhs writes through a selector or dereference,
 // or indexes into one, rather than into a local variable: o.Labels[k] is a
@@ -462,7 +651,11 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 	r := roots{}
 	for _, field := range fn.Type.Params.List {
 		for _, name := range field.Names {
-			r.add(info.Defs[name], fn.Pos(), true)
+			obj := info.Defs[name]
+			// A parameter roots writes only when they can reach the caller
+			// through it. A struct taken by value is a copy: assigning its
+			// fields changes nothing the caller can observe.
+			r.add(obj, fn.Pos(), obj != nil && carriesWrites(obj.Type()))
 		}
 	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
@@ -560,6 +753,23 @@ func isNilValue(e ast.Expr, info *types.Info, locals map[types.Object]bool) bool
 // isNillable reports whether t can hold nil (pointer, map, slice, interface,
 // chan, func), so that assigning a nil value to it is a clear rather than a
 // zero-value write to a scalar.
+// carriesWrites reports whether a write through a value of type t is visible
+// to the caller: a pointer, map, slice, interface or channel shares its
+// referent, a struct or scalar taken by value does not. A map or slice field
+// reached through a by-value struct does share, but the classifier does not
+// trace that: an unusual helper reads as inadmissible rather than slipping
+// through.
+func carriesWrites(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	switch t.Underlying().(type) {
+	case *types.Pointer, *types.Map, *types.Slice, *types.Interface, *types.Chan:
+		return true
+	}
+	return false
+}
+
 func isNillable(t types.Type) bool {
 	if t == nil {
 		return false
