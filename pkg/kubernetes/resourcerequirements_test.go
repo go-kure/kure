@@ -20,95 +20,69 @@ func TestCreateResourceRequirements(t *testing.T) {
 	}
 }
 
-func TestSetResourceRequestCPU(t *testing.T) {
-	rr := CreateResourceRequirements()
-	if err := SetResourceRequestCPU(rr, "100m"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	expected := resource.MustParse("100m")
-	if !rr.Requests.Cpu().Equal(expected) {
-		t.Errorf("expected CPU request 100m, got %s", rr.Requests.Cpu())
-	}
-}
-
-func TestSetResourceRequestMemory(t *testing.T) {
-	rr := CreateResourceRequirements()
-	if err := SetResourceRequestMemory(rr, "256Mi"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	expected := resource.MustParse("256Mi")
-	if !rr.Requests.Memory().Equal(expected) {
-		t.Errorf("expected memory request 256Mi, got %s", rr.Requests.Memory())
-	}
-}
-
-func TestSetResourceLimitCPU(t *testing.T) {
-	rr := CreateResourceRequirements()
-	if err := SetResourceLimitCPU(rr, "500m"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	expected := resource.MustParse("500m")
-	if !rr.Limits.Cpu().Equal(expected) {
-		t.Errorf("expected CPU limit 500m, got %s", rr.Limits.Cpu())
-	}
-}
-
-func TestSetResourceLimitMemory(t *testing.T) {
-	rr := CreateResourceRequirements()
-	if err := SetResourceLimitMemory(rr, "1Gi"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	expected := resource.MustParse("1Gi")
-	if !rr.Limits.Memory().Equal(expected) {
-		t.Errorf("expected memory limit 1Gi, got %s", rr.Limits.Memory())
-	}
-}
-
-func TestSetResourceRequestEphemeralStorage(t *testing.T) {
-	rr := CreateResourceRequirements()
-	if err := SetResourceRequestEphemeralStorage(rr, "10Gi"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := rr.Requests[corev1.ResourceEphemeralStorage]
-	expected := resource.MustParse("10Gi")
-	if !got.Equal(expected) {
-		t.Errorf("expected ephemeral storage request 10Gi, got %s", got.String())
-	}
-}
-
-func TestSetResourceLimitEphemeralStorage(t *testing.T) {
-	rr := CreateResourceRequirements()
-	if err := SetResourceLimitEphemeralStorage(rr, "20Gi"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := rr.Limits[corev1.ResourceEphemeralStorage]
-	expected := resource.MustParse("20Gi")
-	if !got.Equal(expected) {
-		t.Errorf("expected ephemeral storage limit 20Gi, got %s", got.String())
-	}
-}
-
 func TestSetResourceRequest(t *testing.T) {
 	rr := CreateResourceRequirements()
-	if err := SetResourceRequest(rr, "nvidia.com/gpu", "1"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+
+	SetResourceRequest(rr, corev1.ResourceCPU, resource.MustParse("100m"))
+	if !rr.Requests.Cpu().Equal(resource.MustParse("100m")) {
+		t.Errorf("expected CPU request 100m, got %s", rr.Requests.Cpu())
 	}
-	got := rr.Requests[corev1.ResourceName("nvidia.com/gpu")]
-	expected := resource.MustParse("1")
-	if !got.Equal(expected) {
-		t.Errorf("expected gpu request 1, got %s", got.String())
+
+	SetResourceRequest(rr, corev1.ResourceMemory, resource.MustParse("256Mi"))
+	if !rr.Requests.Memory().Equal(resource.MustParse("256Mi")) {
+		t.Errorf("expected memory request 256Mi, got %s", rr.Requests.Memory())
+	}
+
+	SetResourceRequest(rr, corev1.ResourceEphemeralStorage, resource.MustParse("10Gi"))
+	got := rr.Requests[corev1.ResourceEphemeralStorage]
+	if !got.Equal(resource.MustParse("10Gi")) {
+		t.Errorf("expected ephemeral storage request 10Gi, got %s", got.String())
+	}
+
+	SetResourceRequest(rr, "nvidia.com/gpu", resource.MustParse("1"))
+	gpu := rr.Requests[corev1.ResourceName("nvidia.com/gpu")]
+	if !gpu.Equal(resource.MustParse("1")) {
+		t.Errorf("expected gpu request 1, got %s", gpu.String())
 	}
 }
 
 func TestSetResourceLimit(t *testing.T) {
 	rr := CreateResourceRequirements()
-	if err := SetResourceLimit(rr, "nvidia.com/gpu", "2"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+
+	SetResourceLimit(rr, corev1.ResourceCPU, resource.MustParse("500m"))
+	if !rr.Limits.Cpu().Equal(resource.MustParse("500m")) {
+		t.Errorf("expected CPU limit 500m, got %s", rr.Limits.Cpu())
 	}
-	got := rr.Limits[corev1.ResourceName("nvidia.com/gpu")]
-	expected := resource.MustParse("2")
-	if !got.Equal(expected) {
-		t.Errorf("expected gpu limit 2, got %s", got.String())
+
+	SetResourceLimit(rr, corev1.ResourceMemory, resource.MustParse("1Gi"))
+	if !rr.Limits.Memory().Equal(resource.MustParse("1Gi")) {
+		t.Errorf("expected memory limit 1Gi, got %s", rr.Limits.Memory())
+	}
+
+	SetResourceLimit(rr, corev1.ResourceEphemeralStorage, resource.MustParse("20Gi"))
+	got := rr.Limits[corev1.ResourceEphemeralStorage]
+	if !got.Equal(resource.MustParse("20Gi")) {
+		t.Errorf("expected ephemeral storage limit 20Gi, got %s", got.String())
+	}
+
+	SetResourceLimit(rr, "nvidia.com/gpu", resource.MustParse("2"))
+	gpu := rr.Limits[corev1.ResourceName("nvidia.com/gpu")]
+	if !gpu.Equal(resource.MustParse("2")) {
+		t.Errorf("expected gpu limit 2, got %s", gpu.String())
+	}
+}
+
+// TestSetResourceOverwrites covers a second write to the same resource name:
+// the map insert replaces the entry rather than accumulating.
+func TestSetResourceOverwrites(t *testing.T) {
+	rr := CreateResourceRequirements()
+	SetResourceRequest(rr, corev1.ResourceCPU, resource.MustParse("100m"))
+	SetResourceRequest(rr, corev1.ResourceCPU, resource.MustParse("200m"))
+	if len(rr.Requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(rr.Requests))
+	}
+	if !rr.Requests.Cpu().Equal(resource.MustParse("200m")) {
+		t.Errorf("expected CPU request 200m, got %s", rr.Requests.Cpu())
 	}
 }
 
@@ -125,41 +99,22 @@ func TestAddResourceClaim(t *testing.T) {
 }
 
 func TestResourceRequirementsNilErrors(t *testing.T) {
-	// SetResource* functions still return error (can fail on quantity parse)
-	if err := SetResourceRequestCPU(nil, "100m"); err == nil {
-		t.Error("expected error for nil ResourceRequirements")
-	}
-	if err := SetResourceLimitMemory(nil, "256Mi"); err == nil {
-		t.Error("expected error for nil ResourceRequirements")
-	}
-	// AddResourceClaim now panics on nil receiver
+	assertPanics(t, func() { SetResourceRequest(nil, corev1.ResourceCPU, resource.MustParse("100m")) })
+	assertPanics(t, func() { SetResourceLimit(nil, corev1.ResourceMemory, resource.MustParse("256Mi")) })
 	assertPanics(t, func() { AddResourceClaim(nil, corev1.ResourceClaim{Name: "test"}) })
 }
 
-func TestResourceRequirementsInvalidQuantity(t *testing.T) {
-	rr := CreateResourceRequirements()
-	if err := SetResourceRequestCPU(rr, "not-a-quantity"); err == nil {
-		t.Error("expected error for invalid quantity")
-	}
-}
-
-// TestSetResourceRequest_NilMaps exercises the Requests==nil and Limits==nil
-// init paths when rr was constructed without CreateResourceRequirements.
+// TestSetResource_NilMaps exercises the Requests==nil and Limits==nil init
+// paths when rr was constructed without CreateResourceRequirements.
 func TestSetResource_NilMaps(t *testing.T) {
-	// Requests map is nil — the nil guard must initialize it.
 	rr := &corev1.ResourceRequirements{}
-	if err := SetResourceRequestCPU(rr, "100m"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetResourceRequest(rr, corev1.ResourceCPU, resource.MustParse("100m"))
 	if rr.Requests == nil {
 		t.Error("expected Requests to be initialized")
 	}
 
-	// Limits map is nil — the nil guard must initialize it.
 	rr2 := &corev1.ResourceRequirements{}
-	if err := SetResourceLimitCPU(rr2, "500m"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetResourceLimit(rr2, corev1.ResourceCPU, resource.MustParse("500m"))
 	if rr2.Limits == nil {
 		t.Error("expected Limits to be initialized")
 	}
@@ -167,18 +122,10 @@ func TestSetResource_NilMaps(t *testing.T) {
 
 func TestResourceRequirementsMultipleValues(t *testing.T) {
 	rr := CreateResourceRequirements()
-	if err := SetResourceRequestCPU(rr, "100m"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := SetResourceRequestMemory(rr, "256Mi"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := SetResourceLimitCPU(rr, "500m"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := SetResourceLimitMemory(rr, "1Gi"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	SetResourceRequest(rr, corev1.ResourceCPU, resource.MustParse("100m"))
+	SetResourceRequest(rr, corev1.ResourceMemory, resource.MustParse("256Mi"))
+	SetResourceLimit(rr, corev1.ResourceCPU, resource.MustParse("500m"))
+	SetResourceLimit(rr, corev1.ResourceMemory, resource.MustParse("1Gi"))
 
 	if len(rr.Requests) != 2 {
 		t.Errorf("expected 2 requests, got %d", len(rr.Requests))

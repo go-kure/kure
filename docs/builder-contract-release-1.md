@@ -533,3 +533,48 @@ The `pkg/errors` sentinels those helpers returned (`ErrNilDeployment`,
 `ErrNilInitContainer`, `ErrNilEphemeralContainer`, `ErrNilSpec`) are now unused
 inside the module. They stay exported for this release; retiring them is a
 separate `pkg/errors` change, not part of the builder surface.
+
+## Error-returning helpers rewritten as void
+
+The purity rule (§4) allows no error return: a nil receiver panics rather than
+being reported, so a result slot has nothing to carry, and validation inside a
+helper is defaulting by another name.
+
+### `ResourceRequirements` quantities
+
+The eight quantity setters took a `string` and parsed it, so each could fail on
+the parse and each carried an `error`. Parsing belongs to the caller, and once
+the value arrives as a `resource.Quantity` the body is a map insert with a
+nil-map guard — class (a), void. The six typed convenience wrappers are the same
+insert with a constant key and are removed with the rest of the per-field
+duplication.
+
+| Removed | Replacement |
+|---|---|
+| `SetResourceRequestCPU(rr, "100m")` | `SetResourceRequest(rr, corev1.ResourceCPU, resource.MustParse("100m"))` |
+| `SetResourceRequestMemory(rr, "256Mi")` | `SetResourceRequest(rr, corev1.ResourceMemory, resource.MustParse("256Mi"))` |
+| `SetResourceRequestEphemeralStorage(rr, "10Gi")` | `SetResourceRequest(rr, corev1.ResourceEphemeralStorage, resource.MustParse("10Gi"))` |
+| `SetResourceLimitCPU(rr, "500m")` | `SetResourceLimit(rr, corev1.ResourceCPU, resource.MustParse("500m"))` |
+| `SetResourceLimitMemory(rr, "1Gi")` | `SetResourceLimit(rr, corev1.ResourceMemory, resource.MustParse("1Gi"))` |
+| `SetResourceLimitEphemeralStorage(rr, "20Gi")` | `SetResourceLimit(rr, corev1.ResourceEphemeralStorage, resource.MustParse("20Gi"))` |
+
+| Signature changed | From | To |
+|---|---|---|
+| `SetResourceRequest` | `(rr, name, value string) error` | `(rr, name, qty resource.Quantity)` |
+| `SetResourceLimit` | `(rr, name, value string) error` | `(rr, name, qty resource.Quantity)` |
+
+`resource.MustParse` for a literal, `resource.ParseQuantity` when the text comes
+from configuration and the error has somewhere to go.
+
+### `SetHelmReleaseValuesFromMap`
+
+| Signature changed | From | To |
+|---|---|---|
+| `fluxcd.SetHelmReleaseValuesFromMap` | `(obj, values map[string]any) error` | `(obj, values map[string]any)` |
+
+Its only error came from `json.Marshal`, which fails on a map holding a channel,
+a function or a NaN — a programming error, so it panics. The body stays class
+(b): a one-field literal, built from the caller's map, assigned to the pointer
+field `Spec.Values`.
+
+These take the exclusion list from 33 tolerated helpers to 24.

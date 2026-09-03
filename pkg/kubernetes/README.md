@@ -292,9 +292,14 @@ violations := kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSARestricted)
 
 ```go
 reqs := kubernetes.CreateResourceRequirements()
-kubernetes.SetResourceRequestCPU(reqs, "100m")
-kubernetes.SetResourceLimitMemory(reqs, "512Mi")
+kubernetes.SetResourceRequest(reqs, corev1.ResourceCPU, resource.MustParse("100m"))
+kubernetes.SetResourceLimit(reqs, corev1.ResourceMemory, resource.MustParse("512Mi"))
 ```
+
+Two helpers cover every resource name; there is no `SetResourceRequestCPU` or
+`SetResourceLimitMemory`. Both take a parsed `resource.Quantity`, so the parse —
+and any error it can raise — belongs to the caller: `resource.MustParse` for a
+literal, `resource.ParseQuantity` when the text comes from configuration.
 
 ## Related Packages
 

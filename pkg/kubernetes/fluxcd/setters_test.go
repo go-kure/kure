@@ -1198,13 +1198,10 @@ func TestSetHelmReleaseUpgradeCleanupOnFail(t *testing.T) {
 
 func TestSetHelmReleaseValuesFromMap(t *testing.T) {
 	hr := CreateHelmRelease("redis", "apps")
-	err := SetHelmReleaseValuesFromMap(hr, map[string]any{
+	SetHelmReleaseValuesFromMap(hr, map[string]any{
 		"replicaCount": 3,
 		"image":        map[string]any{"tag": "latest"},
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
 	if hr.Spec.Values == nil {
 		t.Fatal("values nil")
 	}
@@ -1231,7 +1228,7 @@ func TestHelmRelease_FullSpec(t *testing.T) {
 			},
 		},
 	})
-	_ = SetHelmReleaseValuesFromMap(hr, map[string]any{
+	SetHelmReleaseValuesFromMap(hr, map[string]any{
 		"replicaCount": 3,
 		"auth":         map[string]any{"enabled": true},
 	})
