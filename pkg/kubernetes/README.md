@@ -91,7 +91,8 @@ argument instead.
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
 outside (a)-(c). `pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers
-tolerated until the prune work item of the epic deletes them; entries only ever leave,
+tolerated until the prune work item of the epic deletes them, or rewrites the
+class-shaped ones that only fail §4 (an `error` return) as void helpers; entries only ever leave,
 and a stale entry fails the test.
 
 ## 4. Purity
