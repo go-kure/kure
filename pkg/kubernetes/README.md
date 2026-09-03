@@ -71,7 +71,10 @@ a kind fails until the wrappers are regenerated and committed. Renovate runs
 An exported `Set*` / `Add*` function under `pkg/kubernetes/...` is admissible when its
 body does one of:
 
-- **(a)** appends to a slice field, or inserts into a map field;
+- **(a)** appends to a slice field, or inserts into a map field. Going through a local
+  counts only when that local came from the field it is written back to: a collection
+  the helper builds itself and then assigns replaces the field's contents, which is
+  not adding to it;
 - **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
   intermediate before assigning through it is the same thing);
 - **(c)** constructs an upstream struct literal setting two or more fields, or a
@@ -108,7 +111,9 @@ and type information (`pkg/kubernetes/internal/admission`) and fails naming any 
 outside (a)-(c). It is syntactic and deliberately conservative: it does not follow
 control flow, so a write guarded by an optional-value condition
 (`if name != "" { ... }`, forbidden by §4) is not detected by the test. That idiom is
-caught by review and by the helper's own golden test. `pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers
+caught by review and by the helper's own golden test. A function literal's body is not
+the helper's own body: an append inside a closure the helper never calls is a no-op no
+caller sees, so it admits nothing. `pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers
 tolerated until the prune work item of the epic deletes them, or rewrites the
 class-shaped ones that only fail §4 (an `error` return) as void helpers; entries only ever leave,
 and a stale entry fails the test.

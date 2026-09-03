@@ -4,7 +4,9 @@
 // A helper is admissible when its body does one of:
 //
 //   - class a: append to a slice field or insert into a map field, directly
-//     or through a local that the body assigns back to the field;
+//     or through a local that came from that field and is assigned back to it
+//     (a collection the helper built itself replaces the field's contents,
+//     which is not adding to it);
 //   - class b: assign a pointer-typed field (the nil-init of a pointer
 //     intermediate before writing through it is itself such an assignment);
 //   - class c: write an upstream struct literal with two or more fields, or a
@@ -57,6 +59,9 @@
 // same local to a rooted field later in source order. Locals are tracked as
 // type-checker objects, so a shadowing declaration is a different local and
 // a name shared by two blocks conflates nothing.
+//
+// A function literal's body is not the helper's own: an uncalled closure that
+// appends is a no-op no caller sees, so no walk descends into one.
 //
 // The classifier is syntactic with type information (go/packages): it never
 // executes code, and it is deliberately conservative, so an unusual but
@@ -251,6 +256,11 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		writtenBack = map[types.Object]token.Pos{} // local -> last assignment of it to a field
 	)
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		// A function literal's body is not the helper's own: an uncalled
+		// closure that appends is a no-op the caller never sees.
+		if _, isLit := n.(*ast.FuncLit); isLit {
+			return false
+		}
 		s, ok := n.(*ast.AssignStmt)
 		if !ok {
 			return true
@@ -343,8 +353,11 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		}
 		return true
 	})
+	// A local counts for class a only when it came from the field it is
+	// written back to. A collection the helper made itself replaces whatever
+	// the field held, which is not adding to it.
 	for obj, opPos := range localOps {
-		if back, ok := writtenBack[obj]; ok && back > opPos {
+		if back, ok := writtenBack[obj]; ok && back > opPos && rooted.everRooted(obj) {
 			appendOrMap = true
 		}
 	}
@@ -514,6 +527,9 @@ func callerValues(fn *ast.FuncDecl, info *types.Info) map[types.Object]bool {
 	// Locals are visited in source order, so a local's initialiser is seen
 	// before any use of it.
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if _, isLit := n.(*ast.FuncLit); isLit {
+			return false
+		}
 		switch s := n.(type) {
 		case *ast.ValueSpec:
 			for i, id := range s.Names {
@@ -618,6 +634,22 @@ type rootEvent struct {
 	rooted bool
 }
 
+// everRooted reports whether obj was a way to reach a caller's object at any
+// point in the body. A local that never was is the helper's own value, so
+// assigning it to a collection field replaces the collection rather than
+// adding to it.
+func (r roots) everRooted(obj types.Object) bool {
+	if obj == nil {
+		return false
+	}
+	for _, e := range r[obj] {
+		if e.rooted {
+			return true
+		}
+	}
+	return false
+}
+
 func (r roots) add(obj types.Object, pos token.Pos, rooted bool) {
 	if obj != nil {
 		r[obj] = append(r[obj], rootEvent{pos: pos, rooted: rooted})
@@ -659,6 +691,9 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 		}
 	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if _, isLit := n.(*ast.FuncLit); isLit {
+			return false
+		}
 		switch s := n.(type) {
 		case *ast.DeclStmt:
 			gd, ok := s.Decl.(*ast.GenDecl)
@@ -794,6 +829,9 @@ func nilLocals(fn *ast.FuncDecl, info *types.Info) map[types.Object]bool {
 		}
 	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if _, isLit := n.(*ast.FuncLit); isLit {
+			return false
+		}
 		switch s := n.(type) {
 		case *ast.DeclStmt:
 			gd, ok := s.Decl.(*ast.GenDecl)
