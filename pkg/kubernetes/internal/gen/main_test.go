@@ -54,6 +54,106 @@ func TestRun_CheckFailsOnStaleAndMissingFiles(t *testing.T) {
 	}
 }
 
+func TestRun_OrphanedPackageFilesFailCheckAndAreRemovedByGenerate(t *testing.T) {
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatal(stderr.String())
+	}
+	// A package that once had kinds and lost them all leaves its generated
+	// files behind; a hand-written file in the same directory is not touched.
+	gone := filepath.Join(root, "gone")
+	if err := os.MkdirAll(gone, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	orphan := filepath.Join(gone, createFile)
+	orphanTest := filepath.Join(gone, createTestFile)
+	keep := filepath.Join(gone, "sugar.go")
+	for _, f := range []string{orphan, orphanTest, keep} {
+		if err := os.WriteFile(f, []byte("package gone\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	stderr.Reset()
+	if rc := run([]string{"-check", "-root", root}, &stderr); rc != 1 {
+		t.Fatalf("check with orphans: rc=%d, want 1; stderr=%s", rc, stderr.String())
+	}
+	for _, f := range []string{orphan, orphanTest} {
+		if !strings.Contains(stderr.String(), f+" is orphaned") {
+			t.Errorf("stderr should name orphan %s: %s", f, stderr.String())
+		}
+	}
+
+	stderr.Reset()
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatalf("generate with orphans: rc=%d stderr=%s", rc, stderr.String())
+	}
+	for _, f := range []string{orphan, orphanTest} {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Errorf("generate should remove orphan %s, stat err=%v", f, err)
+		}
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Errorf("generate must not touch hand-written %s: %v", keep, err)
+	}
+	stderr.Reset()
+	if rc := run([]string{"-check", "-root", root}, &stderr); rc != 0 {
+		t.Fatalf("check after removing orphans: rc=%d stderr=%s", rc, stderr.String())
+	}
+}
+
+func TestFindOrphans_MissingRootHasNone(t *testing.T) {
+	orphans, err := findOrphans(filepath.Join(t.TempDir(), "absent"), map[string][]byte{})
+	if err != nil || len(orphans) != 0 {
+		t.Errorf("orphans=%v err=%v, want none", orphans, err)
+	}
+}
+
+func TestFindOrphans_UnreadableDirIsAnError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := t.TempDir()
+	locked := filepath.Join(root, "locked")
+	if err := os.MkdirAll(locked, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o750) })
+	if _, err := findOrphans(root, map[string][]byte{}); err == nil {
+		t.Error("expected a walk error for an unreadable directory")
+	}
+}
+
+func TestRun_OrphanRemovalFailureIsReported(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatal(stderr.String())
+	}
+	gone := filepath.Join(root, "gone")
+	if err := os.MkdirAll(gone, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gone, createFile), []byte("package gone\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(gone, 0o500); err != nil { // readable, not writable: Remove fails
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(gone, 0o750) })
+	stderr.Reset()
+	if rc := run([]string{"-root", root}, &stderr); rc != 1 {
+		t.Errorf("rc=%d, want 1 when an orphan cannot be removed; stderr=%s", rc, stderr.String())
+	}
+}
+
 func TestRun_BadFlag(t *testing.T) {
 	var stderr bytes.Buffer
 	if rc := run([]string{"-nope"}, &stderr); rc != 2 {

@@ -29,7 +29,7 @@
 // # Sugar
 //
 // The remaining exported Set*/Add* functions are admitted by class: slice
-// append or map insert, pointer-typed field assignment (including nil-init of
+// append or map insert, pointer-typed field assignment (which covers nil-init of
 // an intermediate), or a composite literal of two or more fields. A test
 // classifies every helper with go/ast and fails on anything outside those
 // classes. Helpers panic on a nil receiver, take exactly the value they write,

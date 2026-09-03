@@ -6,9 +6,22 @@ The `cilium` package provides strongly-typed constructor functions for creating 
 
 ## Overview
 
-Each function takes a configuration struct and returns a fully initialized Cilium custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification.
+Each config-struct builder takes a configuration struct and returns a populated Cilium custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification.
 
 All builders emit `cilium.io/v2`. That requires **Cilium 1.18 or newer** on the target cluster: BGPv2, `CiliumCIDRGroup` and `CiliumLoadBalancerIPPool` were served only as `cilium.io/v2alpha1` through 1.17 and were promoted to `v2` in 1.18. The tested range is tracked in [the compatibility matrix](/api-reference/compatibility/).
+
+## Constructors
+
+Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`. The upstream struct is the construction API; set spec fields directly or through the admissible `Set*`/`Add*` sugar below.
+
+```go
+obj := cilium.CreateCiliumNetworkPolicy("allow-internal", "default")
+cl := cilium.CreateCiliumCIDRGroup("internal-ranges")
+```
+
+The config-struct builders (`cilium.CiliumNetworkPolicy(&cilium.CiliumNetworkPolicyConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
+
+See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 
 ## Supported Resources
 

@@ -49,8 +49,11 @@ are never hand-written. A kind registered in the scheme without a wrapper fails 
 identity test; a wrapper that sets anything beyond identity fails it too.
 
 Sub-types that are not `client.Object` (`Container`, `PodSpec`,
-`ResourceRequirements`, an `IngressRule`, a PVC used as a template) get no constructor.
-A struct literal is the idiom.
+`ResourceRequirements`, an `IngressRule`, a PVC used as a template) get no generated
+constructor. A struct literal is the idiom. The hand-written sub-type constructors still
+exported at this revision (`CreateContainer`, `CreatePodSpec`, `CreateIngressRule`,
+`CreateResourceRequirements`, the `fluxcd.Create*` and `certmanager.CreateACME*` helpers
+for spec fragments, among others) are legacy; the prune work item of the epic removes them.
 
 ### Regenerating the wrappers
 
@@ -69,13 +72,17 @@ An exported `Set*` / `Add*` function under `pkg/kubernetes/...` is admissible wh
 body does one of:
 
 - **(a)** appends to a slice field, or inserts into a map field;
-- **(b)** assigns to a pointer-typed field (`x.F = &v`), or initialises a nil
-  intermediate before assigning through it;
+- **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
+  intermediate before assigning through it is the same thing);
 - **(c)** constructs an upstream struct literal setting two or more fields, or a
   nested literal, or writes two or more distinct fields.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment.
+A nil receiver guard admits nothing on its own. A body that assigns the literal `nil`
+to any field is inadmissible whatever else it does, because it clears a field the
+caller did not name (§4); a helper that must replace one member of a one-of takes the
+whole one-of as its argument instead.
 
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper

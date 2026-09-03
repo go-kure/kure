@@ -4,6 +4,19 @@
 
 Low-level builder functions for FluxCD Kubernetes resources. Each resource type follows the `Create*(name, namespace)` + `Set*()/Add*()` pattern.
 
+## Constructors
+
+Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`. The upstream struct is the construction API; set spec fields directly or through the admissible `Set*`/`Add*` sugar below.
+
+```go
+obj := fluxcd.CreateGitRepository("my-repo", "flux-system")
+```
+
+The hand-written `Create*` helpers for spec fragments (sub-types that are not `client.Object`) that remain in this package are legacy and are removed by the prune work item of the builder-contract epic; a struct literal is the idiom.
+
+See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
+
+
 ## Source Controllers
 
 ### GitRepository
