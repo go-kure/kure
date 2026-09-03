@@ -134,6 +134,51 @@ func TestRun_HandWrittenFileUnderGeneratedNameIsAnError(t *testing.T) {
 	}
 }
 
+func TestRun_RenderedFileWithoutHeaderIsRegenerated(t *testing.T) {
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatal(stderr.String())
+	}
+	files, err := render(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var victim string
+	for path := range files {
+		if filepath.Base(path) == createFile {
+			victim = path
+			break
+		}
+	}
+	if victim == "" {
+		t.Fatalf("render produced no %s", createFile)
+	}
+	// A bad merge or hand edit that dropped the header must read as stale,
+	// not as an impostor: the generator owns this path and rewrites it.
+	if err := os.WriteFile(victim, []byte("package lost\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if rc := run([]string{"-check", "-root", root}, &stderr); rc != 1 {
+		t.Errorf("check: rc=%d, want 1 for a headerless rendered file; stderr=%s", rc, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "is stale") || strings.Contains(stderr.String(), "not the generated header") {
+		t.Errorf("check should report the file as stale, not as an impostor: %s", stderr.String())
+	}
+	stderr.Reset()
+	if rc := run([]string{"-root", root}, &stderr); rc != 0 {
+		t.Fatalf("generate: rc=%d, want 0; stderr=%s", rc, stderr.String())
+	}
+	have, err := os.ReadFile(victim) //nolint:gosec // test-owned temp path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(have, files[victim]) {
+		t.Errorf("generate must restore %s to its rendered content", victim)
+	}
+}
+
 func TestRun_SymlinkUnderGeneratedNameIsAnError(t *testing.T) {
 	root := t.TempDir()
 	var stderr bytes.Buffer
