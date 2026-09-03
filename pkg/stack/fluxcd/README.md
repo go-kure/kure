@@ -77,6 +77,21 @@ Each bundle produces a Flux Kustomization resource with:
 - Dependency ordering from `Bundle.DependsOn`
 - Interval and pruning configuration
 
+Sources (`GitRepository`, `OCIRepository`) and the `FluxInstance` are built the way the
+builder contract prescribes: the `pkg/kubernetes/fluxcd` `Create<Kind>` constructor returns a
+typed object, and the generator assigns the plain fields directly.
+
+```go
+gr := pubfluxcd.CreateGitRepository(ref.Name, namespace)
+gr.Spec.URL = ref.URL
+gr.Spec.Interval = metav1.Duration{Duration: g.DefaultInterval}
+```
+
+Only writes that the contract admits as sugar keep a helper — appending to a slice field,
+or assigning a pointer field through a constructed value, as with
+`SetGitRepositoryReference`. See
+[`pkg/kubernetes/README.md`](../../kubernetes/README.md) for the admission rules.
+
 ## Layout Integration
 
 Combine resource generation with directory structure:
