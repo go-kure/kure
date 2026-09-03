@@ -228,9 +228,24 @@ func AddItemViaLocal(o *Obj, s string) {
 
 // class a through a parenthesised local map index, written back
 func AddLabelParenLocal(o *Obj, k, v string) {
-	labels := map[string]string{}
+	labels := o.Labels
 	(labels)[k] = v
 	o.Labels = labels
+}
+
+// inadmissible: the map is the helper's own, so the write-back replaces the
+// caller's labels instead of adding to them
+func AddLabelFreshMap(o *Obj, k, v string) {
+	labels := map[string]string{}
+	labels[k] = v
+	o.Labels = labels
+}
+
+// inadmissible: the append is inside a function literal the helper never
+// calls, so no caller ever sees it
+func AddItemInClosure(o *Obj, s string) {
+	f := func() { o.Spec.Items = append(o.Spec.Items, s) }
+	_ = f
 }
 
 // class a through a pointer alias of a field
@@ -428,6 +443,8 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetSpecNestedNil":       Inadmissible,
 		"AddItemViaLocal":        Append,
 		"AddLabelParenLocal":     Append,
+		"AddLabelFreshMap":       Inadmissible,
+		"AddItemInClosure":       Inadmissible,
 		"AddItemViaAlias":        Append,
 		"SetReplicasViaAlias":    Pointer,
 		"AddItemWriteBackFirst":  Inadmissible,
@@ -478,6 +495,8 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasByValue":    "no field write",
 		"SetReplicasNilReturn":  "returns early instead of writing",
 		"SetNameIfSet":          "returns early instead of writing",
+		"AddLabelFreshMap":      "single bare field assignment",
+		"AddItemInClosure":      "no field write",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)

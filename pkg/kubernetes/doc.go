@@ -32,7 +32,9 @@
 // insert, pointer-typed field assignment (which covers nil-init of an
 // intermediate), or an upstream struct literal of two or more fields or with
 // a nested literal. Every admitted operation carries a value the caller
-// supplied. A body that assigns nil to a field, writes a value the caller did
+// supplied, happens in the helper's own body rather than in a closure it
+// never calls, and, when it goes through a local, that local came from the
+// field it is written back to. A body that assigns nil to a field, writes a value the caller did
 // not pass, or takes its object by value, and a helper that returns anything,
 // are inadmissible whatever else they do. A test classifies every helper
 // with go/ast and fails on anything outside those classes that is not listed
