@@ -348,8 +348,8 @@ bundle them into a single PR:
 2. Run `go get` for all dependencies (Flux packages first for coordinated upgrades)
 3. Run `go mod tidy`
 4. Update `versions.yaml` `supported_range` / `notes` for any bump that lands outside its range
-5. Regenerate docs: `./scripts/sync-versions.sh generate`
-6. Validate: `./scripts/sync-versions.sh check`
+5. Regenerate docs: `./scripts/sync-versions.sh generate`; regenerate the constructor wrappers if an API module moved: `./scripts/gen-builders.sh generate`
+6. Validate: `./scripts/sync-versions.sh check` and `./scripts/gen-builders.sh check`
 7. Run full verification: `make verify && make test-race`
 8. Commit, push, and create PR
 9. Reference all Renovate PR numbers in the PR body to auto-close them

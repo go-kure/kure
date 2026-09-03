@@ -2,34 +2,7 @@ package kubernetes
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// CreateService creates a new v1 Service with the given name and namespace.
-// The returned object has TypeMeta, labels, annotations, and an empty selector
-// and ports slice pre-populated so it can be serialized to YAML immediately.
-func CreateService(name string, namespace string) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Service",
-			APIVersion: corev1.SchemeGroupVersion.String(),
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{},
-			Ports:    []corev1.ServicePort{},
-		},
-	}
-}
 
 // AddServicePort appends a port to the Service spec.
 func AddServicePort(service *corev1.Service, port corev1.ServicePort) {

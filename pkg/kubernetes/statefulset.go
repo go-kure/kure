@@ -3,43 +3,9 @@ package kubernetes
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
-
-// CreateStatefulSet returns a StatefulSet with sensible defaults set.
-func CreateStatefulSet(name, namespace string) *appsv1.StatefulSet {
-	obj := &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: appsv1.StatefulSetSpec{
-			Replicas: new(int32),
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
-				Spec:       corev1.PodSpec{},
-			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{},
-			ServiceName:          "",
-			PodManagementPolicy:  appsv1.OrderedReadyPodManagement,
-			UpdateStrategy:       appsv1.StatefulSetUpdateStrategy{},
-		},
-	}
-	return obj
-}
 
 // SetStatefulSetPodSpec assigns a PodSpec to the StatefulSet template.
 func SetStatefulSetPodSpec(sts *appsv1.StatefulSet, spec *corev1.PodSpec) error {

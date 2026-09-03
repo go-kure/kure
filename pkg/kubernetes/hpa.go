@@ -3,30 +3,7 @@ package kubernetes
 import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// CreateHorizontalPodAutoscaler creates a new HorizontalPodAutoscaler with the
-// given name and namespace. The returned object has TypeMeta, labels, and
-// annotations pre-populated so it can be serialized to YAML immediately.
-func CreateHorizontalPodAutoscaler(name, namespace string) *autoscalingv2.HorizontalPodAutoscaler {
-	return &autoscalingv2.HorizontalPodAutoscaler{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "HorizontalPodAutoscaler",
-			APIVersion: autoscalingv2.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-	}
-}
 
 // SetHPAScaleTargetRef sets the scale target reference for the HPA, identifying
 // the resource (e.g. Deployment) that the autoscaler controls.

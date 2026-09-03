@@ -60,11 +60,14 @@
         "commands": [
           "sh scripts/sync-go-version.sh",
           "./scripts/sync-versions.sh generate",
-          "sh scripts/sync-tool-versions.sh"
+          "sh scripts/sync-tool-versions.sh",
+          "./scripts/gen-builders.sh generate"
         ],
         "fileFilters": [
           "docs/compatibility.md",
           "pkg/versions/versions_gen.go",
+          "pkg/kubernetes/**/zz_generated_*.go",
+          "pkg/kubernetes/zz_generated_*.go",
           "go.mod",
           "versions.yaml",
           "Makefile",

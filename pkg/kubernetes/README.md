@@ -1,12 +1,11 @@
-# Kubernetes Builders - Core Resource Helpers
+# Kubernetes Builders - The Builder Contract
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-kure/kure/pkg/kubernetes.svg)](https://pkg.go.dev/github.com/go-kure/kure/pkg/kubernetes)
 
-The `kubernetes` package provides GVK utilities, scheme registration, and strongly-typed builder functions for core Kubernetes resources.
-
-## Overview
-
-This package exposes helpers that other Kure packages and external consumers use to construct and inspect Kubernetes objects without dealing with low-level struct details.
+The `kubernetes` package provides the shared scheme, the generic constructor and the
+admissible sugar helpers for building Kubernetes objects. This page is the normative
+text of the builder contract (ADR-038, "thin core + admissible sugar"): every package
+under `pkg/kubernetes/...` follows it, and the tests described below enforce it.
 
 ## Import
 
@@ -14,9 +13,135 @@ This package exposes helpers that other Kure packages and external consumers use
 import "github.com/go-kure/kure/pkg/kubernetes"
 ```
 
-## GVK Utilities
+## 1. Canonical path
+
+For every registered kind the upstream Go struct is the construction API:
 
 ```go
+d := kubernetes.CreateDeployment("web", "default")
+d.Spec.Replicas = ptr.To[int32](3)
+d.Spec.Template.Spec.ServiceAccountName = "web"
+```
+
+kure does not provide, and its docs do not suggest, a kure function for plain field
+access. A whole-spec setter is a bare assignment and is not part of the contract.
+
+## 2. Constructors
+
+`Create[T any, PT interface{ *T; client.Object }](name, namespace string) PT` allocates
+`T`, sets `TypeMeta` from the registered scheme (the same lookup
+`GetGroupVersionKind` uses), sets `metadata.name` and `metadata.namespace`, and
+nothing else. The pointer type is inferred from the one type argument:
+
+```go
+d  := kubernetes.Create[appsv1.Deployment]("web", "default")
+ns := kubernetes.Create[corev1.Namespace]("platform", "")   // cluster-scoped: pass ""
+```
+
+An unregistered type panics. That is a programming error, the same rule as a nil
+receiver, not a runtime condition to handle.
+
+Per-kind wrappers keep call sites readable and carry the scope in their signature:
+`CreateDeployment(name, namespace)` for namespaced kinds, `CreateNamespace(name)` for
+cluster-scoped ones. They live in `zz_generated_create.go` in each package, are
+generated from the scheme and the scope table in `pkg/kubernetes/internal/kinds`, and
+are never hand-written. A kind registered in the scheme without a wrapper fails the
+identity test; a wrapper that sets anything beyond identity fails it too.
+
+Sub-types that are not `client.Object` (`Container`, `PodSpec`,
+`ResourceRequirements`, an `IngressRule`, a PVC used as a template) get no constructor.
+A struct literal is the idiom.
+
+### Regenerating the wrappers
+
+```bash
+make gen-builders      # or: mise run builders:generate
+make check-builders    # or: mise run builders:check -- exit 1 when stale
+```
+
+`check-builders` runs in the CI `validate` job, so a dependency bump that adds or drops
+a kind fails until the wrappers are regenerated and committed. Renovate runs
+`scripts/gen-builders.sh generate` itself after any Go module bump.
+
+## 3. Sugar admission
+
+An exported `Set*` / `Add*` function under `pkg/kubernetes/...` is admissible when its
+body does one of:
+
+- **(a)** appends to a slice field, or inserts into a map field;
+- **(b)** assigns to a pointer-typed field (`x.F = &v`), or initialises a nil
+  intermediate before assigning through it;
+- **(c)** constructs an upstream struct literal setting two or more fields, or a
+  nested literal, or writes two or more distinct fields.
+
+A body that is a single assignment to a non-pointer field is inadmissible regardless
+of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment.
+
+`TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
+and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
+outside (a)-(c). `pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers
+tolerated until the prune work item of the epic deletes them; entries only ever leave,
+and a stale entry fails the test.
+
+## 4. Purity
+
+- Sugar takes exactly the value it writes. Value arguments are fine
+  (`SetDeploymentReplicas(d, 3)`) because `nil` stays expressible on the canonical path.
+- No defaulting. No validation: `Validate*` helpers stay explicit, opt-in calls. No
+  touching a field the caller did not name. No error return, because nothing in an
+  assignment can fail; a nil receiver panics.
+- The `if x != "" { set(x) }` idiom is forbidden in sugar. A composite that treats an
+  argument as optional documents that per argument in its doc comment.
+- Opinions are nouns. kure may hold knowledge a caller names
+  (`RestrictedSecurityContext()`, `AddHPACPUMetric(hpa, 80)`) and never applies it to
+  something the caller did not ask about. Every composite carries a golden test of its
+  complete output so an injected value is visible in the diff that adds it.
+
+## 5. Metadata
+
+One helper set over `metav1.Object` covers every kind, including kinds kure never
+names:
+
+```go
+kubernetes.SetLabels(obj, map[string]string{"app": "web"})
+kubernetes.AddLabel(obj, "tier", "frontend")           // initialises a nil map
+kubernetes.SetAnnotations(obj, map[string]string{"owner": "platform"})
+kubernetes.AddAnnotation(obj, "note", "rotated 2026-09")
+```
+
+These four are admitted by name; per-kind label and annotation helpers are not part
+of the contract.
+
+## 6. Names
+
+No rename wave. A surviving function keeps its name unless the name is wrong.
+
+## 7. Consumers are never blocked
+
+If a caller needs a kure change to reach a field, the contract is broken. Sugar is
+added on demand, by the caller's PR, with its test and golden file. There is no
+completeness claim and no coverage oracle.
+
+## 8. Feature-gated and deprecated fields
+
+Ordinary fields. kure cannot know a target cluster's gates, so withholding a field
+would be a policy judgement inside a pure library. Maturity is labelled by the
+generated kinds table, never enforced.
+
+## Identity test
+
+`TestIdentity_ConstructorsEmitIdentityOnly` walks every kind the scheme registers,
+calls its generated wrapper and compares the result with `reflect.DeepEqual` against
+a zero value carrying only GVK, name and (when namespaced) namespace. Any injected
+label, selector or default turns it red. `TestIdentity_EveryRegisteredKindHasAWrapper`
+fails on a registered kind with no wrapper and on a wrapper with no registered kind.
+
+## GVK utilities and scheme
+
+```go
+// Lazily registers every supported API group (core K8s, FluxCD, cert-manager, ...)
+err := kubernetes.RegisterSchemes()
+
 // Resolve the GVK of any registered runtime.Object
 gvk, err := kubernetes.GetGroupVersionKind(myDeployment)
 
@@ -24,302 +149,107 @@ gvk, err := kubernetes.GetGroupVersionKind(myDeployment)
 ok := kubernetes.IsGVKAllowed(gvk, allowedGVKs)
 ```
 
-## Scheme Registration
+## Examples
+
+The helpers below are the surviving sugar for the core kinds. Anything not shown is
+a field write on the upstream struct.
+
+### Deployment
 
 ```go
-// Lazily registers all supported API groups (core K8s, FluxCD, cert-manager, etc.)
-err := kubernetes.RegisterSchemes()
-```
-
-## HPA Builders
-
-```go
-// Create a HorizontalPodAutoscaler
-hpa := kubernetes.CreateHorizontalPodAutoscaler("my-app", "default")
-
-// Set the scale target
-err := kubernetes.SetHPAScaleTargetRef(hpa, "apps/v1", "Deployment", "my-app")
-
-// Set replica bounds
-err = kubernetes.SetHPAMinMaxReplicas(hpa, 2, 10)
-
-// Add CPU and memory metrics
-err = kubernetes.AddHPACPUMetric(hpa, 80)
-err = kubernetes.AddHPAMemoryMetric(hpa, 70)
-
-// Set scaling behavior
-window := int32(300)
-err = kubernetes.SetHPABehavior(hpa, &autoscalingv2.HorizontalPodAutoscalerBehavior{
-    ScaleDown: &autoscalingv2.HPAScalingRules{
-        StabilizationWindowSeconds: &window,
-    },
-})
-
-// Update metadata
-err = kubernetes.SetHPALabels(hpa, map[string]string{"env": "prod"})
-err = kubernetes.SetHPAAnnotations(hpa, map[string]string{"owner": "platform"})
-```
-
-## PDB Builders
-
-```go
-// Create a PodDisruptionBudget
-pdb := kubernetes.CreatePodDisruptionBudget("my-app", "default")
-
-// Set disruption budget (MinAvailable and MaxUnavailable are mutually exclusive)
-err := kubernetes.SetPDBMinAvailable(pdb, intstr.FromInt32(2))
-// or: err = kubernetes.SetPDBMaxUnavailable(pdb, intstr.FromString("25%"))
-
-// Set the label selector
-err = kubernetes.SetPDBSelector(pdb, &metav1.LabelSelector{
-    MatchLabels: map[string]string{"app": "my-app"},
-})
-
-// Update metadata
-err = kubernetes.SetPDBLabels(pdb, map[string]string{"env": "prod"})
-err = kubernetes.SetPDBAnnotations(pdb, map[string]string{"owner": "platform"})
-```
-
-## Deployment Builders
-
-```go
-// Create a Deployment
 dep := kubernetes.CreateDeployment("my-app", "default")
+kubernetes.AddLabel(dep, "app", "my-app")
+dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "my-app"}}
+dep.Spec.Template.Labels = map[string]string{"app": "my-app"}
 
-// Add a container
-container := &corev1.Container{Name: "app", Image: "nginx:1.25"}
-err := kubernetes.AddDeploymentContainer(dep, container)
-
-// Set replicas and strategy
-err = kubernetes.SetDeploymentReplicas(dep, 3)
-err = kubernetes.SetDeploymentStrategy(dep, appsv1.DeploymentStrategy{
-    Type: appsv1.RollingUpdateDeploymentStrategyType,
-})
-
-// Configure pod template
-err = kubernetes.SetDeploymentServiceAccountName(dep, "my-sa")
-err = kubernetes.SetDeploymentNodeSelector(dep, map[string]string{"role": "web"})
-err = kubernetes.AddDeploymentToleration(dep, &corev1.Toleration{Key: "dedicated", Value: "web"})
+err := kubernetes.AddDeploymentContainer(dep, &corev1.Container{Name: "app", Image: "nginx:1.25"})
+kubernetes.SetDeploymentReplicas(dep, 3)
+kubernetes.AddDeploymentToleration(dep, &corev1.Toleration{Key: "dedicated", Value: "web"})
 ```
 
-## CronJob Builders
+### CronJob
 
 ```go
-// Create a CronJob
-cj := kubernetes.CreateCronJob("my-job", "default", "*/5 * * * *")
+cj := kubernetes.CreateCronJob("my-job", "default")
+kubernetes.SetCronJobSchedule(cj, "*/5 * * * *")
+cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 
-// Add a container
-container := &corev1.Container{Name: "worker", Image: "busybox:1.36"}
-err := kubernetes.AddCronJobContainer(cj, container)
-
-// Configure schedule and policies
-err = kubernetes.SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent)
-err = kubernetes.SetCronJobSuccessfulJobsHistoryLimit(cj, 3)
-err = kubernetes.SetCronJobFailedJobsHistoryLimit(cj, 1)
-
-// Configure pod template
-err = kubernetes.SetCronJobServiceAccountName(cj, "my-sa")
-err = kubernetes.SetCronJobNodeSelector(cj, map[string]string{"role": "batch"})
-err = kubernetes.AddCronJobToleration(cj, &corev1.Toleration{Key: "dedicated", Value: "batch"})
+err := kubernetes.AddCronJobContainer(cj, &corev1.Container{Name: "worker", Image: "busybox:1.36"})
+kubernetes.SetCronJobConcurrencyPolicy(cj, batchv1.ForbidConcurrent)
 ```
 
-## Service Builders
+### Service
 
 ```go
-// Create a Service
 svc := kubernetes.CreateService("my-app", "default")
-
-// Configure the service
-err := kubernetes.SetServiceSelector(svc, map[string]string{"app": "my-app"})
-err = kubernetes.AddServicePort(svc, corev1.ServicePort{
-    Name:       "http",
-    Port:       80,
-    TargetPort: intstr.FromInt32(8080),
-})
-err = kubernetes.SetServiceType(svc, corev1.ServiceTypeLoadBalancer)
-
-// Update metadata
-err = kubernetes.AddServiceLabel(svc, "env", "prod")
-err = kubernetes.AddServiceAnnotation(svc, "external-dns.alpha.kubernetes.io/hostname", "app.example.com")
+kubernetes.SetServiceSelector(svc, map[string]string{"app": "my-app"})
+kubernetes.AddServicePort(svc, corev1.ServicePort{Name: "http", Port: 80, TargetPort: intstr.FromInt32(8080)})
+kubernetes.SetServiceType(svc, corev1.ServiceTypeLoadBalancer)
+kubernetes.AddAnnotation(svc, "external-dns.alpha.kubernetes.io/hostname", "app.example.com")
 ```
 
-## Ingress Builders
+### Ingress
 
 ```go
-// Create an Ingress
-ing := kubernetes.CreateIngress("my-app", "default", "nginx")
+ing := kubernetes.CreateIngress("my-app", "default")
+kubernetes.SetIngressClassName(ing, "nginx")
 
-// Build a rule with paths
 rule := kubernetes.CreateIngressRule("app.example.com")
 pt := netv1.PathTypePrefix
 path := kubernetes.CreateIngressPath("/", &pt, "my-app", "http")
 kubernetes.AddIngressRulePath(rule, path)
-err := kubernetes.AddIngressRule(ing, rule)
-
-// Add TLS
-err = kubernetes.AddIngressTLS(ing, netv1.IngressTLS{
-    Hosts:      []string{"app.example.com"},
-    SecretName: "my-app-tls",
-})
+kubernetes.AddIngressRule(ing, rule)
+kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{"app.example.com"}, SecretName: "my-app-tls"})
 ```
 
-## NetworkPolicy Builders
+### HPA and PDB
 
 ```go
-// Create a NetworkPolicy
-np := kubernetes.CreateNetworkPolicy("my-app", "default")
+hpa := kubernetes.CreateHorizontalPodAutoscaler("my-app", "default")
+kubernetes.SetHPAScaleTargetRef(hpa, "apps/v1", "Deployment", "my-app")
+kubernetes.SetHPAMinMaxReplicas(hpa, 2, 10)
+kubernetes.AddHPACPUMetric(hpa, 80)
 
-// Set pod selector and policy types
-err := kubernetes.SetNetworkPolicyPodSelector(np, metav1.LabelSelector{
-    MatchLabels: map[string]string{"app": "my-app"},
-})
-err = kubernetes.AddNetworkPolicyPolicyType(np, netv1.PolicyTypeIngress)
-err = kubernetes.AddNetworkPolicyPolicyType(np, netv1.PolicyTypeEgress)
-
-// Build an ingress rule with peers and ports
-ingressRule := netv1.NetworkPolicyIngressRule{}
-kubernetes.AddNetworkPolicyIngressPeer(&ingressRule, netv1.NetworkPolicyPeer{
-    PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "frontend"}},
-})
-kubernetes.AddNetworkPolicyIngressPort(&ingressRule, netv1.NetworkPolicyPort{})
-err = kubernetes.AddNetworkPolicyIngressRule(np, ingressRule)
+pdb := kubernetes.CreatePodDisruptionBudget("my-app", "default")
+kubernetes.SetPDBMinAvailable(pdb, intstr.FromInt32(2))
+kubernetes.SetPDBSelector(pdb, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "my-app"}})
 ```
 
-## HTTPRoute Builders
+### Namespace and Pod Security Admission
 
 ```go
-// Create an HTTPRoute
-route := kubernetes.CreateHTTPRoute("my-app", "default")
-
-// Add parent gateway reference and hostname
-err := kubernetes.AddHTTPRouteParentRef(route, gwapiv1.ParentReference{Name: "my-gateway"})
-err = kubernetes.AddHTTPRouteHostname(route, "app.example.com")
-
-// Build a rule with match, filter, and backend ref
-rule := gwapiv1.HTTPRouteRule{}
-pathType := gwapiv1.PathMatchPathPrefix
-kubernetes.AddHTTPRouteRuleMatch(&rule, gwapiv1.HTTPRouteMatch{
-    Path: &gwapiv1.HTTPPathMatch{Type: &pathType, Value: ptrStr("/api")},
-})
-kubernetes.AddHTTPRouteRuleFilter(&rule, gwapiv1.HTTPRouteFilter{
-    Type: gwapiv1.HTTPRouteFilterRequestHeaderModifier,
-    RequestHeaderModifier: &gwapiv1.HTTPHeaderFilter{
-        Set: []gwapiv1.HTTPHeader{{Name: "X-Custom", Value: "val"}},
-    },
-})
-kubernetes.AddHTTPRouteRuleBackendRef(&rule, gwapiv1.HTTPBackendRef{
-    BackendRef: gwapiv1.BackendRef{
-        BackendObjectReference: gwapiv1.BackendObjectReference{Name: "my-svc"},
-    },
-})
-err = kubernetes.AddHTTPRouteRule(route, rule)
-```
-
-## Namespace Builder
-
-Create and configure Kubernetes Namespaces, including Pod Security Admission (PSA) label management.
-
-```go
-// Create a Namespace with default app label and annotation
 ns := kubernetes.CreateNamespace("my-app")
+kubernetes.AddLabel(ns, "env", "prod")
 
-// Add or replace labels and annotations
-kubernetes.AddNamespaceLabel(ns, "env", "prod")
-kubernetes.AddNamespaceAnnotation(ns, "owner", "platform-team")
-kubernetes.SetNamespaceLabels(ns, map[string]string{"app": "my-app", "env": "prod"})
-kubernetes.SetNamespaceAnnotations(ns, map[string]string{"owner": "platform-team"})
-
-// Manage finalizers
-kubernetes.AddNamespaceFinalizer(ns, corev1.FinalizerKubernetes)
-kubernetes.SetNamespaceFinalizers(ns, []corev1.FinalizerName{"custom-finalizer"})
-
-// Apply PSA admission labels (enforce, warn, audit modes)
-kubernetes.SetNamespacePSALabels(ns,
-    kubernetes.PSARestricted,  // enforce
-    kubernetes.PSARestricted,  // warn
-    kubernetes.PSARestricted,  // audit
-    "v1.28",                   // version (pass "" to omit version labels)
-)
-
-// Skip a mode by passing an empty string
-kubernetes.SetNamespacePSALabels(ns, kubernetes.PSARestricted, "", "", "latest")
+// enforce, warn, audit; "" skips a mode, version "" omits the version labels
+kubernetes.SetNamespacePSALabels(ns, kubernetes.PSARestricted, kubernetes.PSARestricted, kubernetes.PSARestricted, "v1.28")
 ```
 
-## PSA Security Context Helpers
-
-Helpers for Pod Security Admission (PSA) compliance at Restricted, Baseline, and Privileged levels.
+### ConfigMap
 
 ```go
-// Get a security context matching the Restricted PSA level
+cm := kubernetes.CreateConfigMap("my-config", "default")
+kubernetes.AddConfigMapData(cm, "key", "value")
+kubernetes.AddConfigMapBinaryData(cm, "cert", certBytes)
+kubernetes.SetConfigMapImmutable(cm, true)
+```
+
+### PSA security contexts
+
+```go
 sc := kubernetes.RestrictedSecurityContext()
-
-// Get a pod-level security context
-psc := kubernetes.RestrictedPodSecurityContext()
-
-// Level-based selection
-sc := kubernetes.SecurityContextForLevel(kubernetes.PSABaseline)
 psc := kubernetes.PodSecurityContextForLevel(kubernetes.PSARestricted)
 
-// Validate a container against a PSA level
 err := kubernetes.ValidateContainerPSA(container, kubernetes.PSARestricted)
-
-// Validate an entire PodSpec
 violations := kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSARestricted)
 ```
 
-## ResourceRequirements Builder
-
-Build Kubernetes resource requirements for containers.
+### ResourceRequirements
 
 ```go
 reqs := kubernetes.CreateResourceRequirements()
 kubernetes.SetResourceRequestCPU(reqs, "100m")
-kubernetes.SetResourceRequestMemory(reqs, "128Mi")
-kubernetes.SetResourceLimitCPU(reqs, "500m")
 kubernetes.SetResourceLimitMemory(reqs, "512Mi")
-kubernetes.SetResourceRequestEphemeralStorage(reqs, "1Gi")
-kubernetes.SetResourceLimitEphemeralStorage(reqs, "2Gi")
-```
-
-## Prometheus Builders
-
-Builders for Prometheus Operator CRDs are in the `pkg/kubernetes/prometheus/` sub-package:
-
-```go
-import "github.com/go-kure/kure/pkg/kubernetes/prometheus"
-
-sm := prometheus.CreateServiceMonitor("my-app", "monitoring")
-prometheus.AddServiceMonitorEndpoint(sm, "/metrics", "http", "30s")
-prometheus.SetServiceMonitorSelector(sm, map[string]string{"app": "my-app"})
-
-pm := prometheus.CreatePodMonitor("my-app", "monitoring")
-rule := prometheus.CreatePrometheusRule("alerts", "monitoring")
-```
-
-## ConfigMap Builders
-
-```go
-// Create a ConfigMap
-cm := kubernetes.CreateConfigMap("my-config", "default")
-
-// Add or replace string data
-kubernetes.AddConfigMapData(cm, "key", "value")
-kubernetes.AddConfigMapDataMap(cm, map[string]string{"a": "1", "b": "2"})
-kubernetes.SetConfigMapData(cm, map[string]string{"x": "y"})
-
-// Add or replace binary data
-kubernetes.AddConfigMapBinaryData(cm, "cert", certBytes)
-kubernetes.AddConfigMapBinaryDataMap(cm, map[string][]byte{"p12": p12Bytes})
-kubernetes.SetConfigMapBinaryData(cm, map[string][]byte{"tls.key": keyBytes})
-
-// Mark as immutable
-kubernetes.SetConfigMapImmutable(cm, true)
-
-// Update metadata
-kubernetes.AddConfigMapLabel(cm, "env", "prod")
-kubernetes.AddConfigMapAnnotation(cm, "owner", "platform")
-kubernetes.SetConfigMapLabels(cm, map[string]string{"app": "my-config"})
-kubernetes.SetConfigMapAnnotations(cm, map[string]string{"managed-by": "controller"})
 ```
 
 ## Related Packages
@@ -327,3 +257,4 @@ kubernetes.SetConfigMapAnnotations(cm, map[string]string{"managed-by": "controll
 - [fluxcd](/api-reference/fluxcd-builders/) - FluxCD resource constructors
 - [prometheus](/api-reference/prometheus-builders/) - Prometheus Operator CRD builders
 - [errors](/api-reference/errors/) - Structured error types used for nil-check sentinels
+- [Builder Contract Migration](/concepts/builder-contract-release-1/) - removed constructor defaults and changed signatures

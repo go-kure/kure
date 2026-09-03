@@ -7,19 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func TestCreatePodDisruptionBudget(t *testing.T) {
-	pdb := CreatePodDisruptionBudget("my-pdb", "default")
-	if pdb.Name != "my-pdb" || pdb.Namespace != "default" {
-		t.Fatalf("metadata mismatch: %s/%s", pdb.Namespace, pdb.Name)
-	}
-	if pdb.Kind != "PodDisruptionBudget" {
-		t.Errorf("unexpected kind %q", pdb.Kind)
-	}
-	if pdb.Labels["app"] != "my-pdb" {
-		t.Errorf("expected label app=my-pdb, got %v", pdb.Labels)
-	}
-}
-
 func TestPDBNilErrors(t *testing.T) {
 	val := intstr.FromInt32(1)
 	// All PDB functions now panic on nil receiver

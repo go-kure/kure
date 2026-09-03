@@ -8,31 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestCreateNetworkPolicy(t *testing.T) {
-	np := CreateNetworkPolicy("net", "ns")
-	if np.Name != "net" || np.Namespace != "ns" {
-		t.Fatalf("metadata mismatch: %s/%s", np.Namespace, np.Name)
-	}
-	if np.Kind != "NetworkPolicy" {
-		t.Errorf("unexpected kind %q", np.Kind)
-	}
-	if np.Labels["app"] != "net" {
-		t.Errorf("expected label app=net, got %v", np.Labels)
-	}
-	if np.Annotations["app"] != "net" {
-		t.Errorf("expected annotation app=net, got %v", np.Annotations)
-	}
-	if len(np.Spec.PolicyTypes) != 0 {
-		t.Errorf("expected empty policy types, got %v", np.Spec.PolicyTypes)
-	}
-	if len(np.Spec.Ingress) != 0 {
-		t.Errorf("expected empty ingress, got %v", np.Spec.Ingress)
-	}
-	if len(np.Spec.Egress) != 0 {
-		t.Errorf("expected empty egress, got %v", np.Spec.Egress)
-	}
-}
-
 func TestNetworkPolicyNilErrors(t *testing.T) {
 	// All NetworkPolicy functions now panic on nil receiver
 	assertPanics(t, func() { SetNetworkPolicyPodSelector(nil, metav1.LabelSelector{}) })

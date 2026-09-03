@@ -9,31 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestCreatePersistentVolumeClaim(t *testing.T) {
-	pvc := CreatePersistentVolumeClaim("data", "ns")
-
-	if pvc.Name != "data" {
-		t.Errorf("expected name data got %s", pvc.Name)
-	}
-	if pvc.Namespace != "ns" {
-		t.Errorf("expected namespace ns got %s", pvc.Namespace)
-	}
-	if pvc.Kind != "PersistentVolumeClaim" {
-		t.Errorf("unexpected kind %q", pvc.Kind)
-	}
-	if len(pvc.Spec.AccessModes) != 0 {
-		t.Errorf("expected no access modes")
-	}
-	if pvc.Spec.VolumeMode == nil || *pvc.Spec.VolumeMode != corev1.PersistentVolumeFilesystem {
-		t.Errorf("unexpected volume mode")
-	}
-	exp := resource.MustParse("1Gi")
-	req := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-	if req.Cmp(exp) != 0 {
-		t.Errorf("unexpected storage request %v", pvc.Spec.Resources.Requests)
-	}
-}
-
 func TestPersistentVolumeClaimFunctions(t *testing.T) {
 	pvc := CreatePersistentVolumeClaim("data", "ns")
 

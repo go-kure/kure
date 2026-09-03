@@ -295,6 +295,14 @@ check-govulncheck-docs: ## Verify govulncheck version parity (docs/github-workfl
 sync-govulncheck-docs: ## Sync govulncheck doc mentions (docs/github-workflows.md) from ci.yml
 	sh scripts/sync-govulncheck-docs.sh
 
+.PHONY: gen-builders
+gen-builders: ## Regenerate the per-kind constructor wrappers under pkg/kubernetes from the scheme
+	./scripts/gen-builders.sh generate
+
+.PHONY: check-builders
+check-builders: ## Fail if the generated constructor wrappers under pkg/kubernetes are stale
+	./scripts/gen-builders.sh check
+
 .PHONY: versions-test
 versions-test: ## Run sync-versions.sh guard tests (hermetic, no network)
 	@echo "$(COLOR_YELLOW)Running sync-versions.sh guard tests...$(COLOR_RESET)"
@@ -333,13 +341,13 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 # =============================================================================
 
 .PHONY: check
-check: lint vet test-short check-tool-versions check-govulncheck-docs ## Quick code quality check (lint, vet, short tests, tool pins)
+check: lint vet test-short check-tool-versions check-govulncheck-docs check-builders ## Quick code quality check (lint, vet, short tests, tool pins, generated builders)
 
 .PHONY: precommit
-precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs versions-test ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, versions guard)
+precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs versions-test check-builders ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, versions guard, generated builders)
 
 .PHONY: ci
-ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs versions-test ## Run comprehensive CI pipeline
+ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs versions-test check-builders ## Run comprehensive CI pipeline
 
 # =============================================================================
 # Cleanup

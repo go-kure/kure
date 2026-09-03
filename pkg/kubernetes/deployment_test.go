@@ -9,19 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestCreateDeployment(t *testing.T) {
-	dep := CreateDeployment("my-app", "default")
-	if dep.Name != "my-app" || dep.Namespace != "default" {
-		t.Fatalf("metadata mismatch: %s/%s", dep.Namespace, dep.Name)
-	}
-	if dep.Kind != "Deployment" {
-		t.Errorf("unexpected kind %q", dep.Kind)
-	}
-	if dep.Labels["app"] != "my-app" {
-		t.Errorf("expected label app=my-app, got %v", dep.Labels)
-	}
-}
-
 func TestDeploymentNilErrors(t *testing.T) {
 	// Functions with secondary nil checks — still return error on nil receiver
 	if err := SetDeploymentPodSpec(nil, &corev1.PodSpec{}); err == nil {

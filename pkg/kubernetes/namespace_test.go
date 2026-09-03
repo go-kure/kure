@@ -7,31 +7,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func TestCreateNamespace(t *testing.T) {
-	ns := CreateNamespace("demo")
-	if ns == nil {
-		t.Fatal("expected non-nil Namespace")
-	}
-	if ns.Kind != "Namespace" {
-		t.Errorf("expected Kind=Namespace, got %q", ns.Kind)
-	}
-	if ns.APIVersion != "v1" {
-		t.Errorf("expected APIVersion=v1, got %q", ns.APIVersion)
-	}
-	if ns.Name != "demo" {
-		t.Errorf("expected Name=demo, got %q", ns.Name)
-	}
-	if ns.Labels["app"] != "demo" {
-		t.Errorf("expected default label app=demo, got %q", ns.Labels["app"])
-	}
-	if ns.Annotations["app"] != "demo" {
-		t.Errorf("expected default annotation app=demo, got %q", ns.Annotations["app"])
-	}
-	if len(ns.Spec.Finalizers) != 0 {
-		t.Errorf("expected empty Spec.Finalizers, got %v", ns.Spec.Finalizers)
-	}
-}
-
 func TestAddNamespaceLabel(t *testing.T) {
 	ns := CreateNamespace("demo")
 	AddNamespaceLabel(ns, "env", "prod")

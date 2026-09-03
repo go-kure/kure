@@ -8,22 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestCreateJob(t *testing.T) {
-	job := CreateJob("job", "ns")
-	if job.Name != "job" || job.Namespace != "ns" {
-		t.Fatalf("metadata mismatch: %s/%s", job.Namespace, job.Name)
-	}
-	if job.Kind != "Job" {
-		t.Errorf("unexpected kind %q", job.Kind)
-	}
-	if job.Spec.Template.Spec.RestartPolicy != "" {
-		t.Errorf("unexpected restart policy %v", job.Spec.Template.Spec.RestartPolicy)
-	}
-	if len(job.Spec.Template.Spec.Containers) != 0 {
-		t.Errorf("expected no containers")
-	}
-}
-
 func TestJobFunctions(t *testing.T) {
 	job := CreateJob("job", "ns")
 

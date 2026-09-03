@@ -2,36 +2,7 @@ package kubernetes
 
 import (
 	netv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// CreateIngress creates a new networking/v1 Ingress with the given name,
-// namespace, and ingress class name. The returned object has TypeMeta, labels,
-// annotations, and empty rules/TLS slices pre-populated so it can be serialized
-// to YAML immediately.
-func CreateIngress(name string, namespace string, classname string) *netv1.Ingress {
-	return &netv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Ingress",
-			APIVersion: netv1.SchemeGroupVersion.String(),
-		},
-		Spec: netv1.IngressSpec{
-			IngressClassName: &classname,
-			Rules:            []netv1.IngressRule{},
-			TLS:              []netv1.IngressTLS{},
-		},
-	}
-}
 
 // CreateIngressRule creates a new IngressRule for the given host with an empty
 // HTTP paths list.

@@ -9,25 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestCreateCronJob(t *testing.T) {
-	cj := CreateCronJob("my-app", "default", "*/5 * * * *")
-	if cj.Name != "my-app" || cj.Namespace != "default" {
-		t.Fatalf("metadata mismatch: %s/%s", cj.Namespace, cj.Name)
-	}
-	if cj.Kind != "CronJob" {
-		t.Errorf("unexpected kind %q", cj.Kind)
-	}
-	if cj.Labels["app"] != "my-app" {
-		t.Errorf("expected label app=my-app, got %v", cj.Labels)
-	}
-	if cj.Spec.Schedule != "*/5 * * * *" {
-		t.Errorf("expected schedule */5 * * * *, got %q", cj.Spec.Schedule)
-	}
-	if cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
-		t.Errorf("expected restart policy Never, got %q", cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy)
-	}
-}
-
 func TestCronJobNilErrors(t *testing.T) {
 	// Functions with secondary nil checks — still return errors
 	if err := SetCronJobPodSpec(nil, &corev1.PodSpec{}); err == nil {
@@ -68,7 +49,7 @@ func TestCronJobNilErrors(t *testing.T) {
 }
 
 func TestCronJobNilArgErrors(t *testing.T) {
-	cj := CreateCronJob("test", "default", "* * * * *")
+	cj := CreateCronJob("test", "default")
 	if err := SetCronJobPodSpec(cj, nil); err == nil {
 		t.Error("expected error for nil PodSpec")
 	}
@@ -91,7 +72,7 @@ func TestCronJobNilArgErrors(t *testing.T) {
 
 func TestCronJobTopologySpreadConstraints(t *testing.T) {
 	t.Run("nil constraint", func(t *testing.T) {
-		cj := CreateCronJob("test", "default", "* * * * *")
+		cj := CreateCronJob("test", "default")
 		if err := AddCronJobTopologySpreadConstraint(cj, nil); err != nil {
 			t.Fatalf("AddCronJobTopologySpreadConstraint returned error: %v", err)
 		}
@@ -101,7 +82,7 @@ func TestCronJobTopologySpreadConstraints(t *testing.T) {
 	})
 
 	t.Run("append single constraint", func(t *testing.T) {
-		cj := CreateCronJob("test", "default", "* * * * *")
+		cj := CreateCronJob("test", "default")
 		c := corev1.TopologySpreadConstraint{
 			MaxSkew:           1,
 			TopologyKey:       "topology.kubernetes.io/zone",
@@ -122,7 +103,7 @@ func TestCronJobTopologySpreadConstraints(t *testing.T) {
 	})
 
 	t.Run("append additional constraint", func(t *testing.T) {
-		cj := CreateCronJob("test", "default", "* * * * *")
+		cj := CreateCronJob("test", "default")
 		first := corev1.TopologySpreadConstraint{
 			MaxSkew:           1,
 			TopologyKey:       "zone",
@@ -158,7 +139,7 @@ func TestCronJobTopologySpreadConstraints(t *testing.T) {
 }
 
 func TestCronJobFunctions(t *testing.T) {
-	cj := CreateCronJob("app", "ns", "* * * * *")
+	cj := CreateCronJob("app", "ns")
 	if cj.Name != "app" || cj.Namespace != "ns" {
 		t.Fatalf("metadata mismatch: %s/%s", cj.Namespace, cj.Name)
 	}
@@ -275,7 +256,7 @@ func TestCronJobFunctions(t *testing.T) {
 }
 
 func TestSetCronJobPodSpec(t *testing.T) {
-	cj := CreateCronJob("test", "default", "* * * * *")
+	cj := CreateCronJob("test", "default")
 	spec := &corev1.PodSpec{
 		Containers: []corev1.Container{
 			{Name: "test", Image: "nginx"},

@@ -6,26 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// CreatePodDisruptionBudget creates a new PodDisruptionBudget with the given name and namespace.
-func CreatePodDisruptionBudget(name, namespace string) *policyv1.PodDisruptionBudget {
-	return &policyv1.PodDisruptionBudget{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "PodDisruptionBudget",
-			APIVersion: policyv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-	}
-}
-
 // SetPDBMinAvailable sets MinAvailable and clears MaxUnavailable (mutually exclusive).
 func SetPDBMinAvailable(pdb *policyv1.PodDisruptionBudget, val intstr.IntOrString) {
 	if pdb == nil {

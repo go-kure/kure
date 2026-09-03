@@ -9,6 +9,7 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
+	barmanv1 "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
@@ -21,9 +22,11 @@ import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storv1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -52,14 +55,23 @@ func RegisterSchemes() error {
 	return registerErr
 }
 
+// addBarmanToScheme adapts plugin-barman-cloud's AddKnownTypes, which has no
+// error return, to the addSchemeFunc signature the registration loop expects.
+func addBarmanToScheme(s *runtime.Scheme) error {
+	barmanv1.AddKnownTypes(s)
+	return nil
+}
+
 // registerAllSchemes registers all schemes and returns the first error encountered
 func registerAllSchemes() error {
 	// List of all AddToScheme functions to register
 	schemeFuncs := []addSchemeFunc{
 		corev1.AddToScheme,
 		appsv1.AddToScheme,
+		autoscalingv2.AddToScheme,
 		rbacv1.AddToScheme,
 		batchv1.AddToScheme,
+		policyv1.AddToScheme,
 		netv1.AddToScheme,
 		storv1.AddToScheme,
 		apiextensionsv1.AddToScheme,
@@ -80,6 +92,7 @@ func registerAllSchemes() error {
 		monitoringv1.AddToScheme,
 		volsyncv1alpha1.AddToScheme,
 		cnpgv1.AddToScheme,
+		addBarmanToScheme,
 		ciliumv2.AddToScheme,
 	}
 

@@ -2,65 +2,7 @@ package prometheus
 
 import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// CreateServiceMonitor returns a new ServiceMonitor with TypeMeta and
-// ObjectMeta set. The selector and endpoints are left empty; use the setters
-// to populate them.
-func CreateServiceMonitor(name, namespace string) *monitoringv1.ServiceMonitor {
-	return &monitoringv1.ServiceMonitor{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       monitoringv1.ServiceMonitorsKind,
-			APIVersion: monitoringv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: monitoringv1.ServiceMonitorSpec{
-			Endpoints: []monitoringv1.Endpoint{},
-		},
-	}
-}
-
-// CreatePodMonitor returns a new PodMonitor with TypeMeta and ObjectMeta set.
-// The selector and pod metrics endpoints are left empty; use the setters to
-// populate them.
-func CreatePodMonitor(name, namespace string) *monitoringv1.PodMonitor {
-	return &monitoringv1.PodMonitor{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       monitoringv1.PodMonitorsKind,
-			APIVersion: monitoringv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: monitoringv1.PodMonitorSpec{
-			PodMetricsEndpoints: []monitoringv1.PodMetricsEndpoint{},
-		},
-	}
-}
-
-// CreatePrometheusRule returns a new PrometheusRule with TypeMeta and
-// ObjectMeta set. Groups are left empty; use AddPrometheusRuleGroup to
-// populate them.
-func CreatePrometheusRule(name, namespace string) *monitoringv1.PrometheusRule {
-	return &monitoringv1.PrometheusRule{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       monitoringv1.PrometheusRuleKind,
-			APIVersion: monitoringv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: monitoringv1.PrometheusRuleSpec{
-			Groups: []monitoringv1.RuleGroup{},
-		},
-	}
-}
 
 // ServiceMonitor converts the config to a Prometheus operator ServiceMonitor object.
 func ServiceMonitor(cfg *ServiceMonitorConfig) *monitoringv1.ServiceMonitor {

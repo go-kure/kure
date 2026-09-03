@@ -7,28 +7,6 @@ import (
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func TestCreateHTTPRoute(t *testing.T) {
-	route := CreateHTTPRoute("web", "ns")
-	if route.Name != "web" || route.Namespace != "ns" {
-		t.Fatalf("metadata mismatch: %s/%s", route.Namespace, route.Name)
-	}
-	if route.Kind != "HTTPRoute" {
-		t.Errorf("unexpected kind %q", route.Kind)
-	}
-	if route.Labels["app"] != "web" {
-		t.Errorf("expected label app=web, got %v", route.Labels)
-	}
-	if route.Annotations["app"] != "web" {
-		t.Errorf("expected annotation app=web, got %v", route.Annotations)
-	}
-	if len(route.Spec.Hostnames) != 0 {
-		t.Errorf("expected empty hostnames, got %v", route.Spec.Hostnames)
-	}
-	if len(route.Spec.Rules) != 0 {
-		t.Errorf("expected empty rules, got %v", route.Spec.Rules)
-	}
-}
-
 func TestHTTPRouteNilErrors(t *testing.T) {
 	// All HTTPRoute functions now panic on nil receiver
 	assertPanics(t, func() { AddHTTPRouteHostname(nil, "example.com") })

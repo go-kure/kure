@@ -4,38 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	kubernetes "github.com/go-kure/kure/pkg/kubernetes"
 )
-
-func TestCreateConfigMap(t *testing.T) {
-	cm := kubernetes.CreateConfigMap("cm", "ns")
-	if cm == nil {
-		t.Fatal("expected non-nil ConfigMap")
-	}
-	if cm.Name != "cm" || cm.Namespace != "ns" {
-		t.Fatalf("metadata mismatch: %s/%s", cm.Namespace, cm.Name)
-	}
-	if cm.Kind != "ConfigMap" {
-		t.Errorf("unexpected kind %q", cm.Kind)
-	}
-	if cm.APIVersion != corev1.SchemeGroupVersion.String() {
-		t.Errorf("unexpected apiVersion %q", cm.APIVersion)
-	}
-	if cm.Labels["app"] != "cm" {
-		t.Errorf("expected default label app=cm, got %q", cm.Labels["app"])
-	}
-	if cm.Annotations["app"] != "cm" {
-		t.Errorf("expected default annotation app=cm, got %q", cm.Annotations["app"])
-	}
-	if len(cm.Data) != 0 {
-		t.Errorf("expected empty data map")
-	}
-	if len(cm.BinaryData) != 0 {
-		t.Errorf("expected empty binary data map")
-	}
-}
 
 func TestAddConfigMapData(t *testing.T) {
 	cm := kubernetes.CreateConfigMap("cm", "ns")

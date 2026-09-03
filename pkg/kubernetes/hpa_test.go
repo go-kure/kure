@@ -6,19 +6,6 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 )
 
-func TestCreateHorizontalPodAutoscaler(t *testing.T) {
-	hpa := CreateHorizontalPodAutoscaler("my-hpa", "default")
-	if hpa.Name != "my-hpa" || hpa.Namespace != "default" {
-		t.Fatalf("metadata mismatch: %s/%s", hpa.Namespace, hpa.Name)
-	}
-	if hpa.Kind != "HorizontalPodAutoscaler" {
-		t.Errorf("unexpected kind %q", hpa.Kind)
-	}
-	if hpa.Labels["app"] != "my-hpa" {
-		t.Errorf("expected label app=my-hpa, got %v", hpa.Labels)
-	}
-}
-
 func TestHPANilErrors(t *testing.T) {
 	// All HPA functions now panic on nil receiver
 	assertPanics(t, func() { SetHPAScaleTargetRef(nil, "apps/v1", "Deployment", "web") })
