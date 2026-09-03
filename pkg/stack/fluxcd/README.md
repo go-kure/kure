@@ -90,7 +90,8 @@ gr.Spec.Interval = metav1.Duration{Duration: g.DefaultInterval}
 Only writes that the contract admits as sugar keep a helper — appending to a slice field,
 or assigning a pointer field through a constructed value, as with
 `SetGitRepositoryReference`. See
-[`pkg/kubernetes/README.md`](../../kubernetes/README.md) for the admission rules.
+[Kubernetes Builders](/api-reference/kubernetes-builders/) for the admission
+rules.
 
 ## Layout Integration
 

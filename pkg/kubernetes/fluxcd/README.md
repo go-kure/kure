@@ -150,7 +150,8 @@ fluxcd.SetHelmReleaseChart(hr, &helmv2.HelmChartTemplate{
         },
     },
 })
-_ = fluxcd.SetHelmReleaseValuesFromMap(hr, map[string]any{"replicaCount": 3}) // handle err
+// Panics if the map does not marshal (a channel, a function, a NaN).
+fluxcd.SetHelmReleaseValuesFromMap(hr, map[string]any{"replicaCount": 3})
 // Alternative — pre-marshalled JSON:
 // fluxcd.SetHelmReleaseValues(hr, &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount":3}`)})
 fluxcd.AddHelmReleaseValuesFrom(hr, helmv2.ValuesReference{

@@ -17,15 +17,6 @@ pkg/kubernetes.SetConfigMapLabels
 pkg/kubernetes.SetNamespacePSALabels
 pkg/kubernetes.SetPDBMaxUnavailable
 pkg/kubernetes.SetPDBMinAvailable
-pkg/kubernetes.SetResourceLimit
-pkg/kubernetes.SetResourceLimitCPU
-pkg/kubernetes.SetResourceLimitEphemeralStorage
-pkg/kubernetes.SetResourceLimitMemory
-pkg/kubernetes.SetResourceRequest
-pkg/kubernetes.SetResourceRequestCPU
-pkg/kubernetes.SetResourceRequestEphemeralStorage
-pkg/kubernetes.SetResourceRequestMemory
-pkg/kubernetes/fluxcd.SetHelmReleaseValuesFromMap
 pkg/kubernetes/volsync.AddSyncthingPeer
 pkg/kubernetes/volsync.SetReplicationDestinationManualTrigger
 pkg/kubernetes/volsync.SetReplicationDestinationMover

@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"encoding/json"
+	"fmt"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
@@ -451,14 +452,15 @@ func SetHelmReleaseValues(obj *helmv2.HelmRelease, values *apiextensionsv1.JSON)
 	obj.Spec.Values = values
 }
 
-// SetHelmReleaseValuesFromMap marshals values to JSON and sets them on the HelmRelease.
-func SetHelmReleaseValuesFromMap(obj *helmv2.HelmRelease, values map[string]any) error {
+// SetHelmReleaseValuesFromMap marshals values to JSON and sets them on the
+// HelmRelease. A map that does not marshal — a channel, a function, a NaN —
+// is a programming error and panics.
+func SetHelmReleaseValuesFromMap(obj *helmv2.HelmRelease, values map[string]any) {
 	raw, err := json.Marshal(values)
 	if err != nil {
-		return err
+		panic(fmt.Sprintf("SetHelmReleaseValuesFromMap: %v", err))
 	}
 	obj.Spec.Values = &apiextensionsv1.JSON{Raw: raw}
-	return nil
 }
 
 // AddHelmReleasePostRenderer appends a post renderer.
