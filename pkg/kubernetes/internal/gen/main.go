@@ -136,10 +136,13 @@ func render(root string) (map[string][]byte, error) {
 }
 
 // findOrphans walks root for generated files that no current package renders:
-// the leftovers of a package whose every kind left the scheme. Only a regular
-// file carrying the generated header is ever treated as generated; a symlink
-// or a hand-written file under a generated name is an error, never a deletion
-// candidate. A missing root is not an error (nothing can be orphaned there).
+// the leftovers of a package whose every kind left the scheme. A path the
+// generator renders is its own to overwrite whatever it holds, so a lost
+// header there is a stale file, not an error. Elsewhere only a regular file
+// carrying the generated header is ever treated as generated; a symlink under
+// any generated name, or a hand-written file under one the generator does not
+// render, is an error, never a deletion candidate. A missing root is not an
+// error (nothing can be orphaned there).
 func findOrphans(root string, files map[string][]byte) ([]string, error) {
 	generated := map[string]bool{createFile: true, createTestFile: true, registryFile: true}
 	var orphans []string
@@ -156,6 +159,9 @@ func findOrphans(root string, files map[string][]byte) ([]string, error) {
 		if !d.Type().IsRegular() {
 			return errors.Errorf("%s is not a regular file (a symlink?); generated files are written and removed in place", path)
 		}
+		if _, rendered := files[path]; rendered {
+			return nil
+		}
 		have, err := os.ReadFile(path) //nolint:gosec // path comes from walking the generator's own output root
 		if err != nil {
 			return err
@@ -163,9 +169,7 @@ func findOrphans(root string, files map[string][]byte) ([]string, error) {
 		if !bytes.HasPrefix(have, []byte(header)) {
 			return errors.Errorf("%s carries a generated file name but not the generated header; rename it", path)
 		}
-		if _, rendered := files[path]; !rendered {
-			orphans = append(orphans, path)
-		}
+		orphans = append(orphans, path)
 		return nil
 	})
 	if err != nil {
