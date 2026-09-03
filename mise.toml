@@ -79,6 +79,14 @@ run = "./scripts/sync-versions.sh check"
 description = "Generate docs and the pkg/versions Go API from versions.yaml"
 run = "./scripts/sync-versions.sh generate"
 
+[tasks."builders:generate"]
+description = "Regenerate the per-kind constructor wrappers under pkg/kubernetes from the scheme"
+run = "./scripts/gen-builders.sh generate"
+
+[tasks."builders:check"]
+description = "Fail if the generated constructor wrappers under pkg/kubernetes are stale"
+run = "./scripts/gen-builders.sh check"
+
 [tasks."versions:test"]
 description = "Run scripts/sync-versions.sh guard tests (hermetic, no network)"
 run = "bash scripts/test/run-tests.sh"

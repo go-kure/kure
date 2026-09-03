@@ -1,21 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    app: my-app
-  labels:
-    app: my-app
   name: my-app
   namespace: default
 spec:
-  selector:
-    matchLabels:
-      app: my-app
+  selector: null
   strategy: {}
   template:
-    metadata:
-      labels:
-        app: my-app
+    metadata: {}
     spec:
       containers:
         - image: myapp:latest

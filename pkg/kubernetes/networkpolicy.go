@@ -5,33 +5,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateNetworkPolicy returns a NetworkPolicy with default labels, annotations,
-// and empty rule slices.
-func CreateNetworkPolicy(name, namespace string) *netv1.NetworkPolicy {
-	return &netv1.NetworkPolicy{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "NetworkPolicy",
-			APIVersion: netv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: netv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
-			PolicyTypes: []netv1.PolicyType{},
-			Ingress:     []netv1.NetworkPolicyIngressRule{},
-			Egress:      []netv1.NetworkPolicyEgressRule{},
-		},
-	}
-}
-
 // SetNetworkPolicyPodSelector sets the pod selector on the NetworkPolicy.
 func SetNetworkPolicyPodSelector(np *netv1.NetworkPolicy, selector metav1.LabelSelector) {
 	if np == nil {

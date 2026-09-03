@@ -1,23 +1,13 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  annotations:
-    app: my-app
-  labels:
-    app: my-app
   name: my-app
   namespace: default
 spec:
-  podManagementPolicy: OrderedReady
-  replicas: 0
-  selector:
-    matchLabels:
-      app: my-app
+  selector: null
   serviceName: ""
   template:
-    metadata:
-      labels:
-        app: my-app
+    metadata: {}
     spec:
       containers:
         - image: myapp:latest

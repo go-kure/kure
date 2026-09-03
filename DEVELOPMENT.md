@@ -245,7 +245,13 @@ keeps the golangci-lint pin in `Makefile`, `.github/workflows/ci.yml` and
 scripts/sync-go-version.sh`, which keeps `go.mod`'s own `go` directive in step
 with `mise.toml`'s `go` pin — a bot PR touching those files, or a
 `check-tool-versions`/`check-go-version` failure on one, is this same
-automation.
+automation. The rule's last command, `./scripts/gen-builders.sh generate`,
+regenerates the per-kind constructor wrappers under `pkg/kubernetes`
+(`zz_generated_*.go`) from the registered scheme, so an API-module bump that
+adds or drops a kind arrives with its wrapper; `validate` runs
+`./scripts/gen-builders.sh check` and fails on drift. Locally:
+`make gen-builders` / `make check-builders` (or `mise run builders:generate` /
+`builders:check`).
 
 For the full dependency update process (review, bundling, version tracking), see [Dependency Updates](/contributing/dependency-updates/).
 

@@ -8,11 +8,6 @@ import (
 	intk8s "github.com/go-kure/kure/internal/kubernetes"
 )
 
-// CreateConfigMap returns a basic ConfigMap object with common metadata preset.
-func CreateConfigMap(name, namespace string) *corev1.ConfigMap {
-	return intk8s.CreateConfigMap(name, namespace)
-}
-
 // AddConfigMapData inserts a single key/value pair into the ConfigMap's Data field.
 func AddConfigMapData(cm *corev1.ConfigMap, key, value string) {
 	intk8s.AddConfigMapData(cm, key, value)

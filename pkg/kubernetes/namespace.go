@@ -2,31 +2,7 @@ package kubernetes
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// CreateNamespace creates a new Namespace with TypeMeta, a default "app" label
-// and annotation, and an empty Spec.Finalizers slice.
-func CreateNamespace(name string) *corev1.Namespace {
-	return &corev1.Namespace{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Namespace",
-			APIVersion: corev1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: corev1.NamespaceSpec{
-			Finalizers: []corev1.FinalizerName{},
-		},
-	}
-}
 
 // AddNamespaceLabel adds a label to the Namespace, initializing the map if needed.
 func AddNamespaceLabel(ns *corev1.Namespace, key, value string) {

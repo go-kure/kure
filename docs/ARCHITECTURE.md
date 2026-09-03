@@ -463,39 +463,25 @@ Builders provide compile-time type safety through:
 Example implementation:
 
 ```go
-// internal/kubernetes/deployment.go
+// pkg/kubernetes/zz_generated_create.go (generated from the scheme)
 
+// CreateDeployment returns an apps/v1 Deployment carrying TypeMeta and identity only.
 func CreateDeployment(name, namespace string) *appsv1.Deployment {
-    return &appsv1.Deployment{
-        ObjectMeta: metav1.ObjectMeta{
-            Name:      name,
-            Namespace: namespace,
-        },
-        Spec: appsv1.DeploymentSpec{
-            Selector: &metav1.LabelSelector{
-                MatchLabels: map[string]string{
-                    "app": name,
-                },
-            },
-            Template: corev1.PodTemplateSpec{
-                ObjectMeta: metav1.ObjectMeta{
-                    Labels: map[string]string{
-                        "app": name,
-                    },
-                },
-                Spec: corev1.PodSpec{
-                    Containers: []corev1.Container{},
-                },
-            },
-        },
-    }
+    return Create[appsv1.Deployment](name, namespace)
 }
+
+// pkg/kubernetes/deployment.go (admissible sugar: slice append)
 
 func AddDeploymentContainer(deployment *appsv1.Deployment, container *corev1.Container) {
     deployment.Spec.Template.Spec.Containers = append(
         deployment.Spec.Template.Spec.Containers, *container)
 }
 ```
+
+Constructors emit identity only (`apiVersion`, `kind`, `metadata.name`,
+`metadata.namespace`); labels, selectors and every other value are written by
+the caller on the upstream struct. The builder contract on the
+[Kubernetes Builders](/api-reference/kubernetes-builders/) page is normative.
 
 ### Cross-Resource Consistency
 

@@ -228,6 +228,14 @@ jobs:
     - name: Validate version consistency
       run: ./scripts/sync-versions.sh check
 
+    # The per-kind constructor wrappers under pkg/kubernetes are generated from
+    # the registered scheme (pkg/kubernetes/internal/gen). A dependency bump that
+    # adds or drops an API kind changes the expected output; this fails the job
+    # until `make gen-builders` is re-run and committed. Renovate runs the
+    # generator itself as a postUpgradeTasks command on gomod bumps.
+    - name: Check generated builders
+      run: ./scripts/gen-builders.sh check
+
     # sync-eso-pin.sh, sync-tool-versions.sh and sync-govulncheck-docs.sh have no other CI
     # coverage: they're Renovate postUpgradeTasks commands, not something
     # `sync-versions.sh check`/`make check-tool-versions`/`make check-govulncheck-docs` ever

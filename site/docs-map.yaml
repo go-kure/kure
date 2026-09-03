@@ -108,12 +108,25 @@ packages:
     readme: pkg/stack/helm/README.md
     mounted: false
     reason: "Internal-facing Helm workflow helpers; not yet part of the published API-reference surface."
+  - path: pkg/kubernetes/internal/kinds
+    readme: pkg/kubernetes/README.md
+    mounted: false
+    reason: "Internal kinds/scope table feeding the constructor generator; documented on the Kubernetes Builders page."
+  - path: pkg/kubernetes/internal/gen
+    readme: pkg/kubernetes/README.md
+    mounted: false
+    reason: "Internal generator for the per-kind constructor wrappers; documented on the Kubernetes Builders page."
+  - path: pkg/kubernetes/internal/admission
+    readme: pkg/kubernetes/README.md
+    mounted: false
+    reason: "Internal go/ast classifier behind the sugar admission test; documented on the Kubernetes Builders page."
 
 # Non-package docs mounted into the site. Not gated by code changes.
 extra_mounts:
   - {source: docs/quickstart.md, target: getting-started/quickstart.md, title: Quickstart, weight: 10}
   - {source: docs/ARCHITECTURE.md, target: concepts/architecture.md, title: Architecture, weight: 10}
   - {source: docs/oci-layout.md, target: concepts/oci-layout.md, title: OCI Artifact Layout, weight: 20}
+  - {source: docs/builder-contract-release-1.md, target: concepts/builder-contract-release-1.md, title: Builder Contract Migration, weight: 30}
   - {source: examples/patches/README.md, target: examples/patches.md, title: Patches, weight: 10}
   - {source: docs/compatibility.md, target: api-reference/compatibility.md, title: Compatibility Matrix, weight: 120}
   - {source: DEVELOPMENT.md, target: contributing/guide.md, title: Development Guide, weight: 10}

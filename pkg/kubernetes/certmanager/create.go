@@ -5,50 +5,7 @@ import (
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// CreateCertificate returns a new Certificate with TypeMeta and ObjectMeta set.
-func CreateCertificate(name, namespace string) *certv1.Certificate {
-	return &certv1.Certificate{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Certificate",
-			APIVersion: certv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-	}
-}
-
-// CreateIssuer returns a new Issuer with TypeMeta and ObjectMeta set.
-func CreateIssuer(name, namespace string) *certv1.Issuer {
-	return &certv1.Issuer{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Issuer",
-			APIVersion: certv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-	}
-}
-
-// CreateClusterIssuer returns a new ClusterIssuer with TypeMeta and ObjectMeta set.
-// ClusterIssuer is cluster-scoped so namespace is not set.
-func CreateClusterIssuer(name string) *certv1.ClusterIssuer {
-	return &certv1.ClusterIssuer{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ClusterIssuer",
-			APIVersion: certv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-	}
-}
 
 // CreateACMEIssuer returns an ACMEIssuer with the mandatory fields set.
 func CreateACMEIssuer(server, email string, key cmmeta.SecretKeySelector) *cmacme.ACMEIssuer {

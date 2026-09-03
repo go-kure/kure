@@ -8,22 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func TestCreateService(t *testing.T) {
-	svc := CreateService("my-svc", "default")
-	if svc.Name != "my-svc" || svc.Namespace != "default" {
-		t.Fatalf("metadata mismatch: %s/%s", svc.Namespace, svc.Name)
-	}
-	if svc.Kind != "Service" {
-		t.Errorf("unexpected kind %q", svc.Kind)
-	}
-	if svc.Labels["app"] != "my-svc" {
-		t.Errorf("expected label app=my-svc, got %v", svc.Labels)
-	}
-	if len(svc.Spec.Ports) != 0 {
-		t.Errorf("expected no ports, got %d", len(svc.Spec.Ports))
-	}
-}
-
 func TestServiceNilErrors(t *testing.T) {
 	// All Service functions now panic on nil receiver
 	assertPanics(t, func() { AddServicePort(nil, corev1.ServicePort{}) })

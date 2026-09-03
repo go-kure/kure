@@ -3,40 +3,9 @@ package kubernetes
 import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
-
-func CreateJob(name, namespace string) *batchv1.Job {
-	obj := &batchv1.Job{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Job",
-			APIVersion: batchv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: batchv1.JobSpec{
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": name,
-					},
-				},
-				Spec: corev1.PodSpec{},
-			},
-		},
-	}
-	return obj
-}
 
 // SetJobPodSpec assigns a PodSpec to the Job template.
 func SetJobPodSpec(job *batchv1.Job, spec *corev1.PodSpec) error {

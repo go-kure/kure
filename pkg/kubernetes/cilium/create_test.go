@@ -181,9 +181,6 @@ func TestCiliumCIDRGroup_EmptyCIDRs(t *testing.T) {
 	if obj == nil {
 		t.Fatal("expected non-nil CiliumCIDRGroup")
 	}
-	if obj.Spec.ExternalCIDRs == nil {
-		t.Error("expected non-nil ExternalCIDRs slice")
-	}
 	if len(obj.Spec.ExternalCIDRs) != 0 {
 		t.Errorf("expected 0 ExternalCIDRs, got %d", len(obj.Spec.ExternalCIDRs))
 	}

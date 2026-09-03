@@ -6,37 +6,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreatePersistentVolumeClaim returns a PersistentVolumeClaim object with sane defaults.
-func CreatePersistentVolumeClaim(name string, namespace string) *corev1.PersistentVolumeClaim {
-	mode := corev1.PersistentVolumeFilesystem
-	obj := &corev1.PersistentVolumeClaim{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "PersistentVolumeClaim",
-			APIVersion: corev1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("1Gi"),
-				},
-			},
-			VolumeMode: &mode,
-		},
-	}
-	return obj
-}
-
 // AddPVCAccessMode appends an access mode to the claim.
 func AddPVCAccessMode(pvc *corev1.PersistentVolumeClaim, mode corev1.PersistentVolumeAccessMode) {
 	pvc.Spec.AccessModes = append(pvc.Spec.AccessModes, mode)

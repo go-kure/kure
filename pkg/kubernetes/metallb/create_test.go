@@ -6,45 +6,6 @@ import (
 	metallbv1beta1 "go.universe.tf/metallb/api/v1beta1"
 )
 
-func TestCreateIPAddressPool(t *testing.T) {
-	obj := CreateIPAddressPool("my-pool", "metallb-system")
-	if obj == nil {
-		t.Fatal("expected non-nil IPAddressPool")
-	}
-	if obj.Name != "my-pool" {
-		t.Errorf("expected Name 'my-pool', got %s", obj.Name)
-	}
-	if obj.Namespace != "metallb-system" {
-		t.Errorf("expected Namespace 'metallb-system', got %s", obj.Namespace)
-	}
-	if obj.Kind != "IPAddressPool" {
-		t.Errorf("expected Kind 'IPAddressPool', got %s", obj.Kind)
-	}
-}
-
-func TestCreateBGPPeer(t *testing.T) {
-	obj := CreateBGPPeer("my-peer", "metallb-system")
-	if obj == nil {
-		t.Fatal("expected non-nil BGPPeer")
-	}
-	if obj.Name != "my-peer" {
-		t.Errorf("expected Name 'my-peer', got %s", obj.Name)
-	}
-	if obj.Namespace != "metallb-system" {
-		t.Errorf("expected Namespace 'metallb-system', got %s", obj.Namespace)
-	}
-}
-
-func TestCreateBGPAdvertisement(t *testing.T) {
-	obj := CreateBGPAdvertisement("my-advert", "metallb-system")
-	if obj == nil {
-		t.Fatal("expected non-nil BGPAdvertisement")
-	}
-	if obj.Name != "my-advert" {
-		t.Errorf("expected Name 'my-advert', got %s", obj.Name)
-	}
-}
-
 func TestCreateL2Advertisement(t *testing.T) {
 	obj := CreateL2Advertisement("my-l2", "metallb-system")
 	if obj == nil {
@@ -55,16 +16,6 @@ func TestCreateL2Advertisement(t *testing.T) {
 	}
 	if obj.Namespace != "metallb-system" {
 		t.Errorf("expected Namespace 'metallb-system', got %s", obj.Namespace)
-	}
-}
-
-func TestCreateBFDProfile(t *testing.T) {
-	obj := CreateBFDProfile("full-bfd", "metallb-system")
-	if obj == nil {
-		t.Fatal("expected non-nil BFDProfile")
-	}
-	if obj.Name != "full-bfd" {
-		t.Errorf("expected Name 'full-bfd', got %s", obj.Name)
 	}
 }
 

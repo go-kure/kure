@@ -1,34 +1,8 @@
 package kubernetes
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
-
-// CreateHTTPRoute returns an HTTPRoute with default labels, annotations,
-// and empty rule and hostname slices.
-func CreateHTTPRoute(name, namespace string) *gwapiv1.HTTPRoute {
-	return &gwapiv1.HTTPRoute{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "HTTPRoute",
-			APIVersion: gwapiv1.GroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: gwapiv1.HTTPRouteSpec{
-			Hostnames: []gwapiv1.Hostname{},
-			Rules:     []gwapiv1.HTTPRouteRule{},
-		},
-	}
-}
 
 // AddHTTPRouteHostname appends a hostname to the HTTPRoute.
 func AddHTTPRouteHostname(route *gwapiv1.HTTPRoute, hostname gwapiv1.Hostname) {

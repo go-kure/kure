@@ -3,39 +3,9 @@ package kubernetes
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
-
-// CreateDaemonSet returns a DaemonSet with sane defaults.
-func CreateDaemonSet(name, namespace string) *appsv1.DaemonSet {
-	obj := &appsv1.DaemonSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "DaemonSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: appsv1.DaemonSetSpec{
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
-				Spec:       corev1.PodSpec{},
-			},
-			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{},
-		},
-	}
-	return obj
-}
 
 // SetDaemonSetPodSpec assigns a PodSpec to the DaemonSet template.
 func SetDaemonSetPodSpec(ds *appsv1.DaemonSet, spec *corev1.PodSpec) error {

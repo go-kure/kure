@@ -3,51 +3,9 @@ package kubernetes
 import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
-
-// CreateCronJob creates a new batch/v1 CronJob with the given name, namespace,
-// and schedule. The returned object has TypeMeta, labels, annotations, and a
-// job template pre-populated so it can be serialized to YAML immediately.
-// The pod template restart policy defaults to Never, which is required by
-// Kubernetes for Job and CronJob pods.
-func CreateCronJob(name, namespace, schedule string) *batchv1.CronJob {
-	return &batchv1.CronJob{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "CronJob",
-			APIVersion: batchv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
-			Annotations: map[string]string{
-				"app": name,
-			},
-		},
-		Spec: batchv1.CronJobSpec{
-			Schedule: schedule,
-			JobTemplate: batchv1.JobTemplateSpec{
-				Spec: batchv1.JobSpec{
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{
-								"app": name,
-							},
-						},
-						Spec: corev1.PodSpec{
-							RestartPolicy: corev1.RestartPolicyNever,
-						},
-					},
-				},
-			},
-		},
-	}
-}
 
 // SetCronJobPodSpec assigns a PodSpec to the CronJob's job template.
 func SetCronJobPodSpec(cron *batchv1.CronJob, spec *corev1.PodSpec) error {

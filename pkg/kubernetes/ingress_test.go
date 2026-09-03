@@ -6,22 +6,6 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 )
 
-func TestCreateIngress(t *testing.T) {
-	ing := CreateIngress("my-ing", "default", "nginx")
-	if ing.Name != "my-ing" || ing.Namespace != "default" {
-		t.Fatalf("metadata mismatch: %s/%s", ing.Namespace, ing.Name)
-	}
-	if ing.Kind != "Ingress" {
-		t.Errorf("unexpected kind %q", ing.Kind)
-	}
-	if ing.Labels["app"] != "my-ing" {
-		t.Errorf("expected label app=my-ing, got %v", ing.Labels)
-	}
-	if *ing.Spec.IngressClassName != "nginx" {
-		t.Errorf("unexpected class name %q", *ing.Spec.IngressClassName)
-	}
-}
-
 func TestIngressNilErrors(t *testing.T) {
 	rule := CreateIngressRule("example.com")
 	// All Ingress functions now panic on nil receiver
@@ -32,15 +16,12 @@ func TestIngressNilErrors(t *testing.T) {
 }
 
 func TestIngressFunctions(t *testing.T) {
-	ing := CreateIngress("ing", "ns", "class")
+	ing := CreateIngress("ing", "ns")
 	if ing.Name != "ing" || ing.Namespace != "ns" {
 		t.Fatalf("metadata mismatch: %s/%s", ing.Namespace, ing.Name)
 	}
 	if ing.Kind != "Ingress" {
 		t.Errorf("unexpected kind %q", ing.Kind)
-	}
-	if *ing.Spec.IngressClassName != "class" {
-		t.Errorf("unexpected class name %q", *ing.Spec.IngressClassName)
 	}
 
 	rule := CreateIngressRule("example.com")
