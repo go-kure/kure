@@ -79,7 +79,11 @@ body does one of:
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
-and two such assignments in one body are two forwarders, not a composite. A helper
+and two such assignments in one body are two forwarders, not a composite. A bare
+assignment next to an admitted operation is inadmissible when its value is not an
+argument: an append that also sets a scalar to a literal or a computed value touches a
+field the caller did not name (§4). Forwarding a second argument alongside
+(`SetHPAMinMaxReplicas(hpa, 2, 10)`) leaves the class alone. A helper
 that returns anything, an `error` included, is inadmissible whatever its body does
 (§4 allows no error return: a nil receiver panics). A nil receiver guard admits
 nothing on its own. A body that assigns `nil` to any field,

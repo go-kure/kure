@@ -19,7 +19,7 @@ obj := cilium.CreateCiliumNetworkPolicy("allow-internal", "default")
 cl := cilium.CreateCiliumCIDRGroup("internal-ranges")
 ```
 
-The config-struct builders (`cilium.CiliumNetworkPolicy(&cilium.CiliumNetworkPolicyConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
+The config-struct builders (`cilium.CiliumNetworkPolicy(&cilium.CiliumNetworkPolicyConfig{...})`) are a separate, opinionated layer on top of the same upstream types. They now delegate to the generated constructors and start from identity only: `cilium.CiliumCIDRGroup(cfg)` with no CIDRs leaves `spec.externalCIDRs` nil where it used to be an empty slice (recorded in the release-1 migration ledger); the other config builders serialise as before. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
 
 See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 

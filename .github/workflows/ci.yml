@@ -111,6 +111,11 @@ jobs:
             # these two scripts plus ci.yml/docs/github-workflows.md, both already listed above.
             - 'scripts/check-govulncheck-docs.sh'
             - 'scripts/sync-govulncheck-docs.sh'
+            # scripts/gen-builders.sh is the wrapper `validate` runs as
+            # check-builders and Renovate runs after every Go module bump; a
+            # PR touching only the script must not skip the job that
+            # exercises it.
+            - 'scripts/gen-builders.sh'
           docs:
             - 'site/**'
             - 'docs/**'

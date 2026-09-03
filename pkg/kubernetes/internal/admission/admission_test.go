@@ -109,6 +109,47 @@ func SetReplicasClearingRef(o *Obj, n int32) {
 	o.Spec.Ref = nil
 }
 
+// inadmissible: an append plus a bare write of a value the caller did not pass
+func AddItemAndName(o *Obj, s string) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Spec.Name = "item"
+}
+
+// inadmissible: a pointer assignment plus a default into an unrelated field
+func SetReplicasAndDefault(o *Obj, n int32) {
+	o.Spec.Replicas = &n
+	o.Spec.Name = "web"
+}
+
+// inadmissible: a computed value is not one the caller passed either
+func SetReplicasAndDerived(o *Obj, n int32, name string) {
+	o.Spec.Replicas = &n
+	o.Spec.Name = name + "-x"
+}
+
+// class b: a bare write of a parameter next to the admitted operation forwards
+// a caller-supplied value and does not change the class
+func SetReplicasAndName(o *Obj, n int32, name string) {
+	o.Spec.Replicas = &n
+	o.Spec.Name = name
+}
+
+// class b, nil-init with new then a write through the star
+func SetReplicasThroughStar(o *Obj, n int32) {
+	if o.Spec.Replicas == nil {
+		o.Spec.Replicas = new(int32)
+	}
+	*o.Spec.Replicas = n
+}
+
+// class a, make-init of the map then insert
+func AddLabelMake(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = make(map[string]string)
+	}
+	o.Labels[k] = v
+}
+
 // inadmissible: a typed nil conversion is still a clear
 func SetRefTypedNil(o *Obj) { o.Spec.Ref = (*Ref)(nil) }
 
@@ -309,6 +350,12 @@ func TestClassify_Fixture(t *testing.T) {
 
 	want := map[string]Class{
 		"AddItem":                Append,
+		"AddItemAndName":         Inadmissible,
+		"SetReplicasAndDefault":  Inadmissible,
+		"SetReplicasAndDerived":  Inadmissible,
+		"SetReplicasAndName":     Pointer,
+		"SetReplicasThroughStar": Pointer,
+		"AddLabelMake":           Append,
 		"AddLabel":               Append,
 		"AddLabelViaLocal":       Append,
 		"SetReplicas":            Pointer,
@@ -368,11 +415,14 @@ func TestClassify_Fixture(t *testing.T) {
 	}
 	// The reasons distinguish the rules a fixture exists for.
 	for name, want := range map[string]string{
-		"SetNameViaZeroLocal":  "single bare field assignment",
-		"AddItemWithError":     "returns a value",
-		"SetReplicasReturning": "returns a value",
-		"SetRefViaNilLocal":    "assigns nil",
-		"SetNameAndA":          "bare field writes",
+		"SetNameViaZeroLocal":   "single bare field assignment",
+		"AddItemWithError":      "returns a value",
+		"SetReplicasReturning":  "returns a value",
+		"SetRefViaNilLocal":     "assigns nil",
+		"SetNameAndA":           "bare field writes",
+		"AddItemAndName":        "bare write to o.Spec.Name alongside",
+		"SetReplicasAndDefault": "bare write to o.Spec.Name alongside",
+		"SetReplicasAndDerived": "bare write to o.Spec.Name alongside",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)

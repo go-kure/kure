@@ -39,8 +39,8 @@ description = "Quick pre-commit check"
 run = "make check"
 
 [tasks.verify]
-description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs)"
-depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs", "versions:test"]
+description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs, generated builders)"
+depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs", "versions:test", "builders:check"]
 
 [tasks.check-tool-versions]
 description = "Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml"
