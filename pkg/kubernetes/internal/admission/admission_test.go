@@ -90,6 +90,20 @@ func SetViaDelegate(o *Obj, n string) { SetName(o, n) }
 // inadmissible: no write at all
 func SetNothing(o *Obj) { _ = o }
 
+// inadmissible: a receiver nil guard does not make a bare forwarder class b
+func SetGuardedName(o *Obj, n string) {
+	if o == nil {
+		panic("nil")
+	}
+	o.Spec.Name = n
+}
+
+// inadmissible: clears a field the caller did not name, despite the pointer assignment
+func SetReplicasClearingRef(o *Obj, n int32) {
+	o.Spec.Replicas = &n
+	o.Spec.Ref = nil
+}
+
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
 
@@ -125,20 +139,22 @@ func TestClassify_Fixture(t *testing.T) {
 	}
 
 	want := map[string]Class{
-		"AddItem":           Append,
-		"AddLabel":          Append,
-		"AddLabelViaLocal":  Append,
-		"SetReplicas":       Pointer,
-		"SetRefName":        Pointer,
-		"SetNestedRef":      Composite,
-		"SetNested":         Composite,
-		"SetNameAndA":       Composite,
-		"SetName":           Inadmissible,
-		"SetNameTwice":      Inadmissible,
-		"SetNestedOneField": Inadmissible,
-		"SetViaDelegate":    Inadmissible,
-		"SetNothing":        Inadmissible,
-		"SetExempted":       Exempt,
+		"AddItem":                Append,
+		"AddLabel":               Append,
+		"AddLabelViaLocal":       Append,
+		"SetReplicas":            Pointer,
+		"SetRefName":             Pointer,
+		"SetNestedRef":           Composite,
+		"SetNested":              Composite,
+		"SetNameAndA":            Composite,
+		"SetName":                Inadmissible,
+		"SetNameTwice":           Inadmissible,
+		"SetNestedOneField":      Inadmissible,
+		"SetViaDelegate":         Inadmissible,
+		"SetNothing":             Inadmissible,
+		"SetGuardedName":         Inadmissible,
+		"SetReplicasClearingRef": Inadmissible,
+		"SetExempted":            Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {

@@ -6,7 +6,20 @@ The `cnpg` package provides strongly-typed constructor functions for creating Cl
 
 ## Overview
 
-Each function takes a configuration struct and returns a fully initialized custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification. Domain-friendly option structs keep operator API types out of consumer configuration.
+Each config-struct builder takes a configuration struct and returns a populated custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification. Domain-friendly option structs keep operator API types out of consumer configuration.
+
+## Constructors
+
+Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`. The upstream struct is the construction API; set spec fields directly or through the admissible `Set*`/`Add*` sugar below.
+
+```go
+obj := cnpg.CreateCluster("pg-main", "databases")
+cl := cnpg.CreateClusterImageCatalog("postgres-images")
+```
+
+The config-struct builders (`cnpg.Cluster(&cnpg.ClusterConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
+
+See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 
 ## Supported Resources
 

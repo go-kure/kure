@@ -53,6 +53,11 @@ func run(args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "gen:", err)
 		return 1
 	}
+	orphans, err := findOrphans(*root, files)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "gen:", err)
+		return 1
+	}
 	if *check {
 		stale := 0
 		for _, path := range sortedKeys(files) {
@@ -62,10 +67,20 @@ func run(args []string, stderr io.Writer) int {
 				stale++
 			}
 		}
+		for _, path := range orphans {
+			_, _ = fmt.Fprintf(stderr, "gen: %s is orphaned, no registered kind routes to its package (run scripts/gen-builders.sh generate)\n", path)
+			stale++
+		}
 		if stale > 0 {
 			return 1
 		}
 		return 0
+	}
+	for _, path := range orphans {
+		if err := os.Remove(path); err != nil {
+			_, _ = fmt.Fprintln(stderr, "gen:", err)
+			return 1
+		}
 	}
 	for _, path := range sortedKeys(files) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -117,6 +132,34 @@ func render(root string) (map[string][]byte, error) {
 	}
 	files[filepath.Join(root, registryFile)] = src
 	return files, nil
+}
+
+// findOrphans walks root for generated files that no current package renders:
+// the leftovers of a package whose every kind left the scheme. A missing root
+// is not an error (nothing can be orphaned there).
+func findOrphans(root string, files map[string][]byte) ([]string, error) {
+	generated := map[string]bool{createFile: true, createTestFile: true, registryFile: true}
+	var orphans []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if path == root && os.IsNotExist(walkErr) {
+				return filepath.SkipAll
+			}
+			return walkErr
+		}
+		if d.IsDir() || !generated[d.Name()] {
+			return nil
+		}
+		if _, rendered := files[path]; !rendered {
+			orphans = append(orphans, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gen: scan %s for orphaned files: %w", root, err)
+	}
+	sort.Strings(orphans)
+	return orphans, nil
 }
 
 func wrapperName(k kinds.Kind) string { return "Create" + k.GVK.Kind }

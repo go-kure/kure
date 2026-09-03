@@ -4,14 +4,19 @@
 // A helper is admissible when its body does one of:
 //
 //   - class a: append to a slice or insert into a map;
-//   - class b: assign a pointer-typed field (including the nil-init of an
-//     intermediate struct before writing through it);
+//   - class b: assign a pointer-typed field (the nil-init of a pointer
+//     intermediate before writing through it is itself such an assignment);
 //   - class c: write a composite literal with two or more fields, or a nested
 //     literal, or write two or more distinct fields.
 //
 // Anything else is inadmissible: a bare single-field forwarder, a helper with
-// no field write, a helper that only delegates. The contract also exempts a
-// fixed set of generic metadata helpers by name (§5); callers pass those in.
+// no field write, a helper that only delegates. A body that assigns the
+// literal nil to a field is inadmissible whatever else it does: that clears a
+// field the caller did not name, which the purity rule (§4) forbids. A nil
+// check on its own admits nothing; in particular the receiver guard
+// (`if obj == nil { panic(...) }`) does not turn a bare forwarder into class b.
+// The contract also exempts a fixed set of generic metadata helpers by name
+// (§5); callers pass those in.
 //
 // The classifier is syntactic with type information (go/packages): it never
 // executes code, and it is deliberately conservative, so an unusual but
@@ -174,56 +179,58 @@ func isSugarHelper(fn *ast.FuncDecl) bool {
 }
 
 // classify inspects fn's body and returns the first matching class in the
-// order append, pointer, composite; otherwise Inadmissible with the reason.
+// order append, pointer, composite; otherwise Inadmissible with the reason. A
+// literal-nil field assignment is checked first and makes the whole body
+// inadmissible, whatever else it does.
 func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	var (
 		appendOrMap bool
 		ptrAssign   bool
 		bigLiteral  bool
-		nilGuard    bool
+		nilClear    string
 		writes      = map[string]bool{}
 	)
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		switch s := n.(type) {
-		case *ast.IfStmt:
-			if isNilCheck(s.Cond) {
-				nilGuard = true
+		s, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		for i, lhs := range s.Lhs {
+			var rhs ast.Expr
+			if len(s.Rhs) == len(s.Lhs) {
+				rhs = s.Rhs[i]
+			} else if len(s.Rhs) == 1 {
+				rhs = s.Rhs[0]
 			}
-		case *ast.AssignStmt:
-			for i, lhs := range s.Lhs {
-				var rhs ast.Expr
-				if len(s.Rhs) == len(s.Lhs) {
-					rhs = s.Rhs[i]
-				} else if len(s.Rhs) == 1 {
-					rhs = s.Rhs[0]
+			if isMapIndex(lhs, info) || isAppend(rhs, info) {
+				appendOrMap = true
+			}
+			if !isFieldWrite(lhs) {
+				continue
+			}
+			writes[types.ExprString(lhs)] = true
+			if rhs != nil && isNilIdent(rhs) && nilClear == "" {
+				nilClear = types.ExprString(lhs)
+			}
+			if t := info.TypeOf(lhs); t != nil {
+				if _, ok := t.Underlying().(*types.Pointer); ok {
+					ptrAssign = true
 				}
-				if isMapIndex(lhs, info) || isAppend(rhs, info) {
-					appendOrMap = true
-				}
-				if !isFieldWrite(lhs) {
-					continue
-				}
-				writes[types.ExprString(lhs)] = true
-				if t := info.TypeOf(lhs); t != nil {
-					if _, ok := t.Underlying().(*types.Pointer); ok {
-						ptrAssign = true
-					}
-				}
-				if lit := compositeOf(rhs); lit != nil && (len(lit.Elts) >= 2 || hasNestedLiteral(lit)) {
-					bigLiteral = true
-				}
+			}
+			if lit := compositeOf(rhs); lit != nil && (len(lit.Elts) >= 2 || hasNestedLiteral(lit)) {
+				bigLiteral = true
 			}
 		}
 		return true
 	})
 
 	switch {
+	case nilClear != "":
+		return Inadmissible, fmt.Sprintf("assigns nil to %s, a field the caller did not name (purity §4)", nilClear)
 	case appendOrMap:
 		return Append, "slice append or map insert (class a)"
 	case ptrAssign:
 		return Pointer, "pointer-typed field assignment (class b)"
-	case nilGuard && len(writes) > 0:
-		return Pointer, "nil-init before write (class b)"
 	case bigLiteral:
 		return Composite, "composite literal with two or more fields or nested (class c)"
 	case len(writes) >= 2:
@@ -268,14 +275,6 @@ func isAppend(rhs ast.Expr, info *types.Info) bool {
 	}
 	b, ok := info.Uses[id].(*types.Builtin)
 	return ok && b.Name() == "append"
-}
-
-func isNilCheck(cond ast.Expr) bool {
-	bin, ok := ast.Unparen(cond).(*ast.BinaryExpr)
-	if !ok || (bin.Op != token.EQL && bin.Op != token.NEQ) {
-		return false
-	}
-	return isNilIdent(bin.X) || isNilIdent(bin.Y)
 }
 
 func isNilIdent(e ast.Expr) bool {
