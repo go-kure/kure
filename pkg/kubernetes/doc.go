@@ -28,12 +28,17 @@
 //
 // # Sugar
 //
-// The remaining exported Set*/Add* functions are admitted by class: slice
-// append or map insert, pointer-typed field assignment (which covers nil-init of
-// an intermediate), or a composite literal of two or more fields. A test
-// classifies every helper with go/ast and fails on anything outside those
-// classes. Helpers panic on a nil receiver, take exactly the value they write,
-// and never default or validate.
+// An exported Set*/Add* function is admitted by class: slice append or map
+// insert, pointer-typed field assignment (which covers nil-init of an
+// intermediate), or an upstream struct literal of two or more fields or with
+// a nested literal. A body that assigns nil to a field is inadmissible
+// whatever else it does. A test classifies every helper
+// with go/ast and fails on anything outside those classes that is not listed
+// in testdata/admission_exclusions.txt; that list holds the legacy helpers
+// (bare forwarders, error-returning and validating setters) until the prune
+// work item of the builder-contract epic deletes them, and it only ever
+// shrinks. The target for every helper that survives: panic on a nil receiver,
+// take exactly the value it writes, never default or validate.
 //
 // # GVK Utilities
 //

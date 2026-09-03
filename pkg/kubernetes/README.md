@@ -75,14 +75,16 @@ body does one of:
 - **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
   intermediate before assigning through it is the same thing);
 - **(c)** constructs an upstream struct literal setting two or more fields, or a
-  nested literal, or writes two or more distinct fields.
+  nested literal.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
-of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment.
-A nil receiver guard admits nothing on its own. A body that assigns the literal `nil`
-to any field is inadmissible whatever else it does, because it clears a field the
-caller did not name (§4); a helper that must replace one member of a one-of takes the
-whole one-of as its argument instead.
+of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
+and two such assignments in one body are two forwarders, not a composite. A nil
+receiver guard admits nothing on its own. A body that assigns `nil` to any field
+(the literal, a typed conversion of it, or a local known to be nil) is inadmissible
+whatever else it does, because it clears a field the caller did not name (§4); a
+helper that must replace one member of a one-of takes the whole one-of as its
+argument instead.
 
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper

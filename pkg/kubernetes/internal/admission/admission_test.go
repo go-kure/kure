@@ -66,7 +66,7 @@ func SetNestedRef(o *Obj, name, kind string) { o.Spec.Nested.Ref = Ref{Name: nam
 // class c, nested literal
 func SetNested(o *Obj, a string) { o.Spec.Nested = Inner{Ref: Ref{Name: a}} }
 
-// class c, two distinct field writes
+// inadmissible: two bare field writes are two forwarders, not a composite (no literal)
 func SetNameAndA(o *Obj, n string) {
 	o.Spec.Name = n
 	o.Spec.Nested.A = n
@@ -102,6 +102,28 @@ func SetGuardedName(o *Obj, n string) {
 func SetReplicasClearingRef(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 	o.Spec.Ref = nil
+}
+
+// inadmissible: a typed nil conversion is still a clear
+func SetRefTypedNil(o *Obj) { o.Spec.Ref = (*Ref)(nil) }
+
+// inadmissible: a local declared without a value is nil, and clears the field
+func SetRefViaNilLocal(o *Obj) {
+	var r *Ref
+	o.Spec.Ref = r
+}
+
+// inadmissible: a local assigned nil later clears the field
+func SetRefViaAssignedNil(o *Obj) {
+	r := &Ref{}
+	r = nil
+	o.Spec.Ref = r
+}
+
+// class b: a nil-valued scalar local is not a clear (only nillable fields count)
+func SetNameFromZeroLocal(o *Obj) {
+	var n string
+	o.Spec.Ref = &Ref{Name: n}
 }
 
 // exempt by name
@@ -146,7 +168,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefName":             Pointer,
 		"SetNestedRef":           Composite,
 		"SetNested":              Composite,
-		"SetNameAndA":            Composite,
+		"SetNameAndA":            Inadmissible,
 		"SetName":                Inadmissible,
 		"SetNameTwice":           Inadmissible,
 		"SetNestedOneField":      Inadmissible,
@@ -154,6 +176,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetNothing":             Inadmissible,
 		"SetGuardedName":         Inadmissible,
 		"SetReplicasClearingRef": Inadmissible,
+		"SetRefTypedNil":         Inadmissible,
+		"SetRefViaNilLocal":      Inadmissible,
+		"SetRefViaAssignedNil":   Inadmissible,
+		"SetNameFromZeroLocal":   Pointer,
 		"SetExempted":            Exempt,
 	}
 	got := map[string]Finding{}
