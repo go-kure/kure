@@ -17,6 +17,8 @@ package crds
 
 import (
 	"bytes"
+	stderrors "errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -105,9 +107,7 @@ func Load(dir string) (Index, error) {
 		if err != nil {
 			return errors.Wrapf(err, "crds: reading %s", path)
 		}
-		// Cheap prefilter: most yaml in a module is not a CRD, and decoding
-		// every one of them costs far more than this scan.
-		if !bytes.Contains(data, []byte("CustomResourceDefinition")) {
+		if !declaresCRD(data) || isTemplated(data) {
 			return nil
 		}
 		if err := indexFile(data, path, out); err != nil {
@@ -121,23 +121,71 @@ func Load(dir string) (Index, error) {
 	return out, nil
 }
 
-// documents decodes the manifest's documents, stopping at the first one that
-// does not decode.
+// declaresCRD reports whether the file declares a CustomResourceDefinition
+// document, as a cheap prefilter: most yaml in a module is not a CRD, and
+// decoding all of it costs far more than this scan.
 //
-// That is end-of-file in the ordinary case and, in the other, yaml this
-// decoder cannot read: the prefilter that selected the file is a substring
-// match, so a Helm template or a kustomize fragment mentioning
-// CustomResourceDefinition reaches here legitimately. The two are not
-// distinguished because neither yields a definition, and failing the walk over
-// a Helm template would make this package unusable against the modules it
-// exists to read.
-func documents(data []byte) []definition {
+// It matches a `kind:` key at the start of a line rather than the bare word
+// anywhere in the file. A plain substring match also selects every Helm
+// template, kustomize overlay and piece of documentation that merely mentions
+// the word — files this package cannot decode and, since [documents] refuses to
+// read a declaration only partway, would now fail the whole walk over. The
+// match is deliberately narrow in the other direction too: an indented `kind:`
+// belongs to spec.names, not to the document.
+func declaresCRD(data []byte) bool {
+	for _, want := range crdKindLines {
+		if bytes.HasPrefix(data, want[1:]) || bytes.Contains(data, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// crdKindLines are the spellings of the document's own kind key, each with the
+// leading newline that anchors it to the start of a line.
+var crdKindLines = [][]byte{
+	[]byte("\nkind: CustomResourceDefinition"),
+	[]byte("\nkind: \"CustomResourceDefinition\""),
+	[]byte("\nkind: 'CustomResourceDefinition'"),
+}
+
+// isTemplated reports whether the file is a template rather than a manifest.
+//
+// A Helm chart's templates are not definitions: they are the input a rendering
+// step turns into one, and half of one is not a partial answer but a different
+// document. metallb ships exactly this — charts/metallb/charts/crds/templates/
+// crds.yaml, whose first documents are ordinary CRDs and whose third uses
+// `{{ .Release.Namespace }}` as a map key. Reading it stops mid-file, which is
+// how a templated file came to be a scope source at all; the real definitions
+// are in config/crd/bases alongside it.
+//
+// A CRD whose OpenAPI descriptions happen to contain the delimiter is skipped
+// too. That costs nothing it should not: a kind whose scope no readable source
+// states is then an error, which is this package's whole stance, rather than a
+// scope taken from a file it could only partly read.
+func isTemplated(data []byte) bool { return bytes.Contains(data, []byte("{{")) }
+
+// documents decodes every document in the manifest, or fails.
+//
+// End-of-file ends it. Anything else is an error naming the file and the
+// document's index, never a short read: stopping quietly at a document this
+// decoder cannot handle drops every definition after it, which loses a kind's
+// only answer, or one half of a scope conflict, with nothing to show that
+// anything was skipped. The file was selected by [declaresCRD], so reaching
+// here at all means it declares a CustomResourceDefinition document, and a
+// declaration this package cannot finish reading is a question to decline —
+// the same stance as a kind no source can answer for.
+func documents(data []byte, path string) ([]definition, error) {
 	dec := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
 	var out []definition
-	for {
+	for i := 0; ; i++ {
 		var def definition
-		if dec.Decode(&def) != nil {
-			return out
+		err := dec.Decode(&def)
+		if stderrors.Is(err, io.EOF) {
+			return out, nil
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "crds: %s: document %d does not decode, so the documents after it cannot be read", path, i)
 		}
 		out = append(out, def)
 	}
@@ -145,7 +193,11 @@ func documents(data []byte) []definition {
 
 // indexFile records every CRD in one possibly multi-document manifest.
 func indexFile(data []byte, path string, out Index) error {
-	for _, def := range documents(data) {
+	docs, err := documents(data, path)
+	if err != nil {
+		return err
+	}
+	for _, def := range docs {
 		if def.Kind != "CustomResourceDefinition" || !strings.HasPrefix(def.APIVersion, "apiextensions.k8s.io/") {
 			continue
 		}

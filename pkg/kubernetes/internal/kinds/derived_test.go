@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
+	"github.com/go-kure/kure/pkg/kubernetes/internal/upstream"
 )
 
 // The shape of the registered surface, pinned as numbers so a change to it is
@@ -137,6 +138,48 @@ func TestDerivedScopesAgreeWithTheFrozenFixture(t *testing.T) {
 	sort.Strings(elsewhere)
 	t.Logf("%d kinds answered by their own marker (%d cluster-scoped); %d answered elsewhere:\n  %s",
 		fromMarker, clusterFromMarker, len(elsewhere), strings.Join(elsewhere, "\n  "))
+}
+
+// DeriveScopes declines rather than defaults in both of its failure cases: a
+// kind whose type the pinned module source does not declare, and a marker it
+// cannot parse. Either one silently answered would be Namespaced, which is
+// indistinguishable from a correct answer.
+func TestDeriveScopesDeclinesRatherThanDefaults(t *testing.T) {
+	all, types := markerFixture()
+
+	t.Run("type not in the module source", func(t *testing.T) {
+		_, err := DeriveScopes(all, map[string]upstream.Type{})
+		if err == nil {
+			t.Fatal("a kind whose type the module does not declare must be an error")
+		}
+		if !strings.Contains(err.Error(), "does not declare it") {
+			t.Errorf("error = %v", err)
+		}
+	})
+
+	t.Run("unparsable marker", func(t *testing.T) {
+		broken := map[string]upstream.Type{}
+		for k, v := range types {
+			broken[k] = v
+		}
+		key := upstream.Key("example.com/api/v1", "Marked")
+		bad := broken[key]
+		bad.Doc = "// +kubebuilder:resource:scope=Somewhere\n"
+		broken[key] = bad
+		if _, err := DeriveScopes(all, broken); err == nil {
+			t.Fatal("a marker naming an unknown scope must be an error, not the namespaced default")
+		}
+	})
+}
+
+// UnmarkedKinds reports on the types it was given. A kind absent from the
+// loaded source is not evidence that it carries no marker, so it is skipped
+// here and answered for by DeriveScopes, which errors on it.
+func TestUnmarkedKindsSkipsAKindMissingFromTheSource(t *testing.T) {
+	all, _ := markerFixture()
+	if got := UnmarkedKinds(all, map[string]upstream.Type{}); len(got) != 0 {
+		t.Errorf("UnmarkedKinds = %v, want nothing when the source declares none of them", got)
+	}
 }
 
 // Every kind's module and version must be resolved, or the kinds table would
