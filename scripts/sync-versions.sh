@@ -1059,6 +1059,16 @@ widen_dependency() {
         return 1
     fi
 
+    # validate_no_sha_in_notes (the check guard) rejects a bare commit SHA in
+    # any notes: block -- mirror that here so widen refuses up front instead
+    # of writing a note that only fails later, at the next `check`.
+    local sha_hit
+    sha_hit=$(printf '%s' "$note" | grep -oiE '\b[0-9a-f]{40}\b|\b[0-9a-f]{12}\b' | head -n1 || true)
+    if [[ -n "$sha_hit" ]]; then
+        error "widen: --note text contains a raw commit SHA ($sha_hit) -- reference the pseudo-version pinned in go.mod instead, not the literal commit: $note"
+        return 1
+    fi
+
     # $2 must be exactly major.minor: mm_key silently truncates anything
     # past the second component (so "2.1.0" and "2.1" compare equal), which
     # would otherwise let a malformed bound through the comparison below and
