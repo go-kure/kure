@@ -203,26 +203,46 @@ contradicted a genuinely stable field in the same type. A field's maturity is cl
 in its documentation or by a `+featureGate`, and is never inferred from another
 marker.
 
-The same rule decides what counts inside the prose. An occurrence of "alpha" or
-"beta" qualifying "feature gate" describes the gate, not the field:
-`HorizontalPodAutoscalerSpec.minReplicas` has been GA as long as `autoscaling/v2`
-has, and documents that a value of 0 is allowed "if the alpha feature gate
-HPAScaleToZero is enabled". A field whose own maturity is alpha says so in a
-sentence of its own, and that still counts — including when the same doc comment
-also names an alpha gate.
+The same rule decides what counts inside the prose. A mention of "alpha" or "beta"
+is read as a claim only when the sentence attributes that level to the field being
+documented — "This is an alpha field", "This field is beta-level", a leading
+"(Alpha)" tag, "Alpha, gated by …". The words also appear in prose that says
+nothing about the documented field's maturity, and counting every occurrence
+published five such fields as alpha:
+
+- `CustomResourceDefinitionSpec.versions`, whose prose explains that a version name
+  ends in "optionally the string `alpha` or `beta` and another number" and that
+  names sort "by GA > beta > alpha" — version-name tokens.
+- `FileKeySelector.key`, a required field with no gate marker, documenting a size
+  limit that applies "During Alpha stage of the EnvFiles feature gate" — the gate's
+  stage, and a size limit.
+- `CommonPrometheusFields.scrapeConfigSelector` and its namespace counterpart,
+  which note that the *ScrapeConfig* custom resource definition "is currently at
+  Alpha level" — another resource's level.
+- `GRPCRouteRule.filters`, which says the rule "can change in the future based on
+  feedback during the alpha stage" — a statement about future changes.
+
+The same shape reached the table once through `HorizontalPodAutoscalerSpec.minReplicas`,
+GA as long as `autoscaling/v2` has been, whose prose says a value of 0 is allowed
+"if the alpha feature gate HPAScaleToZero is enabled": the gate's level, not the
+field's. A field whose own maturity is alpha says so in a sentence of its own, and
+that still counts — including when the same doc comment also names an alpha gate. A
+construction the list does not cover reports stable, which under-reports rather than
+publishing a wrong level; the gate list is the signal to act on either way.
 
 Status types are not entered. A kind's status is reported by the cluster and never
 constructed by a caller, so a gate there says nothing about whether a manifest kure
 builds applies as written — and that is where most of the markers are.
 
-Against the current pins, the walk finds 131 maturity-carrying construction-side
+Against the current pins, the walk finds 126 maturity-carrying construction-side
 fields, of which 41 require a feature gate (40 in `k8s.io/api`, one in
-`k8s.io/apiextensions-apiserver`); 29 are documented alpha, 14 beta and 66
+`k8s.io/apiextensions-apiserver`); 24 are documented alpha, 14 beta and 66
 deprecated, the remaining 22 are gated without a documented stability claim, and 92
 distinct status types are skipped. No CRD module kure pins uses `+featureGate` at
 all. These numbers move with the pins and are not asserted by any test; what the
-tests assert is that every reported field exists in the pinned struct, and that a
-set of long-GA built-in fields is reported stable.
+tests assert is that every reported field exists in the pinned struct, that a set of
+long-GA built-in fields is reported stable, and that the five fields named above —
+the ones whose prose mentions the words about something else — claim nothing.
 
 ## 9. Where scope and maturity come from
 
@@ -243,14 +263,18 @@ them. Five internal packages do it, and none of them is part of the public API:
   the type graph for the field table.
 
 Every resolved scope records which of three sources answered — `marker`, `builtin`
-or `crd` — so a wrong scope can be traced to the thing that claimed it. Against the
-current pins that is 65 from the kind's own marker, 44 from the built-in table and
-19 from a shipped CRD.
+or `crd`, surfaced on `KindInfo.ScopeSource` — so a wrong scope can be traced to the
+thing that claimed it. Against the current pins that is 65 from the kind's own
+marker, 44 from the built-in table and 19 from a shipped CRD. The source is part of
+the public answer and not only a debugging aid: `builtin` is what makes a kind a
+built-in, so a caller asking specifically about built-ins reads it rather than
+keeping a list.
 
 `kinds.Registered()` returns each kind with that resolution already applied, and it
 is the only place a scope is stated: the 128-entry hand-seeded pair of sets this
 package used to carry is gone, and so are the two hand-kept maps in `pkg/manifest`,
-which now reads `IsNamespaced` from the generated table. The cluster-scoped half of
+which now reads scope from the generated table — restricting to `ScopeSourceBuiltin`
+where it asks about built-ins specifically. The cluster-scoped half of
 the old table survives as a frozen fixture in the `internal/kinds` tests, dated to
 the pins it was taken at. That is deliberate: the derivation fails silently by
 construction — an absent, unread or detached marker resolves to `Namespaced`, which
@@ -331,11 +355,15 @@ The derivation above is committed as three artifacts, all written by
 | `docs/api-tables.md` | the site page (mounted via `site/docs-map.yaml`) |
 
 `tables.go` holds the hand-written types and lookups over them — `KindFor`,
-`KindByGroupKind`, `IsNamespaced`, `MaturityForType`, `GatedFields`. Every value is a
-plain string or bool: the generator writes into this package, so a table that
-referenced an upstream type could not be regenerated after an API bump removed it.
-Each kind row names the module and version it was read from, and `ScopeSource` names
-what stated the scope, so any row is traceable to a pin.
+`KindForAnyVersion`, `KindByGroupKind`, `IsNamespaced`, `MaturityForType`,
+`GatedFields`. Every value is a plain string or bool: the generator writes into this
+package, so a table that referenced an upstream type could not be regenerated after
+an API bump removed it. Each kind row names the module and version it was read from,
+and `ScopeSource` names what stated the scope — `ScopeSourceMarker`,
+`ScopeSourceShippedCRD` or `ScopeSourceBuiltin` — so any row is traceable to a pin,
+and a caller can tell a built-in kind from a custom resource without keeping a list
+of its own. `pkg/manifest`'s `IsNamespacedBuiltinKind` is exactly that: a scope
+answer restricted to `ScopeSourceBuiltin`.
 
 The tables themselves are unexported, and `Kinds()` and `FieldMaturities()` hand back
 copies — deep ones, since a row's `Gates` slice would otherwise stay shared with the
@@ -344,13 +372,17 @@ among them, so a consumer that edited a returned row in place to relabel a kind 
 its own output would change the answer every later caller in the process gets, at a
 distance and with nothing pointing back to the edit.
 
-The two kind lookups answer deliberately different questions, and the difference is
-the version:
+The kind lookups answer deliberately different questions, and the difference is the
+version:
 
 - `KindFor(apiVersion, kind)` matches the version as well as the group. `GoType`,
   `ImportPath` and `ModuleVersion` describe one version's Go type, so a group/kind
   registered at some other version is not an answer — it reads as unregistered,
   which is what it is.
+- `KindForAnyVersion(apiVersion, kind)` matches the group only, and is the row
+  behind the version-insensitive answers: scope, and what declared it. The row it
+  returns may describe a different version than the one asked about, so anything
+  version-specific on it is not an answer to the question that was asked.
 - `IsNamespaced(apiVersion, kind)` ignores the version. Scope is a property of the
   resource and is the same across the versions of one group/kind, so a manifest
   written against a version kure does not register is still answered rather than

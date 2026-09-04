@@ -20,13 +20,26 @@ type KindInfo struct {
 	Module        string // module providing ImportPath
 	ModuleVersion string // the version this build pins
 	Namespaced    bool
-	// ScopeSource names what said so: "marker" for the kind's own
-	// +kubebuilder:resource marker, "crd" for the CustomResourceDefinition its
-	// module ships, "builtin" for the kinds whose scope the API server rather
-	// than a marker defines. A wrong scope is traceable to the thing that
-	// claimed it.
-	ScopeSource string
+	// ScopeSource names what said so, making a wrong scope traceable to the
+	// thing that claimed it.
+	ScopeSource ScopeSource
 }
+
+// ScopeSource names what declared a kind's scope.
+type ScopeSource string
+
+const (
+	// ScopeSourceMarker is the kind's own +kubebuilder:resource marker in the
+	// module that declares its Go type.
+	ScopeSourceMarker ScopeSource = "marker"
+	// ScopeSourceShippedCRD is the CustomResourceDefinition the kind's module
+	// ships, read when the Go type carries no marker.
+	ScopeSourceShippedCRD ScopeSource = "crd"
+	// ScopeSourceBuiltin is the API server itself: the kinds whose scope is
+	// defined by the Kubernetes API rather than by anything in a module. These
+	// are the built-in kinds, and nothing else is.
+	ScopeSourceBuiltin ScopeSource = "builtin"
+)
 
 // GroupKind returns the "group/Kind" key the scope lookups use. The core group
 // is empty, so a core kind reads as "/Pod".
@@ -156,12 +169,24 @@ func KindFor(apiVersion, kind string) (KindInfo, bool) {
 // must still be answered, since the alternative is "unknown" for a scope that
 // is not in doubt.
 func IsNamespaced(apiVersion, kind string) (namespaced, known bool) {
-	group, _ := groupVersion(apiVersion)
-	k, ok := KindByGroupKind(group + "/" + kind)
+	k, ok := KindForAnyVersion(apiVersion, kind)
 	if !ok {
 		return false, false
 	}
 	return k.Namespaced, true
+}
+
+// KindForAnyVersion returns the registered kind for an apiVersion and kind,
+// matching the group but not the version — the row kure registers for that
+// group/kind, whichever version that is.
+//
+// It answers the questions whose answer does not vary between the versions of
+// one group/kind: scope, and what declared it. Use [KindFor] for anything
+// version-specific, since the row this returns may describe a different version
+// than the one asked about.
+func KindForAnyVersion(apiVersion, kind string) (KindInfo, bool) {
+	group, _ := groupVersion(apiVersion)
+	return KindByGroupKind(group + "/" + kind)
 }
 
 // groupVersion splits an apiVersion into its group and version. The core group

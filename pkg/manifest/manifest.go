@@ -67,15 +67,38 @@ var clusterScopedUnregisteredKinds = map[string]bool{
 }
 
 // IsNamespacedBuiltinKind reports whether a (group-aware) apiVersion+kind is a
-// known namespaced type that must declare metadata.namespace.
+// known namespaced built-in type that must declare metadata.namespace.
 //
-// The answer comes from [kubernetes.IsNamespaced], the table derived from the
-// pinned upstream sources, so it covers every kind kure registers rather than a
-// list maintained here. That is wider than the "builtin" in the name suggests:
-// a namespaced CRD kind kure registers now answers true, which is the correct
-// answer to the question the function asks. An unregistered kind answers false,
-// as before — false means "not known to be namespaced", never "cluster-scoped".
+// Built-in means what the name says: a kind whose scope the Kubernetes API
+// itself defines. The generated table records what declared each kind's scope,
+// so that restriction is derived rather than kept as a list here — a kind whose
+// scope came from a +kubebuilder:resource marker or from a shipped
+// CustomResourceDefinition is a custom resource and answers false, whatever its
+// scope. [IsNamespacedKind] asks the same question without the restriction, and
+// is what a caller reasoning about every kind kure registers wants.
+//
+// Deriving the restriction widens the answer within the built-ins: the
+// hand-kept map this replaced listed twelve namespaced built-in kinds, and the
+// table knows every one the scheme registers. That is the same contract, more
+// completely implemented.
+//
+// false means "not a known namespaced built-in", never "cluster-scoped".
 func IsNamespacedBuiltinKind(apiVersion, kind string) bool {
+	k, ok := kubernetes.KindForAnyVersion(apiVersion, kind)
+	return ok && k.ScopeSource == kubernetes.ScopeSourceBuiltin && k.Namespaced
+}
+
+// IsNamespacedKind reports whether a (group-aware) apiVersion+kind is a kind
+// kure registers and knows to be namespaced, built-in or custom resource
+// alike.
+//
+// This is the general form of the scope question for callers that hold an
+// apiVersion and kind rather than an object; [Scope] answers it for an object,
+// and also for the unregistered kinds the residual sets and crdScopes cover.
+// An unregistered kind answers false, which means "not known to be namespaced",
+// never "cluster-scoped" — a caller that must tell those apart uses [Scope] or
+// [kubernetes.IsNamespaced], both of which report whether the kind was known.
+func IsNamespacedKind(apiVersion, kind string) bool {
 	namespaced, known := kubernetes.IsNamespaced(apiVersion, kind)
 	return known && namespaced
 }

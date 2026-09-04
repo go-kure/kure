@@ -64,17 +64,43 @@ func TestIsNamespacedBuiltinKind(t *testing.T) {
 	if IsNamespacedBuiltinKind("v1", "Namespace") {
 		t.Error("Namespace is cluster-scoped, not in the namespaced set")
 	}
-	// The answer now comes from the derived table, so it covers every kind kure
-	// registers, not only the built-ins.
-	if !IsNamespacedBuiltinKind("cilium.io/v2", "CiliumNetworkPolicy") {
-		t.Error("a registered namespaced CRD kind is namespaced")
+	// A CRD kind is not a built-in however its scope is declared. Both
+	// directions matter: answering true here would report a custom resource as
+	// a built-in, which is what the function's name promises it does not do.
+	if IsNamespacedBuiltinKind("cilium.io/v2", "CiliumNetworkPolicy") {
+		t.Error("a namespaced CRD kind is not a built-in")
 	}
 	if IsNamespacedBuiltinKind("cilium.io/v2", "CiliumClusterwideNetworkPolicy") {
+		t.Error("a cluster-scoped CRD kind is not a built-in")
+	}
+	// An unregistered kind answers false: false is "not known to be a
+	// namespaced built-in", never "cluster-scoped".
+	if IsNamespacedBuiltinKind("example.com/v1", "Widget") {
+		t.Error("an unregistered kind must not answer true")
+	}
+	// The version is not part of the match: scope does not vary between the
+	// versions of one group/kind, and neither does what declared it.
+	if !IsNamespacedBuiltinKind("apps/v99", "Deployment") {
+		t.Error("scope is version-insensitive, so an unregistered version of a registered kind still answers")
+	}
+}
+
+// The general form: the same question over every kind kure registers, which is
+// where a namespaced CRD kind does answer true.
+func TestIsNamespacedKind(t *testing.T) {
+	if !IsNamespacedKind("apps/v1", "Deployment") {
+		t.Error("apps/v1 Deployment is namespaced")
+	}
+	if !IsNamespacedKind("cilium.io/v2", "CiliumNetworkPolicy") {
+		t.Error("a registered namespaced CRD kind is namespaced")
+	}
+	if IsNamespacedKind("cilium.io/v2", "CiliumClusterwideNetworkPolicy") {
 		t.Error("a registered cluster-scoped CRD kind is not namespaced")
 	}
-	// An unregistered kind answers false: false is "not known to be
-	// namespaced", never "cluster-scoped".
-	if IsNamespacedBuiltinKind("example.com/v1", "Widget") {
+	if IsNamespacedKind("v1", "Namespace") {
+		t.Error("Namespace is cluster-scoped")
+	}
+	if IsNamespacedKind("example.com/v1", "Widget") {
 		t.Error("an unregistered kind must not answer true")
 	}
 }

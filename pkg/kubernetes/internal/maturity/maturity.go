@@ -185,12 +185,11 @@ func entryFor(t upstream.Type, f upstream.Field) (Entry, bool) {
 //
 // The feature-gate marker is the precise signal; this prose scan is the
 // best-effort complement for fields upstream documents as alpha or beta
-// without gating them in a marker. It matches whole words only, so a field
-// documented as "alphabetical" is not reported as alpha, and it requires
-// Go's conventional "Deprecated:" prefix on a line rather than the word
-// appearing anywhere. It can still over-report a field whose prose mentions
-// another field's maturity in a shape not listed below; the gate list is what
-// a consumer should act on.
+// without gating them in a marker. It requires Go's conventional
+// "Deprecated:" prefix on a line rather than the word appearing anywhere, and
+// for alpha and beta it requires the word to be used in a sentence that
+// attributes the level to this field — see [claimsStability]. Prose that
+// merely mentions the words reports nothing.
 func stabilityOf(doc string) Stability {
 	prose := proseOnly(doc)
 	for _, line := range strings.Split(prose, "\n") {
@@ -208,15 +207,42 @@ func stabilityOf(doc string) Stability {
 	}
 }
 
-// claimsStability reports whether prose uses word to describe the field itself.
+// claimsStability reports whether prose uses word to state this field's own
+// maturity.
 //
-// An occurrence qualifying "feature gate" describes the gate's maturity, not the
-// field's: HorizontalPodAutoscalerSpec.minReplicas has been GA since v2 went GA,
-// and documents that a value of 0 "is allowed if the alpha feature gate
-// HPAScaleToZero is enabled". Counting that occurrence reported a GA field as
-// alpha, contradicting a sibling field of the same type. A field whose own
-// maturity is alpha says so separately, in a sentence of its own, and that
-// occurrence still counts.
+// The test is a whitelist of the constructions the pinned sources actually use
+// to make that statement, not "any occurrence that is not obviously about
+// something else". A blacklist was tried first and under-reached: excluding the
+// one shape that was known to be wrong left every other mention of the words
+// counting as a claim, and the words appear in prose that says nothing about the
+// documented field. Measured over the pinned modules, an occurrence-counting
+// scan reported five such fields:
+//
+//   - apiextensions/v1 CustomResourceDefinitionSpec.versions, whose prose
+//     explains that a version name is "optionally the string \"alpha\" or
+//     \"beta\" and another number" and that names sort "by GA > beta > alpha"
+//     (types.go:55) — the words are version-name tokens, not a maturity.
+//   - core/v1 FileKeySelector.key, a +required field with no gate marker, whose
+//     prose says "During Alpha stage of the EnvFiles feature gate, the key size
+//     is limited to 128 characters" (types.go:2705) — the alpha stage is the
+//     gate's, and the sentence states a size limit.
+//   - monitoring/v1 CommonPrometheusFields.scrapeConfigSelector and
+//     .scrapeConfigNamespaceSelector, whose prose notes that "the ScrapeConfig
+//     custom resource definition is currently at Alpha level"
+//     (prometheus_types.go:207,216) — another resource's level, not this
+//     field's.
+//   - gateway-api/v1 GRPCRouteRule.filters, whose prose says the rule "can
+//     change in the future based on feedback during the alpha stage"
+//     (grpcroute_types.go:225) — a statement about future changes.
+//
+// The same shape reached the published table once before through "the alpha
+// feature gate HPAScaleToZero" on HorizontalPodAutoscalerSpec.minReplicas, a
+// field GA since autoscaling/v2 went GA. The "feature" clause below excludes
+// that wording too, so the earlier special case is gone rather than duplicated.
+//
+// A construction not listed here reports stable, which under-reports rather than
+// publishing a wrong level; the gate list is the signal a consumer acts on
+// either way. Adding a shape means adding a case and a row to the unit table.
 func claimsStability(prose, word string) bool {
 	lower := strings.ToLower(prose)
 	for i := 0; ; {
@@ -226,11 +252,90 @@ func claimsStability(prose, word string) bool {
 		}
 		start += i
 		end := start + len(word)
-		if !strings.HasPrefix(strings.TrimLeft(lower[end:], " \n"), "feature gate") {
+		if isStabilityClaim(lower, start, end) {
 			return true
 		}
 		i = end
 	}
+}
+
+// isStabilityClaim reports whether the whole-word occurrence at lower[start:end]
+// is used to attribute that level to the documented field. lower is the field's
+// prose, already lowercased, with marker lines removed.
+func isStabilityClaim(lower string, start, end int) bool {
+	before, after := lower[:start], lower[end:]
+	switch {
+	// "This field is beta-level and is enabled by default", "is alpha-level
+	// and requires the WorkloadWithJob feature gate": hyphenated, so the word
+	// is a compound adjective and the field is what it qualifies.
+	case strings.HasPrefix(after, "-level"):
+		return true
+
+	// "(Alpha) This field requires the AtomicWriteVolumeUserFields feature
+	// gate to be enabled": the parenthesised tag upstream puts in front of a
+	// field it is introducing at that level.
+	case strings.HasSuffix(before, "(") && strings.HasPrefix(after, ")"):
+		return true
+
+	// "This is an alpha field", "This is a beta field and requires enabling
+	// ProbeTerminationGracePeriod": the word qualifies "field" directly.
+	case followedBy(after, "field"):
+		return true
+
+	// "This is an Alpha Feature", "This is a beta feature and requires the
+	// VolumeLimitScaling feature gate". Not "the alpha feature gate
+	// HPAScaleToZero", which gives the gate's level: a gated field states its
+	// own level in a sentence of its own, and that sentence is caught here.
+	case followedBy(after, "feature") && !followedBy(after, "feature", "gate"):
+		return true
+
+	// "This field is alpha and requires EmptyDirVolumeMode featuregate to be
+	// enabled", "This field is beta.", "This field is beta in 1.10": a copula
+	// makes the documented field the subject of the claim.
+	case precededByWord(before, "is"):
+		return true
+
+	// "Alpha, gated by the ClusterTrustBundleProjection feature gate.": the
+	// word opens the sentence and is set off by a comma.
+	case strings.HasPrefix(after, ",") && startsLine(before):
+		return true
+	}
+	return false
+}
+
+// followedBy reports whether words follow, in order, each separated from what
+// precedes it by whitespace and matched as a whole word. The whitespace is
+// required: it is what makes the match a following word rather than a suffix.
+func followedBy(after string, words ...string) bool {
+	rest := after
+	for _, word := range words {
+		trimmed := strings.TrimLeft(rest, " \t\n")
+		if len(trimmed) == len(rest) {
+			return false
+		}
+		if !strings.HasPrefix(trimmed, word) || isWordChar(byteAt(trimmed, len(word))) {
+			return false
+		}
+		rest = trimmed[len(word):]
+	}
+	return true
+}
+
+// precededByWord reports whether word is the whole word immediately before,
+// separated by whitespace.
+func precededByWord(before, word string) bool {
+	trimmed := strings.TrimRight(before, " \t\n")
+	if len(trimmed) == len(before) {
+		return false
+	}
+	return strings.HasSuffix(trimmed, word) &&
+		!isWordChar(byteAt(trimmed, len(trimmed)-len(word)-1))
+}
+
+// startsLine reports whether nothing but whitespace precedes on the line.
+func startsLine(before string) bool {
+	trimmed := strings.TrimRight(before, " \t")
+	return trimmed == "" || strings.HasSuffix(trimmed, "\n")
 }
 
 // proseOnly drops the marker lines from a doc comment, keeping the sentences a
