@@ -672,3 +672,36 @@ func TestGotkBootstrapSourceRefMatchesTheEmittedSourceKind(t *testing.T) {
 		})
 	}
 }
+
+// TestGotkBootstrapAcceptsANilRootNode pins that bootstrap does not panic when
+// called without a root node.
+//
+// GenerateBootstrap's signature accepts a *stack.Node and every other consumer
+// of it tests for nil, so nil is a reachable input rather than a contract
+// violation — but the flux-system Kustomization dereferenced it unconditionally
+// to build spec.path, so a nil rootNode crashed the caller instead of producing
+// a manifest.
+func TestGotkBootstrapAcceptsANilRootNode(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+	resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
+		Enabled:  true,
+		FluxMode: "gotk",
+	}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBootstrap: %v", err)
+	}
+
+	var kust *kustv1.Kustomization
+	for _, obj := range resources {
+		if k, ok := obj.(*kustv1.Kustomization); ok {
+			kust = k
+			break
+		}
+	}
+	if kust == nil {
+		t.Fatal("bootstrap emitted no Kustomization")
+	}
+	if got, want := kust.Spec.Path, "manifests"; got != want {
+		t.Errorf("spec.path = %q, want %q — a nameless root must not add a path segment", got, want)
+	}
+}
