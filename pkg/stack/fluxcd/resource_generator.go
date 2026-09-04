@@ -27,14 +27,23 @@ type ResourceGenerator struct {
 	DefaultInterval time.Duration
 	// DefaultNamespace is the default namespace for generated Flux resources
 	DefaultNamespace string
+	// Prune is the garbage-collection input for Kustomizations generated from a
+	// layout.ManifestLayout (FluxIntegratedPerLayout mode), which carries no
+	// prune setting of its own. Kustomizations generated from a stack.Bundle
+	// use that bundle's own Prune and ignore this field. nil emits
+	// prune: false — see pruneValue.
+	Prune *bool
 }
 
-// NewResourceGenerator creates a FluxCD resource generator with sensible defaults.
+// NewResourceGenerator creates a FluxCD resource generator seeded with the
+// exported defaults ([DefaultMode], [DefaultInterval], [DefaultNamespace]).
+// Assign the fields afterwards to override any of them; nothing else is
+// injected into generated resources.
 func NewResourceGenerator() *ResourceGenerator {
 	return &ResourceGenerator{
-		Mode:             layout.KustomizationExplicit,
-		DefaultInterval:  60 * time.Minute,
-		DefaultNamespace: "flux-system",
+		Mode:             DefaultMode,
+		DefaultInterval:  DefaultInterval,
+		DefaultNamespace: DefaultNamespace,
 	}
 }
 
@@ -166,11 +175,9 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		}
 	}
 
-	// Default prune to true if not explicitly set
-	prune := true
-	if b.Prune != nil {
-		prune = *b.Prune
-	}
+	// Prune is a declared tri-state input, passed through untouched. An unset
+	// Prune emits prune: false — see pruneValue for why nil cannot mean "leave
+	// the key out".
 
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
@@ -186,13 +193,9 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: interval},
 			Path:     g.generatePath(b),
-			Prune:    prune,
+			Prune:    pruneValue(b.Prune),
+			Wait:     waitValue(b.Wait),
 		},
-	}
-
-	// Set wait if specified
-	if b.Wait != nil && *b.Wait {
-		kust.Spec.Wait = true
 	}
 
 	// Set timeout if specified
@@ -230,13 +233,17 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		}
 	}
 
-	// Umbrella bundles: force Wait=true and prepend auto HealthChecks for each
-	// child Kustomization. Validation has already rejected any explicit
-	// Wait=false when Children is non-empty, so this override is safe.
+	// Umbrella bundles: prepend an auto HealthCheck for each child
+	// Kustomization, so the umbrella is Ready only when every child is.
 	// User-supplied HealthChecks are appended AFTER the auto entries.
+	//
+	// Wait is no longer forced to true here. It was, and that made these
+	// HealthChecks dead weight: upstream documents that "when enabled, the
+	// HealthChecks are ignored" (kustomize-controller
+	// api/v1/kustomization_types.go:175-177). Leaving Wait to the caller's
+	// tri-state input is what makes the entries below take effect.
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
-		kust.Spec.Wait = true
 		for _, child := range b.Children {
 			if child == nil {
 				continue
@@ -328,7 +335,7 @@ func (g *ResourceGenerator) createKustomizationForLayout(
 		Spec: kustv1.KustomizationSpec{
 			Interval:  metav1.Duration{Duration: g.DefaultInterval},
 			Path:      ml.FullRepoPath(),
-			Prune:     true,
+			Prune:     pruneValue(g.Prune),
 			SourceRef: sourceRef,
 		},
 	}

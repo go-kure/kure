@@ -390,8 +390,11 @@ func TestGenerateFromBundle_UmbrellaAutoHealthChecks(t *testing.T) {
 		t.Fatalf("expected *kustv1.Kustomization, got %T", objs[0])
 	}
 
-	if !k.Spec.Wait {
-		t.Error("expected Wait=true for umbrella bundle")
+	// Wait is the caller's tri-state input and is not forced here. Forcing it
+	// made the HealthChecks below inert, because upstream ignores HealthChecks
+	// when Wait is enabled.
+	if k.Spec.Wait {
+		t.Error("expected an unset Bundle.Wait to leave Wait false, got true")
 	}
 
 	if len(k.Spec.HealthChecks) != 3 {
@@ -745,13 +748,13 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 		}
 	}
 
-	// Umbrella parent should have Wait=true and HealthChecks entries for children.
+	// Umbrella parent gates on its HealthChecks entries, not on a forced Wait.
 	platform := kustsByName["platform"]
 	if platform == nil {
 		t.Fatal("no platform Kustomization")
 	}
-	if !platform.Spec.Wait {
-		t.Error("expected platform.Spec.Wait == true (umbrella)")
+	if platform.Spec.Wait {
+		t.Error("expected platform.Spec.Wait == false with Wait unset (umbrella)")
 	}
 	hcNames := map[string]bool{}
 	for _, hc := range platform.Spec.HealthChecks {

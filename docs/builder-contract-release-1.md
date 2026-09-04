@@ -948,3 +948,227 @@ Three groups of metadata-shaped helpers stay, because none of them writes
 With these gone the exclusion list is empty: every exported `Set*`/`Add*` under
 `pkg/kubernetes` now satisfies the contract, and
 `testdata/admission_exclusions.txt` records no tolerated helper at all.
+
+## Flux workflow defaults, declared by the defaults PR
+
+`pkg/kubernetes` injects nothing at all once the constructors are identity-only
+and the sub-type constructors are gone — the two sections above list all of it.
+`pkg/stack/fluxcd` is a different case. It is a workflow layer above the
+builders and may legitimately hold opinions, so most of its **twenty-six**
+injected values are not deleted:
+
+| Disposition | Sites |
+|---|---|
+| declared inputs with exported named defaults | 17 |
+| pass-through tri-state inputs | 4 |
+| deferred to the package that owns the value | 3 |
+| never defaults at all; removed outright | 2 |
+
+The seventeen exported-default sites collapse onto **eleven** identifiers.
+Interval, namespace, source name, bootstrap name and the Flux directory name
+were each written as a separate literal in two places, and the source kind in
+two more with opposite polarities — six identifiers covering twelve sites, plus
+five that appear once each. Those copies could have been changed apart. They now
+cannot.
+
+`defaults.go` declares a twelfth name, `ModeGotk`, which is not a default —
+nothing falls back to it. It exists so the bootstrap mode set has one authority:
+`DefaultFluxMode` is both the fallback for an empty `FluxMode` and the value
+`GenerateBootstrap` dispatches on, so the two cannot be changed apart into a
+state where an empty `FluxMode` resolves to a mode the switch rejects.
+
+The ticket's own figure was twenty, and that number was too low. It counted
+`resource_generator.go` and `bootstrap_generator.go` only: `layout_integrator.go`
+holds five further sites and was never in the inventory, and the bootstrap
+Kustomization's `spec.path` root was missed inside a file that was. The count
+above is recomputed from the package as it stands, and the two remaining
+categories below account for every site that is not simply renamed.
+
+### Exported so a consumer can see and override them
+
+Every fallback either generator applies is now one of these identifiers in
+`pkg/stack/fluxcd/defaults.go`. Grep for the identifier to find every place its
+value can reach emitted YAML. How each one is overridden differs, and the
+paragraph after the table gives the split — four are copied into an exported
+generator field by the constructor, four yield to a named input, and three are
+fixed path segments with no override.
+
+| Identifier | Value | Replaces the literal formerly at |
+|---|---|---|
+| `DefaultInterval` | `60 * time.Minute` | `NewResourceGenerator`, `NewBootstrapGenerator` — and retained when a non-empty `Bundle.Interval` fails to parse |
+| `DefaultNamespace` | `"flux-system"` | both constructors |
+| `DefaultMode` | `layout.KustomizationExplicit` | `NewResourceGenerator` |
+| `DefaultSourceName` | `"flux-system"` | `generateGitSource`, `generateOCISource` |
+| `DefaultBootstrapName` | `"flux-system"` | the bootstrap `Kustomization`'s name, the `FluxInstance`'s name |
+| `DefaultFluxMode` | `"flux-operator"` | `GenerateBootstrap`'s empty-mode fallback, its dispatch switch, and `SupportedBootstrapModes` |
+| `DefaultSourceKind` | `"OCIRepository"` | `generateFluxSystemKustomization`, `generateFluxInstance` |
+| `DefaultBootstrapPathRoot` | `"manifests"` | `generateFluxSystemKustomization` |
+| `DefaultFluxDirName` | `"flux-system"` | `addSeparateFluxToLayout`, twice |
+| `DefaultSourceRef` | `"latest"` | `generateOCISource` |
+| `DefaultSyncPath` | `"./"` | `generateFluxInstance` |
+
+`DefaultBootstrapName` also gains `BootstrapGenerator.BootstrapName`. It was the
+one default with no override path at all — `BootstrapConfig` carries no name
+input and the constant was applied directly at both emission sites — while the
+package documented every default as overrideable. Four identifiers are now
+copied into exported generator fields (`DefaultInterval`, `DefaultNamespace`,
+`DefaultMode`, `DefaultBootstrapName`); the rest are overridden by naming the
+corresponding input, and the three with no override (`DefaultBootstrapPathRoot`,
+`DefaultFluxDirName`, `DefaultSyncPath`) now say so instead of being described
+as though they had one.
+
+Adding that field made a nameless object reachable for the first time, so an
+empty `BootstrapName` resolves back to `DefaultBootstrapName` at emission. Both
+names were previously a literal and could not be absent; a consumer that builds
+`BootstrapGenerator` as a struct literal rather than through
+`NewBootstrapGenerator` leaves the new field zero, and a `Kustomization` or
+`FluxInstance` with an empty `metadata.name` is rejected by the API server. The
+field is an override, not a way to remove the name. `DefaultNamespace` and
+`DefaultInterval` have the same hazard on a struct literal, but they had it
+before this change as well, and resolving them at emission would alter existing
+behaviour rather than preserve it — so they are left as they were.
+
+`DefaultFluxDirName` shares `DefaultNamespace`'s value and is a separate
+identifier on purpose: one is a path segment, the other a Kubernetes namespace,
+and renaming the namespace must not silently rename the directory.
+
+Except for `DefaultSourceKind`, none of these changes emitted YAML — they change
+where the value comes from. `DefaultSourceKind` does change it, and has its own
+entry below.
+
+### Deferred, not renamed: three values this package does not own
+
+Two sites in `addSeparateFluxToLayout` and `normalizeRulesPlacement` fell back to
+`layout.FilePerResource` and `layout.FluxSeparate`. Both are already declared by
+`layout.DefaultLayoutRules()` (`pkg/stack/layout/types.go:154-163`), which is
+also where the layout walker resolves unset options from
+(`pkg/stack/layout/walker.go:42-43`). They now read from that function rather
+than getting an identifier here, because a constant in `pkg/stack/fluxcd` would
+be a second copy of a value that can change independently — the failure mode the
+rest of this work exists to remove.
+
+The third is the separate Flux layout's own `Mode`, which was
+`layout.KustomizationExplicit` inline and is now left unset. It is deferred
+rather than named because it cannot take effect at that site at all: the layout
+writer resolves an unset mode to `KustomizationExplicit`
+(`pkg/stack/layout/manifest.go:324-326`), and the separate Flux layout never
+gains children, so the branch a mode selects lists the resource files either way
+(`manifest.go:352`). Seeding it from `DefaultMode` would have made that
+identifier look overrideable through `ResourceGenerator.Mode` at a site that
+never reads the field — the same false-override claim this work removes
+elsewhere.
+
+### Changed: one resolved source kind, and the dangling reference it hid
+
+The kind of source object bootstrap emits was decided in three places, and they
+did not agree. `generateSource` emitted a `GitRepository` only when
+`SourceKind == "GitRepository"` and an `OCIRepository` for everything else,
+including the empty string. `generateFluxInstance`'s sync block used the same
+test. But `generateFluxSystemKustomization` used the opposite one — it wrote
+`sourceRef.Kind: OCIRepository` only when `SourceKind == "OCIRepository"`, and
+`GitRepository` otherwise.
+
+The three agreed only when `SourceKind` named a kind exactly:
+
+| `SourceKind` | Emitted source | `sourceRef.Kind` before | after |
+|---|---|---|---|
+| `"GitRepository"` | GitRepository | `GitRepository` | `GitRepository` |
+| `"OCIRepository"` | OCIRepository | `OCIRepository` | `OCIRepository` |
+| `""` | OCIRepository | `GitRepository` | `OCIRepository` |
+| anything else | OCIRepository | `GitRepository` | `OCIRepository` |
+
+The last two rows are the same defect as the `sourceRef.name` one below, in the
+other field of the same reference: a Kustomization pointing at an object that was
+never created. An unnamed `SourceKind` is the default case, not an exotic one.
+
+`resolvedSourceKind` is now the only place the decision is made, and all three
+sites call it. The exported default is `DefaultSourceKind = "OCIRepository"`,
+which is what an unnamed kind actually yields. The previous
+`DefaultBootstrapSourceKind = "GitRepository"` named the losing side of the
+disagreement rather than the package's behaviour, so it is gone rather than
+renamed.
+
+### Removed: the placeholder registry URL
+
+`generateOCISource` substituted `oci://registry.example.com/flux-system` when
+`BootstrapConfig.SourceURL` was empty, so a missing input produced a manifest
+pointing at a registry that does not exist. An absent input is an error, not a
+placeholder: `generateSource`, `generateGitSource` and `generateOCISource` now
+return `(client.Object, error)` and reject an empty `SourceURL` naming the field.
+
+The reachable behaviour is unchanged for every caller that supplied a URL, and
+`GenerateBootstrap` still emits no source at all when `SourceURL` is empty —
+that means "the caller supplies the source", and it is not an error.
+
+### Removed: a dangling `sourceRef`
+
+The bootstrap `Kustomization` hardcoded `spec.sourceRef.name: flux-system` while
+the source object it points at is named after the root node. With a named root
+node the Kustomization referenced a source that was never emitted. Both names
+now come from one derivation, so they cannot drift apart.
+
+| Root node | `sourceRef.name` before | after | Emitted source's name |
+|---|---|---|---|
+| named `prod` | `flux-system` | `prod` | `prod` |
+| unnamed | `flux-system` | `flux-system` | `flux-system` |
+
+### Fixed: a nil root node panicked
+
+Consolidating the name derivation exposed an adjacent defect. Every site that
+read the root node's name tolerated a nil node except the bootstrap
+Kustomization's `spec.path`, which dereferenced `rootNode.Name` directly — one
+line above the nil-guarded call for `sourceRef.name`, in the same struct
+literal. `GenerateBootstrap(config, nil)` in gotk mode therefore panicked, while
+the same call in flux-operator mode returned a valid `FluxInstance`.
+
+`rootName` is now the single place the name is read, and returns `""` for a nil
+or unnamed node. A nil root node yields `spec.path: manifests` and
+`sourceRef.name: flux-system`, which is what the unnamed-node case already
+produced.
+
+### Changed: `prune` and `wait` are pass-through inputs
+
+`Bundle.Prune` and `Bundle.Wait` were already `*bool`. The generator collapsed
+them. They are now passed through untouched, and `BootstrapConfig` gains a
+`Prune *bool` so the bootstrap `Kustomization` has the same input.
+`ResourceGenerator` gains a `Prune *bool` for Kustomizations generated from a
+`layout.ManifestLayout`, which carries no prune setting of its own.
+
+The two resolve differently, because their upstream tags differ. Both tags are in
+`kustomize-controller`'s `api/v1/kustomization_types.go`:
+
+| Field | Upstream tag | Declared at | Unset input emits |
+|---|---|---|---|
+| `KustomizationSpec.Prune` | `+required`, no `omitempty` | `kustomization_types.go:99-101` | `prune: false` — the key cannot be left out |
+| `KustomizationSpec.Wait` | `+optional`, `omitempty` | `kustomization_types.go:174-178` | nothing; Flux's own default, `false`, applies |
+
+**This is the behaviour change with teeth.** An unset `Prune` used to emit
+`prune: true`, enabling destructive garbage collection for a caller who never
+asked for it. It now emits `prune: false`. A caller that wants garbage
+collection sets `Prune` explicitly:
+
+```go
+prune := true
+bundle.Prune = &prune
+```
+
+### Changed: the umbrella no longer forces `wait: true`
+
+An umbrella bundle (`Bundle.Children` non-empty) had `spec.wait` forced to
+`true` alongside the auto-generated `spec.healthChecks` entry per child. That
+was self-defeating: upstream's own doc comment on the field says that when it is
+enabled "the HealthChecks are ignored"
+(`kustomize-controller api/v1/kustomization_types.go:175-177`), so the entries
+the generator had just built were inert. Removing the force is what makes them
+take effect, and the umbrella still becomes `Ready` only when every child is.
+
+A caller that prefers upstream's whole-of-resources health assessment sets
+`Wait` explicitly; that gates on the child Kustomizations too, and then the
+`healthChecks` entries are the ones upstream ignores.
+
+`stack.Bundle.Validate` still rejects an explicit `Wait=false` on a bundle with
+`Children` (`pkg/stack/bundle.go:196-199`). With the force gone that rejects a
+state whose emitted YAML is identical to the accepted unset one, since `Wait`
+carries `omitempty`. Which way to resolve the asymmetry is a semantic call about
+what an umbrella promises, not a mechanical fix, so it is tracked separately in
+issue go-kure/kure#760 rather than settled here.

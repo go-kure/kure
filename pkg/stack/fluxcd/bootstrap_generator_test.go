@@ -383,6 +383,95 @@ func TestGotkGitRepositorySourceGeneration(t *testing.T) {
 	}
 }
 
+// TestGotkBootstrapKustomizationReferencesTheEmittedSource pins the fix for a
+// dangling reference: the bootstrap Kustomization's sourceRef.name used to be
+// the hardcoded "flux-system" while the source object it points at is named
+// after the root node, so a named root node produced a Kustomization
+// referencing a source that was never emitted. Both names now come from the
+// same derivation.
+func TestGotkBootstrapKustomizationReferencesTheEmittedSource(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+	config := &stack.BootstrapConfig{
+		Enabled:    true,
+		FluxMode:   "gotk",
+		SourceKind: "GitRepository",
+		SourceURL:  "https://github.com/org/fleet.git",
+		SourceRef:  "main",
+	}
+
+	for name, rootNode := range map[string]*stack.Node{
+		"named root node":   {Name: "prod"},
+		"unnamed root node": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resources, err := bg.GenerateBootstrap(config, rootNode)
+			if err != nil {
+				t.Fatalf("GenerateBootstrap() error = %v", err)
+			}
+
+			var kust *kustv1.Kustomization
+			var source *sourcev1.GitRepository
+			for _, obj := range resources {
+				switch o := obj.(type) {
+				case *kustv1.Kustomization:
+					kust = o
+				case *sourcev1.GitRepository:
+					source = o
+				}
+			}
+			if kust == nil {
+				t.Fatal("no bootstrap Kustomization emitted")
+			}
+			if source == nil {
+				t.Fatal("no GitRepository emitted")
+			}
+			if kust.Spec.SourceRef.Name != source.Name {
+				t.Errorf("sourceRef.name = %q but the emitted source is named %q — dangling reference",
+					kust.Spec.SourceRef.Name, source.Name)
+			}
+			if kust.Spec.SourceRef.Kind != "GitRepository" {
+				t.Errorf("sourceRef.kind = %q, want GitRepository", kust.Spec.SourceRef.Kind)
+			}
+		})
+	}
+}
+
+// TestGotkBootstrapKustomizationPruneIsAnInput pins the tri-state pass-through
+// on the bootstrap Kustomization: it used to hardcode prune: true.
+func TestGotkBootstrapKustomizationPruneIsAnInput(t *testing.T) {
+	prune := true
+	for name, tc := range map[string]struct {
+		prune *bool
+		want  bool
+	}{
+		"unset means no garbage collection": {nil, false},
+		"explicit true":                     {&prune, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bg := fluxstack.NewBootstrapGenerator()
+			resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
+				Enabled:    true,
+				FluxMode:   "gotk",
+				SourceKind: "GitRepository",
+				SourceURL:  "https://github.com/org/fleet.git",
+				Prune:      tc.prune,
+			}, &stack.Node{Name: "prod"})
+			if err != nil {
+				t.Fatalf("GenerateBootstrap() error = %v", err)
+			}
+			for _, obj := range resources {
+				if kust, ok := obj.(*kustv1.Kustomization); ok {
+					if kust.Spec.Prune != tc.want {
+						t.Errorf("prune = %v, want %v", kust.Spec.Prune, tc.want)
+					}
+					return
+				}
+			}
+			t.Fatal("no bootstrap Kustomization emitted")
+		})
+	}
+}
+
 func TestGenerateFluxInstanceNilConfig(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
@@ -701,7 +790,10 @@ func TestGotkBootstrapAcceptsANilRootNode(t *testing.T) {
 	if kust == nil {
 		t.Fatal("bootstrap emitted no Kustomization")
 	}
-	if got, want := kust.Spec.Path, "manifests"; got != want {
+	if got, want := kust.Spec.Path, fluxstack.DefaultBootstrapPathRoot; got != want {
 		t.Errorf("spec.path = %q, want %q — a nameless root must not add a path segment", got, want)
+	}
+	if got, want := kust.Spec.SourceRef.Name, fluxstack.DefaultSourceName; got != want {
+		t.Errorf("sourceRef.name = %q, want DefaultSourceName (%q)", got, want)
 	}
 }

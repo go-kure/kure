@@ -121,10 +121,12 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
 its Kustomization `Ready` once every child Kustomization is `Ready`. The Flux
-engine enforces this by:
+engine enforces this by prepending an auto `spec.healthChecks` entry for each
+direct child.
 
-- Forcing `spec.wait: true` on the umbrella's Kustomization
-- Prepending an auto `spec.healthChecks` entry for each direct child
+`spec.wait` is not forced. It is `Bundle.Wait` like any other input, and leaving
+it unset is what makes the `healthChecks` entries take effect — upstream ignores
+`healthChecks` when `wait` is enabled.
 
 The resulting umbrella Kustomization aggregates child readiness regardless of
 how many children there are, giving external consumers a single stable anchor:
@@ -147,7 +149,7 @@ metadata:
   name: platform
   namespace: flux-system
 spec:
-  wait: true
+  prune: false
   healthChecks:
   - apiVersion: kustomize.toolkit.fluxcd.io/v1
     kind: Kustomization
@@ -181,7 +183,7 @@ each child via the CR file (not the child subdirectory):
 ```
 clusters/production/apps/
   platform/                                       # umbrella bundle directory
-    flux-system-kustomization-platform.yaml       # umbrella self CR (wait+HC)
+    flux-system-kustomization-platform.yaml       # umbrella self CR (healthChecks)
     flux-system-kustomization-platform-infra.yaml # child CR (placed at parent)
     flux-system-kustomization-platform-apps.yaml  # child CR (placed at parent)
     kustomization.yaml                            # references the CR files

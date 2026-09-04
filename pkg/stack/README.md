@@ -65,8 +65,10 @@ bundle.Interval = "10m"
 
 Bundles also support an **umbrella pattern** via `Bundle.Children`. When a
 bundle has non-empty `Children`, its generated Flux Kustomization automatically
-gets `spec.wait: true` plus an entry in `spec.healthChecks` for each child,
+gets an entry in `spec.healthChecks` for each child,
 giving external consumers a single readiness anchor for a group of bundles.
+`spec.wait` is left to `Bundle.Wait`: the generator no longer forces it, because
+upstream ignores `healthChecks` when `wait` is enabled.
 The child bundles' Flux Kustomization CRs are rendered into the parent
 bundle's directory. Children must be standalone bundles — they cannot
 simultaneously be attached as the `Bundle` of any `stack.Node`.

@@ -158,7 +158,11 @@ func TestGenerateFromBundle_Nil(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_PruneDefault(t *testing.T) {
+// TestGenerateFromBundle_PruneUnsetIsFalse pins the tri-state pass-through: an
+// unset Bundle.Prune must not collapse onto destructive garbage collection.
+// The upstream field is required with no omitempty, so "unset" is emitted as
+// prune: false rather than omitted.
+func TestGenerateFromBundle_PruneUnsetIsFalse(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{Name: "test"}
 
@@ -168,8 +172,26 @@ func TestGenerateFromBundle_PruneDefault(t *testing.T) {
 	}
 
 	k := objs[0].(*kustv1.Kustomization)
+	if k.Spec.Prune {
+		t.Error("expected an unset Bundle.Prune to emit prune: false, got true")
+	}
+}
+
+// TestGenerateFromBundle_PruneExplicitTrue is the other half: the caller who
+// wants garbage collection still gets it.
+func TestGenerateFromBundle_PruneExplicitTrue(t *testing.T) {
+	wf := fluxstack.Engine()
+	prune := true
+	b := &stack.Bundle{Name: "test", Prune: &prune}
+
+	objs, err := wf.GenerateFromBundle(b)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	k := objs[0].(*kustv1.Kustomization)
 	if !k.Spec.Prune {
-		t.Error("expected Prune to default to true")
+		t.Error("expected an explicit Prune=true to emit prune: true")
 	}
 }
 

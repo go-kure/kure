@@ -427,12 +427,22 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		return nil
 	}
 
-	// Create a separate flux-system layout
+	// Create a separate Flux layout. The directory name is
+	// [DefaultFluxDirName]; the file granularity is whatever
+	// layout.DefaultLayoutRules declares rather than a second copy of it
+	// (pkg/stack/layout/types.go:154-163).
+	//
+	// Mode is deliberately left unset rather than seeded with [DefaultMode].
+	// It cannot affect this layout: the writer treats KustomizationUnset as
+	// KustomizationExplicit (pkg/stack/layout/manifest.go:324-326), and this
+	// layout never gains children, so the branch that mode selects lists the
+	// resource files either way (manifest.go:352). Seeding it here would have
+	// made DefaultMode look overrideable via ResourceGenerator.Mode at a site
+	// that never consults that field.
 	fluxLayout := &layout.ManifestLayout{
-		Name:      "flux-system",
-		Namespace: filepath.Join(ml.Namespace, "flux-system"),
-		FilePer:   layout.FilePerResource,
-		Mode:      layout.KustomizationExplicit,
+		Name:      DefaultFluxDirName,
+		Namespace: filepath.Join(ml.Namespace, DefaultFluxDirName),
+		FilePer:   layout.DefaultLayoutRules().FilePer,
 		Resources: fluxResources,
 	}
 
@@ -481,14 +491,19 @@ func (li *LayoutIntegrator) findLayoutNodeByPath(ml *layout.ManifestLayout, targ
 	return nil
 }
 
-// normalizeRulesPlacement returns a copy of rules with FluxPlacement set to
-// FluxSeparate when it was FluxUnset. The integrator, the SourceRef
-// validation gate, and the walker all read from this normalized value so
-// they cannot disagree on what "unset" means. Mirrors the walker behaviour
-// in pkg/stack/layout/walker.go:42-44.
+// normalizeRulesPlacement returns a copy of rules with FluxPlacement filled in
+// from layout.DefaultLayoutRules when it was FluxUnset. The integrator, the
+// SourceRef validation gate, and the walker all read from this normalized value
+// so they cannot disagree on what "unset" means.
+//
+// The default is read from layout.DefaultLayoutRules (pkg/stack/layout/types.go:154-163)
+// rather than named here, because that function is where the layout package
+// declares it and the walker resolves unset options from the same call
+// (pkg/stack/layout/walker.go:42-43). A constant in this package would be a
+// second copy of a value this package does not own.
 func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
 	if rules.FluxPlacement == layout.FluxUnset {
-		rules.FluxPlacement = layout.FluxSeparate
+		rules.FluxPlacement = layout.DefaultLayoutRules().FluxPlacement
 	}
 	return rules
 }
