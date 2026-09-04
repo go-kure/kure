@@ -670,8 +670,19 @@ validate_gomod() {
         lo_key=$(mm_key "$lo_mm")
         hi_key=$(mm_key "$hi_mm")
 
-        if (( ver_key < lo_key || ver_key > hi_key )); then
+        if (( ver_key > hi_key )); then
+            # Above the upper bound is exactly what `widen` raises -- the
+            # command it prints will succeed once the note is filled in.
             error "$dep $ver_mm (go.mod $go_module v$actual_version) is outside supported_range \"$supported\". After confirming API compatibility: ./scripts/sync-versions.sh widen $dep $ver_mm --note \"<compatibility assessment>\""
+            errors=$((errors + 1))
+        elif (( ver_key < lo_key )); then
+            # Below the lower bound: `widen` only ever raises the upper
+            # bound and would refuse this value outright (it's not above
+            # the current one) -- printing that command here would just
+            # hand the human a command guaranteed to fail. This direction
+            # means the pin moved backward for some other reason; there is
+            # no mechanical remediation to suggest.
+            error "$dep $ver_mm (go.mod $go_module v$actual_version) is below supported_range \"$supported\"'s lower bound -- this is not something 'widen' can fix (it only raises the upper bound). Confirm why the pin moved backward, then update supported_range and notes by hand."
             errors=$((errors + 1))
         else
             success "$dep: v$actual_version within supported_range \"$supported\""
@@ -769,7 +780,11 @@ EOF
 ### Build Version (go.mod)
 The version Kure imports and builds against — read directly from `go.mod`, the single
 source of truth for the pin. CI (`sync-versions.sh check`) asserts it falls within the
-declared `supported_range`.
+declared `supported_range` — except an entry whose Deployment Compatibility cell reads
+"derived from `<module>`" (an MVS-floor dependency): its pin is not chosen by Kure, so
+there is no independent range to assert, and CI instead only checks that the pin matches
+what `<module>`'s own go.mod requires. See `docs/dependency-updates.md`'s "MVS-floor
+dependencies" section.
 
 ### Deployment Compatibility
 The range of versions that Kure can generate valid YAML for. Kure may generate YAML compatible with older or newer versions than it builds against.
@@ -1035,6 +1050,24 @@ widen_dependency() {
         return 1
     fi
 
+    # notes is rendered raw into a Markdown table cell by generate_docs
+    # (a '|' would open an extra column) -- go_string_literal_unsafe above
+    # only guards Go-string-literal safety, a different downstream consumer,
+    # so this needs its own check.
+    if [[ "$note" == *'|'* ]]; then
+        error "widen: --note text cannot contain '|' -- it is rendered as a Markdown table cell in docs/compatibility.md and a pipe would break the table: $note"
+        return 1
+    fi
+
+    # $2 must be exactly major.minor: mm_key silently truncates anything
+    # past the second component (so "2.1.0" and "2.1" compare equal), which
+    # would otherwise let a malformed bound through the comparison below and
+    # get written verbatim into supported_range.
+    if [[ ! "$new_hi" =~ ^[0-9]+\.[0-9]+$ ]]; then
+        error "widen: new upper bound \"$new_hi\" is not major.minor (e.g. \"1.26\") -- supported_range only ever records major.minor"
+        return 1
+    fi
+
     local supported
     supported=$(yq ".infrastructure.${dep}.supported_range // \"\"" "$VERSIONS_FILE")
     if [[ -z "$supported" || "$supported" == "null" ]]; then
@@ -1042,18 +1075,23 @@ widen_dependency() {
         return 1
     fi
 
-    local lo
+    local lo hi
     if [[ "$supported" == *" - "* ]]; then
-        lo="${supported%% - *}"
+        lo="${supported%% - *}"; hi="${supported##* - }"
     else
-        lo="$supported"
+        lo="$supported"; hi="$supported"
     fi
 
-    local lo_key new_hi_key
-    lo_key=$(mm_key "$lo")
+    # Compare against the current UPPER bound, not the lower one: for an
+    # existing multi-version range (e.g. "1.5 - 1.7"), a new_hi that is
+    # above the lower bound but at or below the current upper bound (e.g.
+    # "1.6") would otherwise silently narrow the range and drop support for
+    # 1.7 while still being reported as "widened".
+    local hi_key new_hi_key
+    hi_key=$(mm_key "$hi")
     new_hi_key=$(mm_key "$new_hi")
-    if (( new_hi_key <= lo_key )); then
-        error "widen: new upper bound \"$new_hi\" is not above the current lower bound \"$lo\" -- widen only raises the upper bound, never the lower one"
+    if (( new_hi_key <= hi_key )); then
+        error "widen: new upper bound \"$new_hi\" is not above the current upper bound \"$hi\" -- widen only raises the upper bound, never narrows the range"
         return 1
     fi
 

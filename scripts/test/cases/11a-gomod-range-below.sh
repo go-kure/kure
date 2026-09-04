@@ -20,4 +20,4 @@ run_generate
 assert_rc 0
 run_check
 assert_rc 1
-assert_err_contains 'range-dep 1.9 (go.mod github.com/example/range-dep v1.9.0) is outside supported_range "2.0"'
+assert_err_contains 'range-dep 1.9 (go.mod github.com/example/range-dep v1.9.0) is below supported_range "2.0"'
