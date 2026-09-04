@@ -120,6 +120,18 @@ packages:
     readme: pkg/kubernetes/README.md
     mounted: false
     reason: "Internal go/ast classifier behind the sugar admission test; documented on the Kubernetes Builders page."
+  - path: pkg/kubernetes/internal/markers
+    readme: pkg/kubernetes/README.md
+    mounted: false
+    reason: "Internal parser for the upstream controller-gen markers the tables are derived from; documented on the Kubernetes Builders page."
+  - path: pkg/kubernetes/internal/upstream
+    readme: pkg/kubernetes/README.md
+    mounted: false
+    reason: "Internal loader for the pinned upstream module sources the tables are derived from; documented on the Kubernetes Builders page."
+  - path: pkg/kubernetes/internal/maturity
+    readme: pkg/kubernetes/README.md
+    mounted: false
+    reason: "Internal walk over the pinned API types recording gated and deprecated fields; documented on the Kubernetes Builders page."
 
 # Non-package docs mounted into the site. Not gated by code changes.
 extra_mounts:
