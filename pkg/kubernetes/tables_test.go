@@ -1,7 +1,9 @@
 package kubernetes
 
 import (
+	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -172,24 +174,60 @@ func TestTheTablesCannotBeMutatedThroughWhatIsReturned(t *testing.T) {
 		t.Errorf("KindFor now answers %+v, was %+v: Kinds returned the table itself", after, before)
 	}
 
-	gatedBefore := len(GatedFields())
-	for _, m := range FieldMaturities() {
-		for i := range m.Gates {
-			m.Gates[i] = ""
-		}
+	// Gate names, not gate counts. Overwriting the strings in a Gates slice
+	// changes neither the row count nor any len(Gates), so a count comparison
+	// here could not fail whatever the copying did — and the sharing this is
+	// looking for would corrupt a snapshot of the rows themselves just as it
+	// corrupts the table. The snapshot is therefore of string values, which are
+	// immutable: writing into a []string slot replaces the slot, and cannot
+	// reach a string already copied out of it.
+	want := gateNames(GatedFields())
+	if len(want) == 0 {
+		t.Fatal("the pinned sources carry gated construction-side fields")
 	}
-	for _, m := range MaturityForType("k8s.io/api/autoscaling/v2", "HPAScalingRules") {
-		m.Gates = append(m.Gates[:0], "")
-	}
-	if got := len(GatedFields()); got != gatedBefore {
-		t.Errorf("GatedFields now returns %d rows, was %d: the Gates slices are shared with the table", got, gatedBefore)
-	}
-	for _, m := range GatedFields() {
-		for _, g := range m.Gates {
-			if g == "" {
-				t.Fatalf("%s.%s.%s has an emptied gate name: a returned row shares its Gates slice with the table",
-					m.ImportPath, m.TypeName, m.Field)
+
+	for _, rows := range [][]FieldMaturity{
+		FieldMaturities(),
+		MaturityForType("k8s.io/api/autoscaling/v2", "HPAScalingRules"),
+		GatedFields(),
+	} {
+		for i := range rows {
+			for j := range rows[i].Gates {
+				rows[i].Gates[j] = ""
 			}
 		}
 	}
+
+	got := gateNames(GatedFields())
+	if !slices.Equal(got, want) {
+		for i := range got {
+			if i < len(want) && got[i] != want[i] {
+				t.Fatalf("after a caller overwrote the gates it was handed, GatedFields reports %q where it reported %q: the returned rows share their Gates slice with the table",
+					got[i], want[i])
+			}
+		}
+		t.Fatalf("GatedFields now reports %d gated rows, was %d", len(got), len(want))
+	}
+
+	// The copy has to hold for one row read twice, not only in aggregate: take
+	// a row, overwrite its gates, and read that same row again.
+	first := GatedFields()[0]
+	for i := range first.Gates {
+		first.Gates[i] = "overwritten"
+	}
+	again := GatedFields()[0]
+	if slices.Contains(again.Gates, "overwritten") {
+		t.Errorf("%s.%s.%s reads back with a caller's edit: %v",
+			again.ImportPath, again.TypeName, again.Field, again.Gates)
+	}
+}
+
+// gateNames renders the gate lists as one string per row, so a comparison is
+// over immutable values that no later write into the tables can reach.
+func gateNames(rows []FieldMaturity) []string {
+	out := make([]string, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, m.ImportPath+"."+m.TypeName+"."+m.Field+"="+strings.Join(m.Gates, ","))
+	}
+	return out
 }
