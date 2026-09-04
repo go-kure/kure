@@ -5,6 +5,8 @@ import (
 	"time"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -620,5 +622,53 @@ func TestFluxOperatorBootstrapIncludesInstallBundle(t *testing.T) {
 		if !kinds[k] {
 			t.Errorf("missing expected install-bundle kind %q (have: %v)", k, kinds)
 		}
+	}
+}
+
+// TestGotkBootstrapSourceRefMatchesTheEmittedSourceKind pins that the bootstrap
+// Kustomization's sourceRef.Kind names the kind of the object bootstrap actually
+// emits, for every SourceKind value including the ones nobody thought about.
+//
+// The assertion deliberately reads the emitted object's own Go type instead of
+// restating an expected kind per case: a table that hardcoded "GitRepository"
+// here would encode the same assumption the defect made.
+func TestGotkBootstrapSourceRefMatchesTheEmittedSourceKind(t *testing.T) {
+	for name, sourceKind := range map[string]string{
+		"named GitRepository": "GitRepository",
+		"named OCIRepository": "OCIRepository",
+		"unnamed":             "",
+		"unrecognised":        "Bucket",
+	} {
+		t.Run(name, func(t *testing.T) {
+			bg := fluxstack.NewBootstrapGenerator()
+			resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
+				Enabled:    true,
+				FluxMode:   "gotk",
+				SourceKind: sourceKind,
+				SourceURL:  "https://example.test/fleet.git",
+			}, &stack.Node{Name: "prod"})
+			if err != nil {
+				t.Fatalf("GenerateBootstrap: %v", err)
+			}
+
+			var refKind, emittedKind string
+			for _, obj := range resources {
+				switch o := obj.(type) {
+				case *kustv1.Kustomization:
+					refKind = o.Spec.SourceRef.Kind
+				case *sourcev1.GitRepository:
+					emittedKind = "GitRepository"
+				case *sourcev1.OCIRepository:
+					emittedKind = "OCIRepository"
+				}
+			}
+			if emittedKind == "" {
+				t.Fatal("bootstrap emitted no source object")
+			}
+			if refKind != emittedKind {
+				t.Errorf("sourceRef.Kind = %q but the emitted source is a %s — dangling reference",
+					refKind, emittedKind)
+			}
+		})
 	}
 }
