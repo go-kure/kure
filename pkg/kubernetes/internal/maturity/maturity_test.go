@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-kure/kure/pkg/kubernetes/internal/kinds"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/upstream"
@@ -174,15 +175,35 @@ func TestWalkFindsGatesAcrossPackagesAndSkipsStatus(t *testing.T) {
 
 // A self-referential field must not hang the walk. JSONSchemaProps in
 // apiextensions names itself, so this is the real shape, not a hypothetical.
+//
+// The deadline is the whole point: waiting on the channel with no timeout is
+// the same as calling Walk here directly, and a walk that stopped making
+// progress would hang the test binary until the package-wide timeout killed it
+// — a failure attributed to every test in this package at once, minutes later,
+// rather than to this one. The goroutine reports over a buffered channel and
+// never touches t, so it cannot log after this test has returned.
+//
+// It catches a stalled walk, not every way the cycle cut can regress: [visit]
+// recurses, so simply losing the visited check overflows the stack in a couple
+// of seconds, and a fatal runtime error takes the process down before any
+// deadline here can fire. Both mutations were tried; this one reports the
+// failure by name, the other cannot be caught at test level by any means.
 func TestWalkTerminatesOnSelfReference(t *testing.T) {
-	done := make(chan struct{})
+	const deadline = 30 * time.Second // ~5 orders of magnitude over the real walk
+
+	done := make(chan error, 1)
 	go func() {
-		defer close(done)
-		if _, err := Walk([]Root{{ImportPath: "example.com/api/v1", TypeName: "Thing"}}, syntheticTypes()); err != nil {
-			t.Error(err)
-		}
+		_, err := Walk([]Root{{ImportPath: "example.com/api/v1", TypeName: "Thing"}}, syntheticTypes())
+		done <- err
 	}()
-	<-done
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(deadline):
+		t.Fatalf("Walk did not return within %s on a self-referential type: the visited set is not cutting the cycle", deadline)
+	}
 }
 
 func TestWalkRejectsBadInput(t *testing.T) {
