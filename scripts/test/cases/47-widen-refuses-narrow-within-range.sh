@@ -1,5 +1,5 @@
 #!/bin/bash
-# Row 47 (Codex finding on kure#765): widen must compare against the current
+# Row 47 (Codex finding on go-kure/kure#765): widen must compare against the current
 # UPPER bound, not the lower one. boundary-dep's supported_range is
 # "1.5 - 1.7" -- "1.6" is above the lower bound (1.5) but at/below the
 # current upper bound (1.7), so accepting it would silently narrow the
