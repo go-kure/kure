@@ -68,6 +68,12 @@ type BootstrapConfig struct {
 	SourceURL  string `yaml:"sourceURL,omitempty"`  // OCI/Git repository URL
 	SourceRef  string `yaml:"sourceRef,omitempty"`  // Tag/branch/ref
 
+	// Prune controls garbage collection on the bootstrap Kustomization.
+	// Unset emits prune: false: the upstream field is required with no
+	// omitempty, so it cannot be left out of the YAML, and an unset input is
+	// not a request for destructive garbage collection.
+	Prune *bool `yaml:"prune,omitempty"`
+
 	// ArgoCD-specific (mock for now)
 	ArgoCDVersion   string `yaml:"argoCDVersion,omitempty"`
 	ArgoCDNamespace string `yaml:"argoCDNamespace,omitempty"`
