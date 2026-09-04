@@ -532,7 +532,9 @@ The `pkg/errors` sentinels those helpers returned (`ErrNilDeployment`,
 `ErrNilVolume`, `ErrNilToleration`, `ErrNilImagePullSecret`,
 `ErrNilInitContainer`, `ErrNilEphemeralContainer`, `ErrNilSpec`) are now unused
 inside the module. They stay exported for this release; retiring them is a
-separate `pkg/errors` change, not part of the builder surface.
+separate `pkg/errors` change, not part of the builder surface, tracked in
+issue #758. `ErrNilContainer` and `ErrNilPodSpec` keep real users in
+`pkg/kubernetes/psa.go`, whose validators return errors by design.
 
 ## Error-returning helpers rewritten as void
 
@@ -672,3 +674,40 @@ dropping input while the rest reject it was the worse inconsistency.
 
 These take the exclusion list from 24 tolerated helpers to 11, all of them
 `ConfigMap` helpers.
+
+## `ConfigMap` helpers un-delegated
+
+All eleven `ConfigMap` helpers in `pkg/kubernetes` were one-line forwarders into
+`internal/kubernetes`. A helper that only calls another function contains no
+field write, so every one of them classified as inadmissible however
+class-shaped the code at the far end was. The bodies now live in
+`pkg/kubernetes/configmap.go`, with the nil-receiver panic the rest of the
+package uses.
+
+Four are removed rather than inlined:
+
+| Removed | Replacement |
+|---|---|
+| `SetConfigMapData(cm, data)` | `cm.Data = data` |
+| `SetConfigMapBinaryData(cm, data)` | `cm.BinaryData = data` |
+| `AddConfigMapDataMap(cm, data)` | `for k, v := range data { AddConfigMapData(cm, k, v) }` |
+| `AddConfigMapBinaryDataMap(cm, data)` | `for k, v := range data { AddConfigMapBinaryData(cm, k, v) }` |
+
+The first two are bare field assignments. The two merges are not admissible in
+any spelling: class (a) is a *single* insert whose value comes from the caller,
+and neither `maps.Copy(cm.Data, data)` nor an explicit `for k, v := range data`
+loop satisfies it — both were tried against the classifier and both stayed
+inadmissible. Rather than widen a class for one shape that appears twice in the
+whole tree, merging is a loop at the call site, the same answer PSA labels got.
+
+`AddConfigMapData`, `AddConfigMapBinaryData` and `SetConfigMapImmutable` survive
+inlined: the first two are class (a) map inserts with a nil-map guard, the third
+a class (b) pointer assignment. `AddConfigMapLabel`, `AddConfigMapAnnotation`,
+`SetConfigMapLabels` and `SetConfigMapAnnotations` are handled with the rest of
+the per-kind metadata helpers below.
+
+`pkg/kubernetes/configmap.go` was the only importer of
+`internal/kubernetes`, so that package now has no callers inside the module.
+Removing it is a separate change, tracked in issue #756.
+
+That leaves 2 tolerated helpers, both `ConfigMap` metadata.

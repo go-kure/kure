@@ -296,7 +296,21 @@ cm := kubernetes.CreateConfigMap("my-config", "default")
 kubernetes.AddConfigMapData(cm, "key", "value")
 kubernetes.AddConfigMapBinaryData(cm, "cert", certBytes)
 kubernetes.SetConfigMapImmutable(cm, true)
+
+// Replacing a map wholesale is an assignment, not a helper
+cm.Data = map[string]string{"key": "value"}
+
+// Merging one is a loop over the single-key helper
+for k, v := range defaults {
+    kubernetes.AddConfigMapData(cm, k, v)
+}
 ```
+
+`SetConfigMapData`, `SetConfigMapBinaryData`, `AddConfigMapDataMap` and
+`AddConfigMapBinaryDataMap` are gone: the first two were bare field assignments, and
+a bulk merge is not one of the admitted sugar classes in any spelling — neither
+`maps.Copy` nor an explicit loop classifies, because the class is a *single* insert
+whose value comes from the caller.
 
 ### PSA security contexts
 

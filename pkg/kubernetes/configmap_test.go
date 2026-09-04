@@ -16,26 +16,33 @@ func TestAddConfigMapData(t *testing.T) {
 	}
 }
 
-func TestAddConfigMapDataMap(t *testing.T) {
+// TestConfigMapDataMerge covers what AddConfigMapDataMap used to do: merging a
+// map is a loop over the single-key helper.
+func TestConfigMapDataMerge(t *testing.T) {
 	cm := kubernetes.CreateConfigMap("cm", "ns")
+	kubernetes.AddConfigMapData(cm, "keep", "me")
 
-	more := map[string]string{"a": "b", "c": "d"}
-	kubernetes.AddConfigMapDataMap(cm, more)
+	more := map[string]string{"keep": "replaced", "a": "b"}
 	for k, v := range more {
-		if cm.Data[k] != v {
-			t.Errorf("AddConfigMapDataMap: missing key %s", k)
-		}
+		kubernetes.AddConfigMapData(cm, k, v)
+	}
+
+	want := map[string]string{"keep": "replaced", "a": "b"}
+	if !reflect.DeepEqual(cm.Data, want) {
+		t.Errorf("Data = %+v, want %+v", cm.Data, want)
 	}
 }
 
-func TestSetConfigMapData(t *testing.T) {
+// TestConfigMapDataReplacement covers what SetConfigMapData used to do: a
+// wholesale replacement is a field assignment, so it has no helper.
+func TestConfigMapDataReplacement(t *testing.T) {
 	cm := kubernetes.CreateConfigMap("cm", "ns")
 	kubernetes.AddConfigMapData(cm, "old", "value")
 
 	newData := map[string]string{"x": "y"}
-	kubernetes.SetConfigMapData(cm, newData)
+	cm.Data = newData
 	if !reflect.DeepEqual(cm.Data, newData) {
-		t.Errorf("SetConfigMapData: got %+v", cm.Data)
+		t.Errorf("Data: got %+v", cm.Data)
 	}
 }
 
@@ -48,26 +55,28 @@ func TestAddConfigMapBinaryData(t *testing.T) {
 	}
 }
 
-func TestAddConfigMapBinaryDataMap(t *testing.T) {
+func TestConfigMapBinaryDataMerge(t *testing.T) {
 	cm := kubernetes.CreateConfigMap("cm", "ns")
 
 	more := map[string][]byte{"b1": {2, 3}, "b2": {4}}
-	kubernetes.AddConfigMapBinaryDataMap(cm, more)
 	for k, v := range more {
-		if !reflect.DeepEqual(cm.BinaryData[k], v) {
-			t.Errorf("AddConfigMapBinaryDataMap: missing key %s", k)
-		}
+		kubernetes.AddConfigMapBinaryData(cm, k, v)
+	}
+	if !reflect.DeepEqual(cm.BinaryData, more) {
+		t.Errorf("BinaryData = %+v, want %+v", cm.BinaryData, more)
 	}
 }
 
-func TestSetConfigMapBinaryData(t *testing.T) {
+// TestConfigMapBinaryDataReplacement is the SetConfigMapBinaryData equivalent:
+// assign the field.
+func TestConfigMapBinaryDataReplacement(t *testing.T) {
 	cm := kubernetes.CreateConfigMap("cm", "ns")
 	kubernetes.AddConfigMapBinaryData(cm, "old", []byte{0})
 
 	newData := map[string][]byte{"x": {9}}
-	kubernetes.SetConfigMapBinaryData(cm, newData)
+	cm.BinaryData = newData
 	if !reflect.DeepEqual(cm.BinaryData, newData) {
-		t.Errorf("SetConfigMapBinaryData: got %+v", cm.BinaryData)
+		t.Errorf("BinaryData: got %+v", cm.BinaryData)
 	}
 }
 
