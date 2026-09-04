@@ -115,34 +115,50 @@ const (
 	ScopeCluster
 )
 
-// Scope determines whether o is namespaced, cluster-scoped, or unknown. CRDs
-// are cluster-scoped; a kind kure registers takes its scope from the generated
-// table (derived from the pinned upstream sources — see
-// pkg/kubernetes/README.md § 9); the few cluster-scoped kinds kure does not
-// register are named above; and any remaining custom resource is resolved from
-// crdScopes (the spec.scope of CRDs known in the same context). Anything else
-// is ScopeUnknown, which callers fail closed on rather than guess.
+// Scope determines whether o is namespaced, cluster-scoped, or unknown, in this
+// order:
+//
+//  1. A CustomResourceDefinition is cluster-scoped.
+//  2. A built-in kind takes its scope from the generated table, derived from the
+//     pinned upstream sources — see pkg/kubernetes/README.md § 9 — as do the few
+//     cluster-scoped built-ins kure does not register, named above. The
+//     Kubernetes API defines those scopes and no manifest can redefine them.
+//  3. A custom resource takes its scope from crdScopes when a CRD in the same
+//     context defines it. That definition governs even for a kind kure
+//     registers: the CRD names the scope the target cluster will actually
+//     serve, while kure's table only says what the module pinned at build time
+//     declared, and a consumer shipping a different release of that operator is
+//     entitled to differ.
+//  4. Failing that, a kind kure registers falls back to the table.
+//  5. Anything else is ScopeUnknown, which callers fail closed on rather than
+//     guess.
 func Scope(o client.Object, crdScopes map[schema.GroupKind]apiextv1.ResourceScope) ScopeResult {
 	if IsCRD(o) {
 		return ScopeCluster
 	}
 	gvk := o.GetObjectKind().GroupVersionKind()
-	if namespaced, known := kubernetes.IsNamespaced(gvk.GroupVersion().String(), gvk.Kind); known {
-		if namespaced {
-			return ScopeNamespaced
-		}
-		return ScopeCluster
+	k, registered := kubernetes.KindForAnyVersion(gvk.GroupVersion().String(), gvk.Kind)
+	if registered && k.ScopeSource == kubernetes.ScopeSourceBuiltin {
+		return scopeOf(k.Namespaced)
 	}
 	if clusterScopedUnregisteredKinds[gvk.Group+"/"+gvk.Kind] {
 		return ScopeCluster
 	}
 	if scope, ok := crdScopes[schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}]; ok {
-		if scope == apiextv1.ClusterScoped {
-			return ScopeCluster
-		}
-		return ScopeNamespaced
+		return scopeOf(scope != apiextv1.ClusterScoped)
+	}
+	if registered {
+		return scopeOf(k.Namespaced)
 	}
 	return ScopeUnknown
+}
+
+// scopeOf turns a namespaced bool into the ScopeResult for it.
+func scopeOf(namespaced bool) ScopeResult {
+	if namespaced {
+		return ScopeNamespaced
+	}
+	return ScopeCluster
 }
 
 // CRDScope returns a CRD's defined GroupKind and declared scope (defaulting to

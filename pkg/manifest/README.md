@@ -35,20 +35,26 @@ gk, scope, ok := manifest.CRDScope(obj)
 this order:
 
 1. A `CustomResourceDefinition` is cluster-scoped.
-2. A kind kure registers takes its scope from the generated table
-   (`kubernetes.IsNamespaced`), derived from the pinned upstream sources — the
-   `+kubebuilder:resource` markers and the `CustomResourceDefinition`s the modules
-   ship. See [Kubernetes Builders](/api-reference/kubernetes-builders/) § 9. The
-   lookup matches on group and kind only: a manifest at a version kure does not
-   register (`autoscaling/v1` where the scheme has `autoscaling/v2`) is still
-   answered, because a resource has one scope across all its versions.
+2. A **built-in** kind takes its scope from the generated table
+   (`ScopeSourceBuiltin`), derived from the pinned upstream sources. See
+   [Kubernetes Builders](/api-reference/kubernetes-builders/) § 9. The lookup
+   matches on group and kind only: a manifest at a version kure does not register
+   (`autoscaling/v1` where the scheme has `autoscaling/v2`) is still answered,
+   because a resource has one scope across all its versions.
 3. A short residual list covers the cluster-scoped kinds kure does **not** register
    and so cannot derive: `PriorityClass`, `APIService` and the two webhook
-   configurations. It only shrinks — registering one of them moves it to the derived
-   table, and a test fires so the entry is removed rather than left as a second,
-   competing answer.
-4. Any remaining custom resource is resolved from a caller-supplied map of CRD
-   scopes (the `spec.scope` of CRDs known in the same context).
+   configurations. These are built-ins too. It only shrinks — registering one of
+   them moves it to the derived table, and a test fires so the entry is removed
+   rather than left as a second, competing answer.
+4. A **custom resource** takes its scope from the caller-supplied map of CRD scopes
+   (the `spec.scope` of CRDs known in the same context) when that map defines it —
+   including for a kind kure registers. The CRD in scope names the scope the target
+   cluster will actually serve; the generated table only records what the module
+   pinned at build time declared, so a consumer shipping a different release of
+   that operator is entitled to differ. Steps 2 and 3 are the other way round on
+   purpose: the Kubernetes API defines a built-in's scope and no manifest can
+   redefine it.
+5. Failing that, a kind kure registers falls back to the generated table.
 
 Anything else is `ScopeUnknown` — callers are expected to fail closed rather than
 guess:

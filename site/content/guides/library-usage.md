@@ -169,7 +169,11 @@ manifest.IsNamespacedBuiltinKind("cilium.io/v2", "CiliumNetworkPolicy") // false
 
 The three sources are `ScopeSourceMarker` (the kind's own `+kubebuilder:resource`
 marker), `ScopeSourceShippedCRD` (a `CustomResourceDefinition` the module ships) and
-`ScopeSourceBuiltin` (the Kubernetes API itself). Only the last is a built-in.
+`ScopeSourceBuiltin` (the Kubernetes API itself). Only the last is a built-in, and
+that distinction decides who wins in `manifest.Scope`: a built-in's scope comes from
+the table, while for a custom resource a `CustomResourceDefinition` in the same
+context governs — it names the scope the target cluster will serve, where the table
+only records what the pinned module declared at build time.
 
 Maturity is reported, never enforced:
 

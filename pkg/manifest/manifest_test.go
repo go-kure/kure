@@ -171,3 +171,43 @@ func TestScope(t *testing.T) {
 		}
 	}
 }
+
+// A CRD in the same context defines the scope its cluster will serve. For a
+// custom resource that must win over the pinned table, which only records what
+// the module kure built against declared — a consumer shipping a different
+// release of that operator is entitled to differ, and answering from the pin
+// would emit a namespace on a cluster-scoped object or drop one from a
+// namespaced object with nothing to point at. A built-in is the other way
+// round: the Kubernetes API defines its scope and a manifest cannot redefine it,
+// so a CRD claiming otherwise is ignored rather than obeyed.
+func TestScopeLetsASuppliedCRDGovernCustomResources(t *testing.T) {
+	registered := unstructuredObj("cilium.io/v2", "CiliumNetworkPolicy", "cnp")
+	if got := Scope(registered, nil); got != ScopeNamespaced {
+		t.Fatalf("with no CRD supplied the table answers: Scope = %v, want %v", got, ScopeNamespaced)
+	}
+	disagreeing := map[schema.GroupKind]apiextv1.ResourceScope{
+		{Group: "cilium.io", Kind: "CiliumNetworkPolicy"}: apiextv1.ClusterScoped,
+	}
+	if got := Scope(registered, disagreeing); got != ScopeCluster {
+		t.Errorf("a supplied CRD must govern a custom resource: Scope = %v, want %v", got, ScopeCluster)
+	}
+
+	builtin := &appsv1.Deployment{TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}}
+	claimingBuiltin := map[schema.GroupKind]apiextv1.ResourceScope{
+		{Group: "apps", Kind: "Deployment"}: apiextv1.ClusterScoped,
+	}
+	if got := Scope(builtin, claimingBuiltin); got != ScopeNamespaced {
+		t.Errorf("a built-in's scope is not a CRD's to redefine: Scope = %v, want %v", got, ScopeNamespaced)
+	}
+
+	// The same for the cluster-scoped built-ins kure does not register: they
+	// are named in the residual set for the same reason, and a CRD entry must
+	// not move them either.
+	priorityClass := unstructuredObj("scheduling.k8s.io/v1", "PriorityClass", "pc")
+	claimingResidual := map[schema.GroupKind]apiextv1.ResourceScope{
+		{Group: "scheduling.k8s.io", Kind: "PriorityClass"}: apiextv1.NamespaceScoped,
+	}
+	if got := Scope(priorityClass, claimingResidual); got != ScopeCluster {
+		t.Errorf("the residual set outranks a CRD entry too: Scope = %v, want %v", got, ScopeCluster)
+	}
+}
