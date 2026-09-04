@@ -176,6 +176,18 @@ func resolvedSourceKind(config *stack.BootstrapConfig) string {
 	return "OCIRepository"
 }
 
+// rootName returns the root node's name, or the empty string when there is no
+// root node. Every other bootstrap path already tolerates a nil rootNode
+// (generateGitSource, generateOCISource and generateFluxInstance each test it),
+// so this exists to give generateFluxSystemKustomization the same tolerance
+// through a single named place rather than a fourth inline nil test.
+func rootName(rootNode *stack.Node) string {
+	if rootNode == nil {
+		return ""
+	}
+	return rootNode.Name
+}
+
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
 func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
 	kust := &kustv1.Kustomization{
@@ -189,7 +201,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 		},
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: bg.DefaultInterval},
-			Path:     filepath.ToSlash(filepath.Join("manifests", rootNode.Name)),
+			Path:     filepath.ToSlash(filepath.Join("manifests", rootName(rootNode))),
 			Prune:    true,
 			SourceRef: kustv1.CrossNamespaceSourceReference{
 				Kind: resolvedSourceKind(config),

@@ -153,6 +153,14 @@ wrote `OCIRepository` only when `SourceKind` was exactly `"OCIRepository"` and
 produced an `OCIRepository` beneath a `sourceRef` naming a `GitRepository` that
 was never created, which Flux rejects as a dangling reference.
 
+### A nil root node is accepted
+
+`rootNode` may be nil. The bootstrap manifests then describe a cluster with no
+named root: `spec.path` is `manifests` with no trailing segment, the source is
+named `flux-system`, and the `FluxInstance` sync path is `./`. Passing nil
+previously panicked while building the flux-system `Kustomization`, even though
+the source and `FluxInstance` paths already tolerated it.
+
 ## Configuration
 
 ### Kustomization Mode
