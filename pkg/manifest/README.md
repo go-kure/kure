@@ -9,9 +9,13 @@ that must order CRDs ahead of the resources that depend on them, and source
 components that emit and namespace-stamp raw manifests — classify objects
 identically rather than maintaining divergent copies.
 
-The package depends only on Kubernetes API machinery
-(`k8s.io/apiextensions-apiserver`, `k8s.io/apimachinery`,
-`sigs.k8s.io/controller-runtime`) and has no dependency on any other Kure package.
+Besides Kubernetes API machinery (`k8s.io/apiextensions-apiserver`,
+`k8s.io/apimachinery`, `sigs.k8s.io/controller-runtime`), the package depends on
+exactly one other Kure package: `pkg/kubernetes`, for the generated scope table
+`Scope` consults. That dependency replaced two scope maps kept by hand here, which
+had to be edited whenever the scheme gained a kind and were silently wrong until
+someone noticed. It is one-directional and data-only — this package calls a lookup
+and reads a bool; nothing in `pkg/kubernetes` imports `manifest`.
 
 ## CRD recognition
 

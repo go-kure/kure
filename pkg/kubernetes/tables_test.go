@@ -86,17 +86,18 @@ func TestKindByGroupKindAndKeys(t *testing.T) {
 // field, with no two rows sharing all three. An undefined order would show up
 // as a spurious -check failure in CI rather than as a wrong answer here.
 func TestFieldMaturitiesAreSortedAndDistinct(t *testing.T) {
-	if len(FieldMaturities) == 0 {
+	all := FieldMaturities()
+	if len(all) == 0 {
 		t.Fatal("the maturity table is empty")
 	}
 	key := func(m FieldMaturity) [3]string { return [3]string{m.ImportPath, m.TypeName, m.Field} }
-	if !sort.SliceIsSorted(FieldMaturities, func(i, j int) bool {
-		return less(key(FieldMaturities[i]), key(FieldMaturities[j]))
+	if !sort.SliceIsSorted(all, func(i, j int) bool {
+		return less(key(all[i]), key(all[j]))
 	}) {
 		t.Error("FieldMaturities is not sorted by import path, type, field")
 	}
 	seen := map[[3]string]bool{}
-	for _, m := range FieldMaturities {
+	for _, m := range all {
 		if seen[key(m)] {
 			t.Errorf("%s.%s.%s appears twice, so the sort above cannot be total", m.ImportPath, m.TypeName, m.Field)
 		}
@@ -133,12 +134,62 @@ func TestGatedFields(t *testing.T) {
 	if len(got) == 0 {
 		t.Fatal("the pinned k8s.io/api carries feature-gated construction-side fields")
 	}
-	if len(got) == len(FieldMaturities) {
+	if len(got) == len(FieldMaturities()) {
 		t.Error("GatedFields returned every row; the gate filter is not filtering")
 	}
 	for _, m := range got {
 		if len(m.Gates) == 0 {
 			t.Errorf("%s.%s.%s has no gates", m.ImportPath, m.TypeName, m.Field)
+		}
+	}
+}
+
+// The tables are process-global and every lookup reads them, so what a caller
+// gets back must not be the storage itself. A consumer relabelling a row for its
+// own output would otherwise change the scope every later caller is told —
+// including the one inside pkg/manifest — with nothing to trace it to.
+func TestTheTablesCannotBeMutatedThroughWhatIsReturned(t *testing.T) {
+	const (
+		apiVersion = "apps/v1"
+		kind       = "Deployment"
+	)
+
+	before, ok := KindFor(apiVersion, kind)
+	if !ok {
+		t.Fatalf("%s %s is registered", apiVersion, kind)
+	}
+
+	rows := Kinds()
+	for i := range rows {
+		rows[i].Namespaced = !rows[i].Namespaced
+		rows[i].Kind = "Mutated"
+	}
+	after, ok := KindFor(apiVersion, kind)
+	if !ok {
+		t.Fatal("the kind table lost a row to a caller's edit")
+	}
+	if after != before {
+		t.Errorf("KindFor now answers %+v, was %+v: Kinds returned the table itself", after, before)
+	}
+
+	gatedBefore := len(GatedFields())
+	for _, m := range FieldMaturities() {
+		for i := range m.Gates {
+			m.Gates[i] = ""
+		}
+	}
+	for _, m := range MaturityForType("k8s.io/api/autoscaling/v2", "HPAScalingRules") {
+		m.Gates = append(m.Gates[:0], "")
+	}
+	if got := len(GatedFields()); got != gatedBefore {
+		t.Errorf("GatedFields now returns %d rows, was %d: the Gates slices are shared with the table", got, gatedBefore)
+	}
+	for _, m := range GatedFields() {
+		for _, g := range m.Gates {
+			if g == "" {
+				t.Fatalf("%s.%s.%s has an emptied gate name: a returned row shares its Gates slice with the table",
+					m.ImportPath, m.TypeName, m.Field)
+			}
 		}
 	}
 }
