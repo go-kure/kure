@@ -3,9 +3,11 @@
 
 package kubernetes
 
-// Kinds is every object kind registered in the scheme, with the pinned module
-// its Go type came from and the scope derived from that module.
-var Kinds = []KindInfo{
+// kinds is every object kind registered in the scheme, with the pinned module
+// its Go type came from and the scope derived from that module. Unexported: the
+// lookups read it on every call, so a consumer holding the slice itself could
+// change what every later caller is told. [Kinds] returns a copy.
+var kinds = []KindInfo{
 	{Group: "", Version: "v1", Kind: "Binding", GoType: "Binding", ImportPath: "k8s.io/api/core/v1", Module: "k8s.io/api", ModuleVersion: "v0.37.0", Namespaced: true, ScopeSource: "builtin"},
 	{Group: "", Version: "v1", Kind: "ComponentStatus", GoType: "ComponentStatus", ImportPath: "k8s.io/api/core/v1", Module: "k8s.io/api", ModuleVersion: "v0.37.0", Namespaced: false, ScopeSource: "builtin"},
 	{Group: "", Version: "v1", Kind: "ConfigMap", GoType: "ConfigMap", ImportPath: "k8s.io/api/core/v1", Module: "k8s.io/api", ModuleVersion: "v0.37.0", Namespaced: true, ScopeSource: "builtin"},
@@ -136,10 +138,12 @@ var Kinds = []KindInfo{
 	{Group: "volsync.backube", Version: "v1alpha1", Kind: "ReplicationSource", GoType: "ReplicationSource", ImportPath: "github.com/backube/volsync/api/v1alpha1", Module: "github.com/backube/volsync", ModuleVersion: "v0.16.0", Namespaced: true, ScopeSource: "marker"},
 }
 
-// FieldMaturities is every construction-side field of a registered kind that
+// fieldMaturities is every construction-side field of a registered kind that
 // the pinned sources gate or document as less than stable. Status types are not
-// walked; see the package README for why.
-var FieldMaturities = []FieldMaturity{
+// walked; see the package README for why. Unexported for the same reason as
+// [kinds], and each row carries a Gates slice that shares backing memory with
+// this one until copied; [FieldMaturities] returns a copy of both.
+var fieldMaturities = []FieldMaturity{
 	{ImportPath: "github.com/cert-manager/cert-manager/pkg/apis/acme/v1", TypeName: "ACMEExternalAccountBinding", Field: "keyAlgorithm", GoField: "KeyAlgorithm", Gates: nil, Stability: MaturityDeprecated, Module: "github.com/cert-manager/cert-manager", ModuleVersion: "v1.21.1"},
 	{ImportPath: "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1", TypeName: "CertificateSpec", Field: "nameConstraints", GoField: "NameConstraints", Gates: nil, Stability: MaturityAlpha, Module: "github.com/cert-manager/cert-manager", ModuleVersion: "v1.21.1"},
 	{ImportPath: "github.com/cloudnative-pg/cloudnative-pg/api/v1", TypeName: "BootstrapInitDB", Field: "options", GoField: "Options", Gates: nil, Stability: MaturityDeprecated, Module: "github.com/cloudnative-pg/cloudnative-pg", ModuleVersion: "v1.30.0"},

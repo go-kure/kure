@@ -77,9 +77,48 @@ type FieldMaturity struct {
 	ModuleVersion string
 }
 
+// Kinds returns every object kind registered in the scheme, with the pinned
+// module its Go type came from and the scope derived from that module.
+//
+// The returned slice is a copy. The table it comes from is process-global and is
+// read on every lookup, including the ones [github.com/go-kure/kure/pkg/manifest]
+// answers scope questions with, so a consumer that edited a row in place — to
+// relabel a kind for its own output, say — would change what every later caller
+// in the process is told, at a distance and with nothing to trace it to.
+func Kinds() []KindInfo {
+	out := make([]KindInfo, len(kinds))
+	copy(out, kinds)
+	return out
+}
+
+// FieldMaturities returns every construction-side field of a registered kind
+// that the pinned sources gate or document as less than stable. Status types
+// are not walked; see the package README for why.
+//
+// A copy, for the reason [Kinds] gives, and a deep one: each row's Gates slice
+// is copied too, since a shallow copy would hand out rows that still share their
+// gate list with the table.
+func FieldMaturities() []FieldMaturity {
+	out := make([]FieldMaturity, 0, len(fieldMaturities))
+	for _, m := range fieldMaturities {
+		out = append(out, copyMaturity(m))
+	}
+	return out
+}
+
+// copyMaturity returns m with its own Gates slice.
+func copyMaturity(m FieldMaturity) FieldMaturity {
+	if m.Gates != nil {
+		gates := make([]string, len(m.Gates))
+		copy(gates, m.Gates)
+		m.Gates = gates
+	}
+	return m
+}
+
 // KindByGroupKind returns the registered kind for a "group/Kind" key.
 func KindByGroupKind(groupKind string) (KindInfo, bool) {
-	for _, k := range Kinds {
+	for _, k := range kinds {
 		if k.GroupKind() == groupKind {
 			return k, true
 		}
@@ -98,7 +137,7 @@ func KindByGroupKind(groupKind string) (KindInfo, bool) {
 // asked for reads as unregistered, which is what it is.
 func KindFor(apiVersion, kind string) (KindInfo, bool) {
 	group, version := groupVersion(apiVersion)
-	for _, k := range Kinds {
+	for _, k := range kinds {
 		if k.Group == group && k.Version == version && k.Kind == kind {
 			return k, true
 		}
@@ -134,23 +173,25 @@ func groupVersion(apiVersion string) (group, version string) {
 	return "", apiVersion
 }
 
-// MaturityForType returns the maturity entries declared by one Go type.
+// MaturityForType returns the maturity entries declared by one Go type. The
+// rows are copies, Gates included.
 func MaturityForType(importPath, typeName string) []FieldMaturity {
 	var out []FieldMaturity
-	for _, m := range FieldMaturities {
+	for _, m := range fieldMaturities {
 		if m.ImportPath == importPath && m.TypeName == typeName {
-			out = append(out, m)
+			out = append(out, copyMaturity(m))
 		}
 	}
 	return out
 }
 
-// GatedFields returns every field that requires an upstream feature gate.
+// GatedFields returns every field that requires an upstream feature gate. The
+// rows are copies, Gates included.
 func GatedFields() []FieldMaturity {
 	var out []FieldMaturity
-	for _, m := range FieldMaturities {
+	for _, m := range fieldMaturities {
 		if len(m.Gates) > 0 {
-			out = append(out, m)
+			out = append(out, copyMaturity(m))
 		}
 	}
 	return out

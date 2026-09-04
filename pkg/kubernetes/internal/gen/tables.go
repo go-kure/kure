@@ -139,13 +139,13 @@ func renderTablesGo(data tableData) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString(tablesHeader)
 	b.WriteString("package kubernetes\n\n")
-	b.WriteString("// Kinds is every object kind registered in the scheme, with the pinned module\n// its Go type came from and the scope derived from that module.\nvar Kinds = []KindInfo{\n")
+	b.WriteString("// kinds is every object kind registered in the scheme, with the pinned module\n// its Go type came from and the scope derived from that module. Unexported: the\n// lookups read it on every call, so a consumer holding the slice itself could\n// change what every later caller is told. [Kinds] returns a copy.\nvar kinds = []KindInfo{\n")
 	for _, k := range data.Kinds {
 		fmt.Fprintf(&b, "\t{Group: %q, Version: %q, Kind: %q, GoType: %q, ImportPath: %q, Module: %q, ModuleVersion: %q, Namespaced: %v, ScopeSource: %q},\n",
 			k.Group, k.Version, k.Kind, k.GoType, k.ImportPath, k.Module, k.ModuleVersion, k.Namespaced, k.ScopeSource)
 	}
 	b.WriteString("}\n\n")
-	b.WriteString("// FieldMaturities is every construction-side field of a registered kind that\n// the pinned sources gate or document as less than stable. Status types are not\n// walked; see the package README for why.\nvar FieldMaturities = []FieldMaturity{\n")
+	b.WriteString("// fieldMaturities is every construction-side field of a registered kind that\n// the pinned sources gate or document as less than stable. Status types are not\n// walked; see the package README for why. Unexported for the same reason as\n// [kinds], and each row carries a Gates slice that shares backing memory with\n// this one until copied; [FieldMaturities] returns a copy of both.\nvar fieldMaturities = []FieldMaturity{\n")
 	for _, f := range data.Fields {
 		fmt.Fprintf(&b, "\t{ImportPath: %q, TypeName: %q, Field: %q, GoField: %q, Gates: %s, Stability: %s, Module: %q, ModuleVersion: %q},\n",
 			f.ImportPath, f.TypeName, f.Field, f.GoField, goStrings(f.Gates), maturityConst(f.Stability), f.Module, f.ModuleVersion)

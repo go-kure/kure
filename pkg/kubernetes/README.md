@@ -326,7 +326,7 @@ The derivation above is committed as three artifacts, all written by
 
 | Artifact | For |
 |---|---|
-| `zz_generated_tables.go` | `Kinds` and `FieldMaturities`, the exported Go values |
+| `zz_generated_tables.go` | the two Go tables, read through `Kinds()` and `FieldMaturities()` |
 | `docs/api-tables.json` | the machine-readable copy, read as a diff on a bump PR |
 | `docs/api-tables.md` | the site page (mounted via `site/docs-map.yaml`) |
 
@@ -336,6 +336,13 @@ plain string or bool: the generator writes into this package, so a table that
 referenced an upstream type could not be regenerated after an API bump removed it.
 Each kind row names the module and version it was read from, and `ScopeSource` names
 what stated the scope, so any row is traceable to a pin.
+
+The tables themselves are unexported, and `Kinds()` and `FieldMaturities()` hand back
+copies — deep ones, since a row's `Gates` slice would otherwise stay shared with the
+table. The lookups read the tables on every call, `pkg/manifest`'s scope resolution
+among them, so a consumer that edited a returned row in place to relabel a kind for
+its own output would change the answer every later caller in the process gets, at a
+distance and with nothing pointing back to the edit.
 
 The two kind lookups answer deliberately different questions, and the difference is
 the version:
