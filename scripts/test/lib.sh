@@ -153,6 +153,15 @@ assert_out_contains() {
     fi
 }
 
+assert_err_not_contains() {
+    local needle="$1"
+    if [[ "$err" == *"$needle"* ]]; then
+        echo "FAIL: stderr unexpectedly contains: $needle" >&2
+        echo "--- stderr ---" >&2; echo "$err" >&2
+        exit 1
+    fi
+}
+
 assert_out_not_contains() {
     local needle="$1"
     if [[ "$out" == *"$needle"* ]]; then

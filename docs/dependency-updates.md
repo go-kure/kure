@@ -267,6 +267,40 @@ reachable only via `coreutils timeout ...`), never a standalone binary literally
 `timeout` — so it is **not** pinned in `mise.toml` for this. `yq` remains the only
 externally-required tool mise provisions for this script.
 
+### Widening a supported_range
+
+When `sync-versions.sh check` fails a dependency for being outside `supported_range`, and
+you've confirmed the new version is actually API-compatible, `widen` automates the
+mechanical half — the yq edit and the two-file regeneration — while leaving the judgment
+(is it actually compatible?) entirely to the `--note` text you write:
+
+```bash
+./scripts/sync-versions.sh widen <dep> <new-upper-major.minor> --note "<compatibility assessment>"
+./scripts/sync-versions.sh generate
+```
+
+It refuses:
+
+- a dependency that isn't in `.infrastructure`
+- a `floor_module` entry (its range is never checked — see below — so there's nothing to
+  widen; drop `supported_range` instead if it still has a stale one)
+- a `--note` containing a double quote, backslash, or newline (can't be emitted as a YAML/Go
+  string literal) or a `|` (would break the Markdown table cell it's rendered into in
+  `docs/compatibility.md`)
+- an entry with no `supported_range` declared yet (add one by hand first)
+- a new upper bound that isn't exactly `major.minor` (e.g. `2.1.0` is rejected — matching
+  `supported_range`'s own format)
+- a new upper bound that is not *strictly above the current upper bound* — widen only ever
+  raises the ceiling; it never narrows a range (e.g. widening `1.5 - 1.7` to `1.6` would
+  silently drop declared support for 1.7) and never touches the floor
+
+A pin that falls **below** the declared lower bound is a different situation — the pin moved
+backward for some reason `widen` can't diagnose — and `check`'s error says so explicitly
+without suggesting a `widen` command, since one would only be refused.
+
+`yq` may reformat the `notes:` block onto a single line; reflow it to a `|` block by hand
+afterward if you want the usual multi-line prose style.
+
 ## Update Risk Levels
 
 ### Patch Updates (Low Risk)

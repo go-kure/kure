@@ -46,7 +46,11 @@ API's content stable; read them from `go.mod` instead.
 ### Build Version (go.mod)
 The version Kure imports and builds against — read directly from `go.mod`, the single
 source of truth for the pin. CI (`sync-versions.sh check`) asserts it falls within the
-declared `supported_range`.
+declared `supported_range` — except an entry whose Deployment Compatibility cell reads
+"derived from `<module>`" (an MVS-floor dependency): its pin is not chosen by Kure, so
+there is no independent range to assert, and CI instead only checks that the pin matches
+what `<module>`'s own go.mod requires. See `docs/dependency-updates.md`'s "MVS-floor
+dependencies" section.
 
 ### Deployment Compatibility
 The range of versions that Kure can generate valid YAML for. Kure may generate YAML compatible with older or newer versions than it builds against.
