@@ -132,6 +132,27 @@ bootstrapConfig := &stack.BootstrapConfig{
 objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
 ```
 
+### One resolved source kind, not three
+
+`gotk` bootstrap emits a source object, a `Kustomization` whose `spec.sourceRef`
+points at it, and — in flux-operator mode — a `FluxInstance` whose `spec.sync.kind`
+names it too. All three now derive the kind from one place, so they cannot
+disagree: `BootstrapConfig.SourceKind == "GitRepository"` yields a `GitRepository`,
+and **every other value, the empty string included, yields an `OCIRepository`**.
+
+| `SourceKind` | Source emitted | `sourceRef.Kind` |
+|---|---|---|
+| `"GitRepository"` | `GitRepository` | `GitRepository` |
+| `"OCIRepository"` | `OCIRepository` | `OCIRepository` |
+| `""` (unset) | `OCIRepository` | `OCIRepository` |
+| anything else | `OCIRepository` | `OCIRepository` |
+
+Previously the `Kustomization` used the opposite test from the other two — it
+wrote `OCIRepository` only when `SourceKind` was exactly `"OCIRepository"` and
+`GitRepository` otherwise. An unset or unrecognised `SourceKind` therefore
+produced an `OCIRepository` beneath a `sourceRef` naming a `GitRepository` that
+was never created, which Flux rejects as a dangling reference.
+
 ## Configuration
 
 ### Kustomization Mode

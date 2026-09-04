@@ -156,13 +156,28 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 	return objects, nil
 }
 
+// resolvedSourceKind returns the kind of source object bootstrap will emit for
+// config, and therefore the kind every reference to it must name. A
+// GitRepository only when SourceKind says so; an OCIRepository for every other
+// value, the empty string included.
+//
+// The kind was previously decided in three places and they did not agree.
+// generateSource emits a GitRepository only when SourceKind == "GitRepository",
+// and generateFluxInstance's sync block uses the same test — but
+// generateFluxSystemKustomization used the opposite one, writing
+// sourceRef.Kind: OCIRepository only when SourceKind == "OCIRepository" and
+// GitRepository otherwise. The three agreed only when SourceKind named a kind
+// exactly; an empty or unrecognised SourceKind emitted an OCIRepository beneath
+// a sourceRef pointing at a GitRepository that was never created.
+func resolvedSourceKind(config *stack.BootstrapConfig) string {
+	if config != nil && config.SourceKind == "GitRepository" {
+		return "GitRepository"
+	}
+	return "OCIRepository"
+}
+
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
 func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
-	sourceKind := "GitRepository"
-	if config.SourceKind == "OCIRepository" {
-		sourceKind = "OCIRepository"
-	}
-
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
@@ -177,7 +192,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 			Path:     filepath.ToSlash(filepath.Join("manifests", rootNode.Name)),
 			Prune:    true,
 			SourceRef: kustv1.CrossNamespaceSourceReference{
-				Kind: sourceKind,
+				Kind: resolvedSourceKind(config),
 				Name: "flux-system",
 			},
 		},
@@ -186,11 +201,11 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 	return kust
 }
 
-// generateSource creates a source resource based on SourceKind.
-// When SourceKind is "GitRepository", a GitRepository is created.
-// Otherwise (including when SourceKind is empty), an OCIRepository is created for backward compatibility.
+// generateSource creates a source resource of the kind [resolvedSourceKind]
+// names, so that the object emitted here and every reference to it elsewhere
+// cannot disagree about what was created.
 func (bg *BootstrapGenerator) generateSource(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
-	if config.SourceKind == "GitRepository" {
+	if resolvedSourceKind(config) == "GitRepository" {
 		return bg.generateGitSource(config, rootNode)
 	}
 	return bg.generateOCISource(config, rootNode)
@@ -275,13 +290,8 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 			path = "./" + rootNode.Name
 		}
 
-		syncKind := "OCIRepository"
-		if config.SourceKind == "GitRepository" {
-			syncKind = "GitRepository"
-		}
-
 		spec.Sync = &fluxv1.Sync{
-			Kind:     syncKind,
+			Kind:     resolvedSourceKind(config),
 			URL:      config.SourceURL,
 			Ref:      config.SourceRef,
 			Path:     path,
