@@ -287,8 +287,9 @@ It refuses:
 - a `floor_module` entry (its range is never checked — see below — so there's nothing to
   widen; drop `supported_range` instead if it still has a stale one)
 - a `--note` containing a double quote, backslash, or newline (can't be emitted as a YAML/Go
-  string literal) or a `|` (would break the Markdown table cell it's rendered into in
-  `docs/compatibility.md`)
+  string literal), a `|` (would break the Markdown table cell it's rendered into in
+  `docs/compatibility.md`), or a raw 12- or 40-character commit SHA (the same restriction
+  `check`'s `validate_no_sha_in_notes` guard enforces — see above)
 - an entry with no `supported_range` declared yet (add one by hand first)
 - a new upper bound that isn't exactly `major.minor` (e.g. `2.1.0` is rejected — matching
   `supported_range`'s own format)
