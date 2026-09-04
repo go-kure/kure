@@ -6,6 +6,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+func TestConfigMapHelpers_PanicOnNil(t *testing.T) {
+	assertPanics(t, func() { AddConfigMapData(nil, "k", "v") })
+	assertPanics(t, func() { AddConfigMapBinaryData(nil, "k", nil) })
+	assertPanics(t, func() { SetConfigMapImmutable(nil, true) })
+	assertPanics(t, func() { AddConfigMapLabel(nil, "k", "v") })
+	assertPanics(t, func() { AddConfigMapAnnotation(nil, "k", "v") })
+	assertPanics(t, func() { SetConfigMapLabels(nil, nil) })
+	assertPanics(t, func() { SetConfigMapAnnotations(nil, nil) })
+}
+
 // Container setter tests
 func TestAddContainerPort_Success(t *testing.T) {
 	container := &corev1.Container{Name: "test", Image: "nginx"}

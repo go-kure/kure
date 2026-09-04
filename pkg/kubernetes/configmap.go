@@ -1,64 +1,73 @@
-// Package kubernetes exposes ConfigMap builders that delegate to internal/kubernetes,
-// keeping the implementation in one place while providing the public API.
 package kubernetes
 
 import (
 	corev1 "k8s.io/api/core/v1"
-
-	intk8s "github.com/go-kure/kure/internal/kubernetes"
 )
 
 // AddConfigMapData inserts a single key/value pair into the ConfigMap's Data field.
 func AddConfigMapData(cm *corev1.ConfigMap, key, value string) {
-	intk8s.AddConfigMapData(cm, key, value)
-}
-
-// AddConfigMapDataMap merges all entries from the provided map into the ConfigMap's Data field.
-func AddConfigMapDataMap(cm *corev1.ConfigMap, data map[string]string) {
-	intk8s.AddConfigMapDataMap(cm, data)
+	if cm == nil {
+		panic("AddConfigMapData: cm must not be nil")
+	}
+	if cm.Data == nil {
+		cm.Data = make(map[string]string)
+	}
+	cm.Data[key] = value
 }
 
 // AddConfigMapBinaryData inserts a single binary entry into the ConfigMap.
 func AddConfigMapBinaryData(cm *corev1.ConfigMap, key string, value []byte) {
-	intk8s.AddConfigMapBinaryData(cm, key, value)
-}
-
-// AddConfigMapBinaryDataMap merges all binary entries into the ConfigMap's BinaryData field.
-func AddConfigMapBinaryDataMap(cm *corev1.ConfigMap, data map[string][]byte) {
-	intk8s.AddConfigMapBinaryDataMap(cm, data)
-}
-
-// SetConfigMapData replaces the ConfigMap's Data map entirely.
-func SetConfigMapData(cm *corev1.ConfigMap, data map[string]string) {
-	intk8s.SetConfigMapData(cm, data)
-}
-
-// SetConfigMapBinaryData replaces the ConfigMap's BinaryData map entirely.
-func SetConfigMapBinaryData(cm *corev1.ConfigMap, data map[string][]byte) {
-	intk8s.SetConfigMapBinaryData(cm, data)
+	if cm == nil {
+		panic("AddConfigMapBinaryData: cm must not be nil")
+	}
+	if cm.BinaryData == nil {
+		cm.BinaryData = make(map[string][]byte)
+	}
+	cm.BinaryData[key] = value
 }
 
 // SetConfigMapImmutable sets the immutable field for the ConfigMap.
 func SetConfigMapImmutable(cm *corev1.ConfigMap, immutable bool) {
-	intk8s.SetConfigMapImmutable(cm, immutable)
+	if cm == nil {
+		panic("SetConfigMapImmutable: cm must not be nil")
+	}
+	cm.Immutable = &immutable
 }
 
 // AddConfigMapLabel adds a label to the ConfigMap.
 func AddConfigMapLabel(cm *corev1.ConfigMap, key, value string) {
-	intk8s.AddConfigMapLabel(cm, key, value)
+	if cm == nil {
+		panic("AddConfigMapLabel: cm must not be nil")
+	}
+	if cm.Labels == nil {
+		cm.Labels = make(map[string]string)
+	}
+	cm.Labels[key] = value
 }
 
 // AddConfigMapAnnotation adds an annotation to the ConfigMap.
 func AddConfigMapAnnotation(cm *corev1.ConfigMap, key, value string) {
-	intk8s.AddConfigMapAnnotation(cm, key, value)
+	if cm == nil {
+		panic("AddConfigMapAnnotation: cm must not be nil")
+	}
+	if cm.Annotations == nil {
+		cm.Annotations = make(map[string]string)
+	}
+	cm.Annotations[key] = value
 }
 
 // SetConfigMapLabels replaces all labels on the ConfigMap.
 func SetConfigMapLabels(cm *corev1.ConfigMap, labels map[string]string) {
-	intk8s.SetConfigMapLabels(cm, labels)
+	if cm == nil {
+		panic("SetConfigMapLabels: cm must not be nil")
+	}
+	cm.Labels = labels
 }
 
 // SetConfigMapAnnotations replaces all annotations on the ConfigMap.
 func SetConfigMapAnnotations(cm *corev1.ConfigMap, anns map[string]string) {
-	intk8s.SetConfigMapAnnotations(cm, anns)
+	if cm == nil {
+		panic("SetConfigMapAnnotations: cm must not be nil")
+	}
+	cm.Annotations = anns
 }

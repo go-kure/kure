@@ -3,14 +3,5 @@
 # Entries only ever leave; a new helper must be class-admissible (see pkg/kubernetes/README.md).
 # Regenerate with: KURE_ADMISSION_DUMP=1 go test ./pkg/kubernetes -run TestAdmission
 
-pkg/kubernetes.AddConfigMapAnnotation
-pkg/kubernetes.AddConfigMapBinaryData
-pkg/kubernetes.AddConfigMapBinaryDataMap
-pkg/kubernetes.AddConfigMapData
-pkg/kubernetes.AddConfigMapDataMap
-pkg/kubernetes.AddConfigMapLabel
 pkg/kubernetes.SetConfigMapAnnotations
-pkg/kubernetes.SetConfigMapBinaryData
-pkg/kubernetes.SetConfigMapData
-pkg/kubernetes.SetConfigMapImmutable
 pkg/kubernetes.SetConfigMapLabels
