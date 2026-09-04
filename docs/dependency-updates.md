@@ -24,6 +24,8 @@ so a version-metadata-only PR cannot skip it:
    pseudo-version (no semver tags upstream) that also declares `upstream_release` (see
    "Release-pinned dependencies" below), the declared release is substituted for the
    range check instead of being skipped — `supported_range` is enforced for these too.
+   Skipped entirely for a dependency declaring `floor_module` (see "MVS-floor dependencies"
+   below) — guard 6 already enforces the invariant that actually applies to it.
 2. **go.mod pin comment** — the `// Current pin: vX.Y.Z (Kubernetes 1.N)` comment above
    the `k8s.io/api` replace directive matches that directive's actual version. A drifted
    comment used to be caught only by AI review, on every single Kubernetes bump.
@@ -146,7 +148,7 @@ should simply always equal the floor:
 barman-cloud:
   go_module: "github.com/cloudnative-pg/barman-cloud"
   floor_module: "github.com/cloudnative-pg/plugin-barman-cloud"
-  supported_range: "0.5"      # major.minor only -- see is_pseudo_version() note below
+  # No supported_range -- see below.
 ```
 
 - The pin itself is **derived, never hand-written**: `go mod edit -droprequire=<module> &&
@@ -155,16 +157,31 @@ barman-cloud:
   `plugin-barman-cloud`) bumps.
 - `sync-versions.sh check` mechanically asserts this: with `floor_module` set, it reads
   `floor_module`'s own `go.mod` and asserts it requires `go_module` at exactly the pin's
-  version — not just the `major.minor` range check the other assertions apply. It
-  degrades to a warning when Go or the module cache is unavailable (offline dev machine),
-  since that is "could not check," not "checked and it's wrong" — but never when the
-  check actually runs and finds a mismatch. A plugin **downgrade** will legitimately fail
+  version. It degrades to a warning when Go or the module cache is unavailable (offline dev
+  machine), since that is "could not check," not "checked and it's wrong" — but never when
+  the check actually runs and finds a mismatch. A plugin **downgrade** will legitimately fail
   this guard until the pin is re-derived with the `-droprequire` + `tidy` recipe above.
-- `supported_range` is expressed in plain `major.minor` because this dependency's
-  pseudo-version does **not** match `is_pseudo_version()`'s regex (see the comment above
-  that function in `scripts/sync-versions.sh`) — it falls through to the ordinary range
-  path, so the check runs unmodified, unlike the release-pinned case above where the range
-  check is substituted onto `upstream_release`.
+- **`validate_gomod`'s own `major.minor` range check is skipped entirely for any entry
+  declaring `floor_module`** (`scripts/sync-versions.sh`, right after the module lookup,
+  before the pseudo-version branch), printing `<dep>: range check not applicable (pin vX.Y
+  derived from <floor_module>'s own go.mod, ...)` instead of a pass/fail line. A
+  `supported_range` here can only ever demand a forced-yes edit — refusing to widen it means
+  refusing the bump that raised the floor, which is not kure's choice to refuse. Declaring
+  `supported_range` on a `floor_module` entry anyway is harmless but pointless: it is never
+  read. `docs/compatibility.md`'s generated table renders `derived from <floor_module>` in
+  the Deployment Compatibility column for these entries instead of a range (see
+  `generate_docs`).
+  This was originally a range-membership check applied by accident — the loop iterates every
+  `.infrastructure` key with no exemption for floor deps — not a deliberate gate on this class
+  of dependency; see [go-kure/kure#703](https://github.com/go-kure/kure/issues/703), which
+  asked for the floor-equality check above to be *added* (it was: this is that check).
+  Removing the accidental range check on the same entry was the other half.
+  Caveats this creates, not papered over: `barman-cloud` **is** directly imported
+  (`pkg/kubernetes/cnpg/create.go`, `pkg/kubernetes/cnpg/update.go`), so an incompatible
+  upstream API change still surfaces — as a `test` compile failure, not a `lint` range error,
+  which is the correct detector for a types-only module that is never itself deployed. And
+  because the floor-equality guard above degrades to a warning offline, a `floor_module`
+  dependency is entirely unguarded on an offline dev machine (both CI checks always run there).
 - `renovate.json` disables the standalone `gomod` bump for the module
   (`matchPackageNames` + `enabled: false`, same shape as the release-pinned rule above).
   The shared preset's `postUpdateOptions: ["gomodTidy"]` re-raises the require to the new

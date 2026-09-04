@@ -33,7 +33,6 @@ infrastructure:
   barman-cloud:
     go_module: "github.com/cloudnative-pg/barman-cloud"
     floor_module: "github.com/cloudnative-pg/plugin-barman-cloud"
-    supported_range: "0.5"
     notes: |
       Barman Cloud object-store API types (BarmanObjectStoreConfiguration,
       S3Credentials) — a separate module from both the CNPG operator and the
@@ -43,6 +42,12 @@ infrastructure:
       barman-cloud's tags — a hand-picked tag would be a downgrade Go's
       minimum-version selection wouldn't let the build use. renovate.json
       disables the standalone gomod bump for it (see the rule there).
+      No supported_range is declared: the pin moves only when plugin-barman-cloud's
+      own go.mod requirement moves (validate_mvs_floors enforces that equality), so
+      there is no independent range for kure to gate — a hand-maintained range here
+      would only ever demand widening in lockstep with the plugin, never catch a
+      choice kure actually made (go-kure/kure#703; validate_gomod skips the range
+      check for any floor_module entry, see docs/dependency-updates.md).
   cert-manager:
     go_module: "github.com/cert-manager/cert-manager"
     # Kure generates YAML compatible with these deployed versions
