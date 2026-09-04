@@ -46,7 +46,7 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 
 | Constructor | Removed default |
 |---|---|
-| `CreateConfigMap` | `data` and `binaryData` initialised to empty maps. They never rendered, but a fresh object accepted `cm.Data[k] = v` directly; both are now nil, so write through `AddConfigMapData`/`AddConfigMapBinaryData` (which nil-init) or `SetConfigMapData`/`SetConfigMapBinaryData`, or assign a map literal first |
+| `CreateConfigMap` | `data` and `binaryData` initialised to empty maps. They never rendered, but a fresh object accepted `cm.Data[k] = v` directly; both are now nil, so write through `AddConfigMapData`/`AddConfigMapBinaryData` (which nil-init), or assign a map literal first (`cm.Data = map[string]string{...}`) |
 | `CreateCronJob` | `spec.schedule` from the third argument; `spec.jobTemplate.spec.template.metadata.labels.app: <name>`; `spec.jobTemplate.spec.template.spec.restartPolicy: Never` |
 | `CreateDaemonSet` | `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>` |
 | `CreateDeployment` | `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>` |
@@ -106,39 +106,142 @@ folded onto the PodSpec helpers below.
 A sub-type that is not a `client.Object` gets no constructor: a struct literal
 is both shorter and the only form that shows every field being set.
 
+Each row gives the removed function's exact former signature and a literal that
+produces the same value. Where the constructor injected defaults, they are
+listed with it — a caller that relied on one now writes it, and a caller that
+did not gets a smaller object.
+
 | Removed | Replacement |
 |---|---|
-| `CreateContainer(name, image, command, args)` | `&corev1.Container{Name: name, Image: image, Command: command, Args: args}` |
-| `CreatePodSpec()` | `&corev1.PodSpec{}` |
-| `CreateVolumeClaimTemplate(name, storageClass, size, accessModes)` | a `corev1.PersistentVolumeClaim` literal |
-| `CreateIngressRule(host)` | `&netv1.IngressRule{Host: host}` |
-| `CreateACMEIssuer(cfg)` | a `cmacme.ACMEIssuer` literal |
-| `CreateACMEHTTP01Solver(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
-| `CreateACMEDNS01SolverCloudflare(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
-| `CreateACMEDNS01SolverRoute53(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
-| `CreateACMEDNS01SolverGoogle(cfg)` | a `cmacme.ACMEChallengeSolver` literal |
+| `CreateContainer(name string, image string, command []string, args []string) *corev1.Container` | see below — it injected six defaults |
+| `CreatePodSpec() *corev1.PodSpec` | see below — it injected eleven |
+| `CreateVolumeClaimTemplate(name string, opts VolumeClaimTemplateOptions) corev1.PersistentVolumeClaim` | see below |
+| `CreateIngressRule(host string) *netv1.IngressRule` | see below |
+| `CreateACMEIssuer(server, email string, key cmmeta.SecretKeySelector) *cmacme.ACMEIssuer` | see below |
+| `CreateACMEHTTP01Solver(serviceType corev1.ServiceType, class string) cmacme.ACMEChallengeSolver` | see below |
+| `CreateACMEDNS01SolverCloudflare(email string, token cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver` | see below |
+| `CreateACMEDNS01SolverRoute53(region string, key cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver` | see below |
+| `CreateACMEDNS01SolverGoogle(project string, sa *cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver` | see below |
+
+`CreateContainer` set a memory limit, CPU and memory requests, an image pull
+policy, and five empty collections. **A caller that took those silently now gets
+a container with no resource reservation at all.** The behaviour-preserving
+replacement:
+
+```go
+&corev1.Container{
+    Name:    name,
+    Image:   image,
+    Command: command,
+    Args:    args,
+    Resources: corev1.ResourceRequirements{
+        Limits:   corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("256Mi")},
+        Requests: corev1.ResourceList{
+            corev1.ResourceCPU:    resource.MustParse("100m"),
+            corev1.ResourceMemory: resource.MustParse("256Mi"),
+        },
+    },
+    ImagePullPolicy: corev1.PullIfNotPresent,
+}
+```
+
+The five empty collections it also set (`Ports`, `Env`, `EnvFrom`,
+`VolumeMounts`, `VolumeDevices`) never rendered and need no replacement:
+`append` works on a nil slice. Drop the `Resources` and `ImagePullPolicy` keys
+if the defaults were not wanted — that is the point of removing them.
+
+`CreatePodSpec` set `RestartPolicy: Always`, a zero
+`TerminationGracePeriodSeconds` pointer, an empty `SecurityContext`, an empty
+`Affinity`, an empty `NodeSelector` map, and five empty slices. `Always` is the
+API server's own default for a Pod, so only the three pointer and map fields
+change what is serialised:
+
+```go
+&corev1.PodSpec{
+    TerminationGracePeriodSeconds: new(int64),
+    SecurityContext:               &corev1.PodSecurityContext{},
+    Affinity:                      &corev1.Affinity{},
+    NodeSelector:                  map[string]string{},
+}
+```
+
+A caller that wants none of them writes `&corev1.PodSpec{}`.
+
+`CreateVolumeClaimTemplate` took an options struct, also removed
+(`VolumeClaimTemplateOptions`), and returned a value rather than a pointer. It
+left `StorageClassName` nil when the option was empty, which is how the API
+selects the cluster default — the literal must keep that condition:
+
+```go
+pvc := corev1.PersistentVolumeClaim{
+    ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels},
+    Spec: corev1.PersistentVolumeClaimSpec{
+        AccessModes: accessModes,
+        Resources: corev1.VolumeResourceRequirements{
+            Requests: corev1.ResourceList{corev1.ResourceStorage: storageRequest},
+        },
+    },
+}
+if storageClass != "" {
+    pvc.Spec.StorageClassName = &storageClass
+}
+```
+
+`CreateIngressRule` also built the nested `HTTP` value, so a bare
+`&netv1.IngressRule{Host: host}` is not equivalent — appending a path to it
+panics on the nil `HTTP` pointer:
+
+```go
+&netv1.IngressRule{
+    Host: host,
+    IngressRuleValue: netv1.IngressRuleValue{
+        HTTP: &netv1.HTTPIngressRuleValue{},
+    },
+}
+```
+
+The cert-manager five:
+
+```go
+// CreateACMEIssuer(server, email, key)
+&cmacme.ACMEIssuer{Server: server, Email: email, PrivateKey: key}
+
+// CreateACMEHTTP01Solver(serviceType, class) -- class == "" left the pointer nil
+solver := cmacme.ACMEChallengeSolver{
+    HTTP01: &cmacme.ACMEChallengeSolverHTTP01{
+        Ingress: &cmacme.ACMEChallengeSolverHTTP01Ingress{ServiceType: serviceType},
+    },
+}
+if class != "" {
+    solver.HTTP01.Ingress.IngressClassName = &class
+}
+
+// CreateACMEDNS01SolverCloudflare(email, token)
+cmacme.ACMEChallengeSolver{DNS01: &cmacme.ACMEChallengeSolverDNS01{
+    Cloudflare: &cmacme.ACMEIssuerDNS01ProviderCloudflare{Email: email, APIToken: &token},
+}}
+
+// CreateACMEDNS01SolverRoute53(region, key)
+cmacme.ACMEChallengeSolver{DNS01: &cmacme.ACMEChallengeSolverDNS01{
+    Route53: &cmacme.ACMEIssuerDNS01ProviderRoute53{Region: region, SecretAccessKey: key},
+}}
+
+// CreateACMEDNS01SolverGoogle(project, sa)
+cmacme.ACMEChallengeSolver{DNS01: &cmacme.ACMEChallengeSolverDNS01{
+    CloudDNS: &cmacme.ACMEIssuerDNS01ProviderCloudDNS{Project: project, ServiceAccount: sa},
+}}
+```
+
+`CreateACMEIssuer` also set `Solvers` to an empty slice and both boolean fields
+to `false`, none of which changes what is serialised or what `append` does.
 
 The four cert-manager solver constructors and `CreateACMEIssuer` were only ever
 called from `certmanager.Issuer`/`ClusterIssuer`, which now build the literals
 inline.
 
 `VolumeClaimTemplateOptions` goes with `CreateVolumeClaimTemplate`, its only
-consumer. It carried `StorageClassName`, `AccessModes`, `StorageRequest` and
-`Labels`; the replacement is the same `corev1.PersistentVolumeClaim` literal,
-which names those fields where the API does:
-
-```go
-corev1.PersistentVolumeClaim{
-    ObjectMeta: metav1.ObjectMeta{Name: "data", Labels: labels},
-    Spec: corev1.PersistentVolumeClaimSpec{
-        StorageClassName: &storageClass,
-        AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-        Resources: corev1.VolumeResourceRequirements{
-            Requests: corev1.ResourceList{corev1.ResourceStorage: size},
-        },
-    },
-}
-```
+consumer. Its four fields — `StorageClassName`, `AccessModes`, `StorageRequest`
+and `Labels` — appear in the literal above, where the API names them.
 
 ### `pkg/kubernetes` (76)
 
@@ -759,18 +862,27 @@ kubernetes.AddLabel(cluster, "env", "prod")
 kubernetes.AddAnnotation(issuer, "note", "production")
 ```
 
-| Package | Removed | Kinds |
-|---|---|---|
-| `pkg/kubernetes` | 10 | `ConfigMap` (also `SetConfigMapLabels`/`SetConfigMapAnnotations`), `Namespace`, `Service`, `ServiceAccount` |
-| `pkg/kubernetes/certmanager` | 6 | `Certificate`, `Issuer`, `ClusterIssuer` |
-| `pkg/kubernetes/cnpg` | 8 | `Cluster`, `Database`, `ObjectStore`, `ScheduledBackup` |
-| `pkg/kubernetes/externalsecrets` | 6 | `ExternalSecret`, `SecretStore`, `ClusterSecretStore` |
-| `pkg/kubernetes/fluxcd` | 2 | `HelmRelease` |
+Every removed symbol, so that searching this file for an old name finds it:
 
-`SetConfigMapLabels` and `SetConfigMapAnnotations` are whole-map replacements,
-so their replacement is `cm.Labels = labels` / `cm.Annotations = anns` rather
-than the generic setter — `SetLabels` is available and does the same thing, but
-a plain field assignment is what the contract prefers for a bare write.
+| Package | Removed | Replacement |
+|---|---|---|
+| `pkg/kubernetes` | `AddConfigMapLabel`, `AddNamespaceLabel`, `AddServiceLabel`, `AddServiceAccountLabel` | `kubernetes.AddLabel(obj, key, value)` |
+| `pkg/kubernetes` | `AddConfigMapAnnotation`, `AddNamespaceAnnotation`, `AddServiceAnnotation`, `AddServiceAccountAnnotation` | `kubernetes.AddAnnotation(obj, key, value)` |
+| `pkg/kubernetes` | `SetConfigMapLabels(cm, labels)` | `cm.Labels = labels` |
+| `pkg/kubernetes` | `SetConfigMapAnnotations(cm, anns)` | `cm.Annotations = anns` |
+| `pkg/kubernetes/certmanager` | `AddCertificateLabel`, `AddIssuerLabel`, `AddClusterIssuerLabel` | `kubernetes.AddLabel(obj, key, value)` |
+| `pkg/kubernetes/certmanager` | `AddCertificateAnnotation`, `AddIssuerAnnotation`, `AddClusterIssuerAnnotation` | `kubernetes.AddAnnotation(obj, key, value)` |
+| `pkg/kubernetes/cnpg` | `AddClusterLabel`, `AddDatabaseLabel`, `AddObjectStoreLabel`, `AddScheduledBackupLabel` | `kubernetes.AddLabel(obj, key, value)` |
+| `pkg/kubernetes/cnpg` | `AddClusterAnnotation`, `AddDatabaseAnnotation`, `AddObjectStoreAnnotation`, `AddScheduledBackupAnnotation` | `kubernetes.AddAnnotation(obj, key, value)` |
+| `pkg/kubernetes/externalsecrets` | `AddExternalSecretLabel`, `AddSecretStoreLabel`, `AddClusterSecretStoreLabel` | `kubernetes.AddLabel(obj, key, value)` |
+| `pkg/kubernetes/externalsecrets` | `AddExternalSecretAnnotation`, `AddSecretStoreAnnotation`, `AddClusterSecretStoreAnnotation` | `kubernetes.AddAnnotation(obj, key, value)` |
+| `pkg/kubernetes/fluxcd` | `AddHelmReleaseLabel` | `kubernetes.AddLabel(obj, key, value)` |
+| `pkg/kubernetes/fluxcd` | `AddHelmReleaseAnnotation` | `kubernetes.AddAnnotation(obj, key, value)` |
+
+Thirty of the thirty-two take the generic helper unchanged — same arguments,
+same nil-map initialisation, same result. The two `SetConfigMap*` are whole-map
+replacements: `SetLabels`/`SetAnnotations` would do the same thing, but a bare
+field assignment is what the contract prefers for a bare write.
 
 Three groups of metadata-shaped helpers stay, because none of them writes
 `ObjectMeta`:

@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	jsonPkg "encoding/json"
+	"math"
 	"testing"
 	"time"
 
@@ -1198,6 +1199,32 @@ func TestSetHelmReleaseValuesFromMap(t *testing.T) {
 	_ = jsonPkg.Unmarshal(hr.Spec.Values.Raw, &got)
 	if got["replicaCount"] != float64(3) {
 		t.Errorf("got %v", got["replicaCount"])
+	}
+}
+
+// TestSetHelmReleaseValuesFromMap_UnmarshalablePanics pins the behaviour change
+// that replaced this helper's error return: a value encoding/json refuses is a
+// programming error and panics, it is not reported back. Restoring the error
+// return, or swallowing the failure and leaving Spec.Values unwritten, fails
+// here.
+func TestSetHelmReleaseValuesFromMap_UnmarshalablePanics(t *testing.T) {
+	for name, values := range map[string]map[string]any{
+		"function": {"hook": func() {}},
+		"channel":  {"ch": make(chan int)},
+		"NaN":      {"ratio": math.NaN()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hr := CreateHelmRelease("redis", "apps")
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("expected a panic for an unmarshalable %s value", name)
+				}
+				if hr.Spec.Values != nil {
+					t.Errorf("expected Spec.Values to stay nil, got %s", hr.Spec.Values.Raw)
+				}
+			}()
+			SetHelmReleaseValuesFromMap(hr, values)
+		})
 	}
 }
 
