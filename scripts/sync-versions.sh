@@ -253,13 +253,30 @@ resolve_tag_commit() {
     return 2
 }
 
-# Turn a "major.minor" string into a comparable integer key (major*1000+minor).
-mm_key() {
-    local mm="$1"
-    local major="${mm%%.*}"
-    local minor="${mm#*.}"
-    minor="${minor%%.*}"
-    echo $((10#$major * 1000 + 10#$minor))
+# Compare two "major.minor" strings numerically, major first then minor.
+# Echoes -1, 0, or 1. Deliberately not a single fixed-multiplier integer key
+# (the previous "major*1000+minor" scheme collided whenever minor reached
+# 1000: 1.1001 encoded to 2001, the same bucket as 2.0 -- comparing major and
+# minor as separate integers has no such ceiling).
+mm_cmp() {
+    local a="$1" b="$2"
+    local a_major="${a%%.*}" a_minor="${a#*.}"
+    a_minor="${a_minor%%.*}"
+    local b_major="${b%%.*}" b_minor="${b#*.}"
+    b_minor="${b_minor%%.*}"
+    a_major=$((10#$a_major)); a_minor=$((10#$a_minor))
+    b_major=$((10#$b_major)); b_minor=$((10#$b_minor))
+    if (( a_major != b_major )); then
+        (( a_major < b_major )) && { echo -1; return; }
+        echo 1
+        return
+    fi
+    if (( a_minor != b_minor )); then
+        (( a_minor < b_minor )) && { echo -1; return; }
+        echo 1
+        return
+    fi
+    echo 0
 }
 
 # Extract "major.minor" from a full version, applying version_basis normalization.
@@ -664,18 +681,15 @@ validate_gomod() {
             hi_mm="$supported"
         fi
 
-        local ver_mm ver_key lo_key hi_key
+        local ver_mm
         ver_mm=$(version_mm "$actual_version" "$basis")
-        ver_key=$(mm_key "$ver_mm")
-        lo_key=$(mm_key "$lo_mm")
-        hi_key=$(mm_key "$hi_mm")
 
-        if (( ver_key > hi_key )); then
+        if [[ "$(mm_cmp "$ver_mm" "$hi_mm")" == 1 ]]; then
             # Above the upper bound is exactly what `widen` raises -- the
             # command it prints will succeed once the note is filled in.
             error "$dep $ver_mm (go.mod $go_module v$actual_version) is outside supported_range \"$supported\". After confirming API compatibility: ./scripts/sync-versions.sh widen $dep $ver_mm --note \"<compatibility assessment>\""
             errors=$((errors + 1))
-        elif (( ver_key < lo_key )); then
+        elif [[ "$(mm_cmp "$ver_mm" "$lo_mm")" == -1 ]]; then
             # Below the lower bound: `widen` only ever raises the upper
             # bound and would refuse this value outright (it's not above
             # the current one) -- printing that command here would just
@@ -1069,10 +1083,10 @@ widen_dependency() {
         return 1
     fi
 
-    # $2 must be exactly major.minor: mm_key silently truncates anything
-    # past the second component (so "2.1.0" and "2.1" compare equal), which
-    # would otherwise let a malformed bound through the comparison below and
-    # get written verbatim into supported_range.
+    # $2 must be exactly major.minor: mm_cmp's parsing silently truncates
+    # anything past the second component (so "2.1.0" and "2.1" compare
+    # equal), which would otherwise let a malformed bound through the
+    # comparison below and get written verbatim into supported_range.
     if [[ ! "$new_hi" =~ ^[0-9]+\.[0-9]+$ ]]; then
         error "widen: new upper bound \"$new_hi\" is not major.minor (e.g. \"1.26\") -- supported_range only ever records major.minor"
         return 1
@@ -1097,10 +1111,7 @@ widen_dependency() {
     # above the lower bound but at or below the current upper bound (e.g.
     # "1.6") would otherwise silently narrow the range and drop support for
     # 1.7 while still being reported as "widened".
-    local hi_key new_hi_key
-    hi_key=$(mm_key "$hi")
-    new_hi_key=$(mm_key "$new_hi")
-    if (( new_hi_key <= hi_key )); then
+    if [[ "$(mm_cmp "$new_hi" "$hi")" != 1 ]]; then
         error "widen: new upper bound \"$new_hi\" is not above the current upper bound \"$hi\" -- widen only raises the upper bound, never narrows the range"
         return 1
     fi
