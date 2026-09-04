@@ -206,7 +206,7 @@ test; the tests assert that every reported field exists in the pinned struct.
 ## 9. Where scope and maturity come from
 
 Both are derived from the pinned upstream module sources, not kept by hand beside
-them. Three internal packages do it, and none of them is part of the public API:
+them. Five internal packages do it, and none of them is part of the public API:
 
 - `internal/markers` parses the controller-gen markers kure reads —
   `+kubebuilder:resource` for scope, `+featureGate` for maturity. Pure text, no I/O.
@@ -256,12 +256,56 @@ the default handed to it:
   output, generated from the same source, which states the scope explicitly whether
   or not a marker was needed to produce it. That is a second upstream source, not a
   second guess, and it keeps the answer out of a table maintained here.
+
+  Those files are read out of the module zip as unpacked in the local module cache —
+  the directory `go list -m` reports for the pinned version — not fetched from the
+  project's repository. So the manifests read are exactly the ones the pinned version
+  publishes, and they are covered by the module checksum like any other file in it.
+  The consequence to know: a module that stops shipping its CRDs in a later version
+  turns the next Renovate bump into a hard generation failure on that PR, which is the
+  intended behaviour — the scope becomes unanswerable and is declined rather than
+  silently defaulted to `Namespaced`.
 - A kind with neither a marker nor a shipped CRD is an error. The namespaced default
   and a marker that was not read give the same answer, so a kind nothing can answer
   for is a question kure declines rather than resolves. Both halves are probed by
   fixtures: a partly-marked module (one root marked, one not — also the shape a
   grouped `type (...)` block produces), a shipped CRD declaring `Cluster` for an
   unmarked kind, and a module whose CRDs do not cover the kind at all.
+
+## 10. The generated tables
+
+The derivation above is committed as three artifacts, all written by
+`pkg/kubernetes/internal/gen` from one derivation pass so they cannot disagree:
+
+| Artifact | For |
+|---|---|
+| `zz_generated_tables.go` | `Kinds` and `FieldMaturities`, the exported Go values |
+| `docs/api-tables.json` | the machine-readable copy, read as a diff on a bump PR |
+| `docs/api-tables.md` | the site page (mounted via `site/docs-map.yaml`) |
+
+`tables.go` holds the hand-written types and lookups over them — `KindFor`,
+`KindByGroupKind`, `IsNamespaced`, `MaturityForType`, `GatedFields`. Every value is a
+plain string or bool: the generator writes into this package, so a table that
+referenced an upstream type could not be regenerated after an API bump removed it.
+Each kind row names the module and version it was read from, and `ScopeSource` names
+what stated the scope, so any row is traceable to a pin.
+
+Regenerate with `scripts/gen-builders.sh generate`; CI's `validate` job runs
+`scripts/gen-builders.sh check`, and Renovate runs `generate` in its
+`postUpgradeTasks` so a bump PR arrives with the tables already updated. Do not edit
+the artifacts by hand.
+
+Two consequences of that wiring:
+
+- **A pin bump that changes a table changes a file in a doc-gated package.** The
+  doc-gate's `// doc-gate:trivial` exemption cannot help — it only applies to lines
+  containing `=` whose declaration prefix is unchanged, and a table row has none — so
+  pure version churn in these artifacts needs the maintainer `docs-skip` label. See
+  `docs/dependency-updates.md`.
+- **`recover` does not delete `zz_generated_tables.go`.** It holds no upstream type
+  names, so an API bump cannot make it uncompilable, and `tables.go` reads the values
+  it declares. Its absence is a compile error on purpose: an empty table would report
+  every kind as unregistered, which is a wrong answer rather than a missing one.
 
 ## Identity test
 

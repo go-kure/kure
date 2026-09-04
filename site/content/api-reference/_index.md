@@ -48,6 +48,7 @@ For full Go API documentation, see [pkg.go.dev/github.com/go-kure/kure](https://
 ## Compatibility
 
 - [Compatibility Matrix](/api-reference/compatibility/) - Supported Kubernetes and dependency versions
+- [Kinds and Field Maturity](/api-reference/api-tables/) - Every registered kind with its scope, and every field the pinned sources gate or deprecate
 
 ## ArgoCD
 
