@@ -287,6 +287,36 @@ func TestLoadReadsAPinnedModule(t *testing.T) {
 	}
 }
 
+// The import map is what lets a field written as metav1.ObjectMeta be resolved
+// to the package that declares it. Aliases are file-scoped, and an import with
+// no alias is referred to by its last path segment.
+func TestFileImportsRecordsAliases(t *testing.T) {
+	types := parseTypes(t, `package v1
+
+import (
+	"strings"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/api/apps/v1"
+)
+
+type Thing struct {
+	Meta metav1.ObjectMeta ` + "`json:\"metadata\"`" + `
+}
+`)
+	got := types[Key("example.com/api/v1", "Thing")].Imports
+	for _, tc := range []struct{ alias, want string }{
+		{"metav1", "k8s.io/apimachinery/pkg/apis/meta/v1"},
+		{"corev1", "k8s.io/api/core/v1"},
+		{"v1", "k8s.io/api/apps/v1"},
+		{"strings", "strings"},
+	} {
+		if got[tc.alias] != tc.want {
+			t.Errorf("imports[%q] = %q, want %q", tc.alias, got[tc.alias], tc.want)
+		}
+	}
+}
+
 func keysOf(m map[string]Type) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

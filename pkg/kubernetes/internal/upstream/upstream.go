@@ -29,6 +29,11 @@ type Type struct {
 	Module     string // module path, "" for the standard library
 	Version    string // pinned module version
 	Fields     []Field
+	// Imports maps the import aliases in scope in the file that declares this
+	// type to their import paths, so a field written as metav1.ObjectMeta can
+	// be resolved to the package that declares it. Aliases are file-scoped in
+	// Go, so this cannot be held per package.
+	Imports map[string]string
 }
 
 // Field is one struct field of an upstream type.
@@ -93,6 +98,7 @@ func Key(importPath, name string) string { return importPath + "." + name }
 
 // collectTypes records every named type declared in file.
 func collectTypes(file *ast.File, importPath, modPath, modVersion string, out map[string]Type) {
+	imports := fileImports(file)
 	// Lower bound for the detached-marker scan: the package clause, so a
 	// file's license header is never mistaken for the first type's markers.
 	prevEnd := file.Name.End()
@@ -114,6 +120,7 @@ func collectTypes(file *ast.File, importPath, modPath, modVersion string, out ma
 				Doc:        typeDoc(gen, ts, detached),
 				Module:     modPath,
 				Version:    modVersion,
+				Imports:    imports,
 			}
 			if st, ok := ts.Type.(*ast.StructType); ok {
 				t.Fields = structFields(st)
@@ -122,6 +129,29 @@ func collectTypes(file *ast.File, importPath, modPath, modVersion string, out ma
 		}
 		prevEnd = gen.End()
 	}
+}
+
+// fileImports maps the import aliases in scope in a file to their paths. An
+// import with no explicit alias is keyed by the last segment of its path,
+// which is what the source refers to it by in the API packages kure reads
+// (none of them import a package whose name differs from its directory).
+func fileImports(file *ast.File) map[string]string {
+	out := map[string]string{}
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			continue
+		}
+		alias := path
+		if i := strings.LastIndex(path, "/"); i >= 0 {
+			alias = path[i+1:]
+		}
+		if spec.Name != nil {
+			alias = spec.Name.Name
+		}
+		out[alias] = path
+	}
+	return out
 }
 
 // detachedMarkers returns the comment groups that sit between the previous
