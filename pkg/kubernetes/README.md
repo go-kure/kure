@@ -53,11 +53,20 @@ Sub-types that are not `client.Object` (`Container`, `PodSpec`,
 constructor. A struct literal is the idiom: build the value directly, as
 `&corev1.Container{Name: "app", Image: "nginx"}`.
 
-Two hand-written sub-type constructors survive, both because they do more than
-wrap a literal and both under review for the next work item:
+In this package two hand-written sub-type constructors survive, both because
+they do more than wrap a literal and both under review for the next work item:
 `CreateResourceRequirements()` returns empty `Requests` and `Limits` maps, and
 `CreateIngressPath(path, pathType, service, port)` assembles a nested
-`HTTPIngressPath`. Everything else in that shape has been removed.
+`HTTPIngressPath`. Everything else in that shape has been removed from this
+package.
+
+The kind sub-packages are a different matter and are not in scope here.
+`pkg/kubernetes/fluxcd` still exports twenty-four hand-written sub-type
+constructors (`CreateSourceReference`, `CreatePostBuild`, `CreateDecryption`,
+`CreateCommonMetadata`, `CreateDriftDetection`, `CreatePostRendererKustomize`,
+`CreateGitSpec` and the rest), and `pkg/kubernetes/prometheus` exports
+`CreateRuleGroup`. They remain available and unchanged; whether they belong under
+the contract is the sealing work item's question, not this one's.
 
 ### Regenerating the wrappers
 
