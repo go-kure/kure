@@ -188,8 +188,11 @@ if storageClass != "" {
 ```
 
 `CreateIngressRule` also built the nested `HTTP` value, so a bare
-`&netv1.IngressRule{Host: host}` is not equivalent — appending a path to it
-panics on the nil `HTTP` pointer:
+`&netv1.IngressRule{Host: host}` differs in two ways: it serialises without the
+`http: {}` key, and a caller that writes `rule.IngressRuleValue.HTTP.Paths`
+directly dereferences a nil pointer. Going through `AddIngressRulePath` is safe
+either way — it nil-initialises `HTTP` before appending — so most callers need
+no change. To keep the old value exactly:
 
 ```go
 &netv1.IngressRule{
