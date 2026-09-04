@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/go-kure/kure/pkg/errors"
+	"github.com/go-kure/kure/pkg/kubernetes/internal/crds"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/upstream"
 )
@@ -48,50 +49,25 @@ var builtinClusterScoped = set(
 	"storage.k8s.io/VolumeAttributesClass",
 )
 
-// unmarkedModules are the non-built-in modules verified to ship no
-// +kubebuilder:resource marker on any type. Their kinds take controller-gen's
-// documented default, Namespaced — which is what controller-gen itself emitted
-// into the CRD these modules ship.
+// UnmarkedKinds returns the registered kinds whose own type declares no
+// +kubebuilder:resource marker, outside the built-in modules, sorted.
 //
-// The entry is a recorded decision, not a default the derivation fell into: an
-// absent marker is indistinguishable from a marker this parser failed to read,
-// so a module reaching this state has to be looked at once, against the CRD it
-// publishes, and written down here.
-//
-//   - github.com/cloudnative-pg/plugin-barman-cloud: its one registered kind is
-//     ObjectStore (barmancloud.cnpg.io/v1). The module's api/v1 carries
-//     +kubebuilder:object:root, :subresource:status and :storageversion but no
-//     :resource marker, and the CRD it ships in manifest.yaml declares
-//     scope: Namespaced. Verified against v0.14.0.
-var unmarkedModules = map[string]bool{
-	"github.com/cloudnative-pg/plugin-barman-cloud": true,
-}
-
-// UnmarkedModules returns the non-built-in modules among the loaded types that
-// declare no +kubebuilder:resource marker on any of their types, sorted.
-//
-// A module in that state is the one case the derivation cannot see: every one
-// of its kinds resolves to Namespaced, which is upstream's default and also
-// what a total parse failure looks like. The result must be empty, and it is
-// asserted to be — see TestNoRegisteredModuleIsUnmarked, which runs this over
-// the real pinned sources, and TestUnmarkedModulesReportsAMarkerLessModule,
-// which is the same check against a module that genuinely carries none.
-func UnmarkedModules(types map[string]upstream.Type) []string {
-	seen := map[string]bool{}
-	marked := map[string]bool{}
-	for _, t := range types {
+// This is what the marker alone cannot answer: such a kind resolves to
+// Namespaced, which is both upstream's documented default and what a failed
+// parse looks like. [ResolveScopes] answers for these from the CRD the module
+// ships and fails if it ships none.
+func UnmarkedKinds(all []Kind, types map[string]upstream.Type) []string {
+	var out []string
+	for _, k := range all {
+		t, ok := types[upstream.Key(k.ImportPath, k.TypeName)]
+		if !ok {
+			continue
+		}
 		if t.Module == "" || builtinModules[t.Module] {
 			continue
 		}
-		seen[t.Module] = true
-		if markers.HasResource(t.Doc) {
-			marked[t.Module] = true
-		}
-	}
-	var out []string
-	for m := range seen {
-		if !marked[m] {
-			out = append(out, m)
+		if !markers.HasResource(t.Doc) {
+			out = append(out, k.Key())
 		}
 	}
 	sort.Strings(out)
@@ -115,18 +91,71 @@ func ResolveScopes(all []Kind, types map[string]upstream.Type) ([]DerivedScope, 
 	for _, k := range all {
 		registered[k.Key()] = true
 	}
+	shipped := newCRDIndexes()
 	out := make([]DerivedScope, 0, len(derived))
 	for _, d := range derived {
 		if !registered[d.Key] {
 			return nil, errors.Errorf("kinds: derived a scope for %s, which is not registered", d.Key)
 		}
-		if builtinModules[d.Module] {
+		switch {
+		case builtinModules[d.Module]:
 			d.Scope = markers.ScopeNamespaced
 			if builtinClusterScoped[d.Key] {
 				d.Scope = markers.ScopeCluster
 			}
+			d.Source = SourceBuiltinTable
+		case d.Marked:
+			d.Source = SourceMarker
+		default:
+			scope, err := shipped.scopeOf(d)
+			if err != nil {
+				return nil, err
+			}
+			d.Scope = scope
+			d.Source = SourceShippedCRD
 		}
 		out = append(out, d)
 	}
 	return out, nil
+}
+
+// crdIndexes caches one CRD index per module directory. Indexing walks the
+// whole module, so it happens once per module and only when a kind actually
+// needs it — most kinds are answered by their own marker.
+type crdIndexes struct {
+	byDir map[string]crds.Index
+}
+
+func newCRDIndexes() *crdIndexes { return &crdIndexes{byDir: map[string]crds.Index{}} }
+
+// scopeOf answers for a kind whose own type carries no +kubebuilder:resource
+// marker, from the CRD its module ships.
+//
+// It is an error, not the namespaced default, when the module ships no CRD for
+// the kind. The default and a marker this parser failed to read produce the
+// same answer, so an unmarked kind with no second source is a question kure
+// cannot answer — and answering it wrong puts a metadata.namespace on an object
+// that must not carry one. The same strictness the unparsable-marker rule
+// applies.
+func (c *crdIndexes) scopeOf(d DerivedScope) (markers.Scope, error) {
+	if d.ModuleDir == "" {
+		return markers.ScopeNamespaced, errors.Errorf("kinds: %s (%s) declares no +kubebuilder:resource marker on its own type and its module directory is unknown, so the shipped CRD cannot be read", d.Key, d.Module)
+	}
+	index, ok := c.byDir[d.ModuleDir]
+	if !ok {
+		var err error
+		index, err = crds.Load(d.ModuleDir)
+		if err != nil {
+			return markers.ScopeNamespaced, errors.Wrapf(err, "kinds: %s (%s)", d.Key, d.Module)
+		}
+		c.byDir[d.ModuleDir] = index
+	}
+	scope, ok := index[d.Key]
+	if !ok {
+		return markers.ScopeNamespaced, errors.Errorf("kinds: %s (%s) declares no +kubebuilder:resource marker on its own type and its module ships no CustomResourceDefinition for it; the namespaced default cannot be told apart from a marker that was not read, so the scope has to come from somewhere", d.Key, d.Module)
+	}
+	if scope == crds.ScopeCluster {
+		return markers.ScopeCluster, nil
+	}
+	return markers.ScopeNamespaced, nil
 }

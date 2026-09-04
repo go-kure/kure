@@ -1,7 +1,12 @@
 package kinds
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/upstream"
@@ -55,19 +60,13 @@ func TestResolvedScopesMatchTheHandSeededTables(t *testing.T) {
 		}
 	}
 	if mismatches == 0 {
-		t.Logf("all %d kinds agree; %d built-in kinds came from the table, the rest from markers",
-			len(resolved), countBuiltins(resolved))
-	}
-}
-
-func countBuiltins(resolved []DerivedScope) int {
-	n := 0
-	for _, d := range resolved {
-		if builtinModules[d.Module] {
-			n++
+		by := map[ScopeSource]int{}
+		for _, d := range resolved {
+			by[d.Source]++
 		}
+		t.Logf("all %d kinds agree; %d from their own marker, %d from the built-in table, %d from the CRD their module ships",
+			len(resolved), by[SourceMarker], by[SourceBuiltinTable], by[SourceShippedCRD])
 	}
-	return n
 }
 
 // The built-in table is only correct while those modules really carry no
@@ -123,111 +122,191 @@ func TestBuiltinClusterScopedHasNoStaleEntries(t *testing.T) {
 	}
 }
 
-// A kind whose module is neither built-in nor marker-bearing resolves to
-// namespaced by default, which is indistinguishable from the derivation having
-// read nothing at all. Every module in that state must be a recorded decision:
-// this fails both when a new one appears and when a recorded one starts
-// carrying markers and should leave the list.
-func TestUnmarkedModulesMatchTheRecordedExceptions(t *testing.T) {
-	_, types := loadRegistered(t)
-	got := UnmarkedModules(types)
-	for _, m := range got {
-		if !unmarkedModules[m] {
-			t.Errorf("module %s carries no +kubebuilder:resource marker on any type and is not a recorded exception; check the CRD it ships and record the decision in unmarkedModules", m)
-		}
-	}
-	found := map[string]bool{}
-	for _, m := range got {
-		found[m] = true
-	}
-	for m := range unmarkedModules {
-		if !found[m] {
-			t.Errorf("module %s is recorded as unmarked but now carries markers; drop its entry and let the derivation answer", m)
-		}
-	}
-	modules := map[string]bool{}
-	for _, tp := range types {
-		if tp.Module != "" && !builtinModules[tp.Module] {
-			modules[tp.Module] = true
-		}
-	}
-	if len(modules) == 0 {
-		t.Fatal("no non-built-in modules seen")
-	}
-	t.Logf("%d non-built-in modules checked, %d recorded as unmarked", len(modules), len(got))
-}
-
-// Every kind of a recorded unmarked module must be namespaced in the
-// hand-seeded table: that is the claim the recorded exception rests on, and it
-// is checkable while the table still exists.
-func TestUnmarkedModuleKindsAreNamespaced(t *testing.T) {
+// Not every registered kind carries a marker of its own, and the ones that do
+// not are answered from the CRD their module ships. This records how many of
+// each there are and asserts every unmarked kind was in fact answered that way
+// — the count is the thing a module reorganising its comments would move.
+func TestUnmarkedKindsAreAnsweredByTheShippedCRDs(t *testing.T) {
 	all, types := loadRegistered(t)
+	unmarked := map[string]bool{}
+	for _, key := range UnmarkedKinds(all, types) {
+		unmarked[key] = true
+	}
 	resolved, err := ResolveScopes(all, types)
 	if err != nil {
 		t.Fatal(err)
 	}
-	checked := 0
+	bySource := map[ScopeSource]int{}
 	for _, d := range resolved {
-		if !unmarkedModules[d.Module] {
+		bySource[d.Source]++
+		if unmarked[d.Key] && d.Source != SourceShippedCRD {
+			t.Errorf("%s carries no marker but was resolved from %q", d.Key, d.Source)
+		}
+		if !unmarked[d.Key] && d.Source == SourceShippedCRD {
+			t.Errorf("%s carries a marker but was resolved from the shipped CRD", d.Key)
+		}
+		if d.Source == "" {
+			t.Errorf("%s: no scope source recorded", d.Key)
+		}
+	}
+	if bySource[SourceShippedCRD] == 0 {
+		t.Error("no kind was resolved from a shipped CRD; the fallback is no longer exercised by the real pins")
+	}
+	t.Logf("scope sources: %d marker, %d builtin, %d shipped CRD",
+		bySource[SourceMarker], bySource[SourceBuiltinTable], bySource[SourceShippedCRD])
+}
+
+// markerFixture is a two-root module: one root type marked, the other not. It
+// is the case a per-module check cannot see — the module marks something, so
+// "this module has markers" holds while Unmarked's own kind falls to the
+// default. It is also the shape internal/upstream produces for a grouped
+// `type (...)` declaration, whose preceding marker block it drops because it
+// cannot attribute it to one spec.
+func markerFixture() ([]Kind, map[string]upstream.Type) {
+	const path = "example.com/api/v1"
+	kind := func(name string) Kind {
+		return Kind{
+			GVK:        schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: name},
+			ImportPath: path,
+			TypeName:   name,
+		}
+	}
+	return []Kind{kind("Marked"), kind("Unmarked")}, map[string]upstream.Type{
+		upstream.Key(path, "Marked"): {
+			ImportPath: path, Name: "Marked", Module: "example.com", Version: "v1",
+			Doc: "// +kubebuilder:resource:scope=Cluster\n// Marked is marked.\n",
+		},
+		upstream.Key(path, "Unmarked"): {
+			ImportPath: path, Name: "Unmarked", Module: "example.com", Version: "v1",
+			Doc: "// Unmarked declares no resource marker.\n",
+		},
+	}
+}
+
+func TestUnmarkedKindsSeesThroughAPartlyMarkedModule(t *testing.T) {
+	all, types := markerFixture()
+	got := UnmarkedKinds(all, types)
+	if len(got) != 1 || got[0] != "example.com/Unmarked" {
+		t.Errorf("UnmarkedKinds = %v, want [example.com/Unmarked]", got)
+	}
+}
+
+// The guard, probed: an unmarked kind whose module ships nothing to answer for
+// it must make resolution fail, not fall to the namespaced default.
+func TestResolveScopesRejectsAnUnanswerableUnmarkedKind(t *testing.T) {
+	all, types := markerFixture()
+	_, err := ResolveScopes(all, types)
+	if err == nil {
+		t.Fatal("ResolveScopes accepted a kind whose type declares no resource marker")
+	}
+	if !strings.Contains(err.Error(), "example.com/Unmarked") {
+		t.Errorf("error = %v, want it to name the unmarked kind", err)
+	}
+	// The marked sibling on its own resolves, so the rejection is about the
+	// unmarked kind and not about the fixture as a whole.
+	resolved, err := ResolveScopes(all[:1], types)
+	if err != nil {
+		t.Fatalf("ResolveScopes rejected the marked kind alone: %v", err)
+	}
+	if len(resolved) != 1 || resolved[0].Scope != markers.ScopeCluster || resolved[0].Source != SourceMarker {
+		t.Errorf("resolved = %v, want one cluster-scoped marker-sourced entry", resolved)
+	}
+}
+
+// A module that ships a CRD for its unmarked kind answers for it — and the
+// answer is read, not assumed: the fixture's CRD declares Cluster, which is
+// the opposite of the default the missing marker would otherwise imply.
+func TestResolveScopesReadsTheShippedCRDForAnUnmarkedKind(t *testing.T) {
+	dir := t.TempDir()
+	manifest := `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: unmarkeds.example.com
+spec:
+  group: example.com
+  names:
+    kind: Unmarked
+  scope: Cluster
+`
+	if err := os.WriteFile(filepath.Join(dir, "crd.yaml"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	all, types := markerFixture()
+	for key, tp := range types {
+		tp.ModuleDir = dir
+		types[key] = tp
+	}
+	resolved, err := ResolveScopes(all, types)
+	if err != nil {
+		t.Fatalf("ResolveScopes: %v", err)
+	}
+	for _, d := range resolved {
+		if d.Key != "example.com/Unmarked" {
 			continue
 		}
-		checked++
-		if clusterKinds[d.Key] {
-			t.Errorf("%s comes from unmarked module %s but the hand-seeded table says cluster-scoped; the namespaced default is wrong for it", d.Key, d.Module)
+		if d.Scope != markers.ScopeCluster {
+			t.Errorf("%s resolved %s, want Cluster from the shipped CRD", d.Key, d.Scope)
 		}
+		if d.Source != SourceShippedCRD {
+			t.Errorf("%s source = %q, want %q", d.Key, d.Source, SourceShippedCRD)
+		}
+		return
 	}
-	if checked == 0 {
-		t.Fatal("no kinds from a recorded unmarked module; the exception list no longer matches any registered kind")
+	t.Fatal("the unmarked kind was not resolved")
+}
+
+// A module that ships CRDs but none for this kind is still unanswerable. The
+// fallback is not "the module ships CRDs, so trust the default".
+func TestResolveScopesRejectsAKindMissingFromTheShippedCRDs(t *testing.T) {
+	dir := t.TempDir()
+	manifest := `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: others.example.com
+spec:
+  group: example.com
+  names:
+    kind: Other
+  scope: Namespaced
+`
+	if err := os.WriteFile(filepath.Join(dir, "crd.yaml"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	all, types := markerFixture()
+	for key, tp := range types {
+		tp.ModuleDir = dir
+		types[key] = tp
+	}
+	_, err := ResolveScopes(all, types)
+	if err == nil {
+		t.Fatal("ResolveScopes accepted an unmarked kind its module ships no CRD for")
+	}
+	if !strings.Contains(err.Error(), "ships no CustomResourceDefinition") {
+		t.Errorf("error = %v, want it to say the module ships no CRD for the kind", err)
 	}
 }
 
-// The mutation probe for the test above: a module that genuinely carries no
-// resource marker must be reported. Without this, TestNoRegisteredModuleIsUnmarked
-// passing says only that the loop found nothing — the same thing it would say
-// if the check could never fire.
-func TestUnmarkedModulesReportsAMarkerLessModule(t *testing.T) {
+// A kind whose only marker declares scope=Namespaced is marked: the derivation
+// read a real declaration, and the namespaced answer is upstream's, not a
+// default standing in for a failed parse. HasResource, not ResourceScope, is
+// what makes that distinction — this pins it.
+func TestANamespacedOnlyMarkerCountsAsMarked(t *testing.T) {
+	const path = "example.com/ns/v1"
+	all := []Kind{{
+		GVK:        schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Thing"},
+		ImportPath: path,
+		TypeName:   "Thing",
+	}}
 	types := map[string]upstream.Type{
-		"example.com/marked/v1.Marked": {
-			ImportPath: "example.com/marked/v1",
-			Name:       "Marked",
-			Module:     "example.com/marked",
-			Doc:        "// +kubebuilder:resource:scope=Cluster\n// Marked is marked.\n",
-		},
-		"example.com/unmarked/v1.Bare": {
-			ImportPath: "example.com/unmarked/v1",
-			Name:       "Bare",
-			Module:     "example.com/unmarked",
-			Doc:        "// Bare declares no resource marker.\n",
-		},
-		// A built-in module carrying no marker is the expected state, not a
-		// finding: builtinClusterScoped answers for it.
-		"k8s.io/api/core/v1.Pod": {
-			ImportPath: "k8s.io/api/core/v1",
-			Name:       "Pod",
-			Module:     "k8s.io/api",
-			Doc:        "// Pod is a pod.\n",
+		upstream.Key(path, "Thing"): {
+			ImportPath: path, Name: "Thing", Module: "example.com", Version: "v1",
+			Doc: "// +kubebuilder:resource:scope=Namespaced\n// Thing is namespaced.\n",
 		},
 	}
-	got := UnmarkedModules(types)
-	if len(got) != 1 || got[0] != "example.com/unmarked" {
-		t.Errorf("UnmarkedModules = %v, want [example.com/unmarked]", got)
+	if got := UnmarkedKinds(all, types); len(got) != 0 {
+		t.Errorf("UnmarkedKinds = %v, want none", got)
 	}
-}
-
-// A module whose only marker declares scope=Namespaced is marked: the
-// derivation read a real declaration, and the namespaced answer is upstream's,
-// not a default standing in for a failed parse. HasResource, not ResourceScope,
-// is what makes that distinction — this pins it.
-func TestUnmarkedModulesAcceptsANamespacedOnlyModule(t *testing.T) {
-	types := map[string]upstream.Type{
-		"example.com/ns/v1.Thing": {
-			ImportPath: "example.com/ns/v1",
-			Name:       "Thing",
-			Module:     "example.com/ns",
-			Doc:        "// +kubebuilder:resource:scope=Namespaced\n// Thing is namespaced.\n",
-		},
-	}
-	if got := UnmarkedModules(types); len(got) != 0 {
-		t.Errorf("UnmarkedModules = %v, want none", got)
+	if _, err := ResolveScopes(all, types); err != nil {
+		t.Errorf("ResolveScopes: %v", err)
 	}
 }

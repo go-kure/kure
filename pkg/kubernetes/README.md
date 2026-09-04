@@ -211,10 +211,17 @@ them. Three internal packages do it, and none of them is part of the public API:
 - `internal/markers` parses the controller-gen markers kure reads —
   `+kubebuilder:resource` for scope, `+featureGate` for maturity. Pure text, no I/O.
 - `internal/upstream` loads the pinned modules with `go/packages` and returns each
-  named type with its doc comment, fields, file-scoped import aliases and the module
-  and version it came from.
+  named type with its doc comment, fields, file-scoped import aliases and the module,
+  version and module directory it came from.
+- `internal/crds` reads the `CustomResourceDefinition` manifests a module ships in
+  that directory, which is where the scope comes from for a type carrying no marker.
 - `internal/kinds` resolves a scope per registered kind; `internal/maturity` walks
   the type graph for the field table.
+
+Every resolved scope records which of three sources answered — `marker`, `builtin`
+or `crd` — so a wrong scope can be traced to the thing that claimed it. Against the
+current pins that is 65 from the kind's own marker, 44 from the built-in table and
+19 from a shipped CRD.
 
 Three things about that derivation are worth knowing before changing it.
 
@@ -235,19 +242,26 @@ default. `internal/upstream` reattaches the preceding comment group, bounded by 
 end of the previous declaration, and drops it for grouped `type (...)` blocks where it
 cannot be attributed to one spec.
 
-**Two kinds of module carry no `+kubebuilder:resource` marker at all**, and each needs
-a recorded decision rather than the default:
+**Many types carry no `+kubebuilder:resource` marker at all**, and none of them gets
+the default handed to it:
 
 - The built-in modules (`k8s.io/api`, `k8s.io/apiextensions-apiserver`) have no
   markers because the API server, not a generator, defines their scope. Sixteen
   explicit entries in `internal/kinds` name the cluster-scoped built-ins; every other
   built-in kind is namespaced.
-- A CRD module can ship without the marker too. `plugin-barman-cloud` is the current
-  case: it marks `object:root`, `subresource:status` and `storageversion` but not
-  `resource`, and the CRD it publishes declares `scope: Namespaced` — the same answer
-  controller-gen's default produces. It is listed as an exception with that
-  verification recorded, and a test fails both when a new unmarked module appears and
-  when a listed one starts carrying markers.
+- A CRD module marks a type only when it needs a non-default setting, so an unmarked
+  root type is ordinary rather than exceptional: 19 of the registered kinds are in
+  that state, across cnpg, metallb and `plugin-barman-cloud`. Their scope is read
+  from the `CustomResourceDefinition` the module itself ships — controller-gen's own
+  output, generated from the same source, which states the scope explicitly whether
+  or not a marker was needed to produce it. That is a second upstream source, not a
+  second guess, and it keeps the answer out of a table maintained here.
+- A kind with neither a marker nor a shipped CRD is an error. The namespaced default
+  and a marker that was not read give the same answer, so a kind nothing can answer
+  for is a question kure declines rather than resolves. Both halves are probed by
+  fixtures: a partly-marked module (one root marked, one not — also the shape a
+  grouped `type (...)` block produces), a shipped CRD declaring `Cluster` for an
+  unmarked kind, and a module whose CRDs do not cover the kind at all.
 
 ## Identity test
 

@@ -28,7 +28,13 @@ type Type struct {
 	Doc        string // the type's doc comment, marker lines included
 	Module     string // module path, "" for the standard library
 	Version    string // pinned module version
-	Fields     []Field
+	// ModuleDir is the module's directory in the module cache, "" when the
+	// loader reported none. It is what lets a caller read the artifacts a
+	// module ships alongside its Go source — the generated CRDs, in
+	// particular, which answer the scope question for a type whose own doc
+	// comment does not.
+	ModuleDir string
+	Fields    []Field
 	// Imports maps the import aliases in scope in the file that declares this
 	// type to their import paths, so a field written as metav1.ObjectMeta can
 	// be resolved to the package that declares it. Aliases are file-scoped in
@@ -82,12 +88,12 @@ func Load(importPaths []string) (map[string]Type, error) {
 		if len(p.Syntax) == 0 {
 			return nil, errors.Errorf("upstream: %s loaded no syntax; the module cache may be cold", p.PkgPath)
 		}
-		modPath, modVersion := "", ""
+		var mod module
 		if p.Module != nil {
-			modPath, modVersion = p.Module.Path, p.Module.Version
+			mod = module{path: p.Module.Path, version: p.Module.Version, dir: p.Module.Dir}
 		}
 		for _, file := range p.Syntax {
-			collectTypes(file, p.PkgPath, modPath, modVersion, out)
+			collectTypes(file, p.PkgPath, mod, out)
 		}
 	}
 	return out, nil
@@ -96,8 +102,15 @@ func Load(importPaths []string) (map[string]Type, error) {
 // Key is the map key Load uses for a type.
 func Key(importPath, name string) string { return importPath + "." + name }
 
+// module is the provenance every type collected from a package carries.
+type module struct {
+	path    string
+	version string
+	dir     string
+}
+
 // collectTypes records every named type declared in file.
-func collectTypes(file *ast.File, importPath, modPath, modVersion string, out map[string]Type) {
+func collectTypes(file *ast.File, importPath string, mod module, out map[string]Type) {
 	imports := fileImports(file)
 	// Lower bound for the detached-marker scan: the package clause, so a
 	// file's license header is never mistaken for the first type's markers.
@@ -118,8 +131,9 @@ func collectTypes(file *ast.File, importPath, modPath, modVersion string, out ma
 				ImportPath: importPath,
 				Name:       ts.Name.Name,
 				Doc:        typeDoc(gen, ts, detached),
-				Module:     modPath,
-				Version:    modVersion,
+				Module:     mod.path,
+				Version:    mod.version,
+				ModuleDir:  mod.dir,
 				Imports:    imports,
 			}
 			if st, ok := ts.Type.(*ast.StructType); ok {
