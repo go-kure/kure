@@ -1784,60 +1784,6 @@
       "moduleVersion": "v0.37.0"
     },
     {
-      "importPath": "k8s.io/api/apps/v1",
-      "typeName": "StatefulSetSpec",
-      "field": "podManagementPolicy",
-      "goField": "PodManagementPolicy",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/apps/v1",
-      "typeName": "StatefulSetSpec",
-      "field": "selector",
-      "goField": "Selector",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/apps/v1",
-      "typeName": "StatefulSetSpec",
-      "field": "serviceName",
-      "goField": "ServiceName",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/apps/v1",
-      "typeName": "StatefulSetSpec",
-      "field": "volumeClaimTemplates",
-      "goField": "VolumeClaimTemplates",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/autoscaling/v2",
-      "typeName": "CrossVersionObjectReference",
-      "field": "kind",
-      "goField": "Kind",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/autoscaling/v2",
-      "typeName": "CrossVersionObjectReference",
-      "field": "name",
-      "goField": "Name",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
       "importPath": "k8s.io/api/autoscaling/v2",
       "typeName": "HPAScalingRules",
       "field": "tolerance",
@@ -1845,60 +1791,6 @@
       "gates": [
         "HPAConfigurableTolerance"
       ],
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/autoscaling/v2",
-      "typeName": "HorizontalPodAutoscalerSpec",
-      "field": "maxReplicas",
-      "goField": "MaxReplicas",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/autoscaling/v2",
-      "typeName": "HorizontalPodAutoscalerSpec",
-      "field": "metrics",
-      "goField": "Metrics",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/autoscaling/v2",
-      "typeName": "HorizontalPodAutoscalerSpec",
-      "field": "minReplicas",
-      "goField": "MinReplicas",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/autoscaling/v2",
-      "typeName": "MetricSpec",
-      "field": "object",
-      "goField": "Object",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/batch/v1",
-      "typeName": "CronJobSpec",
-      "field": "schedule",
-      "goField": "Schedule",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/batch/v1",
-      "typeName": "JobSpec",
-      "field": "maxFailedIndexes",
-      "goField": "MaxFailedIndexes",
-      "stability": "alpha",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"
     },
@@ -2098,15 +1990,6 @@
       "gates": [
         "InPlacePodVerticalScalingSchedulerPreemption"
       ],
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
-      "typeName": "NodeSpec",
-      "field": "providerID",
-      "goField": "ProviderID",
       "stability": "alpha",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"
@@ -2329,7 +2212,6 @@
       "gates": [
         "EvictionRequestAPI"
       ],
-      "stability": "alpha",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"
     },
@@ -2389,15 +2271,6 @@
     },
     {
       "importPath": "k8s.io/api/core/v1",
-      "typeName": "PodSpec",
-      "field": "tolerations",
-      "goField": "Tolerations",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
       "typeName": "Probe",
       "field": "terminationGracePeriodSeconds",
       "goField": "TerminationGracePeriodSeconds",
@@ -2419,57 +2292,12 @@
     },
     {
       "importPath": "k8s.io/api/core/v1",
-      "typeName": "ReplicationController",
-      "field": "metadata",
-      "goField": "ObjectMeta",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
-      "typeName": "ReplicationControllerSpec",
-      "field": "minReadySeconds",
-      "goField": "MinReadySeconds",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
-      "typeName": "ReplicationControllerSpec",
-      "field": "replicas",
-      "goField": "Replicas",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
-      "typeName": "ReplicationControllerSpec",
-      "field": "template",
-      "goField": "Template",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
       "typeName": "ResourceRequirements",
       "field": "claims",
       "goField": "Claims",
       "gates": [
         "DynamicResourceAllocation"
       ],
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
-      "typeName": "Secret",
-      "field": "type",
-      "goField": "Type",
-      "stability": "alpha",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"
     },
@@ -2503,15 +2331,6 @@
       "field": "loadBalancerIP",
       "goField": "LoadBalancerIP",
       "stability": "deprecated",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/core/v1",
-      "typeName": "Toleration",
-      "field": "key",
-      "goField": "Key",
-      "stability": "alpha",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"
     },
@@ -2735,78 +2554,6 @@
     },
     {
       "importPath": "k8s.io/api/networking/v1",
-      "typeName": "IPAddressSpec",
-      "field": "parentRef",
-      "goField": "ParentRef",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "IPBlock",
-      "field": "cidr",
-      "goField": "CIDR",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "IngressClassParametersReference",
-      "field": "kind",
-      "goField": "Kind",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "IngressClassParametersReference",
-      "field": "name",
-      "goField": "Name",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "IngressClassSpec",
-      "field": "parameters",
-      "goField": "Parameters",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "NetworkPolicyEgressRule",
-      "field": "to",
-      "goField": "To",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "NetworkPolicyIngressRule",
-      "field": "from",
-      "goField": "From",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "NetworkPolicyPeer",
-      "field": "ipBlock",
-      "goField": "IPBlock",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
       "typeName": "NetworkPolicySpec",
       "field": "egress",
       "goField": "Egress",
@@ -2817,116 +2564,8 @@
     {
       "importPath": "k8s.io/api/networking/v1",
       "typeName": "NetworkPolicySpec",
-      "field": "ingress",
-      "goField": "Ingress",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "NetworkPolicySpec",
       "field": "policyTypes",
       "goField": "PolicyTypes",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "ParentReference",
-      "field": "name",
-      "goField": "Name",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/networking/v1",
-      "typeName": "ParentReference",
-      "field": "resource",
-      "goField": "Resource",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "ClusterRole",
-      "field": "rules",
-      "goField": "Rules",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "ClusterRoleBinding",
-      "field": "roleRef",
-      "goField": "RoleRef",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "ClusterRoleBinding",
-      "field": "subjects",
-      "goField": "Subjects",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "PolicyRule",
-      "field": "verbs",
-      "goField": "Verbs",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "Role",
-      "field": "rules",
-      "goField": "Rules",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "RoleBinding",
-      "field": "roleRef",
-      "goField": "RoleRef",
-      "stability": "alpha",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "RoleBinding",
-      "field": "subjects",
-      "goField": "Subjects",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "RoleRef",
-      "field": "name",
-      "goField": "Name",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/rbac/v1",
-      "typeName": "Subject",
-      "field": "name",
-      "goField": "Name",
       "stability": "beta",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"
@@ -2992,7 +2631,7 @@
       "typeName": "CSIDriverSpec",
       "field": "volumeLifecycleModes",
       "goField": "VolumeLifecycleModes",
-      "stability": "alpha",
+      "stability": "beta",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"
     },
@@ -3007,63 +2646,9 @@
     },
     {
       "importPath": "k8s.io/api/storage/v1",
-      "typeName": "StorageClass",
-      "field": "parameters",
-      "goField": "Parameters",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/storage/v1",
-      "typeName": "StorageClass",
-      "field": "provisioner",
-      "goField": "Provisioner",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/storage/v1",
-      "typeName": "StorageClass",
-      "field": "reclaimPolicy",
-      "goField": "ReclaimPolicy",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/storage/v1",
-      "typeName": "StorageClass",
-      "field": "volumeBindingMode",
-      "goField": "VolumeBindingMode",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/storage/v1",
-      "typeName": "VolumeAttachment",
-      "field": "spec",
-      "goField": "Spec",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/storage/v1",
       "typeName": "VolumeAttachmentSource",
       "field": "inlineVolumeSpec",
       "goField": "InlineVolumeSpec",
-      "stability": "beta",
-      "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
-    },
-    {
-      "importPath": "k8s.io/api/storage/v1",
-      "typeName": "VolumeAttachmentSpec",
-      "field": "attacher",
-      "goField": "Attacher",
       "stability": "beta",
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.0"

@@ -188,38 +188,97 @@ func entryFor(t upstream.Type, f upstream.Field) (Entry, bool) {
 // without gating them in a marker. It matches whole words only, so a field
 // documented as "alphabetical" is not reported as alpha, and it requires
 // Go's conventional "Deprecated:" prefix on a line rather than the word
-// appearing anywhere. It can still over-report a field whose prose merely
-// mentions another field's maturity; the gate list is what a consumer should
-// act on.
+// appearing anywhere. It can still over-report a field whose prose mentions
+// another field's maturity in a shape not listed below; the gate list is what
+// a consumer should act on.
 func stabilityOf(doc string) Stability {
-	for _, line := range strings.Split(doc, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "//")), "Deprecated:") {
+	prose := proseOnly(doc)
+	for _, line := range strings.Split(prose, "\n") {
+		if strings.HasPrefix(line, "Deprecated:") {
 			return StabilityDeprecated
 		}
 	}
 	switch {
-	case containsWord(doc, "alpha"):
+	case claimsStability(prose, "alpha"):
 		return StabilityAlpha
-	case containsWord(doc, "beta"):
+	case claimsStability(prose, "beta"):
 		return StabilityBeta
 	default:
 		return StabilityStable
 	}
 }
 
+// claimsStability reports whether prose uses word to describe the field itself.
+//
+// An occurrence qualifying "feature gate" describes the gate's maturity, not the
+// field's: HorizontalPodAutoscalerSpec.minReplicas has been GA since v2 went GA,
+// and documents that a value of 0 "is allowed if the alpha feature gate
+// HPAScaleToZero is enabled". Counting that occurrence reported a GA field as
+// alpha, contradicting a sibling field of the same type. A field whose own
+// maturity is alpha says so separately, in a sentence of its own, and that
+// occurrence still counts.
+func claimsStability(prose, word string) bool {
+	lower := strings.ToLower(prose)
+	for i := 0; ; {
+		start, ok := wordIndex(lower[i:], word)
+		if !ok {
+			return false
+		}
+		start += i
+		end := start + len(word)
+		if !strings.HasPrefix(strings.TrimLeft(lower[end:], " \n"), "feature gate") {
+			return true
+		}
+		i = end
+	}
+}
+
+// proseOnly drops the marker lines from a doc comment, keeping the sentences a
+// human wrote for the field.
+//
+// A marker's words describe the marker's own subject, not the field's maturity.
+// k8s.io/api v0.37.0 introduced declarative-validation markers spelled
+// "+k8s:alpha(since: "1.37")=+k8s:required", which say that the *required* rule
+// is alpha since 1.37 — on fields that have been GA for years. Reading those as
+// prose reported long-stable built-in fields as alpha or beta, in one case
+// contradicting a genuinely stable field in the same type. A field's maturity is
+// claimed in its documentation, never inferred from a marker; the one marker
+// this package does read, +featureGate, is parsed as a gate rather than as a
+// stability signal.
+func proseOnly(doc string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(doc, "\n") {
+		text := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "//"))
+		if strings.HasPrefix(text, "+") {
+			continue
+		}
+		b.WriteString(text)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
 // containsWord reports whether doc contains word as a whole word, ignoring
 // case and ASCII word characters on either side.
 func containsWord(doc, word string) bool {
-	lower := strings.ToLower(doc)
+	_, ok := wordIndex(strings.ToLower(doc), word)
+	return ok
+}
+
+// wordIndex returns the offset of the first whole-word occurrence of word in
+// lower, which must already be lowercased. A word is whole when neither
+// neighbouring byte is an ASCII word character, so "alphabetical" does not
+// match "alpha".
+func wordIndex(lower, word string) (int, bool) {
 	for i := 0; ; {
 		j := strings.Index(lower[i:], word)
 		if j < 0 {
-			return false
+			return 0, false
 		}
 		start := i + j
 		end := start + len(word)
 		if !isWordChar(byteAt(lower, start-1)) && !isWordChar(byteAt(lower, end)) {
-			return true
+			return start, true
 		}
 		i = end
 	}

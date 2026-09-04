@@ -206,6 +206,126 @@ func TestWalkTerminatesOnSelfReference(t *testing.T) {
 	}
 }
 
+// Marker lines are not prose. k8s.io/api v0.37.0 spells its declarative
+// validation markers "+k8s:alpha(since: "1.37")=+k8s:required" — a statement
+// about the required rule, on a field that has been GA since 1.9. Reading them
+// as prose reported 45 long-stable built-in fields as alpha or beta.
+func TestStabilityIgnoresMarkerLines(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		doc  string
+		want Stability
+	}{
+		{
+			"validation rule alpha, field GA",
+			"selector is a label query over pods.\n+required\n+k8s:alpha(since: \"1.37\")=+k8s:required\n",
+			StabilityStable,
+		},
+		{
+			"validation rule beta, field GA",
+			"rules holds all the PolicyRules for this ClusterRole\n+optional\n+k8s:beta(since: \"1.37\")=+k8s:optional\n",
+			StabilityStable,
+		},
+		{
+			"the field's own prose still counts",
+			"resources is the total amount of CPU and Memory.\nThis is an alpha field.\n+featureGate=PodLevelResources\n",
+			StabilityAlpha,
+		},
+		{
+			"a gate alone is no stability claim",
+			"hostnameOverride specifies an explicit hostname.\n+featureGate=HostnameOverride\n",
+			StabilityStable,
+		},
+		{
+			"deprecation is prose too",
+			"Deprecated: use serviceAccountName instead.\n+k8s:alpha(since: \"1.37\")=+k8s:optional\n",
+			StabilityDeprecated,
+		},
+		{
+			"comment-prefixed lines are handled the same",
+			"// selector is a label query.\n// +k8s:alpha(since: \"1.37\")=+k8s:immutable\n",
+			StabilityStable,
+		},
+		{
+			"a gate's maturity is not the field's",
+			"minReplicas is the lower limit for the number of replicas.\nminReplicas is allowed to be 0 if the alpha feature gate\nHPAScaleToZero is enabled.\n+optional\n",
+			StabilityStable,
+		},
+		{
+			"a field that is itself alpha and names an alpha gate",
+			"This is an alpha field.\nIt requires the alpha feature gate InPlacePodVerticalScaling.\n",
+			StabilityAlpha,
+		},
+		{
+			"the marker's own spelling varies",
+			"roleRef can reference a Role in the current namespace.\nThis field is immutable.\n+required\n+k8s:alpha(since:\"1.37\")=+k8s:immutable\n",
+			StabilityStable,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stabilityOf(tc.doc); got != tc.want {
+				t.Errorf("stabilityOf = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// frozenGAFields have been GA for many releases, and every one of them was
+// reported alpha or beta before the prose scan was confined to the words that
+// describe the field itself — sixteen of them by a validation marker's own
+// subject, minReplicas by the gate its prose names.
+// They are asserted against the loaded types rather than against the walk's
+// output: a stable ungated field is not recorded at all, so scanning the entries
+// for them would pass no matter what the derivation said — the same vacuous
+// shape this table exists to avoid.
+var frozenGAFields = []struct{ importPath, typeName, field string }{
+	{"k8s.io/api/apps/v1", "StatefulSetSpec", "Selector"},
+	{"k8s.io/api/apps/v1", "StatefulSetSpec", "ServiceName"},
+	{"k8s.io/api/apps/v1", "StatefulSetSpec", "PodManagementPolicy"},
+	{"k8s.io/api/apps/v1", "StatefulSetSpec", "VolumeClaimTemplates"},
+	{"k8s.io/api/core/v1", "Secret", "Type"},
+	{"k8s.io/api/core/v1", "PodSpec", "Tolerations"},
+	{"k8s.io/api/core/v1", "Toleration", "Key"},
+	{"k8s.io/api/core/v1", "NodeSpec", "ProviderID"},
+	{"k8s.io/api/rbac/v1", "ClusterRole", "Rules"},
+	{"k8s.io/api/rbac/v1", "RoleBinding", "RoleRef"},
+	{"k8s.io/api/rbac/v1", "ClusterRoleBinding", "RoleRef"},
+	{"k8s.io/api/rbac/v1", "PolicyRule", "Verbs"},
+	{"k8s.io/api/storage/v1", "StorageClass", "Provisioner"},
+	{"k8s.io/api/storage/v1", "StorageClass", "ReclaimPolicy"},
+	{"k8s.io/api/batch/v1", "CronJobSpec", "Schedule"},
+	{"k8s.io/api/autoscaling/v2", "HorizontalPodAutoscalerSpec", "MaxReplicas"},
+	{"k8s.io/api/autoscaling/v2", "HorizontalPodAutoscalerSpec", "MinReplicas"},
+}
+
+// assertFrozenGAFieldsAreStable checks each frozen field twice over: that the
+// pinned source still declares it, so a rename cannot turn this check into a
+// no-op, and that its documentation makes no stability claim.
+func assertFrozenGAFieldsAreStable(t *testing.T, types map[string]upstream.Type) {
+	t.Helper()
+	for _, want := range frozenGAFields {
+		tp, ok := types[upstream.Key(want.importPath, want.typeName)]
+		if !ok {
+			t.Errorf("%s.%s is not among the loaded types; the frozen list names a type the pins no longer declare", want.importPath, want.typeName)
+			continue
+		}
+		found := false
+		for _, f := range tp.Fields {
+			if f.Name != want.field {
+				continue
+			}
+			found = true
+			if got := stabilityOf(f.Doc); got != StabilityStable {
+				t.Errorf("%s.%s.%s is derived %q; it has been GA for years, so words about something else — a validation marker's own subject, or a feature gate the prose names — are being read as the field's claim",
+					want.importPath, want.typeName, want.field, got)
+			}
+		}
+		if !found {
+			t.Errorf("%s.%s has no field %s; the frozen list is out of date with the pins", want.importPath, want.typeName, want.field)
+		}
+	}
+}
+
 func TestWalkRejectsBadInput(t *testing.T) {
 	if _, err := Walk(nil, syntheticTypes()); err == nil {
 		t.Error("Walk accepted no roots")
@@ -294,6 +414,8 @@ func TestWalkOverRegisteredKinds(t *testing.T) {
 			t.Errorf("%s.%s: no such field in %s", e.TypeName, e.Field, e.ImportPath)
 		}
 	}
+
+	assertFrozenGAFieldsAreStable(t, types)
 
 	gated, alpha, beta, deprecated := 0, 0, 0, 0
 	byModule := map[string]int{}

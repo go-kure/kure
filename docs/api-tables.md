@@ -143,7 +143,7 @@ for the kinds whose scope the API server defines.
 | `volsync.backube/v1alpha1` | `ReplicationDestination` | Namespaced | `marker` | `ReplicationDestination` | `github.com/backube/volsync@v0.16.0` |
 | `volsync.backube/v1alpha1` | `ReplicationSource` | Namespaced | `marker` | `ReplicationSource` | `github.com/backube/volsync@v0.16.0` |
 
-## Field maturity (177)
+## Field maturity (131)
 
 kure neither warns nor filters on any of this: it reports, and a consumer with
 cluster knowledge decides. For built-in types the API server does not reject a
@@ -196,19 +196,7 @@ by a caller.
 | `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
 | `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
 | `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.0` |
-| `apps/v1.StatefulSetSpec` | `podManagementPolicy` | alpha | — | `k8s.io/api@v0.37.0` |
-| `apps/v1.StatefulSetSpec` | `selector` | alpha | — | `k8s.io/api@v0.37.0` |
-| `apps/v1.StatefulSetSpec` | `serviceName` | alpha | — | `k8s.io/api@v0.37.0` |
-| `apps/v1.StatefulSetSpec` | `volumeClaimTemplates` | alpha | — | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2.CrossVersionObjectReference` | `kind` | alpha | — | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2.CrossVersionObjectReference` | `name` | alpha | — | `k8s.io/api@v0.37.0` |
 | `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2.HorizontalPodAutoscalerSpec` | `maxReplicas` | beta | — | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2.HorizontalPodAutoscalerSpec` | `metrics` | alpha | — | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2.HorizontalPodAutoscalerSpec` | `minReplicas` | alpha | — | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2.MetricSpec` | `object` | alpha | — | `k8s.io/api@v0.37.0` |
-| `batch/v1.CronJobSpec` | `schedule` | beta | — | `k8s.io/api@v0.37.0` |
-| `batch/v1.JobSpec` | `maxFailedIndexes` | alpha | — | `k8s.io/api@v0.37.0` |
 | `batch/v1.JobSpec` | `scheduling` | alpha | `WorkloadWithJob` | `k8s.io/api@v0.37.0` |
 | `core/v1.ClusterTrustBundleProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
 | `core/v1.ConfigMapVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
@@ -227,7 +215,6 @@ by a caller.
 | `core/v1.NodePodPreemptionPolicy` | `disableResizePreemption` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.NodeSpec` | `configSource` | deprecated | — | `k8s.io/api@v0.37.0` |
 | `core/v1.NodeSpec` | `podPreemptionPolicy` | alpha | `InPlacePodVerticalScalingSchedulerPreemption` | `k8s.io/api@v0.37.0` |
-| `core/v1.NodeSpec` | `providerID` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.PersistentVolumeClaimSpec` | `dataSourceRef` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.PersistentVolumeClaimSpec` | `volumeAttributesClassName` | stable | `VolumeAttributesClass` | `k8s.io/api@v0.37.0` |
 | `core/v1.PersistentVolumeSource` | `awsElasticBlockStore` | deprecated | — | `k8s.io/api@v0.37.0` |
@@ -250,25 +237,18 @@ by a caller.
 | `core/v1.PodCertificateProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
 | `core/v1.PodSecurityContext` | `seLinuxChangePolicy` | stable | `SELinuxChangePolicy` | `k8s.io/api@v0.37.0` |
 | `core/v1.PodSecurityContext` | `supplementalGroupsPolicy` | alpha | `SupplementalGroupsPolicy` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `evictionResponders` | alpha | `EvictionRequestAPI` | `k8s.io/api@v0.37.0` |
+| `core/v1.PodSpec` | `evictionResponders` | stable | `EvictionRequestAPI` | `k8s.io/api@v0.37.0` |
 | `core/v1.PodSpec` | `hostnameOverride` | stable | `HostnameOverride` | `k8s.io/api@v0.37.0` |
 | `core/v1.PodSpec` | `resourceClaims` | stable | `DynamicResourceAllocation` | `k8s.io/api@v0.37.0` |
 | `core/v1.PodSpec` | `resources` | alpha | `PodLevelResources` | `k8s.io/api@v0.37.0` |
 | `core/v1.PodSpec` | `schedulingGroup` | stable | `GenericWorkload` | `k8s.io/api@v0.37.0` |
 | `core/v1.PodSpec` | `serviceAccount` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `tolerations` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.Probe` | `terminationGracePeriodSeconds` | beta | — | `k8s.io/api@v0.37.0` |
 | `core/v1.ProjectedVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.ReplicationController` | `metadata` | beta | — | `k8s.io/api@v0.37.0` |
-| `core/v1.ReplicationControllerSpec` | `minReadySeconds` | beta | — | `k8s.io/api@v0.37.0` |
-| `core/v1.ReplicationControllerSpec` | `replicas` | beta | — | `k8s.io/api@v0.37.0` |
-| `core/v1.ReplicationControllerSpec` | `template` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.ResourceRequirements` | `claims` | stable | `DynamicResourceAllocation` | `k8s.io/api@v0.37.0` |
-| `core/v1.Secret` | `type` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.SecretVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
 | `core/v1.ServiceAccountTokenProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
 | `core/v1.ServiceSpec` | `loadBalancerIP` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.Toleration` | `key` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.TopologySpreadConstraint` | `matchLabelKeys` | beta | — | `k8s.io/api@v0.37.0` |
 | `core/v1.TypedObjectReference` | `namespace` | alpha | `CrossNamespaceVolumeDataSource` | `k8s.io/api@v0.37.0` |
 | `core/v1.VolumeMount` | `bindMountOptions` | alpha | `VolumeBindMountOptions` | `k8s.io/api@v0.37.0` |
@@ -292,42 +272,16 @@ by a caller.
 | `core/v1.VolumeSource` | `scaleIO` | deprecated | — | `k8s.io/api@v0.37.0` |
 | `core/v1.VolumeSource` | `storageos` | deprecated | — | `k8s.io/api@v0.37.0` |
 | `core/v1.VolumeSource` | `vsphereVolume` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.IPAddressSpec` | `parentRef` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.IPBlock` | `cidr` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.IngressClassParametersReference` | `kind` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.IngressClassParametersReference` | `name` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.IngressClassSpec` | `parameters` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.NetworkPolicyEgressRule` | `to` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.NetworkPolicyIngressRule` | `from` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.NetworkPolicyPeer` | `ipBlock` | beta | — | `k8s.io/api@v0.37.0` |
 | `networking/v1.NetworkPolicySpec` | `egress` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.NetworkPolicySpec` | `ingress` | beta | — | `k8s.io/api@v0.37.0` |
 | `networking/v1.NetworkPolicySpec` | `policyTypes` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.ParentReference` | `name` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.ParentReference` | `resource` | beta | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.ClusterRole` | `rules` | beta | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.ClusterRoleBinding` | `roleRef` | alpha | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.ClusterRoleBinding` | `subjects` | beta | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.PolicyRule` | `verbs` | beta | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.Role` | `rules` | beta | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.RoleBinding` | `roleRef` | alpha | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.RoleBinding` | `subjects` | beta | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.RoleRef` | `name` | beta | — | `k8s.io/api@v0.37.0` |
-| `rbac/v1.Subject` | `name` | beta | — | `k8s.io/api@v0.37.0` |
 | `storage/v1.CSIDriverSpec` | `nodeAllocatableUpdatePeriodSeconds` | stable | `MutableCSINodeAllocatableCount` | `k8s.io/api@v0.37.0` |
 | `storage/v1.CSIDriverSpec` | `preventPodSchedulingIfMissing` | beta | `VolumeLimitScaling` | `k8s.io/api@v0.37.0` |
 | `storage/v1.CSIDriverSpec` | `seLinuxMount` | stable | `SELinuxMountReadWriteOncePod` | `k8s.io/api@v0.37.0` |
 | `storage/v1.CSIDriverSpec` | `serviceAccountTokenInSecrets` | stable | `CSIServiceAccountTokenSecrets` | `k8s.io/api@v0.37.0` |
 | `storage/v1.CSIDriverSpec` | `storageCapacity` | stable | `CSIStorageCapacity` | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSIDriverSpec` | `volumeLifecycleModes` | alpha | — | `k8s.io/api@v0.37.0` |
+| `storage/v1.CSIDriverSpec` | `volumeLifecycleModes` | beta | — | `k8s.io/api@v0.37.0` |
 | `storage/v1.CSINodeDriver` | `allocatable` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.StorageClass` | `parameters` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.StorageClass` | `provisioner` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.StorageClass` | `reclaimPolicy` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.StorageClass` | `volumeBindingMode` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.VolumeAttachment` | `spec` | beta | — | `k8s.io/api@v0.37.0` |
 | `storage/v1.VolumeAttachmentSource` | `inlineVolumeSpec` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.VolumeAttachmentSpec` | `attacher` | beta | — | `k8s.io/api@v0.37.0` |
 | `apiextensions/v1.CustomResourceDefinitionSpec` | `versions` | alpha | — | `k8s.io/apiextensions-apiserver@v0.37.0` |
 | `apiextensions/v1.CustomResourceDefinitionVersion` | `selectableFields` | stable | `CustomResourceFieldSelectors` | `k8s.io/apiextensions-apiserver@v0.37.0` |
 | `apiextensions/v1.JSONSchemaProps` | `default` | beta | — | `k8s.io/apiextensions-apiserver@v0.37.0` |
