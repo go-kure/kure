@@ -178,9 +178,76 @@ completeness claim and no coverage oracle.
 
 Ordinary fields. kure cannot know a target cluster's gates, so withholding a field
 would be a policy judgement inside a pure library. Maturity is a label, never
-enforced; it arrives with the generated kinds/scope/maturity tables of the later
-work item in the builder-contract epic (the current kind registry records scope
-only).
+enforced: kure reports what the pinned API sources say and a consumer with cluster
+knowledge decides.
+
+The label is worth carrying because the failure it describes is silent. For built-in
+types the API server does not reject a field whose feature gate is disabled — it
+clears the field and admits the object, so the manifest reads as applied and is not.
+
+`pkg/kubernetes/internal/maturity` walks every type reachable from a registered
+kind's own struct and records the fields carrying a signal: a `+featureGate` marker,
+or a doc comment declaring alpha, beta or Go's conventional `Deprecated:` prefix. The
+marker is the precise signal; the prose scan is the best-effort complement for fields
+upstream documents without gating, and it matches whole words, so "alphabetical" is
+not alpha.
+
+Status types are not entered. A kind's status is reported by the cluster and never
+constructed by a caller, so a gate there says nothing about whether a manifest kure
+builds applies as written — and that is where most of the markers are.
+
+Against the current pins, the walk finds 177 maturity-carrying construction-side
+fields, of which 41 require a feature gate (40 in `k8s.io/api`, one in
+`k8s.io/apiextensions-apiserver`); 48 are documented alpha, 42 beta and 66
+deprecated, and 92 distinct status types are skipped. No CRD module kure pins uses
+`+featureGate` at all. These numbers move with the pins and are not asserted by any
+test; the tests assert that every reported field exists in the pinned struct.
+
+## 9. Where scope and maturity come from
+
+Both are derived from the pinned upstream module sources, not kept by hand beside
+them. Three internal packages do it, and none of them is part of the public API:
+
+- `internal/markers` parses the controller-gen markers kure reads —
+  `+kubebuilder:resource` for scope, `+featureGate` for maturity. Pure text, no I/O.
+- `internal/upstream` loads the pinned modules with `go/packages` and returns each
+  named type with its doc comment, fields, file-scoped import aliases and the module
+  and version it came from.
+- `internal/kinds` resolves a scope per registered kind; `internal/maturity` walks
+  the type graph for the field table.
+
+Three things about that derivation are worth knowing before changing it.
+
+**A marker the parser cannot read is a fatal error, never a default.** The one
+legitimate default — an absent `+kubebuilder:resource:scope`, which upstream defines
+as `Namespaced` — is indistinguishable from a marker whose spelling the parser failed
+to match. Treating the second as the first emits a namespaced wrapper for a
+cluster-scoped kind and puts a `metadata.namespace` on an object that must not carry
+one. Two spellings are in use across the pinned modules and both are accepted: the
+bare `scope=Cluster`, and `scope="Cluster"` quoted inside a comma-separated list whose
+other values contain braced commas.
+
+**controller-gen separates its marker block from the type's prose doc comment with a
+blank line**, which detaches the markers from the declaration's `Doc` in `go/ast` and
+files them as free-floating comments on the file. Reading `Doc` alone derives 31 of
+the 33 cluster-scoped kinds as namespaced — silently, since every wrong answer is the
+default. `internal/upstream` reattaches the preceding comment group, bounded by the
+end of the previous declaration, and drops it for grouped `type (...)` blocks where it
+cannot be attributed to one spec.
+
+**Two kinds of module carry no `+kubebuilder:resource` marker at all**, and each needs
+a recorded decision rather than the default:
+
+- The built-in modules (`k8s.io/api`, `k8s.io/apiextensions-apiserver`) have no
+  markers because the API server, not a generator, defines their scope. Sixteen
+  explicit entries in `internal/kinds` name the cluster-scoped built-ins; every other
+  built-in kind is namespaced.
+- A CRD module can ship without the marker too. `plugin-barman-cloud` is the current
+  case: it marks `object:root`, `subresource:status` and `storageversion` but not
+  `resource`, and the CRD it publishes declares `scope: Namespaced` — the same answer
+  controller-gen's default produces. It is listed as an exception with that
+  verification recorded, and a test fails both when a new unmarked module appears and
+  when a listed one starts carrying markers.
 
 ## Identity test
 
