@@ -119,15 +119,37 @@ func run(args []string, stderr io.Writer) int {
 // without this a test would write the table artifacts into the repository's
 // real docs directory — a generator that scribbles outside the tree it was
 // told to write to.
+//
+// "Is the default" is decided on the resolved path, not on the spelling. The
+// same directory can be written "pkg/kubernetes", "./pkg/kubernetes",
+// "pkg/kubernetes/" or absolutely, and a string comparison calls three of those
+// four a different root: generate would then write the tables under
+// <root>/docs, leave the committed ones untouched, and report success — the
+// silent partial update this whole package exists to prevent.
 func docsRoot(root, docs string) string {
 	switch {
 	case docs != "":
 		return docs
-	case root == defaultRoot:
+	case sameDir(root, defaultRoot):
 		return defaultDocs
 	default:
 		return filepath.Join(root, defaultDocs)
 	}
+}
+
+// sameDir reports whether two paths name the same directory. Both are resolved
+// against the same working directory, so a relative and an absolute spelling of
+// one directory compare equal; an unresolvable path is not the default.
+func sameDir(a, b string) bool {
+	absA, err := filepath.Abs(a)
+	if err != nil {
+		return false
+	}
+	absB, err := filepath.Abs(b)
+	if err != nil {
+		return false
+	}
+	return absA == absB
 }
 
 // render returns every generated file, keyed by path, formatted.

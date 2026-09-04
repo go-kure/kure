@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -283,11 +284,24 @@ func TestShortImport(t *testing.T) {
 // The table artifacts must never be written outside the tree the generator was
 // pointed at: a test running against a temporary root would otherwise rewrite
 // the repository's own docs directory as a side effect.
+// Every spelling of the default root must resolve to the repo's own docs
+// directory. A spelling treated as "somewhere else" writes the tables under
+// <root>/docs and leaves the committed ones stale, with generate reporting
+// success — the drift check would then be the only thing that notices, one
+// commit later.
 func TestDocsRoot(t *testing.T) {
+	absDefault, err := filepath.Abs(defaultRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		root, docs, want string
 	}{
 		{defaultRoot, "", defaultDocs},
+		{"./" + defaultRoot, "", defaultDocs},
+		{defaultRoot + "/", "", defaultDocs},
+		{defaultRoot + "/../../" + defaultRoot, "", defaultDocs},
+		{absDefault, "", defaultDocs},
 		{defaultRoot, "elsewhere", "elsewhere"},
 		{"/tmp/x", "", "/tmp/x/docs"},
 		{"/tmp/x", "elsewhere", "elsewhere"},
