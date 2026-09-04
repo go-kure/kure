@@ -34,7 +34,10 @@ this order:
 2. A kind kure registers takes its scope from the generated table
    (`kubernetes.IsNamespaced`), derived from the pinned upstream sources — the
    `+kubebuilder:resource` markers and the `CustomResourceDefinition`s the modules
-   ship. See [Kubernetes Builders](/api-reference/kubernetes-builders/) § 9.
+   ship. See [Kubernetes Builders](/api-reference/kubernetes-builders/) § 9. The
+   lookup matches on group and kind only: a manifest at a version kure does not
+   register (`autoscaling/v1` where the scheme has `autoscaling/v2`) is still
+   answered, because a resource has one scope across all its versions.
 3. A short residual list covers the cluster-scoped kinds kure does **not** register
    and so cannot derive: `PriorityClass`, `APIService` and the two webhook
    configurations. It only shrinks — registering one of them moves it to the derived

@@ -316,6 +316,20 @@ referenced an upstream type could not be regenerated after an API bump removed i
 Each kind row names the module and version it was read from, and `ScopeSource` names
 what stated the scope, so any row is traceable to a pin.
 
+The two kind lookups answer deliberately different questions, and the difference is
+the version:
+
+- `KindFor(apiVersion, kind)` matches the version as well as the group. `GoType`,
+  `ImportPath` and `ModuleVersion` describe one version's Go type, so a group/kind
+  registered at some other version is not an answer — it reads as unregistered,
+  which is what it is.
+- `IsNamespaced(apiVersion, kind)` ignores the version. Scope is a property of the
+  resource and is the same across the versions of one group/kind, so a manifest
+  written against a version kure does not register is still answered rather than
+  returned as unknown. `pkg/manifest`'s `Scope` depends on that: an object at
+  `autoscaling/v1` must not fall through to `ScopeUnknown` because the scheme
+  happens to register `autoscaling/v2`.
+
 Regenerate with `scripts/gen-builders.sh generate`; CI's `validate` job runs
 `scripts/gen-builders.sh check`, and Renovate runs `generate` in its
 `postUpgradeTasks` so a bump PR arrives with the tables already updated. Do not edit

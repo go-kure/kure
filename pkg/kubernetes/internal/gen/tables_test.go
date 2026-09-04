@@ -74,10 +74,56 @@ func TestDeriveTablesCoversEveryRegisteredKind(t *testing.T) {
 	}
 }
 
-// The derivation is held to the hand-seeded table inside deriveTables, not only
-// in the kinds package's own tests: a disagreement must never reach a committed
-// artifact. Flipping one kind's scope proves that guard is wired, so it cannot
-// be lost when the hand-seeded table is deleted and replaced by a fixture.
+// Both table rows must be in a defined total order, or the same pins render
+// differently between runs and CI's drift check fails with nothing wrong.
+// Kinds are sorted here; Fields come out of maturity.Walk already sorted by
+// import path, type and field (maturity.go § Walk), and this asserts that
+// rather than trusting it — the walk's ordering is not this package's to keep.
+func TestDeriveTablesRowsAreInATotalOrder(t *testing.T) {
+	data := realTables(t)
+
+	kindKey := func(k kindRow) [3]string { return [3]string{k.Group, k.Kind, k.Version} }
+	fieldKey := func(f fieldRow) [3]string { return [3]string{f.ImportPath, f.TypeName, f.Field} }
+
+	for _, tc := range []struct {
+		name string
+		n    int
+		key  func(int) [3]string
+	}{
+		{"kinds", len(data.Kinds), func(i int) [3]string { return kindKey(data.Kinds[i]) }},
+		{"fields", len(data.Fields), func(i int) [3]string { return fieldKey(data.Fields[i]) }},
+	} {
+		if tc.n == 0 {
+			t.Errorf("%s: no rows", tc.name)
+			continue
+		}
+		seen := map[[3]string]bool{}
+		for i := 0; i < tc.n; i++ {
+			if seen[tc.key(i)] {
+				// Two rows with equal keys make the order below undefined: sort
+				// is not stable, so either could come first on either run.
+				t.Errorf("%s: %v appears twice", tc.name, tc.key(i))
+			}
+			seen[tc.key(i)] = true
+			if i > 0 && !lessKey(tc.key(i-1), tc.key(i)) {
+				t.Errorf("%s: row %d (%v) does not follow row %d (%v)", tc.name, i, tc.key(i), i-1, tc.key(i-1))
+			}
+		}
+	}
+}
+
+func lessKey(a, b [3]string) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
+}
+
+// The derivation is held to the scope kinds.Registered resolved, not only in
+// the kinds package's own tests: a disagreement must never reach a committed
+// artifact. Flipping one kind's scope proves that guard is wired.
 func TestDeriveTablesRejectsAScopeDisagreement(t *testing.T) {
 	all, err := kinds.Registered()
 	if err != nil {

@@ -87,24 +87,51 @@ func KindByGroupKind(groupKind string) (KindInfo, bool) {
 	return KindInfo{}, false
 }
 
-// KindFor returns the registered kind for an apiVersion and kind.
+// KindFor returns the registered kind for an apiVersion and kind, matching the
+// version as well as the group.
+//
+// The version is part of the match because most of what a KindInfo carries is
+// version-specific: GoType, ImportPath and ModuleVersion describe one version's
+// Go type. Answering an "autoscaling/v1" question with the registered
+// "autoscaling/v2" row would name a type that does not implement the version
+// asked about. A group/kind kure registers at a version other than the one
+// asked for reads as unregistered, which is what it is.
 func KindFor(apiVersion, kind string) (KindInfo, bool) {
-	group := ""
-	if g, _, ok := strings.Cut(apiVersion, "/"); ok {
-		group = g // "apps/v1" -> "apps"; core "v1" -> ""
+	group, version := groupVersion(apiVersion)
+	for _, k := range Kinds {
+		if k.Group == group && k.Version == version && k.Kind == kind {
+			return k, true
+		}
 	}
-	return KindByGroupKind(group + "/" + kind)
+	return KindInfo{}, false
 }
 
 // IsNamespaced reports whether a registered kind is namespaced, and whether it
 // is registered at all. A caller must distinguish the two: an unregistered
 // kind's scope is unknown, not namespaced.
+//
+// Unlike [KindFor] this ignores the version, and deliberately: scope is a
+// property of the resource, uniform across the versions of one group/kind — an
+// apiVersion the API server serves at all serves it at the same scope. A
+// manifest written against an older or newer version of a kind kure registers
+// must still be answered, since the alternative is "unknown" for a scope that
+// is not in doubt.
 func IsNamespaced(apiVersion, kind string) (namespaced, known bool) {
-	k, ok := KindFor(apiVersion, kind)
+	group, _ := groupVersion(apiVersion)
+	k, ok := KindByGroupKind(group + "/" + kind)
 	if !ok {
 		return false, false
 	}
 	return k.Namespaced, true
+}
+
+// groupVersion splits an apiVersion into its group and version. The core group
+// is written without one ("v1"), so a value with no slash is all version.
+func groupVersion(apiVersion string) (group, version string) {
+	if g, v, ok := strings.Cut(apiVersion, "/"); ok {
+		return g, v
+	}
+	return "", apiVersion
 }
 
 // MaturityForType returns the maturity entries declared by one Go type.
