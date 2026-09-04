@@ -10,6 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
 )
 
 func TestRegistered_IsTotalSortedAndRouted(t *testing.T) {
@@ -143,6 +145,37 @@ func TestClassify_ErrorsOnUnroutedAndSkipsNonObjects(t *testing.T) {
 	// here would mean a second, undocumented scope source had crept back in.
 	if got[0].Namespaced {
 		t.Error("classify must leave the scope unset for the resolution to fill in")
+	}
+}
+
+func TestApplyScopes(t *testing.T) {
+	all := []Kind{
+		{GVK: schema.GroupVersionKind{Version: "v1", Kind: "Pod"}},
+		{GVK: schema.GroupVersionKind{Version: "v1", Kind: "Namespace"}},
+	}
+	resolved := []DerivedScope{
+		{Key: "/Pod", Scope: markers.ScopeNamespaced},
+		{Key: "/Namespace", Scope: markers.ScopeCluster},
+	}
+	if err := applyScopes(all, resolved); err != nil {
+		t.Fatal(err)
+	}
+	if !all[0].Namespaced {
+		t.Error("Pod must come out namespaced")
+	}
+	if all[1].Namespaced {
+		t.Error("Namespace must come out cluster-scoped")
+	}
+
+	// A kind the resolution says nothing about must be an error, not the zero
+	// value: Namespaced is the right answer for most kinds, so a silent gap
+	// here would read as a correct table.
+	err := applyScopes(all, resolved[:1])
+	if err == nil {
+		t.Fatal("a kind with no resolved scope must be an error")
+	}
+	if !strings.Contains(err.Error(), "/Namespace") {
+		t.Errorf("the error must name the kind: %v", err)
 	}
 }
 

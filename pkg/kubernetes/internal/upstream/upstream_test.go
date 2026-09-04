@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -189,27 +190,65 @@ func TestEmbeddedName(t *testing.T) {
 
 func TestJSONTagEdgeCases(t *testing.T) {
 	for _, tc := range []struct {
-		name, tag, wantName string
-		wantInline          bool
+		name, tag, wantName  string
+		wantInline, wantOmit bool
 	}{
-		{"no tag", "", "", false},
-		{"no json key", "`yaml:\"x\"`", "", false},
-		{"unterminated json value", "`json:\"x", "", false},
-		{"name only", "`json:\"spec\"`", "spec", false},
-		{"omitempty is not inline", "`json:\"spec,omitempty\"`", "spec", false},
-		{"inline after omitempty", "`json:\"spec,omitempty,inline\"`", "spec", true},
-		{"empty name inline", "`json:\",inline\"`", "", true},
+		{"no tag", "", "", false, false},
+		{"no json key", "`yaml:\"x\"`", "", false, false},
+		{"unterminated json value", "`json:\"x", "", false, false},
+		{"name only", "`json:\"spec\"`", "spec", false, false},
+		{"omitempty is not inline", "`json:\"spec,omitempty\"`", "spec", false, false},
+		{"inline after omitempty", "`json:\"spec,omitempty,inline\"`", "spec", true, false},
+		{"empty name inline", "`json:\",inline\"`", "", true, false},
+		{"dash omits the field", "`json:\"-\"`", "", false, true},
+		// encoding/json's own rule: a trailing comma makes "-" a name.
+		{"dash with a comma is a name", "`json:\"-,\"`", "-", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var lit *ast.BasicLit
 			if tc.tag != "" {
 				lit = &ast.BasicLit{Kind: token.STRING, Value: tc.tag}
 			}
-			name, inline := jsonTag(lit)
-			if name != tc.wantName || inline != tc.wantInline {
-				t.Errorf("jsonTag(%q) = %q,%v want %q,%v", tc.tag, name, inline, tc.wantName, tc.wantInline)
+			name, inline, omitted := jsonTag(lit)
+			if name != tc.wantName || inline != tc.wantInline || omitted != tc.wantOmit {
+				t.Errorf("jsonTag(%q) = %q,%v,%v want %q,%v,%v", tc.tag, name, inline, omitted, tc.wantName, tc.wantInline, tc.wantOmit)
 			}
 		})
+	}
+}
+
+// A json:"-" field is not part of the API surface: it has no name a manifest
+// could carry. Recording it filed every such field under the key "-" and made
+// its type reachable in the walk.
+func TestStructFieldsDropsOmittedFields(t *testing.T) {
+	const src = `package p
+type Thing struct {
+	Spec string ` + "`json:\"spec\"`" + `
+	Internal string ` + "`json:\"-\"`" + `
+	Dash string ` + "`json:\"-,\"`" + `
+}
+`
+	file, err := parser.ParseFile(token.NewFileSet(), "p.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st *ast.StructType
+	ast.Inspect(file, func(n ast.Node) bool {
+		if s, ok := n.(*ast.StructType); ok && st == nil {
+			st = s
+		}
+		return st == nil
+	})
+	if st == nil {
+		t.Fatal("no struct in the fixture")
+	}
+	var names []string
+	for _, f := range structFields(st) {
+		names = append(names, f.Name+"="+f.JSONName)
+	}
+	want := []string{"Spec=spec", "Dash=-"}
+	if !reflect.DeepEqual(names, want) {
+		t.Errorf("fields = %v, want %v", names, want)
 	}
 }
 

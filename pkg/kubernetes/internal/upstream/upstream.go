@@ -225,7 +225,14 @@ func typeDoc(gen *ast.GenDecl, ts *ast.TypeSpec, detached string) string {
 func structFields(st *ast.StructType) []Field {
 	var out []Field
 	for _, f := range st.Fields.List {
-		jsonName, inline := jsonTag(f.Tag)
+		jsonName, inline, omitted := jsonTag(f.Tag)
+		if omitted {
+			// json:"-" means the field is not serialised at all, so it is not
+			// part of the API this package describes: it has no name a manifest
+			// could carry, and recording it would file every such field under
+			// the key "-" and walk a type nothing can reach through the API.
+			continue
+		}
 		doc := ""
 		if f.Doc != nil {
 			doc = f.Doc.Text()
@@ -255,14 +262,20 @@ func structFields(st *ast.StructType) []Field {
 	return out
 }
 
-// jsonTag returns the field's json name and whether it is inlined.
+// jsonTag returns the field's json name, whether it is inlined, and whether the
+// tag excludes it from serialisation entirely.
 //
 // The literal is unquoted with strconv rather than trimmed with a cutset: a
 // cutset of "`\"" strips the tag's own closing quote along with the backticks,
 // turning `json:"spec"` into `json:"spec` and losing every name.
-func jsonTag(tag *ast.BasicLit) (string, bool) {
+//
+// omitted follows encoding/json exactly: only a tag whose whole value is "-"
+// excludes the field. `json:"-,"` names the field "-" and does not, which is
+// obscure but is the rule, and guessing the other way would drop a field the
+// API really does carry.
+func jsonTag(tag *ast.BasicLit) (name string, inline, omitted bool) {
 	if tag == nil {
-		return "", false
+		return "", false, false
 	}
 	raw := tag.Value
 	if unquoted, err := strconv.Unquote(raw); err == nil {
@@ -270,15 +283,18 @@ func jsonTag(tag *ast.BasicLit) (string, bool) {
 	}
 	value, ok := reflect.StructTag(raw).Lookup("json")
 	if !ok {
-		return "", false
+		return "", false, false
+	}
+	if value == "-" {
+		return "", false, true
 	}
 	parts := strings.Split(value, ",")
 	for _, p := range parts[1:] {
 		if p == "inline" {
-			return parts[0], true
+			return parts[0], true, false
 		}
 	}
-	return parts[0], false
+	return parts[0], false, false
 }
 
 // exprString renders a type expression the way it is written in source, for

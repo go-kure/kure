@@ -212,7 +212,10 @@ them. Five internal packages do it, and none of them is part of the public API:
   `+kubebuilder:resource` for scope, `+featureGate` for maturity. Pure text, no I/O.
 - `internal/upstream` loads the pinned modules with `go/packages` and returns each
   named type with its doc comment, fields, file-scoped import aliases and the module,
-  version and module directory it came from.
+  version and module directory it came from. A field tagged `json:"-"` is left out:
+  it is not serialised, so it has no name a manifest could carry, and recording it
+  would file it under the name `-` and make its type reachable in the maturity walk
+  (cilium's `XDSResource` embeds `*anypb.Any` that way).
 - `internal/crds` reads the `CustomResourceDefinition` manifests a module ships in
   that directory, which is where the scope comes from for a type carrying no marker.
 - `internal/kinds` resolves a scope per registered kind; `internal/maturity` walks
@@ -268,6 +271,17 @@ the default handed to it:
   output, generated from the same source, which states the scope explicitly whether
   or not a marker was needed to produce it. That is a second upstream source, not a
   second guess, and it keeps the answer out of a table maintained here.
+
+  Only final manifests count. A file is read when a `kind:` key at the start of a
+  line names a `CustomResourceDefinition`, and it is skipped when it contains Go
+  template delimiters: a Helm template is the input to a rendering step, not a
+  definition. metallb ships exactly that shape — a chart whose `crds.yaml` opens
+  with real CRDs and later uses `{{ .Release.Namespace }}` as a map key — and its
+  real manifests sit in `config/crd/bases` beside it. Within a file that is read,
+  a document that does not decode is an error naming the file and the document's
+  index, never a short read: stopping quietly there drops every definition after
+  it, which loses a kind's only answer or one half of a scope conflict with
+  nothing to show anything was skipped.
 
   Those files are read out of the module zip as unpacked in the local module cache —
   the directory `go list -m` reports for the pinned version — not fetched from the

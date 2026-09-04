@@ -3,6 +3,7 @@ package crds
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -166,10 +167,9 @@ spec:
 	}
 }
 
-// Yaml a module ships that is not a manifest at all — a Helm template, a
-// kustomization — must not fail the walk. Only documents that parse as CRDs
-// are of interest.
-func TestLoadIgnoresUnparseableYAML(t *testing.T) {
+// A Helm template is not a manifest. It must neither fail the walk nor be read
+// as a definition.
+func TestLoadIgnoresAHelmTemplate(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "templates/crd.yaml", "{{- if .Values.crds }}\nkind: CustomResourceDefinition\n{{- end }}\n")
 	write(t, dir, "good.yaml", namespacedCRD)
@@ -179,6 +179,75 @@ func TestLoadIgnoresUnparseableYAML(t *testing.T) {
 	}
 	if len(index) != 1 {
 		t.Errorf("index = %v, want only the readable definition", index)
+	}
+}
+
+// The shape metallb ships: a templated file whose leading documents are
+// ordinary CRDs and whose later one is not yaml at all. Reading it would stop
+// mid-file and take the leading documents as authoritative, which is a scope
+// sourced from a file that could only be read in part. The whole file is
+// skipped instead — and it must be skipped without an error, since a module
+// shipping a Helm chart beside its real manifests is ordinary.
+func TestLoadSkipsATemplatedFileEvenWhereItsFirstDocumentsAreValid(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "charts/x/templates/crds.yaml", namespacedCRD+"---\nkind: Namespace\nmetadata:\n  name: {{ .Release.Namespace }}\n")
+	index, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(index) != 0 {
+		t.Errorf("index = %v, want nothing read out of a templated file", index)
+	}
+}
+
+// A document that does not decode, in a file that really does declare a CRD and
+// is not a template, is an error naming the file and the document's index.
+// Stopping quietly there drops every definition after it — which loses a kind's
+// only answer, or one half of a scope conflict — with nothing to show that
+// anything was skipped.
+func TestLoadRejectsAnUndecodableDocument(t *testing.T) {
+	const bad = "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nspec: [this: is, not: a, mapping\n"
+	cases := []struct {
+		name, body string
+		wantIndex  int
+	}{
+		{"ahead of a good definition", bad + "---\n" + namespacedCRD, 0},
+		{"behind a good definition", namespacedCRD + "---\n" + bad, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			write(t, dir, "crd.yaml", c.body)
+			_, err := Load(dir)
+			if err == nil {
+				t.Fatal("an undecodable document must fail the walk, not truncate it")
+			}
+			for _, want := range []string{"crd.yaml", "document " + strconv.Itoa(c.wantIndex)} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error must name %q: %v", want, err)
+				}
+			}
+		})
+	}
+}
+
+// The prefilter selects on the document's own kind key, not the bare word. A
+// substring match also selects every template and doc that mentions it — files
+// that cannot decode and would now fail the walk.
+func TestDeclaresCRD(t *testing.T) {
+	cases := map[string]bool{
+		"kind: CustomResourceDefinition\n":                      true,
+		"apiVersion: v1\nkind: CustomResourceDefinition\n":      true,
+		"apiVersion: v1\nkind: \"CustomResourceDefinition\"\n":  true,
+		"apiVersion: v1\nkind: 'CustomResourceDefinition'\n":    true,
+		"# applies to every CustomResourceDefinition\n":         false,
+		"spec:\n  names:\n    kind: CustomResourceDefinition\n": false,
+		"": false,
+	}
+	for body, want := range cases {
+		if got := declaresCRD([]byte(body)); got != want {
+			t.Errorf("declaresCRD(%q) = %v, want %v", body, got, want)
+		}
 	}
 }
 

@@ -102,6 +102,19 @@ func derive() ([]Kind, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := applyScopes(all, resolved); err != nil {
+		return nil, err
+	}
+	return all, nil
+}
+
+// applyScopes writes each resolved scope onto its kind, in place.
+//
+// A kind the resolution has no entry for is an error. [ResolveScopes] returns
+// one entry per kind or an error, so that is unreachable through it today; the
+// check stays because the alternative to noticing is handing out the zero
+// value, Namespaced, which is a wrong answer indistinguishable from a right one.
+func applyScopes(all []Kind, resolved []DerivedScope) error {
 	scopes := make(map[string]markers.Scope, len(resolved))
 	for _, d := range resolved {
 		scopes[d.Key] = d.Scope
@@ -109,15 +122,11 @@ func derive() ([]Kind, error) {
 	for i := range all {
 		scope, ok := scopes[all[i].Key()]
 		if !ok {
-			// ResolveScopes returns one entry per kind or an error, so this is
-			// unreachable today. It stays because the alternative to noticing
-			// is handing out Namespaced, which is a wrong answer that looks
-			// exactly like a right one.
-			return nil, errors.Errorf("kinds: no scope resolved for %s (%s)", all[i].Key(), all[i].GVK)
+			return errors.Errorf("kinds: no scope resolved for %s (%s)", all[i].Key(), all[i].GVK)
 		}
 		all[i].Namespaced = scope != markers.ScopeCluster
 	}
-	return all, nil
+	return nil
 }
 
 // classify filters and routes the scheme's known types into Kinds. The scope
