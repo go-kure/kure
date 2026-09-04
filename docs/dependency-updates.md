@@ -113,7 +113,9 @@ resolves the tag to a commit via the GitHub API (falling back to `git ls-remote`
 `go get`s that exact commit (never hand-constructs the pseudo-version string — Go
 verifies its embedded timestamp against the commit), runs `go mod tidy`, writes the
 resolved commit back to `upstream_release_commit`, and regenerates
-`docs/compatibility.md`. It is idempotent: a re-run with `upstream_release` unchanged
+`docs/compatibility.md` and the API tables (`gen-builders.sh generate` — the tables
+record the module version each kind and field came from, so re-pinning this module
+changes them). It is idempotent: a re-run with `upstream_release` unchanged
 leaves the tree untouched. `renovate.json` disables the raw `gomod` manager for this
 module (its `@latest` is `main` HEAD, not useful) and instead tracks
 `upstream_release` via a `customManagers` regex entry on `versions.yaml`, filtered to
@@ -417,6 +419,12 @@ four generated artifacts: the per-kind constructor wrappers, `pkg/kubernetes/zz_
 `scripts/gen-builders.sh check`, which fails on any of them being stale. All four are
 in the `fileFilters` of that `postUpgradeTasks` block — a path missing there is dropped
 from the bot's commit silently, never as an error, and surfaces only as a red `check`.
+
+That block matches the `gomod` and `mise` managers, which is every API-module bump but
+one: external-secrets arrives through the `customManagers` regex entry on
+`versions.yaml` (above), so it matches by manager name nowhere in that rule. Its own
+rule therefore carries the same artifacts in `fileFilters`, and `sync-eso-pin.sh` chains
+`gen-builders.sh generate` itself, so a manual re-pin regenerates them too.
 
 Two things about those tables specifically:
 

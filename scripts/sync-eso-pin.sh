@@ -151,4 +151,13 @@ fi
 echo "sync-eso-pin: ./scripts/sync-versions.sh generate"
 "$SCRIPT_DIR/sync-versions.sh" generate
 
+# The API tables record the module version each kind and field came from, so
+# re-pinning this module changes them. This runs here rather than only in
+# renovate.json because this script is the whole re-pin on every path that uses
+# it -- the bot's postUpgradeTasks and a maintainer's manual re-pin alike -- and
+# a re-pin that leaves the tables behind fails CI's drift check with nothing
+# naming the cause.
+echo "sync-eso-pin: ./scripts/gen-builders.sh generate"
+"$SCRIPT_DIR/gen-builders.sh" generate
+
 echo "sync-eso-pin: done"

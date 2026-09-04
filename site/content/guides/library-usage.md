@@ -127,6 +127,49 @@ data, err := io.EncodeObjectsToYAMLWithOptions(objects, io.EncodeOptions{
 
 See the [IO reference](/api-reference/io) for all output formats and stripping options.
 
+## Asking What Kure Knows About a Kind
+
+Every kind kure registers is described in a table generated from the pinned upstream
+module sources — its scope, the module and version it came from, and the fields
+upstream documents as gated, alpha, beta or deprecated. The lookups are in
+`pkg/kubernetes`, and they answer from that table rather than from a hand-kept list.
+
+```go
+import "github.com/go-kure/kure/pkg/kubernetes"
+
+k, ok := kubernetes.KindFor("apps/v1", "Deployment")   // exact group/version/kind
+if ok {
+    fmt.Println(k.Namespaced, k.Module, k.ModuleVersion, k.ScopeSource)
+}
+
+namespaced, known := kubernetes.IsNamespaced("autoscaling/v1", "HorizontalPodAutoscaler")
+```
+
+The two answer deliberately different questions. `KindFor` returns the row for one
+exact `group/version/kind`, because `GoType`, `ImportPath` and `ModuleVersion` are
+properties of that version. `IsNamespaced` matches on group and kind only: scope is a
+property of the resource, not of the version, so it still answers for a manifest at a
+version kure does not register — `autoscaling/v1` above, where the scheme carries
+`autoscaling/v2`. `pkg/manifest`'s `Scope` builds on the second, which is why a
+manifest at an unregistered version is classified rather than left unknown.
+
+Maturity is reported, never enforced:
+
+```go
+for _, f := range kubernetes.MaturityForType("k8s.io/api/core/v1", "PodSpec") {
+    fmt.Println(f.Field, f.Stability, f.Gates)
+}
+gated := kubernetes.GatedFields()   // every field behind a feature gate
+```
+
+kure does not warn, reject or filter on any of it — a consumer with cluster knowledge
+decides. The table exists because the failure it describes is silent: the API server
+does not reject a field whose feature gate is off, it clears the field and admits the
+object, so the manifest reads as applied and is not. The same data is published as
+`docs/api-tables.json` and [API Tables](/api-reference/api-tables) for readers outside
+Go. See the [Kubernetes Builders](/api-reference/kubernetes-builders) page for what
+each column means and how it is derived.
+
 ## Working with the Domain Model
 
 For more complex scenarios, use the [Stack](/api-reference/stack) package to define cluster topologies:
