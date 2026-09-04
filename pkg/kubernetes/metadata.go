@@ -4,11 +4,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// The four helpers below are the metadata sugar the builder contract admits
-// over metav1.Object (contract §5). They replace the per-kind
+// The helpers below are the metadata sugar the builder contract admits over
+// metav1.Object (contract §5). They replace the per-kind
 // Add<Kind>Label / Set<Kind>Labels / Add<Kind>Annotation scatter: one set of
 // names for every registered kind, including kinds kure never names. A nil
 // obj panics, like every other sugar helper.
+//
+// The contract fixes this set at four (§5). To apply a computed label map —
+// PSALabels, say — loop AddLabel over it rather than adding a merge helper
+// here.
 
 // SetLabels replaces obj's labels with labels.
 func SetLabels(obj metav1.Object, labels map[string]string) {

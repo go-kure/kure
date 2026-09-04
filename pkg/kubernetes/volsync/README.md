@@ -87,25 +87,44 @@ rd := volsync.ReplicationDestination(&volsync.ReplicationDestinationConfig{
 | `Syncthing` | Continuous bidirectional sync over the Syncthing protocol (source resource only). |
 | `External` | Passthrough for custom replication providers — opaque `provider` + `parameters`. |
 
-## Modifier Functions
+## Modifying a resource
+
+The config struct is the only mutation surface this package offers. Trigger,
+paused, source PVC and the mover variant are all fields on
+`ReplicationSourceConfig` / `ReplicationDestinationConfig`, so build the
+resource the way you want it:
 
 ```go
-// Trigger
-volsync.SetReplicationSourceSchedule(rs, "@daily")
-volsync.SetReplicationSourceManualTrigger(rs, "go")
-volsync.SetReplicationDestinationSchedule(rd, "@weekly")
-volsync.SetReplicationDestinationManualTrigger(rd, "go")
+schedule := "@daily"
+rs := volsync.ReplicationSource(&volsync.ReplicationSourceConfig{
+    Name:      "data-backup",
+    Namespace: "apps",
+    SourcePVC: "data",
+    Paused:    true,
+    Trigger:   &volsync.TriggerConfig{Schedule: &schedule},
+    Mover:     &volsync.SourceRcloneConfig{ /* ... */ },
+})
+```
 
-// Spec fields
-volsync.SetReplicationSourceSourcePVC(rs, "data")
-volsync.SetReplicationSourcePaused(rs, true)
-volsync.SetReplicationDestinationPaused(rd, true)
+To change a built resource, assign the field:
 
-// Replace mover (clears any existing mover first)
-volsync.SetReplicationSourceMover(rs, &volsync.SourceRcloneConfig{ /* ... */ })
-volsync.SetReplicationDestinationMover(rd, &volsync.DestinationResticConfig{ /* ... */ })
+```go
+rs.Spec.Paused = false
+rs.Spec.Trigger = &volsyncv1alpha1.ReplicationSourceTriggerSpec{Manual: "go"}
+```
 
-// Syncthing peers
+The per-field `SetReplicationSource*` / `SetReplicationDestination*` helpers are
+gone. They were bare field assignments, and the mover ones duplicated the
+constructor's type switch — the constructor is the one place that knows a
+mover variant clears its siblings. Switching a mover on an existing resource
+means clearing the other five arms yourself, which is exactly the multi-field
+write [the builder contract](/api-reference/kubernetes-builders/) forbids a
+`Set<Field>` helper from hiding.
+
+The one appender remains, because a peer list is a slice the contract admits
+sugar for:
+
+```go
 volsync.AddSyncthingPeer(syncCfg, "tcp://peer:22000", "PEER-ID", false)
 ```
 

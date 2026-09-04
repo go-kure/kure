@@ -15,7 +15,10 @@ func TestPDBNilErrors(t *testing.T) {
 	assertPanics(t, func() { SetPDBSelector(nil, &metav1.LabelSelector{}) })
 }
 
-func TestPDBMutualExclusivity(t *testing.T) {
+// TestPDBAvailabilityTouchesOnlyItsOwnField pins the contract behaviour: each
+// setter writes the field it names and leaves the mutually exclusive sibling
+// alone. Enforcing the exclusion is upstream's job, not the builder's.
+func TestPDBAvailabilityTouchesOnlyItsOwnField(t *testing.T) {
 	pdb := CreatePodDisruptionBudget("test", "default")
 
 	minVal := intstr.FromInt32(2)
@@ -23,20 +26,27 @@ func TestPDBMutualExclusivity(t *testing.T) {
 	if pdb.Spec.MinAvailable == nil {
 		t.Fatal("expected MinAvailable to be set")
 	}
+	if pdb.Spec.MaxUnavailable != nil {
+		t.Error("SetPDBMinAvailable must not write MaxUnavailable")
+	}
 
 	maxVal := intstr.FromInt32(1)
 	SetPDBMaxUnavailable(pdb, maxVal)
 	if pdb.Spec.MaxUnavailable == nil {
 		t.Fatal("expected MaxUnavailable to be set")
 	}
-	if pdb.Spec.MinAvailable != nil {
-		t.Error("expected MinAvailable to be cleared after setting MaxUnavailable")
+	if pdb.Spec.MinAvailable == nil {
+		t.Error("SetPDBMaxUnavailable must not clear MinAvailable")
 	}
 
-	// Set MinAvailable again — should clear MaxUnavailable
+	// Switching back is the caller's explicit two-step.
+	pdb.Spec.MaxUnavailable = nil
 	SetPDBMinAvailable(pdb, minVal)
 	if pdb.Spec.MaxUnavailable != nil {
-		t.Error("expected MaxUnavailable to be cleared after setting MinAvailable")
+		t.Error("expected MaxUnavailable to stay cleared")
+	}
+	if pdb.Spec.MinAvailable == nil || pdb.Spec.MinAvailable.IntValue() != 2 {
+		t.Errorf("expected MinAvailable 2, got %v", pdb.Spec.MinAvailable)
 	}
 }
 

@@ -160,6 +160,22 @@ fluxcd.AddHelmReleaseValuesFrom(hr, helmv2.ValuesReference{
 })
 ```
 
+`SetHelmReleaseValuesFromMap` panics rather than returning an error, because a
+sugar helper cannot return one under the builder contract. Only a value that
+`encoding/json` refuses outright — a channel, a function, a NaN or `+Inf`
+float, a cyclic structure — reaches that panic; ordinary user-supplied YAML or
+JSON decoded into `map[string]any` always marshals. When values come from
+somewhere that could produce such a value, marshal them yourself and hand the
+result to `SetHelmReleaseValues`:
+
+```go
+raw, err := json.Marshal(values)
+if err != nil {
+    return fmt.Errorf("helm values: %w", err)
+}
+fluxcd.SetHelmReleaseValues(hr, &apiextensionsv1.JSON{Raw: raw})
+```
+
 **ChartRef mode (existing OCIRepository or HelmChart):**
 
 ```go

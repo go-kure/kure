@@ -91,13 +91,18 @@ Update existing resources:
 pool.Spec = newSpec
 peer.Spec = newSpec
 
-// Granular updates
-err := metallb.AddIPAddressPoolAddress(pool, "172.16.0.0/12")
-err := peer.Spec.Port = 1179
-err := metallb.AddBGPAdvertisementPeer(advert, "peer-2")
-err := metallb.AddL2AdvertisementInterface(l2, "eth1")
-err := metallb.SetBFDProfileDetectMultiplier(bfd, 5)
+// Plain fields are assigned directly — there is no Set<Kind><Field> helper
+peer.Spec.Port = 1179
+
+// Slice fields keep an appender, and pointer fields a setter
+metallb.AddIPAddressPoolAddress(pool, "172.16.0.0/12")
+metallb.AddBGPAdvertisementPeer(advert, "peer-2")
+metallb.AddL2AdvertisementInterface(l2, "eth1")
+metallb.SetIPAddressPoolAutoAssign(pool, false)
 ```
+
+The helpers are void. A nil object is a programming error and panics, like
+every other builder in this family.
 
 ## Related Packages
 

@@ -454,7 +454,10 @@ func SetHelmReleaseValues(obj *helmv2.HelmRelease, values *apiextensionsv1.JSON)
 
 // SetHelmReleaseValuesFromMap marshals values to JSON and sets them on the
 // HelmRelease. A map that does not marshal — a channel, a function, a NaN —
-// is a programming error and panics.
+// is a programming error and panics; a sugar helper returns no error under the
+// builder contract. Values decoded from YAML or JSON always marshal. If yours
+// can hold something that does not, marshal it yourself and pass the result to
+// SetHelmReleaseValues, which takes the already-encoded JSON.
 func SetHelmReleaseValuesFromMap(obj *helmv2.HelmRelease, values map[string]any) {
 	raw, err := json.Marshal(values)
 	if err != nil {
