@@ -27,11 +27,24 @@ gk, scope, ok := manifest.CRDScope(obj)
 
 ## Scope determination
 
-`Scope` determines whether an object is namespaced, cluster-scoped, or unknown.
-CRDs are cluster-scoped; well-known built-in kinds are resolved from internal
-namespaced/cluster maps; custom resources are resolved from a caller-supplied map
-of CRD scopes (the `spec.scope` of CRDs known in the same context). Anything else
-is `ScopeUnknown` — callers are expected to fail closed rather than guess:
+`Scope` determines whether an object is namespaced, cluster-scoped, or unknown, in
+this order:
+
+1. A `CustomResourceDefinition` is cluster-scoped.
+2. A kind kure registers takes its scope from the generated table
+   (`kubernetes.IsNamespaced`), derived from the pinned upstream sources — the
+   `+kubebuilder:resource` markers and the `CustomResourceDefinition`s the modules
+   ship. See [Kubernetes Builders](/api-reference/kubernetes-builders/) § 9.
+3. A short residual list covers the cluster-scoped kinds kure does **not** register
+   and so cannot derive: `PriorityClass`, `APIService` and the two webhook
+   configurations. It only shrinks — registering one of them moves it to the derived
+   table, and a test fires so the entry is removed rather than left as a second,
+   competing answer.
+4. Any remaining custom resource is resolved from a caller-supplied map of CRD
+   scopes (the `spec.scope` of CRDs known in the same context).
+
+Anything else is `ScopeUnknown` — callers are expected to fail closed rather than
+guess:
 
 ```go
 switch manifest.Scope(obj, crdScopes) {
@@ -53,4 +66,4 @@ case manifest.ScopeUnknown:
 | `CRDScope(o)` | A CRD's defined `GroupKind` and declared scope (defaults to namespaced). |
 | `ObjectGroupKind(o)` | The `GroupKind` of an emitted object. |
 | `Scope(o, crdScopes)` | Classify an object as namespaced, cluster-scoped, or unknown. |
-| `IsNamespacedBuiltinKind(apiVersion, kind)` | Whether a built-in kind is a known namespaced type. |
+| `IsNamespacedBuiltinKind(apiVersion, kind)` | Whether a kind is a known namespaced type. Answered from the generated table, so it covers every kind kure registers, not only the built-ins the name suggests; an unregistered kind answers `false`, which means "not known to be namespaced", never "cluster-scoped". |

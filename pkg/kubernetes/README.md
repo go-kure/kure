@@ -223,6 +223,18 @@ or `crd` — so a wrong scope can be traced to the thing that claimed it. Agains
 current pins that is 65 from the kind's own marker, 44 from the built-in table and
 19 from a shipped CRD.
 
+`kinds.Registered()` returns each kind with that resolution already applied, and it
+is the only place a scope is stated: the 128-entry hand-seeded pair of sets this
+package used to carry is gone, and so are the two hand-kept maps in `pkg/manifest`,
+which now reads `IsNamespaced` from the generated table. The cluster-scoped half of
+the old table survives as a frozen fixture in the `internal/kinds` tests, dated to
+the pins it was taken at. That is deliberate: the derivation fails silently by
+construction — an absent, unread or detached marker resolves to `Namespaced`, which
+is also the right answer for 95 of the 128 kinds — so without a literal to compare
+against, a regression in the comment reattachment below would turn 31 kinds
+namespaced with nothing going red. A pin bump that legitimately re-scopes a kind is
+an edit to that fixture, made with the upstream change named in the commit message.
+
 Three things about that derivation are worth knowing before changing it.
 
 **A marker the parser cannot read is a fatal error, never a default.** The one

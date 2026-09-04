@@ -3,24 +3,27 @@
 // constructor generator (internal/gen) and the identity test read, so the two
 // can never disagree about which kinds exist.
 //
-// The scope table below is hand-seeded from the upstream +kubebuilder:resource
-// markers (CRDs) and the API server's built-in resource scopes (k8s.io/api). It
-// is total: a registered kind missing from both sets is an error, not a
-// default, so a scheme change that adds a kind fails generation until its scope
-// is stated. Deriving the table from the upstream markers automatically is the
-// job of the generated kinds/scope/maturity tables that follow this package.
+// Every scope is derived from the pinned upstream module sources — the
+// +kubebuilder:resource markers, the CustomResourceDefinitions the modules
+// ship, and, for the built-in modules whose scope the API server rather than a
+// generator defines, the explicit set in scope.go. Nothing here is a default:
+// a kind no source can answer for is an error, so a scheme change that adds a
+// kind fails generation until upstream states its scope. See
+// pkg/kubernetes/README.md § 9.
 package kinds
 
 import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/kubernetes"
+	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
 )
 
 // Kind is one registered object kind.
@@ -30,10 +33,10 @@ type Kind struct {
 	ImportPath string       // Go import path of the type's package
 	TypeName   string       // Go type name
 	Package    string       // kure package directory under pkg/kubernetes ("" for the root)
-	Namespaced bool
+	Namespaced bool         // derived; see [Registered]
 }
 
-// Key returns the group/kind key the scope table is indexed by ("apps/Deployment", "/Pod").
+// Key returns the group/kind key the scope lookups are indexed by ("apps/Deployment", "/Pod").
 func (k Kind) Key() string { return k.GVK.Group + "/" + k.GVK.Kind }
 
 // packageRoutes maps upstream import-path prefixes to the kure package that
@@ -53,18 +56,72 @@ var packageRoutes = []struct{ prefix, pkg string }{
 	{"github.com/backube/volsync/", "volsync"},
 }
 
+// memo caches the one derivation this package performs. Resolving the scopes
+// parses every pinned module's Go source and, where a type carries no marker,
+// walks that module for the CRD it ships. For a fixed set of pins the answer
+// is the same every time, and the identity test alone asks for it twice.
+var memo struct {
+	once sync.Once
+	all  []Kind
+	err  error
+}
+
 // Registered returns every object kind in the scheme, sorted by package, kind,
-// group and version. A kind is an object when its pointer type implements
-// client.Object and not client.ObjectList; apimachinery's meta types are
-// excluded.
+// group and version, each with its scope derived from the pinned upstream
+// sources. A kind is an object when its pointer type implements client.Object
+// and not client.ObjectList; apimachinery's meta types are excluded.
+//
+// The result is memoized, and each caller gets its own copy of the slice: a
+// test that rewrites a Kind must not change what a later caller in the same
+// process sees.
 func Registered() ([]Kind, error) {
+	memo.once.Do(func() { memo.all, memo.err = derive() })
+	if memo.err != nil {
+		return nil, memo.err
+	}
+	out := make([]Kind, len(memo.all))
+	copy(out, memo.all)
+	return out, nil
+}
+
+// derive classifies the scheme and resolves every kind's scope. It is separate
+// from [Registered] only so the memoization is not tangled with the work.
+func derive() ([]Kind, error) {
 	if err := kubernetes.RegisterSchemes(); err != nil {
 		return nil, err
 	}
-	return classify(kubernetes.Scheme.AllKnownTypes())
+	all, err := classify(kubernetes.Scheme.AllKnownTypes())
+	if err != nil {
+		return nil, err
+	}
+	types, err := LoadTypes(all)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := ResolveScopes(all, types)
+	if err != nil {
+		return nil, err
+	}
+	scopes := make(map[string]markers.Scope, len(resolved))
+	for _, d := range resolved {
+		scopes[d.Key] = d.Scope
+	}
+	for i := range all {
+		scope, ok := scopes[all[i].Key()]
+		if !ok {
+			// ResolveScopes returns one entry per kind or an error, so this is
+			// unreachable today. It stays because the alternative to noticing
+			// is handing out Namespaced, which is a wrong answer that looks
+			// exactly like a right one.
+			return nil, errors.Errorf("kinds: no scope resolved for %s (%s)", all[i].Key(), all[i].GVK)
+		}
+		all[i].Namespaced = scope != markers.ScopeCluster
+	}
+	return all, nil
 }
 
-// classify filters and routes the scheme's known types into Kinds.
+// classify filters and routes the scheme's known types into Kinds. The scope
+// is left unset; [derive] fills it in from the upstream sources.
 func classify(known map[schema.GroupVersionKind]reflect.Type) ([]Kind, error) {
 	clientObject := reflect.TypeOf((*client.Object)(nil)).Elem()
 	clientObjectList := reflect.TypeOf((*client.ObjectList)(nil)).Elem()
@@ -88,14 +145,6 @@ func classify(known map[schema.GroupVersionKind]reflect.Type) ([]Kind, error) {
 			return nil, errors.Errorf("kinds: no kure package routes import path %s (kind %s); add it to packageRoutes", k.ImportPath, gvk)
 		}
 		k.Package = pkg
-		switch key := k.Key(); {
-		case namespacedKinds[key]:
-			k.Namespaced = true
-		case clusterKinds[key]:
-			k.Namespaced = false
-		default:
-			return nil, errors.Errorf("kinds: scope of %s (%s) is not stated; add it to namespacedKinds or clusterKinds", key, gvk)
-		}
 		out = append(out, k)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].sortKey() < out[j].sortKey() })
@@ -124,161 +173,3 @@ func set(keys ...string) map[string]bool {
 	}
 	return m
 }
-
-// clusterKinds are the registered kinds whose objects carry no namespace.
-// CRDs: from +kubebuilder:resource:scope=Cluster in the pinned module sources.
-// Built-ins: the API server's resource scopes.
-var clusterKinds = set(
-	// k8s.io/api
-	"/ComponentStatus",
-	"/Namespace",
-	"/Node",
-	"/PersistentVolume",
-	"/RangeAllocation",
-	"networking.k8s.io/IPAddress",
-	"networking.k8s.io/IngressClass",
-	"networking.k8s.io/ServiceCIDR",
-	"rbac.authorization.k8s.io/ClusterRole",
-	"rbac.authorization.k8s.io/ClusterRoleBinding",
-	"storage.k8s.io/CSIDriver",
-	"storage.k8s.io/CSINode",
-	"storage.k8s.io/StorageClass",
-	"storage.k8s.io/VolumeAttachment",
-	"storage.k8s.io/VolumeAttributesClass",
-	"apiextensions.k8s.io/CustomResourceDefinition",
-	// gateway-api
-	"gateway.networking.k8s.io/GatewayClass",
-	// cert-manager
-	"cert-manager.io/ClusterIssuer",
-	// cilium
-	"cilium.io/CiliumBGPAdvertisement",
-	"cilium.io/CiliumBGPClusterConfig",
-	"cilium.io/CiliumBGPNodeConfig",
-	"cilium.io/CiliumBGPNodeConfigOverride",
-	"cilium.io/CiliumBGPPeerConfig",
-	"cilium.io/CiliumCIDRGroup",
-	"cilium.io/CiliumClusterwideEnvoyConfig",
-	"cilium.io/CiliumClusterwideNetworkPolicy",
-	"cilium.io/CiliumEgressGatewayPolicy",
-	"cilium.io/CiliumIdentity",
-	"cilium.io/CiliumLoadBalancerIPPool",
-	"cilium.io/CiliumNode",
-	// cloudnative-pg
-	"postgresql.cnpg.io/ClusterImageCatalog",
-	// external-secrets
-	"external-secrets.io/ClusterExternalSecret",
-	"external-secrets.io/ClusterSecretStore",
-)
-
-// namespacedKinds are the registered kinds whose objects live in a namespace.
-// Absent +kubebuilder:resource:scope marker = Namespaced (the kubebuilder
-// default); every module kure pins follows it.
-var namespacedKinds = set(
-	// k8s.io/api core
-	"/Binding",
-	"/ConfigMap",
-	"/Endpoints",
-	"/Event",
-	"/LimitRange",
-	"/PersistentVolumeClaim",
-	"/Pod",
-	"/PodTemplate",
-	"/ReplicationController",
-	"/ResourceQuota",
-	"/Secret",
-	"/Service",
-	"/ServiceAccount",
-	// k8s.io/api apps, batch, autoscaling, policy, networking, rbac, storage
-	"apps/ControllerRevision",
-	"apps/DaemonSet",
-	"apps/Deployment",
-	"apps/ReplicaSet",
-	"apps/StatefulSet",
-	"autoscaling/HorizontalPodAutoscaler",
-	"batch/CronJob",
-	"batch/Job",
-	"policy/Eviction",
-	"policy/PodDisruptionBudget",
-	"networking.k8s.io/Ingress",
-	"networking.k8s.io/NetworkPolicy",
-	"rbac.authorization.k8s.io/Role",
-	"rbac.authorization.k8s.io/RoleBinding",
-	"storage.k8s.io/CSIStorageCapacity",
-	// gateway-api
-	"gateway.networking.k8s.io/BackendTLSPolicy",
-	"gateway.networking.k8s.io/GRPCRoute",
-	"gateway.networking.k8s.io/Gateway",
-	"gateway.networking.k8s.io/HTTPRoute",
-	"gateway.networking.k8s.io/ListenerSet",
-	"gateway.networking.k8s.io/ReferenceGrant",
-	"gateway.networking.k8s.io/TCPRoute",
-	"gateway.networking.k8s.io/TLSRoute",
-	"gateway.networking.k8s.io/UDPRoute",
-	// cert-manager
-	"acme.cert-manager.io/Challenge",
-	"acme.cert-manager.io/Order",
-	"cert-manager.io/Certificate",
-	"cert-manager.io/CertificateRequest",
-	"cert-manager.io/Issuer",
-	// cilium
-	"cilium.io/CiliumEndpoint",
-	"cilium.io/CiliumEnvoyConfig",
-	"cilium.io/CiliumLocalRedirectPolicy",
-	"cilium.io/CiliumNetworkPolicy",
-	"cilium.io/CiliumNodeConfig",
-	// cloudnative-pg + barman-cloud plugin
-	"postgresql.cnpg.io/Backup",
-	"postgresql.cnpg.io/Cluster",
-	"postgresql.cnpg.io/Database",
-	"postgresql.cnpg.io/DatabaseRole",
-	"postgresql.cnpg.io/FailoverQuorum",
-	"postgresql.cnpg.io/ImageCatalog",
-	"postgresql.cnpg.io/Pooler",
-	"postgresql.cnpg.io/Publication",
-	"postgresql.cnpg.io/ScheduledBackup",
-	"postgresql.cnpg.io/Subscription",
-	"barmancloud.cnpg.io/ObjectStore",
-	// flux-operator
-	"fluxcd.controlplane.io/FluxInstance",
-	"fluxcd.controlplane.io/FluxReport",
-	"fluxcd.controlplane.io/ResourceSet",
-	"fluxcd.controlplane.io/ResourceSetInputProvider",
-	// external-secrets
-	"external-secrets.io/ExternalSecret",
-	"external-secrets.io/SecretStore",
-	// fluxcd controllers
-	"helm.toolkit.fluxcd.io/HelmRelease",
-	"image.toolkit.fluxcd.io/ImageUpdateAutomation",
-	"kustomize.toolkit.fluxcd.io/Kustomization",
-	"notification.toolkit.fluxcd.io/Alert",
-	"notification.toolkit.fluxcd.io/Provider",
-	"notification.toolkit.fluxcd.io/Receiver",
-	"source.toolkit.fluxcd.io/Bucket",
-	"source.toolkit.fluxcd.io/ExternalArtifact",
-	"source.toolkit.fluxcd.io/GitRepository",
-	"source.toolkit.fluxcd.io/HelmChart",
-	"source.toolkit.fluxcd.io/HelmRepository",
-	"source.toolkit.fluxcd.io/OCIRepository",
-	"source.extensions.fluxcd.io/ArtifactGenerator",
-	// prometheus-operator
-	"monitoring.coreos.com/Alertmanager",
-	"monitoring.coreos.com/PodMonitor",
-	"monitoring.coreos.com/Probe",
-	"monitoring.coreos.com/Prometheus",
-	"monitoring.coreos.com/PrometheusRule",
-	"monitoring.coreos.com/ServiceMonitor",
-	"monitoring.coreos.com/ThanosRuler",
-	// metallb
-	"metallb.io/BFDProfile",
-	"metallb.io/BGPAdvertisement",
-	"metallb.io/BGPPeer",
-	"metallb.io/Community",
-	"metallb.io/ConfigurationState",
-	"metallb.io/IPAddressPool",
-	"metallb.io/L2Advertisement",
-	"metallb.io/ServiceBGPStatus",
-	"metallb.io/ServiceL2Status",
-	// volsync
-	"volsync.backube/ReplicationDestination",
-	"volsync.backube/ReplicationSource",
-)

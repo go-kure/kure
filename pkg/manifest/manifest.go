@@ -1,12 +1,12 @@
 package manifest
 
 import (
-	"strings"
-
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 // IsCRD reports whether o is a CustomResourceDefinition, by type or GVK. Unlike
@@ -48,59 +48,36 @@ func ObjectGroupKind(o client.Object) schema.GroupKind {
 	return schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}
 }
 
-// namespacedBuiltinKinds lists the namespaced (group, kind) pairs we recognize,
-// keyed "<group>/<kind>" (core group is the empty string). A kind not listed
-// here is treated as unknown scope (callers then fail closed unless
-// metadata.namespace is set), rather than being silently widened.
-var namespacedBuiltinKinds = map[string]bool{
-	"/ConfigMap":                            true,
-	"/Secret":                               true,
-	"/Service":                              true,
-	"/ServiceAccount":                       true,
-	"/PersistentVolumeClaim":                true,
-	"/Pod":                                  true,
-	"apps/Deployment":                       true,
-	"apps/DaemonSet":                        true,
-	"apps/StatefulSet":                      true,
-	"apps/ReplicaSet":                       true,
-	"batch/Job":                             true,
-	"batch/CronJob":                         true,
-	"networking.k8s.io/Ingress":             true,
-	"networking.k8s.io/NetworkPolicy":       true,
-	"rbac.authorization.k8s.io/Role":        true,
-	"rbac.authorization.k8s.io/RoleBinding": true,
-}
-
-// clusterScopedBuiltinKinds lists the cluster-scoped built-in kinds we
-// recognize, so an object like a Namespace is treated as cluster-scoped rather
-// than unknown (which would otherwise require an explicit metadata.namespace).
-var clusterScopedBuiltinKinds = map[string]bool{
-	"/Namespace":                            true,
-	"/Node":                                 true,
-	"/PersistentVolume":                     true,
-	"rbac.authorization.k8s.io/ClusterRole": true,
-	"rbac.authorization.k8s.io/ClusterRoleBinding":                true,
-	"apiextensions.k8s.io/CustomResourceDefinition":               true,
-	"storage.k8s.io/StorageClass":                                 true,
+// clusterScopedUnregisteredKinds lists the cluster-scoped kinds this package
+// must recognise that the generated table cannot answer for, because kure's
+// scheme does not register them and so nothing derives their scope from an
+// upstream source. Without them an APIService or a PriorityClass would come
+// back ScopeUnknown, and a caller failing closed would demand a
+// metadata.namespace on an object that must not carry one.
+//
+// This set only shrinks. Every entry is a kind kure has no builders for;
+// registering one moves its scope to the derived table, and
+// TestClusterScopedUnregisteredKindsAreNotInTheGeneratedTable fires so the
+// entry is removed rather than left behind as a second, competing answer.
+var clusterScopedUnregisteredKinds = map[string]bool{
 	"scheduling.k8s.io/PriorityClass":                             true,
-	"networking.k8s.io/IngressClass":                              true,
 	"apiregistration.k8s.io/APIService":                           true,
 	"admissionregistration.k8s.io/ValidatingWebhookConfiguration": true,
 	"admissionregistration.k8s.io/MutatingWebhookConfiguration":   true,
 }
 
-func groupKey(apiVersion, kind string) string {
-	group := ""
-	if g, _, ok := strings.Cut(apiVersion, "/"); ok {
-		group = g // "apps/v1" -> "apps"; core "v1" -> ""
-	}
-	return group + "/" + kind
-}
-
 // IsNamespacedBuiltinKind reports whether a (group-aware) apiVersion+kind is a
-// known namespaced built-in type that must declare metadata.namespace.
+// known namespaced type that must declare metadata.namespace.
+//
+// The answer comes from [kubernetes.IsNamespaced], the table derived from the
+// pinned upstream sources, so it covers every kind kure registers rather than a
+// list maintained here. That is wider than the "builtin" in the name suggests:
+// a namespaced CRD kind kure registers now answers true, which is the correct
+// answer to the question the function asks. An unregistered kind answers false,
+// as before — false means "not known to be namespaced", never "cluster-scoped".
 func IsNamespacedBuiltinKind(apiVersion, kind string) bool {
-	return namespacedBuiltinKinds[groupKey(apiVersion, kind)]
+	namespaced, known := kubernetes.IsNamespaced(apiVersion, kind)
+	return known && namespaced
 }
 
 // ScopeResult is the determined namespacing of an object.
@@ -115,20 +92,25 @@ const (
 	ScopeCluster
 )
 
-// Scope determines whether o is namespaced, cluster-scoped, or unknown. CRDs are
-// cluster-scoped; built-in kinds use the namespaced/cluster maps; custom
-// resources are resolved from crdScopes (the spec.scope of CRDs known in the
-// same context). Anything else is ScopeUnknown.
+// Scope determines whether o is namespaced, cluster-scoped, or unknown. CRDs
+// are cluster-scoped; a kind kure registers takes its scope from the generated
+// table (derived from the pinned upstream sources — see
+// pkg/kubernetes/README.md § 9); the few cluster-scoped kinds kure does not
+// register are named above; and any remaining custom resource is resolved from
+// crdScopes (the spec.scope of CRDs known in the same context). Anything else
+// is ScopeUnknown, which callers fail closed on rather than guess.
 func Scope(o client.Object, crdScopes map[schema.GroupKind]apiextv1.ResourceScope) ScopeResult {
 	if IsCRD(o) {
 		return ScopeCluster
 	}
 	gvk := o.GetObjectKind().GroupVersionKind()
-	key := gvk.Group + "/" + gvk.Kind
-	switch {
-	case namespacedBuiltinKinds[key]:
-		return ScopeNamespaced
-	case clusterScopedBuiltinKinds[key]:
+	if namespaced, known := kubernetes.IsNamespaced(gvk.GroupVersion().String(), gvk.Kind); known {
+		if namespaced {
+			return ScopeNamespaced
+		}
+		return ScopeCluster
+	}
+	if clusterScopedUnregisteredKinds[gvk.Group+"/"+gvk.Kind] {
 		return ScopeCluster
 	}
 	if scope, ok := crdScopes[schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}]; ok {
