@@ -192,16 +192,37 @@ marker is the precise signal; the prose scan is the best-effort complement for f
 upstream documents without gating, and it matches whole words, so "alphabetical" is
 not alpha.
 
+The prose scan reads prose only — marker lines are removed before it runs. A
+marker's words describe that marker's own subject, not the field's maturity, and
+`k8s.io/api` v0.37.0 makes the difference load-bearing: its declarative-validation
+markers are spelled `+k8s:alpha(since: "1.37")=+k8s:required`, which says the
+*required rule* is alpha since 1.37, on fields that have been GA for years. Reading
+those as prose reported 45 long-stable built-in fields as alpha or beta —
+`StatefulSetSpec.selector`, `ClusterRole.rules`, `Secret.type` among them — and
+contradicted a genuinely stable field in the same type. A field's maturity is claimed
+in its documentation or by a `+featureGate`, and is never inferred from another
+marker.
+
+The same rule decides what counts inside the prose. An occurrence of "alpha" or
+"beta" qualifying "feature gate" describes the gate, not the field:
+`HorizontalPodAutoscalerSpec.minReplicas` has been GA as long as `autoscaling/v2`
+has, and documents that a value of 0 is allowed "if the alpha feature gate
+HPAScaleToZero is enabled". A field whose own maturity is alpha says so in a
+sentence of its own, and that still counts — including when the same doc comment
+also names an alpha gate.
+
 Status types are not entered. A kind's status is reported by the cluster and never
 constructed by a caller, so a gate there says nothing about whether a manifest kure
 builds applies as written — and that is where most of the markers are.
 
-Against the current pins, the walk finds 177 maturity-carrying construction-side
+Against the current pins, the walk finds 131 maturity-carrying construction-side
 fields, of which 41 require a feature gate (40 in `k8s.io/api`, one in
-`k8s.io/apiextensions-apiserver`); 48 are documented alpha, 42 beta and 66
-deprecated, and 92 distinct status types are skipped. No CRD module kure pins uses
-`+featureGate` at all. These numbers move with the pins and are not asserted by any
-test; the tests assert that every reported field exists in the pinned struct.
+`k8s.io/apiextensions-apiserver`); 29 are documented alpha, 14 beta and 66
+deprecated, the remaining 22 are gated without a documented stability claim, and 92
+distinct status types are skipped. No CRD module kure pins uses `+featureGate` at
+all. These numbers move with the pins and are not asserted by any test; what the
+tests assert is that every reported field exists in the pinned struct, and that a
+set of long-GA built-in fields is reported stable.
 
 ## 9. Where scope and maturity come from
 
