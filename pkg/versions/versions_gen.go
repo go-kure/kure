@@ -9,10 +9,11 @@ var infrastructure = []Dependency{
 	{
 		Name:           "barman-cloud",
 		GoModule:       "github.com/cloudnative-pg/barman-cloud",
-		SupportedRange: "0.5",
-		Min:            "0.5",
-		Max:            "0.5",
+		SupportedRange: "",
+		Min:            "",
+		Max:            "",
 		VersionBasis:   "semver",
+		FloorModule:    "github.com/cloudnative-pg/plugin-barman-cloud",
 	},
 	{
 		Name:           "cert-manager",
@@ -21,6 +22,7 @@ var infrastructure = []Dependency{
 		Min:            "1.14",
 		Max:            "1.21",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "cilium",
@@ -29,6 +31,7 @@ var infrastructure = []Dependency{
 		Min:            "1.18",
 		Max:            "1.20",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "fluxcd",
@@ -37,6 +40,7 @@ var infrastructure = []Dependency{
 		Min:            "2.4",
 		Max:            "2.9",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "flux-operator",
@@ -45,6 +49,7 @@ var infrastructure = []Dependency{
 		Min:            "0.23",
 		Max:            "0.53",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "source-watcher",
@@ -53,6 +58,7 @@ var infrastructure = []Dependency{
 		Min:            "2.0",
 		Max:            "2.2",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "metallb",
@@ -61,6 +67,7 @@ var infrastructure = []Dependency{
 		Min:            "0.14",
 		Max:            "0.16",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "prometheus-operator",
@@ -69,6 +76,7 @@ var infrastructure = []Dependency{
 		Min:            "0.75",
 		Max:            "0.93",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "external-secrets",
@@ -77,6 +85,7 @@ var infrastructure = []Dependency{
 		Min:            "2.9",
 		Max:            "2.10",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "cnpg",
@@ -85,6 +94,7 @@ var infrastructure = []Dependency{
 		Min:            "1.24",
 		Max:            "1.30",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "cnpg-barman-cloud-plugin",
@@ -93,6 +103,7 @@ var infrastructure = []Dependency{
 		Min:            "0.9",
 		Max:            "0.14",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "controller-runtime",
@@ -101,6 +112,7 @@ var infrastructure = []Dependency{
 		Min:            "0.22",
 		Max:            "0.24",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "gateway-api",
@@ -109,6 +121,7 @@ var infrastructure = []Dependency{
 		Min:            "1.0",
 		Max:            "1.6",
 		VersionBasis:   "semver",
+		FloorModule:    "",
 	},
 	{
 		Name:           "kubernetes",
@@ -117,5 +130,6 @@ var infrastructure = []Dependency{
 		Min:            "1.33",
 		Max:            "1.37",
 		VersionBasis:   "kubernetes",
+		FloorModule:    "",
 	},
 }

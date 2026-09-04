@@ -31,15 +31,36 @@ func TestGetMissing(t *testing.T) {
 	}
 }
 
+// A non-floor entry must have every field populated. An MVS-floor entry
+// (FloorModule set) is the one deliberate exception: SupportedRange/Min/Max
+// are empty because there is no hand-maintained range to report -- kure
+// never chose that version, see validate_gomod's floor_module skip. Assert
+// both directions so the invariant stays meaningful rather than being
+// silently dropped by the exception.
 func TestAllEntriesPopulated(t *testing.T) {
 	all := versions.All()
 	if len(all) == 0 {
 		t.Fatal("All() is empty")
 	}
+	sawFloor := false
 	for _, d := range all {
-		if d.Name == "" || d.GoModule == "" || d.SupportedRange == "" || d.VersionBasis == "" {
+		if d.Name == "" || d.GoModule == "" || d.VersionBasis == "" {
+			t.Errorf("incomplete entry: %+v", d)
+			continue
+		}
+		if d.FloorModule != "" {
+			sawFloor = true
+			if d.SupportedRange != "" || d.Min != "" || d.Max != "" {
+				t.Errorf("%s: floor entry has a non-empty range, want SupportedRange/Min/Max all empty: %+v", d.Name, d)
+			}
+			continue
+		}
+		if d.SupportedRange == "" {
 			t.Errorf("incomplete entry: %+v", d)
 		}
+	}
+	if !sawFloor {
+		t.Error("no entry has FloorModule set -- the floor-entry branch above never ran; either the fixture data changed or the invariant it guards silently stopped applying")
 	}
 }
 

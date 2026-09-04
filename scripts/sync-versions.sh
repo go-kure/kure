@@ -7,7 +7,10 @@
 #
 # This script ensures that:
 # 1. each go.mod dependency version falls WITHIN versions.yaml "supported_range"
-#    (the build version is read from go.mod; there is no "current" field to sync)
+#    (the build version is read from go.mod; there is no "current" field to sync).
+#    Skipped for an entry declaring floor_module: its version is Go's
+#    minimum-version-selection floor, not a choice kure's supported_range can
+#    gate -- see item 6 and validate_mvs_floors.
 # 2. Documentation is generated from versions.yaml + go.mod
 # 3. go.mod's "// Current pin: ..." comment matches its k8s.io/api replace directive
 # 4. versions.yaml notes never carry a raw commit SHA (must reference a vendor-guard-checked
@@ -538,10 +541,11 @@ validate_gomod() {
     deps=$(yq '.infrastructure | keys | .[]' "$VERSIONS_FILE")
 
     while IFS= read -r dep; do
-        local go_module supported basis
+        local go_module supported basis floor_module
         go_module=$(yq ".infrastructure.${dep}.go_module" "$VERSIONS_FILE")
         supported=$(yq ".infrastructure.${dep}.supported_range" "$VERSIONS_FILE")
         basis=$(yq ".infrastructure.${dep}.version_basis // \"semver\"" "$VERSIONS_FILE")
+        floor_module=$(yq ".infrastructure.${dep}.floor_module // \"\"" "$VERSIONS_FILE")
 
         if [[ "$go_module" == "null" ]]; then
             continue
@@ -553,6 +557,21 @@ validate_gomod() {
 
         if [[ -z "$actual_version" ]]; then
             warning "Module $go_module not found in go.mod (may be transitive)"
+            continue
+        fi
+
+        # A floor_module entry's version is not kure's choice -- it is Go's
+        # minimum-version-selection floor set by floor_module's own go.mod,
+        # and validate_mvs_floors already asserts the pin equals that floor
+        # exactly. Range-checking the same version against a hand-maintained
+        # supported_range here can only ever demand a forced-yes edit:
+        # refusing to widen means refusing the bump that raised the floor.
+        # The range check was never a deliberate gate for these entries --
+        # it applied only as a side effect of this loop iterating every
+        # infrastructure key (go-kure/kure#703). See docs/dependency-updates.md's
+        # "MVS-floor dependencies" section.
+        if [[ -n "$floor_module" && "$floor_module" != "null" ]]; then
+            success "$dep: range check not applicable (pin v$actual_version derived from $floor_module's own go.mod, see validate_mvs_floors)"
             continue
         fi
 
@@ -652,7 +671,7 @@ validate_gomod() {
         hi_key=$(mm_key "$hi_mm")
 
         if (( ver_key < lo_key || ver_key > hi_key )); then
-            error "$dep $ver_mm (go.mod $go_module v$actual_version) is outside supported_range \"$supported\". Update supported_range + notes in versions.yaml after confirming API compatibility."
+            error "$dep $ver_mm (go.mod $go_module v$actual_version) is outside supported_range \"$supported\". After confirming API compatibility: ./scripts/sync-versions.sh widen $dep $ver_mm --note \"<compatibility assessment>\""
             errors=$((errors + 1))
         else
             success "$dep: v$actual_version within supported_range \"$supported\""
@@ -712,6 +731,8 @@ EOF
         go_module=$(yq ".infrastructure.${dep}.go_module" "$VERSIONS_FILE")
         local supported
         supported=$(yq ".infrastructure.${dep}.supported_range" "$VERSIONS_FILE")
+        local floor_module
+        floor_module=$(yq ".infrastructure.${dep}.floor_module // \"\"" "$VERSIONS_FILE")
         local notes
         notes=$(yq ".infrastructure.${dep}.notes" "$VERSIONS_FILE")
 
@@ -729,7 +750,16 @@ EOF
             build_version="(transitive)"
         fi
 
-        echo "| $dep | $build_version | $supported | $notes |" >> "$DOCS_FILE"
+        # A floor_module entry's version is not a hand-maintained range --
+        # see validate_gomod's matching skip and docs/dependency-updates.md's
+        # "MVS-floor dependencies" section. Render that instead of whatever
+        # (or nothing) supported_range happens to hold.
+        local compat_cell="$supported"
+        if [[ -n "$floor_module" && "$floor_module" != "null" ]]; then
+            compat_cell="derived from $floor_module"
+        fi
+
+        echo "| $dep | $build_version | $compat_cell | $notes |" >> "$DOCS_FILE"
     done <<< "$deps"
 
     cat >> "$DOCS_FILE" << 'EOF'
@@ -838,10 +868,24 @@ generate_go_api() {
     deps=$(yq '.infrastructure | keys | .[]' "$VERSIONS_FILE")
 
     while IFS= read -r dep; do
-        local go_module supported basis lo hi field
+        local go_module supported basis lo hi field floor_module
         go_module=$(yq ".infrastructure.${dep}.go_module // \"\"" "$VERSIONS_FILE")
         supported=$(yq ".infrastructure.${dep}.supported_range // \"\"" "$VERSIONS_FILE")
         basis=$(yq ".infrastructure.${dep}.version_basis // \"semver\"" "$VERSIONS_FILE")
+        floor_module=$(yq ".infrastructure.${dep}.floor_module // \"\"" "$VERSIONS_FILE")
+
+        # Mirror validate_gomod's skip and generate_docs' "derived from"
+        # rendering: a floor_module entry's range is never enforced (see
+        # validate_gomod), so the published API must not expose one either
+        # -- a stray supported_range left on such an entry would otherwise
+        # leak an unenforced-looking bound to every pkg/versions consumer.
+        if [[ -n "$floor_module" && "$floor_module" != "null" ]]; then
+            supported=""
+        else
+            # Normalize yq's "no key" result to "" so the unsafe-literal
+            # check and the printf below don't need their own null case.
+            floor_module=""
+        fi
 
         # Same split as the range guard in validate_gomod: keep the two in
         # step, or the exported bounds and the CI range check could disagree.
@@ -854,7 +898,7 @@ generate_go_api() {
         # Refuse to emit a file that will not compile. $out is untouched at
         # this point -- only $tmp exists; remove it explicitly before
         # returning (see the no-RETURN-trap note above).
-        for field in "$dep" "$go_module" "$supported" "$basis"; do
+        for field in "$dep" "$go_module" "$supported" "$basis" "$floor_module"; do
             if go_string_literal_unsafe "$field"; then
                 error "versions.yaml value cannot be emitted as a Go string literal: $field"
                 rm -f "$tmp"
@@ -870,6 +914,7 @@ generate_go_api() {
             printf '\t\t%-15s "%s",\n' 'Min:' "$lo"
             printf '\t\t%-15s "%s",\n' 'Max:' "$hi"
             printf '\t\t%-15s "%s",\n' 'VersionBasis:' "$basis"
+            printf '\t\t%-15s "%s",\n' 'FloorModule:' "$floor_module"
             printf '\t},\n'
         } >> "$tmp"
     done <<< "$deps"
@@ -958,6 +1003,69 @@ validate_go_api_drift() {
     return 1
 }
 
+# Widen a dependency's supported_range upper bound and replace its notes,
+# then regenerate. The judgment (is the new version actually compatible?)
+# stays entirely human -- this only automates the yq edit and the two-file
+# regeneration that validate_gomod's range-check error otherwise leaves as a
+# fully manual, three-artifact chore every time. See docs/dependency-updates.md's
+# "Widening a supported_range" section.
+# $1: dependency key (an .infrastructure entry). $2: new upper bound
+# (major.minor). $3: replacement notes text.
+widen_dependency() {
+    local dep="$1" new_hi="$2" note="$3"
+
+    local exists
+    exists=$(yq ".infrastructure | has(\"${dep}\")" "$VERSIONS_FILE")
+    if [[ "$exists" != "true" ]]; then
+        error "widen: no such dependency '$dep' in versions.yaml's .infrastructure"
+        return 1
+    fi
+
+    # A floor_module entry's range is never enforced (validate_gomod skips
+    # it, see the guard above) -- nothing for widen to usefully change.
+    local floor_module
+    floor_module=$(yq ".infrastructure.${dep}.floor_module // \"\"" "$VERSIONS_FILE")
+    if [[ -n "$floor_module" && "$floor_module" != "null" ]]; then
+        error "widen: $dep declares floor_module ($floor_module) -- its range is never range-checked and there is nothing to widen. See docs/dependency-updates.md's \"MVS-floor dependencies\" section."
+        return 1
+    fi
+
+    if go_string_literal_unsafe "$note"; then
+        error "widen: --note text cannot be emitted as a YAML/Go string literal (contains a double quote, backslash, or newline): $note"
+        return 1
+    fi
+
+    local supported
+    supported=$(yq ".infrastructure.${dep}.supported_range // \"\"" "$VERSIONS_FILE")
+    if [[ -z "$supported" || "$supported" == "null" ]]; then
+        error "widen: $dep has no supported_range declared -- add one by hand first; widen only raises an existing bound"
+        return 1
+    fi
+
+    local lo
+    if [[ "$supported" == *" - "* ]]; then
+        lo="${supported%% - *}"
+    else
+        lo="$supported"
+    fi
+
+    local lo_key new_hi_key
+    lo_key=$(mm_key "$lo")
+    new_hi_key=$(mm_key "$new_hi")
+    if (( new_hi_key <= lo_key )); then
+        error "widen: new upper bound \"$new_hi\" is not above the current lower bound \"$lo\" -- widen only raises the upper bound, never the lower one"
+        return 1
+    fi
+
+    local new_range="$lo - $new_hi"
+    yq eval -i ".infrastructure.${dep}.supported_range = \"${new_range}\"" "$VERSIONS_FILE"
+    yq eval -i ".infrastructure.${dep}.notes = \"${note}\"" "$VERSIONS_FILE"
+
+    success "$dep: supported_range widened to \"$new_range\"; notes replaced"
+    info "yq may have reformatted the notes block onto one line -- reflow it to a '|' block manually if you want the usual multi-line prose style"
+    info "Next: ./scripts/sync-versions.sh generate"
+}
+
 # Main command router
 main() {
     local command="${1:-check}"
@@ -994,9 +1102,32 @@ main() {
             success "Documentation and Go API generated successfully"
             exit 0
             ;;
+        widen)
+            local dep="${2:-}" new_hi="${3:-}" note=""
+            shift 3 2>/dev/null || true
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --note)
+                        note="${2:-}"
+                        shift 2
+                        ;;
+                    *)
+                        error "widen: unknown argument: $1"
+                        echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\""
+                        exit 1
+                        ;;
+                esac
+            done
+            if [[ -z "$dep" || -z "$new_hi" || -z "$note" ]]; then
+                echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\""
+                exit 1
+            fi
+            widen_dependency "$dep" "$new_hi" "$note" || exit 1
+            exit 0
+            ;;
         *)
             error "Unknown command: $command"
-            echo "Usage: $0 {check|generate}"
+            echo "Usage: $0 {check|generate|widen}"
             exit 1
             ;;
     esac

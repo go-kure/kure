@@ -31,7 +31,7 @@ rather than trusting a number written here.
 
 ## What is exported, and what is not
 
-Exported: `Name`, `GoModule`, `SupportedRange`, `Min`, `Max`, `VersionBasis`.
+Exported: `Name`, `GoModule`, `SupportedRange`, `Min`, `Max`, `VersionBasis`, `FloorModule`.
 
 Not exported: `notes`, `related_packages`, `upstream_repo`, `upstream_release`,
 `upstream_release_commit`, the go.mod build version. The build version moves on every
@@ -39,6 +39,14 @@ dependency bump; the others can change too (reviewer prose edits, a release-pinn
 dependency getting re-pinned) but not on every routine bump — an in-range patch bump
 needs no `versions.yaml` change at all. Excluding all of them either way keeps this
 API's content stable rather than tied to prose or pin churn.
+
+`FloorModule` is empty for almost every entry. It is set only for an MVS-floor
+dependency — one whose pin is not chosen directly but is the Go minimum-version-selection
+floor set by another module's own `go.mod` requirement (`versions.yaml`'s `floor_module`
+key). For such an entry, `SupportedRange`/`Min`/`Max` are all empty: there is no
+hand-maintained range to report, since kure never chose that version, so
+`SupportedRange == ""` is ambiguous on its own — check `FloorModule` to tell "no range
+declared" from "range not applicable here."
 
 ## Regenerating
 

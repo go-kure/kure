@@ -96,17 +96,21 @@ gomod_sub() {
     sed "$1" "$FIXTURE/go.mod" > "$FIXTURE/go.mod.tmp" && mv "$FIXTURE/go.mod.tmp" "$FIXTURE/go.mod"
 }
 
-# run_check / run_generate -- invoke sync-versions.sh against $FIXTURE,
-# capturing stdout, stderr and exit code into $out / $err / $rc. Never lets
-# a non-zero exit abort the case (the harness itself does not run under
-# `set -e`; this is belt-and-braces since lib.sh does set -u/-o pipefail).
+# run_check / run_generate / run_widen -- invoke sync-versions.sh against
+# $FIXTURE, capturing stdout, stderr and exit code into $out / $err / $rc.
+# Never lets a non-zero exit abort the case (the harness itself does not run
+# under `set -e`; this is belt-and-braces since lib.sh does set -u/-o pipefail).
 run_check() { _run check; }
 run_generate() { _run generate; }
+# run_widen <dep> <new-upper-bound> [--note "..."] -- forwards every argument
+# after "widen" verbatim, so a case can also omit --note or pass an unknown
+# flag to exercise the subcommand's own argument-parsing errors.
+run_widen() { _run widen "$@"; }
 
 _run() {
     local errfile
     errfile=$(mktemp) || {
-        echo "_run: mktemp failed -- refusing to run '$SYNC_VERSIONS $1' without a place to capture stderr" >&2
+        echo "_run: mktemp failed -- refusing to run '$SYNC_VERSIONS $*' without a place to capture stderr" >&2
         exit 1
     }
     if [[ -z "$errfile" || ! -f "$errfile" ]]; then
@@ -114,7 +118,7 @@ _run() {
         exit 1
     fi
     rc=0
-    out=$("$SYNC_VERSIONS" "$1" 2>"$errfile") || rc=$?
+    out=$("$SYNC_VERSIONS" "$@" 2>"$errfile") || rc=$?
     err=$(cat "$errfile")
     rm -f "$errfile"
 }

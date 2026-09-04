@@ -31,6 +31,13 @@ type Dependency struct {
 	// VersionBasis is "semver" (default) or "kubernetes" -- the latter for a
 	// module versioned v0.N.x whose range is expressed in cluster terms (1.N).
 	VersionBasis string
+	// FloorModule is set only for an MVS-floor dependency: one whose pin is
+	// not chosen directly but is the Go minimum-version-selection floor set
+	// by another module's own go.mod requirement. When non-empty,
+	// SupportedRange, Min and Max are empty -- there is no hand-maintained
+	// range to report, since kure never chose this version. Empty for every
+	// other entry.
+	FloorModule string
 }
 
 // All returns every infrastructure dependency, in versions.yaml document
