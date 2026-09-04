@@ -1096,8 +1096,20 @@ widen_dependency() {
     fi
 
     local new_range="$lo - $new_hi"
-    yq eval -i ".infrastructure.${dep}.supported_range = \"${new_range}\"" "$VERSIONS_FILE"
-    yq eval -i ".infrastructure.${dep}.notes = \"${note}\"" "$VERSIONS_FILE"
+
+    # widen_dependency is always called as the left side of `||` in main()
+    # (`widen_dependency ... || exit 1`), which disables `set -e` for this
+    # entire function -- a failing yq write here would otherwise go
+    # unnoticed and this function would still report success. Check both
+    # explicitly rather than relying on errexit.
+    if ! yq eval -i ".infrastructure.${dep}.supported_range = \"${new_range}\"" "$VERSIONS_FILE"; then
+        error "widen: failed to write supported_range for $dep -- versions.yaml was not changed"
+        return 1
+    fi
+    if ! yq eval -i ".infrastructure.${dep}.notes = \"${note}\"" "$VERSIONS_FILE"; then
+        error "widen: failed to write notes for $dep -- supported_range was already widened to \"$new_range\" but notes was not; versions.yaml is now partially edited, fix notes by hand or revert"
+        return 1
+    fi
 
     success "$dep: supported_range widened to \"$new_range\"; notes replaced"
     info "yq may have reformatted the notes block onto one line -- reflow it to a '|' block manually if you want the usual multi-line prose style"
@@ -1146,7 +1158,16 @@ main() {
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --note)
-                        note="${2:-}"
+                        # A bare trailing --note leaves only 1 positional
+                        # param; `shift 2` then fails outright under set -e
+                        # (no usage message, just an abrupt exit) instead of
+                        # falling through to the dep/new_hi/note emptiness
+                        # check below.
+                        if [[ $# -lt 2 ]]; then
+                            echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\""
+                            exit 1
+                        fi
+                        note="$2"
                         shift 2
                         ;;
                     *)
