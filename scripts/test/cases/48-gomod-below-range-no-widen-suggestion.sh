@@ -1,5 +1,5 @@
 #!/bin/bash
-# Row 48 (Codex finding on kure#765): a pin below supported_range's LOWER
+# Row 48 (Codex finding on go-kure/kure#765): a pin below supported_range's LOWER
 # bound must not recommend `widen` -- that command only ever raises the
 # upper bound and would refuse this exact value (see row 41/47), so
 # printing it here would hand the human a command guaranteed to fail.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Row 50 (Codex finding on kure#765): widen refuses a --note containing '|'.
+# Row 50 (Codex finding on go-kure/kure#765): widen refuses a --note containing '|'.
 # go_string_literal_unsafe (row 44) only guards Go-string-literal safety;
 # notes is also rendered raw into a Markdown table cell by generate_docs,
 # where a pipe would open an extra column, so this needs its own check.

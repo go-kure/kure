@@ -1,5 +1,5 @@
 #!/bin/bash
-# Row 49 (Codex finding on kure#765): widen requires an exact major.minor
+# Row 49 (Codex finding on go-kure/kure#765): widen requires an exact major.minor
 # upper bound. mm_key truncates anything past the second component, so
 # "2.1.0" would otherwise compare equal to "2.1" and pass through, then get
 # written verbatim into supported_range -- leaving Min/Max outside their

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Row 51 (kure-bot finding on kure#765's Codex re-review): `--note` passed
+# Row 51 (kure-bot finding on go-kure/kure#765's Codex re-review): `--note` passed
 # with no value left only 1 positional param when the case handler tried
 # `shift 2`. Under this script's own `set -e`, that failing shift aborted
 # the whole process with no usage message instead of falling through to

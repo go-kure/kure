@@ -1,5 +1,5 @@
 #!/bin/bash
-# Row 52 (Codex finding on kure#765's re-review): widen_dependency runs as
+# Row 52 (Codex finding on go-kure/kure#765's re-review): widen_dependency runs as
 # the left side of `||` in main() (`widen_dependency ... || exit 1`), which
 # disables this script's own `set -e` for the ENTIRE function -- a failing
 # `yq eval -i` would otherwise go unnoticed and the function would still
@@ -13,8 +13,18 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 new_fixture
 
 real_yq=$(command -v yq)
-shim=$(mktemp -d)
-trap 'rm -rf "$shim"' EXIT
+shim=$(mktemp -d) || {
+    echo "52: mktemp -d failed -- refusing to continue" >&2
+    exit 1
+}
+if [[ -z "$shim" || ! -d "$shim" ]]; then
+    echo "52: mktemp -d produced an unusable path ('$shim') -- refusing to continue" >&2
+    exit 1
+fi
+# new_fixture already registered an EXIT trap removing $FIXTURE (lib.sh) --
+# a second `trap ... EXIT` here would replace it, not compose with it, and
+# every run would leave the copied fixture tree behind. Remove both.
+trap 'rm -rf "$shim" "$FIXTURE"' EXIT
 cat > "$shim/yq" << EOF
 #!/bin/bash
 if [[ "\$1" == "eval" && "\$2" == "-i" && "\$3" == *".notes ="* ]]; then
