@@ -83,11 +83,13 @@ func deriveTables(all []kinds.Kind) (tableData, error) {
 		if !ok {
 			return tableData{}, errors.Errorf("gen: no scope resolved for %s", k.Key())
 		}
-		// The hand-seeded table is still present, so the derivation can be
-		// held to it here rather than only in the kinds package's own tests: a
-		// disagreement must never reach a committed artifact.
+		// kinds.Registered() already derives Namespaced from this same
+		// resolution, so comparing the two here would assert nothing —
+		// the antecedent would imply the consequent. The guard that a
+		// derivation regression must trip lives where it can still fail: the
+		// frozen cluster-scoped fixture in internal/kinds' own tests.
 		if namespaced := d.Scope != markers.ScopeCluster; namespaced != k.Namespaced {
-			return tableData{}, errors.Errorf("gen: %s: derived namespaced=%v, the scope table says %v", k.Key(), namespaced, k.Namespaced)
+			return tableData{}, errors.Errorf("gen: %s: derived namespaced=%v, kinds.Registered says %v; the two must come from one resolution", k.Key(), namespaced, k.Namespaced)
 		}
 		data.Kinds = append(data.Kinds, kindRow{
 			Group:         k.GVK.Group,

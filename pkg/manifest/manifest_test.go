@@ -10,6 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 func typedCRD(group, kind string) client.Object {
@@ -61,6 +63,33 @@ func TestIsNamespacedBuiltinKind(t *testing.T) {
 	}
 	if IsNamespacedBuiltinKind("v1", "Namespace") {
 		t.Error("Namespace is cluster-scoped, not in the namespaced set")
+	}
+	// The answer now comes from the derived table, so it covers every kind kure
+	// registers, not only the built-ins.
+	if !IsNamespacedBuiltinKind("cilium.io/v2", "CiliumNetworkPolicy") {
+		t.Error("a registered namespaced CRD kind is namespaced")
+	}
+	if IsNamespacedBuiltinKind("cilium.io/v2", "CiliumClusterwideNetworkPolicy") {
+		t.Error("a registered cluster-scoped CRD kind is not namespaced")
+	}
+	// An unregistered kind answers false: false is "not known to be
+	// namespaced", never "cluster-scoped".
+	if IsNamespacedBuiltinKind("example.com/v1", "Widget") {
+		t.Error("an unregistered kind must not answer true")
+	}
+}
+
+// The residual set exists only for cluster-scoped kinds the generated table
+// cannot answer for. Once kure registers one, the table answers and the entry
+// here becomes a second source that can silently disagree — so it must go.
+func TestClusterScopedUnregisteredKindsAreNotInTheGeneratedTable(t *testing.T) {
+	if len(clusterScopedUnregisteredKinds) == 0 {
+		return
+	}
+	for key := range clusterScopedUnregisteredKinds {
+		if _, ok := kubernetes.KindByGroupKind(key); ok {
+			t.Errorf("%s is now registered; drop it from clusterScopedUnregisteredKinds and let the derived table answer", key)
+		}
 	}
 }
 

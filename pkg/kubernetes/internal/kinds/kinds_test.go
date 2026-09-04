@@ -39,9 +39,6 @@ func TestRegistered_IsTotalSortedAndRouted(t *testing.T) {
 			t.Errorf("%s listed twice", id)
 		}
 		seen[id] = true
-		if k.Namespaced != namespacedKinds[k.Key()] || k.Namespaced == clusterKinds[k.Key()] {
-			t.Errorf("%s: scope disagrees with the tables", k.Key())
-		}
 	}
 	if !sort.SliceIsSorted(all, func(i, j int) bool {
 		a, b := all[i], all[j]
@@ -102,10 +99,13 @@ func TestRegistered_KnownKindsAndScopes(t *testing.T) {
 	}
 }
 
-func TestScopeTablesAreDisjoint(t *testing.T) {
-	for key := range clusterKinds {
-		if namespacedKinds[key] {
-			t.Errorf("%s is in both scope tables", key)
+// The built-in cluster-scoped set is a subset of the frozen fixture: it names
+// kinds the API server scopes, and every one of them is cluster-scoped. An entry
+// in one and not the other means the two disagree about the same kind.
+func TestBuiltinClusterScopedIsInTheFrozenFixture(t *testing.T) {
+	for key := range builtinClusterScoped {
+		if !frozenClusterScoped[key] {
+			t.Errorf("%s is in builtinClusterScoped but not in the frozen fixture", key)
 		}
 	}
 }
@@ -118,19 +118,12 @@ type local struct {
 
 func (l *local) DeepCopyObject() runtime.Object { c := *l; return &c }
 
-func TestClassify_ErrorsOnUnroutedAndUnstated(t *testing.T) {
+func TestClassify_ErrorsOnUnroutedAndSkipsNonObjects(t *testing.T) {
 	unrouted := map[schema.GroupVersionKind]reflect.Type{
 		{Group: "x", Version: "v1", Kind: "Local"}: reflect.TypeOf(local{}),
 	}
 	if _, err := classify(unrouted); err == nil || !strings.Contains(err.Error(), "no kure package routes") {
 		t.Errorf("unrouted import path: err = %v", err)
-	}
-
-	unstated := map[schema.GroupVersionKind]reflect.Type{
-		{Group: "", Version: "v1", Kind: "Bogus"}: reflect.TypeOf(corev1.Pod{}),
-	}
-	if _, err := classify(unstated); err == nil || !strings.Contains(err.Error(), "is not stated") {
-		t.Errorf("unstated scope: err = %v", err)
 	}
 
 	skipped := map[schema.GroupVersionKind]reflect.Type{
@@ -143,8 +136,13 @@ func TestClassify_ErrorsOnUnroutedAndUnstated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].GVK.Kind != "Pod" || !got[0].Namespaced {
+	if len(got) != 1 || got[0].GVK.Kind != "Pod" {
 		t.Errorf("classify should keep only Pod: %+v", got)
+	}
+	// classify no longer states a scope; the resolution does. A non-zero value
+	// here would mean a second, undocumented scope source had crept back in.
+	if got[0].Namespaced {
+		t.Error("classify must leave the scope unset for the resolution to fill in")
 	}
 }
 

@@ -28,11 +28,65 @@ func loadRegistered(t *testing.T) ([]Kind, map[string]upstream.Type) {
 	return all, types
 }
 
-// TestResolvedScopesMatchTheHandSeededTables is the crossover proof: the
-// marker-derived scope, plus the built-in table, agrees with the hand-seeded
-// sets on all 128 registered kinds. It runs while both sources exist, so the
-// derivation is proven against what it replaces rather than trusted after.
-func TestResolvedScopesMatchTheHandSeededTables(t *testing.T) {
+// frozenClusterScoped is the cluster-scoped half of the hand-seeded scope table
+// this package used to carry, copied verbatim before that table was deleted and
+// frozen at the pins current on 2026-09-04 (k8s.io/api v0.37.0, cilium v1.19.5,
+// cert-manager v1.21.1, cnpg v1.30.0, external-secrets, gateway-api v1.6.1).
+//
+// It is a fixture, not a source: nothing reads it outside this test. Its job is
+// to keep the crossover proof alive now that its oracle is gone. The derivation
+// fails silently by construction — an absent, unread or detached
+// +kubebuilder:resource marker resolves to Namespaced, which is also the correct
+// answer for 95 of the 128 kinds — so a regression that reverted internal/upstream
+// to reading GenDecl.Doc alone would turn 31 of these 33 namespaced with nothing
+// else going red. Against this literal it goes red.
+//
+// A legitimate upstream change to any of these — a kind re-scoped, added or
+// removed by a pin bump — is a deliberate edit here, made with the upstream
+// change named in the commit message. Never edit it to make the test pass.
+var frozenClusterScoped = set(
+	"/ComponentStatus",
+	"/Namespace",
+	"/Node",
+	"/PersistentVolume",
+	"/RangeAllocation",
+	"apiextensions.k8s.io/CustomResourceDefinition",
+	"cert-manager.io/ClusterIssuer",
+	"cilium.io/CiliumBGPAdvertisement",
+	"cilium.io/CiliumBGPClusterConfig",
+	"cilium.io/CiliumBGPNodeConfig",
+	"cilium.io/CiliumBGPNodeConfigOverride",
+	"cilium.io/CiliumBGPPeerConfig",
+	"cilium.io/CiliumCIDRGroup",
+	"cilium.io/CiliumClusterwideEnvoyConfig",
+	"cilium.io/CiliumClusterwideNetworkPolicy",
+	"cilium.io/CiliumEgressGatewayPolicy",
+	"cilium.io/CiliumIdentity",
+	"cilium.io/CiliumLoadBalancerIPPool",
+	"cilium.io/CiliumNode",
+	"external-secrets.io/ClusterExternalSecret",
+	"external-secrets.io/ClusterSecretStore",
+	"gateway.networking.k8s.io/GatewayClass",
+	"networking.k8s.io/IPAddress",
+	"networking.k8s.io/IngressClass",
+	"networking.k8s.io/ServiceCIDR",
+	"postgresql.cnpg.io/ClusterImageCatalog",
+	"rbac.authorization.k8s.io/ClusterRole",
+	"rbac.authorization.k8s.io/ClusterRoleBinding",
+	"storage.k8s.io/CSIDriver",
+	"storage.k8s.io/CSINode",
+	"storage.k8s.io/StorageClass",
+	"storage.k8s.io/VolumeAttachment",
+	"storage.k8s.io/VolumeAttributesClass",
+)
+
+// TestResolvedScopesMatchTheFrozenFixture is the crossover proof, kept after the
+// hand-seeded table it originally ran against was deleted. Both directions are
+// checked: a kind in the fixture must resolve to Cluster, and a kind resolving
+// to Cluster must be in the fixture. One direction alone would miss half the
+// failures — a derivation that answered Cluster for everything would pass a
+// fixture-only check.
+func TestResolvedScopesMatchTheFrozenFixture(t *testing.T) {
 	all, types := loadRegistered(t)
 	resolved, err := ResolveScopes(all, types)
 	if err != nil {
@@ -45,27 +99,34 @@ func TestResolvedScopesMatchTheHandSeededTables(t *testing.T) {
 	for _, k := range all {
 		byKey[k.Key()] = k
 	}
-	mismatches := 0
+	gotCluster := map[string]bool{}
 	for _, d := range resolved {
 		k := byKey[d.Key]
-		wantCluster := clusterKinds[d.Key]
-		if !wantCluster && !namespacedKinds[d.Key] {
-			t.Errorf("%s: in neither hand-seeded set", d.Key)
-			continue
+		isCluster := d.Scope == markers.ScopeCluster
+		if isCluster {
+			gotCluster[d.Key] = true
 		}
-		if gotCluster := d.Scope == markers.ScopeCluster; gotCluster != wantCluster {
-			mismatches++
-			t.Errorf("%s (%s.%s, module %s): resolved %s, hand-seeded table says cluster=%v",
-				d.Key, k.ImportPath, k.TypeName, d.Module, d.Scope, wantCluster)
+		if want := frozenClusterScoped[d.Key]; isCluster != want {
+			t.Errorf("%s (%s.%s, module %s, source %s): resolved %s, the frozen fixture says cluster=%v",
+				d.Key, k.ImportPath, k.TypeName, d.Module, d.Source, d.Scope, want)
 		}
 	}
-	if mismatches == 0 {
+	for key := range frozenClusterScoped {
+		if _, ok := byKey[key]; !ok {
+			t.Errorf("the frozen fixture lists %q, which is no longer registered", key)
+			continue
+		}
+		if !gotCluster[key] {
+			t.Errorf("the frozen fixture lists %q as cluster-scoped, but nothing resolved it that way", key)
+		}
+	}
+	if !t.Failed() {
 		by := map[ScopeSource]int{}
 		for _, d := range resolved {
 			by[d.Source]++
 		}
-		t.Logf("all %d kinds agree; %d from their own marker, %d from the built-in table, %d from the CRD their module ships",
-			len(resolved), by[SourceMarker], by[SourceBuiltinTable], by[SourceShippedCRD])
+		t.Logf("all %d kinds agree with the frozen fixture (%d cluster-scoped); %d from their own marker, %d from the built-in table, %d from the CRD their module ships",
+			len(resolved), len(gotCluster), by[SourceMarker], by[SourceBuiltinTable], by[SourceShippedCRD])
 	}
 }
 
