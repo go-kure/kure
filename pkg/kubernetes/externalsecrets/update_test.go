@@ -6,31 +6,29 @@ import (
 
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
-func TestAddExternalSecretLabel(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	AddExternalSecretLabel(es, "app", "myapp")
-
-	if es.Labels["app"] != "myapp" {
-		t.Errorf("expected label 'app'='myapp', got %s", es.Labels["app"])
+// TestMetadataViaGenericHelpers covers what the per-kind
+// Add<Kind>Label/Add<Kind>Annotation helpers used to do for every kind in this
+// package: the generic helpers work over metav1.Object, so one pair reaches all
+// three.
+func TestMetadataViaGenericHelpers(t *testing.T) {
+	objs := []metav1.Object{
+		ExternalSecret(&ExternalSecretConfig{Name: "test", Namespace: "default"}),
+		SecretStore(&SecretStoreConfig{Name: "test", Namespace: "default"}),
+		ClusterSecretStore(&ClusterSecretStoreConfig{Name: "test"}),
 	}
-}
-
-func TestAddExternalSecretAnnotation(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	AddExternalSecretAnnotation(es, "note", "test-annotation")
-
-	if es.Annotations["note"] != "test-annotation" {
-		t.Errorf("expected annotation 'note'='test-annotation', got %s", es.Annotations["note"])
+	for _, obj := range objs {
+		kubernetes.AddLabel(obj, "team", "platform")
+		kubernetes.AddAnnotation(obj, "owner", "ops")
+		if obj.GetLabels()["team"] != "platform" {
+			t.Errorf("%T: expected label team=platform, got %v", obj, obj.GetLabels())
+		}
+		if obj.GetAnnotations()["owner"] != "ops" {
+			t.Errorf("%T: expected annotation owner=ops, got %v", obj, obj.GetAnnotations())
+		}
 	}
 }
 
@@ -57,32 +55,6 @@ func TestAddExternalSecretData(t *testing.T) {
 	}
 }
 
-func TestAddSecretStoreLabel(t *testing.T) {
-	ss := SecretStore(&SecretStoreConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	AddSecretStoreLabel(ss, "env", "prod")
-
-	if ss.Labels["env"] != "prod" {
-		t.Errorf("expected label 'env'='prod', got %s", ss.Labels["env"])
-	}
-}
-
-func TestAddSecretStoreAnnotation(t *testing.T) {
-	ss := SecretStore(&SecretStoreConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
-
-	AddSecretStoreAnnotation(ss, "desc", "test store")
-
-	if ss.Annotations["desc"] != "test store" {
-		t.Errorf("expected annotation 'desc'='test store', got %s", ss.Annotations["desc"])
-	}
-}
-
 func TestSetSecretStoreProvider(t *testing.T) {
 	ss := SecretStore(&SecretStoreConfig{
 		Name:      "test",
@@ -102,30 +74,6 @@ func TestSetSecretStoreProvider(t *testing.T) {
 	}
 	if ss.Spec.Provider.AWS.Region != "ap-southeast-1" {
 		t.Errorf("expected Region 'ap-southeast-1', got %s", ss.Spec.Provider.AWS.Region)
-	}
-}
-
-func TestAddClusterSecretStoreLabel(t *testing.T) {
-	css := ClusterSecretStore(&ClusterSecretStoreConfig{
-		Name: "test",
-	})
-
-	AddClusterSecretStoreLabel(css, "team", "platform")
-
-	if css.Labels["team"] != "platform" {
-		t.Errorf("expected label 'team'='platform', got %s", css.Labels["team"])
-	}
-}
-
-func TestAddClusterSecretStoreAnnotation(t *testing.T) {
-	css := ClusterSecretStore(&ClusterSecretStoreConfig{
-		Name: "test",
-	})
-
-	AddClusterSecretStoreAnnotation(css, "owner", "ops")
-
-	if css.Annotations["owner"] != "ops" {
-		t.Errorf("expected annotation 'owner'='ops', got %s", css.Annotations["owner"])
 	}
 }
 

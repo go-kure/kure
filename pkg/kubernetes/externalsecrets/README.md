@@ -86,18 +86,18 @@ css.Spec = newSpec
 // Granular updates
 externalsecrets.AddExternalSecretData(es, data)
 es.Spec.SecretStoreRef = ref
-externalsecrets.AddExternalSecretLabel(es, "app", "myapp")
-externalsecrets.AddExternalSecretAnnotation(es, "note", "value")
 
 externalsecrets.SetSecretStoreProvider(ss, provider)
 ss.Spec.Controller = "my-controller"
-externalsecrets.AddSecretStoreLabel(ss, "env", "prod")
-externalsecrets.AddSecretStoreAnnotation(ss, "desc", "value")
 
 externalsecrets.SetClusterSecretStoreProvider(css, provider)
 css.Spec.Controller = "global"
-externalsecrets.AddClusterSecretStoreLabel(css, "team", "platform")
-externalsecrets.AddClusterSecretStoreAnnotation(css, "owner", "ops")
+
+// Labels and annotations use the generic helpers, which work over any object
+// with ObjectMeta -- this package carries no per-kind metadata helpers
+kubernetes.AddLabel(es, "app", "myapp")
+kubernetes.AddAnnotation(ss, "desc", "value")
+kubernetes.AddLabel(css, "team", "platform")
 ```
 
 ## Related Packages

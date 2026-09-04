@@ -36,15 +36,17 @@ func TestSetServiceAccountAutomountToken(t *testing.T) {
 	}
 }
 
-func TestServiceAccountMetadataFunctions(t *testing.T) {
+// TestServiceAccountMetadataViaGenericHelpers covers what
+// AddServiceAccountLabel and AddServiceAccountAnnotation used to do.
+func TestServiceAccountMetadataViaGenericHelpers(t *testing.T) {
 	sa := CreateServiceAccount("sa", "ns")
-	AddServiceAccountLabel(sa, "team", "dev")
+	AddLabel(sa, "team", "dev")
+	AddAnnotation(sa, "owner", "bob")
 	if sa.Labels["team"] != "dev" {
-		t.Errorf("label not added")
+		t.Errorf("label not added: %v", sa.Labels)
 	}
-	AddServiceAccountAnnotation(sa, "owner", "bob")
 	if sa.Annotations["owner"] != "bob" {
-		t.Errorf("annotation not added")
+		t.Errorf("annotation not added: %v", sa.Annotations)
 	}
 }
 
@@ -62,13 +64,13 @@ func TestServiceAccountNilGuards(t *testing.T) {
 	}
 
 	bare2 := &corev1.ServiceAccount{}
-	AddServiceAccountLabel(bare2, "team", "ops")
+	AddLabel(bare2, "team", "ops")
 	if bare2.Labels["team"] != "ops" {
 		t.Error("label not added to bare ServiceAccount")
 	}
 
 	bare3 := &corev1.ServiceAccount{}
-	AddServiceAccountAnnotation(bare3, "owner", "ops")
+	AddAnnotation(bare3, "owner", "ops")
 	if bare3.Annotations["owner"] != "ops" {
 		t.Error("annotation not added to bare ServiceAccount")
 	}

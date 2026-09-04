@@ -38,12 +38,11 @@
 // not pass, or takes its object by value, and a helper that returns anything,
 // are inadmissible whatever else they do. A test classifies every helper
 // with go/ast and fails on anything outside those classes that is not listed
-// in testdata/admission_exclusions.txt; that list holds the legacy helpers
-// (bare forwarders, error-returning and validating setters) until the prune
-// work item of the builder-contract epic deletes them or rewrites the
-// class-shaped error-returning ones as void helpers, and it only ever
-// shrinks. The target for every helper that survives: panic on a nil receiver,
-// take exactly the value it writes, never default or validate.
+// in testdata/admission_exclusions.txt; that list held the legacy helpers
+// (bare forwarders, error-returning and validating setters) while the prune
+// work item of the builder-contract epic ran, and is now empty. It only ever
+// shrinks. Every helper here panics on a nil receiver, takes exactly the value
+// it writes, and never defaults or validates.
 //
 // # GVK Utilities
 //

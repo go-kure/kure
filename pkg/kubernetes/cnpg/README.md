@@ -34,7 +34,7 @@ cluster := cnpg.Cluster(&cnpg.ClusterConfig{
     Spec:      cnpgv1.ClusterSpec{Instances: 3},
 })
 
-cnpg.AddClusterLabel(cluster, "env", "prod")
+kubernetes.AddLabel(cluster, "env", "prod")
 cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
 ```
 
@@ -104,12 +104,14 @@ only way to request pod-level metrics scraping through this builder.
 
 ## Modifier Functions
 
-All `Add*` and `Set*` functions from the internal package are re-exported here:
+The `Add*` and `Set*` helpers write one spec field each; everything else is a
+direct field assignment:
 
 ```go
-// Labels and annotations
-cnpg.AddClusterLabel(cluster, "app", "my-app")
-cnpg.AddDatabaseAnnotation(db, "note", "production")
+// Labels and annotations use the generic helpers, which work over any object
+// with ObjectMeta -- this package carries no per-kind metadata helpers
+kubernetes.AddLabel(cluster, "app", "my-app")
+kubernetes.AddAnnotation(db, "note", "production")
 
 // Cluster
 cnpg.AddClusterManagedRole(cluster, role)

@@ -37,11 +37,14 @@
 // ## Update helpers
 //
 // Additional functions prefixed with `Set` or `Add` expose granular control over
-// the generated objects.  They delegate to the internal package to perform the
-// actual mutations while keeping the public API stable.  For example:
+// the generated objects.  Each writes exactly the one spec field it names.
+// Labels and annotations use the generic kubernetes.AddLabel /
+// kubernetes.AddAnnotation over metav1.Object; this package carries no per-kind
+// metadata helpers.  For example:
 //
 //	cert := certmanager.Certificate(&certmanager.CertificateConfig{...})
 //	cert.Spec = certv1.CertificateSpec{SecretName: "new-secret"}
+//	kubernetes.AddLabel(cert, "app", "my-app")
 //
 // This package aims to provide a convenient typed interface for applications
 // that need to generate cert-manager manifests at runtime or as part of a build

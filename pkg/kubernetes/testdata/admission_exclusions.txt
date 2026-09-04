@@ -1,7 +1,5 @@
 # Inadmissible Set*/Add* helpers tolerated by TestAdmission_SugarHelpersAreClassAdmissible.
-# Temporary: the prune work item of the builder-contract epic empties this file.
+# The prune work item of the builder-contract epic emptied it; it stays empty.
 # Entries only ever leave; a new helper must be class-admissible (see pkg/kubernetes/README.md).
 # Regenerate with: KURE_ADMISSION_DUMP=1 go test ./pkg/kubernetes -run TestAdmission
 
-pkg/kubernetes.SetConfigMapAnnotations
-pkg/kubernetes.SetConfigMapLabels

@@ -4,9 +4,12 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	barmanapi "github.com/cloudnative-pg/barman-cloud/pkg/api"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
+
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 func mustCluster(t *testing.T, cfg *ClusterConfig) *cnpgv1.Cluster {
@@ -18,19 +21,26 @@ func mustCluster(t *testing.T, cfg *ClusterConfig) *cnpgv1.Cluster {
 	return obj
 }
 
-func TestAddClusterLabel(t *testing.T) {
-	obj := mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}})
-	AddClusterLabel(obj, "env", "prod")
-	if obj.Labels["env"] != "prod" {
-		t.Error("expected label 'env' to be 'prod'")
+// TestMetadataViaGenericHelpers covers what the per-kind
+// Add<Kind>Label/Add<Kind>Annotation helpers used to do for every kind in this
+// package: the generic helpers work over metav1.Object, so one pair reaches all
+// four.
+func TestMetadataViaGenericHelpers(t *testing.T) {
+	objs := []metav1.Object{
+		mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}}),
+		Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}}),
+		ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}}),
+		ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}}),
 	}
-}
-
-func TestAddClusterAnnotation(t *testing.T) {
-	obj := mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}})
-	AddClusterAnnotation(obj, "note", "value")
-	if obj.Annotations["note"] != "value" {
-		t.Error("expected annotation 'note' to be 'value'")
+	for _, obj := range objs {
+		kubernetes.AddLabel(obj, "env", "prod")
+		kubernetes.AddAnnotation(obj, "note", "value")
+		if obj.GetLabels()["env"] != "prod" {
+			t.Errorf("%T: expected label env=prod, got %v", obj, obj.GetLabels())
+		}
+		if obj.GetAnnotations()["note"] != "value" {
+			t.Errorf("%T: expected annotation note=value, got %v", obj, obj.GetAnnotations())
+		}
 	}
 }
 
@@ -46,22 +56,6 @@ func TestAddClusterManagedRole(t *testing.T) {
 	}
 }
 
-func TestAddDatabaseLabel(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
-	AddDatabaseLabel(obj, "env", "prod")
-	if obj.Labels["env"] != "prod" {
-		t.Error("expected label 'env' to be 'prod'")
-	}
-}
-
-func TestAddDatabaseAnnotation(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
-	AddDatabaseAnnotation(obj, "note", "value")
-	if obj.Annotations["note"] != "value" {
-		t.Error("expected annotation 'note' to be 'value'")
-	}
-}
-
 func TestAddDatabaseExtension(t *testing.T) {
 	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
 	ext := cnpgv1.ExtensionSpec{DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{Name: "pgcrypto"}}
@@ -71,22 +65,6 @@ func TestAddDatabaseExtension(t *testing.T) {
 	}
 	if obj.Spec.Extensions[0].Name != "pgcrypto" {
 		t.Errorf("expected extension name 'pgcrypto', got %s", obj.Spec.Extensions[0].Name)
-	}
-}
-
-func TestAddObjectStoreLabel(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
-	AddObjectStoreLabel(obj, "env", "prod")
-	if obj.Labels["env"] != "prod" {
-		t.Error("expected label 'env' to be 'prod'")
-	}
-}
-
-func TestAddObjectStoreAnnotation(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
-	AddObjectStoreAnnotation(obj, "note", "value")
-	if obj.Annotations["note"] != "value" {
-		t.Error("expected annotation 'note' to be 'value'")
 	}
 }
 
@@ -132,22 +110,6 @@ func TestSetObjectStoreDataConfig(t *testing.T) {
 	}
 	if obj.Spec.Configuration.Data.Compression != barmanapi.CompressionTypeGzip {
 		t.Error("expected Data Compression to be Gzip")
-	}
-}
-
-func TestAddScheduledBackupLabel(t *testing.T) {
-	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
-	AddScheduledBackupLabel(obj, "env", "prod")
-	if obj.Labels["env"] != "prod" {
-		t.Error("expected label 'env' to be 'prod'")
-	}
-}
-
-func TestAddScheduledBackupAnnotation(t *testing.T) {
-	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
-	AddScheduledBackupAnnotation(obj, "note", "value")
-	if obj.Annotations["note"] != "value" {
-		t.Error("expected annotation 'note' to be 'value'")
 	}
 }
 

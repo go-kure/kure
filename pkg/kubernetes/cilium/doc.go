@@ -27,6 +27,8 @@
 // ## Update helpers
 //
 // Additional functions prefixed with `Set` or `Add` expose granular control
-// over the generated objects.  They delegate to the internal package to
-// perform the actual mutations while keeping the public API stable.
+// over the generated objects.  Each writes exactly the one spec field it names.
+// ObjectMeta labels and annotations use the generic kubernetes.AddLabel /
+// kubernetes.AddAnnotation; the Set*Labels helpers here write the policy's own
+// `spec.labels`, which is a different field.
 package cilium

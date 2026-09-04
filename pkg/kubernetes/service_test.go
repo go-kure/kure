@@ -12,8 +12,6 @@ func TestServiceNilErrors(t *testing.T) {
 	assertPanics(t, func() { AddServicePort(nil, corev1.ServicePort{}) })
 	assertPanics(t, func() { AddServiceExternalIP(nil, "1.2.3.4") })
 	assertPanics(t, func() { SetServiceLoadBalancerClass(nil, "x") })
-	assertPanics(t, func() { AddServiceLabel(nil, "k", "v") })
-	assertPanics(t, func() { AddServiceAnnotation(nil, "k", "v") })
 	assertPanics(t, func() { AddServiceLoadBalancerSourceRange(nil, "10.0.0.0/24") })
 	assertPanics(t, func() { SetServiceIPFamilyPolicy(nil, nil) })
 	assertPanics(t, func() { SetServiceInternalTrafficPolicy(nil, nil) })
@@ -72,33 +70,28 @@ func TestServiceFunctions(t *testing.T) {
 	}
 }
 
-func TestServiceMetadataFunctions(t *testing.T) {
+// TestServiceMetadataViaGenericHelpers covers what AddServiceLabel and
+// AddServiceAnnotation used to do, including the nil-map init path on a Service
+// not built by CreateService.
+func TestServiceMetadataViaGenericHelpers(t *testing.T) {
 	svc := CreateService("svc", "ns")
-
-	AddServiceLabel(svc, "k", "v")
+	AddLabel(svc, "k", "v")
+	AddAnnotation(svc, "a", "b")
 	if svc.Labels["k"] != "v" {
-		t.Errorf("label not added")
+		t.Errorf("label not added: %v", svc.Labels)
 	}
-
-	AddServiceAnnotation(svc, "a", "b")
 	if svc.Annotations["a"] != "b" {
-		t.Errorf("annotation not added")
-	}
-}
-
-// TestAddServiceLabel_NilMaps exercises the nil-map init paths for Labels
-// and Annotations when the Service was not created via CreateService.
-func TestAddServiceLabelAnnotation_NilMaps(t *testing.T) {
-	svc := &corev1.Service{}
-	AddServiceLabel(svc, "env", "prod")
-	if svc.Labels["env"] != "prod" {
-		t.Errorf("expected label env=prod, got %v", svc.Labels)
+		t.Errorf("annotation not added: %v", svc.Annotations)
 	}
 
-	svc2 := &corev1.Service{}
-	AddServiceAnnotation(svc2, "note", "test")
-	if svc2.Annotations["note"] != "test" {
-		t.Errorf("expected annotation note=test, got %v", svc2.Annotations)
+	bare := &corev1.Service{}
+	AddLabel(bare, "env", "prod")
+	AddAnnotation(bare, "note", "test")
+	if bare.Labels["env"] != "prod" {
+		t.Errorf("expected label env=prod, got %v", bare.Labels)
+	}
+	if bare.Annotations["note"] != "test" {
+		t.Errorf("expected annotation note=test, got %v", bare.Annotations)
 	}
 }
 

@@ -28,16 +28,5 @@ func SetServiceAccountAutomountToken(sa *corev1.ServiceAccount, automount bool) 
 	*sa.AutomountServiceAccountToken = automount
 }
 
-func AddServiceAccountLabel(sa *corev1.ServiceAccount, key, value string) {
-	if sa.Labels == nil {
-		sa.Labels = make(map[string]string)
-	}
-	sa.Labels[key] = value
-}
-
-func AddServiceAccountAnnotation(sa *corev1.ServiceAccount, key, value string) {
-	if sa.Annotations == nil {
-		sa.Annotations = make(map[string]string)
-	}
-	sa.Annotations[key] = value
-}
+// Labels and annotations use the generic AddLabel / AddAnnotation over
+// metav1.Object (metadata.go); there is no per-kind ServiceAccount helper.
