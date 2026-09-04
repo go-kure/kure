@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -36,16 +35,5 @@ func SetPVCDataSourceRef(pvc *corev1.PersistentVolumeClaim, src *corev1.TypedObj
 	pvc.Spec.DataSourceRef = src
 }
 
-// VolumeClaimTemplateOptions holds fields needed to construct a PVC for
-// embedding in StatefulSet.Spec.VolumeClaimTemplates.
-type VolumeClaimTemplateOptions struct {
-	// StorageClassName is the name of the StorageClass. When empty, the cluster
-	// default StorageClass is used.
-	StorageClassName string
-	// AccessModes defines the desired access modes for the volume.
-	AccessModes []corev1.PersistentVolumeAccessMode
-	// StorageRequest is the minimum storage capacity requested.
-	StorageRequest resource.Quantity
-	// Labels are optional metadata labels applied to the PVC template.
-	Labels map[string]string
-}
+// A volume claim template for StatefulSet.Spec.VolumeClaimTemplates is a
+// corev1.PersistentVolumeClaim literal; there is no options struct.

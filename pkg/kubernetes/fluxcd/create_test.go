@@ -33,6 +33,9 @@ func TestHelmReleaseSetters(t *testing.T) {
 			},
 		},
 	})
+	if obj.Spec.Chart == nil {
+		t.Fatal("expected Chart to be set")
+	}
 	if obj.Spec.Chart.Spec.Chart != "nginx" {
 		t.Errorf("expected Chart 'nginx', got %s", obj.Spec.Chart.Spec.Chart)
 	}
