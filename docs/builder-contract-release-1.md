@@ -122,6 +122,24 @@ The four cert-manager solver constructors and `CreateACMEIssuer` were only ever
 called from `certmanager.Issuer`/`ClusterIssuer`, which now build the literals
 inline.
 
+`VolumeClaimTemplateOptions` goes with `CreateVolumeClaimTemplate`, its only
+consumer. It carried `StorageClassName`, `AccessModes`, `StorageRequest` and
+`Labels`; the replacement is the same `corev1.PersistentVolumeClaim` literal,
+which names those fields where the API does:
+
+```go
+corev1.PersistentVolumeClaim{
+    ObjectMeta: metav1.ObjectMeta{Name: "data", Labels: labels},
+    Spec: corev1.PersistentVolumeClaimSpec{
+        StorageClassName: &storageClass,
+        AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+        Resources: corev1.VolumeResourceRequirements{
+            Requests: corev1.ResourceList{corev1.ResourceStorage: size},
+        },
+    },
+}
+```
+
 ### `pkg/kubernetes` (76)
 
 | Removed | Replacement |
@@ -661,8 +679,16 @@ a multi-field write by nature, so it belongs where the invariant is already
 owned — the constructor — not behind a `Set<Field>` name. Every arm of that
 switch, typed-nil cases included, is covered by the constructor's own tests.
 
-`AddSyncthingPeer` stays: appending to `cfg.Peers` is class (a). Its silent
-`if cfg == nil { return }` became a panic, matching every other appender.
+`AddSyncthingPeer` stays: appending to `cfg.Peers` is class (a). Its nil
+handling is a behaviour break in its own right:
+
+| Behaviour change | Before | After |
+|---|---|---|
+| `AddSyncthingPeer(nil, addr, id, introducer)` | `if cfg == nil { return }` — the peer is silently discarded | panics with `AddSyncthingPeer: cfg must not be nil` |
+
+A nil receiver is a programming error, and swallowing the caller's write is the
+one outcome that cannot be diagnosed from the output. Every other appender in
+the package already panicked; this one no longer differs.
 
 ### `AddPodSpecTopologySpreadConstraints`
 
