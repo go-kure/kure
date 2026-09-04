@@ -271,8 +271,10 @@ externally-required tool mise provisions for this script.
 
 When `sync-versions.sh check` fails a dependency for being outside `supported_range`, and
 you've confirmed the new version is actually API-compatible, `widen` automates the
-mechanical half — the yq edit and the two-file regeneration — while leaving the judgment
-(is it actually compatible?) entirely to the `--note` text you write:
+mechanical edit to `versions.yaml` — updating `supported_range` and `notes` — while
+leaving the judgment (is it actually compatible?) entirely to the `--note` text you write.
+It does not itself regenerate `docs/compatibility.md` or `pkg/versions/versions_gen.go`;
+run `generate` afterward as a separate step:
 
 ```bash
 ./scripts/sync-versions.sh widen <dep> <new-upper-major.minor> --note "<compatibility assessment>"
