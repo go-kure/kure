@@ -130,13 +130,14 @@ func TestDeriveTablesRejectsAScopeDisagreement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var i int
-	for i = range all {
-		if all[i].Key() == "/Namespace" {
+	i := -1
+	for j := range all {
+		if all[j].Key() == "/Namespace" {
+			i = j
 			break
 		}
 	}
-	if all[i].Key() != "/Namespace" {
+	if i < 0 {
 		t.Fatal("/Namespace is not registered; pick another cluster-scoped kind")
 	}
 	all[i].Namespaced = true
@@ -195,8 +196,12 @@ func TestRenderTablesJSONRoundTripsAndCarriesProvenance(t *testing.T) {
 	if back.Generated != jsonProvenance {
 		t.Errorf("provenance = %q, want %q", back.Generated, jsonProvenance)
 	}
+	// Fatal, not Errorf: a round trip that lost rows makes every assertion
+	// after it meaningless, and the next one indexes the first row — on an
+	// empty slice that panics, taking the whole test binary down instead of
+	// reporting the lost rows.
 	if len(back.Kinds) != len(data.Kinds) || len(back.Fields) != len(data.Fields) {
-		t.Errorf("round trip lost rows: %d/%d kinds, %d/%d fields",
+		t.Fatalf("round trip lost rows: %d/%d kinds, %d/%d fields",
 			len(back.Kinds), len(data.Kinds), len(back.Fields), len(data.Fields))
 	}
 	if back.Kinds[0].ScopeSource == "" {
