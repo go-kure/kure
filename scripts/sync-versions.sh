@@ -253,30 +253,56 @@ resolve_tag_commit() {
     return 2
 }
 
-# Compare two "major.minor" strings numerically, major first then minor.
-# Echoes -1, 0, or 1. Deliberately not a single fixed-multiplier integer key
-# (the previous "major*1000+minor" scheme collided whenever minor reached
-# 1000: 1.1001 encoded to 2001, the same bucket as 2.0 -- comparing major and
-# minor as separate integers has no such ceiling).
+# Strip leading zeros from a decimal digit string, keeping at least one
+# digit ("007" -> "7", "0" -> "0").
+strip_leading_zeros() {
+    local s="$1"
+    while [[ ${#s} -gt 1 && "${s:0:1}" == "0" ]]; do
+        s="${s:1}"
+    done
+    printf '%s' "$s"
+}
+
+# Compare two non-negative decimal integer strings without bash arithmetic
+# ($(( )) is a 64-bit signed integer -- a version component with enough
+# digits, e.g. a 20-digit major, silently wraps). Strips leading zeros, then
+# compares digit-string length (longer wins) and falls back to lexicographic
+# order for equal lengths, which matches numeric order once leading zeros
+# are gone. Echoes -1, 0, or 1.
+numcmp() {
+    local a b
+    a=$(strip_leading_zeros "$1")
+    b=$(strip_leading_zeros "$2")
+    if [[ ${#a} -ne ${#b} ]]; then
+        [[ ${#a} -lt ${#b} ]] && { echo -1; return; }
+        echo 1
+        return
+    fi
+    if [[ "$a" == "$b" ]]; then
+        echo 0
+    elif [[ "$a" < "$b" ]]; then
+        echo -1
+    else
+        echo 1
+    fi
+}
+
+# Compare two "major.minor" strings numerically, major first then minor, via
+# numcmp (see above -- no fixed-multiplier key, no bash-arithmetic overflow).
+# Echoes -1, 0, or 1.
 mm_cmp() {
     local a="$1" b="$2"
     local a_major="${a%%.*}" a_minor="${a#*.}"
     a_minor="${a_minor%%.*}"
     local b_major="${b%%.*}" b_minor="${b#*.}"
     b_minor="${b_minor%%.*}"
-    a_major=$((10#$a_major)); a_minor=$((10#$a_minor))
-    b_major=$((10#$b_major)); b_minor=$((10#$b_minor))
-    if (( a_major != b_major )); then
-        (( a_major < b_major )) && { echo -1; return; }
-        echo 1
+    local major_cmp
+    major_cmp=$(numcmp "$a_major" "$b_major")
+    if [[ "$major_cmp" != 0 ]]; then
+        echo "$major_cmp"
         return
     fi
-    if (( a_minor != b_minor )); then
-        (( a_minor < b_minor )) && { echo -1; return; }
-        echo 1
-        return
-    fi
-    echo 0
+    numcmp "$a_minor" "$b_minor"
 }
 
 # Extract "major.minor" from a full version, applying version_basis normalization.
