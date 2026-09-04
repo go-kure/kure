@@ -577,4 +577,98 @@ a function or a NaN — a programming error, so it panics. The body stays class
 (b): a one-field literal, built from the caller's map, assigned to the pointer
 field `Spec.Values`.
 
+A sugar helper cannot hand back a marshalling failure, so values that could
+hold something `encoding/json` refuses must be marshalled by the caller and
+passed to `SetHelmReleaseValues`, which takes already-encoded JSON. Anything
+decoded from YAML or JSON into `map[string]any` always marshals; the panic is
+reachable only from a channel, a function, a NaN or `+Inf` float, or a cyclic
+structure.
+
 These take the exclusion list from 33 tolerated helpers to 24.
+
+## Helpers that wrote more than the field they named
+
+Three survivors of the passes above kept their names but broke §4's rule that a
+helper touches no field the caller did not name. Each is resolved by narrowing
+the write, not by widening the contract.
+
+### `PodDisruptionBudget` availability
+
+`Spec.MinAvailable` and `Spec.MaxUnavailable` are mutually exclusive upstream,
+and each setter used to nil the other. That made the pair order-dependent and
+hid a write the caller never asked for; it also classified as a `nilClear`,
+which no admission class covers. Both now assign only their own field.
+
+| Behaviour change | Before | After |
+|---|---|---|
+| `SetPDBMinAvailable(pdb, v)` | sets `MinAvailable`, clears `MaxUnavailable` | sets `MinAvailable` only |
+| `SetPDBMaxUnavailable(pdb, v)` | sets `MaxUnavailable`, clears `MinAvailable` | sets `MaxUnavailable` only |
+
+Setting both now produces a `PodDisruptionBudget` the API server rejects.
+Enforcing the exclusion is upstream's job; switching from one to the other is
+an explicit two statements at the call site.
+
+### Pod Security Admission labels
+
+`SetNamespacePSALabels` failed §4 twice: it delegated every write to
+`AddNamespaceLabel` so it contained no field write of its own, and it was built
+out of `if level != "" { set(level) }` — the conditional-write shape the
+contract names outright. Its replacement writes nothing at all.
+
+| Removed | Replacement |
+|---|---|
+| `SetNamespacePSALabels(ns, enforce, warn, audit, version)` | `for k, v := range PSALabels(enforce, warn, audit, version) { AddLabel(ns, k, v) }` |
+
+`PSALabels(enforce, warn, audit PSALevel, version string) map[string]string`
+returns up to six labels and touches no object. One argument expanding into a
+family of labels is not something a `Set<Field>` helper may hide, so the
+expansion became a value helper and the write stayed with the generic
+`AddLabel`. Skipping an empty mode is honest in a function whose result *is* the
+label set, where the same skip inside a setter was a silent partial write.
+
+No merge helper was added for this. The generic metadata set is fixed at four by
+name (§5) and the exempt list in the admission test does not grow, so a
+`AddLabels(obj, map)` would have been a contract change to save one loop.
+
+### volsync trigger, spec and mover setters
+
+`pkg/kubernetes/volsync` carried ten `Set*` helpers alongside a config-struct
+constructor that already covers the same fields. Nine are removed.
+
+| Removed | Replacement |
+|---|---|
+| `SetReplicationSourceSourcePVC(rs, pvc)` | `ReplicationSourceConfig.SourcePVC`, or `rs.Spec.SourcePVC = pvc` |
+| `SetReplicationSourcePaused(rs, b)` | `ReplicationSourceConfig.Paused`, or `rs.Spec.Paused = b` |
+| `SetReplicationDestinationPaused(rd, b)` | `ReplicationDestinationConfig.Paused`, or `rd.Spec.Paused = b` |
+| `SetReplicationSourceSchedule(rs, s)` | `ReplicationSourceConfig.Trigger` |
+| `SetReplicationSourceManualTrigger(rs, s)` | `ReplicationSourceConfig.Trigger` |
+| `SetReplicationDestinationSchedule(rd, s)` | `ReplicationDestinationConfig.Trigger` |
+| `SetReplicationDestinationManualTrigger(rd, s)` | `ReplicationDestinationConfig.Trigger` |
+| `SetReplicationSourceMover(rs, m)` | `ReplicationSourceConfig.Mover` |
+| `SetReplicationDestinationMover(rd, m)` | `ReplicationDestinationConfig.Mover` |
+
+The three spec setters were bare field assignments. The four trigger setters
+nil-initialised `Spec.Trigger` and then wrote one of its fields, leaving the
+sibling trigger field standing — their doc comments claimed to replace the whole
+trigger and did not.
+
+The two mover setters were the substantive removal. Each cleared all six mover
+arms and then set one, a verbatim duplicate of the type switch in
+`ReplicationSource` / `ReplicationDestination`. A sealed-union discriminator is
+a multi-field write by nature, so it belongs where the invariant is already
+owned — the constructor — not behind a `Set<Field>` name. Every arm of that
+switch, typed-nil cases included, is covered by the constructor's own tests.
+
+`AddSyncthingPeer` stays: appending to `cfg.Peers` is class (a). Its silent
+`if cfg == nil { return }` became a panic, matching every other appender.
+
+### `AddPodSpecTopologySpreadConstraints`
+
+Named here because it is a deliberate behaviour change rather than a signature
+one. It previously returned early on a nil constraint, discarding the caller's
+write without a word. It now panics, like the six other appenders in
+`podspec.go` — a nil element is a programming error, and one appender silently
+dropping input while the rest reject it was the worse inconsistency.
+
+These take the exclusion list from 24 tolerated helpers to 11, all of them
+`ConfigMap` helpers.

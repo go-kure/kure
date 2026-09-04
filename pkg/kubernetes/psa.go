@@ -25,6 +25,38 @@ const (
 	PSAPrivileged PSALevel = "privileged"
 )
 
+// PSALabels returns the Pod Security Admission labels for the given modes. It
+// writes nothing; apply the result with AddLabel:
+//
+//	for k, v := range kubernetes.PSALabels(kubernetes.PSARestricted, "", "", "v1.28") {
+//		kubernetes.AddLabel(ns, k, v)
+//	}
+//
+// An empty level omits that mode's labels; an empty version omits the
+// *-version labels. This is a value helper, not builder sugar — one argument
+// expands into up to six labels, which no Set<Field> helper is allowed to do
+// (see the builder contract in this package's README).
+func PSALabels(enforce, warn, audit PSALevel, version string) map[string]string {
+	labels := map[string]string{}
+	for _, mode := range []struct {
+		name  string
+		level PSALevel
+	}{
+		{"enforce", enforce},
+		{"warn", warn},
+		{"audit", audit},
+	} {
+		if mode.level == "" {
+			continue
+		}
+		labels["pod-security.kubernetes.io/"+mode.name] = string(mode.level)
+		if version != "" {
+			labels["pod-security.kubernetes.io/"+mode.name+"-version"] = version
+		}
+	}
+	return labels
+}
+
 // RestrictedPodSecurityContext returns a PodSecurityContext compliant with the
 // restricted Pod Security Standards level. It sets RunAsNonRoot and configures
 // SeccompProfile to RuntimeDefault.

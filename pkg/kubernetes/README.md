@@ -50,9 +50,14 @@ identity test; a wrapper that sets anything beyond identity fails it too.
 
 Sub-types that are not `client.Object` (`Container`, `PodSpec`,
 `ResourceRequirements`, an `IngressRule`, a PVC used as a template) get no generated
-constructor. A struct literal is the idiom, and the hand-written constructors that used
-to wrap one are gone: build the value directly, as
+constructor. A struct literal is the idiom: build the value directly, as
 `&corev1.Container{Name: "app", Image: "nginx"}`.
+
+Two hand-written sub-type constructors survive, both because they do more than
+wrap a literal and both under review for the next work item:
+`CreateResourceRequirements()` returns empty `Requests` and `Limits` maps, and
+`CreateIngressPath(path, pathType, service, port)` assembles a nested
+`HTTPIngressPath`. Everything else in that shape has been removed.
 
 ### Regenerating the wrappers
 
@@ -259,6 +264,15 @@ kubernetes.SetPDBMinAvailable(pdb, intstr.FromInt32(2))
 kubernetes.SetPDBSelector(pdb, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "my-app"}})
 ```
 
+`MinAvailable` and `MaxUnavailable` are mutually exclusive upstream, and each setter
+writes only the field it names — a helper does not clear a field the caller did not
+mention. Switching from one to the other is two statements:
+
+```go
+pdb.Spec.MinAvailable = nil
+kubernetes.SetPDBMaxUnavailable(pdb, intstr.FromString("25%"))
+```
+
 ### Namespace and Pod Security Admission
 
 ```go
@@ -266,8 +280,14 @@ ns := kubernetes.CreateNamespace("my-app")
 kubernetes.AddLabel(ns, "env", "prod")
 
 // enforce, warn, audit; "" skips a mode, version "" omits the version labels
-kubernetes.SetNamespacePSALabels(ns, kubernetes.PSARestricted, kubernetes.PSARestricted, kubernetes.PSARestricted, "v1.28")
+for k, v := range kubernetes.PSALabels(kubernetes.PSARestricted, kubernetes.PSARestricted, kubernetes.PSARestricted, "v1.28") {
+    kubernetes.AddLabel(ns, k, v)
+}
 ```
+
+`PSALabels` returns the label map and writes nothing. One argument expanding into six
+labels is not something a `Set<Field>` helper may hide, so the expansion is a value
+helper and the write stays with `AddLabel`.
 
 ### ConfigMap
 

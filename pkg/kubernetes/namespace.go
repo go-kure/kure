@@ -25,28 +25,5 @@ func AddNamespaceFinalizer(ns *corev1.Namespace, finalizer corev1.FinalizerName)
 	ns.Spec.Finalizers = append(ns.Spec.Finalizers, finalizer)
 }
 
-// SetNamespacePSALabels sets Pod Security Admission labels on the namespace.
-// enforce, warn, audit are PSA levels: use PSALevel constants (PSARestricted,
-// PSABaseline, PSAPrivileged) or an empty string to skip that mode.
-// version is applied to all configured modes; pass "latest", a specific
-// Kubernetes version like "v1.28", or an empty string to omit version labels.
-func SetNamespacePSALabels(ns *corev1.Namespace, enforce, warn, audit PSALevel, version string) {
-	if enforce != "" {
-		AddNamespaceLabel(ns, "pod-security.kubernetes.io/enforce", string(enforce))
-		if version != "" {
-			AddNamespaceLabel(ns, "pod-security.kubernetes.io/enforce-version", version)
-		}
-	}
-	if warn != "" {
-		AddNamespaceLabel(ns, "pod-security.kubernetes.io/warn", string(warn))
-		if version != "" {
-			AddNamespaceLabel(ns, "pod-security.kubernetes.io/warn-version", version)
-		}
-	}
-	if audit != "" {
-		AddNamespaceLabel(ns, "pod-security.kubernetes.io/audit", string(audit))
-		if version != "" {
-			AddNamespaceLabel(ns, "pod-security.kubernetes.io/audit-version", version)
-		}
-	}
-}
+// PSA labels are not set by a per-namespace helper: PSALabels (psa.go) returns
+// the label map, and AddLabel applies each entry.
