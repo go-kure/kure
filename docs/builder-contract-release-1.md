@@ -153,11 +153,16 @@ if the defaults were not wanted — that is the point of removing them.
 `CreatePodSpec` set `RestartPolicy: Always`, a zero
 `TerminationGracePeriodSeconds` pointer, an empty `SecurityContext`, an empty
 `Affinity`, an empty `NodeSelector` map, and five empty slices. `Always` is the
-API server's own default for a Pod, so only the three pointer and map fields
-change what is serialised:
+API server's own default for a Pod. Four of the five slices (`InitContainers`,
+`Volumes`, `ImagePullSecrets`, `Tolerations`) carry `omitempty` upstream and so
+never rendered, but `Containers` does not: `PodSpec.Containers` is required with
+no `omitempty` (`k8s.io/api/core/v1/types.go:4393`), so an empty slice
+serialises as `containers: []` where nil serialises as `containers: null`. To
+keep the old value exactly:
 
 ```go
 &corev1.PodSpec{
+    Containers:                    []corev1.Container{},
     TerminationGracePeriodSeconds: new(int64),
     SecurityContext:               &corev1.PodSecurityContext{},
     Affinity:                      &corev1.Affinity{},
@@ -165,7 +170,9 @@ change what is serialised:
 }
 ```
 
-A caller that wants none of them writes `&corev1.PodSpec{}`.
+A caller that wants none of them writes `&corev1.PodSpec{}`. The `Containers`
+difference disappears as soon as one container is appended, so it matters only
+for a spec serialised while still empty.
 
 `CreateVolumeClaimTemplate` took an options struct, also removed
 (`VolumeClaimTemplateOptions`), and returned a value rather than a pointer. It
@@ -187,21 +194,29 @@ if storageClass != "" {
 }
 ```
 
-`CreateIngressRule` also built the nested `HTTP` value, so a bare
-`&netv1.IngressRule{Host: host}` differs in two ways: it serialises without the
-`http: {}` key, and a caller that writes `rule.IngressRuleValue.HTTP.Paths`
-directly dereferences a nil pointer. Going through `AddIngressRulePath` is safe
-either way — it nil-initialises `HTTP` before appending — so most callers need
-no change. To keep the old value exactly:
+`CreateIngressRule` also built the nested `HTTP` value, with `Paths` initialised
+to an empty slice, so a bare `&netv1.IngressRule{Host: host}` differs in three
+ways: it serialises without the `http: {}` key; a caller that writes
+`rule.IngressRuleValue.HTTP.Paths` directly dereferences a nil pointer; and
+`HTTPIngressRuleValue.Paths` is required with no `omitempty`
+(`k8s.io/api/networking/v1/types.go:452`), so the old value serialises
+`paths: []` where a nil slice serialises `paths: null`. Going through
+`AddIngressRulePath` is safe either way — it nil-initialises `HTTP` before
+appending — so most callers need no change. To keep the old value exactly:
 
 ```go
 &netv1.IngressRule{
     Host: host,
     IngressRuleValue: netv1.IngressRuleValue{
-        HTTP: &netv1.HTTPIngressRuleValue{},
+        HTTP: &netv1.HTTPIngressRuleValue{
+            Paths: []netv1.HTTPIngressPath{},
+        },
     },
 }
 ```
+
+As with `PodSpec.Containers`, the `paths` difference disappears once a path is
+appended.
 
 The cert-manager five:
 
@@ -651,13 +666,47 @@ already passed as class (b) pointer assignments and are removed as duplicates,
 not as contract violations. Dropping those 47 plus the 7 `AddPodSpec*` helpers
 that no longer return an error takes the file from 87 tolerated helpers to 33.
 
+### The seven `AddPodSpec*` signatures
+
+These are the survivors every table above forwards to, and their own signatures
+changed: the `error` return is gone, and a nil argument panics instead of
+returning a sentinel. Code that checked the error no longer compiles, so each is
+listed by name with its before and after.
+
+| Before | After |
+|---|---|
+| `AddPodSpecContainer(spec, c) error` | `AddPodSpecContainer(spec, c)` |
+| `AddPodSpecInitContainer(spec, c) error` | `AddPodSpecInitContainer(spec, c)` |
+| `AddPodSpecEphemeralContainer(spec, c) error` | `AddPodSpecEphemeralContainer(spec, c)` |
+| `AddPodSpecVolume(spec, v) error` | `AddPodSpecVolume(spec, v)` |
+| `AddPodSpecImagePullSecret(spec, s) error` | `AddPodSpecImagePullSecret(spec, s)` |
+| `AddPodSpecToleration(spec, t) error` | `AddPodSpecToleration(spec, t)` |
+| `AddPodSpecTopologySpreadConstraints(spec, c) error` | `AddPodSpecTopologySpreadConstraints(spec, c)` |
+
+Drop the error check; there is nothing left to check.
+
+```go
+// before
+if err := AddPodSpecEphemeralContainer(spec, ec); err != nil {
+    return err
+}
+
+// after
+AddPodSpecEphemeralContainer(spec, ec)
+```
+
+A nil `spec` or nil element panics, which is what the contract requires of every
+sugar helper. `AddPodSpecTopologySpreadConstraints` is the one whose nil-element
+behaviour also changed — it used to return nil and silently drop the constraint;
+see its own entry below.
+
 The `pkg/errors` sentinels those helpers returned (`ErrNilDeployment`,
 `ErrNilDaemonSet`, `ErrNilStatefulSet`, `ErrNilJob`, `ErrNilCronJob`,
 `ErrNilVolume`, `ErrNilToleration`, `ErrNilImagePullSecret`,
 `ErrNilInitContainer`, `ErrNilEphemeralContainer`, `ErrNilSpec`) are now unused
 inside the module. They stay exported for this release; retiring them is a
 separate `pkg/errors` change, not part of the builder surface, tracked in
-issue #758. `ErrNilContainer` and `ErrNilPodSpec` keep real users in
+issue go-kure/kure#758. `ErrNilContainer` and `ErrNilPodSpec` keep real users in
 `pkg/kubernetes/psa.go`, whose validators return errors by design.
 
 ## Error-returning helpers rewritten as void
@@ -840,7 +889,7 @@ the per-kind metadata helpers below.
 
 `pkg/kubernetes/configmap.go` was the only importer of
 `internal/kubernetes`, so that package now has no callers inside the module.
-Removing it is a separate change, tracked in issue #756.
+Removing it is a separate change, tracked in issue go-kure/kure#756.
 
 That leaves 2 tolerated helpers, both `ConfigMap` metadata.
 

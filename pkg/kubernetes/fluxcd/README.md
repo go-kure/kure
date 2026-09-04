@@ -169,9 +169,11 @@ somewhere that could produce such a value, marshal them yourself and hand the
 result to `SetHelmReleaseValues`:
 
 ```go
+import "github.com/go-kure/kure/pkg/errors"
+
 raw, err := json.Marshal(values)
 if err != nil {
-    return fmt.Errorf("helm values: %w", err)
+    return errors.Wrap(err, "helm values")
 }
 fluxcd.SetHelmReleaseValues(hr, &apiextensionsv1.JSON{Raw: raw})
 ```
