@@ -6,23 +6,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Labels and annotations use the generic kubernetes.AddLabel /
+// kubernetes.AddAnnotation over metav1.Object; this package carries no per-kind
+// metadata helpers.
+
 // Certificate setters
-
-// AddCertificateLabel adds or updates a label on the Certificate metadata.
-func AddCertificateLabel(obj *certv1.Certificate, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddCertificateAnnotation adds or updates an annotation on the Certificate metadata.
-func AddCertificateAnnotation(obj *certv1.Certificate, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
-}
 
 // AddCertificateDNSName appends a DNS name to the Certificate spec.
 func AddCertificateDNSName(obj *certv1.Certificate, dns string) {
@@ -41,22 +29,6 @@ func SetCertificateRenewBefore(obj *certv1.Certificate, dur *metav1.Duration) {
 
 // Issuer setters
 
-// AddIssuerLabel adds or updates a label on the Issuer metadata.
-func AddIssuerLabel(obj *certv1.Issuer, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddIssuerAnnotation adds or updates an annotation on the Issuer metadata.
-func AddIssuerAnnotation(obj *certv1.Issuer, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
-}
-
 // SetIssuerACME sets the ACME configuration on the issuer spec.
 func SetIssuerACME(obj *certv1.Issuer, acme *cmacme.ACMEIssuer) {
 	obj.Spec.IssuerConfig.ACME = acme
@@ -68,22 +40,6 @@ func SetIssuerCA(obj *certv1.Issuer, ca *certv1.CAIssuer) {
 }
 
 // ClusterIssuer setters
-
-// AddClusterIssuerLabel adds or updates a label on the ClusterIssuer metadata.
-func AddClusterIssuerLabel(obj *certv1.ClusterIssuer, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddClusterIssuerAnnotation adds or updates an annotation on the ClusterIssuer metadata.
-func AddClusterIssuerAnnotation(obj *certv1.ClusterIssuer, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
-}
 
 // SetClusterIssuerACME sets the ACME config on the ClusterIssuer.
 func SetClusterIssuerACME(obj *certv1.ClusterIssuer, acme *cmacme.ACMEIssuer) {

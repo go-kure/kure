@@ -96,9 +96,10 @@ Update existing resources:
 // Update Certificate spec
 cert.Spec = newSpec
 
-// Add labels and annotations
-certmanager.AddCertificateLabel(cert, "app", "my-app")
-certmanager.AddIssuerAnnotation(issuer, "note", "production")
+// Labels and annotations use the generic helpers, which work over any object
+// with ObjectMeta -- this package carries no per-kind metadata helpers
+kubernetes.AddLabel(cert, "app", "my-app")
+kubernetes.AddAnnotation(issuer, "note", "production")
 
 // Update issuer configuration
 certmanager.SetIssuerACME(issuer, acmeConfig)

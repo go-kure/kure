@@ -5,62 +5,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// AddExternalSecretLabel adds or updates a label on the ExternalSecret.
-func AddExternalSecretLabel(obj *esv1.ExternalSecret, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddExternalSecretAnnotation adds or updates an annotation on the ExternalSecret.
-func AddExternalSecretAnnotation(obj *esv1.ExternalSecret, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
-}
+// Labels and annotations use the generic kubernetes.AddLabel /
+// kubernetes.AddAnnotation over metav1.Object; this package carries no per-kind
+// metadata helpers.
 
 // AddExternalSecretData appends a data entry to the ExternalSecret spec.
 func AddExternalSecretData(obj *esv1.ExternalSecret, data esv1.ExternalSecretData) {
 	obj.Spec.Data = append(obj.Spec.Data, data)
 }
 
-// AddSecretStoreLabel adds or updates a label on the SecretStore.
-func AddSecretStoreLabel(obj *esv1.SecretStore, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddSecretStoreAnnotation adds or updates an annotation on the SecretStore.
-func AddSecretStoreAnnotation(obj *esv1.SecretStore, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
-}
-
 // SetSecretStoreProvider sets the provider field on the SecretStore spec.
 func SetSecretStoreProvider(obj *esv1.SecretStore, provider *esv1.SecretStoreProvider) {
 	obj.Spec.Provider = provider
-}
-
-// AddClusterSecretStoreLabel adds or updates a label on the ClusterSecretStore.
-func AddClusterSecretStoreLabel(obj *esv1.ClusterSecretStore, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddClusterSecretStoreAnnotation adds or updates an annotation on the ClusterSecretStore.
-func AddClusterSecretStoreAnnotation(obj *esv1.ClusterSecretStore, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
 }
 
 // SetClusterSecretStoreProvider sets the provider field on the ClusterSecretStore spec.

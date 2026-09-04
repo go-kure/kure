@@ -94,36 +94,33 @@ func TestSetConfigMapImmutable(t *testing.T) {
 	}
 }
 
-func TestAddConfigMapLabel(t *testing.T) {
+// TestConfigMapMetadataViaGenericHelpers covers what AddConfigMapLabel and
+// AddConfigMapAnnotation used to do.
+func TestConfigMapMetadataViaGenericHelpers(t *testing.T) {
 	cm := kubernetes.CreateConfigMap("cm", "ns")
-	kubernetes.AddConfigMapLabel(cm, "env", "prod")
+	kubernetes.AddLabel(cm, "env", "prod")
+	kubernetes.AddAnnotation(cm, "owner", "team")
 	if cm.Labels["env"] != "prod" {
-		t.Errorf("AddConfigMapLabel: label not set")
+		t.Errorf("AddLabel: label not set: %+v", cm.Labels)
 	}
-}
-
-func TestAddConfigMapAnnotation(t *testing.T) {
-	cm := kubernetes.CreateConfigMap("cm", "ns")
-	kubernetes.AddConfigMapAnnotation(cm, "owner", "team")
 	if cm.Annotations["owner"] != "team" {
-		t.Errorf("AddConfigMapAnnotation: annotation not set")
+		t.Errorf("AddAnnotation: annotation not set: %+v", cm.Annotations)
 	}
 }
 
-func TestSetConfigMapLabels(t *testing.T) {
+// TestConfigMapMetadataReplacement covers what SetConfigMapLabels and
+// SetConfigMapAnnotations used to do: a whole-map replacement is a direct field
+// assignment, not builder sugar.
+func TestConfigMapMetadataReplacement(t *testing.T) {
 	cm := kubernetes.CreateConfigMap("cm", "ns")
 	labels := map[string]string{"x": "y"}
-	kubernetes.SetConfigMapLabels(cm, labels)
-	if !reflect.DeepEqual(cm.Labels, labels) {
-		t.Errorf("SetConfigMapLabels: got %+v", cm.Labels)
-	}
-}
-
-func TestSetConfigMapAnnotations(t *testing.T) {
-	cm := kubernetes.CreateConfigMap("cm", "ns")
 	anns := map[string]string{"c": "d"}
-	kubernetes.SetConfigMapAnnotations(cm, anns)
+	cm.Labels = labels
+	cm.Annotations = anns
+	if !reflect.DeepEqual(cm.Labels, labels) {
+		t.Errorf("labels: got %+v", cm.Labels)
+	}
 	if !reflect.DeepEqual(cm.Annotations, anns) {
-		t.Errorf("SetConfigMapAnnotations: got %+v", cm.Annotations)
+		t.Errorf("annotations: got %+v", cm.Annotations)
 	}
 }

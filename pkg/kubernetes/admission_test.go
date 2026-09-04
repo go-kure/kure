@@ -95,7 +95,7 @@ func dumpExclusions(t *testing.T, inadmissible map[string]admission.Finding) {
 	sort.Strings(keys)
 	var b strings.Builder
 	b.WriteString("# Inadmissible Set*/Add* helpers tolerated by TestAdmission_SugarHelpersAreClassAdmissible.\n")
-	b.WriteString("# Temporary: the prune work item of the builder-contract epic empties this file.\n")
+	b.WriteString("# The prune work item of the builder-contract epic emptied it; it stays empty.\n")
 	b.WriteString("# Entries only ever leave; a new helper must be class-admissible (see pkg/kubernetes/README.md).\n")
 	b.WriteString("# Regenerate with: KURE_ADMISSION_DUMP=1 go test ./pkg/kubernetes -run TestAdmission\n\n")
 	for _, k := range keys {

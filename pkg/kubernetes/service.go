@@ -28,27 +28,8 @@ func SetServiceLoadBalancerClass(service *corev1.Service, class string) {
 	service.Spec.LoadBalancerClass = &class
 }
 
-// AddServiceLabel adds a single label to the Service metadata.
-func AddServiceLabel(svc *corev1.Service, key, value string) {
-	if svc == nil {
-		panic("AddServiceLabel: svc must not be nil")
-	}
-	if svc.Labels == nil {
-		svc.Labels = make(map[string]string)
-	}
-	svc.Labels[key] = value
-}
-
-// AddServiceAnnotation adds a single annotation to the Service metadata.
-func AddServiceAnnotation(svc *corev1.Service, key, value string) {
-	if svc == nil {
-		panic("AddServiceAnnotation: svc must not be nil")
-	}
-	if svc.Annotations == nil {
-		svc.Annotations = make(map[string]string)
-	}
-	svc.Annotations[key] = value
-}
+// Labels and annotations use the generic AddLabel / AddAnnotation over
+// metav1.Object (metadata.go); there is no per-kind Service helper.
 
 // AddServiceLoadBalancerSourceRange appends a CIDR to the allowed source ranges
 // for a load balancer Service.

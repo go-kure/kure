@@ -711,3 +711,50 @@ the per-kind metadata helpers below.
 Removing it is a separate change, tracked in issue #756.
 
 That leaves 2 tolerated helpers, both `ConfigMap` metadata.
+
+## Per-kind metadata helpers removed
+
+The contract admits exactly four generic metadata helpers by name — `AddLabel`,
+`SetLabels`, `AddAnnotation`, `SetAnnotations` — and that set never grows. They
+take a `metav1.Object`, so they already reach every kind in the module,
+including kinds kure has never heard of. The thirty-two per-kind helpers below
+reached one kind each and are removed.
+
+Every one of them has the same replacement shape, so the tables below give the
+kinds rather than repeating one row per function:
+
+```go
+// before
+cnpg.AddClusterLabel(cluster, "env", "prod")
+certmanager.AddIssuerAnnotation(issuer, "note", "production")
+
+// after
+kubernetes.AddLabel(cluster, "env", "prod")
+kubernetes.AddAnnotation(issuer, "note", "production")
+```
+
+| Package | Removed | Kinds |
+|---|---|---|
+| `pkg/kubernetes` | 10 | `ConfigMap` (also `SetConfigMapLabels`/`SetConfigMapAnnotations`), `Namespace`, `Service`, `ServiceAccount` |
+| `pkg/kubernetes/certmanager` | 6 | `Certificate`, `Issuer`, `ClusterIssuer` |
+| `pkg/kubernetes/cnpg` | 8 | `Cluster`, `Database`, `ObjectStore`, `ScheduledBackup` |
+| `pkg/kubernetes/externalsecrets` | 6 | `ExternalSecret`, `SecretStore`, `ClusterSecretStore` |
+| `pkg/kubernetes/fluxcd` | 2 | `HelmRelease` |
+
+`SetConfigMapLabels` and `SetConfigMapAnnotations` are whole-map replacements,
+so their replacement is `cm.Labels = labels` / `cm.Annotations = anns` rather
+than the generic setter — `SetLabels` is available and does the same thing, but
+a plain field assignment is what the contract prefers for a bare write.
+
+Three groups of metadata-shaped helpers stay, because none of them writes
+`ObjectMeta`:
+
+| Kept | Field it writes |
+|---|---|
+| `cilium.SetCiliumNetworkPolicyLabels`, `cilium.SetCiliumClusterwideNetworkPolicyLabels` | `spec.labels` (`labels.LabelArray`) |
+| `prometheus.AddServiceMonitorTargetLabel`, `prometheus.AddPodMonitorPodTargetLabel` | `spec.targetLabels` / `spec.podTargetLabels` (`[]string`) |
+| `fluxcd.AddCommonMetadataLabel`, `fluxcd.AddCommonMetadataAnnotation` | `spec.commonMetadata` on a `Kustomization` — a spec sub-type, not a `metav1.Object`, so the generic helpers cannot reach it |
+
+With these gone the exclusion list is empty: every exported `Set*`/`Add*` under
+`pkg/kubernetes` now satisfies the contract, and
+`testdata/admission_exclusions.txt` records no tolerated helper at all.

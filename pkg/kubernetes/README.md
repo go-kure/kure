@@ -117,10 +117,9 @@ control flow, so a write guarded by an optional-value condition
 (`if name != "" { ... }`, forbidden by §4) is not detected by the test. That idiom is
 caught by review and by the helper's own golden test. A function literal's body is not
 the helper's own body: an append inside a closure the helper never calls is a no-op no
-caller sees, so it admits nothing. `pkg/kubernetes/testdata/admission_exclusions.txt` lists the helpers
-tolerated until the prune work item of the epic deletes them, or rewrites the
-class-shaped ones that only fail §4 (an `error` return) as void helpers; entries only ever leave,
-and a stale entry fails the test.
+caller sees, so it admits nothing. `pkg/kubernetes/testdata/admission_exclusions.txt` listed the
+helpers tolerated while the prune work item of the epic ran; that file is now empty and stays
+empty. Entries only ever leave, and a stale entry fails the test.
 
 ## 4. Purity
 
@@ -149,7 +148,12 @@ kubernetes.AddAnnotation(obj, "note", "rotated 2026-09")
 ```
 
 These four are admitted by name; per-kind label and annotation helpers are not part
-of the contract.
+of the contract, and none remain — `AddNamespaceLabel`, `AddClusterAnnotation`,
+`SetConfigMapLabels` and the twenty-nine others like them were removed, since the
+four above already reach every kind through `metav1.Object`. Two helpers keep a
+metadata-shaped name while writing something else: cilium's `Set*PolicyLabels`
+write the policy's `spec.labels`, and prometheus's `Add*TargetLabel` appends to a
+scrape spec's target-label list. Neither is ObjectMeta.
 
 ## 6. Names
 

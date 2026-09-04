@@ -17,6 +17,8 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
 // GitRepository setters
@@ -640,35 +642,22 @@ func TestCreateCustomHealthCheck(t *testing.T) {
 
 // HelmRelease setters
 
-func TestAddHelmReleaseLabel(t *testing.T) {
+// TestHelmReleaseMetadataViaGenericHelpers covers what AddHelmReleaseLabel and
+// AddHelmReleaseAnnotation used to do, including the nil-map path on a
+// HelmRelease not built by CreateHelmRelease.
+func TestHelmReleaseMetadataViaGenericHelpers(t *testing.T) {
 	obj := CreateHelmRelease("hr", "ns")
-	AddHelmReleaseLabel(obj, "env", "prod")
-	if obj.Labels["env"] != "prod" {
-		t.Error("label not set")
+	kubernetes.AddLabel(obj, "env", "prod")
+	kubernetes.AddAnnotation(obj, "note", "value")
+	if obj.Labels["env"] != "prod" || obj.Annotations["note"] != "value" {
+		t.Errorf("metadata not set: labels=%v annotations=%v", obj.Labels, obj.Annotations)
 	}
-}
 
-func TestAddHelmReleaseLabel_NilMap(t *testing.T) {
-	obj := &helmv2.HelmRelease{}
-	AddHelmReleaseLabel(obj, "env", "prod")
-	if obj.Labels["env"] != "prod" {
-		t.Error("label not set after nil init")
-	}
-}
-
-func TestAddHelmReleaseAnnotation(t *testing.T) {
-	obj := CreateHelmRelease("hr", "ns")
-	AddHelmReleaseAnnotation(obj, "note", "value")
-	if obj.Annotations["note"] != "value" {
-		t.Error("annotation not set")
-	}
-}
-
-func TestAddHelmReleaseAnnotation_NilMap(t *testing.T) {
-	obj := &helmv2.HelmRelease{}
-	AddHelmReleaseAnnotation(obj, "note", "value")
-	if obj.Annotations["note"] != "value" {
-		t.Error("annotation not set after nil init")
+	bare := &helmv2.HelmRelease{}
+	kubernetes.AddLabel(bare, "env", "prod")
+	kubernetes.AddAnnotation(bare, "note", "value")
+	if bare.Labels["env"] != "prod" || bare.Annotations["note"] != "value" {
+		t.Errorf("metadata not set after nil init: labels=%v annotations=%v", bare.Labels, bare.Annotations)
 	}
 }
 

@@ -8,7 +8,7 @@
 // The package mirrors the constructors and setters found under
 // `internal/cnpg` so applications can build CNPG manifests programmatically
 // without depending on the internal packages directly.  All constructors accept
-// a configuration struct and delegate to the internal package.
+// a configuration struct.
 //
 // Resources covered include `Cluster`, `Database`, `ObjectStore`, and
 // `ScheduledBackup`.
@@ -27,10 +27,12 @@
 // ## Update helpers
 //
 // Additional functions prefixed with `Set` or `Add` expose granular control
-// over the generated objects.  They delegate to the internal package while
-// keeping the public API stable.  For example:
+// over the generated objects.  Each writes exactly the one spec field it names.
+// Labels and annotations use the generic kubernetes.AddLabel /
+// kubernetes.AddAnnotation over metav1.Object; this package carries no per-kind
+// metadata helpers.  For example:
 //
 //	cluster := cnpg.Cluster(&cnpg.ClusterConfig{...})
-//	cnpg.AddClusterLabel(cluster, "env", "prod")
+//	kubernetes.AddLabel(cluster, "env", "prod")
 //	cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "app"})
 package cnpg

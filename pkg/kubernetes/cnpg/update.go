@@ -7,21 +7,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// AddClusterLabel adds or updates a label on the Cluster metadata.
-func AddClusterLabel(obj *cnpgv1.Cluster, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddClusterAnnotation adds or updates an annotation on the Cluster metadata.
-func AddClusterAnnotation(obj *cnpgv1.Cluster, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
-}
+// Labels and annotations use the generic kubernetes.AddLabel /
+// kubernetes.AddAnnotation over metav1.Object; this package carries no per-kind
+// metadata helpers.
 
 // AddClusterManagedRole adds a managed role to the Cluster spec.
 func AddClusterManagedRole(obj *cnpgv1.Cluster, role cnpgv1.RoleConfiguration) {
@@ -31,41 +19,9 @@ func AddClusterManagedRole(obj *cnpgv1.Cluster, role cnpgv1.RoleConfiguration) {
 	obj.Spec.Managed.Roles = append(obj.Spec.Managed.Roles, role)
 }
 
-// AddDatabaseLabel adds or updates a label on the Database metadata.
-func AddDatabaseLabel(obj *cnpgv1.Database, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddDatabaseAnnotation adds or updates an annotation on the Database metadata.
-func AddDatabaseAnnotation(obj *cnpgv1.Database, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
-}
-
 // AddDatabaseExtension appends an extension to the Database spec.
 func AddDatabaseExtension(obj *cnpgv1.Database, ext cnpgv1.ExtensionSpec) {
 	obj.Spec.Extensions = append(obj.Spec.Extensions, ext)
-}
-
-// AddObjectStoreLabel adds or updates a label on the ObjectStore metadata.
-func AddObjectStoreLabel(obj *barmanv1.ObjectStore, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddObjectStoreAnnotation adds or updates an annotation on the ObjectStore metadata.
-func AddObjectStoreAnnotation(obj *barmanv1.ObjectStore, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
 }
 
 // AddObjectStoreEnvVar appends an environment variable to the instance sidecar configuration.
@@ -88,22 +44,6 @@ func SetObjectStoreWalConfig(obj *barmanv1.ObjectStore, wal *barmanapi.WalBackup
 // SetObjectStoreDataConfig sets the data backup configuration on the ObjectStore.
 func SetObjectStoreDataConfig(obj *barmanv1.ObjectStore, data *barmanapi.DataBackupConfiguration) {
 	obj.Spec.Configuration.Data = data
-}
-
-// AddScheduledBackupLabel adds or updates a label on the ScheduledBackup metadata.
-func AddScheduledBackupLabel(obj *cnpgv1.ScheduledBackup, key, value string) {
-	if obj.Labels == nil {
-		obj.Labels = make(map[string]string)
-	}
-	obj.Labels[key] = value
-}
-
-// AddScheduledBackupAnnotation adds or updates an annotation on the ScheduledBackup metadata.
-func AddScheduledBackupAnnotation(obj *cnpgv1.ScheduledBackup, key, value string) {
-	if obj.Annotations == nil {
-		obj.Annotations = make(map[string]string)
-	}
-	obj.Annotations[key] = value
 }
 
 // SetScheduledBackupPluginConfiguration sets the plugin configuration on the ScheduledBackup spec.
