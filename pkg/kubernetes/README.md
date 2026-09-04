@@ -194,9 +194,10 @@ not alpha.
 
 The prose scan reads prose only — marker lines are removed before it runs. A
 marker's words describe that marker's own subject, not the field's maturity, and
-`k8s.io/api` v0.37.0 makes the difference load-bearing: its declarative-validation
-markers are spelled `+k8s:alpha(since: "1.37")=+k8s:required`, which says the
-*required rule* is alpha since 1.37, on fields that have been GA for years. Reading
+the declarative-validation markers `k8s.io/api` introduced in v0.37.0 make the
+difference load-bearing: they are spelled
+`+k8s:alpha(since: "1.37")=+k8s:required`, which says the *required rule* is alpha
+since 1.37, on fields that have been GA for years. Reading
 those as prose reported 45 long-stable built-in fields as alpha or beta —
 `StatefulSetSpec.selector`, `ClusterRole.rules`, `Secret.type` among them — and
 contradicted a genuinely stable field in the same type. A field's maturity is claimed
@@ -239,7 +240,10 @@ fields, of which 41 require a feature gate (40 in `k8s.io/api`, one in
 `k8s.io/apiextensions-apiserver`); 24 are documented alpha, 14 beta and 66
 deprecated, the remaining 22 are gated without a documented stability claim, and 92
 distinct status types are skipped. No CRD module kure pins uses `+featureGate` at
-all. These numbers move with the pins and are not asserted by any test; what the
+all. These numbers move with the pins and are not asserted by any test; the pins
+themselves are not restated here — every generated row carries the module and
+version it was read from, and the exact build versions live in the generated
+[Compatibility Matrix](/api-reference/compatibility/). What the
 tests assert is that every reported field exists in the pinned struct, that a set of
 long-GA built-in fields is reported stable, and that the five fields named above —
 the ones whose prose mentions the words about something else — claim nothing.
