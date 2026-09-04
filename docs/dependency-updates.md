@@ -348,11 +348,37 @@ bundle them into a single PR:
 2. Run `go get` for all dependencies (Flux packages first for coordinated upgrades)
 3. Run `go mod tidy`
 4. Update `versions.yaml` `supported_range` / `notes` for any bump that lands outside its range
-5. Regenerate docs: `./scripts/sync-versions.sh generate`; regenerate the constructor wrappers if an API module moved: `./scripts/gen-builders.sh generate`
+5. Regenerate docs: `./scripts/sync-versions.sh generate`; regenerate the constructor wrappers and the API tables if an API module moved: `./scripts/gen-builders.sh generate`
 6. Validate: `./scripts/sync-versions.sh check` and `./scripts/gen-builders.sh check`
 7. Run full verification: `make verify && make test-race`
 8. Commit, push, and create PR
 9. Reference all Renovate PR numbers in the PR body to auto-close them
+
+## The Generated API Tables
+
+An API module bump can change what kure publishes about that API, so
+`scripts/gen-builders.sh generate` runs in Renovate's `postUpgradeTasks` and rewrites
+four generated artifacts: the per-kind constructor wrappers, `pkg/kubernetes/zz_generated_tables.go`,
+`docs/api-tables.json` and `docs/api-tables.md`. CI's `validate` job runs
+`scripts/gen-builders.sh check`, which fails on any of them being stale. All four are
+in the `fileFilters` of that `postUpgradeTasks` block — a path missing there is dropped
+from the bot's commit silently, never as an error, and surfaces only as a red `check`.
+
+Two things about those tables specifically:
+
+- **They are derived from two upstream sources**, both read out of the pinned module as
+  unpacked in the local module cache: the `+kubebuilder:resource` markers in the Go
+  source, and the `CustomResourceDefinition` manifests the module ships. A kind that a
+  bump leaves with neither is a **hard generation failure** on that PR, not a silent
+  default — see `pkg/kubernetes/README.md` § 9. If a bump fails to generate for that
+  reason, the fix is to establish the kind's real scope from upstream, not to make the
+  generator guess.
+- **A table change trips the doc gate.** `zz_generated_tables.go` lives in the doc-gated
+  `pkg/kubernetes` package, and the `// doc-gate:trivial` exemption cannot cover it: that
+  exemption applies only to lines containing `=` whose declaration prefix is unchanged,
+  and a table row has no `=`. For a bump whose only effect on these artifacts is version
+  churn, a maintainer applies the `docs-skip` label. A bump that adds, removes or
+  re-scopes a kind is not version churn and should update the prose too.
 
 ## Dangerous Upgrades to Watch For
 
@@ -370,6 +396,8 @@ Before merging any dependency update:
 - [ ] `./scripts/sync-versions.sh check` — build versions within `supported_range`, the
       `go.mod` pin comment and `versions.yaml` notes match (run `generate` first if it
       reports drift; reword any raw commit SHA in `notes:` to reference `go.mod` instead)
+- [ ] `./scripts/gen-builders.sh check` — the constructor wrappers and the API tables
+      match the pinned modules (run `generate` first if it reports drift)
 - [ ] `make verify` — tidy + lint + test
 - [ ] `make test-race` — race condition detection
 - [ ] k8s.io replace directives unchanged (unless intentionally bumping)
