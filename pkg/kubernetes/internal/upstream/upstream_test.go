@@ -18,7 +18,7 @@ func parseTypes(t *testing.T, src string) map[string]Type {
 		t.Fatalf("parse: %v", err)
 	}
 	out := map[string]Type{}
-	collectTypes(file, "example.com/api/v1", "example.com", "v1.2.3", out)
+	collectTypes(file, "example.com/api/v1", module{path: "example.com", version: "v1.2.3", dir: "/mod/example.com@v1.2.3"}, out)
 	return out
 }
 

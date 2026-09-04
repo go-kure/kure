@@ -128,6 +128,10 @@ packages:
     readme: pkg/kubernetes/README.md
     mounted: false
     reason: "Internal loader for the pinned upstream module sources the tables are derived from; documented on the Kubernetes Builders page."
+  - path: pkg/kubernetes/internal/crds
+    readme: pkg/kubernetes/README.md
+    mounted: false
+    reason: "Internal reader for the CustomResourceDefinition manifests a pinned module ships; documented on the Kubernetes Builders page."
   - path: pkg/kubernetes/internal/maturity
     readme: pkg/kubernetes/README.md
     mounted: false

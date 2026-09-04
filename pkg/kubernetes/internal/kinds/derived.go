@@ -15,7 +15,40 @@ type DerivedScope struct {
 	Scope   markers.Scope
 	Module  string
 	Version string
+	// Marked records whether this kind's own type declares a
+	// +kubebuilder:resource marker. Scope alone cannot say: an unmarked type
+	// and a type declaring scope=Namespaced both resolve to ScopeNamespaced,
+	// and only the second is an answer rather than the absence of one.
+	//
+	// Per kind, not per module. A module can mark some of its root types and
+	// not others — and internal/upstream deliberately drops a marker block
+	// preceding a grouped `type (...)` declaration, since it cannot be
+	// attributed to one spec, so those types read as unmarked too. A
+	// module-level "this module has markers somewhere" test would pass while
+	// exactly the kinds it was meant to protect fell to the default.
+	Marked bool
+	// ModuleDir is where the module was unpacked, so a kind its markers cannot
+	// answer for can be answered from the CRD the module ships.
+	ModuleDir string
+	// Source records which of the three sources answered. Empty until
+	// [ResolveScopes] fills it in: [DeriveScopes] reads markers only.
+	Source ScopeSource
 }
+
+// ScopeSource names where a resolved scope came from. The generated table
+// carries it so a wrong scope can be traced to the thing that claimed it.
+type ScopeSource string
+
+const (
+	// SourceMarker is the kind's own +kubebuilder:resource marker.
+	SourceMarker ScopeSource = "marker"
+	// SourceBuiltinTable is builtinClusterScoped, for the modules whose scope
+	// the API server rather than a marker defines.
+	SourceBuiltinTable ScopeSource = "builtin"
+	// SourceShippedCRD is the CustomResourceDefinition the module ships, read
+	// when the type carries no marker of its own.
+	SourceShippedCRD ScopeSource = "crd"
+)
 
 // DeriveScopes reads each kind's scope from the +kubebuilder:resource marker in
 // the pinned upstream module sources, returning one entry per kind keyed by
@@ -39,10 +72,12 @@ func DeriveScopes(all []Kind, types map[string]upstream.Type) ([]DerivedScope, e
 			return nil, errors.Wrapf(err, "kinds: %s (%s.%s)", k.GVK, k.ImportPath, k.TypeName)
 		}
 		out = append(out, DerivedScope{
-			Key:     k.Key(),
-			Scope:   scope,
-			Module:  t.Module,
-			Version: t.Version,
+			Key:       k.Key(),
+			Scope:     scope,
+			Module:    t.Module,
+			Version:   t.Version,
+			Marked:    markers.HasResource(t.Doc),
+			ModuleDir: t.ModuleDir,
 		})
 	}
 	return out, nil
