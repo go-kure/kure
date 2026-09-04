@@ -65,11 +65,7 @@ func Walk(roots []Root, types map[string]upstream.Type) ([]Entry, error) {
 	if len(roots) == 0 {
 		return nil, errors.Errorf("maturity: no roots to walk")
 	}
-	w := &walker{
-		types:   types,
-		visited: map[string]bool{},
-		entries: map[string]Entry{},
-	}
+	w := newWalker(types)
 	for _, r := range roots {
 		key := upstream.Key(r.ImportPath, r.TypeName)
 		if _, ok := types[key]; !ok {
@@ -93,29 +89,44 @@ func Walk(roots []Root, types map[string]upstream.Type) ([]Entry, error) {
 	return out, nil
 }
 
-// SkippedStatusTypes returns the names of the status types the walk declined
-// to enter, so a test can assert the skip is doing what it claims rather than
+// SkippedStatusTypes returns the distinct status types the walk declined to
+// enter, so a test can assert the skip is doing what it claims rather than
 // quietly swallowing half the API.
+//
+// Distinct, not one entry per reference: a status type is commonly named by
+// several kinds (every Flux kind reaches meta.ReconcileRequestStatus), and
+// counting each reference separately would report a number that says how
+// densely the API cross-references its status types, not how many of them the
+// walk refused.
 func SkippedStatusTypes(roots []Root, types map[string]upstream.Type) []string {
-	w := &walker{
-		types:   types,
-		visited: map[string]bool{},
-		entries: map[string]Entry{},
-	}
+	w := newWalker(types)
 	for _, r := range roots {
 		if _, ok := types[upstream.Key(r.ImportPath, r.TypeName)]; ok {
 			w.visit(upstream.Key(r.ImportPath, r.TypeName))
 		}
 	}
-	sort.Strings(w.skipped)
-	return w.skipped
+	out := make([]string, 0, len(w.skipped))
+	for k := range w.skipped {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 type walker struct {
 	types   map[string]upstream.Type
 	visited map[string]bool
 	entries map[string]Entry
-	skipped []string
+	skipped map[string]bool
+}
+
+func newWalker(types map[string]upstream.Type) *walker {
+	return &walker{
+		types:   types,
+		visited: map[string]bool{},
+		entries: map[string]Entry{},
+		skipped: map[string]bool{},
+	}
 }
 
 // visit records the maturity-carrying fields of one type and descends into the
@@ -140,7 +151,7 @@ func (w *walker) visit(key string) {
 			continue
 		}
 		if isStatusType(child) {
-			w.skipped = append(w.skipped, child)
+			w.skipped[child] = true
 			continue
 		}
 		w.visit(child)

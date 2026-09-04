@@ -154,6 +154,29 @@ func TestFeatureGates(t *testing.T) {
 	}
 }
 
+// HasResource exists to separate the two cases ResourceScope collapses into
+// ScopeNamespaced: a type declaring the default, and a type declaring nothing.
+func TestHasResource(t *testing.T) {
+	for _, tc := range []struct {
+		name, doc string
+		want      bool
+	}{
+		{"no markers", "// Thing is a thing.\n", false},
+		{"other markers only", "// +genclient\n// +kubebuilder:object:root=true\n", false},
+		{"bare resource marker", "// +kubebuilder:resource\n", true},
+		{"scope cluster", "// +kubebuilder:resource:scope=Cluster\n", true},
+		{"scope namespaced", "// +kubebuilder:resource:scope=Namespaced\n", true},
+		{"quoted list", `// +kubebuilder:resource:path="things",scope="Cluster"`, true},
+		{"not a marker line", "// see +kubebuilder:resource:scope=Cluster for details\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := HasResource(tc.doc); got != tc.want {
+				t.Errorf("HasResource(%q) = %v, want %v", tc.doc, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestScopeString(t *testing.T) {
 	if got := ScopeCluster.String(); got != "Cluster" {
 		t.Errorf("ScopeCluster = %q, want %q", got, "Cluster")

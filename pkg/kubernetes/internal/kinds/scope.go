@@ -1,8 +1,11 @@
 package kinds
 
 import (
+	"sort"
+
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
+	"github.com/go-kure/kure/pkg/kubernetes/internal/upstream"
 )
 
 // builtinModules are the modules whose types carry no +kubebuilder:resource
@@ -45,11 +48,66 @@ var builtinClusterScoped = set(
 	"storage.k8s.io/VolumeAttributesClass",
 )
 
+// unmarkedModules are the non-built-in modules verified to ship no
+// +kubebuilder:resource marker on any type. Their kinds take controller-gen's
+// documented default, Namespaced — which is what controller-gen itself emitted
+// into the CRD these modules ship.
+//
+// The entry is a recorded decision, not a default the derivation fell into: an
+// absent marker is indistinguishable from a marker this parser failed to read,
+// so a module reaching this state has to be looked at once, against the CRD it
+// publishes, and written down here.
+//
+//   - github.com/cloudnative-pg/plugin-barman-cloud: its one registered kind is
+//     ObjectStore (barmancloud.cnpg.io/v1). The module's api/v1 carries
+//     +kubebuilder:object:root, :subresource:status and :storageversion but no
+//     :resource marker, and the CRD it ships in manifest.yaml declares
+//     scope: Namespaced. Verified against v0.14.0.
+var unmarkedModules = map[string]bool{
+	"github.com/cloudnative-pg/plugin-barman-cloud": true,
+}
+
+// UnmarkedModules returns the non-built-in modules among the loaded types that
+// declare no +kubebuilder:resource marker on any of their types, sorted.
+//
+// A module in that state is the one case the derivation cannot see: every one
+// of its kinds resolves to Namespaced, which is upstream's default and also
+// what a total parse failure looks like. The result must be empty, and it is
+// asserted to be — see TestNoRegisteredModuleIsUnmarked, which runs this over
+// the real pinned sources, and TestUnmarkedModulesReportsAMarkerLessModule,
+// which is the same check against a module that genuinely carries none.
+func UnmarkedModules(types map[string]upstream.Type) []string {
+	seen := map[string]bool{}
+	marked := map[string]bool{}
+	for _, t := range types {
+		if t.Module == "" || builtinModules[t.Module] {
+			continue
+		}
+		seen[t.Module] = true
+		if markers.HasResource(t.Doc) {
+			marked[t.Module] = true
+		}
+	}
+	var out []string
+	for m := range seen {
+		if !marked[m] {
+			out = append(out, m)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // ResolveScopes returns every kind's scope: read from the upstream
 // +kubebuilder:resource marker for the CRD modules that carry them, and from
 // builtinClusterScoped for the built-in modules that do not.
-func ResolveScopes(all []Kind) ([]DerivedScope, error) {
-	derived, err := DeriveScopes(all)
+//
+// types is the loaded upstream source, from [LoadTypes]. It is an argument
+// rather than something this function loads for itself because the maturity
+// walk needs the same map, and loading the pinned module sources twice is the
+// most expensive thing the generator does.
+func ResolveScopes(all []Kind, types map[string]upstream.Type) ([]DerivedScope, error) {
+	derived, err := DeriveScopes(all, types)
 	if err != nil {
 		return nil, err
 	}

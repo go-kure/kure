@@ -41,11 +41,8 @@ func TestBaselineCounts(t *testing.T) {
 // while both sources exist, so the marker derivation is proven against the
 // table it replaces rather than trusted after the table is gone.
 func TestDerivedScopesAgreeWithTheHandSeededTables(t *testing.T) {
-	all, err := Registered()
-	if err != nil {
-		t.Fatal(err)
-	}
-	derived, err := DeriveScopes(all)
+	all, types := loadRegistered(t)
+	derived, err := DeriveScopes(all, types)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,11 +83,8 @@ func TestDerivedScopesAgreeWithTheHandSeededTables(t *testing.T) {
 // Every kind's module and version must be resolved, or the kinds table would
 // carry blank provenance columns.
 func TestDerivedScopesCarryModuleProvenance(t *testing.T) {
-	all, err := Registered()
-	if err != nil {
-		t.Fatal(err)
-	}
-	derived, err := DeriveScopes(all)
+	all, types := loadRegistered(t)
+	derived, err := DeriveScopes(all, types)
 	if err != nil {
 		t.Fatal(err)
 	}

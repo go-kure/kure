@@ -27,16 +27,7 @@ type DerivedScope struct {
 // registers. DeriveScopes reports what the markers say and does not paper over
 // that difference — [ResolveScopes] is the function that applies
 // builtinClusterScoped on top and is what callers should use.
-func DeriveScopes(all []Kind) ([]DerivedScope, error) {
-	paths := map[string]bool{}
-	for _, k := range all {
-		paths[k.ImportPath] = true
-	}
-	types, err := upstream.Load(sortedKeys(paths))
-	if err != nil {
-		return nil, err
-	}
-
+func DeriveScopes(all []Kind, types map[string]upstream.Type) ([]DerivedScope, error) {
 	out := make([]DerivedScope, 0, len(all))
 	for _, k := range all {
 		t, ok := types[upstream.Key(k.ImportPath, k.TypeName)]
@@ -55,6 +46,23 @@ func DeriveScopes(all []Kind) ([]DerivedScope, error) {
 		})
 	}
 	return out, nil
+}
+
+// ImportPaths returns the distinct packages the kinds are declared in, sorted.
+// It is the argument to [upstream.Load]: callers load once and pass the result
+// to both [ResolveScopes] and the maturity walk, rather than parsing the same
+// modules twice.
+func ImportPaths(all []Kind) []string {
+	paths := map[string]bool{}
+	for _, k := range all {
+		paths[k.ImportPath] = true
+	}
+	return sortedKeys(paths)
+}
+
+// LoadTypes loads the upstream types for every package the kinds live in.
+func LoadTypes(all []Kind) (map[string]upstream.Type, error) {
+	return upstream.Load(ImportPaths(all))
 }
 
 func sortedKeys(m map[string]bool) []string {

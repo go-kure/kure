@@ -114,6 +114,12 @@ func syntheticTypes() map[string]upstream.Type {
 				{Name: "Nested", JSONName: "nested", TypeExpr: "[]*Nested"},
 				{Name: "Far", JSONName: "far", TypeExpr: "other.Far"},
 				{Name: "Loop", JSONName: "loop", TypeExpr: "*ThingSpec"},
+				// The same status type reached a second time, from a second
+				// place. SkippedStatusTypes must still report it once: a
+				// per-reference count measures how densely the API
+				// cross-references its status types, not how many the walk
+				// refused to enter.
+				{Name: "LastStatus", JSONName: "lastStatus", TypeExpr: "*ThingStatus"},
 				{Name: "Unloaded", JSONName: "unloaded", TypeExpr: "missing.Type"},
 			},
 		},
@@ -188,10 +194,12 @@ func TestWalkRejectsBadInput(t *testing.T) {
 	}
 }
 
+// The synthetic graph names ThingStatus from two fields, so this also pins the
+// deduplication: one entry, not one per reference.
 func TestSkippedStatusTypesReportsTheSkip(t *testing.T) {
 	skipped := SkippedStatusTypes([]Root{{ImportPath: "example.com/api/v1", TypeName: "Thing"}}, syntheticTypes())
 	if len(skipped) != 1 || !strings.HasSuffix(skipped[0], "ThingStatus") {
-		t.Errorf("skipped = %v, want one ThingStatus entry", skipped)
+		t.Errorf("skipped = %v, want exactly one ThingStatus entry", skipped)
 	}
 	// A root that is not loaded is simply not walked.
 	if got := SkippedStatusTypes([]Root{{ImportPath: "nope", TypeName: "Nope"}}, syntheticTypes()); len(got) != 0 {

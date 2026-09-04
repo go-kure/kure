@@ -301,7 +301,7 @@ import (
 )
 
 type Thing struct {
-	Meta metav1.ObjectMeta ` + "`json:\"metadata\"`" + `
+	Meta metav1.ObjectMeta `+"`json:\"metadata\"`"+`
 }
 `)
 	got := types[Key("example.com/api/v1", "Thing")].Imports

@@ -95,6 +95,24 @@ func ResourceScope(doc string) (Scope, error) {
 	return scope, nil
 }
 
+// HasResource reports whether a doc comment carries a +kubebuilder:resource
+// marker at all, in either form.
+//
+// [ResourceScope] cannot answer this: it returns ScopeNamespaced both for a
+// type that declares scope=Namespaced and for a type that declares nothing,
+// which is correct for deriving a scope and useless for deciding whether a
+// module was generated with resource markers in the first place. A module
+// carrying none needs an explicitly recorded exception rather than the default,
+// so something has to be able to tell the two apart.
+func HasResource(doc string) bool {
+	for _, line := range markerLines(doc) {
+		if line == resourceBare || strings.HasPrefix(line, resourcePrefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // FeatureGates returns the feature-gate names a doc comment declares, in the
 // order they appear. A field carries one marker per gate.
 func FeatureGates(doc string) []string {
