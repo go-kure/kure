@@ -73,4 +73,5 @@ case manifest.ScopeUnknown:
 | `CRDScope(o)` | A CRD's defined `GroupKind` and declared scope (defaults to namespaced). |
 | `ObjectGroupKind(o)` | The `GroupKind` of an emitted object. |
 | `Scope(o, crdScopes)` | Classify an object as namespaced, cluster-scoped, or unknown. |
-| `IsNamespacedBuiltinKind(apiVersion, kind)` | Whether a kind is a known namespaced type. Answered from the generated table, so it covers every kind kure registers, not only the built-ins the name suggests; an unregistered kind answers `false`, which means "not known to be namespaced", never "cluster-scoped". |
+| `IsNamespacedKind(apiVersion, kind)` | Whether a kind kure registers is namespaced, built-in or custom resource alike. Answered from the generated table; version-insensitive. An unregistered kind answers `false`, which means "not known to be namespaced", never "cluster-scoped" — use `Scope` to tell those apart. |
+| `IsNamespacedBuiltinKind(apiVersion, kind)` | The same question restricted to built-ins: a kind whose scope the Kubernetes API itself defines, which the generated table records as `ScopeSourceBuiltin`. A CRD kind answers `false` whatever its scope. |

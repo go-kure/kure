@@ -143,7 +143,7 @@ for the kinds whose scope the API server defines.
 | `volsync.backube/v1alpha1` | `ReplicationDestination` | Namespaced | `marker` | `ReplicationDestination` | `github.com/backube/volsync@v0.16.0` |
 | `volsync.backube/v1alpha1` | `ReplicationSource` | Namespaced | `marker` | `ReplicationSource` | `github.com/backube/volsync@v0.16.0` |
 
-## Field maturity (131)
+## Field maturity (126)
 
 kure neither warns nor filters on any of this: it reports, and a consumer with
 cluster knowledge decides. For built-in types the API server does not reject a
@@ -181,8 +181,6 @@ by a caller.
 | `monitoring/v1.AlertmanagerSpec` | `sha` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
 | `monitoring/v1.AlertmanagerSpec` | `tag` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
 | `monitoring/v1.CommonPrometheusFields` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.CommonPrometheusFields` | `scrapeConfigNamespaceSelector` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.CommonPrometheusFields` | `scrapeConfigSelector` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
 | `monitoring/v1.Endpoint` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
 | `monitoring/v1.HTTPConfigWithoutTLS` | `bearerTokenSecret` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
 | `monitoring/v1.PodMetricsEndpoint` | `targetPort` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
@@ -208,7 +206,6 @@ by a caller.
 | `core/v1.EnvVarSource` | `fileKeyRef` | stable | `EnvFiles` | `k8s.io/api@v0.37.0` |
 | `core/v1.EphemeralContainerCommon` | `resizePolicy` | stable | `InPlacePodVerticalScaling` | `k8s.io/api@v0.37.0` |
 | `core/v1.EphemeralContainerCommon` | `restartPolicyRules` | stable | `ContainerRestartRules` | `k8s.io/api@v0.37.0` |
-| `core/v1.FileKeySelector` | `key` | alpha | — | `k8s.io/api@v0.37.0` |
 | `core/v1.GRPCAction` | `mode` | stable | `GRPCContainerProbeTLS` | `k8s.io/api@v0.37.0` |
 | `core/v1.HTTPGetAction` | `protocol` | stable | `H2CContainerProbe` | `k8s.io/api@v0.37.0` |
 | `core/v1.KeyToPath` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
@@ -282,7 +279,5 @@ by a caller.
 | `storage/v1.CSIDriverSpec` | `volumeLifecycleModes` | beta | — | `k8s.io/api@v0.37.0` |
 | `storage/v1.CSINodeDriver` | `allocatable` | beta | — | `k8s.io/api@v0.37.0` |
 | `storage/v1.VolumeAttachmentSource` | `inlineVolumeSpec` | beta | — | `k8s.io/api@v0.37.0` |
-| `apiextensions/v1.CustomResourceDefinitionSpec` | `versions` | alpha | — | `k8s.io/apiextensions-apiserver@v0.37.0` |
 | `apiextensions/v1.CustomResourceDefinitionVersion` | `selectableFields` | stable | `CustomResourceFieldSelectors` | `k8s.io/apiextensions-apiserver@v0.37.0` |
 | `apiextensions/v1.JSONSchemaProps` | `default` | beta | — | `k8s.io/apiextensions-apiserver@v0.37.0` |
-| `apis/v1.GRPCRouteRule` | `filters` | alpha | — | `sigs.k8s.io/gateway-api@v1.6.1` |

@@ -261,6 +261,59 @@ func TestStabilityIgnoresMarkerLines(t *testing.T) {
 			"roleRef can reference a Role in the current namespace.\nThis field is immutable.\n+required\n+k8s:alpha(since:\"1.37\")=+k8s:immutable\n",
 			StabilityStable,
 		},
+
+		// The claim shapes the pinned sources use. Narrowing the predicate
+		// past any of these turns a real alpha or beta field stable, which is
+		// the failure the whitelist trades against.
+		{
+			"a hyphenated level qualifies the field",
+			"maxUnavailable is the maximum number of pods that can be unavailable.\nThis field is alpha-level and is only honored by servers.\n",
+			StabilityAlpha,
+		},
+		{
+			"a parenthesised tag introduces the field",
+			"(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.\n",
+			StabilityAlpha,
+		},
+		{
+			"the word qualifies \"feature\"",
+			"nameConstraints indicates the name constraints.\nThis is an Alpha Feature and is only enabled with the corresponding flag.\n",
+			StabilityAlpha,
+		},
+		{
+			"a copula makes the field the subject",
+			"volumeLifecycleModes defines what kind of volumes this CSI volume driver supports.\nThis field is beta.\n",
+			StabilityBeta,
+		},
+		{
+			"the word opens the sentence and is set off by a comma",
+			"clusterTrustBundle allows a pod to access ClusterTrustBundle objects.\nAlpha, gated by the ClusterTrustBundleProjection feature gate.\n",
+			StabilityAlpha,
+		},
+
+		// Mentions that claim nothing about the field. Each is the real prose
+		// of a field the occurrence-counting scan published as alpha; the
+		// fields themselves are frozen in mentionOnlyFields.
+		{
+			"a version-name token is not a level",
+			"versions is the list of all API versions of the defined custom resource.\nVersion names are like \"v1\", \"v2beta1\", etc., then optionally the string \"alpha\" or \"beta\"\nand another number. These are sorted first by GA > beta > alpha.\n+listType=atomic\n",
+			StabilityStable,
+		},
+		{
+			"another resource's level is not this field's",
+			"scrapeConfigSelector defines the ScrapeConfigs to be selected.\nNote that the ScrapeConfig custom resource definition is currently at Alpha level\nand will be graduated to Beta in a future release.\n+optional\n",
+			StabilityStable,
+		},
+		{
+			"a gate's stage is not the field's level",
+			"The key within the env file.\nDuring Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.\n+required\n",
+			StabilityStable,
+		},
+		{
+			"a statement about future changes is not a claim",
+			"filters defines the filters that are applied to requests.\nThis can change in the future based on feedback during the alpha stage.\n+optional\n",
+			StabilityStable,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := stabilityOf(tc.doc); got != tc.want {
@@ -278,7 +331,7 @@ func TestStabilityIgnoresMarkerLines(t *testing.T) {
 // output: a stable ungated field is not recorded at all, so scanning the entries
 // for them would pass no matter what the derivation said — the same vacuous
 // shape this table exists to avoid.
-var frozenGAFields = []struct{ importPath, typeName, field string }{
+var frozenGAFields = []frozenField{
 	{"k8s.io/api/apps/v1", "StatefulSetSpec", "Selector"},
 	{"k8s.io/api/apps/v1", "StatefulSetSpec", "ServiceName"},
 	{"k8s.io/api/apps/v1", "StatefulSetSpec", "PodManagementPolicy"},
@@ -298,12 +351,39 @@ var frozenGAFields = []struct{ importPath, typeName, field string }{
 	{"k8s.io/api/autoscaling/v2", "HorizontalPodAutoscalerSpec", "MinReplicas"},
 }
 
-// assertFrozenGAFieldsAreStable checks each frozen field twice over: that the
-// pinned source still declares it, so a rename cannot turn this check into a
-// no-op, and that its documentation makes no stability claim.
+type frozenField struct{ importPath, typeName, field string }
+
+// mentionOnlyFields use the word "alpha" or "beta" in their own documentation
+// about something other than themselves, and every one of them was published as
+// alpha before the scan required language that attributes the level to the
+// field: a version-name token, another resource's level, a feature gate's
+// stage, a statement about future changes. They are the real upstream prose
+// behind the paraphrases in the unit table above, and unlike
+// [frozenGAFields] they are not claimed to be long-GA — only to claim nothing.
+var mentionOnlyFields = []frozenField{
+	{"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1", "CustomResourceDefinitionSpec", "Versions"},
+	{"k8s.io/api/core/v1", "FileKeySelector", "Key"},
+	{"github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1", "CommonPrometheusFields", "ScrapeConfigSelector"},
+	{"github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1", "CommonPrometheusFields", "ScrapeConfigNamespaceSelector"},
+	{"sigs.k8s.io/gateway-api/apis/v1", "GRPCRouteRule", "Filters"},
+}
+
+// assertFrozenGAFieldsAreStable asserts both frozen lists against the loaded
+// types, with the reason each list exists.
 func assertFrozenGAFieldsAreStable(t *testing.T, types map[string]upstream.Type) {
 	t.Helper()
-	for _, want := range frozenGAFields {
+	assertNoStabilityClaim(t, types, frozenGAFields,
+		"it has been GA for years, so words about something else — a validation marker's own subject, or a feature gate the prose names — are being read as the field's claim")
+	assertNoStabilityClaim(t, types, mentionOnlyFields,
+		"its prose uses the word about something other than this field, so an occurrence is being counted where no level is claimed")
+}
+
+// assertNoStabilityClaim checks each named field twice over: that the pinned
+// source still declares it, so a rename cannot turn this check into a no-op,
+// and that its documentation makes no stability claim.
+func assertNoStabilityClaim(t *testing.T, types map[string]upstream.Type, fields []frozenField, why string) {
+	t.Helper()
+	for _, want := range fields {
 		tp, ok := types[upstream.Key(want.importPath, want.typeName)]
 		if !ok {
 			t.Errorf("%s.%s is not among the loaded types; the frozen list names a type the pins no longer declare", want.importPath, want.typeName)
@@ -316,8 +396,8 @@ func assertFrozenGAFieldsAreStable(t *testing.T, types map[string]upstream.Type)
 			}
 			found = true
 			if got := stabilityOf(f.Doc); got != StabilityStable {
-				t.Errorf("%s.%s.%s is derived %q; it has been GA for years, so words about something else — a validation marker's own subject, or a feature gate the prose names — are being read as the field's claim",
-					want.importPath, want.typeName, want.field, got)
+				t.Errorf("%s.%s.%s is derived %q; %s",
+					want.importPath, want.typeName, want.field, got, why)
 			}
 		}
 		if !found {

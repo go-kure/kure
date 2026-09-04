@@ -150,8 +150,26 @@ exact `group/version/kind`, because `GoType`, `ImportPath` and `ModuleVersion` a
 properties of that version. `IsNamespaced` matches on group and kind only: scope is a
 property of the resource, not of the version, so it still answers for a manifest at a
 version kure does not register — `autoscaling/v1` above, where the scheme carries
-`autoscaling/v2`. `pkg/manifest`'s `Scope` builds on the second, which is why a
-manifest at an unregistered version is classified rather than left unknown.
+`autoscaling/v2`. `KindForAnyVersion` is that same version-insensitive match
+returning the whole row. `pkg/manifest`'s `Scope` builds on the version-insensitive
+form, which is why a manifest at an unregistered version is classified rather than
+left unknown.
+
+`ScopeSource` says what declared the scope, and distinguishes a built-in kind from a
+custom resource without keeping a list:
+
+```go
+k, _ := kubernetes.KindForAnyVersion("cilium.io/v2", "CiliumNetworkPolicy")
+k.ScopeSource == kubernetes.ScopeSourceBuiltin   // false: declared by a marker
+
+// pkg/manifest asks both forms of the scope question:
+manifest.IsNamespacedKind("cilium.io/v2", "CiliumNetworkPolicy")        // true
+manifest.IsNamespacedBuiltinKind("cilium.io/v2", "CiliumNetworkPolicy") // false, not a built-in
+```
+
+The three sources are `ScopeSourceMarker` (the kind's own `+kubebuilder:resource`
+marker), `ScopeSourceShippedCRD` (a `CustomResourceDefinition` the module ships) and
+`ScopeSourceBuiltin` (the Kubernetes API itself). Only the last is a built-in.
 
 Maturity is reported, never enforced:
 
