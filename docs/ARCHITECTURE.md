@@ -1441,5 +1441,9 @@ and never changes behaviour. Three things are not mechanical, and all three are 
 - An unset Flux `Prune` now resolves to `false` rather than `true`. `KustomizationSpec.Prune` is a
   required field with no `omitempty`, so an unset input cannot leave the key out of the emitted
   YAML — it has to pick one, and the old direction turned on destructive garbage collection for a
-  caller who never asked for it. This is the one change that is silent at the call site: a caller
-  who never named `Prune` compiles unchanged and stops pruning. Set it explicitly to keep it.
+  caller who never asked for it. Set it explicitly to keep pruning.
+
+The middle one announces itself: the constructor is gone, so the call does not compile. The other
+two do not. A caller who never named `Prune`, and one that relied on a constructor's labels,
+both compile unchanged and emit different YAML — so read the migration notes even if the build is
+already green.
