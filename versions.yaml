@@ -39,9 +39,11 @@ infrastructure:
       barman-cloud *plugin* (cnpg-barman-cloud-plugin, below). Kure imports pkg/api
       directly.
       The pin is derived from floor_module's own requirement, not chosen from
-      barman-cloud's tags — a hand-picked tag would be a downgrade Go's
-      minimum-version selection wouldn't let the build use. renovate.json
-      disables the standalone gomod bump for it (see the rule there).
+      barman-cloud's tags directly — whether that requirement happens to land
+      on a tag or a pseudo-version, a hand-picked tag could still be a
+      downgrade Go's minimum-version selection wouldn't let the build use.
+      renovate.json disables the standalone gomod bump for it (see the rule
+      there).
       No supported_range is declared: the pin moves only when plugin-barman-cloud's
       own go.mod requirement moves (validate_mvs_floors enforces that equality), so
       there is no independent range for kure to gate — a hand-maintained range here
@@ -174,24 +176,27 @@ infrastructure:
       - "github.com/cloudnative-pg/machinery"
   cnpg-barman-cloud-plugin:
     go_module: "github.com/cloudnative-pg/plugin-barman-cloud"
-    supported_range: "0.9 - 0.14"
+    supported_range: "0.9 - 0.15"
     notes: |
       Barman Cloud plugin for CNPG — provides ObjectStore CR (barmancloud.cnpg.io/v1).
       Versioned independently from the CNPG operator. Not to be confused with
       the barman-cloud entry above, a separate module this plugin itself
       depends on for object-store API types.
-      v0.14 is a routine minor with no changes to the imported ObjectStore v1 type
-      (build + tests pass unchanged).
+      v0.15.0 adds a restore-hook sidecar and bumps Barman to 3.20.0, both
+      internal/cnpgi-only. The imported barmancloud.cnpg.io/v1 ObjectStore type
+      (api/v1) has zero file changes between v0.14.0 and v0.15.0 (verified
+      against the upstream diff) — build and tests pass unchanged.
   controller-runtime:
     go_module: "sigs.k8s.io/controller-runtime"
-    supported_range: "0.22 - 0.24"
+    supported_range: "0.22 - 0.25"
     notes: |
-      v0.24.1 fixes Apply typed error handling regression. Its own go.mod pins
-      k8s.io/* v0.36.0 (Kubernetes 1.36) -- the latest release as of the k8s v0.37.0
-      bump above; Go's MVS resolves the shared k8s.io/* modules to v0.37.0 here
-      since kure now requires that directly. controller-runtime's client-go usage
-      is compatible with the newer minor (build + tests pass unchanged); no
-      v0.24.x+ release yet declares k8s.io/* v0.37.0 itself.
+      v0.25.0's breaking changes are the new EventRecorder interface and a bump
+      to k8s.io/* v1.37, neither in kure's surface: kure imports only pkg/client
+      (verified — no other controller-runtime subpackage is imported anywhere),
+      whose Client interface is unchanged; IndexerFunc/FieldIndexer became type
+      aliases to a new cacheapi package but kure uses neither. kure already
+      requires k8s.io/api v0.37.0 directly, so the k8s.io/* bump is a no-op
+      here. Build and tests pass unchanged.
     related_packages:
       - "sigs.k8s.io/kustomize/api"
       - "sigs.k8s.io/yaml"
