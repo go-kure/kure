@@ -38,12 +38,13 @@
 #     ... CreateNewKind, AddNewKindRule ...
 #     <!-- doc-api-refs:ignore-end -->
 #
-# The reason goes inside the comment, and is not optional: every form needs a
-# space and a reason after the keyword. Markdown passes the whole line of an HTML
-# block through verbatim, so a reason written after the `-->` renders as visible
-# text on the page. A `<!-- doc-api-refs:` comment that is none of the three
-# forms -- a misspelled keyword, a missing reason -- is an error rather than a
-# silent skip.
+# The reason goes inside the comment, and is not optional: a form that suppresses
+# anything needs a space and then a reason starting with an alphanumeric.
+# `ignore-end` suppresses nothing and so needs none. Markdown passes the whole
+# line of an HTML block through verbatim, so a reason written after the `-->`
+# renders as visible text on the page. A `<!-- doc-api-refs:` comment that is
+# none of the three forms -- a misspelled keyword, a missing reason -- is an
+# error rather than a silent skip.
 #
 # Prefer the single-line form -- a comment that starts a line interrupts the
 # surrounding markdown paragraph, and the fence is only worth that when the names
@@ -101,17 +102,21 @@ extract_refs() {
 		# The three forms are matched exhaustively and anything else that opens a
 		# doc-api-refs comment is an error: a typo such as `ignore-strt` would
 		# otherwise fall through to the bare-ignore rule and silently suppress the
-		# line, which is the one failure mode a reader cannot see. Each form
-		# requires a space after the keyword, so the reason is not optional and
-		# `ignore-end` can never be read as `ignore`.
+		# line, which is the one failure mode a reader cannot see. The space after
+		# each keyword also keeps `ignore-end` from ever being read as `ignore`.
 		/<!-- doc-api-refs:/ {
-			opens = ($0 ~ /<!-- doc-api-refs:ignore-start /)
+			# A form that suppresses must carry a reason, and the reason must
+			# start with an alphanumeric: a space alone is not enough, since the
+			# one in `<!-- doc-api-refs:ignore -->` belongs to the closing `-->`
+			# and would suppress a line with nothing said about why. `ignore-end`
+			# suppresses nothing, so it needs no reason.
+			opens = ($0 ~ /<!-- doc-api-refs:ignore-start [A-Za-z0-9]/)
 			closes = ($0 ~ /<!-- doc-api-refs:ignore-end /)
 			# Both on one line is a self-contained fence: it changes no state.
 			if (opens && closes) next
 			if (opens) { skip = 1; next }
 			if (closes) { skip = 0; next }
-			if ($0 ~ /<!-- doc-api-refs:ignore /) next
+			if ($0 ~ /<!-- doc-api-refs:ignore [A-Za-z0-9]/) next
 			print "unrecognised doc-api-refs marker in " FILENAME " line " FNR > "/dev/stderr"
 			rc = 1
 			next
@@ -169,6 +174,13 @@ self_test() {
 	cat >"$d/typo.md" <<-'EOF'
 		<!-- doc-api-refs:ignore-strt reason --> `CreateGone`
 	EOF
+	cat >"$d/noreason.md" <<-'EOF'
+		<!-- doc-api-refs:ignore --> `CreateGone`
+	EOF
+	cat >"$d/noreason-start.md" <<-'EOF'
+		<!-- doc-api-refs:ignore-start --> `CreateGone`
+		<!-- doc-api-refs:ignore-end -->
+	EOF
 
 	local got
 	# Line 3 pins the offset arithmetic: a rejected match between two accepted
@@ -196,6 +208,19 @@ fenced.md:4:CreateReal'
 
 	if extract_refs "$d/typo.md" >/dev/null 2>&1; then
 		printf 'self-test: a misspelled marker was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
+	# The space before `-->` would satisfy a bare `ignore ` / `ignore-start `
+	# pattern, so a reason-less marker must be rejected explicitly rather than
+	# silently honoured.
+	if extract_refs "$d/noreason.md" >/dev/null 2>&1; then
+		printf 'self-test: a reason-less ignore was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
+	if extract_refs "$d/noreason-start.md" >/dev/null 2>&1; then
+		printf 'self-test: a reason-less ignore-start was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
