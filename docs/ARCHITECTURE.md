@@ -1434,6 +1434,12 @@ The builder contract removed the constructor defaults and the bare field forward
 breaking change for callers that relied on either, and it is the one migration this release asks
 for. Every removed function is listed with the expression that replaces it, grouped by package, in
 [the release-1 migration notes](/concepts/builder-contract-release-1/); the rewrite is mechanical
-and never changes behaviour. Two things are not mechanical, and both are called out there: a
-constructor no longer injects `app: <name>` labels or a per-kind spec default, and the removal of
-the container constructor takes a resource reservation with it.
+and never changes behaviour. Three things are not mechanical, and all three are called out there:
+
+- A constructor no longer injects `app: <name>` labels or a per-kind spec default.
+- The removal of the container constructor takes a resource reservation with it.
+- An unset Flux `Prune` now resolves to `false` rather than `true`. `KustomizationSpec.Prune` is a
+  required field with no `omitempty`, so an unset input cannot leave the key out of the emitted
+  YAML — it has to pick one, and the old direction turned on destructive garbage collection for a
+  caller who never asked for it. This is the one change that is silent at the call site: a caller
+  who never named `Prune` compiles unchanged and stops pruning. Set it explicitly to keep it.
