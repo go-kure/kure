@@ -134,14 +134,20 @@ temporary branch — the merged result — before the PR is allowed to land.
   one proves the pages describe the API that shipped. The page set comes from `site/docs-map.yaml`
   (so it needs `yq`, installed earlier in the same job) plus the `docs/`, `examples/`,
   `site/content/` and package-README trees, so a page mounted from a new directory cannot escape
-  it. A reference written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the
+  it. The public Go files under `pkg/` are in the set too — pkg.go.dev publishes their doc
+  comments, so a stale name in one is as visible as a stale name on the site — and only their
+  comment lines are read, since code calling a removed function does not compile. A reference
+  written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the
   package that selector names rather than anywhere in the tree, so a helper that moves or is
   removed from one package is not answered by a same-named declaration in another; a reference
   written without one still resolves tree-wide, because an import alias and a variable receiver are
   spelled alike. The generic constructor is recognised in its qualified `kubernetes.Create[T]`
-  form. Dated records under `docs/history/` and `docs/reviews/`, the release-1 migration ledger,
-  the generated `CHANGELOG.md` and the two proposal documents are exempt by name in the script,
-  each with its reason. The step runs `--self-test` first, which pins the extractor and the
+  form. Dated records under `docs/history/` and `docs/reviews/`, the generated `CHANGELOG.md` and
+  the two proposal documents are exempt by name in the script, each with its reason. The release-1
+  migration ledger is not exempt: it names removed functions and their live replacements on the
+  same table row, so excluding it would stop checking the replacements — the names a caller
+  actually types. Its rows are read one column at a time instead, and only the last cell, which is
+  the replacement, has to resolve. The step runs `--self-test` first, which pins the extractor and the
   resolver against a synthetic tree — a fence marker that matches too much, an identifier boundary
   that stops matching, or a selector that stops being carried would otherwise turn the repo run
   quietly green

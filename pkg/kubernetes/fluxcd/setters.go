@@ -347,8 +347,9 @@ func AddCommonMetadataAnnotation(cm *kustv1.CommonMetadata, key, value string) {
 // HelmRelease setters
 //
 // Object labels and annotations use the generic kubernetes.AddLabel /
-// kubernetes.AddAnnotation over metav1.Object. The AddCommonMetadata* helpers
-// above are unrelated: CommonMetadata is a Kustomization spec sub-type, not a
+// kubernetes.AddAnnotation over metav1.Object. AddCommonMetadataLabel and
+// AddCommonMetadataAnnotation above are unrelated: CommonMetadata is a
+// Kustomization spec sub-type, not a
 // metav1.Object, so the generic helpers cannot reach it.
 
 // SetHelmReleaseChart sets the inline HelmChartTemplate.

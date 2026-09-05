@@ -7,17 +7,19 @@
 //
 // The package provides two layers of API:
 //
-//   - CreateX constructors: allocate an object with TypeMeta and ObjectMeta set,
-//     leaving the spec empty. Use the Set/Add helpers to populate it.
-//   - SetX/AddX helpers: granular setters that mutate a single field on an existing
-//     object.
+//   - Create<Kind> constructors: allocate an object with TypeMeta and ObjectMeta
+//     set, leaving the spec empty. Assign the spec fields directly, or use a
+//     Set/Add helper where one exists.
+//   - Set/Add helpers: admissible sugar over a single field of an existing
+//     object. They exist only where a plain assignment cannot express the write;
+//     everything else is a field on the upstream type.
 //
 // Resources covered include IPAddressPool, BGPPeer, BGPAdvertisement,
 // L2Advertisement, and BFDProfile.
 //
 // # Constructors
 //
-// Constructors follow the form CreateX(name, namespace string). A minimal example
+// Constructors follow the form Create<Kind>(name, namespace string). A minimal example
 // creating an IPAddressPool looks like:
 //
 //	pool := metallb.CreateIPAddressPool("my-pool", "metallb-system")
@@ -27,5 +29,7 @@
 // # Update helpers
 //
 // Additional functions prefixed with Set or Add expose granular control over
-// the generated objects. SetXSpec functions replace the entire spec at once.
+// the generated objects. There is no whole-spec setter: replacing a spec is a
+// plain assignment (pool.Spec = metallbv1beta1.IPAddressPoolSpec{...}), and the
+// builder contract does not wrap one.
 package metallb

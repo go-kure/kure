@@ -24,7 +24,16 @@ d.Spec.Template.Spec.ServiceAccountName = "web"
 ```
 
 kure does not provide, and its docs do not suggest, a kure function for plain field
-access. A whole-spec setter is a bare assignment and is not part of the contract.
+access: a helper whose body assigns one argument to one value-typed field is that
+assignment written twice, and §3's classifier rejects it.
+
+A whole-spec setter is that same shape one level up, and it is admissible on exactly
+the same condition — class (b) is decided on the assigned field, not on how deep it
+sits. `Spec` is `*api.Rule` on both Cilium policy kinds, so
+`SetCiliumNetworkPolicySpec` and `SetCiliumClusterwideNetworkPolicySpec` are class (b)
+and ship; a whole-spec setter for a value-typed `Spec` would not be admitted, and none
+exists. These two are the only whole-spec setters in the tree — every other assignment
+of a complete spec is inside a config-struct constructor, which is not sugar.
 
 ## 2. Constructors
 
