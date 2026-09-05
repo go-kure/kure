@@ -1,5 +1,9 @@
 # Plugin Architecture Design for Kure
 
+**Status: proposed, not shipped.** The Go identifiers below describe an API that was designed and
+never built; they are not part of kure's public surface and will not resolve against `pkg/`.
+`scripts/check-doc-api-refs.sh` exempts this page by name for that reason.
+
 ## Overview
 
 This document outlines the design for implementing a plugin architecture that allows external generators to extend Kure's capabilities. The plugin system would enable users to create custom generators for specific needs (Terraform, Pulumi, custom CRDs, etc.) while maintaining type safety and security.

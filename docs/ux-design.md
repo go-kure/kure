@@ -2,7 +2,13 @@
 
 **Version:** 1.0  
 **Date:** August 2025  
-**Status:** Design Specification  
+**Status:** Design Specification — **proposed, not shipped**  
+
+> The Go identifiers in this document describe an API that was proposed and never built. They are
+> not part of kure's public surface and will not resolve against `pkg/`. For the API that exists,
+> see the [builder contract](../pkg/kubernetes/README.md) and the
+> [generated kinds table](api-tables.md). `scripts/check-doc-api-refs.sh` exempts this page by name
+> for that reason.
 
 ## Executive Summary
 

@@ -98,7 +98,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, and the documented builder references via `scripts/check-doc-api-refs.sh` |
 | `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
 | `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
@@ -128,6 +128,12 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
   `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
   longer vendors its own copies under `site/scripts/`
+- **Builder-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
+  when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports. It is the
+  kure-specific complement to `check-doc-sync`: that action proves every package has a page, this
+  one proves the pages describe the API that shipped. Dated records under `docs/history/` and
+  `docs/reviews/`, the release-1 migration ledger and the two proposal documents are exempt by
+  name in the script, each with its reason
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
   action
