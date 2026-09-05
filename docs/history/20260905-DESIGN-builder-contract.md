@@ -192,7 +192,14 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   `CreateLayoutWithResources` several lines above the call that uses it — is not checked. A rename
   that keeps the example compiling can leave the comment beside it stale.
 
-  These three are the same shape as the exclusions above: the check is a floor, not a proof. They
+- **A suppressing marker containing a nested `<!--` is accepted.** The opener pattern ends in
+  `[^>]*-->`, and `<!--` contains no `>`, so `<!-- doc-api-refs:ignore-start reason <!-- x -->`
+  matches and opens a fence. Every other malformed suppression is an error — no terminator, nothing
+  open, reversed, unrecognised, reason-less, nested opener, repeated marker — so this one is an
+  inconsistency as much as a hole: a typo suppresses a passage instead of failing the build, and
+  the rendered page shows the stray `-->` while the check says nothing.
+
+  These four are the same shape as the exclusions above: the check is a floor, not a proof. They
   are filed as go-kure/kure#770 (checker false negatives) rather than fixed here — this ticket's
   subject is the documentation, and the checker had already taken four hardening rounds by the time
   they surfaced.
