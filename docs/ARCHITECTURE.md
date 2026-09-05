@@ -844,48 +844,48 @@ There is deliberately no `SetNewKindProperty(obj, v)`: the caller writes `obj.Sp
 
 #### 4. Test the object, not the setter
 
+Compare the whole object, not a few of its fields. "Identity and nothing else" is a claim about
+everything the constructor did not write, and a field-by-field check cannot make it: an injected
+label, a defaulted status or a populated selector all pass a test that only looks at `Name`,
+`TypeMeta` and `Spec`. Build the object you expect and `DeepEqual` against it.
+
 ```go
 // pkg/kubernetes/<family>/<kind>_test.go
 
 func TestCreateNewKind(t *testing.T) {
-    obj := CreateNewKind("test", "default")
+    got := CreateNewKind("test", "default")
 
-    // A constructor emits identity and TypeMeta, and nothing else.
-    if obj.Name != "test" || obj.Namespace != "default" {
-        t.Errorf("identity: got %s/%s", obj.Namespace, obj.Name)
-    }
-    if obj.APIVersion == "" || obj.Kind == "" {
-        t.Error("TypeMeta not stamped from the scheme")
-    }
-    if !reflect.DeepEqual(obj.Spec, v1.NewKindSpec{}) {
-        t.Errorf("constructor injected a spec default: %+v", obj.Spec)
+    want := &v1.NewKind{}
+    want.GetObjectKind().SetGroupVersionKind(
+        schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "NewKind"})
+    want.SetName("test")
+    want.SetNamespace("default")
+
+    if !reflect.DeepEqual(got, want) {
+        t.Errorf("constructor emitted more than identity:\n got %#v\nwant %#v", got, want)
     }
 }
 ```
 
-That is the namespaced form. The generator writes the wrapper's signature from the scope it
-derived, so a cluster-scoped kind gets a one-argument constructor and the test above does not
-compile against it:
+This form works whatever the kind's shape: it never names `Spec`, so it compiles for the built-ins
+that have no such field, and the generator writes the wrapper's signature from the scope it derived
+— so a cluster-scoped kind drops the namespace argument and the matching `want.SetNamespace` line,
+and nothing else changes.
 
-```go
-func TestCreateNewKind(t *testing.T) {
-    obj := CreateNewKind("test")        // cluster-scoped: no namespace parameter
-
-    if obj.Name != "test" || obj.Namespace != "" {
-        t.Errorf("identity: got %s/%s", obj.Namespace, obj.Name)
-    }
-    // TypeMeta and spec assertions are the same as above.
-}
-```
+`pkg/kubernetes/identity_test.go:53-80` already asserts exactly this for every registered kind, by
+constructing `want` reflectively from the scheme. The per-kind test is a local echo of that, worth
+writing because it fails with the kind's name in it rather than as one subtest among hundreds.
 
 <!-- doc-api-refs:ignore-end -->
 
-The scope assertion is worth making in both forms: a namespace on a cluster-scoped object is the
-failure the whole scope-derivation chain exists to prevent, and it is invisible until the API
-server rejects the manifest.
+The scope is covered by the same comparison rather than by a separate assertion: `want` carries a
+namespace only when the kind is namespaced, so a namespace on a cluster-scoped object fails here.
+That is the failure the whole scope-derivation chain exists to prevent, and it is otherwise
+invisible until the API server rejects the manifest.
 
-The last assertion is the one that matters: a constructor that starts setting spec values is the
-regression this contract exists to prevent.
+A constructor that starts setting spec values is the regression this contract exists to prevent,
+and the whole-object comparison is what catches it — along with every other field it might start
+writing.
 
 #### 5. Map the package, if the family is new
 

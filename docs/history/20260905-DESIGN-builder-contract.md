@@ -199,7 +199,14 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   inconsistency as much as a hole: a typo suppresses a passage instead of failing the build, and
   the rendered page shows the stray `-->` while the check says nothing.
 
-  These four are the same shape as the exclusions above: the check is a floor, not a proof. They
+- **The symbol index is grepped, not parsed.** Declarations are collected with
+  `grep -oE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*'`, so a line beginning `func CreateSomething`
+  inside a block comment in a public Go file is recorded as an exported symbol the compiler never
+  sees. That is a false *positive* in the index, which makes it a false negative in the check: a
+  page naming the real function stays green after the function is deleted, because its ghost in a
+  comment still resolves. The same is true of such a line in a raw string literal.
+
+  These five are the same shape as the exclusions above: the check is a floor, not a proof. They
   are filed as go-kure/kure#770 (checker false negatives) rather than fixed here — this ticket's
   subject is the documentation, and the checker had already taken four hardening rounds by the time
   they surfaced.
