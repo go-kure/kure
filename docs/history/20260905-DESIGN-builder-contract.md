@@ -166,3 +166,11 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
 - **`pkg/stack` may still hold opinions.** The contract binds `pkg/kubernetes`. The layer above is
   a workflow layer and defaults are part of its job — the rule there is only that every default is
   a name, not a literal.
+- **The ledger's own references are checked against a written list, not against the page.** A
+  migration ledger has to name what it removed, so `scripts/doc-api-refs-removed.txt` licenses
+  those names and only those. The list is validated — nothing in it may be a name `pkg/` still
+  exports — but it is a snapshot maintained by hand, and the guarantee it buys is one-directional:
+  a removed name the ledger mentions and the list omits fails the build, while a name wrongly
+  present in the list quietly exempts itself on that page. Deriving the list from the page instead
+  was tried and rejected: not all of the ledger's tables are removal tables, so a positional rule
+  exempted about thirty live builders the page recommends.

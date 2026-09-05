@@ -147,12 +147,17 @@ temporary branch — the merged result — before the PR is allowed to land.
   the two proposal documents are exempt by name in the script, each with its reason. The release-1
   migration ledger is not exempt: it names removed functions and their live replacements on the
   same table row, so excluding it would stop checking the replacements — the names a caller
-  actually types. The exemption is per name instead of per page: the ledger's own tables are the
-  list of what was removed, so every name in a row's non-final cells is exempt anywhere on that
-  page — in prose, in a "before" code block, in the sentence explaining why it went — and every
-  other name it mentions has to resolve, including a replacement recommended only in prose. Adding
-  a removal to the tables licenses the prose about it in the same edit, so nothing is marked by
-  hand. The step runs `--self-test` first, which pins the extractor and the
+  actually types. The exemption is per name instead of per page, and the names are written down in
+  `scripts/doc-api-refs-removed.txt` rather than inferred from where they sit on the page. Inferring
+  them does not work: that page's tables are not all removal tables — some pair an old signature
+  with a new one under the same name, some pair a builder that still ships with the field it no
+  longer sets, and some list the helpers that stay and say why — so a positional rule exempts about
+  thirty live builders the page recommends. Being written down also makes the set a snapshot: a
+  derived set would grow by itself, so deleting a builder tomorrow would make it exempt on that page
+  the same day, silently. The list is validated rather than trusted — every name in it must be
+  absent from `pkg/`, and a live name there fails the run with the names to drop — and a removed
+  name the ledger mentions but the list omits fails the run too, with the name to add. The step
+  runs `--self-test` first, which pins the extractor and the
   resolver against a synthetic tree — a fence marker that matches too much, an identifier boundary
   that stops matching, or a selector that stops being carried would otherwise turn the repo run
   quietly green

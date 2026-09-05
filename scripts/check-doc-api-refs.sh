@@ -94,22 +94,26 @@ EXCLUDED_PAGES=(
 # same line, and its three-column tables put the removed names in the middle
 # cell, so an ignore-fence covers the wrong thing whichever way it is drawn.
 #
-# So the exemption is per name rather than per line, and the page states its own:
-# a ledger's tables ARE the removed list, so every builder name in a row's
-# non-final cell is exempt wherever else that page mentions it -- in prose, in a
-# "before" code block, in the sentence explaining why it went. Every other name
-# on the page has to resolve, including one recommended only in prose. Adding a
-# removal to the tables licenses the prose about it in the same edit, so nothing
-# has to be marked by hand.
+# So the exemption is per name, and the names are written down in REMOVED_LIST
+# rather than inferred from where they sit on the page. Inferring them does not
+# work: this ledger's tables are not all removal tables. Some pair an old
+# signature with a new one under the same name, some pair a builder that still
+# ships with the field it no longer sets, and some list the helpers that stay
+# and say why -- so "the non-final cells are the removed names" exempts about
+# thirty live builders the page recommends, including the ones it recommends
+# most.
 #
-# The list is derived from the page and cannot be checked against anything: a
-# name misspelled in a first cell exempts itself. That is the same trust the
-# page already asks for -- it is the record of what was removed -- and it costs
-# nothing a reader could not see, because a name that never existed reads as a
-# removal that never happened.
+# Being written down also makes the set a snapshot. A derived set grows by
+# itself: delete a builder tomorrow and it becomes exempt on this page the same
+# day, silently. A listed one does not, and an unlisted removed name fails the
+# build with the name to add.
 LEDGER_PAGES=(
 	docs/builder-contract-release-1.md # release-1 ledger: removed names left, live replacements right
 )
+
+# The names LEDGER_PAGES may mention. Validated, not trusted: every name in it
+# must be absent from pkg/, so a live builder cannot hide there.
+REMOVED_LIST=scripts/doc-api-refs-removed.txt
 
 # Identifiers matching the builder shape that belong to somebody else's API.
 EXTERNAL=(
@@ -371,8 +375,8 @@ self_test() {
 
 	# A ledger page: removed names on the left, live replacements on the right,
 	# both on the same line, and a three-column row that puts the removed names
-	# in the middle -- so the exemption cannot be a column index. Row 5 is the
-	# rot the rule still has to catch: a replacement that no longer exists,
+	# in the middle -- so no cell position separates the two halves. Row 5 is
+	# the rot the rule still has to catch: a replacement that no longer exists,
 	# named both in its cell and in the page's prose.
 	cat >"$d/ledger.md" <<-'EOF'
 		| Removed | Replacement |
@@ -384,8 +388,19 @@ self_test() {
 		`CreateGone` is not.
 	EOF
 
+	# The list the page is checked against. `CreateReal` is deliberately absent
+	# even though a table row names it: it is the live replacement, and a cell
+	# position must not be able to smuggle it in.
+	cat >"$d/removed.txt" <<-'EOF'
+		# removed by the fixture release
+		SetGoneThing
+		AddGoneMiddle
+
+		SetAlsoGone # trailing comment
+	EOF
+
 	# The same removed name on a page that is not a ledger: the exemption is
-	# scoped to the pages that list it, not granted to the whole tree.
+	# scoped to the ledger pages, not granted to the whole tree.
 	cat >"$d/notledger.md" <<-'EOF'
 		Use `SetGoneThing` for this.
 	EOF
@@ -518,24 +533,25 @@ pkg/stack/fluxcd/doc.go:3:CreateGone'
 		failures=$((failures + 1))
 	fi
 
-	# The removed set is the non-final cells of the table rows. Taking the last
-	# cell instead would exempt the replacements -- which is what the check is
-	# for -- and a column index would miss the three-column row.
+	# The list is a plain name per line, with `#` comments and blank lines to
+	# keep it readable, and it is sorted so a diff of it reads as a diff of the
+	# removals. An inline comment is stripped, not taken as part of the name.
 	local want_removed='AddGoneMiddle
 SetAlsoGone
 SetGoneThing'
-	got=$(collect_removed "$d/ledger.md")
+	got=$(collect_removed "$d/removed.txt")
 	if [ "$got" != "$want_removed" ]; then
-		printf 'self-test: removed-name mismatch\nwant:\n%s\ngot:\n%s\n' \
+		printf 'self-test: removed-list mismatch\nwant:\n%s\ngot:\n%s\n' \
 			"$want_removed" "$got" >&2
 		failures=$((failures + 1))
 	fi
 
-	# The ledger rule: a removed name is exempt anywhere on its own page, prose
+	# The ledger rule: a listed name is exempt anywhere on a ledger page, prose
 	# included, and nowhere else. Every other name on the page resolves like any
-	# other reference, in a table cell (line 5) and in prose (line 7) alike.
+	# other reference, in a table cell (line 5) and in prose (line 7) alike --
+	# including `CreateReal`, which the page recommends and the list omits.
 	LEDGER_LIST="$d/ledger.md"
-	collect_removed "$d/ledger.md" >"$removed"
+	collect_removed "$d/removed.txt" >"$removed"
 	extract_refs "$d/ledger.md" "$d/notledger.md" | sort -u >"$referenced"
 	local want_ledger='ledger.md:5:CreateGone
 ledger.md:7:CreateGone
@@ -546,6 +562,15 @@ notledger.md:1:SetGoneThing'
 			"$want_ledger" "$unresolved" >&2
 		failures=$((failures + 1))
 	fi
+
+	# A live name in the list is refused. It would silence the ledger's own
+	# recommendation of that name, so it fails the run rather than being
+	# dropped: only a human knows whether the name came back or never went.
+	printf 'CreateReal\n' >>"$removed"
+	if check_removed_are_gone 2>/dev/null; then
+		printf 'self-test: a live name in the removed list was accepted\n' >&2
+		failures=$((failures + 1))
+	fi
 	LEDGER_LIST=
 	: >"$removed"
 
@@ -554,6 +579,37 @@ notledger.md:1:SetGoneThing'
 		return 1
 	fi
 	printf 'check-doc-api-refs --self-test: ok\n'
+}
+
+# The removed-name list: one name per line, with `#` comments and blank lines
+# allowed so the file can say which release each block belongs to.
+collect_removed() {
+	sed -e 's/#.*//' -e 's/^[ \t]*//' -e 's/[ \t]*$//' -e '/^$/d' "$@" | sort -u
+}
+
+# Nothing in the list may be a name pkg/ still exports. A live name in there is
+# not a harmless spare entry: it silences the ledger's own recommendation of
+# that name, which is the one thing this check is here to catch. It fails the
+# run rather than being dropped quietly, because the list and the tree
+# disagreeing means one of them is wrong and only a human knows which.
+check_removed_are_gone() {
+	local live
+	# Keyed on FILENAME rather than NR == FNR, for the same reason
+	# report_unresolved is: the file a record came from is the thing being
+	# tested, so say so. The two forms agree here -- an empty $symbols makes
+	# NR == FNR span both files, but with no symbols there is nothing live to
+	# report either way, and the run refuses an empty $symbols upstream anyway.
+	live=$(awk -v symfile="$symbols" \
+		'FILENAME == symfile { name[$2] = 1; next } $0 in name' \
+		"$symbols" "$removed")
+	[ -n "$live" ] || return 0
+	printf 'check-doc-api-refs: %s lists names that pkg/ still exports:\n\n' "$REMOVED_LIST" >&2
+	printf '%s\n' "$live" | sed 's/^/  /' >&2
+	printf '\n' >&2
+	printf 'Either the name came back, in which case drop it from the list, or it\n' >&2
+	printf 'was never removed and the entry is wrong. While it is listed, the ledger\n' >&2
+	printf 'may name it freely and a later deletion of it goes unnoticed.\n' >&2
+	return 1
 }
 
 # Every row in $referenced that does not resolve, given where the row was written.
@@ -590,31 +646,6 @@ notledger.md:1:SetGoneThing'
 # like the variable receiver in engine.CreateLayoutWithResources two code blocks
 # later. Failing on those would buy one more catchable removal and cost three
 # suppressions on pages that are correct, which is a worse check.
-# The builder names a ledger's tables list as removed: everything in a row's
-# cells except the last non-empty one, which is the replacement. Taking the last
-# non-empty field rather than field n-1 keeps a row written without its closing
-# pipe from shifting the whole row into the exemption.
-collect_removed() {
-	awk '
-		/^\|/ {
-			nf = split($0, cell, "|")
-			last = 0
-			for (k = nf; k >= 1; k--) {
-				t = cell[k]
-				gsub(/^[ \t]+|[ \t]+$/, "", t)
-				if (t != "") { last = k; break }
-			}
-			for (k = 1; k < last; k++) {
-				line = cell[k]
-				while (match(line, /(Create|Set|Add)[A-Z][A-Za-z0-9_]*/)) {
-					print substr(line, RSTART, RLENGTH)
-					line = substr(line, RSTART + RLENGTH)
-				}
-			}
-		}
-	' "$@" | sort -u
-}
-
 report_unresolved() {
 	awk -v symfile="$symbols" -v dirfile="$pkgdirs" -v extfile="$external" \
 		-v remfile="$removed" -v ledgers="${LEDGER_LIST:-}" '
@@ -776,8 +807,8 @@ done < <(printf '%s\n%s\n%s\n%s\n' "$docs_pages" "$pkg_pages" "$map_pages" "$go_
 	sed 's#^\./##' | sort -u)
 
 # The ledger pages arrive through the same enumeration as any other page, so
-# they are already in `pages`; what they get is a name-level exemption built from
-# their own tables. A ledger page that stopped existing would drop out of the
+# they are already in `pages`; what they get is the name-level exemption from
+# REMOVED_LIST. A ledger page that stopped existing would drop out of the
 # enumeration silently, so require each one.
 for _ledger in "${LEDGER_PAGES[@]}"; do
 	if [ ! -f "$_ledger" ]; then
@@ -788,17 +819,20 @@ for _ledger in "${LEDGER_PAGES[@]}"; do
 done
 unset _ledger
 LEDGER_LIST="${LEDGER_PAGES[*]}"
-collect_removed "${LEDGER_PAGES[@]}" >"$removed"
-if [ ! -s "$removed" ]; then
-	printf 'check-doc-api-refs: no removed names found in %s -- the tables changed shape\n' \
-		"$LEDGER_LIST" >&2
+
+if [ ! -f "$REMOVED_LIST" ]; then
+	printf 'check-doc-api-refs: %s is missing -- without it the ledgers cannot be checked\n' \
+		"$REMOVED_LIST" >&2
 	exit 1
 fi
+collect_removed "$REMOVED_LIST" >"$removed"
+check_removed_are_gone || exit 1
 
 if [ "${1:-}" = "--list" ]; then
 	printf 'declarations: %s\n' "$(wc -l <"$symbols")"
 	printf 'packages:     %s\n' "$(wc -l <"$pkgdirs")"
 	printf 'pages:        %s (Markdown pages plus public Go files)\n' "${#pages[@]}"
+	printf 'removed:      %s (names the ledgers may mention)\n' "$(wc -l <"$removed")"
 	exit 0
 fi
 
