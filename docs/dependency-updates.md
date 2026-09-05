@@ -139,9 +139,10 @@ A different shape of pseudo-version problem: the upstream repo **does** cut rele
 nothing in kure ever picks one — the pin is set by Go's minimum-version selection from a
 *different* dependency's `go.mod`. `github.com/cloudnative-pg/barman-cloud` is the example:
 kure imports it directly, but `github.com/cloudnative-pg/plugin-barman-cloud` also requires
-it, at a pseudo-version *past* barman-cloud's last real tag — so MVS floors kure's pin above
-any tag that exists, and a hand-chosen tag would actually be a **downgrade** the build
-cannot use.
+it, and the version that requirement lands on — a tag, or a pseudo-version past
+barman-cloud's last real tag — is whatever the plugin's own `go.mod` says, not kure's
+choice. Either way, a hand-picked tag that Go's minimum-version selection would then have
+to override is a **downgrade** the build cannot use.
 
 This needs no release-tracking machinery, because there is no release to track — the pin
 should simply always equal the floor:
