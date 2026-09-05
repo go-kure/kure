@@ -57,15 +57,17 @@ difference only becomes visible when the volume fills.
 
 ## When sugar exists, and when it does not
 
-A `Set*` or `Add*` helper exists only where a plain assignment cannot do the job. There are three
-such cases, and `pkg/kubernetes/admission_test.go` parses every exported helper in the tree and
-fails the build on one that fits none of them.
+A `Set*` or `Add*` helper survives only if the write it performs falls into one of three classes,
+and `pkg/kubernetes/admission_test.go` parses every exported helper in the tree and fails the build
+on one that fits none of them. The classes are about the shape of the write, not about whether you
+could have written it yourself: a pointer field you already hold a pointer to is a one-line
+assignment, and a helper for it is admitted all the same.
 
-| Class | Why an assignment is not enough | Example |
+| Class | What the helper does | Example |
 |---|---|---|
-| Appender | The field is a slice to append to, or a map to insert into — either may be nil, so writing it by hand is a read-modify-write with a guard | `AddPodSpecContainer`, `AddRoleRule`, `AddConfigMapData` |
-| Pointer / nil-init | The field is a pointer, so an assignment needs a named local to take the address of | `SetDeploymentReplicas` |
-| Composite | Several fields belong together, and the helper's name states the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
+| Appender | Appends to a slice field, or inserts into a map field — either may be nil, so writing it by hand is a read-modify-write with a guard | `AddPodSpecContainer`, `AddRoleRule`, `AddConfigMapData` |
+| Pointer / nil-init | Assigns to a pointer-typed field, or initialises a nil pointer intermediate before writing through it. Taking the address of a value argument needs a named local; forwarding a pointer the caller already holds does not, and both count | `SetDeploymentReplicas`, `SetPodSpecAffinity` |
+| Composite | Writes several fields that belong together — two or more fields of an upstream struct, or a nested literal — and names the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
 
 Everything else you write yourself:
 

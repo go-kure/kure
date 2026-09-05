@@ -39,10 +39,10 @@ the per-kind wrappers are generated from the scheme and carry the scope in
 their signature, so a cluster-scoped kind takes only a name
 (`kubernetes.CreateNamespace("platform")`).
 
-Kure adds a helper only where a plain assignment is awkward: appending to a
-list, inserting into a map, setting a pointer field, or composing a small
-upstream struct. A helper never defaults, never validates, and never touches a
-field you did not name.
+Kure adds a helper only for one of a few write shapes: appending to a list,
+inserting into a map, setting a pointer field, or composing a small upstream
+struct. A helper never defaults, never validates, and never touches a field you
+did not name.
 
 ```go
 kubernetes.AddLabel(dep, "tier", "frontend")       // works on any kind
