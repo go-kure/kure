@@ -134,8 +134,11 @@ temporary branch — the merged result — before the PR is allowed to land.
   one proves the pages describe the API that shipped. The page set comes from `site/docs-map.yaml`
   (so it needs `yq`, installed earlier in the same job) plus the repository-root Markdown — every
   `*.md` there, not just `README.md`, since `AGENTS.md` carries worked examples that agents follow
-  — and the `docs/`, `examples/`, `site/content/` and package-README trees, so a page mounted from
-  a new directory cannot escape it. The public Go files under `pkg/` are in the set too — pkg.go.dev publishes their doc
+  — and the `docs/`, `examples/` and `site/content/` trees plus every Markdown file under `pkg/`,
+  again not just the READMEs: `pkg/stack/DESIGN.md` describes the shipped design and
+  `pkg/stack/STATUS.md` says in its own first line that it reflects current implementation state, so
+  a page mounted from a new directory cannot escape the set and neither can one that sits beside the
+  code without being mounted at all. The public Go files under `pkg/` are in the set too — pkg.go.dev publishes their doc
   comments, so a stale name in one is as visible as a stale name on the site — and only their
   comment lines are read, since code calling a removed function does not compile. A reference
   written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the
@@ -160,7 +163,10 @@ temporary branch — the merged result — before the PR is allowed to land.
   runs `--self-test` first, which pins the extractor and the
   resolver against a synthetic tree — a fence marker that matches too much, an identifier boundary
   that stops matching, or a selector that stops being carried would otherwise turn the repo run
-  quietly green
+  quietly green. Every malformed suppression is an error rather than a silent pass: an
+  `ignore-start` with no terminator, an `ignore-end` with nothing open, a reversed pair on one line,
+  and a second `ignore-start` inside an open fence, which would otherwise be closed by the first
+  `ignore-end` and leave the outer fence open with nothing said
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
   action
