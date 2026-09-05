@@ -261,6 +261,28 @@ sort -u -o "$symbols" "$symbols"
 # find roots stay as well -- a page under site/content is published without
 # appearing in the map, and a page under docs/ is read on GitHub whether or not
 # it is mounted.
+#
+# Each enumeration is a plain assignment, run and checked on its own, rather than
+# three commands inside one process substitution: a process substitution's exit
+# status is never examined, so a missing yq would leave the page list silently
+# short of every mapped page while the run still reported "all resolved" -- the
+# fail-open this script exists to prevent. An empty result is treated the same
+# way, since a yq that succeeds against a restructured map yields nothing.
+docs_pages=$(find README.md docs site/content -name '*.md' -type f)
+# The package READMEs are the API-reference pages the site mounts, so they are
+# exactly the pages a stale call hurts most.
+pkg_pages=$(find pkg -name 'README.md' -type f)
+map_pages=$(yq -r '.packages[].readme, .extra_mounts[].source' site/docs-map.yaml)
+
+for _list in docs_pages pkg_pages map_pages; do
+	if [ -z "${!_list}" ]; then
+		printf 'check-doc-api-refs: %s enumerated no pages -- refusing to check a partial set\n' \
+			"$_list" >&2
+		exit 1
+	fi
+done
+unset _list
+
 pages=()
 while IFS= read -r page; do
 	[ -f "$page" ] || continue
@@ -269,13 +291,7 @@ while IFS= read -r page; do
 		case "$page" in "$excluded"* | "./$excluded"*) skip=1 ;; esac
 	done
 	[ "$skip" -eq 0 ] && pages+=("$page")
-done < <({
-	find README.md docs site/content -name '*.md' -type f
-	# The package READMEs are the API-reference pages the site mounts, so they
-	# are exactly the pages a stale call hurts most.
-	find pkg -name 'README.md' -type f
-	yq -r '.packages[].readme, .extra_mounts[].source' site/docs-map.yaml
-} | sed 's#^\./##' | sort -u)
+done < <(printf '%s\n%s\n%s\n' "$docs_pages" "$pkg_pages" "$map_pages" | sed 's#^\./##' | sort -u)
 
 if [ "${1:-}" = "--list" ]; then
 	printf 'symbols: %s\n' "$(wc -l <"$symbols")"

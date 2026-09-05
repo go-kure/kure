@@ -43,6 +43,11 @@ kubernetes.AddLabel(cluster, "env", "prod")
 cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
 ```
 
+`Cluster` is the only config-struct builder in this package that returns an error:
+it parses the CPU and memory quantities in `ClusterOptions.Resources`, and a
+malformed quantity is a caller error rather than something to panic on. `Database`
+and `ObjectStore` copy their inputs verbatim and return the object alone.
+
 ### Database
 
 ```go
