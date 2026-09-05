@@ -165,8 +165,9 @@ temporary branch — the merged result — before the PR is allowed to land.
   that stops matching, or a selector that stops being carried would otherwise turn the repo run
   quietly green. Every malformed suppression is an error rather than a silent pass: an
   `ignore-start` with no terminator, an `ignore-end` with nothing open, a reversed pair on one line,
-  and a second `ignore-start` inside an open fence, which would otherwise be closed by the first
-  `ignore-end` and leave the outer fence open with nothing said
+  a second `ignore-start` inside an open fence, which would otherwise be closed by the first
+  `ignore-end` and leave the outer fence open with nothing said, and the same repetition written on
+  a single line, so the spelling never decides whether a malformed suppression is an error
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
   action
