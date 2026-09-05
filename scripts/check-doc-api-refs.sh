@@ -30,6 +30,11 @@
 # browses on GitHub, so a page mounted from a new directory cannot escape the
 # check by being somewhere this script never thought to look. It needs yq.
 #
+# The public Go files under pkg/ are pages too: pkg.go.dev publishes their doc
+# comments, and a doc comment naming a removed helper is as stale as a Markdown
+# page naming one. Only the comment lines of a Go file are read -- code that
+# calls a removed function does not compile, so the compiler already covers it.
+#
 # What it deliberately does not check: the pages in EXCLUDED_PAGES. A migration
 # ledger must name the functions it removed, and a dated history or review record
 # describes the tree as it stood on its date -- rewriting either to satisfy a
@@ -47,8 +52,12 @@
 #     ... CreateNewKind, AddNewKindRule ...
 #     <!-- doc-api-refs:ignore-end -->
 #
-# The reason goes inside the comment, and is not optional: a form that suppresses
-# anything needs a space and then a reason starting with an alphanumeric.
+# Every form must be a complete HTML comment, terminator included: an
+# `ignore-start` whose `-->` was forgotten is malformed markdown that hides the
+# rest of the page, so accepting it would grant a suppression nothing on the
+# rendered site can show. The reason goes inside the comment, and is not
+# optional: a form that suppresses anything needs a space and then a reason
+# starting with an alphanumeric.
 # `ignore-end` suppresses nothing and so needs none -- and because it does not,
 # it must actually close a fence: a stray one is an error rather than a marker
 # line that quietly takes its own references with it. Markdown passes the whole
@@ -70,12 +79,27 @@ cd "$repo_root"
 
 # Pages that may name a removed function, with the reason each is exempt.
 EXCLUDED_PAGES=(
-	docs/builder-contract-release-1.md # the release-1 deletion ledger: naming them is its job
 	docs/history/                      # dated design records; true as of their date
 	docs/reviews/                      # dated review records; ditto
 	docs/ux-design.md                  # proposed UX, not shipped API (says so in its header)
 	docs/plugin-architecture-design.md # proposed plugin API, not shipped (ditto)
 	CHANGELOG.md                       # generated from commit subjects; a released change may name what it removed
+)
+
+# Pages whose job is to name removed functions beside their live replacements.
+# Excluding such a page wholesale exempts the replacement column too, and those
+# are live API: a later rename leaves the migration guide recommending a call
+# that no longer compiles, with nothing red. The two halves cannot be separated
+# by line -- 58 rows of this ledger name a removed builder and a live one on the
+# same line, and its three-column tables put the removed names in the middle
+# cell, so an ignore-fence covers the wrong thing whichever way it is drawn.
+#
+# What is uniform is the column: the last cell of a row is the replacement. So a
+# ledger page is scanned, but only its last cells contribute references. Its
+# first cells, its middle cells and everything that is not a table row are
+# exempt, which is the removed-name half of the page.
+LEDGER_PAGES=(
+	docs/builder-contract-release-1.md # release-1 ledger: removed names left, live replacements right
 )
 
 # Identifiers matching the builder shape that belong to somebody else's API.
@@ -103,7 +127,11 @@ trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" ${selftest_dir:+"$s
 # ENDFILE is a gawk extension and the CI runner's awk is mawk, so the unclosed
 # check runs on the first line of the NEXT file and again at END.
 extract_refs() {
-	awk '
+	awk -v ledgers="${LEDGER_LIST:-}" '
+		BEGIN {
+			n = split(ledgers, l, " ")
+			for (i = 1; i <= n; i++) isledger[l[i]] = 1
+		}
 		function unclosed() {
 			if (skip) {
 				print "unclosed doc-api-refs:ignore-start in " current > "/dev/stderr"
@@ -123,8 +151,14 @@ extract_refs() {
 			# one in `<!-- doc-api-refs:ignore -->` belongs to the closing `-->`
 			# and would suppress a line with nothing said about why. `ignore-end`
 			# suppresses nothing, so it needs no reason.
-			opens = ($0 ~ /<!-- doc-api-refs:ignore-start [A-Za-z0-9]/)
-			closes = ($0 ~ /<!-- doc-api-refs:ignore-end /)
+			# Each form must be a complete HTML comment. Without the closing
+			# `-->` in the pattern, `<!-- doc-api-refs:ignore-start reason`
+			# with the terminator forgotten still opens a fence -- and since
+			# markdown renders an unterminated comment by swallowing the rest
+			# of the page, the malformed line and the suppression it grants
+			# are both invisible in the built site.
+			opens = ($0 ~ /<!-- doc-api-refs:ignore-start [A-Za-z0-9][^>]*-->/)
+			closes = ($0 ~ /<!-- doc-api-refs:ignore-end *-->/)
 			# Both on one line is a self-contained fence: it changes no state.
 			if (opens && closes) next
 			if (opens) { skip = 1; next }
@@ -139,12 +173,32 @@ extract_refs() {
 				skip = 0
 				next
 			}
-			if ($0 ~ /<!-- doc-api-refs:ignore [A-Za-z0-9]/) next
+			if ($0 ~ /<!-- doc-api-refs:ignore [A-Za-z0-9][^>]*-->/) next
 			print "unrecognised doc-api-refs marker in " FILENAME " line " FNR > "/dev/stderr"
 			rc = 1
 			next
 		}
 		skip { next }
+		# A Go file contributes its comments and nothing else. Code that calls a
+		# removed function does not compile, so the compiler already checks it;
+		# a doc comment naming one is exactly as stale as a Markdown page naming
+		# one, and pkg.go.dev publishes it just as widely.
+		FILENAME ~ /\.go$/ { if ($0 !~ /^[ \t]*\/\//) next }
+		# A ledger page contributes only the replacement half of each row: the
+		# last non-empty cell. Anything that is not a table row names removed
+		# functions in prose and is exempt. Taking the last non-empty field
+		# rather than field n-1 keeps a row without its closing pipe from
+		# reducing to the empty string, which would silently check nothing.
+		FILENAME in isledger {
+			if ($0 !~ /^\|/) next
+			nf = split($0, cell, "|")
+			$0 = ""
+			for (k = nf; k >= 1; k--) {
+				t = cell[k]
+				gsub(/^[ \t]+|[ \t]+$/, "", t)
+				if (t != "") { $0 = t; break }
+			}
+		}
 		{
 			line = $0
 			offset = 0
@@ -235,6 +289,18 @@ self_test() {
 	cat >"$d/orphan-end.md" <<-'EOF'
 		`CreateGone` <!-- doc-api-refs:ignore-end -->
 	EOF
+	# The opener has a reason and a well-formed keyword and is still not a
+	# comment: a pattern that stops at the reason opens a fence here, and the
+	# properly-formed close on line 3 tidies up after it, so the whole passage
+	# is suppressed and the run exits 0.
+	cat >"$d/unterminated-ignore.md" <<-'EOF'
+		`CreateGone` <!-- doc-api-refs:ignore reason
+	EOF
+	cat >"$d/unterminated-start.md" <<-'EOF'
+		<!-- doc-api-refs:ignore-start reason
+		`CreateGone`
+		<!-- doc-api-refs:ignore-end -->
+	EOF
 
 	# The package-scoping tree: CreateLayoutWithResources survives in argocd and
 	# has been removed from fluxcd, which is the shape a name-only symbol set
@@ -259,6 +325,31 @@ self_test() {
 	EOF
 	cat >"$d/pkg/stack/argocd/README.md" <<-'EOF'
 		`engine.CreateLayoutWithResources(cluster, rules)` builds the layout.
+	EOF
+
+	# A Go file: the doc comment is checked, the code below it is not. Both name
+	# CreateGone, so a filter that stopped at the comment boundary in either
+	# direction shows up as a count.
+	cat >"$d/pkg/stack/fluxcd/doc.go" <<-'EOF'
+		// Package fluxcd builds things.
+		//
+		// CreateGone is advertised here and does not exist.
+		package fluxcd
+
+		func caller() { CreateGone() }
+	EOF
+
+	# A ledger page: removed names on the left, live replacements on the right,
+	# both on the same line, and a three-column row that puts the removed names
+	# in the middle. Only the last cell may be checked, and it must be -- row 5
+	# is the rot this buys: a replacement that no longer exists.
+	cat >"$d/ledger.md" <<-'EOF'
+		| Removed | Replacement |
+		|---|---|
+		| `SetGoneThing(obj, v)` | `AddReal(obj, v)` |
+		| `pkg` | `AddGoneMiddle(obj)` | `CreateReal(obj)` |
+		| `SetAlsoGone(obj, v)` | `CreateGone(obj, v)` |
+		Prose naming `CreateGone` outside a table row is exempt.
 	EOF
 
 	local got
@@ -316,6 +407,20 @@ fenced.md:4:CreateReal'
 		failures=$((failures + 1))
 	fi
 
+	# The single-line form has the same obligation, and no fence to close it: a
+	# terminator-less bare ignore still swallows its own line.
+	if extract_refs "$d/unterminated-ignore.md" >/dev/null 2>&1; then
+		printf 'self-test: an unterminated ignore was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
+	# Nothing about the CreateGone between these two markers may reach the
+	# caller, and the run must fail: the opener is not a complete comment.
+	if extract_refs "$d/unterminated-start.md" >/dev/null 2>&1; then
+		printf 'self-test: an unterminated ignore-start was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
 	# A name absent from the symbol set must be reported; one present must not.
 	# CreateDeployment is in the set and CreateDeployment_Gone is not, so the
 	# suffix must survive extraction or the fourth line resolves wrongly.
@@ -359,6 +464,35 @@ pkg/kubernetes/fluxcd/README.md:1:fluxcd.CreateElsewhere'
 		printf 'self-test: package-scope mismatch\nwant:\n%s\ngot:\n%s\n' "$want_scoped" "$unresolved" >&2
 		failures=$((failures + 1))
 	fi
+
+	local want_go='pkg/stack/fluxcd/doc.go:3:CreateGone'
+	got=$(extract_refs "$d/pkg/stack/fluxcd/doc.go" | sed "s#^$d/##")
+	if [ "$got" != "$want_go" ]; then
+		printf 'self-test: go-comment extraction mismatch\nwant:\n%s\ngot:\n%s\n' \
+			"$want_go" "$got" >&2
+		failures=$((failures + 1))
+	fi
+
+	# The ledger rule, both halves: the removed names must not be extracted at
+	# all, and the replacements must be resolved like any other reference.
+	LEDGER_LIST="$d/ledger.md"
+	local want_ledger='ledger.md:3:AddReal
+ledger.md:4:CreateReal
+ledger.md:5:CreateGone'
+	got=$(extract_refs "$d/ledger.md" | sed "s#^$d/##")
+	if [ "$got" != "$want_ledger" ]; then
+		printf 'self-test: ledger extraction mismatch\nwant:\n%s\ngot:\n%s\n' \
+			"$want_ledger" "$got" >&2
+		failures=$((failures + 1))
+	fi
+	extract_refs "$d/ledger.md" | sort -u >"$referenced"
+	unresolved=$(report_unresolved | sed "s#^$d/##")
+	if [ "$unresolved" != 'ledger.md:5:CreateGone' ]; then
+		printf 'self-test: ledger resolution mismatch\nwant:\n%s\ngot:\n%s\n' \
+			'ledger.md:5:CreateGone' "$unresolved" >&2
+		failures=$((failures + 1))
+	fi
+	LEDGER_LIST=
 
 	if [ "$failures" -ne 0 ]; then
 		printf 'check-doc-api-refs --self-test: %s failure(s)\n' "$failures" >&2
@@ -542,12 +676,27 @@ while IFS= read -r page; do
 		case "$page" in "$excluded"* | "./$excluded"*) skip=1 ;; esac
 	done
 	[ "$skip" -eq 0 ] && pages+=("$page")
-done < <(printf '%s\n%s\n%s\n' "$docs_pages" "$pkg_pages" "$map_pages" | sed 's#^\./##' | sort -u)
+done < <(printf '%s\n%s\n%s\n%s\n' "$docs_pages" "$pkg_pages" "$map_pages" "$go_files" |
+	sed 's#^\./##' | sort -u)
+
+# The ledger pages arrive through the same enumeration as any other page, so
+# they are already in `pages`; the extractor is told which of them to read a
+# column at a time. A ledger page that stopped existing would drop out of the
+# enumeration silently, so require each one.
+for _ledger in "${LEDGER_PAGES[@]}"; do
+	if [ ! -f "$_ledger" ]; then
+		printf 'check-doc-api-refs: LEDGER_PAGES names %s, which does not exist\n' \
+			"$_ledger" >&2
+		exit 1
+	fi
+done
+unset _ledger
+LEDGER_LIST="${LEDGER_PAGES[*]}"
 
 if [ "${1:-}" = "--list" ]; then
 	printf 'declarations: %s\n' "$(wc -l <"$symbols")"
 	printf 'packages:     %s\n' "$(wc -l <"$pkgdirs")"
-	printf 'pages:        %s\n' "${#pages[@]}"
+	printf 'pages:        %s (Markdown pages plus public Go files)\n' "${#pages[@]}"
 	exit 0
 fi
 
@@ -571,5 +720,5 @@ if unresolved=$(report_unresolved); then
 	exit 1
 fi
 
-printf 'check-doc-api-refs: %s pages, %s builder references, all resolved.\n' \
+printf 'check-doc-api-refs: %s pages and Go files, %s builder references, all resolved.\n' \
 	"${#pages[@]}" "$(wc -l <"$referenced")"

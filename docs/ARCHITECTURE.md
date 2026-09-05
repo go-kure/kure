@@ -454,8 +454,13 @@ d.Spec.Replicas = ptr.To[int32](3)
 d.Spec.Template.Spec.ServiceAccountName = "web"
 ```
 
-A whole-spec setter, or a helper whose entire body assigns one argument to one field, is a bare
-assignment written twice. kure does not ship those and its documentation does not suggest them.
+A helper whose entire body assigns one argument to one *value-typed* field is that assignment
+written twice, and the admission test rejects it. A *pointer-typed* field is the pointer/nil-init
+class below, decided on the field rather than on how deep in the spec it sits: `Spec` itself is
+`*api.Rule` on both Cilium policy kinds, so `SetCiliumNetworkPolicySpec` and
+`SetCiliumClusterwideNetworkPolicySpec` (`pkg/kubernetes/cilium/update.go`) are admissible
+whole-spec setters and ship. They are the only two in the tree — every other whole-spec assignment
+is inside a config-struct constructor, which is not sugar.
 
 ### Implementation Structure
 
