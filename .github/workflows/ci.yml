@@ -983,6 +983,14 @@ jobs:
     - name: Validate docs map (code↔docs sync)
       uses: go-kure/.github/.github/actions/check-doc-sync@7d126c76cdbe2388ead770417d5a3a02066778d3 # main
 
+    # check-doc-sync proves every package has a page; this proves the pages name
+    # functions that still exist. The builder-contract epic removed several
+    # hundred Set*/Add*/Create* helpers, and a page calling one reads as current
+    # API. Lives here rather than in validate because its inputs -- pkg/**,
+    # docs/**, site/content/**, README.md -- are the docs filter's inputs.
+    - name: Check documented builder references resolve
+      run: ./scripts/check-doc-api-refs.sh
+
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
 
