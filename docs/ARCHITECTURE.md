@@ -2,12 +2,24 @@
 
 ## Executive Summary
 
-Kure is a Go library for programmatically building Kubernetes resources used by GitOps tools (Flux, cert-manager, MetalLB, External Secrets). The library emphasizes strongly-typed object construction over templating engines, providing a composable, type-safe approach to generating Kubernetes manifests.
+Kure is a GitOps domain model and layout engine on a thin Kubernetes foundation. The domain model
+(`pkg/stack`) says what a cluster contains; the layout engine (`pkg/stack/layout`,
+`pkg/stack/fluxcd`) writes that out as a reconcilable directory tree of plain YAML; the Kubernetes
+foundation (`pkg/kubernetes`) supplies the scheme, one generic constructor, the generated per-kind
+wrappers over it, and a small admissible set of sugar helpers.
+
+The foundation is thin on purpose. The upstream Go struct is the construction API — kure sets
+identity and stops — so the library's surface stays small enough to keep stable while the domain
+model above it carries the opinions.
 
 **Key Architectural Achievements:**
 - **Domain-Driven Design**: Hierarchical cluster model with clear boundaries
 - **Interface Segregation**: Split monolithic workflow interfaces into focused components
-- **Type Safety**: Strong typing throughout with comprehensive validation
+- **Thin Kubernetes foundation**: Identity-only constructors, generated from the registered scheme,
+  under a contract that is asserted by tests rather than described by convention
+  ([Kubernetes Builders](/api-reference/kubernetes-builders/) is normative)
+- **Derived, not hand-kept**: Which kinds exist, their scope, and which of their fields are
+  feature-gated or deprecated are all read out of the pinned upstream modules
 - **GitOps Agnostic**: Support for multiple GitOps tools through pluggable workflows
 - **Declarative Patching**: JSONPath-based patching system with structure preservation *(moved to go-kure/launcher)*
 
@@ -21,7 +33,7 @@ The architecture supports complex Kubernetes cluster configurations while mainta
 2. [Domain Model Architecture](#domain-model-architecture)
 3. [Workflow Architecture](#workflow-architecture)
 4. [Error Handling Architecture](#error-handling-architecture)
-5. [Resource Builder Pattern](#resource-builder-pattern)
+5. [Kubernetes Foundation](#kubernetes-foundation)
 6. [Patch System Architecture](#patch-system-architecture)
 7. [Layout and Packaging](#layout-and-packaging)
 8. [Naming Conventions](#naming-conventions)
@@ -44,7 +56,7 @@ graph TB
     subgraph "Kure Library"
         DM[Domain Model]
         WF[Workflow Engines]
-        RB[Resource Builders]
+        RB[Kubernetes Foundation]
         LO[Layout Engine]
     end
     
@@ -75,7 +87,9 @@ The system is organized around four primary architectural layers:
 
 1. **Domain Model** (`pkg/stack/`): Hierarchical abstractions for cluster configuration
 2. **Workflow Engines** (`pkg/stack/workflow.go`, `pkg/stack/fluxcd/`, `pkg/stack/argocd/`): GitOps-specific implementations
-3. **Resource Builders** (`internal/`): Strongly-typed Kubernetes resource factories
+3. **Kubernetes Foundation** (`pkg/kubernetes/` and its per-CRD subpackages): the registered
+   scheme, the generic `Create[T]` constructor and its generated per-kind wrappers, the admissible
+   sugar helpers, and the generated kinds/scope/maturity tables
 4. **Support Systems**: Error handling, layout, and I/O utilities
 
 ### What kure does NOT provide
@@ -421,44 +435,87 @@ func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object
 
 ---
 
-## Resource Builder Pattern
+## Kubernetes Foundation
 
-### Builder Architecture
+The [Kubernetes Builders](/api-reference/kubernetes-builders/) page is the normative text of the
+builder contract (ADR-038, "thin core + admissible sugar"). This section describes how that
+contract sits in the architecture; where the two differ, that page wins.
 
-Resource builders follow a consistent functional pattern across all Kubernetes resource types:
+### The canonical path
+
+For every registered kind the upstream Go struct is the construction API. kure allocates the
+object, stamps `TypeMeta` from the registered scheme and writes `metadata.name` (and
+`metadata.namespace` for a namespaced kind). Everything else is a field on the upstream type,
+assigned by the caller:
 
 ```go
-// Pattern: Create* functions for constructors
-func CreateDeployment(name, namespace string) *appsv1.Deployment
-
-// Pattern: Add* functions for collection modifications
-func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container)
-
-// Pattern: Set* functions for field assignments
-func SetDeploymentReplicas(deployment *appsv1.Deployment, replicas int32)
+d := kubernetes.CreateDeployment("web", "default")
+d.Spec.Replicas = ptr.To[int32](3)
+d.Spec.Template.Spec.ServiceAccountName = "web"
 ```
+
+A helper whose entire body assigns one argument to one *value-typed* field is that assignment
+written twice, and the admission test rejects it. A *pointer-typed* field is the pointer/nil-init
+class below, decided on the field rather than on how deep in the spec it sits: `Spec` itself is
+`*api.Rule` on both Cilium policy kinds, so `SetCiliumNetworkPolicySpec` and
+`SetCiliumClusterwideNetworkPolicySpec` (`pkg/kubernetes/cilium/update.go`) are admissible
+whole-spec setters and ship. They are the only two in the tree — every other whole-spec assignment
+is inside a config-struct constructor, which is not sugar.
 
 ### Implementation Structure
 
-Each resource builder package (`internal/kubernetes/`, `internal/fluxcd/`, etc.) follows consistent organization:
+The foundation is one package plus one package per CRD family, all under `pkg/kubernetes/`:
 
 ```
-internal/kubernetes/
-├── doc.go                    # Package documentation
-├── deployment.go            # Deployment builders
-├── deployment_test.go       # Deployment tests
-├── service.go              # Service builders  
-├── service_test.go         # Service tests
-└── ...
+pkg/kubernetes/
+├── doc.go                     # Package documentation
+├── create.go                  # Create[T]: the single constructor implementation
+├── scheme.go                  # The registered scheme every lookup goes through
+├── zz_generated_create.go     # Per-kind Create<Kind> wrappers (generated)
+├── zz_generated_tables.go     # Kinds, scope and field maturity (generated)
+├── podspec.go                 # Admissible sugar for corev1.PodSpec
+├── admission_test.go          # go/ast check that every exported helper is admissible
+├── certmanager/ cilium/ cnpg/ …   # one subpackage per CRD family, same shape
+└── internal/                  # kinds, markers, upstream, crds, maturity, gen, admission
 ```
+
+The `internal/` tree is where derivation lives: it reads the pinned upstream module sources and
+their `CustomResourceDefinition` manifests, and the generator writes both the wrappers and the
+tables from what it finds. Nothing under `internal/` is importable by a consumer.
+
+### Three classes of sugar, and one test that enforces them
+
+A helper survives only if the write it performs falls into one of three classes. The classes are
+about the shape of the write, not about whether a caller could have written it by hand — a pointer
+field the caller already holds a pointer to is a one-line assignment, and a helper for it is still
+admitted:
+
+| Class | What it does | Example |
+|---|---|---|
+| Appender | Appends to a slice field, or inserts into a map field, creating either if nil | `AddPodSpecContainer`, `AddConfigMapData` |
+| Pointer / nil-init | Assigns a pointer-typed field, or initialises a nil pointer intermediate before writing through it | `SetDeploymentReplicas` |
+| Composite | Writes several fields that belong together, and names the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
+
+`pkg/kubernetes/admission_test.go` parses every exported `Set*`/`Add*` in the tree with `go/ast`
+and fails on one that fits none of the three, with one exception that is four names rather than a
+rule: `SetLabels`, `AddLabel`, `SetAnnotations` and `AddAnnotation` write through the
+`metav1.Object` interface rather than into a field, so they match no write shape and the classifier
+admits them by name as a fourth outcome (`Exempt`). That is what lets one metadata helper set cover
+every kind, including kinds kure does not register; the normative statement is
+[Kubernetes Builders](https://www.gokure.dev/kure/api-reference/kubernetes-builders/) §5. It is a
+fixed set, not an exclusion list — it never grows.
+
+Constructors are outside the test's remit — `Create*` is not sugar, and the generator is what keeps
+those honest. The exclusion list the test once carried is empty and stays empty, so the classes are
+enforced rather than merely documented.
 
 ### Type Safety Guarantees
 
-Builders provide compile-time type safety through:
-
 1. **Strong Return Types**: All constructors return specific Kubernetes types
-2. **Void Helpers**: Setter/adder functions use void returns (no nil-checking) since callers always use constructors first
-3. **Validation at Boundaries**: Only public facade functions (`pkg/kubernetes/`) validate inputs
+2. **Void Helpers**: Sugar helpers return nothing and panic on a nil receiver — a nil object is a
+   programming error, not a runtime condition, so there is no error to thread through a caller
+3. **Purity**: A helper writes the field its name states and no other. A helper that also clears a
+   sibling field either says so in its name or does not exist
 
 Example implementation:
 
@@ -492,13 +549,28 @@ Constructors emit identity only (`apiVersion`, `kind`, `metadata.name`,
 the caller on the upstream struct. The builder contract on the
 [Kubernetes Builders](/api-reference/kubernetes-builders/) page is normative.
 
+### Where scope and maturity come from
+
+Which kinds exist, whether each is namespaced or cluster-scoped, and which of their fields are
+feature-gated or deprecated are not maintained by hand. `pkg/kubernetes/internal` reads the pinned
+upstream module sources — the `+kubebuilder:resource` markers a CRD family ships, the
+`CustomResourceDefinition` manifests in the module, and the doc comments on the API types — and the
+generator writes `zz_generated_tables.go` and `docs/api-tables.{json,md}` from what it found. Every
+row names the module and version it was read from.
+
+Two consequences worth stating. A dependency bump changes the tables, so `scripts/gen-builders.sh
+check` fails in CI until the regenerated files are committed; Renovate runs the generator itself
+after a Go module bump. And a kind whose scope no source can state is an error at generation time,
+not a namespaced default — a wrong scope is silent in YAML and loud in a cluster.
+
 ### Cross-Resource Consistency
 
 All builders maintain consistency through:
 
-- **Void Returns**: All internal setter/adder functions use void returns consistently
+- **Void Returns**: Sugar helpers return nothing and panic on nil, uniformly across every package
 - **Standard Patterns**: Uniform function naming across resource types
-- **Boundary Validation**: Public facade functions handle nil-config checks
+- **One admission test**: `pkg/kubernetes/admission_test.go` covers every package under
+  `pkg/kubernetes/...`, so consistency is a test result rather than a review habit
 
 ### One-of Constraints (Sealed Interfaces)
 
@@ -720,76 +792,136 @@ internal/                    # Implementation packages (private)
 
 ## Developer Guidelines
 
-### Adding New Resource Builders
+### Adding Support for a New Kind
 
-Follow this standardized process for adding Kubernetes resource support:
+You do not write a constructor. Register the kind's scheme and the constructor is generated.
 
-#### 1. Create Constructor Function
+#### 1. Register the type's scheme
+
+Add the module's `AddToScheme` to the list in `pkg/kubernetes/scheme.go`. For a kind whose family
+kure already covers, that is the whole step.
+
+A family kure does not yet cover needs two more things, because the generator has to know which
+subpackage the wrapper belongs in:
+
+- the subpackage itself (`pkg/kubernetes/<family>/`), following the shape of an existing one;
+- a row in `packageRoutes` (`pkg/kubernetes/internal/kinds/kinds.go`) mapping the upstream module's
+  import-path prefix to that subpackage name. An unrouted import path is not a silent miss — the
+  classifier refuses the whole run with `no kure package routes import path <path>` — but nothing
+  routes a new vendor prefix by default, so the row is part of adding the family rather than a
+  later fix.
+
+#### 2. Regenerate
+
+```bash
+make gen-builders          # or: ./scripts/gen-builders.sh generate
+```
+
+This writes the `Create<Kind>` wrapper into `zz_generated_create.go`, adds the kind to
+`zz_generated_tables.go` and to `docs/api-tables.{json,md}`, and records the scope it derived and
+what stated it. Commit the generated files; `./scripts/gen-builders.sh check` fails CI otherwise.
+
+If the generator reports that it cannot determine a kind's scope, that is the intended failure: add
+the `+kubebuilder:resource` marker upstream, or ship the `CustomResourceDefinition` in the module.
+Do not default it. The built-in table is not a third option here: `builtinClusterScoped`
+(`pkg/kubernetes/internal/kinds/scope.go`) is consulted only for the two modules in
+`builtinModules` — `k8s.io/api` and `k8s.io/apiextensions-apiserver`, whose types carry no markers
+because the API server defines their scope — so an entry added there for a CRD family's kind is
+never read, and the same error comes back. That table is only the right place when the kind you are
+adding is itself a Kubernetes built-in.
+
+#### 3. Add sugar only in one of the three admitted classes
+
+A helper must be an appender, a pointer/nil-init setter, or a named composite (see
+[Kubernetes Foundation](#kubernetes-foundation)). Anything else is a bare assignment and
+`admission_test.go` will reject it — the four generic metadata helpers it admits by name are a
+fixed set and not a precedent to argue from:
+
+<!-- doc-api-refs:ignore-start NewKind is a placeholder for the kind being added -->
+
 ```go
-// internal/kubernetes/newresource.go
-
-func CreateNewResource(name, namespace string, opts ...Option) *v1.NewResource {
-    resource := &v1.NewResource{
-        ObjectMeta: metav1.ObjectMeta{
-            Name:      name,
-            Namespace: namespace,
-        },
-        Spec: v1.NewResourceSpec{
-            // Initialize required fields
-        },
+// pkg/kubernetes/<family>/<kind>.go — appender: append is not a plain assignment
+func AddNewKindRule(obj *v1.NewKind, rule v1.Rule) {
+    if obj == nil {
+        panic("AddNewKindRule: obj must not be nil")
     }
-    
-    // Apply options
-    for _, opt := range opts {
-        opt(resource)
-    }
-    
-    return resource
+    obj.Spec.Rules = append(obj.Spec.Rules, rule)
 }
 ```
 
-#### 2. Add Helper Functions
-```go
-func AddNewResourceField(resource *v1.NewResource, field FieldType) {
-    resource.Spec.Fields = append(resource.Spec.Fields, field)
-}
+There is deliberately no `SetNewKindProperty(obj, v)`: the caller writes `obj.Spec.Property = v`.
 
-func SetNewResourceProperty(resource *v1.NewResource, value PropertyType) {
-    resource.Spec.Property = value
+#### 4. Test the object, not the setter
+
+Compare the whole object, not a few of its fields. "Identity and nothing else" is a claim about
+everything the constructor did not write, and a field-by-field check cannot make it: an injected
+label, a defaulted status or a populated selector all pass a test that only looks at `Name`,
+`TypeMeta` and `Spec`. Build the object you expect and `DeepEqual` against it.
+
+```go
+// pkg/kubernetes/<family>/<kind>_test.go
+
+func TestCreateNewKind(t *testing.T) {
+    got := CreateNewKind("test", "default")
+
+    want := &v1.NewKind{}
+    want.GetObjectKind().SetGroupVersionKind(
+        schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "NewKind"})
+    want.SetName("test")
+    want.SetNamespace("default")
+
+    if !reflect.DeepEqual(got, want) {
+        t.Errorf("constructor emitted more than identity:\n got %#v\nwant %#v", got, want)
+    }
 }
 ```
 
-#### 3. Comprehensive Testing
-```go
-// internal/kubernetes/newresource_test.go
+This form works whatever the kind's shape: it never names `Spec`, so it compiles for the built-ins
+that have no such field, and the generator writes the wrapper's signature from the scope it derived
+— so a cluster-scoped kind drops the namespace argument and the matching `want.SetNamespace` line,
+and nothing else changes.
 
-func TestCreateNewResource(t *testing.T) {
-    resource := CreateNewResource("test", "default")
-    if resource == nil {
-        t.Fatal("expected non-nil resource")
-    }
-    
-    // Validate required fields
-    if resource.Name != "test" {
-        t.Errorf("expected name 'test', got %s", resource.Name)
-    }
-    if resource.Namespace != "default" {
-        t.Errorf("expected namespace 'default', got %s", resource.Namespace)
-    }
-}
+`pkg/kubernetes/identity_test.go:53-80` already asserts exactly this for every registered kind, by
+constructing `want` reflectively from the scheme. The per-kind test is a local echo of that, worth
+writing because it fails with the kind's name in it rather than as one subtest among hundreds.
 
-func TestNewResourceHelpers(t *testing.T) {
-    resource := CreateNewResource("test", "default")
+<!-- doc-api-refs:ignore-end -->
 
-    // Test all helper functions
-    field := FieldType{/* valid field */}
-    AddNewResourceField(resource, field)
+The scope is covered by the same comparison rather than by a separate assertion: `want` carries a
+namespace only when the kind is namespaced, so a namespace on a cluster-scoped object fails here.
+That is the failure the whole scope-derivation chain exists to prevent, and it is otherwise
+invisible until the API server rejects the manifest.
 
-    // Validate field was added
-    if len(resource.Spec.Fields) != 1 {
-        t.Errorf("expected 1 field, got %d", len(resource.Spec.Fields))
-    }
-}
+A constructor that starts setting spec values is the regression this contract exists to prevent,
+and the whole-object comparison is what catches it — along with every other field it might start
+writing.
+
+#### 5. Map the package, if the family is new
+
+A new `pkg/kubernetes/<family>/` is a new public package, and `check-doc-sync` requires every public
+package to be mapped exactly once with a README that exists. Skipping this leaves `docs-build` red
+after generation has already succeeded, which reads as a generator failure and is not one. So:
+
+- write `pkg/kubernetes/<family>/README.md`, following an existing family's — the kind coverage
+  belongs in the generated table, not in prose;
+- add the package to `site/docs-map.yaml`, which is the single source of the code-to-docs mapping.
+  The AGENTS reverse-map table and the site nav are generated from it by
+  `bash site/scripts/gen-docs-tables.sh`; run that and commit its output rather than editing either
+  by hand.
+
+Adding a kind to a family kure already covers needs no new mapping — the package is already mapped,
+and step 2's regenerated tables carry the new kind — but it is not free of documentation work.
+Regeneration inserts a constructor into that package's `zz_generated_create.go`, and `doc-gate`
+requires mapped code that changed to be paired with a change to its mapped docs: the family README,
+or the guide the map names for it (`guides/library-usage` for every `pkg/kubernetes/<family>`).
+A newly inserted generated line is never treated as trivial, so the generated kinds table being
+current does not settle it. Say what the new kind is for in the family README, in a sentence, and
+the gate is satisfied by the thing that should have happened anyway.
+
+```bash
+bash site/scripts/gen-docs-tables.sh
+bash scripts/check-doc-api-refs.sh
+mise run site:check
 ```
 
 ### Extending Domain Model
@@ -894,19 +1026,17 @@ Kure maintains comprehensive test coverage through consistent patterns:
 
 #### Unit Testing
 ```go
-func TestResourceCreation(t *testing.T) {
-    // Test constructor
-    resource := CreateResource("test", "default")
-    
-    // Validate required fields
-    // Test error conditions
-    // Verify helper functions
+func TestServiceConstruction(t *testing.T) {
+    svc := kubernetes.CreateService("web", "default")
+
+    // Identity and TypeMeta are set; nothing in the spec is.
+    // Verify the helpers the caller would reach for next.
+    kubernetes.AddServicePort(svc, corev1.ServicePort{Port: 80})
 }
 
-func TestResourceValidation(t *testing.T) {
-    // Test validation logic
-    // Test error cases
-    // Verify error messages
+func TestClusterValidation(t *testing.T) {
+    // Structural rules live in the domain model, not the constructors:
+    // exercise stack.ValidateCluster and assert the error it returns.
 }
 ```
 
@@ -999,24 +1129,14 @@ Kure follows Kubernetes security best practices for secret handling:
 
 #### 1. No Hardcoded Secrets
 ```go
-// NEVER do this
-func CreateSecretWithData(name, namespace, password string) *corev1.Secret {
-    return &corev1.Secret{
-        Data: map[string][]byte{
-            "password": []byte(password), // WRONG: hardcoded secret
-        },
-    }
-}
+// NEVER do this - a literal secret in the program that generates the manifests
+// is a literal secret in the Git repository those manifests are committed to.
+secret := kubernetes.CreateSecret("db-credentials", "default")
+secret.Data = map[string][]byte{"password": []byte("hunter2")} // WRONG
 
-// CORRECT approach - reference existing secrets
-func CreateCertificateWithSecret(name, namespace string, secretRef cmmeta.SecretKeySelector) *cmv1.Certificate {
-    return &cmv1.Certificate{
-        Spec: cmv1.CertificateSpec{
-            SecretName: secretRef.Name,
-            // Reference, don't embed
-        },
-    }
-}
+// CORRECT approach - name the secret, let the cluster hold the value
+cert := certmanager.CreateCertificate("tls-cert", "default")
+cert.Spec.SecretName = "tls-cert-secret" // where cert-manager writes the key
 ```
 
 #### 2. Secret Reference Pattern
@@ -1027,9 +1147,13 @@ key := cmmeta.SecretKeySelector{
     Key: "key-name",
 }
 
-// Use in resource builders
-cert := certmanager.CreateCertificate("tls-cert", "default")
-certmanager.SetCertificateIssuerSecret(cert, key)
+// The reference is a field on the upstream struct; there is no kure setter for it
+issuer := certmanager.CreateIssuer("vault", "default")
+issuer.Spec.Vault = &certv1.VaultIssuer{
+    Server: "https://vault.example.com:8200",
+    Path:   "pki/sign/example",
+    Auth:   certv1.VaultAuth{TokenSecretRef: &key},
+}
 ```
 
 ### RBAC Integration
@@ -1045,9 +1169,14 @@ kubernetes.AddRoleRule(role, rbacv1.PolicyRule{
     Verbs:     []string{"get", "list"},
 })
 
-// Bind to specific accounts
+// Bind to specific accounts. RoleRef is a single struct field, so it is written
+// directly - a helper for it would be the assignment with more words.
 binding := kubernetes.CreateRoleBinding("app-reader", "default")
-kubernetes.SetRoleBindingRole(binding, "app-reader")
+binding.RoleRef = rbacv1.RoleRef{
+    APIGroup: rbacv1.GroupName,
+    Kind:     "Role",
+    Name:     "app-reader",
+}
 kubernetes.AddRoleBindingSubject(binding, rbacv1.Subject{
     Kind: "ServiceAccount",
     Name: "app-sa",
@@ -1059,41 +1188,59 @@ kubernetes.AddRoleBindingSubject(binding, rbacv1.Subject{
 cert-manager integration provides secure TLS:
 
 ```go
-// ACME challenge configuration
+// ACME challenge configuration. SetClusterIssuerACME assigns a pointer-typed
+// field, which is what makes it admissible sugar — it takes the *ACMEIssuer,
+// built here as an upstream struct literal, and writes it straight to the spec.
 issuer := certmanager.CreateClusterIssuer("letsencrypt")
-certmanager.SetClusterIssuerACME(issuer, "https://acme-v02.api.letsencrypt.org/directory")
-certmanager.AddClusterIssuerACMEDNS01Provider(issuer, "cloudflare", map[string]string{
-    "email": "admin@example.com",
+certmanager.SetClusterIssuerACME(issuer, &cmacme.ACMEIssuer{
+    Server: "https://acme-v02.api.letsencrypt.org/directory",
+    Email:  "admin@example.com",
+    Solvers: []cmacme.ACMEChallengeSolver{{
+        DNS01: &cmacme.ACMEChallengeSolverDNS01{
+            Cloudflare: &cmacme.ACMEIssuerDNS01ProviderCloudflare{
+                APIToken: &cmmeta.SecretKeySelector{
+                    LocalObjectReference: cmmeta.LocalObjectReference{Name: "cloudflare-api-token"},
+                    Key:                  "token",
+                },
+            },
+        },
+    }},
 })
 
-// Certificate with DNS validation
-cert := certmanager.CreateCertificate("api-tls", "default")  
-certmanager.SetCertificateIssuer(cert, cmmeta.IssuerReference{
+// Certificate with DNS validation. IssuerRef is a plain field; DNSNames is a
+// slice, so it keeps an appender.
+cert := certmanager.CreateCertificate("api-tls", "default")
+cert.Spec.IssuerRef = cmmeta.IssuerReference{
     Name: "letsencrypt",
     Kind: "ClusterIssuer",
-})
+}
 certmanager.AddCertificateDNSName(cert, "api.example.com")
 ```
 
 ### Input Validation
 
-All user inputs undergo strict validation:
+Validation is layered, and the constructor layer deliberately does none of it. A `Create<Kind>` call
+returns an object, never an error: it writes the name it was given, because a library that second-
+guesses a name it was handed cannot be composed with a caller that generates names.
+
+| Layer | What it checks | Where |
+|---|---|---|
+| Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
+| Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node` | `stack.ValidateCluster`, `Bundle.Validate` |
+| Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
+| The cluster | Schema, admission, CRD structural rules | apply time |
+
+The domain-model row is about bundles, and deliberately does not claim more. `ValidateCluster`
+walks `Node.Children` to find the attached bundles and to scan for a `PackageRef`, but it checks
+nothing about the nodes themselves: a node name may be empty, a `ParentPath` may resolve to
+nothing, and the node walk carries no visited set, so a `Node` graph containing a cycle recurses
+until the stack runs out rather than returning an error. A caller that builds a `Node` tree by hand
+is responsible for its shape; the builders in `pkg/stack` do not produce a cyclic one.
 
 ```go
-func CreateResource(name, namespace string) (*Resource, error) {
-    // Validate Kubernetes naming conventions
-    if !isValidKubernetesName(name) {
-        return nil, errors.NewValidationError("name", name, "Resource", 
-                                              []string{"lowercase", "alphanumeric", "hyphens-only"})
-    }
-    
-    // Validate namespace format
-    if namespace != "" && !isValidNamespace(namespace) {
-        return nil, errors.NewValidationError("namespace", namespace, "Resource", 
-                                              []string{"valid-namespace-name"})
-    }
-    
-    return &Resource{Name: name, Namespace: namespace}, nil
+// Validation is a call the caller makes, not a side effect of construction.
+if err := stack.ValidateCluster(c); err != nil {
+    return errors.Wrap(err, "cluster is not layoutable")
 }
 ```
 
@@ -1103,27 +1250,26 @@ func CreateResource(name, namespace string) (*Resource, error) {
 
 ### Test Organization
 
-Kure maintains **105 test files** with comprehensive coverage:
+Tests live beside the code they cover, under `pkg/`:
 
 ```
-internal/
+pkg/
 ├── kubernetes/
 │   ├── deployment_test.go
-│   ├── service_test.go
-│   └── ...
-├── fluxcd/
-│   ├── kustomize_test.go
-│   ├── source_test.go  
-│   └── ...
-└── ...
-
-pkg/
+│   ├── admission_test.go        # the contract: every helper is class-admissible
+│   ├── identity_test.go         # the contract: constructors emit identity only
+│   ├── zz_generated_kinds_test.go   # the frozen kind/scope fixture (generated)
+│   ├── fluxcd/ certmanager/ …   # one _test.go beside each builder file
+│   └── internal/…               # kinds, markers, upstream, crds, maturity, gen
 ├── stack/
 │   ├── application_test.go
 │   ├── bundle_test.go
 │   └── ...
 └── ...
 ```
+
+CI enforces a repository floor of 90% statement coverage and the same 90% for every package outside
+`examples/`, so a new package cannot be added under the floor.
 
 ### Testing Patterns
 
@@ -1145,10 +1291,11 @@ func TestCreateDeployment(t *testing.T) {
     if deployment.Namespace != "default" {
         t.Errorf("expected namespace 'default', got %s", deployment.Namespace)
     }
-    
-    // Validate default values
-    if deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != 1 {
-        t.Error("expected default replicas to be 1")
+
+    // Assert the absence of defaults, not their presence: a constructor that
+    // starts writing spec values is the regression the contract prevents.
+    if !reflect.DeepEqual(deployment.Spec, appsv1.DeploymentSpec{}) {
+        t.Errorf("constructor injected a spec default: %+v", deployment.Spec)
     }
 }
 ```
@@ -1313,7 +1460,11 @@ func assertError(t *testing.T, err error, expectedType errors.ErrorType) {
 
 **Patch**: Declarative modification of Kubernetes resources using JSONPath-based operations.
 
-**Resource Builder**: Strongly-typed factory function for creating Kubernetes resources.
+**Kubernetes foundation**: `pkg/kubernetes` and its per-CRD subpackages — the registered scheme, `Create[T]` and its generated per-kind wrappers, the admissible sugar helpers, and the generated kinds/scope/maturity tables.
+
+**Admissible sugar**: A `Set*`/`Add*` helper whose write falls into one of three classes — appends to a slice or inserts into a map, assigns a pointer-typed field or initialises a nil pointer intermediate, or writes several fields under a name that states the opinion — plus the four generic metadata helpers (`SetLabels`, `AddLabel`, `SetAnnotations`, `AddAnnotation`), which write through `metav1.Object` and are admitted by name. Anything else is not part of the builder contract.
+
+**Constructor**: `Create<Kind>(name[, namespace])` — returns an object carrying `apiVersion`, `kind` and identity, and nothing else. Generated from the registered scheme.
 
 **Workflow Engine**: Complete GitOps workflow implementation combining resource generation, layout integration, and bootstrap capabilities.
 
@@ -1330,6 +1481,10 @@ func assertError(t *testing.T, err error, expectedType errors.ErrorType) {
 
 Additional design documentation available in the repository:
 
+- `pkg/kubernetes/README.md`: The builder contract (ADR-038) — normative
+- `docs/history/20260905-DESIGN-builder-contract.md`: Why the contract replaced three builder layers
+- `docs/builder-contract-release-1.md`: Release-1 migration ledger — every removed helper and its replacement
+- `docs/api-tables.md`: Generated kinds, scope and field-maturity tables
 - `pkg/stack/layout/README.md`: Layout system overview
 - `pkg/stack/workflow.go`: Workflow interface definitions
 
@@ -1359,4 +1514,22 @@ For migrating from previous versions:
 - Update imports to use new package structure
 - Helper function signatures remain compatible
 
-This comprehensive architecture serves as the foundation for Kure's continued evolution while maintaining backward compatibility and extensibility.
+#### Builder contract (release 1)
+
+The builder contract removed the constructor defaults and the bare field forwarders. This is a
+breaking change for callers that relied on either, and it is the one migration this release asks
+for. Every removed function is listed with the expression that replaces it, grouped by package, in
+[the release-1 migration notes](/concepts/builder-contract-release-1/); the rewrite is mechanical
+and never changes behaviour. Three things are not mechanical, and all three are called out there:
+
+- A constructor no longer injects `app: <name>` labels or a per-kind spec default.
+- The removal of the container constructor takes a resource reservation with it.
+- An unset Flux `Prune` now resolves to `false` rather than `true`. `KustomizationSpec.Prune` is a
+  required field with no `omitempty`, so an unset input cannot leave the key out of the emitted
+  YAML — it has to pick one, and the old direction turned on destructive garbage collection for a
+  caller who never asked for it. Set it explicitly to keep pruning.
+
+The middle one announces itself: the constructor is gone, so the call does not compile. The other
+two do not. A caller who never named `Prune`, and one that relied on a constructor's labels,
+both compile unchanged and emit different YAML — so read the migration notes even if the build is
+already green.

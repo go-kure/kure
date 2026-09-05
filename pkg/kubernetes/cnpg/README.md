@@ -17,7 +17,9 @@ obj := cnpg.CreateCluster("pg-main", "databases")
 cl := cnpg.CreateClusterImageCatalog("postgres-images")
 ```
 
-The config-struct builders (`cnpg.Cluster(&cnpg.ClusterConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
+The config-struct builders (`cnpg.Cluster(&cnpg.ClusterConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. No hand-written `Create*` helper for a spec fragment remains — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+
+The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
 See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 
@@ -28,15 +30,34 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 ```go
 import "github.com/go-kure/kure/pkg/kubernetes/cnpg"
 
-cluster := cnpg.Cluster(&cnpg.ClusterConfig{
+cluster, err := cnpg.Cluster(&cnpg.ClusterConfig{
     Name:      "pg-main",
     Namespace: "databases",
-    Spec:      cnpgv1.ClusterSpec{Instances: 3},
+    Options:   &cnpg.ClusterOptions{Instances: 3, StorageSize: "10Gi"},
 })
+if err != nil {
+    return err
+}
 
 kubernetes.AddLabel(cluster, "env", "prod")
 cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
 ```
+
+`Cluster` is the only config-struct builder in this package that returns an error,
+and it has two fallible steps rather than one: it parses the CPU and memory
+quantities in `ClusterOptions.Resources`, and it round-trips each
+`ExternalClusters[].BarmanObjectStore` through JSON to reach the upstream
+Barman type. A malformed quantity and an unconvertible object-store map are both
+caller errors rather than something to panic on.
+
+The others return the object alone, but none of them is a verbatim copy — each
+normalises what the options struct leaves loose. `Database` maps the `Ensure` and
+`ReclaimPolicy` strings onto their upstream constants and gives every extension
+an explicit `Ensure`, defaulting to present. `ObjectStore` fills in the
+`ACCESS_KEY_ID` and `SECRET_ACCESS_KEY` credential keys when `SecretName` is set
+without them, and assembles the upstream spec from the flat option fields.
+`ScheduledBackup` is the one that really does copy: it takes an upstream `Spec`
+directly.
 
 ### Database
 
@@ -44,11 +65,13 @@ cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
 db := cnpg.Database(&cnpg.DatabaseConfig{
     Name:      "app-db",
     Namespace: "databases",
-    Spec:      cnpgv1.DatabaseSpec{Name: "appdb"},
+    Options: &cnpg.DatabaseOptions{
+        ClusterName: "pg-main",
+        DBName:      "appdb",
+        Owner:       "appuser",
+    },
 })
 
-db.Spec.ClusterRef = corev1.LocalObjectReference{Name: "pg-main"}
-db.Spec.Owner = "appuser"
 cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{Name: "pgcrypto"})
 ```
 
@@ -58,12 +81,13 @@ cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{Name: "pgcrypto"})
 store := cnpg.ObjectStore(&cnpg.ObjectStoreConfig{
     Name:      "backup-store",
     Namespace: "databases",
-    Spec:      barmanv1.ObjectStoreSpec{},
+    Options: &cnpg.ObjectStoreOptions{
+        DestinationPath: "s3://my-bucket/backups",
+        RetentionPolicy: "30d",
+    },
 })
 
-store.Spec.Configuration.DestinationPath = "s3://my-bucket/backups"
-cnpg.SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{...})
-store.Spec.RetentionPolicy = "30d"
+cnpg.SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{})
 ```
 
 ### ScheduledBackup

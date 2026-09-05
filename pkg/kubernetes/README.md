@@ -24,7 +24,16 @@ d.Spec.Template.Spec.ServiceAccountName = "web"
 ```
 
 kure does not provide, and its docs do not suggest, a kure function for plain field
-access. A whole-spec setter is a bare assignment and is not part of the contract.
+access: a helper whose body assigns one argument to one value-typed field is that
+assignment written twice, and §3's classifier rejects it.
+
+A whole-spec setter is that same shape one level up, and it is admissible on exactly
+the same condition — class (b) is decided on the assigned field, not on how deep it
+sits. `Spec` is `*api.Rule` on both Cilium policy kinds, so
+`SetCiliumNetworkPolicySpec` and `SetCiliumClusterwideNetworkPolicySpec` are class (b)
+and ship; a whole-spec setter for a value-typed `Spec` would not be admitted, and none
+exists. These two are the only whole-spec setters in the tree — every other assignment
+of a complete spec is inside a config-struct constructor, which is not sugar.
 
 ## 2. Constructors
 
@@ -156,6 +165,8 @@ kubernetes.SetAnnotations(obj, map[string]string{"owner": "platform"})
 kubernetes.AddAnnotation(obj, "note", "rotated 2026-09")
 ```
 
+<!-- doc-api-refs:ignore-start the paragraph names removed helpers to say they are removed -->
+
 These four are admitted by name; per-kind label and annotation helpers are not part
 of the contract, and none remain — `AddNamespaceLabel`, `AddClusterAnnotation`,
 `SetConfigMapLabels` and the twenty-nine others like them were removed, since the
@@ -163,6 +174,8 @@ four above already reach every kind through `metav1.Object`. Two helpers keep a
 metadata-shaped name while writing something else: cilium's `Set*PolicyLabels`
 write the policy's `spec.labels`, and prometheus's `Add*TargetLabel` appends to a
 scrape spec's target-label list. Neither is ObjectMeta.
+
+<!-- doc-api-refs:ignore-end -->
 
 ## 6. Names
 
@@ -451,7 +464,7 @@ kubernetes.AddPodSpecToleration(podSpec, &corev1.Toleration{Key: "dedicated", Va
 kubernetes.SetDeploymentReplicas(dep, 3)
 ```
 
-There is no `AddDeploymentContainer`. A workload kind's pod template is a
+There is no `AddDeploymentContainer`. <!-- doc-api-refs:ignore names a removed helper to say it is gone --> A workload kind's pod template is a
 `corev1.PodSpec`, so the `PodSpec` helpers serve every kind — pass
 `&dep.Spec.Template.Spec` (a CronJob nests one level deeper:
 `&cj.Spec.JobTemplate.Spec.Template.Spec`). `ServiceAccountName` and
@@ -548,8 +561,9 @@ for k, v := range defaults {
 }
 ```
 
-`SetConfigMapData`, `SetConfigMapBinaryData`, `AddConfigMapDataMap` and
-`AddConfigMapBinaryDataMap` are gone: the first two were bare field assignments, and
+`SetConfigMapData`, `SetConfigMapBinaryData`, `AddConfigMapDataMap` and <!-- doc-api-refs:ignore names removed helpers to say they are gone -->
+`AddConfigMapBinaryDataMap` are gone: <!-- doc-api-refs:ignore same sentence, second line -->
+the first two were bare field assignments, and
 a bulk merge is not one of the admitted sugar classes in any spelling — neither
 `maps.Copy` nor an explicit loop classifies, because the class is a *single* insert
 whose value comes from the caller.
@@ -572,8 +586,9 @@ kubernetes.SetResourceRequest(reqs, corev1.ResourceCPU, resource.MustParse("100m
 kubernetes.SetResourceLimit(reqs, corev1.ResourceMemory, resource.MustParse("512Mi"))
 ```
 
-Two helpers cover every resource name; there is no `SetResourceRequestCPU` or
-`SetResourceLimitMemory`. Both take a parsed `resource.Quantity`, so the parse —
+Two helpers cover every resource name; there is no `SetResourceRequestCPU` or <!-- doc-api-refs:ignore names removed helpers to say they are gone -->
+`SetResourceLimitMemory`. <!-- doc-api-refs:ignore same sentence, second line -->
+Both take a parsed `resource.Quantity`, so the parse —
 and any error it can raise — belongs to the caller: `resource.MustParse` for a
 literal, `resource.ParseQuantity` when the text comes from configuration.
 

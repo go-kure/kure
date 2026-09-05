@@ -18,7 +18,9 @@ Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_
 obj := volsync.CreateReplicationSource("db-backup", "data")
 ```
 
-The config-struct builders (`volsync.ReplicationSource(&volsync.ReplicationSourceConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
+The config-struct builders (`volsync.ReplicationSource(&volsync.ReplicationSourceConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. No hand-written `Create*` helper for a spec fragment remains — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+
+The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
 See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 
@@ -61,6 +63,8 @@ rs := volsync.ReplicationSource(&volsync.ReplicationSourceConfig{
 ## ReplicationDestination
 
 ```go
+capacity := resource.MustParse("10Gi")
+
 rd := volsync.ReplicationDestination(&volsync.ReplicationDestinationConfig{
     Name:      "db-restore",
     Namespace: "dr",
@@ -69,7 +73,7 @@ rd := volsync.ReplicationDestination(&volsync.ReplicationDestinationConfig{
         Repository: "restic-creds",
         ReplicationDestinationVolumeOptions: volsyncv1alpha1.ReplicationDestinationVolumeOptions{
             CopyMethod:  volsync.CopyMethodSnapshot,
-            Capacity:    resource.MustParse("10Gi").DeepCopy(),
+            Capacity:    &capacity,
             AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
         },
     },
@@ -113,7 +117,7 @@ rs.Spec.Paused = false
 rs.Spec.Trigger = &volsyncv1alpha1.ReplicationSourceTriggerSpec{Manual: "go"}
 ```
 
-The per-field `SetReplicationSource*` / `SetReplicationDestination*` helpers are
+The per-field `SetReplicationSource*` / `SetReplicationDestination*` helpers are <!-- doc-api-refs:ignore names removed helper families to say they are gone -->
 gone. They were bare field assignments, and the mover ones duplicated the
 constructor's type switch — the constructor is the one place that knows a
 mover variant clears its siblings. Switching a mover on an existing resource

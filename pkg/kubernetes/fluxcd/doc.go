@@ -7,10 +7,15 @@
 //
 // The package provides two layers of API:
 //
-//   - CreateX constructors: allocate an object with TypeMeta and ObjectMeta set,
-//     leaving the spec empty. Use the Set/Add helpers to populate it.
-//   - SetX/AddX helpers: granular setters that mutate a single field on an existing
-//     object, keeping callers in control of which fields are set.
+//   - Create<Kind> constructors: allocate an object with TypeMeta and ObjectMeta
+//     set, leaving the spec empty. Assign the spec fields directly, or use a
+//     Set/Add helper where one exists.
+//   - Set/Add helpers: admissible sugar over a single field of an existing
+//     object. They exist for three shapes of write — appending to a slice or
+//     inserting into a map, assigning to a pointer-typed field (a pointer the
+//     caller already holds counts, and is forwarded directly), and composing an
+//     upstream struct under a name that states the opinion. Everything else is
+//     a field on the upstream type, assigned directly.
 //
 // Applications covered include sources (GitRepository, OCIRepository,
 // HelmRepository, Bucket, ExternalArtifact, ArtifactGenerator), workloads
@@ -21,7 +26,7 @@
 //
 // # Constructors
 //
-// Constructors follow the form CreateX(name, namespace string). A minimal example
+// Constructors follow the form Create<Kind>(name, namespace string). A minimal example
 // creating a Kustomization and a GitRepository looks like:
 //
 //	repo := fluxcd.CreateGitRepository("app-repo", "flux-system")
@@ -40,8 +45,8 @@
 // # Update helpers
 //
 // Additional functions prefixed with Set or Add expose granular control over
-// the generated objects. For coarse-grained replacement, SetXSpec functions
-// replace the entire spec at once:
+// the generated objects. There is no whole-spec setter: replacing a spec is a
+// plain assignment, and the builder contract does not wrap one.
 //
 //	hr := fluxcd.CreateHelmRelease("my-app", "default")
 //	hr.Spec = helmv2.HelmReleaseSpec{Chart: chart}

@@ -566,8 +566,8 @@ pod-template field, per workload kind, is five copies of the same line — so th
 means. The 51 per-kind passthroughs below are removed.
 
 The `PodSpec` appenders lose their `error` return in the same change: they are
-void and panic on a nil `*PodSpec` or a nil element, matching the `SetPodSpec*`
-setters that already did. `AddPodSpecTopologySpreadConstraints` no longer
+void and panic on a nil `*PodSpec` or a nil element, matching the `PodSpec`
+setters, which already did. `AddPodSpecTopologySpreadConstraints` no longer
 silently ignores a nil constraint.
 
 The receiver expression is the same for every row of a kind:
@@ -663,10 +663,10 @@ Below, `spec` stands for that expression.
 Of the 51, 47 were on the exclusion list; `SetDeploymentSecurityContext`,
 `SetDeploymentAffinity`, `SetCronJobSecurityContext` and `SetCronJobAffinity`
 already passed as class (b) pointer assignments and are removed as duplicates,
-not as contract violations. Dropping those 47 plus the 7 `AddPodSpec*` helpers
+not as contract violations. Dropping those 47 plus the seven `PodSpec` appenders
 that no longer return an error takes the file from 87 tolerated helpers to 33.
 
-### The seven `AddPodSpec*` signatures
+### The seven `PodSpec` appender signatures
 
 These are the survivors every table above forwards to, and their own signatures
 changed: the `error` return is gone, and a nil argument panics instead of
@@ -803,7 +803,7 @@ label set, where the same skip inside a setter was a silent partial write.
 
 No merge helper was added for this. The generic metadata set is fixed at four by
 name (§5) and the exempt list in the admission test does not grow, so a
-`AddLabels(obj, map)` would have been a contract change to save one loop.
+map-merging variant would have been a contract change to save one loop.
 
 ### volsync trigger, spec and mover setters
 
@@ -932,8 +932,9 @@ Every removed symbol, so that searching this file for an old name finds it:
 | `pkg/kubernetes/fluxcd` | `AddHelmReleaseAnnotation` | `kubernetes.AddAnnotation(obj, key, value)` |
 
 Thirty of the thirty-two take the generic helper unchanged — same arguments,
-same nil-map initialisation, same result. The two `SetConfigMap*` are whole-map
-replacements: `SetLabels`/`SetAnnotations` would do the same thing, but a bare
+same nil-map initialisation, same result. `SetConfigMapLabels` and
+`SetConfigMapAnnotations` are whole-map replacements: a generic pair taking a
+whole map would do the same thing, but a bare
 field assignment is what the contract prefers for a bare write.
 
 Three groups of metadata-shaped helpers stay, because none of them writes

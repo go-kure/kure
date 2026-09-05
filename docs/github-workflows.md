@@ -98,7 +98,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github` |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, and the documented builder references via `scripts/check-doc-api-refs.sh` |
 | `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
 | `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
@@ -128,6 +128,46 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
   `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
   longer vendors its own copies under `site/scripts/`
+- **Builder-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
+  when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports. It is the
+  kure-specific complement to `check-doc-sync`: that action proves every package has a page, this
+  one proves the pages describe the API that shipped. The page set comes from `site/docs-map.yaml`
+  (so it needs `yq`, installed earlier in the same job) plus the repository-root Markdown — every
+  `*.md` there, not just `README.md`, since `AGENTS.md` carries worked examples that agents follow
+  — and the `docs/`, `examples/` and `site/content/` trees plus every Markdown file under `pkg/`,
+  again not just the READMEs: `pkg/stack/DESIGN.md` describes the shipped design and
+  `pkg/stack/STATUS.md` says in its own first line that it reflects current implementation state, so
+  a page mounted from a new directory cannot escape the set and neither can one that sits beside the
+  code without being mounted at all. The public Go files under `pkg/` are in the set too — pkg.go.dev publishes their doc
+  comments, so a stale name in one is as visible as a stale name on the site — and only their
+  comment lines are read, since code calling a removed function does not compile. A reference
+  written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the
+  package that selector names rather than anywhere in the tree, so a helper that moves or is
+  removed from one package is not answered by a same-named declaration in another; a reference
+  written without one still resolves tree-wide, because an import alias and a variable receiver are
+  spelled alike. The generic constructor is recognised in its qualified `kubernetes.Create[T]`
+  form. Dated records under `docs/history/` and `docs/reviews/`, the generated `CHANGELOG.md` and
+  the two proposal documents are exempt by name in the script, each with its reason. The release-1
+  migration ledger is not exempt: it names removed functions and their live replacements on the
+  same table row, so excluding it would stop checking the replacements — the names a caller
+  actually types. The exemption is per name instead of per page, and the names are written down in
+  `scripts/doc-api-refs-removed.txt` rather than inferred from where they sit on the page. Inferring
+  them does not work: that page's tables are not all removal tables — some pair an old signature
+  with a new one under the same name, some pair a builder that still ships with the field it no
+  longer sets, and some list the helpers that stay and say why — so a positional rule exempts about
+  thirty live builders the page recommends. Being written down also makes the set a snapshot: a
+  derived set would grow by itself, so deleting a builder tomorrow would make it exempt on that page
+  the same day, silently. The list is validated rather than trusted — every name in it must be
+  absent from `pkg/`, and a live name there fails the run with the names to drop — and a removed
+  name the ledger mentions but the list omits fails the run too, with the name to add. The step
+  runs `--self-test` first, which pins the extractor and the
+  resolver against a synthetic tree — a fence marker that matches too much, an identifier boundary
+  that stops matching, or a selector that stops being carried would otherwise turn the repo run
+  quietly green. Every malformed suppression is an error rather than a silent pass: an
+  `ignore-start` with no terminator, an `ignore-end` with nothing open, a reversed pair on one line,
+  a second `ignore-start` inside an open fence, which would otherwise be closed by the first
+  `ignore-end` and leave the outer fence open with nothing said, and the same repetition written on
+  a single line, so the spelling never decides whether a malformed suppression is an error
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
   action

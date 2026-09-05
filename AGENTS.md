@@ -87,8 +87,9 @@ make test-integration
 
 #### Coverage Thresholds
 
-- **CI gate (enforced):** 90% total — PRs fail if total coverage drops below this
-- **Target:** 95% total, ≥90% per package — maintain this as the working standard
+- **CI gate (enforced):** 90% total **and** ≥90% for every package outside `examples/` — the
+  `Coverage Check` job fails on either (`.github/workflows/ci.yml`, `THRESHOLD` and `PKG_THRESHOLD`)
+- **Target:** 95% total — the working standard above the gate
 - Check per-package detail: `GOWORK=off go test ./... -covermode=atomic 2>&1 | grep "coverage:"`
 - Check total: `GOWORK=off go test ./... -coverprofile=/tmp/cov.out -covermode=atomic 2>/dev/null && go tool cover -func=/tmp/cov.out | tail -1`
 
@@ -200,13 +201,23 @@ func Test<ResourceType>Helpers(t *testing.T) {
 - Use GoDoc conventions for function comments
 - Include examples in function documentation
 
-## Adding New Resource Builders
+## Adding Support for a New Kind
 
-1. Create constructor function: `func Create<ResourceType>(name, namespace string, ...) *<Type>`
-2. Add helper functions: `func Add<ResourceType><Field>(...)`
-3. Add setter functions: `func Set<ResourceType><Field>(...)`
-4. Include comprehensive unit tests in `*_test.go`
-5. Follow existing patterns in `internal/` packages
+You do not write a constructor. Register the kind's scheme and the constructor is generated.
+
+1. Add the module's `AddToScheme` to `pkg/kubernetes/scheme.go`; a family kure does not yet cover
+   also needs its subpackage and a `packageRoutes` row
+2. Regenerate: `mise run builders:generate` (or `make gen-builders`) — the wrapper lands in that
+   package's `zz_generated_create.go`
+3. Add sugar only where the write falls into one of the three admitted classes (append/map insert,
+   pointer or nil-init, named composite). Everything else is the caller's field assignment
+4. Test the constructed object whole — `reflect.DeepEqual` against an object carrying GVK, name and
+   (for a namespaced kind) namespace, so "identity and nothing else" is actually asserted
+5. Touch the family README or the guide the docs map names for it: a newly generated constructor is
+   never a trivial change to the doc gate
+
+Full procedure, with the scope-derivation failure modes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+§ Developer Guidelines. The normative contract is [`pkg/kubernetes/README.md`](pkg/kubernetes/README.md).
 
 ## Security Considerations
 
@@ -247,20 +258,24 @@ contracts rather than consumer-specific types, identifiers, or documentation.
 ### Flux Integration
 
 ```go
-ks := fluxcd.CreateKustomization("app", "default", kustv1.KustomizationSpec{
-    Path: "./manifests",
-    SourceRef: kustv1.CrossNamespaceSourceReference{
-        Kind: "GitRepository",
-        Name: "repo",
-    },
-})
+ks := fluxcd.CreateKustomization("app", "default")
+ks.Spec.Path = "./manifests"
+ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
+    Kind: "GitRepository",
+    Name: "repo",
+}
 ```
 
 ### ArgoCD Integration
 
 ```go
-wf := argocd.NewWorkflow()
-apps, err := wf.Cluster(cluster)
+// The provider registers itself from its init, so the package has to be
+// imported: import _ "github.com/go-kure/kure/pkg/stack/argocd"
+wf, err := stack.NewWorkflow("argocd")
+if err != nil {
+    return err
+}
+apps, err := wf.GenerateFromCluster(cluster)
 ```
 
 ### Layout Generation
