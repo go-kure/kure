@@ -132,9 +132,10 @@ temporary branch — the merged result — before the PR is allowed to land.
   when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports. It is the
   kure-specific complement to `check-doc-sync`: that action proves every package has a page, this
   one proves the pages describe the API that shipped. The page set comes from `site/docs-map.yaml`
-  (so it needs `yq`, installed earlier in the same job) plus the `docs/`, `examples/`,
-  `site/content/` and package-README trees, so a page mounted from a new directory cannot escape
-  it. The public Go files under `pkg/` are in the set too — pkg.go.dev publishes their doc
+  (so it needs `yq`, installed earlier in the same job) plus the repository-root Markdown — every
+  `*.md` there, not just `README.md`, since `AGENTS.md` carries worked examples that agents follow
+  — and the `docs/`, `examples/`, `site/content/` and package-README trees, so a page mounted from
+  a new directory cannot escape it. The public Go files under `pkg/` are in the set too — pkg.go.dev publishes their doc
   comments, so a stale name in one is as visible as a stale name on the site — and only their
   comment lines are read, since code calling a removed function does not compile. A reference
   written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the

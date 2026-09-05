@@ -489,8 +489,8 @@ A helper survives only if it does something a plain assignment cannot:
 
 | Class | What it does | Example |
 |---|---|---|
-| Appender | Appends to a slice field | `AddPodSpecContainer` |
-| Pointer / nil-init | Assigns a pointer-typed field, or initialises a nil map before writing | `SetDeploymentReplicas`, `AddConfigMapData` |
+| Appender | Appends to a slice field, or inserts into a map field, creating either if nil | `AddPodSpecContainer`, `AddConfigMapData` |
+| Pointer / nil-init | Assigns a pointer-typed field, or initialises a nil pointer intermediate before writing through it | `SetDeploymentReplicas` |
 | Composite | Writes several fields that belong together, and names the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
 
 `pkg/kubernetes/admission_test.go` parses every exported `Set*`/`Add*` in the tree with `go/ast`

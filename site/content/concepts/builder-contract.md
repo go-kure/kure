@@ -31,7 +31,8 @@ Cluster-scoped kinds take one argument, and the signature is how you tell:
 ns := kubernetes.CreateNamespace("platform")
 ```
 
-There is also a generic form, for a registered type that has no wrapper yet:
+The wrapper is a spelling, not a separate implementation: it calls the generic form, which you can
+write directly when naming the type reads better than naming the kind.
 
 ```go
 d := kubernetes.Create[appsv1.Deployment]("web", "default")
@@ -62,8 +63,8 @@ fails the build on one that fits none of them.
 
 | Class | Why an assignment is not enough | Example |
 |---|---|---|
-| Appender | `append` is not an assignment, and doing it by hand is easy to get subtly wrong | `AddPodSpecContainer`, `AddRoleRule` |
-| Pointer / nil-init | The field is a pointer, or a map that has to be created before the first write | `SetDeploymentReplicas`, `AddConfigMapData` |
+| Appender | The field is a slice to append to, or a map to insert into — either may be nil, so writing it by hand is a read-modify-write with a guard | `AddPodSpecContainer`, `AddRoleRule`, `AddConfigMapData` |
+| Pointer / nil-init | The field is a pointer, so an assignment needs a named local to take the address of | `SetDeploymentReplicas` |
 | Composite | Several fields belong together, and the helper's name states the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
 
 Everything else you write yourself:

@@ -157,10 +157,20 @@ extract_refs() {
 			# markdown renders an unterminated comment by swallowing the rest
 			# of the page, the malformed line and the suppression it grants
 			# are both invisible in the built site.
-			opens = ($0 ~ /<!-- doc-api-refs:ignore-start [A-Za-z0-9][^>]*-->/)
-			closes = ($0 ~ /<!-- doc-api-refs:ignore-end *-->/)
+			ostart = match($0, /<!-- doc-api-refs:ignore-start [A-Za-z0-9][^>]*-->/)
+			opens = (ostart > 0)
+			cstart = match($0, /<!-- doc-api-refs:ignore-end *-->/)
+			closes = (cstart > 0)
 			# Both on one line is a self-contained fence: it changes no state.
-			if (opens && closes) next
+			# Only in that order, though -- a close followed by an open is not a
+			# fence, and treating it as one skips the line it is written on,
+			# which is where the stale reference sits.
+			if (opens && closes) {
+				if (ostart < cstart) next
+				print "reversed doc-api-refs fence in " FILENAME " line " FNR > "/dev/stderr"
+				rc = 1
+				next
+			}
 			if (opens) { skip = 1; next }
 			if (closes) {
 				# A close with nothing open still swallows its own line, so
@@ -304,6 +314,11 @@ self_test() {
 	# comment: a pattern that stops at the reason opens a fence here, and the
 	# properly-formed close on line 3 tidies up after it, so the whole passage
 	# is suppressed and the run exits 0.
+	# Both markers, wrong order: not a fence, and the line it is written on is
+	# the one carrying the stale name.
+	cat >"$d/reversed-fence.md" <<-'EOF'
+		`CreateGone` <!-- doc-api-refs:ignore-end --> <!-- doc-api-refs:ignore-start reason -->
+	EOF
 	cat >"$d/unterminated-ignore.md" <<-'EOF'
 		`CreateGone` <!-- doc-api-refs:ignore reason
 	EOF
@@ -428,6 +443,11 @@ fenced.md:4:CreateReal'
 	# would let the marker documented as suppressing nothing suppress something.
 	if extract_refs "$d/orphan-end.md" >/dev/null 2>&1; then
 		printf 'self-test: an unmatched ignore-end was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
+	if extract_refs "$d/reversed-fence.md" >/dev/null 2>&1; then
+		printf 'self-test: a reversed one-line fence was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
@@ -679,7 +699,13 @@ unset _list
 # one example README, and the rest are advertised as runnable, so a removed
 # symbol surviving in examples/getting-started is exactly as misleading as one on
 # the site.
-docs_pages=$(find README.md docs examples site/content -name '*.md' -type f)
+#
+# The repository-root Markdown is enumerated as a directory rather than as
+# README.md alone: AGENTS.md is read by every agent that touches this tree and
+# carries worked examples, DEVELOPMENT.md the same for a human, and neither is
+# less live than the site for being at the root.
+docs_pages=$(find . -maxdepth 1 -name '*.md' -type f
+	find docs examples site/content -name '*.md' -type f)
 # The package READMEs are the API-reference pages the site mounts, so they are
 # exactly the pages a stale call hurts most.
 pkg_pages=$(find pkg -name 'README.md' -type f)
