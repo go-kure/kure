@@ -63,6 +63,8 @@ rs := volsync.ReplicationSource(&volsync.ReplicationSourceConfig{
 ## ReplicationDestination
 
 ```go
+capacity := resource.MustParse("10Gi")
+
 rd := volsync.ReplicationDestination(&volsync.ReplicationDestinationConfig{
     Name:      "db-restore",
     Namespace: "dr",
@@ -71,7 +73,7 @@ rd := volsync.ReplicationDestination(&volsync.ReplicationDestinationConfig{
         Repository: "restic-creds",
         ReplicationDestinationVolumeOptions: volsyncv1alpha1.ReplicationDestinationVolumeOptions{
             CopyMethod:  volsync.CopyMethodSnapshot,
-            Capacity:    resource.MustParse("10Gi").DeepCopy(),
+            Capacity:    &capacity,
             AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
         },
     },

@@ -488,9 +488,10 @@ A helper survives only if it does something a plain assignment cannot:
 | Pointer / nil-init | Takes a value and writes the pointer, or initialises a nil map | `SetDeploymentReplicas`, `AddConfigMapData` |
 | Composite | Writes several fields that belong together, and names the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
 
-`pkg/kubernetes/admission_test.go` parses every exported `Create*`/`Set*`/`Add*` in the tree with
-`go/ast` and fails on one that fits none of the three. The exclusion list it once carried is empty
-and stays empty, so the classes are enforced rather than merely documented.
+`pkg/kubernetes/admission_test.go` parses every exported `Set*`/`Add*` in the tree with `go/ast`
+and fails on one that fits none of the three. Constructors are outside its remit — `Create*` is not
+sugar, and the generator is what keeps those honest. The exclusion list the test once carried is
+empty and stays empty, so the classes are enforced rather than merely documented.
 
 ### Type Safety Guarantees
 
