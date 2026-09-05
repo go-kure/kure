@@ -18,8 +18,8 @@ ADR-038, "thin core + admissible sugar". The upstream Go struct is kure's constr
 
 - every `Create<Kind>` is generated from the registered scheme and emits `apiVersion`, `kind`,
   `metadata.name` and — for a namespaced kind — `metadata.namespace`, and nothing else;
-- a `Set*` / `Add*` helper survives only if it belongs to one of three classes that a plain
-  assignment cannot express, and a `go/ast` test decides class membership rather than a reviewer;
+- a `Set*` / `Add*` helper survives only if the write it performs belongs to one of three classes,
+  and a `go/ast` test decides class membership rather than a reviewer;
 - everything else is a field assignment the caller writes.
 
 `pkg/stack` is the layer above and keeps its opinions — but as exported identifiers a consumer
@@ -181,11 +181,17 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   (`pkg/stack/fluxcd/layout_integrator.go:81`) were deleted, since `WorkflowEngine` exports the same
   name (`pkg/stack/fluxcd/workflow_engine.go:84`). The check catches a builder that no longer exists
   anywhere; it does not catch one that moved between types.
+- **An unqualified generic reference is not checked.** `Create[T]` written bare — as `README.md:34`
+  and `docs/ARCHITECTURE.md:91` write it — is discarded by the extractor, which keeps a generic
+  match only when it carries a package qualifier. The condition exists because a bare `Set[T]` or
+  `Add[T]` in a non-Go code block is usually another language's syntax rather than a kure builder,
+  and it takes `Create[T]` with it. Renaming the generic constructor would leave those two overview
+  references stale with the check green.
 - **Go comments are scanned under `pkg/` only.** The `examples/` enumeration takes `*.md`, so an
   instructional comment in a runnable example — `examples/getting-started/main.go:93-98` describes
   `CreateLayoutWithResources` several lines above the call that uses it — is not checked. A rename
   that keeps the example compiling can leave the comment beside it stale.
 
-  Both are the same shape as the exclusions above: the check is a floor, not a proof. Both are
-  filed as #770 rather than fixed here — this ticket's subject is the documentation, and the
+  These three are the same shape as the exclusions above: the check is a floor, not a proof. They
+  are filed as #770 rather than fixed here — this ticket's subject is the documentation, and the
   checker had already taken four hardening rounds by the time they surfaced.
