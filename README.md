@@ -31,7 +31,9 @@ upstream type. The rules, and what they mean for a caller, are the
 - Layout engine that writes a reconcilable directory tree, `kustomization.yaml` files included
 - Flux workflow engine — the supported GitOps path; ArgoCD support exists but its bootstrap is not
   production-ready
-- Generic `Create[T]` plus generated per-kind constructors for all 128 registered kinds
+- Generic `Create[T]` plus a generated constructor for every registered kind — the count comes
+  from the pinned upstream modules, so the [kinds table](docs/api-tables.md) states it and this
+  page does not
 - CRD builders for cert-manager, Cilium, CloudNativePG, External Secrets, MetalLB, Prometheus
   Operator and VolSync
 - Generated kinds, scope and field-maturity tables derived from the upstream modules this build

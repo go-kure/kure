@@ -181,7 +181,21 @@ extract_refs() {
 				rc = 1
 				next
 			}
-			if (opens) { skip = 1; next }
+			if (opens) {
+				# A second opener inside an open fence is not a wider fence:
+				# the first `ignore-end` would close both, so two opens and
+				# one close leave the run green with the rest of the passage
+				# suppressed and nothing said about the fence still open.
+				# Depth-counting would make that legal; there is no passage
+				# this file needs it for, so it is an error instead.
+				if (skip) {
+					print "nested doc-api-refs:ignore-start in " FILENAME " line " FNR > "/dev/stderr"
+					rc = 1
+					next
+				}
+				skip = 1
+				next
+			}
 			if (closes) {
 				# A close with nothing open still swallows its own line, so
 				# `CreateGone` <!-- doc-api-refs:ignore-end --> would suppress a
@@ -319,6 +333,16 @@ self_test() {
 	EOF
 	cat >"$d/unterminated-start.md" <<-'EOF'
 		<!-- doc-api-refs:ignore-start reason
+		`CreateGone`
+		<!-- doc-api-refs:ignore-end -->
+	EOF
+
+	# Two opens and one close. The close matches the inner opener, so the file
+	# ends with a fence still open and no reference reported -- clean, green and
+	# wrong. Only the nested opener makes it visible.
+	cat >"$d/nested-fence.md" <<-'EOF'
+		<!-- doc-api-refs:ignore-start outer -->
+		<!-- doc-api-refs:ignore-start inner -->
 		`CreateGone`
 		<!-- doc-api-refs:ignore-end -->
 	EOF
@@ -476,6 +500,11 @@ fenced.md:4:CreateReal'
 	# caller, and the run must fail: the opener is not a complete comment.
 	if extract_refs "$d/unterminated-start.md" >/dev/null 2>&1; then
 		printf 'self-test: an unterminated ignore-start was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
+	if extract_refs "$d/nested-fence.md" >/dev/null 2>&1; then
+		printf 'self-test: a nested ignore-start was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
@@ -782,8 +811,14 @@ unset _list
 docs_pages=$(find . -maxdepth 1 -name '*.md' -type f
 	find docs examples site/content -name '*.md' -type f)
 # The package READMEs are the API-reference pages the site mounts, so they are
-# exactly the pages a stale call hurts most.
-pkg_pages=$(find pkg -name 'README.md' -type f)
+# exactly the pages a stale call hurts most -- but the enumeration is every
+# Markdown file under pkg/, not just those. pkg/stack/DESIGN.md describes the
+# shipped design and pkg/stack/STATUS.md says in its first line that it reflects
+# current implementation state; a builder named in either is as live a claim as
+# one named in a README, and sits closer to the code than the site does. A page
+# under pkg/ that stops being current belongs in EXCLUDED_PAGES by name, with
+# its reason, like every other exemption here.
+pkg_pages=$(find pkg -name '*.md' -type f)
 map_pages=$(yq -r '.packages[].readme, .extra_mounts[].source' site/docs-map.yaml)
 
 for _list in docs_pages pkg_pages map_pages; do
