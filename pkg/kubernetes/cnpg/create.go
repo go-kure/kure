@@ -92,7 +92,10 @@ func Database(cfg *DatabaseConfig) *cnpgv1.Database {
 }
 
 // Cluster converts ClusterOptions to a CNPG Cluster object.
-// It returns an error only if ExternalClusters contains an invalid BarmanObjectStore map.
+// It returns an error when ClusterOptions.Resources holds a CPU or memory
+// quantity resource.ParseQuantity rejects, or when an
+// ExternalClusters[].BarmanObjectStore map does not convert to the upstream
+// Barman configuration.
 func Cluster(cfg *ClusterConfig) (*cnpgv1.Cluster, error) {
 	if cfg == nil {
 		return nil, nil

@@ -43,10 +43,21 @@ kubernetes.AddLabel(cluster, "env", "prod")
 cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
 ```
 
-`Cluster` is the only config-struct builder in this package that returns an error:
-it parses the CPU and memory quantities in `ClusterOptions.Resources`, and a
-malformed quantity is a caller error rather than something to panic on. `Database`
-and `ObjectStore` copy their inputs verbatim and return the object alone.
+`Cluster` is the only config-struct builder in this package that returns an error,
+and it has two fallible steps rather than one: it parses the CPU and memory
+quantities in `ClusterOptions.Resources`, and it round-trips each
+`ExternalClusters[].BarmanObjectStore` through JSON to reach the upstream
+Barman type. A malformed quantity and an unconvertible object-store map are both
+caller errors rather than something to panic on.
+
+The others return the object alone, but none of them is a verbatim copy — each
+normalises what the options struct leaves loose. `Database` maps the `Ensure` and
+`ReclaimPolicy` strings onto their upstream constants and gives every extension
+an explicit `Ensure`, defaulting to present. `ObjectStore` fills in the
+`ACCESS_KEY_ID` and `SECRET_ACCESS_KEY` credential keys when `SecretName` is set
+without them, and assembles the upstream spec from the flat option fields.
+`ScheduledBackup` is the one that really does copy: it takes an upstream `Spec`
+directly.
 
 ### Database
 
