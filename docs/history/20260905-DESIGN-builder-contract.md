@@ -174,3 +174,18 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   present in the list quietly exempts itself on that page. Deriving the list from the page instead
   was tried and rejected: not all of the ledger's tables are removal tables, so a positional rule
   exempted about thirty live builders the page recommends.
+- **The checker resolves a bare name, not a qualified one.** `Type.Method` on a page resolves if
+  anything under `pkg/` exports `Method`, because the symbol index keeps package and name and drops
+  the receiver type. So `LayoutIntegrator.CreateLayoutWithResources`
+  (`pkg/stack/fluxcd/README.md:55`) would stay green if that method
+  (`pkg/stack/fluxcd/layout_integrator.go:81`) were deleted, since `WorkflowEngine` exports the same
+  name (`pkg/stack/fluxcd/workflow_engine.go:84`). The check catches a builder that no longer exists
+  anywhere; it does not catch one that moved between types.
+- **Go comments are scanned under `pkg/` only.** The `examples/` enumeration takes `*.md`, so an
+  instructional comment in a runnable example — `examples/getting-started/main.go:93-98` describes
+  `CreateLayoutWithResources` several lines above the call that uses it — is not checked. A rename
+  that keeps the example compiling can leave the comment beside it stale.
+
+  Both are the same shape as the exclusions above: the check is a floor, not a proof. Both are
+  filed as #770 rather than fixed here — this ticket's subject is the documentation, and the
+  checker had already taken four hardening rounds by the time they surfaced.

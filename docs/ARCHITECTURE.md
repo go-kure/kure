@@ -485,7 +485,10 @@ tables from what it finds. Nothing under `internal/` is importable by a consumer
 
 ### Three classes of sugar, and one test that enforces them
 
-A helper survives only if it does something a plain assignment cannot:
+A helper survives only if the write it performs falls into one of three classes. The classes are
+about the shape of the write, not about whether a caller could have written it by hand — a pointer
+field the caller already holds a pointer to is a one-line assignment, and a helper for it is still
+admitted:
 
 | Class | What it does | Example |
 |---|---|---|
@@ -811,10 +814,15 @@ This writes the `Create<Kind>` wrapper into `zz_generated_create.go`, adds the k
 what stated it. Commit the generated files; `./scripts/gen-builders.sh check` fails CI otherwise.
 
 If the generator reports that it cannot determine a kind's scope, that is the intended failure: add
-the `+kubebuilder:resource` marker upstream, ship the `CustomResourceDefinition`, or record the kind
-in the built-in table with a reason. Do not default it.
+the `+kubebuilder:resource` marker upstream, or ship the `CustomResourceDefinition` in the module.
+Do not default it. The built-in table is not a third option here: `builtinClusterScoped`
+(`pkg/kubernetes/internal/kinds/scope.go`) is consulted only for the two modules in
+`builtinModules` — `k8s.io/api` and `k8s.io/apiextensions-apiserver`, whose types carry no markers
+because the API server defines their scope — so an entry added there for a CRD family's kind is
+never read, and the same error comes back. That table is only the right place when the kind you are
+adding is itself a Kubernetes built-in.
 
-#### 3. Add sugar only where a plain assignment cannot do the job
+#### 3. Add sugar only in one of the three admitted classes
 
 A helper must be an appender, a pointer/nil-init setter, or a named composite (see
 [Kubernetes Foundation](#kubernetes-foundation)). Anything else is a bare assignment and
