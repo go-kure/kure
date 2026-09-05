@@ -988,8 +988,14 @@ jobs:
     # hundred Set*/Add*/Create* helpers, and a page calling one reads as current
     # API. Lives here rather than in validate because its inputs -- pkg/**,
     # docs/**, site/content/**, README.md -- are the docs filter's inputs.
+    # --self-test first: the check's own extractor decides what counts as a
+    # reference and which passages a page fenced off, and every way that logic
+    # breaks makes the repo run pass quietly. The self-test runs it against a
+    # synthetic tree where the expected rows are known.
     - name: Check documented builder references resolve
-      run: ./scripts/check-doc-api-refs.sh
+      run: |
+        ./scripts/check-doc-api-refs.sh --self-test
+        ./scripts/check-doc-api-refs.sh
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
