@@ -18,8 +18,10 @@ ADR-038, "thin core + admissible sugar". The upstream Go struct is kure's constr
 
 - every `Create<Kind>` is generated from the registered scheme and emits `apiVersion`, `kind`,
   `metadata.name` and — for a namespaced kind — `metadata.namespace`, and nothing else;
-- a `Set*` / `Add*` helper survives only if the write it performs belongs to one of three classes,
-  and a `go/ast` test decides class membership rather than a reviewer;
+- a `Set*` / `Add*` helper survives only if the write it performs belongs to one of three classes —
+  or is one of the four generic metadata helpers admitted by name, which write through
+  `metav1.Object` and so match no write shape — and a `go/ast` test decides membership rather than
+  a reviewer;
 - everything else is a field assignment the caller writes.
 
 `pkg/stack` is the layer above and keeps its opinions — but as exported identifiers a consumer
@@ -93,6 +95,11 @@ returns nothing, and never clears a field the caller did not name.
 The reason this is a contract rather than a guideline is
 `TestAdmission_SugarHelpersAreClassAdmissible`. It classifies every exported helper under
 `pkg/kubernetes/...` with `go/ast` and type information and fails naming anything outside (a)–(c).
+The one thing it admits outside (a)–(c) is a fixed set of four names — `SetLabels`, `AddLabel`,
+`SetAnnotations`, `AddAnnotation` — which write through the `metav1.Object` interface rather than
+into a field and therefore have no write shape to classify. They are a fourth outcome in the
+classifier (`Exempt`), not a fourth class: a set that never grows, which is what makes one metadata
+helper set able to serve kinds kure does not register.
 `pkg/kubernetes/testdata/admission_exclusions.txt` held the helpers tolerated while the prune ran;
 it is empty now and entries only ever leave it. A new helper is admitted by the test or it does
 not merge — nobody has to remember the rule.
@@ -206,7 +213,15 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   page naming the real function stays green after the function is deleted, because its ghost in a
   comment still resolves. The same is true of such a line in a raw string literal.
 
-  These five are the same shape as the exclusions above: the check is a floor, not a proof. They
+- **A malformed marker is honoured when a valid one shares its line.** The marker branch tests the
+  forms in order and takes the first that matches, so
+  `` `CreateGone` <!-- doc-api-refs:ignore-strt typo --> <!-- doc-api-refs:ignore valid --> ``
+  matches the valid single-line ignore, skips the line, and never reaches the unrecognised-marker
+  error that the typo alone would have raised. The line is suppressed and the build stays green.
+  Like the nested-`<!--` case, the defect is as much the inconsistency as the hole: the same typo is
+  an error on a line of its own.
+
+  These six are the same shape as the exclusions above: the check is a floor, not a proof. They
   are filed as go-kure/kure#770 (checker false negatives) rather than fixed here — this ticket's
   subject is the documentation, and the checker had already taken four hardening rounds by the time
   they surfaced.

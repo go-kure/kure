@@ -63,6 +63,12 @@ on one that fits none of them. The classes are about the shape of the write, not
 could have written it yourself: a pointer field you already hold a pointer to is a one-line
 assignment, and a helper for it is admitted all the same.
 
+There is one exception, and it is four names rather than a rule. `SetLabels`, `AddLabel`,
+`SetAnnotations` and `AddAnnotation` write through the `metav1.Object` interface rather than into a
+field, so they match no write shape and are admitted by name — a fourth outcome (`Exempt`) in the
+classifier, listed in `pkg/kubernetes/admission_test.go` and, unlike an exclusion list, one that
+never grows. That is what lets them cover every kind, including kinds kure has never heard of.
+
 | Class | What the helper does | Example |
 |---|---|---|
 | Appender | Appends to a slice field, or inserts into a map field — either may be nil, so writing it by hand is a read-modify-write with a guard | `AddPodSpecContainer`, `AddRoleRule`, `AddConfigMapData` |
