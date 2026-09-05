@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+> **Builder contract, release 1.** The builder contract (ADR-038, "thin core plus admissible
+> sugar") removes several hundred `Create*`/`Set*`/`Add*` helpers and every value the constructors
+> used to inject. Every removal is listed once, with the expression that replaces it, in
+> [Builder contract: release 1 migration notes](https://www.gokure.dev/kure/concepts/builder-contract-release-1/):
+> the deleted helpers and sub-type constructors, and the constructor and workflow defaults that no
+> longer apply. Read it before upgrading across the entries below. The contract itself is
+> [Kubernetes Builders](https://www.gokure.dev/kure/api-reference/kubernetes-builders/).
 ## [0.2.0-beta.10] - 2026-08-23
 
 ### Added
