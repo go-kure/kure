@@ -131,11 +131,14 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Builder-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
   when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports. It is the
   kure-specific complement to `check-doc-sync`: that action proves every package has a page, this
-  one proves the pages describe the API that shipped. Dated records under `docs/history/` and
-  `docs/reviews/`, the release-1 migration ledger and the two proposal documents are exempt by
-  name in the script, each with its reason. The step runs `--self-test` first, which pins the
-  extractor against a synthetic tree — a fence marker that matches too much, or an identifier
-  boundary that stops matching, would otherwise turn the repo run quietly green
+  one proves the pages describe the API that shipped. The page set comes from `site/docs-map.yaml`
+  (so it needs `yq`, installed earlier in the same job) plus the `docs/`, `site/content/` and
+  package-README trees, so a page mounted from a new directory cannot escape it. Dated records
+  under `docs/history/` and `docs/reviews/`, the release-1 migration ledger, the generated
+  `CHANGELOG.md` and the two proposal documents are exempt by name in the script, each with its
+  reason. The step runs `--self-test` first, which pins the extractor against a synthetic tree — a
+  fence marker that matches too much, or an identifier boundary that stops matching, would
+  otherwise turn the repo run quietly green
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
   action

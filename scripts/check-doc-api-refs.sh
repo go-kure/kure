@@ -17,6 +17,10 @@
 # not builders and are not checked; upstream and third-party calls that happen to
 # fit the shape are listed in EXTERNAL below.
 #
+# Which pages count comes from site/docs-map.yaml plus the docs trees a reader
+# browses on GitHub, so a page mounted from a new directory cannot escape the
+# check by being somewhere this script never thought to look. It needs yq.
+#
 # What it deliberately does not check: the pages in EXCLUDED_PAGES. A migration
 # ledger must name the functions it removed, and a dated history or review record
 # describes the tree as it stood on its date -- rewriting either to satisfy a
@@ -34,9 +38,12 @@
 #     ... CreateNewKind, AddNewKindRule ...
 #     <!-- doc-api-refs:ignore-end -->
 #
-# The reason goes inside the comment. Markdown passes the whole line of an HTML
+# The reason goes inside the comment, and is not optional: every form needs a
+# space and a reason after the keyword. Markdown passes the whole line of an HTML
 # block through verbatim, so a reason written after the `-->` renders as visible
-# text on the page.
+# text on the page. A `<!-- doc-api-refs:` comment that is none of the three
+# forms -- a misspelled keyword, a missing reason -- is an error rather than a
+# silent skip.
 #
 # Prefer the single-line form -- a comment that starts a line interrupts the
 # surrounding markdown paragraph, and the fence is only worth that when the names
@@ -56,6 +63,7 @@ EXCLUDED_PAGES=(
 	docs/reviews/                      # dated review records; ditto
 	docs/ux-design.md                  # proposed UX, not shipped API (says so in its header)
 	docs/plugin-architecture-design.md # proposed plugin API, not shipped (ditto)
+	CHANGELOG.md                       # generated from commit subjects; a released change may name what it removed
 )
 
 # Identifiers matching the builder shape that belong to somebody else's API.
@@ -89,14 +97,33 @@ extract_refs() {
 			}
 		}
 		FNR == 1 { unclosed(); skip = 0; current = FILENAME }
-		/<!-- doc-api-refs:ignore-start/ { skip = 1; next }
-		/<!-- doc-api-refs:ignore-end/   { skip = 0; next }
-		/<!-- doc-api-refs:ignore/       { next }
+		# A marker line is never scanned for references, whichever form it takes.
+		# The three forms are matched exhaustively and anything else that opens a
+		# doc-api-refs comment is an error: a typo such as `ignore-strt` would
+		# otherwise fall through to the bare-ignore rule and silently suppress the
+		# line, which is the one failure mode a reader cannot see. Each form
+		# requires a space after the keyword, so the reason is not optional and
+		# `ignore-end` can never be read as `ignore`.
+		/<!-- doc-api-refs:/ {
+			opens = ($0 ~ /<!-- doc-api-refs:ignore-start /)
+			closes = ($0 ~ /<!-- doc-api-refs:ignore-end /)
+			# Both on one line is a self-contained fence: it changes no state.
+			if (opens && closes) next
+			if (opens) { skip = 1; next }
+			if (closes) { skip = 0; next }
+			if ($0 ~ /<!-- doc-api-refs:ignore /) next
+			print "unrecognised doc-api-refs marker in " FILENAME " line " FNR > "/dev/stderr"
+			rc = 1
+			next
+		}
 		skip { next }
 		{
 			line = $0
 			offset = 0
-			while (match(line, /(Create|Set|Add)[A-Z][A-Za-z0-9]*/)) {
+			# The underscore is in the class on purpose: the declaration extractor
+			# accepts it, so without it CreateDeployment_Gone would be truncated to
+			# the CreateDeployment that does exist and resolve.
+			while (match(line, /(Create|Set|Add)[A-Z][A-Za-z0-9_]*/)) {
 				# Reject a match that continues an identifier (foo.MySetName).
 				if (RSTART + offset == 1 || substr($0, RSTART + offset - 1, 1) !~ /[A-Za-z0-9_]/) {
 					print FILENAME ":" FNR ":" substr(line, RSTART, RLENGTH)
@@ -120,10 +147,14 @@ self_test() {
 	cat >"$d/plain.md" <<-'EOF'
 		A page calling `CreateGone` and `CreateReal`, and a method
 		reference like foo.MyCreateGone that is not a call of ours.
+		CreateReal xSetSkipped CreateGone AddReal trails a rejected match.
+		CreateDeployment_Gone is not CreateDeployment.
 	EOF
 	cat >"$d/skipped.md" <<-'EOF'
 		There is no `CreateGone`. <!-- doc-api-refs:ignore removed -->
 		`CreateGone` here is not skipped by the line above.
+		<!-- doc-api-refs:ignore-start reason --> `AddGone` <!-- doc-api-refs:ignore-end -->
+		`CreateReal` is still checked after a self-contained fence.
 	EOF
 	cat >"$d/fenced.md" <<-'EOF'
 		<!-- doc-api-refs:ignore-start reason -->
@@ -135,11 +166,22 @@ self_test() {
 		<!-- doc-api-refs:ignore-start reason -->
 		`CreateGone`
 	EOF
+	cat >"$d/typo.md" <<-'EOF'
+		<!-- doc-api-refs:ignore-strt reason --> `CreateGone`
+	EOF
 
 	local got
+	# Line 3 pins the offset arithmetic: a rejected match between two accepted
+	# ones must not consume the rest of the line. Line 4 pins the underscore.
 	local want='plain.md:1:CreateGone
 plain.md:1:CreateReal
+plain.md:3:CreateReal
+plain.md:3:CreateGone
+plain.md:3:AddReal
+plain.md:4:CreateDeployment_Gone
+plain.md:4:CreateDeployment
 skipped.md:2:CreateGone
+skipped.md:4:CreateReal
 fenced.md:4:CreateReal'
 	got=$(extract_refs "$d/plain.md" "$d/skipped.md" "$d/fenced.md" | sed "s#^$d/##")
 	if [ "$got" != "$want" ]; then
@@ -152,13 +194,23 @@ fenced.md:4:CreateReal'
 		failures=$((failures + 1))
 	fi
 
+	if extract_refs "$d/typo.md" >/dev/null 2>&1; then
+		printf 'self-test: a misspelled marker was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
 	# A name absent from the symbol set must be reported; one present must not.
-	printf 'CreateReal\n' >"$symbols"
+	# CreateDeployment is in the set and CreateDeployment_Gone is not, so the
+	# suffix must survive extraction or the fourth line resolves wrongly.
+	printf 'AddReal\nCreateDeployment\nCreateReal\n' >"$symbols"
 	extract_refs "$d/plain.md" | sort -u >"$referenced"
 	local unresolved
+	local want_unresolved='plain.md:1:CreateGone
+plain.md:3:CreateGone
+plain.md:4:CreateDeployment_Gone'
 	unresolved=$(report_unresolved | sed "s#^$d/##")
-	if [ "$unresolved" != "plain.md:1:CreateGone" ]; then
-		printf 'self-test: resolution mismatch, got: %s\n' "$unresolved" >&2
+	if [ "$unresolved" != "$want_unresolved" ]; then
+		printf 'self-test: resolution mismatch\nwant:\n%s\ngot:\n%s\n' "$want_unresolved" "$unresolved" >&2
 		failures=$((failures + 1))
 	fi
 
@@ -199,9 +251,19 @@ find pkg -name '*.go' ! -name '*_test.go' -print0 |
 printf '%s\n' "${EXTERNAL[@]}" >>"$symbols"
 sort -u -o "$symbols" "$symbols"
 
-# Live pages: everything under the documentation roots that is not exempt.
+# Live pages: everything the site publishes, plus the repository-root and docs/
+# trees a reader browses on GitHub without the site.
+#
+# site/docs-map.yaml is the authority for what is published, so the page list is
+# derived from it rather than from a hand-kept list of roots: DEVELOPMENT.md and
+# examples/patches/README.md are mounted from outside docs/ and site/content, and
+# a future mount from a new directory must not silently escape the check. The
+# find roots stay as well -- a page under site/content is published without
+# appearing in the map, and a page under docs/ is read on GitHub whether or not
+# it is mounted.
 pages=()
 while IFS= read -r page; do
+	[ -f "$page" ] || continue
 	skip=0
 	for excluded in "${EXCLUDED_PAGES[@]}"; do
 		case "$page" in "$excluded"* | "./$excluded"*) skip=1 ;; esac
@@ -212,7 +274,8 @@ done < <({
 	# The package READMEs are the API-reference pages the site mounts, so they
 	# are exactly the pages a stale call hurts most.
 	find pkg -name 'README.md' -type f
-} | sort)
+	yq -r '.packages[].readme, .extra_mounts[].source' site/docs-map.yaml
+} | sed 's#^\./##' | sort -u)
 
 if [ "${1:-}" = "--list" ]; then
 	printf 'symbols: %s\n' "$(wc -l <"$symbols")"

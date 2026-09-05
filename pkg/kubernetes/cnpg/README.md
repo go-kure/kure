@@ -30,11 +30,14 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 ```go
 import "github.com/go-kure/kure/pkg/kubernetes/cnpg"
 
-cluster := cnpg.Cluster(&cnpg.ClusterConfig{
+cluster, err := cnpg.Cluster(&cnpg.ClusterConfig{
     Name:      "pg-main",
     Namespace: "databases",
-    Spec:      cnpgv1.ClusterSpec{Instances: 3},
+    Options:   &cnpg.ClusterOptions{Instances: 3, StorageSize: "10Gi"},
 })
+if err != nil {
+    return err
+}
 
 kubernetes.AddLabel(cluster, "env", "prod")
 cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
@@ -46,11 +49,13 @@ cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
 db := cnpg.Database(&cnpg.DatabaseConfig{
     Name:      "app-db",
     Namespace: "databases",
-    Spec:      cnpgv1.DatabaseSpec{Name: "appdb"},
+    Options: &cnpg.DatabaseOptions{
+        ClusterName: "pg-main",
+        DBName:      "appdb",
+        Owner:       "appuser",
+    },
 })
 
-db.Spec.ClusterRef = corev1.LocalObjectReference{Name: "pg-main"}
-db.Spec.Owner = "appuser"
 cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{Name: "pgcrypto"})
 ```
 
@@ -60,12 +65,13 @@ cnpg.AddDatabaseExtension(db, cnpgv1.ExtensionSpec{Name: "pgcrypto"})
 store := cnpg.ObjectStore(&cnpg.ObjectStoreConfig{
     Name:      "backup-store",
     Namespace: "databases",
-    Spec:      barmanv1.ObjectStoreSpec{},
+    Options: &cnpg.ObjectStoreOptions{
+        DestinationPath: "s3://my-bucket/backups",
+        RetentionPolicy: "30d",
+    },
 })
 
-store.Spec.Configuration.DestinationPath = "s3://my-bucket/backups"
-cnpg.SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{...})
-store.Spec.RetentionPolicy = "30d"
+cnpg.SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{})
 ```
 
 ### ScheduledBackup
