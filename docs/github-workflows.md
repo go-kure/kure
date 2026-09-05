@@ -147,8 +147,12 @@ temporary branch — the merged result — before the PR is allowed to land.
   the two proposal documents are exempt by name in the script, each with its reason. The release-1
   migration ledger is not exempt: it names removed functions and their live replacements on the
   same table row, so excluding it would stop checking the replacements — the names a caller
-  actually types. Its rows are read one column at a time instead, and only the last cell, which is
-  the replacement, has to resolve. The step runs `--self-test` first, which pins the extractor and the
+  actually types. The exemption is per name instead of per page: the ledger's own tables are the
+  list of what was removed, so every name in a row's non-final cells is exempt anywhere on that
+  page — in prose, in a "before" code block, in the sentence explaining why it went — and every
+  other name it mentions has to resolve, including a replacement recommended only in prose. Adding
+  a removal to the tables licenses the prose about it in the same edit, so nothing is marked by
+  hand. The step runs `--self-test` first, which pins the extractor and the
   resolver against a synthetic tree — a fence marker that matches too much, an identifier boundary
   that stops matching, or a selector that stops being carried would otherwise turn the repo run
   quietly green

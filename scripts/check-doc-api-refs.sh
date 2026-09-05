@@ -94,10 +94,19 @@ EXCLUDED_PAGES=(
 # same line, and its three-column tables put the removed names in the middle
 # cell, so an ignore-fence covers the wrong thing whichever way it is drawn.
 #
-# What is uniform is the column: the last cell of a row is the replacement. So a
-# ledger page is scanned, but only its last cells contribute references. Its
-# first cells, its middle cells and everything that is not a table row are
-# exempt, which is the removed-name half of the page.
+# So the exemption is per name rather than per line, and the page states its own:
+# a ledger's tables ARE the removed list, so every builder name in a row's
+# non-final cell is exempt wherever else that page mentions it -- in prose, in a
+# "before" code block, in the sentence explaining why it went. Every other name
+# on the page has to resolve, including one recommended only in prose. Adding a
+# removal to the tables licenses the prose about it in the same edit, so nothing
+# has to be marked by hand.
+#
+# The list is derived from the page and cannot be checked against anything: a
+# name misspelled in a first cell exempts itself. That is the same trust the
+# page already asks for -- it is the record of what was removed -- and it costs
+# nothing a reader could not see, because a name that never existed reads as a
+# removal that never happened.
 LEDGER_PAGES=(
 	docs/builder-contract-release-1.md # release-1 ledger: removed names left, live replacements right
 )
@@ -117,9 +126,10 @@ symbols=$(mktemp)    # "<package dir> <name>" per exported declaration
 pkgdirs=$(mktemp)    # every package directory under pkg/, exported symbols or not
 external=$(mktemp)   # EXTERNAL, one name per line
 referenced=$(mktemp) # "<page>:<line>:<reference>" per builder-shaped reference
+removed=$(mktemp)    # names a LEDGER_PAGES table lists as removed, one per line
 selftest_dir=
 # shellcheck disable=SC2064 # expand now: the paths must survive the function that set them
-trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" ${selftest_dir:+"$selftest_dir"}' EXIT
+trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" "$removed" ${selftest_dir:+"$selftest_dir"}' EXIT
 
 # One "file:line:identifier" row per builder-shaped reference in the pages named
 # on stdin (NUL-separated), skipping any passage a page fenced off. An unclosed
@@ -127,11 +137,7 @@ trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" ${selftest_dir:+"$s
 # ENDFILE is a gawk extension and the CI runner's awk is mawk, so the unclosed
 # check runs on the first line of the NEXT file and again at END.
 extract_refs() {
-	awk -v ledgers="${LEDGER_LIST:-}" '
-		BEGIN {
-			n = split(ledgers, l, " ")
-			for (i = 1; i <= n; i++) isledger[l[i]] = 1
-		}
+	awk '
 		function unclosed() {
 			if (skip) {
 				print "unclosed doc-api-refs:ignore-start in " current > "/dev/stderr"
@@ -204,21 +210,6 @@ extract_refs() {
 			if (inblock) {
 				if ($0 ~ /\*\//) inblock = 0
 			} else if ($0 !~ /^[ \t]*\/\//) next
-		}
-		# A ledger page contributes only the replacement half of each row: the
-		# last non-empty cell. Anything that is not a table row names removed
-		# functions in prose and is exempt. Taking the last non-empty field
-		# rather than field n-1 keeps a row without its closing pipe from
-		# reducing to the empty string, which would silently check nothing.
-		FILENAME in isledger {
-			if ($0 !~ /^\|/) next
-			nf = split($0, cell, "|")
-			$0 = ""
-			for (k = nf; k >= 1; k--) {
-				t = cell[k]
-				gsub(/^[ \t]+|[ \t]+$/, "", t)
-				if (t != "") { $0 = t; break }
-			}
 		}
 		{
 			line = $0
@@ -380,15 +371,23 @@ self_test() {
 
 	# A ledger page: removed names on the left, live replacements on the right,
 	# both on the same line, and a three-column row that puts the removed names
-	# in the middle. Only the last cell may be checked, and it must be -- row 5
-	# is the rot this buys: a replacement that no longer exists.
+	# in the middle -- so the exemption cannot be a column index. Row 5 is the
+	# rot the rule still has to catch: a replacement that no longer exists,
+	# named both in its cell and in the page's prose.
 	cat >"$d/ledger.md" <<-'EOF'
 		| Removed | Replacement |
 		|---|---|
 		| `SetGoneThing(obj, v)` | `AddReal(obj, v)` |
 		| `pkg` | `AddGoneMiddle(obj)` | `CreateReal(obj)` |
 		| `SetAlsoGone(obj, v)` | `CreateGone(obj, v)` |
-		Prose naming `CreateGone` outside a table row is exempt.
+		Prose naming `SetGoneThing` and `AddGoneMiddle` is exempt; prose naming
+		`CreateGone` is not.
+	EOF
+
+	# The same removed name on a page that is not a ledger: the exemption is
+	# scoped to the pages that list it, not granted to the whole tree.
+	cat >"$d/notledger.md" <<-'EOF'
+		Use `SetGoneThing` for this.
 	EOF
 
 	local got
@@ -519,26 +518,36 @@ pkg/stack/fluxcd/doc.go:3:CreateGone'
 		failures=$((failures + 1))
 	fi
 
-	# The ledger rule, both halves: the removed names must not be extracted at
-	# all, and the replacements must be resolved like any other reference.
-	LEDGER_LIST="$d/ledger.md"
-	local want_ledger='ledger.md:3:AddReal
-ledger.md:4:CreateReal
-ledger.md:5:CreateGone'
-	got=$(extract_refs "$d/ledger.md" | sed "s#^$d/##")
-	if [ "$got" != "$want_ledger" ]; then
-		printf 'self-test: ledger extraction mismatch\nwant:\n%s\ngot:\n%s\n' \
-			"$want_ledger" "$got" >&2
+	# The removed set is the non-final cells of the table rows. Taking the last
+	# cell instead would exempt the replacements -- which is what the check is
+	# for -- and a column index would miss the three-column row.
+	local want_removed='AddGoneMiddle
+SetAlsoGone
+SetGoneThing'
+	got=$(collect_removed "$d/ledger.md")
+	if [ "$got" != "$want_removed" ]; then
+		printf 'self-test: removed-name mismatch\nwant:\n%s\ngot:\n%s\n' \
+			"$want_removed" "$got" >&2
 		failures=$((failures + 1))
 	fi
-	extract_refs "$d/ledger.md" | sort -u >"$referenced"
+
+	# The ledger rule: a removed name is exempt anywhere on its own page, prose
+	# included, and nowhere else. Every other name on the page resolves like any
+	# other reference, in a table cell (line 5) and in prose (line 7) alike.
+	LEDGER_LIST="$d/ledger.md"
+	collect_removed "$d/ledger.md" >"$removed"
+	extract_refs "$d/ledger.md" "$d/notledger.md" | sort -u >"$referenced"
+	local want_ledger='ledger.md:5:CreateGone
+ledger.md:7:CreateGone
+notledger.md:1:SetGoneThing'
 	unresolved=$(report_unresolved | sed "s#^$d/##")
-	if [ "$unresolved" != 'ledger.md:5:CreateGone' ]; then
+	if [ "$unresolved" != "$want_ledger" ]; then
 		printf 'self-test: ledger resolution mismatch\nwant:\n%s\ngot:\n%s\n' \
-			'ledger.md:5:CreateGone' "$unresolved" >&2
+			"$want_ledger" "$unresolved" >&2
 		failures=$((failures + 1))
 	fi
 	LEDGER_LIST=
+	: >"$removed"
 
 	if [ "$failures" -ne 0 ]; then
 		printf 'check-doc-api-refs --self-test: %s failure(s)\n' "$failures" >&2
@@ -581,8 +590,39 @@ ledger.md:5:CreateGone'
 # like the variable receiver in engine.CreateLayoutWithResources two code blocks
 # later. Failing on those would buy one more catchable removal and cost three
 # suppressions on pages that are correct, which is a worse check.
+# The builder names a ledger's tables list as removed: everything in a row's
+# cells except the last non-empty one, which is the replacement. Taking the last
+# non-empty field rather than field n-1 keeps a row written without its closing
+# pipe from shifting the whole row into the exemption.
+collect_removed() {
+	awk '
+		/^\|/ {
+			nf = split($0, cell, "|")
+			last = 0
+			for (k = nf; k >= 1; k--) {
+				t = cell[k]
+				gsub(/^[ \t]+|[ \t]+$/, "", t)
+				if (t != "") { last = k; break }
+			}
+			for (k = 1; k < last; k++) {
+				line = cell[k]
+				while (match(line, /(Create|Set|Add)[A-Z][A-Za-z0-9_]*/)) {
+					print substr(line, RSTART, RLENGTH)
+					line = substr(line, RSTART + RLENGTH)
+				}
+			}
+		}
+	' "$@" | sort -u
+}
+
 report_unresolved() {
-	awk -v symfile="$symbols" -v dirfile="$pkgdirs" -v extfile="$external" '
+	awk -v symfile="$symbols" -v dirfile="$pkgdirs" -v extfile="$external" \
+		-v remfile="$removed" -v ledgers="${LEDGER_LIST:-}" '
+		BEGIN {
+			nl = split(ledgers, l, " ")
+			for (li = 1; li <= nl; li++) isledger[l[li]] = 1
+		}
+		FILENAME == remfile { gone[$0] = 1; next }
 		FILENAME == symfile {
 			names[$2] = 1
 			decl[$1 " " $2] = 1
@@ -612,6 +652,10 @@ report_unresolved() {
 			if (i > 0) { qual = substr(ref, 1, i - 1); name = substr(ref, i + 1) }
 
 			if (name in ext) next
+			# A ledger page may name what it says it removed, anywhere on the
+			# page: its own tables are the list of what that is. Everything else
+			# it names, prose included, is a live recommendation and resolves.
+			if ((file in isledger) && (name in gone)) next
 			if (qual != "" && (qual in pkgbase)) {
 				# Base names are not unique: pkg/kubernetes/fluxcd and
 				# pkg/stack/fluxcd are both spelled fluxcd, so a bare base-name
@@ -638,7 +682,7 @@ report_unresolved() {
 			found = 1
 		}
 		END { exit !found }
-	' "$symbols" "$pkgdirs" "$external" "$referenced"
+	' "$symbols" "$pkgdirs" "$external" "$removed" "$referenced"
 }
 
 if [ "${1:-}" = "--self-test" ]; then
@@ -732,8 +776,8 @@ done < <(printf '%s\n%s\n%s\n%s\n' "$docs_pages" "$pkg_pages" "$map_pages" "$go_
 	sed 's#^\./##' | sort -u)
 
 # The ledger pages arrive through the same enumeration as any other page, so
-# they are already in `pages`; the extractor is told which of them to read a
-# column at a time. A ledger page that stopped existing would drop out of the
+# they are already in `pages`; what they get is a name-level exemption built from
+# their own tables. A ledger page that stopped existing would drop out of the
 # enumeration silently, so require each one.
 for _ledger in "${LEDGER_PAGES[@]}"; do
 	if [ ! -f "$_ledger" ]; then
@@ -744,6 +788,12 @@ for _ledger in "${LEDGER_PAGES[@]}"; do
 done
 unset _ledger
 LEDGER_LIST="${LEDGER_PAGES[*]}"
+collect_removed "${LEDGER_PAGES[@]}" >"$removed"
+if [ ! -s "$removed" ]; then
+	printf 'check-doc-api-refs: no removed names found in %s -- the tables changed shape\n' \
+		"$LEDGER_LIST" >&2
+	exit 1
+fi
 
 if [ "${1:-}" = "--list" ]; then
 	printf 'declarations: %s\n' "$(wc -l <"$symbols")"
