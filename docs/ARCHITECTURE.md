@@ -485,7 +485,7 @@ A helper survives only if it does something a plain assignment cannot:
 | Class | What it does | Example |
 |---|---|---|
 | Appender | Appends to a slice field | `AddPodSpecContainer` |
-| Pointer / nil-init | Takes a value and writes the pointer, or initialises a nil map | `SetDeploymentReplicas`, `AddConfigMapData` |
+| Pointer / nil-init | Assigns a pointer-typed field, or initialises a nil map before writing | `SetDeploymentReplicas`, `AddConfigMapData` |
 | Composite | Writes several fields that belong together, and names the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
 
 `pkg/kubernetes/admission_test.go` parses every exported `Set*`/`Add*` in the tree with `go/ast`
@@ -1110,8 +1110,9 @@ kubernetes.AddRoleBindingSubject(binding, rbacv1.Subject{
 cert-manager integration provides secure TLS:
 
 ```go
-// ACME challenge configuration. SetClusterIssuerACME is a pointer setter, so it
-// is sugar; the ACMEIssuer it takes is an upstream struct literal.
+// ACME challenge configuration. SetClusterIssuerACME assigns a pointer-typed
+// field, which is what makes it admissible sugar — it takes the *ACMEIssuer,
+// built here as an upstream struct literal, and writes it straight to the spec.
 issuer := certmanager.CreateClusterIssuer("letsencrypt")
 certmanager.SetClusterIssuerACME(issuer, &cmacme.ACMEIssuer{
     Server: "https://acme-v02.api.letsencrypt.org/directory",

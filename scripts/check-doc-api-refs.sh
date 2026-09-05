@@ -49,7 +49,9 @@
 #
 # The reason goes inside the comment, and is not optional: a form that suppresses
 # anything needs a space and then a reason starting with an alphanumeric.
-# `ignore-end` suppresses nothing and so needs none. Markdown passes the whole
+# `ignore-end` suppresses nothing and so needs none -- and because it does not,
+# it must actually close a fence: a stray one is an error rather than a marker
+# line that quietly takes its own references with it. Markdown passes the whole
 # line of an HTML block through verbatim, so a reason written after the `-->`
 # renders as visible text on the page. A `<!-- doc-api-refs:` comment that is
 # none of the three forms -- a misspelled keyword, a missing reason -- is an
@@ -126,7 +128,17 @@ extract_refs() {
 			# Both on one line is a self-contained fence: it changes no state.
 			if (opens && closes) next
 			if (opens) { skip = 1; next }
-			if (closes) { skip = 0; next }
+			if (closes) {
+				# A close with nothing open still swallows its own line, so
+				# `CreateGone` <!-- doc-api-refs:ignore-end --> would suppress a
+				# reference through a marker documented as suppressing nothing.
+				if (!skip) {
+					print "unmatched doc-api-refs:ignore-end in " FILENAME " line " FNR > "/dev/stderr"
+					rc = 1
+				}
+				skip = 0
+				next
+			}
 			if ($0 ~ /<!-- doc-api-refs:ignore [A-Za-z0-9]/) next
 			print "unrecognised doc-api-refs marker in " FILENAME " line " FNR > "/dev/stderr"
 			rc = 1
@@ -220,6 +232,9 @@ self_test() {
 		<!-- doc-api-refs:ignore-start --> `CreateGone`
 		<!-- doc-api-refs:ignore-end -->
 	EOF
+	cat >"$d/orphan-end.md" <<-'EOF'
+		`CreateGone` <!-- doc-api-refs:ignore-end -->
+	EOF
 
 	# The package-scoping tree: CreateLayoutWithResources survives in argocd and
 	# has been removed from fluxcd, which is the shape a name-only symbol set
@@ -229,9 +244,15 @@ self_test() {
 	# alias -- and must both resolve: they pin the decision recorded above
 	# report_unresolved, so re-adding a page-package rule breaks the self-test
 	# instead of quietly failing correct pages.
-	mkdir -p "$d/docs" "$d/pkg/stack/fluxcd" "$d/pkg/stack/argocd"
+	mkdir -p "$d/docs" "$d/pkg/stack/fluxcd" "$d/pkg/stack/argocd" "$d/pkg/kubernetes/fluxcd"
 	cat >"$d/docs/qualified.md" <<-'EOF'
 		Both `argocd.CreateLayoutWithResources` and `fluxcd.CreateLayoutWithResources`.
+	EOF
+	# Two packages are called fluxcd. This page is one of them, so its own
+	# `fluxcd.` selector means itself: CreateOwn is declared here and resolves,
+	# CreateElsewhere is declared in the other fluxcd and must not.
+	cat >"$d/pkg/kubernetes/fluxcd/README.md" <<-'EOF'
+		`fluxcd.CreateOwn` and `fluxcd.CreateElsewhere`.
 	EOF
 	cat >"$d/pkg/stack/fluxcd/README.md" <<-'EOF'
 		`engine.CreateLayoutWithResources(cluster, rules)` builds the layout.
@@ -288,17 +309,26 @@ fenced.md:4:CreateReal'
 		failures=$((failures + 1))
 	fi
 
+	# A close with nothing open swallows its own line, so accepting it silently
+	# would let the marker documented as suppressing nothing suppress something.
+	if extract_refs "$d/orphan-end.md" >/dev/null 2>&1; then
+		printf 'self-test: an unmatched ignore-end was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
 	# A name absent from the symbol set must be reported; one present must not.
 	# CreateDeployment is in the set and CreateDeployment_Gone is not, so the
 	# suffix must survive extraction or the fourth line resolves wrongly.
 	cat >"$symbols" <<-'EOF'
 		pkg/kubernetes Create
+		pkg/kubernetes/fluxcd CreateOwn
 		pkg/stack/argocd CreateLayoutWithResources
 		pkg/stack/fluxcd AddReal
 		pkg/stack/fluxcd CreateDeployment
+		pkg/stack/fluxcd CreateElsewhere
 		pkg/stack/fluxcd CreateReal
 	EOF
-	printf 'pkg/kubernetes\npkg/stack/argocd\npkg/stack/fluxcd\n' >"$pkgdirs"
+	printf 'pkg/kubernetes\npkg/kubernetes/fluxcd\npkg/stack/argocd\npkg/stack/fluxcd\n' >"$pkgdirs"
 	printf 'AddCommand\n' >"$external"
 
 	extract_refs "$d/plain.md" | sort -u >"$referenced"
@@ -317,9 +347,13 @@ plain.md:5:pkgname.CreateGone'
 
 	# The same name on three pages: the spelling that names the package it was
 	# removed from is the only one that fails. A flat name set passes all three.
-	extract_refs "$d/docs/qualified.md" "$d/pkg/stack/fluxcd/README.md" \
-		"$d/pkg/stack/argocd/README.md" | sort -u >"$referenced"
-	local want_scoped='docs/qualified.md:1:fluxcd.CreateLayoutWithResources'
+	# The fourth page pins the base-name collision -- a selector answered by the
+	# page's own package rather than by whichever package shares its name.
+	extract_refs "$d/docs/qualified.md" "$d/pkg/kubernetes/fluxcd/README.md" \
+		"$d/pkg/stack/fluxcd/README.md" "$d/pkg/stack/argocd/README.md" |
+		sort -u >"$referenced"
+	local want_scoped='docs/qualified.md:1:fluxcd.CreateLayoutWithResources
+pkg/kubernetes/fluxcd/README.md:1:fluxcd.CreateElsewhere'
 	unresolved=$(report_unresolved | sed "s#^$d/##")
 	if [ "$unresolved" != "$want_scoped" ]; then
 		printf 'self-test: package-scope mismatch\nwant:\n%s\ngot:\n%s\n' "$want_scoped" "$unresolved" >&2
@@ -337,15 +371,26 @@ plain.md:5:pkgname.CreateGone'
 # Exits 0 when it printed at least one row, so it reads as
 # `if unresolved=$(report_unresolved)`.
 #
-# Two rules:
+# Three rules:
 #
-#   qualified `pkg.Name`, where pkg is the base name of a directory under pkg/
-#       -> Name must be declared in a package with that base name
+#   qualified `pkg.Name` on a page that lives in a package called pkg
+#       -> Name must be declared in that exact package
+#   qualified `pkg.Name` anywhere else
+#       -> Name must be declared in a package whose base name is pkg
 #   anything else
 #       -> Name must be declared somewhere under pkg/
 #
-# The first rule is what makes a removal in one package fail a page that names
-# that package, even while a same-named declaration survives elsewhere.
+# The qualified rules are what makes a removal in one package fail a page that
+# names that package, even while a same-named declaration survives elsewhere.
+# Base names are not unique -- pkg/kubernetes/fluxcd and pkg/stack/fluxcd are
+# both `fluxcd`, and 60 references in this tree use that selector -- so the union
+# of same-named packages answers a reference that only one of them should. The
+# page's own location is the only disambiguation the text offers, and the first
+# rule takes it. It is not complete: nothing distinguishes the two for a page
+# under docs/ or site/content/, so a name removed from one while the other keeps
+# it still resolves there. The two packages currently share no builder-shaped
+# name at all (184 in pkg/kubernetes/fluxcd, 2 in pkg/stack/fluxcd, no overlap),
+# so no reference in the tree is ambiguous today.
 #
 # It is deliberately not extended to unqualified names on a package's own README.
 # That rule is not decidable from the text and was measured against this tree: a
@@ -360,12 +405,14 @@ report_unresolved() {
 	awk -v symfile="$symbols" -v dirfile="$pkgdirs" -v extfile="$external" '
 		FILENAME == symfile {
 			names[$2] = 1
+			decl[$1 " " $2] = 1
 			base = $1
 			sub(/.*\//, "", base)
 			bybase[base " " $2] = 1
 			next
 		}
 		FILENAME == dirfile {
+			ispkg[$0] = 1
 			base = $0
 			sub(/.*\//, "", base)
 			pkgbase[base] = 1
@@ -376,6 +423,8 @@ report_unresolved() {
 			n = split($0, p, ":")
 			if (n < 3) next
 			ref = p[n]
+			file = p[1]
+			for (i = 2; i <= n - 2; i++) file = file ":" p[i]
 
 			qual = ""
 			name = ref
@@ -384,6 +433,21 @@ report_unresolved() {
 
 			if (name in ext) next
 			if (qual != "" && (qual in pkgbase)) {
+				# Base names are not unique: pkg/kubernetes/fluxcd and
+				# pkg/stack/fluxcd are both spelled fluxcd, so a bare base-name
+				# match lets either answer. A page that lives in a package of
+				# that name is the one case the text settles -- it means itself.
+				pagedir = file
+				sub(/\/[^\/]*$/, "", pagedir)
+				sub(/^.*\/pkg\//, "pkg/", pagedir)
+				pbase = pagedir
+				sub(/.*\//, "", pbase)
+				if (pbase == qual && (pagedir in ispkg)) {
+					if ((pagedir " " name) in decl) next
+					print
+					found = 1
+					next
+				}
 				if ((qual " " name) in bybase) next
 				print
 				found = 1
@@ -403,14 +467,17 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 # Exported functions and methods declared in the public tree, each paired with
-# the package directory that declares it. Test files count: a symbol that only
-# exists in a _test.go file is not importable, and no page may cite one, so they
-# are excluded.
+# the package directory that declares it. Test files do not count: a symbol that
+# only exists in a _test.go file is not importable, and no page may cite one.
+# Neither does anything under an internal/ directory, for the same reason one
+# step further out -- pkg/kubernetes/internal is closed to consumers, so a
+# declaration there must never be what makes a public page resolve. It holds no
+# builder-shaped name today; the exclusion is what keeps that from mattering.
 #
 # -H is not optional. Without it grep omits the file name whenever xargs hands it
 # a single path, which happens for the last batch of a long list -- the rows would
 # then lose the package half of the pair for an arbitrary tail of the tree.
-go_files=$(find pkg -name '*.go' ! -name '*_test.go' -type f)
+go_files=$(find pkg -name '*.go' ! -name '*_test.go' ! -path '*/internal/*' -type f)
 printf '%s\n' "$go_files" | sed 's#/[^/]*$##' | sort -u >"$pkgdirs"
 printf '%s\n' "$go_files" | tr '\n' '\0' |
 	xargs -0 grep -HoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' |
