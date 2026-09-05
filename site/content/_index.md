@@ -3,9 +3,9 @@ title = "Kure"
 type = "home"
 +++
 
-**Type-safe Kubernetes manifest generation in Go.**
+**A GitOps domain model and layout engine, on a thin Kubernetes foundation.**
 
-Kure helps platform teams generate plain Kubernetes YAML for GitOps workflows — without Helm templates, runtime controllers, or fragile string-based YAML manipulation.
+Kure helps platform teams describe a cluster in Go and write it out as plain Kubernetes YAML for GitOps workflows — without Helm templates, runtime controllers, or fragile string-based YAML manipulation.
 
 {{< button link="/getting-started/quickstart/" >}}Get Started{{< /button >}} {{< button link="https://github.com/go-kure/kure" >}}View on GitHub{{< /button >}}
 
@@ -21,7 +21,7 @@ Building Kubernetes manifests for GitOps can be challenging:
 - **Helm charts** add complexity with their templating language and release lifecycle
 - **Raw manifests** lead to duplication and inconsistency across clusters
 
-Kure provides typed Go builders that catch errors at compile time and compose cleanly into larger GitOps layouts.
+Kure answers this in three layers. A **domain model** says what a cluster contains. A **layout engine** turns that into a reconcilable directory tree. Underneath both, a deliberately **thin Kubernetes foundation** hands you the upstream Go struct with its identity filled in and then gets out of the way — so what you write is checked by the compiler against the real API types, not against kure's idea of them.
 
 ## Quick Example
 
@@ -85,13 +85,14 @@ See [Domain Model](/concepts/domain-model) for the full reference.
 ## What Kure Is and Is Not
 
 **Kure is:**
-- A Go library for generating Kubernetes and GitOps manifests
+- A domain model and layout engine for GitOps repositories, on a thin Kubernetes foundation
 - A compile-time tool — it runs in your build step, not in your cluster
 - FluxCD-first for GitOps workflow integration
 - Designed to output plain, readable YAML
 
 **Kure is not:**
 - A runtime controller or operator
+- A wrapper around the Kubernetes API types — the upstream struct is the construction API, and kure adds identity, not a parallel vocabulary
 - A package manager by itself
 - A replacement for every Helm chart use case
 - Required to run inside your target cluster
@@ -114,10 +115,11 @@ Recommended reading order:
 
 1. [Quickstart](/getting-started/quickstart/) — generate your first Kubernetes manifest
 2. [Domain Model](/concepts/domain-model) — understand the Cluster → Node → Bundle → Application hierarchy
-3. [Using Kure as a Library](/guides/library-usage/) — import paths, creating resources, generating YAML
-4. [Generating Flux Manifests](/guides/flux-workflow/) — end-to-end GitOps layout generation
-5. [Examples](/examples/) — practical, runnable examples
-6. [API Reference](/api-reference/) — package documentation
+3. [Builder Contract](/concepts/builder-contract/) — what a constructor sets, when a helper exists, how to read the maturity table
+4. [Using Kure as a Library](/guides/library-usage/) — import paths, creating resources, generating YAML
+5. [Generating Flux Manifests](/guides/flux-workflow/) — end-to-end GitOps layout generation
+6. [Examples](/examples/) — practical, runnable examples
+7. [API Reference](/api-reference/) — package documentation
 
 ## Get Involved
 

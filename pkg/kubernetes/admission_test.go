@@ -31,8 +31,8 @@ var contractExempt = map[string]bool{
 // Set*/Add* helper under pkg/kubernetes (internal packages excluded) and fails
 // on any inadmissible helper that is not listed in the exclusion file, and on
 // any listed helper that is no longer inadmissible (a stale entry). The
-// exclusion file is temporary: the prune work item empties it, and once it is
-// empty this test is the whole enforcement of ADR-038 §4.
+// exclusion file is empty, so this test is the whole enforcement of ADR-038 §4:
+// entries only ever leave it, and a new helper must be class-admissible.
 func TestAdmission_SugarHelpersAreClassAdmissible(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads every package under pkg/kubernetes with type information")

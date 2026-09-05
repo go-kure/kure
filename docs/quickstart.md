@@ -93,6 +93,7 @@ flux reconcile kustomization flux-system --with-source
 ## Next Steps
 
 - **Architecture**: Read the [Design Philosophy](/concepts/design-philosophy/) page for a deep dive into Kure's design
+- **Building objects**: The [Builder Contract](/concepts/builder-contract/) page explains what a constructor does and does not set, when a `Set*`/`Add*` helper exists, and how to read the maturity table
 - **Examples**: Explore the `examples/` directory for more complex configurations
 - **API Reference**: See the full API at [pkg.go.dev](https://pkg.go.dev/github.com/go-kure/kure)
-- **Patching**: Learn about declarative patching in the [README](https://github.com/go-kure/kure#declarative-patching)
+- **Patching**: The patch engine moved to [go-kure/launcher](https://github.com/go-kure/launcher) in the launcher extraction (ADR-018); see that repository for current documentation

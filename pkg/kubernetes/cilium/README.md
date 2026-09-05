@@ -19,7 +19,9 @@ obj := cilium.CreateCiliumNetworkPolicy("allow-internal", "default")
 cl := cilium.CreateCiliumCIDRGroup("internal-ranges")
 ```
 
-The config-struct builders (`cilium.CiliumNetworkPolicy(&cilium.CiliumNetworkPolicyConfig{...})`) are a separate, opinionated layer on top of the same upstream types. They now delegate to the generated constructors and start from identity only: `cilium.CiliumCIDRGroup(cfg)` with no CIDRs leaves `spec.externalCIDRs` nil where it used to be an empty slice (recorded in the release-1 migration ledger); the other config builders serialise as before. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
+The config-struct builders (`cilium.CiliumNetworkPolicy(&cilium.CiliumNetworkPolicyConfig{...})`) are a separate, opinionated layer on top of the same upstream types. They now delegate to the generated constructors and start from identity only: `cilium.CiliumCIDRGroup(cfg)` with no CIDRs leaves `spec.externalCIDRs` nil where it used to be an empty slice (recorded in the release-1 migration ledger); the other config builders serialise as before. No hand-written `Create*` helper for a spec fragment remains — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+
+The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
 See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 

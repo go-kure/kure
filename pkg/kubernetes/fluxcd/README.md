@@ -12,7 +12,9 @@ Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_
 obj := fluxcd.CreateGitRepository("my-repo", "flux-system")
 ```
 
-The hand-written `Create*` helpers for spec fragments (sub-types that are not `client.Object`) that remain in this package are legacy and are removed by the prune work item of the builder-contract epic; a struct literal is the idiom.
+Twenty-four hand-written constructors for spec fragments remain (`CreateGitSpec`, `CreatePostBuild`, `CreateInstallRemediation`, `CreateCrossNamespaceSourceReference` and the rest). Their sub-types are not `client.Object`, so they get no generated wrapper, and Flux's spec fragments are deep enough that assembling one by literal at every call site is the less readable option. They are not identity constructors and are not covered by the identity test — for anything they do not cover, a struct literal is the idiom.
+
+The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
 See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 
@@ -235,21 +237,29 @@ Upgrade flag setters: `SetHelmReleaseUpgradeTimeout`, `SetHelmReleaseUpgradeCRDs
 
 ```go
 provider := fluxcd.CreateProvider("slack", "flux-system")
-// SetProvider* setters configure type, channel, secretRef, etc.
+provider.Spec.Type = "slack"          // plain fields: assigned, not set
+provider.Spec.Channel = "#alerts"
+fluxcd.SetProviderSecretRef(provider, &meta.LocalObjectReference{Name: "slack-webhook"})
 
 alert := fluxcd.CreateAlert("slack-alert", "flux-system")
-// SetAlert* setters configure providerRef, eventSeverity, summary, etc.
+alert.Spec.ProviderRef = meta.LocalObjectReference{Name: "slack"}
+alert.Spec.EventSeverity = "error"     // no Alert setters remain: all were bare assignments
 
 receiver := fluxcd.CreateReceiver("github-receiver", "flux-system")
-// SetReceiver* setters configure type, events, resources, secretRef, etc.
+receiver.Spec.Type = "github"
+receiver.Spec.Events = []string{"push"}
+fluxcd.SetReceiverSecretRef(receiver, meta.LocalObjectReference{Name: "webhook-token"})
 ```
 
 ## Flux Operator
 
 ```go
 instance := fluxcd.CreateFluxInstance("flux", "flux-system")
-instance.Spec.Distribution.Variant = "upstream-alpine"
-// Additional: SetFluxInstance* for distribution, cluster, sharding, storage, kustomize, sync, wait.
+instance.Spec.Distribution.Variant = "upstream-alpine"   // Distribution is a plain field
+// Pointer setters remain for the optional blocks: SetFluxInstanceCluster,
+// SetFluxInstanceSharding, SetFluxInstanceStorage, SetFluxInstanceKustomize,
+// SetFluxInstanceSync, SetFluxInstanceWait, SetFluxInstanceCommonMetadata and
+// SetFluxInstanceMigrateResources.
 ```
 
 ## Extended Resource Types

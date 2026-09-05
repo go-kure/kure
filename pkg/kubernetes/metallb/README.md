@@ -16,7 +16,9 @@ Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_
 obj := metallb.CreateIPAddressPool("my-pool", "metallb-system")
 ```
 
-The config-struct builders (`metallb.IPAddressPool(&metallb.IPAddressPoolConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. The hand-written `Create*` helpers for spec fragments that remain in this package are legacy and are removed by the prune work item of the builder-contract epic.
+The config-struct builders (`metallb.IPAddressPool(&metallb.IPAddressPoolConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. No hand-written `Create*` helper for a spec fragment remains — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+
+The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
 See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the full builder contract: construction, sugar admission classes, purity and the release-1 migration ledger.
 
