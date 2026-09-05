@@ -860,6 +860,28 @@ func TestCreateNewKind(t *testing.T) {
 The last assertion is the one that matters: a constructor that starts setting spec values is the
 regression this contract exists to prevent.
 
+#### 5. Map the package, if the family is new
+
+A new `pkg/kubernetes/<family>/` is a new public package, and `check-doc-sync` requires every public
+package to be mapped exactly once with a README that exists. Skipping this leaves `docs-build` red
+after generation has already succeeded, which reads as a generator failure and is not one. So:
+
+- write `pkg/kubernetes/<family>/README.md`, following an existing family's — the kind coverage
+  belongs in the generated table, not in prose;
+- add the package to `site/docs-map.yaml`, which is the single source of the code-to-docs mapping.
+  The AGENTS reverse-map table and the site nav are generated from it by
+  `bash site/scripts/gen-docs-tables.sh`; run that and commit its output rather than editing either
+  by hand.
+
+Adding a kind to a family kure already covers needs none of this — the package is already mapped,
+and step 2's regenerated tables carry the new kind.
+
+```bash
+bash site/scripts/gen-docs-tables.sh
+bash scripts/check-doc-api-refs.sh
+mise run site:check
+```
+
 ### Extending Domain Model
 
 When extending the core domain model:
@@ -1162,9 +1184,16 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 | Layer | What it checks | Where |
 |---|---|---|
 | Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
-| Domain model | Structural rules over the hierarchy: names present, no cycles, parents resolvable | `stack.ValidateCluster`, `Bundle.Validate` |
+| Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node` | `stack.ValidateCluster`, `Bundle.Validate` |
 | Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
 | The cluster | Schema, admission, CRD structural rules | apply time |
+
+The domain-model row is about bundles, and deliberately does not claim more. `ValidateCluster`
+walks `Node.Children` to find the attached bundles and to scan for a `PackageRef`, but it checks
+nothing about the nodes themselves: a node name may be empty, a `ParentPath` may resolve to
+nothing, and the node walk carries no visited set, so a `Node` graph containing a cycle recurses
+until the stack runs out rather than returning an error. A caller that builds a `Node` tree by hand
+is responsible for its shape; the builders in `pkg/stack` do not produce a cyclic one.
 
 ```go
 // Validation is a call the caller makes, not a side effect of construction.

@@ -142,6 +142,18 @@ trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" "$removed" ${selfte
 # check runs on the first line of the NEXT file and again at END.
 extract_refs() {
 	awk '
+		# How many times one fence keyword appears on a line. The bodies are
+		# matched loosely on purpose -- a malformed repeat has to be counted
+		# too, or the count says one where the reader sees two.
+		function nmarkers(s, keyword,   n, t) {
+			n = 0
+			t = s
+			while (match(t, "<!-- doc-api-refs:" keyword)) {
+				n++
+				t = substr(t, RSTART + RLENGTH)
+			}
+			return n
+		}
 		function unclosed() {
 			if (skip) {
 				print "unclosed doc-api-refs:ignore-start in " current > "/dev/stderr"
@@ -171,6 +183,17 @@ extract_refs() {
 			opens = (ostart > 0)
 			cstart = match($0, /<!-- doc-api-refs:ignore-end *-->/)
 			closes = (cstart > 0)
+			# One line, more than one marker of a kind: two opens and a close
+			# would otherwise read as a self-contained fence and be accepted,
+			# where the same three markers on three lines are now an error.
+			# Both spellings mean the same malformed thing, so both are refused.
+			# `opens` and `closes` only record that a match happened, which is
+			# why this is counted separately rather than read off them.
+			if (nmarkers($0, "ignore-start") > 1 || nmarkers($0, "ignore-end") > 1) {
+				print "repeated doc-api-refs fence marker in " FILENAME " line " FNR > "/dev/stderr"
+				rc = 1
+				next
+			}
 			# Both on one line is a self-contained fence: it changes no state.
 			# Only in that order, though -- a close followed by an open is not a
 			# fence, and treating it as one skips the line it is written on,
@@ -347,6 +370,13 @@ self_test() {
 		<!-- doc-api-refs:ignore-end -->
 	EOF
 
+	# The same three markers written on one line. Read as a self-contained
+	# fence it is accepted, so the spelling decides whether a malformed
+	# suppression is an error -- which is exactly what it must not do.
+	cat >"$d/repeated-marker.md" <<-'EOF'
+		`CreateGone` <!-- doc-api-refs:ignore-start a --> <!-- doc-api-refs:ignore-start b --> <!-- doc-api-refs:ignore-end -->
+	EOF
+
 	# The package-scoping tree: CreateLayoutWithResources survives in argocd and
 	# has been removed from fluxcd, which is the shape a name-only symbol set
 	# cannot see. qualified.md names both packages explicitly and must split.
@@ -505,6 +535,11 @@ fenced.md:4:CreateReal'
 
 	if extract_refs "$d/nested-fence.md" >/dev/null 2>&1; then
 		printf 'self-test: a nested ignore-start was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
+	if extract_refs "$d/repeated-marker.md" >/dev/null 2>&1; then
+		printf 'self-test: a repeated fence marker on one line was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
