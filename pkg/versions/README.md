@@ -48,6 +48,22 @@ hand-maintained range to report, since kure never chose that version, so
 `SupportedRange == ""` is ambiguous on its own — check `FloorModule` to tell "no range
 declared" from "range not applicable here."
 
+## SupportedRange/Min/Max are a moving target, not a build-time constant
+
+A dependency bump that lands outside its current `supported_range` fails CI until a human
+runs `./scripts/sync-versions.sh widen <dep> <new-upper-bound> --note "<assessment>"` — the
+range only ever widens, and only after someone has actually confirmed the new version is
+compatible (`go-kure/kure#593`, `go-kure/kure#765`). That happens roughly as often as kure
+takes a dependency bump, not on a fixed schedule. A consumer that reads these fields once and
+caches the result — in a config file, a constant, a test fixture — will silently drift from
+what `Get`/`All` report on kure's next release; call them at the point of use instead of
+hoisting the values out.
+
+An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
+whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
+or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
+dependencies" section for why there is no independent range to gate there).
+
 ## Regenerating
 
 Never edit `versions_gen.go` by hand:
