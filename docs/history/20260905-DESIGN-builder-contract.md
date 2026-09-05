@@ -5,8 +5,9 @@
 > **Note**: This document is not part of the kure documentation website. It is an internal
 > development note about how the builder contract was decided. The normative contract is
 > `pkg/kubernetes/README.md`, published as
-> [Kubernetes Builders](/api-reference/kubernetes-builders/); the caller-facing list of what
-> changed is [`docs/builder-contract-release-1.md`](../builder-contract-release-1.md).
+> [Kubernetes Builders](https://www.gokure.dev/kure/api-reference/kubernetes-builders/); the
+> caller-facing list of what changed is
+> [`docs/builder-contract-release-1.md`](../builder-contract-release-1.md).
 
 ---
 
