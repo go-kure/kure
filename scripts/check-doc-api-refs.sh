@@ -183,7 +183,18 @@ extract_refs() {
 		# removed function does not compile, so the compiler already checks it;
 		# a doc comment naming one is exactly as stale as a Markdown page naming
 		# one, and pkg.go.dev publishes it just as widely.
-		FILENAME ~ /\.go$/ { if ($0 !~ /^[ \t]*\/\//) next }
+		# Both comment forms: pkg/stack/layout/doc.go is a `/* ... */` block, and
+		# a package that documents a builder that way is published exactly like
+		# one that uses `//`. A block is recognised only when it opens the line,
+		# which is what a doc comment does and what a `/*` inside a string
+		# literal does not.
+		FILENAME ~ /\.go$/ {
+			if (FNR == 1) inblock = 0
+			if (!inblock && $0 ~ /^[ \t]*\/\*/) inblock = 1
+			if (inblock) {
+				if ($0 ~ /\*\//) inblock = 0
+			} else if ($0 !~ /^[ \t]*\/\//) next
+		}
 		# A ledger page contributes only the replacement half of each row: the
 		# last non-empty cell. Anything that is not a table row names removed
 		# functions in prose and is exempt. Taking the last non-empty field
@@ -339,6 +350,19 @@ self_test() {
 		func caller() { CreateGone() }
 	EOF
 
+	# The block form, and the line after it: the closing */ must end the
+	# comment, or every line of the file counts as documentation.
+	cat >"$d/pkg/stack/fluxcd/block.go" <<-'EOF'
+		/*
+		Package fluxcd builds things.
+
+		CreateBlockGone is advertised here and does not exist.
+		*/
+		package fluxcd
+
+		func other() { CreateGone() }
+	EOF
+
 	# A ledger page: removed names on the left, live replacements on the right,
 	# both on the same line, and a three-column row that puts the removed names
 	# in the middle. Only the last cell may be checked, and it must be -- row 5
@@ -465,8 +489,10 @@ pkg/kubernetes/fluxcd/README.md:1:fluxcd.CreateElsewhere'
 		failures=$((failures + 1))
 	fi
 
-	local want_go='pkg/stack/fluxcd/doc.go:3:CreateGone'
-	got=$(extract_refs "$d/pkg/stack/fluxcd/doc.go" | sed "s#^$d/##")
+	local want_go='pkg/stack/fluxcd/block.go:4:CreateBlockGone
+pkg/stack/fluxcd/doc.go:3:CreateGone'
+	got=$(extract_refs "$d/pkg/stack/fluxcd/block.go" "$d/pkg/stack/fluxcd/doc.go" |
+		sed "s#^$d/##")
 	if [ "$got" != "$want_go" ]; then
 		printf 'self-test: go-comment extraction mismatch\nwant:\n%s\ngot:\n%s\n' \
 			"$want_go" "$got" >&2
