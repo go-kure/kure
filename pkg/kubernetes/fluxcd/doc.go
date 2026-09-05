@@ -11,8 +11,11 @@
 //     set, leaving the spec empty. Assign the spec fields directly, or use a
 //     Set/Add helper where one exists.
 //   - Set/Add helpers: admissible sugar over a single field of an existing
-//     object. They exist only where a plain assignment cannot express the write;
-//     everything else is a field on the upstream type.
+//     object. They exist for three shapes of write — appending to a slice or
+//     inserting into a map, assigning to a pointer-typed field (a pointer the
+//     caller already holds counts, and is forwarded directly), and composing an
+//     upstream struct under a name that states the opinion. Everything else is
+//     a field on the upstream type, assigned directly.
 //
 // Applications covered include sources (GitRepository, OCIRepository,
 // HelmRepository, Bucket, ExternalArtifact, ArtifactGenerator), workloads

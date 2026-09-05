@@ -1453,7 +1453,7 @@ func assertError(t *testing.T, err error, expectedType errors.ErrorType) {
 
 **Kubernetes foundation**: `pkg/kubernetes` and its per-CRD subpackages — the registered scheme, `Create[T]` and its generated per-kind wrappers, the admissible sugar helpers, and the generated kinds/scope/maturity tables.
 
-**Admissible sugar**: A `Set*`/`Add*` helper that does something a plain field assignment cannot — appends to a slice, writes a pointer or initialises a nil map, or writes several fields under a name that states the opinion. Anything else is not part of the builder contract.
+**Admissible sugar**: A `Set*`/`Add*` helper whose write falls into one of three classes — appends to a slice or inserts into a map, assigns a pointer-typed field or initialises a nil pointer intermediate, or writes several fields under a name that states the opinion. Anything else is not part of the builder contract.
 
 **Constructor**: `Create<Kind>(name[, namespace])` — returns an object carrying `apiVersion`, `kind` and identity, and nothing else. Generated from the registered scheme.
 
