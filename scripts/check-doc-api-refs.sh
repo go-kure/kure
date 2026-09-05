@@ -11,11 +11,20 @@
 # page at all, so this check is the machine-checkable half of "the docs describe
 # the library that shipped".
 #
-# What it checks: every identifier shaped like a kure builder call
-# (Create|Set|Add followed by an upper-case letter) that appears in a live page
-# must be declared in pkg/ as a function or method. Names outside that shape are
-# not builders and are not checked; upstream and third-party calls that happen to
-# fit the shape are listed in EXTERNAL below.
+# What it checks: every identifier shaped like a kure builder call -- Create, Set
+# or Add followed by an upper-case letter, or the generic constructor's
+# `Create[T]` bracket -- that appears in a live page must be declared in pkg/ as a
+# function or method. Names outside that shape are not builders and are not
+# checked; upstream and third-party calls that happen to fit the shape are listed
+# in EXTERNAL below.
+#
+# Resolution is package-aware where the page says which package it means. pkg/
+# holds same-named declarations in unrelated packages -- CreateLayoutWithResources
+# is a method on three receivers across pkg/stack/fluxcd and pkg/stack/argocd --
+# so a name written `fluxcd.CreateX` is resolved in fluxcd and not answered by an
+# X that only argocd declares. A name written without a package selector is still
+# resolved against the whole tree; report_unresolved records why that limit is
+# deliberate.
 #
 # Which pages count comes from site/docs-map.yaml plus the docs trees a reader
 # browses on GitHub, so a page mounted from a new directory cannot escape the
@@ -78,11 +87,13 @@ EXTERNAL=(
 	CreateReplace      # helm-controller's CRDsPolicy constant, not a constructor
 )
 
-symbols=$(mktemp)
-referenced=$(mktemp)
+symbols=$(mktemp)    # "<package dir> <name>" per exported declaration
+pkgdirs=$(mktemp)    # every package directory under pkg/, exported symbols or not
+external=$(mktemp)   # EXTERNAL, one name per line
+referenced=$(mktemp) # "<page>:<line>:<reference>" per builder-shaped reference
 selftest_dir=
 # shellcheck disable=SC2064 # expand now: the paths must survive the function that set them
-trap 'rm -rf "$symbols" "$referenced" ${selftest_dir:+"$selftest_dir"}' EXIT
+trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" ${selftest_dir:+"$selftest_dir"}' EXIT
 
 # One "file:line:identifier" row per builder-shaped reference in the pages named
 # on stdin (NUL-separated), skipping any passage a page fenced off. An unclosed
@@ -127,11 +138,36 @@ extract_refs() {
 			offset = 0
 			# The underscore is in the class on purpose: the declaration extractor
 			# accepts it, so without it CreateDeployment_Gone would be truncated to
-			# the CreateDeployment that does exist and resolve.
-			while (match(line, /(Create|Set|Add)[A-Z][A-Za-z0-9_]*/)) {
+			# the CreateDeployment that does exist and resolve. The `\[` alternative
+			# catches the generic constructor, spelled `kubernetes.Create[T]` and so
+			# invisible to a pattern that demands an upper-case letter after Create;
+			# the bracket is dropped again below, leaving the declared name `Create`.
+			while (match(line, /(Create|Set|Add)([A-Z][A-Za-z0-9_]*|\[)/)) {
+				abs = RSTART + offset
 				# Reject a match that continues an identifier (foo.MySetName).
-				if (RSTART + offset == 1 || substr($0, RSTART + offset - 1, 1) !~ /[A-Za-z0-9_]/) {
-					print FILENAME ":" FNR ":" substr(line, RSTART, RLENGTH)
+				if (abs == 1 || substr($0, abs - 1, 1) !~ /[A-Za-z0-9_]/) {
+					ref = substr(line, RSTART, RLENGTH)
+					generic = sub(/\[$/, "", ref)
+					# Keep the package selector when there is one: resolution is
+					# package-aware, and `fluxcd.CreateX` must not be answered by
+					# an X that only another package declares. A selector that is
+					# a variable rather than a package (engine.CreateLayout…) is
+					# carried too and simply names no package at resolution time.
+					qual = ""
+					if (abs > 1 && substr($0, abs - 1, 1) == ".") {
+						j = abs - 2
+						while (j >= 1 && substr($0, j, 1) ~ /[A-Za-z0-9_]/) j--
+						qual = substr($0, j + 1, abs - 2 - j)
+					}
+					# The bracket form counts only when a package selector spells
+					# it out, which is how kure documents it. Bare `Set[` and
+					# `Add[` are type syntax in every other language a review page
+					# might quote -- Python `ClassVar[Set[T]]` matched here before
+					# this condition existed.
+					if (!generic || qual != "") {
+						if (qual != "") ref = qual "." ref
+						print FILENAME ":" FNR ":" ref
+					}
 				}
 				offset += RSTART + RLENGTH - 1
 				line = substr(line, RSTART + RLENGTH)
@@ -154,6 +190,9 @@ self_test() {
 		reference like foo.MyCreateGone that is not a call of ours.
 		CreateReal xSetSkipped CreateGone AddReal trails a rejected match.
 		CreateDeployment_Gone is not CreateDeployment.
+		Qualified `pkgname.CreateGone` keeps its selector; a bare .CreateReal does not.
+		The generic `kube.Create[T]` reduces to the declared name Create.
+		Python `ClassVar[Set[PatchType]]` is type syntax and names no builder.
 	EOF
 	cat >"$d/skipped.md" <<-'EOF'
 		There is no `CreateGone`. <!-- doc-api-refs:ignore removed -->
@@ -182,9 +221,31 @@ self_test() {
 		<!-- doc-api-refs:ignore-end -->
 	EOF
 
+	# The package-scoping tree: CreateLayoutWithResources survives in argocd and
+	# has been removed from fluxcd, which is the shape a name-only symbol set
+	# cannot see. qualified.md names both packages explicitly and must split.
+	# The two package READMEs name the method the way this repository really does
+	# -- through a selector that is a variable, indistinguishable from an import
+	# alias -- and must both resolve: they pin the decision recorded above
+	# report_unresolved, so re-adding a page-package rule breaks the self-test
+	# instead of quietly failing correct pages.
+	mkdir -p "$d/docs" "$d/pkg/stack/fluxcd" "$d/pkg/stack/argocd"
+	cat >"$d/docs/qualified.md" <<-'EOF'
+		Both `argocd.CreateLayoutWithResources` and `fluxcd.CreateLayoutWithResources`.
+	EOF
+	cat >"$d/pkg/stack/fluxcd/README.md" <<-'EOF'
+		`engine.CreateLayoutWithResources(cluster, rules)` builds the layout.
+	EOF
+	cat >"$d/pkg/stack/argocd/README.md" <<-'EOF'
+		`engine.CreateLayoutWithResources(cluster, rules)` builds the layout.
+	EOF
+
 	local got
 	# Line 3 pins the offset arithmetic: a rejected match between two accepted
-	# ones must not consume the rest of the line. Line 4 pins the underscore.
+	# ones must not consume the rest of the line. Line 4 pins the underscore,
+	# line 5 the selector capture (and that a dot with no identifier before it
+	# yields none), line 6 the generic bracket form, line 7 that the bracket form
+	# is ignored without one -- it emits nothing at all.
 	local want='plain.md:1:CreateGone
 plain.md:1:CreateReal
 plain.md:3:CreateReal
@@ -192,6 +253,9 @@ plain.md:3:CreateGone
 plain.md:3:AddReal
 plain.md:4:CreateDeployment_Gone
 plain.md:4:CreateDeployment
+plain.md:5:pkgname.CreateGone
+plain.md:5:CreateReal
+plain.md:6:kube.Create
 skipped.md:2:CreateGone
 skipped.md:4:CreateReal
 fenced.md:4:CreateReal'
@@ -227,15 +291,38 @@ fenced.md:4:CreateReal'
 	# A name absent from the symbol set must be reported; one present must not.
 	# CreateDeployment is in the set and CreateDeployment_Gone is not, so the
 	# suffix must survive extraction or the fourth line resolves wrongly.
-	printf 'AddReal\nCreateDeployment\nCreateReal\n' >"$symbols"
+	cat >"$symbols" <<-'EOF'
+		pkg/kubernetes Create
+		pkg/stack/argocd CreateLayoutWithResources
+		pkg/stack/fluxcd AddReal
+		pkg/stack/fluxcd CreateDeployment
+		pkg/stack/fluxcd CreateReal
+	EOF
+	printf 'pkg/kubernetes\npkg/stack/argocd\npkg/stack/fluxcd\n' >"$pkgdirs"
+	printf 'AddCommand\n' >"$external"
+
 	extract_refs "$d/plain.md" | sort -u >"$referenced"
 	local unresolved
+	# `pkgname` and `kube` name no package, so both fall back to the whole tree:
+	# CreateGone is nowhere in it, Create is.
 	local want_unresolved='plain.md:1:CreateGone
 plain.md:3:CreateGone
-plain.md:4:CreateDeployment_Gone'
+plain.md:4:CreateDeployment_Gone
+plain.md:5:pkgname.CreateGone'
 	unresolved=$(report_unresolved | sed "s#^$d/##")
 	if [ "$unresolved" != "$want_unresolved" ]; then
 		printf 'self-test: resolution mismatch\nwant:\n%s\ngot:\n%s\n' "$want_unresolved" "$unresolved" >&2
+		failures=$((failures + 1))
+	fi
+
+	# The same name on three pages: the spelling that names the package it was
+	# removed from is the only one that fails. A flat name set passes all three.
+	extract_refs "$d/docs/qualified.md" "$d/pkg/stack/fluxcd/README.md" \
+		"$d/pkg/stack/argocd/README.md" | sort -u >"$referenced"
+	local want_scoped='docs/qualified.md:1:fluxcd.CreateLayoutWithResources'
+	unresolved=$(report_unresolved | sed "s#^$d/##")
+	if [ "$unresolved" != "$want_scoped" ]; then
+		printf 'self-test: package-scope mismatch\nwant:\n%s\ngot:\n%s\n' "$want_scoped" "$unresolved" >&2
 		failures=$((failures + 1))
 	fi
 
@@ -246,18 +333,68 @@ plain.md:4:CreateDeployment_Gone'
 	printf 'check-doc-api-refs --self-test: ok\n'
 }
 
-# Every row in $referenced whose identifier is absent from $symbols. Exits 0 when
-# it printed at least one row, so it reads as `if unresolved=$(report_unresolved)`.
+# Every row in $referenced that does not resolve, given where the row was written.
+# Exits 0 when it printed at least one row, so it reads as
+# `if unresolved=$(report_unresolved)`.
+#
+# Two rules:
+#
+#   qualified `pkg.Name`, where pkg is the base name of a directory under pkg/
+#       -> Name must be declared in a package with that base name
+#   anything else
+#       -> Name must be declared somewhere under pkg/
+#
+# The first rule is what makes a removal in one package fail a page that names
+# that package, even while a same-named declaration survives elsewhere.
+#
+# It is deliberately not extended to unqualified names on a package's own README.
+# That rule is not decidable from the text and was measured against this tree: a
+# package README legitimately names a neighbour's builder both in prose
+# (pkg/stack/fluxcd/README.md's SetGitRepositoryReference, declared in
+# pkg/kubernetes/fluxcd) and inside its own Go examples through an import alias
+# (the same file's pubfluxcd.CreateGitRepository), and an alias is spelled exactly
+# like the variable receiver in engine.CreateLayoutWithResources two code blocks
+# later. Failing on those would buy one more catchable removal and cost three
+# suppressions on pages that are correct, which is a worse check.
 report_unresolved() {
-	local row name found=1
-	while IFS= read -r row; do
-		[ -n "$row" ] || continue
-		name=${row##*:}
-		grep -qxF "$name" "$symbols" && continue
-		printf '%s\n' "$row"
-		found=0
-	done <"$referenced"
-	return "$found"
+	awk -v symfile="$symbols" -v dirfile="$pkgdirs" -v extfile="$external" '
+		FILENAME == symfile {
+			names[$2] = 1
+			base = $1
+			sub(/.*\//, "", base)
+			bybase[base " " $2] = 1
+			next
+		}
+		FILENAME == dirfile {
+			base = $0
+			sub(/.*\//, "", base)
+			pkgbase[base] = 1
+			next
+		}
+		FILENAME == extfile { ext[$0] = 1; next }
+		{
+			n = split($0, p, ":")
+			if (n < 3) next
+			ref = p[n]
+
+			qual = ""
+			name = ref
+			i = index(ref, ".")
+			if (i > 0) { qual = substr(ref, 1, i - 1); name = substr(ref, i + 1) }
+
+			if (name in ext) next
+			if (qual != "" && (qual in pkgbase)) {
+				if ((qual " " name) in bybase) next
+				print
+				found = 1
+				next
+			}
+			if (name in names) next
+			print
+			found = 1
+		}
+		END { exit !found }
+	' "$symbols" "$pkgdirs" "$external" "$referenced"
 }
 
 if [ "${1:-}" = "--self-test" ]; then
@@ -265,16 +402,33 @@ if [ "${1:-}" = "--self-test" ]; then
 	exit
 fi
 
-# Exported functions and methods declared in the public tree. Test files count:
-# a symbol that only exists in a _test.go file is not importable, and no page may
-# cite one, so they are excluded.
-find pkg -name '*.go' ! -name '*_test.go' -print0 |
-	xargs -0 grep -hoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' |
-	sed -E 's/^func (\([^)]*\) )?//' |
+# Exported functions and methods declared in the public tree, each paired with
+# the package directory that declares it. Test files count: a symbol that only
+# exists in a _test.go file is not importable, and no page may cite one, so they
+# are excluded.
+#
+# -H is not optional. Without it grep omits the file name whenever xargs hands it
+# a single path, which happens for the last batch of a long list -- the rows would
+# then lose the package half of the pair for an arbitrary tail of the tree.
+go_files=$(find pkg -name '*.go' ! -name '*_test.go' -type f)
+printf '%s\n' "$go_files" | sed 's#/[^/]*$##' | sort -u >"$pkgdirs"
+printf '%s\n' "$go_files" | tr '\n' '\0' |
+	xargs -0 grep -HoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' |
+	sed -E 's#/[^/]*\.go:func (\([^)]*\) )?# #' |
 	sort -u >"$symbols"
 
-printf '%s\n' "${EXTERNAL[@]}" >>"$symbols"
-sort -u -o "$symbols" "$symbols"
+printf '%s\n' "${EXTERNAL[@]}" >"$external"
+
+for _list in go_files symbols pkgdirs external; do
+	case "$_list" in
+	go_files) [ -n "$go_files" ] && continue ;;
+	*) [ -s "${!_list}" ] && continue ;;
+	esac
+	printf 'check-doc-api-refs: %s is empty -- refusing to resolve against nothing\n' \
+		"$_list" >&2
+	exit 1
+done
+unset _list
 
 # Live pages: everything the site publishes, plus the repository-root and docs/
 # trees a reader browses on GitHub without the site.
@@ -293,7 +447,12 @@ sort -u -o "$symbols" "$symbols"
 # short of every mapped page while the run still reported "all resolved" -- the
 # fail-open this script exists to prevent. An empty result is treated the same
 # way, since a yq that succeeds against a restructured map yields nothing.
-docs_pages=$(find README.md docs site/content -name '*.md' -type f)
+#
+# examples/ is a find root of its own rather than left to the map: the map mounts
+# one example README, and the rest are advertised as runnable, so a removed
+# symbol surviving in examples/getting-started is exactly as misleading as one on
+# the site.
+docs_pages=$(find README.md docs examples site/content -name '*.md' -type f)
 # The package READMEs are the API-reference pages the site mounts, so they are
 # exactly the pages a stale call hurts most.
 pkg_pages=$(find pkg -name 'README.md' -type f)
@@ -319,8 +478,9 @@ while IFS= read -r page; do
 done < <(printf '%s\n%s\n%s\n' "$docs_pages" "$pkg_pages" "$map_pages" | sed 's#^\./##' | sort -u)
 
 if [ "${1:-}" = "--list" ]; then
-	printf 'symbols: %s\n' "$(wc -l <"$symbols")"
-	printf 'pages:   %s\n' "${#pages[@]}"
+	printf 'declarations: %s\n' "$(wc -l <"$symbols")"
+	printf 'packages:     %s\n' "$(wc -l <"$pkgdirs")"
+	printf 'pages:        %s\n' "${#pages[@]}"
 	exit 0
 fi
 
@@ -331,12 +491,15 @@ if unresolved=$(report_unresolved); then
 	while IFS= read -r row; do printf '  %s\n' "$row" >&2; done <<<"$unresolved"
 	cat >&2 <<-'EOF'
 
-		Each row is a page naming a function no longer in the public API. Fix the page
-		-- the replacement expression for every function the builder-contract epic
-		removed is in docs/builder-contract-release-1.md. If the reference is
-		deliberate (a dated record, or a third-party API that happens to match the
-		Create/Set/Add shape), add the page to EXCLUDED_PAGES or the name to EXTERNAL
-		in scripts/check-doc-api-refs.sh, with the reason.
+		Each row is a page naming a function that is not in the public API where the
+		page says it is. A row written `pkg.Name` was resolved in the package that
+		selector names, so it can appear because the name lives in another package
+		rather than because it was deleted. Fix the page -- the replacement
+		expression for every function the builder-contract epic removed is in
+		docs/builder-contract-release-1.md. If the reference is deliberate (a dated
+		record, or a third-party API that happens to match the Create/Set/Add shape),
+		add the page to EXCLUDED_PAGES or the name to EXTERNAL in
+		scripts/check-doc-api-refs.sh, with the reason.
 	EOF
 	exit 1
 fi
