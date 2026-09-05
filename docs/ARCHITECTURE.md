@@ -863,7 +863,26 @@ func TestCreateNewKind(t *testing.T) {
 }
 ```
 
+That is the namespaced form. The generator writes the wrapper's signature from the scope it
+derived, so a cluster-scoped kind gets a one-argument constructor and the test above does not
+compile against it:
+
+```go
+func TestCreateNewKind(t *testing.T) {
+    obj := CreateNewKind("test")        // cluster-scoped: no namespace parameter
+
+    if obj.Name != "test" || obj.Namespace != "" {
+        t.Errorf("identity: got %s/%s", obj.Namespace, obj.Name)
+    }
+    // TypeMeta and spec assertions are the same as above.
+}
+```
+
 <!-- doc-api-refs:ignore-end -->
+
+The scope assertion is worth making in both forms: a namespace on a cluster-scoped object is the
+failure the whole scope-derivation chain exists to prevent, and it is invisible until the API
+server rejects the manifest.
 
 The last assertion is the one that matters: a constructor that starts setting spec values is the
 regression this contract exists to prevent.
@@ -881,8 +900,14 @@ after generation has already succeeded, which reads as a generator failure and i
   `bash site/scripts/gen-docs-tables.sh`; run that and commit its output rather than editing either
   by hand.
 
-Adding a kind to a family kure already covers needs none of this — the package is already mapped,
-and step 2's regenerated tables carry the new kind.
+Adding a kind to a family kure already covers needs no new mapping — the package is already mapped,
+and step 2's regenerated tables carry the new kind — but it is not free of documentation work.
+Regeneration inserts a constructor into that package's `zz_generated_create.go`, and `doc-gate`
+requires mapped code that changed to be paired with a change to its mapped docs: the family README,
+or the guide the map names for it (`guides/library-usage` for every `pkg/kubernetes/<family>`).
+A newly inserted generated line is never treated as trivial, so the generated kinds table being
+current does not settle it. Say what the new kind is for in the family README, in a sentence, and
+the gate is satisfied by the thing that should have happened anyway.
 
 ```bash
 bash site/scripts/gen-docs-tables.sh
