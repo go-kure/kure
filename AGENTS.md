@@ -247,20 +247,24 @@ contracts rather than consumer-specific types, identifiers, or documentation.
 ### Flux Integration
 
 ```go
-ks := fluxcd.CreateKustomization("app", "default", kustv1.KustomizationSpec{
-    Path: "./manifests",
-    SourceRef: kustv1.CrossNamespaceSourceReference{
-        Kind: "GitRepository",
-        Name: "repo",
-    },
-})
+ks := fluxcd.CreateKustomization("app", "default")
+ks.Spec.Path = "./manifests"
+ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
+    Kind: "GitRepository",
+    Name: "repo",
+}
 ```
 
 ### ArgoCD Integration
 
 ```go
-wf := argocd.NewWorkflow()
-apps, err := wf.Cluster(cluster)
+// The provider registers itself from its init, so the package has to be
+// imported: import _ "github.com/go-kure/kure/pkg/stack/argocd"
+wf, err := stack.NewWorkflow("argocd")
+if err != nil {
+    return err
+}
+apps, err := wf.GenerateFromCluster(cluster)
 ```
 
 ### Layout Generation
