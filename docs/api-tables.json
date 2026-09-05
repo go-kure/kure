@@ -305,7 +305,7 @@
       "goType": "ObjectStore",
       "importPath": "github.com/cloudnative-pg/plugin-barman-cloud/api/v1",
       "module": "github.com/cloudnative-pg/plugin-barman-cloud",
-      "moduleVersion": "v0.14.0",
+      "moduleVersion": "v0.15.0",
       "namespaced": true,
       "scopeSource": "crd"
     },
