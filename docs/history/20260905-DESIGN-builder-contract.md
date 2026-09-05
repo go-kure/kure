@@ -193,5 +193,6 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   that keeps the example compiling can leave the comment beside it stale.
 
   These three are the same shape as the exclusions above: the check is a floor, not a proof. They
-  are filed as #770 rather than fixed here — this ticket's subject is the documentation, and the
-  checker had already taken four hardening rounds by the time they surfaced.
+  are filed as go-kure/kure#770 (checker false negatives) rather than fixed here — this ticket's
+  subject is the documentation, and the checker had already taken four hardening rounds by the time
+  they surfaced.
