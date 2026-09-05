@@ -19,48 +19,46 @@ When working on Kure, load these files for context:
 - `DEVELOPMENT.md` - Development workflow documentation
 - `go.mod` - Dependencies and module path
 
-### Code Generation Patterns
+### Builder Patterns
 
-When generating resource builders:
+**Do not hand-write a constructor.** `Create<Kind>` is generated from the registered scheme into
+`pkg/kubernetes/<family>/zz_generated_create.go` and emits `apiVersion`, `kind`, `metadata.name`
+and — for a namespaced kind — `metadata.namespace`, and nothing else. Register the scheme and
+run `mise run builders:generate`.
 
-```go
-// internal/<package>/<resource>.go
-package <package>
+Write a `Set*`/`Add*` helper only where the write falls into one of the three admitted classes —
+appends to a slice or inserts into a map, assigns a pointer-typed field or initialises a nil
+pointer intermediate, or composes an upstream struct under a name that states the opinion.
+Everything else is the caller's own field assignment (`obj.Spec.Field = value`), and
+`pkg/kubernetes/admission_test.go` fails the build on a helper that fits no class. The four
+generic metadata helpers (`SetLabels`, `AddLabel`, `SetAnnotations`, `AddAnnotation`) are admitted
+by name; that set never grows.
 
-// Create<ResourceType> creates a new <resource> with required fields
-func Create<ResourceType>(name, namespace string) *<Type> {
-    return &<Type>{
-        ObjectMeta: metav1.ObjectMeta{
-            Name:      name,
-            Namespace: namespace,
-        },
-    }
-}
-
-// Add<ResourceType><Field> adds a <field> to the <resource>
-func Add<ResourceType><Field>(obj *<Type>, ...) {
-    // Implementation
-}
-
-// Set<ResourceType><Field> sets a <field> on the <resource>
-func Set<ResourceType><Field>(obj *<Type>, ...) {
-    // Implementation
-}
-```
+The normative contract is `pkg/kubernetes/README.md`; the procedure for adding a kind is
+`docs/ARCHITECTURE.md` § Developer Guidelines.
 
 ### Testing Pattern
 
-Always create comprehensive tests:
+Compare the whole object, not a few of its fields — "identity and nothing else" is a claim about
+everything the constructor did not write:
 
 ```go
-func TestCreate<ResourceType>(t *testing.T) {
-    obj := Create<ResourceType>("test", "default")
-    if obj == nil {
-        t.Fatal("expected non-nil object")
+func TestCreateNewKind(t *testing.T) {
+    got := CreateNewKind("test", "default")
+
+    want := &v1.NewKind{}
+    want.GetObjectKind().SetGroupVersionKind(
+        schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "NewKind"})
+    want.SetName("test")
+    want.SetNamespace("default")
+
+    if !reflect.DeepEqual(got, want) {
+        t.Errorf("constructor emitted more than identity:\n got %#v\nwant %#v", got, want)
     }
-    // Validate required fields...
 }
 ```
+
+`pkg/kubernetes/identity_test.go` already asserts this for every registered kind.
 
 ### Error Handling
 

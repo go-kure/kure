@@ -497,9 +497,17 @@ admitted:
 | Composite | Writes several fields that belong together, and names the opinion | `SetHPAMinMaxReplicas`, `AddHPACPUMetric` |
 
 `pkg/kubernetes/admission_test.go` parses every exported `Set*`/`Add*` in the tree with `go/ast`
-and fails on one that fits none of the three. Constructors are outside its remit — `Create*` is not
-sugar, and the generator is what keeps those honest. The exclusion list the test once carried is
-empty and stays empty, so the classes are enforced rather than merely documented.
+and fails on one that fits none of the three, with one exception that is four names rather than a
+rule: `SetLabels`, `AddLabel`, `SetAnnotations` and `AddAnnotation` write through the
+`metav1.Object` interface rather than into a field, so they match no write shape and the classifier
+admits them by name as a fourth outcome (`Exempt`). That is what lets one metadata helper set cover
+every kind, including kinds kure does not register; the normative statement is
+[Kubernetes Builders](https://www.gokure.dev/kure/api-reference/kubernetes-builders/) §5. It is a
+fixed set, not an exclusion list — it never grows.
+
+Constructors are outside the test's remit — `Create*` is not sugar, and the generator is what keeps
+those honest. The exclusion list the test once carried is empty and stays empty, so the classes are
+enforced rather than merely documented.
 
 ### Type Safety Guarantees
 
@@ -826,7 +834,8 @@ adding is itself a Kubernetes built-in.
 
 A helper must be an appender, a pointer/nil-init setter, or a named composite (see
 [Kubernetes Foundation](#kubernetes-foundation)). Anything else is a bare assignment and
-`admission_test.go` will reject it:
+`admission_test.go` will reject it — the four generic metadata helpers it admits by name are a
+fixed set and not a precedent to argue from:
 
 <!-- doc-api-refs:ignore-start NewKind is a placeholder for the kind being added -->
 
@@ -1453,7 +1462,7 @@ func assertError(t *testing.T, err error, expectedType errors.ErrorType) {
 
 **Kubernetes foundation**: `pkg/kubernetes` and its per-CRD subpackages — the registered scheme, `Create[T]` and its generated per-kind wrappers, the admissible sugar helpers, and the generated kinds/scope/maturity tables.
 
-**Admissible sugar**: A `Set*`/`Add*` helper whose write falls into one of three classes — appends to a slice or inserts into a map, assigns a pointer-typed field or initialises a nil pointer intermediate, or writes several fields under a name that states the opinion. Anything else is not part of the builder contract.
+**Admissible sugar**: A `Set*`/`Add*` helper whose write falls into one of three classes — appends to a slice or inserts into a map, assigns a pointer-typed field or initialises a nil pointer intermediate, or writes several fields under a name that states the opinion — plus the four generic metadata helpers (`SetLabels`, `AddLabel`, `SetAnnotations`, `AddAnnotation`), which write through `metav1.Object` and are admitted by name. Anything else is not part of the builder contract.
 
 **Constructor**: `Create<Kind>(name[, namespace])` — returns an object carrying `apiVersion`, `kind` and identity, and nothing else. Generated from the registered scheme.
 
