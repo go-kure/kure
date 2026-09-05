@@ -1268,8 +1268,8 @@ pkg/
 └── ...
 ```
 
-CI enforces a repository floor of 90% statement coverage and a per-package threshold on top of it,
-so a new package cannot be added under the floor.
+CI enforces a repository floor of 90% statement coverage and the same 90% for every package outside
+`examples/`, so a new package cannot be added under the floor.
 
 ### Testing Patterns
 
