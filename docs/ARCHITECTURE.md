@@ -787,9 +787,18 @@ You do not write a constructor. Register the kind's scheme and the constructor i
 
 #### 1. Register the type's scheme
 
-Add the module's `AddToScheme` to the list in `pkg/kubernetes/scheme.go`. For a CRD family kure does
-not yet cover, add the subpackage first (`pkg/kubernetes/<family>/`), following the shape of an
-existing one.
+Add the module's `AddToScheme` to the list in `pkg/kubernetes/scheme.go`. For a kind whose family
+kure already covers, that is the whole step.
+
+A family kure does not yet cover needs two more things, because the generator has to know which
+subpackage the wrapper belongs in:
+
+- the subpackage itself (`pkg/kubernetes/<family>/`), following the shape of an existing one;
+- a row in `packageRoutes` (`pkg/kubernetes/internal/kinds/kinds.go`) mapping the upstream module's
+  import-path prefix to that subpackage name. An unrouted import path is not a silent miss — the
+  classifier refuses the whole run with `no kure package routes import path <path>` — but nothing
+  routes a new vendor prefix by default, so the row is part of adding the family rather than a
+  later fix.
 
 #### 2. Regenerate
 
