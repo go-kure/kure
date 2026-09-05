@@ -657,7 +657,7 @@
       "goType": "BackendTLSPolicy",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -668,7 +668,7 @@
       "goType": "GRPCRoute",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -679,7 +679,7 @@
       "goType": "Gateway",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -690,7 +690,7 @@
       "goType": "GatewayClass",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -701,7 +701,7 @@
       "goType": "HTTPRoute",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -712,7 +712,7 @@
       "goType": "ListenerSet",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -723,7 +723,7 @@
       "goType": "ReferenceGrant",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -734,7 +734,7 @@
       "goType": "TCPRoute",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -745,7 +745,7 @@
       "goType": "TLSRoute",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -756,7 +756,7 @@
       "goType": "UDPRoute",
       "importPath": "sigs.k8s.io/gateway-api/apis/v1",
       "module": "sigs.k8s.io/gateway-api",
-      "moduleVersion": "v1.6.1",
+      "moduleVersion": "v1.6.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
