@@ -51,6 +51,13 @@ conventional_commits = true
 filter_unconventional = true
 split_commits = false
 commit_parsers = [
+    # Breaking changes first: parsers are evaluated in order and the first match
+    # wins, so this must precede ^feat/^fix/^refactor or a `refactor(x)!:` commit
+    # is claimed by ^refactor and loses its marker. The `<!-- 0 -->` prefix is a
+    # sort key, not output — the body template already pipes the group name
+    # through `striptags`, and `<` sorts before every letter, so the section
+    # renders as `### Breaking` and appears first.
+    { message = "^[a-z]+(\\(.+\\))?!:", group = "<!-- 0 -->Breaking" },
     { message = "^feat", group = "Added" },
     { message = "^fix", group = "Fixed" },
     { message = "^doc", group = "Documentation" },
