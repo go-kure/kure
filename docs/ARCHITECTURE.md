@@ -1519,8 +1519,9 @@ For migrating from previous versions:
 The builder contract removed the constructor defaults and the bare field forwarders. This is a
 breaking change for callers that relied on either, and it is the one migration this release asks
 for. Every removed function is listed with the expression that replaces it, grouped by package, in
-[the release-1 migration notes](/concepts/builder-contract-release-1/); the rewrite is mechanical
-and never changes behaviour. Three things are not mechanical, and all three are called out there:
+[the release-1 migration notes](/concepts/builder-contract-release-1/). Three of those replacements
+change what the caller emits; every other one is mechanical and emits the same YAML the helper did.
+The three, all called out in the notes as well:
 
 - A constructor no longer injects `app: <name>` labels or a per-kind spec default.
 - The removal of the container constructor takes a resource reservation with it.

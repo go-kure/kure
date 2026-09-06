@@ -213,8 +213,9 @@ You do not write a constructor. Register the kind's scheme and the constructor i
    pointer or nil-init, named composite). Everything else is the caller's field assignment
 4. Test the constructed object whole — `reflect.DeepEqual` against an object carrying GVK, name and
    (for a namespaced kind) namespace, so "identity and nothing else" is actually asserted
-5. Touch the family README or the guide the docs map names for it: a newly generated constructor is
-   never a trivial change to the doc gate
+5. Update the family README **and** every guide the reverse mapping lists for it, per the rule
+   below — the doc gate only demands one of them, but the rule is both, and a newly generated
+   constructor is never a trivial change to the gate
 
 Full procedure, with the scope-derivation failure modes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 § Developer Guidelines. The normative contract is [`pkg/kubernetes/README.md`](pkg/kubernetes/README.md).
