@@ -803,9 +803,12 @@ fi
 # the emptiness guard below could say why. It is latent rather than live -- the
 # list is one batch at this tree's size -- but the failure it would produce is a
 # bare exit status with no message, so it is worth closing while it is cheap.
-# 123 also covers a real grep error inside a batch, so the guard below stays the
-# backstop for a scan that produced nothing; every other xargs status still
-# aborts, which is what the third probe case asserts.
+# The tolerance cannot be finer than xargs allows: 123 also covers grep exiting
+# 2 on an unreadable file, because xargs collapses every child status in 1-125
+# into it. The guard below is the backstop for a scan that produced nothing, and
+# the resolution step after it for one that produced too little. Every other
+# xargs status -- 1 for its own errors, 126 cannot-run, 127 not-found -- still
+# aborts, which is the difference between this and `|| true`.
 scan_symbols() {
 	xargs -0 grep -HoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' || [ "$?" -eq 123 ]
 }
