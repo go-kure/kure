@@ -68,6 +68,14 @@ cj.Spec.Schedule = "*/5 * * * *"
 cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 ```
 
+The two differ in reach, and the difference matters when judging whether you are
+affected. Every caller of `CreateDaemonSet`, `CreateDeployment` and `CreateStatefulSet`
+lost the selector — there was no way to build one of those objects that did not depend
+on it. The CronJob restart policy is narrower: `SetCronJobPodSpec` assigned the whole
+pod spec (`cron.Spec.JobTemplate.Spec.Template.Spec = *spec`), so a caller who set the
+pod template that way had already lost the injected `Never` before this release. Only
+callers who mutated the template in place still had it.
+
 These are the removals known to produce a rejected object, not a full admission audit
 of every kind — a manifest still has to satisfy the rest of its own schema.
 
