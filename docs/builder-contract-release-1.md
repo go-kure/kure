@@ -74,6 +74,16 @@ one is worth less than no citation, because it looks checked.
 
 #### Rejected by the API server
 
+**What "rejected" rests on, so the standard is visible.** Each row below is rejected
+because the *type* declares the field required and supplies no default. The validating
+code that performs the refusal lives in `k8s.io/kubernetes`, which is not a dependency of
+this repository — the same absence that leaves the PVC storage request and
+`automountServiceAccountToken` marked **unsettled** further down. The difference is what
+the pinned types settle on their own: a required field with no default is refused on any
+conformant API server, whereas "is a storage request required" is a validation policy the
+types do not state. Disclosing this for two rows and not the others would make the
+undisclosed ones look better established than they are.
+
 **`spec.selector`** on `CreateDaemonSet`, `CreateDeployment` and `CreateStatefulSet`
 is marked `+required` with no server-side default — `k8s.io/api@v0.37.0`
 `apps/v1/types.go:212`, and the field carries `json:"selector"` with no `omitempty`
@@ -146,7 +156,8 @@ IngressClass resource has this annotation set to true, new Ingress resources wit
 class specified will be assigned this default class."* (`networking/v1/types.go:562-566`).
 So the Ingress is silently
 adopted by whatever controller owns the cluster's default class, which may not be the
-one you meant, or by none if no default exists:
+one you meant. What happens when no default class exists is not stated by the type and
+is not claimed here:
 
 ```go
 ing.Spec.IngressClassName = ptr.To("nginx")
@@ -167,6 +178,40 @@ selection you built around it quietly stops working.
 ```go
 job.Spec.Template.Labels = map[string]string{"app": name}
 ```
+
+**The object's own `app` label and annotation** are gone too, and this one is not
+confined to the pod-template kinds: *every* one of the fifteen core constructors set both
+`metadata.labels.app: <name>` and `metadata.annotations.app: <name>` on the object it
+returned. For `CreateHorizontalPodAutoscaler` and `CreatePodDisruptionBudget` it was the
+*only* injected default, which is why those two appear in the table with nothing else
+against them. The four CRD constructors — `CreateServiceMonitor`, `CreatePodMonitor`,
+`CreatePrometheusRule`, `cilium.CreateCiliumCIDRGroup` — never did it, and neither did
+the RBAC constructors, which were already identity-only. Restore it where you relied on
+it:
+
+```go
+kubernetes.AddLabel(obj, "app", name)
+kubernetes.AddAnnotation(obj, "app", name)
+```
+
+The consequence is the same shape as the pod-template label — anything selecting the
+object by `app: <name>` stops matching it — but how much that costs depends on the kind,
+and for most kinds nothing in the pinned types does such selecting. **`CreateNamespace`
+is the exception the types do settle**: namespace labels are a first-class selector
+surface, *"namespaceSelector selects namespaces using cluster-scoped labels"*
+(`networking/v1/types.go:209-210`), so a Namespace that quietly dropped `app: <name>`
+falls out of every NetworkPolicy peer that selected it. That row is **silent** for this
+reason alone; without it, it would be `no-op`.
+
+For the remaining kinds the table leaves the class where the object's other removals put
+it, and this removal is named in the row without changing it. That is a deliberate
+limit, not an oversight: whether a ConfigMap or a Service is selected by `app: <name>` is
+a fact about your cluster, not about these types. The nearest case that looks settleable
+is not — a ServiceMonitor selects `Endpoints` objects and *"in most cases, an Endpoints
+object is backed by a … Service object with the same name and labels"*
+(`servicemonitor_types.go:99,103`), but that label copying is done by a controller in
+`k8s.io/kubernetes`, and the sentence hedges. If you select any of these objects by
+label, treat your own case as **silent**.
 
 #### Renders `null` where it used to render `[]`
 
@@ -228,19 +273,21 @@ fixing the rejection is exactly when they start to apply.
 
 | Constructor | Class | Removed default |
 |---|---|---|
-| `CreateConfigMap` | no-op | `data` and `binaryData` initialised to empty maps. Both carry `omitempty`, so the manifest is unchanged — but a fresh object accepted `cm.Data[k] = v` directly and both are now nil, so that assignment **panics**. Write through `AddConfigMapData`/`AddConfigMapBinaryData` (which nil-init), or assign a map literal first (`cm.Data = map[string]string{...}`) |
-| `CreateCronJob` | **rejected** | **`spec.schedule` from the third argument (required, see above)**; **`spec.jobTemplate.spec.template.spec.restartPolicy: Never` (required, see above)**; `spec.jobTemplate.spec.template.metadata.labels.app: <name>` (**silent** — the Job controller supplies its own selector, so only external selection breaks) |
-| `CreateDaemonSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>` |
-| `CreateDeployment` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>` |
-| `CreateHTTPRoute` | no-op | empty `spec.hostnames` and `spec.rules` slices — both `omitempty`, so no output change |
-| `CreateIngress` | **silent** | **`spec.ingressClassName` from the third argument — the Ingress is adopted by the cluster's default IngressClass, see above**; empty `spec.rules` and `spec.tls` slices (`omitempty`, no output change) |
-| `CreateJob` | **silent** | `spec.template.metadata.labels.app: <name>` — the object stays valid, but anything selecting `app: <name>` stops matching its pods, see above |
-| `CreateNamespace` | no-op | empty `spec.finalizers` slice — `omitempty`, no output change |
-| `CreateNetworkPolicy` | **silent** | **`spec.podSelector.matchLabels.app: <name>` (rescopes the policy to the whole namespace, see above)**; empty `spec.policyTypes`, `spec.ingress` and `spec.egress` slices (all `omitempty`, no output change — unlike `podSelector`, which has none) |
-| `CreatePersistentVolumeClaim` | **unsettled** | **`spec.resources.requests.storage: 1Gi` — unsettled, see above**; `spec.volumeMode: Filesystem` (no-op — upstream: *"Value of Filesystem is implied when not included in claim spec"*); empty `spec.accessModes` slice (no-op — an empty list satisfied no requirement either) |
-| `CreateService` | no-op | empty `spec.selector` map and `spec.ports` slice — both `omitempty`, and an empty selector meant "no selector" exactly as nil does |
-| `CreateServiceAccount` | **unsettled** | **`automountServiceAccountToken: false` (a pointer to `false`, serialised) — unsettled, see above.** The field is now unset and the effective value comes from the cluster, so if you relied on the injected `false`, restore it with `SetServiceAccountAutomountToken(sa, false)`; empty `secrets` and `imagePullSecrets` slices (`omitempty`, no output change) |
-| `CreateStatefulSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, silent, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady` (no-op — upstream: *"The default policy is `OrderedReady`"*); empty `spec.volumeClaimTemplates` slice (`omitempty`, no output change) |
+| `CreateConfigMap` | no-op | `data` and `binaryData` initialised to empty maps. Both carry `omitempty`, so the manifest is unchanged — but a fresh object accepted `cm.Data[k] = v` directly and both are now nil, so that assignment **panics**. Write through `AddConfigMapData`/`AddConfigMapBinaryData` (which nil-init), or assign a map literal first (`cm.Data = map[string]string{...}`); the object's own `app` label and annotation |
+| `CreateCronJob` | **rejected** | **`spec.schedule` from the third argument (required, see above)**; **`spec.jobTemplate.spec.template.spec.restartPolicy: Never` (required, see above)**; `spec.jobTemplate.spec.template.metadata.labels.app: <name>` (**silent** — the Job controller supplies its own selector, so only external selection breaks); the object's own `app` label and annotation |
+| `CreateDaemonSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>`; the object's own `app` label and annotation |
+| `CreateDeployment` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>`; the object's own `app` label and annotation |
+| `CreateHorizontalPodAutoscaler` | no-op | the object's own `app` label and annotation — its only injected default |
+| `CreateHTTPRoute` | no-op | empty `spec.hostnames` and `spec.rules` slices — both `omitempty`, so no output change; the object's own `app` label and annotation |
+| `CreateIngress` | **silent** | **`spec.ingressClassName` from the third argument — the Ingress is adopted by the cluster's default IngressClass, see above**; empty `spec.rules` and `spec.tls` slices (`omitempty`, no output change); the object's own `app` label and annotation |
+| `CreateJob` | **silent** | `spec.template.metadata.labels.app: <name>` — the object stays valid, but anything selecting `app: <name>` stops matching its pods, see above; the object's own `app` label and annotation |
+| `CreateNamespace` | **silent** | **the object's own `app` label and annotation — a Namespace that dropped `app: <name>` falls out of every NetworkPolicy peer selecting it, see above**; empty `spec.finalizers` slice (`omitempty`, no output change) |
+| `CreateNetworkPolicy` | **silent** | **`spec.podSelector.matchLabels.app: <name>` (rescopes the policy to the whole namespace, see above)**; empty `spec.policyTypes`, `spec.ingress` and `spec.egress` slices (all `omitempty`, no output change — unlike `podSelector`, which has none); the object's own `app` label and annotation |
+| `CreatePersistentVolumeClaim` | **unsettled** | **`spec.resources.requests.storage: 1Gi` — unsettled, see above**; `spec.volumeMode: Filesystem` (no-op — upstream: *"Value of Filesystem is implied when not included in claim spec"*); empty `spec.accessModes` slice (no-op — an empty list satisfied no requirement either); the object's own `app` label and annotation |
+| `CreatePodDisruptionBudget` | no-op | the object's own `app` label and annotation — its only injected default |
+| `CreateService` | no-op | empty `spec.selector` map and `spec.ports` slice — both `omitempty`, and an empty selector meant "no selector" exactly as nil does; the object's own `app` label and annotation |
+| `CreateServiceAccount` | **unsettled** | **`automountServiceAccountToken: false` (a pointer to `false`, serialised) — unsettled, see above.** The field is now unset and the effective value comes from the cluster, so if you relied on the injected `false`, restore it with `SetServiceAccountAutomountToken(sa, false)`; empty `secrets` and `imagePullSecrets` slices (`omitempty`, no output change); the object's own `app` label and annotation |
+| `CreateStatefulSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, silent, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady` (no-op — upstream: *"The default policy is `OrderedReady`"*); empty `spec.volumeClaimTemplates` slice (`omitempty`, no output change); the object's own `app` label and annotation |
 | `prometheus.CreateServiceMonitor` | **unsettled** | empty `spec.endpoints` slice. `+required` with no `omitempty`, so this now renders **`null` instead of `[]`**; whether that is refused depends on a CRD schema not shipped here — see above (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints) |
 | `prometheus.CreatePodMonitor` | no-op | empty `spec.podMetricsEndpoints` slice. No `omitempty`, so this now renders **`null` instead of `[]`** — but the field is `+optional`, so a pruned `null` is simply an absent optional field, see above (also observable through `prometheus.PodMonitor(cfg)` with no endpoints) |
 | `prometheus.CreatePrometheusRule` | no-op | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
@@ -252,26 +299,48 @@ If you kept manifests rendered before this release and diff them against manifes
 rendered after, you get exactly three kinds of line. Knowing which is which is most of
 the migration:
 
-- **Values that vanish.** The field carries `omitempty` and is now empty, so the line is
-  simply gone: `replicas: 0` (look at this one twice — the `omitempty` sits on a
-  *pointer*, `apps/v1/types.go:207`, so an explicit zero was emitted and is now omitted
-  entirely), `volumeMode: Filesystem`, `podManagementPolicy: OrderedReady`,
+- **Values that vanish.** The *leaf* line is simply gone, because the field carries
+  `omitempty` and is now empty: `replicas: 0` (look at this one twice — the `omitempty`
+  sits on a *pointer*, `apps/v1/types.go:207`, so an explicit zero was emitted and is now
+  omitted entirely), `volumeMode: Filesystem`, `podManagementPolicy: OrderedReady`,
   `ingressClassName`, `restartPolicy: Never`, `automountServiceAccountToken: false`, and
-  the `app` label and annotation.
-- **Values that become `null`, `{}` or `""`.** A field *without* `omitempty` is emitted
-  whether or not it holds anything, so the line stays and the value degrades:
-  `spec.selector` on DaemonSet/Deployment/StatefulSet renders `null`
+  the object's own `app` label and annotation.
+- **Values that become `null`, `{}` or `""`.** The field is emitted whatever it holds, so
+  the line stays and the value degrades. Two different things put a field here — no
+  `omitempty` at all, or a **struct-typed** field, for which `omitempty` does nothing (see
+  below): `spec.selector` on DaemonSet/Deployment/StatefulSet renders `null`
   (`apps/v1/types.go:215`), NetworkPolicy's `spec.podSelector` renders `{}`
   (`networking/v1/types.go:69` — a value type, so the zero struct, not `null`), CronJob's
-  `spec.schedule` renders `""` (`batch/v1/types.go:794`), and the three CRD list fields
-  render `null` where they rendered `[]`.
+  `spec.schedule` renders `""` (`batch/v1/types.go:794`), the three CRD list fields
+  render `null` where they rendered `[]`, the PVC's `spec.resources` renders `{}`
+  (`core/v1/types.go:566`), the Ingress's whole `spec` renders `{}`
+  (`networking/v1/types.go:261`) now that the class name was its only content, and the
+  pod template's `metadata` renders `{}` on all five pod-template kinds
+  (`core/v1/types.go:5834`) now that the `app` label was its only content.
 - **Nothing at all** — for every other collection in the table. They carry `omitempty`,
   so nil and `[]`/`{}` serialise identically: the diff shows no line for them, not a
   shorter one.
 
-**The second group is the one to read.** A value that vanished is one you can put back at
-your leisure; a field that stayed and degraded is one the API server may refuse outright,
-and it is the group that maps onto the **rejected** class above.
+`null`, `{}` and `""` are the only degraded values **in this table**, not a general law:
+a field emitted regardless of content that happened to be numeric or boolean would
+degrade to `0` or `false`. None of the removed defaults is one.
+
+**Why a field with `omitempty` can still be emitted.** `omitempty` drops a field only
+when its value is *empty*, and Go defines that as "false, 0, a nil pointer, a nil
+interface value, and any array, slice, map, or string of length zero"
+(`encoding/json/encode.go:107-110`, Go 1.26.8). **A struct is not on that list**, so a
+struct-typed field is written out however empty it is — which is why
+`json:"resources,omitempty"`, `json:"spec,omitempty"` and `json:"metadata,omitempty"`
+all still produce a `{}`. Seven of the nineteen rows have a line of this kind, and
+reading the tag alone predicts the wrong group for every one of them. The repository's
+own fixture shows it already:
+`pkg/kubernetes/testdata/deployment-with-init-container.yaml` carries `strategy: {}`,
+`metadata: {}` and `resources: {}`.
+
+**Which group a line lands in tells you where to look, not what it costs.** The mapping
+is tempting in both directions and wrong in both: `restartPolicy: Never` vanishes and its
+absence is **rejected**, while `podMetricsEndpoints: null` degrades and is **no-op**. Use
+the diff to find the changed objects, then read the class in the table for each one.
 
 The other hand-written constructors (cert-manager, CloudNativePG, External Secrets,
 Flux, MetalLB, VolSync, the remaining Cilium kinds, RBAC) were already
