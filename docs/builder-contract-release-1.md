@@ -470,15 +470,28 @@ because it classifies kinds and a `Container` is not one.** The scheme still
 applies, so it is worth stating rather than leaving to a reader who only read
 the table: a container that lost its memory limit and its CPU and memory
 requests is a valid container that asks for nothing and is capped at nothing —
-the manifest is accepted and no controller reports the change. The pull policy
-splits, and the pinned type settles which way: *"Defaults to Always if `:latest`
-tag is specified, or IfNotPresent otherwise"* (`core/v1/types.go:3296`). For an
-image pinned to any other tag the effective value is `IfNotPresent` either way,
-so that removal is **no-op**; for an image on `:latest` it becomes `Always`, and
-the container is re-pulled on every start where it previously was not — **silent**
-by the same standard as the rest of this document. This is the one place where
-a single removed default lands in two different classes depending on a value the
-caller supplies.
+the manifest is accepted and no controller reports the change.
+
+The pull policy is different in kind, and worth stating carefully because it is
+the only removed default in this release whose class is **a property of the
+caller's input rather than of the default itself**. Every other row here can be
+classified from the removed value alone. This one cannot: the type documents
+*"Defaults to Always if `:latest` tag is specified, or IfNotPresent otherwise"*
+(`core/v1/types.go:3296`), so for an image carrying an explicit tag other than
+`:latest` the effective value is `IfNotPresent` either way and the removal is
+**no-op**, while for an image on `:latest` it becomes `Always` and the container
+is re-pulled on every start where it previously was not — **silent**.
+
+Two limits on that, both of which this document's own standard requires stating.
+The evidence is the pinned type's documented default, the same kind of evidence
+the `podManagementPolicy` and `volumeMode` rows rest on — but the defaulting
+itself is implemented in `k8s.io/kubernetes`, which is in neither `go.mod` nor
+`go.sum` here, so what can be read is a comment *about* the behaviour and not the
+behaviour. And the comment's `otherwise` is doing more work than it can be
+checked for: **an image written with no tag at all is not settled by that
+sentence**, and which branch it takes cannot be determined from this repository.
+If your images are untagged, treat this removal as **unsettled** and pin the
+policy explicitly rather than inferring it from the sentence above.
 
 `CreatePodSpec` set `RestartPolicy: Always`, a zero
 `TerminationGracePeriodSeconds` pointer, an empty `SecurityContext`, an empty
