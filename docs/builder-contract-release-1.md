@@ -86,7 +86,9 @@ obj.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": 
 obj.Spec.Template.Labels = map[string]string{"app": name}
 ```
 
-**`CreateCronJob` drops two.** `spec.schedule` is required with no default. The job
+**`CreateCronJob` drops two.** `spec.schedule` is required with no default, and carries
+no `omitempty` (`batch/v1/types.go:794`), so an unset schedule is not absent from the
+manifest — it is emitted as `schedule: ""`, which is what gets refused. The job
 pod's `restartPolicy` is `+optional` in the type and defaults to `Always`
 (`core/v1/types.go:4406`), but a Job's template does not permit that value — *"The only
 allowed `template.spec.restartPolicy` values are `Never` or `OnFailure`"*
@@ -244,20 +246,32 @@ fixing the rejection is exactly when they start to apply.
 | `prometheus.CreatePrometheusRule` | no-op | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
 | `cilium.CreateCiliumCIDRGroup` | **rejected** | empty `spec.externalCIDRs` slice. Required with `minItems: 0` and no `omitempty`, so this now renders **`null` instead of `[]`** — and Cilium's own bundled CRD makes the field non-nullable, so the `null` is pruned and the required field is then missing, see above (also observable through `cilium.CiliumCIDRGroup(cfg)` with no CIDRs) |
 
-**On empty collections specifically:** of the collections this release stopped
-initialising, exactly three lack `omitempty` upstream — the CRD fields called out above.
-Every other list and map field in the table has it, so nil and `[]`/`{}` serialise
-identically and a golden file of the old output shows **no difference at all** for those
-collections: not a smaller difference, none.
+#### What a golden file of the old output actually shows
 
-Read that as narrowly as it is written. It is a claim about collection initialisation,
-not about the rows as wholes. Several rows also dropped a **scalar**, and every one of
-those does change the emitted YAML: `spec.replicas: 0` (`apps/v1/types.go:207` — the
-`omitempty` sits on a *pointer*, so an explicit zero was emitted and is now omitted
-entirely), `spec.volumeMode`, `spec.podManagementPolicy`, `spec.ingressClassName`,
-`automountServiceAccountToken`. A golden-file diff of this release is therefore not
-empty. It is empty of *collection* changes — and the three CRD fields are the only place
-a collection change shows up at all, as `[]` → `null`.
+If you kept manifests rendered before this release and diff them against manifests
+rendered after, you get exactly three kinds of line. Knowing which is which is most of
+the migration:
+
+- **Values that vanish.** The field carries `omitempty` and is now empty, so the line is
+  simply gone: `replicas: 0` (look at this one twice — the `omitempty` sits on a
+  *pointer*, `apps/v1/types.go:207`, so an explicit zero was emitted and is now omitted
+  entirely), `volumeMode: Filesystem`, `podManagementPolicy: OrderedReady`,
+  `ingressClassName`, `restartPolicy: Never`, `automountServiceAccountToken: false`, and
+  the `app` label and annotation.
+- **Values that become `null`, `{}` or `""`.** A field *without* `omitempty` is emitted
+  whether or not it holds anything, so the line stays and the value degrades:
+  `spec.selector` on DaemonSet/Deployment/StatefulSet renders `null`
+  (`apps/v1/types.go:215`), NetworkPolicy's `spec.podSelector` renders `{}`
+  (`networking/v1/types.go:69` — a value type, so the zero struct, not `null`), CronJob's
+  `spec.schedule` renders `""` (`batch/v1/types.go:794`), and the three CRD list fields
+  render `null` where they rendered `[]`.
+- **Nothing at all** — for every other collection in the table. They carry `omitempty`,
+  so nil and `[]`/`{}` serialise identically: the diff shows no line for them, not a
+  shorter one.
+
+**The second group is the one to read.** A value that vanished is one you can put back at
+your leisure; a field that stayed and degraded is one the API server may refuse outright,
+and it is the group that maps onto the **rejected** class above.
 
 The other hand-written constructors (cert-manager, CloudNativePG, External Secrets,
 Flux, MetalLB, VolSync, the remaining Cilium kinds, RBAC) were already
