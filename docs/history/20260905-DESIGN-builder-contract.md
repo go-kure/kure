@@ -241,7 +241,20 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   file without those constants and silent in one with them. Nothing about it is deliberate — a Go
   file's *comments* are the scanned surface, and its code should be inert.
 
-  These eight are the same shape as the exclusions above: the check is a floor, not a proof. They
+- **Only builder-shaped names are resolved at all.** The extractor matches
+  `(Create|Set|Add)[A-Z]…`, so every other exported identifier a page names — a config-struct
+  builder, a type, a constant — is invisible to it. This is the widest of the nine and the one that
+  actually bit: `pkg/kubernetes/metallb/README.md` documented four worked examples calling
+  `metallb.IPAddressPool(&metallb.IPAddressPoolConfig{…})` and three siblings, none of which have
+  ever existed in that package, and the check was green throughout because not one of those names
+  begins with `Create`, `Set` or `Add`. Widening the pattern is not the fix on its own: resolving
+  arbitrary identifiers means indexing types, constants and vars, not just `func` declarations —
+  a sweep here that looked only for `func` and `type` reported `volsync.CopyMethodSnapshot` missing
+  when it is a `const` at `pkg/kubernetes/volsync/types.go:112`. A prefix filter with a matching
+  narrow index is at least honest about its scope; a wider pattern over the same index would fail
+  pages that are correct.
+
+  These nine are the same shape as the exclusions above: the check is a floor, not a proof. They
   are filed as go-kure/kure#770 (checker false negatives) rather than fixed here — this ticket's
   subject is the documentation, and the checker had already taken four hardening rounds by the time
   they surfaced.

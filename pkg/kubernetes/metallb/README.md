@@ -6,7 +6,7 @@ The `metallb` package provides strongly-typed constructor functions for creating
 
 ## Overview
 
-Each config-struct builder takes a configuration struct and returns a populated MetalLB custom resource. The builders handle API version and kind metadata, letting you focus on the resource specification.
+Each generated constructor returns a MetalLB custom resource carrying its API version, kind and identity, and nothing else. You set the spec yourself, by assignment or through the admissible sugar this package exports.
 
 ## Constructors
 
@@ -16,7 +16,7 @@ Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_
 obj := metallb.CreateIPAddressPool("my-pool", "metallb-system")
 ```
 
-The config-struct builders (`metallb.IPAddressPool(&metallb.IPAddressPoolConfig{...})`) are a separate, opinionated layer on top of the same upstream types; they are unchanged by the generated constructors. No hand-written `Create*` helper for a spec fragment remains — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+This package has no config-struct layer. Unlike `cilium` and `prometheus`, it exports no `metallb.<Kind>(&metallb.<Kind>Config{...})` builder, and never has — the generated constructor plus field assignment is the whole construction API here. No hand-written `Create*` helper for a spec fragment remains either: a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
@@ -29,59 +29,44 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 ```go
 import "github.com/go-kure/kure/pkg/kubernetes/metallb"
 
-pool := metallb.IPAddressPool(&metallb.IPAddressPoolConfig{
-    Name:      "my-pool",
-    Namespace: "metallb-system",
-    Addresses: []string{"192.168.1.0/24", "10.0.0.0/16"},
-})
+pool := metallb.CreateIPAddressPool("my-pool", "metallb-system")
+metallb.AddIPAddressPoolAddress(pool, "192.168.1.0/24")
+metallb.AddIPAddressPoolAddress(pool, "10.0.0.0/16")
 ```
 
 ### BGP Peers
 
 ```go
-peer := metallb.BGPPeer(&metallb.BGPPeerConfig{
-    Name:      "my-peer",
-    Namespace: "metallb-system",
-    MyASN:     64500,
-    ASN:       64501,
-    Address:   "10.0.0.1",
-    Port:      179,
-})
+peer := metallb.CreateBGPPeer("my-peer", "metallb-system")
+peer.Spec.MyASN = 64500
+peer.Spec.ASN = 64501
+peer.Spec.Address = "10.0.0.1"
+peer.Spec.Port = 179
 ```
 
 ### BGP Advertisements
 
 ```go
-advert := metallb.BGPAdvertisement(&metallb.BGPAdvertisementConfig{
-    Name:           "my-advert",
-    Namespace:      "metallb-system",
-    IPAddressPools: []string{"my-pool"},
-    Peers:          []string{"my-peer"},
-    Communities:    []string{"65535:65282"},
-    LocalPref:      100,
-})
+advert := metallb.CreateBGPAdvertisement("my-advert", "metallb-system")
+metallb.AddBGPAdvertisementIPAddressPool(advert, "my-pool")
+metallb.AddBGPAdvertisementPeer(advert, "my-peer")
+metallb.AddBGPAdvertisementCommunity(advert, "65535:65282")
+advert.Spec.LocalPref = 100
 ```
 
 ### L2 Advertisements
 
 ```go
-l2 := metallb.L2Advertisement(&metallb.L2AdvertisementConfig{
-    Name:           "my-l2",
-    Namespace:      "metallb-system",
-    IPAddressPools: []string{"my-pool"},
-    Interfaces:     []string{"eth0"},
-})
+l2 := metallb.CreateL2Advertisement("my-l2", "metallb-system")
+metallb.AddL2AdvertisementIPAddressPool(l2, "my-pool")
+metallb.AddL2AdvertisementInterface(l2, "eth0")
 ```
 
 ### BFD Profiles
 
 ```go
-detectMult := uint32(3)
-bfd := metallb.BFDProfile(&metallb.BFDProfileConfig{
-    Name:             "my-bfd",
-    Namespace:        "metallb-system",
-    DetectMultiplier: &detectMult,
-})
+bfd := metallb.CreateBFDProfile("my-bfd", "metallb-system")
+metallb.SetBFDProfileDetectMultiplier(bfd, 3)
 ```
 
 ## Modifier Functions
