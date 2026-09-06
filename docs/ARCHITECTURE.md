@@ -911,12 +911,17 @@ after generation has already succeeded, which reads as a generator failure and i
 
 Adding a kind to a family kure already covers needs no new mapping — the package is already mapped,
 and step 2's regenerated tables carry the new kind — but it is not free of documentation work.
-Regeneration inserts a constructor into that package's `zz_generated_create.go`, and `doc-gate`
-requires mapped code that changed to be paired with a change to its mapped docs: the family README,
-or the guide the map names for it (`guides/library-usage` for every `pkg/kubernetes/<family>`).
-A newly inserted generated line is never treated as trivial, so the generated kinds table being
-current does not settle it. Say what the new kind is for in the family README, in a sentence, and
-the gate is satisfied by the thing that should have happened anyway.
+Regeneration inserts a constructor into that package's `zz_generated_create.go`, and a newly
+inserted generated line is never treated as trivial, so the generated kinds table being current
+does not settle it.
+
+Two different bars apply here and they are not the same height. `doc-gate` passes once **any** of
+the package's mapped docs changes — the family README, or the guide the map names for it. The
+repository's rule is the README **and** every guide the reverse mapping lists, and for every
+`pkg/kubernetes/<family>` that list is `[guides/library-usage]`. So satisfying the gate with the
+README alone leaves a required update undone, with CI green. Say what the new kind is for in the
+family README, and carry it into `guides/library-usage` wherever that guide enumerates the family's
+coverage.
 
 ```bash
 bash site/scripts/gen-docs-tables.sh
