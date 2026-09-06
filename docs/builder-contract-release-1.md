@@ -164,10 +164,12 @@ kinds with no endpoints, set the empty slice explicitly:
 sm.Spec.Endpoints = []monitoringv1.Endpoint{}
 ```
 
-#### Rows that cannot be settled from this repository
+#### Two more rows that cannot be settled from this repository
 
-Two removals cannot be adjudicated from the dependencies here, and are marked
-**unsettled** in the table rather than assumed benign:
+The three CRD rows above are marked **unsettled** because the schema that would settle
+them is not a dependency here. Two further removals are unsettled for a different
+reason — the defaulting itself happens outside the types this repository can read — and
+are likewise marked **unsettled** in the table rather than assumed benign:
 
 - **`CreatePersistentVolumeClaim`, `spec.resources.requests.storage: 1Gi`** — whether a
   storage request is required lives in `k8s.io/kubernetes` validation, not a dependency
@@ -181,7 +183,10 @@ The distinction that matters for both: knowing *where* a default comes from is n
 knowing *what* it is. Neither is claimed here in either direction.
 
 Where a constructor dropped several values with different consequences, the class is the
-worst of them.
+one you hit **first**, not the one the preface calls most dangerous: a rejected manifest
+never reaches the cluster, so a silent consequence sitting behind it cannot happen until
+the rejection is fixed. Those subordinate consequences are still named in the row, because
+fixing the rejection is exactly when they start to apply.
 
 | Constructor | Class | Removed default |
 |---|---|---|
@@ -197,7 +202,7 @@ worst of them.
 | `CreatePersistentVolumeClaim` | **unsettled** | **`spec.resources.requests.storage: 1Gi` — unsettled, see above**; `spec.volumeMode: Filesystem` (no-op — upstream: *"Value of Filesystem is implied when not included in claim spec"*); empty `spec.accessModes` slice (no-op — an empty list satisfied no requirement either) |
 | `CreateService` | no-op | empty `spec.selector` map and `spec.ports` slice — both `omitempty`, and an empty selector meant "no selector" exactly as nil does |
 | `CreateServiceAccount` | **unsettled** | **`automountServiceAccountToken: false` (a pointer to `false`, serialised) — unsettled, see above.** The field is now unset and the effective value comes from the cluster, so if you relied on the injected `false`, restore it with `SetServiceAccountAutomountToken(sa, false)`; empty `secrets` and `imagePullSecrets` slices (`omitempty`, no output change) |
-| `CreateStatefulSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, **silent**, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady` (no-op — upstream: *"The default policy is `OrderedReady`"*); empty `spec.volumeClaimTemplates` slice (`omitempty`, no output change) |
+| `CreateStatefulSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, silent, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady` (no-op — upstream: *"The default policy is `OrderedReady`"*); empty `spec.volumeClaimTemplates` slice (`omitempty`, no output change) |
 | `prometheus.CreateServiceMonitor` | **unsettled** | empty `spec.endpoints` slice. `+required` with no `omitempty`, so this now renders **`null` instead of `[]`** — see above (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints) |
 | `prometheus.CreatePodMonitor` | **unsettled** | empty `spec.podMetricsEndpoints` slice. No `omitempty`, so this now renders **`null` instead of `[]`** — see above (also observable through `prometheus.PodMonitor(cfg)` with no endpoints) |
 | `prometheus.CreatePrometheusRule` | no-op | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
