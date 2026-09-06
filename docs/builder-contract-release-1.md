@@ -45,8 +45,8 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 ### Spec values injected per kind
 
 **Every row in the table carries a class**, so the consequence survives a reader who
-samples one row instead of reading this section. There are four, and they are ordered
-by how loudly they fail — which is the inverse of how much attention they need:
+samples one row instead of reading this section. The four classes, loudest failure
+first:
 
 | Class | What happens | How you find out |
 |---|---|---|
