@@ -45,7 +45,7 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 ### Spec values injected per kind
 
 **Not every row below is a rendering change.** Most are — an empty slice going nil,
-`[]` versus omitted, a serialised `false`. The rows called out here are not, and they
+`[]` versus omitted. The rows called out here are not, and they
 fail in two different ways. Some remove a value the API server requires, so the
 manifest is rejected. Others remove a value that has a *different* default, so the
 manifest is accepted and the object means something else. The second kind is the more
@@ -72,12 +72,17 @@ cj.Spec.Schedule = "*/5 * * * *"
 cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 ```
 
-The two differ in reach, and the difference matters when judging whether you are
-affected. Every caller of `CreateDaemonSet`, `CreateDeployment` and `CreateStatefulSet`
-lost the selector — there was no way to build one of those objects that did not depend
-on it. The CronJob restart policy is narrower: `SetCronJobPodSpec` assigned the whole
-pod spec (`cron.Spec.JobTemplate.Spec.Template.Spec = *spec`), so a caller who set the
-pod template that way had already lost the injected `Never` before this release. Only
+Both of these hit only callers who **relied on the injected value**. If you already
+assign `Spec.Selector` and your own template labels — the pattern
+`pkg/kubernetes/README.md` documents — you were never depending on the constructor and
+nothing here applies; do not replace a working custom selector with the generic
+`app: <name>` recipe above.
+
+Within that, the two differ in reach. Any caller who left the selector alone lost it,
+because nothing else wrote it. The CronJob restart policy is narrower still:
+`SetCronJobPodSpec` assigned the whole pod spec
+(`cron.Spec.JobTemplate.Spec.Template.Spec = *spec`), so a caller who set the pod
+template that way had already lost the injected `Never` before this release. Only
 callers who mutated the template in place still had it.
 
 #### Accepted, and behaves differently
@@ -111,7 +116,9 @@ types. The remaining rows have not been audited, and two of them cannot be settl
 this repository's dependencies at all: whether a PVC storage request is required lives
 in `k8s.io/kubernetes` validation, and `automountServiceAccountToken`'s default is
 applied by the ServiceAccount admission controller rather than documented on the type.
-Neither is claimed here in either direction.
+Neither is claimed here in either direction — but the `CreateServiceAccount` row names
+the expression that restores the old value, which is what a caller who relied on it
+needs regardless of what the cluster would otherwise do.
 
 | Constructor | Removed default |
 |---|---|
@@ -126,7 +133,7 @@ Neither is claimed here in either direction.
 | `CreateNetworkPolicy` | **`spec.podSelector.matchLabels.app: <name>` (rescopes the policy, see above)**; empty `spec.policyTypes`, `spec.ingress` and `spec.egress` slices |
 | `CreatePersistentVolumeClaim` | `spec.resources.requests.storage: 1Gi`; `spec.volumeMode: Filesystem`; empty `spec.accessModes` slice |
 | `CreateService` | empty `spec.selector` map and `spec.ports` slice |
-| `CreateServiceAccount` | `automountServiceAccountToken: false` (a pointer to `false`, serialised); empty `secrets` and `imagePullSecrets` slices |
+| `CreateServiceAccount` | `automountServiceAccountToken: false` (a pointer to `false`, serialised) — the field is now unset and the effective value comes from the cluster, so if you relied on the injected `false`, restore it with `SetServiceAccountAutomountToken(sa, false)`; empty `secrets` and `imagePullSecrets` slices |
 | `CreateStatefulSet` | **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, see above)**; **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady`; empty `spec.volumeClaimTemplates` slice |
 | `prometheus.CreateServiceMonitor` | empty `spec.endpoints` slice (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints, which now leaves the field nil) |
 | `prometheus.CreatePodMonitor` | empty `spec.podMetricsEndpoints` slice (also observable through `prometheus.PodMonitor(cfg)` with no endpoints, which now leaves the field nil) |
