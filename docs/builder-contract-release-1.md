@@ -44,25 +44,37 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 
 ### Spec values injected per kind
 
-**Three rows below are not rendering changes.** `spec.selector` is required on
-`DaemonSet`, `Deployment` and `StatefulSet` and has no server-side default, so an
-object built without it is rejected by the API server rather than serialised
-differently. A caller that relied on the injected selector compiles unchanged and
-emits invalid manifests. Restore it, together with the matching template labels the
-same constructors stopped setting:
+**Not every row below is a rendering change.** Most are — an empty slice going nil,
+`[]` versus omitted, a serialised `false`. The rows called out here are not: they
+remove a value the API server requires, so a caller that relied on the constructor
+compiles unchanged and emits a manifest the server rejects.
+
+**`spec.selector`** on `CreateDaemonSet`, `CreateDeployment` and `CreateStatefulSet`
+is required and has no server-side default. Restore it together with the matching
+template labels the same constructors stopped setting — the selector must match them:
 
 ```go
 obj.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}
 obj.Spec.Template.Labels = map[string]string{"app": name}
 ```
 
-The selector must match the pod template's labels. Every other row in the table is a
-rendering change.
+**`CreateCronJob` drops two.** `spec.schedule` is required with no default. The job
+pod's `restartPolicy` is optional in the type but defaults to `Always`, which Job and
+CronJob pods do not permit — so leaving it unset is rejected just as surely as
+omitting the schedule:
+
+```go
+cj.Spec.Schedule = "*/5 * * * *"
+cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
+```
+
+These are the removals known to produce a rejected object, not a full admission audit
+of every kind — a manifest still has to satisfy the rest of its own schema.
 
 | Constructor | Removed default |
 |---|---|
 | `CreateConfigMap` | `data` and `binaryData` initialised to empty maps. They never rendered, but a fresh object accepted `cm.Data[k] = v` directly; both are now nil, so write through `AddConfigMapData`/`AddConfigMapBinaryData` (which nil-init), or assign a map literal first (`cm.Data = map[string]string{...}`) |
-| `CreateCronJob` | `spec.schedule` from the third argument; `spec.jobTemplate.spec.template.metadata.labels.app: <name>`; `spec.jobTemplate.spec.template.spec.restartPolicy: Never` |
+| `CreateCronJob` | **`spec.schedule` from the third argument (required, see above)**; `spec.jobTemplate.spec.template.metadata.labels.app: <name>`; **`spec.jobTemplate.spec.template.spec.restartPolicy: Never` (required, see above)** |
 | `CreateDaemonSet` | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>` |
 | `CreateDeployment` | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>` |
 | `CreateHTTPRoute` | empty `spec.hostnames` and `spec.rules` slices |
