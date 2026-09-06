@@ -52,12 +52,21 @@ filter_unconventional = true
 split_commits = false
 commit_parsers = [
     # Breaking changes first: parsers are evaluated in order and the first match
-    # wins, so this must precede ^feat/^fix/^refactor or a `refactor(x)!:` commit
-    # is claimed by ^refactor and loses its marker. The `<!-- 0 -->` prefix is a
-    # sort key, not output — the body template already pipes the group name
-    # through `striptags`, and `<` sorts before every letter, so the section
-    # renders as `### Breaking` and appears first.
-    { message = "^[a-z]+(\\(.+\\))?!:", group = "<!-- 0 -->Breaking" },
+    # wins, so this must precede ^feat/^fix/^refactor or a breaking commit is
+    # claimed by its type parser and loses its marker.
+    #
+    # Match git-cliff's own parsed `breaking` field rather than the subject line.
+    # conventional_commits = true above makes it parse the full conventional-commit
+    # structure, so this covers both ways a commit can declare breakage — the `!`
+    # marker in the subject AND a `BREAKING CHANGE:` footer in the body. A
+    # subject-only regex covers only the first, and the second is not hypothetical:
+    # d08095d ("migrate CRD subpackage constructors to CreateX pattern") deleted
+    # eight internal packages with a footer and no `!`, and rendered under Changed.
+    #
+    # The `<!-- 0 -->` prefix is a sort key, not output — the body template pipes
+    # the group name through `striptags`, and `<` sorts before every letter, so the
+    # section renders as `### Breaking` and appears first.
+    { field = "breaking", pattern = "^true$", group = "<!-- 0 -->Breaking" },
     { message = "^feat", group = "Added" },
     { message = "^fix", group = "Fixed" },
     { message = "^doc", group = "Documentation" },
