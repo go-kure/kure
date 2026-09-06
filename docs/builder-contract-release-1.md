@@ -45,9 +45,13 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 ### Spec values injected per kind
 
 **Not every row below is a rendering change.** Most are — an empty slice going nil,
-`[]` versus omitted, a serialised `false`. The rows called out here are not: they
-remove a value the API server requires, so a caller that relied on the constructor
-compiles unchanged and emits a manifest the server rejects.
+`[]` versus omitted, a serialised `false`. The rows called out here are not, and they
+fail in two different ways. Some remove a value the API server requires, so the
+manifest is rejected. Others remove a value that has a *different* default, so the
+manifest is accepted and the object means something else. The second kind is the more
+dangerous, because nothing anywhere reports it.
+
+#### Rejected by the API server
 
 **`spec.selector`** on `CreateDaemonSet`, `CreateDeployment` and `CreateStatefulSet`
 is required and has no server-side default. Restore it together with the matching
@@ -76,8 +80,38 @@ pod spec (`cron.Spec.JobTemplate.Spec.Template.Spec = *spec`), so a caller who s
 pod template that way had already lost the injected `Never` before this release. Only
 callers who mutated the template in place still had it.
 
-These are the removals known to produce a rejected object, not a full admission audit
-of every kind — a manifest still has to satisfy the rest of its own schema.
+#### Accepted, and behaves differently
+
+These produce a valid object. Nothing fails, nothing warns, and the difference only
+shows up in the cluster.
+
+**`CreateNetworkPolicy`** stopped setting `spec.podSelector.matchLabels.app: <name>`.
+An empty `podSelector` is not "no selection" — upstream documents it as *"An empty
+selector matches all pods in the policy's namespace… If it is not specified, it
+defaults to an empty selector."* A policy that applied to one app now applies to every
+pod in its namespace. Restore the scope explicitly:
+
+```go
+np.Spec.PodSelector = metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}
+```
+
+**`CreateStatefulSet`** stopped setting `spec.replicas: 0`. The field is a pointer
+precisely so that an explicit zero is distinguishable from unset, and unset *"defaults
+to 1"*. A StatefulSet built to start scaled to zero now starts one pod. If zero was
+deliberate, say so:
+
+```go
+sts.Spec.Replicas = ptr.To[int32](0)
+```
+
+#### What this list does not cover
+
+These are the removals whose consequence has been checked against the upstream API
+types. The remaining rows have not been audited, and two of them cannot be settled from
+this repository's dependencies at all: whether a PVC storage request is required lives
+in `k8s.io/kubernetes` validation, and `automountServiceAccountToken`'s default is
+applied by the ServiceAccount admission controller rather than documented on the type.
+Neither is claimed here in either direction.
 
 | Constructor | Removed default |
 |---|---|
@@ -89,11 +123,11 @@ of every kind — a manifest still has to satisfy the rest of its own schema.
 | `CreateIngress` | `spec.ingressClassName` from the third argument; empty `spec.rules` and `spec.tls` slices |
 | `CreateJob` | `spec.template.metadata.labels.app: <name>` |
 | `CreateNamespace` | empty `spec.finalizers` slice |
-| `CreateNetworkPolicy` | `spec.podSelector.matchLabels.app: <name>`; empty `spec.policyTypes`, `spec.ingress` and `spec.egress` slices |
+| `CreateNetworkPolicy` | **`spec.podSelector.matchLabels.app: <name>` (rescopes the policy, see above)**; empty `spec.policyTypes`, `spec.ingress` and `spec.egress` slices |
 | `CreatePersistentVolumeClaim` | `spec.resources.requests.storage: 1Gi`; `spec.volumeMode: Filesystem`; empty `spec.accessModes` slice |
 | `CreateService` | empty `spec.selector` map and `spec.ports` slice |
 | `CreateServiceAccount` | `automountServiceAccountToken: false` (a pointer to `false`, serialised); empty `secrets` and `imagePullSecrets` slices |
-| `CreateStatefulSet` | `spec.replicas: 0` (a pointer to zero, serialised); **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady`; empty `spec.volumeClaimTemplates` slice |
+| `CreateStatefulSet` | **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, see above)**; **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady`; empty `spec.volumeClaimTemplates` slice |
 | `prometheus.CreateServiceMonitor` | empty `spec.endpoints` slice (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints, which now leaves the field nil) |
 | `prometheus.CreatePodMonitor` | empty `spec.podMetricsEndpoints` slice (also observable through `prometheus.PodMonitor(cfg)` with no endpoints, which now leaves the field nil) |
 | `prometheus.CreatePrometheusRule` | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
