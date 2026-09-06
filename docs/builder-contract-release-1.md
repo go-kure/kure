@@ -59,9 +59,9 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 | `CreateService` | empty `spec.selector` map and `spec.ports` slice |
 | `CreateServiceAccount` | `automountServiceAccountToken: false` (a pointer to `false`, serialised); empty `secrets` and `imagePullSecrets` slices |
 | `CreateStatefulSet` | `spec.replicas: 0` (a pointer to zero, serialised); `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady`; empty `spec.volumeClaimTemplates` slice |
-| `prometheus.CreateServiceMonitor` | empty `spec.endpoints` slice |
-| `prometheus.CreatePodMonitor` | empty `spec.podMetricsEndpoints` slice |
-| `prometheus.CreatePrometheusRule` | empty `spec.groups` slice |
+| `prometheus.CreateServiceMonitor` | empty `spec.endpoints` slice (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints, which now leaves the field nil) |
+| `prometheus.CreatePodMonitor` | empty `spec.podMetricsEndpoints` slice (also observable through `prometheus.PodMonitor(cfg)` with no endpoints, which now leaves the field nil) |
+| `prometheus.CreatePrometheusRule` | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
 | `cilium.CreateCiliumCIDRGroup` | empty `spec.externalCIDRs` slice (also observable through `cilium.CiliumCIDRGroup(cfg)` with no CIDRs, which now leaves the field nil) |
 
 Empty slices and maps serialise as `[]` / `{}` where the upstream struct has no
