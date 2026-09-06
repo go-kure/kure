@@ -221,7 +221,16 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   Like the nested-`<!--` case, the defect is as much the inconsistency as the hole: the same typo is
   an error on a line of its own.
 
-  These six are the same shape as the exclusions above: the check is a floor, not a proof. They
+- **Nested agent-guidance Markdown is not enumerated.** The repository-root sweep is
+  `find . -maxdepth 1 -name '*.md'`, which reaches `README.md`, `AGENTS.md` and `DEVELOPMENT.md`
+  but not `.claude/CLAUDE.md` one level down. That file names live builders — the four generic
+  metadata helpers among them — and is loaded by every agent that works in this tree, so a rename
+  leaves it stale with the check green. The exposure is newer than the check: this work item is what
+  put builder names in it. Widening the enumeration is one `find` root, but the file also carries an
+  intentional placeholder kind, so it needs a suppression fence in the same change rather than
+  after it.
+
+  These seven are the same shape as the exclusions above: the check is a floor, not a proof. They
   are filed as go-kure/kure#770 (checker false negatives) rather than fixed here — this ticket's
   subject is the documentation, and the checker had already taken four hardening rounds by the time
   they surfaced.
