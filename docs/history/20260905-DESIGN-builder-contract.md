@@ -230,7 +230,14 @@ ledger, and the changelog carries a pointer to the ledger rather than a copy of 
   intentional placeholder kind, so it needs a suppression fence in the same change rather than
   after it.
 
-  These seven are the same shape as the exclusions above: the check is a floor, not a proof. They
+- **In a Go file, marker text is honoured wherever it appears, not only in a comment.** Suppression
+  is interpreted before the Go-comment filter runs, and both operate on raw lines, so a `const`
+  holding the string `<!-- doc-api-refs:ignore-start … -->` opens a fence that a later string
+  closes. Verified with a fixture: the same doc comment naming a removed builder is reported in a
+  file without those constants and silent in one with them. Nothing about it is deliberate — a Go
+  file's *comments* are the scanned surface, and its code should be inert.
+
+  These eight are the same shape as the exclusions above: the check is a floor, not a proof. They
   are filed as go-kure/kure#770 (checker false negatives) rather than fixed here — this ticket's
   subject is the documentation, and the checker had already taken four hardening rounds by the time
   they surfaced.

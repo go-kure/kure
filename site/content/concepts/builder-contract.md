@@ -127,17 +127,28 @@ documented. Read it as a report, not a warning:
   manifest reads as applied and is not, which is the failure this column exists to make visible.
 - **A blank stability with a gate listed** means upstream gates the field but does not document a
   level. That is still a gate, and still silent.
-- **Status fields are not in the table at all.** A status is reported by the cluster, never built by
-  a caller, and that is where most of the markers live.
+- **Status subtrees are excluded.** The walk records a field, then declines to descend into a type
+  whose name ends in `Status` — a status is reported by the cluster, never built by a caller, and
+  that is where most of the markers live. Two edges follow from *how* that exclusion is done: the
+  `status` field itself is recorded if upstream marks it, since the field is read before the
+  descent is refused, and a status type upstream names something else is walked like any other. So
+  read the exclusion as "status subtrees, recognised by name", not as a guarantee that nothing
+  status-shaped can appear.
 
 The numbers move with the pins, by design: bump a module and the tables are regenerated, so "what
 does kure support" is answered from the pin rather than from prose someone forgot to update.
 
 ## Opinions as nouns
 
-The foundation holds no opinions. The workflow layer above it — `pkg/stack/fluxcd` — legitimately
-does: something has to decide a reconcile interval, a namespace, a source kind. The rule there is
-not "have no defaults", it is **every default is a name you can see**.
+The foundation applies no opinion you did not ask for. It is allowed to *hold* one: a composite
+like `AddHPACPUMetric(hpa, 80)` encodes real knowledge about how a CPU metric is shaped, and the
+contract admits it precisely because you have to name it to get it — the opinion arrives with the
+call, never with the constructor. What the foundation never does is default, and every composite
+carries a golden test of its complete output so an injected value shows up in the diff that adds it.
+
+The workflow layer above it — `pkg/stack/fluxcd` — goes further and defaults outright: something
+has to decide a reconcile interval, a namespace, a source kind. The rule there is not "have no
+defaults", it is **every default is a name you can see**.
 
 ```go
 // pkg/stack/fluxcd/defaults.go
