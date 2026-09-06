@@ -208,12 +208,14 @@ fixing the rejection is exactly when they start to apply.
 | `prometheus.CreatePrometheusRule` | no-op | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
 | `cilium.CreateCiliumCIDRGroup` | **unsettled** | empty `spec.externalCIDRs` slice. `Required` with `MinItems=0` and no `omitempty`, so this now renders **`null` instead of `[]`** — see above (also observable through `cilium.CiliumCIDRGroup(cfg)` with no CIDRs) |
 
-**On the `no-op` rows specifically:** every list and map field above that this release
-stopped initialising carries `omitempty` in its upstream struct, so nil and `[]`/`{}`
+**On the `no-op` rows specifically:** exactly three of the list fields this release
+stopped initialising lack `omitempty` upstream, and all three are the CRD fields called
+out above. Every other list and map field in the table has it, so nil and `[]`/`{}`
 serialise identically and a golden file of the old output shows **no difference at all**
-for them. The three fields without `omitempty` are the CRD ones called out above, and
-there the difference is `[]` → `null` — which is why they are classed **unsettled**
-rather than counted as cosmetic.
+for those rows — not a smaller difference, none. That is the correction worth carrying
+away: the only place the emitted YAML genuinely changes is those three CRD fields, and
+there it changes `[]` → `null`, which is why they are classed **unsettled** rather than
+counted as cosmetic.
 
 The other hand-written constructors (cert-manager, CloudNativePG, External Secrets,
 Flux, MetalLB, VolSync, the remaining Cilium kinds, RBAC) were already
