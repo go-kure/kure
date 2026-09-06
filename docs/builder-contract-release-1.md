@@ -270,18 +270,33 @@ sm.Spec.Endpoints = []monitoringv1.Endpoint{}
 
 #### The rows that cannot be settled from this repository
 
-Exactly three rows are marked **unsettled** in the table. One is the ServiceMonitor row
-above, where the CRD schema that would decide it is not shipped in any module here. The
-other two are unsettled for a different reason — the defaulting itself happens outside
-the types this repository can read:
+Exactly three rows are marked **unsettled** in the table. "Unsettled" is a claim about
+this repository's dependencies, so each one has to survive the same test the
+CiliumCIDRGroup row passes above: a pinned module that ships its own schema *does* settle
+a question, and finding nothing is only evidence if you looked where the answer would be.
+Each of the three was checked that way.
 
+- **`prometheus.CreateServiceMonitor`, `spec.endpoints`** — the CRD schema that would
+  decide it is genuinely absent, not merely uncited: the pinned
+  `prometheus-operator/pkg/apis/monitoring@v0.93.1` module contains 41 files and not one
+  YAML or JSON among them. It ships Go types only. That is the difference from
+  `cilium@v1.20.1`, which ships its CRD manifests inside the module and therefore settles
+  its own row.
 - **`CreatePersistentVolumeClaim`, `spec.resources.requests.storage: 1Gi`** — whether a
   storage request is required lives in `k8s.io/kubernetes` validation, not a dependency
-  of this repository.
+  of this repository. The type is not merely silent, it is inapplicable: the doc comment
+  on `VolumeResourceRequirements.Requests` still describes what happens when requests are
+  *"omitted for a container"* (`core/v1/types.go:3087-3089`), inherited text from the era
+  the same struct served both — the field below it records that volumes shared
+  `ResourceRequirements` with containers *"by accident"* (`:3094-3096`). A comment written
+  about containers cannot settle a claim about volumes.
 - **`CreateServiceAccount`, `automountServiceAccountToken: false`** — the type documents
-  no default; the behaviour is applied by the ServiceAccount admission controller. The
-  table still names `SetServiceAccountAutomountToken(sa, false)`, which is what a caller
-  who relied on the injected `false` needs regardless of what the cluster would do.
+  no default, only that it *"indicates whether pods running as this service account
+  should have an API token automatically mounted"* and *"can be overridden at the pod
+  level"* (`core/v1/types.go:6664-6667`); the behaviour is applied by the ServiceAccount
+  admission controller. The table still names `SetServiceAccountAutomountToken(sa,
+  false)`, which is what a caller who relied on the injected `false` needs regardless of
+  what the cluster would do.
 
 The distinction that matters for both: knowing *where* a default comes from is not
 knowing *what* it is. Neither is claimed here in either direction.
