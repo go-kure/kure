@@ -44,12 +44,27 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 
 ### Spec values injected per kind
 
+**Three rows below are not rendering changes.** `spec.selector` is required on
+`DaemonSet`, `Deployment` and `StatefulSet` and has no server-side default, so an
+object built without it is rejected by the API server rather than serialised
+differently. A caller that relied on the injected selector compiles unchanged and
+emits invalid manifests. Restore it, together with the matching template labels the
+same constructors stopped setting:
+
+```go
+obj.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}
+obj.Spec.Template.Labels = map[string]string{"app": name}
+```
+
+The selector must match the pod template's labels. Every other row in the table is a
+rendering change.
+
 | Constructor | Removed default |
 |---|---|
 | `CreateConfigMap` | `data` and `binaryData` initialised to empty maps. They never rendered, but a fresh object accepted `cm.Data[k] = v` directly; both are now nil, so write through `AddConfigMapData`/`AddConfigMapBinaryData` (which nil-init), or assign a map literal first (`cm.Data = map[string]string{...}`) |
 | `CreateCronJob` | `spec.schedule` from the third argument; `spec.jobTemplate.spec.template.metadata.labels.app: <name>`; `spec.jobTemplate.spec.template.spec.restartPolicy: Never` |
-| `CreateDaemonSet` | `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>` |
-| `CreateDeployment` | `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>` |
+| `CreateDaemonSet` | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>` |
+| `CreateDeployment` | **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>` |
 | `CreateHTTPRoute` | empty `spec.hostnames` and `spec.rules` slices |
 | `CreateIngress` | `spec.ingressClassName` from the third argument; empty `spec.rules` and `spec.tls` slices |
 | `CreateJob` | `spec.template.metadata.labels.app: <name>` |
@@ -58,7 +73,7 @@ Restore with `kubernetes.AddLabel(obj, "app", name)` and
 | `CreatePersistentVolumeClaim` | `spec.resources.requests.storage: 1Gi`; `spec.volumeMode: Filesystem`; empty `spec.accessModes` slice |
 | `CreateService` | empty `spec.selector` map and `spec.ports` slice |
 | `CreateServiceAccount` | `automountServiceAccountToken: false` (a pointer to `false`, serialised); empty `secrets` and `imagePullSecrets` slices |
-| `CreateStatefulSet` | `spec.replicas: 0` (a pointer to zero, serialised); `spec.selector.matchLabels.app: <name>`; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady`; empty `spec.volumeClaimTemplates` slice |
+| `CreateStatefulSet` | `spec.replicas: 0` (a pointer to zero, serialised); **`spec.selector.matchLabels.app: <name>` (required, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady`; empty `spec.volumeClaimTemplates` slice |
 | `prometheus.CreateServiceMonitor` | empty `spec.endpoints` slice (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints, which now leaves the field nil) |
 | `prometheus.CreatePodMonitor` | empty `spec.podMetricsEndpoints` slice (also observable through `prometheus.PodMonitor(cfg)` with no endpoints, which now leaves the field nil) |
 | `prometheus.CreatePrometheusRule` | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
