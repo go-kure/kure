@@ -127,8 +127,12 @@ Every removal has a replacement expression, listed once in
 - **Per-kind pod-template helpers folded onto `PodSpec`.** One family serves every workload kind,
   reached through `&obj.Spec.Template.Spec`.
 - **Garbage collection is no longer implicit.** In `pkg/stack/fluxcd`, an unset `Bundle.Prune`
-  emits `prune: false` where it emitted `prune: true`. This is the one change that alters what a
-  cluster does rather than how a caller writes it.
+  emits `prune: false` where it emitted `prune: true`. It changes what a cluster gets rather than
+  only how a caller writes it — and so do the constructor defaults above, including the resource
+  reservation the removed container constructor carried. Of those three, `Prune` and the injected
+  `app` label are the two that give no signal at the call site: the container constructor is gone,
+  so that call does not compile, while a caller who never named `Prune`, and one that relied on the
+  label, both build unchanged and emit different YAML.
 
 `pkg/stack/fluxcd`'s seventeen injected values now collapse onto eleven exported identifiers in
 `defaults.go`, so a consumer can grep for the identifier and find every site the value can reach
