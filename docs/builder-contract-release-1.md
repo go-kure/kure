@@ -52,7 +52,7 @@ first:
 |---|---|---|
 | **rejected** | the API server refuses the manifest | at apply time, loudly |
 | **silent** | the object is valid and means something else | in the cluster, eventually |
-| **no-op** | output may change, behaviour does not | you don't, and don't need to |
+| **no-op** | output may change, cluster behaviour does not | nothing in the cluster differs |
 | **unsettled** | not determinable from this repository's dependencies | stated, not guessed |
 
 A rejected manifest is the *safe* failure: it fails in front of the person applying it.
@@ -60,11 +60,26 @@ The **silent** class is the one to read, because nothing anywhere reports it. Ev
 non-`no-op` row below cites the upstream text that settles it, and a row that could not
 be settled from source is marked **unsettled** rather than assumed benign.
 
+**The class describes the object you ship, not your build.** One row is `no-op` by that
+measure and still breaks caller *code*: `CreateConfigMap` stopped initialising `data` and
+`binaryData`, so `cm.Data[k] = v` on a fresh object now assigns into a nil map and
+panics. That failure is immediate, and in your own process rather than in a cluster —
+which is why it is not **silent** — but it is not nothing, and the row says so.
+
+Every `file:line` below is in the module version this repository **pins** — `k8s.io/api`
+v0.37.0, `sigs.k8s.io/gateway-api` v1.6.2, `github.com/cilium/cilium` v1.20.1,
+prometheus-operator `monitoring` v0.93.1 — not in whichever copy is newest on the machine
+you read it from. Defaulting text moves between versions; a citation against the wrong
+one is worth less than no citation, because it looks checked.
+
 #### Rejected by the API server
 
 **`spec.selector`** on `CreateDaemonSet`, `CreateDeployment` and `CreateStatefulSet`
-is required and has no server-side default. Restore it together with the matching
-template labels the same constructors stopped setting — the selector must match them:
+is marked `+required` with no server-side default — `k8s.io/api@v0.37.0`
+`apps/v1/types.go:212`, and the field carries `json:"selector"` with no `omitempty`
+(`:215`), so it is emitted as `null` rather than omitted. Restore it together with the
+matching template labels the same constructors stopped setting — the selector must
+match them:
 
 ```go
 obj.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}
@@ -72,9 +87,11 @@ obj.Spec.Template.Labels = map[string]string{"app": name}
 ```
 
 **`CreateCronJob` drops two.** `spec.schedule` is required with no default. The job
-pod's `restartPolicy` is optional in the type but defaults to `Always`, which Job and
-CronJob pods do not permit — so leaving it unset is rejected just as surely as
-omitting the schedule:
+pod's `restartPolicy` is `+optional` in the type and defaults to `Always`
+(`core/v1/types.go:4406`), but a Job's template does not permit that value — *"The only
+allowed `template.spec.restartPolicy` values are `Never` or `OnFailure`"*
+(`batch/v1/types.go:405`). So leaving it unset is rejected just as surely as omitting
+the schedule, and this is why `+optional` on its own settles nothing:
 
 ```go
 cj.Spec.Schedule = "*/5 * * * *"
@@ -102,7 +119,9 @@ shows up in the cluster.
 **`CreateNetworkPolicy`** stopped setting `spec.podSelector.matchLabels.app: <name>`.
 An empty `podSelector` is not "no selection" — upstream documents it as *"An empty
 selector matches all pods in the policy's namespace… If it is not specified, it
-defaults to an empty selector."* A policy that applied to one app now applies to every
+defaults to an empty selector."* (`networking/v1/types.go:62-69`; note the field is
+`+optional` yet carries `json:"podSelector"` with no `omitempty`, so it is always
+emitted). A policy that applied to one app now applies to every
 pod in its namespace. Restore the scope explicitly:
 
 ```go
@@ -111,7 +130,8 @@ np.Spec.PodSelector = metav1.LabelSelector{MatchLabels: map[string]string{"app":
 
 **`CreateStatefulSet`** stopped setting `spec.replicas: 0`. The field is a pointer
 precisely so that an explicit zero is distinguishable from unset, and unset *"defaults
-to 1"*. A StatefulSet built to start scaled to zero now starts one pod. If zero was
+to 1"* (`apps/v1/types.go:201-207`). A StatefulSet built to start scaled to zero now
+starts one pod. If zero was
 deliberate, say so:
 
 ```go
@@ -121,7 +141,8 @@ sts.Spec.Replicas = ptr.To[int32](0)
 **`CreateIngress`** stopped setting `spec.ingressClassName` from its third argument. An
 Ingress with no class is not unrouted — upstream documents that *"when a single
 IngressClass resource has this annotation set to true, new Ingress resources without a
-class specified will be assigned this default class."* So the Ingress is silently
+class specified will be assigned this default class."* (`networking/v1/types.go:562-566`).
+So the Ingress is silently
 adopted by whatever controller owns the cluster's default class, which may not be the
 one you meant, or by none if no default exists:
 
@@ -132,7 +153,10 @@ ing.Spec.IngressClassName = ptr.To("nginx")
 **The pod template's `app` label** is no longer set by `CreateCronJob`, `CreateDaemonSet`,
 `CreateDeployment`, `CreateJob` or `CreateStatefulSet`. No upstream default is involved
 — the label is simply absent, and anything that *selects* on it stops matching those
-pods: a Service, a NetworkPolicy peer, a ServiceMonitor. For the three kinds that also
+pods: a Service, a NetworkPolicy peer, a PodMonitor (whose selector selects `Pod`
+objects — `podmonitor_types.go:98`). A ServiceMonitor selects `Endpoints` objects
+(`servicemonitor_types.go:103`), so it breaks one step removed, through the Service
+whose own pod selector no longer matches. For the three kinds that also
 lost `spec.selector` this is already covered above, because the manifest is rejected
 before it can matter. **For `CreateJob` and `CreateCronJob` it is not**: those
 controllers generate their own selector, so the object is perfectly valid and only the
@@ -144,32 +168,44 @@ job.Spec.Template.Labels = map[string]string{"app": name}
 
 #### Renders `null` where it used to render `[]`
 
-Three CRD fields are declared required *and* without `omitempty`, so they are always
-emitted. An empty slice rendered `[]`; nil renders `null`:
+Three CRD list fields carry no `omitempty`, so they are always emitted: an empty slice
+rendered `[]`, and nil renders `null`. They do **not** share a consequence, and that is
+the whole reason for checking each rather than classing them together:
 
-- `prometheus.CreateServiceMonitor` — `spec.endpoints` (`+required`)
-- `prometheus.CreatePodMonitor` — `spec.podMetricsEndpoints`
-- `cilium.CreateCiliumCIDRGroup` — `spec.externalCIDRs` (`Required`, `MinItems=0` — so
-  an empty list is explicitly permitted, which is what makes `null` the odd value)
+- **`cilium.CreateCiliumCIDRGroup`, `spec.externalCIDRs` — rejected.** Cilium ships its
+  CRD manifests *inside* the Go module this repository already depends on, so this one
+  is settleable here after all: `cilium@v1.20.1`
+  `pkg/k8s/apis/cilium.io/client/crds/v2/ciliumcidrgroups.yaml:48-60` declares
+  `type: array` with `minItems: 0` and `required: [externalCIDRs]`, and gives it neither
+  `nullable` nor a default. A null value for a non-nullable, non-defaultable field is
+  *pruned* before validation runs — `apiextensions-apiserver`,
+  `PruneNonNullableNullsWithoutDefaults` — which leaves a required field absent, so the
+  object is refused. `[]` was accepted; `null` is not.
+- **`prometheus.CreateServiceMonitor`, `spec.endpoints` — unsettled.** The field is
+  `+required` (`servicemonitor_types.go:100`), so the same pruning would reject it — but
+  prometheus-operator does *not* ship its CRDs inside the Go module, so the `nullable`
+  flag in the schema that actually runs cannot be read from here. Expect the Cilium
+  outcome; the CRD installed in your cluster is what settles it.
+- **`prometheus.CreatePodMonitor`, `spec.podMetricsEndpoints` — no-op.** Despite the
+  missing `omitempty` this field is `+optional` (`podmonitor_types.go:95`), so a pruned
+  `null` leaves an absent optional field and nothing is refused. The emitted YAML
+  changes; nothing else does.
 
-**Whether the CRD accepts `null` here is unsettled**, and deliberately not guessed: that
-depends on the published CRD schema's `nullable`, which lives in the operators' shipped
-manifests rather than in the Go types this repository depends on. It is called out
-because it is the one place where the old and new output genuinely differ, and the
-difference runs toward a value a required array is less likely to accept — so it should
-not sit in the same bucket as a field that merely stopped rendering. If you build these
-kinds with no endpoints, set the empty slice explicitly:
+**`omitempty` and `+required` are separate markers.** The first decides whether the field
+is emitted, the second whether it may be missing — and reading one for the other is
+exactly how the third row above would have been filed with the first. If you build these
+kinds with no entries, set the empty slice explicitly:
 
 ```go
 sm.Spec.Endpoints = []monitoringv1.Endpoint{}
 ```
 
-#### Two more rows that cannot be settled from this repository
+#### The rows that cannot be settled from this repository
 
-The three CRD rows above are marked **unsettled** because the schema that would settle
-them is not a dependency here. Two further removals are unsettled for a different
-reason — the defaulting itself happens outside the types this repository can read — and
-are likewise marked **unsettled** in the table rather than assumed benign:
+Exactly three rows are marked **unsettled** in the table. One is the ServiceMonitor row
+above, where the CRD schema that would decide it is not shipped in any module here. The
+other two are unsettled for a different reason — the defaulting itself happens outside
+the types this repository can read:
 
 - **`CreatePersistentVolumeClaim`, `spec.resources.requests.storage: 1Gi`** — whether a
   storage request is required lives in `k8s.io/kubernetes` validation, not a dependency
@@ -203,19 +239,25 @@ fixing the rejection is exactly when they start to apply.
 | `CreateService` | no-op | empty `spec.selector` map and `spec.ports` slice — both `omitempty`, and an empty selector meant "no selector" exactly as nil does |
 | `CreateServiceAccount` | **unsettled** | **`automountServiceAccountToken: false` (a pointer to `false`, serialised) — unsettled, see above.** The field is now unset and the effective value comes from the cluster, so if you relied on the injected `false`, restore it with `SetServiceAccountAutomountToken(sa, false)`; empty `secrets` and `imagePullSecrets` slices (`omitempty`, no output change) |
 | `CreateStatefulSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, silent, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady` (no-op — upstream: *"The default policy is `OrderedReady`"*); empty `spec.volumeClaimTemplates` slice (`omitempty`, no output change) |
-| `prometheus.CreateServiceMonitor` | **unsettled** | empty `spec.endpoints` slice. `+required` with no `omitempty`, so this now renders **`null` instead of `[]`** — see above (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints) |
-| `prometheus.CreatePodMonitor` | **unsettled** | empty `spec.podMetricsEndpoints` slice. No `omitempty`, so this now renders **`null` instead of `[]`** — see above (also observable through `prometheus.PodMonitor(cfg)` with no endpoints) |
+| `prometheus.CreateServiceMonitor` | **unsettled** | empty `spec.endpoints` slice. `+required` with no `omitempty`, so this now renders **`null` instead of `[]`**; whether that is refused depends on a CRD schema not shipped here — see above (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints) |
+| `prometheus.CreatePodMonitor` | no-op | empty `spec.podMetricsEndpoints` slice. No `omitempty`, so this now renders **`null` instead of `[]`** — but the field is `+optional`, so a pruned `null` is simply an absent optional field, see above (also observable through `prometheus.PodMonitor(cfg)` with no endpoints) |
 | `prometheus.CreatePrometheusRule` | no-op | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
-| `cilium.CreateCiliumCIDRGroup` | **unsettled** | empty `spec.externalCIDRs` slice. `Required` with `MinItems=0` and no `omitempty`, so this now renders **`null` instead of `[]`** — see above (also observable through `cilium.CiliumCIDRGroup(cfg)` with no CIDRs) |
+| `cilium.CreateCiliumCIDRGroup` | **rejected** | empty `spec.externalCIDRs` slice. Required with `minItems: 0` and no `omitempty`, so this now renders **`null` instead of `[]`** — and Cilium's own bundled CRD makes the field non-nullable, so the `null` is pruned and the required field is then missing, see above (also observable through `cilium.CiliumCIDRGroup(cfg)` with no CIDRs) |
 
-**On the `no-op` rows specifically:** exactly three of the list fields this release
-stopped initialising lack `omitempty` upstream, and all three are the CRD fields called
-out above. Every other list and map field in the table has it, so nil and `[]`/`{}`
-serialise identically and a golden file of the old output shows **no difference at all**
-for those rows — not a smaller difference, none. That is the correction worth carrying
-away: the only place the emitted YAML genuinely changes is those three CRD fields, and
-there it changes `[]` → `null`, which is why they are classed **unsettled** rather than
-counted as cosmetic.
+**On empty collections specifically:** of the collections this release stopped
+initialising, exactly three lack `omitempty` upstream — the CRD fields called out above.
+Every other list and map field in the table has it, so nil and `[]`/`{}` serialise
+identically and a golden file of the old output shows **no difference at all** for those
+collections: not a smaller difference, none.
+
+Read that as narrowly as it is written. It is a claim about collection initialisation,
+not about the rows as wholes. Several rows also dropped a **scalar**, and every one of
+those does change the emitted YAML: `spec.replicas: 0` (`apps/v1/types.go:207` — the
+`omitempty` sits on a *pointer*, so an explicit zero was emitted and is now omitted
+entirely), `spec.volumeMode`, `spec.podManagementPolicy`, `spec.ingressClassName`,
+`automountServiceAccountToken`. A golden-file diff of this release is therefore not
+empty. It is empty of *collection* changes — and the three CRD fields are the only place
+a collection change shows up at all, as `[]` → `null`.
 
 The other hand-written constructors (cert-manager, CloudNativePG, External Secrets,
 Flux, MetalLB, VolSync, the remaining Cilium kinds, RBAC) were already
