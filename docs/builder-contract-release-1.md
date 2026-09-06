@@ -203,7 +203,7 @@ object by `app: <name>` stops matching it — but it does not cost the same on e
 and the difference is not a judgement call. **Some labels sit on a surface the API itself
 defines a selector for, and some do not.** Pod template labels do: a Service routes
 *"traffic to pods with label keys and values matching this selector"*
-(`core/v1/types.go:6275`), a NetworkPolicy `podSelector` selects pods in the policy's own
+(`core/v1/types.go:6275-6276`), a NetworkPolicy `podSelector` selects pods in the policy's own
 namespace (`networking/v1/types.go:203-205`) and a PodMonitor selects pods to scrape
 (`podmonitor_types.go:98`) — which is why losing them is **silent** rather than cosmetic.
 Namespace labels do too — *"namespaceSelector selects namespaces using cluster-scoped
