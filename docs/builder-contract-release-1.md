@@ -465,6 +465,21 @@ The five empty collections it also set (`Ports`, `Env`, `EnvFrom`,
 `append` works on a nil slice. Drop the `Resources` and `ImagePullPolicy` keys
 if the defaults were not wanted — that is the point of removing them.
 
+**In the table's own terms these are `silent`, and the table does not say so
+because it classifies kinds and a `Container` is not one.** The scheme still
+applies, so it is worth stating rather than leaving to a reader who only read
+the table: a container that lost its memory limit and its CPU and memory
+requests is a valid container that asks for nothing and is capped at nothing —
+the manifest is accepted and no controller reports the change. The pull policy
+splits, and the pinned type settles which way: *"Defaults to Always if `:latest`
+tag is specified, or IfNotPresent otherwise"* (`core/v1/types.go:3296`). For an
+image pinned to any other tag the effective value is `IfNotPresent` either way,
+so that removal is **no-op**; for an image on `:latest` it becomes `Always`, and
+the container is re-pulled on every start where it previously was not — **silent**
+by the same standard as the rest of this document. This is the one place where
+a single removed default lands in two different classes depending on a value the
+caller supplies.
+
 `CreatePodSpec` set `RestartPolicy: Always`, a zero
 `TerminationGracePeriodSeconds` pointer, an empty `SecurityContext`, an empty
 `Affinity`, an empty `NodeSelector` map, and five empty slices. `Always` is the
