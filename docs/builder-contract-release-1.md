@@ -326,8 +326,13 @@ the migration:
   shorter one.
 
 `null`, `{}` and `""` are the only degraded values **in this table**, not a general law:
-a field emitted regardless of content that happened to be numeric or boolean would
-degrade to `0` or `false`. None of the removed defaults is one.
+a field emitted regardless of content that happened to be numeric or boolean degrades to
+`0` or `false` instead. No removed default is one — but the shape is live in this
+repository rather than hypothetical. `spec.maxReplicas` on a HorizontalPodAutoscaler
+carries no `omitempty` (`autoscaling/v2/types.go:73`), which is why
+`pkg/kubernetes/testdata/hpa-scale-target-ref.yaml` renders `maxReplicas: 0`. It renders
+that on both sides of this release, so it is not a diff line; it is what you would be
+looking at if one of these constructors had injected a number.
 
 **Why a field with `omitempty` can still be emitted.** `omitempty` drops a field only
 when its value is *empty*, and Go defines that as "false, 0, a nil pointer, a nil
