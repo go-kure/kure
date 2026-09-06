@@ -195,23 +195,27 @@ kubernetes.AddAnnotation(obj, "app", name)
 ```
 
 The consequence is the same shape as the pod-template label — anything selecting the
-object by `app: <name>` stops matching it — but how much that costs depends on the kind,
-and for most kinds nothing in the pinned types does such selecting. **`CreateNamespace`
-is the exception the types do settle**: namespace labels are a first-class selector
-surface, *"namespaceSelector selects namespaces using cluster-scoped labels"*
-(`networking/v1/types.go:209-210`), so a Namespace that quietly dropped `app: <name>`
-falls out of every NetworkPolicy peer that selected it. That row is **silent** for this
-reason alone; without it, it would be `no-op`.
+object by `app: <name>` stops matching it — but it does not cost the same on every kind,
+and the difference is not a judgement call. **Some labels sit on a surface the API itself
+defines a selector for, and some do not.** Pod template labels do: `Service.spec.selector`,
+a NetworkPolicy `podSelector` and a PodMonitor all select pods by label, which is why
+losing them is **silent** rather than cosmetic. Namespace labels do too —
+*"namespaceSelector selects namespaces using cluster-scoped labels"*
+(`networking/v1/types.go:209-210`) — so a Namespace that quietly dropped `app: <name>`
+falls out of every NetworkPolicy peer that selected it, and `CreateNamespace` is
+**silent** for that reason alone. Without it that row would be `no-op`.
 
-For the remaining kinds the table leaves the class where the object's other removals put
-it, and this removal is named in the row without changing it. That is a deliberate
-limit, not an oversight: whether a ConfigMap or a Service is selected by `app: <name>` is
-a fact about your cluster, not about these types. The nearest case that looks settleable
-is not — a ServiceMonitor selects `Endpoints` objects and *"in most cases, an Endpoints
-object is backed by a … Service object with the same name and labels"*
-(`servicemonitor_types.go:99,103`), but that label copying is done by a controller in
-`k8s.io/kubernetes`, and the sentence hedges. If you select any of these objects by
-label, treat your own case as **silent**.
+Nothing in the pinned types selects a ConfigMap, an HPA or a PodDisruptionBudget by its
+own labels, so those rows keep the class their other removals give them and simply name
+this one. That is the same standard, not a softer one: the class states what these types
+guarantee, and a selector you wrote yourself is outside what they can guarantee. If you
+do select any of these objects by label, treat your own case as **silent** — the removal
+is identical, only the evidence for it is yours rather than upstream's. The nearest case
+that looks like it should settle does not: a ServiceMonitor selects `Endpoints` objects
+and *"in most cases, an Endpoints object is backed by a … Service object with the same
+name and labels"* (`servicemonitor_types.go:99,103`), but that label copying is performed
+by a controller in `k8s.io/kubernetes` and the sentence hedges, so a Service's own label
+is not settleable here either.
 
 #### Renders `null` where it used to render `[]`
 
