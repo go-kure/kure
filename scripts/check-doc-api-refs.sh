@@ -796,10 +796,23 @@ fi
 # -H is not optional. Without it grep omits the file name whenever xargs hands it
 # a single path, which happens for the last batch of a long list -- the rows would
 # then lose the package half of the pair for an arbitrary tail of the tree.
+#
+# scan_symbols exists to tolerate one status and only one. A batch holding no
+# file with an exported declaration makes grep exit 1, which xargs reports as
+# 123; under `set -e` with `pipefail` that would end the run right here, before
+# the emptiness guard below could say why. It is latent rather than live -- the
+# list is one batch at this tree's size -- but the failure it would produce is a
+# bare exit status with no message, so it is worth closing while it is cheap.
+# 123 also covers a real grep error inside a batch, so the guard below stays the
+# backstop for a scan that produced nothing; every other xargs status still
+# aborts, which is what the third probe case asserts.
+scan_symbols() {
+	xargs -0 grep -HoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' || [ "$?" -eq 123 ]
+}
 go_files=$(find pkg -name '*.go' ! -name '*_test.go' ! -path '*/internal/*' -type f)
 printf '%s\n' "$go_files" | sed 's#/[^/]*$##' | sort -u >"$pkgdirs"
 printf '%s\n' "$go_files" | tr '\n' '\0' |
-	xargs -0 grep -HoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' |
+	scan_symbols |
 	sed -E 's#/[^/]*\.go:func (\([^)]*\) )?# #' |
 	sort -u >"$symbols"
 
