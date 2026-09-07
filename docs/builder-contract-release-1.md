@@ -85,11 +85,13 @@ types do not state. Disclosing this for two rows and not the others would make t
 undisclosed ones look better established than they are.
 
 **`spec.selector`** on `CreateDaemonSet`, `CreateDeployment` and `CreateStatefulSet`
-is marked `+required` with no server-side default — `k8s.io/api@v0.37.0`
-`apps/v1/types.go:212`, and the field carries `json:"selector"` with no `omitempty`
-(`:215`), so it is emitted as `null` rather than omitted. Restore it together with the
-matching template labels the same constructors stopped setting — the selector must
-match them:
+is marked `+required` with no server-side default, and each of the three specs
+declares the field separately — `k8s.io/api@v0.37.0` `apps/v1/types.go:697-702`
+(`DaemonSetSpec`), `:422-426` (`DeploymentSpec`) and `:209-215`
+(`StatefulSetSpec`). In all three the field carries `json:"selector"` with no
+`omitempty`, so it is emitted as `null` rather than omitted. Restore it together
+with the matching template labels the same constructors stopped setting — the
+selector must match them:
 
 ```go
 obj.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}
@@ -365,7 +367,8 @@ the migration:
   the line stays and the value degrades. Two different things put a field here — no
   `omitempty` at all, or a **struct-typed** field, for which `omitempty` does nothing (see
   below): `spec.selector` on DaemonSet/Deployment/StatefulSet renders `null`
-  (`apps/v1/types.go:215`), NetworkPolicy's `spec.podSelector` renders `{}`
+  (`apps/v1/types.go:702`, `:426` and `:215` respectively — one declaration per
+  spec), NetworkPolicy's `spec.podSelector` renders `{}`
   (`networking/v1/types.go:69` — a value type, so the zero struct, not `null`), CronJob's
   `spec.schedule` renders `""` (`batch/v1/types.go:794`), the three CRD list fields
   render `null` where they rendered `[]`, the PVC's `spec.resources` renders `{}`
@@ -438,8 +441,19 @@ folded onto the PodSpec helpers below.
 
 ### Sub-type constructors (9)
 
-A sub-type that is not a `client.Object` gets no constructor: a struct literal
-is both shorter and the only form that shows every field being set.
+A sub-type that is not a `client.Object` gets no *generated* constructor: a
+struct literal is both shorter and the only form that shows every field being
+set. Read that as a statement about generation, not a blanket removal. The nine
+rows below are the sub-type constructors this release removed; hand-written
+sub-type helpers that were not on that list survive this release unchanged and
+their call sites still compile. `pkg/kubernetes/README.md:60-78` states the
+split and names the survivors: `CreateIngressPath` at
+`pkg/kubernetes/ingress.go:9` and `CreateResourceRequirements` at
+`pkg/kubernetes/resourcerequirements.go:10` in this package — both under review
+for the next work item, per that page — plus the ones the kind sub-packages
+still export, such as `CreatePostRendererKustomize` at
+`pkg/kubernetes/fluxcd/setters.go:465`. So a consumer rewrites the nine rows
+below, and nothing else on account of this release.
 
 Each row gives the removed function's exact former signature and a literal that
 produces the same value. Where the constructor injected defaults, they are
@@ -448,7 +462,7 @@ did not gets a smaller object.
 
 | Removed | Replacement |
 |---|---|
-| `CreateContainer(name string, image string, command []string, args []string) *corev1.Container` | see below — it injected six defaults |
+| `CreateContainer(name string, image string, command []string, args []string) *corev1.Container` | see below — it injected seven fields |
 | `CreatePodSpec() *corev1.PodSpec` | see below — it injected eleven |
 | `CreateVolumeClaimTemplate(name string, opts VolumeClaimTemplateOptions) corev1.PersistentVolumeClaim` | see below |
 | `CreateIngressRule(host string) *netv1.IngressRule` | see below |
@@ -458,10 +472,19 @@ did not gets a smaller object.
 | `CreateACMEDNS01SolverRoute53(region string, key cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver` | see below |
 | `CreateACMEDNS01SolverGoogle(project string, sa *cmmeta.SecretKeySelector) cmacme.ACMEChallengeSolver` | see below |
 
-`CreateContainer` set a memory limit, CPU and memory requests, an image pull
-policy, and five empty collections. **A caller that took those silently now gets
-a container with no resource reservation at all.** The behaviour-preserving
-replacement:
+`CreateContainer` set seven fields beyond its four arguments: five empty
+collections, `Resources` and `ImagePullPolicy`. Counting the individual values
+instead of the fields gives nine — a memory limit, a CPU request, a memory
+request, the pull policy, and the five collections. The table's number is
+fields. **A caller that took those silently now gets a container that states no
+requests and no limits of its own.** Whether that leaves it with none is a
+cluster question, not a type question: with no limits specified, an omitted
+request defaults to *"an implementation-defined value"*
+(`core/v1/types.go:3060-3062`), and a `LimitRange` in the namespace supplies a
+default for an omitted limit and for an omitted request alike
+(`core/v1/types.go:8052-8057`). What the removal guarantees is that the manifest
+no longer carries the old numbers — not that nothing takes their place. The
+behaviour-preserving replacement:
 
 ```go
 &corev1.Container{
@@ -489,13 +512,23 @@ if the defaults were not wanted — that is the point of removing them.
 because it classifies kinds and a `Container` is not one.** The scheme still
 applies, so it is worth stating rather than leaving to a reader who only read
 the table: a container that lost its memory limit and its CPU and memory
-requests is a valid container that asks for nothing and is capped at nothing —
-the manifest is accepted and no controller reports the change.
+requests is a valid container that asks for nothing *explicitly* and states no
+cap of its own — the manifest is accepted and no controller reports the change.
+What it ends up scheduled and capped with is then whatever admission supplies
+(`LimitRange` defaults, `core/v1/types.go:8052-8057`) or, absent that, the
+implementation-defined request the type documents
+(`core/v1/types.go:3060-3062`). `silent` is the right class on either path, and
+for the same reason: nothing in the rendered manifest and nothing in any
+controller's status tells the caller the numbers changed.
 
-The pull policy is different in kind, and worth stating carefully because it is
-the only removed default in this release whose class is **a property of the
-caller's input rather than of the default itself**. Every other row here can be
-classified from the removed value alone. This one cannot: the type documents
+The pull policy is different in kind, and worth stating carefully, because its
+class is **a property of the caller's input rather than of the default itself**
+— it cannot be classified from the removed value alone. It is not the only row
+of that shape: `CreateIngress` above is another, for the same reason. It too
+stopped assigning a value its caller supplied, against an upstream default that
+may or may not coincide with what was supplied, so that removal likewise
+preserves or changes routing depending on the caller's input rather than on the
+removed value. Here the type documents
 *"Defaults to Always if `:latest` tag is specified, or IfNotPresent otherwise"*
 (`core/v1/types.go:3296`), so for an image carrying an explicit tag other than
 `:latest` the effective value is `IfNotPresent` either way and the removal is
@@ -515,7 +548,9 @@ policy explicitly rather than inferring it from the sentence above.
 
 `CreatePodSpec` set `RestartPolicy: Always`, a zero
 `TerminationGracePeriodSeconds` pointer, an empty `SecurityContext`, an empty
-`Affinity`, an empty `NodeSelector` map, and five empty slices. `Always` is the
+`Affinity`, an empty `NodeSelector` map, an empty `ServiceAccountName` string
+(the zero value, so writing it changed nothing) and five empty slices —
+eleven fields, the number in the table above. `Always` is the
 API server's own default for a Pod. Four of the five slices (`InitContainers`,
 `Volumes`, `ImagePullSecrets`, `Tolerations`) carry `omitempty` upstream and so
 never rendered, but `Containers` does not: `PodSpec.Containers` is required with
@@ -536,6 +571,20 @@ keep the old value exactly:
 A caller that wants none of them writes `&corev1.PodSpec{}`. The `Containers`
 difference disappears as soon as one container is appended, so it matters only
 for a spec serialised while still empty.
+
+**`TerminationGracePeriodSeconds` needs its own note: its removal changes what
+the cluster does, and in the table's terms it is `silent`** — the same shape as
+`spec.replicas: 0` above. The pointer was to zero, and `omitempty`
+on a pointer elides only nil, so the old output carried
+`terminationGracePeriodSeconds: 0` and the new output omits the line. Upstream
+documents that *"the value zero indicates stop immediately via the kill signal
+(no opportunity to shut down)"*, that *"if this value is nil, the default grace
+period will be used instead"*, and that it *"defaults to 30 seconds"*
+(`core/v1/types.go:4410-4419`). So a pod that was killed the instant it was
+deleted now gets 30 seconds to shut down instead. The object stays valid,
+nothing refuses it and no controller reports it — you find out from how long
+deletes take. Keeping `new(int64)`, as the literal above does, restores
+immediate termination.
 
 `CreateVolumeClaimTemplate` took an options struct, also removed
 (`VolumeClaimTemplateOptions`), and returned a value rather than a pointer. It
