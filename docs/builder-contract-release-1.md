@@ -201,7 +201,7 @@ kubernetes.AddAnnotation(obj, "app", name)
 The consequence is the same shape as the pod-template label — anything selecting the
 object by `app: <name>` stops matching it — but it does not cost the same on every kind,
 and the difference is not a judgement call. **Some labels sit on a surface the API itself
-defines a selector for, and some do not.** Pod template labels do: a Service routes
+defines a selector for *that kind*, and some do not.** Pod template labels do: a Service routes
 *"traffic to pods with label keys and values matching this selector"*
 (`core/v1/types.go:6275-6276`), a NetworkPolicy `podSelector` selects pods in the policy's own
 namespace (`networking/v1/types.go:203-205`) and a PodMonitor selects pods to scrape
@@ -227,12 +227,32 @@ same name and labels"* (`servicemonitor_types.go:99,103`), but that label copyin
 by a controller in `k8s.io/kubernetes`, which is not a dependency here, and the sentence
 hedges. That path stays unsettleable; it simply no longer carries the question.
 
-Nothing in the pinned types selects a ConfigMap, an HPA or a PodDisruptionBudget by its
-own labels, so those rows keep the class their other removals give them and simply name
-this one. That is the same standard, not a softer one: the class states what these types
-guarantee, and a selector you wrote yourself is outside what they can guarantee. If you
-do select any of these objects by label, treat your own case as **silent** — the removal
-is identical, only the evidence for it is yours rather than upstream's.
+No pinned type defines a selector *for* a ConfigMap, an HPA, an HTTPRoute or a
+PodDisruptionBudget — one whose own definition names the kind it selects, the way
+`Service.spec.selector` names pods and `namespaceSelector` names namespaces. Gateway API
+comes closest and does not qualify: both of its label selectors pick *namespaces*, not
+routes — *"only Routes in Namespaces matching this Selector will be selected by this
+Gateway"* (`gateway-api@v1.6.2` `apis/v1/gateway_types.go:892-893`). So those four rows
+stay **no-op** and simply name this removal: for `CreateConfigMap` and `CreateHTTPRoute`
+that is the class their other removals already give them, and for
+`CreateHorizontalPodAutoscaler` and `CreatePodDisruptionBudget` — where the label and
+annotation were the *only* injected default — it is the class on its own.
+
+Two mechanisms in the pinned dependencies *do* match objects by their own labels
+regardless of kind, which is why the line above is drawn at kind-specific selection
+rather than at label matching in general. An admission webhook's `objectSelector`
+*"decides whether to run the webhook based on if the object has matching labels"*
+(`admissionregistration/v1/types.go:1032-1033`), and a Flux Kustomization's inline
+patches are *"defined as inline YAML objects, capable of targeting objects based on kind,
+label and annotation selectors"* (`kustomize-controller/api@v1.9.4`
+`v1/kustomization_types.go:129-130`). Both apply to **every** row in the table, including
+the ones already **silent**, so neither moves one row's class relative to another's. What
+they do change is the floor, and it is the one thing here worth checking before you
+upgrade even on a `no-op` row: if a webhook or a Flux patch in your cluster targets
+`app: <name>`, the removal is **silent** for you on whichever kind it targets. The same
+goes for a selector you wrote yourself — `kubectl -l`, a Kustomize label selector, your
+own controller. The class states what these types guarantee; it cannot state what your
+cluster is configured to do.
 
 #### Renders `null` where it used to render `[]`
 
@@ -1097,10 +1117,17 @@ field `Spec.Values`.
 
 A sugar helper cannot hand back a marshalling failure, so values that could
 hold something `encoding/json` refuses must be marshalled by the caller and
-passed to `SetHelmReleaseValues`, which takes already-encoded JSON. Anything
-decoded from YAML or JSON into `map[string]any` always marshals; the panic is
-reachable only from a channel, a function, a NaN or `+Inf` float, or a cyclic
-structure.
+passed to `SetHelmReleaseValues`, which takes already-encoded JSON. The panic
+is reachable from a channel, a function, a cyclic structure, or a NaN or `±Inf`
+float — and the float case **is** reachable from YAML, so "it was decoded from
+a config file" is not on its own a guarantee. A decoder that produces Go floats
+directly decodes the legal YAML scalar `.NaN` into a `float64` NaN and returns
+no error (`gopkg.in/yaml.v3@v3.0.1` `decode_test.go:919-923`, the library's own
+test). A decoder that round-trips through JSON does rule it out, but by failing
+rather than by sanitising: `sigs.k8s.io/yaml` marshals the decoded object to
+JSON and hands you that error (`sigs.k8s.io/yaml@v1.6.0` `yaml.go:174-176`), so
+the NaN never reaches your map. Reaching `map[string]any` by any other route
+needs the caller's own check, or `SetHelmReleaseValues`.
 
 These take the exclusion list from 33 tolerated helpers to 24.
 
