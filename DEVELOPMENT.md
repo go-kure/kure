@@ -303,15 +303,24 @@ For the full dependency update process (review, bundling, version tracking), see
 - `list-packages` - List all packages
 ## Environment Variables
 
-Key environment variables the Makefile respects:
+Set from the environment (`?=`, so `VAR=value make <target>` and an exported `VAR` both work):
+
+- `GOROOT` - Go root directory (default: `go env GOROOT`)
+- `VERSION` - Version string for builds (default: `git describe`, else `dev`)
+- `TEST_TIMEOUT` - Test timeout, applied per test binary (default: `15m`, the same budget CI grants)
+
+Assigned with `:=`, so the **environment does not reach them** — override with a make command-line
+assignment instead, as in `make test TEST_PACKAGES=./pkg/errors/`:
 
 - `GO` - Go command (default: `go`)
-- `GOROOT` - Go root directory
-- `VERSION` - Version string for builds
-- `BUILD_DIR` - Clean target artifact directory (default: `bin`)
-- `OUTPUT_DIR` - Clean target artifact directory (default: `out`)
-- `TEST_TIMEOUT` - Test timeout, applied per test binary (default: `15m`, the same budget CI grants)
-- `PACKAGE_PATH` - Package path for kurel operations
+- `TEST_PACKAGES` - Package pattern the test targets run (default: `./...`)
+- `BUILD_DIR`, `OUTPUT_DIR`, `COVERAGE_DIR` - directories `clean` removes (`bin`, `out`,
+  `coverage`); `COVERAGE_DIR` is also where `test-coverage` writes its profile and HTML report
+
+`COVERAGE_THRESHOLD` (`Makefile:30`) is **defined and never referenced** — setting it changes
+nothing. It also disagrees with the gate that does run: it reads `80`, while the `coverage-check` CI
+job hardcodes `90` for both total and per-package coverage (`.github/workflows/ci.yml:768-769`).
+Treat 90 as the number that matters.
 
 ## Development Tips
 

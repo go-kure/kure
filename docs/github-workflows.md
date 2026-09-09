@@ -544,29 +544,44 @@ The development version shows a warning banner linking to the latest stable vers
 
 ## Test Jobs in CI
 
-| Job | Matrix | Command | Uses Makefile? |
-|-----|--------|---------|----------------|
-| `test` | - | `go test -json -v ./...` | ✅ (deps) |
-| `test` | - | `make test-race` | ✅ |
-| `test` | - | `make test-coverage` | ✅ |
+There is **one** Go test job, and it runs `go test` inline rather than through a `make` target.
+
+| Job | Command | Uses Makefile? |
+|-----|---------|----------------|
+| `test` | `go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 15m ./...`, tee'd to a `test-log` artifact (`ci.yml:534`) | `make deps` only |
+| `coverage-check` | no tests; downloads the `coverage` artifact and thresholds it with `go tool cover -func` | - |
+
+That single command produces the race check and the coverage profile together, so there is no
+separate race or coverage test run. **Nothing under `.github/workflows/` invokes `make test`,
+`make test-race`, `make test-coverage`, `make vuln`, `make precommit` or `make ci`** — the `make`
+targets CI does use are `deps`, `fmt`, `tidy`, `lint`, `vet`, `outdated`, `check-go-version`,
+`check-tool-versions` and `check-govulncheck-docs`.
 
 ## Test Targets in Makefile
 
-| Target | Command | Used in CI? | In precommit? |
-|--------|---------|-------------|---------------|
-| `test` | `go test -timeout 15m ./...` | ✅ | ✅ |
-| `test-race` | `go test -race -timeout 15m ./...` | ✅ | - |
-| `test-coverage` | `go test -coverprofile=... ./...` | ✅ | - |
+**No `make` target in this table is invoked by CI.** The column below states that explicitly,
+because a ✅ there would claim pipeline coverage these targets do not have: a green pipeline says
+nothing about whether any of them passes.
+
+| Target | Command | Invoked by CI? | In precommit? |
+|--------|---------|----------------|---------------|
+| `test` | `go test -timeout 15m ./...` | - (CI runs its own inline `go test`) | ✅ |
+| `test-race` | `go test -race -timeout 15m ./...` | - (the inline command already carries `-race`) | - |
+| `test-coverage` | `go test -coverprofile=... ./...` | - (the inline command already writes the profile) | - |
 | `test-integration` | `go test -tags=integration -timeout 5m ./...` | - | - |
-| `vuln` | `govulncheck ./...` | ✅ | - |
+| `vuln` | `govulncheck ./...` | - (CI runs the canonical `govulncheck-gate` action instead) | - |
 | `versions-test` | `bash scripts/test/run-tests.sh` | - (CI runs the script directly, not via `make`) | ✅ |
 
 ## CI vs Pre-commit
 
-| Target | Tasks | Use Case |
+Both are local aggregate targets. **Neither is what CI runs** — the pipeline calls individual
+targets and its own inline commands, so `make ci` passing locally is not the pipeline passing, and
+the pipeline passing is not `make ci` passing.
+
+| Target | Tasks (`Makefile:349`, `:352`) | Use Case |
 |--------|-------|----------|
-| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs, versions-test | Fast local checks (~10s) |
-| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln, check-tool-versions, check-govulncheck-docs, versions-test | Comprehensive CI pipeline (~2min) |
+| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs, versions-test, check-builders | Local pre-commit gate. Dominated by `test`: `pkg/kubernetes/internal/gen` alone runs ~1 minute |
+| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln, check-tool-versions, check-govulncheck-docs, versions-test, check-builders | Local superset — runs the race, coverage and integration passes `precommit` skips |
 
 ---
 
