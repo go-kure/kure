@@ -29,8 +29,8 @@ This document provides an overview of all GitHub Actions workflows used in the k
 ### Triggers
 
 - Push to: `main`, `develop`, `release/*`
-- Pull requests to: `main`, `develop`, on GitHub's default types
-  `opened`, `synchronize`, `reopened`
+- Pull requests to: `main`, `develop` only, on types
+  `opened`, `synchronize`, `reopened`, `labeled`, `unlabeled`
 - Merge group (merge queue's temporary branch — required checks must report here)
 - Schedule: 4am UTC daily (catch external changes)
 - Manual dispatch
@@ -38,6 +38,17 @@ This document provides an overview of all GitHub Actions workflows used in the k
 Every job runs on draft PRs the same as ready ones (2026-08-19, GitLab `mr-review` parity — see
 [Draft PRs](#draft-prs)), so `ready_for_review` is not declared: it would only re-trigger a suite
 that already ran.
+
+`labeled` and `unlabeled` are declared so that adding the `pin-impact` job's `pin-impact-ack`
+override label starts a new run — without them the required `build` check stayed failed until an
+unrelated push, so the acknowledgement path existed but nothing re-evaluated it. The cost is that
+**any** label change reruns the whole pipeline, not just a `pin-impact-ack` one.
+
+**The `branches:` filter is a base-branch filter, and a stacked PR gets no CI from it.** A PR whose
+base is another feature branch rather than `main` or `develop` does not match, so none of this
+workflow's jobs run on it — only `claude` and `pr-review`, which declare no branch filter, report.
+The absence is structural, not a pass: an empty check list on such a PR means the suite never ran.
+CI starts reporting once the base merges and GitHub retargets the PR to `main`.
 
 ### Concurrency
 
