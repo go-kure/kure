@@ -554,8 +554,8 @@ The development version shows a warning banner linking to the latest stable vers
 
 | Target | Command | Used in CI? | In precommit? |
 |--------|---------|-------------|---------------|
-| `test` | `go test -timeout 30s ./...` | ✅ | ✅ |
-| `test-race` | `go test -race -timeout 30s ./...` | ✅ | - |
+| `test` | `go test -timeout 15m ./...` | ✅ | ✅ |
+| `test-race` | `go test -race -timeout 15m ./...` | ✅ | - |
 | `test-coverage` | `go test -coverprofile=... ./...` | ✅ | - |
 | `test-integration` | `go test -tags=integration -timeout 5m ./...` | - | - |
 | `vuln` | `govulncheck ./...` | ✅ | - |

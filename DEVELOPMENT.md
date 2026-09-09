@@ -310,7 +310,7 @@ Key environment variables the Makefile respects:
 - `VERSION` - Version string for builds
 - `BUILD_DIR` - Clean target artifact directory (default: `bin`)
 - `OUTPUT_DIR` - Clean target artifact directory (default: `out`)
-- `TEST_TIMEOUT` - Test timeout (default: `30s`)
+- `TEST_TIMEOUT` - Test timeout, applied per test binary (default: `15m`, the same budget CI grants)
 - `PACKAGE_PATH` - Package path for kurel operations
 
 ## Development Tips
