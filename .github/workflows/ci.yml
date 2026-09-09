@@ -32,7 +32,7 @@ env:
   # govulncheck-gate action, but nothing compares their pins. A bump therefore has
   # to be mirrored by hand in each workflow that installs it, this one included.
   # renovate: datasource=go depName=golang.org/x/vuln
-  GOVULNCHECK_VERSION: 'v1.7.0'
+  GOVULNCHECK_VERSION: 'v1.8.0'
   # The runner binary patch (Runner.Worker.dll) renames all occurrences of
   # ACTIONS_RESULTS_URL to ACTIONS_RESULTS_ORL, including the name the Worker
   # injects into step process environments.  Workflow env overrides runner-injected
