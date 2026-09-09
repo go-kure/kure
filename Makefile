@@ -23,7 +23,9 @@ OUTPUT_DIR := out
 COVERAGE_DIR := coverage
 
 # Test configuration
-TEST_TIMEOUT := 30s
+# go test -timeout is per test binary, so this must cover the slowest package,
+# not a typical one. 15m matches the budget ci.yml already grants the same suite.
+TEST_TIMEOUT ?= 15m
 TEST_PACKAGES := ./...
 COVERAGE_THRESHOLD := 80
 
