@@ -713,14 +713,11 @@ jobs:
     - name: Check for outdated dependencies
       run: make outdated
 
-    - name: Check for sensitive files
-      run: |
-        # Check for common sensitive patterns
-        matches=$(grep -r -i "password\|secret\|token\|key" --include="*.go" --include="*.yaml" --include="*.yml" . | grep -v "test" | grep -v "_test.go" | grep -E "(=|:)" | head -10 || true)
-        if [ -n "$matches" ]; then
-          printf '%s\n' "$matches"
-          echo "::warning::Potential sensitive information found in code. Please review."
-        fi
+    # Credential detection is GitHub secret scanning + push protection, both enabled on this
+    # repository, not a step here. A grep for `password|secret|token|key` over *.go/*.yaml/*.yml
+    # matched only Actions cache keys on every run it ever made -- and could not see .env, .json,
+    # .pem, .netrc, Dockerfile, Makefile or shell scripts, which is where a credential lands.
+    # Removed in go-kure/kure#788; see docs/github-workflows.md.
 
   # =============================================================================
   # Stage 3: Coverage Check

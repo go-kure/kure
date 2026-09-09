@@ -136,8 +136,13 @@ temporary branch — the merged result — before the PR is allowed to land.
   pass without valid data
 - **PR comments** - Coverage report comment on PRs
 - **Runs on draft PRs** - no draft gate on any job (see [below](#draft-prs))
-- **Sensitive file check** - Print at most ten potential matches and emit one warning only when
-  matches exist; this check remains informational and does not block CI
+- **Credential detection** - GitHub **secret scanning** and **push protection**, both enabled on
+  this repository, not a CI step. Push protection blocks the push; a CI step can only report after
+  the secret is already in the history. The former `Sensitive file check` step was removed in #788:
+  it grepped `password|secret|token|key` across `*.go`/`*.yaml`/`*.yml`, which matched Actions cache
+  keys (`key:`, `restore-keys:`) on every run while being unable to read `.env`, `.json`, `.pem`,
+  `.netrc`, `Dockerfile`, `Makefile` or shell scripts. A warning that fires on every run carries no
+  signal, and this one could not look where a credential actually lands
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
