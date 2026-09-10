@@ -153,9 +153,10 @@ temporary branch — the merged result — before the PR is allowed to land.
   on `key` or on the `secret` inside `external-secrets`. It could not read `.env`, `.json`, `.pem`,
   `.netrc`, `Dockerfile`, `Makefile` or shell scripts at all; its `grep -v test` filter dropped any
   line containing that substring, including paths under `latest/`; and `head -10` discarded an
-  eleventh match. It emitted `::warning` behind `|| true`, so it gated nothing. On every run
-  inspected it fired, which is what makes its output uninformative: a warning that is present
-  whether or not anything is wrong cannot distinguish the two
+  eleventh match. It could only emit `::warning`, never fail the job, so it gated nothing — and the
+  `|| true` on its grep pipeline meant a no-match run could not fail it either. It did print its
+  matches, so its output was not empty; but the annotation fired on every run inspected, and an
+  annotation present whether or not anything is wrong cannot distinguish the two
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
