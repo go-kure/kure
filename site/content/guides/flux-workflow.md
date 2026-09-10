@@ -287,22 +287,35 @@ objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
 
 ### Bootstrap namespace
 
-The bootstrap namespace is not part of `BootstrapConfig` — it comes from the generator:
+The bootstrap namespace is not part of `BootstrapConfig` — it lives on the generator. The engine
+holds its own generator and `engine.GenerateBootstrap` delegates to that one, so configure it
+through the engine rather than building a second generator the call never reads:
 
 ```go
-bg := fluxcd.NewBootstrapGenerator()
-bg.DefaultNamespace = "custom-flux" // default: "flux-system"
+engine.GetBootstrapGenerator().DefaultNamespace = "custom-flux" // default: "flux-system"
+
+objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
 ```
 
-It relocates the **whole** bundle, in both modes. For `"gotk"` that includes the toolkit components
-themselves — the controllers' Deployments, ServiceAccounts, Services, NetworkPolicies and
-ResourceQuota — alongside the root Kustomization and the root source. The cluster-scoped objects
-follow where they name a namespace: the emitted `Namespace` and the `ClusterRoleBinding` names and
-subjects are derived from the same value, while CRDs and ClusterRoles carry no namespace.
+**How much it moves depends on the mode, and the two differ sharply.**
 
-One consequence worth knowing before you narrow anything: the toolkit components are generated with
-`WatchAllNamespaces` at its upstream default of `true`, and that is not currently derived from
-configuration. Controllers therefore reconcile across namespaces regardless of where they run.
+With `"gotk"` it relocates the whole bundle: the toolkit components themselves — the controllers'
+Deployments, ServiceAccounts, Services, NetworkPolicies and ResourceQuota — alongside the root
+Kustomization and the root source. The cluster-scoped objects follow where they name a namespace,
+since the emitted `Namespace` and the `ClusterRoleBinding` names and subjects are derived from the
+same value; CRDs and ClusterRoles carry no namespace.
+
+With `"flux-operator"` — the default mode — it reaches **only the `FluxInstance`**. The operator's
+own install bundle is appended unmodified from an embedded manifest, so its `Namespace`,
+ServiceAccount, Service and Deployment stay hardcoded to `flux-system` whatever this field says. A
+non-default value therefore yields an operator running in `flux-system` reconciling a `FluxInstance`
+in your namespace. That works, but it is not "the bundle moved", and the emitted `Namespace` object
+is still named `flux-system`.
+
+One further consequence, for `"gotk"`, worth knowing before you narrow anything: the toolkit
+components are generated with `WatchAllNamespaces` at its upstream default of `true`, and that is
+not currently derived from configuration. Controllers therefore reconcile across namespaces
+regardless of where they run.
 
 ## Further Reading
 
