@@ -331,7 +331,7 @@ Treat 90 as the number that matters.
 - Use `make check` for quick pre-commit validation
 
 ### Code Quality
-- The CI pipeline enforces 85% test coverage
+- CI gates test coverage — see the `COVERAGE_THRESHOLD` note above for the number that applies
 - All code must pass golangci-lint checks
 - Code must be properly formatted with `go fmt`
 - Modules must be tidy
