@@ -132,19 +132,10 @@ temporary branch — the merged result — before the PR is allowed to land.
   a line, if the line happened to contain one of its four words and landed within the first ten
   matches. Enabling that setting, and `secret_scanning_validity_checks` alongside it, is a
   repository-settings decision rather than a change to this repository's contents. The former
-  `Sensitive file check` step was removed in go-kure/kure#788: it grepped `password|secret|token|key` across
-  `*.go`/`*.yaml`/`*.yml` and warned on every run it was observed on, printing only lines from the
-  workflow file itself — cache keys (`key:`, `restore-keys:`) alongside comment prose that matched
-  on `key` or on the `secret` inside `external-secrets`. It could not read `.env`, `.json`, `.pem`,
-  `.netrc`, `Dockerfile`, `Makefile` or shell scripts at all; its `grep -v test` filter dropped any
-  line containing that substring, including paths under `latest/`; and `head -10` discarded an
-  eleventh match. On a match it emitted an `::warning` annotation and nothing else; annotations are
-  not errors, so the step passed and the check gated nothing. A no-match run passed too, but not
-  because of the `|| true` on its pipeline: the step set no `shell:`, so it ran under the runner
-  default `bash -e`, which does not enable `pipefail`, and the pipeline ended in `head -10`, whose
-  exit status is zero whether or not anything upstream matched — that guard was inert. It did print
-  its matches, so its output was not empty; but the annotation fired on every run inspected, and an
-  annotation present whether or not anything is wrong cannot distinguish the two
+  `Sensitive file check` step grepped `password|secret|token|key` over `*.go`/`*.yaml`/`*.yml`: a
+  match produced an `::warning` annotation rather than a build failure, and on every run observed
+  it fired, matching only lines in this workflow file itself. It was removed in go-kure/kure#788,
+  which records the full analysis
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
