@@ -125,6 +125,11 @@ surfaces only when someone narrows the controllers to their own namespace, at wh
 reconciliation stops with no error. `WatchAllNamespaces` is deliberately left at the upstream
 default and is not currently derived from any field here.
 
+In `flux-operator` mode — the default — the field reaches only the `FluxInstance`. That bundle's
+other objects come from the vendored upstream install manifest, appended unmodified, so its
+`Namespace`, ServiceAccount, Service and Deployment stay at the upstream `flux-system` whatever this
+field says. Relocating the operator itself is not something this package offers.
+
 The wiring is guarded on the field being non-empty, which matters only for a struct-literal
 generator. `install.Generate` uses the option as the emitted `Namespace`'s **name**, so assigning it
 unconditionally would make a generator with a zero `DefaultNamespace` fail the whole bundle —
