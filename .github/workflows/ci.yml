@@ -716,12 +716,17 @@ jobs:
     # Credential detection is GitHub secret scanning + push protection, both enabled on this
     # repository, not a step here. The step that stood here grepped `password|secret|token|key`
     # over *.go/*.yaml/*.yml, warned on every run it was observed on, and on the runs inspected
-    # printed only this file's own cache keys and the prose around them. It could not read .env,
-    # .json, .pem, .netrc, Dockerfile, Makefile or shell scripts at all, and `head -10` meant a
-    # real match past the tenth was never printed. It could only ::warning, never fail.
-    # Push protection is stronger for a provider-issued token: it blocks the push rather than
-    # reporting after the fact. It is NOT a superset -- secret_scanning_non_provider_patterns is
-    # disabled on this repository, so generic high-entropy credentials are covered by neither.
+    # printed only lines from this file itself -- cache keys, and comment prose matching on words
+    # like `key` or the `secret` inside `external-secrets`. It could not read .env, .json, .pem,
+    # .netrc, Dockerfile, Makefile or shell scripts at all, and `head -10` meant a match past the
+    # tenth was never printed. It could only ::warning, never fail, so it gated nothing.
+    # For a token matching a supported provider pattern, push protection is the stronger control:
+    # it blocks the push rather than reporting after the fact. It is NOT a superset -- it covers
+    # only patterns secret scanning recognises (GitHub: "Push protection only supports the most
+    # recent token versions that secret scanning can identify with confidence"), and
+    # secret_scanning_non_provider_patterns is disabled here, so a generic high-entropy credential
+    # is not blocked. The removed step could at most have printed such a line, had it matched one
+    # of those four words and landed within the first ten -- never blocked it.
     # Removed in go-kure/kure#788; see docs/github-workflows.md.
 
   # =============================================================================

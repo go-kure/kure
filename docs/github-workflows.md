@@ -122,20 +122,25 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **PR comments** - Coverage report comment on PRs
 - **Runs on draft PRs** - no draft gate on any job (see [below](#draft-prs))
 - **Credential detection** - GitHub **secret scanning** and **push protection**, both enabled on
-  this repository, not a CI step. For a provider-issued token push protection is the stronger
-  control: it blocks the push, where a CI step can only report once the secret is already in the
-  history. It is **not a superset** — `secret_scanning_non_provider_patterns` is disabled here, so
-  a generic high-entropy credential is caught by neither it nor the removed step. Enabling that
-  setting, and `secret_scanning_validity_checks` alongside it, is a repository-settings decision
-  rather than a change to this repository's contents. The former `Sensitive file check` step was
-  removed in #788: it grepped `password|secret|token|key` across `*.go`/`*.yaml`/`*.yml` and warned
-  on every run it was observed on, printing this workflow's own cache keys (`key:`,
-  `restore-keys:`) and the prose around them. It could not read `.env`, `.json`, `.pem`, `.netrc`,
-  `Dockerfile`, `Makefile` or shell scripts at all; its `grep -v test` filter dropped any line
-  containing that substring, including paths under `latest/`; and `head -10` discarded an eleventh
-  match. It emitted `::warning` behind `|| true`, so it gated nothing. A signal that never varies
-  cannot discriminate — there is no run of that step whose quiet meant anything, because it was
-  never quiet
+  this repository, not a CI step. For a token matching a supported provider pattern, push
+  protection is the stronger control: it blocks the push, where a CI step can only report once the
+  secret is already in the history. It is **not a superset**. It covers only the patterns secret
+  scanning recognises — GitHub's own scope note is *"Push protection only supports the most recent
+  token versions that secret scanning can identify with confidence"* — and
+  `secret_scanning_non_provider_patterns` is disabled here, so a generic high-entropy credential is
+  not blocked. The removed step did not cover that gap either: at most it could have *printed* such
+  a line, if the line happened to contain one of its four words and landed within the first ten
+  matches. Enabling that setting, and `secret_scanning_validity_checks` alongside it, is a
+  repository-settings decision rather than a change to this repository's contents. The former
+  `Sensitive file check` step was removed in #788: it grepped `password|secret|token|key` across
+  `*.go`/`*.yaml`/`*.yml` and warned on every run it was observed on, printing only lines from the
+  workflow file itself — cache keys (`key:`, `restore-keys:`) alongside comment prose that matched
+  on `key` or on the `secret` inside `external-secrets`. It could not read `.env`, `.json`, `.pem`,
+  `.netrc`, `Dockerfile`, `Makefile` or shell scripts at all; its `grep -v test` filter dropped any
+  line containing that substring, including paths under `latest/`; and `head -10` discarded an
+  eleventh match. It emitted `::warning` behind `|| true`, so it gated nothing. On every run
+  inspected it fired, which is what makes its output uninformative: a warning that is present
+  whether or not anything is wrong cannot distinguish the two
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
