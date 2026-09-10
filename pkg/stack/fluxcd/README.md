@@ -126,9 +126,17 @@ reconciliation stops with no error. `WatchAllNamespaces` is deliberately left at
 default and is not currently derived from any field here.
 
 The wiring is guarded on the field being non-empty, which matters only for a struct-literal
-generator: with `DefaultNamespace` zero the components keep the upstream `flux-system` rather than
-being handed an empty namespace. Construct through `NewBootstrapGenerator` and the field is always
-populated.
+generator. `install.Generate` uses the option as the emitted `Namespace`'s **name**, so assigning it
+unconditionally would make a generator with a zero `DefaultNamespace` fail the whole bundle —
+`missing metadata.name in object {{v1 Namespace}}` — rather than fall back. Guarded, that generator
+keeps the upstream `flux-system` for the components.
+
+That generator is nonetheless inconsistent, and the guard does not fix it: the root Kustomization
+and the root source read the same empty value and emit no namespace at all, so the components sit in
+`flux-system` while the objects referencing them are unnamespaced. This predates the namespace wiring
+and is a property of struct-literal construction across this package rather than of one option.
+**Construct through `NewBootstrapGenerator`**, which populates the field; a struct literal is not a
+supported way to get a coherent bundle.
 
 `defaults.go` also declares `ModeGotk = "gotk"`, which is not a default: nothing falls back to it.
 It is named so that the bootstrap mode set has one authority. `DefaultFluxMode` is both the

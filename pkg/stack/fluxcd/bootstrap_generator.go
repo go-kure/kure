@@ -163,9 +163,16 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 	// reconciles -- until someone narrows the controllers, at which point it goes
 	// quiet with no error. Setting the option is enough for the cluster-scoped
 	// objects too: install.Generate derives the emitted Namespace's name and the
-	// ClusterRoleBinding names and subjects from it. Guarded because the other
-	// options are: a zero-value generator must keep the upstream default rather
-	// than be handed an empty namespace.
+	// ClusterRoleBinding names and subjects from it.
+	//
+	// The guard is not cosmetic. install.Generate uses this option as the emitted
+	// Namespace's *name*, so assigning it unconditionally makes a struct-literal
+	// generator (DefaultNamespace zero) fail the whole bundle with "missing
+	// metadata.name in object {{v1 Namespace}}" rather than merely produce an
+	// unnamespaced one. Such a generator is already inconsistent -- the root
+	// Kustomization and source take the same empty value and emit no namespace at
+	// all -- but that is a package-wide question about struct-literal
+	// construction, and turning it into a hard error here is not the fix for it.
 	if bg.DefaultNamespace != "" {
 		opts.Namespace = bg.DefaultNamespace
 	}
