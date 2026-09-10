@@ -120,7 +120,7 @@ infrastructure:
       (IPAddressPool, BGPPeer, BGPAdvertisement, L2Advertisement, BFDProfile).
   prometheus-operator:
     go_module: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
-    supported_range: "0.75 - 0.93"
+    supported_range: "0.75 - 0.94"
     notes: |
       Prometheus operator monitoring API types (ServiceMonitor, PodMonitor, PrometheusRule).
       Only the /pkg/apis/monitoring submodule is imported — not the full operator.
@@ -131,6 +131,14 @@ infrastructure:
       SetServiceMonitorSampleLimit/SetPodMonitorSampleLimit signatures moved to int64 in
       lockstep. Wire format (monitoring.coreos.com/v1 JSON) is unchanged, so generated
       YAML still applies to clusters across this range.
+      v0.94 changes no API type kure imports. servicemonitor_types.go, podmonitor_types.go,
+      probe_types.go and prometheusrule_types.go are unchanged from v0.93.1 — absent from
+      the v0.93.1...v0.94.0 compare while present at both tags. Of the four changed v1
+      files, prometheus_types.go and alertmanager_types.go are purely additive (new
+      optional retentionPercentage and clusterPeerName fields, no removals),
+      thanos_types.go has no removed lines, and types.go removes only six malformed struct
+      tags on TracingConfig, where omitempty sat outside the json tag string and is now
+      inside it. kure does not reference TracingConfig. Nothing removed, nothing retyped.
   external-secrets:
     go_module: "github.com/external-secrets/external-secrets/apis"
     upstream_repo: "external-secrets/external-secrets"

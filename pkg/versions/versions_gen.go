@@ -72,9 +72,9 @@ var infrastructure = []Dependency{
 	{
 		Name:           "prometheus-operator",
 		GoModule:       "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-		SupportedRange: "0.75 - 0.93",
+		SupportedRange: "0.75 - 0.94",
 		Min:            "0.75",
-		Max:            "0.93",
+		Max:            "0.94",
 		VersionBasis:   "semver",
 		FloorModule:    "",
 	},
