@@ -137,12 +137,14 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **PR comments** - Coverage report comment on PRs
 - **Runs on draft PRs** - no draft gate on any job (see [below](#draft-prs))
 - **Credential detection** - GitHub **secret scanning** and **push protection**, both enabled on
-  this repository, not a CI step. For a token matching a supported provider pattern, push
-  protection is the stronger control: it blocks the push, where a CI step can only report once the
-  secret is already in the history. It is **not a superset**. It covers only the patterns secret
-  scanning recognises — GitHub's own scope note is *"Push protection only supports the most recent
-  token versions that secret scanning can identify with confidence"* — and
-  a hand-rolled credential is not covered by either control. `secret_scanning_non_provider_patterns`
+  this repository, not a CI step. Where push protection applies it is the stronger control: it
+  blocks the push, where a CI step can only report once the secret is already in the history. It is
+  **not a superset**, and it is narrower than secret scanning itself — GitHub's scope note is
+  *"Push protection only blocks leaked secrets on a subset of the most identifiable user-alerted
+  patterns"*, and separately *"push protection only supports the most recent token versions that
+  secret scanning can identify with confidence"*. Matching a supported provider pattern therefore
+  earns an alert, not necessarily a block. Beyond those patterns, a hand-rolled credential is not
+  covered by either control. `secret_scanning_non_provider_patterns`
   is disabled here, but enabling it would not close that gap: non-provider patterns are a defined
   inventory — private keys, database connection strings, HTTP Basic/Bearer headers — not arbitrary
   high-entropy strings, and GitHub states plainly that *"push protection and validity checks are not
