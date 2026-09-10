@@ -285,6 +285,25 @@ bootstrapConfig := &stack.BootstrapConfig{
 objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
 ```
 
+### Bootstrap namespace
+
+The bootstrap namespace is not part of `BootstrapConfig` — it comes from the generator:
+
+```go
+bg := fluxcd.NewBootstrapGenerator()
+bg.DefaultNamespace = "custom-flux" // default: "flux-system"
+```
+
+It relocates the **whole** bundle, in both modes. For `"gotk"` that includes the toolkit components
+themselves — the controllers' Deployments, ServiceAccounts, Services, NetworkPolicies and
+ResourceQuota — alongside the root Kustomization and the root source. The cluster-scoped objects
+follow where they name a namespace: the emitted `Namespace` and the `ClusterRoleBinding` names and
+subjects are derived from the same value, while CRDs and ClusterRoles carry no namespace.
+
+One consequence worth knowing before you narrow anything: the toolkit components are generated with
+`WatchAllNamespaces` at its upstream default of `true`, and that is not currently derived from
+configuration. Controllers therefore reconcile across namespaces regardless of where they run.
+
 ## Further Reading
 
 - [Stack](/api-reference/stack) - Domain model reference
