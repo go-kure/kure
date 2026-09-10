@@ -59,6 +59,11 @@ caches the result — in a config file, a constant, a test fixture — will sile
 what `Get`/`All` report on kure's next release; call them at the point of use instead of
 hoisting the values out.
 
+The assessment behind a widening is not reachable through this API. `--note` is written to
+`versions.yaml`'s unexported `notes` key and rendered into the Notes column of
+`docs/compatibility.md`; `SupportedRange` records only the conclusion. A consumer asking why a
+range covers a given version reads one of those two, not this package.
+
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
 whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
