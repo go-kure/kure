@@ -127,15 +127,19 @@ temporary branch — the merged result — before the PR is allowed to land.
   secret is already in the history. It is **not a superset**. It covers only the patterns secret
   scanning recognises — GitHub's own scope note is *"Push protection only supports the most recent
   token versions that secret scanning can identify with confidence"* — and
-  `secret_scanning_non_provider_patterns` is disabled here, so a generic high-entropy credential is
-  not blocked. The removed step did not cover that gap either: at most it could have *printed* such
-  a line, if the line happened to contain one of its four words and landed within the first ten
-  matches. Enabling that setting, and `secret_scanning_validity_checks` alongside it, is a
-  repository-settings decision rather than a change to this repository's contents. The former
-  `Sensitive file check` step grepped `password|secret|token|key` over `*.go`/`*.yaml`/`*.yml`: a
-  match produced an `::warning` annotation rather than a build failure, and on every run observed
-  it fired, matching only lines in this workflow file itself. It was removed in go-kure/kure#788,
-  which records the full analysis
+  a hand-rolled credential is not covered by either control. `secret_scanning_non_provider_patterns`
+  is disabled here, but enabling it would not close that gap: non-provider patterns are a defined
+  inventory — private keys, database connection strings, HTTP Basic/Bearer headers — not arbitrary
+  high-entropy strings, and GitHub states plainly that *"push protection and validity checks are not
+  supported for passwords"*. Enabling that setting, and `secret_scanning_validity_checks` alongside
+  it, is a repository-settings decision rather than a change to this repository's contents; it would
+  widen detection, not make an arbitrary password blockable. The removed step did not cover the gap
+  either: at most it could have *printed* such a line, if the line happened to contain one of its
+  four words and was among the ten it showed. That step grepped `password|secret|token|key` over
+  `*.go`/`*.yaml`/`*.yml`: a match produced an `::warning` annotation rather than a build failure,
+  and `head -10` capped it at ten printed lines out of thousands matching, picked by traversal
+  order — on every run observed, those ten were all from this workflow file itself. It was removed
+  in go-kure/kure#788, which records the full analysis
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical

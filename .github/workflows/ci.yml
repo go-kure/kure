@@ -718,16 +718,19 @@ jobs:
     # over *.go/*.yaml/*.yml, warned on every run it was observed on, and on the runs inspected
     # printed only lines from this file itself -- cache keys, and comment prose matching on words
     # like `key` or the `secret` inside `external-secrets`. It could not read .env, .json, .pem,
-    # .netrc, Dockerfile, Makefile or shell scripts at all, and `head -10` meant a match past the
-    # tenth was never printed. On a match it emitted an ::warning annotation and nothing else;
-    # annotations are not errors, so the step passed and the check gated nothing.
+    # .netrc, Dockerfile, Makefile or shell scripts at all, and `head -10` capped it at ten printed
+    # lines out of thousands matching, picked by traversal order. On a match it printed those lines
+    # and emitted an ::warning; an annotation is not an error, so the step passed and gated nothing.
     # For a token matching a supported provider pattern, push protection is the stronger control:
     # it blocks the push rather than reporting after the fact. It is NOT a superset -- it covers
     # only patterns secret scanning recognises (GitHub: "Push protection only supports the most
     # recent token versions that secret scanning can identify with confidence"), and
-    # secret_scanning_non_provider_patterns is disabled here, so a generic high-entropy credential
-    # is not blocked. The removed step could at most have printed such a line, had it matched one
-    # of those four words and landed within the first ten -- never blocked it.
+    # a hand-rolled credential is covered by neither control. secret_scanning_non_provider_patterns
+    # is disabled here, but enabling it would not close that gap: non-provider patterns are a
+    # defined inventory (private keys, DB connection strings, HTTP Basic/Bearer headers), not
+    # arbitrary high-entropy strings, and GitHub states "push protection and validity checks are
+    # not supported for passwords". The removed step could at most have printed such a line, had it
+    # matched one of those four words and been among the ten it showed -- never blocked it.
     # Removed in go-kure/kure#788; see docs/github-workflows.md.
 
   # =============================================================================
