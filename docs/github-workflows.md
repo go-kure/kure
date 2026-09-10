@@ -122,12 +122,20 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **PR comments** - Coverage report comment on PRs
 - **Runs on draft PRs** - no draft gate on any job (see [below](#draft-prs))
 - **Credential detection** - GitHub **secret scanning** and **push protection**, both enabled on
-  this repository, not a CI step. Push protection blocks the push; a CI step can only report after
-  the secret is already in the history. The former `Sensitive file check` step was removed in #788:
-  it grepped `password|secret|token|key` across `*.go`/`*.yaml`/`*.yml`, which matched Actions cache
-  keys (`key:`, `restore-keys:`) on every run while being unable to read `.env`, `.json`, `.pem`,
-  `.netrc`, `Dockerfile`, `Makefile` or shell scripts. A warning that fires on every run carries no
-  signal, and this one could not look where a credential actually lands
+  this repository, not a CI step. For a provider-issued token push protection is the stronger
+  control: it blocks the push, where a CI step can only report once the secret is already in the
+  history. It is **not a superset** — `secret_scanning_non_provider_patterns` is disabled here, so
+  a generic high-entropy credential is caught by neither it nor the removed step. Enabling that
+  setting, and `secret_scanning_validity_checks` alongside it, is a repository-settings decision
+  rather than a change to this repository's contents. The former `Sensitive file check` step was
+  removed in #788: it grepped `password|secret|token|key` across `*.go`/`*.yaml`/`*.yml` and warned
+  on every run it was observed on, printing this workflow's own cache keys (`key:`,
+  `restore-keys:`) and the prose around them. It could not read `.env`, `.json`, `.pem`, `.netrc`,
+  `Dockerfile`, `Makefile` or shell scripts at all; its `grep -v test` filter dropped any line
+  containing that substring, including paths under `latest/`; and `head -10` discarded an eleventh
+  match. It emitted `::warning` behind `|| true`, so it gated nothing. A signal that never varies
+  cannot discriminate — there is no run of that step whose quiet meant anything, because it was
+  never quiet
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
 - **Matrix fail-fast: false** - Cross-platform builds continue if one fails
 - **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical

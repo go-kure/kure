@@ -714,9 +714,14 @@ jobs:
       run: make outdated
 
     # Credential detection is GitHub secret scanning + push protection, both enabled on this
-    # repository, not a step here. A grep for `password|secret|token|key` over *.go/*.yaml/*.yml
-    # matched only Actions cache keys on every run it ever made -- and could not see .env, .json,
-    # .pem, .netrc, Dockerfile, Makefile or shell scripts, which is where a credential lands.
+    # repository, not a step here. The step that stood here grepped `password|secret|token|key`
+    # over *.go/*.yaml/*.yml, warned on every run it was observed on, and on the runs inspected
+    # printed only this file's own cache keys and the prose around them. It could not read .env,
+    # .json, .pem, .netrc, Dockerfile, Makefile or shell scripts at all, and `head -10` meant a
+    # real match past the tenth was never printed. It could only ::warning, never fail.
+    # Push protection is stronger for a provider-issued token: it blocks the push rather than
+    # reporting after the fact. It is NOT a superset -- secret_scanning_non_provider_patterns is
+    # disabled on this repository, so generic high-entropy credentials are covered by neither.
     # Removed in go-kure/kure#788; see docs/github-workflows.md.
 
   # =============================================================================
