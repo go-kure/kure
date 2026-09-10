@@ -797,3 +797,60 @@ func TestGotkBootstrapAcceptsANilRootNode(t *testing.T) {
 		t.Errorf("sourceRef.name = %q, want DefaultSourceName (%q)", got, want)
 	}
 }
+
+// TestGenerateGotkComponents_NamespaceFollowsDefaultNamespace asserts over the
+// whole gotk bundle that every namespaced object lands in DefaultNamespace.
+//
+// The case that matters is the override. At the default value all three
+// producers agree — the components because install.MakeDefaultOptions already
+// says "flux-system", the Kustomization and the source because they read
+// DefaultNamespace — so a single-value test cannot tell a fix from the bug it
+// fixes. Only a value differing from the upstream default separates them:
+// before the fix this bundle split 15 objects into flux-system against 1 in the
+// configured namespace.
+//
+// The assertion covers the whole bundle rather than the objects a test already
+// knows to look for, because the components are precisely the ones that used to
+// be wrong and they are the bulk of the bundle.
+func TestGenerateGotkComponents_NamespaceFollowsDefaultNamespace(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ns   string
+	}{
+		{name: "upstream default", ns: fluxstack.DefaultNamespace},
+		{name: "override", ns: "custom-flux"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bg := fluxstack.NewBootstrapGenerator()
+			bg.DefaultNamespace = tc.ns
+
+			objects, err := bg.GenerateBootstrap(
+				&stack.BootstrapConfig{Enabled: true, FluxMode: "gotk"},
+				&stack.Node{Name: "test"},
+			)
+			if err != nil {
+				t.Fatalf("GenerateBootstrap: %v", err)
+			}
+
+			// A bundle that generated nothing would satisfy the "no stray
+			// namespace" check vacuously, so require the namespaced objects to
+			// actually be present. The components alone account for well over ten.
+			var placed int
+			for _, obj := range objects {
+				got := obj.GetNamespace()
+				if got == "" {
+					continue // cluster-scoped: CRDs, ClusterRoles, the Namespace itself
+				}
+				if got != tc.ns {
+					t.Errorf("%s/%s is in namespace %q, want %q",
+						obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), got, tc.ns)
+				}
+				placed++
+			}
+			if placed < 10 {
+				t.Errorf("only %d namespaced objects in a %d-object bundle; too few to prove anything",
+					placed, len(objects))
+			}
+		})
+	}
+}

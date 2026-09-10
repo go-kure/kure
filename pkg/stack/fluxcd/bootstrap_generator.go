@@ -154,6 +154,22 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 	// Create install options with defaults
 	opts := install.MakeDefaultOptions()
 
+	// Place the components in the same namespace as the rest of the bundle. The
+	// root Kustomization and the root source already use bg.DefaultNamespace, so
+	// leaving this at the upstream default splits a non-default bundle: the
+	// controllers' Deployments, ServiceAccounts, Services, NetworkPolicies and
+	// ResourceQuota stay in flux-system while the objects that rely on them land
+	// elsewhere. WatchAllNamespaces defaults to true, so the split still
+	// reconciles -- until someone narrows the controllers, at which point it goes
+	// quiet with no error. Setting the option is enough for the cluster-scoped
+	// objects too: install.Generate derives the emitted Namespace's name and the
+	// ClusterRoleBinding names and subjects from it. Guarded because the other
+	// options are: a zero-value generator must keep the upstream default rather
+	// than be handed an empty namespace.
+	if bg.DefaultNamespace != "" {
+		opts.Namespace = bg.DefaultNamespace
+	}
+
 	// Set version if specified
 	if config.FluxVersion != "" {
 		opts.Version = config.FluxVersion
