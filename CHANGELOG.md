@@ -9,6 +9,297 @@ All notable changes to this project will be documented in this file.
 > the deleted helpers and sub-type constructors, and the constructor and workflow defaults that no
 > longer apply. Read it before upgrading across the entries below. The contract itself is
 > [Kubernetes Builders](https://www.gokure.dev/kure/api-reference/kubernetes-builders/).
+## [0.2.0-beta.11] - 2026-09-10
+
+### Breaking
+
+- Delete bare field forwarders and sub-type constructors
+- Fold per-kind pod-template helpers onto PodSpec
+- Drop error returns from resource and Helm values setters
+- Stop sugar helpers writing fields the caller did not name
+- Inline the ConfigMap helpers, drop the bulk-map ones
+- Remove the per-kind label and annotation helpers
+- Declare every injected default as an exported name
+
+### Added
+
+- Track go-kure/.github ref: via customManager + vendor-guard
+- Pin external-secrets to upstream releases, not main HEAD
+- Detect the govulncheck env pin and keep golangci-lint pins in sync
+- Add LayoutIntentAugmenter companion interface for layout placement intent
+- Add pkg/versions, a stable Go API over versions.yaml metadata
+- Guard pkg/versions/versions_gen.go against versions.yaml drift
+- Mechanically enforce barman-cloud's MVS-floor claim
+- Gate go-kure/.github pin bumps on their real impact
+- Land the builder contract core (ADR-038)
+- Derive kind scope from the pinned upstream markers
+- Walk the pinned API types for gated and deprecated fields
+- Publish the derived kinds, scope and maturity tables
+
+### Build
+
+- Update github.com/cloudnative-pg/barman-cloud digest to 5aa56cd
+- Update toolchain
+- Update kubernetes to v0.36.4
+- Update go-kure/.github digest to 3cfa256
+- Track external-secrets by release, not raw gomod
+- Update module github.com/cilium/cilium to v1.20.1
+- Update go-kure/.github digest to d22e3cf
+- Update go-kure/.github digest to 9260c00
+- Update go-kure/.github digest to 0c93c6f
+- Update go-kure/.github digest to d96e444
+- Update module golang.org/x/crypto to v0.55.0 [security]
+- Update dependency external-secrets/external-secrets to v2.10.0
+- Update toolchain
+- Update kubernetes to v0.37.0
+- Update go-kure/.github digest to b3513ac
+- Update dependency git-cliff to v2.14.1
+- Update module github.com/cloudnative-pg/machinery to v0.6.0
+- Update go-kure/.github digest to 48d8390
+- Update module google.golang.org/grpc to v1.83.1 [security]
+- Update dependency go to v1.26.8
+- Update go-kure/.github digest to d392f39
+- Update module golang.org/x/crypto to v0.56.0 [security]
+- Update go-kure/.github digest to abcba39
+- Update go-kure/.github digest to 022fde2
+- Update module golang.org/x/mod to v0.40.0 [security]
+- Update go-kure/.github digest to 7d126c7
+- Update module github.com/cloudnative-pg/plugin-barman-cloud to v0.15.0
+- Update sigs.k8s.io
+- Update go-kure/.github digest to 3f72c03
+- Update go-kure/.github digest to f76dc32
+- Update go-kure/.github digest to 636e9f2
+- Update go-kure/.github digest to d904eef
+- Update go-kure/.github digest to 5e5c8e1
+- Update module golang.org/x/vuln to v1.8.0
+- Update module golang.org/x/tools to v0.50.0
+- Update dependency hugo to v0.166.0
+- Update go-kure/.github digest to 992e9ee
+- Update go-kure/.github digest to 6990dea
+
+### CI
+
+- Only save Go build cache from the default branch
+- Syntax-check version-sync scripts; make dep-updates example version-neutral
+- Drop the sensitive-file grep, which warned on every run and on cache keys
+
+### Changed
+
+- Delete the hand-kept scope tables, derive every scope
+- Hand out copies of the generated tables, not the tables
+
+### Dependencies
+
+- Widen prometheus-operator supported range to 0.94
+
+### Documentation
+
+- Add AI agent gates (A1-A7) section
+- Correct PATH-ordering troubleshooting note for pinned golangci-lint
+- Fix CNPG Monitoring example to match the real Cluster/ClusterOptions API
+- Strengthen the GO-2026-5377 govulncheck waiver justification
+- Document the release-pinned dependency pattern
+- List the four new tool-version-parity go: filter entries
+- Fix golangci-lint recovery instructions to cover all four synced files
+- Document pkg/versions and its regeneration
+- Add external-secrets example to pkg/versions README
+- Sync pkg/versions README example with 1.37 supported_range
+- Note VolumeMount comparability as a public-API breaking change
+- Correct controller-runtime note for the k8s v0.37.0 MVS bump
+- Explain strip-ack/rerun gotcha on pin-impact-ack
+- Note the strip-ack rerun gotcha in the pin-impact-ack section
+- Scope pin-impact-ack rerun gotcha to same-repo PRs
+- Say the prune rewrites class-shaped error-returning helpers
+- Document direct field assignment in generators
+- Make every removal in the ledger findable and replaceable
+- Correct the CreateIngressRule replacement note
+- Fix six defects the post-undraft review found
+- Describe widen as YAML-only, not two-file regeneration
+- Document where scope and maturity come from
+- Point at the compatibility matrix instead of restating a pin
+- Document that SupportedRange/Min/Max move on every widen
+- Fail CI when a page names a builder function that no longer exists
+- Describe a domain model and layout engine on a thin Kubernetes foundation
+- Record the builder-contract design and point the changelog at the ledger
+- Require a reason on every suppressing doc-api-refs marker
+- Resolve documented builders per package, and scan examples/
+- Name the Prune default among ARCHITECTURE's non-mechanical migrations
+- Correct the cnpg config-builder error model
+- Say which release-1 migrations are silent at the call site
+- Close three more ways a stale builder reference resolves
+- Link the contract by absolute URL from the unpublished design record
+- Check Go doc comments and the ledger's replacement column
+- Scan block-form GoDoc, and route a new family's import path
+- Check root Markdown, and fix three stale contract claims
+- Correct the sugar-class rationale and the scope-failure remedy
+- Correct the new-kind recipe for cluster scope and the doc gate
+- Finish the sugar-class correction across Go doc and the glossary
+- Qualify the follow-up issue reference in the design record
+- Record a fourth checker residual, the nested-comment marker
+- Test the whole object in the new-kind recipe
+- State the metadata exemption, and align the agent guidance
+- Name the examples exclusion on the per-package coverage floor
+- Scope the migration claim, and fix two recipe defects
+- Separate the doc gate's bar from the repository's rule
+- Record the unscanned agent-guidance file as a seventh residual
+- Correct two overstatements on the concepts page
+- Correct two claims about what this release changes
+- State the xargs tolerance's limit at the site
+- The config builders did change what they emit
+- Replace worked examples that call a nonexistent API
+- Flag spec.selector as required, not cosmetic
+- Add the CronJob rows to the required-value call-out
+- Scope the CronJob restart-policy loss to who it hits
+- Split the call-out into rejected vs silently different
+- Stop citing the one row the section declines to judge
+- Correct the workflow tables that claim CI runs make targets
+- Record ci.yml's real PR trigger types and its base-branch filter
+- Resolve two self-contradictions this guide introduced
+- Narrow the removal rationale to what was observed
+- Fix four accuracy defects in the removal rationale
+- Scope the removed step's uninformative-output claim to its annotation
+- State what the removed step did, not what it could never do
+- Cut the deleted step's autopsy down to what the page needs
+- Fix the non-provider-patterns claim and the match-scope claim
+- A supported pattern earns an alert, not necessarily a block
+- Document the bootstrap namespace in the mapped guide
+- Scope the DefaultNamespace claim to gotk mode
+- Say where a widening's compatibility assessment lives
+
+### Fixed
+
+- Align golangci-lint pins and add a version assertion to lint
+- Use the canonical golangci-lint install.sh URL
+- Enforce pinned golangci-lint version instead of only printing it
+- Don't mask a failed golangci-lint install behind a piped shell
+- Stop tracking .claude/settings.local.json
+- Preserve go.mod perms and fail loudly on missing replace-block anchor
+- Guard get_gomod_pin_comment against pipefail abort
+- Fix cliff.toml allow-term pragma adjacency for the platform component label
+- Require k8s.io/api replace directive for pin comment, not require fallback
+- Harden ref: extraction against future ambiguity
+- Peel annotated tags to their commit in sync-eso-pin.sh
+- Verify upstream_release_commit live, document ESO breaking change
+- Distinguish unreachable-server from tag-not-found in resolve_tag_commit
+- Guard sync-eso-pin.sh's ls-remote fallback under set -euo pipefail
+- Gate CI on sync-eso-pin.sh changes, bound its network calls
+- Correct link-check and syntax-check bugs from PR review
+- Strip a possible v-prefix from the mise golangci-lint pin
+- Widen syncer's sed patterns to match the checker's tolerance
+- Add check-tool-versions to make precommit
+- Keep govulncheck version docs in sync with ci.yml
+- Anchor govulncheck doc-sync extraction, sync stale task descriptions
+- Harden govulncheck doc checker against case and duplicate-pin risk
+- Doc-sync gaps and CI_VAL whitespace trim for govulncheck checks
+- Sed -i -E portability + CI-vs-precommit doc-sync gap
+- Tolerate trailing whitespace on the ci.yml pin line
+- Scope the govulncheck-docs rule to its own customManager
+- Strip trailing whitespace from Makefile golangci-lint pin, document sync-tool-versions.sh
+- Anchor barman-cloud to its MVS floor, range-check it
+- Syntax-check the two new sync scripts; reject duplicate mise pins
+- Sh-vs-bash syntax-check dispatch; tolerate mise.toml = spacing
+- Tolerate TOML single-quote pins; align syncer's mise parser with the checker
+- Scope mise.toml pin matching to [tools]; guard syncer against duplicate pins; fix stale doc line
+- Tolerate whitespace around the [tools] table header
+- Recognize TOML quoted-key [tools] table headers
+- Retain the generated pkg/versions Go API on bot branches
+- Don't leave a truncated versions_gen.go on generate_go_api's guard failure
+- Don't clobber validate_go_api_drift's RETURN trap in generate_go_api
+- Keep generated versions_gen.go world-readable (mktemp default is 0600)
+- Close cross-device mv and multiline-value gaps in generate_go_api
+- Guard go mod edit|yq pipe assignment under set -e
+- Distinguish tool-pipe failure from confirmed missing requirement
+- Apply GOWORK=off to sync-versions.sh's step-4 go mod edit call
+- Bound and root-anchor the MVS-floor guard's go list probe
+- Harden sync-versions.sh/vendor-guard.sh against missing timeout/mktemp
+- Strengthen case 37's mktemp-guard oracle and correct case 09 doc wording
+- Harden mktemp helper and correct harness docs (round 3 review)
+- Fail closed on action.yml steps outside the scripts/*.sh pattern
+- Stop the pin-impact gate silently swallowing its own exit code
+- Guard --old/--new argument parsing and non-ahead compares
+- Add pin-impact-ack override, harden multi-step/dot-segment gaps
+- Recognize uses:/run: written as the step's first YAML key
+- Rerun pin-impact on label change, detect compound-line source
+- Scan .yaml workflows too, reject mixed deps in one run block
+- Bind pin-impact-ack to the reviewed head SHA
+- Skip label mutation on fork PRs, fix token auth, use immutable base SHA
+- Fail closed on ack-strip failure, cover reopened PRs, tighten perms
+- Re-sync external-secrets pin and widen supported_range to 2.10
+- Sync CI/docs yq pins with mise.toml's 4.53.6 bump
+- Sync mise.toml's own yq comment with the 4.53.6 bump
+- Widen k8s supported_range to 1.37, fix VolumeMount comparability
+- Wire go.mod's go directive into the mise-sync postUpgradeTasks
+- Sync versions.yaml's go.current too, and reorder before generate
+- Syntax-check sync-go-version.sh in CI, document its path filter, anchor its go.mod sed
+- Drop dead self-substitution sed, harden go.mod directive sync
+- Widen go-version postUpgradeTasks fileFilters to every workflow file
+- Chain sync-versions.sh generate into make sync-go-version
+- Mark GoVersion as doc-gate:trivial; trim README's hardcoded examples
+- Scope the rerun-gotcha warning to synchronize/reopened reruns
+- Close admission gaps, catch orphaned generated files, sync package docs
+- Align the admission classifier with ADR-038 and harden the generator
+- Tie class (a) to a field and trace nil through literals and initialised locals
+- Root admission field writes in a parameter and order local write-backs
+- Track admission provenance by object and position, not by name
+- Reject result-bearing helpers in the admission test
+- Build generator errors with pkg/errors
+- Let generate rewrite a rendered file that lost its header
+- Reject a default written next to an admitted operation
+- Require caller-supplied values and reject silent nil returns
+- Close two admission classifier evasions
+- Drop the orphaned PVC options struct, restore a nil guard
+- Make bootstrap sourceRef name the source it emits
+- Stop bootstrap panicking on a nil root node
+- Stop range-checking MVS-floor dependencies, add widen subcommand
+- Address Codex review findings on the widen subcommand
+- Guard widen against a bare --note flag and unchecked yq writes
+- Address Codex third-pass review on the widen test cases
+- Reject a raw commit SHA in widen's --note before writing
+- Replace mm_key's collision-prone fixed-multiplier key with mm_cmp
+- Compare version components as digit strings, not bash arithmetic
+- Make the marker-coverage check able to fail, and record what it found
+- Resolve an unmarked kind's scope from the CRD its module ships
+- Refuse a half-read CRD manifest, and skip json:"-" fields
+- Match the version in KindFor, and cover the table lookups
+- Decide the docs root on the resolved path, not the spelling
+- Read a field's stability from its own words, not its neighbours'
+- Regenerate the API tables on an external-secrets re-pin
+- Claim stability only where the prose claims it, and keep IsNamespacedBuiltinKind about built-ins
+- Let a supplied CRD govern the scope of a custom resource
+- Widen cnpg-barman-cloud-plugin and controller-runtime ranges
+- Close six ways the builder-reference check could pass wrongly
+- Fail the builder-reference check when its page list is incomplete
+- Scope the ledger exemption to the names it removed
+- License the ledger's names from a validated list, not its cells
+- Widen the page set, reject nested fences, drop a hand-kept count
+- Reject repeated fence markers; correct two ARCHITECTURE claims
+- Stop a no-match xargs batch from killing the symbol scan
+- Group breaking commits under their own section
+- Match git-cliff's parsed breaking field, not the subject
+- Size the test budget for the slowest package, not a typical one
+- Honour DefaultNamespace in the gotk components
+
+### Maintenance
+
+- Drop stale ready_for_review from pr-review workflow
+- Read yq and lychee versions from mise.toml at run time
+- Bump go-kure/.github pin to post-#136 main
+- Regenerate builder tables for plugin-barman-cloud v0.15.0
+- Regenerate builder tables for sigs.k8s.io bump
+
+### Testing
+
+- Drop TestGetKubernetes's Min!=Max assertion, redundant and brittle
+- Add hermetic failure-path harness for sync-versions.sh guards
+- Make the sync-versions guard case 23 able to fail
+- Fix docs-drift masking in mvs-floor/range/notes guard cases, scope case-32's sed, add mise yq pin, sync ci docs
+- Clear ambient GOWORK in harness runner, make fixture edits BSD-sed portable
+- Harden guard-test harness against mktemp failure and missing seq; wire into make precommit
+- Fix full-scope confirm-pass findings (mktemp in _run, seq in cases 21/22, ci coverage, case-09 flakiness)
+- Give the self-reference test a deadline it can fail on
+- Fail rather than panic when a table round trip loses rows
+- Assert the gate copy-out on names, not on a count that cannot move
+
 ## [0.2.0-beta.10] - 2026-08-23
 
 ### Added
@@ -76,10 +367,13 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.0-beta.9] - 2026-08-03
 
+### Breaking
+
+- Bump prometheus-operator monitoring API to v0.93.0
+
 ### Dependencies
 
 - Bump cilium 1.20.0, plugin-barman-cloud 0.14.0, cert-manager 1.21.1
-- Bump prometheus-operator monitoring API to v0.93.0
 
 ### Fixed
 
@@ -196,7 +490,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.0-beta.3] - 2026-05-28
 
-### Added
+### Breaking
 
 - Add FluxIntegratedPerBundle placement mode
 
@@ -245,7 +539,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.0-beta.1] - 2026-05-27
 
-### Fixed
+### Breaking
 
 - Rules.FluxPlacement is the sole controller of placement
 
@@ -370,6 +664,11 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.0-alpha.4] - 2026-05-11
 
+### Breaking
+
+- Nil-receiver setters panic instead of returning error
+- Migrate CRD subpackage constructors to CreateX pattern
+
 ### Added
 
 - Add actions:read permission to release-create workflow
@@ -386,11 +685,6 @@ All notable changes to this project will be documented in this file.
 - Make artifact upload/download resilient on ARC runners
 - Set ACTIONS_RESULTS_URL at workflow level for step env routing
 - Stable gobuild cache key and expand workflow path filter
-
-### Changed
-
-- Nil-receiver setters panic instead of returning error
-- Migrate CRD subpackage constructors to CreateX pattern
 
 ### Documentation
 
@@ -433,7 +727,7 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
-- Add downstream consumer state analysis review (2026-05-06)
+- Add the downstream operator state analysis review (2026-05-06)
 - Note that GenerateFluxInstance does not check config.Enabled
 - Add Namespace builder section to README
 - Add OCI HelmRepository example to README
@@ -798,7 +1092,7 @@ All notable changes to this project will be documented in this file.
 
 - Explicitly enable unused linter (#288)
 - Document gosimple inclusion via staticcheck (#290)
-- Align golangci-lint config with the downstream consumer linter set (#293)
+- Align golangci-lint config with the downstream operator linter set (#293)
 
 ### Testing
 
@@ -903,7 +1197,7 @@ All notable changes to this project will be documented in this file.
 ### Maintenance
 
 - Bump the actions group with 2 updates
-- Align golangci-lint config with the downstream platform standard
+- Align golangci-lint config with the downstream operator standard
 - Replace generic code review with two-pass PR review workflow
 - Bump the actions group with 3 updates
 - Add CNPG to versions.yaml and dependency governance
@@ -1138,8 +1432,8 @@ All notable changes to this project will be documented in this file.
 - Add task #1 for CEL validation enhancement
 - Add workflow guidelines to tasks.md
 - Remove references to non-existent demo-internals make target
-- Add HPA and PDB builder tasks for downstream OAM support
-- Add downstream consumer integration documentation
+- Add HPA and PDB builder tasks for the downstream operator OAM support
+- Add the downstream operator integration documentation
 - Add tasks README and update task 03 status
 - Add quickstart guide
 - Expand README with end-to-end examples
@@ -1186,7 +1480,7 @@ All notable changes to this project will be documented in this file.
 - Update Claude settings - always save to .claude/settings.json
 - Go fmt
 - Standardize Go version and improve workflow organization
-- Align repo with the downstream scaffold and platform standards
+- Align repo with the downstream operator scaffold and the downstream operator standards
 - Enhance dependabot configuration
 - Migrate tasks to GitHub issues
 - Bump the actions group across 1 directory with 7 updates
@@ -1214,4 +1508,5 @@ All notable changes to this project will be documented in this file.
 - Add setter function tests for internal packages
 - Add comprehensive IO table and printer tests
 - Add comprehensive appworkload internal tests
+
 
