@@ -719,7 +719,8 @@ jobs:
     # printed only lines from this file itself -- cache keys, and comment prose matching on words
     # like `key` or the `secret` inside `external-secrets`. It could not read .env, .json, .pem,
     # .netrc, Dockerfile, Makefile or shell scripts at all, and `head -10` meant a match past the
-    # tenth was never printed. It could only ::warning, never fail, so it gated nothing.
+    # tenth was never printed. On a match it emitted an ::warning annotation and nothing else;
+    # annotations are not errors, so the step passed and the check gated nothing.
     # For a token matching a supported provider pattern, push protection is the stronger control:
     # it blocks the push rather than reporting after the fact. It is NOT a superset -- it covers
     # only patterns secret scanning recognises (GitHub: "Push protection only supports the most
