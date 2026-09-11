@@ -16,7 +16,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Release / Create](#release--create-workflow) | `release-create.yml` | manual | Auto-infer release type from VERSION, create tag |
 | [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
 | [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major/prerelease), no tag |
-| [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
+| [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser (release object only — no artifacts), docs deploy, proxy refresh |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
 
 ---
@@ -434,7 +434,9 @@ workflow file _at that tag_, so dispatch only works for tags cut after it was ad
    publisher when a `workflow_dispatch` names a branch)
 2. **test** - Full test run with race detection
 3. **validate** - Strict tag format, changelog, and version progression validation
-4. **goreleaser** - Build release artifacts, generate SBOM, sign with cosign
+4. **goreleaser** - Create the GitHub release object. kure is a library, so `.goreleaser.yml` skips
+   builds and disables checksums and declares no SBOM or signing stanza: **no artifacts are
+   produced and a successful release carries zero assets**
 5. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
 6. **post-release** - Go proxy refresh
 
