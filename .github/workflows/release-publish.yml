@@ -32,10 +32,11 @@ jobs:
     name: Guard tag ref
     runs-on: autops-kube-kure
     # The workflow-level block grants the publisher contents/id-token/actions
-    # write. This job reads github.ref and exits; it needs none of that, and
-    # inheriting it would put release-capable credentials on an extra job on
-    # every tag push.
-    permissions: {}
+    # write. This job only inspects the ref and the release list, so it takes
+    # read access and nothing else; inheriting the publisher's write scopes
+    # would put release-capable credentials on an extra job on every tag push.
+    permissions:
+      contents: read
     steps:
       - name: Refuse a non-tag ref
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -44,6 +45,48 @@ jobs:
         run: |
           echo "::error::release-publish must run against a v* tag; got $REF"
           exit 1
+
+      # A dispatch re-publishes a tag that already exists, and the documented
+      # scope is a run that failed BEFORE goreleaser created the release
+      # object. Nothing in the UI or CLI enforces that, so dispatching a tag
+      # whose release is already present hands the privileged publisher a live
+      # release to republish over. Refuse, and refuse equally when the answer
+      # cannot be determined: a wrong "proceed" mutates a published release,
+      # a wrong "refuse" costs a retry.
+      #
+      # Scoped to workflow_dispatch deliberately. A tag push is a first
+      # publication, where no release exists yet and an API hiccup must not be
+      # allowed to block the normal release path.
+      #
+      # Measured shapes of the probe: release present -> exit 0, no stderr;
+      # absent -> exit 1 with "gh: Not Found (HTTP 404)". Any other non-zero
+      # exit is an undetermined answer and takes the refuse branch, so a change
+      # in that error format fails safe instead of silently reading as absent.
+      - name: Refuse a dispatch for a tag that already has a release
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set +e
+          err=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>&1 >/dev/null)
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::$TAG already has a GitHub release. Dispatch re-publishes and would" \
+                 "overwrite it. Recover the failed follow-up job directly, or escalate --" \
+                 "see docs/github-workflows.md."
+            exit 1
+          fi
+          case "$err" in
+            *"(HTTP 404)"*)
+              echo "No release exists for $TAG; proceeding with re-publish"
+              ;;
+            *)
+              echo "::error::could not determine whether $TAG already has a release: $err"
+              exit 1
+              ;;
+          esac
 
   release:
     needs: guard-tag-ref
