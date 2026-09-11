@@ -502,6 +502,26 @@ specified reference — here `@main`, so it picks up a fix — while re-running 
 single job** uses the called workflow from the commit SHA of the first attempt, so it does not.
 Re-runs stay available for 30 days after the initial run.
 
+> ⚠ **Every re-run row above holds only while fewer than two newer `v*` tags exist.** A re-run
+> refreshes the workflow but **keeps the original event**, so a re-run of a tag-push run is still
+> `event=push` — and the shared publisher exempts only `workflow_dispatch` from its
+> version-progression check (`go-kure/.github` `release-publish.yml:89-98`). That check derives the
+> previous tag as `git tag --list 'v*' --sort=-v:refname | sed -n '2p'`, which picks a tag *newer*
+> than the one being recovered as soon as two or more newer tags exist; `validate` then exits 1 and
+> `goreleaser` never runs, because it declares `needs: [test, validate]`. With exactly one newer
+> tag, position 2 is the recovered tag itself and the check passes against itself — so the failure
+> is latent until the second newer tag lands.
+>
+> This is the same mechanism that made dispatch unusable before `go-kure/.github#204`, reaching the
+> re-run paths instead, which that fix does not cover. **If two or more newer `v*` tags exist, skip
+> the re-run rows and use the dispatch row**, which is exempt. Check before choosing a row:
+>
+> ```bash
+> git tag --list 'v*' --sort=-v:refname | grep -n -m3 .
+> ```
+>
+> If the tag you are recovering is not in position 1 or 2, only dispatch will work.
+
 The dispatch row depends on the shared workflow skipping its version-progression check for
 `workflow_dispatch`. That check derives the previous tag as the second entry of
 `git tag --sort=-v:refname`, which assumes the tag being released sorts first — true for a pushed
@@ -521,6 +541,15 @@ recovery scope above, and neither the UI nor the CLI enforces that on its own. T
 needs the release to be provably absent: a `404` proceeds, an existing release refuses, and an API
 error that answers neither also refuses, so an undetermined answer never reaches the publisher.
 
+That probe is not atomic with the publication it guards, so the wrapper carries its own
+`concurrency` group (`release-publish-wrapper-<ref>`, `cancel-in-progress: false`). The shared
+publisher's own `release-<ref>` group covers only the called workflow's jobs, which leaves
+`guard-tag-ref` outside it — without the wrapper group, two dispatches of one tag could both probe
+while the release was still absent and the second would republish over the first. The wrapper group
+is deliberately named differently from the publisher's: a called workflow's concurrency is evaluated
+in the caller's context, so reusing the name would risk the wrapper holding a group its own
+`release` job then waits on.
+
 > ⚠ **Known limitation — a wrapper broken _at the tag_ is not recoverable by either path.** The
 > trigger has to be present in `.github/workflows/release-publish.yml` *at that tag*, so dispatch
 > only works for tags cut after it was added — and that is the specific case of a general one.
@@ -530,6 +559,27 @@ error that answers neither also refuses, so an undetermined answer never reaches
 > Same shape as the `deploy-docs.yml` limitation above, and the same remedy is out of scope here:
 > closing it needs a default-branch recovery workflow taking the target tag as an input. Until
 > then this is an escalation, not a self-service recovery.
+
+> ⚠ **Recovering an older *stable* tag rolls the published docs back.** A successful publish
+> triggers `deploy-docs.yml` with `set_latest=true` unconditionally — the shared publisher hardcodes
+> it (`go-kure/.github` `release-publish.yml:191`) rather than comparing the tag against the newest
+> release. So recovering `v1.2.0` after `v1.3.0` has already shipped republishes the `v1.2` slot
+> *and* repoints `latest` at `v1.2.0`. Nothing fails; the docs site simply regresses.
+>
+> This only fires on stable tags: the job is gated `if: "!contains(github.ref_name, '-')"`
+> (`release-publish.yml:172`), so a prerelease such as `v0.2.0-beta.11` never triggers a docs
+> deploy at all, and the recovery of a prerelease is unaffected.
+>
+> **When recovering a stable tag that is not the newest stable tag, re-deploy the docs afterwards**
+> so `latest` points where it should:
+>
+> ```bash
+> gh workflow run deploy-docs.yml --repo go-kure/kure --ref <newest-stable-tag> \
+>   -f version_slot=<newest-minor> -f version_label=<newest-stable-tag> -f set_latest=true
+> ```
+>
+> Making the publisher itself skip `set_latest` for a non-newest tag is the durable fix and belongs
+> in `go-kure/.github`, not here.
 
 ### Jobs
 
