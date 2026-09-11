@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual re-publish for an existing tag. Without this, a publish run that
+  # fails leaves the tag pushed and no release object, with no way to retry:
+  # `gh run rerun` replays the reusable-workflow resolution captured at first
+  # dispatch, so it cannot pick up a fix on go-kure/.github main, and moving or
+  # deleting a release tag is not an option. Dispatch with `--ref <tag>` so the
+  # shared workflow checks out the tag being published.
+  workflow_dispatch:
 
 permissions:
   contents: write

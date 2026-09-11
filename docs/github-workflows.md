@@ -16,7 +16,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Release / Create](#release--create-workflow) | `release-create.yml` | manual | Auto-infer release type from VERSION, create tag |
 | [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
 | [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major/prerelease), no tag |
-| [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
+| [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser, SBOM, cosign signing, docs deploy, proxy refresh |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
 
 ---
@@ -350,6 +350,22 @@ Advance the version cycle without creating a tag. Use before starting a new prer
 ### Triggers
 
 - Push tags: `v*` (e.g., v1.0.0, v0.1.0-beta.2)
+- `workflow_dispatch` — manual re-publish of an existing tag
+
+#### Re-publishing a tag after a failed run
+
+A publish run that fails leaves the tag pushed and no release object. The tag must not be moved
+or deleted, and `gh run rerun` does not help: GitHub resolves the shared reusable workflow at the
+*first* dispatch and a re-run replays that resolution, so it cannot pick up a fix landed on
+`go-kure/.github` `main` afterwards. Dispatch against the tag instead:
+
+```bash
+gh workflow run release-publish.yml --repo go-kure/kure --ref v0.2.0-beta.11
+```
+
+The `--ref` must be the tag being published — the shared workflow checks out `github.ref`, so
+dispatching from a branch would build that branch rather than the release. The trigger has to be
+present in the workflow file *at that tag*, so this only works for tags cut after it was added.
 
 ### Jobs
 
