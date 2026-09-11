@@ -186,15 +186,16 @@ The project uses several GitHub Actions workflows:
 
 ### Create Release (`.github/workflows/release-create.yml`)
 - **Triggers**: Manual (`workflow_dispatch`)
-- **Inputs**: Release type (alpha/beta/rc/stable/bump), scope, dry-run
+- **Inputs**: `dry_run` only — the version being cut comes from the `VERSION` file on `main`, not
+  from a workflow input
 - **Purpose**: Creates release commits and tags on `main`, pushes atomically
 - **Auth**: Uses GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`); the `kure-release-bot` App is listed as a bypass actor in the `main-protection` repository ruleset, allowing it to push release commits directly to `main`
 - **Concurrency**: Only one release at a time (`release-create` group)
 
 To create a release:
-1. Go to Actions > "Create Release" > Run workflow
-2. Select release type and optional scope
-3. Optionally enable dry-run for preview
+1. Set the target version in `VERSION` on `main` (this is what decides the release type)
+2. Go to Actions > "Create Release" > Run workflow
+3. Optionally enable `dry_run` for a preview
 4. Click "Run workflow"
 
 The pushed tag triggers the release pipeline below.

@@ -22,6 +22,26 @@ permissions:
   id-token: write
   actions: write
 
+# guard-tag-ref's release probe is not atomic with the publication it guards.
+# The shared publisher declares its own `concurrency: release-${{ github.ref }}`
+# (go-kure/.github release-publish.yml:11-13), but that covers only the called
+# workflow's jobs -- guard-tag-ref runs in this wrapper, outside it. Two
+# dispatches of one tag can therefore both probe while the release is still
+# absent, both see 404, and the second republish over what the first created,
+# which is exactly what the guard exists to prevent.
+#
+# Serialising the wrapper closes that window: the second run queues before its
+# guard job starts, so it probes only after the first run has finished
+# publishing, sees the release, and refuses.
+#
+# Deliberately NOT the shared publisher's own group name. A called workflow's
+# concurrency is evaluated in the caller's repository context, so reusing
+# `release-${{ github.ref }}` here would risk this run holding a group that its
+# own `release` job then has to wait on.
+concurrency:
+  group: release-publish-wrapper-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # A workflow_dispatch can name any ref, including a branch. Handing the
   # privileged publisher a branch would publish that tree under the release
