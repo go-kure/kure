@@ -671,19 +671,27 @@ in the caller's context, so reusing the name would risk the wrapper holding a gr
 > gh workflow run deploy-docs.yml --repo go-kure/kure --ref <newest-stable-tag> \
 >   -f version_slot=<newest-minor> -f version_label=<newest-stable-tag> -f set_latest=true
 >
-> # 3. Independently, re-mark the newest stable release as GitHub's Latest. This is a separate
+> # 3. Wait for THAT run too. `gh workflow run` dispatches and returns; it does not wait. The
+> #    corrective deploy ends in the same unretried `git push` as the one above, so it can lose a
+> #    race of its own and leave the docs root on the older version while every later step reports
+> #    success.
+> gh run list --repo go-kure/kure --workflow deploy-docs.yml \
+>   --branch <newest-stable-tag> --limit 5
+> gh run watch <id-of-the-in-flight-run> --repo go-kure/kure
+>
+> # 4. Independently, re-mark the newest stable release as GitHub's Latest. This is a separate
 > #    pointer from the docs slot above and step 2 does not touch it.
 > gh release edit <newest-stable-tag> --repo go-kure/kure --latest
 >
-> # 4. Confirm. With no tag argument this resolves through /releases/latest -- the same endpoint
+> # 5. Confirm. With no tag argument this resolves through /releases/latest -- the same endpoint
 > #    consumers read -- so it checks the pointer rather than the request.
 > gh release view --repo go-kure/kure --json tagName --jq .tagName
 > ```
 >
-> Confirm the docs result from the deploy run's own log rather than from `gh run watch`, which exits
-> `0` on a red run. Steps 3 and 4 need no run to watch — `gh release edit` applies immediately.
+> Confirm **both** docs deploys from their own run logs rather than from `gh run watch`, which exits
+> `0` on a red run. Steps 4 and 5 need no run to watch — `gh release edit` applies immediately.
 >
-> Step 3 is safe to run unconditionally, including when you are unsure whether the pointer moved:
+> Step 4 is safe to run unconditionally, including when you are unsure whether the pointer moved:
 > re-marking the tag that is already Latest is a no-op.
 >
 > Making the publisher skip `set_latest` for a non-newest tag, and setting `make_latest` from the
