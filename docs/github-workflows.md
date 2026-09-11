@@ -419,10 +419,30 @@ done
 The branch below is decided by `goreleaser`'s conclusion **in the attempt that ran it** — the first
 one not reporting `skipped`.
 
-`skipped` in *every* attempt while a release exists is a contradiction, and worth stopping on rather
-than forcing into a branch: no run in this record published that release, so it came from somewhere
-else — a hand-created release object, or a different run entirely. Establish where it came from
-before touching it. None of the recovery below applies to a release this workflow did not create.
+**Before treating the release as this run's output, establish that it is.** The branch below ends in
+deleting a release object, and a non-`success` conclusion is not evidence of ownership. Two
+independent situations put a *valid* release in front of an operator reading one: `goreleaser` ran
+and failed **before** creating anything and the release was created by hand afterwards, or the
+release came from a different run entirely. `skipped` in every attempt is only the most obvious
+case, not the only one.
+
+Neither is hypothetical — `v0.2.0-beta.11`'s release object was hand-created after its publish runs
+failed. Ownership is a positive check, not the absence of a contradiction:
+
+```bash
+gh release view <tag> --repo go-kure/kure --json publishedAt,author,isDraft
+```
+
+A release this workflow published carries the release automation's identity in `author` and a
+`publishedAt` falling inside the `goreleaser` job's execution window from the per-attempt command
+above. **If `author` is a human, or `publishedAt` falls outside every `goreleaser` window, stop.**
+The release was not produced by this run, and nothing below applies to it.
+
+> ⚠ **`createdAt` is not the release object's creation time — it tracks the tag.** On
+> `v0.2.0-beta.11` it reads `2026-09-10T18:03:56Z`, *before* the publish run started, while the
+> object itself was created at `publishedAt: 2026-09-11T07:41:30Z` — and `author` reads `srgvg`,
+> a human, not the automation. Keying ownership on `createdAt` compares against the wrong event and
+> would mark that hand-created release as this run's to delete.
 
 > ⛔ **Never infer completeness from the release's asset count in this repo.** kure is a Go library:
 > `.goreleaser.yml` sets `builds: skip: true` and `checksum: disable: true` and declares no SBOM or
@@ -478,7 +498,8 @@ If the release does **not** exist, recover it. Which path applies depends on why
 
 | Situation | Recovery |
 | --- | --- |
-| Transient failure; the shared workflow needs no change | `gh run rerun --failed <run-id>` |
+| Transient, `goreleaser` concluded `failure`; the shared workflow needs no change | `gh run rerun --failed <run-id>` |
+| Transient, but `goreleaser` concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` selects *failed* jobs, so a publisher with a different terminal conclusion is never re-run, and a release object you removed above stays absent while the run reports done |
 | The shared workflow needed a fix, and the failed run is under 30 days old | `gh run rerun <run-id>` — a **full** re-run, not `--failed` |
 | No failed run remains, or it is over 30 days old | `gh workflow run release-publish.yml --repo go-kure/kure --ref <tag>` |
 
@@ -603,7 +624,7 @@ Uses a two-pass AI review system via the in-cluster claude-max-proxy (ported fro
 
 ### Requirements
 
-- **Self-hosted runner:** Runs on `autops-kube` label (ARC runner with in-cluster access)
+- **Self-hosted runner:** Runs on `autops-kube-kure` label (ARC runner with in-cluster access)
 - **claude-max-proxy:** Reachable at `http://openclaw-claude-proxy.openclaw.svc:3456` from the runner pod
 - **No API keys needed:** the proxy handles model authentication
 
@@ -956,7 +977,7 @@ To account for this:
 - **Version updates:** Run `make sync-go-version` to update Go version in all files
 - **Version check:** Run `make check-go-version` to verify consistency
 - **Action versions:** Keep GitHub Actions up to date (currently using v3-v6)
-- **New jobs using `make`:** Add the `Install build tools` step (see above) if the job runs on `autops-kube`
+- **New jobs using `make`:** Add the `Install build tools` step (see above) if the job runs on `autops-kube-kure`
 
 ---
 
