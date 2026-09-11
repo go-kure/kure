@@ -115,17 +115,28 @@ jobs:
           rc=$?
           set -e
           if [ "$rc" -eq 0 ]; then
-            # Deliberately names no re-run mode. Which one is correct depends on
-            # the follow-up job's own conclusion -- `--failed` selects only jobs
-            # that concluded `failure`, so it silently does nothing for a
-            # `cancelled` or `timed_out` follow-up -- and this step cannot see
-            # that conclusion. Send the operator to the decision tree instead of
-            # guessing on their behalf.
+            # This message states ONE observable fact -- the release object
+            # exists -- and asserts nothing about publication. Everything it
+            # could add is beyond what this step can see:
+            #   * whether publication SUCCEEDED. goreleaser creates the release
+            #     object before the job finishes, so a run that died part-way
+            #     leaves a release here too; the runbook says as much where it
+            #     rules out the asset count as a completeness oracle. Saying
+            #     "publication succeeded" would send an operator hunting a
+            #     failed follow-up job when the real state is an incomplete
+            #     release needing escalation.
+            #   * which RE-RUN MODE to use. That depends on how the failed job
+            #     concluded -- `--failed` selects only `failure`, so it silently
+            #     does nothing for `cancelled` or `timed_out` -- and this step
+            #     cannot see that conclusion either.
+            # Both belong to the runbook's decision tree, which has the run's
+            # per-attempt conclusions in front of it. Route there; do not guess.
             echo "::error::$TAG already has a GitHub release, so this" \
                  "${GITHUB_EVENT_NAME} (attempt ${GITHUB_RUN_ATTEMPT}) would re-publish over a" \
-                 "live release object. Publication already succeeded; recover the failed" \
-                 "follow-up job on its own. The correct re-run mode depends on how that job" \
-                 "concluded -- see the recovery decision tree in docs/github-workflows.md."
+                 "live release object. This does not by itself mean publication succeeded --" \
+                 "a run that died part-way leaves a release object too. Determine the state and" \
+                 "the recovery from the decision tree in docs/github-workflows.md before" \
+                 "re-running anything."
             exit 1
           fi
           case "$err" in
