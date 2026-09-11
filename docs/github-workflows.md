@@ -535,11 +535,20 @@ The tag itself must never be moved or deleted to force a fresh `push` event.
 On the dispatch path, `--ref` must be the tag being published: the shared workflow checks out
 `github.ref`, so dispatching from a branch would build that branch rather than the release. The
 wrapper-local `guard-tag-ref` job refuses a non-tag ref outright rather than skipping, so a
-mistaken dispatch fails loudly instead of leaving a green-looking run, and on a dispatch it also
-refuses a tag that already has a release — re-publishing over a live release object is outside the
-recovery scope above, and neither the UI nor the CLI enforces that on its own. That second check
-needs the release to be provably absent: a `404` proceeds, an existing release refuses, and an API
-error that answers neither also refuses, so an undetermined answer never reaches the publisher.
+mistaken dispatch fails loudly instead of leaving a green-looking run, and it also refuses a tag
+that already has a release — re-publishing over a live release object is outside the recovery scope
+above, and neither the UI nor the CLI enforces that on its own. That second check needs the release
+to be provably absent: a `404` proceeds, an existing release refuses, and an API error that answers
+neither also refuses, so an undetermined answer never reaches the publisher.
+
+The release check runs on a dispatch **and on any attempt after the first**
+(`github.event_name == 'workflow_dispatch' || github.run_attempt > 1`). Only attempt 1 of a tag
+push is exempt, because only that attempt is a genuine first publication where no release can exist
+yet and an API hiccup must not block the normal release path. A re-run replays the *original* event
+context, so `github.event_name` stays `push` on attempt 2 — scoping the check to the event alone
+would let the full re-run prescribed above skip it and hand the publisher a release an earlier
+attempt had already created. This is the same frozen-event-context behaviour that stops the shared
+publisher's `workflow_dispatch` exemption from covering a re-run, noted in the re-run caveat above.
 
 That probe is not atomic with the publication it guards, so the wrapper carries its own
 `concurrency` group (`release-publish-wrapper-<ref>`, `cancel-in-progress: false`). The shared
@@ -583,10 +592,11 @@ in the caller's context, so reusing the name would risk the wrapper holding a gr
 
 ### Jobs
 
-1. **guard-tag-ref** - Fails the run unless `github.ref` is a `v*` tag, and on a `workflow_dispatch`
-   also unless the tag has no release yet (wrapper-local; blocks the publisher when a dispatch names
-   a branch, or would re-publish over a live release). Takes `contents: read` only, not the
-   publisher's write scopes
+1. **guard-tag-ref** - Fails the run unless `github.ref` is a `v*` tag, and — on a
+   `workflow_dispatch` or any attempt after the first — also unless the tag has no release yet
+   (wrapper-local; blocks the publisher when a dispatch names a branch, or when a dispatch or
+   re-run would re-publish over a live release). Takes `contents: read` only, not the publisher's
+   write scopes
 2. **test** - Full test run with race detection
 3. **validate** - Strict tag format, changelog, and version progression validation
 4. **goreleaser** - Create the GitHub release object. kure is a library, so `.goreleaser.yml` skips

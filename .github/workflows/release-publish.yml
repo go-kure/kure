@@ -74,16 +74,25 @@ jobs:
       # cannot be determined: a wrong "proceed" mutates a published release,
       # a wrong "refuse" costs a retry.
       #
-      # Scoped to workflow_dispatch deliberately. A tag push is a first
-      # publication, where no release exists yet and an API hiccup must not be
-      # allowed to block the normal release path.
+      # The exemption is ATTEMPT 1 OF A TAG PUSH, not "a tag push". Only the
+      # first attempt is a first publication, where no release can exist yet and
+      # an API hiccup must not be allowed to block the normal release path.
+      #
+      # A re-run replays the ORIGINAL event context, so `github.event_name`
+      # stays `push` on attempt 2+ -- the same frozen-context behaviour ci.yml
+      # documents at :420-423 from an earlier incident, and the same reason the
+      # shared publisher's workflow_dispatch exemption does not cover a re-run.
+      # Without `run_attempt > 1` here, the full re-run the runbook prescribes
+      # would skip this probe and hand the publisher a release an earlier
+      # attempt had already created -- reaching the exact state this guard
+      # exists to prevent, by the one path that was not checked.
       #
       # Measured shapes of the probe: release present -> exit 0, no stderr;
       # absent -> exit 1 with "gh: Not Found (HTTP 404)". Any other non-zero
       # exit is an undetermined answer and takes the refuse branch, so a change
       # in that error format fails safe instead of silently reading as absent.
-      - name: Refuse a dispatch for a tag that already has a release
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+      - name: Refuse a re-publish over a tag that already has a release
+        if: ${{ github.event_name == 'workflow_dispatch' || github.run_attempt > 1 }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
@@ -93,9 +102,10 @@ jobs:
           rc=$?
           set -e
           if [ "$rc" -eq 0 ]; then
-            echo "::error::$TAG already has a GitHub release. Dispatch re-publishes and would" \
-                 "overwrite it. Recover the failed follow-up job directly, or escalate --" \
-                 "see docs/github-workflows.md."
+            echo "::error::$TAG already has a GitHub release, so this" \
+                 "${GITHUB_EVENT_NAME} (attempt ${GITHUB_RUN_ATTEMPT}) would re-publish over a" \
+                 "live release object. Recover the failed follow-up job directly with" \
+                 "'gh run rerun --failed', or escalate -- see docs/github-workflows.md."
             exit 1
           fi
           case "$err" in
