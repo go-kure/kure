@@ -74,18 +74,35 @@ jobs:
       # cannot be determined: a wrong "proceed" mutates a published release,
       # a wrong "refuse" costs a retry.
       #
-      # The exemption is ATTEMPT 1 OF A TAG PUSH, not "a tag push". Only the
-      # first attempt is a first publication, where no release can exist yet and
-      # an API hiccup must not be allowed to block the normal release path.
+      # The probe runs on EVERY path, attempt 1 of a tag push included. What
+      # varies between paths is only what an UNDETERMINED answer does.
+      #
+      # It was previously skipped outright on attempt 1 of a tag push, on the
+      # premise that a first publication cannot have a release yet. The wrapper
+      # concurrency group above falsifies that premise: a dispatch for a
+      # freshly pushed tag can take the slot first and publish, and the queued
+      # push run then arrives at a tag that DOES have a release while still
+      # reporting `event_name == 'push'` and `run_attempt == 1`. Skipping made
+      # the second serialised publication the one path the guard cannot see --
+      # and serialising the two runs is what creates that ordering in the first
+      # place.
+      #
+      # The reason the exemption existed is still real, so it survives in a
+      # narrower form: a first publication must not be blocked by an API
+      # hiccup. On attempt 1 of a tag push an UNDETERMINED answer therefore
+      # warns and proceeds, while "the release exists" refuses there as
+      # everywhere. On every other path -- any dispatch, any attempt 2+ --
+      # undetermined still refuses, because those are re-publications, where a
+      # wrong "proceed" mutates a live release and a wrong "refuse" costs a
+      # retry.
       #
       # A re-run replays the ORIGINAL event context, so `github.event_name`
       # stays `push` on attempt 2+ -- the same frozen-context behaviour ci.yml
       # documents at :420-423 from an earlier incident, and the same reason the
       # shared publisher's workflow_dispatch exemption does not cover a re-run.
-      # Without `run_attempt > 1` here, the full re-run the runbook prescribes
-      # would skip this probe and hand the publisher a release an earlier
-      # attempt had already created -- reaching the exact state this guard
-      # exists to prevent, by the one path that was not checked.
+      # That is why FIRST_PUBLICATION tests the attempt as well as the event,
+      # and why it is written as the exact complement of the old
+      # `run_attempt > 1` gate.
       #
       # KNOWN LIMIT -- this guard covers a FULL re-run, never `--failed`. On
       # `gh run rerun --failed`, GitHub reschedules only jobs that concluded
@@ -102,13 +119,21 @@ jobs:
       #
       # Measured shapes of the probe: release present -> exit 0, no stderr;
       # absent -> exit 1 with "gh: Not Found (HTTP 404)". Any other non-zero
-      # exit is an undetermined answer and takes the refuse branch, so a change
-      # in that error format fails safe instead of silently reading as absent.
+      # exit is an UNDETERMINED answer -- never read as absent. So a change in
+      # that error format degrades to undetermined rather than to "no release".
+      # Undetermined refuses on every path except a first publication, where it
+      # warns and proceeds (see FIRST_PUBLICATION below); on that one path a
+      # format change would therefore cost a warning, not a blocked release.
       - name: Refuse a re-publish over a tag that already has a release
-        if: ${{ github.event_name == 'workflow_dispatch' || github.run_attempt > 1 }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          # The exact complement of the gate this step used to carry
+          # (`github.event_name == 'workflow_dispatch' || github.run_attempt > 1`).
+          # Written with the same `> 1` comparison rather than `== 1`, so it does
+          # not depend on how the expression language coerces run_attempt, which
+          # is a string.
+          FIRST_PUBLICATION: ${{ github.event_name == 'push' && !(github.run_attempt > 1) }}
         run: |
           set +e
           err=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>&1 >/dev/null)
@@ -141,11 +166,25 @@ jobs:
           fi
           case "$err" in
             *"(HTTP 404)"*)
-              echo "No release exists for $TAG; proceeding with re-publish"
+              # Says "publication", not "re-publish": this branch is now also
+              # reached on attempt 1 of a tag push, which is a first publication.
+              echo "No release exists for $TAG; proceeding with publication"
               ;;
             *)
-              echo "::error::could not determine whether $TAG already has a release: $err"
-              exit 1
+              if [ "$FIRST_PUBLICATION" = "true" ]; then
+                # Attempt 1 of a tag push. No earlier attempt of this run can
+                # have created a release, so the only way one exists here is the
+                # concurrent-dispatch race -- and that case answers rc=0 above,
+                # which still refuses. What is left is far more likely an API
+                # hiccup, and failing closed on it would block a normal release.
+                echo "::warning::could not determine whether $TAG already has a release: $err"
+                echo "Proceeding anyway: attempt 1 of a tag push is a first publication," \
+                     "which must not be blocked by an API error. A release that does exist" \
+                     "is still refused above; only an UNDETERMINED answer is waived here."
+              else
+                echo "::error::could not determine whether $TAG already has a release: $err"
+                exit 1
+              fi
               ;;
           esac
 
