@@ -87,6 +87,19 @@ jobs:
       # attempt had already created -- reaching the exact state this guard
       # exists to prevent, by the one path that was not checked.
       #
+      # KNOWN LIMIT -- this guard covers a FULL re-run, never `--failed`. On
+      # `gh run rerun --failed`, GitHub reschedules only jobs that concluded
+      # `failure` plus their downstream jobs; `guard-tag-ref` concluded
+      # `success`, so it is carried over and NONE of its steps execute, this one
+      # included. `release` declares `needs: guard-tag-ref`, and a carried-over
+      # `needs:` still satisfies the dependency. So a `--failed` re-run of a
+      # publisher that failed AFTER creating the release object re-enters
+      # publication with this probe never evaluated. The runbook does not
+      # prescribe `--failed` in that state (it is an escalation), but nothing
+      # here enforces that. The durable fix is a release-existence probe inside
+      # the shared publisher itself, which IS rescheduled by `--failed`; it
+      # belongs in `go-kure/.github`, not here.
+      #
       # Measured shapes of the probe: release present -> exit 0, no stderr;
       # absent -> exit 1 with "gh: Not Found (HTTP 404)". Any other non-zero
       # exit is an undetermined answer and takes the refuse branch, so a change

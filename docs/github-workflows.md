@@ -430,12 +430,19 @@ commit. **If `headBranch` is not the tag you are recovering, you are reading the
 
 - **`goreleaser` concluded `success`** — publication finished and only a follow-up job failed.
   Do not re-publish; recovery depends on why the follow-up failed:
-  - *Transient failure* — `gh run rerun --failed <run-id>`. This does not re-run `goreleaser`:
+  - *Transient failure, and the follow-up job concluded `failure`* —
+    `gh run rerun --failed <run-id>`. This does not re-run `goreleaser`:
     `--failed` re-runs the failed jobs and the jobs *downstream* of them, carrying successful
     upstream jobs over untouched. Measured on `v0.2.0-beta.11`'s run — attempt 3 lists
     `Validate tag and changelog: success` with attempt 1's `started_at`, unchanged, even though it
     is a declared `needs:` of a job that was re-run. (The `--failed` help text reads "including
     dependencies", which invites the opposite reading; the API endpoint is `rerun-failed-jobs`.)
+  - *Transient failure, but the follow-up job concluded `cancelled` or `timed_out`* — **`--failed`
+    selects nothing and the command reports success having re-run no job at all**, because it
+    selects only jobs whose conclusion is `failure` (the same mechanism the recovery table below
+    splits its rows on). A full re-run is not the answer either: it would redo publication against
+    the release that already exists. Drive the follow-up work directly, exactly as in the next
+    bullet.
   - *The shared workflow itself needs a fix* — `--failed` pins the reusable workflow to the first
     attempt's SHA and so cannot pick the fix up, while a full re-run would redo publication against
     the release that already exists. Neither works. Drive the follow-up work directly instead:
@@ -484,6 +491,17 @@ settled.
 
 > Determining this state reliably is tracked as an extraction into a tested script shared by both
 > repos, rather than a procedure re-derived by a reader — see `go-kure/.github#205`.
+
+> ⚠ **The wrapper's own guard does not backstop you here.** `guard-tag-ref` refuses a re-publish
+> over a tag that already has a release, but only on a `workflow_dispatch` or a **full** re-run. On
+> `gh run rerun --failed`, GitHub reschedules only jobs that concluded `failure` and their
+> downstream jobs — `guard-tag-ref` concluded `success`, so it is carried over and none of its steps
+> run, while the carried-over result still satisfies `release`'s `needs:`. A `--failed` re-run of a
+> publisher that failed *after* creating the release object therefore re-enters publication with the
+> probe never evaluated. This is why the state above is an escalation and not a self-service re-run:
+> the escalation is the control, not the guard. A release-existence probe inside the shared
+> publisher — which `--failed` does reschedule — is the durable fix and belongs in
+> `go-kure/.github`.
 
 If the release does **not** exist, recover it. Which path applies depends on why the run failed:
 
@@ -580,12 +598,30 @@ in the caller's context, so reusing the name would risk the wrapper holding a gr
 > deploy at all, and the recovery of a prerelease is unaffected.
 >
 > **When recovering a stable tag that is not the newest stable tag, re-deploy the docs afterwards**
-> so `latest` points where it should:
+> so `latest` points where it should. **The two deploys do not serialise — wait for the recovered
+> tag's own `Deploy Docs` run to conclude before starting the corrective one.** `deploy-docs.yml`
+> scopes `concurrency` per version slot (`group: deploy-docs-${{ inputs.version_slot || 'dev' }}`,
+> `deploy-docs.yml:35-37`), so a deploy for the old slot and one for the new slot sit in *different*
+> groups and run at the same time. Both check out `go-kure/go-kure.github.io` independently and end
+> in a plain `git push` with no retry (`deploy-docs.yml:199-200`), so the second one to push fails
+> non-fast-forward and its content is never applied. If the corrective deploy is the one that loses,
+> `latest` stays pointing at the older tag — and the run you are most likely to be looking at, the
+> republish, is green.
 >
 > ```bash
+> # 1. Wait for the recovered tag's docs deploy. The republish creates it, so it may not be listed
+> #    for a few seconds -- re-run the list until a run appears rather than watching an older id.
+> gh run list --repo go-kure/kure --workflow deploy-docs.yml \
+>   --branch <recovered-tag> --limit 5
+> gh run watch <id-of-the-in-flight-run> --repo go-kure/kure
+>
+> # 2. Then re-point latest at the newest stable tag.
 > gh workflow run deploy-docs.yml --repo go-kure/kure --ref <newest-stable-tag> \
 >   -f version_slot=<newest-minor> -f version_label=<newest-stable-tag> -f set_latest=true
 > ```
+>
+> Confirm the result from the deploy run's own log rather than from `gh run watch`, which exits `0`
+> on a red run.
 >
 > Making the publisher itself skip `set_latest` for a non-newest tag is the durable fix and belongs
 > in `go-kure/.github`, not here.
