@@ -369,33 +369,47 @@ If the release exists, do **not** conclude the publish succeeded — check that 
 afterwards, so a failure partway through leaves a release that exists with missing or zero assets.
 `v0.2.0-beta.11` is exactly that state: release object present, zero assets.
 
+Judge completeness **against the tag being published**, never against a previous release: the
+artifact set is defined by `.goreleaser.yml` *at that tag*, so any deliberate change to the build
+matrix makes an earlier release a misleading oracle — it would classify a complete release as
+partial.
+
 ```bash
-gh release view <tag> --repo go-kure/kure --json assets --jq '.assets | length'
-gh release view <previous-tag> --repo go-kure/kure --json assets --jq '.assets | length'
+gh release view <tag> --repo go-kure/kure --json assets --jq '.assets[].name'
+git show <tag>:.goreleaser.yml
 ```
 
-The previous good release is the oracle for how many assets a complete publish produces — compare
-the two counts rather than guessing an expected number.
+`checksums.txt` is the self-describing part: `goreleaser` produces it at that tag and it names every
+archive the tag should carry. A release with no `checksums.txt` failed before artifact upload.
+Against that list, expect one `.sbom.json` per archive and one `checksums.txt.sigstore.json`.
 
-- **Counts match** — publication finished and only a follow-up job failed. Do not re-publish;
-  recovery depends on why the follow-up failed:
+- **Assets match that tag's configuration** — publication finished and only a follow-up job failed.
+  Do not re-publish; recovery depends on why the follow-up failed:
   - *Transient failure* — `gh run rerun --failed <run-id>`.
   - *The shared workflow itself needs a fix* — `--failed` pins the reusable workflow to the first
     attempt's SHA and so cannot pick the fix up, while a full re-run would redo publication against
     the release that already exists. Neither works. Drive the follow-up work directly instead:
-    - `deploy-docs` — dispatch `deploy-docs.yml` with the tag's `version_slot` and `version_label`.
-    - `post-release` (Go proxy refresh) — request the module so the proxy fetches it:
 
-      ```bash
-      curl -fsS https://proxy.golang.org/github.com/go-kure/kure/@v/<tag>.info
-      ```
-- **Count is lower, or zero** — a *partial* publish. Delete the release object and recover it as if
-  it had never been created, using the table below. Deleting a release does not delete the tag, and
-  the tag must stay exactly where it is:
+    ```bash
+    # deploy-docs. --ref is required: without it the workflow runs from the default branch and
+    # deploys main's content into the version slot. set_latest defaults to false, so pass true
+    # only when this tag is the latest stable.
+    gh workflow run deploy-docs.yml --repo go-kure/kure --ref <tag> \
+      -f version_slot=<slot> -f version_label=<tag> -f set_latest=<true|false>
 
-  ```bash
-  gh release delete <tag> --repo go-kure/kure --yes   # never --cleanup-tag
-  ```
+    # post-release (Go proxy refresh) — request the module so the proxy fetches it
+    curl -fsS https://proxy.golang.org/github.com/go-kure/kure/@v/<tag>.info
+    ```
+
+- **Assets are missing for that tag** — a *partial* publish. The tag is correct and must not move;
+  what is wrong is the release object attached to it. Recovery means removing the incomplete release
+  and re-publishing with the table below.
+
+  **That removal is destructive and is deliberately not given here as a copy-pasteable command.**
+  Confirm from the two commands above that the asset list is genuinely short for *this* tag's own
+  configuration — not merely shorter than some other release — and remove the release object as a
+  considered manual step. Removing a release does not remove the tag, and the tag must not be
+  touched.
 
 If the release does **not** exist, recover it. Which path applies depends on why the run failed:
 
