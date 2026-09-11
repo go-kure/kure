@@ -401,6 +401,29 @@ attempt 3 started 2026-09-11T06:08:55Z
 
 Add `--attempt <n>` to inspect an older attempt; without it the command reports the latest one.
 
+> ⛔ **`goreleaser: skipped` in the latest attempt does not mean it never ran.** It declares
+> `needs: [test, validate]`, so *any* re-run whose `test` fails skips it again — while a release
+> object created by an **earlier** attempt is still there. You only reach this section because
+> `gh release view` found a release, so something published it. Find the attempt that did:
+
+```bash
+RUN=<run-id>
+for a in $(seq 1 "$(gh api repos/go-kure/kure/actions/runs/$RUN --jq '.run_attempt')"); do
+  printf 'attempt %s: ' "$a"
+  gh api "repos/go-kure/kure/actions/runs/$RUN/attempts/$a/jobs" \
+    --jq '[.jobs[] | select(.name | test("goreleaser"))]
+          | map("\(.conclusion) (started \(.started_at))") | join(", ")'
+done
+```
+
+The branch below is decided by `goreleaser`'s conclusion **in the attempt that ran it** — the first
+one not reporting `skipped`.
+
+`skipped` in *every* attempt while a release exists is a contradiction, and worth stopping on rather
+than forcing into a branch: no run in this record published that release, so it came from somewhere
+else — a hand-created release object, or a different run entirely. Establish where it came from
+before touching it. None of the recovery below applies to a release this workflow did not create.
+
 > ⛔ **Never infer completeness from the release's asset count in this repo.** kure is a Go library:
 > `.goreleaser.yml` sets `builds: skip: true` and `checksum: disable: true` and declares no SBOM or
 > signing stanza, so **a fully successful kure release carries zero assets.** The tag is the
@@ -440,8 +463,8 @@ Add `--attempt <n>` to inspect an older attempt; without it the command reports 
   `action_required` all mean the same thing here: a *partial* publish, where the release object
   exists but the job that owns it did not finish. Key on "not `success`" rather than matching
   `failure`, so a cancelled run — a job cancelled mid-upload concludes `cancelled`, not `failure` —
-  lands in this branch instead of matching neither. (`skipped` cannot occur on this path: a skipped
-  `goreleaser` never created a release, so the "release does not exist" case below applies.)
+  lands in this branch instead of matching neither. Read that conclusion from the attempt that ran
+  `goreleaser`, per the note above; `skipped` is not a conclusion about publication.
 
   The tag is correct and must not move; what is wrong is the release object attached to it.
   Recovery means removing that release object and re-publishing with the table below.
