@@ -364,26 +364,22 @@ Check before doing anything:
 gh release view <tag> --repo go-kure/kure
 ```
 
-If the release exists, do **not** conclude the publish succeeded — check that it is *complete*.
-`goreleaser` creates the release object first and uploads archives, checksums, SBOMs and signatures
-afterwards, so a failure partway through leaves a release that exists with missing or zero assets.
-`v0.2.0-beta.11` is exactly that state: release object present, zero assets.
-
-Judge completeness **against the tag being published**, never against a previous release: the
-artifact set is defined by `.goreleaser.yml` *at that tag*, so any deliberate change to the build
-matrix makes an earlier release a misleading oracle — it would classify a complete release as
-partial.
+If the release exists, do **not** conclude the publish succeeded — `goreleaser` creates the release
+object before it finishes. Read the **job conclusions** of the publish run:
 
 ```bash
-gh release view <tag> --repo go-kure/kure --json assets --jq '.assets[].name'
-git show <tag>:.goreleaser.yml
+gh run view <run-id> --repo go-kure/kure --json jobs \
+  --jq '.jobs[] | "\(.name): \(.conclusion)"'
 ```
 
-`checksums.txt` is the self-describing part: `goreleaser` produces it at that tag and it names every
-archive the tag should carry. A release with no `checksums.txt` failed before artifact upload.
-Against that list, expect one `.sbom.json` per archive and one `checksums.txt.sigstore.json`.
+> ⛔ **Never infer completeness from the release's asset count in this repo.** kure is a Go library:
+> `.goreleaser.yml` sets `builds: skip: true` and `checksum: disable: true` and declares no SBOM or
+> signing stanza, so **a fully successful kure release carries zero assets.** The tag is the
+> artifact — `go get` resolves from the tag, not from the release object. An asset count cannot
+> distinguish a complete release from one whose `goreleaser` job died right after creating it, and
+> reading zero assets as "artifacts are missing" is wrong here.
 
-- **Assets match that tag's configuration** — publication finished and only a follow-up job failed.
+- **`goreleaser` succeeded** — publication finished and only a follow-up job failed.
   Do not re-publish; recovery depends on why the follow-up failed:
   - *Transient failure* — `gh run rerun --failed <run-id>`.
   - *The shared workflow itself needs a fix* — `--failed` pins the reusable workflow to the first
@@ -401,15 +397,14 @@ Against that list, expect one `.sbom.json` per archive and one `checksums.txt.si
     curl -fsS https://proxy.golang.org/github.com/go-kure/kure/@v/<tag>.info
     ```
 
-- **Assets are missing for that tag** — a *partial* publish. The tag is correct and must not move;
-  what is wrong is the release object attached to it. Recovery means removing the incomplete release
-  and re-publishing with the table below.
+- **`goreleaser` failed** — a *partial* publish: the release object exists but the job that owns it
+  did not finish. The tag is correct and must not move; what is wrong is the release object attached
+  to it. Recovery means removing that release object and re-publishing with the table below.
 
   **That removal is destructive and is deliberately not given here as a copy-pasteable command.**
-  Confirm from the two commands above that the asset list is genuinely short for *this* tag's own
-  configuration — not merely shorter than some other release — and remove the release object as a
-  considered manual step. Removing a release does not remove the tag, and the tag must not be
-  touched.
+  Confirm the `goreleaser` job's conclusion from the command above first, then remove the release
+  object as a considered manual step. Removing a release does not remove the tag, and the tag must
+  not be touched.
 
 If the release does **not** exist, recover it. Which path applies depends on why the run failed:
 
