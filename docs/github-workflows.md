@@ -585,6 +585,15 @@ proceeds; everywhere else it refuses. A first publication must not be blocked by
 while a re-publication that cannot establish the release state is exactly the case where proceeding
 mutates something live.
 
+The probe retries up to three times before an answer counts as undetermined, so that waiver rides
+on a persistent outage rather than a single blip. It still leaves a residual hole, recorded here
+rather than hidden: if a concurrent dispatch published the tag **and** the API cannot answer, the
+existing-release refusal never fires and the push run proceeds over a live release. That is
+accepted — refusing instead would block every first publication on an API outage — and it is
+strictly narrower than the previous behaviour, which skipped the probe on this path entirely and so
+missed the race whatever the API was doing. Closing it needs a probe inside the shared publisher,
+atomic with the publication it guards.
+
 An existing release refuses on every path, attempt 1 of a tag push included, because that attempt
 is not always a first publication. The wrapper's `concurrency` group serialises runs for one tag
 without making the later one re-check what the earlier one did: a dispatch for a freshly pushed tag
@@ -835,7 +844,9 @@ The workflow uses `continue-on-error: true` so review failures never block PR me
 
 ### Concurrency
 
-Per-slot concurrency group (`deploy-docs-<slot>`) prevents race conditions when deploying different versions simultaneously.
+Per-slot concurrency group (`deploy-docs-<slot>`) with `cancel-in-progress: false` — two deploys **to the same slot** queue rather than cancel, so neither is dropped.
+
+**This does not serialise deploys to *different* slots, and they are not independent.** The group name includes the slot, so a `v1.2` deploy and a `v1.3` deploy sit in different groups and run at the same time. Both check out the same docs repository and both end in a plain `git push` with no retry (`deploy-docs.yml:199-200`), so the second to push fails non-fast-forward and its content is never applied — a real race, just not one this concurrency key can see. Sequence cross-slot deploys yourself: wait for the first to conclude before starting the second. The release-recovery procedure above does exactly that, and explains why the run you are most likely to be looking at is the one that stays green.
 
 ### Preservation
 
