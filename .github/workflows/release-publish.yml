@@ -135,10 +135,28 @@ jobs:
           # is a string.
           FIRST_PUBLICATION: ${{ github.event_name == 'push' && !(github.run_attempt > 1) }}
         run: |
-          set +e
-          err=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>&1 >/dev/null)
-          rc=$?
-          set -e
+          # Probe up to 3 times, 5s apart, stopping at the first DETERMINATE
+          # answer. This is not generic flake tolerance: the first-publication
+          # waiver at the bottom of this step is only defensible if
+          # "undetermined" means PERSISTENTLY undetermined. Without retries a
+          # single 403/429/network blip is indistinguishable from an API that
+          # genuinely cannot answer, and the waiver would ride on the blip.
+          attempt=0
+          while : ; do
+            attempt=$((attempt + 1))
+            set +e
+            err=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>&1 >/dev/null)
+            rc=$?
+            set -e
+            case "${rc}:${err}" in
+              0:*|*"(HTTP 404)"*) break ;;
+            esac
+            if [ "$attempt" -ge 3 ]; then
+              break
+            fi
+            echo "Probe attempt ${attempt} for $TAG was undetermined ($err); retrying in 5s"
+            sleep 5
+          done
           if [ "$rc" -eq 0 ]; then
             # This message states ONE observable fact -- the release object
             # exists -- and asserts nothing about publication. Everything it
@@ -172,11 +190,27 @@ jobs:
               ;;
             *)
               if [ "$FIRST_PUBLICATION" = "true" ]; then
-                # Attempt 1 of a tag push. No earlier attempt of this run can
-                # have created a release, so the only way one exists here is the
-                # concurrent-dispatch race -- and that case answers rc=0 above,
-                # which still refuses. What is left is far more likely an API
-                # hiccup, and failing closed on it would block a normal release.
+                # Attempt 1 of a tag push, with the probe still undetermined
+                # after every retry above.
+                #
+                # THIS WAIVER HAS A RESIDUAL HOLE, stated plainly because the
+                # comment that first stood here denied it: if a concurrent
+                # dispatch published this tag AND the API cannot answer, the
+                # release exists and this branch proceeds anyway. The `rc=0`
+                # refusal catches that race only while the API is answering --
+                # which is precisely what reaching this branch rules out.
+                #
+                # Accepted, not closed. Refusing here would block every first
+                # publication on an API outage: a certain cost on the normal
+                # release path, traded against the intersection of two
+                # independent unlikely events. This branch is also strictly
+                # better than what preceded it, which skipped the probe on this
+                # path entirely and so missed the race whatever the API was
+                # doing, and the retries above narrow the hole to a PERSISTENT
+                # outage rather than a single blip.
+                #
+                # Closing it properly needs a probe inside the shared publisher,
+                # atomic with the publication it guards -- see KNOWN LIMIT above.
                 echo "::warning::could not determine whether $TAG already has a release: $err"
                 echo "Proceeding anyway: attempt 1 of a tag push is a first publication," \
                      "which must not be blocked by an API error. A release that does exist" \
