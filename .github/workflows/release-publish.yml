@@ -4,12 +4,17 @@ on:
   push:
     tags:
       - 'v*'
-  # Manual re-publish for an existing tag. Without this, a publish run that
-  # fails leaves the tag pushed and no release object, with no way to retry:
-  # `gh run rerun` replays the reusable-workflow resolution captured at first
-  # dispatch, so it cannot pick up a fix on go-kure/.github main, and moving or
-  # deleting a release tag is not an option. Dispatch with `--ref <tag>` so the
-  # shared workflow checks out the tag being published.
+  # Manual re-publish for a tag whose publish run failed before the release
+  # object was created. The re-run paths do not always recover that state:
+  #   * `gh run rerun --failed <id>`, and a single-job re-run, resolve the
+  #     reusable workflow at the commit SHA of the FIRST attempt, so they cannot
+  #     pick up a fix landed on go-kure/.github main afterwards. Measured on
+  #     v0.2.0-beta.11: a --failed re-run 102s after the fix merged still ran
+  #     the pre-fix command.
+  #   * a full `gh run rerun <id>` does re-resolve `@main`, but only inside
+  #     GitHub's 30-day re-run window, and only while a failed run still exists.
+  # Moving or deleting a release tag is not an option, so dispatch is what is
+  # left. Pass `--ref <tag>`: the shared workflow checks out github.ref.
   workflow_dispatch:
 
 permissions:
@@ -18,7 +23,25 @@ permissions:
   actions: write
 
 jobs:
+  # A workflow_dispatch can name any ref, including a branch. Handing the
+  # privileged publisher a branch would publish that tree under the release
+  # path. Refuse instead of skipping: a job gated off with `if:` leaves the run
+  # reading green, and an operator recovering a failed publish would take that
+  # as a successful re-publish while the release object still does not exist.
+  guard-tag-ref:
+    name: Guard tag ref
+    runs-on: autops-kube-kure
+    steps:
+      - name: Refuse a non-tag ref
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::release-publish must run against a v* tag; got $REF"
+          exit 1
+
   release:
+    needs: guard-tag-ref
     uses: go-kure/.github/.github/workflows/release-publish.yml@main
     with:
       go_module: github.com/go-kure/kure

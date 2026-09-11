@@ -354,26 +354,50 @@ Advance the version cycle without creating a tag. Use before starting a new prer
 
 #### Re-publishing a tag after a failed run
 
-A publish run that fails leaves the tag pushed and no release object. The tag must not be moved
-or deleted, and `gh run rerun` does not help: GitHub resolves the shared reusable workflow at the
-*first* dispatch and a re-run replays that resolution, so it cannot pick up a fix landed on
-`go-kure/.github` `main` afterwards. Dispatch against the tag instead:
+**Scope: runs that failed _before_ `goreleaser` created the GitHub release.** `goreleaser` runs
+ahead of `deploy-docs` and `post-release` (see Jobs below) and publishes a non-draft release, so a
+failure in either of those later jobs leaves the release object already created. Dispatching a
+fresh publish in that case would redo release publication instead of recovering the failed step.
+Check before doing anything:
 
 ```bash
-gh workflow run release-publish.yml --repo go-kure/kure --ref v0.2.0-beta.11
+gh release view <tag> --repo go-kure/kure
 ```
 
-The `--ref` must be the tag being published — the shared workflow checks out `github.ref`, so
-dispatching from a branch would build that branch rather than the release. The trigger has to be
-present in the workflow file *at that tag*, so this only works for tags cut after it was added.
+If the release exists, the publication already succeeded — fix the failed follow-up job on its own
+(`gh run rerun --failed <run-id>`) rather than re-publishing.
+
+If the release does **not** exist, recover it. Which path applies depends on why the run failed:
+
+| Situation | Recovery |
+| --- | --- |
+| Transient failure; the shared workflow needs no change | `gh run rerun --failed <run-id>` |
+| The shared workflow needed a fix, and the failed run is under 30 days old | `gh run rerun <run-id>` — a **full** re-run, not `--failed` |
+| No failed run remains, or it is over 30 days old | `gh workflow run release-publish.yml --repo go-kure/kure --ref <tag>` |
+
+The full-versus-failed distinction is load-bearing. GitHub resolves a reusable workflow referenced
+by branch differently per re-run mode: re-running **all** jobs uses the called workflow from the
+specified reference — here `@main`, so it picks up a fix — while re-running **failed jobs or a
+single job** uses the called workflow from the commit SHA of the first attempt, so it does not.
+Re-runs stay available for 30 days after the initial run.
+
+The tag itself must never be moved or deleted to force a fresh `push` event.
+
+On the dispatch path, `--ref` must be the tag being published: the shared workflow checks out
+`github.ref`, so dispatching from a branch would build that branch rather than the release. The
+`guard-tag-ref` job rejects a non-tag ref outright rather than skipping, so a mistaken dispatch
+fails loudly instead of leaving a green-looking run. The trigger also has to be present in the
+workflow file _at that tag_, so dispatch only works for tags cut after it was added.
 
 ### Jobs
 
-1. **test** - Full test run with race detection
-2. **validate** - Strict tag format, changelog, and version progression validation
-3. **goreleaser** - Build release artifacts, generate SBOM, sign with cosign
-4. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
-5. **post-release** - Go proxy refresh
+1. **guard-tag-ref** - Fails the run unless `github.ref` is a `v*` tag (wrapper-local; blocks the
+   publisher when a `workflow_dispatch` names a branch)
+2. **test** - Full test run with race detection
+3. **validate** - Strict tag format, changelog, and version progression validation
+4. **goreleaser** - Build release artifacts, generate SBOM, sign with cosign
+5. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
+6. **post-release** - Go proxy refresh
 
 ### Configuration
 
