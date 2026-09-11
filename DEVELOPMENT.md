@@ -199,14 +199,15 @@ To create a release:
 
 The pushed tag triggers the release pipeline below.
 
-### Release Pipeline (`.github/workflows/release.yml`)
-- **Triggers**: Version tags (`v*.*.*`)
-- **Jobs**:
-  - Pre-release validation with `make ci-coverage`
-  - Release readiness check with `make release-check`
-  - Multi-platform build with `make release-build`
-  - GitHub release creation
+### Release Pipeline (`.github/workflows/release-publish.yml`)
+- **Triggers**: Version tags (`v*`); `workflow_dispatch` to re-publish an existing tag
+- **Jobs**: `guard-tag-ref`, then the shared publisher from `go-kure/.github`:
+  - Full test run with race detection
+  - Tag format, changelog and version progression validation
+  - GitHub release creation via `goreleaser` (kure is a library — `.goreleaser.yml` sets
+    `builds: skip: true`, so a complete release carries no assets; the tag is the artifact)
   - Go proxy refresh
+  - Versioned docs deploy
 
 ### PR Checks (`.github/workflows/pr-checks.yml`)
 - **Triggers**: PR events

@@ -31,6 +31,11 @@ jobs:
   guard-tag-ref:
     name: Guard tag ref
     runs-on: autops-kube-kure
+    # The workflow-level block grants the publisher contents/id-token/actions
+    # write. This job reads github.ref and exits; it needs none of that, and
+    # inheriting it would put release-capable credentials on an extra job on
+    # every tag push.
+    permissions: {}
     steps:
       - name: Refuse a non-tag ref
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
