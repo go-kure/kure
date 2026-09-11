@@ -483,15 +483,16 @@ a way that waiting is not, and a release object can be replaced by hand once its
 settled.
 
 > Determining this state reliably is tracked as an extraction into a tested script shared by both
-> repos, rather than a procedure re-derived by a reader — see `go-kure/.github` issue 205.
+> repos, rather than a procedure re-derived by a reader — see `go-kure/.github#205`.
 
 If the release does **not** exist, recover it. Which path applies depends on why the run failed:
 
 | Situation | Recovery |
 | --- | --- |
 | Transient, `goreleaser` concluded `failure`; the shared workflow needs no change | `gh run rerun --failed <run-id>` |
-| Transient, but `goreleaser` was `skipped` because an upstream job (`test`, `validate`) failed | `gh run rerun --failed <run-id>` — the upstream failure is what to recover. `goreleaser` re-runs as a job downstream of it, so no separate step is needed |
-| Transient, but `goreleaser` concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` selects jobs whose conclusion is `failure`, so a publisher that concluded some other way is never re-run and the release stays absent while the run reports done |
+| Transient, but `goreleaser` was `skipped` because an upstream job (`test`, `validate`) concluded `failure` | `gh run rerun --failed <run-id>` — the upstream failure is what to recover. `goreleaser` re-runs as a job downstream of it, so no separate step is needed |
+| Transient, but `goreleaser` was `skipped` because an upstream job concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` would select neither the upstream job nor its skipped publisher, so nothing re-runs at all |
+| Transient, but `goreleaser` itself concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` selects jobs whose conclusion is `failure`, so a publisher that concluded some other way is never re-run and the release stays absent while the run reports done |
 | The shared workflow needed a fix, and the failed run is under 30 days old | `gh run rerun <run-id>` — a **full** re-run, not `--failed` |
 | No failed run remains, or it is over 30 days old | `gh workflow run release-publish.yml --repo go-kure/kure --ref <tag>` |
 
@@ -513,14 +514,29 @@ The tag itself must never be moved or deleted to force a fresh `push` event.
 
 On the dispatch path, `--ref` must be the tag being published: the shared workflow checks out
 `github.ref`, so dispatching from a branch would build that branch rather than the release. The
-`guard-tag-ref` job rejects a non-tag ref outright rather than skipping, so a mistaken dispatch
-fails loudly instead of leaving a green-looking run. The trigger also has to be present in the
-workflow file _at that tag_, so dispatch only works for tags cut after it was added.
+wrapper-local `guard-tag-ref` job refuses a non-tag ref outright rather than skipping, so a
+mistaken dispatch fails loudly instead of leaving a green-looking run, and on a dispatch it also
+refuses a tag that already has a release — re-publishing over a live release object is outside the
+recovery scope above, and neither the UI nor the CLI enforces that on its own. That second check
+needs the release to be provably absent: a `404` proceeds, an existing release refuses, and an API
+error that answers neither also refuses, so an undetermined answer never reaches the publisher.
+
+> ⚠ **Known limitation — a wrapper broken _at the tag_ is not recoverable by either path.** The
+> trigger has to be present in `.github/workflows/release-publish.yml` *at that tag*, so dispatch
+> only works for tags cut after it was added — and that is the specific case of a general one.
+> `gh workflow run --ref <tag>` takes the workflow file from `<tag>`, and a full re-run re-resolves
+> only the *called* `@main` workflow while still using the wrapper from the original run's commit.
+> So if the wrapper itself is faulty at that tag, every documented path runs the faulty version.
+> Same shape as the `deploy-docs.yml` limitation above, and the same remedy is out of scope here:
+> closing it needs a default-branch recovery workflow taking the target tag as an input. Until
+> then this is an escalation, not a self-service recovery.
 
 ### Jobs
 
-1. **guard-tag-ref** - Fails the run unless `github.ref` is a `v*` tag (wrapper-local; blocks the
-   publisher when a `workflow_dispatch` names a branch)
+1. **guard-tag-ref** - Fails the run unless `github.ref` is a `v*` tag, and on a `workflow_dispatch`
+   also unless the tag has no release yet (wrapper-local; blocks the publisher when a dispatch names
+   a branch, or would re-publish over a live release). Takes `contents: read` only, not the
+   publisher's write scopes
 2. **test** - Full test run with race detection
 3. **validate** - Strict tag format, changelog, and version progression validation
 4. **goreleaser** - Create the GitHub release object. kure is a library, so `.goreleaser.yml` skips
