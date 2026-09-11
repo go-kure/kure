@@ -364,8 +364,38 @@ Check before doing anything:
 gh release view <tag> --repo go-kure/kure
 ```
 
-If the release exists, the publication already succeeded — fix the failed follow-up job on its own
-(`gh run rerun --failed <run-id>`) rather than re-publishing.
+If the release exists, do **not** conclude the publish succeeded — check that it is *complete*.
+`goreleaser` creates the release object first and uploads archives, checksums, SBOMs and signatures
+afterwards, so a failure partway through leaves a release that exists with missing or zero assets.
+`v0.2.0-beta.11` is exactly that state: release object present, zero assets.
+
+```bash
+gh release view <tag> --repo go-kure/kure --json assets --jq '.assets | length'
+gh release view <previous-tag> --repo go-kure/kure --json assets --jq '.assets | length'
+```
+
+The previous good release is the oracle for how many assets a complete publish produces — compare
+the two counts rather than guessing an expected number.
+
+- **Counts match** — publication finished and only a follow-up job failed. Do not re-publish;
+  recovery depends on why the follow-up failed:
+  - *Transient failure* — `gh run rerun --failed <run-id>`.
+  - *The shared workflow itself needs a fix* — `--failed` pins the reusable workflow to the first
+    attempt's SHA and so cannot pick the fix up, while a full re-run would redo publication against
+    the release that already exists. Neither works. Drive the follow-up work directly instead:
+    - `deploy-docs` — dispatch `deploy-docs.yml` with the tag's `version_slot` and `version_label`.
+    - `post-release` (Go proxy refresh) — request the module so the proxy fetches it:
+
+      ```bash
+      curl -fsS https://proxy.golang.org/github.com/go-kure/kure/@v/<tag>.info
+      ```
+- **Count is lower, or zero** — a *partial* publish. Delete the release object and recover it as if
+  it had never been created, using the table below. Deleting a release does not delete the tag, and
+  the tag must stay exactly where it is:
+
+  ```bash
+  gh release delete <tag> --repo go-kure/kure --yes   # never --cleanup-tag
+  ```
 
 If the release does **not** exist, recover it. Which path applies depends on why the run failed:
 
