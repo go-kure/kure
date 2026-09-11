@@ -392,8 +392,8 @@ attempt 3 started 2026-09-11T06:08:55Z
 >
 > **No job goes missing.** The hazard is the opposite and worse: a missing job sends you looking and
 > you notice, whereas a carried-over row hands you a conclusion from an attempt you are not looking
-> at, and it reads exactly like a current one. Acting on a carried-over `goreleaser: success` means
-> entering the destructive branch below against the wrong run.
+> at, and it reads exactly like a current one. A carried-over `goreleaser: success` describes a
+> publication that happened in some earlier attempt, not the one you are recovering.
 >
 > The comparison is what the `--jq` above does for you — the run-level `startedAt` is the attempt's
 > own start, so any job starting before it belongs to an earlier attempt. Do not do this by eye; the
@@ -403,46 +403,20 @@ Add `--attempt <n>` to inspect an older attempt; without it the command reports 
 
 > ⛔ **`goreleaser: skipped` in the latest attempt does not mean it never ran.** It declares
 > `needs: [test, validate]`, so *any* re-run whose `test` fails skips it again — while a release
-> object created by an **earlier** attempt is still there. You only reach this section because
-> `gh release view` found a release, so something published it. Find the attempt that did:
+> object created by an **earlier** attempt is still there. A `skipped` publisher next to an existing
+> release means the two disagree, which is an escalation rather than a conclusion about publication.
+
+**Confirm the run you are reading published this tag.** The run id is supplied independently of the
+tag, and both tag pushes and manual dispatches create publish runs, so nothing so far has tied the
+two together:
 
 ```bash
-RUN=<run-id>
-for a in $(seq 1 "$(gh api repos/go-kure/kure/actions/runs/$RUN --jq '.run_attempt')"); do
-  printf 'attempt %s: ' "$a"
-  gh api "repos/go-kure/kure/actions/runs/$RUN/attempts/$a/jobs" \
-    --jq '[.jobs[] | select(.name | test("goreleaser"))]
-          | map("\(.conclusion) (started \(.started_at))") | join(", ")'
-done
+gh run view <run-id> --repo go-kure/kure --json headBranch,headSha,event
 ```
 
-The branch below is decided by `goreleaser`'s conclusion **in the attempt that ran it** — the first
-one not reporting `skipped`.
-
-**Before treating the release as this run's output, establish that it is.** The branch below ends in
-deleting a release object, and a non-`success` conclusion is not evidence of ownership. Two
-independent situations put a *valid* release in front of an operator reading one: `goreleaser` ran
-and failed **before** creating anything and the release was created by hand afterwards, or the
-release came from a different run entirely. `skipped` in every attempt is only the most obvious
-case, not the only one.
-
-Neither is hypothetical — `v0.2.0-beta.11`'s release object was hand-created after its publish runs
-failed. Ownership is a positive check, not the absence of a contradiction:
-
-```bash
-gh release view <tag> --repo go-kure/kure --json publishedAt,author,isDraft
-```
-
-A release this workflow published carries the release automation's identity in `author` and a
-`publishedAt` falling inside the `goreleaser` job's execution window from the per-attempt command
-above. **If `author` is a human, or `publishedAt` falls outside every `goreleaser` window, stop.**
-The release was not produced by this run, and nothing below applies to it.
-
-> ⚠ **`createdAt` is not the release object's creation time — it tracks the tag.** On
-> `v0.2.0-beta.11` it reads `2026-09-10T18:03:56Z`, *before* the publish run started, while the
-> object itself was created at `publishedAt: 2026-09-11T07:41:30Z` — and `author` reads `srgvg`,
-> a human, not the automation. Keying ownership on `createdAt` compares against the wrong event and
-> would mark that hand-created release as this run's to delete.
+`headBranch` carries the tag name on a tag-triggered run — `v0.2.0-beta.11`'s publish run reports
+`headBranch: v0.2.0-beta.11` and `headSha: 38f721dd6e14bce266b667cf4fde5f7d6430cbcf`, the tagged
+commit. **If `headBranch` is not the tag you are recovering, you are reading the wrong run.**
 
 > ⛔ **Never infer completeness from the release's asset count in this repo.** kure is a Go library:
 > `.goreleaser.yml` sets `builds: skip: true` and `checksum: disable: true` and declares no SBOM or
@@ -451,9 +425,17 @@ The release was not produced by this run, and nothing below applies to it.
 > distinguish a complete release from one whose `goreleaser` job died right after creating it, and
 > reading zero assets as "artifacts are missing" is wrong here.
 
+**If the release object exists, this runbook covers exactly one recovery.** It applies when
+`goreleaser` concluded `success` in the attempt you are reading and only a follow-up job failed:
+
 - **`goreleaser` concluded `success`** — publication finished and only a follow-up job failed.
   Do not re-publish; recovery depends on why the follow-up failed:
-  - *Transient failure* — `gh run rerun --failed <run-id>`.
+  - *Transient failure* — `gh run rerun --failed <run-id>`. This does not re-run `goreleaser`:
+    `--failed` re-runs the failed jobs and the jobs *downstream* of them, carrying successful
+    upstream jobs over untouched. Measured on `v0.2.0-beta.11`'s run — attempt 3 lists
+    `Validate tag and changelog: success` with attempt 1's `started_at`, unchanged, even though it
+    is a declared `needs:` of a job that was re-run. (The `--failed` help text reads "including
+    dependencies", which invites the opposite reading; the API endpoint is `rerun-failed-jobs`.)
   - *The shared workflow itself needs a fix* — `--failed` pins the reusable workflow to the first
     attempt's SHA and so cannot pick the fix up, while a full re-run would redo publication against
     the release that already exists. Neither works. Drive the follow-up work directly instead:
@@ -479,27 +461,37 @@ The release was not produced by this run, and nothing below applies to it.
     > `deploy-docs.yml`; until then this bullet only covers a *transient* or *environmental* docs
     > failure, not a defect baked into the tag.
 
-- **`goreleaser` reached any other terminal conclusion** — `failure`, `cancelled`, `timed_out` or
-  `action_required` all mean the same thing here: a *partial* publish, where the release object
-  exists but the job that owns it did not finish. Key on "not `success`" rather than matching
-  `failure`, so a cancelled run — a job cancelled mid-upload concludes `cancelled`, not `failure` —
-  lands in this branch instead of matching neither. Read that conclusion from the attempt that ran
-  `goreleaser`, per the note above; `skipped` is not a conclusion about publication.
+**Every other shape stops here — escalate, do not delete.** A release object that exists while
+`goreleaser` concluded anything other than `success` — `failure`, `cancelled`, `timed_out`,
+`action_required`, or `skipped` in every attempt — means the release and the job that should own it
+disagree. Resolving that requires deciding whether the object is this run's to remove, and every
+signal available from the command line is too weak to carry a deletion:
 
-  The tag is correct and must not move; what is wrong is the release object attached to it.
-  Recovery means removing that release object and re-publishing with the table below.
+- `author` does not separate two runs of the same automation, and a release created through the
+  automation's token by a human action reads as the automation.
+- A `publishedAt` inside a `goreleaser` execution window needs both ends of that window, and picking
+  *which* attempt's window to compare against is itself the question being asked.
+- `createdAt` is not the release object's creation time at all — **it tracks the tag.** On
+  `v0.2.0-beta.11` it reads `2026-09-10T18:03:56Z`, before the publish run started, while the object
+  was created at `publishedAt: 2026-09-11T07:41:30Z` by `author: srgvg`, a human. That release is
+  exactly this case: hand-created after three publish runs failed.
 
-  **That removal is destructive and is deliberately not given here as a copy-pasteable command.**
-  Confirm the `goreleaser` job's conclusion from the command above first, then remove the release
-  object as a considered manual step. Removing a release does not remove the tag, and the tag must
-  not be touched.
+Collect the tag, the run id, and the job conclusions from the command above — repeated with
+`--attempt <n>` for each earlier attempt — and hand them to a maintainer. **Do not delete the
+release object, and never move or delete the tag.** Deleting the wrong release is unrecoverable in
+a way that waiting is not, and a release object can be replaced by hand once its provenance is
+settled.
+
+> Determining this state reliably is tracked as an extraction into a tested script shared by both
+> repos, rather than a procedure re-derived by a reader — see `go-kure/.github` issue 205.
 
 If the release does **not** exist, recover it. Which path applies depends on why the run failed:
 
 | Situation | Recovery |
 | --- | --- |
 | Transient, `goreleaser` concluded `failure`; the shared workflow needs no change | `gh run rerun --failed <run-id>` |
-| Transient, but `goreleaser` concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` selects *failed* jobs, so a publisher with a different terminal conclusion is never re-run, and a release object you removed above stays absent while the run reports done |
+| Transient, but `goreleaser` was `skipped` because an upstream job (`test`, `validate`) failed | `gh run rerun --failed <run-id>` — the upstream failure is what to recover. `goreleaser` re-runs as a job downstream of it, so no separate step is needed |
+| Transient, but `goreleaser` concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` selects jobs whose conclusion is `failure`, so a publisher that concluded some other way is never re-run and the release stays absent while the run reports done |
 | The shared workflow needed a fix, and the failed run is under 30 days old | `gh run rerun <run-id>` — a **full** re-run, not `--failed` |
 | No failed run remains, or it is over 30 days old | `gh workflow run release-publish.yml --repo go-kure/kure --ref <tag>` |
 
