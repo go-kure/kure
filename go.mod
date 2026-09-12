@@ -27,7 +27,7 @@ replace (
 
 require (
 	github.com/backube/volsync v0.16.0
-	github.com/cert-manager/cert-manager v1.21.1
+	github.com/cert-manager/cert-manager v1.21.2
 	github.com/cilium/cilium v1.20.1
 	github.com/cloudnative-pg/barman-cloud v0.6.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
