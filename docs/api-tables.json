@@ -206,7 +206,7 @@
       "goType": "Challenge",
       "importPath": "github.com/cert-manager/cert-manager/pkg/apis/acme/v1",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1",
+      "moduleVersion": "v1.21.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -217,7 +217,7 @@
       "goType": "Order",
       "importPath": "github.com/cert-manager/cert-manager/pkg/apis/acme/v1",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1",
+      "moduleVersion": "v1.21.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -338,7 +338,7 @@
       "goType": "Certificate",
       "importPath": "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1",
+      "moduleVersion": "v1.21.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -349,7 +349,7 @@
       "goType": "CertificateRequest",
       "importPath": "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1",
+      "moduleVersion": "v1.21.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -360,7 +360,7 @@
       "goType": "ClusterIssuer",
       "importPath": "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1",
+      "moduleVersion": "v1.21.2",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -371,7 +371,7 @@
       "goType": "Issuer",
       "importPath": "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1",
+      "moduleVersion": "v1.21.2",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1418,7 +1418,7 @@
       "goField": "KeyAlgorithm",
       "stability": "deprecated",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1"
+      "moduleVersion": "v1.21.2"
     },
     {
       "importPath": "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1",
@@ -1427,7 +1427,7 @@
       "goField": "NameConstraints",
       "stability": "alpha",
       "module": "github.com/cert-manager/cert-manager",
-      "moduleVersion": "v1.21.1"
+      "moduleVersion": "v1.21.2"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",

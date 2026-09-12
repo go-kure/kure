@@ -32,8 +32,8 @@ for the kinds whose scope the API server defines.
 | `v1` | `Secret` | Namespaced | `builtin` | `Secret` | `k8s.io/api@v0.37.0` |
 | `v1` | `Service` | Namespaced | `builtin` | `Service` | `k8s.io/api@v0.37.0` |
 | `v1` | `ServiceAccount` | Namespaced | `builtin` | `ServiceAccount` | `k8s.io/api@v0.37.0` |
-| `acme.cert-manager.io/v1` | `Challenge` | Namespaced | `marker` | `Challenge` | `github.com/cert-manager/cert-manager@v1.21.1` |
-| `acme.cert-manager.io/v1` | `Order` | Namespaced | `marker` | `Order` | `github.com/cert-manager/cert-manager@v1.21.1` |
+| `acme.cert-manager.io/v1` | `Challenge` | Namespaced | `marker` | `Challenge` | `github.com/cert-manager/cert-manager@v1.21.2` |
+| `acme.cert-manager.io/v1` | `Order` | Namespaced | `marker` | `Order` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `apiextensions.k8s.io/v1` | `CustomResourceDefinition` | Cluster | `builtin` | `CustomResourceDefinition` | `k8s.io/apiextensions-apiserver@v0.37.0` |
 | `apps/v1` | `ControllerRevision` | Namespaced | `builtin` | `ControllerRevision` | `k8s.io/api@v0.37.0` |
 | `apps/v1` | `DaemonSet` | Namespaced | `builtin` | `DaemonSet` | `k8s.io/api@v0.37.0` |
@@ -44,10 +44,10 @@ for the kinds whose scope the API server defines.
 | `barmancloud.cnpg.io/v1` | `ObjectStore` | Namespaced | `crd` | `ObjectStore` | `github.com/cloudnative-pg/plugin-barman-cloud@v0.15.0` |
 | `batch/v1` | `CronJob` | Namespaced | `builtin` | `CronJob` | `k8s.io/api@v0.37.0` |
 | `batch/v1` | `Job` | Namespaced | `builtin` | `Job` | `k8s.io/api@v0.37.0` |
-| `cert-manager.io/v1` | `Certificate` | Namespaced | `marker` | `Certificate` | `github.com/cert-manager/cert-manager@v1.21.1` |
-| `cert-manager.io/v1` | `CertificateRequest` | Namespaced | `marker` | `CertificateRequest` | `github.com/cert-manager/cert-manager@v1.21.1` |
-| `cert-manager.io/v1` | `ClusterIssuer` | Cluster | `marker` | `ClusterIssuer` | `github.com/cert-manager/cert-manager@v1.21.1` |
-| `cert-manager.io/v1` | `Issuer` | Namespaced | `marker` | `Issuer` | `github.com/cert-manager/cert-manager@v1.21.1` |
+| `cert-manager.io/v1` | `Certificate` | Namespaced | `marker` | `Certificate` | `github.com/cert-manager/cert-manager@v1.21.2` |
+| `cert-manager.io/v1` | `CertificateRequest` | Namespaced | `marker` | `CertificateRequest` | `github.com/cert-manager/cert-manager@v1.21.2` |
+| `cert-manager.io/v1` | `ClusterIssuer` | Cluster | `marker` | `ClusterIssuer` | `github.com/cert-manager/cert-manager@v1.21.2` |
+| `cert-manager.io/v1` | `Issuer` | Namespaced | `marker` | `Issuer` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `cilium.io/v2` | `CiliumBGPAdvertisement` | Cluster | `marker` | `CiliumBGPAdvertisement` | `github.com/cilium/cilium@v1.20.1` |
 | `cilium.io/v2` | `CiliumBGPClusterConfig` | Cluster | `marker` | `CiliumBGPClusterConfig` | `github.com/cilium/cilium@v1.20.1` |
 | `cilium.io/v2` | `CiliumBGPNodeConfig` | Cluster | `marker` | `CiliumBGPNodeConfig` | `github.com/cilium/cilium@v1.20.1` |
@@ -155,8 +155,8 @@ by a caller.
 
 | Type | Field | Stability | Feature gates | Module |
 |---|---|---|---|---|
-| `acme/v1.ACMEExternalAccountBinding` | `keyAlgorithm` | deprecated | — | `github.com/cert-manager/cert-manager@v1.21.1` |
-| `certmanager/v1.CertificateSpec` | `nameConstraints` | alpha | — | `github.com/cert-manager/cert-manager@v1.21.1` |
+| `acme/v1.ACMEExternalAccountBinding` | `keyAlgorithm` | deprecated | — | `github.com/cert-manager/cert-manager@v1.21.2` |
+| `certmanager/v1.CertificateSpec` | `nameConstraints` | alpha | — | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `api/v1.BootstrapInitDB` | `options` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
 | `api/v1.MonitoringConfiguration` | `enablePodMonitor` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
 | `api/v1.MonitoringConfiguration` | `podMonitorMetricRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
