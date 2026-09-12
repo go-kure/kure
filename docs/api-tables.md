@@ -95,13 +95,13 @@ for the kinds whose scope the API server defines.
 | `metallb.io/v1beta1` | `L2Advertisement` | Namespaced | `crd` | `L2Advertisement` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `ServiceBGPStatus` | Namespaced | `crd` | `ServiceBGPStatus` | `go.universe.tf/metallb@v0.16.1` |
 | `metallb.io/v1beta1` | `ServiceL2Status` | Namespaced | `crd` | `ServiceL2Status` | `go.universe.tf/metallb@v0.16.1` |
-| `monitoring.coreos.com/v1` | `Alertmanager` | Namespaced | `marker` | `Alertmanager` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring.coreos.com/v1` | `PodMonitor` | Namespaced | `marker` | `PodMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring.coreos.com/v1` | `Probe` | Namespaced | `marker` | `Probe` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring.coreos.com/v1` | `Prometheus` | Namespaced | `marker` | `Prometheus` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring.coreos.com/v1` | `PrometheusRule` | Namespaced | `marker` | `PrometheusRule` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring.coreos.com/v1` | `ServiceMonitor` | Namespaced | `marker` | `ServiceMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring.coreos.com/v1` | `ThanosRuler` | Namespaced | `marker` | `ThanosRuler` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
+| `monitoring.coreos.com/v1` | `Alertmanager` | Namespaced | `marker` | `Alertmanager` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring.coreos.com/v1` | `PodMonitor` | Namespaced | `marker` | `PodMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring.coreos.com/v1` | `Probe` | Namespaced | `marker` | `Probe` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring.coreos.com/v1` | `Prometheus` | Namespaced | `marker` | `Prometheus` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring.coreos.com/v1` | `PrometheusRule` | Namespaced | `marker` | `PrometheusRule` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring.coreos.com/v1` | `ServiceMonitor` | Namespaced | `marker` | `ServiceMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring.coreos.com/v1` | `ThanosRuler` | Namespaced | `marker` | `ThanosRuler` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
 | `networking.k8s.io/v1` | `IPAddress` | Cluster | `builtin` | `IPAddress` | `k8s.io/api@v0.37.0` |
 | `networking.k8s.io/v1` | `Ingress` | Namespaced | `builtin` | `Ingress` | `k8s.io/api@v0.37.0` |
 | `networking.k8s.io/v1` | `IngressClass` | Cluster | `builtin` | `IngressClass` | `k8s.io/api@v0.37.0` |
@@ -174,25 +174,25 @@ by a caller.
 | `api/v2.Rollback` | `recreate` | deprecated | — | `github.com/fluxcd/helm-controller/api@v1.6.3` |
 | `api/v1beta3.AlertSpec` | `summary` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.9.2` |
 | `api/v1beta3.ProviderSpec` | `proxy` | deprecated | — | `github.com/fluxcd/notification-controller/api@v1.9.2` |
-| `monitoring/v1.APIServerConfig` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.AlertmanagerEndpoints` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.AlertmanagerSpec` | `baseImage` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.AlertmanagerSpec` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.AlertmanagerSpec` | `sha` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.AlertmanagerSpec` | `tag` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.CommonPrometheusFields` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.Endpoint` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.HTTPConfigWithoutTLS` | `bearerTokenSecret` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.PodMetricsEndpoint` | `targetPort` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.PrometheusSpec` | `allowOverlappingBlocks` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.PrometheusSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.PrometheusSpec` | `shardRetentionPolicy` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.RemoteReadSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.RemoteWriteSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.ShardingStrategy` | `mode` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
-| `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.93.1` |
+| `monitoring/v1.APIServerConfig` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.AlertmanagerEndpoints` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.AlertmanagerSpec` | `baseImage` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.AlertmanagerSpec` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.AlertmanagerSpec` | `sha` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.AlertmanagerSpec` | `tag` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.CommonPrometheusFields` | `persistentVolumeClaimRetentionPolicy` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.Endpoint` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.HTTPConfigWithoutTLS` | `bearerTokenSecret` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.PodMetricsEndpoint` | `targetPort` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.PrometheusSpec` | `allowOverlappingBlocks` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.PrometheusSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.PrometheusSpec` | `shardRetentionPolicy` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.RemoteReadSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.RemoteWriteSpec` | `bearerTokenFile` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.ShardingStrategy` | `mode` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
+| `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.0` |
 | `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.0` |
 | `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.0` |
 | `batch/v1.JobSpec` | `scheduling` | alpha | `WorkloadWithJob` | `k8s.io/api@v0.37.0` |
