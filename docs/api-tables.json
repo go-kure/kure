@@ -899,7 +899,7 @@
       "goType": "Alertmanager",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1",
+      "moduleVersion": "v0.94.0",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -910,7 +910,7 @@
       "goType": "PodMonitor",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1",
+      "moduleVersion": "v0.94.0",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -921,7 +921,7 @@
       "goType": "Probe",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1",
+      "moduleVersion": "v0.94.0",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -932,7 +932,7 @@
       "goType": "Prometheus",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1",
+      "moduleVersion": "v0.94.0",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -943,7 +943,7 @@
       "goType": "PrometheusRule",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1",
+      "moduleVersion": "v0.94.0",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -954,7 +954,7 @@
       "goType": "ServiceMonitor",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1",
+      "moduleVersion": "v0.94.0",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -965,7 +965,7 @@
       "goType": "ThanosRuler",
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1",
+      "moduleVersion": "v0.94.0",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1589,7 +1589,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1598,7 +1598,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1607,7 +1607,7 @@
       "goField": "BaseImage",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1616,7 +1616,7 @@
       "goField": "PersistentVolumeClaimRetentionPolicy",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1625,7 +1625,7 @@
       "goField": "SHA",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1634,7 +1634,7 @@
       "goField": "Tag",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1643,7 +1643,7 @@
       "goField": "PersistentVolumeClaimRetentionPolicy",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1652,7 +1652,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1661,7 +1661,7 @@
       "goField": "BearerTokenSecret",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1670,7 +1670,7 @@
       "goField": "TargetPort",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1679,7 +1679,7 @@
       "goField": "AllowOverlappingBlocks",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1688,7 +1688,7 @@
       "goField": "PrometheusRulesExcludedFromEnforce",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1697,7 +1697,7 @@
       "goField": "ShardRetentionPolicy",
       "stability": "beta",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1706,7 +1706,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1715,7 +1715,7 @@
       "goField": "BearerTokenFile",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1724,7 +1724,7 @@
       "goField": "MaxUnavailable",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1733,7 +1733,7 @@
       "goField": "Mode",
       "stability": "alpha",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1742,7 +1742,7 @@
       "goField": "Ephemeral",
       "stability": "beta",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
@@ -1751,7 +1751,7 @@
       "goField": "PrometheusRulesExcludedFromEnforce",
       "stability": "deprecated",
       "module": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring",
-      "moduleVersion": "v0.93.1"
+      "moduleVersion": "v0.94.0"
     },
     {
       "importPath": "k8s.io/api/apps/v1",
