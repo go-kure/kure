@@ -394,6 +394,9 @@ re-fetches `scripts/check-forbidden-terms.sh` from `go-kure/.github` at that rev
 re-vendors it to `site/scripts/`. The script is idempotent — a re-run against an
 already-synced tree makes no further change.
 
+See `go-kure/.github`'s `docs/standards.md` § "Adopting the trusted Actions lane" for the
+full mechanism, and go-kure/kure#813 for the original migration off a two-pin design.
+
 ## Bundling Renovate PRs
 
 Renovate's ecosystem groups already land related bumps as one PR, so bundling is
