@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 # vendor-guard.sh — keep the vendored copy of go-kure/.github's forbidden-terms
-# guard in sync with the SHA pinned in .github/workflows/ci.yml's `ref:` field.
+# guard in sync with the check-forbidden-terms action pin in
+# .github/workflows/ci.yml.
 #
-# .github/workflows/ci.yml's forbidden-terms job pins go-kure/.github twice:
-# once via the check-forbidden-terms action's `uses:` digest (tracked by
-# Renovate's github-actions manager) and once via a second checkout step's
-# `ref:` (invisible to that manager — see renovate.json's customManagers
-# entry). Left to drift, `forbidden-terms` byte-compares the vendored copy
-# against a stale revision. This script closes that gap: given the `ref:`
-# SHA, it re-fetches the canonical guard script from go-kure/.github at that
-# SHA and re-vendors it, so the two pins move together.
+# .github/workflows/ci.yml's forbidden-terms job checks out go-kure/.github a
+# second time (to byte-compare the vendored guard against its canonical
+# source) at a ref derived, at CI-run time, from the check-forbidden-terms
+# action's own `uses:@<sha>` pin (go-kure/kure#813) — the same single pin
+# Renovate's github-actions manager already tracks, so there is nothing left
+# for this script to independently extract from a second `ref:` literal.
+# This script re-fetches the canonical guard script from go-kure/.github at
+# that same pin and re-vendors it, so the vendored copy and the pin move
+# together.
 #
 # Invoked as a Renovate postUpgradeTasks command (renovate.json) whenever the
-# go-kure/.github customManager dependency bumps; safe to run by hand too.
-# Idempotent: a no-op re-run leaves the vendored file untouched.
+# go-kure/.github dependency bumps; safe to run by hand too. Idempotent: a
+# no-op re-run leaves the vendored file untouched.
 #
 # Usage: ./scripts/vendor-guard.sh
 
@@ -24,35 +26,37 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
 VENDORED="$REPO_ROOT/site/scripts/check-forbidden-terms.sh"
 
-# Pull the `ref:` SHA out of the "Checkout canonical guard" step — the
-# unmanaged pin the customManager in renovate.json tracks. If a second
-# `repository: go-kure/.github` checkout is ever added, `grep -A3 | grep -m1`
-# would silently pick a `ref:` from whichever block happened to match first
-# in the concatenated output, possibly the wrong one -- refuse instead of
-# guessing.
-repo_count="$(grep -c 'repository: go-kure/\.github' "$CI_WORKFLOW" || true)"
-if [[ "$repo_count" -gt 1 ]]; then
-    echo "vendor-guard: $repo_count 'repository: go-kure/.github' checkout blocks in $CI_WORKFLOW -- ambiguous, refusing to guess which ref: to track" >&2
+# Pull the ref out of the check-forbidden-terms action's own uses:@<sha> pin
+# — the same pin Renovate's github-actions manager tracks, and the exact
+# expression the CI resolver step uses, so guard and CI can never disagree.
+# Refuse rather than guess if the pin isn't found exactly once: an added or
+# removed occurrence (this repo's or a second, unrelated one) is ambiguous,
+# not a reason to pick the first match. `|| true` is required: grep -c exits
+# 1 on zero matches even though it still prints "0", and under set -e an
+# unguarded command substitution would abort the whole script right here —
+# silently, before this check's own error message ever runs.
+occurrences="$(grep -cE '^\s*uses:.*check-forbidden-terms@' "$CI_WORKFLOW" || true)"
+if [[ "$occurrences" -ne 1 ]]; then
+    echo "vendor-guard: expected exactly one uses:...check-forbidden-terms@<ref> pin in $CI_WORKFLOW, found $occurrences -- refusing to guess which one to track" >&2
     exit 1
 fi
 
-# `grep -A3` after the `repository:` line lands on the very next `ref:`
-# line; anchoring on both means a reordered or removed YAML block fails
-# loudly here instead of silently reading a stale or wrong SHA. `|| true` on
-# the whole pipeline is required under `pipefail`: if either grep finds no
-# match, that grep's non-zero status becomes the pipeline's status even
-# though the final awk still exits 0, which would otherwise abort here
-# under `set -e` before the empty-$sha check below ever runs — verified by
-# direct probe.
-sha="$(grep -A3 'repository: go-kure/\.github' "$CI_WORKFLOW" | grep -m1 'ref:' | awk '{print $2}' || true)"
+# Anchored to a `uses:` line, the same expression the CI resolver step uses,
+# so guard and CI can never disagree. Capture the whole non-whitespace token
+# after the @ first, then validate it as one anchored ^...{40}$ match below
+# -- not `\K[0-9a-f]{40}` in a single grep, which would silently accept a
+# 41-character hex run (matching only the first 40) or 40 hex characters
+# followed by a stray non-hex character (matching the 40 and stopping) with
+# no indication either happened.
+sha="$(grep -oP '^\s*uses:.*check-forbidden-terms@\K\S+' "$CI_WORKFLOW" || true)"
 
 if [[ -z "$sha" ]]; then
-    echo "vendor-guard: could not find 'ref:' after 'repository: go-kure/.github' in $CI_WORKFLOW" >&2
+    echo "vendor-guard: could not extract the check-forbidden-terms action pin from $CI_WORKFLOW" >&2
     exit 1
 fi
 
 if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "vendor-guard: '$sha' does not look like a 40-char commit SHA" >&2
+    echo "vendor-guard: '$sha' is not a bare 40-character commit SHA -- refusing to use a truncated or malformed value" >&2
     exit 1
 fi
 
