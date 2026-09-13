@@ -35,7 +35,15 @@ VENDORED="$REPO_ROOT/site/scripts/check-forbidden-terms.sh"
 # 1 on zero matches even though it still prints "0", and under set -e an
 # unguarded command substitution would abort the whole script right here —
 # silently, before this check's own error message ever runs.
-occurrences="$(grep -cE '^\s*uses:.*check-forbidden-terms@' "$CI_WORKFLOW" || true)"
+#
+# Portable POSIX regex, not GNU-only `\s`/`\S`/`-P`: this script (unlike the
+# CI resolver step) is documented above as safe to run by hand, and
+# DEVELOPMENT.md's prerequisites don't require GNU grep -- a run on macOS's
+# BSD grep would otherwise either silently misparse (`\s` in `-E` is literal
+# "s" to BSD grep, not whitespace) or hard-fail (`-P` is a GNU extension BSD
+# grep doesn't have at all), in both cases masked by the `|| true` above and
+# reported as "pin not found" instead of the real cause.
+occurrences="$(grep -cE '^[[:space:]]*uses:.*check-forbidden-terms@' "$CI_WORKFLOW" || true)"
 if [[ "$occurrences" -ne 1 ]]; then
     echo "vendor-guard: expected exactly one uses:...check-forbidden-terms@<ref> pin in $CI_WORKFLOW, found $occurrences -- refusing to guess which one to track" >&2
     exit 1
@@ -47,8 +55,12 @@ fi
 # -- not `\K[0-9a-f]{40}` in a single grep, which would silently accept a
 # 41-character hex run (matching only the first 40) or 40 hex characters
 # followed by a stray non-hex character (matching the 40 and stopping) with
-# no indication either happened.
-sha="$(grep -oP '^\s*uses:.*check-forbidden-terms@\K\S+' "$CI_WORKFLOW" || true)"
+# no indication either happened. sed's `s///p`, not grep -oP: portable POSIX
+# BRE (`\(...\)` capture group, `[[:space:]]` class) instead of PCRE, same
+# reason as the occurrence count above. No `|| true` needed here -- sed exits
+# 0 whether or not the pattern matches; a non-match just leaves $sha empty,
+# caught by the check right below.
+sha="$(sed -n 's/^[[:space:]]*uses:.*check-forbidden-terms@\([^[:space:]]*\).*/\1/p' "$CI_WORKFLOW")"
 
 if [[ -z "$sha" ]]; then
     echo "vendor-guard: could not extract the check-forbidden-terms action pin from $CI_WORKFLOW" >&2
