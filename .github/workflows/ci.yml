@@ -374,15 +374,24 @@ jobs:
     # 40 and stops), in both cases handing a corrupted-but-plausible ref to
     # the checkout below with no error. Capturing the full token first makes
     # both cases fail the length/character-class check instead.
+    #
+    # Portable POSIX regex throughout (no `-P`/PCRE, no `\s`/`\S` GNU
+    # extensions inside `-E`) even though this step only ever runs on a
+    # GitHub-hosted runner with GNU tools: scripts/vendor-guard.sh runs this
+    # same extraction locally, where a developer's grep/sed may be BSD's (the
+    # macOS default) rather than GNU's, and the two are documented as using
+    # "the exact expression" so they can never disagree -- keeping both
+    # literally portable is what keeps that claim true, not just the one that
+    # needs it.
     - name: Resolve pinned guard revision
       id: guardrev
       run: |
-        occurrences=$(grep -cE '^\s*uses:.*check-forbidden-terms@' .github/workflows/ci.yml || true)
+        occurrences=$(grep -cE '^[[:space:]]*uses:.*check-forbidden-terms@' .github/workflows/ci.yml || true)
         if [ "$occurrences" -ne 1 ]; then
           echo "::error::expected exactly one uses:...check-forbidden-terms@<ref> pin in ci.yml, found $occurrences -- refusing to guess which one to track" >&2
           exit 1
         fi
-        ref=$(grep -oP '^\s*uses:.*check-forbidden-terms@\K\S+' .github/workflows/ci.yml || true)
+        ref=$(sed -n 's/^[[:space:]]*uses:.*check-forbidden-terms@\([^[:space:]]*\).*/\1/p' .github/workflows/ci.yml)
         if [ -z "$ref" ]; then
           echo "::error::could not extract the check-forbidden-terms action pin from ci.yml -- refusing to fall back to an unpinned ref" >&2
           exit 1
