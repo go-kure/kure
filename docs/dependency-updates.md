@@ -436,12 +436,11 @@ Two things about those tables specifically:
   default — see `pkg/kubernetes/README.md` § 9. If a bump fails to generate for that
   reason, the fix is to establish the kind's real scope from upstream, not to make the
   generator guess.
-- **A table change trips the doc gate.** `zz_generated_tables.go` lives in the doc-gated
-  `pkg/kubernetes` package, and the `// doc-gate:trivial` exemption cannot cover it: that
-  exemption applies only to lines containing `=` whose declaration prefix is unchanged,
-  and a table row has no `=`. For a bump whose only effect on these artifacts is version
-  churn, a maintainer applies the `docs-skip` label. A bump that adds, removes or
-  re-scopes a kind is not version churn and should update the prose too.
+- **A table change may trip the doc gate.** `zz_generated_tables.go` lives in the
+  doc-gated `pkg/kubernetes` package. When a bump's only effect on a row is its
+  `ModuleVersion` provenance field — pure version churn — the doc-gate exempts it
+  automatically: no paired doc edit, no `docs-skip` label. A bump that adds, removes or
+  re-scopes a kind is not version churn, is not exempt, and should update the prose too.
 
 ## Dangerous Upgrades to Watch For
 

@@ -129,7 +129,7 @@ mise run verify
 - Each pkg/ package has a README.md mounted to the docs site — update it when changing public APIs
 - Code and documentation changes must be in the same PR (mandatory, CI-enforced; org standard in go-kure/.github docs/standards.md)
 - `site/docs-map.yaml` is the single source of code→docs mapping; the AGENTS reverse-map table + site nav are generated from it (`bash site/scripts/gen-docs-tables.sh`) — never hand-edit them
-- Doc-sync is enforced by the canonical check-doc-sync (structure), check-links (rendered links) and check-doc-gate (source change must touch its docs; bypass only via maintainer `docs-skip` label) scripts, consumed from go-kure/.github via composite actions — kure no longer vendors its own copies
+- Doc-sync is enforced by the canonical check-doc-sync (structure), check-links (rendered links) and check-doc-gate (source change must touch its docs; bypass via maintainer `docs-skip` label, or automatically for pure `ModuleVersion` version churn in a generated table) scripts, consumed from go-kure/.github via composite actions — kure no longer vendors its own copies
 - See AGENTS.md "Reverse Mapping" table to know which guides to review when changing a package
 ## Consumer Compatibility
 

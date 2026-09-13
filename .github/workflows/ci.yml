@@ -1127,9 +1127,13 @@ jobs:
 
   # Layer 3 change-gate: a mapped package's source change must touch its mapped
   # docs in the same PR. Always runs on PRs (so a pkg-only change can't skip it);
-  # the maintainer-restricted `docs-skip` label bypasses via the script. On
-  # merge_group this is skipped (the PR already passed it), which the build gate
-  # accepts. Required via the `build` aggregate job.
+  # the maintainer-restricted `docs-skip` label bypasses via the script. One
+  # narrow case needs neither docs nor the label: a generated-table row whose
+  # only change is a provenance field (`ModuleVersion`) — pure version churn
+  # from a dependency bump — which the script exempts automatically. Adding,
+  # removing, or re-scoping a kind is not exempt. On merge_group this is skipped
+  # (the PR already passed it), which the build gate accepts. Required via the
+  # `build` aggregate job.
   doc-gate:
     name: doc-gate
     runs-on: autops-kube-kure

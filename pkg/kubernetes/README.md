@@ -414,11 +414,11 @@ the artifacts by hand.
 
 Two consequences of that wiring:
 
-- **A pin bump that changes a table changes a file in a doc-gated package.** The
-  doc-gate's `// doc-gate:trivial` exemption cannot help — it only applies to lines
-  containing `=` whose declaration prefix is unchanged, and a table row has none — so
-  pure version churn in these artifacts needs the maintainer `docs-skip` label. See
-  `docs/dependency-updates.md`.
+- **A pin bump that changes a table changes a file in a doc-gated package.** When a
+  row's only change is its `ModuleVersion` provenance field — pure version churn — the
+  doc-gate exempts it automatically, needing neither a paired doc edit nor the
+  maintainer `docs-skip` label. A change that adds, removes, or re-scopes a kind is not
+  version churn and still trips the gate. See `docs/dependency-updates.md`.
 - **`recover` does not delete `zz_generated_tables.go`.** It holds no upstream type
   names, so an API bump cannot make it uncompilable, and `tables.go` reads the values
   it declares. Its absence is a compile error on purpose: an empty table would report
