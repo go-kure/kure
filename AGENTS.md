@@ -377,7 +377,10 @@ checkout for local use.
 - `check-links` — all internal links resolve in a root-relative Hugo build of the site
   (lychee, blocking, `docs-build` job).
 - `check-doc-gate` — a mapped package's source change must touch its mapped docs
-  (the `doc-gate` job). Bypass only with the maintainer-restricted `docs-skip` label.
+  (the `doc-gate` job). Bypass with the maintainer-restricted `docs-skip` label, or
+  automatically for a generated-table row whose only change is a provenance field
+  (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or
+  re-scoping a kind is not exempt.
 
 ### Cross-cutting guides
 
