@@ -107,7 +107,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 |-----|------------|---------|--------------|---------|
 | `validate` | `lint` | 15 min | changes | Go fmt, tidy, vet, lint, tool-version parity (golangci-lint pin across Makefile/ci.yml/docs), govulncheck doc parity; `sync-versions.sh check`; `scripts/gen-builders.sh check` (fails when the generated constructor wrappers under `pkg/kubernetes` are stale against the registered scheme); syntax-check on the version-sync scripts, `sh -n` or `bash -n` per each script's own shebang; `scripts/test/run-tests.sh` (hermetic mutation-matrix guard tests for `sync-versions.sh`'s own six guards, no network); caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
-| `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard |
+| `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard against `go-kure/.github` at a ref derived from the guard action's own pin (go-kure/kure#813) |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.8.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
@@ -203,8 +203,9 @@ temporary branch — the merged result — before the PR is allowed to land.
   `ignore-end` and leave the outer fence open with nothing said, and the same repetition written on
   a single line, so the spelling never decides whether a malformed suppression is an error
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
-  tracked tree and keeps the release script's vendored guard byte-identical to the pinned canonical
-  action
+  tracked tree and keeps the release script's vendored guard byte-identical to the canonical
+  action, checked out at a ref derived from that action's own `uses:@<sha>` pin rather than a
+  second, independently-tracked pin (go-kure/kure#813)
 - **Pin-impact gate** - `pin-impact` renders a `go-kure/.github` pin bump's real effect (which
   `scripts/*.sh` a referenced action actually runs, whether the compare touches any of them) into
   the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed

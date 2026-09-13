@@ -357,11 +357,47 @@ jobs:
     - name: Check for downstream references
       uses: go-kure/.github/.github/actions/check-forbidden-terms@7cc86e2ab3cc285eb74fc1165a9bfa7f7d146206 # main
 
+    # Derives the canonical-guard checkout ref from the check-forbidden-terms
+    # action pin above instead of carrying a second, independently-tracked
+    # ref: literal (go-kure/kure#813). The two pins can then never drift, and
+    # Renovate needs no customManager to see this checkout's revision.
+    #
+    # Anchored to a `uses:` line specifically -- a bare `check-forbidden-terms@`
+    # match would also hit this very script's own grep patterns and error
+    # messages once they're written into this file, over-counting occurrences.
+    #
+    # Extraction is deliberately two steps -- capture the whole non-whitespace
+    # token after the @, then validate it as one anchored ^...{40}$ match --
+    # rather than a single `\K[0-9a-f]{40}` regex: that shape accepts a
+    # 41-character hex run (matches the first 40, silently truncating) and
+    # accepts 40 hex characters followed by an invalid character (matches the
+    # 40 and stops), in both cases handing a corrupted-but-plausible ref to
+    # the checkout below with no error. Capturing the full token first makes
+    # both cases fail the length/character-class check instead.
+    - name: Resolve pinned guard revision
+      id: guardrev
+      run: |
+        occurrences=$(grep -cE '^\s*uses:.*check-forbidden-terms@' .github/workflows/ci.yml || true)
+        if [ "$occurrences" -ne 1 ]; then
+          echo "::error::expected exactly one uses:...check-forbidden-terms@<ref> pin in ci.yml, found $occurrences -- refusing to guess which one to track" >&2
+          exit 1
+        fi
+        ref=$(grep -oP '^\s*uses:.*check-forbidden-terms@\K\S+' .github/workflows/ci.yml || true)
+        if [ -z "$ref" ]; then
+          echo "::error::could not extract the check-forbidden-terms action pin from ci.yml -- refusing to fall back to an unpinned ref" >&2
+          exit 1
+        fi
+        if ! [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error::extracted ref '$ref' is not a bare 40-character commit SHA -- refusing to use a truncated or malformed value" >&2
+          exit 1
+        fi
+        echo "sha=$ref" >> "$GITHUB_OUTPUT"
+
     - name: Checkout canonical guard
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         repository: go-kure/.github
-        ref: 7cc86e2ab3cc285eb74fc1165a9bfa7f7d146206
+        ref: ${{ steps.guardrev.outputs.sha }}
         path: .tmp/go-kure-dot-github
 
     - name: Verify vendored guard matches canonical

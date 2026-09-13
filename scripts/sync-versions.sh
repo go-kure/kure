@@ -14,7 +14,7 @@
 # 2. Documentation is generated from versions.yaml + go.mod
 # 3. go.mod's "// Current pin: ..." comment matches its k8s.io/api replace directive
 # 4. versions.yaml notes never carry a raw commit SHA (must reference a vendor-guard-checked
-#    ref: pin instead, see scripts/vendor-guard.sh)
+#    pin instead, see scripts/vendor-guard.sh)
 # 5. pkg/versions/versions_gen.go (the published Go API's generated data) matches
 #    versions.yaml -- see generate_go_api / validate_go_api_drift
 # 6. a versions.yaml entry declaring floor_module has its go.mod pin exactly equal

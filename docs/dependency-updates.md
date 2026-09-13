@@ -381,19 +381,18 @@ go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 
 ### Vendored `go-kure/.github` Guard
 
-`.github/workflows/ci.yml`'s `forbidden-terms` job pins `go-kure/.github` twice: once as
-the `check-forbidden-terms` action's `uses:` digest (tracked by Renovate's
-`github-actions` manager) and once as a second checkout's `ref:`, which that manager
-cannot see. Left alone, the two drift apart and the job byte-compares the vendored
-`site/scripts/check-forbidden-terms.sh` against a stale revision.
+`.github/workflows/ci.yml`'s `forbidden-terms` job byte-compares a vendored copy,
+`site/scripts/check-forbidden-terms.sh`, against the canonical script in `go-kure/.github`,
+checked out at a ref the job resolves from the `check-forbidden-terms` action's own
+`uses:@<sha>` pin — the single pin Renovate's `github-actions` manager already tracks.
+No second, independently-tracked pin exists to drift out of step with it.
 
-`renovate.json` closes the gap with a `customManagers` regex entry that tracks the
-`ref:` SHA as a `go-kure/.github` `git-refs` dependency, grouped with the `github-actions`
-bump via a `packageRules` entry (`matchDepNames: ["go-kure/.github"]`) so both pins move
-in the same PR. That same rule's `postUpgradeTasks` runs `./scripts/vendor-guard.sh` on
-the bot's branch, which re-fetches `scripts/check-forbidden-terms.sh` from
-`go-kure/.github` at the new `ref:` SHA and re-vendors it to `site/scripts/`. The script
-is idempotent — a re-run against an already-synced tree makes no further change.
+`renovate.json`'s `matchDepNames: ["go-kure/.github"]` `packageRules` entry runs
+`postUpgradeTasks: ./scripts/vendor-guard.sh` on the bot's branch whenever that dependency
+bumps. `vendor-guard.sh` extracts the same `uses:@<sha>` pin the CI resolver step uses,
+re-fetches `scripts/check-forbidden-terms.sh` from `go-kure/.github` at that revision, and
+re-vendors it to `site/scripts/`. The script is idempotent — a re-run against an
+already-synced tree makes no further change.
 
 ## Bundling Renovate PRs
 
