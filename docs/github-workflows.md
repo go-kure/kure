@@ -114,7 +114,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, and the documented builder references via `scripts/check-doc-api-refs.sh` |
-| `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`) |
+| `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`). Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
 | `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
 ### Configuration
