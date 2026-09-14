@@ -767,7 +767,7 @@
       "goType": "HelmRelease",
       "importPath": "github.com/fluxcd/helm-controller/api/v2",
       "module": "github.com/fluxcd/helm-controller/api",
-      "moduleVersion": "v1.6.3",
+      "moduleVersion": "v1.6.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -778,7 +778,7 @@
       "goType": "ImageUpdateAutomation",
       "importPath": "github.com/fluxcd/image-automation-controller/api/v1",
       "module": "github.com/fluxcd/image-automation-controller/api",
-      "moduleVersion": "v1.2.3",
+      "moduleVersion": "v1.2.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -789,7 +789,7 @@
       "goType": "Kustomization",
       "importPath": "github.com/fluxcd/kustomize-controller/api/v1",
       "module": "github.com/fluxcd/kustomize-controller/api",
-      "moduleVersion": "v1.9.4",
+      "moduleVersion": "v1.9.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1031,7 +1031,7 @@
       "goType": "Alert",
       "importPath": "github.com/fluxcd/notification-controller/api/v1beta3",
       "module": "github.com/fluxcd/notification-controller/api",
-      "moduleVersion": "v1.9.2",
+      "moduleVersion": "v1.9.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1042,7 +1042,7 @@
       "goType": "Provider",
       "importPath": "github.com/fluxcd/notification-controller/api/v1beta3",
       "module": "github.com/fluxcd/notification-controller/api",
-      "moduleVersion": "v1.9.2",
+      "moduleVersion": "v1.9.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1053,7 +1053,7 @@
       "goType": "Receiver",
       "importPath": "github.com/fluxcd/notification-controller/api/v1",
       "module": "github.com/fluxcd/notification-controller/api",
-      "moduleVersion": "v1.9.2",
+      "moduleVersion": "v1.9.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1251,7 +1251,7 @@
       "goType": "ArtifactGenerator",
       "importPath": "github.com/fluxcd/source-watcher/api/v2/v1beta1",
       "module": "github.com/fluxcd/source-watcher/api/v2",
-      "moduleVersion": "v2.2.2",
+      "moduleVersion": "v2.2.4",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1262,7 +1262,7 @@
       "goType": "Bucket",
       "importPath": "github.com/fluxcd/source-controller/api/v1",
       "module": "github.com/fluxcd/source-controller/api",
-      "moduleVersion": "v1.9.3",
+      "moduleVersion": "v1.9.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1273,7 +1273,7 @@
       "goType": "ExternalArtifact",
       "importPath": "github.com/fluxcd/source-controller/api/v1",
       "module": "github.com/fluxcd/source-controller/api",
-      "moduleVersion": "v1.9.3",
+      "moduleVersion": "v1.9.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1284,7 +1284,7 @@
       "goType": "GitRepository",
       "importPath": "github.com/fluxcd/source-controller/api/v1",
       "module": "github.com/fluxcd/source-controller/api",
-      "moduleVersion": "v1.9.3",
+      "moduleVersion": "v1.9.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1295,7 +1295,7 @@
       "goType": "HelmChart",
       "importPath": "github.com/fluxcd/source-controller/api/v1",
       "module": "github.com/fluxcd/source-controller/api",
-      "moduleVersion": "v1.9.3",
+      "moduleVersion": "v1.9.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1306,7 +1306,7 @@
       "goType": "HelmRepository",
       "importPath": "github.com/fluxcd/source-controller/api/v1",
       "module": "github.com/fluxcd/source-controller/api",
-      "moduleVersion": "v1.9.3",
+      "moduleVersion": "v1.9.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1317,7 +1317,7 @@
       "goType": "OCIRepository",
       "importPath": "github.com/fluxcd/source-controller/api/v1",
       "module": "github.com/fluxcd/source-controller/api",
-      "moduleVersion": "v1.9.3",
+      "moduleVersion": "v1.9.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1562,7 +1562,7 @@
       "goField": "Recreate",
       "stability": "deprecated",
       "module": "github.com/fluxcd/helm-controller/api",
-      "moduleVersion": "v1.6.3"
+      "moduleVersion": "v1.6.4"
     },
     {
       "importPath": "github.com/fluxcd/notification-controller/api/v1beta3",
@@ -1571,7 +1571,7 @@
       "goField": "Summary",
       "stability": "deprecated",
       "module": "github.com/fluxcd/notification-controller/api",
-      "moduleVersion": "v1.9.2"
+      "moduleVersion": "v1.9.4"
     },
     {
       "importPath": "github.com/fluxcd/notification-controller/api/v1beta3",
@@ -1580,7 +1580,7 @@
       "goField": "Proxy",
       "stability": "deprecated",
       "module": "github.com/fluxcd/notification-controller/api",
-      "moduleVersion": "v1.9.2"
+      "moduleVersion": "v1.9.4"
     },
     {
       "importPath": "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1",
