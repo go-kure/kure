@@ -1,9 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>go-kure/.github//renovate/shared"],
-  "constraints": {
-    "go": "1.26"
-  },
   "customManagers": [
     {
       "customType": "regex",
@@ -24,6 +21,11 @@
     }
   ],
   "packageRules": [
+    {
+      "description": "Filter out gomod releases whose own go.mod go directive exceeds this repo's Go version (go-kure/kure#821 -- constraints.go alone only selects the Go toolchain Renovate runs itself with, it does not filter dependency releases; constraintsFiltering defaults to \"none\" and must be set to \"strict\" to do that, and strict derives the comparison from go.mod's own go directive, so it never needs updating when the repo's Go pin moves).",
+      "matchManagers": ["gomod"],
+      "constraintsFiltering": "strict"
+    },
     {
       "description": "external-secrets' /apis submodule is untagged, so the gomod manager's @latest is upstream main HEAD -- every commit reads as a new version (go-kure/kure's release-pinning plan). Disable the raw gomod bump; the customManager above tracks upstream_release instead and re-pins via sync-eso-pin.sh.",
       "matchManagers": ["gomod"],
