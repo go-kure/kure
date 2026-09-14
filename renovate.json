@@ -1,6 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>go-kure/.github//renovate/shared"],
+  "constraints": {
+    "go": "1.26"
+  },
   "customManagers": [
     {
       "customType": "regex",
