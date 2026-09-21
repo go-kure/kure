@@ -95,11 +95,22 @@ infrastructure:
       - "github.com/controlplaneio-fluxcd/*"
   flux-operator:
     go_module: "github.com/controlplaneio-fluxcd/flux-operator"
-    supported_range: "0.23 - 0.53"
+    supported_range: "0.23 - 0.58"
     notes: |
-      Upgraded alongside the FluxCD 2.9 ecosystem. The vendored install bundle
-      (pkg/stack/fluxcd/flux_operator_install.yaml) and FluxOperatorVersion constant
-      are pinned in lockstep with this module version.
+      Routine minors, assessed against the vendored CRDs rather than the Go types alone.
+      Three of the four bundled CRDs (fluxinstances, fluxreports, resourcesets) are
+      byte-identical between v0.53.0 and v0.58.1, including FluxInstance
+      spec.distribution.version, so nothing the bootstrap generator emits is newly
+      constrained. Only resourcesetinputproviders changes: a new ExternalArtifact type with
+      its spec.selectors array, and four CEL rules replaced by widened forms that
+      additionally permit it. The two real tightenings are a maximum of 10000 on
+      spec.filter.limit and a new requirement that an OCI spec.url carry a repository path
+      after the registry host; both apply to caller-assigned fields kure has no setter for,
+      so kure never emits a value that trips them. The Go api/v1 surface changes additively
+      only, and fluxcd/pkg/apis acl 0.11.0, kustomize 1.21.0 and meta 1.32.0 carry no type
+      changes at all. The vendored install bundle
+      (pkg/stack/fluxcd/flux_operator_install.yaml) and FluxOperatorVersion constant are
+      re-pinned to v0.58.1 in the same change and the install inventory is unchanged.
   source-watcher:
     go_module: "github.com/fluxcd/source-watcher/api/v2"
     supported_range: "2.0 - 2.2"
