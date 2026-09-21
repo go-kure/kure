@@ -139,9 +139,9 @@ url="https://github.com/${UPSTREAM_REPO}/releases/download/${version}/install.ya
 echo "sync-flux-operator-pin: ${GO_MODULE} ${version} -- downloading ${url}"
 
 tmp="$(mktemp)"
-# The .new files are rewrite()'s scratch copies; a failed sed must not leave one
-# behind in the source tree.
-trap 'rm -f "$tmp" "$CONST_FILE.new" "$README_FILE.new"' EXIT
+# The .new files are stage()'s scratch copies; a failure while staging must not
+# leave one behind in the source tree.
+trap 'rm -f "$tmp" "$BUNDLE_FILE.new" "$CONST_FILE.new" "$README_FILE.new"' EXIT
 
 if ! curl -fsSL "${CURL_TIMEOUT_ARGS[@]}" -o "$tmp" "$url"; then
     echo "sync-flux-operator-pin: could not download ${url}" >&2
@@ -162,34 +162,47 @@ for kind in CustomResourceDefinition Deployment; do
     fi
 done
 
-# rewrite FILE SED_EXPR LABEL -- applies SED_EXPR and writes only when the
-# result differs. The anchors were already proven present exactly once by the
-# preflight above, so this cannot half-apply.
-rewrite() {
-    local file="$1" expr="$2" label="$3"
-    sed -E "$expr" "$file" > "$file.new"
+# Two phases, so a failure cannot leave the three artifacts disagreeing:
+#   1. stage: build every changed file as FILE.new next to its target. Anything
+#      that can realistically fail here (a full disk, an unwritable directory, a
+#      sed error) fails before a single target has been touched, and the EXIT
+#      trap removes the scratch copies.
+#   2. swap: rename each staged file into place. A rename within one directory
+#      needs no free space and no new permission, so this phase has nothing left
+#      to run out of; only an interrupt between two renames could split them, and
+#      re-running the script (idempotent) repairs that.
+staged=()
+
+# stage FILE [SED_EXPR] -- stage FILE's new content: the downloaded bundle when
+# no SED_EXPR is given, otherwise FILE with SED_EXPR applied. Records FILE for
+# the swap phase only when the content differs. The anchors were proven present
+# exactly once by the preflight above.
+stage() {
+    local file="$1" expr="${2:-}"
+    if [[ -n "$expr" ]]; then
+        sed -E "$expr" "$file" > "$file.new"
+    else
+        cp "$tmp" "$file.new"
+    fi
     if cmp -s "$file" "$file.new"; then
         rm -f "$file.new"
-        echo "sync-flux-operator-pin: ${label} already ${version} -- no change"
+        echo "sync-flux-operator-pin: ${file#"$REPO_ROOT"/} already ${version} -- no change"
     else
-        mv "$file.new" "$file"
-        echo "sync-flux-operator-pin: ${label} -> ${version}"
+        staged+=("$file")
     fi
 }
 
-if cmp -s "$tmp" "$BUNDLE_FILE"; then
-    echo "sync-flux-operator-pin: ${BUNDLE_FILE#"$REPO_ROOT"/} already matches ${version} -- no change"
-else
-    cp "$tmp" "$BUNDLE_FILE"
-    echo "sync-flux-operator-pin: ${BUNDLE_FILE#"$REPO_ROOT"/} -> ${version}"
-fi
+stage "$BUNDLE_FILE"
+stage "$CONST_FILE" \
+    "s/^(const FluxOperatorVersion = )\"[^\"]*\"/\\1\"${version}\"/"
+stage "$README_FILE" \
+    "s/(\`FluxOperatorVersion\`, currently \\*\\*)v[^*]*(\\*\\*)/\\1${version}\\2/"
 
-rewrite "$CONST_FILE" \
-    "s/^(const FluxOperatorVersion = )\"[^\"]*\"/\\1\"${version}\"/" \
-    "FluxOperatorVersion"
-
-rewrite "$README_FILE" \
-    "s/(\`FluxOperatorVersion\`, currently \\*\\*)v[^*]*(\\*\\*)/\\1${version}\\2/" \
-    "pkg/stack/fluxcd/README.md mention"
+# ${staged[@]+...}: an empty array is an unbound variable under `set -u` on bash
+# older than 4.4.
+for file in ${staged[@]+"${staged[@]}"}; do
+    mv "$file.new" "$file"
+    echo "sync-flux-operator-pin: ${file#"$REPO_ROOT"/} -> ${version}"
+done
 
 echo "sync-flux-operator-pin: done"
