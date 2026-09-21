@@ -64,6 +64,14 @@ The assessment behind a widening is not reachable through this API. `--note` is 
 `docs/compatibility.md`; `SupportedRange` records only the conclusion. A consumer asking why a
 range covers a given version reads one of those two, not this package.
 
+What a range does and does not promise: the assessment is made against the YAML kure
+generates and the deployed tool's CRDs, so `SupportedRange` says that generated YAML applies
+across it. It does not say every object a caller builds by hand is admitted across it. A
+release inside the range can tighten CRD validation (a new maximum, a stricter URL rule), and
+kure's builders let callers assign upstream fields directly, so an object the older release
+accepted can be rejected by the newer one. When that happens the widening's note in
+`docs/compatibility.md` says so; check it before upgrading across a range boundary.
+
 An MVS-floor entry (`FloorModule != ""`) moves on a different trigger: its pin tracks
 whichever version `floor_module` itself currently requires, tag or pseudo-version, whether
 or not that's kure's own dependency bump (see `docs/dependency-updates.md`'s "MVS-floor
