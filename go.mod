@@ -34,7 +34,7 @@ require (
 	github.com/cloudnative-pg/machinery v0.6.0
 	github.com/cloudnative-pg/plugin-barman-cloud v0.15.0
 	github.com/controlplaneio-fluxcd/flux-operator v0.53.0
-	github.com/external-secrets/external-secrets/apis v0.0.0-20260828112654-279f56c84d5d
+	github.com/external-secrets/external-secrets/apis v0.0.0-20260918141056-e8f12e1f1646
 	github.com/fluxcd/flux2/v2 v2.9.5
 	github.com/fluxcd/helm-controller/api v1.6.4
 	github.com/fluxcd/image-automation-controller/api v1.2.5

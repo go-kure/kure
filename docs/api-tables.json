@@ -569,7 +569,7 @@
       "goType": "ClusterExternalSecret",
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d",
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -580,7 +580,7 @@
       "goType": "ClusterSecretStore",
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d",
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -591,7 +591,7 @@
       "goType": "ExternalSecret",
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d",
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -602,7 +602,7 @@
       "goType": "SecretStore",
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d",
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1508,7 +1508,7 @@
       "goField": "NamespaceSelector",
       "stability": "deprecated",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d"
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646"
     },
     {
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
@@ -1517,7 +1517,7 @@
       "goField": "Namespaces",
       "stability": "deprecated",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d"
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646"
     },
     {
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
@@ -1526,7 +1526,7 @@
       "goField": "AccessToken",
       "stability": "deprecated",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d"
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646"
     },
     {
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
@@ -1535,7 +1535,7 @@
       "goField": "GeneratorRef",
       "stability": "deprecated",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d"
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646"
     },
     {
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
@@ -1544,7 +1544,7 @@
       "goField": "Audiences",
       "stability": "deprecated",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d"
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646"
     },
     {
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
@@ -1553,7 +1553,7 @@
       "goField": "ExpirationSeconds",
       "stability": "deprecated",
       "module": "github.com/external-secrets/external-secrets/apis",
-      "moduleVersion": "v0.0.0-20260828112654-279f56c84d5d"
+      "moduleVersion": "v0.0.0-20260918141056-e8f12e1f1646"
     },
     {
       "importPath": "github.com/fluxcd/helm-controller/api/v2",
