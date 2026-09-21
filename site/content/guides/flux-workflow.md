@@ -274,6 +274,14 @@ Generate Flux system bootstrap manifests. Two modes are available:
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
+The `"flux-operator"` bundle is vendored from one specific upstream flux-operator release
+(`FluxOperatorVersion`), so upgrading Kure can also change the CRDs it installs. A CRD that
+tightens validation rejects objects the previous release accepted — for example a
+`ResourceSetInputProvider` whose `filter.limit` exceeds 10000, or whose OCI `url` names only a
+registry host. Kure has no setter for those fields, but you can assign them directly on the
+upstream struct, so check hand-built objects against the release notes before upgrading. The
+[compatibility matrix](/api-reference/compatibility/) records the supported flux-operator range.
+
 ```go
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
