@@ -40,6 +40,8 @@ for case_file in "$TEST_DIR"/cases/*.sh; do
     if out=$(env -u STUB_GO_MODE -u STUB_NET_MODE \
                  -u SYNC_VERSIONS_REPO_ROOT -u SYNC_VERSIONS_PROBE_TIMEOUT \
                  -u SYNC_VERSIONS_TIMEOUT_CMD \
+                 -u SYNC_FLUX_OPERATOR_PIN_REPO_ROOT \
+                 -u STUB_PIN_MODE -u STUB_PIN_BODY -u STUB_PIN_LOG \
                  -u GOWORK \
                  bash "$case_file" 2>&1); then
         pass=$((pass + 1))

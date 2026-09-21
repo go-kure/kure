@@ -198,3 +198,93 @@ with_stub_go() {
 with_stub_net() {
     export STUB_NET_MODE="$1"
 }
+
+# ---------------------------------------------------------------------------
+# sync-flux-operator-pin.sh helpers. A separate fixture from new_fixture: that
+# one builds a versions.yaml/docs tree for sync-versions.sh, this one builds
+# the four files the pin script reads or rewrites, and stubs only `curl`
+# (fixtures/stub-pin/curl) -- the script needs no go or git.
+# ---------------------------------------------------------------------------
+SYNC_FLUX_OPERATOR_PIN="$TEST_DIR/../sync-flux-operator-pin.sh"
+PIN_MODULE="github.com/example/flux-operator"
+
+# A three-document stand-in for an upstream install.yaml. It must carry a
+# CustomResourceDefinition and a Deployment (the script's shape check) and be
+# distinguishable from the fixture's pre-existing "old" bundle.
+PIN_NEW_BUNDLE_BODY=$'apiVersion: v1\nkind: Namespace\n---\nkind: CustomResourceDefinition\n---\nkind: Deployment\nimage: new\n'
+
+# new_pin_fixture <go.mod-version> -- builds $FIXTURE with go.mod requiring
+# $PIN_MODULE at that version (inside a `require (` block, next to a `replace`
+# line naming a different module, so the awk that reads it is exercised on the
+# shapes it must skip), an "old" vendored bundle pinned at v0.1.0, and the
+# constant and README anchors the script rewrites. Sets STUB_PIN_LOG,
+# STUB_PIN_BODY and STUB_PIN_MODE=ok. Call bare, like new_fixture.
+new_pin_fixture() {
+    local gomod_version="$1"
+    FIXTURE=$(mktemp -d) || {
+        echo "new_pin_fixture: mktemp -d failed -- refusing to continue" >&2
+        exit 1
+    }
+    if [[ -z "$FIXTURE" || ! -d "$FIXTURE" ]]; then
+        echo "new_pin_fixture: mktemp -d produced an unusable path ('$FIXTURE') -- refusing to continue" >&2
+        exit 1
+    fi
+    trap 'rm -rf "$FIXTURE"' EXIT
+
+    mkdir -p "$FIXTURE/pkg/stack/fluxcd" "$FIXTURE/bin"
+    cat > "$FIXTURE/versions.yaml" <<YAML
+infrastructure:
+  flux-operator:
+    go_module: "$PIN_MODULE"
+    supported_range: "0.23 - 0.58"
+YAML
+    cat > "$FIXTURE/go.mod" <<GOMOD
+module example.com/fixture
+
+go 1.26.0
+
+require (
+	github.com/example/other v9.9.9
+	$PIN_MODULE $gomod_version
+)
+
+replace github.com/example/other => ../other
+GOMOD
+    printf 'apiVersion: v1\nkind: Namespace\n---\nkind: CustomResourceDefinition\n---\nkind: Deployment\nimage: old\n' \
+        > "$FIXTURE/pkg/stack/fluxcd/flux_operator_install.yaml"
+    cat > "$FIXTURE/pkg/stack/fluxcd/flux_operator_install.go" <<'GO'
+package fluxcd
+
+const FluxOperatorVersion = "v0.1.0"
+GO
+    cat > "$FIXTURE/pkg/stack/fluxcd/README.md" <<'MD'
+The bundle is vendored (`FluxOperatorVersion`, currently **v0.1.0**). See the source.
+MD
+    printf '%s' "$PIN_NEW_BUNDLE_BODY" > "$FIXTURE/new-bundle.yaml"
+
+    export SYNC_FLUX_OPERATOR_PIN_REPO_ROOT="$FIXTURE"
+    export STUB_PIN_MODE="${STUB_PIN_MODE:-ok}"
+    export STUB_PIN_BODY="$FIXTURE/new-bundle.yaml"
+    export STUB_PIN_LOG="$FIXTURE/curl.log"
+    export PATH="$FIXTURES_DIR/stub-pin:$PATH"
+}
+
+# run_pin -- run sync-flux-operator-pin.sh against $FIXTURE, capturing stdout,
+# stderr and exit code into $out / $err / $rc like run_check does.
+run_pin() {
+    local errfile
+    errfile=$(mktemp) || {
+        echo "run_pin: mktemp failed -- refusing to run without a place to capture stderr" >&2
+        exit 1
+    }
+    rc=0
+    out=$("$SYNC_FLUX_OPERATOR_PIN" 2>"$errfile") || rc=$?
+    err=$(cat "$errfile")
+    rm -f "$errfile"
+}
+
+# pin_tree_hash -- one hash over the three files the script may rewrite, so a
+# case can assert "left untouched" without naming each file.
+pin_tree_hash() {
+    (cd "$FIXTURE/pkg/stack/fluxcd" && cat flux_operator_install.yaml flux_operator_install.go README.md | sha256sum)
+}

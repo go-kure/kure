@@ -1,0 +1,42 @@
+#!/bin/bash
+# Stub `curl` for scripts/test/'s sync-flux-operator-pin.sh cases. The script
+# calls `curl -fsSL <timeouts> -o <file> <url>`; this records the URL to
+# $STUB_PIN_LOG and, by $STUB_PIN_MODE, either serves $STUB_PIN_BODY into <file>
+# ("ok", the default), fails like `curl -f` on an HTTP error ("fail", rc 22),
+# writes an HTML error page ("html"), or writes nothing ("empty").
+set -euo pipefail
+
+mode="${STUB_PIN_MODE:-ok}"
+url="${*: -1}"
+outfile=""
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then
+        outfile="$arg"
+    fi
+    prev="$arg"
+done
+
+if [[ -n "${STUB_PIN_LOG:-}" ]]; then
+    printf '%s\n' "$url" >> "$STUB_PIN_LOG"
+fi
+
+case "$mode" in
+    ok)
+        : "${STUB_PIN_BODY:?STUB_PIN_BODY must be set for mode ok (see lib.sh new_pin_fixture)}"
+        cp "$STUB_PIN_BODY" "$outfile"
+        ;;
+    html)
+        printf '<html><body>Not Found</body></html>\n' > "$outfile"
+        ;;
+    empty)
+        : > "$outfile"
+        ;;
+    fail)
+        exit 22
+        ;;
+    *)
+        echo "stub-pin curl: unknown STUB_PIN_MODE '$mode'" >&2
+        exit 1
+        ;;
+esac
