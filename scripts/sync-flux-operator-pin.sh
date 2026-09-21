@@ -81,12 +81,16 @@ if [[ "$GO_MODULE" != github.com/* ]]; then
 fi
 UPSTREAM_REPO="${GO_MODULE#github.com/}"
 
-# Handles both `require <mod> <ver>` and a `require ( ... )` block line, and
-# skips `replace` directives (whose second field is `=>`, not a version).
+# Only `require` directives count: the single-line form and lines inside a
+# `require ( ... )` block. A line naming the module inside an `exclude`,
+# `replace` or `retract` block (or their single-line forms) is not the pin and
+# must not be mistaken for it, so track whether we are inside a require block
+# rather than matching the module on any line.
 version="$(awk -v m="$GO_MODULE" '
-    $1 == "replace" { next }
-    $1 == "require" { $1 = ""; $0 = $0 }
-    $1 == m { print $2; exit }
+    $1 == "require" && $2 == "(" { inreq = 1; next }
+    inreq && $1 == ")"           { inreq = 0; next }
+    $1 == "require"              { if ($2 == m) { print $3; exit } next }
+    inreq && $1 == m             { print $2; exit }
 ' "$GO_MOD")"
 if [[ -z "$version" ]]; then
     echo "sync-flux-operator-pin: go.mod does not require ${GO_MODULE}" >&2

@@ -282,6 +282,11 @@ registry host. Kure has no setter for those fields, but you can assign them dire
 upstream struct, so check hand-built objects against the release notes before upgrading. The
 [compatibility matrix](/api-reference/compatibility/) records the supported flux-operator range.
 
+The vendored bundle follows Kure's own `flux-operator` module version: when Renovate bumps the
+module it also re-vendors the bundle and updates `FluxOperatorVersion`, so the bundle you get
+always matches the release Kure was built against. Widening the supported range to cover a new
+release is a separate, manual step that records a compatibility assessment.
+
 ```go
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,

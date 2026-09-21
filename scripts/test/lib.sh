@@ -207,6 +207,7 @@ with_stub_net() {
 # ---------------------------------------------------------------------------
 SYNC_FLUX_OPERATOR_PIN="$TEST_DIR/../sync-flux-operator-pin.sh"
 PIN_MODULE="github.com/example/flux-operator"
+PIN_FIXTURES=()
 
 # A three-document stand-in for an upstream install.yaml. It must carry a
 # CustomResourceDefinition and a Deployment (the script's shape check) and be
@@ -229,7 +230,11 @@ new_pin_fixture() {
         echo "new_pin_fixture: mktemp -d produced an unusable path ('$FIXTURE') -- refusing to continue" >&2
         exit 1
     fi
-    trap 'rm -rf "$FIXTURE"' EXIT
+    # A case may call this more than once (case 59 does). The trap body is
+    # evaluated at exit, so `rm -rf "$FIXTURE"` would remove only the last
+    # fixture and leak the earlier ones; accumulate every path instead.
+    PIN_FIXTURES+=("$FIXTURE")
+    trap 'rm -rf "${PIN_FIXTURES[@]}"' EXIT
 
     mkdir -p "$FIXTURE/pkg/stack/fluxcd" "$FIXTURE/bin"
     cat > "$FIXTURE/versions.yaml" <<YAML
