@@ -166,9 +166,12 @@ infrastructure:
       v2.10.0 adds providers/features only (no further apis type changes per
       the upstream changelog); build + tests pass unchanged.
       v2.11.0 adds the Barbican provider type and marks
-      KeeperSecurityProvider.FolderID optional (JSON tag and CRD marker only,
-      Go type unchanged); no other apis type changes — build + tests pass
-      unchanged.
+      KeeperSecurityProvider.FolderID optional (Go type unchanged); no other
+      apis type changes — build + tests pass unchanged. The field now carries
+      omitempty, so a Keeper provider passed through SecretStoreConfig.Provider
+      with an empty FolderID serialises without folderID, which the v2.9 and
+      v2.10 CRDs (folderID required) reject: set FolderID explicitly when
+      targeting a cluster older than v2.11. Kure does not populate it itself.
   cnpg:
     go_module: "github.com/cloudnative-pg/cloudnative-pg"
     supported_range: "1.24 - 1.30"
