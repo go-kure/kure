@@ -1099,14 +1099,14 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
 - `go:` filter — triggers lint/test/security/build jobs. Includes `**.go`, `go.mod`, `go.sum`,
   `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated,
   plus `versions.yaml`, `docs/compatibility.md`, `scripts/sync-versions.sh`,
-  `scripts/test/**` and `scripts/sync-eso-pin.sh`. Those last five are here because the only
-  `sync-versions.sh check` invocation lives in the `validate` job: without them a PR touching
-  just version metadata, `sync-versions.sh`'s own guard-test harness (`scripts/test/**` — a
-  case file or the harness itself, the exact changes it exists to enforce CI coverage of), or
-  the release-pinning script skipped the supported-range guard, the compatibility-matrix drift
-  guard, and/or the "Run sync-versions.sh guard tests" step (or, for `sync-eso-pin.sh`, all of
-  `validate`/`test`) and still reported success — the `build` gate accepts a `skipped`
-  dependency as passing.
+  `scripts/test/**`, `scripts/sync-eso-pin.sh` and `scripts/sync-flux-operator-pin.sh`. Those
+  last six are here because the only `sync-versions.sh check` invocation lives in the `validate`
+  job: without them a PR touching just version metadata, `sync-versions.sh`'s own guard-test
+  harness (`scripts/test/**` — a case file or the harness itself, the exact changes it exists
+  to enforce CI coverage of), or a release-pinning script skipped the supported-range guard,
+  the compatibility-matrix drift guard, and/or the "Run sync-versions.sh guard tests" step (or,
+  for the two pin scripts, all of `validate`/`test`) and still reported success — the `build`
+  gate accepts a `skipped` dependency as passing.
   Also includes `mise.toml`, `scripts/check-tool-versions.sh`, `scripts/sync-tool-versions.sh`
   and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
   job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity

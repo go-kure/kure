@@ -16,7 +16,9 @@ import (
 // kure's go.mod so that the generated FluxInstance type and the install
 // bundle stay in lockstep.
 //
-// To refresh this vendoring:
+// scripts/sync-flux-operator-pin.sh performs steps 2-4 below from go.mod's
+// version, and Renovate runs it after a module bump. To refresh by hand
+// instead:
 //  1. Bump github.com/controlplaneio-fluxcd/flux-operator in go.mod.
 //  2. Download the matching install.yaml from the flux-operator GitHub
 //     release page:

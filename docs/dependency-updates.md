@@ -231,6 +231,11 @@ It's part of `mise run verify` and runs in CI as its own step, gated on
 `scripts/test/**`/`scripts/sync-versions.sh`/`versions.yaml`/`docs/compatibility.md`
 changes (same path filter as `sync-versions.sh check` itself).
 
+The same harness also covers `scripts/sync-flux-operator-pin.sh` (cases 56-60, using
+`new_pin_fixture`/`run_pin` and the stub `curl` in `scripts/test/fixtures/stub-pin/`):
+that script is a Renovate `postUpgradeTasks` command with no other coverage, and its
+contract is failure-shaped — leave the tree untouched on any bad input.
+
 **Adding a case:** every case follows the same shape — see `scripts/test/lib.sh` for the
 full helper reference (`new_fixture`, `yq_set`, `gomod_sub`, `run_check`/`run_generate`,
 the `assert_*` family, `with_stub_go`/`with_stub_net`):
@@ -376,6 +381,42 @@ separate PRs whose `go.mod` changes conflicted with each other in the merge queu
 had to be consolidated by hand. Flux minors are additionally dashboard-gated by
 `renovate.json` (majors are gated org-wide by the preset), so the group only ever
 carries patches unless a pending minor is deliberately approved on the dashboard.
+
+#### The vendored flux-operator install bundle
+
+`pkg/stack/fluxcd` embeds the upstream install manifest
+(`flux_operator_install.yaml`) and names its release in `FluxOperatorVersion`, so the
+`FluxInstance` type kure compiles against and the operator it installs stay in lockstep.
+A `flux-operator` bump in `go.mod` therefore has three companion edits: the bundle, the
+constant, and the "currently **vX.Y.Z**" mention in `pkg/stack/fluxcd/README.md`.
+
+`scripts/sync-flux-operator-pin.sh` makes all three. It reads the module version from
+`go.mod`, downloads that release's `install.yaml` asset, validates it looks like an install
+bundle, and only then writes anything — so a failed download, an empty or non-bundle
+response, or a rewrite target that is missing or ambiguous leaves the tree untouched rather
+than half-applied. It refuses a `go.mod` pin that is not a plain `vX.Y.Z` tag (a
+pseudo-version has no release asset). It is idempotent, and exits before any network call
+when the constant and README already name the `go.mod` version, because Renovate runs it
+after *every* `gomod`/`mise` bump and most have nothing to do with flux-operator. That
+also means it does not overwrite a hand-edited bundle that is already at the right
+version; to force a refresh, follow the manual procedure in the `FluxOperatorVersion`
+doc comment.
+
+It is wired as a command of the shared `gomod`/`mise` rule's `postUpgradeTasks` in
+`renovate.json`, not as its own rule (`postUpgradeTasks` has no merge semantics, so a
+second matching rule would replace the command list), and the three paths it writes are in
+that rule's `fileFilters` — an unlisted path is dropped from the bot's commit silently.
+Run it by hand after bumping the module yourself:
+
+```bash
+./scripts/sync-flux-operator-pin.sh
+```
+
+**What this does not automate:** the `supported_range` widen. It records a compatibility
+assessment ([Widening a supported_range](#widening-a-supported_range)), so a flux-operator
+minor beyond the declared range still arrives red on `lint` until someone runs
+`sync-versions.sh widen`. The bundle re-vendor is the mechanical part; the widen is the
+judgment.
 
 ### Kubernetes (`k8s.io/*`)
 
