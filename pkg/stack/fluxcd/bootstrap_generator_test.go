@@ -670,6 +670,15 @@ func TestFluxOperatorInstallObjects(t *testing.T) {
 			t.Errorf("install bundle kind %q: got %d, want %d (all kinds: %v)", kind, got, want, counts)
 		}
 	}
+	// A refreshed bundle can add a kind (a new Role, a webhook configuration)
+	// while keeping every expected one. Renovate re-vendors the bundle
+	// unattended, so an unlisted kind must fail here and put a human in front of
+	// the new resource instead of shipping it silently.
+	for kind, got := range counts {
+		if _, ok := wantCounts[kind]; !ok {
+			t.Errorf("install bundle has unexpected kind %q (%d): review it, then add it to wantCounts (all kinds: %v)", kind, got, counts)
+		}
+	}
 }
 
 // TestFluxOperatorBootstrapIncludesInstallBundle asserts the install

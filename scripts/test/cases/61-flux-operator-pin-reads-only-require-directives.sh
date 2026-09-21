@@ -49,7 +49,7 @@ retract v0.9.6
 
 require example.com/other v1.0.0
 GOMOD
-before=$(pin_tree_hash)
+pin_snapshot
 run_pin
 assert_rc 1
 assert_err_contains 'go.mod does not require'
@@ -57,10 +57,7 @@ if [[ -e "$FIXTURE/curl.log" ]]; then
     echo "FAIL: downloaded a release for a module that is not required" >&2
     exit 1
 fi
-if [[ "$(pin_tree_hash)" != "$before" ]]; then
-    echo "FAIL: refused run modified the tree" >&2
-    exit 1
-fi
+assert_pin_tree_unchanged "refused run modified the tree"
 
 # Single-line `require` form.
 new_pin_fixture v0.2.0

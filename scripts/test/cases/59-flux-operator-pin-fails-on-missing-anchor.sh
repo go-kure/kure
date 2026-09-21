@@ -10,26 +10,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 # README anchor reworded.
 new_pin_fixture v0.2.0
 printf 'The bundle is vendored at some version.\n' > "$FIXTURE/pkg/stack/fluxcd/README.md"
-before=$(pin_tree_hash)
+pin_snapshot
 run_pin
 assert_rc 1
 assert_err_contains 'expected exactly one line matching'
 assert_err_contains 'README.md'
-if [[ "$(pin_tree_hash)" != "$before" ]]; then
-    echo "FAIL: missing README anchor still modified the tree" >&2
-    exit 1
-fi
+assert_pin_tree_unchanged "missing README anchor still modified the tree"
 
 # Constant declared twice: ambiguous, so refuse rather than rewrite both.
 new_pin_fixture v0.2.0
 printf 'package fluxcd\n\nconst FluxOperatorVersion = "v0.1.0"\nconst FluxOperatorVersion = "v0.1.0"\n' \
     > "$FIXTURE/pkg/stack/fluxcd/flux_operator_install.go"
-before=$(pin_tree_hash)
+pin_snapshot
 run_pin
 assert_rc 1
 assert_err_contains 'expected exactly one line matching'
 assert_err_contains 'flux_operator_install.go'
-if [[ "$(pin_tree_hash)" != "$before" ]]; then
-    echo "FAIL: ambiguous constant still modified the tree" >&2
-    exit 1
-fi
+assert_pin_tree_unchanged "ambiguous constant still modified the tree"
