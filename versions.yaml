@@ -105,10 +105,13 @@ infrastructure:
       its spec.selectors array, and four CEL rules replaced by widened forms that
       additionally permit it. The two real tightenings are a maximum of 10000 on
       spec.filter.limit and a new requirement that an OCI spec.url carry a repository path
-      after the registry host; both apply to caller-assigned fields kure has no setter for,
-      so kure never emits a value that trips them. The Go api/v1 surface changes additively
-      only, and fluxcd/pkg/apis acl 0.11.0, kustomize 1.21.0 and meta 1.32.0 carry no type
-      changes at all. The vendored install bundle
+      after the registry host. Kure has no setter for either field, but the builder
+      contract lets callers assign them directly, so a caller-built ResourceSetInputProvider
+      with a filter.limit above 10000 or an OCI url holding only a registry host, which the
+      v0.53 CRD admitted, is rejected at apply time by the v0.58 CRD. That is an
+      admission-breaking change for such callers, not unconditional compatibility. The Go
+      api/v1 surface changes additively only, and fluxcd/pkg/apis acl 0.11.0, kustomize
+      1.21.0 and meta 1.32.0 carry no type changes at all. The vendored install bundle
       (pkg/stack/fluxcd/flux_operator_install.yaml) and FluxOperatorVersion constant are
       re-pinned to v0.58.1 in the same change and the install inventory is unchanged.
   source-watcher:
