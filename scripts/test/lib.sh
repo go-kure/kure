@@ -288,8 +288,25 @@ run_pin() {
     rm -f "$errfile"
 }
 
-# pin_tree_hash -- one hash over the three files the script may rewrite, so a
-# case can assert "left untouched" without naming each file.
-pin_tree_hash() {
-    (cd "$FIXTURE/pkg/stack/fluxcd" && cat flux_operator_install.yaml flux_operator_install.go README.md | sha256sum)
+# pin_snapshot / assert_pin_tree_unchanged -- let a case assert "left
+# untouched" over everything under the fixture's pkg/stack/fluxcd (a stray
+# *.new scratch file counts) without naming each file. A copy compared with
+# `diff -r`, not a checksum: `diff` is POSIX, and this harness runs without
+# `set -e`, so a missing checksum tool would make both sides an empty string
+# and every "unchanged" assertion pass falsely. Here a failed copy or a diff
+# error (rc 2, as well as rc 1 for a difference) ends the case.
+pin_snapshot() {
+    rm -rf "$FIXTURE/snap"
+    if ! cp -R "$FIXTURE/pkg/stack/fluxcd" "$FIXTURE/snap"; then
+        echo "pin_snapshot: could not snapshot $FIXTURE/pkg/stack/fluxcd -- refusing to continue" >&2
+        exit 1
+    fi
+}
+
+assert_pin_tree_unchanged() {
+    if ! diff -r "$FIXTURE/snap" "$FIXTURE/pkg/stack/fluxcd" >/dev/null 2>&1; then
+        echo "FAIL: $1" >&2
+        diff -r "$FIXTURE/snap" "$FIXTURE/pkg/stack/fluxcd" >&2
+        exit 1
+    fi
 }

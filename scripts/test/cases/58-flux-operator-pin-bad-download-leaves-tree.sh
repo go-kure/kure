@@ -7,7 +7,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 
 new_pin_fixture v0.2.0
-before=$(pin_tree_hash)
+pin_snapshot
 
 for mode in fail empty html; do
     export STUB_PIN_MODE="$mode"
@@ -18,8 +18,5 @@ for mode in fail empty html; do
         empty) assert_err_contains 'downloaded empty' ;;
         html)  assert_err_contains "has no 'CustomResourceDefinition' document" ;;
     esac
-    if [[ "$(pin_tree_hash)" != "$before" ]]; then
-        echo "FAIL: mode=$mode modified the tree" >&2
-        exit 1
-    fi
+    assert_pin_tree_unchanged "mode=$mode modified the tree"
 done

@@ -152,7 +152,9 @@ if [[ ! -s "$tmp" ]]; then
     exit 1
 fi
 # Cheap shape check: an HTML error page or a truncated body must not replace
-# the bundle. TestFluxOperatorInstallObjects checks the full inventory.
+# the bundle. Deliberately not an inventory check: TestFluxOperatorInstallObjects
+# owns the expected kinds and counts (and rejects unlisted kinds), so the bot's
+# PR goes red there, visibly, if a release adds a resource.
 for kind in CustomResourceDefinition Deployment; do
     if ! grep -q "^kind: ${kind}\$" "$tmp"; then
         echo "sync-flux-operator-pin: ${url} has no '${kind}' document -- not an install bundle" >&2
