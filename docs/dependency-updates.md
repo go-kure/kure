@@ -121,8 +121,20 @@ module (its `@latest` is `main` HEAD, not useful) and instead tracks
 `upstream_release` via a `customManagers` regex entry on `versions.yaml`, filtered to
 plain `vX.Y.Z` release tags (upstream also cuts non-matching `helm-chart-X.Y.Z` tags),
 wired to run `sync-eso-pin.sh` as a `postUpgradeTasks` command — so a PR opens when
-upstream cuts a release, arriving already re-pinned and range-checked, rather than on
-every upstream commit.
+upstream cuts a release, rather than on every upstream commit.
+
+Renovate's image ships no Go, and it installs Go on demand only while its `gomod`
+manager runs. This dependency arrives through the regex manager, so nothing has put `go`
+on `PATH` when the command starts; `sync-eso-pin.sh` therefore installs the toolchain
+that `go.mod`'s `go` directive names, through containerbase's `install-tool`, when `go`
+is missing and `install-tool` exists (a developer machine has `go` and no `install-tool`,
+so it is a no-op there). Before that step existed, the command exited 127 at `go get` and
+the bot's branch carried only the one-line `upstream_release` edit — the
+`upstream_release_commit` mismatch then failed `sync-versions.sh check` in CI.
+
+With the re-pin done, a **patch** release arrives re-pinned and range-checked. A **minor**
+release still arrives red: `supported_range` is a compatibility judgement no bot can make,
+so a maintainer widens it (and adds the notes sentence) on the PR branch before merging.
 
 `generate` regenerates `docs/compatibility.md` and the `go.mod` pin comment in place.
 There is no other hand-maintained "current" version to keep in sync (see

@@ -37,6 +37,9 @@
 #
 # Invoked as a Renovate postUpgradeTasks command (renovate.json) whenever the
 # upstream_release customManager dependency bumps; safe to run by hand too.
+# Needs `yq`, `curl`, `git` and `go` on PATH; where `go` is missing but
+# containerbase's `install-tool` is present (Renovate's image), it installs the
+# toolchain go.mod's `go` directive names before step 3.
 #
 # Usage: ./scripts/sync-eso-pin.sh
 
@@ -130,6 +133,25 @@ if ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 
 echo "sync-eso-pin: ${release} -> ${commit}"
+
+# Renovate's own image ships no Go. Renovate installs it on demand
+# (containerbase's `install-tool`) only while it runs its gomod manager, so a
+# gomod-driven branch already has `go` on PATH by the time its postUpgradeTasks
+# run — but this dependency arrives through the custom regex manager, which
+# installs nothing, and `go get` below then died with "go: command not found"
+# and left the bot's commit as the bare one-line versions.yaml edit. Install the
+# toolchain go.mod's own `go` directive names when it is missing and
+# `install-tool` exists; a developer machine has `go` and no `install-tool`, so
+# this is a no-op there.
+if ! command -v go >/dev/null 2>&1 && command -v install-tool >/dev/null 2>&1; then
+    go_version="$(awk '$1 == "go" { print $2; exit }' "$REPO_ROOT/go.mod")"
+    if [[ -z "$go_version" ]]; then
+        echo "sync-eso-pin: go is not installed and go.mod declares no go directive to install" >&2
+        exit 1
+    fi
+    echo "sync-eso-pin: go not found, installing ${go_version} via install-tool"
+    install-tool golang "$go_version"
+fi
 
 echo "sync-eso-pin: go get ${GO_MODULE}@${commit}"
 go get "${GO_MODULE}@${commit}"
