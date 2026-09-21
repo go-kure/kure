@@ -219,7 +219,7 @@ It's part of `mise run verify` and runs in CI as its own step, gated on
 `scripts/test/**`/`scripts/sync-versions.sh`/`versions.yaml`/`docs/compatibility.md`
 changes (same path filter as `sync-versions.sh check` itself).
 
-The same harness also covers `scripts/sync-flux-operator-pin.sh` (cases 56-60, using
+The same harness also covers `scripts/sync-flux-operator-pin.sh` (the `flux-operator-pin` cases, using
 `new_pin_fixture`/`run_pin` and the stub `curl` in `scripts/test/fixtures/stub-pin/`):
 that script is a Renovate `postUpgradeTasks` command with no other coverage, and its
 contract is failure-shaped — leave the tree untouched on any bad input.
