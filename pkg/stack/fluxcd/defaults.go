@@ -102,13 +102,9 @@ const (
 )
 
 // DefaultInterval is the reconciliation interval used when the caller names
-// none, on both generators.
-//
-// It also applies when Bundle.Interval is non-empty but does not parse: the
-// parse error is swallowed and the default retained
-// (see createKustomization in resource_generator.go). That is pre-existing
-// behaviour, stated here rather than quietly implied by "names none", and
-// tracked for a decision in issue go-kure/kure#762.
+// none, on both generators. It applies only to an empty Bundle.Interval: a
+// non-empty value that does not parse is a validation error, never a reason
+// to fall back to this default.
 const DefaultInterval = 60 * time.Minute
 
 // DefaultMode is the Kustomization path mode [ResourceGenerator] starts in. It

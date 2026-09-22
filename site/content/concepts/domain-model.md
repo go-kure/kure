@@ -34,7 +34,7 @@ A deployment unit corresponding to a single GitOps reconciliation resource (e.g.
 
 - **Dependency ordering** via `DependsOn` (pointer-based, in-scope bundles) or `NamedDependsOn` (name-based, for cross-scope or hook-phase chains)
 - **Umbrella composition** via `Children` (see below)
-- **Reconciliation settings**: interval, pruning, timeouts
+- **Reconciliation settings**: interval, pruning, timeouts. `Interval`, `Timeout` and `RetryInterval` are Go duration strings (`"10m"`); empty means the default, and a value that does not parse is a validation error rather than a silent fallback
 - **Labels and annotations** for metadata
 
 #### Umbrella Bundles

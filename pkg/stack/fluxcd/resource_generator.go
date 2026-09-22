@@ -116,7 +116,11 @@ func (g *ResourceGenerator) generateUmbrellaClosure(umbrella *stack.Bundle) ([]c
 		if c == nil {
 			continue
 		}
-		out = append(out, g.createKustomization(c))
+		kust, err := g.createKustomization(c)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, kust)
 		if c.SourceRef != nil && c.SourceRef.URL != "" {
 			src, err := g.createSource(c.SourceRef, c.Name)
 			if err != nil {
@@ -148,7 +152,10 @@ func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object
 	}
 
 	// Create the main Kustomization for this bundle
-	kustomization := g.createKustomization(b)
+	kustomization, err := g.createKustomization(b)
+	if err != nil {
+		return nil, err
+	}
 	resources := []client.Object{kustomization}
 
 	// Create source if specified
@@ -167,12 +174,19 @@ func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object
 }
 
 // createKustomization creates a Flux Kustomization resource from a bundle.
-func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
+// An empty Interval takes g.DefaultInterval and an empty Timeout or
+// RetryInterval leaves the field unset; a non-empty value that does not parse
+// is an error, never a silent fallback. Bundle.Validate reports the same
+// error earlier; checking here as well covers callers that generate without
+// validating first.
+func (g *ResourceGenerator) createKustomization(b *stack.Bundle) (client.Object, error) {
 	interval := g.DefaultInterval
 	if b.Interval != "" {
-		if d, err := time.ParseDuration(b.Interval); err == nil {
-			interval = d
+		d, err := parseBundleDuration(b, "interval", b.Interval)
+		if err != nil {
+			return nil, err
 		}
+		interval = d
 	}
 
 	// Prune is a declared tri-state input, passed through untouched. An unset
@@ -200,16 +214,20 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 
 	// Set timeout if specified
 	if b.Timeout != "" {
-		if d, err := time.ParseDuration(b.Timeout); err == nil {
-			kust.Spec.Timeout = &metav1.Duration{Duration: d}
+		d, err := parseBundleDuration(b, "timeout", b.Timeout)
+		if err != nil {
+			return nil, err
 		}
+		kust.Spec.Timeout = &metav1.Duration{Duration: d}
 	}
 
 	// Set retry interval if specified
 	if b.RetryInterval != "" {
-		if d, err := time.ParseDuration(b.RetryInterval); err == nil {
-			kust.Spec.RetryInterval = &metav1.Duration{Duration: d}
+		d, err := parseBundleDuration(b, "retryInterval", b.RetryInterval)
+		if err != nil {
+			return nil, err
 		}
+		kust.Spec.RetryInterval = &metav1.Duration{Duration: d}
 	}
 
 	// Set force if specified
@@ -313,7 +331,18 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) client.Object {
 		})
 	}
 
-	return kust
+	return kust, nil
+}
+
+// parseBundleDuration parses one of a bundle's duration fields, returning a
+// validation error that names the field and the rejected value.
+func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, error) {
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, errors.ResourceValidationError("Bundle", b.Name, field,
+			fmt.Sprintf("%s %q is not a valid duration: %v", field, value, err), err)
+	}
+	return d, nil
 }
 
 // createKustomizationForLayout creates a Flux Kustomization CR for a

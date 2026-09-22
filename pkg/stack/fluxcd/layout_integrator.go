@@ -333,7 +333,10 @@ func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.Manif
 		if child == nil {
 			continue
 		}
-		childKust := li.Generator.createKustomization(child)
+		childKust, err := li.Generator.createKustomization(child)
+		if err != nil {
+			return err
+		}
 		parentLayout.Resources = append(parentLayout.Resources, childKust)
 
 		if child.SourceRef != nil && child.SourceRef.URL != "" {
