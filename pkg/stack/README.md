@@ -39,7 +39,10 @@ cluster.SetGitOps(&stack.GitOpsConfig{
 ```
 
 `GitOpsConfig.Bootstrap` takes a `BootstrapConfig`: the Flux mode (`flux-operator` by default, or
-`gotk`), the Flux version and components, and the sync source — `SourceKind`, `SourceURL`,
+`gotk`), the Flux version (in `gotk` mode, empty or the vendored `fluxcd.GotkVersion` builds
+offline; any other value downloads manifests — the named release for `vX.Y.Z`, the latest
+release otherwise) and components, and the sync
+source — `SourceKind`, `SourceURL`,
 `SourceRef` and, in `flux-operator` mode, `SyncName`, the name the operator gives the sync source
 and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
 namespace). See [Flux Engine](/api-reference/flux-engine/) for how each field is emitted.

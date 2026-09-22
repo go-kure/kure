@@ -419,6 +419,23 @@ minor beyond the declared range still arrives red on `lint` until someone runs
 `sync-versions.sh widen`. The bundle re-vendor is the mechanical part; the widen is the
 judgment.
 
+#### The vendored gotk manifests base
+
+`gotk` bootstrap mode builds the Flux controllers from the flux2 release's install
+manifests base, embedded as `pkg/stack/fluxcd/gotk_manifests.tar.gz` and named in
+`GotkVersion`, so generation with `FluxVersion` empty or naming that release downloads
+nothing (go-kure/kure#794); any other `FluxVersion` is an explicit opt-in to the upstream
+download. A `flux2/v2`
+bump in `go.mod` therefore has three companion edits: the tarball (the release's
+`manifests.tar.gz` asset), the constant, and the "currently **vX.Y.Z**" mention in
+`pkg/stack/fluxcd/README.md`; the `GotkVersion` doc comment lists the steps. No script
+makes them yet, so the Flux group's bump PR fails `TestVendoredPinsMatchGoMod` until they
+are made: the test compares `GotkVersion` and `FluxOperatorVersion` with `go.mod`, and
+each controller image in the vendored gotk bundle that has a controller API module with
+that module's version. A Flux release moves those images, so a bundle left on the old
+release fails; it does not fingerprint the archive, so a bump that leaves every checked
+controller unchanged still relies on the refresh procedure.
+
 ### Kubernetes (`k8s.io/*`)
 
 All `k8s.io/` packages must stay at the same patch release. Kure uses `replace` directives in `go.mod` to enforce this. See the comment block in `go.mod` for details.

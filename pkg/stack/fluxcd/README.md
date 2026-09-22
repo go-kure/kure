@@ -248,6 +248,19 @@ in lockstep with the `github.com/controlplaneio-fluxcd/flux-operator` Go module
 the constant and this version when it bumps the module (`scripts/sync-flux-operator-pin.sh`);
 see `flux_operator_install.go` for the manual refresh procedure.
 
+The `"gotk"` components are built from the flux2 release's install manifests base, vendored
+(`gotk_manifests.tar.gz`) in lockstep with the `github.com/fluxcd/flux2/v2` Go module
+(`GotkVersion`, currently **v2.9.5**), so gotk generation makes no network call and the same
+input always produces the same manifests. That happens when `FluxVersion` is empty or names
+`GotkVersion` (with or without the leading `v`). Any other `FluxVersion`, `"latest"` included,
+is an explicit opt-in to the upstream behaviour: a manifests base is downloaded from GitHub at
+generation time — the named release for a `vX.Y.Z` value, the latest release for anything else
+(upstream selects a release only for a `v`-prefixed version). `TestVendoredPinsMatchGoMod` fails when
+`GotkVersion` or `FluxOperatorVersion` differs from its `go.mod` require, or when a controller
+image in the gotk bundle differs from the matching `fluxcd/<controller>/api` require (controllers
+without an API module, such as image-reflector-controller, are not compared); see
+`gotk_install.go` for the refresh procedure after a flux2 bump.
+
 ```go
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
