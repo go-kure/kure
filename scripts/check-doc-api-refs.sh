@@ -30,10 +30,13 @@
 # browses on GitHub, so a page mounted from a new directory cannot escape the
 # check by being somewhere this script never thought to look. It needs yq.
 #
-# The public Go files under pkg/ are pages too: pkg.go.dev publishes their doc
-# comments, and a doc comment naming a removed helper is as stale as a Markdown
-# page naming one. Only the comment lines of a Go file are read -- code that
-# calls a removed function does not compile, so the compiler already covers it.
+# The public Go files under pkg/ and examples/ are pages too: pkg.go.dev
+# publishes the former's doc comments, an example's instructional comment sits
+# beside the call it describes, and either naming a removed helper is as stale
+# as a Markdown page naming one. Only the comment lines of a Go file are read --
+# code that calls a removed function does not compile, so the compiler already
+# covers it -- and that includes suppression markers: marker text in code is
+# inert. .claude/CLAUDE.md is a page for the same reason AGENTS.md is.
 #
 # What it deliberately does not check: the pages in EXCLUDED_PAGES. A migration
 # ledger must name the functions it removed, and a dated history or review record
@@ -142,17 +145,42 @@ trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" "$removed" ${selfte
 # check runs on the first line of the NEXT file and again at END.
 extract_refs() {
 	awk '
-		# How many times one fence keyword appears on a line. The bodies are
-		# matched loosely on purpose -- a malformed repeat has to be counted
-		# too, or the count says one where the reader sees two.
-		function nmarkers(s, keyword,   n, t) {
-			n = 0
-			t = s
-			while (match(t, "<!-- doc-api-refs:" keyword)) {
-				n++
-				t = substr(t, RSTART + RLENGTH)
+		# The comment text of one line of Go source, given the lexer state
+		# carried from the previous line (inblock: inside /* */; inraw: inside
+		# a raw string). Sets hadcomment when any part of the line is comment.
+		# Interpreted strings and runes cannot span lines, so their state is
+		# per line. \047 is a single quote: this program is itself quoted.
+		function gocomment(line,   out, i, n, c, q) {
+			out = ""; hadcomment = 0; q = ""
+			n = length(line)
+			i = 1
+			while (i <= n) {
+				c = substr(line, i, 1)
+				if (inblock) {
+					hadcomment = 1
+					if (substr(line, i, 2) == "*/") { inblock = 0; out = out " "; i += 2; continue }
+					out = out c; i++; continue
+				}
+				if (inraw) {
+					if (c == "`") inraw = 0
+					i++; continue
+				}
+				if (q != "") {
+					if (c == "\\") { i += 2; continue }
+					if (c == q) q = ""
+					i++; continue
+				}
+				if (substr(line, i, 2) == "//") {
+					hadcomment = 1
+					out = out substr(line, i + 2)
+					break
+				}
+				if (substr(line, i, 2) == "/*") { inblock = 1; hadcomment = 1; i += 2; continue }
+				if (c == "`") { inraw = 1; i++; continue }
+				if (c == "\"" || c == "\047") { q = c; i++; continue }
+				i++
 			}
-			return n
+			return out
 		}
 		function unclosed() {
 			if (skip) {
@@ -161,35 +189,75 @@ extract_refs() {
 			}
 		}
 		FNR == 1 { unclosed(); skip = 0; current = FILENAME }
+		# A Go file contributes its comment text and nothing else. Code that
+		# calls a removed function does not compile, so the compiler already
+		# checks it; a doc comment naming one is exactly as stale as a Markdown
+		# page naming one, and pkg.go.dev publishes it just as widely. Both
+		# comment forms count: pkg/stack/layout/doc.go is a `/* ... */` block.
+		#
+		# The comment text is extracted by a small lexer (gocomment) that
+		# tracks interpreted strings, runes and raw strings, so a string that
+		# merely looks like a comment -- a raw string whose lines start with
+		# `//`, a marker in a constant after a `/* */` on the same line -- is
+		# code, not documentation. That matters most for suppression markers:
+		# marker text in code must not open or close a fence, so the line is
+		# replaced by its comment text before the marker rule below sees it.
+		FILENAME ~ /\.go$/ {
+			if (FNR == 1) { inblock = 0; inraw = 0 }
+			text = gocomment($0)
+			if (!hadcomment) next
+			$0 = text
+		}
 		# A marker line is never scanned for references, whichever form it takes.
-		# The three forms are matched exhaustively and anything else that opens a
-		# doc-api-refs comment is an error: a typo such as `ignore-strt` would
-		# otherwise fall through to the bare-ignore rule and silently suppress the
-		# line, which is the one failure mode a reader cannot see. The space after
-		# each keyword also keeps `ignore-end` from ever being read as `ignore`.
+		# Every `<!-- doc-api-refs:` comment on the line is validated before any
+		# of them is honoured: a malformed one sharing a line with a valid one
+		# would otherwise be skipped as soon as the valid one matched, so which
+		# of two adjacent comments is malformed would decide whether the file
+		# fails. Each comment runs to its first `-->`; one with no `-->` is an
+		# error, and so is one whose body holds another `<!--`, which would
+		# otherwise let the terminator of a nested, unrelated comment close it.
+		# The three forms are matched exhaustively and anything else is an
+		# error: a typo such as `ignore-strt` must not fall through to a
+		# suppression, which is the one failure a reader cannot see.
+		#
+		# A form that suppresses must carry a reason starting with an
+		# alphanumeric: the space in `<!-- doc-api-refs:ignore -->` belongs to
+		# the closing `-->`. `ignore-end` suppresses nothing and needs none.
 		/<!-- doc-api-refs:/ {
-			# A form that suppresses must carry a reason, and the reason must
-			# start with an alphanumeric: a space alone is not enough, since the
-			# one in `<!-- doc-api-refs:ignore -->` belongs to the closing `-->`
-			# and would suppress a line with nothing said about why. `ignore-end`
-			# suppresses nothing, so it needs no reason.
-			# Each form must be a complete HTML comment. Without the closing
-			# `-->` in the pattern, `<!-- doc-api-refs:ignore-start reason`
-			# with the terminator forgotten still opens a fence -- and since
-			# markdown renders an unterminated comment by swallowing the rest
-			# of the page, the malformed line and the suppression it grants
-			# are both invisible in the built site.
-			ostart = match($0, /<!-- doc-api-refs:ignore-start [A-Za-z0-9][^>]*-->/)
-			opens = (ostart > 0)
-			cstart = match($0, /<!-- doc-api-refs:ignore-end *-->/)
-			closes = (cstart > 0)
+			t = $0; off = 0; bad = ""
+			nstart = 0; nend = 0; fstart = 0; fend = 0
+			while ((i = index(t, "<!-- doc-api-refs:")) > 0) {
+				rest = substr(t, i)
+				j = index(rest, "-->")
+				if (j == 0) { bad = "unterminated doc-api-refs marker"; break }
+				body = substr(rest, 1, j + 2)
+				if (index(substr(body, 5), "<!--") > 0) {
+					bad = "doc-api-refs marker containing a nested <!--"
+					break
+				}
+				pos = off + i
+				if (body ~ /^<!-- doc-api-refs:ignore-start [A-Za-z0-9][^>]*-->$/) {
+					nstart++
+					if (!fstart) fstart = pos
+				} else if (body ~ /^<!-- doc-api-refs:ignore-end *-->$/) {
+					nend++
+					if (!fend) fend = pos
+				} else if (body !~ /^<!-- doc-api-refs:ignore [A-Za-z0-9][^>]*-->$/) {
+					bad = "unrecognised doc-api-refs marker"
+					break
+				}
+				off += i + j + 1
+				t = substr(rest, j + 3)
+			}
+			if (bad != "") {
+				print bad " in " FILENAME " line " FNR > "/dev/stderr"
+				rc = 1
+				next
+			}
 			# One line, more than one marker of a kind: two opens and a close
 			# would otherwise read as a self-contained fence and be accepted,
-			# where the same three markers on three lines are now an error.
-			# Both spellings mean the same malformed thing, so both are refused.
-			# `opens` and `closes` only record that a match happened, which is
-			# why this is counted separately rather than read off them.
-			if (nmarkers($0, "ignore-start") > 1 || nmarkers($0, "ignore-end") > 1) {
+			# where the same three markers on three lines are an error.
+			if (nstart > 1 || nend > 1) {
 				print "repeated doc-api-refs fence marker in " FILENAME " line " FNR > "/dev/stderr"
 				rc = 1
 				next
@@ -198,19 +266,16 @@ extract_refs() {
 			# Only in that order, though -- a close followed by an open is not a
 			# fence, and treating it as one skips the line it is written on,
 			# which is where the stale reference sits.
-			if (opens && closes) {
-				if (ostart < cstart) next
+			if (nstart && nend) {
+				if (fstart < fend) next
 				print "reversed doc-api-refs fence in " FILENAME " line " FNR > "/dev/stderr"
 				rc = 1
 				next
 			}
-			if (opens) {
+			if (nstart) {
 				# A second opener inside an open fence is not a wider fence:
-				# the first `ignore-end` would close both, so two opens and
-				# one close leave the run green with the rest of the passage
-				# suppressed and nothing said about the fence still open.
-				# Depth-counting would make that legal; there is no passage
-				# this file needs it for, so it is an error instead.
+				# the first `ignore-end` would close both. There is no passage
+				# this file needs depth-counting for, so it is an error.
 				if (skip) {
 					print "nested doc-api-refs:ignore-start in " FILENAME " line " FNR > "/dev/stderr"
 					rc = 1
@@ -219,10 +284,10 @@ extract_refs() {
 				skip = 1
 				next
 			}
-			if (closes) {
-				# A close with nothing open still swallows its own line, so
-				# `CreateGone` <!-- doc-api-refs:ignore-end --> would suppress a
-				# reference through a marker documented as suppressing nothing.
+			if (nend) {
+				# A close with nothing open still swallows its own line, so a
+				# stray one would suppress a reference through a marker
+				# documented as suppressing nothing.
 				if (!skip) {
 					print "unmatched doc-api-refs:ignore-end in " FILENAME " line " FNR > "/dev/stderr"
 					rc = 1
@@ -230,28 +295,10 @@ extract_refs() {
 				skip = 0
 				next
 			}
-			if ($0 ~ /<!-- doc-api-refs:ignore [A-Za-z0-9][^>]*-->/) next
-			print "unrecognised doc-api-refs marker in " FILENAME " line " FNR > "/dev/stderr"
-			rc = 1
+			# Only single-line ignores: the line is suppressed.
 			next
 		}
 		skip { next }
-		# A Go file contributes its comments and nothing else. Code that calls a
-		# removed function does not compile, so the compiler already checks it;
-		# a doc comment naming one is exactly as stale as a Markdown page naming
-		# one, and pkg.go.dev publishes it just as widely.
-		# Both comment forms: pkg/stack/layout/doc.go is a `/* ... */` block, and
-		# a package that documents a builder that way is published exactly like
-		# one that uses `//`. A block is recognised only when it opens the line,
-		# which is what a doc comment does and what a `/*` inside a string
-		# literal does not.
-		FILENAME ~ /\.go$/ {
-			if (FNR == 1) inblock = 0
-			if (!inblock && $0 ~ /^[ \t]*\/\*/) inblock = 1
-			if (inblock) {
-				if ($0 ~ /\*\//) inblock = 0
-			} else if ($0 !~ /^[ \t]*\/\//) next
-		}
 		{
 			line = $0
 			offset = 0
@@ -278,12 +325,14 @@ extract_refs() {
 						while (j >= 1 && substr($0, j, 1) ~ /[A-Za-z0-9_]/) j--
 						qual = substr($0, j + 1, abs - 2 - j)
 					}
-					# The bracket form counts only when a package selector spells
-					# it out, which is how kure documents it. Bare `Set[` and
-					# `Add[` are type syntax in every other language a review page
-					# might quote -- Python `ClassVar[Set[T]]` matched here before
-					# this condition existed.
-					if (!generic || qual != "") {
+					# The bracket form counts when a package selector spells it
+					# out, which is how kure documents it, and bare for Create
+					# alone. Bare `Set[` and `Add[` are type syntax in every other
+					# language a review page might quote -- Python
+					# `ClassVar[Set[T]]` matched here before this condition
+					# existed -- but `Create[` is no such spelling, and the
+					# overview pages write the generic constructor bare.
+					if (!generic || qual != "" || ref == "Create") {
 						if (qual != "") ref = qual "." ref
 						print FILENAME ":" FNR ":" ref
 					}
@@ -312,6 +361,7 @@ self_test() {
 		Qualified `pkgname.CreateGone` keeps its selector; a bare .CreateReal does not.
 		The generic `kube.Create[T]` reduces to the declared name Create.
 		Python `ClassVar[Set[PatchType]]` is type syntax and names no builder.
+		The bare `Create[T]` is the generic constructor; a bare `Set[T]` or `Add[T]` is not.
 	EOF
 	cat >"$d/skipped.md" <<-'EOF'
 		There is no `CreateGone`. <!-- doc-api-refs:ignore removed -->
@@ -373,6 +423,32 @@ self_test() {
 	# The same three markers written on one line. Read as a self-contained
 	# fence it is accepted, so the spelling decides whether a malformed
 	# suppression is an error -- which is exactly what it must not do.
+	# A marker body holding another comment opener: the terminator of the
+	# inner, unrelated comment would otherwise close the marker, and the fence
+	# it opens would suppress the passage below it.
+	cat >"$d/nested-comment-marker.md" <<-'EOF'
+		<!-- doc-api-refs:ignore-start reason <!-- unrelated -->
+		`CreateGone`
+		<!-- doc-api-refs:ignore-end -->
+	EOF
+
+	# A malformed marker sharing its line with a valid one. On a line of its
+	# own the typo is an error; the valid neighbour must not change that, with
+	# each of the three valid forms.
+	cat >"$d/comarker-ignore.md" <<-'EOF'
+		`CreateGone` <!-- doc-api-refs:ignore-strt typo --> <!-- doc-api-refs:ignore valid -->
+	EOF
+	cat >"$d/comarker-start.md" <<-'EOF'
+		<!-- doc-api-refs:ignore-strt typo --> <!-- doc-api-refs:ignore-start valid -->
+		`CreateGone`
+		<!-- doc-api-refs:ignore-end -->
+	EOF
+	cat >"$d/comarker-end.md" <<-'EOF'
+		<!-- doc-api-refs:ignore-start valid -->
+		`CreateGone`
+		<!-- doc-api-refs:ignore-strt typo --> <!-- doc-api-refs:ignore-end -->
+	EOF
+
 	cat >"$d/repeated-marker.md" <<-'EOF'
 		`CreateGone` <!-- doc-api-refs:ignore-start a --> <!-- doc-api-refs:ignore-start b --> <!-- doc-api-refs:ignore-end -->
 	EOF
@@ -427,6 +503,61 @@ self_test() {
 		func other() { CreateGone() }
 	EOF
 
+	# Marker text inside Go code is not a comment and must not suppress: the
+	# two files carry the same doc comment, and the reference must be reported
+	# from both. A marker written as a Go comment still suppresses.
+	cat >"$d/pkg/stack/fluxcd/markerplain.go" <<-'EOF'
+		package fluxcd
+
+		// CreateGoneFromDoc is described here and no longer exists.
+		func Real() {}
+	EOF
+	cat >"$d/pkg/stack/fluxcd/markercode.go" <<-'EOF'
+		package fluxcd
+
+		const openMarker = "<!-- doc-api-refs:ignore-start data -->"
+
+		// CreateGoneFromDoc is described here and no longer exists.
+		func Other() {}
+
+		const closeMarker = "<!-- doc-api-refs:ignore-end -->"
+	EOF
+	# The same two markers inside raw strings whose lines start with `//`,
+	# and after a `/* */` comment on a code line: code both times, so the doc
+	# comment between them must still be reported.
+	cat >"$d/pkg/stack/fluxcd/markerraw.go" <<-'EOF'
+		package fluxcd
+
+		var s = `
+		// <!-- doc-api-refs:ignore-start data -->
+		`
+
+		// CreateGoneFromDoc is described here and no longer exists.
+		func Raw() {}
+
+		var e = `
+		// <!-- doc-api-refs:ignore-end -->
+		`
+	EOF
+	cat >"$d/pkg/stack/fluxcd/markerblock.go" <<-'EOF'
+		package fluxcd
+
+		/* data */ const openMarker = "<!-- doc-api-refs:ignore-start data -->"
+
+		// CreateGoneFromDoc is described here and no longer exists.
+		func Block() {}
+
+		/* data */ const closeMarker = "<!-- doc-api-refs:ignore-end -->"
+	EOF
+	cat >"$d/pkg/stack/fluxcd/markercomment.go" <<-'EOF'
+		package fluxcd
+
+		// <!-- doc-api-refs:ignore-start a deliberate example -->
+		// CreateGoneFromDoc is fenced off here.
+		// <!-- doc-api-refs:ignore-end -->
+		func Third() {}
+	EOF
+
 	# A ledger page: removed names on the left, live replacements on the right,
 	# both on the same line, and a three-column row that puts the removed names
 	# in the middle -- so no cell position separates the two halves. Row 5 is
@@ -475,6 +606,7 @@ plain.md:4:CreateDeployment
 plain.md:5:pkgname.CreateGone
 plain.md:5:CreateReal
 plain.md:6:kube.Create
+plain.md:8:Create
 skipped.md:2:CreateGone
 skipped.md:4:CreateReal
 fenced.md:4:CreateReal'
@@ -543,6 +675,19 @@ fenced.md:4:CreateReal'
 		failures=$((failures + 1))
 	fi
 
+	if extract_refs "$d/nested-comment-marker.md" >/dev/null 2>&1; then
+		printf 'self-test: a marker containing a nested <!-- was accepted instead of reported\n' >&2
+		failures=$((failures + 1))
+	fi
+
+	local comarker
+	for comarker in ignore start end; do
+		if extract_refs "$d/comarker-$comarker.md" >/dev/null 2>&1; then
+			printf 'self-test: a malformed marker sharing a line with a valid %s was accepted\n' "$comarker" >&2
+			failures=$((failures + 1))
+		fi
+	done
+
 	# A name absent from the symbol set must be reported; one present must not.
 	# CreateDeployment is in the set and CreateDeployment_Gone is not, so the
 	# suffix must survive extraction or the fourth line resolves wrongly.
@@ -588,8 +733,15 @@ pkg/kubernetes/fluxcd/README.md:1:fluxcd.CreateElsewhere'
 	fi
 
 	local want_go='pkg/stack/fluxcd/block.go:4:CreateBlockGone
-pkg/stack/fluxcd/doc.go:3:CreateGone'
-	got=$(extract_refs "$d/pkg/stack/fluxcd/block.go" "$d/pkg/stack/fluxcd/doc.go" |
+pkg/stack/fluxcd/doc.go:3:CreateGone
+pkg/stack/fluxcd/markerblock.go:5:CreateGoneFromDoc
+pkg/stack/fluxcd/markercode.go:5:CreateGoneFromDoc
+pkg/stack/fluxcd/markerplain.go:3:CreateGoneFromDoc
+pkg/stack/fluxcd/markerraw.go:7:CreateGoneFromDoc'
+	got=$(extract_refs "$d/pkg/stack/fluxcd/block.go" "$d/pkg/stack/fluxcd/doc.go" \
+		"$d/pkg/stack/fluxcd/markerblock.go" "$d/pkg/stack/fluxcd/markercode.go" \
+		"$d/pkg/stack/fluxcd/markercomment.go" "$d/pkg/stack/fluxcd/markerplain.go" \
+		"$d/pkg/stack/fluxcd/markerraw.go" |
 		sed "s#^$d/##")
 	if [ "$got" != "$want_go" ]; then
 		printf 'self-test: go-comment extraction mismatch\nwant:\n%s\ngot:\n%s\n' \
@@ -637,6 +789,37 @@ notledger.md:1:SetGoneThing'
 	fi
 	LEDGER_LIST=
 	: >"$removed"
+
+	# The page set: .claude/CLAUDE.md and a public Go file under examples/
+	# are pages; a worktree under .claude/, a *.local.md file there and an
+	# examples/ test file are not.
+	mkdir -p "$d/enum/docs" "$d/enum/site/content" "$d/enum/examples/demo" \
+		"$d/enum/.claude/worktrees/wt"
+	: >"$d/enum/.claude/CLAUDE.md"
+	: >"$d/enum/.claude/session.local.md"
+	: >"$d/enum/.claude/worktrees/wt/CLAUDE.md"
+	: >"$d/enum/examples/demo/main.go"
+	: >"$d/enum/examples/demo/main_test.go"
+	local want_pages='.claude/CLAUDE.md
+examples/demo/main.go'
+	got=$(cd "$d/enum" && list_page_candidates | sort)
+	if [ "$got" != "$want_pages" ]; then
+		printf 'self-test: page enumeration mismatch\nwant:\n%s\ngot:\n%s\n' "$want_pages" "$got" >&2
+		failures=$((failures + 1))
+	fi
+
+	# An unreadable directory makes the enumeration fail rather than return a
+	# page set with a hole in it. Root reads everything, so the case cannot be
+	# built there and is skipped.
+	if [ "$(id -u)" -ne 0 ]; then
+		mkdir -p "$d/enum/docs/hidden"
+		chmod 000 "$d/enum/docs/hidden"
+		if (cd "$d/enum" && list_page_candidates >/dev/null 2>&1); then
+			printf 'self-test: an unreadable directory did not fail the page enumeration\n' >&2
+			failures=$((failures + 1))
+		fi
+		chmod 755 "$d/enum/docs/hidden"
+	fi
 
 	if [ "$failures" -ne 0 ]; then
 		printf 'check-doc-api-refs --self-test: %s failure(s)\n' "$failures" >&2
@@ -780,6 +963,30 @@ report_unresolved() {
 	' "$symbols" "$pkgdirs" "$external" "$removed" "$referenced"
 }
 
+# The pages outside pkg/ and the site map, one path per line, relative to the
+# current directory. A function so the self-test can run it over a fixture tree.
+#
+# The root sweep is one level deep and reaches README.md, AGENTS.md,
+# DEVELOPMENT.md and CHANGELOG.md. .claude/ is swept one level deep too:
+# .claude/CLAUDE.md is loaded by every agent that edits this tree and names live
+# builders, exactly the case AGENTS.md is in for being at the root. Deeper
+# .claude/ paths are local tooling state (worktrees, per-session files), and
+# a `*.local.md` file there is local by name, so neither is a page.
+#
+# examples/ contributes its public Go files' comments as well as its Markdown:
+# an instructional comment sits a few lines above the call it describes, and a
+# rename the compiler forces onto the call does not reach the comment.
+list_page_candidates() {
+	# Every find must succeed: an unreadable directory would otherwise be a
+	# page set with a hole in it and a green run. Only the last command's
+	# status would reach the caller's command substitution, so each one
+	# returns on its own failure.
+	find . -maxdepth 1 -name '*.md' -type f || return
+	find docs examples site/content -name '*.md' -type f || return
+	find .claude -maxdepth 1 -name '*.md' ! -name '*.local.md' -type f || return
+	find examples -name '*.go' ! -name '*_test.go' -type f || return
+}
+
 if [ "${1:-}" = "--self-test" ]; then
 	self_test
 	exit
@@ -859,8 +1066,7 @@ unset _list
 # README.md alone: AGENTS.md is read by every agent that touches this tree and
 # carries worked examples, DEVELOPMENT.md the same for a human, and neither is
 # less live than the site for being at the root.
-docs_pages=$(find . -maxdepth 1 -name '*.md' -type f
-	find docs examples site/content -name '*.md' -type f)
+docs_pages=$(list_page_candidates)
 # The package READMEs are the API-reference pages the site mounts, so they are
 # exactly the pages a stale call hurts most -- but the enumeration is every
 # Markdown file under pkg/, not just those. pkg/stack/DESIGN.md describes the
