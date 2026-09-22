@@ -243,15 +243,8 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		appMode = AppFilePerResource
 	}
 
-	var fullPath string
-	if appMode == AppFileSingle {
-		fullPath = filepath.Join(basePath, ml.Namespace)
-	} else {
-		fullPath = filepath.Join(basePath, ml.FullRepoPath())
-	}
-	if err := os.MkdirAll(fullPath, 0755); err != nil {
-		return errors.NewFileError("create", fullPath, "directory creation failed", err)
-	}
+	outDir := diskOutDir(basePath)
+	fullPath, _ := outDir(ml)
 
 	fileGroups := map[string][]client.Object{}
 	for _, obj := range ml.Resources {
@@ -280,6 +273,13 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 		sortedFileNames = append(sortedFileNames, fileName)
 	}
 	sort.Strings(sortedFileNames)
+	if err := checkExtraFiles(ml, outDir, sortedFileNames); err != nil {
+		return err
+	}
+	// Created only after the check, so a refused layout leaves nothing behind.
+	if err := os.MkdirAll(fullPath, 0755); err != nil {
+		return errors.NewFileError("create", fullPath, "directory creation failed", err)
+	}
 
 	listedInResources := make(map[string]struct{}, len(sortedFileNames))
 	for _, f := range sortedFileNames {

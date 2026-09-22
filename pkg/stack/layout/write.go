@@ -32,15 +32,8 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		kMode = cfg.ResolveKustomizationMode(ml.FluxPlacement)
 	}
 
-	var fullPath string
-	if appMode == AppFileSingle {
-		fullPath = filepath.Join(basePath, cfg.ManifestsDir, ml.Namespace)
-	} else {
-		fullPath = filepath.Join(basePath, cfg.ManifestsDir, ml.FullRepoPath())
-	}
-	if err := os.MkdirAll(fullPath, 0755); err != nil {
-		return errors.NewFileError("create", fullPath, "directory creation failed", err)
-	}
+	outDir := manifestOutDir(basePath, cfg)
+	fullPath, _ := outDir(ml)
 
 	fileGroups := map[string][]client.Object{}
 	for _, obj := range ml.Resources {
@@ -67,6 +60,13 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		sortedFileNames = append(sortedFileNames, fileName)
 	}
 	sort.Strings(sortedFileNames)
+	if err := checkExtraFiles(ml, outDir, sortedFileNames); err != nil {
+		return err
+	}
+	// Created only after the check, so a refused layout leaves nothing behind.
+	if err := os.MkdirAll(fullPath, 0755); err != nil {
+		return errors.NewFileError("create", fullPath, "directory creation failed", err)
+	}
 
 	listedInResources := make(map[string]struct{}, len(sortedFileNames))
 	for _, f := range sortedFileNames {

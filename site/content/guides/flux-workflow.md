@@ -247,6 +247,15 @@ Flux reconciles `nginx-01-hooks` only after `nginx-00-pre-install` is healthy.
 
 The child layout `Name` becomes the Flux `Kustomization` CR's `metadata.name`. Since all `Kustomization` CRs live in the `flux-system` namespace, names must be **globally unique across the cluster**. The recommended convention is `{appName}-{hookGroupDir}` (e.g. `nginx-00-pre-install`, `nginx-01-hooks`). Augmenters are responsible for enforcing this uniqueness.
 
+### Extra files an augmenter attaches
+
+`ExtraFiles` an augmenter attaches must use portable relative names (letters, digits, `.`, `_`,
+`-`, and `/` between segments) and may not take a path the writer owns in the layout's directory:
+a generated resource file, a kustomize control file, a child layout's directory or file, or
+another extra file. The layout writers refuse such a layout with an error instead of letting the
+extra file replace a generated manifest. See the [Layout Engine reference](/api-reference/layout/)
+for the full rule.
+
 ### Disk layout
 
 ```

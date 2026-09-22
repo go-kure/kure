@@ -33,17 +33,8 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		appMode = AppFilePerResource
 	}
 
-	var fullPath string
-	if appMode == AppFileSingle {
-		fullPath = path.Join(basePath, ml.Namespace)
-	} else {
-		fullPath = path.Join(basePath, ml.FullRepoPath())
-	}
-
-	// Add directory entry
-	if err := writeTarDir(tw, fullPath); err != nil {
-		return err
-	}
+	outDir := tarOutDir(basePath)
+	fullPath, _ := outDir(ml)
 
 	nameFn := ml.resolveManifestFileName()
 
@@ -74,6 +65,14 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		sortedFileNames = append(sortedFileNames, fileName)
 	}
 	sort.Strings(sortedFileNames)
+	if err := checkExtraFiles(ml, outDir, sortedFileNames); err != nil {
+		return err
+	}
+	// Added only after the check: the archive is a stream, so an entry for a
+	// refused layout could not be taken back.
+	if err := writeTarDir(tw, fullPath); err != nil {
+		return err
+	}
 
 	listedInResources := make(map[string]struct{}, len(sortedFileNames))
 	for _, f := range sortedFileNames {
