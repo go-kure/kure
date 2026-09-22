@@ -258,8 +258,9 @@ func resolvedSourceKind(config *stack.BootstrapConfig) string {
 	return DefaultSourceKind
 }
 
-// resolvedSyncRef returns the FluxInstance spec.sync.ref that selects the same
-// revision the gotk source would. flux-operator renders sync.ref as the
+// resolvedSyncRef returns the FluxInstance spec.sync.ref that, for an OCI tag,
+// an empty ref or a Git branch name, selects the same revision the gotk source
+// would. flux-operator renders sync.ref as the
 // source's ref.tag for an OCIRepository and as ref.name — a full Git
 // reference such as refs/heads/main — for a GitRepository, while the gotk path
 // reads SourceRef as an OCI tag (with [DefaultSourceRef] for an empty one) or a
@@ -268,8 +269,10 @@ func resolvedSourceKind(config *stack.BootstrapConfig) string {
 // needs a full reference.
 //
 // A Git SourceRef that already starts with refs/ is kept, so tags and other
-// references stay reachable. An empty Git SourceRef stays empty, as it leaves
-// the gotk GitRepository's reference unset.
+// references stay reachable in flux-operator mode. That case has no gotk
+// equivalent: generateGitSource puts any Git SourceRef into ref.branch. An
+// empty Git SourceRef stays empty, as it leaves the gotk GitRepository's
+// reference unset.
 func resolvedSyncRef(config *stack.BootstrapConfig) string {
 	ref := config.SourceRef
 	if resolvedSourceKind(config) == "GitRepository" {
