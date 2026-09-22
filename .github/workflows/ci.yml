@@ -97,6 +97,11 @@ jobs:
             # is also a Renovate postUpgradeTasks command with no other CI coverage
             # than its cases under scripts/test/ and the syntax check below.
             - 'scripts/sync-flux-operator-pin.sh'
+            # check-pin-impact.sh runs only in the PR-only pin-impact job, which
+            # executes it against the real pin state, not its failure paths;
+            # those are covered by its hermetic cases under scripts/test/ (run by
+            # validate). A PR touching only the script must still run them.
+            - 'scripts/check-pin-impact.sh'
             # check-tool-versions (golangci-lint pin parity) reads all of these;
             # a PR touching only one must not be able to skip the lint job it
             # runs in — that would leave the checker unexercised on exactly the
@@ -266,7 +271,7 @@ jobs:
         for f in scripts/sync-tool-versions.sh scripts/sync-govulncheck-docs.sh scripts/sync-go-version.sh; do
           sh -n "$f"
         done
-        for f in scripts/sync-eso-pin.sh scripts/sync-flux-operator-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/cases/*.sh scripts/check-pin-impact.sh; do
+        for f in scripts/sync-eso-pin.sh scripts/sync-flux-operator-pin.sh scripts/sync-versions.sh scripts/test/run-tests.sh scripts/test/lib.sh scripts/test/pin-impact-lib.sh scripts/test/cases/*.sh scripts/check-pin-impact.sh; do
           bash -n "$f"
         done
 
