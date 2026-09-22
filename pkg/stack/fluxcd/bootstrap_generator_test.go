@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -542,6 +543,108 @@ func TestGenerateFluxInstanceSyncFromSourceURL(t *testing.T) {
 	}
 	if fi.Spec.Sync.Path != "./production" {
 		t.Errorf("Sync.Path = %q, want %q", fi.Spec.Sync.Path, "./production")
+	}
+}
+
+// TestGenerateFluxInstanceSyncName pins the SyncName pass-through to
+// spec.sync.name. Without it the operator names the sync source and
+// Kustomization after the FluxInstance's namespace, which leaves any
+// reference to a differently named source dangling.
+func TestGenerateFluxInstanceSyncName(t *testing.T) {
+	for name, tc := range map[string]struct {
+		syncName  string
+		sourceURL string
+		wantSync  bool
+		wantName  string
+	}{
+		"set with a source":    {syncName: "stack-src", sourceURL: "oci://registry.example.com/fleet", wantSync: true, wantName: "stack-src"},
+		"unset keeps default":  {sourceURL: "oci://registry.example.com/fleet", wantSync: true, wantName: ""},
+		"set without a source": {syncName: "stack-src", wantSync: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bg := fluxstack.NewBootstrapGenerator()
+			fi, err := bg.GenerateFluxInstance(&stack.BootstrapConfig{
+				Enabled:   true,
+				SourceURL: tc.sourceURL,
+				SyncName:  tc.syncName,
+			}, &stack.Node{Name: "production"})
+			if err != nil {
+				t.Fatalf("GenerateFluxInstance() error = %v", err)
+			}
+			if fi == nil {
+				t.Fatal("expected non-nil FluxInstance")
+			}
+			if !tc.wantSync {
+				if fi.Spec.Sync != nil {
+					t.Errorf("expected no Sync without SourceURL, got %+v", fi.Spec.Sync)
+				}
+				return
+			}
+			if fi.Spec.Sync == nil {
+				t.Fatal("expected Sync to be set when SourceURL is non-empty")
+			}
+			if fi.Spec.Sync.Name != tc.wantName {
+				t.Errorf("Sync.Name = %q, want %q", fi.Spec.Sync.Name, tc.wantName)
+			}
+		})
+	}
+}
+
+// TestFluxOperatorBootstrapCarriesSyncName covers the entry point callers use:
+// flux-operator GenerateBootstrap must carry SyncName into the FluxInstance it
+// emits alongside the operator install bundle.
+func TestFluxOperatorBootstrapCarriesSyncName(t *testing.T) {
+	bg := fluxstack.NewBootstrapGenerator()
+	resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
+		Enabled:   true,
+		FluxMode:  "flux-operator",
+		SourceURL: "oci://registry.example.com/fleet",
+		SourceRef: "latest",
+		SyncName:  "stack",
+	}, &stack.Node{Name: "production"})
+	if err != nil {
+		t.Fatalf("GenerateBootstrap() error = %v", err)
+	}
+	fi := findFluxInstance(t, resources)
+	if fi.Spec.Sync == nil {
+		t.Fatal("expected Sync to be set when SourceURL is non-empty")
+	}
+	if fi.Spec.Sync.Name != "stack" {
+		t.Errorf("Sync.Name = %q, want %q", fi.Spec.Sync.Name, "stack")
+	}
+}
+
+// TestGenerateBootstrapGotkIgnoresSyncName is a differential: SyncName is a
+// flux-operator input, so gotk-mode output must be identical with and without
+// it. The oracle is the generator's own output for the unset case. FluxVersion
+// is pinned to the go.mod flux2 release so both calls fetch the same manifests
+// rather than whatever "latest" resolves to between them.
+func TestGenerateBootstrapGotkIgnoresSyncName(t *testing.T) {
+	generate := func(syncName string) []client.Object {
+		t.Helper()
+		bg := fluxstack.NewBootstrapGenerator()
+		resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
+			Enabled:     true,
+			FluxMode:    "gotk",
+			FluxVersion: "v2.9.5",
+			SourceKind:  "GitRepository",
+			SourceURL:   "https://github.com/org/fleet.git",
+			SourceRef:   "main",
+			SyncName:    syncName,
+		}, &stack.Node{Name: "prod"})
+		if err != nil {
+			t.Fatalf("GenerateBootstrap(syncName=%q) error = %v", syncName, err)
+		}
+		if len(resources) == 0 {
+			t.Fatalf("GenerateBootstrap(syncName=%q) returned no resources", syncName)
+		}
+		return resources
+	}
+
+	without := generate("")
+	with := generate("stack-src")
+	if !reflect.DeepEqual(without, with) {
+		t.Errorf("gotk output changed when SyncName was set: %d resources without, %d with", len(without), len(with))
 	}
 }
 

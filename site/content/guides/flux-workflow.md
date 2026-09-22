@@ -330,6 +330,29 @@ components are generated with `WatchAllNamespaces` at its upstream default of `t
 not currently derived from configuration. Controllers therefore reconcile across namespaces
 regardless of where they run.
 
+### Sync name
+
+In `"flux-operator"` mode the `FluxInstance` sync makes the operator create a source and a
+Kustomization of its own. `BootstrapConfig.SyncName` names both; it becomes `spec.sync.name`.
+Left empty, the operator names them after the `FluxInstance`'s namespace — `flux-system` unless
+you moved it as above. Set `SyncName` when the Kustomizations you generate reference the sync
+source under another name, or their `sourceRef` points at a source nothing creates:
+
+```go
+bootstrapConfig := &stack.BootstrapConfig{
+    Enabled:   true,
+    SourceURL: "oci://registry.example.com/fleet",
+    SourceRef: "latest",
+    SyncName:  "fleet",
+}
+```
+
+It only takes effect with `SourceURL` set, since no sync block is emitted without one, and
+`"gotk"` mode ignores it: there kure creates and names the root source itself. kure does not
+validate the value. The CRD caps it at 63 characters and makes it immutable once set, so renaming
+the sync of a running cluster means recreating the `FluxInstance`. It is distinct from the
+generator's `BootstrapName`, which names the `FluxInstance` itself.
+
 ## Further Reading
 
 - [Stack](/api-reference/stack) - Domain model reference
