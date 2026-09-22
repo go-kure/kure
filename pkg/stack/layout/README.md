@@ -116,6 +116,23 @@ Controls how resource YAML files are named:
 
 `ManifestLayout.ExtraFiles` lets callers attach arbitrary files (e.g. a `values.yaml`) into a layout's directory alongside the resource YAMLs. `ManifestLayout.ConfigMapGenerators` adds entries to a `configMapGenerator:` section in the generated `kustomization.yaml`. kustomize appends a content-hash suffix to the generated ConfigMap name and rewrites references (e.g. `HelmRelease.spec.valuesFrom`) on build, so any change to the source file forces re-reconciliation — the canonical FluxCD pattern for tracking Helm values changes.
 
+An `ExtraFile.Name` is a relative path of `/`-separated segments made of letters, digits, `.`, `_`
+and `-`, with no `.` or `..` segment; a name in a subdirectory (`assets/dashboard.json`) creates
+that directory. Every writer (`WriteToDisk`, `WriteManifest`, `WriteToTar`) refuses, before writing
+any file of the layout, an extra file that would take a path it owns in that directory: a generated
+resource file, a kustomize control file (`kustomization.yaml`, `kustomization.yml`,
+`Kustomization`), a child layout's output directory where it lies inside this layout's (umbrella
+children included; anything under it, or a file on the way to it) or an `AppFileSingle` child's
+`<name>.yaml`, or another extra file (listed twice); nor may it use any of those files as
+a directory (`kustomization.yaml/x`), or be a file where one of them needs a directory. A child's
+output directory is the one its writer uses (for `WriteManifest`, after applying the `Config`
+defaults). All names are compared case-insensitively, as on default macOS volumes. When a layout
+has extra files, a `..` segment in its `Namespace` or `Name`, in a direct child's `Namespace` or
+`Name`, or in a generated file name refuses the layout before any of its files is written; a
+rooted name (`/x`) is not refused, since every writer joins it under its base. Previously such an
+extra file silently replaced the generated one on disk, or shadowed it as a later tar entry, while
+`kustomization.yaml` still listed the path.
+
 `LayoutAugmenter` is an optional interface on `stack.ApplicationConfig`:
 
 ```go
