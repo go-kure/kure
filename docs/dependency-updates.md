@@ -26,6 +26,9 @@ so a version-metadata-only PR cannot skip it:
    range check instead of being skipped — `supported_range` is enforced for these too.
    Skipped entirely for a dependency declaring `floor_module` (see "MVS-floor dependencies"
    below) — guard 6 already enforces the invariant that actually applies to it.
+   Each bound of `supported_range` must be exactly `major.minor` (`"1.26 - 1.28"` or `"1.26"`):
+   `check`, `generate` and `widen` all reject a malformed one such as `"1.x - 3.x"` rather than
+   compare it or publish it as `pkg/versions` `Min`/`Max` metadata.
 2. **go.mod pin comment** — the `// Current pin: vX.Y.Z (Kubernetes 1.N)` comment above
    the `k8s.io/api` replace directive matches that directive's actual version. A drifted
    comment used to be caught only by AI review, on every single Kubernetes bump.

@@ -269,7 +269,18 @@ strip_leading_zeros() {
 # compares digit-string length (longer wins) and falls back to lexicographic
 # order for equal lengths, which matches numeric order once leading zeros
 # are gone. Echoes -1, 0, or 1.
+#
+# Defends itself: an operand that is not a non-empty digit string prints an
+# error to stderr, echoes nothing and returns 2, so a caller that checks the
+# status (every caller does -- see mm_cmp) cannot mistake it for a result.
 numcmp() {
+    local x
+    for x in "$1" "$2"; do
+        if [[ ! "$x" =~ ^[0-9]+$ ]]; then
+            error "numcmp: operand \"$x\" is not a non-negative decimal integer"
+            return 2
+        fi
+    done
     local a b
     a=$(strip_leading_zeros "$1")
     b=$(strip_leading_zeros "$2")
@@ -290,19 +301,46 @@ numcmp() {
 # Compare two "major.minor" strings numerically, major first then minor, via
 # numcmp (see above -- no fixed-multiplier key, no bash-arithmetic overflow).
 # Echoes -1, 0, or 1.
+#
+# Both operands must be exactly major.minor. Anything else -- "1.x", "2.1.0",
+# "" -- prints an error to stderr, echoes nothing and returns 2 instead of
+# comparing a truncated or non-numeric component. Callers must capture the
+# result with `r=$(mm_cmp a b) || ...`, never inline inside [[ ]], where a
+# failed substitution just reads as an empty string (go-kure/kure#766).
 mm_cmp() {
-    local a="$1" b="$2"
+    local a="$1" b="$2" x
+    for x in "$a" "$b"; do
+        if [[ ! "$x" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            error "mm_cmp: operand \"$x\" is not major.minor"
+            return 2
+        fi
+    done
     local a_major="${a%%.*}" a_minor="${a#*.}"
-    a_minor="${a_minor%%.*}"
     local b_major="${b%%.*}" b_minor="${b#*.}"
-    b_minor="${b_minor%%.*}"
     local major_cmp
-    major_cmp=$(numcmp "$a_major" "$b_major")
+    major_cmp=$(numcmp "$a_major" "$b_major") || return 2
     if [[ "$major_cmp" != 0 ]]; then
         echo "$major_cmp"
         return
     fi
-    numcmp "$a_minor" "$b_minor"
+    numcmp "$a_minor" "$b_minor" || return 2
+}
+
+# Split a supported_range value ("A.B - C.D", or a single "A.B") into its two
+# bounds and require each to be exactly major.minor. Prints "LO HI" on
+# success; on a malformed value prints nothing and returns 1, leaving the
+# caller to report it. Every reader of supported_range goes through this, so
+# a hand-edited "1.x - 3.x" cannot reach a comparison or be published as
+# Min/Max metadata (go-kure/kure#766).
+parse_supported_range() {
+    # Match the WHOLE value, not the text before the first " - " and after
+    # the last: splitting that way accepted "1.0 - garbage - 3.0" as 1.0..3.0.
+    local re='^([0-9]+\.[0-9]+)( - ([0-9]+\.[0-9]+))?$'
+    if [[ ! "$1" =~ $re ]]; then
+        return 1
+    fi
+    local lo="${BASH_REMATCH[1]}" hi="${BASH_REMATCH[3]:-${BASH_REMATCH[1]}}"
+    printf '%s %s\n' "$lo" "$hi"
 }
 
 # Extract "major.minor" from a full version, applying version_basis normalization.
@@ -698,24 +736,29 @@ validate_gomod() {
         fi
 
         # Parse supported_range: "A.B - C.D" (range) or "A.B" (single major.minor)
-        local lo_mm hi_mm
-        if [[ "$supported" == *" - "* ]]; then
-            lo_mm="${supported%% - *}"
-            hi_mm="${supported##* - }"
-        else
-            lo_mm="$supported"
-            hi_mm="$supported"
+        local lo_mm hi_mm bounds
+        if ! bounds=$(parse_supported_range "$supported"); then
+            error "$dep: supported_range \"$supported\" is malformed -- each bound must be major.minor (e.g. \"1.26 - 1.28\" or \"1.26\")"
+            errors=$((errors + 1))
+            continue
         fi
+        read -r lo_mm hi_mm <<< "$bounds"
 
-        local ver_mm
+        local ver_mm cmp_hi cmp_lo
         ver_mm=$(version_mm "$actual_version" "$basis")
 
-        if [[ "$(mm_cmp "$ver_mm" "$hi_mm")" == 1 ]]; then
+        if ! cmp_hi=$(mm_cmp "$ver_mm" "$hi_mm") || ! cmp_lo=$(mm_cmp "$ver_mm" "$lo_mm"); then
+            error "$dep: cannot compare go.mod version v$actual_version (as \"$ver_mm\") against supported_range \"$supported\""
+            errors=$((errors + 1))
+            continue
+        fi
+
+        if [[ "$cmp_hi" == 1 ]]; then
             # Above the upper bound is exactly what `widen` raises -- the
             # command it prints will succeed once the note is filled in.
             error "$dep $ver_mm (go.mod $go_module v$actual_version) is outside supported_range \"$supported\". After confirming API compatibility: ./scripts/sync-versions.sh widen $dep $ver_mm --note \"<compatibility assessment>\""
             errors=$((errors + 1))
-        elif [[ "$(mm_cmp "$ver_mm" "$lo_mm")" == -1 ]]; then
+        elif [[ "$cmp_lo" == -1 ]]; then
             # Below the lower bound: `widen` only ever raises the upper
             # bound and would refuse this value outright (it's not above
             # the current one) -- printing that command here would just
@@ -867,6 +910,46 @@ go_string_literal_unsafe() {
     [[ "$1" == *'"'* || "$1" == *'\'* || "$1" == *$'\n'* ]]
 }
 
+# Every supported_range that generate would publish must parse. floor_module
+# entries are skipped exactly as generate_go_api skips them: their range is
+# never enforced or emitted.
+validate_all_ranges() {
+    local deps dep supported floor_module rc=0
+    deps=$(yq '.infrastructure | keys | .[]' "$VERSIONS_FILE")
+    while IFS= read -r dep; do
+        [[ -n "$dep" ]] || continue
+        floor_module=$(yq ".infrastructure.${dep}.floor_module // \"\"" "$VERSIONS_FILE")
+        [[ -n "$floor_module" && "$floor_module" != "null" ]] && continue
+        # Read the tag, not `// ""`: yq's alternative operator treats `false`
+        # like null, so a boolean range would read as absent and skip the
+        # check. Only a missing/null value is absent; any non-string value is
+        # malformed, and a quoted "null" string is a value like any other.
+        local tag
+        tag=$(yq ".infrastructure.${dep}.supported_range | tag" "$VERSIONS_FILE")
+        [[ "$tag" == "!!null" ]] && continue
+        if [[ "$tag" != "!!str" ]]; then
+            error "$dep: supported_range is a $tag, not a string like \"1.26 - 1.28\"; refusing to generate anything"
+            rc=1
+            continue
+        fi
+        # An explicit empty string is a declared value, not an absent one:
+        # it falls through to parse_supported_range and is refused there.
+        supported=$(yq ".infrastructure.${dep}.supported_range" "$VERSIONS_FILE")
+        # Same order as generate_go_api: an unemittable literal is reported
+        # as such before it is reported as a malformed range.
+        if go_string_literal_unsafe "$supported"; then
+            error "versions.yaml value cannot be emitted as a Go string literal: $supported"
+            rc=1
+            continue
+        fi
+        if ! parse_supported_range "$supported" >/dev/null; then
+            error "$dep: supported_range \"$supported\" is malformed -- each bound must be major.minor; refusing to generate anything"
+            rc=1
+        fi
+    done <<< "$deps"
+    return "$rc"
+}
+
 # Generate the pkg/versions Go API from versions.yaml.
 # $1: output path (drift check passes a temp file; `generate` passes $GO_API_FILE).
 # Output must be gofmt-canonical -- the drift check is a byte comparison, and
@@ -944,13 +1027,6 @@ generate_go_api() {
             floor_module=""
         fi
 
-        # Same split as the range guard in validate_gomod: keep the two in
-        # step, or the exported bounds and the CI range check could disagree.
-        if [[ "$supported" == *" - "* ]]; then
-            lo="${supported%% - *}"; hi="${supported##* - }"
-        else
-            lo="$supported"; hi="$supported"
-        fi
 
         # Refuse to emit a file that will not compile. $out is untouched at
         # this point -- only $tmp exists; remove it explicitly before
@@ -962,6 +1038,20 @@ generate_go_api() {
                 return 1
             fi
         done
+
+        # Same parser as the range guard in validate_gomod, so the exported
+        # bounds and the CI range check cannot disagree -- and a malformed
+        # range is refused here rather than published as Min/Max.
+        lo=""; hi=""
+        if [[ -n "$supported" ]]; then
+            local bounds
+            if ! bounds=$(parse_supported_range "$supported"); then
+                error "$dep: supported_range \"$supported\" is malformed -- each bound must be major.minor; refusing to emit it"
+                rm -f "$tmp"
+                return 1
+            fi
+            read -r lo hi <<< "$bounds"
+        fi
 
         {
             printf '\t{\n'
@@ -1111,10 +1201,9 @@ widen_dependency() {
         return 1
     fi
 
-    # $2 must be exactly major.minor: mm_cmp's parsing silently truncates
-    # anything past the second component (so "2.1.0" and "2.1" compare
-    # equal), which would otherwise let a malformed bound through the
-    # comparison below and get written verbatim into supported_range.
+    # $2 must be exactly major.minor, checked here so the error names the
+    # argument: mm_cmp would also refuse "2.1.0", but only as a generic
+    # comparison failure, and supported_range only ever records major.minor.
     if [[ ! "$new_hi" =~ ^[0-9]+\.[0-9]+$ ]]; then
         error "widen: new upper bound \"$new_hi\" is not major.minor (e.g. \"1.26\") -- supported_range only ever records major.minor"
         return 1
@@ -1127,19 +1216,24 @@ widen_dependency() {
         return 1
     fi
 
-    local lo hi
-    if [[ "$supported" == *" - "* ]]; then
-        lo="${supported%% - *}"; hi="${supported##* - }"
-    else
-        lo="$supported"; hi="$supported"
+    local lo hi bounds
+    if ! bounds=$(parse_supported_range "$supported"); then
+        error "widen: $dep's current supported_range \"$supported\" is malformed -- each bound must be major.minor; fix it by hand first. versions.yaml was not changed"
+        return 1
     fi
+    read -r lo hi <<< "$bounds"
 
     # Compare against the current UPPER bound, not the lower one: for an
     # existing multi-version range (e.g. "1.5 - 1.7"), a new_hi that is
     # above the lower bound but at or below the current upper bound (e.g.
     # "1.6") would otherwise silently narrow the range and drop support for
     # 1.7 while still being reported as "widened".
-    if [[ "$(mm_cmp "$new_hi" "$hi")" != 1 ]]; then
+    local cmp
+    if ! cmp=$(mm_cmp "$new_hi" "$hi"); then
+        error "widen: cannot compare \"$new_hi\" with the current upper bound \"$hi\" -- versions.yaml was not changed"
+        return 1
+    fi
+    if [[ "$cmp" != 1 ]]; then
         error "widen: new upper bound \"$new_hi\" is not above the current upper bound \"$hi\" -- widen only raises the upper bound, never narrows the range"
         return 1
     fi
@@ -1212,6 +1306,9 @@ main() {
             info ""
             local gomod_result=0
             validate_gomod || gomod_result=$?
+            # validate_gomod only parses the ranges it compares against a pin;
+            # this covers every entry's range shape and YAML type, as generate does.
+            validate_all_ranges || gomod_result=1
             validate_gomod_pin_comment || gomod_result=1
             validate_no_sha_in_notes || gomod_result=1
             validate_mvs_floors || gomod_result=1
@@ -1229,6 +1326,11 @@ main() {
             fi
             ;;
         generate)
+            # Refuse a malformed range before writing anything: generate_docs
+            # and sync_gomod_pin_comment write their files directly, so a
+            # refusal found later, in generate_go_api, would leave them
+            # regenerated around a range the Go API then declined to emit.
+            validate_all_ranges || exit 1
             sync_gomod_pin_comment
             generate_docs "$DOCS_FILE"
             generate_go_api "$GO_API_FILE"
