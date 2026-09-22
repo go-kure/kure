@@ -810,7 +810,9 @@ EOF
             compat_cell="derived from $floor_module"
         fi
 
-        echo "| $dep | $build_version | $compat_cell | $notes |" >> "$DOCS_FILE"
+        # printf, not echo: notes may carry backslashes (widen accepts them),
+        # and echo expands escapes when the shell has xpg_echo set.
+        printf '| %s | %s | %s | %s |\n' "$dep" "$build_version" "$compat_cell" "$notes" >> "$DOCS_FILE"
     done <<< "$deps"
 
     cat >> "$DOCS_FILE" << 'EOF'
@@ -1058,16 +1060,20 @@ validate_go_api_drift() {
     return 1
 }
 
-# Widen a dependency's supported_range upper bound and replace its notes,
-# then regenerate. The judgment (is the new version actually compatible?)
-# stays entirely human -- this only automates the yq edit and the two-file
+# Widen a dependency's supported_range upper bound and append a paragraph to
+# its notes (or, with --replace-notes, replace them), then regenerate. The
+# judgment (is the new version actually compatible?) stays entirely human -- this only automates the yq edit and the two-file
 # regeneration that validate_gomod's range-check error otherwise leaves as a
 # fully manual, three-artifact chore every time. See docs/dependency-updates.md's
 # "Widening a supported_range" section.
 # $1: dependency key (an .infrastructure entry). $2: new upper bound
-# (major.minor). $3: replacement notes text.
+# (major.minor). $3: notes text. $4: "append" (default) or "replace".
+#
+# notes is the audit trail for the whole supported_range, accumulated one
+# widen at a time, so the default appends: replacing would delete the reasons
+# for the lower half of a range that still covers it (go-kure/kure#802).
 widen_dependency() {
-    local dep="$1" new_hi="$2" note="$3"
+    local dep="$1" new_hi="$2" note="$3" notes_mode="${4:-append}"
 
     local exists
     exists=$(yq ".infrastructure | has(\"${dep}\")" "$VERSIONS_FILE")
@@ -1085,15 +1091,11 @@ widen_dependency() {
         return 1
     fi
 
-    if go_string_literal_unsafe "$note"; then
-        error "widen: --note text cannot be emitted as a YAML/Go string literal (contains a double quote, backslash, or newline): $note"
-        return 1
-    fi
-
+    # The note reaches yq through strenv, never through the expression text,
+    # so quotes, backslashes and newlines need no guard here; generate_go_api
+    # never emits notes, so no Go-string-literal constraint applies either.
     # notes is rendered raw into a Markdown table cell by generate_docs
-    # (a '|' would open an extra column) -- go_string_literal_unsafe above
-    # only guards Go-string-literal safety, a different downstream consumer,
-    # so this needs its own check.
+    # (a '|' would open an extra column), which does need its own check.
     if [[ "$note" == *'|'* ]]; then
         error "widen: --note text cannot contain '|' -- it is rendered as a Markdown table cell in docs/compatibility.md and a pipe would break the table: $note"
         return 1
@@ -1144,6 +1146,30 @@ widen_dependency() {
 
     local new_range="$lo - $new_hi"
 
+    # Read the existing notes before writing anything, and refuse -- rather
+    # than overwrite -- a notes value that is not a plain string: appending
+    # to something widen cannot read would silently discard it.
+    local existing_notes="" notes_tag
+    notes_tag=$(yq ".infrastructure.${dep}.notes | tag" "$VERSIONS_FILE") || {
+        error "widen: could not read the notes of $dep -- versions.yaml was not changed"
+        return 1
+    }
+    case "$notes_tag" in
+        '!!null') ;;
+        '!!str')
+            existing_notes=$(yq ".infrastructure.${dep}.notes" "$VERSIONS_FILE") || {
+                error "widen: could not read the notes of $dep -- versions.yaml was not changed"
+                return 1
+            }
+            ;;
+        *)
+            if [[ "$notes_mode" != "replace" ]]; then
+                error "widen: $dep's notes is a $notes_tag, not a string -- cannot append to it; fix it by hand or pass --replace-notes. versions.yaml was not changed"
+                return 1
+            fi
+            ;;
+    esac
+
     # widen_dependency is always called as the left side of `||` in main()
     # (`widen_dependency ... || exit 1`), which disables `set -e` for this
     # entire function -- a failing yq write here would otherwise go
@@ -1153,13 +1179,23 @@ widen_dependency() {
         error "widen: failed to write supported_range for $dep -- versions.yaml was not changed"
         return 1
     fi
-    if ! yq eval -i ".infrastructure.${dep}.notes = \"${note}\"" "$VERSIONS_FILE"; then
+    local new_notes
+    if [[ "$notes_mode" == "replace" ]]; then
+        new_notes="$note"
+    else
+        new_notes="${existing_notes:+$existing_notes$'\n'}$note"
+    fi
+    # Trailing newline so yq writes a '|' literal block rather than '|-'.
+    if ! NOTES="$new_notes"$'\n' DEP="$dep" yq eval -i '.infrastructure[strenv(DEP)].notes = strenv(NOTES) | .infrastructure[strenv(DEP)].notes style="literal"' "$VERSIONS_FILE"; then
         error "widen: failed to write notes for $dep -- supported_range was already widened to \"$new_range\" but notes was not; versions.yaml is now partially edited, fix notes by hand or revert"
         return 1
     fi
 
-    success "$dep: supported_range widened to \"$new_range\"; notes replaced"
-    info "yq may have reformatted the notes block onto one line -- reflow it to a '|' block manually if you want the usual multi-line prose style"
+    if [[ "$notes_mode" == "replace" ]]; then
+        success "$dep: supported_range widened to \"$new_range\"; notes replaced (--replace-notes)"
+    else
+        success "$dep: supported_range widened to \"$new_range\"; note appended to the existing notes"
+    fi
     info "Next: ./scripts/sync-versions.sh generate"
 }
 
@@ -1200,7 +1236,7 @@ main() {
             exit 0
             ;;
         widen)
-            local dep="${2:-}" new_hi="${3:-}" note=""
+            local dep="${2:-}" new_hi="${3:-}" note="" notes_mode="append"
             shift 3 2>/dev/null || true
             while [[ $# -gt 0 ]]; do
                 case "$1" in
@@ -1210,25 +1246,33 @@ main() {
                         # (no usage message, just an abrupt exit) instead of
                         # falling through to the dep/new_hi/note emptiness
                         # check below.
-                        if [[ $# -lt 2 ]]; then
-                            echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\""
+                        # A following recognised option means the note itself
+                        # was left out (`--note --replace-notes`): taking the
+                        # option as the note text would record it as the
+                        # compatibility assessment.
+                        if [[ $# -lt 2 || "$2" == "--replace-notes" || "$2" == "--note" ]]; then
+                            echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\" [--replace-notes]"
                             exit 1
                         fi
                         note="$2"
                         shift 2
                         ;;
+                    --replace-notes)
+                        notes_mode="replace"
+                        shift
+                        ;;
                     *)
                         error "widen: unknown argument: $1"
-                        echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\""
+                        echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\" [--replace-notes]"
                         exit 1
                         ;;
                 esac
             done
             if [[ -z "$dep" || -z "$new_hi" || -z "$note" ]]; then
-                echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\""
+                echo "Usage: $0 widen <dep> <new-upper-bound> --note \"<compatibility assessment>\" [--replace-notes]"
                 exit 1
             fi
-            widen_dependency "$dep" "$new_hi" "$note" || exit 1
+            widen_dependency "$dep" "$new_hi" "$note" "$notes_mode" || exit 1
             exit 0
             ;;
         *)
