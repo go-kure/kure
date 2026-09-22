@@ -9,6 +9,104 @@ All notable changes to this project will be documented in this file.
 > the deleted helpers and sub-type constructors, and the constructor and workflow defaults that no
 > longer apply. Read it before upgrading across the entries below. The contract itself is
 > [Kubernetes Builders](https://www.gokure.dev/kure/api-reference/kubernetes-builders/).
+## [0.2.0-beta.12] - 2026-09-22
+
+### Added
+
+- Expose FluxInstance sync name via BootstrapConfig.SyncName
+
+### Build
+
+- Update go-kure/.github digest to aa7c673
+- Update go-kure/.github digest to 0c9368c
+- Update go-minor
+- Update module github.com/cert-manager/cert-manager to v1.21.2
+- Update module sigs.k8s.io/controller-runtime to v0.25.1
+- Update fluxcd (flux-operator held at v0.53.0)
+- Constrain Renovate to the repo's Go pin
+- Update module github.com/cilium/cilium to v1.20.2
+- Update dependency git-cliff to v2.14.2
+- Update dependency external-secrets/external-secrets to v2.11.0
+- Update fluxcd
+- Widen flux-operator range to 0.58 and re-vendor the install bundle
+- Re-vendor the flux-operator install bundle from Renovate
+
+### CI
+
+- Allow manual re-publish of an existing tag
+- Guard dispatch ref and correct the re-run recovery guidance
+- Refuse a dispatch over a live release, split the rerun rows
+- Serialize the wrapper, bound the re-run rows, flag docs rollback
+- Probe for an existing release on re-attempts, not just dispatches
+
+### Documentation
+
+- Detect partial publishes and cover post-publication recovery
+- Key the completeness check on the tag, drop the scripted deletion
+- Use the goreleaser job conclusion as the completion oracle
+- Drop the SBOM and cosign claims kure does not produce
+- Pin the attempt, key on not-success, state two limits
+- Let the command flag carried-over job rows
+- Find the attempt that ran goreleaser, not the latest
+- Require positive release ownership before deletion
+- Replace the partial-publish deletion branch with escalation
+- Split transient re-run recovery, document the docs-deploy race
+- Close the --failed class by enumeration, add the guard-failure row
+- Wait for the corrective docs deploy, not just the recovered one
+- Classify every removed default by what it costs
+- Fix nested emphasis and reconcile the unsettled count
+- Drop an ordering claim the class list does not honour
+- State the omitempty count instead of contradicting it
+- Settle the Cilium row, and stop reading omitempty as required
+- Say what a golden diff shows, not what it does not
+- Fix the golden-diff rule and the defaults the table never listed
+- State the rule behind which app-label removals are silent
+- Show the 0/false degradation shape with a fixture that has one
+- Reclass CreateService as silent on a pinned selector
+- Check the three unsettled rows against the standard the table already uses
+- Cite the whole Service selector sentence, not half of it
+- Class the container defaults the scheme never reached
+- Narrow the pull-policy split to what the pinned comment supports
+- Replace two claims the pinned dependencies contradict
+- Fold in the frozen citation and wording findings
+- Note the ModuleVersion provenance exemption in the doc-gate contract
+- Note the ModuleVersion exemption in the workflow guide
+- Link the vendored guard section to the canonical adoption procedure
+- Make the canonical adoption procedure reference a hyperlink
+- Record the external-secrets v2.11 folderID wire-format change
+- State the admission-breaking CRD tightenings for flux-operator 0.58
+- Say what a supported range does and does not promise
+- Stop numbering the flux-operator pin cases in the guard-test note
+- Document SyncName in the stack README and domain-model guide
+- Scope the sync-ref equivalence to tags, branches and empty refs
+- Explain SourceRef resolution in the flux-workflow guide
+
+### Fixed
+
+- The guard's message must not claim publication succeeded
+- Probe the release on every path, fail closed on an undetermined answer
+- Retry the release probe, and stop the waiver claiming more than it can
+- Derive the canonical-guard checkout ref from the action pin
+- Make the pin resolver portable to non-GNU grep/sed
+- Enable strict constraintsFiltering instead of a toolchain override
+- Re-pin external-secrets to v2.11.0 and widen supported_range
+- Install Go in sync-eso-pin.sh when Renovate's image lacks it
+- Read only require directives and stop leaking pin fixtures
+- Reject unlisted bundle kinds and check pin trees portably
+- Stage every flux-operator pin output before replacing any
+- Drop the no-op pull_request trigger from the Claude workflow
+- Resolve the FluxInstance sync ref the way the gotk source does
+
+### Maintenance
+
+- Bump go-kure/.github pin to 7cc86e2 for doc-gate provenance exemption
+- Update go-kure/.github digest to 6c92665
+- Update codecov/codecov-action digest to 0b35c9e
+- Update go-kure/.github digest to bd0ce1a
+- Update codecov/codecov-action digest to 303a32d
+- Update go-kure/.github digest to 92da34e
+- Update go-kure/.github digest to 75b120b
+
 ## [0.2.0-beta.11] - 2026-09-10
 
 ### Breaking
