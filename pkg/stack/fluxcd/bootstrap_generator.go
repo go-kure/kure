@@ -178,8 +178,21 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 		opts.Namespace = bg.DefaultNamespace
 	}
 
-	// Set version if specified
-	if config.FluxVersion != "" {
+	// Build from the vendored GotkVersion bundle unless FluxVersion asks for a
+	// different release. install.Generate skips its download whenever it is
+	// given a manifests base, so the default path makes no network call and
+	// its output depends only on kure's version (go-kure/kure#794). Any other
+	// FluxVersion ("latest" included) keeps the upstream fetch as an explicit
+	// opt-in.
+	manifestsBase, cleanup, err := gotkManifestsBase(config.FluxVersion)
+	if err != nil {
+		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "install",
+			fmt.Sprintf("failed to prepare Flux installation manifests: %v", err), err)
+	}
+	defer cleanup()
+	if manifestsBase != "" {
+		opts.Version = GotkVersion
+	} else {
 		opts.Version = config.FluxVersion
 	}
 
@@ -199,7 +212,7 @@ func (bg *BootstrapGenerator) generateGotkComponents(config *stack.BootstrapConf
 	}
 
 	// Generate manifests
-	content, err := install.Generate(opts, "")
+	content, err := install.Generate(opts, manifestsBase)
 	if err != nil {
 		return nil, errors.ResourceValidationError("BootstrapConfig", "gotk", "install",
 			fmt.Sprintf("failed to generate Flux installation manifests: %v", err), err)

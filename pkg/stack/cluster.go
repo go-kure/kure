@@ -57,7 +57,14 @@ type BootstrapConfig struct {
 	Enabled bool `yaml:"enabled"`
 
 	// Flux-specific
-	FluxMode        string   `yaml:"fluxMode,omitempty"` // "flux-operator" (default) or "gotk" (legacy)
+	FluxMode string `yaml:"fluxMode,omitempty"` // "flux-operator" (default) or "gotk" (legacy)
+	// FluxVersion selects the Flux release. In gotk mode, empty or the vendored
+	// fluxcd.GotkVersion builds offline from the bundle kure ships; any other
+	// value downloads manifests at generation time: the named release for a
+	// "vX.Y.Z" value, and the latest release for anything else ("latest", or a
+	// version without its "v"), as upstream flux2 resolves it. In
+	// flux-operator mode it is the FluxInstance
+	// distribution version.
 	FluxVersion     string   `yaml:"fluxVersion,omitempty"`
 	Components      []string `yaml:"components,omitempty"`
 	Registry        string   `yaml:"registry,omitempty"`

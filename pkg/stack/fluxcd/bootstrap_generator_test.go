@@ -617,9 +617,8 @@ func TestFluxOperatorBootstrapCarriesSyncName(t *testing.T) {
 
 // TestGenerateBootstrapGotkIgnoresSyncName is a differential: SyncName is a
 // flux-operator input, so gotk-mode output must be identical with and without
-// it. The oracle is the generator's own output for the unset case. FluxVersion
-// is pinned to the go.mod flux2 release so both calls fetch the same manifests
-// rather than whatever "latest" resolves to between them.
+// it. The oracle is the generator's own output for the unset case. Both calls
+// build from the vendored GotkVersion bundle, so neither touches the network.
 func TestGenerateBootstrapGotkIgnoresSyncName(t *testing.T) {
 	generate := func(syncName string) []client.Object {
 		t.Helper()
@@ -627,7 +626,7 @@ func TestGenerateBootstrapGotkIgnoresSyncName(t *testing.T) {
 		resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
 			Enabled:     true,
 			FluxMode:    "gotk",
-			FluxVersion: "v2.9.5",
+			FluxVersion: fluxstack.GotkVersion,
 			SourceKind:  "GitRepository",
 			SourceURL:   "https://github.com/org/fleet.git",
 			SourceRef:   "main",
@@ -681,17 +680,18 @@ func TestGenerateGotkComponents_FieldBranches(t *testing.T) {
 	config := &stack.BootstrapConfig{
 		Enabled:         true,
 		FluxMode:        "gotk",
-		FluxVersion:     "v2.3.0",
+		FluxVersion:     fluxstack.GotkVersion,
 		Registry:        "ghcr.io/fluxcd",
 		ImagePullSecret: "my-pull-secret",
 		Components:      []string{"source-controller", "kustomize-controller"},
 	}
 	rootNode := &stack.Node{Name: "test"}
 
-	// The gotk mode calls generateGotkComponents which exercises all the
-	// optional field branches. We don't care about the result (it may fail due to
-	// network or version mismatch); we care the branches were reached.
-	_, _ = bg.GenerateBootstrap(config, rootNode)
+	// The pinned version builds from the vendored bundle, so this runs offline
+	// and must succeed.
+	if _, err := bg.GenerateBootstrap(config, rootNode); err != nil {
+		t.Fatalf("GenerateBootstrap() error = %v", err)
+	}
 }
 
 // TestGenerateFluxSystemKustomization_OCISourceKind exercises the OCIRepository
@@ -748,6 +748,7 @@ func TestFluxOperatorInstallObjects(t *testing.T) {
 		t.Fatalf("FluxOperatorInstallObjects() error = %v", err)
 	}
 
+	// TestVendoredPinsMatchGoMod checks the value against go.mod.
 	if fluxstack.FluxOperatorVersion == "" {
 		t.Error("FluxOperatorVersion must not be empty")
 	}

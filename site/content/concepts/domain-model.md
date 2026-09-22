@@ -18,7 +18,7 @@ Cluster
 
 ### Cluster
 
-The root of the hierarchy, representing a target Kubernetes cluster. A cluster has a name, a tree of nodes, and GitOps configuration specifying which workflow engine to use (Flux or ArgoCD). That configuration can also carry a bootstrap: how Flux itself is installed and which source it syncs from, including — for flux-operator — the name of the sync source and Kustomization the operator creates (`BootstrapConfig.SyncName`).
+The root of the hierarchy, representing a target Kubernetes cluster. A cluster has a name, a tree of nodes, and GitOps configuration specifying which workflow engine to use (Flux or ArgoCD). That configuration can also carry a bootstrap: how Flux itself is installed (in `gotk` mode, from the flux2 release Kure vendors unless `FluxVersion` names another) and which source it syncs from, including — for flux-operator — the name of the sync source and Kustomization the operator creates (`BootstrapConfig.SyncName`).
 
 ### Node
 

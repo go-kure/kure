@@ -297,6 +297,12 @@ module it also re-vendors the bundle and updates `FluxOperatorVersion`, so the b
 always matches the release Kure was built against. Widening the supported range to cover a new
 release is a separate, manual step that records a compatibility assessment.
 
+`"gotk"` mode is vendored the same way: its components are built from the install manifests of
+the flux2 release Kure depends on (`GotkVersion`), with no network access, as long as
+`FluxVersion` is empty or names that release. Setting `FluxVersion` to any other release, or to
+`"latest"`, opts in to downloading manifests from GitHub each time the bundle is generated: the
+named release when written `vX.Y.Z`, otherwise the latest release.
+
 ```go
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
