@@ -24,14 +24,6 @@ Kure is a Go library for programmatically building Kubernetes resources used by 
 
 ```
 kure/
-├── internal/         # Resource builders
-│   ├── certmanager/  # cert-manager resources
-│   ├── externalsecrets/  # External Secrets resources
-│   ├── fluxcd/       # FluxCD resources
-│   ├── gvk/          # GroupVersionKind utilities
-│   ├── kubernetes/   # Core K8s resources
-│   ├── metallb/      # MetalLB resources
-│   └── validation/   # Validation utilities
 ├── pkg/
 │   ├── errors/       # Error handling (use in app code instead of fmt.Errorf)
 │   ├── io/           # YAML serialization

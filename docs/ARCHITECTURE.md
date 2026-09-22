@@ -772,14 +772,11 @@ pkg/                          # Public APIs and interfaces
 ├── stack/workflow.go       # Workflow interfaces (public)
 ├── errors/                 # Error handling utilities (public)
 └── patch/                  # Patch system (public) — moved to go-kure/launcher (ADR-018)
-
-internal/                    # Implementation packages (private)
-├── kubernetes/             # Core Kubernetes builders
-├── fluxcd/                # Flux resource builders
-├── certmanager/           # cert-manager builders
-├── metallb/               # MetalLB builders
-└── externalsecrets/       # External Secrets builders
 ```
+
+There is no top-level `internal/` tree: the kind-specific builders live under `pkg/kubernetes/`,
+and the last private builder package, `internal/kubernetes`, was removed once nothing imported it
+(issue go-kure/kure#756).
 
 ### File Naming Patterns
 
