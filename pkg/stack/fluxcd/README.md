@@ -245,6 +245,30 @@ bootstrapConfig := &stack.BootstrapConfig{
 objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
 ```
 
+### Sync name
+
+`BootstrapConfig.SyncName` becomes the `FluxInstance`'s `spec.sync.name`: the name flux-operator
+gives the source and Kustomization it creates for the sync. When it is empty the operator names
+both after the `FluxInstance`'s namespace (`DefaultNamespace`). That fallback is the operator's,
+not kure's, which is why the defaults table above has no row for it. Set `SyncName` when the
+Kustomizations you generate reference the sync source by another name; otherwise their
+`sourceRef` points at a source nothing creates.
+
+```go
+bootstrapConfig := &stack.BootstrapConfig{
+    Enabled:   true,
+    SourceURL: "oci://registry.example.com/fleet",
+    SourceRef: "latest",
+    SyncName:  "fleet",
+}
+```
+
+- flux-operator mode only: gotk mode ignores it, as flux-operator mode ignores `Prune`.
+- It needs `SourceURL`: without one no sync block is emitted, so there is nothing to name.
+- kure passes it through unvalidated. The CRD caps it at 63 characters and makes it immutable
+  once set, so renaming the sync of a live cluster means recreating the `FluxInstance`.
+- It is not `BootstrapGenerator.BootstrapName`, which names the `FluxInstance` itself.
+
 ## Configuration
 
 ### Kustomization Mode

@@ -368,6 +368,7 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		}
 
 		spec.Sync = &fluxv1.Sync{
+			Name:     config.SyncName,
 			Kind:     resolvedSourceKind(config),
 			URL:      config.SourceURL,
 			Ref:      config.SourceRef,

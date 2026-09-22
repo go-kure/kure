@@ -68,6 +68,14 @@ type BootstrapConfig struct {
 	SourceURL  string `yaml:"sourceURL,omitempty"`  // OCI/Git repository URL
 	SourceRef  string `yaml:"sourceRef,omitempty"`  // Tag/branch/ref
 
+	// SyncName names the source and Kustomization that the FluxInstance sync
+	// creates (spec.sync.name). flux-operator mode only: gotk mode ignores it.
+	// It has no effect without SourceURL, because no sync block is emitted
+	// then. Empty leaves the name to the operator, which defaults it to the
+	// FluxInstance's namespace. The CRD caps it at 63 characters and makes it
+	// immutable once set, so changing it means recreating the FluxInstance.
+	SyncName string `yaml:"syncName,omitempty"`
+
 	// Prune controls garbage collection on the bootstrap Kustomization.
 	// Unset emits prune: false: the upstream field is required with no
 	// omitempty, so it cannot be left out of the YAML, and an unset input is
