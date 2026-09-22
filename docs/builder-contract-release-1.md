@@ -1307,8 +1307,9 @@ a class (b) pointer assignment. `AddConfigMapLabel`, `AddConfigMapAnnotation`,
 the per-kind metadata helpers below.
 
 `pkg/kubernetes/configmap.go` was the only importer of
-`internal/kubernetes`, so that package now has no callers inside the module.
-Removing it is a separate change, tracked in issue go-kure/kure#756.
+`internal/kubernetes`, so that package had no callers left inside the module.
+It has since been removed (issue go-kure/kure#756); as an `internal/` package
+it carried no public stability guarantee.
 
 That leaves 2 tolerated helpers, both `ConfigMap` metadata.
 
