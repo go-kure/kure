@@ -3,6 +3,7 @@ package fluxcd
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
@@ -257,6 +258,32 @@ func resolvedSourceKind(config *stack.BootstrapConfig) string {
 	return DefaultSourceKind
 }
 
+// resolvedSyncRef returns the FluxInstance spec.sync.ref that selects the same
+// revision the gotk source would. flux-operator renders sync.ref as the
+// source's ref.tag for an OCIRepository and as ref.name — a full Git
+// reference such as refs/heads/main — for a GitRepository, while the gotk path
+// reads SourceRef as an OCI tag (with [DefaultSourceRef] for an empty one) or a
+// Git branch. Passing SourceRef through verbatim therefore emitted an empty
+// OCI tag where gotk uses DefaultSourceRef, and a bare branch name where Flux
+// needs a full reference.
+//
+// A Git SourceRef that already starts with refs/ is kept, so tags and other
+// references stay reachable. An empty Git SourceRef stays empty, as it leaves
+// the gotk GitRepository's reference unset.
+func resolvedSyncRef(config *stack.BootstrapConfig) string {
+	ref := config.SourceRef
+	if resolvedSourceKind(config) == "GitRepository" {
+		if ref == "" || strings.HasPrefix(ref, "refs/") {
+			return ref
+		}
+		return "refs/heads/" + ref
+	}
+	if ref == "" {
+		return DefaultSourceRef
+	}
+	return ref
+}
+
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
 func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
 	kust := &kustv1.Kustomization{
@@ -370,7 +397,7 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		spec.Sync = &fluxv1.Sync{
 			Kind:     resolvedSourceKind(config),
 			URL:      config.SourceURL,
-			Ref:      config.SourceRef,
+			Ref:      resolvedSyncRef(config),
 			Path:     path,
 			Interval: &metav1.Duration{Duration: bg.DefaultInterval},
 		}
