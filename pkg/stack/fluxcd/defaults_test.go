@@ -509,3 +509,70 @@ func TestGotkBootstrapWithoutASourceURLEmitsNoSource(t *testing.T) {
 		t.Error("expected the bootstrap Kustomization to still be emitted")
 	}
 }
+
+// TestFluxInstanceSyncRefMatchesGotkSource is a differential: one
+// BootstrapConfig must select the same revision on both bootstrap paths. The
+// oracle is the gotk source generateSource already emits — a GitRepository
+// branch, or an OCIRepository tag with DefaultSourceRef applied — against the
+// FluxInstance sync ref, which flux-operator renders as the source's
+// ref.name (Git, a full reference) or ref.tag (OCI).
+func TestFluxInstanceSyncRefMatchesGotkSource(t *testing.T) {
+	for name, cfg := range map[string]stack.BootstrapConfig{
+		"oci explicit tag": {SourceKind: "OCIRepository", SourceURL: "oci://example.test/repo", SourceRef: "v1.2.3"},
+		"oci empty ref":    {SourceKind: "OCIRepository", SourceURL: "oci://example.test/repo"},
+		"git branch":       {SourceKind: "GitRepository", SourceURL: "https://example.test/repo.git", SourceRef: "main"},
+		"git empty ref":    {SourceKind: "GitRepository", SourceURL: "https://example.test/repo.git"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bg := NewBootstrapGenerator()
+			node := &stack.Node{Name: "prod"}
+			src, err := bg.generateSource(&cfg, node)
+			if err != nil {
+				t.Fatalf("generateSource() error = %v", err)
+			}
+			fi, err := bg.GenerateFluxInstance(&cfg, node)
+			if err != nil {
+				t.Fatalf("GenerateFluxInstance() error = %v", err)
+			}
+			if fi.Spec.Sync == nil {
+				t.Fatal("expected a sync block for a config with SourceURL")
+			}
+			var want string
+			switch s := src.(type) {
+			case *sourcev1.OCIRepository:
+				if s.Spec.Reference == nil {
+					t.Fatal("gotk OCIRepository has no reference")
+				}
+				want = s.Spec.Reference.Tag
+			case *sourcev1.GitRepository:
+				if s.Spec.Reference != nil {
+					want = "refs/heads/" + s.Spec.Reference.Branch
+				}
+			default:
+				t.Fatalf("unexpected gotk source type %T", src)
+			}
+			if fi.Spec.Sync.Ref != want {
+				t.Errorf("Sync.Ref = %q, want %q (the revision the gotk source selects)", fi.Spec.Sync.Ref, want)
+			}
+		})
+	}
+}
+
+// TestFluxInstanceSyncRefKeepsAFullGitRef: a SourceRef that is already a full
+// Git reference passes through untouched, so tags and other refs stay
+// reachable in flux-operator mode.
+func TestFluxInstanceSyncRefKeepsAFullGitRef(t *testing.T) {
+	for _, ref := range []string{"refs/heads/release", "refs/tags/v1.0.0"} {
+		fi, err := NewBootstrapGenerator().GenerateFluxInstance(&stack.BootstrapConfig{
+			SourceKind: "GitRepository",
+			SourceURL:  "https://example.test/repo.git",
+			SourceRef:  ref,
+		}, nil)
+		if err != nil {
+			t.Fatalf("GenerateFluxInstance(%q) error = %v", ref, err)
+		}
+		if fi.Spec.Sync == nil || fi.Spec.Sync.Ref != ref {
+			t.Errorf("Sync = %+v, want Ref %q unchanged", fi.Spec.Sync, ref)
+		}
+	}
+}

@@ -231,8 +231,9 @@ func TestFluxOperatorSourceKindGitRepository(t *testing.T) {
 	if fi.Spec.Sync.URL != "https://github.com/example/fleet.git" {
 		t.Errorf("Sync.URL = %q, want %q", fi.Spec.Sync.URL, "https://github.com/example/fleet.git")
 	}
-	if fi.Spec.Sync.Ref != "main" {
-		t.Errorf("Sync.Ref = %q, want %q", fi.Spec.Sync.Ref, "main")
+	// flux-operator renders a Git sync ref as ref.name, a full reference.
+	if fi.Spec.Sync.Ref != "refs/heads/main" {
+		t.Errorf("Sync.Ref = %q, want %q", fi.Spec.Sync.Ref, "refs/heads/main")
 	}
 }
 
@@ -538,8 +539,8 @@ func TestGenerateFluxInstanceSyncFromSourceURL(t *testing.T) {
 	if fi.Spec.Sync.URL != "https://github.com/example/fleet.git" {
 		t.Errorf("Sync.URL = %q, want %q", fi.Spec.Sync.URL, "https://github.com/example/fleet.git")
 	}
-	if fi.Spec.Sync.Ref != "main" {
-		t.Errorf("Sync.Ref = %q, want %q", fi.Spec.Sync.Ref, "main")
+	if fi.Spec.Sync.Ref != "refs/heads/main" {
+		t.Errorf("Sync.Ref = %q, want %q", fi.Spec.Sync.Ref, "refs/heads/main")
 	}
 	if fi.Spec.Sync.Path != "./production" {
 		t.Errorf("Sync.Path = %q, want %q", fi.Spec.Sync.Path, "./production")

@@ -96,7 +96,7 @@ for the identifier to find every place its value can reach emitted YAML.
 | `DefaultSourceKind` | `OCIRepository` | `BootstrapConfig.SourceKind` does not name `GitRepository`, the empty string included | setting `BootstrapConfig.SourceKind` |
 | `DefaultBootstrapPathRoot` | `manifests` | building the bootstrap Kustomization's `spec.path` | not overrideable; the root node's name is joined onto it |
 | `DefaultFluxDirName` | `flux-system` | a separate Flux layout needs a directory | not overrideable |
-| `DefaultSourceRef` | `latest` | an OCI source has no `SourceRef` | setting `BootstrapConfig.SourceRef` |
+| `DefaultSourceRef` | `latest` | an OCI source, or an OCI `FluxInstance` sync, has no `SourceRef` | setting `BootstrapConfig.SourceRef` |
 | `DefaultSyncPath` | `./` | the root node has no name | not overrideable; it is the prefix a sync path is built from |
 
 Four of these — `DefaultInterval`, `DefaultNamespace`, `DefaultMode` and `DefaultBootstrapName` —
@@ -172,6 +172,17 @@ sync block — and they used to decide it separately, with the `sourceRef` testi
 `OCIRepository` while the other two tested for `GitRepository`. The three agreed only when
 `SourceKind` named a kind exactly; an empty or unrecognised `SourceKind` emitted an
 `OCIRepository` under a `sourceRef` naming a `GitRepository` that was never created.
+
+### One resolved source ref, on both bootstrap paths
+
+`BootstrapConfig.SourceRef` selects the same revision in both modes. The gotk source reads it as an
+OCI tag, falling back to `DefaultSourceRef`, or as a Git branch. flux-operator renders the
+`FluxInstance`'s `spec.sync.ref` as the source's `ref.tag` for OCI and as `ref.name` for Git, and
+`ref.name` takes a full Git reference. `resolvedSyncRef` bridges the two: an empty OCI ref becomes
+`DefaultSourceRef`, and a Git branch name becomes `refs/heads/<name>`. A Git ref that already
+starts with `refs/` — a tag, say — passes through unchanged, and an empty Git ref stays empty.
+Before this, `spec.sync.ref` was `SourceRef` verbatim: an empty OCI tag where the gotk source used
+`latest`, and a bare branch name where Flux needs a full reference.
 
 ### `prune` and `wait` are inputs, not policy
 

@@ -89,8 +89,9 @@ const (
 	DefaultSourceKind = "OCIRepository"
 
 	// DefaultSourceRef is the OCI tag used when BootstrapConfig.SourceRef is
-	// empty. It has no GitRepository equivalent: an empty SourceRef leaves the
-	// GitRepository reference unset rather than guessing a branch.
+	// empty, by both the gotk OCIRepository and the FluxInstance sync
+	// ([resolvedSyncRef]). It has no GitRepository equivalent: an empty
+	// SourceRef leaves the Git reference unset rather than guessing a branch.
 	DefaultSourceRef = "latest"
 
 	// DefaultSyncPath is the path a FluxInstance sync block uses when the root
