@@ -175,14 +175,17 @@ sync block — and they used to decide it separately, with the `sourceRef` testi
 
 ### One resolved source ref, on both bootstrap paths
 
-`BootstrapConfig.SourceRef` selects the same revision in both modes. The gotk source reads it as an
-OCI tag, falling back to `DefaultSourceRef`, or as a Git branch. flux-operator renders the
-`FluxInstance`'s `spec.sync.ref` as the source's `ref.tag` for OCI and as `ref.name` for Git, and
-`ref.name` takes a full Git reference. `resolvedSyncRef` bridges the two: an empty OCI ref becomes
-`DefaultSourceRef`, and a Git branch name becomes `refs/heads/<name>`. A Git ref that already
-starts with `refs/` — a tag, say — passes through unchanged, and an empty Git ref stays empty.
-Before this, `spec.sync.ref` was `SourceRef` verbatim: an empty OCI tag where the gotk source used
-`latest`, and a bare branch name where Flux needs a full reference.
+For an OCI tag, an empty ref or a bare Git branch name, `BootstrapConfig.SourceRef` selects the
+same revision in both modes. The gotk source reads it as an OCI tag, falling back to
+`DefaultSourceRef`, or as a Git branch. flux-operator renders the `FluxInstance`'s
+`spec.sync.ref` as the source's `ref.tag` for OCI and as `ref.name` for Git, and `ref.name` takes
+a full Git reference. `resolvedSyncRef` bridges the two: an empty OCI ref becomes
+`DefaultSourceRef`, a Git branch name becomes `refs/heads/<name>`, and an empty Git ref stays
+empty. A Git ref that already starts with `refs/` — a tag, say — passes through unchanged in
+flux-operator mode only: the gotk source still puts any Git `SourceRef` into `ref.branch`, so
+there a full reference is not equivalent. Before this, `spec.sync.ref` was `SourceRef` verbatim:
+an empty OCI tag where the gotk source used `latest`, and a bare branch name where Flux needs a
+full reference.
 
 ### `prune` and `wait` are inputs, not policy
 
