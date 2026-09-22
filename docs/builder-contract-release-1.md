@@ -206,7 +206,7 @@ and the difference is not a judgement call. **Some labels sit on a surface the A
 defines a selector for *that kind*, and some do not.** Pod template labels do: a Service routes
 *"traffic to pods with label keys and values matching this selector"*
 (`core/v1/types.go:6275-6276`), a NetworkPolicy `podSelector` selects pods in the policy's own
-namespace (`networking/v1/types.go:203-205`) and a PodMonitor selects pods to scrape
+namespace (`networking/v1/types.go:62-64`) and a PodMonitor selects pods to scrape
 (`podmonitor_types.go:98`) — which is why losing them is **silent** rather than cosmetic.
 Namespace labels do too — *"namespaceSelector selects namespaces using cluster-scoped
 labels"* (`networking/v1/types.go:209-210`) — so a Namespace that quietly dropped
@@ -556,7 +556,8 @@ API server's own default for a Pod. Four of the five slices (`InitContainers`,
 never rendered, but `Containers` does not: `PodSpec.Containers` is required with
 no `omitempty` (`k8s.io/api/core/v1/types.go:4393`), so an empty slice
 serialises as `containers: []` where nil serialises as `containers: null`. To
-keep the old value exactly:
+keep the old value (all but `restartPolicy: Always`, which the old constructor
+also wrote and which is the server-side default, so the Pod behaves the same):
 
 ```go
 &corev1.PodSpec{
@@ -608,7 +609,7 @@ if storageClass != "" {
 
 `CreateIngressRule` also built the nested `HTTP` value, with `Paths` initialised
 to an empty slice, so a bare `&netv1.IngressRule{Host: host}` differs in three
-ways: it serialises without the `http: {}` key; a caller that writes
+ways: it serialises without the `http: {paths: []}` value; a caller that writes
 `rule.IngressRuleValue.HTTP.Paths` directly dereferences a nil pointer; and
 `HTTPIngressRuleValue.Paths` is required with no `omitempty`
 (`k8s.io/api/networking/v1/types.go:452`), so the old value serialises
@@ -1246,12 +1247,14 @@ nil-initialised `Spec.Trigger` and then wrote one of its fields, leaving the
 sibling trigger field standing — their doc comments claimed to replace the whole
 trigger and did not.
 
-The two mover setters were the substantive removal. Each cleared all six mover
-arms and then set one, a verbatim duplicate of the type switch in
+The two mover setters were the substantive removal. Each cleared every mover
+arm of its kind and then set one — six on a source, five on a destination,
+which has no Syncthing mover — a verbatim duplicate of the type switch in
 `ReplicationSource` / `ReplicationDestination`. A sealed-union discriminator is
 a multi-field write by nature, so it belongs where the invariant is already
-owned — the constructor — not behind a `Set<Field>` name. Every arm of that
-switch, typed-nil cases included, is covered by the constructor's own tests.
+owned — the constructor — not behind a `Set<Field>` name. The constructor's own
+tests exercise that switch, including a typed-nil mover for three of its eleven
+arms (`pkg/kubernetes/volsync/create_test.go`).
 
 `AddSyncthingPeer` stays: appending to `cfg.Peers` is class (a). Its nil
 handling is a behaviour break in its own right:
@@ -1371,8 +1374,12 @@ With these gone the exclusion list is empty: every exported `Set*`/`Add*` under
 
 ## Flux workflow defaults, declared by the defaults PR
 
-`pkg/kubernetes` injects nothing at all once the constructors are identity-only
-and the sub-type constructors are gone — the two sections above list all of it.
+Once the constructors are identity-only and the nine sub-type constructors above
+are gone, `pkg/kubernetes` injects nothing through a constructor except in the
+hand-written sub-type helpers that survive this release — `CreateResourceRequirements`
+still initialises empty `Requests`/`Limits` maps, for one (see
+[Sub-type constructors](#sub-type-constructors-9)). The two sections above list
+everything that was removed.
 `pkg/stack/fluxcd` is a different case. It is a workflow layer above the
 builders and may legitimately hold opinions, so most of its **twenty-six**
 injected values are not deleted:
