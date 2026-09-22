@@ -42,6 +42,7 @@ The normative contract is `pkg/kubernetes/README.md`; the procedure for adding a
 Compare the whole object, not a few of its fields — "identity and nothing else" is a claim about
 everything the constructor did not write:
 
+<!-- doc-api-refs:ignore-start CreateNewKind is a placeholder for the kind being added -->
 ```go
 func TestCreateNewKind(t *testing.T) {
     got := CreateNewKind("test", "default")
@@ -57,9 +58,10 @@ func TestCreateNewKind(t *testing.T) {
     }
 }
 ```
+<!-- doc-api-refs:ignore-end -->
 
 For a **cluster-scoped** kind the generator emits a one-argument wrapper, so the call is
-`CreateNewKind("test")` and the `want.SetNamespace` line goes: a namespace on a cluster-scoped
+`CreateNewKind("test")` <!-- doc-api-refs:ignore placeholder kind, as above --> and the `want.SetNamespace` line goes: a namespace on a cluster-scoped
 object then fails the same comparison, which is the point of comparing the whole object.
 
 `pkg/kubernetes/identity_test.go` already asserts this for every registered kind.

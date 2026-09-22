@@ -131,6 +131,9 @@ jobs:
             - 'docs/**'
             - '**.md'
             - 'pkg/**'
+            # check-doc-api-refs (docs-build) reads the comments of examples/
+            # Go files as pages; an example-only change must still run it.
+            - 'examples/**'
             - 'scripts/**'
             - '.github/workflows/ci.yml'
 

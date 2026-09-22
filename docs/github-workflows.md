@@ -167,19 +167,25 @@ temporary branch — the merged result — before the PR is allowed to land.
   one proves the pages describe the API that shipped. The page set comes from `site/docs-map.yaml`
   (so it needs `yq`, installed earlier in the same job) plus the repository-root Markdown — every
   `*.md` there, not just `README.md`, since `AGENTS.md` carries worked examples that agents follow
-  — and the `docs/`, `examples/` and `site/content/` trees plus every Markdown file under `pkg/`,
+  — `.claude/CLAUDE.md` (and any other `*.md` directly in `.claude/` except `*.local.md`), which
+  every agent loads before editing, and the `docs/`, `examples/` and `site/content/` trees plus
+  every Markdown file under `pkg/`,
   again not just the READMEs: `pkg/stack/DESIGN.md` describes the shipped design and
   `pkg/stack/STATUS.md` says in its own first line that it reflects current implementation state, so
   a page mounted from a new directory cannot escape the set and neither can one that sits beside the
-  code without being mounted at all. The public Go files under `pkg/` are in the set too — pkg.go.dev publishes their doc
-  comments, so a stale name in one is as visible as a stale name on the site — and only their
-  comment lines are read, since code calling a removed function does not compile. A reference
+  code without being mounted at all. The public Go files under `pkg/` and `examples/` are in the
+  set too — pkg.go.dev publishes the former's doc comments, and an example's instructional comment
+  sits beside the call it describes — and only their comment lines are read, since code calling a
+  removed function does not compile. That includes suppression markers: marker text in Go code (a
+  string literal) is inert. Every `doc-api-refs` marker on a line is validated before any is
+  honoured, so a malformed one cannot hide behind a valid neighbour, and a marker whose body holds
+  another `<!--` is an error. A reference
   written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the
   package that selector names rather than anywhere in the tree, so a helper that moves or is
   removed from one package is not answered by a same-named declaration in another; a reference
   written without one still resolves tree-wide, because an import alias and a variable receiver are
-  spelled alike. The generic constructor is recognised in its qualified `kubernetes.Create[T]`
-  form. Dated records under `docs/history/` and `docs/reviews/`, the generated `CHANGELOG.md` and
+  spelled alike. The generic constructor is recognised both qualified (`kubernetes.Create[T]`)
+  and bare (`Create[T]`); a bare `Set[...]`/`Add[...]` is not, being type syntax elsewhere. Dated records under `docs/history/` and `docs/reviews/`, the generated `CHANGELOG.md` and
   the two proposal documents are exempt by name in the script, each with its reason. The release-1
   migration ledger is not exempt: it names removed functions and their live replacements on the
   same table row, so excluding it would stop checking the replacements — the names a caller
@@ -1117,9 +1123,11 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
   and Renovate invokes the same script after Go module bumps. `pkg/**/testdata/**` is there for
   the same reason: Go testdata is test input, and `pkg/**` alone matches only the `docs` filter,
   so a PR editing just the admission exclusion list would skip the tests that check it.
-- `docs:` filter — triggers the `docs-build` job (`doc-gate` runs on every PR regardless). Includes `site/**`, `docs/**`, `*.md`,
-  `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
-  the docs build).
+- `docs:` filter — triggers the `docs-build` job (`doc-gate` runs on every PR regardless). Includes
+  `site/**`, `docs/**`, `**.md` (every Markdown file, `.claude/CLAUDE.md` included), `pkg/**`,
+  `examples/**` (the builder-reference check reads the comments of `examples/` Go files),
+  `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect the
+  docs build).
 
 ### Branch Patterns
 
