@@ -39,8 +39,8 @@ description = "Quick pre-commit check"
 run = "make check"
 
 [tasks.verify]
-description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs, generated builders)"
-depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs", "versions:test", "builders:check"]
+description = "Run all checks (tidy, lint, test, tool pins, govulncheck docs, test budget, generated builders)"
+depends = ["tidy", "lint", "test", "check-tool-versions", "check-govulncheck-docs", "check-test-timeout", "versions:test", "builders:check"]
 
 [tasks.check-tool-versions]
 description = "Verify golangci-lint pin parity (Makefile/ci.yml/docs) against mise.toml"
@@ -53,6 +53,10 @@ run = "sh scripts/sync-tool-versions.sh"
 [tasks.check-govulncheck-docs]
 description = "Verify govulncheck version parity (docs/github-workflows.md) against ci.yml"
 run = "sh scripts/check-govulncheck-docs.sh"
+
+[tasks.check-test-timeout]
+description = "Verify the test budget (Makefile TEST_TIMEOUT) matches ci.yml's go test -timeout"
+run = "sh scripts/check-test-timeout.sh"
 
 [tasks.sync-govulncheck-docs]
 description = "Sync govulncheck doc mentions (docs/github-workflows.md) from ci.yml"

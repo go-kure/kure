@@ -25,6 +25,8 @@ COVERAGE_DIR := coverage
 # Test configuration
 # go test -timeout is per test binary, so this must cover the slowest package,
 # not a typical one. 15m matches the budget ci.yml already grants the same suite.
+# CI's test job carries the same value as a literal (`-timeout` in .github/workflows/ci.yml);
+# scripts/check-test-timeout.sh (make check-test-timeout, run by CI and mise verify) fails if they differ.
 TEST_TIMEOUT ?= 15m
 TEST_PACKAGES := ./...
 COVERAGE_THRESHOLD := 80
@@ -293,6 +295,10 @@ sync-tool-versions: ## Sync golangci-lint pins (Makefile/ci.yml/docs) from mise.
 check-govulncheck-docs: ## Verify govulncheck version parity (docs/github-workflows.md) against ci.yml
 	sh scripts/check-govulncheck-docs.sh
 
+.PHONY: check-test-timeout
+check-test-timeout: ## Verify the test budget (Makefile TEST_TIMEOUT) matches ci.yml's go test -timeout
+	sh scripts/check-test-timeout.sh
+
 .PHONY: sync-govulncheck-docs
 sync-govulncheck-docs: ## Sync govulncheck doc mentions (docs/github-workflows.md) from ci.yml
 	sh scripts/sync-govulncheck-docs.sh
@@ -343,13 +349,13 @@ dev: tools ## Set up development environment (mise, deps, git hooks)
 # =============================================================================
 
 .PHONY: check
-check: lint vet test-short check-tool-versions check-govulncheck-docs check-builders ## Quick code quality check (lint, vet, short tests, tool pins, generated builders)
+check: lint vet test-short check-tool-versions check-govulncheck-docs check-test-timeout check-builders ## Quick code quality check (lint, vet, short tests, tool pins, test budget, generated builders)
 
 .PHONY: precommit
-precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs versions-test check-builders ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, versions guard, generated builders)
+precommit: fmt tidy lint test check-tool-versions check-govulncheck-docs check-test-timeout versions-test check-builders ## Run fast pre-commit checks (fmt, tidy, lint, test, tool pins, test budget, versions guard, generated builders)
 
 .PHONY: ci
-ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs versions-test check-builders ## Run comprehensive CI pipeline
+ci: deps fmt tidy lint vet test test-race test-coverage test-integration vuln check-tool-versions check-govulncheck-docs check-test-timeout versions-test check-builders ## Run comprehensive CI pipeline
 
 # =============================================================================
 # Cleanup

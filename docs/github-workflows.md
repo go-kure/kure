@@ -942,14 +942,34 @@ There is **one** Go test job, and it runs `go test` inline rather than through a
 
 | Job | Command | Uses Makefile? |
 |-----|---------|----------------|
-| `test` | `go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 15m ./...`, tee'd to a `test-log` artifact (`ci.yml:534`) | `make deps` only |
+| `test` | `go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 15m ./...`, tee'd to a `test-log` artifact (`ci.yml:592`) | `make deps` only |
 | `coverage-check` | no tests; downloads the `coverage` artifact and thresholds it with `go tool cover -func` | - |
 
 That single command produces the race check and the coverage profile together, so there is no
 separate race or coverage test run. **Nothing under `.github/workflows/` invokes `make test`,
 `make test-race`, `make test-coverage`, `make vuln`, `make precommit` or `make ci`** — the `make`
 targets CI does use are `deps`, `fmt`, `tidy`, `lint`, `vet`, `outdated`, `check-go-version`,
-`check-tool-versions` and `check-govulncheck-docs`.
+`check-tool-versions`, `check-govulncheck-docs` and `check-test-timeout`.
+
+The `-timeout 15m` on that command and `TEST_TIMEOUT ?= 15m` in the `Makefile` are the same budget
+written twice; `check-test-timeout` (run by `validate` and by `mise run verify`) fails, naming both
+lines, if they differ. On the Makefile side it reads the timeout from the one `go test` command
+`make -n test` would run (a second one chained on the recipe line fails the check), so a `define`, include, `override` or target-specific assignment cannot change the
+budget unseen; on the `ci.yml` side it reads, with `yq`, the `run:` of the `test` job's "Run tests"
+step. Shell is too rich to parse from text, so that step is held to a canonical form: no `\` line
+continuations, `go test` exactly once (chained commands included), every other line a plain
+`mkdir …` or `set -euxo pipefail` (so no heredoc, quote, branch, `exit` or `PATH` change can keep
+the `go test` line from running), nothing after that command but `2>&1 | tee <file>`, and the
+command — up to its first `;`, `&` or `|` (a `2>&1` does not end it) — made of plain words only (letters, digits and
+`. _ / = , : + @ % -`: no quote, escape, expansion or glob), with every flag either a known boolean
+or written `-flag=value`, and exactly one timeout flag (`-timeout`, `--timeout` or `-test.timeout`,
+`=value` or the value as the next word) placed before the package patterns, where `go test` still
+reads it as a flag. The command `make -n test` would run is read with the same rules, and its
+recipe may not use a `\` continuation, chain anything after that command (`;`, `&`, `|`), nor
+run anything besides it but plain `echo "..."`, `mkdir` or `set -euxo pipefail` lines. Anything
+outside that form fails rather than being guessed at, and any other timeout spelling anywhere in
+the file counts as a possible override. It needs `make` and `yq`, so `validate` runs it after
+installing `yq`.
 
 ## Test Targets in Makefile
 
@@ -972,10 +992,10 @@ Both are local aggregate targets. **Neither is what CI runs** — the pipeline c
 targets and its own inline commands, so `make ci` passing locally is not the pipeline passing, and
 the pipeline passing is not `make ci` passing.
 
-| Target | Tasks (`Makefile:349`, `:352`) | Use Case |
+| Target | Tasks (`Makefile:355`, `:358`) | Use Case |
 |--------|-------|----------|
-| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs, versions-test, check-builders | Local pre-commit gate. Dominated by `test`: `pkg/kubernetes/internal/gen` alone runs ~1 minute |
-| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln, check-tool-versions, check-govulncheck-docs, versions-test, check-builders | Local superset — runs the race, coverage and integration passes `precommit` skips |
+| `precommit` | fmt, tidy, lint, test, check-tool-versions, check-govulncheck-docs, check-test-timeout, versions-test, check-builders | Local pre-commit gate. Dominated by `test`: `pkg/kubernetes/internal/gen` alone runs ~1 minute |
+| `ci` | deps, fmt, tidy, lint, vet, test, test-race, test-coverage, test-integration, vuln, check-tool-versions, check-govulncheck-docs, check-test-timeout, versions-test, check-builders | Local superset — runs the race, coverage and integration passes `precommit` skips |
 
 ---
 
@@ -1113,7 +1133,8 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
   and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
   job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity
   guard. Same reasoning covers `scripts/check-govulncheck-docs.sh` and
-  `scripts/sync-govulncheck-docs.sh` — `check-govulncheck-docs` also runs only in `validate`.
+  `scripts/sync-govulncheck-docs.sh` — `check-govulncheck-docs` also runs only in `validate` —
+  and `scripts/check-test-timeout.sh` (`check-test-timeout`, also `validate`-only).
   Same reasoning covers `scripts/sync-go-version.sh` too — `check-go-version` (Go-version parity
   between `mise.toml` and `go.mod`) also runs only in `validate`. And `scripts/gen-builders.sh`:
   the generated-builders check (`scripts/gen-builders.sh check`) also runs only in `validate`,

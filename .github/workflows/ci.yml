@@ -115,6 +115,10 @@ jobs:
             # these two scripts plus ci.yml/docs/github-workflows.md, both already listed above.
             - 'scripts/check-govulncheck-docs.sh'
             - 'scripts/sync-govulncheck-docs.sh'
+            # check-test-timeout (test budget parity, Makefile vs ci.yml) reads
+            # both, already listed above; the script itself must not be able to
+            # change without the job that runs it.
+            - 'scripts/check-test-timeout.sh'
             # scripts/gen-builders.sh is the wrapper `validate` runs as
             # check-builders and Renovate runs after every Go module bump; a
             # PR touching only the script must not skip the job that
@@ -235,6 +239,10 @@ jobs:
     - name: Add yq to PATH
       if: steps.yq-cache.outputs.cache-hit == 'true'
       run: echo "$HOME/bin" >> $GITHUB_PATH
+
+    # After yq is installed: check-test-timeout reads the test job's "Run tests" step with it.
+    - name: Check test budget parity
+      run: make check-test-timeout
 
     # sync-versions.sh check's MVS-floor guard (validate_mvs_floors) needs a populated
     # module cache to read a floor module's own go.mod -- it degrades to a warning
@@ -580,6 +588,7 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p coverage
+        # The -timeout must equal TEST_TIMEOUT in the Makefile: make check-test-timeout (validate job) fails otherwise.
         go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic -timeout 15m ./... 2>&1 | tee /tmp/gotest.log
 
     - name: Save Go build cache
