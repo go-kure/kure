@@ -46,7 +46,9 @@ unrelated push, so the acknowledgement path existed but nothing re-evaluated it.
 
 **The `branches:` filter is a base-branch filter, and a stacked PR gets no CI from it.** A PR whose
 base is another feature branch rather than `main` or `develop` does not match, so none of this
-workflow's jobs run on it — only `claude` and `pr-review`, which declare no branch filter, report.
+workflow's jobs run on it — only `pr-review`, which declares no branch filter, reports. (`claude.yml`
+also declares no branch filter, but since go-kure/.github#223 it no longer triggers on `pull_request`
+at all, so it reports nothing on any PR unless someone mentions `@claude`.)
 The absence is structural, not a pass: an empty check list on such a PR means the suite never ran.
 Retargeting alone does **not** start it. When the base merges, GitHub retargets the PR and sends
 `edited` (with `changes.base`), which is not in this workflow's `types:` list — so the PR now
