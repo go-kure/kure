@@ -1586,9 +1586,8 @@ A caller that prefers upstream's whole-of-resources health assessment sets
 `Wait` explicitly; that gates on the child Kustomizations too, and then the
 `healthChecks` entries are the ones upstream ignores.
 
-`stack.Bundle.Validate` still rejects an explicit `Wait=false` on a bundle with
-`Children` (`pkg/stack/bundle.go:196-199`). With the force gone that rejects a
-state whose emitted YAML is identical to the accepted unset one, since `Wait`
-carries `omitempty`. Which way to resolve the asymmetry is a semantic call about
-what an umbrella promises, not a mechanical fix, so it is tracked separately in
-issue go-kure/kure#760 rather than settled here.
+`stack.Bundle.Validate` used to reject an explicit `Wait=false` on a bundle with
+`Children`. With the force gone that rejected a state whose emitted YAML is
+identical to the accepted unset one, since `Wait` carries `omitempty`. The check
+has since been dropped (issue go-kure/kure#760): an umbrella with `Wait=false`
+validates, exactly as an unset one does.

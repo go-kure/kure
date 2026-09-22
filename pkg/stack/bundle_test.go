@@ -536,11 +536,14 @@ func TestBundleValidateUmbrellaChildren(t *testing.T) {
 		}
 	})
 
-	t.Run("umbrella with Wait=false rejected", func(t *testing.T) {
+	t.Run("umbrella with Wait=false validates", func(t *testing.T) {
+		// Wait=false and an unset Wait emit the same YAML, so rejecting one
+		// while accepting the other would be a rule about spelling
+		// (go-kure/kure#760).
 		child := &Bundle{Name: "c"}
 		parent := &Bundle{Name: "p", Wait: falsePtr(), Children: []*Bundle{child}}
-		if err := parent.Validate(); err == nil {
-			t.Fatal("expected Wait=false + Children to fail")
+		if err := parent.Validate(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
