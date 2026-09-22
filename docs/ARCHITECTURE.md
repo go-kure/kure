@@ -1228,16 +1228,18 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 | Layer | What it checks | Where |
 |---|---|---|
 | Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
-| Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node` | `stack.ValidateCluster`, `Bundle.Validate` |
+| Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree | `stack.ValidateCluster`, `Bundle.Validate` |
 | Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
 | The cluster | Schema, admission, CRD structural rules | apply time |
 
-The domain-model row is about bundles, and deliberately does not claim more. `ValidateCluster`
-walks `Node.Children` to find the attached bundles and to scan for a `PackageRef`, but it checks
-nothing about the nodes themselves: a node name may be empty, a `ParentPath` may resolve to
-nothing, and the node walk carries no visited set, so a `Node` graph containing a cycle recurses
-until the stack runs out rather than returning an error. A caller that builds a `Node` tree by hand
-is responsible for its shape; the builders in `pkg/stack` do not produce a cyclic one.
+The domain-model row is about bundles, plus one shape rule for nodes. `ValidateCluster` walks
+`Node.Children` once to find the attached bundles and to scan for a `PackageRef`, and rejects a
+`Node` graph containing a cycle, naming the node where it closes. It checks nothing else about the
+nodes themselves: a node name may be empty, a `ParentPath` may resolve to nothing, and a node
+reachable from two parents is not rejected, although it is not a supported shape either. A caller
+that builds a `Node` tree by hand is responsible for that part of its shape. The check runs where
+`ValidateCluster` does; generator entry points that take a `Node` directly, such as
+`GenerateFromNode`, do not call it.
 
 ```go
 // Validation is a call the caller makes, not a side effect of construction.

@@ -94,6 +94,8 @@ auto-generated and merged with any user-supplied entries.
 **Validation:** `ValidateCluster()` runs automatically in all layout entry
 points (`WalkCluster`, `WalkClusterByPackage`) and rejects invalid umbrella
 configurations (e.g., shared ownership, children that are also node bundles).
+It also rejects a `Node` tree containing a cycle, naming the node where the
+cycle closes.
 
 ### Application
 

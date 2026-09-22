@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -117,5 +118,56 @@ func TestValidateCluster_InvalidBundleBubblesUp(t *testing.T) {
 	c := &Cluster{Name: "c", Node: &Node{Name: "n", Bundle: root}}
 	if err := ValidateCluster(c); err == nil {
 		t.Fatal("expected Wait=false umbrella to fail")
+	}
+}
+
+func TestValidateCluster_NodeCycle(t *testing.T) {
+	// A Node reached again from its own descendant is a cycle: ValidateCluster
+	// must return an error naming the node, not recurse until the stack runs out.
+	root := &Node{Name: "root"}
+	mid := &Node{Name: "mid"}
+	root.Children = []*Node{mid}
+	mid.Children = []*Node{root}
+	c := &Cluster{Name: "c", Node: root}
+	err := ValidateCluster(c)
+	if err == nil {
+		t.Fatal("expected error for cyclic Node graph")
+	}
+	if !strings.Contains(err.Error(), `node cycle detected at "root"`) {
+		t.Errorf("error %q does not name the node where the cycle closes", err)
+	}
+}
+
+func TestValidateCluster_NodeSelfCycle(t *testing.T) {
+	n := &Node{Name: "self"}
+	n.Children = []*Node{n}
+	if err := ValidateCluster(&Cluster{Name: "c", Node: n}); err == nil {
+		t.Fatal("expected error for a Node that is its own child")
+	}
+}
+
+func TestValidateCluster_NodeCycleWithPackageRefScan(t *testing.T) {
+	// The PackageRef scan runs only when an umbrella exists; a cycle must be
+	// rejected before it, not recursed by it.
+	umbrella := &Bundle{Name: "u", Children: []*Bundle{{Name: "child"}}}
+	root := &Node{Name: "root", Bundle: umbrella}
+	leaf := &Node{Name: "leaf"}
+	root.Children = []*Node{leaf}
+	leaf.Children = []*Node{root}
+	if err := ValidateCluster(&Cluster{Name: "c", Node: root}); err == nil {
+		t.Fatal("expected error for cyclic Node graph with an umbrella present")
+	}
+}
+
+func TestValidateCluster_SharedNodeIsNotACycle(t *testing.T) {
+	// A node reachable from two parents is not a cycle, so the cycle check
+	// must not report one. (Whether such a tree is supported is a separate
+	// question this check does not answer.)
+	shared := &Node{Name: "shared", Bundle: &Bundle{Name: "b"}}
+	a := &Node{Name: "a", Children: []*Node{shared}}
+	b := &Node{Name: "b-node", Children: []*Node{shared}}
+	root := &Node{Name: "root", Children: []*Node{a, b}}
+	if err := ValidateCluster(&Cluster{Name: "c", Node: root}); err != nil {
+		t.Fatalf("shared node rejected as a cycle: %v", err)
 	}
 }
