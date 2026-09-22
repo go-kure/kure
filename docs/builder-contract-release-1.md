@@ -1415,7 +1415,7 @@ fixed path segments with no override.
 
 | Identifier | Value | Replaces the literal formerly at |
 |---|---|---|
-| `DefaultInterval` | `60 * time.Minute` | `NewResourceGenerator`, `NewBootstrapGenerator` — and retained when a non-empty `Bundle.Interval` fails to parse |
+| `DefaultInterval` | `60 * time.Minute` | `NewResourceGenerator`, `NewBootstrapGenerator`. It was also retained when a non-empty `Bundle.Interval` failed to parse; that is now a validation error (issue go-kure/kure#762) |
 | `DefaultNamespace` | `"flux-system"` | both constructors |
 | `DefaultMode` | `layout.KustomizationExplicit` | `NewResourceGenerator` |
 | `DefaultSourceName` | `"flux-system"` | `generateGitSource`, `generateOCISource` |

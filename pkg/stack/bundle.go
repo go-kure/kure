@@ -3,6 +3,7 @@ package stack
 import (
 	"fmt"
 	"slices"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -38,7 +39,9 @@ type Bundle struct {
 	// it is Ready only when all Children are Ready. Children bundles must be
 	// standalone — they cannot simultaneously be the Bundle of a stack.Node.
 	Children []*Bundle
-	// Interval controls how often Flux reconciles the bundle.
+	// Interval controls how often Flux reconciles the bundle. It must parse as
+	// a Go duration (e.g. "10m"); empty means the generator's default.
+	// Validate rejects any other value.
 	Interval string
 	// SourceRef specifies the source for the bundle.
 	SourceRef *SourceRef
@@ -56,8 +59,10 @@ type Bundle struct {
 	// Wait causes the Kustomization to wait for resources to become ready.
 	Wait *bool
 	// Timeout is the maximum duration to wait for resources to be ready (e.g. "5m").
+	// It must parse as a Go duration; empty leaves the field unset.
 	Timeout string
 	// RetryInterval is the interval between retry attempts for failed reconciliations (e.g. "2m").
+	// It must parse as a Go duration; empty leaves the field unset.
 	RetryInterval string
 	// Force causes Flux to re-apply resources even if there are no detected changes.
 	Force *bool
@@ -183,8 +188,8 @@ func (a *Bundle) Validate() error {
 }
 
 // validateChildren performs recursive umbrella-children validation: cycle
-// detection, nil/self/duplicate/empty-name checks, and DependsOn/Children
-// disjointness. Cycle detection uses a visited pointer set
+// detection, duration syntax, nil/self/duplicate/empty-name checks, and
+// DependsOn/Children disjointness. Cycle detection uses a visited pointer set
 // shared across the whole recursion.
 func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 	if visited[a] {
@@ -192,6 +197,9 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 			fmt.Sprintf("umbrella cycle detected at %q", a.Name), nil)
 	}
 	visited[a] = true
+	if err := a.validateDurations(); err != nil {
+		return err
+	}
 	depNames := make(map[string]bool, len(a.DependsOn))
 	for _, dep := range a.DependsOn {
 		if dep != nil {
@@ -256,6 +264,27 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 		}
 		if err := c.validateChildren(visited); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// validateDurations rejects a non-empty Interval, Timeout or RetryInterval
+// that does not parse as a Go duration. Empty is the declared "unset" state,
+// not a parse failure. It runs from validateChildren, so it covers the bundle
+// and every umbrella descendant.
+func (a *Bundle) validateDurations() error {
+	for _, f := range []struct{ field, value string }{
+		{"interval", a.Interval},
+		{"timeout", a.Timeout},
+		{"retryInterval", a.RetryInterval},
+	} {
+		if f.value == "" {
+			continue
+		}
+		if _, err := time.ParseDuration(f.value); err != nil {
+			return errors.ResourceValidationError("Bundle", a.Name, f.field,
+				fmt.Sprintf("%s %q is not a valid duration: %v", f.field, f.value, err), err)
 		}
 	}
 	return nil

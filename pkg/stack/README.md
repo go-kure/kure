@@ -63,6 +63,13 @@ bundle.NamedDependsOn = []string{"cert-manager"}
 bundle.Interval = "10m"
 ```
 
+`Interval`, `Timeout` and `RetryInterval` take Go duration strings (`"10m"`,
+`"1h30m"`). Empty means the generator's default interval, or, for
+`Timeout`/`RetryInterval`, that the field is omitted so Flux's own defaults
+apply; any other value that does not parse (`"5 minutes"`, `"5min"`, `"5"`)
+is rejected by `Bundle.Validate` and by the Flux generator, never replaced by
+the default.
+
 Bundles also support an **umbrella pattern** via `Bundle.Children`. When a
 bundle has non-empty `Children`, its generated Flux Kustomization automatically
 gets an entry in `spec.healthChecks` for each child,

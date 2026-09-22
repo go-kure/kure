@@ -2,6 +2,7 @@ package stack
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -774,5 +775,50 @@ func TestNewBundle_ValidationError(t *testing.T) {
 	_, err := NewBundle("", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for empty name")
+	}
+}
+
+func TestBundleValidate_Durations(t *testing.T) {
+	// go-kure/kure#762: a non-empty duration that does not parse is a
+	// validation error; empty is the declared default/unset state.
+	for _, field := range []string{"interval", "timeout", "retryInterval"} {
+		for _, tc := range []struct {
+			value   string
+			wantErr bool
+		}{
+			{"", false},
+			{"10m", false},
+			{"1h30m", false},
+			{"5 minutes", true},
+			{"5min", true},
+			{"5", true},
+		} {
+			t.Run(field+"="+tc.value, func(t *testing.T) {
+				b := &Bundle{Name: "b"}
+				switch field {
+				case "interval":
+					b.Interval = tc.value
+				case "timeout":
+					b.Timeout = tc.value
+				case "retryInterval":
+					b.RetryInterval = tc.value
+				}
+				err := b.Validate()
+				if (err != nil) != tc.wantErr {
+					t.Fatalf("Validate() err = %v, wantErr %v", err, tc.wantErr)
+				}
+				if err != nil && !strings.Contains(err.Error(), tc.value) {
+					t.Errorf("error %q does not name the rejected value", err)
+				}
+			})
+		}
+	}
+}
+
+func TestBundleValidate_DurationOnUmbrellaChild(t *testing.T) {
+	child := &Bundle{Name: "c", Interval: "5min"}
+	parent := &Bundle{Name: "p", Children: []*Bundle{child}}
+	if err := parent.Validate(); err == nil {
+		t.Fatal("expected an unparsable interval on an umbrella child to fail")
 	}
 }

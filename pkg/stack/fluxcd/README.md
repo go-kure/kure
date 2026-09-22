@@ -87,7 +87,7 @@ for the identifier to find every place its value can reach emitted YAML.
 
 | Identifier | Value | Applies when | Override by |
 |---|---|---|---|
-| `DefaultInterval` | `60m` | the caller names no interval, or names one that does not parse | assigning `.DefaultInterval` on either generator |
+| `DefaultInterval` | `60m` | the caller names no interval (a non-empty `Bundle.Interval` that does not parse is a validation error, not a fallback) | assigning `.DefaultInterval` on either generator |
 | `DefaultNamespace` | `flux-system` | generated resources need a namespace | assigning `.DefaultNamespace` on either generator |
 | `DefaultMode` | `layout.KustomizationExplicit` | `ResourceGenerator` is constructed — its only site | assigning `ResourceGenerator.Mode` |
 | `DefaultBootstrapName` | `flux-system` | naming the bootstrap Kustomization and the `FluxInstance` | assigning `BootstrapGenerator.BootstrapName` |
