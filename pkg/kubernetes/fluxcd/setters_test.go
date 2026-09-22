@@ -16,8 +16,10 @@ import (
 	"github.com/fluxcd/pkg/apis/kustomize"
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	yamlv3 "gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
@@ -1199,6 +1201,34 @@ func TestSetHelmReleaseValuesFromMap(t *testing.T) {
 	_ = jsonPkg.Unmarshal(hr.Spec.Values.Raw, &got)
 	if got["replicaCount"] != float64(3) {
 		t.Errorf("got %v", got["replicaCount"])
+	}
+}
+
+// TestSetHelmReleaseValuesFromMap_DecodedYAML pins the claim the godoc makes
+// about decoders (go-kure/kure#780): gopkg.in/yaml.v3 decodes .nan/.inf without error into
+// values the helper then panics on, while sigs.k8s.io/yaml refuses them at
+// decode time, so a map it returns always reaches the helper safely.
+func TestSetHelmReleaseValuesFromMap_DecodedYAML(t *testing.T) {
+	for _, doc := range []string{"ratio: .nan", "ratio: .inf", "ratio: -.inf"} {
+		t.Run(doc, func(t *testing.T) {
+			var v3 map[string]any
+			if err := yamlv3.Unmarshal([]byte(doc), &v3); err != nil {
+				t.Fatalf("yaml.v3 unexpectedly refused %q: %v", doc, err)
+			}
+			func() {
+				defer func() {
+					if recover() == nil {
+						t.Errorf("expected a panic for yaml.v3-decoded %q", doc)
+					}
+				}()
+				SetHelmReleaseValuesFromMap(CreateHelmRelease("redis", "apps"), v3)
+			}()
+
+			var sigs map[string]any
+			if err := sigsyaml.Unmarshal([]byte(doc), &sigs); err == nil {
+				t.Errorf("sigs.k8s.io/yaml accepted %q; the godoc says it returns the error at decode time", doc)
+			}
+		})
 	}
 }
 

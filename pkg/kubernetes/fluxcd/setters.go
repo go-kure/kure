@@ -445,9 +445,13 @@ func SetHelmReleaseValues(obj *helmv2.HelmRelease, values *apiextensionsv1.JSON)
 // SetHelmReleaseValuesFromMap marshals values to JSON and sets them on the
 // HelmRelease. A map that does not marshal — a channel, a function, a NaN —
 // is a programming error and panics; a sugar helper returns no error under the
-// builder contract. Values decoded from YAML or JSON always marshal. If yours
-// can hold something that does not, marshal it yourself and pass the result to
-// SetHelmReleaseValues, which takes the already-encoded JSON.
+// builder contract. Decoded YAML is not automatically safe: gopkg.in/yaml.v3
+// decodes the legal scalars .nan and .inf into float64 NaN and +Inf without
+// error, and encoding/json rejects both. sigs.k8s.io/yaml does not have this
+// gap, because it converts through JSON and returns that error at decode time.
+// If your values can hold something that does not marshal, marshal them
+// yourself and pass the result to SetHelmReleaseValues, which takes the
+// already-encoded JSON.
 func SetHelmReleaseValuesFromMap(obj *helmv2.HelmRelease, values map[string]any) {
 	raw, err := json.Marshal(values)
 	if err != nil {
