@@ -84,6 +84,12 @@ ks.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 ks.Spec.Prune = true
 ```
 
+Helm values given as a map go through `fluxcd.SetHelmReleaseValuesFromMap`, which marshals them to
+JSON and panics on a value `encoding/json` refuses. Decoded YAML can carry one: `gopkg.in/yaml.v3`
+decodes `.nan` and `.inf` into a float NaN or infinity without error, while `sigs.k8s.io/yaml`
+returns that error at decode time. Decode with the latter, or marshal the values yourself and pass
+them to `fluxcd.SetHelmReleaseValues`.
+
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.
 
 Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) package provides typed constructors for core resources (Deployment, Service, Ingress, CronJob, NetworkPolicy, HTTPRoute), PSA security context helpers, ResourceRequirements builders, and more. The [Prometheus Builders](/api-reference/prometheus-builders) sub-package covers ServiceMonitor, PodMonitor, and PrometheusRule CRDs.

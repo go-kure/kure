@@ -165,10 +165,12 @@ fluxcd.AddHelmReleaseValuesFrom(hr, helmv2.ValuesReference{
 `SetHelmReleaseValuesFromMap` panics rather than returning an error, because a
 sugar helper cannot return one under the builder contract. Only a value that
 `encoding/json` refuses outright — a channel, a function, a NaN or `+Inf`
-float, a cyclic structure — reaches that panic; ordinary user-supplied YAML or
-JSON decoded into `map[string]any` always marshals. When values come from
-somewhere that could produce such a value, marshal them yourself and hand the
-result to `SetHelmReleaseValues`:
+float, a cyclic structure — reaches that panic. Decoded YAML can carry one:
+`gopkg.in/yaml.v3` decodes the legal YAML scalars `.nan` and `.inf` into a
+`float64` NaN or `+Inf` without error. `sigs.k8s.io/yaml` converts through JSON
+and returns that error at decode time instead, so a map it produced always
+marshals. When values come from a decoder that could produce such a value,
+marshal them yourself and hand the result to `SetHelmReleaseValues`:
 
 ```go
 import "github.com/go-kure/kure/pkg/errors"
