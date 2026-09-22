@@ -167,8 +167,9 @@ spec:
 ```
 
 User-supplied `HealthChecks` on the umbrella bundle are appended AFTER the
-auto entries. Setting `Wait: false` on a bundle that has `Children` is
-rejected at validation time.
+auto entries. `Wait` on an umbrella is the caller's choice like on any other
+bundle: unset and `Wait: false` emit the same `spec`, and the umbrella still
+becomes `Ready` only when every child is, through those health checks.
 
 Umbrella children must be **standalone** — a bundle cannot simultaneously be
 the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.

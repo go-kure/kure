@@ -112,12 +112,11 @@ func TestValidateCluster_UmbrellaWithNilChild(t *testing.T) {
 }
 
 func TestValidateCluster_InvalidBundleBubblesUp(t *testing.T) {
-	// Parent has Wait=false but has Children — invalid per Bundle.Validate.
-	falseVal := false
-	root := &Bundle{Name: "root", Wait: &falseVal, Children: []*Bundle{{Name: "c"}}}
+	// Parent has two children with the same name — invalid per Bundle.Validate.
+	root := &Bundle{Name: "root", Children: []*Bundle{{Name: "c"}, {Name: "c"}}}
 	c := &Cluster{Name: "c", Node: &Node{Name: "n", Bundle: root}}
 	if err := ValidateCluster(c); err == nil {
-		t.Fatal("expected Wait=false umbrella to fail")
+		t.Fatal("expected duplicate umbrella child names to fail")
 	}
 }
 

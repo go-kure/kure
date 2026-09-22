@@ -37,7 +37,6 @@ type Bundle struct {
 	// bundle's HealthChecks. When non-empty, this bundle acts as an umbrella:
 	// it is Ready only when all Children are Ready. Children bundles must be
 	// standalone — they cannot simultaneously be the Bundle of a stack.Node.
-	// Setting Wait=false on a bundle with Children is a validation error.
 	Children []*Bundle
 	// Interval controls how often Flux reconciles the bundle.
 	Interval string
@@ -166,7 +165,7 @@ func NewBundle(name string, resources []*Application, labels map[string]string) 
 
 // Validate performs basic sanity checks on the Bundle. When the bundle has
 // umbrella Children, Validate recursively walks the child subtree checking for
-// cycles, duplicate names, and Wait/DependsOn contradictions.
+// cycles, duplicate names, and DependsOn contradictions.
 func (a *Bundle) Validate() error {
 	if a == nil {
 		return errors.ErrNilBundle
@@ -184,8 +183,8 @@ func (a *Bundle) Validate() error {
 }
 
 // validateChildren performs recursive umbrella-children validation: cycle
-// detection, nil/self/duplicate/empty-name checks, Wait contradictions, and
-// DependsOn/Children disjointness. Cycle detection uses a visited pointer set
+// detection, nil/self/duplicate/empty-name checks, and DependsOn/Children
+// disjointness. Cycle detection uses a visited pointer set
 // shared across the whole recursion.
 func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 	if visited[a] {
@@ -193,10 +192,6 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 			fmt.Sprintf("umbrella cycle detected at %q", a.Name), nil)
 	}
 	visited[a] = true
-	if a.Wait != nil && !*a.Wait && len(a.Children) > 0 {
-		return errors.ResourceValidationError("Bundle", a.Name, "wait",
-			"umbrella bundle (has Children) cannot set Wait=false", nil)
-	}
 	depNames := make(map[string]bool, len(a.DependsOn))
 	for _, dep := range a.DependsOn {
 		if dep != nil {
