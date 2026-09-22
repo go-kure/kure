@@ -466,9 +466,24 @@ kubernetes.SetDeploymentReplicas(dep, 3)
 
 There is no `AddDeploymentContainer`. <!-- doc-api-refs:ignore names a removed helper to say it is gone --> A workload kind's pod template is a
 `corev1.PodSpec`, so the `PodSpec` helpers serve every kind — pass
-`&dep.Spec.Template.Spec` (a CronJob nests one level deeper:
-`&cj.Spec.JobTemplate.Spec.Template.Spec`). `ServiceAccountName` and
+`&dep.Spec.Template.Spec` (a Job uses `&job.Spec.Template.Spec`; a CronJob
+nests one level deeper: `&cj.Spec.JobTemplate.Spec.Template.Spec`). `ServiceAccountName` and
 `NodeSelector` are plain fields on that struct and are assigned directly.
+
+### Job
+
+```go
+job := kubernetes.CreateJob("migrate", "default")
+job.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+kubernetes.AddPodSpecContainer(&job.Spec.Template.Spec,
+	&corev1.Container{Name: "migrate", Image: "busybox:1.36"})
+```
+
+`CreateJob` writes identity only, so `restartPolicy` is yours to set. Leave it
+out and the API server defaults it to `Always`, which it then rejects for a Job
+pod (`restartPolicy: Unsupported value: "Always"`); set `Never` or `OnFailure`.
+The CronJob example below sets it for the same reason.
 
 ### CronJob
 

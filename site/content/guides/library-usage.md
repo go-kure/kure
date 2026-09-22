@@ -92,7 +92,7 @@ them to `fluxcd.SetHelmReleaseValues`.
 
 See the [FluxCD Builders reference](/api-reference/fluxcd-builders) for all available resource types.
 
-Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) package provides typed constructors for core resources (Deployment, Service, Ingress, CronJob, NetworkPolicy, HTTPRoute), PSA security context helpers, ResourceRequirements builders, and more. The [Prometheus Builders](/api-reference/prometheus-builders) sub-package covers ServiceMonitor, PodMonitor, and PrometheusRule CRDs.
+Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) package provides typed constructors for core resources (Deployment, Service, Ingress, CronJob, NetworkPolicy, HTTPRoute), PSA security context helpers, ResourceRequirements builders, and more. The constructors write identity only, so fields the API server requires in context are yours to set: a Job from `kubernetes.CreateJob` needs `Spec.Template.Spec.RestartPolicy` set to `Never` or `OnFailure`, or the server defaults it to `Always` and rejects the Job. The [Prometheus Builders](/api-reference/prometheus-builders) sub-package covers ServiceMonitor, PodMonitor, and PrometheusRule CRDs.
 
 ## Generating YAML
 
