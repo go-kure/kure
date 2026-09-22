@@ -121,7 +121,8 @@ The per-field `SetReplicationSource*` / `SetReplicationDestination*` helpers are
 gone. They were bare field assignments, and the mover ones duplicated the
 constructor's type switch — the constructor is the one place that knows a
 mover variant clears its siblings. Switching a mover on an existing resource
-means clearing the other five arms yourself, which is exactly the multi-field
+means clearing the other arms yourself — five on a source, four on a
+destination, which has no Syncthing mover — exactly the multi-field
 write [the builder contract](/api-reference/kubernetes-builders/) forbids a
 `Set<Field>` helper from hiding.
 
