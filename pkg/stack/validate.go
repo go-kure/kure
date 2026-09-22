@@ -2,6 +2,7 @@ package stack
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
@@ -12,6 +13,8 @@ import (
 // v1alpha1 converter round-trip.
 //
 // It enforces:
+//  0. The Node tree has no cycle: a Node reached again from one of its own
+//     descendants is rejected, naming the node where the cycle closes.
 //  1. Every Node bundle passes Bundle.Validate (which recursively validates
 //     umbrella Children subtrees including cycle detection).
 //  2. Disjointness: a bundle pointer appearing inside any umbrella Children
@@ -28,21 +31,42 @@ func ValidateCluster(c *Cluster) error {
 		return nil
 	}
 
-	// Collect every bundle pointer that is attached to a Node.
+	// Collect every bundle pointer that is attached to a Node. onPath holds
+	// the nodes on the current descent, so a Node reached again from below
+	// itself is a cycle; done holds the nodes already walked, so a node
+	// reachable from two parents is visited once rather than misreported as a
+	// cycle. Every later walk of the Node tree may then iterate nodeOrder
+	// instead of recursing again.
 	nodeBundles := make(map[*Bundle]*Node)
-	var walkNodes func(*Node)
-	walkNodes = func(n *Node) {
-		if n == nil {
-			return
+	onPath := make(map[*Node]bool)
+	done := make(map[*Node]bool)
+	var nodeOrder []*Node
+	var walkNodes func(*Node) error
+	walkNodes = func(n *Node) error {
+		if n == nil || done[n] {
+			return nil
 		}
+		if onPath[n] {
+			return errors.ResourceValidationError("Cluster", c.Name, "nodes",
+				fmt.Sprintf("node cycle detected at %q", n.Name), nil)
+		}
+		onPath[n] = true
 		if n.Bundle != nil {
 			nodeBundles[n.Bundle] = n
 		}
 		for _, ch := range n.Children {
-			walkNodes(ch)
+			if err := walkNodes(ch); err != nil {
+				return err
+			}
 		}
+		onPath[n] = false
+		done[n] = true
+		nodeOrder = append(nodeOrder, n)
+		return nil
 	}
-	walkNodes(c.Node)
+	if err := walkNodes(c.Node); err != nil {
+		return err
+	}
 
 	// 1. Validate every Node bundle. Bundle.Validate recursively walks the
 	//    umbrella Children subtree.
@@ -87,21 +111,9 @@ func ValidateCluster(c *Cluster) error {
 	// 4. Multi-package rejection: umbrella + PackageRef is out of scope for
 	// this initial patch.
 	if len(umbrellaOwnership) > 0 {
-		hasPackageRef := false
-		var scanPkg func(*Node)
-		scanPkg = func(n *Node) {
-			if n == nil || hasPackageRef {
-				return
-			}
-			if n.PackageRef != nil {
-				hasPackageRef = true
-				return
-			}
-			for _, ch := range n.Children {
-				scanPkg(ch)
-			}
-		}
-		scanPkg(c.Node)
+		hasPackageRef := slices.ContainsFunc(nodeOrder, func(n *Node) bool {
+			return n.PackageRef != nil
+		})
 		if hasPackageRef {
 			return errors.ResourceValidationError("Cluster", c.Name, "bundles",
 				"umbrella bundles (Bundle.Children) are not supported with multi-package PackageRef in this release",
