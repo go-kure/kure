@@ -298,6 +298,12 @@ bootstrapConfig := &stack.BootstrapConfig{
 objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
 ```
 
+`SourceRef` names the revision to sync, and the same value works in both modes: an OCI tag
+(empty means `latest`) or a Git branch name. In `"flux-operator"` mode Kure turns a branch name
+into the full reference the operator's `GitRepository` needs (`main` becomes `refs/heads/main`).
+A value that already starts with `refs/` — a tag such as `refs/tags/v1.0.0` — is passed through
+unchanged in `"flux-operator"` mode only; `"gotk"` mode always treats a Git `SourceRef` as a branch.
+
 ### Bootstrap namespace
 
 The bootstrap namespace is not part of `BootstrapConfig` — it lives on the generator. The engine
