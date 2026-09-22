@@ -214,7 +214,12 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Pin-impact gate** - `pin-impact` renders a `go-kure/.github` pin bump's real effect (which
   `scripts/*.sh` a referenced action actually runs, whether the compare touches any of them) into
   the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed
-  (go-kure/kure#719, 2026-08-30). A maintainer who has reviewed a real hit and judged it safe adds
+  (go-kure/kure#719, 2026-08-30). Its fail-closed paths — no pin change, inert and affected bumps,
+  the acknowledgement, inconsistent pins, a non-ahead compare, nested `uses:`, more than one `run:`
+  step, mixed dependencies in one `run:` block, transitive, dot-segment, compound-line and
+  unfetchable `source`, the pagination cap — are pinned by hermetic cases in `scripts/test/cases/`
+  (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
+  has reviewed a real hit and judged it safe adds
   the `pin-impact-ack` label to merge anyway — same convention as `check-doc-gate`'s `docs-skip`
   label; there is no other override. **Rerun gotcha:** the `strip-ack` step only runs when the
   triggering event's action was `synchronize` or `reopened`; re-running a stale/failed run of one of
@@ -1112,6 +1117,10 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
   the compatibility-matrix drift guard, and/or the "Run sync-versions.sh guard tests" step (or,
   for the two pin scripts, all of `validate`/`test`) and still reported success — the `build`
   gate accepts a `skipped` dependency as passing.
+  `scripts/check-pin-impact.sh` is listed for the same reason: its failure paths are covered only by
+  its hermetic cases under `scripts/test/cases/*-pin-impact-*.sh` (run by `validate`), while the
+  PR-only `pin-impact` job runs it against the real pin state, so a PR touching only the script
+  must still run those cases.
   Also includes `mise.toml`, `scripts/check-tool-versions.sh`, `scripts/sync-tool-versions.sh`
   and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
   job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity
