@@ -68,37 +68,34 @@ concurrency:
 
 ### Job Dependency Graph
 
+Boxes are job ids from `ci.yml`; where a job's check name differs, it follows in parentheses.
+
 ```
-┌─────────────────┐
-│   lint          │  ← Fast checks: go-version, fmt, tidy, vet, lint
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    ▼         ▼
-┌───────┐ ┌───────────┐
-│ test  │ │ security  │  ← Tests + govulncheck (parallel)
-└───┬───┘ └───────────┘
-    │
-    ▼
-┌───────────────────┐   ┌───────────────────┐
-│ coverage-check    │   │ forbidden-terms   │  ← Unconditional full-tree policy guard
-└─────────┬─────────┘   └─────────┬─────────┘
-          └────────────┬───────────┘
+                   ┌──────────────────────────┐
+                   │ changes (detect-changes) │  ← which paths the change touches
+                   └────────────┬─────────────┘
+       ┌───────────────┬────────┴──────┬────────────────┐
+       ▼               ▼               ▼                ▼
+┌────────────────┐ ┌────────┐ ┌─────────────────────┐ ┌────────────┐
+│ validate (lint)│ │ test   │ │ security (Security) │ │ docs-build │  ← each needs only changes,
+└────────────────┘ └───┬────┘ └─────────────────────┘ └────────────┘    so they run in parallel
                        ▼
-                 ┌───────┐
-                 │ build │  ← Aggregation gate
-                 └───────┘
+             ┌──────────────────┐
+             │ coverage-check   │  (Coverage Check)
+             └──────────────────┘
 
-PR-only jobs (parallel, no blocking):
-┌─────────────────┐  ┌────────────┐  ┌─────────────┐
-│ analyze-changes │  │ docs-check │  │ pin-impact  │
-└─────────────────┘  └────────────┘  └─────────────┘
+No needs, start at once:  action-pins, forbidden-terms
+PR-only, no needs:        doc-gate, pin-impact, analyze-changes (Analyze Changes)
+
+                 ┌───────┐
+                 │ build │  ← aggregation gate (if: always()): validate, test, coverage-check,
+                 └───────┘    security, docs-build, doc-gate, action-pins, forbidden-terms,
+                              pin-impact
 ```
 
-`pin-impact` is PR-only like `docs-check` in the diagram above, but — like `action-pins`/
-`forbidden-terms`/`doc-gate` — it does feed the `build` aggregation gate (see the Jobs Detail
-table); the diagram groups it with the other PR-only jobs for layout only, not to say it's
-unblocking.
+The PR-only jobs `doc-gate` and `pin-impact` still feed `build`; on a push or merge-queue run they
+are skipped, and `build` accepts `skipped` from every job except `forbidden-terms`.
+`analyze-changes` is informational and feeds nothing.
 
 On `merge_group` events (merge queue), `lint`/`test`/`build` run against the queue's
 temporary branch — the merged result — before the PR is allowed to land.
@@ -116,7 +113,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, and the documented builder references via `scripts/check-doc-api-refs.sh` |
-| `docs-check` | `Docs Check` | 5 min | changes | API changes need docs check (PR only); runs the canonical `check-doc-gate` action from `go-kure/.github` (job id: `doc-gate`). Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
+| `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
 | `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
 ### Configuration
@@ -131,8 +128,9 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 ### Features
 
-- **gotestfmt** - Nice formatted test output
-- **Fail fast** - Jobs depend on validate, so lint failure stops everything
+- **Independent jobs** - `validate`, `test` and `security` each depend only on `changes`, so a lint
+  failure in `validate` does not stop `test` or `security` from running; the `build` gate reports
+  all of them together
 - **Artifact sharing** - Coverage is uploaded as an artifact and reused by `coverage-check`; upload,
   download, missing-file, and invalid-profile failures are blocking so the coverage gates cannot
   pass without valid data
@@ -160,8 +158,7 @@ temporary branch — the merged result — before the PR is allowed to land.
   order — on every run observed, those ten were all from this workflow file itself. It was removed
   in go-kure/kure#788, which records the full analysis
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
-- **Matrix fail-fast: false** - Cross-platform builds continue if one fails
-- **Doc-sync checks** - `docs-build` and `docs-check` (`doc-gate` job) run the canonical
+- **Doc-sync checks** - `docs-build` and `doc-gate` run the canonical
   `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
   longer vendors its own copies under `site/scripts/`
 - **Builder-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
@@ -1120,7 +1117,7 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
   and Renovate invokes the same script after Go module bumps. `pkg/**/testdata/**` is there for
   the same reason: Go testdata is test input, and `pkg/**` alone matches only the `docs` filter,
   so a PR editing just the admission exclusion list would skip the tests that check it.
-- `docs:` filter — triggers docs-build/docs-check jobs. Includes `site/**`, `docs/**`, `*.md`,
+- `docs:` filter — triggers the `docs-build` job (`doc-gate` runs on every PR regardless). Includes `site/**`, `docs/**`, `*.md`,
   `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect
   the docs build).
 
