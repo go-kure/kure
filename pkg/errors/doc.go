@@ -18,17 +18,20 @@
 //
 // # Predefined Errors
 //
-// Common validation errors are predefined for efficiency and consistency:
+// A small set of sentinels is predefined, one for each error kure code
+// actually returns; a sentinel no kure code returns is removed, not kept:
 //
 //	// Nil resource checks
-//	errors.ErrNilDeployment
-//	errors.ErrNilPod
-//	errors.ErrNilService
-//	errors.ErrNilConfigMap
+//	errors.ErrNilPodSpec
+//	errors.ErrNilContainer
+//	errors.ErrNilBundle
+//	errors.ErrNilObject
+//	errors.ErrNilRuntimeObject
 //
-//	// GVK errors
+//	// GVK and kind errors
 //	errors.ErrGVKNotFound
 //	errors.ErrGVKNotAllowed
+//	errors.ErrUnsupportedKind
 //
 // # Error Wrapping
 //
@@ -40,9 +43,11 @@
 //	// Wrap with formatted message
 //	err := errors.Wrapf(originalErr, "failed to process %s", filename)
 //
-//	// Check wrapped errors
-//	if errors.Is(err, errors.ErrNilDeployment) {
-//	    // handle nil deployment
+//	// Check wrapped errors with the standard library's errors.Is; this
+//	// package does not re-export it, so import the two under distinct names
+//	// (stderrors "errors", kerrors "github.com/go-kure/kure/pkg/errors")
+//	if stderrors.Is(err, kerrors.ErrNilPodSpec) {
+//	    // handle nil pod spec
 //	}
 //
 // # Resource Validation Errors
@@ -59,8 +64,8 @@
 //
 // These errors can be introspected for automated handling:
 //
-//	var resErr *errors.ResourceError
-//	if errors.As(err, &resErr) {
+//	var resErr *kerrors.ResourceError
+//	if stderrors.As(err, &resErr) {
 //	    fmt.Printf("Resource: %s/%s\n", resErr.ResourceType, resErr.Name)
 //	}
 //

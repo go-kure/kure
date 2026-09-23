@@ -113,27 +113,42 @@ if errors.IsType(err, errors.ErrorTypeValidation) {
 
 ## Predefined Errors
 
-Common nil-resource errors are predefined for use throughout Kure:
+A small set of sentinels is predefined, one for each error Kure code actually returns, so callers
+can match them with the standard library's `errors.Is`:
 
 ```go
-errors.ErrNilDeployment
-errors.ErrNilService
-errors.ErrNilConfigMap
-errors.ErrNilSecret
-errors.ErrNilBundle
-// ... and more for each resource type
-```
-
-File and GVK errors:
-
-```go
-errors.ErrFileNotFound
-errors.ErrDirectoryNotFound
-errors.ErrInvalidPath
+errors.ErrNilPodSpec       // PSA validators (pkg/kubernetes)
+errors.ErrNilContainer     // PSA validators (pkg/kubernetes)
+errors.ErrNilBundle        // bundle validation (pkg/stack)
+errors.ErrNilObject
+errors.ErrNilRuntimeObject
 errors.ErrGVKNotFound
 errors.ErrGVKNotAllowed
-errors.ErrNilObject
+errors.ErrUnsupportedKind
 ```
+
+This package does not re-export `Is` or `As`, so import both packages under distinct names:
+
+```go
+import (
+    stderrors "errors"
+
+    kerrors "github.com/go-kure/kure/pkg/errors"
+)
+
+if stderrors.Is(err, kerrors.ErrNilPodSpec) {
+    // handle nil pod spec
+}
+```
+
+A sentinel that no Kure code returns is removed rather than kept exported: callers could compare
+against it, but nothing would ever produce it. `TestExportedSentinelsHaveProducers` fails the build
+if an exported `Err*` sentinel, declared in any file of this package, has no producer outside it: a
+non-test reference through an import of this package. A comparison (`errors.Is`/`errors.As`
+argument, `==`/`!=` operand, `switch` tag or case) is not a producer, and neither is an assignment
+to the blank identifier (`var _ = errors.ErrX`). The check reads the source, so any other mention,
+such as a sentinel stored in a variable and only then compared, or passed to a logger, still counts
+as produced.
 
 ## Related Packages
 

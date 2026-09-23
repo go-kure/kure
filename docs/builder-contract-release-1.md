@@ -1116,11 +1116,11 @@ see its own entry below.
 The `pkg/errors` sentinels those helpers returned (`ErrNilDeployment`,
 `ErrNilDaemonSet`, `ErrNilStatefulSet`, `ErrNilJob`, `ErrNilCronJob`,
 `ErrNilVolume`, `ErrNilToleration`, `ErrNilImagePullSecret`,
-`ErrNilInitContainer`, `ErrNilEphemeralContainer`, `ErrNilSpec`) are now unused
-inside the module. They stay exported for this release; retiring them is a
-separate `pkg/errors` change, not part of the builder surface, tracked in
-issue go-kure/kure#758. `ErrNilContainer` and `ErrNilPodSpec` keep real users in
-`pkg/kubernetes/psa.go`, whose validators return errors by design.
+`ErrNilInitContainer`, `ErrNilEphemeralContainer`, `ErrNilSpec`) had no producer
+left in the module. They were removed by go-kure/kure#758, together with every
+other `pkg/errors` sentinel that no kure code returned (61 in all), and a test now
+fails if an exported sentinel has no producer. `ErrNilContainer` and
+`ErrNilPodSpec` stay: `pkg/kubernetes/psa.go`'s validators return them by design.
 
 ## Error-returning helpers rewritten as void
 
