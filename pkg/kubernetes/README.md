@@ -150,9 +150,13 @@ A second rule covers what a helper takes, not what it writes: **no exported func
 `pkg/kubernetes/...` takes a kure-defined type where an upstream spec type exists.** A
 kure-declared struct or interface as a parameter is a second vocabulary for an object the
 upstream struct already describes — the shape of the retired `Kind(&Config)` layer — and
-`TestAdmission_NoOwnParameterTypes` fails on one, reached directly or through pointer,
-slice, array or map layers, with no exclusion list. A named scalar with no upstream
-counterpart (`PSALevel`, a string enum) is not a spec type and passes.
+`TestAdmission_NoOwnParameterTypes` fails on one, with no exclusion list. It looks
+through every layer a type can hide behind: pointer, slice, array, map and channel
+layers, a callback's parameters and results, an alias or a named container declared
+under `pkg/kubernetes` (`type Config = *struct{...}`, `type List []struct{...}`), and a
+struct or method-bearing interface literal written in the signature itself. It does not
+enter an upstream named type. A named scalar with no upstream counterpart (`PSALevel`, a
+string enum) and an interface with no methods (`any`) are not spec types and pass.
 
 ## 4. Purity
 
