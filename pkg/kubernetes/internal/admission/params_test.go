@@ -16,6 +16,8 @@ const paramsUpstreamSource = `package up
 type Spec struct{ Name string }
 
 type Obj struct{ Spec Spec }
+
+type Wrapper[T any] struct{ V T }
 `
 
 const paramsOwnSource = `package own
@@ -82,6 +84,8 @@ func Anon(c struct{ Name string })                    {}
 func Callback(f func(*Config))                        {}
 func AnyParams(v any, m map[string]interface{})       {}
 func UpCallback(f func(*up.Spec) error)               {}
+func GenericOwn(w up.Wrapper[Config])                 {}
+func GenericUp(w *up.Wrapper[up.Spec])                {}
 func Label(o *up.Obj, l Level)                        {}
 func Plain(o *up.Obj, s *up.Spec, n int)              {}
 func Generic[T any](o *up.Obj, v T)                   {}
@@ -130,6 +134,7 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 		{"Build", "cfg", "*fixture/own.Config"},
 		{"Callback", "f", "func(*fixture/own.Config)"},
 		{"Defined", "w", "*fixture/own.Wrapped"},
+		{"GenericOwn", "w", "fixture/up.Wrapper[fixture/own.Config]"},
 		{"LitIface", "v", "[]fixture/own.LitVariant"},
 		{"LitStruct", "c", "*fixture/own.LitConfig"},
 		{"Many", "byName", "map[string]*fixture/own.Config"},
@@ -158,7 +163,7 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 // named spec for an alias to a struct literal. Ownership is decided where an
 // alias is declared, so an upstream alias to a literal is upstream: the
 // parameters that take it directly, through a callback, or through an
-// in-tree re-export are not findings, and the 19 findings are unchanged
+// in-tree re-export are not findings, and the 20 findings are unchanged
 // (Wrapped is still declared in-tree, whatever its upstream base).
 func TestOwnParameterTypes_UpstreamLiteralAliases(t *testing.T) {
 	dir := writeParamsFixture(t)
@@ -183,8 +188,25 @@ func TestOwnParameterTypes_UpstreamLiteralAliases(t *testing.T) {
 			t.Errorf("%s(%s %s): an upstream alias to a literal is not a kure-defined type", f.Name, f.Param, f.Type)
 		}
 	}
-	if len(findings) != 19 {
-		t.Errorf("expected the same 19 findings as with a named upstream spec, got %d: %+v", len(findings), findings)
+	if len(findings) != 20 {
+		t.Errorf("expected the same 20 findings as with a named upstream spec, got %d: %+v", len(findings), findings)
+	}
+}
+
+func TestOwnParameterTypes_EmptyLoadFailsClosed(t *testing.T) {
+	dir := writeParamsFixture(t)
+	// An existing directory with no Go files: go list warns "matched no
+	// packages" and returns nothing, with no per-package error.
+	if err := os.MkdirAll(filepath.Join(dir, "empty"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	_, err := OwnParameterTypes(Options{
+		Dir:      dir,
+		Patterns: []string{"./empty/..."},
+		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
+	}, "fixture/own")
+	if err == nil {
+		t.Fatal("a load that matches no package must be an error, not a vacuous pass")
 	}
 }
 
