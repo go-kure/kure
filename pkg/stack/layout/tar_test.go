@@ -65,7 +65,7 @@ func TestWriteToTar_BasicLayout(t *testing.T) {
 func TestWriteToTar_NestedLayout(t *testing.T) {
 	child := &ManifestLayout{
 		Name:      "child",
-		Namespace: "default/parent/child",
+		Namespace: "default/parent",
 		FilePer:   FilePerResource,
 		Mode:      KustomizationExplicit,
 		Resources: []client.Object{
@@ -84,7 +84,7 @@ func TestWriteToTar_NestedLayout(t *testing.T) {
 
 	parent := &ManifestLayout{
 		Name:      "parent",
-		Namespace: "default/parent",
+		Namespace: "default",
 		FilePer:   FilePerResource,
 		Mode:      KustomizationExplicit,
 		Children:  []*ManifestLayout{child},
@@ -144,7 +144,7 @@ func TestWriteToTar_Deterministic(t *testing.T) {
 func TestWriteToTar_FluxIntegrated(t *testing.T) {
 	child := &ManifestLayout{
 		Name:      "team-a",
-		Namespace: "cl/flux-system/team-a",
+		Namespace: "cl/flux-system",
 		FilePer:   FilePerResource,
 		Mode:      KustomizationExplicit,
 		Resources: []client.Object{
@@ -200,7 +200,7 @@ func TestWriteToTar_UmbrellaChild(t *testing.T) {
 
 	child := &ManifestLayout{
 		Name:          "infra",
-		Namespace:     "cl/apps/platform/infra",
+		Namespace:     "cl/apps/platform",
 		FilePer:       FilePerResource,
 		Mode:          KustomizationExplicit,
 		UmbrellaChild: true,
@@ -214,7 +214,7 @@ func TestWriteToTar_UmbrellaChild(t *testing.T) {
 
 	parent := &ManifestLayout{
 		Name:      "platform",
-		Namespace: "cl/apps/platform",
+		Namespace: "cl/apps",
 		FilePer:   FilePerResource,
 		Mode:      KustomizationExplicit,
 		Resources: []client.Object{childKust},
@@ -326,7 +326,7 @@ func TestWriteToTar_FileNamingKindName(t *testing.T) {
 func TestWriteToTar_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	child := &ManifestLayout{
 		Name:       "team-a",
-		Namespace:  "cl/flux-system/team-a",
+		Namespace:  "cl/flux-system",
 		FilePer:    FilePerResource,
 		FileNaming: FileNamingKindName,
 		Mode:       KustomizationExplicit,
@@ -376,7 +376,7 @@ func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
 	// references — each child needs a unique filename including child.Name.
 	childA := &ManifestLayout{
 		Name:      "team-a",
-		Namespace: "cl/flux-system/team-a",
+		Namespace: "cl/flux-system",
 		FilePer:   FilePerKind,
 		Mode:      KustomizationExplicit,
 		Resources: []client.Object{
@@ -388,7 +388,7 @@ func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
 	}
 	childB := &ManifestLayout{
 		Name:      "team-b",
-		Namespace: "cl/flux-system/team-b",
+		Namespace: "cl/flux-system",
 		FilePer:   FilePerKind,
 		Mode:      KustomizationExplicit,
 		Resources: []client.Object{
@@ -750,7 +750,7 @@ func TestWriteToTar_NoDuplicateFluxEntries(t *testing.T) {
 
 	child := &ManifestLayout{
 		Name:          "myapp",
-		Namespace:     "prod/apps/myapp",
+		Namespace:     "prod/apps",
 		FluxPlacement: FluxIntegratedPerLayout,
 	}
 	parent := &ManifestLayout{

@@ -157,9 +157,11 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 	}
 
 	if len(apps) > 0 {
+		// Namespace is ml's own directory, since ml references this layout as
+		// a child (go-kure/kure#771).
 		argoCDLayout := &layout.ManifestLayout{
 			Name:       "argocd",
-			Namespace:  filepath.Join(ml.Namespace, "argocd"),
+			Namespace:  ml.FullRepoPath(),
 			FilePer:    layout.FilePerResource,
 			FileNaming: ml.FileNaming,
 			Resources:  apps,

@@ -309,7 +309,7 @@ Controls how kustomization.yaml files reference resources:
 
 Controls where Flux Kustomization resources are placed:
 
-- `FluxSeparate` - Flux resources collected in a separate directory tree; children referenced as directories
+- `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories
 - `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout node (incl. augmenter-added child layouts), placed alongside its manifests; children referenced as `kustomization-<child>.yaml` CR files. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle/node boundaries only**; a bundle's interior (incl. augmenter-added child layouts) is a single kustomize build, with children referenced as directories. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 

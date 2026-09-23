@@ -16,8 +16,13 @@ import (
 
 // WriteToTar writes the ManifestLayout to a tar archive, mirroring the
 // directory structure that WriteToDisk would produce. File paths use
-// forward slashes and output is deterministic (sorted file names).
+// forward slashes and output is deterministic (sorted file names). It refuses
+// a tree in which two layouts resolve to the same directory (see
+// checkLayoutTree) before writing any entry.
 func (ml *ManifestLayout) WriteToTar(w io.Writer) error {
+	if err := checkLayoutTree(ml, tarOutDir("")); err != nil {
+		return err
+	}
 	tw := tar.NewWriter(w)
 	defer func() { _ = tw.Close() }()
 	return ml.writeToTarRecursive(tw, "")

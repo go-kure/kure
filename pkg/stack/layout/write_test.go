@@ -210,7 +210,7 @@ func TestWriteManifest_KustomizationExplicit(t *testing.T) {
 	obj := testObject("v1", "ConfigMap", "cfg", "ns")
 	child := &ManifestLayout{
 		Name:      "child",
-		Namespace: "cl/ns/parent/child",
+		Namespace: "cl/ns/parent",
 		Resources: []client.Object{testObject("v1", "Secret", "s1", "ns")},
 	}
 
@@ -250,7 +250,7 @@ func TestWriteManifest_KustomizationRecursive(t *testing.T) {
 	obj := testObject("v1", "ConfigMap", "cfg", "ns")
 	child := &ManifestLayout{
 		Name:      "child",
-		Namespace: "cl/ns/parent/child",
+		Namespace: "cl/ns/parent",
 		Resources: []client.Object{testObject("v1", "Secret", "s1", "ns")},
 	}
 
@@ -299,12 +299,12 @@ func TestWriteManifest_KustomizationRecursive(t *testing.T) {
 func TestWriteManifest_WithChildren(t *testing.T) {
 	childA := &ManifestLayout{
 		Name:      "alpha",
-		Namespace: "cl/ns/root/alpha",
+		Namespace: "cl/ns/root",
 		Resources: []client.Object{testObject("v1", "ConfigMap", "a", "ns")},
 	}
 	childB := &ManifestLayout{
 		Name:      "beta",
-		Namespace: "cl/ns/root/beta",
+		Namespace: "cl/ns/root",
 		Resources: []client.Object{testObject("v1", "Secret", "b", "ns")},
 	}
 
@@ -356,7 +356,7 @@ func TestWriteManifest_ClusterRootEmptyContainerNoKustomization(t *testing.T) {
 		Children: []*ManifestLayout{
 			{
 				Name:      "child",
-				Namespace: "mycluster/child",
+				Namespace: "mycluster",
 				Resources: []client.Object{testObject("v1", "Namespace", "default", "")},
 			},
 		},
@@ -437,12 +437,12 @@ func TestWriteManifest_ClusterNamespace(t *testing.T) {
 func TestWriteManifest_FluxIntegrated(t *testing.T) {
 	childA := &ManifestLayout{
 		Name:      "team-a",
-		Namespace: "cl/flux-system/team-a",
+		Namespace: "cl/flux-system",
 		Resources: []client.Object{testObject("v1", "ConfigMap", "ca", "flux-system")},
 	}
 	childB := &ManifestLayout{
 		Name:      "team-b",
-		Namespace: "cl/flux-system/team-b",
+		Namespace: "cl/flux-system",
 		Resources: []client.Object{testObject("v1", "ConfigMap", "cb", "flux-system")},
 	}
 
@@ -525,12 +525,12 @@ func TestWriteManifest_ChildAppFileSingle(t *testing.T) {
 func TestWriteToDisk_FluxIntegrated(t *testing.T) {
 	childA := &ManifestLayout{
 		Name:      "team-a",
-		Namespace: "cl/flux-system/team-a",
+		Namespace: "cl/flux-system",
 		Resources: []client.Object{testObject("v1", "ConfigMap", "ca", "flux-system")},
 	}
 	childB := &ManifestLayout{
 		Name:      "team-b",
-		Namespace: "cl/flux-system/team-b",
+		Namespace: "cl/flux-system",
 		Resources: []client.Object{testObject("v1", "ConfigMap", "cb", "flux-system")},
 	}
 
@@ -569,7 +569,7 @@ func TestWriteToDisk_FluxIntegrated(t *testing.T) {
 func TestWriteToDisk_FluxSeparateDefault(t *testing.T) {
 	child := &ManifestLayout{
 		Name:      "apps",
-		Namespace: "cl/apps",
+		Namespace: "cl",
 		Resources: []client.Object{testObject("v1", "ConfigMap", "ca", "default")},
 	}
 
@@ -746,7 +746,7 @@ func TestWriteManifest_FluxKustomizationMode_PerPlacement(t *testing.T) {
 	// Parent with FluxIntegratedPerLayout, child with resources
 	child := &ManifestLayout{
 		Name:      "team-a",
-		Namespace: "cl/ns/root/team-a",
+		Namespace: "cl/ns/root",
 		Resources: []client.Object{
 			testObject("v1", "ConfigMap", "ca", "ns"),
 			testObject("v1", "Secret", "sa", "ns"),
@@ -801,7 +801,7 @@ func TestWriteManifest_FluxKustomizationMode_NoOverride(t *testing.T) {
 	// FluxSeparate without override should use default KustomizationMode
 	child := &ManifestLayout{
 		Name:      "apps",
-		Namespace: "cl/ns/root/apps",
+		Namespace: "cl/ns/root",
 		Resources: []client.Object{testObject("v1", "ConfigMap", "c", "ns")},
 	}
 
@@ -961,7 +961,7 @@ func TestWriteManifest_UmbrellaChild(t *testing.T) {
 
 	child := &ManifestLayout{
 		Name:          "infra",
-		Namespace:     "mycluster/apps/platform/infra",
+		Namespace:     "mycluster/apps/platform",
 		UmbrellaChild: true,
 		Resources: []client.Object{
 			testObject("v1", "ConfigMap", "cfg", "default"),
@@ -970,7 +970,7 @@ func TestWriteManifest_UmbrellaChild(t *testing.T) {
 
 	parent := &ManifestLayout{
 		Name:      "platform",
-		Namespace: "mycluster/apps/platform",
+		Namespace: "mycluster/apps",
 		Resources: []client.Object{childKustCR},
 		Children:  []*ManifestLayout{child},
 	}
@@ -1028,7 +1028,7 @@ func TestWriteManifest_UmbrellaChild(t *testing.T) {
 func TestWriteManifest_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	child := &ManifestLayout{
 		Name:       "team-a",
-		Namespace:  "cl/flux-system/team-a",
+		Namespace:  "cl/flux-system",
 		FileNaming: FileNamingKindName,
 		Resources:  []client.Object{testObject("v1", "ConfigMap", "ca", "flux-system")},
 	}
@@ -1212,7 +1212,7 @@ func TestWriteToDisk_NamespaceDot_RootPaths(t *testing.T) {
 func TestWriteToDisk_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	child := &ManifestLayout{
 		Name:       "team-a",
-		Namespace:  "cl/flux-system/team-a",
+		Namespace:  "cl/flux-system",
 		FilePer:    FilePerResource,
 		FileNaming: FileNamingKindName,
 		Mode:       KustomizationExplicit,
@@ -1256,7 +1256,7 @@ func TestWriteManifest_NoDuplicateFluxEntries(t *testing.T) {
 	cr := testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "myapp", "flux-system")
 	child := &ManifestLayout{
 		Name:          "myapp",
-		Namespace:     "clusters/prod/apps/myapp",
+		Namespace:     "clusters/prod/apps",
 		FluxPlacement: FluxIntegratedPerLayout,
 	}
 	parent := &ManifestLayout{
@@ -1289,7 +1289,7 @@ func TestWriteToDisk_NoDuplicateFluxEntries(t *testing.T) {
 	cr := testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "myapp", "flux-system")
 	child := &ManifestLayout{
 		Name:          "myapp",
-		Namespace:     "prod/apps/myapp",
+		Namespace:     "prod/apps",
 		FluxPlacement: FluxIntegratedPerLayout,
 	}
 	parent := &ManifestLayout{

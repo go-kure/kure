@@ -996,7 +996,7 @@ func TestAugmenterChildrenErrorWhenNoSourceRef(t *testing.T) {
 				FluxPlacement: layout.FluxIntegratedPerLayout,
 				Children: []*layout.ManifestLayout{{
 					Name:          "myapp-00-pre-install",
-					Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
+					Namespace:     "clusters/prod/myapp",
 					FluxPlacement: layout.FluxIntegratedPerLayout,
 				}},
 			}
@@ -1036,13 +1036,13 @@ func buildUmbrellaAugmenterTree(parentSR, childSR *stack.SourceRef) (
 ) {
 	redis = &layout.ManifestLayout{
 		Name:          "redis",
-		Namespace:     "platform/platform-apps/redis",
+		Namespace:     "platform/platform-apps",
 		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Mode:          layout.KustomizationExplicit,
 	}
 	platformApps = &layout.ManifestLayout{
 		Name:          "platform-apps",
-		Namespace:     "platform/platform-apps",
+		Namespace:     "platform",
 		FluxPlacement: layout.FluxIntegratedPerLayout,
 		Mode:          layout.KustomizationExplicit,
 		UmbrellaChild: true,
@@ -1050,7 +1050,7 @@ func buildUmbrellaAugmenterTree(parentSR, childSR *stack.SourceRef) (
 	}
 	platformLayout = &layout.ManifestLayout{
 		Name:      "platform",
-		Namespace: "platform",
+		Namespace: ".",
 		Children:  []*layout.ManifestLayout{platformApps},
 	}
 	root = &layout.ManifestLayout{
@@ -1222,7 +1222,7 @@ func TestUmbrellaChildAugmenterSubLayoutUsesChildSourceRef(t *testing.T) {
 func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
 	grandchild := &layout.ManifestLayout{
 		Name:          "myapp-00-pre-install",
-		Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
+		Namespace:     "clusters/prod/myapp",
 		FluxPlacement: layout.FluxIntegratedPerLayout,
 	}
 	appLayout := &layout.ManifestLayout{
@@ -1268,12 +1268,12 @@ func TestAugmenterGrandchildErrorWhenNoSourceRef(t *testing.T) {
 func buildAugmenterTestTree() (root, nodeLayout, app, preInstall, hooks *layout.ManifestLayout, cluster *stack.Cluster) {
 	preInstall = &layout.ManifestLayout{
 		Name:          "myapp-00-pre-install",
-		Namespace:     "clusters/prod/myapp/myapp-00-pre-install",
+		Namespace:     "clusters/prod/myapp",
 		FluxPlacement: layout.FluxIntegratedPerLayout,
 	}
 	hooks = &layout.ManifestLayout{
 		Name:          "myapp-01-hooks",
-		Namespace:     "clusters/prod/myapp/myapp-01-hooks",
+		Namespace:     "clusters/prod/myapp",
 		FluxPlacement: layout.FluxIntegratedPerLayout,
 		DependsOn:     []string{"myapp-00-pre-install"},
 	}
@@ -1491,6 +1491,92 @@ func TestCreateLayoutWithResources_ClusterNameEqualsNodeName_SpecPath(t *testing
 	for name, p := range paths {
 		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
 			t.Errorf("Kustomization %q has double-nested spec.path %q (equal-root-name regression)", name, p)
+		}
+	}
+}
+
+// TestFluxSeparate_FluxSystemInsideRootDirectory pins where the separate
+// flux-system layout lands: inside the root layout's own directory, which is
+// where the root's kustomization.yaml references it. Joined onto the root's
+// Namespace instead, it landed beside the root whenever the root had a Name
+// (no ClusterName: root cluster/platform, flux-system at top level), and the
+// reference dangled (go-kure/kure#771). With a ClusterName the output is
+// unchanged.
+func TestFluxSeparate_FluxSystemInsideRootDirectory(t *testing.T) {
+	for _, tc := range []struct{ clusterName, want string }{
+		{"", "platform/flux-system/kustomization.yaml"},
+		{"platform", "platform/flux-system/kustomization.yaml"},
+		{"prod", "prod/flux-system/kustomization.yaml"},
+	} {
+		cluster := &stack.Cluster{Name: "platform", Node: &stack.Node{
+			Name:   "platform",
+			Bundle: &stack.Bundle{Name: "platform", SourceRef: testSR()},
+		}}
+		integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+		ml, err := integrator.CreateLayoutWithResources(cluster, layout.LayoutRules{
+			ClusterName:   tc.clusterName,
+			FluxPlacement: layout.FluxSeparate,
+		})
+		if err != nil {
+			t.Fatalf("ClusterName %q: CreateLayoutWithResources: %v", tc.clusterName, err)
+		}
+		dir := t.TempDir()
+		if err := ml.WriteToDisk(dir); err != nil {
+			t.Fatalf("ClusterName %q: WriteToDisk: %v", tc.clusterName, err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, tc.want)); err != nil {
+			t.Errorf("ClusterName %q: missing %s: %v", tc.clusterName, tc.want, err)
+		}
+		rootKust, err := os.ReadFile(filepath.Join(dir, ml.FullRepoPath(), "kustomization.yaml"))
+		if err != nil {
+			t.Fatalf("ClusterName %q: read root kustomization.yaml: %v", tc.clusterName, err)
+		}
+		if !strings.Contains(string(rootKust), "- flux-system\n") {
+			t.Errorf("ClusterName %q: root kustomization.yaml does not reference flux-system:\n%s", tc.clusterName, rootKust)
+		}
+	}
+}
+
+// TestCreateLayoutWithResources_NoClusterName_BundlePathsResolve checks that
+// every Flux Kustomization's spec.path names a directory the layout actually
+// writes. The generator derives bundle paths from the node hierarchy
+// (<root>/<child>/...), so without a ClusterName the layout must place nodes
+// there too (go-kure/kure#771).
+func TestCreateLayoutWithResources_NoClusterName_BundlePathsResolve(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		child := &stack.Node{Name: "apps", Bundle: &stack.Bundle{Name: "apps", SourceRef: testSR()}}
+		root := &stack.Node{Name: "root", Bundle: &stack.Bundle{Name: "root", SourceRef: testSR()}, Children: []*stack.Node{child}}
+		child.SetParent(root)
+		child.Bundle.SetParent(root.Bundle)
+		integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+		ml, err := integrator.CreateLayoutWithResources(&stack.Cluster{Name: "root", Node: root}, layout.LayoutRules{FluxPlacement: placement})
+		if err != nil {
+			t.Fatalf("placement %v: CreateLayoutWithResources: %v", placement, err)
+		}
+		dir := t.TempDir()
+		if err := ml.WriteToDisk(dir); err != nil {
+			t.Fatalf("placement %v: WriteToDisk: %v", placement, err)
+		}
+		var paths []string
+		var collect func(l *layout.ManifestLayout)
+		collect = func(l *layout.ManifestLayout) {
+			for _, r := range l.Resources {
+				if k, ok := r.(*kustv1.Kustomization); ok {
+					paths = append(paths, k.Spec.Path)
+				}
+			}
+			for _, c := range l.Children {
+				collect(c)
+			}
+		}
+		collect(ml)
+		if len(paths) == 0 {
+			t.Fatalf("placement %v: no Kustomization CRs generated", placement)
+		}
+		for _, p := range paths {
+			if info, err := os.Stat(filepath.Join(dir, strings.TrimPrefix(p, "./"))); err != nil || !info.IsDir() {
+				t.Errorf("placement %v: spec.path %q is not a written directory (err %v)", placement, p, err)
+			}
 		}
 	}
 }

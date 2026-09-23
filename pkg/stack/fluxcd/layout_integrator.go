@@ -2,7 +2,6 @@ package fluxcd
 
 import (
 	"fmt"
-	"path/filepath"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -442,9 +441,13 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// resource files either way (manifest.go:352). Seeding it here would have
 	// made DefaultMode look overrideable via ResourceGenerator.Mode at a site
 	// that never consults that field.
+	// Namespace is ml's own directory: ml's kustomization.yaml references
+	// this layout as a child, so it must sit below ml. Joined onto
+	// ml.Namespace instead, it landed beside ml when ml had a Name, and the
+	// reference dangled (go-kure/kure#771).
 	fluxLayout := &layout.ManifestLayout{
 		Name:      DefaultFluxDirName,
-		Namespace: filepath.Join(ml.Namespace, DefaultFluxDirName),
+		Namespace: ml.FullRepoPath(),
 		FilePer:   layout.DefaultLayoutRules().FilePer,
 		Resources: fluxResources,
 	}
