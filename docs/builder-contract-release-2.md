@@ -192,7 +192,7 @@ reproduced byte for byte.
 | `AffinityOptions.EnablePodAntiAffinity bool` | `Spec.Affinity.EnablePodAntiAffinity *bool` — `ptr.To(b)` |
 | `AffinityOptions.TopologyKey`, `.PodAntiAffinityType`, `.NodeSelector` | `Spec.Affinity.TopologyKey`, `.PodAntiAffinityType` (`cnpgv1.PodAntiAffinityTypePreferred` / `Required`), `.NodeSelector` |
 | `ClusterOptions.ManagedRoles []ManagedRoleOptions` | `Spec.Managed = &cnpgv1.ManagedConfiguration{Roles: []cnpgv1.RoleConfiguration{...}}`, or `AddClusterManagedRole(cluster, role)` per role |
-| `ManagedRoleOptions.Name`, `.Comment`, `.Login`, `.Superuser`, `.CreateDB`, `.CreateRole`, `.Replication`, `.Inherit *bool`, `.InRoles` | the same-named fields of `cnpgv1.RoleConfiguration` |
+| `ManagedRoleOptions.Name`, `.Comment`, `.Login`, `.Superuser`, `.CreateDB`, `.CreateRole`, `.Replication`, `.Inherit *bool`, `.InRoles` | the same-named fields of `cnpgv1.RoleConfiguration` <!-- doc-api-refs:ignore CreateDB and CreateRole are upstream struct fields, not builders --> |
 | `ManagedRoleOptions.ConnectionLimit *int64` | `cnpgv1.RoleConfiguration.ConnectionLimit int64` (a value; `-1` is the upstream default) |
 | `ManagedRoleOptions.PasswordSecret string` | `cnpgv1.RoleConfiguration.PasswordSecret = &cnpgv1.LocalObjectReference{Name}` |
 | `ManagedRoleOptions.Ensure string` | `cnpgv1.RoleConfiguration.Ensure cnpgv1.EnsureOption` (`EnsurePresent` / `EnsureAbsent`) |

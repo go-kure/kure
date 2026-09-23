@@ -51,7 +51,7 @@ kubernetes.AddLabel(cluster, "env", "prod")
 cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "appuser"})
 ```
 
-Quantities are parsed at the call site — `resource.MustParse` for a literal, `resource.ParseQuantity` when the text comes from configuration — the same ruling the release 1 `SetResource*` helpers follow. A WAL archive through the barman-cloud plugin is one entry in `Spec.Plugins`:
+Quantities are parsed at the call site — `resource.MustParse` for a literal, `resource.ParseQuantity` when the text comes from configuration — the same ruling the release 1 `SetResourceRequest` / `SetResourceLimit` helpers follow. A WAL archive through the barman-cloud plugin is one entry in `Spec.Plugins`:
 
 ```go
 cluster.Spec.Plugins = []cnpgv1.PluginConfiguration{{
