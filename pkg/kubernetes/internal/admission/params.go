@@ -39,7 +39,8 @@ func (f ParamFinding) Key() string { return f.Package + "." + f.Name }
 // itself, under prefix (an import-path prefix, e.g.
 // "github.com/go-kure/kure/pkg/kubernetes"); ownSpecType lists every layer the
 // walk follows. A named scalar declared under prefix (a string enum) is not a
-// spec type and is not reported; a type parameter is not either.
+// spec type and is not reported; a type parameter only when its constraint
+// is.
 //
 // This is the contract's rule that the upstream struct is the construction
 // API: a function that takes a struct or a sum type kure invented is a
@@ -146,8 +147,8 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 //     written there is defined here.
 //
 // A named type from outside prefix (the upstream API) is not entered, beyond
-// the type arguments of an instantiated generic; a type
-// parameter is not reported, and an interface with no methods (any) is not a
+// the type arguments of an instantiated generic or generic alias; a type
+// parameter is reported only when its constraint is, and an interface with no methods (any) is not a
 // spec type. The seen set stops a self-referential name (type Tree []Tree)
 // from recursing forever.
 func ownSpecType(t types.Type, prefix string, inTree bool) bool {
@@ -163,6 +164,16 @@ func ownSpecTypeIn(t types.Type, prefix string, owned bool, seen map[*types.Name
 	}
 	switch x := t.(type) {
 	case *types.Alias:
+		// The type arguments of an instantiated generic alias are written in
+		// the signature being walked, so they keep its ownership; the RHS
+		// belongs to wherever the alias is declared.
+		if args := x.TypeArgs(); args != nil {
+			for i := 0; i < args.Len(); i++ {
+				if ownSpecTypeIn(args.At(i), prefix, owned, seen) {
+					return true
+				}
+			}
+		}
 		return ownSpecTypeIn(x.Rhs(), prefix, under(x.Obj().Pkg()), seen)
 	case *types.Pointer:
 		return ownSpecTypeIn(x.Elem(), prefix, owned, seen)
@@ -206,6 +217,12 @@ func ownSpecTypeIn(t types.Type, prefix string, owned bool, seen map[*types.Name
 			return ownSpecTypeIn(x.Underlying(), prefix, mine, seen)
 		}
 		return false
+	case *types.TypeParam:
+		// A type parameter is reported only through its constraint: one
+		// constrained by a kure-defined interface ([T Variant]) is the
+		// sealed-sum shape again; any, comparable and upstream constraints
+		// are not.
+		return ownSpecTypeIn(x.Constraint(), prefix, owned, seen)
 	case *types.Struct:
 		return owned
 	case *types.Interface:

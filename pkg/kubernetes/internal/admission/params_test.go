@@ -86,6 +86,7 @@ func AnyParams(v any, m map[string]interface{})       {}
 func UpCallback(f func(*up.Spec) error)               {}
 func GenericOwn(w up.Wrapper[Config])                 {}
 func GenericUp(w *up.Wrapper[up.Spec])                {}
+func Constrained[T Variant](v T)                      {}
 func Label(o *up.Obj, l Level)                        {}
 func Plain(o *up.Obj, s *up.Spec, n int)              {}
 func Generic[T any](o *up.Obj, v T)                   {}
@@ -133,6 +134,7 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 		{"Apply", "v", "fixture/own.Variant"},
 		{"Build", "cfg", "*fixture/own.Config"},
 		{"Callback", "f", "func(*fixture/own.Config)"},
+		{"Constrained", "v", "T"},
 		{"Defined", "w", "*fixture/own.Wrapped"},
 		{"GenericOwn", "w", "fixture/up.Wrapper[fixture/own.Config]"},
 		{"LitIface", "v", "[]fixture/own.LitVariant"},
@@ -163,7 +165,7 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 // named spec for an alias to a struct literal. Ownership is decided where an
 // alias is declared, so an upstream alias to a literal is upstream: the
 // parameters that take it directly, through a callback, or through an
-// in-tree re-export are not findings, and the 20 findings are unchanged
+// in-tree re-export are not findings, and the 21 findings are unchanged
 // (Wrapped is still declared in-tree, whatever its upstream base).
 func TestOwnParameterTypes_UpstreamLiteralAliases(t *testing.T) {
 	dir := writeParamsFixture(t)
@@ -188,8 +190,45 @@ func TestOwnParameterTypes_UpstreamLiteralAliases(t *testing.T) {
 			t.Errorf("%s(%s %s): an upstream alias to a literal is not a kure-defined type", f.Name, f.Param, f.Type)
 		}
 	}
-	if len(findings) != 20 {
-		t.Errorf("expected the same 20 findings as with a named upstream spec, got %d: %+v", len(findings), findings)
+	if len(findings) != 21 {
+		t.Errorf("expected the same 21 findings as with a named upstream spec, got %d: %+v", len(findings), findings)
+	}
+}
+
+// TestOwnParameterTypes_UpstreamGenericAliases swaps the upstream generic
+// for a generic alias to a struct literal. The alias's own RHS is upstream,
+// but its type arguments are written in the in-tree signature, so
+// up.Wrapper[Config] stays a finding and up.Wrapper[up.Spec] stays clean.
+func TestOwnParameterTypes_UpstreamGenericAliases(t *testing.T) {
+	dir := writeParamsFixture(t)
+	upstream := strings.Replace(paramsUpstreamSource, "type Wrapper[T any] struct{ V T }", "type Wrapper[T any] = struct{ V T }", 1)
+	if upstream == paramsUpstreamSource {
+		t.Fatal("fixture upstream source no longer declares Wrapper as expected")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "up", "up.go"), []byte(upstream), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	findings, err := OwnParameterTypes(Options{
+		Dir:      dir,
+		Patterns: []string{"./..."},
+		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
+	}, "fixture/own")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var own, up bool
+	for _, f := range findings {
+		own = own || f.Name == "GenericOwn"
+		up = up || f.Name == "GenericUp"
+	}
+	if !own {
+		t.Error("GenericOwn(up.Wrapper[Config]) must be a finding when Wrapper is a generic alias")
+	}
+	if up {
+		t.Error("GenericUp(up.Wrapper[up.Spec]) must not be a finding")
+	}
+	if len(findings) != 21 {
+		t.Errorf("expected the same 21 findings as with a defined generic, got %d", len(findings))
 	}
 }
 
