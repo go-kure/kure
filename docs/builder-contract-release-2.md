@@ -199,24 +199,24 @@ reproduced byte for byte.
 | `ClusterOptions.Synchronous *SynchronousOptions` | `Spec.PostgresConfiguration.Synchronous = &cnpgv1.SynchronousReplicaConfiguration{...}` |
 | `SynchronousOptions.Method string` | `.Method cnpgv1.SynchronousReplicaConfigurationMethod` (`SynchronousReplicaConfigurationMethodAny` / `First`) |
 | `SynchronousOptions.Number int32` | `.Number int` |
-| `SynchronousOptions.DataDurability string` | `.DataDurability cnpgv1.DataDurabilityLevel` (`DataDurabilityLevelRequired` / `Preferred`) |
+| `SynchronousOptions.DataDurability string` | `.DataDurability cnpgv1.DataDurabilityLevel` (`DataDurabilityLevelRequired` / `Preferred`) — only for a non-empty former value; `""` left it empty (`omitempty`) |
 | `SynchronousOptions.MaxStandbyDelay int32` | nothing — the layer never wrote it, and `SynchronousReplicaConfiguration` has no such field (`MaxStandbyNamesFromCluster` is the nearest) |
 | `ClusterOptions.ObjectStoreName` | `Spec.Plugins = []cnpgv1.PluginConfiguration{{Name: "barman-cloud.barmancloud.cnpg.io", IsWALArchiver: ptr.To(true), Parameters: map[string]string{"objectStoreName": name}}}` |
 | `ClusterOptions.Affinity *AffinityOptions` | `Spec.Affinity` (`cnpgv1.AffinityConfiguration`, a value) |
 | `AffinityOptions.EnablePodAntiAffinity bool` | `Spec.Affinity.EnablePodAntiAffinity *bool` — `ptr.To(b)`, including `ptr.To(false)`: the layer always wrote it when `Affinity` was supplied, and CNPG treats nil as enabled (pinned by `cluster-affinity-disabled.yaml`) |
-| `AffinityOptions.TopologyKey`, `.PodAntiAffinityType`, `.NodeSelector` | `Spec.Affinity.TopologyKey`, `.PodAntiAffinityType` (`cnpgv1.PodAntiAffinityTypePreferred` / `Required`), `.NodeSelector` |
+| `AffinityOptions.TopologyKey`, `.PodAntiAffinityType`, `.NodeSelector` | `Spec.Affinity.TopologyKey`, `.PodAntiAffinityType` (`cnpgv1.PodAntiAffinityTypePreferred` / `Required`), `.NodeSelector` — copied as given; an empty type stayed empty for the operator to default |
 | `ClusterOptions.ManagedRoles []ManagedRoleOptions` | `Spec.Managed = &cnpgv1.ManagedConfiguration{Roles: []cnpgv1.RoleConfiguration{...}}`, or `AddClusterManagedRole(cluster, role)` per role — only when there is at least one role; the layer left `Managed` nil otherwise, and a non-nil empty one renders `managed: {}` |
 | `ManagedRoleOptions.Name`, `.Comment`, `.Login`, `.Superuser`, `.CreateDB`, `.CreateRole`, `.Replication`, `.Inherit *bool`, `.InRoles` | the same-named fields of `cnpgv1.RoleConfiguration` <!-- doc-api-refs:ignore CreateDB and CreateRole are upstream struct fields, not builders --> |
-| `ManagedRoleOptions.ConnectionLimit *int64` | `cnpgv1.RoleConfiguration.ConnectionLimit int64` (a value; `-1` is the upstream default) |
+| `ManagedRoleOptions.ConnectionLimit *int64` | `cnpgv1.RoleConfiguration.ConnectionLimit int64` — `*p` only for a non-nil pointer; a nil one left the field `0`, which is `omitempty` and lets the operator apply its own default. Do not translate nil to an explicit `-1` |
 | `ManagedRoleOptions.PasswordSecret string` | `cnpgv1.RoleConfiguration.PasswordSecret = &cnpgv1.LocalObjectReference{Name}` — only when the name is non-empty; the layer left it nil for `""`, and a reference with an empty name is not the same manifest |
-| `ManagedRoleOptions.Ensure string` | `cnpgv1.RoleConfiguration.Ensure cnpgv1.EnsureOption` (`EnsurePresent` / `EnsureAbsent`) |
+| `ManagedRoleOptions.Ensure string` | `cnpgv1.RoleConfiguration.Ensure cnpgv1.EnsureOption` — `cnpgv1.EnsureAbsent` only for the former `"absent"`; every other value, `""` included, left the field empty (`omitempty`, and the operator defaults to present), so do not write `EnsurePresent` for it |
 | `DatabaseConfig.Name`, `.Namespace` | `CreateDatabase(name, namespace)` |
 | `DatabaseConfig.Options *DatabaseOptions` | `db.Spec` (`cnpgv1.DatabaseSpec`) |
 | `DatabaseOptions.ClusterName` | `Spec.ClusterRef = corev1.LocalObjectReference{Name}` |
 | `DatabaseOptions.DBName` | `Spec.Name` |
 | `DatabaseOptions.Owner` | `Spec.Owner` |
-| `DatabaseOptions.ReclaimPolicy string` (`"delete"` or `""`) | `Spec.ReclaimPolicy cnpgv1.DatabaseReclaimPolicy` (`DatabaseReclaimDelete` / `DatabaseReclaimRetain`) |
-| `DatabaseOptions.Ensure string` (`"absent"` or `""`) | `Spec.Ensure cnpgv1.EnsureOption` |
+| `DatabaseOptions.ReclaimPolicy string` (`"delete"` or `""`) | `Spec.ReclaimPolicy cnpgv1.DatabaseReclaimPolicy` — `DatabaseReclaimDelete` only for the former `"delete"`; anything else left it empty (`omitempty`, operator default retain), so do not write `DatabaseReclaimRetain` for it |
+| `DatabaseOptions.Ensure string` (`"absent"` or `""`) | `Spec.Ensure cnpgv1.EnsureOption` — `EnsureAbsent` only for the former `"absent"`; anything else left it empty (`omitempty`, operator default present), so do not write `EnsurePresent` for it |
 | `DatabaseOptions.Extensions []ExtensionOptions` | `Spec.Extensions []cnpgv1.ExtensionSpec`, or `AddDatabaseExtension(db, ext)` per extension |
 | `ExtensionOptions.Name`, `.Ensure` | `cnpgv1.ExtensionSpec{DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{Name, Ensure}}` |
 | `ObjectStoreConfig.Name`, `.Namespace` | `CreateObjectStore(name, namespace)` |
@@ -231,7 +231,7 @@ reproduced byte for byte.
 | `PoolerOptions.Instances int32` (≤ 0 = omit) | `Spec.Instances *int32` — `ptr.To[int32](n)` only for `n > 0`; the layer omitted it for zero and for a negative count, leaving the operator default |
 | `PoolerOptions.Type string` (`"ro"`, anything else `rw`) | `Spec.Type cnpgv1.PoolerType` (`PoolerTypeRW` / `PoolerTypeRO`) |
 | `PoolerOptions.PgBouncer *PgBouncerOptions` | `Spec.PgBouncer = &cnpgv1.PgBouncerSpec{...}` (required upstream: no `omitempty`, so always set it, empty if nothing else) |
-| `PgBouncerOptions.PoolMode string` | `cnpgv1.PgBouncerSpec.PoolMode cnpgv1.PgBouncerPoolMode` (`PgBouncerPoolModeSession` / `Transaction`) |
+| `PgBouncerOptions.PoolMode string` | `cnpgv1.PgBouncerSpec.PoolMode cnpgv1.PgBouncerPoolMode` (`PgBouncerPoolModeSession` / `Transaction`) — only for a non-empty former value; `""` left the field empty (`omitempty`) for CNPG to default, so do not write `PgBouncerPoolModeSession` for it |
 | `PgBouncerOptions.Parameters` | `cnpgv1.PgBouncerSpec.Parameters` |
 
 ### Values the layer injected
@@ -257,9 +257,10 @@ write every one of them — but nothing writes them for you.
 | `postgresql.synchronous` omitted, `Number` and `DataDurability` included, unless `Method` was non-empty | a guard in the layer | leave `Spec.PostgresConfiguration.Synchronous` nil, or set it with a `Method` |
 
 Every conditional in the retired CNPG builders (`pkg/kubernetes/cnpg/create.go` and
-`pooler.go` as of `4729da0`) is accounted for above: either the guarded field is
-`omitempty` or emits the same zero value either way, so an unguarded literal renders
-the same, or its row or this table states the guard.
+`pooler.go` as of `4729da0`) is accounted for above: its row or this table states the
+guard, including the ones where the only risk is writing a value the layer left out
+(a connection limit, a role `ensure`, a pool mode), or the guarded field is
+`omitempty` and the layer wrote nothing a literal would write differently.
 
 Golden deltas: none. Every fixture in `pkg/kubernetes/cnpg/testdata` is reproduced
 byte for byte, the injected values above included.
