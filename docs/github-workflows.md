@@ -29,7 +29,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 ### Triggers
 
 - Push to: `main`, `develop`, `release/*`
-- Pull requests to: `main`, `develop` only, on types
+- Pull requests against any base branch, on types
   `opened`, `synchronize`, `reopened`, `labeled`, `unlabeled`
 - Merge group (merge queue's temporary branch — required checks must report here)
 - Schedule: 4am UTC daily (catch external changes)
@@ -44,17 +44,13 @@ override label starts a new run — without them the required `build` check stay
 unrelated push, so the acknowledgement path existed but nothing re-evaluated it. The cost is that
 **any** label change reruns the whole pipeline, not just a `pin-impact-ack` one.
 
-**The `branches:` filter is a base-branch filter, and a stacked PR gets no CI from it.** A PR whose
-base is another feature branch rather than `main` or `develop` does not match, so none of this
-workflow's jobs run on it — only `pr-review`, which declares no branch filter, reports. (`claude.yml`
-also declares no branch filter, but since go-kure/.github#223 it no longer triggers on `pull_request`
-at all, so it reports nothing on any PR unless someone mentions `@claude`.)
-The absence is structural, not a pass: an empty check list on such a PR means the suite never ran.
-Retargeting alone does **not** start it. When the base merges, GitHub retargets the PR and sends
-`edited` (with `changes.base`), which is not in this workflow's `types:` list — so the PR now
-matches `branches:` but nothing has triggered a run, and the check list stays empty for the same
-reason it was empty before. A subscribed event is still required: push another commit, or close and
-reopen the PR. See [Draft PRs](#draft-prs) for the retargeting table and why `edited` is excluded.
+**No `branches:` filter on `pull_request`, so a stacked PR gets the full suite** (go-kure/kure#798).
+A `branches:` filter matches the PR's *base*, so with one a PR based on another feature branch ran
+none of this workflow's jobs while `pr-review` (which has no filter) still reported green. Now `CI`
+runs on a PR whatever its base, from its first push. When the base merges and GitHub retargets the
+PR to `main` (sending `edited`, which is not in the `types:` list), nothing needs re-running: the
+required checks already ran on the PR's head commit, and the merge queue re-tests the merged
+result against `main` anyway.
 
 ### Concurrency
 
@@ -240,16 +236,10 @@ pipeline regardless of draft status). A draft PR gets
 the identical `lint`/`test`/`Security`/`coverage-check`/`build` run as a ready one; draft blocks
 merge only, via branch protection — it does not change what CI runs.
 
-One retargeting case is still **not** covered, because GitHub sends neither `synchronize` nor
-any type in this workflow's list for it:
-
-| Situation | Event GitHub sends | Remedy |
-|---|---|---|
-| PR **retargeted** to another base branch | `edited` (with `changes.base`) | close and reopen the PR, which sends `reopened` |
-| PR title or body edited | `edited` | none needed — no code changed |
-
 `edited` is deliberately not in the type list: it fires on every title and body edit, which
-would run the full suite for text-only changes. A retarget is rare enough to handle by hand.
+would run the full suite for text-only changes. A PR retargeted to another base also sends
+`edited`, but needs no run of its own: with no `branches:` filter the suite already ran on the head
+commit (see [Triggers](#triggers)).
 
 ---
 
@@ -1106,32 +1096,18 @@ The `docs-build` job uses two separate caches:
 
 The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files change:
 
-- `go:` filter — triggers lint/test/security/build jobs. Includes `**.go`, `go.mod`, `go.sum`,
-  `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated,
-  plus `versions.yaml`, `docs/compatibility.md`, `scripts/sync-versions.sh`,
-  `scripts/test/**`, `scripts/sync-eso-pin.sh` and `scripts/sync-flux-operator-pin.sh`. Those
-  last six are here because the only `sync-versions.sh check` invocation lives in the `validate`
-  job: without them a PR touching just version metadata, `sync-versions.sh`'s own guard-test
-  harness (`scripts/test/**` — a case file or the harness itself, the exact changes it exists
-  to enforce CI coverage of), or a release-pinning script skipped the supported-range guard,
-  the compatibility-matrix drift guard, and/or the "Run sync-versions.sh guard tests" step (or,
-  for the two pin scripts, all of `validate`/`test`) and still reported success — the `build`
-  gate accepts a `skipped` dependency as passing.
-  `scripts/check-pin-impact.sh` is listed for the same reason: its failure paths are covered only by
-  its hermetic cases under `scripts/test/cases/*-pin-impact-*.sh` (run by `validate`), while the
-  PR-only `pin-impact` job runs it against the real pin state, so a PR touching only the script
-  must still run those cases.
-  Also includes `mise.toml`, `scripts/check-tool-versions.sh`, `scripts/sync-tool-versions.sh`
-  and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
-  job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity
-  guard. Same reasoning covers `scripts/check-govulncheck-docs.sh` and
-  `scripts/sync-govulncheck-docs.sh` — `check-govulncheck-docs` also runs only in `validate`.
-  Same reasoning covers `scripts/sync-go-version.sh` too — `check-go-version` (Go-version parity
-  between `mise.toml` and `go.mod`) also runs only in `validate`. And `scripts/gen-builders.sh`:
-  the generated-builders check (`scripts/gen-builders.sh check`) also runs only in `validate`,
-  and Renovate invokes the same script after Go module bumps. `pkg/**/testdata/**` is there for
-  the same reason: Go testdata is test input, and `pkg/**` alone matches only the `docs` filter,
-  so a PR editing just the admission exclusion list would skip the tests that check it.
+- `go` output — gates `lint`, `test` and `Security`. It is a **deny-list** (go-kure/kure#800): true
+  unless every changed file is documentation, meaning under `site/**` or `docs/**`, or a Markdown
+  file anywhere (`**/*.md`). Every other path, including one nobody thought to classify, runs the Go
+  jobs. Two docs files are added back because `validate` reads them: `docs/compatibility.md`
+  (`sync-versions.sh check`) and this file (the golangci-lint and govulncheck version-parity
+  checks). This replaced an allowlist whose silent failure mode was the problem: a path missing
+  from it skipped `lint` and `test`, and a skipped required check still satisfies the ruleset, so
+  the PR read green unexercised. Eight separate additions to that list were each made after such a
+  miss. The cost of the inversion is a Go run on PRs that touch only an unusual non-Go, non-docs
+  file (a license or an editor config). Implemented as two `dorny/paths-filter` steps: `nondocs`
+  with `predicate-quantifier: every` over `**` and the three negated docs paths, and
+  `go_docs_inputs` for the two added-back files.
 - `docs:` filter — triggers the `docs-build` job (`doc-gate` runs on every PR regardless). Includes
   `site/**`, `docs/**`, `**.md` (every Markdown file, `.claude/CLAUDE.md` included), `pkg/**`,
   `examples/**` (the builder-reference check reads the comments of `examples/` Go files),
