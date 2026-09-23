@@ -1,38 +1,39 @@
-// Package cnpg exposes helper functions for constructing resources used by
-// CloudNativePG (CNPG) and the Barman Cloud plugin.  Each function returns a
-// fully initialized controller-runtime object that can be serialized to YAML or
-// modified further by the calling application.
-//
-// ## Overview
-//
-// The package mirrors the constructors and setters found under
-// `internal/cnpg` so applications can build CNPG manifests programmatically
-// without depending on the internal packages directly.  All constructors accept
-// a configuration struct.
-//
-// Resources covered include `Cluster`, `Database`, `ObjectStore`, and
-// `ScheduledBackup`.
+// Package cnpg exposes the generated constructors and the admissible sugar
+// for CloudNativePG (CNPG) and Barman Cloud plugin resources: Cluster,
+// Database, Pooler, ScheduledBackup, ObjectStore and the image catalogs. Each
+// constructor returns a controller-runtime object carrying identity only; the
+// upstream CNPG struct is the construction API.
 //
 // ## Constructors
 //
-// Constructors accept a configuration struct and return the corresponding CNPG
-// object.  A minimal example creating a `Cluster` looks like:
+// Create<Kind> is generated from the registered scheme and emits apiVersion,
+// kind, metadata.name and metadata.namespace. Spec fields are the caller's own
+// assignments:
 //
-//	cluster := cnpg.Cluster(&cnpg.ClusterConfig{
-//	        Name:      "pg-main",
-//	        Namespace: "databases",
-//	        Spec:      cnpgv1.ClusterSpec{Instances: 3},
-//	})
+//	cluster := cnpg.CreateCluster("pg-main", "databases")
+//	cluster.Spec = cnpgv1.ClusterSpec{
+//	        Instances:            3,
+//	        StorageConfiguration: cnpgv1.StorageConfiguration{Size: "10Gi"},
+//	}
 //
 // ## Update helpers
 //
-// Additional functions prefixed with `Set` or `Add` expose granular control
-// over the generated objects.  Each writes exactly the one spec field it names.
-// Labels and annotations use the generic kubernetes.AddLabel /
-// kubernetes.AddAnnotation over metav1.Object; this package carries no per-kind
-// metadata helpers.  For example:
+// Functions prefixed with Set or Add write exactly the one field they name and
+// fall into the builder contract's admitted classes: AddClusterManagedRole,
+// AddDatabaseExtension and AddObjectStoreEnvVar append, the Set* helpers assign
+// a pointer-typed field. Labels and annotations use the generic
+// kubernetes.AddLabel / kubernetes.AddAnnotation over metav1.Object; this
+// package carries no per-kind metadata helpers.
 //
-//	cluster := cnpg.Cluster(&cnpg.ClusterConfig{...})
 //	kubernetes.AddLabel(cluster, "env", "prod")
 //	cnpg.AddClusterManagedRole(cluster, cnpgv1.RoleConfiguration{Name: "app"})
+//
+// The config-struct layer this package used to carry — Cluster, Database,
+// ObjectStore, ScheduledBackup and Pooler taking a *Config with *Options — was
+// retired by release 2 of the builder contract, and with it every value the
+// layer invented: enablePDB derived from the instance count, the pinned
+// primaryUpdateStrategy, the ACCESS_KEY_ID / SECRET_ACCESS_KEY key names, the
+// barman-cloud plugin entry, the pooler type coercion and the extension ensure
+// default. See docs/builder-contract-release-2.md for the field-by-field
+// mapping.
 package cnpg
