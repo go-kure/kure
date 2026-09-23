@@ -273,3 +273,45 @@ The layer skipped `Provider` when nil and `Controller` when empty; a nil pointer
 an empty string serialise to nothing either way, so there is no behaviour to
 replace. Golden deltas: none. Every fixture in
 `pkg/kubernetes/externalsecrets/testdata` is reproduced byte for byte.
+
+## `pkg/kubernetes/prometheus`
+
+### Removed functions (3)
+
+| Removed | Replacement |
+|---|---|
+| `ServiceMonitor(&ServiceMonitorConfig{...})` | `CreateServiceMonitor(name, namespace)` + `sm.Spec = monitoringv1.ServiceMonitorSpec{...}` |
+| `PodMonitor(&PodMonitorConfig{...})` | `CreatePodMonitor(name, namespace)` + `pm.Spec = monitoringv1.PodMonitorSpec{...}` |
+| `PrometheusRule(&PrometheusRuleConfig{...})` | `CreatePrometheusRule(name, namespace)` + `AddPrometheusRuleGroup(rule, g)` per group |
+
+### Removed types (3) and their fields
+
+| Removed field | Upstream field |
+|---|---|
+| `ServiceMonitorConfig.Name`, `.Namespace` | `CreateServiceMonitor(name, namespace)` |
+| `ServiceMonitorConfig.Selector` | `sm.Spec.Selector` |
+| `ServiceMonitorConfig.Endpoints` | `sm.Spec.Endpoints`, or `AddServiceMonitorEndpoint(sm, ep)` per endpoint |
+| `ServiceMonitorConfig.JobLabel` | `sm.Spec.JobLabel` |
+| `ServiceMonitorConfig.TargetLabels` | `sm.Spec.TargetLabels`, or `AddServiceMonitorTargetLabel(sm, l)` per label |
+| `ServiceMonitorConfig.NamespaceSelector *monitoringv1.NamespaceSelector` | `sm.Spec.NamespaceSelector monitoringv1.NamespaceSelector` (a value; dereference) |
+| `ServiceMonitorConfig.SampleLimit *int64` | `SetServiceMonitorSampleLimit(sm, n)` |
+| `ServiceMonitorConfig.Labels map[string]string` | `kubernetes.SetLabels(sm, labels)` — it was `metadata.labels` |
+| `PodMonitorConfig.Name`, `.Namespace` | `CreatePodMonitor(name, namespace)` |
+| `PodMonitorConfig.Selector` | `pm.Spec.Selector` |
+| `PodMonitorConfig.PodMetricsEndpoints` | `pm.Spec.PodMetricsEndpoints`, or `AddPodMonitorEndpoint(pm, ep)` per endpoint |
+| `PodMonitorConfig.JobLabel` | `pm.Spec.JobLabel` |
+| `PodMonitorConfig.PodTargetLabels` | `pm.Spec.PodTargetLabels`, or `AddPodMonitorPodTargetLabel(pm, l)` per label |
+| `PodMonitorConfig.NamespaceSelector *monitoringv1.NamespaceSelector` | `pm.Spec.NamespaceSelector monitoringv1.NamespaceSelector` (a value; dereference) |
+| `PodMonitorConfig.SampleLimit *int64` | `SetPodMonitorSampleLimit(pm, n)` |
+| `PodMonitorConfig.Labels map[string]string` | `kubernetes.SetLabels(pm, labels)` |
+| `PrometheusRuleConfig.Name`, `.Namespace` | `CreatePrometheusRule(name, namespace)` |
+| `PrometheusRuleConfig.Groups` | `rule.Spec.Groups`, or `AddPrometheusRuleGroup(rule, g)` per group |
+| `PrometheusRuleConfig.Labels map[string]string` | `kubernetes.SetLabels(rule, labels)` |
+
+The layer skipped `JobLabel` when empty, `NamespaceSelector` and `SampleLimit` when
+nil and `Labels` when nil; an empty string, a nil pointer and a nil map serialise to
+nothing either way, so there is no behaviour to replace. `spec.endpoints` and
+`spec.podMetricsEndpoints` render `null` when unset — release 1 recorded that
+change when the layer stopped seeding empty slices, and a struct literal is the
+same. Golden deltas: none. Every fixture in `pkg/kubernetes/prometheus/testdata` is
+reproduced byte for byte.
