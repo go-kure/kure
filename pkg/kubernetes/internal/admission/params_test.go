@@ -3,6 +3,7 @@ package admission
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -150,6 +151,40 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 		if f.Key() != "fixture/own."+w.name {
 			t.Errorf("finding %d: key %q", i, f.Key())
 		}
+	}
+}
+
+// TestOwnParameterTypes_UpstreamLiteralAliases swaps the upstream package's
+// named spec for an alias to a struct literal. Ownership is decided where an
+// alias is declared, so an upstream alias to a literal is upstream: the
+// parameters that take it directly, through a callback, or through an
+// in-tree re-export are not findings, and the 19 findings are unchanged
+// (Wrapped is still declared in-tree, whatever its upstream base).
+func TestOwnParameterTypes_UpstreamLiteralAliases(t *testing.T) {
+	dir := writeParamsFixture(t)
+	upstream := strings.Replace(paramsUpstreamSource, "type Spec struct{ Name string }", "type Spec = struct{ Name string }", 1)
+	if upstream == paramsUpstreamSource {
+		t.Fatal("fixture upstream source no longer declares Spec as expected")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "up", "up.go"), []byte(upstream), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	findings, err := OwnParameterTypes(Options{
+		Dir:      dir,
+		Patterns: []string{"./..."},
+		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
+	}, "fixture/own")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range findings {
+		switch f.Name {
+		case "Plain", "UpCallback", "UpstreamAlias":
+			t.Errorf("%s(%s %s): an upstream alias to a literal is not a kure-defined type", f.Name, f.Param, f.Type)
+		}
+	}
+	if len(findings) != 19 {
+		t.Errorf("expected the same 19 findings as with a named upstream spec, got %d: %+v", len(findings), findings)
 	}
 }
 
