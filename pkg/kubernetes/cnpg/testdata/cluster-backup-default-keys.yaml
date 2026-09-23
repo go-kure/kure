@@ -1,0 +1,28 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-replica
+  namespace: databases
+spec:
+  affinity: {}
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://bucket/pg-replica/
+      s3Credentials:
+        accessKeyId:
+          key: ACCESS_KEY_ID
+          name: backup-creds
+        secretAccessKey:
+          key: SECRET_ACCESS_KEY
+          name: backup-creds
+  bootstrap:
+    pg_basebackup:
+      source: pg-main
+  enablePDB: true
+  instances: 2
+  postgresql:
+    syncReplicaElectionConstraint:
+      enabled: false
+  primaryUpdateStrategy: unsupervised
+  resources: {}
+  storage: {}

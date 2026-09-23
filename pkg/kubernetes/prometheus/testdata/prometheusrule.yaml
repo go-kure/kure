@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    role: alert-rules
+  name: my-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: http-alerts
+      rules:
+        - alert: HighErrorRate
+          expr: rate(http_errors_total[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: critical

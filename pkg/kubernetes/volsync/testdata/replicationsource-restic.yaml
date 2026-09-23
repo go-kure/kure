@@ -1,0 +1,20 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: db-backup
+  namespace: data
+spec:
+  paused: true
+  restic:
+    copyMethod: Snapshot
+    customCA: {}
+    pruneIntervalDays: 7
+    repository: restic-creds
+    retain:
+      daily: 7
+      monthly: 12
+      weekly: 4
+    storageClassName: fast
+  sourcePVC: postgres-data
+  trigger:
+    schedule: '@hourly'

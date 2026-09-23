@@ -1,0 +1,10 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationDestination
+metadata:
+  name: rsync-dst
+  namespace: dr
+spec:
+  rsync:
+    sshKeys: ssh-secret
+  trigger:
+    schedule: '@daily'

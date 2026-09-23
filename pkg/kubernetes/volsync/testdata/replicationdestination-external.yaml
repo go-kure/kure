@@ -1,0 +1,8 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationDestination
+metadata:
+  name: ext-dst
+  namespace: dr
+spec:
+  external:
+    provider: example.com/foo

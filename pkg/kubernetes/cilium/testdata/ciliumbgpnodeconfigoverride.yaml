@@ -1,0 +1,8 @@
+apiVersion: cilium.io/v2
+kind: CiliumBGPNodeConfigOverride
+metadata:
+  name: node-worker-1
+spec:
+  bgpInstances:
+    - name: instance-65000
+      routerID: 10.0.0.1

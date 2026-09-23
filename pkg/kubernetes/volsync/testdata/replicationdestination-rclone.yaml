@@ -1,0 +1,9 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationDestination
+metadata:
+  name: rclone-dst
+  namespace: dr
+spec:
+  rclone:
+    customCA: {}
+    rcloneConfig: rclone-config-secret

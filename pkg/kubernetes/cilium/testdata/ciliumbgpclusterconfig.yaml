@@ -1,0 +1,10 @@
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: default-bgp
+spec:
+  bgpInstances:
+    - name: instance-65000
+  nodeSelector:
+    matchLabels:
+      bgp: enabled

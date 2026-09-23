@@ -1,0 +1,12 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: rsync-src
+  namespace: data
+spec:
+  rsync:
+    address: dst.example.com
+    sshKeys: ssh-secret
+  sourcePVC: data
+  trigger:
+    manual: sync-1

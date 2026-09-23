@@ -1,0 +1,10 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: daily-backup
+  namespace: databases
+spec:
+  cluster:
+    name: pg-main
+  method: plugin
+  schedule: 0 0 2 * * *

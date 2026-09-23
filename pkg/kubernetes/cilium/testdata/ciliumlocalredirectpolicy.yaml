@@ -1,0 +1,19 @@
+apiVersion: cilium.io/v2
+kind: CiliumLocalRedirectPolicy
+metadata:
+  name: dns-redirect
+  namespace: kube-system
+spec:
+  redirectBackend:
+    localEndpointSelector:
+      matchLabels:
+        k8s-app: coredns
+    toPorts:
+      - port: "53"
+        protocol: ANY
+  redirectFrontend:
+    addressMatcher:
+      ip: 169.254.20.10
+      toPorts:
+        - port: "53"
+          protocol: ANY

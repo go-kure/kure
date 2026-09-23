@@ -1,0 +1,13 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: sync-src
+  namespace: data
+spec:
+  sourcePVC: data
+  syncthing:
+    configCapacity: 1Gi
+    peers:
+      - ID: PEER-ID-XX
+        address: tcp://peer:22000
+        introducer: true

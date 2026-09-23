@@ -1,0 +1,11 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-internal
+  namespace: default
+spec:
+  description: allow traffic from the same namespace
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
