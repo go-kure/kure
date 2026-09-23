@@ -41,7 +41,8 @@ fails on any parameter whose type names a struct or interface this tree defines 
 declared under `pkg/kubernetes`, written as a literal in the signature, or reached
 through pointer, slice, array, map or channel layers, a callback's parameters and
 results, an alias or a named container (`type Config = *struct{...}`), or a type
-argument of an instantiated generic. Upstream
+argument of an instantiated generic or generic alias, or a type parameter's
+constraint. Upstream
 named types are not otherwise entered. There is no exclusion list. A named scalar such as `kubernetes.PSALevel` (a string
 enum with no upstream spec type) is not a spec type and passes; a defined type over
 an upstream struct (volsync's former `SourceResticConfig`) does not.

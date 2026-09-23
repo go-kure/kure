@@ -155,7 +155,8 @@ through every layer a type can hide behind: pointer, slice, array, map and chann
 layers, a callback's parameters and results, an alias or a named container declared
 under `pkg/kubernetes` (`type Config = *struct{...}`, `type List []struct{...}`), and a
 struct or method-bearing interface literal written in the signature itself, and the type
-arguments of an instantiated generic (`up.Wrapper[Config]`). It does not
+arguments of an instantiated generic or generic alias (`up.Wrapper[Config]`), and the
+constraint of a type parameter (`[T Variant]`). It does not
 enter an upstream named type otherwise. A named scalar with no upstream counterpart (`PSALevel`, a
 string enum) and an interface with no methods (`any`) are not spec types and pass.
 
