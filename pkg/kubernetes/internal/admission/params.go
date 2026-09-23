@@ -33,11 +33,11 @@ func (f ParamFinding) Key() string { return f.Package + "." + f.Name }
 
 // OwnParameterTypes loads the packages matching opts.Patterns and reports
 // every exported top-level function in their non-test, non-generated files
-// that takes a parameter whose type is declared under prefix (an import-path
-// prefix, e.g. "github.com/go-kure/kure/pkg/kubernetes") and is a struct or
-// an interface, reached directly or through any number of pointer, slice,
-// array or map layers, named or not. A named scalar declared under prefix (a string enum)
-// is not a spec type and is not reported; a type parameter is not either.
+// that takes a parameter naming a struct or interface this tree defines
+// itself, under prefix (an import-path prefix, e.g.
+// "github.com/go-kure/kure/pkg/kubernetes"); ownSpecType lists every layer the
+// walk follows. A named scalar declared under prefix (a string enum) is not a
+// spec type and is not reported; a type parameter is not either.
 //
 // This is the contract's rule that the upstream struct is the construction
 // API: a function that takes a struct or a sum type kure invented is a
@@ -86,9 +86,10 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 					continue
 				}
 				params := sig.Params()
+				inTree := strings.HasPrefix(p.PkgPath, prefix)
 				for i := 0; i < params.Len(); i++ {
 					v := params.At(i)
-					if !ownSpecType(v.Type(), prefix) {
+					if !ownSpecType(v.Type(), prefix, inTree) {
 						continue
 					}
 					pname := v.Name()
@@ -118,53 +119,76 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 	return findings, nil
 }
 
-// ownSpecType reports whether t is, or contains through pointer, slice,
-// array or map layers, a named struct or interface type declared in a
-// package whose import path starts with prefix. A named type whose
-// underlying type is itself such a layer (type ConfigList []Config) is
-// unwrapped too, so a container given a name does not hide its element; the
-// seen set stops a self-referential name (type Tree []Tree) from recursing
-// forever. An alias declared under prefix for an unnamed struct or interface
-// literal counts as declared there.
-func ownSpecType(t types.Type, prefix string) bool {
-	return ownSpecTypeSeen(t, prefix, map[*types.Named]bool{})
+// ownSpecType reports whether a parameter type t names, anywhere inside it, a
+// struct or interface this tree defines itself. "Defines" is followed through
+// every layer a type can hide behind:
+//
+//   - a named struct or interface declared in a package under prefix;
+//   - pointer, slice, array, map and channel layers, named or not, and a
+//     function type's parameters and results (a callback taking *Config is
+//     the same vocabulary);
+//   - an alias declared under prefix, whose target is owned even when it is
+//     a container around an unnamed literal (type Config = *struct{...});
+//   - a named container declared under prefix (type List []struct{...});
+//   - an unnamed struct, or an unnamed interface with at least one method,
+//     written in the signature itself — the parameter list belongs to this
+//     tree when the function's own package is under prefix, so a literal
+//     written there is defined here.
+//
+// A named type from outside prefix (the upstream API) is not entered, a type
+// parameter is not reported, and an interface with no methods (any) is not a
+// spec type. The seen set stops a self-referential name (type Tree []Tree)
+// from recursing forever.
+func ownSpecType(t types.Type, prefix string, inTree bool) bool {
+	return ownSpecTypeIn(t, prefix, inTree, map[*types.Named]bool{})
 }
 
-func ownSpecTypeSeen(t types.Type, prefix string, seen map[*types.Named]bool) bool {
-	// An alias declared under prefix for an unnamed struct or interface
-	// literal (type Config = struct{...}) is a kure-invented type just as a
-	// defined one is; Unalias would lose where it was declared.
-	for a, ok := t.(*types.Alias); ok; a, ok = t.(*types.Alias) {
-		if pkg := a.Obj().Pkg(); pkg != nil && strings.HasPrefix(pkg.Path(), prefix) {
-			switch types.Unalias(a).(type) {
-			case *types.Struct, *types.Interface:
-				return true
-			}
-		}
-		t = a.Rhs()
+// ownSpecTypeIn is ownSpecType with owned reporting whether the type being
+// walked was written in, or reached through a name declared in, a package
+// under prefix — which decides whether an unnamed literal found there counts.
+func ownSpecTypeIn(t types.Type, prefix string, owned bool, seen map[*types.Named]bool) bool {
+	under := func(pkg *types.Package) bool {
+		return pkg != nil && strings.HasPrefix(pkg.Path(), prefix)
 	}
 	switch x := t.(type) {
+	case *types.Alias:
+		return ownSpecTypeIn(x.Rhs(), prefix, owned || under(x.Obj().Pkg()), seen)
 	case *types.Pointer:
-		return ownSpecTypeSeen(x.Elem(), prefix, seen)
+		return ownSpecTypeIn(x.Elem(), prefix, owned, seen)
 	case *types.Slice:
-		return ownSpecTypeSeen(x.Elem(), prefix, seen)
+		return ownSpecTypeIn(x.Elem(), prefix, owned, seen)
 	case *types.Array:
-		return ownSpecTypeSeen(x.Elem(), prefix, seen)
+		return ownSpecTypeIn(x.Elem(), prefix, owned, seen)
+	case *types.Chan:
+		return ownSpecTypeIn(x.Elem(), prefix, owned, seen)
 	case *types.Map:
-		return ownSpecTypeSeen(x.Key(), prefix, seen) || ownSpecTypeSeen(x.Elem(), prefix, seen)
+		return ownSpecTypeIn(x.Key(), prefix, owned, seen) || ownSpecTypeIn(x.Elem(), prefix, owned, seen)
+	case *types.Signature:
+		for _, tuple := range []*types.Tuple{x.Params(), x.Results()} {
+			for i := 0; i < tuple.Len(); i++ {
+				if ownSpecTypeIn(tuple.At(i).Type(), prefix, owned, seen) {
+					return true
+				}
+			}
+		}
+		return false
 	case *types.Named:
 		if seen[x] {
 			return false
 		}
 		seen[x] = true
-		pkg := x.Obj().Pkg()
+		mine := under(x.Obj().Pkg())
 		switch x.Underlying().(type) {
 		case *types.Struct, *types.Interface:
-			return pkg != nil && strings.HasPrefix(pkg.Path(), prefix)
-		case *types.Pointer, *types.Slice, *types.Array, *types.Map:
-			return ownSpecTypeSeen(x.Underlying(), prefix, seen)
+			return mine
+		case *types.Pointer, *types.Slice, *types.Array, *types.Map, *types.Chan, *types.Signature:
+			return ownSpecTypeIn(x.Underlying(), prefix, mine, seen)
 		}
 		return false
+	case *types.Struct:
+		return owned
+	case *types.Interface:
+		return owned && x.NumMethods() > 0
 	}
 	return false
 }

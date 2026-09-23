@@ -49,6 +49,16 @@ type LitVariant = interface{ isLit() }
 
 type UpAlias = up.Spec
 
+type PtrLit = *struct{ Name string }
+
+type SliceLit = []struct{ Name string }
+
+type ArrLit = [1]struct{ Name string }
+
+type MapLit = map[string]interface{ isM() }
+
+type NamedLitList []struct{ Name string }
+
 func Build(cfg *Config) *up.Obj                       { return &up.Obj{Spec: up.Spec{Name: cfg.Name}} }
 func Apply(o *up.Obj, v Variant)                      {}
 func Many(cfgs []Config, byName map[string]*Config)   {}
@@ -62,6 +72,15 @@ func NamedScalars(n Names, t Tree)                    {}
 func LitStruct(c *LitConfig)                          {}
 func LitIface(v []LitVariant)                         {}
 func UpstreamAlias(u *UpAlias)                        {}
+func AliasPtr(p PtrLit)                               {}
+func AliasSlice(s SliceLit)                           {}
+func AliasArray(a ArrLit)                             {}
+func AliasMap(m MapLit)                               {}
+func NamedLit(l NamedLitList)                         {}
+func Anon(c struct{ Name string })                    {}
+func Callback(f func(*Config))                        {}
+func AnyParams(v any, m map[string]interface{})       {}
+func UpCallback(f func(*up.Spec) error)               {}
 func Label(o *up.Obj, l Level)                        {}
 func Plain(o *up.Obj, s *up.Spec, n int)              {}
 func Generic[T any](o *up.Obj, v T)                   {}
@@ -100,9 +119,15 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []struct{ name, param, typ string }{
+		{"AliasArray", "a", "fixture/own.ArrLit"},
+		{"AliasMap", "m", "fixture/own.MapLit"},
+		{"AliasPtr", "p", "fixture/own.PtrLit"},
+		{"AliasSlice", "s", "fixture/own.SliceLit"},
 		{"Aliased", "a", "fixture/own.Alias"},
+		{"Anon", "c", "struct{Name string}"},
 		{"Apply", "v", "fixture/own.Variant"},
 		{"Build", "cfg", "*fixture/own.Config"},
+		{"Callback", "f", "func(*fixture/own.Config)"},
 		{"Defined", "w", "*fixture/own.Wrapped"},
 		{"LitIface", "v", "[]fixture/own.LitVariant"},
 		{"LitStruct", "c", "*fixture/own.LitConfig"},
@@ -110,6 +135,7 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 		{"Many", "cfgs", "[]fixture/own.Config"},
 		{"NamedArray", "a", "fixture/own.ConfigArray"},
 		{"NamedList", "l", "fixture/own.ConfigList"},
+		{"NamedLit", "l", "fixture/own.NamedLitList"},
 		{"NamedMap", "m", "fixture/own.ConfigByName"},
 		{"NamedPtr", "p", "fixture/own.ConfigPtr"},
 	}
