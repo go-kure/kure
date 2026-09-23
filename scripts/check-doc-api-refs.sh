@@ -18,13 +18,16 @@
 # checked; upstream and third-party calls that happen to fit the shape are listed
 # in EXTERNAL below.
 #
-# Resolution is package-aware where the page says which package it means. pkg/
-# holds same-named declarations in unrelated packages -- CreateLayoutWithResources
-# is a method on three receivers across pkg/stack/fluxcd and pkg/stack/argocd --
-# so a name written `fluxcd.CreateX` is resolved in fluxcd and not answered by an
-# X that only argocd declares. A name written without a package selector is still
-# resolved against the whole tree; report_unresolved records why that limit is
-# deliberate.
+# Resolution is package-aware where the page says which package it means, and
+# type-aware where it says which type. pkg/ holds same-named declarations in
+# unrelated packages -- CreateLayoutWithResources is a method on three receivers
+# across pkg/stack/fluxcd and pkg/stack/argocd -- so a name written
+# `fluxcd.CreateX` is resolved in fluxcd and not answered by an X that only
+# argocd declares, and one written `LayoutIntegrator.CreateX` is resolved
+# against that type's methods and not answered by a CreateX on WorkflowEngine.
+# A name written with a selector that is neither -- a variable, a field -- or
+# with none is still resolved against the whole tree; report_unresolved records
+# why that limit is deliberate.
 #
 # Which pages count comes from site/docs-map.yaml plus the docs trees a reader
 # browses on GitHub, so a page mounted from a new directory cannot escape the
@@ -688,17 +691,53 @@ fenced.md:4:CreateReal'
 		fi
 	done
 
+	# The symbol index: one row per declaration, its receiver type in the third
+	# column and `-` for a plain function. Every receiver shape gofmt emits
+	# must yield the bare type name: named or unnamed, pointer or value, with
+	# or without type parameters. A row that lost its receiver would let a
+	# method resolve on any type, which is the residual this column closes.
+	mkdir -p "$d/idx/pkg/a"
+	cat >"$d/idx/pkg/a/a.go" <<-'EOF'
+		package a
+
+		func CreatePlain() {}
+		func (r *Recv) CreatePtr() {}
+		func (Recv) CreateBare() {}
+		func (*Recv) CreateBarePtr() {}
+		func (g *Gen[T]) CreateGeneric() {}
+		func (g Gen[K, V]) CreateGenericPair() {}
+		func (r *Recv) unexported() {}
+		func helper() {}
+	EOF
+	local want_index='pkg/a CreateBare Recv
+pkg/a CreateBarePtr Recv
+pkg/a CreateGeneric Gen
+pkg/a CreateGenericPair Gen
+pkg/a CreatePlain -
+pkg/a CreatePtr Recv'
+	got=$(printf '%s\0' "$d/idx/pkg/a/a.go" | scan_symbols | index_rows | sed "s#^$d/idx/##" | LC_ALL=C sort)
+	if [ "$got" != "$want_index" ]; then
+		printf 'self-test: symbol index mismatch\nwant:\n%s\ngot:\n%s\n' "$want_index" "$got" >&2
+		failures=$((failures + 1))
+	fi
+
 	# A name absent from the symbol set must be reported; one present must not.
 	# CreateDeployment is in the set and CreateDeployment_Gone is not, so the
 	# suffix must survive extraction or the fourth line resolves wrongly.
+	# WorkflowEngine is declared in both stack packages, as it really is;
+	# CreateOnEngine is a method of it in both and CreateOnlyInArgo in one.
 	cat >"$symbols" <<-'EOF'
-		pkg/kubernetes Create
-		pkg/kubernetes/fluxcd CreateOwn
-		pkg/stack/argocd CreateLayoutWithResources
-		pkg/stack/fluxcd AddReal
-		pkg/stack/fluxcd CreateDeployment
-		pkg/stack/fluxcd CreateElsewhere
-		pkg/stack/fluxcd CreateReal
+		pkg/kubernetes Create -
+		pkg/kubernetes/fluxcd CreateOwn -
+		pkg/stack/argocd CreateLayoutWithResources WorkflowEngine
+		pkg/stack/argocd CreateOnEngine WorkflowEngine
+		pkg/stack/argocd CreateOnlyInArgo WorkflowEngine
+		pkg/stack/fluxcd AddReal -
+		pkg/stack/fluxcd CreateDeployment -
+		pkg/stack/fluxcd CreateElsewhere -
+		pkg/stack/fluxcd CreateOnEngine WorkflowEngine
+		pkg/stack/fluxcd CreateOnIntegrator LayoutIntegrator
+		pkg/stack/fluxcd CreateReal -
 	EOF
 	printf 'pkg/kubernetes\npkg/kubernetes/fluxcd\npkg/stack/argocd\npkg/stack/fluxcd\n' >"$pkgdirs"
 	printf 'AddCommand\n' >"$external"
@@ -729,6 +768,34 @@ pkg/kubernetes/fluxcd/README.md:1:fluxcd.CreateElsewhere'
 	unresolved=$(report_unresolved | sed "s#^$d/##")
 	if [ "$unresolved" != "$want_scoped" ]; then
 		printf 'self-test: package-scope mismatch\nwant:\n%s\ngot:\n%s\n' "$want_scoped" "$unresolved" >&2
+		failures=$((failures + 1))
+	fi
+
+	# The receiver rule. Line 1: a method named on the type that declares it
+	# resolves, and one that moved to another type does not, even though the
+	# bare name survives. Line 2: a type declared in two packages answers from
+	# either on a page outside both; a selector the index knows no receiver
+	# for -- a variable, a type from another module -- falls back to the bare
+	# name, resolving CreateReal and failing CreateGone. Line 3: a lower-case
+	# selector is a variable, never a type, and falls back the same way. The
+	# package page pins the page-local half: it lives in a package declaring
+	# WorkflowEngine, so its own WorkflowEngine is the one it means, and the
+	# method only argocd's has is unresolved here while the shared one is not.
+	cat >"$d/docs/receiver.md" <<-'EOF'
+		`LayoutIntegrator.CreateOnIntegrator` is declared; `LayoutIntegrator.CreateOnEngine` moved.
+		`WorkflowEngine.CreateOnlyInArgo` resolves through argocd; `Unknown.CreateReal` and `Unknown.CreateGone` fall back.
+		`engine.CreateOnIntegrator` is a variable selector and falls back too.
+	EOF
+	cat >"$d/pkg/stack/fluxcd/engine.md" <<-'EOF'
+		`WorkflowEngine.CreateOnlyInArgo` is argocd's; `WorkflowEngine.CreateOnEngine` is ours.
+	EOF
+	extract_refs "$d/docs/receiver.md" "$d/pkg/stack/fluxcd/engine.md" | sort -u >"$referenced"
+	local want_receiver='docs/receiver.md:1:LayoutIntegrator.CreateOnEngine
+docs/receiver.md:2:Unknown.CreateGone
+pkg/stack/fluxcd/engine.md:1:WorkflowEngine.CreateOnlyInArgo'
+	unresolved=$(report_unresolved | sed "s#^$d/##")
+	if [ "$unresolved" != "$want_receiver" ]; then
+		printf 'self-test: receiver-scope mismatch\nwant:\n%s\ngot:\n%s\n' "$want_receiver" "$unresolved" >&2
 		failures=$((failures + 1))
 	fi
 
@@ -863,12 +930,17 @@ check_removed_are_gone() {
 # Exits 0 when it printed at least one row, so it reads as
 # `if unresolved=$(report_unresolved)`.
 #
-# Three rules:
+# Five rules, tried in this order:
 #
 #   qualified `pkg.Name` on a page that lives in a package called pkg
 #       -> Name must be declared in that exact package
 #   qualified `pkg.Name` anywhere else
 #       -> Name must be declared in a package whose base name is pkg
+#   qualified `Type.Name`, Type exported and a receiver somewhere in the index,
+#   on a page that lives in a package declaring methods on Type
+#       -> Name must be a method of Type in that exact package
+#   qualified `Type.Name` anywhere else
+#       -> Name must be a method of Type in some package
 #   anything else
 #       -> Name must be declared somewhere under pkg/
 #
@@ -883,6 +955,18 @@ check_removed_are_gone() {
 # it still resolves there. The two packages currently share no builder-shaped
 # name at all (184 in pkg/kubernetes/fluxcd, 2 in pkg/stack/fluxcd, no overlap),
 # so no reference in the tree is ambiguous today.
+#
+# The receiver rules do the same for a method that moved between types: without
+# them `LayoutIntegrator.CreateLayoutWithResources` resolved as long as any type
+# in the tree had a CreateLayoutWithResources, and WorkflowEngine does. They have
+# the same shape and the same limit as the package rules -- WorkflowEngine is
+# declared in both stack packages, and only a page under one of them settles
+# which it means. A selector is taken as a type only when it starts upper-case
+# and the index holds methods on a type of that name. Anything else -- a
+# variable (`engine.CreateLayoutWithResources`), an upper-case field
+# (`Spec.Template`), a type from another module -- names nothing the index can
+# check, and falls back to the bare-name rule: the last rule is a deliberate
+# floor, not a gap, because the page cannot always say what type it means.
 #
 # It is deliberately not extended to unqualified names on a package's own README.
 # That rule is not decidable from the text and was measured against this tree: a
@@ -907,6 +991,12 @@ report_unresolved() {
 			base = $1
 			sub(/.*\//, "", base)
 			bybase[base " " $2] = 1
+			if ($3 != "-") {
+				isrecv[$3] = 1
+				byrecv[$3 " " $2] = 1
+				pkgrecv[$1 " " $3] = 1
+				recvdecl[$1 " " $3 " " $2] = 1
+			}
 			next
 		}
 		FILENAME == dirfile {
@@ -955,6 +1045,26 @@ report_unresolved() {
 				found = 1
 				next
 			}
+			if (qual ~ /^[A-Z]/ && (qual in isrecv)) {
+				# An exported selector the index knows as a receiver type
+				# names that type, so the method must be its own. The same
+				# page-local rule as above: a type declared in more than one
+				# package (WorkflowEngine, in both stack packages) means the
+				# one beside the page where the page lives in one of them.
+				pagedir = file
+				sub(/\/[^\/]*$/, "", pagedir)
+				sub(/^.*\/pkg\//, "pkg/", pagedir)
+				if ((pagedir " " qual) in pkgrecv) {
+					if ((pagedir " " qual " " name) in recvdecl) next
+					print
+					found = 1
+					next
+				}
+				if ((qual " " name) in byrecv) next
+				print
+				found = 1
+				next
+			}
 			if (name in names) next
 			print
 			found = 1
@@ -987,11 +1097,6 @@ list_page_candidates() {
 	find examples -name '*.go' ! -name '*_test.go' -type f || return
 }
 
-if [ "${1:-}" = "--self-test" ]; then
-	self_test
-	exit
-fi
-
 # Exported functions and methods declared in the public tree, each paired with
 # the package directory that declares it. Test files do not count: a symbol that
 # only exists in a _test.go file is not importable, and no page may cite one.
@@ -1019,11 +1124,50 @@ fi
 scan_symbols() {
 	xargs -0 grep -HoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' || [ "$?" -eq 123 ]
 }
+
+# One "<package dir> <name> <receiver>" row per scan_symbols line, `-` for a
+# function. The receiver is the bare type name: the parameter name, the `*`
+# and any type-parameter list are dropped, so `(li *LayoutIntegrator)`,
+# `(*Recv)`, `(Recv)` and `(g Gen[K, V])` all reduce to the type. The type is
+# what a page names in `Type.Method`, and keeping it is what lets that form
+# resolve against the type's own methods instead of against every method of
+# that name in the tree. A line the scan produced that this cannot read is an
+# error rather than a dropped row: a silently thinner index is a greener check.
+index_rows() {
+	awk '
+		{
+			i = index($0, ".go:func ")
+			if (i == 0) {
+				print "check-doc-api-refs: unreadable declaration row: " $0 > "/dev/stderr"
+				exit 1
+			}
+			dir = substr($0, 1, i - 1)
+			sub(/\/[^\/]*$/, "", dir)
+			rest = substr($0, i + 9)
+			recv = "-"
+			if (substr(rest, 1, 1) == "(") {
+				j = index(rest, ")")
+				recv = substr(rest, 2, j - 2)
+				rest = substr(rest, j + 2)
+				sub(/^[A-Za-z0-9_]+ /, "", recv)
+				sub(/^\*/, "", recv)
+				sub(/\[.*$/, "", recv)
+			}
+			print dir " " rest " " recv
+		}
+	'
+}
+
+if [ "${1:-}" = "--self-test" ]; then
+	self_test
+	exit
+fi
+
 go_files=$(find pkg -name '*.go' ! -name '*_test.go' ! -path '*/internal/*' -type f)
 printf '%s\n' "$go_files" | sed 's#/[^/]*$##' | sort -u >"$pkgdirs"
 printf '%s\n' "$go_files" | tr '\n' '\0' |
 	scan_symbols |
-	sed -E 's#/[^/]*\.go:func (\([^)]*\) )?# #' |
+	index_rows |
 	sort -u >"$symbols"
 
 printf '%s\n' "${EXTERNAL[@]}" >"$external"
@@ -1137,8 +1281,9 @@ if unresolved=$(report_unresolved); then
 
 		Each row is a page naming a function that is not in the public API where the
 		page says it is. A row written `pkg.Name` was resolved in the package that
-		selector names, so it can appear because the name lives in another package
-		rather than because it was deleted. Fix the page -- the replacement
+		selector names, and one written `Type.Name` against the methods of that
+		type, so it can appear because the name lives in another package or on
+		another type rather than because it was deleted. Fix the page -- the replacement
 		expression for every function the builder-contract epic removed is in
 		docs/builder-contract-release-1.md. If the reference is deliberate (a dated
 		record, or a third-party API that happens to match the Create/Set/Add shape),

@@ -178,8 +178,14 @@ temporary branch — the merged result — before the PR is allowed to land.
   another `<!--` is an error. A reference
   written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the
   package that selector names rather than anywhere in the tree, so a helper that moves or is
-  removed from one package is not answered by a same-named declaration in another; a reference
-  written without one still resolves tree-wide, because an import alias and a variable receiver are
+  removed from one package is not answered by a same-named declaration in another. A reference
+  written with an exported type selector that the index knows as a method receiver
+  (`LayoutIntegrator.CreateLayoutWithResources`) is resolved against that type's own methods — in
+  the page's own package first when it lives in one declaring the type, otherwise in any package
+  that does — so a method that moves between types is not answered by its old name on the other;
+  the index keeps the receiver type of every method for this. A reference
+  written with a selector that is neither — a variable, a field, a type from another module — or
+  without one still resolves tree-wide, because an import alias and a variable receiver are
   spelled alike. The generic constructor is recognised both qualified (`kubernetes.Create[T]`)
   and bare (`Create[T]`); a bare `Set[...]`/`Add[...]` is not, being type syntax elsewhere. Dated records under `docs/history/` and `docs/reviews/`, the generated `CHANGELOG.md` and
   the two proposal documents are exempt by name in the script, each with its reason. The release-1
