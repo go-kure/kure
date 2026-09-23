@@ -1,0 +1,17 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-no-paa
+  namespace: databases
+spec:
+  affinity:
+    enablePodAntiAffinity: false
+    topologyKey: kubernetes.io/hostname
+  enablePDB: false
+  instances: 1
+  postgresql:
+    syncReplicaElectionConstraint:
+      enabled: false
+  primaryUpdateStrategy: unsupervised
+  resources: {}
+  storage: {}

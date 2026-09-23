@@ -70,15 +70,17 @@ equivalent and need no replacement: a `nil` `*Config` returned a `nil` object
 interface was treated as "no variant" (there is no interface to store it in — an
 unset pointer arm is unset).
 
-One rule covers most of the remaining differences. The layer never wrote an empty
-value: it set a pointer only when the input behind it was non-empty or non-zero,
-and it built a list by appending in a loop, so an empty input left the field nil.
-A struct literal writes exactly what it is given. To keep a manifest unchanged,
-leave a pointer nil where you would have passed an empty or zero input, and leave a
-list nil rather than assigning an empty one — the difference shows in output
-wherever the upstream field has no `omitempty` (an empty slice renders `[]`, nil
-renders `null`) and wherever a pointer to an empty struct renders `{}`. The rows
-below that carry such a guard say so.
+Most of the remaining differences share one shape. Where the layer guarded a field,
+it set a pointer only when the input behind it was non-empty or positive, and it
+filled a list by appending in a loop, so an empty input left the field nil. A struct
+literal writes exactly what it is given, so for those fields an assigned empty value
+can change the manifest: an empty slice renders `[]` where nil renders `null` on a
+field without `omitempty`, and a pointer to an empty struct renders `{}`. The guard
+is a property of each field, not a general default — the rows below that carry one
+state its condition, and only those fields should be left nil for an empty input.
+A pointer the layer always wrote, whatever its value, has no such guard: CNPG's
+`EnablePodAntiAffinity` was written as `false` when asked for `false`, and leaving it
+nil instead lets the operator apply anti-affinity.
 
 The golden fixtures under each package's `testdata/` were written by the layer as it
 stood before this release; the tests that now produce them use `Create<Kind>` and
@@ -199,7 +201,7 @@ reproduced byte for byte.
 | `SynchronousOptions.MaxStandbyDelay int32` | nothing — the layer never wrote it, and `SynchronousReplicaConfiguration` has no such field (`MaxStandbyNamesFromCluster` is the nearest) |
 | `ClusterOptions.ObjectStoreName` | `Spec.Plugins = []cnpgv1.PluginConfiguration{{Name: "barman-cloud.barmancloud.cnpg.io", IsWALArchiver: ptr.To(true), Parameters: map[string]string{"objectStoreName": name}}}` |
 | `ClusterOptions.Affinity *AffinityOptions` | `Spec.Affinity` (`cnpgv1.AffinityConfiguration`, a value) |
-| `AffinityOptions.EnablePodAntiAffinity bool` | `Spec.Affinity.EnablePodAntiAffinity *bool` — `ptr.To(b)` |
+| `AffinityOptions.EnablePodAntiAffinity bool` | `Spec.Affinity.EnablePodAntiAffinity *bool` — `ptr.To(b)`, including `ptr.To(false)`: the layer always wrote it when `Affinity` was supplied, and CNPG treats nil as enabled (pinned by `cluster-affinity-disabled.yaml`) |
 | `AffinityOptions.TopologyKey`, `.PodAntiAffinityType`, `.NodeSelector` | `Spec.Affinity.TopologyKey`, `.PodAntiAffinityType` (`cnpgv1.PodAntiAffinityTypePreferred` / `Required`), `.NodeSelector` |
 | `ClusterOptions.ManagedRoles []ManagedRoleOptions` | `Spec.Managed = &cnpgv1.ManagedConfiguration{Roles: []cnpgv1.RoleConfiguration{...}}`, or `AddClusterManagedRole(cluster, role)` per role — only when there is at least one role; the layer left `Managed` nil otherwise, and a non-nil empty one renders `managed: {}` |
 | `ManagedRoleOptions.Name`, `.Comment`, `.Login`, `.Superuser`, `.CreateDB`, `.CreateRole`, `.Replication`, `.Inherit *bool`, `.InRoles` | the same-named fields of `cnpgv1.RoleConfiguration` <!-- doc-api-refs:ignore CreateDB and CreateRole are upstream struct fields, not builders --> |
