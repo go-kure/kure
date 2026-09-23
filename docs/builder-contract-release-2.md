@@ -139,3 +139,108 @@ it can see what to write instead.
 
 Golden deltas: none. Every fixture in `pkg/kubernetes/certmanager/testdata` is
 reproduced byte for byte.
+
+## `pkg/kubernetes/cnpg`
+
+### Removed functions (5)
+
+| Removed | Replacement |
+|---|---|
+| `Cluster(&ClusterConfig{...}) (*Cluster, error)` | `CreateCluster(name, namespace)` + `cluster.Spec = cnpgv1.ClusterSpec{...}`; no error return — the two things it could fail on (quantity parsing, the object-store map round-trip) are the caller's now |
+| `Database(&DatabaseConfig{...})` | `CreateDatabase(name, namespace)` + `db.Spec = cnpgv1.DatabaseSpec{...}` |
+| `ObjectStore(&ObjectStoreConfig{...})` | `CreateObjectStore(name, namespace)` + `store.Spec = barmanv1.ObjectStoreSpec{...}` |
+| `ScheduledBackup(&ScheduledBackupConfig{...})` | `CreateScheduledBackup(name, namespace)` + `backup.Spec = spec` |
+| `Pooler(&PoolerConfig{...})` | `CreatePooler(name, namespace)` + `pooler.Spec = cnpgv1.PoolerSpec{...}` |
+
+### Removed types (21) and their fields
+
+| Removed field | Upstream field |
+|---|---|
+| `ClusterConfig.Name`, `.Namespace` | `CreateCluster(name, namespace)` |
+| `ClusterConfig.Options *ClusterOptions` | `cluster.Spec` (`cnpgv1.ClusterSpec`) |
+| `ClusterOptions.Instances int32` | `Spec.Instances int` |
+| `ClusterOptions.ImageName` | `Spec.ImageName` |
+| `ClusterOptions.StorageSize` | `Spec.StorageConfiguration.Size` |
+| `ClusterOptions.InheritedLabels`, `.InheritedAnnotations` | `Spec.InheritedMetadata = &cnpgv1.EmbeddedObjectMetadata{Labels, Annotations}` |
+| `ClusterOptions.Resources *ResourceOptions` | `Spec.Resources` (`corev1.ResourceRequirements`) |
+| `ResourceOptions.RequestsCPU`, `.RequestsMemory` (strings) | `Spec.Resources.Requests[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal |
+| `ResourceOptions.LimitsCPU`, `.LimitsMemory` (strings) | `Spec.Resources.Limits[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal |
+| `ClusterOptions.Backup *BackupOptions` | `Spec.Backup = &cnpgv1.BackupConfiguration{...}` |
+| `BackupOptions.DestinationPath`, `.EndpointURL` | `Spec.Backup.BarmanObjectStore = &barmanapi.BarmanObjectStoreConfiguration{DestinationPath, EndpointURL}` |
+| `BackupOptions.RetentionPolicy` | `Spec.Backup.RetentionPolicy` |
+| `BackupOptions.S3Credentials *S3CredentialOptions` | `Spec.Backup.BarmanObjectStore.AWS = &barmanapi.S3Credentials{...}` (`AWS` is promoted from the embedded `barmanapi.BarmanCredentials`; in a literal it is `BarmanCredentials: barmanapi.BarmanCredentials{AWS: ...}`) |
+| `S3CredentialOptions.SecretName`, `.AccessKeyIDKey` | `barmanapi.S3Credentials.AccessKeyIDReference = &machineryapi.SecretKeySelector{LocalObjectReference: {Name: secret}, Key: key}` |
+| `S3CredentialOptions.SecretName`, `.SecretAccessKeyKey` | `barmanapi.S3Credentials.SecretAccessKeyReference = &machineryapi.SecretKeySelector{LocalObjectReference: {Name: secret}, Key: key}` |
+| `ClusterOptions.Monitoring *MonitoringOptions` | `Spec.Monitoring = &cnpgv1.MonitoringConfiguration{...}` |
+| `MonitoringOptions.EnablePodMonitor` | `Spec.Monitoring.EnablePodMonitor` (deprecated upstream, still the only opt-in) |
+| `MonitoringOptions.CustomQueriesConfigMap []ConfigMapKeyRefOptions` | `Spec.Monitoring.CustomQueriesConfigMap []cnpgv1.ConfigMapKeySelector` |
+| `ConfigMapKeyRefOptions.Name`, `.Key` | `cnpgv1.ConfigMapKeySelector{LocalObjectReference: machineryapi.LocalObjectReference{Name}, Key}` |
+| `ClusterOptions.Bootstrap *BootstrapOptions` | `Spec.Bootstrap = &cnpgv1.BootstrapConfiguration{...}` |
+| `BootstrapOptions.RecoverySource` | `Spec.Bootstrap.Recovery = &cnpgv1.BootstrapRecovery{Source}` |
+| `BootstrapOptions.PgBasebackupSource` | `Spec.Bootstrap.PgBaseBackup = &cnpgv1.BootstrapPgBaseBackup{Source}` |
+| `ClusterOptions.ExternalClusters []ExternalClusterOptions` | `Spec.ExternalClusters []cnpgv1.ExternalCluster` |
+| `ExternalClusterOptions.Name`, `.ConnectionParameters` | `cnpgv1.ExternalCluster.Name`, `.ConnectionParameters` |
+| `ExternalClusterOptions.BarmanObjectStore map[string]any` | `cnpgv1.ExternalCluster.BarmanObjectStore *barmanapi.BarmanObjectStoreConfiguration` — a typed literal; a caller holding a map does its own `json.Marshal` / `json.Unmarshal` into the upstream type |
+| `ClusterOptions.PostgresParams` | `Spec.PostgresConfiguration.Parameters` |
+| `ClusterOptions.Synchronous *SynchronousOptions` | `Spec.PostgresConfiguration.Synchronous = &cnpgv1.SynchronousReplicaConfiguration{...}` |
+| `SynchronousOptions.Method string` | `.Method cnpgv1.SynchronousReplicaConfigurationMethod` (`SynchronousReplicaConfigurationMethodAny` / `First`) |
+| `SynchronousOptions.Number int32` | `.Number int` |
+| `SynchronousOptions.DataDurability string` | `.DataDurability cnpgv1.DataDurabilityLevel` (`DataDurabilityLevelRequired` / `Preferred`) |
+| `SynchronousOptions.MaxStandbyDelay int32` | nothing — the layer never wrote it, and `SynchronousReplicaConfiguration` has no such field (`MaxStandbyNamesFromCluster` is the nearest) |
+| `ClusterOptions.ObjectStoreName` | `Spec.Plugins = []cnpgv1.PluginConfiguration{{Name: "barman-cloud.barmancloud.cnpg.io", IsWALArchiver: ptr.To(true), Parameters: map[string]string{"objectStoreName": name}}}` |
+| `ClusterOptions.Affinity *AffinityOptions` | `Spec.Affinity` (`cnpgv1.AffinityConfiguration`, a value) |
+| `AffinityOptions.EnablePodAntiAffinity bool` | `Spec.Affinity.EnablePodAntiAffinity *bool` — `ptr.To(b)` |
+| `AffinityOptions.TopologyKey`, `.PodAntiAffinityType`, `.NodeSelector` | `Spec.Affinity.TopologyKey`, `.PodAntiAffinityType` (`cnpgv1.PodAntiAffinityTypePreferred` / `Required`), `.NodeSelector` |
+| `ClusterOptions.ManagedRoles []ManagedRoleOptions` | `Spec.Managed = &cnpgv1.ManagedConfiguration{Roles: []cnpgv1.RoleConfiguration{...}}`, or `AddClusterManagedRole(cluster, role)` per role |
+| `ManagedRoleOptions.Name`, `.Comment`, `.Login`, `.Superuser`, `.CreateDB`, `.CreateRole`, `.Replication`, `.Inherit *bool`, `.InRoles` | the same-named fields of `cnpgv1.RoleConfiguration` |
+| `ManagedRoleOptions.ConnectionLimit *int64` | `cnpgv1.RoleConfiguration.ConnectionLimit int64` (a value; `-1` is the upstream default) |
+| `ManagedRoleOptions.PasswordSecret string` | `cnpgv1.RoleConfiguration.PasswordSecret = &cnpgv1.LocalObjectReference{Name}` |
+| `ManagedRoleOptions.Ensure string` | `cnpgv1.RoleConfiguration.Ensure cnpgv1.EnsureOption` (`EnsurePresent` / `EnsureAbsent`) |
+| `DatabaseConfig.Name`, `.Namespace` | `CreateDatabase(name, namespace)` |
+| `DatabaseConfig.Options *DatabaseOptions` | `db.Spec` (`cnpgv1.DatabaseSpec`) |
+| `DatabaseOptions.ClusterName` | `Spec.ClusterRef = corev1.LocalObjectReference{Name}` |
+| `DatabaseOptions.DBName` | `Spec.Name` |
+| `DatabaseOptions.Owner` | `Spec.Owner` |
+| `DatabaseOptions.ReclaimPolicy string` (`"delete"` or `""`) | `Spec.ReclaimPolicy cnpgv1.DatabaseReclaimPolicy` (`DatabaseReclaimDelete` / `DatabaseReclaimRetain`) |
+| `DatabaseOptions.Ensure string` (`"absent"` or `""`) | `Spec.Ensure cnpgv1.EnsureOption` |
+| `DatabaseOptions.Extensions []ExtensionOptions` | `Spec.Extensions []cnpgv1.ExtensionSpec`, or `AddDatabaseExtension(db, ext)` per extension |
+| `ExtensionOptions.Name`, `.Ensure` | `cnpgv1.ExtensionSpec{DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{Name, Ensure}}` |
+| `ObjectStoreConfig.Name`, `.Namespace` | `CreateObjectStore(name, namespace)` |
+| `ObjectStoreConfig.Options *ObjectStoreOptions` | `store.Spec` (`barmanv1.ObjectStoreSpec`) |
+| `ObjectStoreOptions.DestinationPath`, `.EndpointURL`, `.ServerName` | `Spec.Configuration.DestinationPath`, `.EndpointURL`, `.ServerName` |
+| `ObjectStoreOptions.SecretName`, `.AccessKeyIDKey`, `.SecretAccessKeyKey` | `SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{...})` with the two `machineryapi.SecretKeySelector` references spelled out |
+| `ObjectStoreOptions.RetentionPolicy` | `Spec.RetentionPolicy` |
+| `ScheduledBackupConfig.Name`, `.Namespace`, `.Spec` | `CreateScheduledBackup(name, namespace)`; `backup.Spec = spec` |
+| `PoolerConfig.Name`, `.Namespace` | `CreatePooler(name, namespace)` |
+| `PoolerConfig.Options *PoolerOptions` | `pooler.Spec` (`cnpgv1.PoolerSpec`) |
+| `PoolerOptions.ClusterName` | `Spec.Cluster = cnpgv1.LocalObjectReference{Name}` |
+| `PoolerOptions.Instances int32` (0 = omit) | `Spec.Instances *int32` — `ptr.To[int32](n)`; nil omits |
+| `PoolerOptions.Type string` (`"ro"`, anything else `rw`) | `Spec.Type cnpgv1.PoolerType` (`PoolerTypeRW` / `PoolerTypeRO`) |
+| `PoolerOptions.PgBouncer *PgBouncerOptions` | `Spec.PgBouncer = &cnpgv1.PgBouncerSpec{...}` (required upstream: no `omitempty`, so always set it, empty if nothing else) |
+| `PgBouncerOptions.PoolMode string` | `cnpgv1.PgBouncerSpec.PoolMode cnpgv1.PgBouncerPoolMode` (`PgBouncerPoolModeSession` / `Transaction`) |
+| `PgBouncerOptions.Parameters` | `cnpgv1.PgBouncerSpec.Parameters` |
+
+### Values the layer injected
+
+Each of these was a line in emitted YAML the caller never wrote. The release 1
+defaults purge deferred them to this release (they lived in the layer, not in a
+constructor or a sugar helper). They are all expressible — the re-authored goldens
+write every one of them — but nothing writes them for you.
+
+| Injected value | Old trigger | Write it yourself as |
+|---|---|---|
+| `spec.enablePDB: true` / `false` | derived from `Instances > 1` | `Spec.EnablePDB = ptr.To(instances > 1)` — or the value you actually want |
+| `spec.primaryUpdateStrategy: unsupervised` | always | `Spec.PrimaryUpdateStrategy = cnpgv1.PrimaryUpdateStrategyUnsupervised` |
+| S3 key names `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` | a `SecretName` with empty key names, on `ObjectStoreOptions` and `S3CredentialOptions` | the `Key` of each `machineryapi.SecretKeySelector` |
+| `spec.plugins[0]` = `barman-cloud.barmancloud.cnpg.io`, `isWALArchiver: true` | `ObjectStoreName != ""` | the `cnpgv1.PluginConfiguration` literal above |
+| Pooler `spec.type: rw` | any `Type` other than `"ro"`, including `""` | `Spec.Type = cnpgv1.PoolerTypeRW` |
+| Pooler `spec.pgbouncer: {}` | always | `Spec.PgBouncer = &cnpgv1.PgBouncerSpec{}` |
+| Extension `ensure: present` | every extension without `Ensure: "absent"` | `DatabaseObjectSpec.Ensure = cnpgv1.EnsurePresent` |
+| `Database` `ensure` / `databaseReclaimPolicy` dropped for any string other than `"absent"` / `"delete"` | string normalisation | the upstream constant; there is no string to normalise |
+| `spec.bootstrap` chose `recovery` over `pg_basebackup` when both sources were set | precedence in the layer | set the one arm you mean |
+| `spec.backup` omitted when both `DestinationPath` and `RetentionPolicy` were empty | a guard in the layer | leave `Spec.Backup` nil |
+| `spec.monitoring` omitted, `CustomQueriesConfigMap` included, unless `EnablePodMonitor` was true | a guard in the layer | set `Spec.Monitoring` whenever you want custom queries, with or without `EnablePodMonitor` |
+| `postgresql.synchronous` omitted, `Number` and `DataDurability` included, unless `Method` was non-empty | a guard in the layer | leave `Spec.PostgresConfiguration.Synchronous` nil, or set it with a `Method` |
+
+Golden deltas: none. Every fixture in `pkg/kubernetes/cnpg/testdata` is reproduced
+byte for byte, the injected values above included.

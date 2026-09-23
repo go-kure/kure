@@ -12,25 +12,17 @@ import (
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
-func mustCluster(t *testing.T, cfg *ClusterConfig) *cnpgv1.Cluster {
-	t.Helper()
-	obj, err := Cluster(cfg)
-	if err != nil {
-		t.Fatalf("Cluster: unexpected error: %v", err)
-	}
-	return obj
-}
-
 // TestMetadataViaGenericHelpers covers what the per-kind
 // Add<Kind>Label/Add<Kind>Annotation helpers used to do for every kind in this
 // package: the generic helpers work over metav1.Object, so one pair reaches all
-// four.
+// five.
 func TestMetadataViaGenericHelpers(t *testing.T) {
 	objs := []metav1.Object{
-		mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}}),
-		Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}}),
-		ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}}),
-		ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}}),
+		CreateCluster("pg", "db"),
+		CreateDatabase("db", "ns"),
+		CreateObjectStore("store", "ns"),
+		CreateScheduledBackup("bk", "ns"),
+		CreatePooler("pool", "ns"),
 	}
 	for _, obj := range objs {
 		kubernetes.AddLabel(obj, "env", "prod")
@@ -45,7 +37,7 @@ func TestMetadataViaGenericHelpers(t *testing.T) {
 }
 
 func TestAddClusterManagedRole(t *testing.T) {
-	obj := mustCluster(t, &ClusterConfig{Name: "pg", Namespace: "db", Options: &ClusterOptions{}})
+	obj := CreateCluster("pg", "db")
 	role := cnpgv1.RoleConfiguration{Name: "app"}
 	AddClusterManagedRole(obj, role)
 	if len(obj.Spec.Managed.Roles) != 1 {
@@ -57,7 +49,7 @@ func TestAddClusterManagedRole(t *testing.T) {
 }
 
 func TestAddDatabaseExtension(t *testing.T) {
-	obj := Database(&DatabaseConfig{Name: "db", Namespace: "ns", Options: &DatabaseOptions{}})
+	obj := CreateDatabase("db", "ns")
 	ext := cnpgv1.ExtensionSpec{DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{Name: "pgcrypto"}}
 	AddDatabaseExtension(obj, ext)
 	if len(obj.Spec.Extensions) != 1 {
@@ -69,7 +61,7 @@ func TestAddDatabaseExtension(t *testing.T) {
 }
 
 func TestAddObjectStoreEnvVar(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
+	obj := CreateObjectStore("store", "ns")
 	env := corev1.EnvVar{Name: "AWS_REGION", Value: "us-east-1"}
 	AddObjectStoreEnvVar(obj, env)
 	if len(obj.Spec.InstanceSidecarConfiguration.Env) != 1 {
@@ -81,7 +73,7 @@ func TestAddObjectStoreEnvVar(t *testing.T) {
 }
 
 func TestSetObjectStoreS3Credentials(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
+	obj := CreateObjectStore("store", "ns")
 	creds := &barmanapi.S3Credentials{}
 	SetObjectStoreS3Credentials(obj, creds)
 	if obj.Spec.Configuration.AWS == nil {
@@ -90,7 +82,7 @@ func TestSetObjectStoreS3Credentials(t *testing.T) {
 }
 
 func TestSetObjectStoreWalConfig(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
+	obj := CreateObjectStore("store", "ns")
 	wal := &barmanapi.WalBackupConfiguration{Compression: barmanapi.CompressionTypeGzip}
 	SetObjectStoreWalConfig(obj, wal)
 	if obj.Spec.Configuration.Wal == nil {
@@ -102,7 +94,7 @@ func TestSetObjectStoreWalConfig(t *testing.T) {
 }
 
 func TestSetObjectStoreDataConfig(t *testing.T) {
-	obj := ObjectStore(&ObjectStoreConfig{Name: "store", Namespace: "ns", Options: &ObjectStoreOptions{}})
+	obj := CreateObjectStore("store", "ns")
 	data := &barmanapi.DataBackupConfiguration{Compression: barmanapi.CompressionTypeGzip}
 	SetObjectStoreDataConfig(obj, data)
 	if obj.Spec.Configuration.Data == nil {
@@ -114,7 +106,7 @@ func TestSetObjectStoreDataConfig(t *testing.T) {
 }
 
 func TestSetScheduledBackupPluginConfiguration(t *testing.T) {
-	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
+	obj := CreateScheduledBackup("bk", "ns")
 	params := map[string]string{"key": "value"}
 	SetScheduledBackupPluginConfiguration(obj, "barman-cloud.cloudnative-pg.io", params)
 	if obj.Spec.PluginConfiguration == nil {
@@ -126,7 +118,7 @@ func TestSetScheduledBackupPluginConfiguration(t *testing.T) {
 }
 
 func TestSetScheduledBackupImmediate(t *testing.T) {
-	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
+	obj := CreateScheduledBackup("bk", "ns")
 	SetScheduledBackupImmediate(obj, true)
 	if obj.Spec.Immediate == nil || !*obj.Spec.Immediate {
 		t.Error("expected Immediate to be true")
@@ -134,7 +126,7 @@ func TestSetScheduledBackupImmediate(t *testing.T) {
 }
 
 func TestSetScheduledBackupSuspend(t *testing.T) {
-	obj := ScheduledBackup(&ScheduledBackupConfig{Name: "bk", Namespace: "ns", Spec: cnpgv1.ScheduledBackupSpec{}})
+	obj := CreateScheduledBackup("bk", "ns")
 	SetScheduledBackupSuspend(obj, true)
 	if obj.Spec.Suspend == nil || !*obj.Spec.Suspend {
 		t.Error("expected Suspend to be true")
