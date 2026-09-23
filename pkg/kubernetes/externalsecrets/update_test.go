@@ -16,9 +16,9 @@ import (
 // three.
 func TestMetadataViaGenericHelpers(t *testing.T) {
 	objs := []metav1.Object{
-		ExternalSecret(&ExternalSecretConfig{Name: "test", Namespace: "default"}),
-		SecretStore(&SecretStoreConfig{Name: "test", Namespace: "default"}),
-		ClusterSecretStore(&ClusterSecretStoreConfig{Name: "test"}),
+		CreateExternalSecret("test", "default"),
+		CreateSecretStore("test", "default"),
+		CreateClusterSecretStore("test"),
 	}
 	for _, obj := range objs {
 		kubernetes.AddLabel(obj, "team", "platform")
@@ -33,10 +33,7 @@ func TestMetadataViaGenericHelpers(t *testing.T) {
 }
 
 func TestAddExternalSecretData(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
+	es := CreateExternalSecret("test", "default")
 
 	data := esv1.ExternalSecretData{
 		SecretKey: "api-key",
@@ -56,10 +53,7 @@ func TestAddExternalSecretData(t *testing.T) {
 }
 
 func TestSetSecretStoreProvider(t *testing.T) {
-	ss := SecretStore(&SecretStoreConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
+	ss := CreateSecretStore("test", "default")
 
 	provider := &esv1.SecretStoreProvider{
 		AWS: &esv1.AWSProvider{
@@ -78,9 +72,7 @@ func TestSetSecretStoreProvider(t *testing.T) {
 }
 
 func TestSetClusterSecretStoreProvider(t *testing.T) {
-	css := ClusterSecretStore(&ClusterSecretStoreConfig{
-		Name: "test",
-	})
+	css := CreateClusterSecretStore("test")
 
 	provider := &esv1.SecretStoreProvider{
 		AWS: &esv1.AWSProvider{
@@ -99,10 +91,7 @@ func TestSetClusterSecretStoreProvider(t *testing.T) {
 }
 
 func TestSetRefreshInterval(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
+	es := CreateExternalSecret("test", "default")
 
 	d := metav1.Duration{Duration: 5 * time.Minute}
 	SetRefreshInterval(es, d)
@@ -116,10 +105,7 @@ func TestSetRefreshInterval(t *testing.T) {
 }
 
 func TestAddDataFrom(t *testing.T) {
-	es := ExternalSecret(&ExternalSecretConfig{
-		Name:      "test",
-		Namespace: "default",
-	})
+	es := CreateExternalSecret("test", "default")
 
 	source := esv1.ExternalSecretDataFromRemoteRef{
 		Extract: &esv1.ExternalSecretDataRemoteRef{
