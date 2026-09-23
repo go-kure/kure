@@ -37,9 +37,11 @@ One idiom remains: the generated `Create<Kind>` constructor plus the upstream st
 
 `TestAdmission_NoOwnParameterTypes` (`pkg/kubernetes/admission_params_test.go`)
 walks every exported top-level function in the non-test, non-generated files and
-fails on any parameter whose type is a struct or interface declared under
-`pkg/kubernetes` — reached directly or through pointer, slice, array or map layers.
-There is no exclusion list. A named scalar such as `kubernetes.PSALevel` (a string
+fails on any parameter whose type names a struct or interface this tree defines —
+declared under `pkg/kubernetes`, written as a literal in the signature, or reached
+through pointer, slice, array, map or channel layers, a callback's parameters and
+results, an alias or a named container (`type Config = *struct{...}`). Upstream
+named types are not entered. There is no exclusion list. A named scalar such as `kubernetes.PSALevel` (a string
 enum with no upstream spec type) is not a spec type and passes; a defined type over
 an upstream struct (volsync's former `SourceResticConfig`) does not.
 
@@ -175,8 +177,8 @@ reproduced byte for byte.
 | `ClusterOptions.StorageSize` | `Spec.StorageConfiguration.Size` |
 | `ClusterOptions.InheritedLabels`, `.InheritedAnnotations` | `Spec.InheritedMetadata = &cnpgv1.EmbeddedObjectMetadata{Labels, Annotations}` — only when either map is non-empty; the layer left it nil otherwise, and a non-nil empty one renders `inheritedMetadata: {}` |
 | `ClusterOptions.Resources *ResourceOptions` | `Spec.Resources` (`corev1.ResourceRequirements`) |
-| `ResourceOptions.RequestsCPU`, `.RequestsMemory` (strings) | `Spec.Resources.Requests[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal |
-| `ResourceOptions.LimitsCPU`, `.LimitsMemory` (strings) | `Spec.Resources.Limits[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal |
+| `ResourceOptions.RequestsCPU`, `.RequestsMemory` (strings) | `Spec.Resources.Requests[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal; one entry per non-empty string — the layer skipped an empty one, and allocated the map only when at least one was set |
+| `ResourceOptions.LimitsCPU`, `.LimitsMemory` (strings) | `Spec.Resources.Limits[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal; one entry per non-empty string — the layer skipped an empty one, and allocated the map only when at least one was set |
 | `ClusterOptions.Backup *BackupOptions` | `Spec.Backup = &cnpgv1.BackupConfiguration{...}` |
 | `BackupOptions.DestinationPath`, `.EndpointURL` | `Spec.Backup.BarmanObjectStore = &barmanapi.BarmanObjectStoreConfiguration{DestinationPath, EndpointURL}` |
 | `BackupOptions.RetentionPolicy` | `Spec.Backup.RetentionPolicy` |
@@ -187,9 +189,9 @@ reproduced byte for byte.
 | `MonitoringOptions.EnablePodMonitor` | `Spec.Monitoring.EnablePodMonitor` (deprecated upstream, still the only opt-in) |
 | `MonitoringOptions.CustomQueriesConfigMap []ConfigMapKeyRefOptions` | `Spec.Monitoring.CustomQueriesConfigMap []cnpgv1.ConfigMapKeySelector` |
 | `ConfigMapKeyRefOptions.Name`, `.Key` | `cnpgv1.ConfigMapKeySelector{LocalObjectReference: machineryapi.LocalObjectReference{Name}, Key}` |
-| `ClusterOptions.Bootstrap *BootstrapOptions` | `Spec.Bootstrap = &cnpgv1.BootstrapConfiguration{...}` |
-| `BootstrapOptions.RecoverySource` | `Spec.Bootstrap.Recovery = &cnpgv1.BootstrapRecovery{Source}` |
-| `BootstrapOptions.PgBasebackupSource` | `Spec.Bootstrap.PgBaseBackup = &cnpgv1.BootstrapPgBaseBackup{Source}` |
+| `ClusterOptions.Bootstrap *BootstrapOptions` | `Spec.Bootstrap = &cnpgv1.BootstrapConfiguration{...}` — only when one of the two sources is non-empty; with both empty the layer left `Spec.Bootstrap` nil, and CNPG then defaults to `initdb`. A bootstrap block with an empty `recovery` or `pg_basebackup` arm selects that mode instead |
+| `BootstrapOptions.RecoverySource` | `Spec.Bootstrap.Recovery = &cnpgv1.BootstrapRecovery{Source}` — only for a non-empty source; it took precedence over `PgBasebackupSource` when both were set |
+| `BootstrapOptions.PgBasebackupSource` | `Spec.Bootstrap.PgBaseBackup = &cnpgv1.BootstrapPgBaseBackup{Source}` — only for a non-empty source, and only when `RecoverySource` was empty |
 | `ClusterOptions.ExternalClusters []ExternalClusterOptions` | `Spec.ExternalClusters []cnpgv1.ExternalCluster` (the layer assigned it only when non-empty; the field is `omitempty`, so an empty slice renders the same) |
 | `ExternalClusterOptions.Name`, `.ConnectionParameters` | `cnpgv1.ExternalCluster.Name`, `.ConnectionParameters` |
 | `ExternalClusterOptions.BarmanObjectStore map[string]any` | `cnpgv1.ExternalCluster.BarmanObjectStore *barmanapi.BarmanObjectStoreConfiguration` — a typed literal; a caller holding a map does its own `json.Marshal` / `json.Unmarshal` into the upstream type |
@@ -253,6 +255,11 @@ write every one of them — but nothing writes them for you.
 | `spec.backup` omitted when both `DestinationPath` and `RetentionPolicy` were empty | a guard in the layer | leave `Spec.Backup` nil |
 | `spec.monitoring` omitted, `CustomQueriesConfigMap` included, unless `EnablePodMonitor` was true | a guard in the layer | set `Spec.Monitoring` whenever you want custom queries, with or without `EnablePodMonitor` |
 | `postgresql.synchronous` omitted, `Number` and `DataDurability` included, unless `Method` was non-empty | a guard in the layer | leave `Spec.PostgresConfiguration.Synchronous` nil, or set it with a `Method` |
+
+Every conditional in the retired CNPG builders (`pkg/kubernetes/cnpg/create.go` and
+`pooler.go` as of `4729da0`) is accounted for above: either the guarded field is
+`omitempty` or emits the same zero value either way, so an unguarded literal renders
+the same, or its row or this table states the guard.
 
 Golden deltas: none. Every fixture in `pkg/kubernetes/cnpg/testdata` is reproduced
 byte for byte, the injected values above included.

@@ -296,3 +296,22 @@ func TestGolden_ClusterAffinityDisabled(t *testing.T) {
 	}
 	goldenTest(t, "cluster-affinity-disabled.yaml", obj)
 }
+
+// TestGolden_ClusterEmptyBootstrap pins the bootstrap guard of the retired
+// layer: a BootstrapOptions with neither source set left Spec.Bootstrap nil,
+// which CNPG defaults to initdb. A bootstrap block with an empty recovery or
+// pg_basebackup arm would select that mode instead. The fixture was written by
+// the retired Cluster(&ClusterConfig{...}) builder with
+// Bootstrap: &BootstrapOptions{}.
+func TestGolden_ClusterEmptyBootstrap(t *testing.T) {
+	obj := CreateCluster("pg-initdb", "databases")
+	obj.Spec = cnpgv1.ClusterSpec{
+		Instances: 1,
+		// formerly injected: enablePDB false because Instances was 1
+		EnablePDB: ptr.To(false),
+		// formerly injected: primaryUpdateStrategy was pinned to unsupervised
+		PrimaryUpdateStrategy: cnpgv1.PrimaryUpdateStrategyUnsupervised,
+		// no Bootstrap: neither source was set
+	}
+	goldenTest(t, "cluster-empty-bootstrap.yaml", obj)
+}
