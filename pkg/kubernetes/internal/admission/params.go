@@ -124,13 +124,26 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 // underlying type is itself such a layer (type ConfigList []Config) is
 // unwrapped too, so a container given a name does not hide its element; the
 // seen set stops a self-referential name (type Tree []Tree) from recursing
-// forever.
+// forever. An alias declared under prefix for an unnamed struct or interface
+// literal counts as declared there.
 func ownSpecType(t types.Type, prefix string) bool {
 	return ownSpecTypeSeen(t, prefix, map[*types.Named]bool{})
 }
 
 func ownSpecTypeSeen(t types.Type, prefix string, seen map[*types.Named]bool) bool {
-	switch x := types.Unalias(t).(type) {
+	// An alias declared under prefix for an unnamed struct or interface
+	// literal (type Config = struct{...}) is a kure-invented type just as a
+	// defined one is; Unalias would lose where it was declared.
+	for a, ok := t.(*types.Alias); ok; a, ok = t.(*types.Alias) {
+		if pkg := a.Obj().Pkg(); pkg != nil && strings.HasPrefix(pkg.Path(), prefix) {
+			switch types.Unalias(a).(type) {
+			case *types.Struct, *types.Interface:
+				return true
+			}
+		}
+		t = a.Rhs()
+	}
+	switch x := t.(type) {
 	case *types.Pointer:
 		return ownSpecTypeSeen(x.Elem(), prefix, seen)
 	case *types.Slice:

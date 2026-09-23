@@ -43,6 +43,12 @@ type Names []string
 
 type Tree []Tree
 
+type LitConfig = struct{ Name string }
+
+type LitVariant = interface{ isLit() }
+
+type UpAlias = up.Spec
+
 func Build(cfg *Config) *up.Obj                       { return &up.Obj{Spec: up.Spec{Name: cfg.Name}} }
 func Apply(o *up.Obj, v Variant)                      {}
 func Many(cfgs []Config, byName map[string]*Config)   {}
@@ -53,6 +59,9 @@ func NamedList(l ConfigList)                          {}
 func NamedArray(a ConfigArray)                        {}
 func NamedMap(m ConfigByName)                         {}
 func NamedScalars(n Names, t Tree)                    {}
+func LitStruct(c *LitConfig)                          {}
+func LitIface(v []LitVariant)                         {}
+func UpstreamAlias(u *UpAlias)                        {}
 func Label(o *up.Obj, l Level)                        {}
 func Plain(o *up.Obj, s *up.Spec, n int)              {}
 func Generic[T any](o *up.Obj, v T)                   {}
@@ -95,6 +104,8 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 		{"Apply", "v", "fixture/own.Variant"},
 		{"Build", "cfg", "*fixture/own.Config"},
 		{"Defined", "w", "*fixture/own.Wrapped"},
+		{"LitIface", "v", "[]fixture/own.LitVariant"},
+		{"LitStruct", "c", "*fixture/own.LitConfig"},
 		{"Many", "byName", "map[string]*fixture/own.Config"},
 		{"Many", "cfgs", "[]fixture/own.Config"},
 		{"NamedArray", "a", "fixture/own.ConfigArray"},
