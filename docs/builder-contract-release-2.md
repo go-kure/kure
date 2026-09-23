@@ -70,6 +70,16 @@ equivalent and need no replacement: a `nil` `*Config` returned a `nil` object
 interface was treated as "no variant" (there is no interface to store it in — an
 unset pointer arm is unset).
 
+One rule covers most of the remaining differences. The layer never wrote an empty
+value: it set a pointer only when the input behind it was non-empty or non-zero,
+and it built a list by appending in a loop, so an empty input left the field nil.
+A struct literal writes exactly what it is given. To keep a manifest unchanged,
+leave a pointer nil where you would have passed an empty or zero input, and leave a
+list nil rather than assigning an empty one — the difference shows in output
+wherever the upstream field has no `omitempty` (an empty slice renders `[]`, nil
+renders `null`) and wherever a pointer to an empty struct renders `{}`. The rows
+below that carry such a guard say so.
+
 The golden fixtures under each package's `testdata/` were written by the layer as it
 stood before this release; the tests that now produce them use `Create<Kind>` and
 the upstream struct and reproduce that output byte for byte, including every value
@@ -161,14 +171,14 @@ reproduced byte for byte.
 | `ClusterOptions.Instances int32` | `Spec.Instances int` |
 | `ClusterOptions.ImageName` | `Spec.ImageName` |
 | `ClusterOptions.StorageSize` | `Spec.StorageConfiguration.Size` |
-| `ClusterOptions.InheritedLabels`, `.InheritedAnnotations` | `Spec.InheritedMetadata = &cnpgv1.EmbeddedObjectMetadata{Labels, Annotations}` |
+| `ClusterOptions.InheritedLabels`, `.InheritedAnnotations` | `Spec.InheritedMetadata = &cnpgv1.EmbeddedObjectMetadata{Labels, Annotations}` — only when either map is non-empty; the layer left it nil otherwise, and a non-nil empty one renders `inheritedMetadata: {}` |
 | `ClusterOptions.Resources *ResourceOptions` | `Spec.Resources` (`corev1.ResourceRequirements`) |
 | `ResourceOptions.RequestsCPU`, `.RequestsMemory` (strings) | `Spec.Resources.Requests[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal |
 | `ResourceOptions.LimitsCPU`, `.LimitsMemory` (strings) | `Spec.Resources.Limits[corev1.ResourceCPU / ResourceMemory] = q`, with `q, err := resource.ParseQuantity(s)` and the error returned when `s` comes from configuration; `resource.MustParse` only for a literal |
 | `ClusterOptions.Backup *BackupOptions` | `Spec.Backup = &cnpgv1.BackupConfiguration{...}` |
 | `BackupOptions.DestinationPath`, `.EndpointURL` | `Spec.Backup.BarmanObjectStore = &barmanapi.BarmanObjectStoreConfiguration{DestinationPath, EndpointURL}` |
 | `BackupOptions.RetentionPolicy` | `Spec.Backup.RetentionPolicy` |
-| `BackupOptions.S3Credentials *S3CredentialOptions` | `Spec.Backup.BarmanObjectStore.AWS = &barmanapi.S3Credentials{...}` (`AWS` is promoted from the embedded `barmanapi.BarmanCredentials`; in a literal it is `BarmanCredentials: barmanapi.BarmanCredentials{AWS: ...}`) |
+| `BackupOptions.S3Credentials *S3CredentialOptions` | `Spec.Backup.BarmanObjectStore.AWS = &barmanapi.S3Credentials{...}` (`AWS` is promoted from the embedded `barmanapi.BarmanCredentials`; in a literal it is `BarmanCredentials: barmanapi.BarmanCredentials{AWS: ...}`) — only when `SecretName` is non-empty; the layer left `AWS` nil otherwise, and selectors with an empty secret name are not the same manifest |
 | `S3CredentialOptions.SecretName`, `.AccessKeyIDKey` | `barmanapi.S3Credentials.AccessKeyIDReference = &machineryapi.SecretKeySelector{LocalObjectReference: {Name: secret}, Key: key}` |
 | `S3CredentialOptions.SecretName`, `.SecretAccessKeyKey` | `barmanapi.S3Credentials.SecretAccessKeyReference = &machineryapi.SecretKeySelector{LocalObjectReference: {Name: secret}, Key: key}` |
 | `ClusterOptions.Monitoring *MonitoringOptions` | `Spec.Monitoring = &cnpgv1.MonitoringConfiguration{...}` |
@@ -178,7 +188,7 @@ reproduced byte for byte.
 | `ClusterOptions.Bootstrap *BootstrapOptions` | `Spec.Bootstrap = &cnpgv1.BootstrapConfiguration{...}` |
 | `BootstrapOptions.RecoverySource` | `Spec.Bootstrap.Recovery = &cnpgv1.BootstrapRecovery{Source}` |
 | `BootstrapOptions.PgBasebackupSource` | `Spec.Bootstrap.PgBaseBackup = &cnpgv1.BootstrapPgBaseBackup{Source}` |
-| `ClusterOptions.ExternalClusters []ExternalClusterOptions` | `Spec.ExternalClusters []cnpgv1.ExternalCluster` |
+| `ClusterOptions.ExternalClusters []ExternalClusterOptions` | `Spec.ExternalClusters []cnpgv1.ExternalCluster` (the layer assigned it only when non-empty; the field is `omitempty`, so an empty slice renders the same) |
 | `ExternalClusterOptions.Name`, `.ConnectionParameters` | `cnpgv1.ExternalCluster.Name`, `.ConnectionParameters` |
 | `ExternalClusterOptions.BarmanObjectStore map[string]any` | `cnpgv1.ExternalCluster.BarmanObjectStore *barmanapi.BarmanObjectStoreConfiguration` — a typed literal; a caller holding a map does its own `json.Marshal` / `json.Unmarshal` into the upstream type |
 | `ClusterOptions.PostgresParams` | `Spec.PostgresConfiguration.Parameters` |
@@ -191,10 +201,10 @@ reproduced byte for byte.
 | `ClusterOptions.Affinity *AffinityOptions` | `Spec.Affinity` (`cnpgv1.AffinityConfiguration`, a value) |
 | `AffinityOptions.EnablePodAntiAffinity bool` | `Spec.Affinity.EnablePodAntiAffinity *bool` — `ptr.To(b)` |
 | `AffinityOptions.TopologyKey`, `.PodAntiAffinityType`, `.NodeSelector` | `Spec.Affinity.TopologyKey`, `.PodAntiAffinityType` (`cnpgv1.PodAntiAffinityTypePreferred` / `Required`), `.NodeSelector` |
-| `ClusterOptions.ManagedRoles []ManagedRoleOptions` | `Spec.Managed = &cnpgv1.ManagedConfiguration{Roles: []cnpgv1.RoleConfiguration{...}}`, or `AddClusterManagedRole(cluster, role)` per role |
+| `ClusterOptions.ManagedRoles []ManagedRoleOptions` | `Spec.Managed = &cnpgv1.ManagedConfiguration{Roles: []cnpgv1.RoleConfiguration{...}}`, or `AddClusterManagedRole(cluster, role)` per role — only when there is at least one role; the layer left `Managed` nil otherwise, and a non-nil empty one renders `managed: {}` |
 | `ManagedRoleOptions.Name`, `.Comment`, `.Login`, `.Superuser`, `.CreateDB`, `.CreateRole`, `.Replication`, `.Inherit *bool`, `.InRoles` | the same-named fields of `cnpgv1.RoleConfiguration` <!-- doc-api-refs:ignore CreateDB and CreateRole are upstream struct fields, not builders --> |
 | `ManagedRoleOptions.ConnectionLimit *int64` | `cnpgv1.RoleConfiguration.ConnectionLimit int64` (a value; `-1` is the upstream default) |
-| `ManagedRoleOptions.PasswordSecret string` | `cnpgv1.RoleConfiguration.PasswordSecret = &cnpgv1.LocalObjectReference{Name}` |
+| `ManagedRoleOptions.PasswordSecret string` | `cnpgv1.RoleConfiguration.PasswordSecret = &cnpgv1.LocalObjectReference{Name}` — only when the name is non-empty; the layer left it nil for `""`, and a reference with an empty name is not the same manifest |
 | `ManagedRoleOptions.Ensure string` | `cnpgv1.RoleConfiguration.Ensure cnpgv1.EnsureOption` (`EnsurePresent` / `EnsureAbsent`) |
 | `DatabaseConfig.Name`, `.Namespace` | `CreateDatabase(name, namespace)` |
 | `DatabaseConfig.Options *DatabaseOptions` | `db.Spec` (`cnpgv1.DatabaseSpec`) |
@@ -208,13 +218,13 @@ reproduced byte for byte.
 | `ObjectStoreConfig.Name`, `.Namespace` | `CreateObjectStore(name, namespace)` |
 | `ObjectStoreConfig.Options *ObjectStoreOptions` | `store.Spec` (`barmanv1.ObjectStoreSpec`) |
 | `ObjectStoreOptions.DestinationPath`, `.EndpointURL`, `.ServerName` | `Spec.Configuration.DestinationPath`, `.EndpointURL`, `.ServerName` |
-| `ObjectStoreOptions.SecretName`, `.AccessKeyIDKey`, `.SecretAccessKeyKey` | `SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{...})` with the two `machineryapi.SecretKeySelector` references spelled out |
+| `ObjectStoreOptions.SecretName`, `.AccessKeyIDKey`, `.SecretAccessKeyKey` | `SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{...})` with the two `machineryapi.SecretKeySelector` references spelled out — only when `SecretName` is non-empty; the layer left `AWS` nil otherwise |
 | `ObjectStoreOptions.RetentionPolicy` | `Spec.RetentionPolicy` |
 | `ScheduledBackupConfig.Name`, `.Namespace`, `.Spec` | `CreateScheduledBackup(name, namespace)`; `backup.Spec = spec` |
 | `PoolerConfig.Name`, `.Namespace` | `CreatePooler(name, namespace)` |
 | `PoolerConfig.Options *PoolerOptions` | `pooler.Spec` (`cnpgv1.PoolerSpec`) |
 | `PoolerOptions.ClusterName` | `Spec.Cluster = cnpgv1.LocalObjectReference{Name}` |
-| `PoolerOptions.Instances int32` (0 = omit) | `Spec.Instances *int32` — `ptr.To[int32](n)`; nil omits |
+| `PoolerOptions.Instances int32` (≤ 0 = omit) | `Spec.Instances *int32` — `ptr.To[int32](n)` only for `n > 0`; the layer omitted it for zero and for a negative count, leaving the operator default |
 | `PoolerOptions.Type string` (`"ro"`, anything else `rw`) | `Spec.Type cnpgv1.PoolerType` (`PoolerTypeRW` / `PoolerTypeRO`) |
 | `PoolerOptions.PgBouncer *PgBouncerOptions` | `Spec.PgBouncer = &cnpgv1.PgBouncerSpec{...}` (required upstream: no `omitempty`, so always set it, empty if nothing else) |
 | `PgBouncerOptions.PoolMode string` | `cnpgv1.PgBouncerSpec.PoolMode cnpgv1.PgBouncerPoolMode` (`PgBouncerPoolModeSession` / `Transaction`) |
@@ -311,9 +321,11 @@ replace. Golden deltas: none. Every fixture in
 The layer skipped `JobLabel` when empty, `NamespaceSelector` and `SampleLimit` when
 nil and `Labels` when nil; an empty string, a nil pointer and a nil map serialise to
 nothing either way, so there is no behaviour to replace. `spec.endpoints` and
-`spec.podMetricsEndpoints` render `null` when unset — release 1 recorded that
-change when the layer stopped seeding empty slices, and a struct literal is the
-same. Golden deltas: none. Every fixture in `pkg/kubernetes/prometheus/testdata` is
+`spec.podMetricsEndpoints` carry no `omitempty`: the layer filled them by appending,
+so an empty (even explicitly allocated) input list left them nil and rendered
+`null`, which release 1 recorded when the layer stopped seeding empty slices. A
+literal that assigns an empty slice renders `[]` instead; leave the field nil, or use
+`AddServiceMonitorEndpoint` / `AddPodMonitorEndpoint`, to keep `null`. Golden deltas: none. Every fixture in `pkg/kubernetes/prometheus/testdata` is
 reproduced byte for byte.
 
 ## `pkg/kubernetes/cilium`
@@ -361,7 +373,10 @@ the same assignment.
 | `CiliumBGPNodeConfigOverrideConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumBGPNodeConfigOverrideSpec`) |
 
 The two policy builders skipped a nil `Spec`; a nil pointer serialises to nothing
-either way. Golden deltas: none. Every fixture in `pkg/kubernetes/cilium/testdata`
+either way. `CiliumCIDRGroup` filled `spec.externalCIDRs` by appending, so an empty
+input list left it nil and rendered `externalCIDRs: null` (the field has no
+`omitempty`); assigning an empty slice renders `[]` — leave it nil, or use
+`AddCiliumCIDRGroupCIDR`, to keep `null`. Golden deltas: none. Every fixture in `pkg/kubernetes/cilium/testdata`
 is reproduced byte for byte.
 
 ## `pkg/kubernetes/volsync`
