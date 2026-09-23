@@ -569,8 +569,10 @@ All builders maintain consistency through:
 
 - **Void Returns**: Sugar helpers return nothing and panic on nil, uniformly across every package
 - **Standard Patterns**: Uniform function naming across resource types
-- **One admission test**: `pkg/kubernetes/admission_test.go` covers every package under
-  `pkg/kubernetes/...`, so consistency is a test result rather than a review habit
+- **Two admission tests**: `pkg/kubernetes/admission_test.go` classifies every `Set*`/`Add*`
+  body under `pkg/kubernetes/...`, and `pkg/kubernetes/admission_params_test.go` fails on any
+  exported function there that takes a struct or interface kure defines itself where the upstream
+  type is the API — so consistency is a test result rather than a review habit
 
 ### One-of Constraints
 
