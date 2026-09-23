@@ -272,3 +272,27 @@ func TestGolden_PoolerDefault(t *testing.T) {
 	}
 	goldenTest(t, "pooler-default.yaml", obj)
 }
+
+// TestGolden_ClusterAffinityDisabled pins the one CNPG pointer the retired
+// layer always wrote whatever its value: EnablePodAntiAffinity, set whenever
+// Affinity was supplied, including false. CNPG applies anti-affinity unless
+// the field is explicitly false, so leaving it nil for a false input would
+// turn a disabled setting back on. The fixture was written by the retired
+// Cluster(&ClusterConfig{...}) builder with
+// Affinity: &AffinityOptions{EnablePodAntiAffinity: false,
+// TopologyKey: "kubernetes.io/hostname"}.
+func TestGolden_ClusterAffinityDisabled(t *testing.T) {
+	obj := CreateCluster("pg-no-paa", "databases")
+	obj.Spec = cnpgv1.ClusterSpec{
+		Instances: 1,
+		// formerly injected: enablePDB false because Instances was 1
+		EnablePDB: ptr.To(false),
+		// formerly injected: primaryUpdateStrategy was pinned to unsupervised
+		PrimaryUpdateStrategy: cnpgv1.PrimaryUpdateStrategyUnsupervised,
+		Affinity: cnpgv1.AffinityConfiguration{
+			EnablePodAntiAffinity: ptr.To(false),
+			TopologyKey:           "kubernetes.io/hostname",
+		},
+	}
+	goldenTest(t, "cluster-affinity-disabled.yaml", obj)
+}
