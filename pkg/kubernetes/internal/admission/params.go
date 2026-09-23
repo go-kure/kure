@@ -32,7 +32,9 @@ type ParamFinding struct {
 func (f ParamFinding) Key() string { return f.Package + "." + f.Name }
 
 // OwnParameterTypes loads the packages matching opts.Patterns and reports
-// every exported top-level function in their non-test, non-generated files
+// every exported top-level function in the non-test, non-generated files the
+// current build context selects (pkg/kubernetes has no file behind a build
+// constraint; one added later is checked only on the platforms that build it)
 // that takes a parameter naming a struct or interface this tree defines
 // itself, under prefix (an import-path prefix, e.g.
 // "github.com/go-kure/kure/pkg/kubernetes"); ownSpecType lists every layer the
@@ -63,6 +65,11 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 	})
 	if len(loadErrs) > 0 {
 		return nil, errors.Errorf("load packages: %s", strings.Join(loadErrs, "; "))
+	}
+	// A pattern that matches no package loads nothing and reports no error;
+	// passing on that would be a check that inspected nothing.
+	if len(pkgs) == 0 {
+		return nil, errors.Errorf("load packages: %s matched no package under %s", strings.Join(opts.Patterns, " "), opts.Dir)
 	}
 
 	var findings []ParamFinding
@@ -138,7 +145,8 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 //     tree when the function's own package is under prefix, so a literal
 //     written there is defined here.
 //
-// A named type from outside prefix (the upstream API) is not entered, a type
+// A named type from outside prefix (the upstream API) is not entered, beyond
+// the type arguments of an instantiated generic; a type
 // parameter is not reported, and an interface with no methods (any) is not a
 // spec type. The seen set stops a self-referential name (type Tree []Tree)
 // from recursing forever.
@@ -181,6 +189,16 @@ func ownSpecTypeIn(t types.Type, prefix string, owned bool, seen map[*types.Name
 		}
 		seen[x] = true
 		mine := under(x.Obj().Pkg())
+		// An instantiated generic carries its type arguments in the
+		// signature even when the generic itself is upstream
+		// (up.Wrapper[Config]); each argument is checked where it is written.
+		if args := x.TypeArgs(); args != nil {
+			for i := 0; i < args.Len(); i++ {
+				if ownSpecTypeIn(args.At(i), prefix, owned, seen) {
+					return true
+				}
+			}
+		}
 		switch x.Underlying().(type) {
 		case *types.Struct, *types.Interface:
 			return mine
