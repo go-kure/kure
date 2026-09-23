@@ -363,3 +363,54 @@ the same assignment.
 The two policy builders skipped a nil `Spec`; a nil pointer serialises to nothing
 either way. Golden deltas: none. Every fixture in `pkg/kubernetes/cilium/testdata`
 is reproduced byte for byte.
+
+## `pkg/kubernetes/volsync`
+
+### Removed functions (2) and one changed signature
+
+| Removed | Replacement |
+|---|---|
+| `ReplicationSource(&ReplicationSourceConfig{...})` | `CreateReplicationSource(name, namespace)` + `rs.Spec = volsyncv1alpha1.ReplicationSourceSpec{...}` |
+| `ReplicationDestination(&ReplicationDestinationConfig{...})` | `CreateReplicationDestination(name, namespace)` + `rd.Spec = volsyncv1alpha1.ReplicationDestinationSpec{...}` |
+
+| Before | After |
+|---|---|
+| `AddSyncthingPeer(cfg *SourceSyncthingConfig, address, id string, introducer bool)` | `AddSyncthingPeer(spec *volsyncv1alpha1.ReplicationSourceSyncthingSpec, address, id string, introducer bool)` — the value assigned to `rs.Spec.Syncthing`; same body, same nil panic |
+
+### Removed types (15) and their fields
+
+The sealed interfaces `SourceMover` and `DestinationMover` are gone with the nine
+mover types defined over the upstream specs, `ExternalConfig`, `TriggerConfig` and
+the two parent `Config` structs. The upstream one-of is a pointer per arm on the
+spec; VolSync validates "exactly one" at apply time. `CopyMethod` and its four
+constants stay: they re-export the upstream type and were never part of the layer.
+
+| Removed field | Upstream field |
+|---|---|
+| `ReplicationSourceConfig.Name`, `.Namespace` | `CreateReplicationSource(name, namespace)` |
+| `ReplicationSourceConfig.SourcePVC` | `rs.Spec.SourcePVC` |
+| `ReplicationSourceConfig.Paused` | `rs.Spec.Paused` |
+| `ReplicationSourceConfig.Trigger *TriggerConfig` | `rs.Spec.Trigger = &volsyncv1alpha1.ReplicationSourceTriggerSpec{Schedule, Manual}` |
+| `ReplicationSourceConfig.Mover` = `*SourceResticConfig` | `rs.Spec.Restic = &volsyncv1alpha1.ReplicationSourceResticSpec{...}` (the type `SourceResticConfig` was defined over) |
+| `ReplicationSourceConfig.Mover` = `*SourceRsyncConfig` | `rs.Spec.Rsync = &volsyncv1alpha1.ReplicationSourceRsyncSpec{...}` |
+| `ReplicationSourceConfig.Mover` = `*SourceRsyncTLSConfig` | `rs.Spec.RsyncTLS = &volsyncv1alpha1.ReplicationSourceRsyncTLSSpec{...}` |
+| `ReplicationSourceConfig.Mover` = `*SourceRcloneConfig` | `rs.Spec.Rclone = &volsyncv1alpha1.ReplicationSourceRcloneSpec{...}` |
+| `ReplicationSourceConfig.Mover` = `*SourceSyncthingConfig` | `rs.Spec.Syncthing = &volsyncv1alpha1.ReplicationSourceSyncthingSpec{...}` |
+| `ReplicationSourceConfig.Mover` = `*ExternalConfig` | `rs.Spec.External = &volsyncv1alpha1.ReplicationSourceExternalSpec{Provider, Parameters}` |
+| `ReplicationDestinationConfig.Name`, `.Namespace` | `CreateReplicationDestination(name, namespace)` |
+| `ReplicationDestinationConfig.Paused` | `rd.Spec.Paused` |
+| `ReplicationDestinationConfig.Trigger *TriggerConfig` | `rd.Spec.Trigger = &volsyncv1alpha1.ReplicationDestinationTriggerSpec{Schedule, Manual}` |
+| `ReplicationDestinationConfig.Mover` = `*DestinationResticConfig` | `rd.Spec.Restic = &volsyncv1alpha1.ReplicationDestinationResticSpec{...}` |
+| `ReplicationDestinationConfig.Mover` = `*DestinationRsyncConfig` | `rd.Spec.Rsync = &volsyncv1alpha1.ReplicationDestinationRsyncSpec{...}` |
+| `ReplicationDestinationConfig.Mover` = `*DestinationRsyncTLSConfig` | `rd.Spec.RsyncTLS = &volsyncv1alpha1.ReplicationDestinationRsyncTLSSpec{...}` |
+| `ReplicationDestinationConfig.Mover` = `*DestinationRcloneConfig` | `rd.Spec.Rclone = &volsyncv1alpha1.ReplicationDestinationRcloneSpec{...}` |
+| `ReplicationDestinationConfig.Mover` = `*ExternalConfig` | `rd.Spec.External = &volsyncv1alpha1.ReplicationDestinationExternalSpec{Provider, Parameters}` |
+| `TriggerConfig.Schedule *string`, `.Manual string` | the same-named fields of the upstream trigger spec |
+| `ExternalConfig.Provider`, `.Parameters` | the same-named fields of the upstream external spec |
+
+Each `Source<Mover>Config` / `Destination<Mover>Config` had exactly the fields of
+the upstream spec it was defined over, so a literal keeps its body and changes its
+type name. The release 1 ledger's volsync section named `ReplicationSourceConfig.*`
+as the replacement for the setters it removed; those replacements are now the
+`rs.Spec.*` assignments listed above. Golden deltas: none. Every fixture in
+`pkg/kubernetes/volsync/testdata` is reproduced byte for byte.

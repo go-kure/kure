@@ -1230,6 +1230,17 @@ map-merging variant would have been a contract change to save one loop.
 `pkg/kubernetes/volsync` carried ten `Set*` helpers alongside a config-struct
 constructor that already covers the same fields. Nine are removed.
 
+Release 2 retired that config-struct constructor in turn, so the
+`ReplicationSourceConfig.*` / `ReplicationDestinationConfig.*` replacements named
+below no longer exist either. Where a row also names an `rs.Spec.*` / `rd.Spec.*`
+assignment, that assignment is the one that survives. The six rows that name only a
+`Config` field (the four trigger setters and the two mover setters) are replaced by
+`rs.Spec.Trigger = &volsyncv1alpha1.ReplicationSourceTriggerSpec{...}` /
+`rd.Spec.Trigger = &volsyncv1alpha1.ReplicationDestinationTriggerSpec{...}` and by
+setting one mover arm (`rs.Spec.Restic`, `rs.Spec.Rsync`, …) directly; the
+[release 2 migration notes](/concepts/builder-contract-release-2/) map each trigger
+field and mover variant to its upstream field.
+
 | Removed | Replacement |
 |---|---|
 | `SetReplicationSourceSourcePVC(rs, pvc)` | `ReplicationSourceConfig.SourcePVC`, or `rs.Spec.SourcePVC = pvc` |

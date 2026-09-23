@@ -4,12 +4,13 @@ import (
 	volsyncv1alpha1 "github.com/backube/volsync/api/v1alpha1"
 )
 
-// AddSyncthingPeer appends a peer to a SourceSyncthingConfig.
-func AddSyncthingPeer(cfg *SourceSyncthingConfig, address, id string, introducer bool) {
-	if cfg == nil {
-		panic("AddSyncthingPeer: cfg must not be nil")
+// AddSyncthingPeer appends a peer to a ReplicationSource's Syncthing mover
+// spec, the value assigned to rs.Spec.Syncthing.
+func AddSyncthingPeer(spec *volsyncv1alpha1.ReplicationSourceSyncthingSpec, address, id string, introducer bool) {
+	if spec == nil {
+		panic("AddSyncthingPeer: spec must not be nil")
 	}
-	cfg.Peers = append(cfg.Peers, volsyncv1alpha1.SyncthingPeer{
+	spec.Peers = append(spec.Peers, volsyncv1alpha1.SyncthingPeer{
 		Address:    address,
 		ID:         id,
 		Introducer: introducer,
