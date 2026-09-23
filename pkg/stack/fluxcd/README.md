@@ -90,7 +90,8 @@ for the identifier to find every place its value can reach emitted YAML.
 | `DefaultInterval` | `60m` | the caller names no interval (a non-empty `Bundle.Interval` that does not parse is a validation error, not a fallback) | assigning `.DefaultInterval` on either generator |
 | `DefaultNamespace` | `flux-system` | generated resources need a namespace | assigning `.DefaultNamespace` on either generator |
 | `DefaultMode` | `layout.KustomizationExplicit` | `ResourceGenerator` is constructed — its only site | assigning `ResourceGenerator.Mode` |
-| `DefaultBootstrapName` | `flux-system` | naming the bootstrap Kustomization and the `FluxInstance` | assigning `BootstrapGenerator.BootstrapName` |
+| `DefaultBootstrapName` | `flux-system` | naming the bootstrap Kustomization | assigning `BootstrapGenerator.BootstrapName` |
+| `FluxInstanceName` | `flux` | naming the `FluxInstance` in `flux-operator` mode | not overrideable; the CRD admits no other name (see below) |
 | `DefaultSourceName` | `flux-system` | the root node has no name | naming the root `stack.Node` |
 | `DefaultFluxMode` | `flux-operator` | `BootstrapConfig.FluxMode` is empty | setting `BootstrapConfig.FluxMode` |
 | `DefaultSourceKind` | `OCIRepository` | `BootstrapConfig.SourceKind` does not name `GitRepository`, the empty string included | setting `BootstrapConfig.SourceKind` |
@@ -102,13 +103,23 @@ for the identifier to find every place its value can reach emitted YAML.
 Four of these — `DefaultInterval`, `DefaultNamespace`, `DefaultMode` and `DefaultBootstrapName` —
 are copied into exported generator fields by `NewResourceGenerator` / `NewBootstrapGenerator`, and
 a field assigned afterwards is never overridden. The rest are applied where they are used and are
-overridden by naming the corresponding input, as the last column says. Three have no override at
-all and say so, rather than being listed as though they had one.
+overridden by naming the corresponding input, as the last column says. Three defaults have no
+override at all and say so, rather than being listed as though they had one; `FluxInstanceName`
+is the fourth row without one, and is not a default at all (next but one paragraph).
 
 An empty `BootstrapGenerator.BootstrapName` resolves back to `DefaultBootstrapName` at emission.
 A generator built as a struct literal rather than through `NewBootstrapGenerator` leaves the field
-zero, and a Kustomization or `FluxInstance` with no `metadata.name` is invalid — the field is an
-override, not a way to remove the name.
+zero, and a Kustomization with no `metadata.name` is invalid — the field is an override, not a way
+to remove the name.
+
+`FluxInstanceName` is in the table but is not a default: it is the one value the flux-operator CRD
+accepts. The CRD requires `metadata.name: flux` and rejects any other name at admission
+(`x-kubernetes-validations`: `self.metadata.name == 'flux'`, in the vendored install bundle), so
+`BootstrapName` does not reach the `FluxInstance` and nothing else does either. It used to — both
+objects took `bootstrapName()` — so a `flux-operator` bundle with the default `BootstrapName`, or
+any override other than `flux`, was refused with `the only accepted name for a FluxInstance is
+'flux'`. A test compares the constant against the vendored
+CRD's rule, so an operator bump that changes the rule fails in this package rather than at apply.
 
 `DefaultNamespace` governs the **whole** gotk bundle, not just the objects this package constructs
 itself. The bootstrap bundle has three producers — the root Kustomization, the root source, and the
@@ -294,7 +305,9 @@ bootstrapConfig := &stack.BootstrapConfig{
 - It needs `SourceURL`: without one no sync block is emitted, so there is nothing to name.
 - kure passes it through unvalidated. The CRD caps it at 63 characters and makes it immutable
   once set, so renaming the sync of a live cluster means recreating the `FluxInstance`.
-- It is not `BootstrapGenerator.BootstrapName`, which names the `FluxInstance` itself.
+- It is not the `FluxInstance`'s own `metadata.name`, which is always `FluxInstanceName` (`flux`):
+  the CRD accepts no other. `BootstrapGenerator.BootstrapName` names the bootstrap Kustomization
+  only.
 
 ## Configuration
 

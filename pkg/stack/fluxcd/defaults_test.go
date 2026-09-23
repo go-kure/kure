@@ -2,12 +2,15 @@ package fluxcd
 
 import (
 	stderrors "errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	fluxv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	kerrors "github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
@@ -81,12 +84,14 @@ func TestBootstrapNameIsOverrideable(t *testing.T) {
 		t.Fatal("no bootstrap Kustomization emitted")
 	}
 
+	// The override stops at the Kustomization. The FluxInstance's name is a CRD
+	// constraint, not a default, so BootstrapName must not reach it.
 	fi, err := bg.GenerateFluxInstance(config, &stack.Node{Name: "prod"})
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance: %v", err)
 	}
-	if fi.Name != "gitops" {
-		t.Errorf("FluxInstance name = %q, want the assigned %q", fi.Name, "gitops")
+	if fi.Name != FluxInstanceName {
+		t.Errorf("FluxInstance name = %q, want FluxInstanceName (%q): BootstrapName must not reach it", fi.Name, FluxInstanceName)
 	}
 }
 
@@ -95,9 +100,10 @@ func TestBootstrapNameIsOverrideable(t *testing.T) {
 //
 // A caller that builds the generator as a struct literal rather than through
 // NewBootstrapGenerator leaves BootstrapName at "". Before the field existed
-// both names were a literal and could not be absent; without the fallback the
-// same caller would now emit metadata.name: "" on the Kustomization and the
-// FluxInstance, which the API server rejects.
+// the name was a literal and could not be absent; without the fallback the
+// same caller would now emit metadata.name: "" on the Kustomization, which the
+// API server rejects. The FluxInstance never reads the field, so it is checked
+// here only to pin that the fallback does not leak into it either.
 func TestBootstrapNameEmptyFallsBackToTheDefault(t *testing.T) {
 	bg := &BootstrapGenerator{
 		DefaultNamespace: DefaultNamespace,
@@ -132,8 +138,112 @@ func TestBootstrapNameEmptyFallsBackToTheDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateFluxInstance: %v", err)
 	}
-	if fi.Name != DefaultBootstrapName {
-		t.Errorf("FluxInstance name = %q, want DefaultBootstrapName (%q)", fi.Name, DefaultBootstrapName)
+	if fi.Name != FluxInstanceName {
+		t.Errorf("FluxInstance name = %q, want FluxInstanceName (%q)", fi.Name, FluxInstanceName)
+	}
+}
+
+// TestFluxInstanceNameIsFluxRegardlessOfBootstrapName pins go-kure/kure#847:
+// the flux-operator CRD requires a FluxInstance's name to be "flux"
+// (x-kubernetes-validations, `self.metadata.name == 'flux'`). The name used to
+// be bootstrapName(), so a bundle with the default BootstrapName, or any
+// override other than "flux", was rejected at apply with "the only accepted name for a FluxInstance is
+// 'flux'". The literal is deliberate: the test states the CRD's value, not the
+// constant's, so redefining FluxInstanceName cannot make it pass.
+//
+// Both emission paths are covered — GenerateFluxInstance alone and the
+// FluxInstance inside GenerateBootstrap's flux-operator bundle — for every
+// shape BootstrapName can take: the constructor's default, an override, empty
+// (struct literal), and the value that happens to equal the CRD's.
+func TestFluxInstanceNameIsFluxRegardlessOfBootstrapName(t *testing.T) {
+	config := &stack.BootstrapConfig{
+		Enabled:   true,
+		FluxMode:  DefaultFluxMode,
+		SourceURL: "oci://registry.example.com/fleet",
+	}
+	node := &stack.Node{Name: "prod"}
+
+	for name, bootstrapName := range map[string]string{
+		"constructor default": DefaultBootstrapName,
+		"override":            "gitops",
+		"empty":               "",
+		"already flux":        "flux",
+	} {
+		t.Run(name, func(t *testing.T) {
+			bg := NewBootstrapGenerator()
+			bg.BootstrapName = bootstrapName
+
+			fi, err := bg.GenerateFluxInstance(config, node)
+			if err != nil {
+				t.Fatalf("GenerateFluxInstance: %v", err)
+			}
+			if fi.Name != "flux" {
+				t.Errorf("GenerateFluxInstance name = %q, want %q (BootstrapName %q)", fi.Name, "flux", bootstrapName)
+			}
+
+			objs, err := bg.GenerateBootstrap(config, node)
+			if err != nil {
+				t.Fatalf("GenerateBootstrap: %v", err)
+			}
+			var found bool
+			for _, o := range objs {
+				bundled, ok := o.(*fluxv1.FluxInstance)
+				if !ok {
+					continue
+				}
+				found = true
+				if bundled.Name != "flux" {
+					t.Errorf("GenerateBootstrap FluxInstance name = %q, want %q (BootstrapName %q)", bundled.Name, "flux", bootstrapName)
+				}
+			}
+			if !found {
+				t.Fatal("no FluxInstance in the flux-operator bundle")
+			}
+		})
+	}
+}
+
+// TestFluxInstanceNameMatchesVendoredCRDRule ties FluxInstanceName to the
+// admission rule in the vendored install bundle: the CRD is the authority for
+// the name, so a flux-operator bump that changes or drops the rule fails here
+// rather than at apply time.
+func TestFluxInstanceNameMatchesVendoredCRDRule(t *testing.T) {
+	objs, err := FluxOperatorInstallObjects()
+	if err != nil {
+		t.Fatalf("FluxOperatorInstallObjects: %v", err)
+	}
+	const crdName = "fluxinstances.fluxcd.controlplane.io"
+	var crd *apiextensionsv1.CustomResourceDefinition
+	for _, o := range objs {
+		if c, ok := o.(*apiextensionsv1.CustomResourceDefinition); ok && c.Name == crdName {
+			crd = c
+			break
+		}
+	}
+	if crd == nil {
+		t.Fatalf("no CustomResourceDefinition %q in the vendored install bundle (%s)", crdName, FluxOperatorVersion)
+	}
+
+	const prefix = "self.metadata.name == "
+	var rules []string
+	for _, version := range crd.Spec.Versions {
+		if version.Schema == nil || version.Schema.OpenAPIV3Schema == nil {
+			continue
+		}
+		for _, validation := range version.Schema.OpenAPIV3Schema.XValidations {
+			if strings.HasPrefix(validation.Rule, prefix) {
+				rules = append(rules, validation.Rule)
+			}
+		}
+	}
+	if len(rules) == 0 {
+		t.Fatalf("the vendored %s CRD (%s) carries no %q rule: FluxInstanceName no longer has a source", crdName, FluxOperatorVersion, prefix)
+	}
+	want := fmt.Sprintf("%s'%s'", prefix, FluxInstanceName)
+	for _, rule := range rules {
+		if rule != want {
+			t.Errorf("CRD rule %q, want %q: FluxInstanceName (%q) disagrees with the vendored CRD", rule, want, FluxInstanceName)
+		}
 	}
 }
 
@@ -211,6 +321,7 @@ func TestDefaultValues(t *testing.T) {
 		"DefaultNamespace":         "flux-system",
 		"DefaultSourceName":        "flux-system",
 		"DefaultBootstrapName":     "flux-system",
+		"FluxInstanceName":         "flux",
 		"DefaultFluxDirName":       "flux-system",
 		"DefaultBootstrapPathRoot": "manifests",
 		"DefaultFluxMode":          "flux-operator",
@@ -223,6 +334,7 @@ func TestDefaultValues(t *testing.T) {
 		"DefaultNamespace":         DefaultNamespace,
 		"DefaultSourceName":        DefaultSourceName,
 		"DefaultBootstrapName":     DefaultBootstrapName,
+		"FluxInstanceName":         FluxInstanceName,
 		"DefaultFluxDirName":       DefaultFluxDirName,
 		"DefaultBootstrapPathRoot": DefaultBootstrapPathRoot,
 		"DefaultFluxMode":          DefaultFluxMode,

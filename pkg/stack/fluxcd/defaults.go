@@ -27,7 +27,10 @@ import (
 // and [DefaultFluxDirName]. Each is a fixed structural segment of a path the
 // package builds, not a value a caller replaces, and their comments say so.
 // They are named here anyway so the value is greppable and reviewable rather
-// than a literal inside the function that emits it.
+// than a literal inside the function that emits it. [FluxInstanceName] is
+// likewise fixed but is not a default of any kind: the flux-operator CRD
+// accepts no other value, so it is a constraint the package satisfies, not an
+// opinion it holds.
 //
 // Interval and namespace are the two that always reach output.
 // KustomizationSpec.Interval is +required upstream with no omitempty
@@ -43,10 +46,23 @@ const (
 	// OCIRepository when the root node has no name of its own.
 	DefaultSourceName = "flux-system"
 
-	// DefaultBootstrapName is the name given to the bootstrap Kustomization and
-	// to the FluxInstance. Neither is derived from the root node. Override it by
-	// assigning [BootstrapGenerator.BootstrapName].
+	// DefaultBootstrapName is the name given to the bootstrap Kustomization. It
+	// is not derived from the root node. Override it by assigning
+	// [BootstrapGenerator.BootstrapName]. It does not reach the FluxInstance,
+	// whose name is fixed — see [FluxInstanceName].
 	DefaultBootstrapName = "flux-system"
+
+	// FluxInstanceName is the metadata.name of the FluxInstance emitted in
+	// flux-operator mode. It is not a default and has no override: the
+	// flux-operator CRD requires metadata.name to be "flux" and rejects any
+	// other name at admission (x-kubernetes-validations rule
+	// `self.metadata.name == 'flux'` in the vendored flux_operator_install.yaml).
+	// The name used to follow [BootstrapGenerator.BootstrapName], so a bundle
+	// generated with the default ([DefaultBootstrapName]) or any override other
+	// than "flux" was refused with "the only accepted name for a FluxInstance
+	// is 'flux'". A test compares this constant against the vendored CRD's rule, so
+	// an operator bump that changes the rule fails there rather than at apply.
+	FluxInstanceName = "flux"
 
 	// DefaultFluxDirName is the directory a separate Flux layout is placed in,
 	// under FluxSeparate placement. It is a path segment, not a namespace: it

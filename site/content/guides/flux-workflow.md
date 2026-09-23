@@ -373,7 +373,9 @@ It only takes effect with `SourceURL` set, since no sync block is emitted withou
 `"gotk"` mode ignores it: there kure creates and names the root source itself. kure does not
 validate the value. The CRD caps it at 63 characters and makes it immutable once set, so renaming
 the sync of a running cluster means recreating the `FluxInstance`. It is distinct from the
-generator's `BootstrapName`, which names the `FluxInstance` itself.
+`FluxInstance`'s own `metadata.name`, which is always `flux` (`fluxcd.FluxInstanceName`): the
+flux-operator CRD rejects any other name at admission. The generator's
+`BootstrapName` names the bootstrap Kustomization only and never reaches the `FluxInstance`.
 
 ## Further Reading
 
