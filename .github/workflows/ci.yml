@@ -61,80 +61,44 @@ jobs:
     # On merge_group there is no PR base to diff against; dorny/paths-filter would
     # error. Skip the filter and force both outputs to 'true' so every gating job
     # runs in the queue — otherwise required checks never report and merges hang.
+    #
+    # `go` (lint/test/security) is a deny-list (go-kure/kure#800): it is true unless
+    # every changed file is documentation, so a path nobody classified runs the Go
+    # jobs instead of silently skipping them (a skipped required check still
+    # satisfies the ruleset). The `nondocs` step matches files outside the docs
+    # paths; `go_docs_inputs` adds back the docs files that `validate` reads:
+    # sync-versions.sh check reads docs/compatibility.md; the tool-version and
+    # govulncheck parity checks read docs/github-workflows.md; the builder
+    # generator (gen-builders.sh check) writes and compares docs/api-tables.*.
     outputs:
-      go: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.go }}
+      go: ${{ github.event_name == 'merge_group' && 'true' || ((steps.nondocs.outputs.go == 'true' || steps.filter.outputs.go_docs_inputs == 'true') && 'true' || 'false') }}
       docs: ${{ github.event_name == 'merge_group' && 'true' || steps.filter.outputs.docs }}
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
       if: github.event_name != 'merge_group'
+      id: nondocs
+      with:
+        # `every`: a file counts only if it matches all patterns, i.e. it is
+        # outside all three docs paths.
+        predicate-quantifier: 'every'
+        filters: |
+          go:
+            - '**'
+            - '!site/**'
+            - '!docs/**'
+            - '!**/*.md'
+    - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+      if: github.event_name != 'merge_group'
       id: filter
       with:
         filters: |
-          go:
-            - '**.go'
-            - 'go.mod'
-            - 'go.sum'
-            - 'Makefile'
-            - '.github/workflows/**'
-            # The only `sync-versions.sh check` invocation lives in the `validate`
-            # job, which is gated on this filter. Without these entries a PR
-            # touching only version metadata skipped the range and drift guards
-            # entirely and still reported success.
-            - 'versions.yaml'
+          go_docs_inputs:
             - 'docs/compatibility.md'
-            - 'scripts/sync-versions.sh'
-            # scripts/test/** is sync-versions.sh's own guard-test harness (run as
-            # the "Run sync-versions.sh guard tests" step below). Without this
-            # entry, a PR touching only a case file or the harness itself -- the
-            # exact changes this harness exists to enforce CI coverage of -- would
-            # skip `validate` and report success unexercised.
-            - 'scripts/test/**'
-            # Renovate's postUpgradeTasks command for the external-secrets pin —
-            # same reasoning as the three entries above: a PR touching only this
-            # script would otherwise skip `validate`/`test` entirely (the `build`
-            # gate accepts `skipped` deps), so a broken release-pinning script
-            # could land with a green build.
-            - 'scripts/sync-eso-pin.sh'
-            # Same reasoning for the flux-operator bundle re-vendor script, which
-            # is also a Renovate postUpgradeTasks command with no other CI coverage
-            # than its cases under scripts/test/ and the syntax check below.
-            - 'scripts/sync-flux-operator-pin.sh'
-            # check-pin-impact.sh runs only in the PR-only pin-impact job, which
-            # executes it against the real pin state, not its failure paths;
-            # those are covered by its hermetic cases under scripts/test/ (run by
-            # validate). A PR touching only the script must still run them.
-            - 'scripts/check-pin-impact.sh'
-            # check-tool-versions (golangci-lint pin parity) reads all of these;
-            # a PR touching only one must not be able to skip the lint job it
-            # runs in — that would leave the checker unexercised on exactly the
-            # class of edit most likely to break it.
-            - 'mise.toml'
-            - 'scripts/check-tool-versions.sh'
-            - 'scripts/sync-tool-versions.sh'
             - 'docs/github-workflows.md'
-            # check-go-version (mise.toml vs go.mod Go version parity) reads
-            # mise.toml (already listed above) and go.mod (base list); this is
-            # its syncer counterpart, same reasoning as sync-tool-versions.sh
-            # above — a PR touching only this script must not be able to skip
-            # the job that exercises it.
-            - 'scripts/sync-go-version.sh'
-            # check-govulncheck-docs (govulncheck version parity, ci.yml vs the doc) reads
-            # these two scripts plus ci.yml/docs/github-workflows.md, both already listed above.
-            - 'scripts/check-govulncheck-docs.sh'
-            - 'scripts/sync-govulncheck-docs.sh'
-            # scripts/gen-builders.sh is the wrapper `validate` runs as
-            # check-builders and Renovate runs after every Go module bump; a
-            # PR touching only the script must not skip the job that
-            # exercises it.
-            - 'scripts/gen-builders.sh'
-            # Go testdata is input to the tests, not documentation: the
-            # admission exclusion list is checked for stale and missing
-            # entries by pkg/kubernetes/admission_test.go, and `pkg/**` only
-            # matches the docs filter, so a PR editing just the list would
-            # otherwise skip both validate and test.
-            - 'pkg/**/testdata/**'
+            - 'docs/api-tables.md'
+            - 'docs/api-tables.json'
           docs:
             - 'site/**'
             - 'docs/**'

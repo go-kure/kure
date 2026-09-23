@@ -1096,32 +1096,20 @@ The `docs-build` job uses two separate caches:
 
 The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files change:
 
-- `go:` filter — triggers lint/test/security/build jobs. Includes `**.go`, `go.mod`, `go.sum`,
-  `Makefile`, and **`.github/workflows/**`** so that workflow-only PRs are also validated,
-  plus `versions.yaml`, `docs/compatibility.md`, `scripts/sync-versions.sh`,
-  `scripts/test/**`, `scripts/sync-eso-pin.sh` and `scripts/sync-flux-operator-pin.sh`. Those
-  last six are here because the only `sync-versions.sh check` invocation lives in the `validate`
-  job: without them a PR touching just version metadata, `sync-versions.sh`'s own guard-test
-  harness (`scripts/test/**` — a case file or the harness itself, the exact changes it exists
-  to enforce CI coverage of), or a release-pinning script skipped the supported-range guard,
-  the compatibility-matrix drift guard, and/or the "Run sync-versions.sh guard tests" step (or,
-  for the two pin scripts, all of `validate`/`test`) and still reported success — the `build`
-  gate accepts a `skipped` dependency as passing.
-  `scripts/check-pin-impact.sh` is listed for the same reason: its failure paths are covered only by
-  its hermetic cases under `scripts/test/cases/*-pin-impact-*.sh` (run by `validate`), while the
-  PR-only `pin-impact` job runs it against the real pin state, so a PR touching only the script
-  must still run those cases.
-  Also includes `mise.toml`, `scripts/check-tool-versions.sh`, `scripts/sync-tool-versions.sh`
-  and this file, for the same reason: `check-tool-versions` also runs only in the `validate`
-  job, and a PR touching only one of those would otherwise skip the golangci-lint pin-parity
-  guard. Same reasoning covers `scripts/check-govulncheck-docs.sh` and
-  `scripts/sync-govulncheck-docs.sh` — `check-govulncheck-docs` also runs only in `validate`.
-  Same reasoning covers `scripts/sync-go-version.sh` too — `check-go-version` (Go-version parity
-  between `mise.toml` and `go.mod`) also runs only in `validate`. And `scripts/gen-builders.sh`:
-  the generated-builders check (`scripts/gen-builders.sh check`) also runs only in `validate`,
-  and Renovate invokes the same script after Go module bumps. `pkg/**/testdata/**` is there for
-  the same reason: Go testdata is test input, and `pkg/**` alone matches only the `docs` filter,
-  so a PR editing just the admission exclusion list would skip the tests that check it.
+- `go` output — gates `lint`, `test` and `Security`. It is a **deny-list** (go-kure/kure#800): true
+  unless every changed file is documentation, meaning under `site/**` or `docs/**`, or a Markdown
+  file anywhere (`**/*.md`). Every other path, including one nobody thought to classify, runs the Go
+  jobs. Docs files that `validate` reads are added back: `docs/compatibility.md`
+  (`sync-versions.sh check`), this file (the golangci-lint and govulncheck version-parity
+  checks), and `docs/api-tables.md` and `docs/api-tables.json` (written and compared by the
+  builder generator, `gen-builders.sh check`). A new docs file that a Go-gated job reads must be
+  added to `go_docs_inputs`. This replaced an allowlist whose silent failure mode was the problem: a path missing
+  from it skipped `lint` and `test`, and a skipped required check still satisfies the ruleset, so
+  the PR read green unexercised. Eight separate additions to that list were each made after such a
+  miss. The cost of the inversion is a Go run on PRs that touch only an unusual non-Go, non-docs
+  file (a license or an editor config). Implemented as two `dorny/paths-filter` steps: `nondocs`
+  with `predicate-quantifier: every` over `**` and the three negated docs paths, and
+  `go_docs_inputs` for the added-back files.
 - `docs:` filter — triggers the `docs-build` job (`doc-gate` runs on every PR regardless). Includes
   `site/**`, `docs/**`, `**.md` (every Markdown file, `.claude/CLAUDE.md` included), `pkg/**`,
   `examples/**` (the builder-reference check reads the comments of `examples/` Go files),
