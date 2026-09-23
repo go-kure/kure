@@ -1530,7 +1530,7 @@ All notable changes to this project will be documented in this file.
 - Add task #1 for CEL validation enhancement
 - Add workflow guidelines to tasks.md
 - Remove references to non-existent demo-internals make target
-- Add HPA and PDB builder tasks for the downstream operator OAM support
+- Add HPA and PDB builder tasks for downstream OAM support
 - Add the downstream operator integration documentation
 - Add tasks README and update task 03 status
 - Add quickstart guide
@@ -1578,7 +1578,7 @@ All notable changes to this project will be documented in this file.
 - Update Claude settings - always save to .claude/settings.json
 - Go fmt
 - Standardize Go version and improve workflow organization
-- Align repo with the downstream operator scaffold and the downstream operator standards
+- Align repo with the downstream scaffold and platform standards
 - Enhance dependabot configuration
 - Migrate tasks to GitHub issues
 - Bump the actions group across 1 directory with 7 updates
