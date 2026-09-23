@@ -10,7 +10,7 @@ import (
 )
 
 func TestSetCiliumNetworkPolicySpec(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	SetCiliumNetworkPolicySpec(obj, &api.Rule{Description: "replaced"})
 	if obj.Spec == nil {
 		t.Fatal("expected non-nil Spec after set")
@@ -21,7 +21,7 @@ func TestSetCiliumNetworkPolicySpec(t *testing.T) {
 }
 
 func TestAddCiliumNetworkPolicySpec(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	AddCiliumNetworkPolicySpec(obj, &api.Rule{Description: "r1"})
 	AddCiliumNetworkPolicySpec(obj, &api.Rule{Description: "r2"})
 	if len(obj.Specs) != 2 {
@@ -30,7 +30,7 @@ func TestAddCiliumNetworkPolicySpec(t *testing.T) {
 }
 
 func TestSetCiliumNetworkPolicyEndpointSelector(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	sel := api.NewESFromLabels()
 	SetCiliumNetworkPolicyEndpointSelector(obj, sel)
 	if obj.Spec == nil {
@@ -39,7 +39,7 @@ func TestSetCiliumNetworkPolicyEndpointSelector(t *testing.T) {
 }
 
 func TestAddCiliumNetworkPolicyIngressRule(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	AddCiliumNetworkPolicyIngressRule(obj, api.IngressRule{})
 	if len(obj.Spec.Ingress) != 1 {
 		t.Errorf("expected 1 ingress rule, got %d", len(obj.Spec.Ingress))
@@ -47,7 +47,7 @@ func TestAddCiliumNetworkPolicyIngressRule(t *testing.T) {
 }
 
 func TestAddCiliumNetworkPolicyIngressDenyRule(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	AddCiliumNetworkPolicyIngressDenyRule(obj, api.IngressDenyRule{})
 	if len(obj.Spec.IngressDeny) != 1 {
 		t.Errorf("expected 1 ingress deny rule, got %d", len(obj.Spec.IngressDeny))
@@ -55,7 +55,7 @@ func TestAddCiliumNetworkPolicyIngressDenyRule(t *testing.T) {
 }
 
 func TestAddCiliumNetworkPolicyEgressRule(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	AddCiliumNetworkPolicyEgressRule(obj, api.EgressRule{})
 	if len(obj.Spec.Egress) != 1 {
 		t.Errorf("expected 1 egress rule, got %d", len(obj.Spec.Egress))
@@ -63,7 +63,7 @@ func TestAddCiliumNetworkPolicyEgressRule(t *testing.T) {
 }
 
 func TestAddCiliumNetworkPolicyEgressDenyRule(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	AddCiliumNetworkPolicyEgressDenyRule(obj, api.EgressDenyRule{})
 	if len(obj.Spec.EgressDeny) != 1 {
 		t.Errorf("expected 1 egress deny rule, got %d", len(obj.Spec.EgressDeny))
@@ -71,7 +71,7 @@ func TestAddCiliumNetworkPolicyEgressDenyRule(t *testing.T) {
 }
 
 func TestSetCiliumNetworkPolicyDescription(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	SetCiliumNetworkPolicyDescription(obj, "allow internal traffic")
 	if obj.Spec == nil {
 		t.Fatal("expected Spec to be auto-initialised")
@@ -82,7 +82,7 @@ func TestSetCiliumNetworkPolicyDescription(t *testing.T) {
 }
 
 func TestSetCiliumNetworkPolicyLabels(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	lbls := labels.LabelArray{labels.NewLabel("env", "prod", labels.LabelSourceK8s)}
 	SetCiliumNetworkPolicyLabels(obj, lbls)
 	if obj.Spec == nil {
@@ -94,7 +94,7 @@ func TestSetCiliumNetworkPolicyLabels(t *testing.T) {
 }
 
 func TestSetCiliumNetworkPolicyEnableDefaultDeny(t *testing.T) {
-	obj := CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumNetworkPolicy("p", "ns")
 	ingress := true
 	egress := false
 	SetCiliumNetworkPolicyEnableDefaultDeny(obj, api.DefaultDenyConfig{Ingress: &ingress, Egress: &egress})
@@ -110,7 +110,7 @@ func TestSetCiliumNetworkPolicyEnableDefaultDeny(t *testing.T) {
 }
 
 func TestSetCiliumClusterwideNetworkPolicySpec(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	SetCiliumClusterwideNetworkPolicySpec(obj, &api.Rule{Description: "cluster rule"})
 	if obj.Spec == nil {
 		t.Fatal("expected non-nil Spec after set")
@@ -121,7 +121,7 @@ func TestSetCiliumClusterwideNetworkPolicySpec(t *testing.T) {
 }
 
 func TestSetCiliumClusterwideNetworkPolicyEndpointSelector(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	sel := api.NewESFromLabels()
 	SetCiliumClusterwideNetworkPolicyEndpointSelector(obj, sel)
 	if obj.Spec == nil {
@@ -130,7 +130,7 @@ func TestSetCiliumClusterwideNetworkPolicyEndpointSelector(t *testing.T) {
 }
 
 func TestSetCiliumClusterwideNetworkPolicyNodeSelector(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	sel := api.NewESFromLabels()
 	SetCiliumClusterwideNetworkPolicyNodeSelector(obj, sel)
 	if obj.Spec == nil {
@@ -139,7 +139,7 @@ func TestSetCiliumClusterwideNetworkPolicyNodeSelector(t *testing.T) {
 }
 
 func TestAddCiliumClusterwideNetworkPolicyIngressRule(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	AddCiliumClusterwideNetworkPolicyIngressRule(obj, api.IngressRule{})
 	AddCiliumClusterwideNetworkPolicyIngressRule(obj, api.IngressRule{})
 	if len(obj.Spec.Ingress) != 2 {
@@ -148,7 +148,7 @@ func TestAddCiliumClusterwideNetworkPolicyIngressRule(t *testing.T) {
 }
 
 func TestAddCiliumClusterwideNetworkPolicyIngressDenyRule(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	AddCiliumClusterwideNetworkPolicyIngressDenyRule(obj, api.IngressDenyRule{})
 	if len(obj.Spec.IngressDeny) != 1 {
 		t.Errorf("expected 1 ingress deny rule, got %d", len(obj.Spec.IngressDeny))
@@ -156,7 +156,7 @@ func TestAddCiliumClusterwideNetworkPolicyIngressDenyRule(t *testing.T) {
 }
 
 func TestAddCiliumClusterwideNetworkPolicyEgressRule(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	AddCiliumClusterwideNetworkPolicyEgressRule(obj, api.EgressRule{})
 	if len(obj.Spec.Egress) != 1 {
 		t.Errorf("expected 1 egress rule, got %d", len(obj.Spec.Egress))
@@ -164,7 +164,7 @@ func TestAddCiliumClusterwideNetworkPolicyEgressRule(t *testing.T) {
 }
 
 func TestAddCiliumClusterwideNetworkPolicyEgressDenyRule(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	AddCiliumClusterwideNetworkPolicyEgressDenyRule(obj, api.EgressDenyRule{})
 	if len(obj.Spec.EgressDeny) != 1 {
 		t.Errorf("expected 1 egress deny rule, got %d", len(obj.Spec.EgressDeny))
@@ -172,7 +172,7 @@ func TestAddCiliumClusterwideNetworkPolicyEgressDenyRule(t *testing.T) {
 }
 
 func TestSetCiliumClusterwideNetworkPolicyDescription(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	SetCiliumClusterwideNetworkPolicyDescription(obj, "cluster wide policy")
 	if obj.Spec == nil {
 		t.Fatal("expected Spec to be auto-initialised")
@@ -183,7 +183,7 @@ func TestSetCiliumClusterwideNetworkPolicyDescription(t *testing.T) {
 }
 
 func TestSetCiliumClusterwideNetworkPolicyLabels(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	lbls := labels.LabelArray{labels.NewLabel("env", "prod", labels.LabelSourceK8s)}
 	SetCiliumClusterwideNetworkPolicyLabels(obj, lbls)
 	if obj.Spec == nil {
@@ -195,7 +195,7 @@ func TestSetCiliumClusterwideNetworkPolicyLabels(t *testing.T) {
 }
 
 func TestSetCiliumClusterwideNetworkPolicyEnableDefaultDeny(t *testing.T) {
-	obj := CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{Name: "p"})
+	obj := CreateCiliumClusterwideNetworkPolicy("p")
 	ingress := true
 	egress := true
 	SetCiliumClusterwideNetworkPolicyEnableDefaultDeny(obj, api.DefaultDenyConfig{Ingress: &ingress, Egress: &egress})
@@ -211,7 +211,7 @@ func TestSetCiliumClusterwideNetworkPolicyEnableDefaultDeny(t *testing.T) {
 }
 
 func TestAddCiliumCIDRGroupCIDR(t *testing.T) {
-	obj := CiliumCIDRGroup(&CiliumCIDRGroupConfig{Name: "g"})
+	obj := CreateCiliumCIDRGroup("g")
 	AddCiliumCIDRGroupCIDR(obj, api.CIDR("10.0.0.0/8"))
 	AddCiliumCIDRGroupCIDR(obj, api.CIDR("192.168.0.0/16"))
 	if len(obj.Spec.ExternalCIDRs) != 2 {
@@ -223,7 +223,7 @@ func TestAddCiliumCIDRGroupCIDR(t *testing.T) {
 }
 
 func TestAddCiliumEgressGatewayPolicySelectorRule(t *testing.T) {
-	obj := CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{Name: "p"})
+	obj := CreateCiliumEgressGatewayPolicy("p")
 	rule := ciliumv2.EgressRule{}
 	AddCiliumEgressGatewayPolicySelectorRule(obj, rule)
 	AddCiliumEgressGatewayPolicySelectorRule(obj, rule)
@@ -233,7 +233,7 @@ func TestAddCiliumEgressGatewayPolicySelectorRule(t *testing.T) {
 }
 
 func TestAddCiliumEgressGatewayPolicyDestinationCIDR(t *testing.T) {
-	obj := CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{Name: "p"})
+	obj := CreateCiliumEgressGatewayPolicy("p")
 	AddCiliumEgressGatewayPolicyDestinationCIDR(obj, "10.0.0.0/8")
 	AddCiliumEgressGatewayPolicyDestinationCIDR(obj, "192.168.0.0/16")
 	if len(obj.Spec.DestinationCIDRs) != 2 {
@@ -242,7 +242,7 @@ func TestAddCiliumEgressGatewayPolicyDestinationCIDR(t *testing.T) {
 }
 
 func TestAddCiliumEgressGatewayPolicyExcludedCIDR(t *testing.T) {
-	obj := CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{Name: "p"})
+	obj := CreateCiliumEgressGatewayPolicy("p")
 	AddCiliumEgressGatewayPolicyExcludedCIDR(obj, "10.1.0.0/24")
 	if len(obj.Spec.ExcludedCIDRs) != 1 {
 		t.Fatalf("expected 1 ExcludedCIDR, got %d", len(obj.Spec.ExcludedCIDRs))
@@ -250,7 +250,7 @@ func TestAddCiliumEgressGatewayPolicyExcludedCIDR(t *testing.T) {
 }
 
 func TestSetCiliumEgressGatewayPolicyEgressGateway(t *testing.T) {
-	obj := CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{Name: "p"})
+	obj := CreateCiliumEgressGatewayPolicy("p")
 	gw := &ciliumv2.EgressGateway{Interface: "eth0"}
 	SetCiliumEgressGatewayPolicyEgressGateway(obj, gw)
 	if obj.Spec.EgressGateway == nil || obj.Spec.EgressGateway.Interface != "eth0" {
@@ -259,7 +259,7 @@ func TestSetCiliumEgressGatewayPolicyEgressGateway(t *testing.T) {
 }
 
 func TestAddCiliumEgressGatewayPolicyEgressGateway(t *testing.T) {
-	obj := CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{Name: "p"})
+	obj := CreateCiliumEgressGatewayPolicy("p")
 	AddCiliumEgressGatewayPolicyEgressGateway(obj, ciliumv2.EgressGateway{Interface: "eth0"})
 	AddCiliumEgressGatewayPolicyEgressGateway(obj, ciliumv2.EgressGateway{Interface: "eth1"})
 	if len(obj.Spec.EgressGateways) != 2 {
@@ -268,7 +268,7 @@ func TestAddCiliumEgressGatewayPolicyEgressGateway(t *testing.T) {
 }
 
 func TestSetCiliumLoadBalancerIPPoolServiceSelector(t *testing.T) {
-	obj := CiliumLoadBalancerIPPool(&CiliumLoadBalancerIPPoolConfig{Name: "p"})
+	obj := CreateCiliumLoadBalancerIPPool("p")
 	sel := &slimv1.LabelSelector{MatchLabels: map[string]string{"svc": "lb"}}
 	SetCiliumLoadBalancerIPPoolServiceSelector(obj, sel)
 	if obj.Spec.ServiceSelector == nil {
@@ -277,7 +277,7 @@ func TestSetCiliumLoadBalancerIPPoolServiceSelector(t *testing.T) {
 }
 
 func TestAddCiliumLoadBalancerIPPoolBlock(t *testing.T) {
-	obj := CiliumLoadBalancerIPPool(&CiliumLoadBalancerIPPoolConfig{Name: "p"})
+	obj := CreateCiliumLoadBalancerIPPool("p")
 	AddCiliumLoadBalancerIPPoolBlock(obj, ciliumv2.CiliumLoadBalancerIPPoolIPBlock{Cidr: "10.0.0.0/8"})
 	AddCiliumLoadBalancerIPPoolBlock(obj, ciliumv2.CiliumLoadBalancerIPPoolIPBlock{Cidr: "172.16.0.0/12"})
 	if len(obj.Spec.Blocks) != 2 {
@@ -286,7 +286,7 @@ func TestAddCiliumLoadBalancerIPPoolBlock(t *testing.T) {
 }
 
 func TestAddCiliumEnvoyConfigService(t *testing.T) {
-	obj := CiliumEnvoyConfig(&CiliumEnvoyConfigConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumEnvoyConfig("p", "ns")
 	svc := &ciliumv2.ServiceListener{Name: "svc", Namespace: "ns"}
 	AddCiliumEnvoyConfigService(obj, svc)
 	AddCiliumEnvoyConfigService(obj, svc)
@@ -296,7 +296,7 @@ func TestAddCiliumEnvoyConfigService(t *testing.T) {
 }
 
 func TestAddCiliumEnvoyConfigBackendService(t *testing.T) {
-	obj := CiliumEnvoyConfig(&CiliumEnvoyConfigConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumEnvoyConfig("p", "ns")
 	svc := &ciliumv2.Service{Name: "backend", Namespace: "ns"}
 	AddCiliumEnvoyConfigBackendService(obj, svc)
 	if len(obj.Spec.BackendServices) != 1 {
@@ -305,7 +305,7 @@ func TestAddCiliumEnvoyConfigBackendService(t *testing.T) {
 }
 
 func TestAddCiliumEnvoyConfigResource(t *testing.T) {
-	obj := CiliumEnvoyConfig(&CiliumEnvoyConfigConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumEnvoyConfig("p", "ns")
 	AddCiliumEnvoyConfigResource(obj, ciliumv2.XDSResource{})
 	if len(obj.Spec.Resources) != 1 {
 		t.Fatalf("expected 1 resource, got %d", len(obj.Spec.Resources))
@@ -313,7 +313,7 @@ func TestAddCiliumEnvoyConfigResource(t *testing.T) {
 }
 
 func TestSetCiliumEnvoyConfigNodeSelector(t *testing.T) {
-	obj := CiliumEnvoyConfig(&CiliumEnvoyConfigConfig{Name: "p", Namespace: "ns"})
+	obj := CreateCiliumEnvoyConfig("p", "ns")
 	sel := &slimv1.LabelSelector{MatchLabels: map[string]string{"node": "worker"}}
 	SetCiliumEnvoyConfigNodeSelector(obj, sel)
 	if obj.Spec.NodeSelector == nil {
@@ -322,7 +322,7 @@ func TestSetCiliumEnvoyConfigNodeSelector(t *testing.T) {
 }
 
 func TestAddCiliumClusterwideEnvoyConfigService(t *testing.T) {
-	obj := CiliumClusterwideEnvoyConfig(&CiliumClusterwideEnvoyConfigConfig{Name: "p"})
+	obj := CreateCiliumClusterwideEnvoyConfig("p")
 	svc := &ciliumv2.ServiceListener{Name: "svc", Namespace: "ns"}
 	AddCiliumClusterwideEnvoyConfigService(obj, svc)
 	if len(obj.Spec.Services) != 1 {
@@ -331,7 +331,7 @@ func TestAddCiliumClusterwideEnvoyConfigService(t *testing.T) {
 }
 
 func TestAddCiliumClusterwideEnvoyConfigBackendService(t *testing.T) {
-	obj := CiliumClusterwideEnvoyConfig(&CiliumClusterwideEnvoyConfigConfig{Name: "p"})
+	obj := CreateCiliumClusterwideEnvoyConfig("p")
 	svc := &ciliumv2.Service{Name: "backend", Namespace: "ns"}
 	AddCiliumClusterwideEnvoyConfigBackendService(obj, svc)
 	if len(obj.Spec.BackendServices) != 1 {
@@ -340,7 +340,7 @@ func TestAddCiliumClusterwideEnvoyConfigBackendService(t *testing.T) {
 }
 
 func TestAddCiliumClusterwideEnvoyConfigResource(t *testing.T) {
-	obj := CiliumClusterwideEnvoyConfig(&CiliumClusterwideEnvoyConfigConfig{Name: "p"})
+	obj := CreateCiliumClusterwideEnvoyConfig("p")
 	AddCiliumClusterwideEnvoyConfigResource(obj, ciliumv2.XDSResource{})
 	AddCiliumClusterwideEnvoyConfigResource(obj, ciliumv2.XDSResource{})
 	if len(obj.Spec.Resources) != 2 {
@@ -349,7 +349,7 @@ func TestAddCiliumClusterwideEnvoyConfigResource(t *testing.T) {
 }
 
 func TestSetCiliumClusterwideEnvoyConfigNodeSelector(t *testing.T) {
-	obj := CiliumClusterwideEnvoyConfig(&CiliumClusterwideEnvoyConfigConfig{Name: "p"})
+	obj := CreateCiliumClusterwideEnvoyConfig("p")
 	sel := &slimv1.LabelSelector{MatchLabels: map[string]string{"node": "worker"}}
 	SetCiliumClusterwideEnvoyConfigNodeSelector(obj, sel)
 	if obj.Spec.NodeSelector == nil {
@@ -358,7 +358,7 @@ func TestSetCiliumClusterwideEnvoyConfigNodeSelector(t *testing.T) {
 }
 
 func TestSetCiliumBGPClusterConfigNodeSelector(t *testing.T) {
-	obj := CiliumBGPClusterConfig(&CiliumBGPClusterConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPClusterConfig("p")
 	sel := &slimv1.LabelSelector{MatchLabels: map[string]string{"bgp": "enabled"}}
 	SetCiliumBGPClusterConfigNodeSelector(obj, sel)
 	if obj.Spec.NodeSelector == nil {
@@ -367,7 +367,7 @@ func TestSetCiliumBGPClusterConfigNodeSelector(t *testing.T) {
 }
 
 func TestAddCiliumBGPClusterConfigBGPInstance(t *testing.T) {
-	obj := CiliumBGPClusterConfig(&CiliumBGPClusterConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPClusterConfig("p")
 	AddCiliumBGPClusterConfigBGPInstance(obj, ciliumv2.CiliumBGPInstance{Name: "inst-1"})
 	AddCiliumBGPClusterConfigBGPInstance(obj, ciliumv2.CiliumBGPInstance{Name: "inst-2"})
 	if len(obj.Spec.BGPInstances) != 2 {
@@ -376,7 +376,7 @@ func TestAddCiliumBGPClusterConfigBGPInstance(t *testing.T) {
 }
 
 func TestSetCiliumBGPPeerConfigTransport(t *testing.T) {
-	obj := CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPPeerConfig("p")
 	port := int32(179)
 	transport := &ciliumv2.CiliumBGPTransport{PeerPort: &port}
 	SetCiliumBGPPeerConfigTransport(obj, transport)
@@ -386,7 +386,7 @@ func TestSetCiliumBGPPeerConfigTransport(t *testing.T) {
 }
 
 func TestSetCiliumBGPPeerConfigTimers(t *testing.T) {
-	obj := CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPPeerConfig("p")
 	hold := int32(90)
 	timers := &ciliumv2.CiliumBGPTimers{HoldTimeSeconds: &hold}
 	SetCiliumBGPPeerConfigTimers(obj, timers)
@@ -396,7 +396,7 @@ func TestSetCiliumBGPPeerConfigTimers(t *testing.T) {
 }
 
 func TestSetCiliumBGPPeerConfigAuthSecretRef(t *testing.T) {
-	obj := CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPPeerConfig("p")
 	SetCiliumBGPPeerConfigAuthSecretRef(obj, "my-secret")
 	if obj.Spec.AuthSecretRef == nil || *obj.Spec.AuthSecretRef != "my-secret" {
 		t.Errorf("unexpected AuthSecretRef: %v", obj.Spec.AuthSecretRef)
@@ -404,7 +404,7 @@ func TestSetCiliumBGPPeerConfigAuthSecretRef(t *testing.T) {
 }
 
 func TestSetCiliumBGPPeerConfigEBGPMultihop(t *testing.T) {
-	obj := CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPPeerConfig("p")
 	SetCiliumBGPPeerConfigEBGPMultihop(obj, 5)
 	if obj.Spec.EBGPMultihop == nil || *obj.Spec.EBGPMultihop != 5 {
 		t.Errorf("unexpected EBGPMultihop: %v", obj.Spec.EBGPMultihop)
@@ -412,7 +412,7 @@ func TestSetCiliumBGPPeerConfigEBGPMultihop(t *testing.T) {
 }
 
 func TestSetCiliumBGPPeerConfigGracefulRestart(t *testing.T) {
-	obj := CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPPeerConfig("p")
 	enabled := true
 	gr := &ciliumv2.CiliumBGPNeighborGracefulRestart{Enabled: enabled}
 	SetCiliumBGPPeerConfigGracefulRestart(obj, gr)
@@ -422,7 +422,7 @@ func TestSetCiliumBGPPeerConfigGracefulRestart(t *testing.T) {
 }
 
 func TestAddCiliumBGPPeerConfigFamily(t *testing.T) {
-	obj := CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPPeerConfig("p")
 	fam := ciliumv2.CiliumBGPFamilyWithAdverts{
 		CiliumBGPFamily: ciliumv2.CiliumBGPFamily{Afi: "ipv4", Safi: "unicast"},
 	}
@@ -434,7 +434,7 @@ func TestAddCiliumBGPPeerConfigFamily(t *testing.T) {
 }
 
 func TestAddCiliumBGPAdvertisementEntry(t *testing.T) {
-	obj := CiliumBGPAdvertisement(&CiliumBGPAdvertisementConfig{Name: "p"})
+	obj := CreateCiliumBGPAdvertisement("p")
 	AddCiliumBGPAdvertisementEntry(obj, ciliumv2.BGPAdvertisement{AdvertisementType: ciliumv2.BGPServiceAdvert})
 	AddCiliumBGPAdvertisementEntry(obj, ciliumv2.BGPAdvertisement{AdvertisementType: ciliumv2.BGPPodCIDRAdvert})
 	if len(obj.Spec.Advertisements) != 2 {
@@ -443,7 +443,7 @@ func TestAddCiliumBGPAdvertisementEntry(t *testing.T) {
 }
 
 func TestAddCiliumBGPNodeConfigBGPInstance(t *testing.T) {
-	obj := CiliumBGPNodeConfig(&CiliumBGPNodeConfigConfig{Name: "p"})
+	obj := CreateCiliumBGPNodeConfig("p")
 	AddCiliumBGPNodeConfigBGPInstance(obj, ciliumv2.CiliumBGPNodeInstance{Name: "inst-1"})
 	if len(obj.Spec.BGPInstances) != 1 {
 		t.Fatalf("expected 1 BGP node instance, got %d", len(obj.Spec.BGPInstances))
@@ -451,7 +451,7 @@ func TestAddCiliumBGPNodeConfigBGPInstance(t *testing.T) {
 }
 
 func TestAddCiliumBGPNodeConfigOverrideBGPInstance(t *testing.T) {
-	obj := CiliumBGPNodeConfigOverride(&CiliumBGPNodeConfigOverrideConfig{Name: "p"})
+	obj := CreateCiliumBGPNodeConfigOverride("p")
 	routerID := "10.0.0.2"
 	AddCiliumBGPNodeConfigOverrideBGPInstance(obj, ciliumv2.CiliumBGPNodeConfigInstanceOverride{
 		Name:     "inst-1",
