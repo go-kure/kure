@@ -128,7 +128,10 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 //     function type's parameters and results (a callback taking *Config is
 //     the same vocabulary);
 //   - an alias declared under prefix, whose target is owned even when it is
-//     a container around an unnamed literal (type Config = *struct{...});
+//     a container around an unnamed literal (type Config = *struct{...}).
+//     Ownership is reset at every alias to where that alias is declared, so
+//     an upstream alias to a literal (type Spec = struct{...} upstream) stays
+//     upstream however it is reached;
 //   - a named container declared under prefix (type List []struct{...});
 //   - an unnamed struct, or an unnamed interface with at least one method,
 //     written in the signature itself — the parameter list belongs to this
@@ -152,7 +155,7 @@ func ownSpecTypeIn(t types.Type, prefix string, owned bool, seen map[*types.Name
 	}
 	switch x := t.(type) {
 	case *types.Alias:
-		return ownSpecTypeIn(x.Rhs(), prefix, owned || under(x.Obj().Pkg()), seen)
+		return ownSpecTypeIn(x.Rhs(), prefix, under(x.Obj().Pkg()), seen)
 	case *types.Pointer:
 		return ownSpecTypeIn(x.Elem(), prefix, owned, seen)
 	case *types.Slice:
