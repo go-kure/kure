@@ -283,7 +283,12 @@ If the pre-release test fails, the release job never runs and no tag is created.
 ### Jobs
 
 1. **test** — Full test run with race detection and CGO enabled (`build-essential` + `CGO_ENABLED=1`)
-2. **release** — Runs `scripts/release.sh` to generate changelog, commit, create tag, and push
+2. **release** — Runs `scripts/release.sh` to generate changelog, commit, create tag, and push.
+   The changelog step renders only the section for the version being cut
+   (`git-cliff --unreleased --tag <version> --prepend CHANGELOG.md`) and inserts it below the header.
+   Published sections are never regenerated, so a later `cliff.toml` postprocessor change cannot
+   rewrite them (go-kure/kure#774). Nothing else writes `CHANGELOG.md`; `changelog-preview` only
+   prints the unreleased entries.
 
 ### Authentication
 

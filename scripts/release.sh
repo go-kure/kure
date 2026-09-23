@@ -236,7 +236,11 @@ generate_changelog() {
         log_info "[DRY_RUN] Would generate changelog for $1"
     else
         log_info "Generating changelog for $1..."
-        git-cliff --tag "$1" -o "$CHANGELOG_FILE"
+        # Render only the section being released and insert it below the header,
+        # leaving every published section untouched (go-kure/kure#774). A full
+        # regeneration re-rendered old subjects through whatever cliff.toml's
+        # postprocessors had become, silently rewriting history on each release.
+        git-cliff --unreleased --tag "$1" --prepend "$CHANGELOG_FILE"
         log_success "Updated $CHANGELOG_FILE"
     fi
 }

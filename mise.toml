@@ -58,10 +58,8 @@ run = "sh scripts/check-govulncheck-docs.sh"
 description = "Sync govulncheck doc mentions (docs/github-workflows.md) from ci.yml"
 run = "sh scripts/sync-govulncheck-docs.sh"
 
-[tasks.changelog]
-description = "Generate changelog from git history"
-run = "git cliff -o CHANGELOG.md"
-
+# No task writes CHANGELOG.md: scripts/release.sh prepends each release's
+# section and published sections are never regenerated (go-kure/kure#774).
 [tasks.changelog-preview]
 description = "Preview changelog changes"
 run = "git cliff --unreleased"

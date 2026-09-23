@@ -366,12 +366,8 @@ clean: ## Clean build artifacts and caches
 # Changelog
 # =============================================================================
 
-.PHONY: changelog
-changelog: ## Generate changelog from git history
-	@echo "$(COLOR_YELLOW)Generating changelog...$(COLOR_RESET)"
-	git cliff -o CHANGELOG.md
-	@echo "$(COLOR_GREEN)Changelog generated$(COLOR_RESET)"
-
+# No target writes CHANGELOG.md: scripts/release.sh prepends each release's
+# section and published sections are never regenerated (go-kure/kure#774).
 .PHONY: changelog-preview
 changelog-preview: ## Preview unreleased changelog entries
 	@echo "$(COLOR_YELLOW)Previewing unreleased changes...$(COLOR_RESET)"
