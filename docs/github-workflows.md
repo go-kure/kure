@@ -1158,5 +1158,3 @@ To account for this:
 - [Makefile](https://github.com/go-kure/kure/blob/main/Makefile) - Local development commands
 - [mise.toml](https://github.com/go-kure/kure/blob/main/mise.toml) - Local tool version management
 - [gen-versions-toml.sh](https://github.com/go-kure/kure/blob/main/scripts/gen-versions-toml.sh) - Versioned docs config generator
-
-<!-- ci gating probe 2, throwaway -->
