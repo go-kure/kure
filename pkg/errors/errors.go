@@ -39,105 +39,20 @@ var (
 	ErrNilObject     = errors.New("provided object is nil")
 )
 
-// Common Kubernetes resource validation errors
+// Resource validation errors still returned by kure: the PSA validators in
+// pkg/kubernetes and the stack's bundle checks. Sentinels no kure code returns
+// are removed rather than kept exported; TestExportedSentinelsHaveProducers
+// enforces that (go-kure/kure#758).
 var (
-	// Nil resource errors
-	ErrNilDeployment           = ResourceValidationError("Deployment", "", "deployment", "deployment cannot be nil", nil)
-	ErrNilPod                  = ResourceValidationError("Pod", "", "pod", "pod cannot be nil", nil)
-	ErrNilPodSpec              = ResourceValidationError("PodSpec", "", "spec", "pod spec cannot be nil", nil)
-	ErrNilContainer            = ResourceValidationError("Container", "", "container", "container cannot be nil", nil)
-	ErrNilStatefulSet          = ResourceValidationError("StatefulSet", "", "statefulset", "statefulset cannot be nil", nil)
-	ErrNilDaemonSet            = ResourceValidationError("DaemonSet", "", "daemonset", "daemonset cannot be nil", nil)
-	ErrNilJob                  = ResourceValidationError("Job", "", "job", "job cannot be nil", nil)
-	ErrNilCronJob              = ResourceValidationError("CronJob", "", "cronjob", "cronjob cannot be nil", nil)
-	ErrNilService              = ResourceValidationError("Service", "", "service", "service cannot be nil", nil)
-	ErrNilSecret               = ResourceValidationError("Secret", "", "secret", "secret cannot be nil", nil)
-	ErrNilConfigMap            = ResourceValidationError("ConfigMap", "", "configmap", "configmap cannot be nil", nil)
-	ErrNilServiceAccount       = ResourceValidationError("ServiceAccount", "", "serviceaccount", "serviceaccount cannot be nil", nil)
-	ErrNilIngress              = ResourceValidationError("Ingress", "", "ingress", "ingress cannot be nil", nil)
-	ErrNilNetworkPolicy        = ResourceValidationError("NetworkPolicy", "", "networkpolicy", "network policy cannot be nil", nil)
-	ErrNilHTTPRoute            = ResourceValidationError("HTTPRoute", "", "httproute", "http route cannot be nil", nil)
-	ErrNilResourceRequirements = ResourceValidationError("ResourceRequirements", "", "resources", "resource requirements cannot be nil", nil)
-	ErrNilBundle               = ResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
-
-	// Common field validation errors
-	ErrNilSpec               = ResourceValidationError("Resource", "", "spec", "spec cannot be nil", nil)
-	ErrNilInitContainer      = ResourceValidationError("PodSpec", "", "container", "init container cannot be nil", nil)
-	ErrNilEphemeralContainer = ResourceValidationError("PodSpec", "", "container", "ephemeral container cannot be nil", nil)
-	ErrNilVolume             = ResourceValidationError("PodSpec", "", "volume", "volume cannot be nil", nil)
-	ErrNilImagePullSecret    = ResourceValidationError("PodSpec", "", "secret", "image pull secret cannot be nil", nil)
-	ErrNilToleration         = ResourceValidationError("PodSpec", "", "toleration", "toleration cannot be nil", nil)
-
-	// Additional resource errors
-	ErrNilNamespace               = ResourceValidationError("Namespace", "", "namespace", "namespace cannot be nil", nil)
-	ErrNilRole                    = ResourceValidationError("Role", "", "role", "role cannot be nil", nil)
-	ErrNilClusterRole             = ResourceValidationError("ClusterRole", "", "clusterrole", "cluster role cannot be nil", nil)
-	ErrNilRoleBinding             = ResourceValidationError("RoleBinding", "", "rolebinding", "role binding cannot be nil", nil)
-	ErrNilClusterRoleBinding      = ResourceValidationError("ClusterRoleBinding", "", "clusterrolebinding", "cluster role binding cannot be nil", nil)
-	ErrNilServicePort             = ResourceValidationError("Service", "", "port", "service port cannot be nil", nil)
-	ErrNilPodDisruptionBudget     = ResourceValidationError("PodDisruptionBudget", "", "pdb", "pod disruption budget cannot be nil", nil)
-	ErrNilHorizontalPodAutoscaler = ResourceValidationError("HorizontalPodAutoscaler", "", "hpa", "horizontal pod autoscaler cannot be nil", nil)
-	ErrNilKustomization           = ResourceValidationError("Kustomization", "", "kustomization", "kustomization cannot be nil", nil)
-
-	// Flux resources
-	ErrNilFluxInstance = ResourceValidationError("FluxInstance", "", "fluxinstance", "flux instance cannot be nil", nil)
-
-	// MetalLB resources
-	ErrNilIPAddressPool    = ResourceValidationError("IPAddressPool", "", "ipaddresspool", "ip address pool cannot be nil", nil)
-	ErrNilBGPPeer          = ResourceValidationError("BGPPeer", "", "bgppeer", "bgp peer cannot be nil", nil)
-	ErrNilBGPAdvertisement = ResourceValidationError("BGPAdvertisement", "", "bgpadvertisement", "bgp advertisement cannot be nil", nil)
-	ErrNilL2Advertisement  = ResourceValidationError("L2Advertisement", "", "l2advertisement", "l2 advertisement cannot be nil", nil)
-	ErrNilBFDProfile       = ResourceValidationError("BFDProfile", "", "bfdprofile", "bfd profile cannot be nil", nil)
-
-	// cert-manager resources
-	ErrNilCertificate   = ResourceValidationError("Certificate", "", "certificate", "certificate cannot be nil", nil)
-	ErrNilIssuer        = ResourceValidationError("Issuer", "", "issuer", "issuer cannot be nil", nil)
-	ErrNilClusterIssuer = ResourceValidationError("ClusterIssuer", "", "clusterissuer", "cluster issuer cannot be nil", nil)
-	ErrNilACMEIssuer    = ResourceValidationError("ACMEIssuer", "", "acmeissuer", "acme issuer cannot be nil", nil)
-
-	// CNPG resources
-	ErrNilDatabase        = ResourceValidationError("Database", "", "database", "database cannot be nil", nil)
-	ErrNilObjectStore     = ResourceValidationError("ObjectStore", "", "objectstore", "object store cannot be nil", nil)
-	ErrNilCluster         = ResourceValidationError("Cluster", "", "cluster", "cluster cannot be nil", nil)
-	ErrNilScheduledBackup = ResourceValidationError("ScheduledBackup", "", "scheduledbackup", "scheduled backup cannot be nil", nil)
-
-	// external-secrets resources
-	ErrNilSecretStore        = ResourceValidationError("SecretStore", "", "secretstore", "secret store cannot be nil", nil)
-	ErrNilClusterSecretStore = ResourceValidationError("ClusterSecretStore", "", "clustersecretstore", "cluster secret store cannot be nil", nil)
-	ErrNilExternalSecret     = ResourceValidationError("ExternalSecret", "", "externalsecret", "external secret cannot be nil", nil)
-
-	// Cilium resources
-	ErrNilCiliumNetworkPolicy            = ResourceValidationError("CiliumNetworkPolicy", "", "ciliumnetworkpolicy", "cilium network policy cannot be nil", nil)
-	ErrNilCiliumClusterwideNetworkPolicy = ResourceValidationError("CiliumClusterwideNetworkPolicy", "", "ciliumclusterwidenetworkpolicy", "cilium clusterwide network policy cannot be nil", nil)
-	ErrNilCiliumCIDRGroup                = ResourceValidationError("CiliumCIDRGroup", "", "ciliumcidrgroup", "cilium CIDR group cannot be nil", nil)
-
-	// Prometheus operator resources
-	ErrNilServiceMonitor = ResourceValidationError("ServiceMonitor", "", "servicemonitor", "service monitor cannot be nil", nil)
-	ErrNilPodMonitor     = ResourceValidationError("PodMonitor", "", "podmonitor", "pod monitor cannot be nil", nil)
-	ErrNilPrometheusRule = ResourceValidationError("PrometheusRule", "", "prometheusrule", "prometheus rule cannot be nil", nil)
-	ErrNilRuleGroup      = ResourceValidationError("RuleGroup", "", "rulegroup", "rule group cannot be nil", nil)
-)
-
-// Common file operation errors
-var (
-	ErrFileNotFound      = errors.New("file not found")
-	ErrDirectoryNotFound = errors.New("directory not found")
-	ErrInvalidPath       = errors.New("invalid file path")
+	ErrNilPodSpec   = ResourceValidationError("PodSpec", "", "spec", "pod spec cannot be nil", nil)
+	ErrNilContainer = ResourceValidationError("Container", "", "container", "container cannot be nil", nil)
+	ErrNilBundle    = ResourceValidationError("Bundle", "", "bundle", "bundle cannot be nil", nil)
 )
 
 // Common parse/processing errors
 var (
-	ErrNilRuntimeObject   = errors.New("nil runtime object provided")
-	ErrSchemeRegistration = errors.New("failed to register schemes")
-	ErrUnsupportedKind    = errors.New("unsupported object kind")
-	ErrInteractiveMode    = errors.New("interactive mode not yet implemented")
-)
-
-// Common configuration errors
-var (
-	ErrInvalidOutputFormat = errors.New("invalid output format")
-	ErrInvalidGrouping     = errors.New("invalid grouping option")
-	ErrInvalidPlacement    = errors.New("invalid placement option")
+	ErrNilRuntimeObject = errors.New("nil runtime object provided")
+	ErrUnsupportedKind  = errors.New("unsupported object kind")
 )
 
 // ErrorType represents the category of error
