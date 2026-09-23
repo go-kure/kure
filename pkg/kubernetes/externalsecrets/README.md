@@ -17,7 +17,7 @@ obj := externalsecrets.CreateExternalSecret("my-secret", "default")
 cl := externalsecrets.CreateClusterSecretStore("global-vault")
 ```
 
-There is no second construction path. The config-struct layer this package used to carry (`externalsecrets.ExternalSecret(&externalsecrets.ExternalSecretConfig{...})`, `SecretStore`, `ClusterSecretStore`) was retired by release 2 of the builder contract: it reached 5 of an `ExternalSecret`'s 7 spec fields and was otherwise a copy of the assignments below. The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+There is no second construction path. The config-struct layer this package used to carry (`externalsecrets.ExternalSecret(&externalsecrets.ExternalSecretConfig{...})`, `SecretStore`, `ClusterSecretStore`) was retired by release 2 of the builder contract: it reached 2 of an `ExternalSecret`'s 7 spec fields (`secretStoreRef` and `data`) and was otherwise a copy of the assignments below. The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
