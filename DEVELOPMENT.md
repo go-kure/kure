@@ -430,3 +430,5 @@ go work use ./kure ./consumer
 
 Before publishing a Kure change needed by a consumer, verify Kure with `GOWORK=off`, then update
 and verify the consumer against the released Kure version in its own repository.
+
+<!-- ci gating probe, throwaway -->
