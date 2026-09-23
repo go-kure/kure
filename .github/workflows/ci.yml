@@ -4,7 +4,11 @@ on:
   push:
     branches: [main, develop, 'release/*']
   pull_request:
-    branches: [main, develop]
+    # No `branches:` filter (go-kure/kure#798): it filters on the PR's *base*, so a
+    # stacked PR (based on another feature branch) ran no job here while pr-review
+    # still reported green, and retargeting after the base merged started nothing.
+    # Running on every base gives a stacked PR real results from its first push,
+    # and they are already on its head commit when it is retargeted to main.
     # No draft gate below (2026-08-19, GitLab mr-review parity) — every job runs
     # on a draft PR the same as a ready one, so ready_for_review buys nothing
     # here and is left out of the default set (opened, synchronize, reopened).
