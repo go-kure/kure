@@ -29,7 +29,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 ### Triggers
 
 - Push to: `main`, `develop`, `release/*`
-- Pull requests to: `main`, `develop` only, on types
+- Pull requests against any base branch, on types
   `opened`, `synchronize`, `reopened`, `labeled`, `unlabeled`
 - Merge group (merge queue's temporary branch — required checks must report here)
 - Schedule: 4am UTC daily (catch external changes)
@@ -44,17 +44,13 @@ override label starts a new run — without them the required `build` check stay
 unrelated push, so the acknowledgement path existed but nothing re-evaluated it. The cost is that
 **any** label change reruns the whole pipeline, not just a `pin-impact-ack` one.
 
-**The `branches:` filter is a base-branch filter, and a stacked PR gets no CI from it.** A PR whose
-base is another feature branch rather than `main` or `develop` does not match, so none of this
-workflow's jobs run on it — only `pr-review`, which declares no branch filter, reports. (`claude.yml`
-also declares no branch filter, but since go-kure/.github#223 it no longer triggers on `pull_request`
-at all, so it reports nothing on any PR unless someone mentions `@claude`.)
-The absence is structural, not a pass: an empty check list on such a PR means the suite never ran.
-Retargeting alone does **not** start it. When the base merges, GitHub retargets the PR and sends
-`edited` (with `changes.base`), which is not in this workflow's `types:` list — so the PR now
-matches `branches:` but nothing has triggered a run, and the check list stays empty for the same
-reason it was empty before. A subscribed event is still required: push another commit, or close and
-reopen the PR. See [Draft PRs](#draft-prs) for the retargeting table and why `edited` is excluded.
+**No `branches:` filter on `pull_request`, so a stacked PR gets the full suite** (go-kure/kure#798).
+A `branches:` filter matches the PR's *base*, so with one a PR based on another feature branch ran
+none of this workflow's jobs while `pr-review` (which has no filter) still reported green. Now `CI`
+runs on a PR whatever its base, from its first push. When the base merges and GitHub retargets the
+PR to `main` (sending `edited`, which is not in the `types:` list), nothing needs re-running: the
+required checks already ran on the PR's head commit, and the merge queue re-tests the merged
+result against `main` anyway.
 
 ### Concurrency
 
@@ -240,16 +236,10 @@ pipeline regardless of draft status). A draft PR gets
 the identical `lint`/`test`/`Security`/`coverage-check`/`build` run as a ready one; draft blocks
 merge only, via branch protection — it does not change what CI runs.
 
-One retargeting case is still **not** covered, because GitHub sends neither `synchronize` nor
-any type in this workflow's list for it:
-
-| Situation | Event GitHub sends | Remedy |
-|---|---|---|
-| PR **retargeted** to another base branch | `edited` (with `changes.base`) | close and reopen the PR, which sends `reopened` |
-| PR title or body edited | `edited` | none needed — no code changed |
-
 `edited` is deliberately not in the type list: it fires on every title and body edit, which
-would run the full suite for text-only changes. A retarget is rare enough to handle by hand.
+would run the full suite for text-only changes. A PR retargeted to another base also sends
+`edited`, but needs no run of its own: with no `branches:` filter the suite already ran on the head
+commit (see [Triggers](#triggers)).
 
 ---
 
