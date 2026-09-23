@@ -117,17 +117,15 @@ func (ml *ManifestLayout) resolveManifestFileName() ManifestFileNameFunc {
 	}
 }
 
+// FullRepoPath returns the layout's directory: Namespace joined with Name.
+// Namespace is always the parent's path ("." for the tree root); an empty
+// Namespace means "cluster". A child whose Namespace already ends in its Name
+// nests one level deeper (go-kure/kure#771); set Namespace to the parent path.
 func (ml *ManifestLayout) FullRepoPath() string {
 	ns := ml.Namespace
 	if ns == "" {
 		ns = "cluster"
 	}
-
-	// Don't duplicate the name if it's already at the end of the namespace
-	if ml.Name != "" && strings.HasSuffix(ns, ml.Name) {
-		return filepath.ToSlash(ns)
-	}
-
 	return filepath.ToSlash(filepath.Join(ns, ml.Name))
 }
 
@@ -233,7 +231,17 @@ func sanitizePackageKey(packageKey string) string {
 	return sanitized
 }
 
+// WriteToDisk writes the layout tree under basePath. It refuses a tree in
+// which two layouts resolve to the same directory (see checkLayoutTree)
+// before writing anything.
 func (ml *ManifestLayout) WriteToDisk(basePath string) error {
+	if err := checkLayoutTree(ml, diskOutDir(basePath)); err != nil {
+		return err
+	}
+	return ml.writeToDisk(basePath)
+}
+
+func (ml *ManifestLayout) writeToDisk(basePath string) error {
 	fileMode := ml.FilePer
 	if fileMode == FilePerUnset {
 		fileMode = FilePerResource
@@ -406,7 +414,7 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	}
 
 	for _, child := range ml.Children {
-		if err := child.WriteToDisk(basePath); err != nil {
+		if err := child.writeToDisk(basePath); err != nil {
 			return err
 		}
 	}

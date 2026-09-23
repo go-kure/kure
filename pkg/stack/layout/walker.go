@@ -11,15 +11,15 @@ import (
 	"github.com/go-kure/kure/pkg/stack"
 )
 
-// layoutPathSegments splits a layout's canonical repo path into directory
-// segments for use as the ancestor path of its descendants. FullRepoPath()
-// returns slash-normalised paths and already suffix-dedups (so a root whose
-// ClusterName equals its node Name yields a single segment), which avoids the
-// double-counting that occurs when threading raw []string{ClusterName, Name}.
+// layoutPathSegments splits a layout's repo path into directory segments for
+// use as the parent path of its children, so every child's Namespace is its
+// parent's FullRepoPath() (go-kure/kure#771). A layout at the tree root "."
+// yields []string{"."}, never nil: filepath.Join of no segments is "", which
+// FullRepoPath would read as "cluster".
 func layoutPathSegments(ml *ManifestLayout) []string {
 	p := ml.FullRepoPath()
 	if p == "." || p == "" {
-		return nil
+		return []string{"."}
 	}
 	return strings.Split(p, "/")
 }
@@ -73,8 +73,12 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		return flattenSingleTier(ml, c, rules), nil
 	}
 
-	// Traditional layout without cluster name
-	ml, err := walkNode(c.Node, nil, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
+	// Traditional layout without cluster name. The root node's parent is the
+	// tree root ".", so the root sits at <root> and its children at
+	// <root>/<child>: the paths the Flux generator derives from the node
+	// hierarchy. (With no parent at all, Namespace "" would put the root alone
+	// at cluster/<root>, away from its children and its Flux spec.path.)
+	ml, err := walkNode(c.Node, []string{"."}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +109,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 	// resources so WriteToDisk writes a single directory (no path collision).
 	if c.Node.Name == "" {
 		if c.Node.Bundle != nil {
-			if err := processFlatBundleApps(c.Node.Bundle.Applications, clusterLayout, []string{rules.ClusterName}, rules.FluxPlacement, rules.FileNaming); err != nil {
+			if err := processFlatBundleApps(c.Node.Bundle.Applications, clusterLayout, rules.FluxPlacement, rules.FileNaming); err != nil {
 				return nil, err
 			}
 			if len(c.Node.Bundle.Children) > 0 {
@@ -137,27 +141,31 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 
 	// Build the root node layout following the walker's path invariant
 	// (Namespace = parent path, Name = this segment). The root's parent is the
-	// cluster layer, so Namespace = ClusterName; FullRepoPath() then appends the
-	// node Name and suffix-dedups when ClusterName == Node.Name (avoiding the
-	// old <cluster>/<node> double-count). Done unconditionally (even when the
-	// root node has no Bundle) so child-node subtrees can be nested underneath.
+	// cluster layer, so Namespace = ClusterName. When the cluster directory's
+	// last segment is the node's name, the node IS that directory: its parent
+	// is set explicitly to the directory above, so the root resolves to
+	// ClusterName instead of <cluster>/<node> (and the wrapper is elided
+	// below). Done unconditionally (even when the root node has no Bundle) so
+	// child-node subtrees can be nested underneath.
+	rootNamespace := filepath.Clean(rules.ClusterName)
+	if filepath.Base(rootNamespace) == c.Node.Name {
+		rootNamespace = filepath.Dir(rootNamespace)
+	}
 	rootLayout := &ManifestLayout{
 		Name:          c.Node.Name,
-		Namespace:     rules.ClusterName,
+		Namespace:     rootNamespace,
 		FilePer:       filePer,
 		FluxPlacement: rules.FluxPlacement,
 		FileNaming:    rules.FileNaming,
 		Children:      []*ManifestLayout{},
 	}
 
-	// Canonical root path segments — descendants derive their ancestor path
-	// from this (not from raw []string{ClusterName, Node.Name}) so they collapse
-	// the duplicate segment exactly as the root does.
+	// Descendants take the root's directory as their parent path.
 	rootSegments := layoutPathSegments(rootLayout)
 
 	if c.Node.Bundle != nil {
 		// Add only the root node's bundle resources (not child resources)
-		if err := processFlatBundleApps(c.Node.Bundle.Applications, rootLayout, rootSegments, rules.FluxPlacement, rules.FileNaming); err != nil {
+		if err := processFlatBundleApps(c.Node.Bundle.Applications, rootLayout, rules.FluxPlacement, rules.FileNaming); err != nil {
 			return nil, err
 		}
 
@@ -250,7 +258,8 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 	// Second pass: build layouts for each package
 	layouts := make(map[string]*ManifestLayout)
 	for pkgKey, pkgRef := range packages {
-		layout, err := walkNodeForPackage(c.Node, nil, nodeOnly, filePer, pkgRef, pkgKey, rules.FileNaming)
+		// As in WalkCluster: the root's parent is the tree root ".".
+		layout, err := walkNodeForPackage(c.Node, []string{"."}, nodeOnly, filePer, pkgRef, pkgKey, rules.FileNaming)
 		if err != nil {
 			return nil, err
 		}
@@ -270,11 +279,6 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 		return nil, nil
 	}
 
-	currentPath := append([]string{}, ancestors...)
-	if n.Name != "" {
-		currentPath = append(currentPath, n.Name)
-	}
-
 	ml := &ManifestLayout{
 		Name:          n.Name,
 		Namespace:     filepath.Join(ancestors...),
@@ -282,10 +286,14 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 		FluxPlacement: fluxPlacement,
 		FileNaming:    fileNaming,
 	}
+	// Children take this layout's own directory as their parent path. Built
+	// from raw name segments instead, a root with no ClusterName (which
+	// resolves to cluster/<name>) put its children outside its directory.
+	currentPath := layoutPathSegments(ml)
 
 	if nodeOnly {
 		if b := n.Bundle; b != nil {
-			if err := processFlatBundleApps(b.Applications, ml, currentPath, fluxPlacement, fileNaming); err != nil {
+			if err := processFlatBundleApps(b.Applications, ml, fluxPlacement, fileNaming); err != nil {
 				return nil, err
 			}
 			// Umbrella: umbrella child sub-layouts live directly under the
@@ -417,7 +425,7 @@ func walkUmbrellaChildLayouts(children []*stack.Bundle, currentPath []string, fi
 			Mode:          KustomizationExplicit,
 			UmbrellaChild: true,
 		}
-		if err := processFlatBundleApps(cb.Applications, ml, append(append([]string(nil), currentPath...), cb.Name), fluxPlacement, fileNaming); err != nil {
+		if err := processFlatBundleApps(cb.Applications, ml, fluxPlacement, fileNaming); err != nil {
 			return nil, err
 		}
 		if len(cb.Children) > 0 {
@@ -478,10 +486,9 @@ func isAugmenter(app *stack.Application) bool {
 // their own ManifestLayout without colliding with sibling apps that share the
 // same bundle.
 //
-// parentPath is the slice of path segments leading to and including the
-// parent layout's on-disk directory; per-app sub-layouts get
-// Namespace = filepath.Join(parentPath..., app.Name).
-func processFlatBundleApps(apps []*stack.Application, parent *ManifestLayout, parentPath []string, fluxPlacement FluxPlacement, fileNaming FileNamingMode) error {
+// A per-app sub-layout's Namespace is the parent layout's directory,
+// parent.FullRepoPath(), so the parent's `- <app>` reference resolves.
+func processFlatBundleApps(apps []*stack.Application, parent *ManifestLayout, fluxPlacement FluxPlacement, fileNaming FileNamingMode) error {
 	for _, app := range apps {
 		if app == nil {
 			continue
@@ -500,7 +507,7 @@ func processFlatBundleApps(apps []*stack.Application, parent *ManifestLayout, pa
 		if isAugmenter(app) {
 			appLayout := &ManifestLayout{
 				Name:          app.Name,
-				Namespace:     filepath.Join(append(append([]string(nil), parentPath...), app.Name)...),
+				Namespace:     parent.FullRepoPath(),
 				Resources:     objs,
 				Mode:          KustomizationExplicit,
 				FluxPlacement: fluxPlacement,
@@ -564,11 +571,6 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 	// Check if this node belongs to the target package
 	belongsToPackage := packageRefKey(currentPackageRef) == targetKey
 
-	currentPath := append([]string{}, ancestors...)
-	if n.Name != "" && belongsToPackage {
-		currentPath = append(currentPath, n.Name)
-	}
-
 	var ml *ManifestLayout
 	if belongsToPackage {
 		ml = &ManifestLayout{
@@ -577,6 +579,8 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 			FilePer:    filePer,
 			FileNaming: fileNaming,
 		}
+		// As in walkNode: children take this layout's directory as parent.
+		currentPath := layoutPathSegments(ml)
 
 		if nodeOnly {
 			if b := n.Bundle; b != nil {
@@ -584,7 +588,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 				// package-aware walker also leaves FluxPlacement unset on
 				// per-app layouts. The per-app sublayout created for
 				// augmenter apps matches that convention.
-				if err := processFlatBundleApps(b.Applications, ml, currentPath, FluxUnset, fileNaming); err != nil {
+				if err := processFlatBundleApps(b.Applications, ml, FluxUnset, fileNaming); err != nil {
 					return nil, err
 				}
 			}
@@ -662,6 +666,14 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 				return nil, err
 			}
 			if cl != nil {
+				// An excluded child returns its own unnamed wrapper at this
+				// same directory (excluded nodes add no path segment). Take
+				// its children instead of nesting a second wrapper in one
+				// directory, which the writers refuse.
+				kids := []*ManifestLayout{cl}
+				if cl.Name == "" && cl.Namespace == filepath.Join(ancestors...) && len(cl.Resources) == 0 {
+					kids = cl.Children
+				}
 				// If we get a valid layout from a child but this node doesn't belong to the package,
 				// we need to create a minimal parent structure
 				if ml == nil {
@@ -670,10 +682,10 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 						Namespace:  filepath.Join(ancestors...),
 						FilePer:    filePer,
 						FileNaming: fileNaming,
-						Children:   []*ManifestLayout{cl},
+						Children:   kids,
 					}
 				} else {
-					ml.Children = append(ml.Children, cl)
+					ml.Children = append(ml.Children, kids...)
 				}
 			}
 		}

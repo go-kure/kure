@@ -285,7 +285,7 @@ func TestManifestLayoutYAMLFormat(t *testing.T) {
 
 	ml := &layout.ManifestLayout{
 		Name:      "test",
-		Namespace: "test",
+		Namespace: ".",
 		FilePer:   layout.FilePerResource,
 		Resources: []client.Object{obj},
 	}
@@ -493,7 +493,7 @@ func TestWriteToDisk_UmbrellaChildNotInKustomization(t *testing.T) {
 
 	umbrellaChild := &layout.ManifestLayout{
 		Name:          "leaf",
-		Namespace:     "apps/leaf",
+		Namespace:     "apps",
 		UmbrellaChild: true,
 		Resources:     []client.Object{obj},
 	}
@@ -620,7 +620,7 @@ func TestLeafDirectoryKustomizationGeneration(t *testing.T) {
 	// Create a leaf directory layout (no children)
 	leafLayout := &layout.ManifestLayout{
 		Name:      "backend",
-		Namespace: "apps/backend",
+		Namespace: "apps",
 		Mode:      layout.KustomizationRecursive, // Even in recursive mode, leaf should list files
 		Resources: []client.Object{obj1, obj2},
 		Children:  nil, // No children - this is a leaf directory
@@ -679,14 +679,14 @@ func TestParentDirectoryKustomizationGeneration(t *testing.T) {
 	// Create child layouts
 	frontendChild := &layout.ManifestLayout{
 		Name:      "frontend",
-		Namespace: "apps/frontend",
+		Namespace: "apps",
 		Resources: []client.Object{obj1},
 		Children:  nil,
 	}
 
 	backendChild := &layout.ManifestLayout{
 		Name:      "backend",
-		Namespace: "apps/backend",
+		Namespace: "apps",
 		Resources: []client.Object{obj2},
 		Children:  nil,
 	}
@@ -694,7 +694,7 @@ func TestParentDirectoryKustomizationGeneration(t *testing.T) {
 	// Create parent layout with children but no direct resources
 	parentLayout := &layout.ManifestLayout{
 		Name:      "apps",
-		Namespace: "apps",
+		Namespace: ".",
 		Resources: nil, // No direct resources in parent
 		Children:  []*layout.ManifestLayout{frontendChild, backendChild},
 	}

@@ -13,12 +13,21 @@ import (
 	kio "github.com/go-kure/kure/pkg/io"
 )
 
-// WriteManifest writes a ManifestLayout to disk using the provided configuration.
+// WriteManifest writes a ManifestLayout to disk using the provided
+// configuration. It refuses a tree in which two layouts resolve to the same
+// directory (see checkLayoutTree) before writing anything.
 func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
-	manifestFileName := cfg.ResolveManifestFileName()
 	if cfg.ManifestsDir == "" {
 		cfg.ManifestsDir = "clusters"
 	}
+	if err := checkLayoutTree(ml, manifestOutDir(basePath, cfg)); err != nil {
+		return err
+	}
+	return writeManifest(basePath, cfg, ml)
+}
+
+func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
+	manifestFileName := cfg.ResolveManifestFileName()
 	mode := ml.FilePer
 	if mode == FilePerUnset {
 		mode = cfg.FilePer
@@ -195,7 +204,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	}
 
 	for _, child := range ml.Children {
-		if err := WriteManifest(basePath, cfg, child); err != nil {
+		if err := writeManifest(basePath, cfg, child); err != nil {
 			return err
 		}
 	}

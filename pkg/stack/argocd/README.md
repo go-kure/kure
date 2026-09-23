@@ -55,7 +55,7 @@ ml, err := engine.CreateLayoutWithResources(cluster, layout.LayoutRules{})
 err = engine.IntegrateWithLayout(ml, cluster, layout.LayoutRules{})
 ```
 
-`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster`, then appends an `argocd/` child layout containing the generated Applications.
+`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster`, then appends an `argocd/` child layout containing the generated Applications. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it.
 
 ## Known Limitations
 

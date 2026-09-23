@@ -107,7 +107,7 @@ func TestFlatten_PropagatesExtraFilesAndCMGen(t *testing.T) {
 		Namespace: "arc-runners",
 		Children: []*ManifestLayout{{
 			Name:      "apps",
-			Namespace: "arc-runners/apps",
+			Namespace: "arc-runners",
 			ExtraFiles: []ExtraFile{
 				{Name: "values.yaml", Content: []byte("a: b")},
 			},
@@ -173,7 +173,7 @@ func TestFlatten_NoCollapseWhenChildHasChildren(t *testing.T) {
 		Children: []*ManifestLayout{
 			{
 				Name:      "apps",
-				Namespace: "arc-runners/apps",
+				Namespace: "arc-runners",
 				Children:  []*ManifestLayout{{Name: "deeper"}},
 			},
 		},
@@ -255,7 +255,7 @@ func TestApplyFlattenPathRewrites(t *testing.T) {
 		Children: []*ManifestLayout{
 			{
 				Name:      "flux-system",
-				Namespace: "arc-runners/flux-system",
+				Namespace: "arc-runners",
 				Resources: []client.Object{deepKust},
 			},
 		},
@@ -341,7 +341,7 @@ func TestFlattenSingleTier_InheritsChildMode(t *testing.T) {
 		Mode:      KustomizationUnset,
 		Children: []*ManifestLayout{{
 			Name:                "apps",
-			Namespace:           "arc-runners/apps",
+			Namespace:           "arc-runners",
 			Mode:                KustomizationExplicit,
 			FilePer:             FilePerResource,
 			ApplicationFileMode: AppFileSingle,
@@ -468,14 +468,14 @@ func TestCollectPathRewrites_MultipleChildren(t *testing.T) {
 	// in collectPathRewrites is exercised.
 	childA := &ManifestLayout{
 		Name:      "a",
-		Namespace: "cluster/a",
+		Namespace: "cluster",
 		flattenInfo: &flattenInfo{
 			pathRewrites: map[string]string{"cluster/a/apps": "cluster/a"},
 		},
 	}
 	childB := &ManifestLayout{
 		Name:      "b",
-		Namespace: "cluster/b",
+		Namespace: "cluster",
 		flattenInfo: &flattenInfo{
 			pathRewrites: map[string]string{"cluster/b/apps": "cluster/b"},
 		},

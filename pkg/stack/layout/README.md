@@ -15,6 +15,32 @@ The layout module transforms Kure's in-memory stack representation (Clusters →
 - Contains: Name, Namespace, Resources (K8s objects), Children (subdirectories)
 - Supports package-aware layouts for multi-OCI/Git scenarios
 
+#### Layout paths
+
+A layout's directory is `FullRepoPath()`, which is `Namespace` joined with `Name`. `Namespace` is
+always the **parent's** directory: set a child's `Namespace` to its parent's `FullRepoPath()`, and
+use `"."` for the root of the tree. An empty `Namespace` means `cluster`. An `AppFileSingle` layout
+writes one file, `<Namespace>/<Name>.yaml`, into its parent's directory.
+
+When a parent's `kustomization.yaml` references a child by directory (`- <Name>`), the child's
+directory must be `<parent directory>/<Name>` for the reference to resolve; building every child
+with its parent's `FullRepoPath()` as `Namespace` gives exactly that. Layouts with the same name nest:
+a bundle `web` with an application `web` gives `web/web`. A caller may still place a child
+elsewhere on purpose, for example an OCI artifact whose root lists sibling layers that live under a
+group directory; nothing refuses that, but such a root's own `kustomization.yaml` is not a valid
+kustomize entry point.
+
+Before go-kure/kure#771, `FullRepoPath()` dropped `Name` whenever `Namespace` ended with it as a
+string, and callers commonly set `Namespace` to the full path including the child's own name. That
+rule also collapsed layouts that merely shared a name or a name suffix onto one directory, losing
+resources from the kustomize graph. A caller still joining the child's `Name` into its `Namespace`
+now gets that name twice (`.../<name>/<name>`); pass the parent's path instead.
+
+Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
+anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
+layouts that resolve to the same file. Directories are compared case-insensitively, as on default
+macOS volumes.
+
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: How nodes are organized (GroupByName creates dirs, GroupFlat flattens)
 - **BundleGrouping**: How bundles within nodes are organized  
@@ -54,13 +80,11 @@ clusters/
 ### Package-Based Layout (WalkClusterByPackage)  
 ```
 oci-packages/
-  cluster/
-    web/
-      app-manifests.yaml
+  web/
+    app-manifests.yaml
 git-packages/
-  cluster/
-    monitoring/
-      app-manifests.yaml
+  monitoring/
+    app-manifests.yaml
 ```
 
 ### Flat Layout (GroupFlat rules)
@@ -189,7 +213,9 @@ Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegr
 
 ### ClusterName-Aware Layouts
 
-Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters.
+Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters. When the last segment of `ClusterName` is the root node's name (for example `ClusterName` `platform` with a root node `platform`), the root node is the cluster directory itself: the output is `platform/...`, not `platform/platform/...`.
+
+Without a `ClusterName` the root node sits at `{rootName}` and every child node nests under it (`{rootName}/{childName}/...`), the paths the Flux generator derives from the node hierarchy. `WalkClusterByPackage` places each package's root the same way, below the package directory.
 
 ### Flatten Single Tier (opt-in)
 

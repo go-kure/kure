@@ -76,7 +76,7 @@ func TestProcessFlatBundleApps_NilObjectPointer(t *testing.T) {
 	app := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{nilObjPtr}})
 	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
 
-	err := processFlatBundleApps([]*stack.Application{app}, parent, []string{"ns"}, FluxSeparate, "")
+	err := processFlatBundleApps([]*stack.Application{app}, parent, FluxSeparate, "")
 	if err != nil {
 		t.Fatalf("unexpected error with nil object pointer: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestProcessFlatBundleApps_NilApp(t *testing.T) {
 	plainApp := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{&o}})
 	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
 
-	err := processFlatBundleApps([]*stack.Application{nil, plainApp}, parent, []string{"ns"}, FluxSeparate, "")
+	err := processFlatBundleApps([]*stack.Application{nil, plainApp}, parent, FluxSeparate, "")
 	if err != nil {
 		t.Fatalf("unexpected error with nil app entry: %v", err)
 	}
