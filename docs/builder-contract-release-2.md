@@ -244,3 +244,32 @@ write every one of them — but nothing writes them for you.
 
 Golden deltas: none. Every fixture in `pkg/kubernetes/cnpg/testdata` is reproduced
 byte for byte, the injected values above included.
+
+## `pkg/kubernetes/externalsecrets`
+
+### Removed functions (3)
+
+| Removed | Replacement |
+|---|---|
+| `ExternalSecret(&ExternalSecretConfig{...})` | `CreateExternalSecret(name, namespace)` + `es.Spec.SecretStoreRef = ref` + `AddExternalSecretData(es, d)` per entry |
+| `SecretStore(&SecretStoreConfig{...})` | `CreateSecretStore(name, namespace)` + `SetSecretStoreProvider(ss, p)` + `ss.Spec.Controller = c` |
+| `ClusterSecretStore(&ClusterSecretStoreConfig{...})` | `CreateClusterSecretStore(name)` + `SetClusterSecretStoreProvider(css, p)` + `css.Spec.Controller = c` |
+
+### Removed types (3) and their fields
+
+| Removed field | Upstream field |
+|---|---|
+| `ExternalSecretConfig.Name`, `.Namespace` | `CreateExternalSecret(name, namespace)` |
+| `ExternalSecretConfig.SecretStoreRef` | `es.Spec.SecretStoreRef` |
+| `ExternalSecretConfig.Data []esv1.ExternalSecretData` | `es.Spec.Data`, or `AddExternalSecretData(es, d)` per entry |
+| `SecretStoreConfig.Name`, `.Namespace` | `CreateSecretStore(name, namespace)` |
+| `SecretStoreConfig.Provider *esv1.SecretStoreProvider` | `ss.Spec.Provider`, or `SetSecretStoreProvider(ss, p)` |
+| `SecretStoreConfig.Controller` | `ss.Spec.Controller` |
+| `ClusterSecretStoreConfig.Name` | `CreateClusterSecretStore(name)` |
+| `ClusterSecretStoreConfig.Provider *esv1.SecretStoreProvider` | `css.Spec.Provider`, or `SetClusterSecretStoreProvider(css, p)` |
+| `ClusterSecretStoreConfig.Controller` | `css.Spec.Controller` |
+
+The layer skipped `Provider` when nil and `Controller` when empty; a nil pointer and
+an empty string serialise to nothing either way, so there is no behaviour to
+replace. Golden deltas: none. Every fixture in
+`pkg/kubernetes/externalsecrets/testdata` is reproduced byte for byte.

@@ -182,7 +182,7 @@ infrastructure:
       v2.11.0 adds the Barbican provider type and marks
       KeeperSecurityProvider.FolderID optional (Go type unchanged); no other
       apis type changes — build + tests pass unchanged. The field now carries
-      omitempty, so a Keeper provider passed through SecretStoreConfig.Provider
+      omitempty, so a Keeper provider assigned to SecretStore.Spec.Provider
       with an empty FolderID serialises without folderID, which the v2.9 and
       v2.10 CRDs (folderID required) reject: set FolderID explicitly when
       targeting a cluster older than v2.11. Kure does not populate it itself.

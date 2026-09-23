@@ -12,6 +12,12 @@ import (
 	kureio "github.com/go-kure/kure/pkg/io"
 )
 
+// The fixtures under testdata were written by the config-struct layer this
+// package used to carry (ExternalSecret(&ExternalSecretConfig{...}),
+// SecretStore, ClusterSecretStore) before it was retired. Each test below
+// builds the same object on the generated constructor plus the upstream
+// struct and must reproduce that output byte for byte.
+
 var update = flag.Bool("update", false, "update golden files")
 
 func goldenTest(t *testing.T, filename string, obj client.Object) {
@@ -43,33 +49,33 @@ func goldenTest(t *testing.T, filename string, obj client.Object) {
 }
 
 func TestGolden_ExternalSecret(t *testing.T) {
-	obj := ExternalSecret(&ExternalSecretConfig{
-		Name:           "db-credentials",
-		Namespace:      "default",
-		SecretStoreRef: esv1.SecretStoreRef{Name: "vault", Kind: "ClusterSecretStore"},
-		Data: []esv1.ExternalSecretData{
-			{SecretKey: "password", RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "secret/data/db", Property: "password"}},
-			{SecretKey: "username", RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "secret/data/db", Property: "username"}},
-		},
+	obj := CreateExternalSecret("db-credentials", "default")
+	obj.Spec.SecretStoreRef = esv1.SecretStoreRef{Name: "vault", Kind: "ClusterSecretStore"}
+	AddExternalSecretData(obj, esv1.ExternalSecretData{
+		SecretKey: "password",
+		RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "secret/data/db", Property: "password"},
+	})
+	AddExternalSecretData(obj, esv1.ExternalSecretData{
+		SecretKey: "username",
+		RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "secret/data/db", Property: "username"},
 	})
 	goldenTest(t, "externalsecret.yaml", obj)
 }
 
 func TestGolden_SecretStore(t *testing.T) {
-	obj := SecretStore(&SecretStoreConfig{
-		Name:       "aws-store",
-		Namespace:  "default",
-		Provider:   &esv1.SecretStoreProvider{AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "us-east-1"}},
-		Controller: "my-controller",
+	obj := CreateSecretStore("aws-store", "default")
+	obj.Spec.Controller = "my-controller"
+	SetSecretStoreProvider(obj, &esv1.SecretStoreProvider{
+		AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "us-east-1"},
 	})
 	goldenTest(t, "secretstore.yaml", obj)
 }
 
 func TestGolden_ClusterSecretStore(t *testing.T) {
-	obj := ClusterSecretStore(&ClusterSecretStoreConfig{
-		Name:       "global-vault",
-		Provider:   &esv1.SecretStoreProvider{AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "eu-west-1"}},
-		Controller: "global-controller",
+	obj := CreateClusterSecretStore("global-vault")
+	obj.Spec.Controller = "global-controller"
+	SetClusterSecretStoreProvider(obj, &esv1.SecretStoreProvider{
+		AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "eu-west-1"},
 	})
 	goldenTest(t, "clustersecretstore.yaml", obj)
 }
