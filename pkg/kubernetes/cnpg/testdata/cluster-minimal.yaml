@@ -1,0 +1,15 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-single
+  namespace: databases
+spec:
+  affinity: {}
+  enablePDB: false
+  instances: 1
+  postgresql:
+    syncReplicaElectionConstraint:
+      enabled: false
+  primaryUpdateStrategy: unsupervised
+  resources: {}
+  storage: {}

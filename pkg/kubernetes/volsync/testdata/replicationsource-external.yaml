@@ -1,0 +1,11 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: ext-src
+  namespace: data
+spec:
+  external:
+    parameters:
+      k: v
+    provider: example.com/foo
+  sourcePVC: data

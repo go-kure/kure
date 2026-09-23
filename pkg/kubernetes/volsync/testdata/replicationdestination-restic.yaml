@@ -1,0 +1,16 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationDestination
+metadata:
+  name: db-restore
+  namespace: dr
+spec:
+  paused: true
+  restic:
+    accessModes:
+      - ReadWriteOnce
+    capacity: 10Gi
+    copyMethod: Snapshot
+    customCA: {}
+    repository: restic-creds
+  trigger:
+    manual: restore-1

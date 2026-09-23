@@ -1,0 +1,7 @@
+apiVersion: cilium.io/v2
+kind: CiliumBGPNodeConfig
+metadata:
+  name: node-worker-1
+spec:
+  bgpInstances:
+    - name: instance-65000

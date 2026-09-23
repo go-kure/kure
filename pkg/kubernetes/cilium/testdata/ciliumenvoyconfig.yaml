@@ -1,0 +1,12 @@
+apiVersion: cilium.io/v2
+kind: CiliumEnvoyConfig
+metadata:
+  name: my-proxy
+  namespace: default
+spec:
+  backendServices:
+    - name: backend
+      namespace: default
+  services:
+    - name: my-svc
+      namespace: default

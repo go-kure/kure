@@ -1,0 +1,86 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-main
+  namespace: databases
+spec:
+  affinity:
+    enablePodAntiAffinity: true
+    nodeSelector:
+      node-type: db
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://bucket/pg-main/
+      endpointURL: https://s3.example.com
+      s3Credentials:
+        accessKeyId:
+          key: MY_ACCESS_KEY
+          name: backup-creds
+        secretAccessKey:
+          key: MY_SECRET_KEY
+          name: backup-creds
+    retentionPolicy: 30d
+  bootstrap:
+    recovery:
+      source: pg-old
+  enablePDB: true
+  externalClusters:
+    - barmanObjectStore:
+        destinationPath: s3://bucket/pg-old/
+        endpointURL: https://s3.example.com
+      connectionParameters:
+        host: pg-old.example.com
+        user: postgres
+      name: pg-old
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  inheritedMetadata:
+    annotations:
+      owner: platform
+    labels:
+      team: backend
+  instances: 3
+  managed:
+    roles:
+      - comment: Application user
+        connectionLimit: 10
+        createdb: true
+        ensure: absent
+        inRoles:
+          - pg_read_all_data
+        inherit: false
+        login: true
+        name: app_user
+        passwordSecret:
+          name: app-creds
+  monitoring:
+    customQueriesConfigMap:
+      - key: queries.yaml
+        name: custom-queries
+    enablePodMonitor: true
+  plugins:
+    - isWALArchiver: true
+      name: barman-cloud.barmancloud.cnpg.io
+      parameters:
+        objectStoreName: pg-backup
+  postgresql:
+    parameters:
+      max_connections: "200"
+    syncReplicaElectionConstraint:
+      enabled: false
+    synchronous:
+      dataDurability: required
+      failoverQuorum: false
+      method: any
+      number: 1
+  primaryUpdateStrategy: unsupervised
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  storage:
+    size: 10Gi

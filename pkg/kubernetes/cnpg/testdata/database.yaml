@@ -1,0 +1,17 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-main-appdb
+  namespace: databases
+spec:
+  cluster:
+    name: pg-main
+  databaseReclaimPolicy: delete
+  ensure: absent
+  extensions:
+    - ensure: present
+      name: pg_stat_statements
+    - ensure: absent
+      name: pgvector
+  name: appdb
+  owner: app_user

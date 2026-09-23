@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: pg-main-pooler-ro
+  namespace: databases
+spec:
+  cluster:
+    name: pg-main
+  instances: 2
+  pgbouncer:
+    parameters:
+      max_client_conn: "100"
+    poolMode: transaction
+  type: ro

@@ -1,0 +1,10 @@
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: tls-src
+  namespace: data
+spec:
+  rsyncTLS:
+    address: dst.example.com
+    keySecret: tls-key
+  sourcePVC: data

@@ -1,0 +1,13 @@
+apiVersion: cilium.io/v2
+kind: CiliumEgressGatewayPolicy
+metadata:
+  name: prod-egress
+spec:
+  destinationCIDRs:
+    - 0.0.0.0/0
+  egressGateway:
+    interface: eth0
+    nodeSelector: null
+  excludedCIDRs:
+    - 10.0.0.0/8
+  selectors: null

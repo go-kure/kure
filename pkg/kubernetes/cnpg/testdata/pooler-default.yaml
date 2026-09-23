@@ -1,0 +1,10 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: pg-main-pooler
+  namespace: databases
+spec:
+  cluster:
+    name: pg-main
+  pgbouncer: {}
+  type: rw

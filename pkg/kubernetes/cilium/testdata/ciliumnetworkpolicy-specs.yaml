@@ -1,0 +1,8 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: multi-rule
+  namespace: default
+specs:
+  - description: r1
+  - description: r2

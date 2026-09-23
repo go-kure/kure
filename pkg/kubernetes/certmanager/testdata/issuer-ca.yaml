@@ -1,0 +1,8 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: internal-ca
+  namespace: default
+spec:
+  ca:
+    secretName: ca-key-pair

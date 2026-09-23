@@ -1,0 +1,8 @@
+apiVersion: cilium.io/v2
+kind: CiliumCIDRGroup
+metadata:
+  name: internal-ranges
+spec:
+  externalCIDRs:
+    - 10.0.0.0/8
+    - 192.168.0.0/16

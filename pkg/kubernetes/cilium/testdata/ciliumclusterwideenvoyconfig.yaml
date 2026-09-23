@@ -1,0 +1,8 @@
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideEnvoyConfig
+metadata:
+  name: cluster-proxy
+spec:
+  services:
+    - name: my-svc
+      namespace: default

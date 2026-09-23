@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  labels:
+    team: platform
+  name: my-pods
+  namespace: monitoring
+spec:
+  jobLabel: app
+  namespaceSelector:
+    any: true
+  podMetricsEndpoints:
+    - path: /metrics
+      port: metrics
+  podTargetLabels:
+    - version
+  sampleLimit: 1000
+  selector:
+    matchLabels:
+      app: my-app
