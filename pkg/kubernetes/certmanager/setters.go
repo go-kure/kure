@@ -50,3 +50,11 @@ func SetClusterIssuerACME(obj *certv1.ClusterIssuer, acme *cmacme.ACMEIssuer) {
 func SetClusterIssuerCA(obj *certv1.ClusterIssuer, ca *certv1.CAIssuer) {
 	obj.Spec.IssuerConfig.CA = ca
 }
+
+// ACME issuer setters
+
+// AddACMEIssuerSolver appends a challenge solver to the ACME issuer
+// configuration, which is the value SetIssuerACME / SetClusterIssuerACME take.
+func AddACMEIssuerSolver(issuer *cmacme.ACMEIssuer, solver cmacme.ACMEChallengeSolver) {
+	issuer.Solvers = append(issuer.Solvers, solver)
+}
