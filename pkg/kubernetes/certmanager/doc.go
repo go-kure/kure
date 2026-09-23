@@ -1,52 +1,41 @@
-// Package certmanager exposes helper functions for constructing resources used by
-// the cert-manager project.  Each function returns a fully initialized
-// controller-runtime object that can be serialized to YAML or modified further by
-// the calling application.
-//
-// ## Overview
-//
-// The package mirrors the constructors and setters found under
-// `internal/certmanager` so applications can build cert-manager manifests
-// programmatically without depending on the internal packages directly.  All
-// builders operate on configuration structures defined in this package and
-// convert them to the appropriate cert-manager custom resources.
-//
-// Resources covered include `Certificate`, `Issuer`, and `ClusterIssuer`, with
-// ACME and CA issuer configurations.
-//
-// ## One-of constraints
-//
-// `IssuerConfig.Variant`, `ClusterIssuerConfig.Variant`, `ACMESolverConfig.Solver`,
-// and `DNS01SolverConfig.Provider` are sealed-interface sum types — exactly one
-// implementation may be set, enforced at compile time. See
-// `docs/ARCHITECTURE.md` § "One-of Constraints (Sealed Interfaces)".
+// Package certmanager exposes the generated constructors and the admissible
+// sugar for cert-manager resources: Certificate, Issuer and ClusterIssuer.
+// Each constructor returns a controller-runtime object carrying identity
+// only; the upstream cert-manager struct is the construction API.
 //
 // ## Constructors
 //
-// Constructors accept a configuration struct and return the corresponding
-// cert-manager object.  A minimal example creating a `Certificate` looks like:
+// Create<Kind> is generated from the registered scheme and emits apiVersion,
+// kind, metadata.name and, for a namespaced kind, metadata.namespace. Spec
+// fields are the caller's own assignments:
 //
-//	cert := certmanager.Certificate(&certmanager.CertificateConfig{
-//	        Name:       "my-cert",
-//	        Namespace:  "default",
+//	cert := certmanager.CreateCertificate("my-cert", "default")
+//	cert.Spec = certv1.CertificateSpec{
 //	        SecretName: "my-cert-tls",
 //	        IssuerRef:  cmmeta.IssuerReference{Name: "letsencrypt", Kind: "ClusterIssuer"},
 //	        DNSNames:   []string{"example.com"},
+//	}
+//
+// An issuer's one-of (ACME, CA, Vault, SelfSigned, Venafi) is the upstream
+// IssuerConfig struct: set the arm you want, as a pointer.
+//
+//	issuer := certmanager.CreateClusterIssuer("letsencrypt")
+//	certmanager.SetClusterIssuerACME(issuer, &cmacme.ACMEIssuer{
+//	        Server: "https://acme-v02.api.letsencrypt.org/directory",
+//	        Email:  "admin@example.com",
 //	})
 //
 // ## Update helpers
 //
-// Additional functions prefixed with `Set` or `Add` expose granular control over
-// the generated objects.  Each writes exactly the one spec field it names.
-// Labels and annotations use the generic kubernetes.AddLabel /
-// kubernetes.AddAnnotation over metav1.Object; this package carries no per-kind
-// metadata helpers.  For example:
+// Functions prefixed with Set or Add write exactly the one field they name
+// and fall into the builder contract's admitted classes: AddCertificateDNSName
+// and AddACMEIssuerSolver append, the remaining Set* helpers assign a
+// pointer-typed field. Labels and annotations use the generic
+// kubernetes.AddLabel / kubernetes.AddAnnotation over metav1.Object; this
+// package carries no per-kind metadata helpers.
 //
-//	cert := certmanager.Certificate(&certmanager.CertificateConfig{...})
-//	cert.Spec = certv1.CertificateSpec{SecretName: "new-secret"}
-//	kubernetes.AddLabel(cert, "app", "my-app")
-//
-// This package aims to provide a convenient typed interface for applications
-// that need to generate cert-manager manifests at runtime or as part of a build
-// pipeline.
+// The config-struct layer this package used to carry — Certificate, Issuer and
+// ClusterIssuer taking a *Config, and the sealed IssuerVariant, ACMESolver and
+// DNS01Provider sums — was retired by release 2 of the builder contract; see
+// docs/builder-contract-release-2.md for the field-by-field mapping.
 package certmanager

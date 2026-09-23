@@ -459,8 +459,8 @@ written twice, and the admission test rejects it. A *pointer-typed* field is the
 class below, decided on the field rather than on how deep in the spec it sits: `Spec` itself is
 `*api.Rule` on both Cilium policy kinds, so `SetCiliumNetworkPolicySpec` and
 `SetCiliumClusterwideNetworkPolicySpec` (`pkg/kubernetes/cilium/update.go`) are admissible
-whole-spec setters and ship. They are the only two in the tree — every other whole-spec assignment
-is inside a config-struct constructor, which is not sugar.
+whole-spec setters and ship. They are the only two in the tree — a value-typed `Spec` is the
+caller's own `obj.Spec = spec`.
 
 ### Implementation Structure
 
@@ -572,50 +572,13 @@ All builders maintain consistency through:
 - **One admission test**: `pkg/kubernetes/admission_test.go` covers every package under
   `pkg/kubernetes/...`, so consistency is a test result rather than a review habit
 
-### One-of Constraints (Sealed Interfaces)
+### One-of Constraints
 
-Some upstream CRDs encode an *exactly-one-of* constraint as a struct with multiple optional pointer fields — the user is expected to set exactly one. Examples: cert-manager `IssuerSpec` (ACME / CA / Vault / SelfSigned / Venafi); VolSync `ReplicationSourceSpec` (Restic / Rsync / RsyncTLS / Rclone / Syncthing / External). Go's type system can't statically express "set exactly one of these fields", so the constraint is a CRD-level (apply-time) check.
+Some upstream CRDs encode an *exactly-one-of* constraint as a struct with multiple optional pointer fields — the user is expected to set exactly one. Examples: cert-manager `IssuerConfig` (ACME / CA / Vault / SelfSigned / Venafi); VolSync `ReplicationSourceSpec` (Restic / Rsync / RsyncTLS / Rclone / Syncthing / External). Go's type system cannot statically express "set exactly one of these fields", so the constraint is a CRD-level (apply-time) check.
 
-Kure encodes these as a **sealed-interface sum type** so violations are a compile error rather than an apply-time error. Pattern:
+Kure passes that struct through as it is. The upstream one-of is the API: set the arm you want as a pointer (`issuer.Spec.Vault = &certv1.VaultIssuer{...}`, `rs.Spec.Restic = &volsyncv1alpha1.ReplicationSourceResticSpec{...}`), and leave the others nil. A pointer setter exists where the contract admits one (`SetIssuerACME`, `SetClusterIssuerCA`); every arm is reachable either way.
 
-1. **Sealed marker interface** with an unexported method, so only types in the same package can satisfy it:
-   ```go
-   type SourceMover interface {
-       isSourceMover()
-   }
-   ```
-2. **Per-variant Configs** as defined types over the upstream specs (or hand-rolled structs where simplification adds value), each attaching the marker:
-   ```go
-   type SourceResticConfig volsyncv1alpha1.ReplicationSourceResticSpec
-   func (*SourceResticConfig) isSourceMover() {}
-
-   type SourceRcloneConfig volsyncv1alpha1.ReplicationSourceRcloneSpec
-   func (*SourceRcloneConfig) isSourceMover() {}
-   // ... etc.
-   ```
-3. **Single field** of the interface type on the parent Config — the compiler enforces "at most one variant":
-   ```go
-   type ReplicationSourceConfig struct {
-       Name, Namespace string
-       SourcePVC       string
-       Trigger         *TriggerConfig
-       Mover           SourceMover  // exactly one variant
-   }
-   ```
-4. **Type-switch dispatch** in the public constructor:
-   ```go
-   switch m := cfg.Mover.(type) {
-   case *SourceResticConfig:
-       spec := volsyncv1alpha1.ReplicationSourceResticSpec(*m)
-       rs.Spec.Restic = &spec
-   case *SourceRcloneConfig:
-       // ...
-   }
-   ```
-
-This is the kure idiom for one-of: setting two variants is a compile error (single field), and missing variants are caught at construction (nil case in the type switch).
-
-`pkg/kubernetes/volsync` and `pkg/kubernetes/certmanager` both follow this idiom. cert-manager carries three layers: `IssuerVariant` (ACME / CA on `IssuerConfig.Variant` and `ClusterIssuerConfig.Variant`), `ACMESolver` (HTTP-01 / DNS-01 on `ACMESolverConfig.Solver`), and `DNS01Provider` (Cloudflare / Route 53 / Google CloudDNS on `DNS01SolverConfig.Provider`).
+Until release 2 of the builder contract, `pkg/kubernetes/volsync` and `pkg/kubernetes/certmanager` wrapped these one-ofs in a **sealed-interface sum type** — an interface closed by an unexported marker method, a per-variant `Config` type per arm, and a type switch in a `Kind(&Config)` constructor — so that setting two arms was a compile error. The wall cut both ways: a caller could not add a Vault issuer or an Azure DNS solver even by hand, because no type outside the package could satisfy the marker, and the sums only ever covered the arms kure had chosen to mirror (2 of 5 issuer arms, 3 of 9 DNS-01 providers). The sums went with the layer; the [release 2 migration notes](/concepts/builder-contract-release-2/) map each former variant to its upstream arm.
 
 ---
 

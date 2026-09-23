@@ -32,8 +32,15 @@ the same condition — class (b) is decided on the assigned field, not on how de
 sits. `Spec` is `*api.Rule` on both Cilium policy kinds, so
 `SetCiliumNetworkPolicySpec` and `SetCiliumClusterwideNetworkPolicySpec` are class (b)
 and ship; a whole-spec setter for a value-typed `Spec` would not be admitted, and none
-exists. These two are the only whole-spec setters in the tree — every other assignment
-of a complete spec is inside a config-struct constructor, which is not sugar.
+exists. These two are the only whole-spec setters in the tree — a value-typed `Spec` is
+the caller's own `obj.Spec = spec`.
+
+There is no second construction path either. The `Kind(&Config)` layer — a function per
+kind taking a kure-invented `Config` struct and translating it into the upstream spec —
+was retired by release 2 of the contract, together with the sealed-interface sum types
+behind it; the [release 2 migration notes](/concepts/builder-contract-release-2/) map
+every removed field to the upstream field that replaces it. §3 states the rule that keeps
+it out.
 
 ## 2. Constructors
 
@@ -138,6 +145,14 @@ the helper's own body: an append inside a closure the helper never calls is a no
 caller sees, so it admits nothing. `pkg/kubernetes/testdata/admission_exclusions.txt` listed the
 helpers tolerated while the prune work item of the epic ran; that file is now empty and stays
 empty. Entries only ever leave, and a stale entry fails the test.
+
+A second rule covers what a helper takes, not what it writes: **no exported function under
+`pkg/kubernetes/...` takes a kure-defined type where an upstream spec type exists.** A
+kure-declared struct or interface as a parameter is a second vocabulary for an object the
+upstream struct already describes — the shape of the retired `Kind(&Config)` layer — and
+`TestAdmission_NoOwnParameterTypes` fails on one, reached directly or through pointer,
+slice, array or map layers, with no exclusion list. A named scalar with no upstream
+counterpart (`PSALevel`, a string enum) is not a spec type and passes.
 
 ## 4. Purity
 
@@ -613,3 +628,4 @@ literal, `resource.ParseQuantity` when the text comes from configuration.
 - [prometheus](/api-reference/prometheus-builders/) - Prometheus Operator CRD builders
 - [errors](/api-reference/errors/) - Structured error types used for nil-check sentinels
 - [Builder Contract Migration](/concepts/builder-contract-release-1/) - removed constructor defaults and changed signatures
+- [Builder Contract Migration (release 2)](/concepts/builder-contract-release-2/) - the retired `Kind(&Config)` layer, field by field
