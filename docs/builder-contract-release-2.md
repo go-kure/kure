@@ -315,3 +315,51 @@ nothing either way, so there is no behaviour to replace. `spec.endpoints` and
 change when the layer stopped seeding empty slices, and a struct literal is the
 same. Golden deltas: none. Every fixture in `pkg/kubernetes/prometheus/testdata` is
 reproduced byte for byte.
+
+## `pkg/kubernetes/cilium`
+
+### Removed functions (13)
+
+Every one of these was `obj.Spec = cfg.Spec` (or the `Spec` / `Specs` pair on the two
+policy kinds, or the `ExternalCIDRs` list on the CIDR group) behind a `Name` and, for
+the namespaced kinds, a `Namespace`. The replacement is the generated constructor and
+the same assignment.
+
+| Removed | Replacement |
+|---|---|
+| `CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{...})` | `CreateCiliumNetworkPolicy(name, namespace)` + `SetCiliumNetworkPolicySpec(obj, rule)` / `AddCiliumNetworkPolicySpec(obj, rule)` |
+| `CiliumClusterwideNetworkPolicy(&CiliumClusterwideNetworkPolicyConfig{...})` | `CreateCiliumClusterwideNetworkPolicy(name)` + `SetCiliumClusterwideNetworkPolicySpec(obj, rule)` / `AddCiliumClusterwideNetworkPolicySpec(obj, rule)` |
+| `CiliumCIDRGroup(&CiliumCIDRGroupConfig{...})` | `CreateCiliumCIDRGroup(name)` + `obj.Spec.ExternalCIDRs = cidrs` |
+| `CiliumEgressGatewayPolicy(&CiliumEgressGatewayPolicyConfig{...})` | `CreateCiliumEgressGatewayPolicy(name)` + `obj.Spec = spec` |
+| `CiliumLocalRedirectPolicy(&CiliumLocalRedirectPolicyConfig{...})` | `CreateCiliumLocalRedirectPolicy(name, namespace)` + `obj.Spec = spec` |
+| `CiliumLoadBalancerIPPool(&CiliumLoadBalancerIPPoolConfig{...})` | `CreateCiliumLoadBalancerIPPool(name)` + `obj.Spec = spec` |
+| `CiliumEnvoyConfig(&CiliumEnvoyConfigConfig{...})` | `CreateCiliumEnvoyConfig(name, namespace)` + `obj.Spec = spec` |
+| `CiliumClusterwideEnvoyConfig(&CiliumClusterwideEnvoyConfigConfig{...})` | `CreateCiliumClusterwideEnvoyConfig(name)` + `obj.Spec = spec` |
+| `CiliumBGPClusterConfig(&CiliumBGPClusterConfigConfig{...})` | `CreateCiliumBGPClusterConfig(name)` + `obj.Spec = spec` |
+| `CiliumBGPPeerConfig(&CiliumBGPPeerConfigConfig{...})` | `CreateCiliumBGPPeerConfig(name)` + `obj.Spec = spec` |
+| `CiliumBGPAdvertisement(&CiliumBGPAdvertisementConfig{...})` | `CreateCiliumBGPAdvertisement(name)` + `obj.Spec = spec` |
+| `CiliumBGPNodeConfig(&CiliumBGPNodeConfigConfig{...})` | `CreateCiliumBGPNodeConfig(name)` + `obj.Spec = spec` |
+| `CiliumBGPNodeConfigOverride(&CiliumBGPNodeConfigOverrideConfig{...})` | `CreateCiliumBGPNodeConfigOverride(name)` + `obj.Spec = spec` |
+
+### Removed types (13) and their fields
+
+| Removed field | Upstream field |
+|---|---|
+| `<Kind>Config.Name`, `.Namespace` | `Create<Kind>(name, namespace)`, or `Create<Kind>(name)` for the cluster-scoped kinds |
+| `CiliumNetworkPolicyConfig.Spec *api.Rule` | `obj.Spec` (`*api.Rule`), or `SetCiliumNetworkPolicySpec(obj, rule)` |
+| `CiliumNetworkPolicyConfig.Specs api.Rules` | `obj.Specs`, or `AddCiliumNetworkPolicySpec(obj, rule)` per rule |
+| `CiliumClusterwideNetworkPolicyConfig.Spec`, `.Specs` | `obj.Spec` / `obj.Specs`, or the `SetCiliumClusterwideNetworkPolicySpec` / `AddCiliumClusterwideNetworkPolicySpec` pair |
+| `CiliumCIDRGroupConfig.ExternalCIDRs []api.CIDR` | `obj.Spec.ExternalCIDRs`, or `AddCiliumCIDRGroupCIDR(obj, cidr)` per CIDR |
+| `CiliumEgressGatewayPolicyConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumEgressGatewayPolicySpec`) |
+| `CiliumLocalRedirectPolicyConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumLocalRedirectPolicySpec`) |
+| `CiliumLoadBalancerIPPoolConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumLoadBalancerIPPoolSpec`) |
+| `CiliumEnvoyConfigConfig.Spec`, `CiliumClusterwideEnvoyConfigConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumEnvoyConfigSpec`) |
+| `CiliumBGPClusterConfigConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumBGPClusterConfigSpec`) |
+| `CiliumBGPPeerConfigConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumBGPPeerConfigSpec`) |
+| `CiliumBGPAdvertisementConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumBGPAdvertisementSpec`) |
+| `CiliumBGPNodeConfigConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumBGPNodeSpec`) |
+| `CiliumBGPNodeConfigOverrideConfig.Spec` | `obj.Spec` (`ciliumv2.CiliumBGPNodeConfigOverrideSpec`) |
+
+The two policy builders skipped a nil `Spec`; a nil pointer serialises to nothing
+either way. Golden deltas: none. Every fixture in `pkg/kubernetes/cilium/testdata`
+is reproduced byte for byte.
