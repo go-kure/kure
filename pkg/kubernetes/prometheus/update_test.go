@@ -4,16 +4,11 @@ import (
 	"testing"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func TestAddServiceMonitorEndpoint_Public(t *testing.T) {
-	obj := ServiceMonitor(&ServiceMonitorConfig{
-		Name:      "test",
-		Namespace: "ns",
-		Selector:  metav1.LabelSelector{},
-	})
+	obj := CreateServiceMonitor("test", "ns")
 	AddServiceMonitorEndpoint(obj, monitoringv1.Endpoint{Port: "http"})
 	if len(obj.Spec.Endpoints) != 1 {
 		t.Errorf("expected 1 endpoint, got %d", len(obj.Spec.Endpoints))
@@ -21,9 +16,7 @@ func TestAddServiceMonitorEndpoint_Public(t *testing.T) {
 }
 
 func TestAddPodMonitorEndpoint_Public(t *testing.T) {
-	obj := PodMonitor(&PodMonitorConfig{
-		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
-	})
+	obj := CreatePodMonitor("test", "ns")
 	port := "http"
 	AddPodMonitorEndpoint(obj, monitoringv1.PodMetricsEndpoint{Port: &port})
 	if len(obj.Spec.PodMetricsEndpoints) != 1 {
@@ -32,9 +25,7 @@ func TestAddPodMonitorEndpoint_Public(t *testing.T) {
 }
 
 func TestAddPrometheusRuleGroup_Public(t *testing.T) {
-	obj := PrometheusRule(&PrometheusRuleConfig{
-		Name: "test", Namespace: "ns",
-	})
+	obj := CreatePrometheusRule("test", "ns")
 	AddPrometheusRuleGroup(obj, monitoringv1.RuleGroup{Name: "grp"})
 	if len(obj.Spec.Groups) != 1 {
 		t.Errorf("expected 1 group, got %d", len(obj.Spec.Groups))
@@ -42,9 +33,7 @@ func TestAddPrometheusRuleGroup_Public(t *testing.T) {
 }
 
 func TestSetServiceMonitorSampleLimit_Public(t *testing.T) {
-	obj := ServiceMonitor(&ServiceMonitorConfig{
-		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
-	})
+	obj := CreateServiceMonitor("test", "ns")
 	SetServiceMonitorSampleLimit(obj, 100)
 	if obj.Spec.SampleLimit == nil || *obj.Spec.SampleLimit != 100 {
 		t.Error("sample limit not set")
@@ -52,9 +41,7 @@ func TestSetServiceMonitorSampleLimit_Public(t *testing.T) {
 }
 
 func TestSetPodMonitorSampleLimit_Public(t *testing.T) {
-	obj := PodMonitor(&PodMonitorConfig{
-		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
-	})
+	obj := CreatePodMonitor("test", "ns")
 	SetPodMonitorSampleLimit(obj, 100)
 	if obj.Spec.SampleLimit == nil || *obj.Spec.SampleLimit != 100 {
 		t.Error("sample limit not set")
@@ -62,9 +49,7 @@ func TestSetPodMonitorSampleLimit_Public(t *testing.T) {
 }
 
 func TestAddServiceMonitorTargetLabel_Public(t *testing.T) {
-	obj := ServiceMonitor(&ServiceMonitorConfig{
-		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
-	})
+	obj := CreateServiceMonitor("test", "ns")
 	AddServiceMonitorTargetLabel(obj, "version")
 	if len(obj.Spec.TargetLabels) != 1 || obj.Spec.TargetLabels[0] != "version" {
 		t.Error("expected targetLabel version")
@@ -72,9 +57,7 @@ func TestAddServiceMonitorTargetLabel_Public(t *testing.T) {
 }
 
 func TestAddPodMonitorPodTargetLabel_Public(t *testing.T) {
-	obj := PodMonitor(&PodMonitorConfig{
-		Name: "test", Namespace: "ns", Selector: metav1.LabelSelector{},
-	})
+	obj := CreatePodMonitor("test", "ns")
 	AddPodMonitorPodTargetLabel(obj, "version")
 	if len(obj.Spec.PodTargetLabels) != 1 || obj.Spec.PodTargetLabels[0] != "version" {
 		t.Error("expected podTargetLabel version")
