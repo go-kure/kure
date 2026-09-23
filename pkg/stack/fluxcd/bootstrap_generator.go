@@ -26,20 +26,26 @@ type BootstrapGenerator struct {
 	DefaultNamespace string
 	// DefaultInterval is the default reconciliation interval
 	DefaultInterval time.Duration
-	// BootstrapName is the name given to the bootstrap Kustomization and to the
-	// FluxInstance. Neither is derived from the root node, and BootstrapConfig
-	// carries no equivalent input, so this field is the only way to override
-	// [DefaultBootstrapName]. Leaving it empty means the default, not a
-	// nameless object — see [BootstrapGenerator.bootstrapName].
+	// BootstrapName is the name given to the bootstrap Kustomization. It is not
+	// derived from the root node, and BootstrapConfig carries no equivalent
+	// input, so this field is the only way to override [DefaultBootstrapName].
+	// Leaving it empty means the default, not a nameless object — see
+	// [BootstrapGenerator.bootstrapName].
+	//
+	// It does not name the FluxInstance. That object's metadata.name is fixed
+	// at [FluxInstanceName] by the flux-operator CRD, which admits no other
+	// value; it used to take this field, so any bundle whose BootstrapName was
+	// not "flux" — the default included — was rejected at apply
+	// (go-kure/kure#847).
 	BootstrapName string
 }
 
-// bootstrapName is the name the bootstrap Kustomization and the FluxInstance are
-// given. An empty BootstrapName resolves to [DefaultBootstrapName] rather than
-// emitting an object with no metadata.name.
+// bootstrapName is the name the bootstrap Kustomization is given. An empty
+// BootstrapName resolves to [DefaultBootstrapName] rather than emitting an
+// object with no metadata.name.
 //
-// The field is new: before it, both names were the literal that
-// DefaultBootstrapName now holds, so they could not be absent. A caller that
+// The field is new: before it, the name was the literal that
+// DefaultBootstrapName now holds, so it could not be absent. A caller that
 // builds a BootstrapGenerator as a struct literal instead of through
 // NewBootstrapGenerator would otherwise have started emitting invalid YAML
 // merely because a field appeared. DefaultNamespace and DefaultInterval carry
@@ -420,7 +426,9 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 		}
 	}
 
-	fi := pubfluxcd.CreateFluxInstance(bg.bootstrapName(), bg.DefaultNamespace)
+	// The name is not bg.bootstrapName(): the CRD accepts only FluxInstanceName
+	// and rejects anything else at admission.
+	fi := pubfluxcd.CreateFluxInstance(FluxInstanceName, bg.DefaultNamespace)
 	fi.Spec = spec
 	return fi
 }

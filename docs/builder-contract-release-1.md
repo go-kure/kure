@@ -1438,7 +1438,7 @@ fixed path segments with no override.
 | `DefaultNamespace` | `"flux-system"` | both constructors |
 | `DefaultMode` | `layout.KustomizationExplicit` | `NewResourceGenerator` |
 | `DefaultSourceName` | `"flux-system"` | `generateGitSource`, `generateOCISource` |
-| `DefaultBootstrapName` | `"flux-system"` | the bootstrap `Kustomization`'s name, the `FluxInstance`'s name |
+| `DefaultBootstrapName` | `"flux-system"` | the bootstrap `Kustomization`'s name (and, until go-kure/kure#847, the `FluxInstance`'s — now fixed at `FluxInstanceName`, `"flux"`, the only name the CRD accepts) |
 | `DefaultFluxMode` | `"flux-operator"` | `GenerateBootstrap`'s empty-mode fallback, its dispatch switch, and `SupportedBootstrapModes` |
 | `DefaultSourceKind` | `"OCIRepository"` | `generateFluxSystemKustomization`, `generateFluxInstance` |
 | `DefaultBootstrapPathRoot` | `"manifests"` | `generateFluxSystemKustomization` |
@@ -1460,9 +1460,10 @@ Adding that field made a nameless object reachable for the first time, so an
 empty `BootstrapName` resolves back to `DefaultBootstrapName` at emission. Both
 names were previously a literal and could not be absent; a consumer that builds
 `BootstrapGenerator` as a struct literal rather than through
-`NewBootstrapGenerator` leaves the new field zero, and a `Kustomization` or
-`FluxInstance` with an empty `metadata.name` is rejected by the API server. The
-field is an override, not a way to remove the name. `DefaultNamespace` and
+`NewBootstrapGenerator` leaves the new field zero, and a `Kustomization` with
+an empty `metadata.name` is rejected by the API server. The field is an
+override, not a way to remove the name. (The `FluxInstance` no longer reads
+it: its name is fixed at `FluxInstanceName` since go-kure/kure#847.) `DefaultNamespace` and
 `DefaultInterval` have the same hazard on a struct literal, but they had it
 before this change as well, and resolving them at emission would alter existing
 behaviour rather than preserve it — so they are left as they were.
