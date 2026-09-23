@@ -16,7 +16,7 @@ Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_
 obj := metallb.CreateIPAddressPool("my-pool", "metallb-system")
 ```
 
-This package has no config-struct layer. Unlike `cilium` and `prometheus`, it exports no `metallb.<Kind>(&metallb.<Kind>Config{...})` builder, and never has — the generated constructor plus field assignment is the whole construction API here. No hand-written `Create*` helper for a spec fragment remains either: a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+This package never had a config-struct layer: no `metallb.<Kind>(&metallb.<Kind>Config{...})` builder existed here even before release 2 of the builder contract retired that layer everywhere else — the generated constructor plus field assignment has always been the whole construction API. No hand-written `Create*` helper for a spec fragment remains either: a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
