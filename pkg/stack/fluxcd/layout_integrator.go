@@ -266,25 +266,53 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 		}
 		return best
 	}
-	return checkReconcileOrder(kusts, creator)
+	// applied lists the generated CRs a Kustomization's apply writes: those
+	// its directory's references reach. With wait it waits for all of them,
+	// whoever else (the bootstrap) also creates them.
+	applied := func(key string) []string {
+		k := set(kusts)[key]
+		l := layoutAt[path.Clean(k.Spec.Path)]
+		if l == nil {
+			return nil
+		}
+		if reached[key] == nil {
+			reached[key] = map[*layout.ManifestLayout]bool{}
+			reach(l, reached[key])
+		}
+		var out []string
+		for _, other := range kusts {
+			ok := crKey(other.Namespace, other.Name)
+			if ok != key && reached[key][hostOf[ok]] {
+				out = append(out, ok)
+			}
+		}
+		return out
+	}
+	return checkReconcileOrder(kusts, creator, applied)
+}
+
+// set indexes Kustomizations by namespace/name.
+func set(kusts []*kustv1.Kustomization) map[string]*kustv1.Kustomization {
+	out := make(map[string]*kustv1.Kustomization, len(kusts))
+	for _, k := range kusts {
+		out[crKey(k.Namespace, k.Name)] = k
+	}
+	return out
 }
 
 // checkReconcileOrder refuses a set of Flux Kustomizations kure generated that
 // can never all become Ready. Each has two states, applied and Ready: applying
 // waits for every dependsOn to be Ready; Ready waits for being applied and for
 // every Kustomization it health-checks — unless wait is set, when Flux ignores
-// health checks and waits for everything the Kustomization applied, the CRs
-// it created included. creator, if set, names the Kustomization whose apply
-// creates a CR. Identities are namespace/name; references to objects outside
+// health checks and waits for everything the Kustomization applied (applied,
+// if set, lists the generated CRs among it). creator, if set, names the
+// Kustomization whose apply creates a CR. Identities are namespace/name; references to objects outside
 // the set (other namespaces, Kustomizations an application emits) are not
 // modelled. A cycle is a deadlock on a fresh install: a merge can close one
 // (a health check or dependency on a bundle merged into a unit that waits for
 // it), and so can a dependency chain ending at a CR its first member creates.
-func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string) string) error {
-	set := map[string]*kustv1.Kustomization{}
-	for _, k := range kusts {
-		set[crKey(k.Namespace, k.Name)] = k
-	}
+func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string) string, applied func(key string) []string) error {
+	set := set(kusts)
 	edges := map[string][]string{}
 	for _, k := range kusts {
 		key := crKey(k.Namespace, k.Name)
@@ -313,14 +341,16 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 				}
 			}
 		}
+		if k.Spec.Wait && applied != nil {
+			for _, x := range applied(key) {
+				edges[ready] = append(edges[ready], "ready "+x)
+			}
+		}
 		if creator == nil {
 			continue
 		}
 		if c := creator(key); c != "" {
 			edges[apply] = append(edges[apply], "apply "+c)
-			if set[c].Spec.Wait {
-				edges["ready "+c] = append(edges["ready "+c], ready)
-			}
 		}
 	}
 	state := map[string]int{}
@@ -436,7 +466,11 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 	if scope.ref.Kind != "" && scope.ref.Name != "" {
 		return scope.ref, nil
 	}
+	// Deduplicated by effective value: an omitted namespace is the
+	// generator's DefaultNamespace, as it is for the Kustomization's own
+	// sourceRef. The first reference is emitted as written.
 	var refs []kustv1.CrossNamespaceSourceReference
+	seen := map[kustv1.CrossNamespaceSourceReference]bool{}
 	var walk func(l *layout.ManifestLayout)
 	walk = func(l *layout.ManifestLayout) {
 		for _, b := range l.OriginBundles() {
@@ -444,7 +478,12 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 				continue
 			}
 			ref := sourceRefOf(b)
-			if ref.Kind != "" && ref.Name != "" && !slices.Contains(refs, ref) {
+			effective := ref
+			if effective.Namespace == "" {
+				effective.Namespace = p.gen.DefaultNamespace
+			}
+			if ref.Kind != "" && ref.Name != "" && !seen[effective] {
+				seen[effective] = true
 				refs = append(refs, ref)
 			}
 		}

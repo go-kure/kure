@@ -403,3 +403,40 @@ func TestReconcileOrder_Scope(t *testing.T) {
 		}
 	})
 }
+
+// TestReconcileOrder_WaitOnRootReachableCR pins that with wait a Kustomization
+// waits for every CR it applies, even one the bootstrap also creates: a
+// (PerLayout, at the root) waits for b, whose CR it applies, and b depends on
+// a.
+func TestReconcileOrder_WaitOnRootReachableCR(t *testing.T) {
+	yes := true
+	b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
+	root := &stack.Node{Name: "r", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
+	root.Bundle.Wait = &yes
+	b.Bundle.DependsOn = []*stack.Bundle{root.Bundle}
+	b.SetParent(root)
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules)
+	if err == nil || !strings.Contains(err.Error(), "never") {
+		t.Fatalf("got %v, want a reconcile-order refusal (a waits for b, b depends on a)", err)
+	}
+}
+
+// TestPerLayout_SharedSourceEffectiveNamespace pins that a bundle-less
+// layout's source is chosen by effective SourceRef: an omitted namespace is
+// the generator's default, so the two bundles below share one source.
+func TestPerLayout_SharedSourceEffectiveNamespace(t *testing.T) {
+	a := &stack.Node{Name: "a", Bundle: &stack.Bundle{Name: "a", SourceRef: &stack.SourceRef{Kind: "GitRepository", Name: "repo"}, Applications: []*stack.Application{cmApp("a-app")}}}
+	b := &stack.Node{Name: "b", Bundle: &stack.Bundle{Name: "b", SourceRef: &stack.SourceRef{Kind: "GitRepository", Name: "repo", Namespace: "flux-system"}, Applications: []*stack.Application{cmApp("b-app")}}}
+	group := &stack.Node{Name: "group", Children: []*stack.Node{a, b}}
+	root := &stack.Node{Name: "root", Children: []*stack.Node{group}}
+	a.SetParent(group)
+	b.SetParent(group)
+	group.SetParent(root)
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules); err != nil {
+		t.Fatalf("equivalent SourceRefs below a bundle-less layout refused: %v", err)
+	}
+}

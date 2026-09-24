@@ -102,7 +102,7 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 		}
 		out = append(out, objs...)
 	}
-	if err := checkReconcileOrder(kusts, nil); err != nil {
+	if err := checkReconcileOrder(kusts, nil, nil); err != nil {
 		return nil, err
 	}
 	return out, nil
