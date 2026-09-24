@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -62,23 +66,59 @@ func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
 // is where this happens.
 func checkResourceIdentities(l *ManifestLayout) error {
 	seen := make(map[string]struct{}, len(l.Resources))
-	for _, obj := range l.Resources {
-		if obj == nil {
-			continue
+	claim := func(obj runtime.Object) error {
+		acc, err := meta.Accessor(obj)
+		if err != nil {
+			return errors.Wrapf(err, "layout %q: read object metadata", l.FullRepoPath())
 		}
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		// kustomize reads an omitted namespace as "default", so an object
 		// without one and the same object in "default" are one identity.
-		ns := obj.GetNamespace()
+		ns := acc.GetNamespace()
 		if ns == "" {
 			ns = "default"
 		}
-		id := fmt.Sprintf("%s/%s %s/%s", gvk.Group, gvk.Kind, ns, obj.GetName())
+		id := fmt.Sprintf("%s/%s %s/%s", gvk.Group, gvk.Kind, ns, acc.GetName())
 		if _, dup := seen[id]; dup {
 			return errors.NewFileError("write", l.FullRepoPath(),
 				fmt.Sprintf("layout %q holds the same object %s twice", l.FullRepoPath(), id), nil)
 		}
 		seen[id] = struct{}{}
+		return nil
+	}
+	for _, obj := range l.Resources {
+		if obj == nil {
+			continue
+		}
+		// A List is an envelope: kustomize builds its items, so the
+		// items are what must be unique, not the (usually unnamed) List.
+		if u, ok := obj.(*unstructured.Unstructured); ok && u.IsList() {
+			list, err := u.ToList()
+			if err != nil {
+				return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			for i := range list.Items {
+				if err := claim(&list.Items[i]); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if meta.IsListType(obj) {
+			items, err := meta.ExtractList(obj)
+			if err != nil {
+				return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			for _, item := range items {
+				if err := claim(item); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if err := claim(obj); err != nil {
+			return err
+		}
 	}
 	return nil
 }
