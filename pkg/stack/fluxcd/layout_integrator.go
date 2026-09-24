@@ -688,6 +688,12 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q); the generated one would register the same id in the kustomize build", e.host.FullRepoPath(), obj.GetName(), e.path)
 		}
 	}
+	generated := map[string]bool{}
+	for _, obj := range fluxResources {
+		if k, ok := obj.(*kustv1.Kustomization); ok {
+			generated[crKey(k.Namespace, k.Name)] = true
+		}
+	}
 	if fluxDir != nil {
 		// Kept only when it is exactly what this integration generates: the
 		// same directory (the one ml's kustomization.yaml references), the
@@ -695,7 +701,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		// above leaves out with the child).
 		if fluxDir.Namespace == ml.FullRepoPath() && len(fluxDir.Children) == 0 &&
 			reflect.DeepEqual(fluxDir.Resources, fluxResources) {
-			return nil
+			return checkPlacedReconcileOrder(ml, generated)
 		}
 		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
 	}
@@ -724,13 +730,12 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// GenerateFromLayout checked dependencies and health checks; the
 	// placement adds what a wait on the root's Kustomization covers: the
 	// root's kustomization.yaml lists flux-system, so it applies every CR.
-	generated := map[string]bool{}
-	for _, obj := range fluxResources {
-		if k, ok := obj.(*kustv1.Kustomization); ok {
-			generated[crKey(k.Namespace, k.Name)] = true
-		}
+	// A refused placement is taken back, so the tree is as the caller gave it.
+	if err := checkPlacedReconcileOrder(ml, generated); err != nil {
+		ml.Children = ml.Children[:len(ml.Children)-1]
+		return err
 	}
-	return checkPlacedReconcileOrder(ml, generated)
+	return nil
 }
 
 // normalizeRulesPlacement returns a copy of rules with FluxPlacement filled in
