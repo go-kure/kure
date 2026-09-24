@@ -112,12 +112,22 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, f
 		var kustomBuf strings.Builder
 		kustomBuf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
 		kustomBuf.WriteString("kind: Kustomization\n")
-		kustomBuf.WriteString("resources:\n")
+		// The header is written with the first entry: a kustomization that
+		// lists nothing says so with "resources: []", since kustomize refuses
+		// a bare "resources:" with nothing else as an empty kustomization.
+		listed := false
+		entry := func(s string) {
+			if !listed {
+				kustomBuf.WriteString("resources:\n")
+				listed = true
+			}
+			kustomBuf.WriteString(s)
+		}
 
 		// Every resource file in explicit mode or for a leaf; see
 		// listedResourceFiles for recursive mode.
 		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
-			kustomBuf.WriteString(fmt.Sprintf("  - %s\n", file))
+			entry(fmt.Sprintf("  - %s\n", file))
 		}
 
 		for _, child := range ml.Children {
@@ -137,7 +147,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, f
 				continue
 			}
 			if child.ApplicationFileMode == AppFileSingle {
-				kustomBuf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
 				// FluxIntegratedPerLayout: the child is applied by the Flux
 				// Kustomization the integrator placed in ml.Resources, which
@@ -148,8 +158,11 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, f
 				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {
 					continue
 				}
-				kustomBuf.WriteString(fmt.Sprintf("  - %s\n", child.Name))
+				entry(fmt.Sprintf("  - %s\n", child.Name))
 			}
+		}
+		if !listed {
+			kustomBuf.WriteString("resources: []\n")
 		}
 
 		kustomBuf.WriteString(renderConfigMapGeneratorBlock(ml.ConfigMapGenerators))

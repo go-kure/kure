@@ -145,8 +145,9 @@ Controls how resource YAML files are named:
 - A layout that renders a bundle, and every child of a `FluxIntegratedPerLayout` layout, always
   gets a `kustomization.yaml`, even when it holds nothing else (a bundle with no applications, an
   empty node, an empty augmenter layout): a Flux Kustomization or ArgoCD Application names that
-  directory, and an empty directory does not survive a Git tree. An `AppFileSingle` layout, which
-  writes into its parent's directory, never gets one of its own
+  directory, and an empty directory does not survive a Git tree. A kustomization that lists
+  nothing is written `resources: []` (kustomize rejects a bare `resources:` as empty). An
+  `AppFileSingle` layout, which writes into its parent's directory, never gets one of its own
 
 ### Layout origins
 
