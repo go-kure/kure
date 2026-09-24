@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -169,11 +170,12 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		perLayout: perLayout,
 		nodeOf:    map[*stack.Bundle]*stack.Node{},
 		names:     map[string]string{},
-		existing:  map[string]existingCR{},
 	}
-	if err := p.indexExisting(ml); err != nil {
+	existing, err := indexExistingKustomizations(ml, nil)
+	if err != nil {
 		return err
 	}
+	p.existing = existing
 	var index func(n *stack.Node)
 	index = func(n *stack.Node) {
 		if n == nil {
@@ -223,7 +225,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 				continue
 			}
 			name := layoutCRName(child)
-			if e, ok := p.existing[name]; ok && e.host == l && e.path == child.FullRepoPath() {
+			if e, ok := p.existing[crKey(p.gen.DefaultNamespace, name)]; ok && e.host == l && e.path == child.FullRepoPath() {
 				// Placed by an earlier integration: kept as is, so its
 				// source need not be resolved again.
 				if err := p.claim(name, e.path); err != nil {
@@ -321,7 +323,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			if err := p.claim(k.Name, k.Spec.Path); err != nil {
 				return err
 			}
-			if e, ok := p.existing[k.Name]; ok {
+			if e, ok := p.existing[crKey(k.Namespace, k.Name)]; ok {
 				if e.host == host && e.path == k.Spec.Path {
 					continue
 				}
@@ -341,29 +343,58 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 	return nil
 }
 
-// indexExisting records every Kustomization already in the tree. One name
-// present twice is an identity collision before this pass adds anything.
-func (p *integratedPlacement) indexExisting(l *layout.ManifestLayout) error {
-	for _, r := range l.Resources {
-		k, ok := r.(*kustv1.Kustomization)
-		if !ok {
-			continue
+// indexExistingKustomizations records every Flux Kustomization already in the
+// tree under ml (an earlier integration's, a caller's, or one an application
+// emits), typed or unstructured, keyed by namespace/name. skip, if set, is left
+// out. One identity present twice is a collision before anything is added:
+// kustomize would register the id twice.
+func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]existingCR, error) {
+	out := map[string]existingCR{}
+	var walk func(l *layout.ManifestLayout) error
+	walk = func(l *layout.ManifestLayout) error {
+		if l == nil || l == skip {
+			return nil
 		}
-		if prev, dup := p.existing[k.Name]; dup {
-			return errors.Errorf("Flux Kustomization name %q is present twice (in layout %q with spec.path %q and in layout %q with spec.path %q): Kustomization names must be unique", k.Name, prev.host.FullRepoPath(), prev.path, l.FullRepoPath(), k.Spec.Path)
+		for _, r := range l.Resources {
+			path, ok := fluxKustomizationPath(r)
+			if !ok {
+				continue
+			}
+			key := crKey(r.GetNamespace(), r.GetName())
+			if prev, dup := out[key]; dup {
+				return errors.Errorf("Flux Kustomization name %q is present twice (in layout %q with spec.path %q and in layout %q with spec.path %q): Kustomization names must be unique", r.GetName(), prev.host.FullRepoPath(), prev.path, l.FullRepoPath(), path)
+			}
+			out[key] = existingCR{host: l, path: path}
 		}
-		p.existing[k.Name] = existingCR{host: l, path: k.Spec.Path}
+		for _, c := range l.Children {
+			if err := walk(c); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	for _, c := range l.Children {
-		if c == nil {
-			continue
-		}
-		if err := p.indexExisting(c); err != nil {
-			return err
-		}
-	}
-	return nil
+	return out, walk(ml)
 }
+
+// fluxKustomizationPath reports whether obj is a Flux Kustomization — typed,
+// or any object with its group and kind — and returns its spec.path.
+func fluxKustomizationPath(obj client.Object) (string, bool) {
+	if k, ok := obj.(*kustv1.Kustomization); ok {
+		return k.Spec.Path, true
+	}
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	if gvk.Group != kustv1.GroupVersion.Group || gvk.Kind != "Kustomization" {
+		return "", false
+	}
+	if u, ok := obj.(*unstructured.Unstructured); ok {
+		path, _, _ := unstructured.NestedString(u.Object, "spec", "path")
+		return path, true
+	}
+	return "", true
+}
+
+// crKey is a Kustomization's identity: Flux Kustomizations are namespaced.
+func crKey(namespace, name string) string { return namespace + "/" + name }
 
 // claim records that this pass emits a Kustomization named name: a second
 // claim of one name is a CR identity collision.
@@ -424,12 +455,30 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		return nil
 	}
 
+	var fluxDir *layout.ManifestLayout
 	for _, child := range ml.Children {
-		if child == nil || child.Name != DefaultFluxDirName || child.OriginApplication() != nil ||
-			len(child.OriginNodes()) > 0 || len(child.OriginBundles()) > 0 {
+		if child != nil && child.Name == DefaultFluxDirName && child.OriginApplication() == nil &&
+			len(child.OriginNodes()) == 0 && len(child.OriginBundles()) == 0 {
+			fluxDir = child
+		}
+	}
+	// The flux-system directory is applied beside the rest of the tree, so
+	// a generated Kustomization's identity must not already be taken there
+	// (an earlier flux-system child is compared as a whole below).
+	existing, err := indexExistingKustomizations(ml, fluxDir)
+	if err != nil {
+		return err
+	}
+	for _, obj := range fluxResources {
+		if _, ok := fluxKustomizationPath(obj); !ok {
 			continue
 		}
-		if reflect.DeepEqual(child.Resources, fluxResources) {
+		if e, dup := existing[crKey(obj.GetNamespace(), obj.GetName())]; dup {
+			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q); the generated one would register the same id in the kustomize build", e.host.FullRepoPath(), obj.GetName(), e.path)
+		}
+	}
+	if fluxDir != nil {
+		if reflect.DeepEqual(fluxDir.Resources, fluxResources) {
 			return nil
 		}
 		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
