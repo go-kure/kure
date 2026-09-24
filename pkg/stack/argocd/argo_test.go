@@ -666,3 +666,23 @@ func TestGenerateFromCluster_Refusals(t *testing.T) {
 		t.Errorf("generateFromLayout on a hand-built tree: got %v, %v; want a refusal", objs, err)
 	}
 }
+
+// TestGenerateFromLayout_UmbrellaDependencyChain pins that ArgoCD, which has
+// no umbrella health checks, accepts an acyclic dependency chain through an
+// umbrella: c (an umbrella child of p) depends on b, and b on p.
+func TestGenerateFromLayout_UmbrellaDependencyChain(t *testing.T) {
+	p := &stack.Bundle{Name: "p"}
+	c := &stack.Bundle{Name: "c"}
+	p.Children = []*stack.Bundle{c}
+	b := &stack.Bundle{Name: "b", DependsOn: []*stack.Bundle{p}}
+	c.DependsOn = []*stack.Bundle{b}
+	pn := &stack.Node{Name: "pn", Bundle: p}
+	bn := &stack.Node{Name: "bn", Bundle: b}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{pn, bn}}
+	pn.SetParent(r)
+	bn.SetParent(r)
+	cluster := &stack.Cluster{Name: "demo", Node: r}
+	if _, err := Engine().GenerateFromCluster(cluster); err != nil {
+		t.Fatalf("acyclic ArgoCD dependencies refused: %v", err)
+	}
+}

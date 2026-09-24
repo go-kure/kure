@@ -115,11 +115,14 @@ bundle when it has one):
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
 | `NamedDependsOn` | combined |
 
-The integrator refuses Kustomizations that can never all become Ready. Applying waits for every
-`dependsOn` to be Ready; becoming Ready waits for every Kustomization it health-checks (with
-`wait`, for every CR it created too); and a CR exists only once the Kustomization whose directory
-references reach its file has applied. A CR the root directory reaches is created by the Flux
-bootstrap. A cycle among these waits is refused, naming the chain. A merge can close one (a health
+`GenerateFromLayout` and the integrator refuse a set of Kustomizations kure generates that can
+never all become Ready. Applying waits for every `dependsOn` to be Ready; becoming Ready waits for
+every Kustomization it health-checks, unless `wait` is set (Flux then ignores health checks and
+waits for everything it applied, the CRs it created included); and, under integrated placement, a
+CR exists only once the Kustomization whose directory references reach its file has applied — a CR
+the root directory reaches is created by the Flux bootstrap. Identities are namespace and name. A
+cycle among these waits is refused, naming the chain. Kustomizations an application emits itself,
+and objects in other namespaces, are outside this check. A merge can close one (a health
 check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
 bundle depending on a child node's bundle whose CR only the parent's directory holds (PerLayout). ArgoCD
 Applications follow the same rule. Give bundles directories of their own (`NodeGrouping` or

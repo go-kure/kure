@@ -128,6 +128,9 @@ type integratedPlacement struct {
 	// existing maps every Kustomization already in the tree (an earlier
 	// integration's, or a caller's) to where it sits.
 	existing map[string]existingCR
+	// generated is the namespace/name of every Kustomization this pass
+	// placed: the reconcile-order check covers these.
+	generated map[string]bool
 }
 
 // existingCR is a Kustomization found in the tree before this pass.
@@ -168,6 +171,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		perLayout: perLayout,
 		nodeOf:    map[*stack.Bundle]*stack.Node{},
 		names:     map[string]string{},
+		generated: map[string]bool{},
 	}
 	existing, err := indexExistingKustomizations(ml, nil)
 	if err != nil {
@@ -190,49 +194,28 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.place(ml, sourceScope{}); err != nil {
 		return err
 	}
-	return checkReconcileOrder(ml)
+	return checkPlacedReconcileOrder(ml, p.generated)
 }
 
-// checkReconcileOrder refuses Flux Kustomizations that can never all become
-// Ready. Each has two states: applied, and Ready. Applying waits for every
-// dependsOn to be Ready; Ready waits for being applied and for every
-// Kustomization it health-checks (with wait, for every one it created too); a
-// Kustomization is applied only once the one that creates its CR has applied —
-// the one whose directory references reach the CR's file. A CR the root
-// directory reaches is created by the Flux bootstrap and waits on nothing. A
-// cycle among these waits is a deadlock on a fresh install: a merge can close
-// one (a health check or dependency on a bundle merged into a unit that waits
-// for it), and so can a dependency chain that ends at a CR its first member
-// creates.
-func checkReconcileOrder(root *layout.ManifestLayout) error {
-	type kust struct {
-		host         *layout.ManifestLayout
-		path         string
-		deps, checks []string
-		wait         bool
-	}
-	ks := map[string]*kust{}
-	var names []string
+// checkPlacedReconcileOrder runs checkReconcileOrder over the Kustomizations
+// this integration placed (generated: their namespace/name keys), with the
+// creation rule integrated placement adds: a CR exists only once the
+// Kustomization whose directory references reach its file has applied, and a
+// CR the root directory reaches is created by the Flux bootstrap. Under
+// separate placement every CR sits in flux-system, which the root lists, so
+// GenerateFromLayout's own check is the whole story.
+func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string]bool) error {
+	var kusts []*kustv1.Kustomization
+	hostOf := map[string]*layout.ManifestLayout{}
 	layoutAt := map[string]*layout.ManifestLayout{}
 	var index func(l *layout.ManifestLayout)
 	index = func(l *layout.ManifestLayout) {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
 		for _, obj := range l.Resources {
-			k, ok := obj.(*kustv1.Kustomization)
-			if !ok {
-				continue
+			if k, ok := obj.(*kustv1.Kustomization); ok && generated[crKey(k.Namespace, k.Name)] {
+				kusts = append(kusts, k)
+				hostOf[crKey(k.Namespace, k.Name)] = l
 			}
-			e := &kust{host: l, path: path.Clean(k.Spec.Path), wait: k.Spec.Wait}
-			for _, d := range k.Spec.DependsOn {
-				e.deps = append(e.deps, d.Name)
-			}
-			for _, hc := range k.Spec.HealthChecks {
-				if hc.Kind == "Kustomization" {
-					e.checks = append(e.checks, hc.Name)
-				}
-			}
-			ks[k.Name] = e
-			names = append(names, k.Name)
 		}
 		for _, child := range l.Children {
 			if child != nil {
@@ -261,51 +244,81 @@ func checkReconcileOrder(root *layout.ManifestLayout) error {
 	fromRoot := map[*layout.ManifestLayout]bool{}
 	reach(root, fromRoot)
 	reached := map[string]map[*layout.ManifestLayout]bool{}
-	creator := func(name string) string {
-		host := ks[name].host
+	creator := func(key string) string {
+		host := hostOf[key]
 		if fromRoot[host] {
 			return ""
 		}
-		best := ""
-		for _, other := range names {
-			if other == name {
-				continue
-			}
-			l := layoutAt[ks[other].path]
-			if l == nil {
+		best, bestLen := "", -1
+		for _, k := range kusts {
+			other := crKey(k.Namespace, k.Name)
+			l := layoutAt[path.Clean(k.Spec.Path)]
+			if other == key || l == nil {
 				continue
 			}
 			if reached[other] == nil {
 				reached[other] = map[*layout.ManifestLayout]bool{}
 				reach(l, reached[other])
 			}
-			if reached[other][host] && (best == "" || len(ks[other].path) > len(ks[best].path)) {
-				best = other
+			if reached[other][host] && len(k.Spec.Path) > bestLen {
+				best, bestLen = other, len(k.Spec.Path)
 			}
 		}
 		return best
 	}
+	return checkReconcileOrder(kusts, creator)
+}
 
-	// Nodes are "apply <name>" and "ready <name>"; an edge says the first
-	// waits for the second.
+// checkReconcileOrder refuses a set of Flux Kustomizations kure generated that
+// can never all become Ready. Each has two states, applied and Ready: applying
+// waits for every dependsOn to be Ready; Ready waits for being applied and for
+// every Kustomization it health-checks — unless wait is set, when Flux ignores
+// health checks and waits for everything the Kustomization applied, the CRs
+// it created included. creator, if set, names the Kustomization whose apply
+// creates a CR. Identities are namespace/name; references to objects outside
+// the set (other namespaces, Kustomizations an application emits) are not
+// modelled. A cycle is a deadlock on a fresh install: a merge can close one
+// (a health check or dependency on a bundle merged into a unit that waits for
+// it), and so can a dependency chain ending at a CR its first member creates.
+func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string) string) error {
+	set := map[string]*kustv1.Kustomization{}
+	for _, k := range kusts {
+		set[crKey(k.Namespace, k.Name)] = k
+	}
 	edges := map[string][]string{}
-	for _, name := range names {
-		k := ks[name]
-		ready, apply := "ready "+name, "apply "+name
+	for _, k := range kusts {
+		key := crKey(k.Namespace, k.Name)
+		ready, apply := "ready "+key, "apply "+key
 		edges[ready] = append(edges[ready], apply)
-		for _, d := range k.deps {
-			if _, ours := ks[d]; ours {
-				edges[apply] = append(edges[apply], "ready "+d)
+		for _, d := range k.Spec.DependsOn {
+			ns := d.Namespace
+			if ns == "" {
+				ns = k.Namespace
+			}
+			if dep := crKey(ns, d.Name); set[dep] != nil {
+				edges[apply] = append(edges[apply], "ready "+dep)
 			}
 		}
-		for _, h := range k.checks {
-			if _, ours := ks[h]; ours {
-				edges[ready] = append(edges[ready], "ready "+h)
+		if !k.Spec.Wait {
+			for _, hc := range k.Spec.HealthChecks {
+				if hc.Kind != "Kustomization" || !strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") {
+					continue
+				}
+				ns := hc.Namespace
+				if ns == "" {
+					ns = k.Namespace
+				}
+				if checked := crKey(ns, hc.Name); set[checked] != nil {
+					edges[ready] = append(edges[ready], "ready "+checked)
+				}
 			}
 		}
-		if c := creator(name); c != "" {
+		if creator == nil {
+			continue
+		}
+		if c := creator(key); c != "" {
 			edges[apply] = append(edges[apply], "apply "+c)
-			if ks[c].wait {
+			if set[c].Spec.Wait {
 				edges["ready "+c] = append(edges["ready "+c], ready)
 			}
 		}
@@ -333,8 +346,9 @@ func checkReconcileOrder(root *layout.ManifestLayout) error {
 		state[n] = 2
 		return nil
 	}
-	for _, name := range names {
-		for _, n := range []string{"ready " + name, "apply " + name} {
+	for _, k := range kusts {
+		key := crKey(k.Namespace, k.Name)
+		for _, n := range []string{"ready " + key, "apply " + key} {
 			if err := visit(n); err != nil {
 				return err
 			}
@@ -465,6 +479,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			if err := p.claim(k.Name, k.Spec.Path); err != nil {
 				return err
 			}
+			p.generated[crKey(k.Namespace, k.Name)] = true
 			if e, ok := p.existing[crKey(k.Namespace, k.Name)]; ok {
 				if e.host == host && e.path == k.Spec.Path {
 					continue
@@ -665,7 +680,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 
 	ml.Children = append(ml.Children, fluxLayout)
 
-	return checkReconcileOrder(ml)
+	return nil
 }
 
 // normalizeRulesPlacement returns a copy of rules with FluxPlacement filled in

@@ -192,8 +192,8 @@ func TestGenerateFromLayout_RefusesUmbrellaReadinessCycle(t *testing.T) {
 				rb.Children = []*stack.Bundle{u}
 				edit(u, b2)
 			})
-			if _, err := generateUnits(t, c, allFlat); err == nil || !strings.Contains(err.Error(), "cycle") {
-				t.Fatalf("got %v, want a cycle refusal (rb waits for u, u depends on rb)", err)
+			if _, err := generateUnits(t, c, allFlat); err == nil || !strings.Contains(err.Error(), "never") {
+				t.Fatalf("got %v, want a reconcile-order refusal (rb waits for u, u depends on rb)", err)
 			}
 		})
 	}
@@ -359,4 +359,47 @@ func TestIntegrateWithLayout_RefusesTransitiveDependencyOnHostedDescendant(t *te
 	if err == nil || !strings.Contains(err.Error(), "never") {
 		t.Fatalf("got %v, want a reconcile-order refusal (a -> c -> b, b created by a)", err)
 	}
+}
+
+// TestGenerateFromLayout_RefusesMergeHealthCheckCycle pins the reconcile-order
+// check on GenerateFromLayout itself, not only through the integrator.
+func TestGenerateFromLayout_RefusesMergeHealthCheckCycle(t *testing.T) {
+	u := &stack.Bundle{Name: "u", SourceRef: testSR(), Applications: []*stack.Application{cmApp("ua")},
+		HealthChecks: []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "b2", Namespace: "flux-system"}}}
+	c := mergedCluster(func(rb, _, _ *stack.Bundle) { rb.Children = []*stack.Bundle{u} })
+	if _, err := generateUnits(t, c, allFlat); err == nil || !strings.Contains(err.Error(), "never") {
+		t.Fatalf("got %v, want a reconcile-order refusal (rb waits for u, u waits for rb)", err)
+	}
+}
+
+// TestReconcileOrder_Scope pins what the reconcile-order check models: the
+// Kustomizations kure generates, identified by namespace and name, with a
+// health check ignored when Wait is set, as Flux ignores it.
+func TestReconcileOrder_Scope(t *testing.T) {
+	yes := true
+	t.Run("other namespace, same name", func(t *testing.T) {
+		c := mergedCluster(func(rb, _, _ *stack.Bundle) {
+			rb.HealthChecks = []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "rb", Namespace: "other"}}
+		})
+		if _, err := generateUnits(t, c, allFlat); err != nil {
+			t.Fatalf("a health check on other/rb is not rb itself: %v", err)
+		}
+	})
+	t.Run("wait ignores health checks", func(t *testing.T) {
+		a := srBundle("a", cmApp("a-app"))
+		b := srBundle("b", cmApp("b-app"))
+		a.Wait = &yes
+		a.HealthChecks = []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "b", Namespace: "flux-system"}}
+		b.DependsOn = []*stack.Bundle{a}
+		an := &stack.Node{Name: "a", Bundle: a}
+		bn := &stack.Node{Name: "b", Bundle: b}
+		r := &stack.Node{Name: "r", Children: []*stack.Node{an, bn}}
+		an.SetParent(r)
+		bn.SetParent(r)
+		rules := propertyGroupings["nodeOnly"]
+		rules.FluxPlacement = layout.FluxSeparate
+		if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: r}, rules); err != nil {
+			t.Fatalf("with wait, Flux ignores a's health check on b: %v", err)
+		}
+	})
 }

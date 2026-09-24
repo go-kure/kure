@@ -522,10 +522,10 @@ func TestIndexOrigins_Units(t *testing.T) {
 		t.Errorf("UnitNamedDependencies = %v, want [external] (rb is rb's own unit)", got)
 	}
 
-	// u depending on a bundle merged into its umbrella parent's unit waits
-	// for a unit that waits for it (health checks): a cycle.
+	// b1 -> u -> b2 is acyclic until b1 and b2 merge into rb's unit:
+	// rb -> u -> rb.
 	u.DependsOn = []*stack.Bundle{b2}
-	b1.DependsOn = nil
+	b1.DependsOn = []*stack.Bundle{u}
 	if _, err := layout.IndexOrigins(walk(t, c, flat), c); err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Errorf("got %v, want a unit cycle refusal", err)
 	}
