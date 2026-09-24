@@ -1,8 +1,6 @@
 package argocd
 
 import (
-	"path/filepath"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,49 +37,53 @@ func Engine() *WorkflowEngine {
 
 // ResourceGenerator interface implementation
 
-// GenerateFromCluster creates ArgoCD Applications from a cluster definition.
+// GenerateFromCluster creates ArgoCD Applications from a cluster definition:
+// it walks the cluster with layout.DefaultLayoutRules and generates from that
+// layout (see generateFromLayout), so each source.path is the directory a
+// default-rules walk writes the bundle to. Callers writing the layout with
+// other rules use CreateLayoutWithResources, which generates from the layout
+// it walks.
 func (w *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
 	if c == nil || c.Node == nil {
 		return nil, nil
 	}
-	return w.GenerateFromNode(c.Node)
+	ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
+	if err != nil {
+		return nil, err
+	}
+	return w.generateFromLayout(ml, c)
 }
 
-// GenerateFromNode creates ArgoCD Applications from a node and its children.
-func (w *WorkflowEngine) GenerateFromNode(n *stack.Node) ([]client.Object, error) {
-	if n == nil {
+// generateFromLayout creates an Application for every bundle the layout tree
+// root renders (umbrella children included), in layout pre-order. root must
+// have been walked from c: layout.IndexOrigins refuses anything else. Each
+// source.path is the directory of the layout that renders the bundle.
+func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
+	if root == nil || c == nil || c.Node == nil {
 		return nil, nil
 	}
-
+	ix, err := layout.IndexOrigins(root, c)
+	if err != nil {
+		return nil, err
+	}
 	var objs []client.Object
-
-	// Generate application for this node's bundle
-	if n.Bundle != nil {
-		bundleApps, err := w.GenerateFromBundle(n.Bundle)
+	for _, b := range ix.Bundles() {
+		path, err := ix.KustomizationPath(b)
 		if err != nil {
 			return nil, err
 		}
-		objs = append(objs, bundleApps...)
-	}
-
-	// Generate applications for child nodes
-	for _, child := range n.Children {
-		childApps, err := w.GenerateFromNode(child)
+		app, err := w.applicationForBundle(b, path)
 		if err != nil {
 			return nil, err
 		}
-		objs = append(objs, childApps...)
+		objs = append(objs, app)
 	}
-
 	return objs, nil
 }
 
-// GenerateFromBundle creates an ArgoCD Application from a bundle definition.
-func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, error) {
-	if b == nil {
-		return nil, nil
-	}
-
+// applicationForBundle creates an ArgoCD Application for b whose
+// spec.source.path is path, verbatim.
+func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (client.Object, error) {
 	app := &unstructured.Unstructured{}
 	app.SetAPIVersion("argoproj.io/v1alpha1")
 	app.SetKind("Application")
@@ -96,7 +98,7 @@ func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, e
 	// Configure source
 	source := map[string]any{
 		"repoURL": w.RepoURL,
-		"path":    w.bundlePath(b),
+		"path":    path,
 	}
 
 	// Configure destination
@@ -124,8 +126,7 @@ func (w *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, e
 		}
 	}
 
-	var obj client.Object = app
-	return []client.Object{obj}, nil
+	return app, nil
 }
 
 // LayoutIntegrator interface implementation
@@ -144,14 +145,22 @@ func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterf
 	if !ok {
 		return nil, errors.New("rules must be of type layout.LayoutRules")
 	}
+	// An integrated Flux placement asks the writer to reference child layouts
+	// through Flux CRs, and an Argo layout has none: the argocd/ directory
+	// and the child layouts would never be applied.
+	if rules.FluxPlacement == layout.FluxIntegratedPerLayout || rules.FluxPlacement == layout.FluxIntegratedPerBundle {
+		return nil, errors.Errorf("ArgoCD layouts do not support FluxPlacement %q: no Flux Kustomization exists to apply the argocd directory; use FluxSeparate or leave it unset", rules.FluxPlacement)
+	}
 	// Generate the base manifest layout
 	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, err
 	}
 
-	// For ArgoCD, we typically create a separate argocd directory for Applications
-	apps, err := w.GenerateFromCluster(c)
+	// For ArgoCD, we typically create a separate argocd directory for
+	// Applications. They are generated from the layout just walked, so each
+	// source.path is a directory this layout writes.
+	apps, err := w.generateFromLayout(ml, c)
 	if err != nil {
 		return nil, err
 	}
@@ -210,15 +219,4 @@ func (w *WorkflowEngine) SetRepoURL(repoURL string) {
 // SetDefaultNamespace configures the default namespace for ArgoCD Applications.
 func (w *WorkflowEngine) SetDefaultNamespace(namespace string) {
 	w.DefaultNamespace = namespace
-}
-
-// bundlePath builds a repository path for the bundle based on its ancestry.
-func (w *WorkflowEngine) bundlePath(b *stack.Bundle) string {
-	var parts []string
-	for p := b; p != nil; p = p.GetParent() {
-		if p.Name != "" {
-			parts = append([]string{p.Name}, parts...)
-		}
-	}
-	return filepath.ToSlash(filepath.Join(parts...))
 }
