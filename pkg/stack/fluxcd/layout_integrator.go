@@ -415,6 +415,12 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 				continue
 			}
 			name := layoutCRName(child)
+			// The CR applies child's directory, so child must be written as
+			// one: pinned here, a writer's Config-wide AppFileSingle cannot
+			// turn it into a file in its parent (the layout's own mode wins).
+			if child.ApplicationFileMode == layout.AppFileUnset {
+				child.ApplicationFileMode = layout.AppFilePerResource
+			}
 			if e, ok := p.existing[crKey(p.gen.DefaultNamespace, name)]; ok && e.host == l && e.path == child.FullRepoPath() {
 				// Placed by an earlier integration: kept as is, so its
 				// source need not be resolved again. It is still one of

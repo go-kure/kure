@@ -589,8 +589,21 @@ func TestIntegrateWithLayout_SourceDefaultNamespaceIdentity(t *testing.T) {
 // layout a PerLayout Kustomization targets keeps its directory under a Config
 // whose ApplicationFileMode is AppFileSingle: that setting is a default for
 // application files, not for directories a CR applies.
+// bareChildAugmenter adds an empty child layout with no Flux placement of its
+// own, as an augmenter written without the walker's settings would.
+type bareChildAugmenter struct{}
+
+func (bareChildAugmenter) Generate(*stack.Application) ([]*client.Object, error) { return nil, nil }
+
+func (bareChildAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
+	ml.Children = append(ml.Children, &layout.ManifestLayout{Name: "hooks", Namespace: ml.FullRepoPath()})
+	return nil
+}
+
 func TestWriteManifest_PerLayout_ConfigSinglePreservesCRTargets(t *testing.T) {
-	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "root", Bundle: srBundle("root", stack.NewApplication("app", "default", &fakeAppConfig{}))}}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "root", Bundle: srBundle("root",
+		stack.NewApplication("app", "default", &fakeAppConfig{}),
+		stack.NewApplication("chart", "default", bareChildAugmenter{}))}}
 	rules := propertyGroupings["GroupByName"]
 	rules.FluxPlacement = layout.FluxIntegratedPerLayout
 	ml := integrated(t, c, rules)
