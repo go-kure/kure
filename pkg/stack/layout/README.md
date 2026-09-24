@@ -142,10 +142,10 @@ Controls how resource YAML files are named:
 
 ### Kustomization Generation
 - **KustomizationExplicit**: Lists all manifest files explicitly
-- **KustomizationRecursive**: References subdirectories only — except that a
-  `FluxIntegratedPerLayout` layout still lists the files holding the Flux objects it hosts (its
-  children's Kustomizations and any Source generated for them), which stand in for its child
-  references
+- **KustomizationRecursive**: References subdirectories only — except that a layout still lists
+  the files holding the Flux objects it hosts (Kustomizations and any Source generated for them),
+  in every placement, since nothing else applies them; under `FluxIntegratedPerLayout` these
+  stand in for its child references
 - A `FluxIntegratedPerLayout` layout references no child directory: each child is applied by the
   Flux Kustomization the integrator placed in the parent's `Resources`, listed as one of its own
   files. No reference is derived from a child's name.
