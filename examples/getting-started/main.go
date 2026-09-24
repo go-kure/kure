@@ -81,14 +81,15 @@ func run() error {
 	// ---------------------------------------------------------------
 	// Step 2: Create the FluxCD workflow engine.
 	//
-	// NewWorkflowEngineWithConfig sets the Kustomization mode.
-	// Placement is configured on layout.LayoutRules.FluxPlacement at
-	// call time (see Step 3); FluxSeparate places Flux resources in a
-	// dedicated directory rather than alongside manifests.
+	// NewWorkflowEngine uses the defaults. Placement is configured on
+	// layout.LayoutRules.FluxPlacement at call time (see Step 3);
+	// FluxSeparate places Flux resources in a dedicated directory rather
+	// than alongside manifests. Every Kustomization spec.path is the
+	// directory the layout writes its bundle to.
 	// ---------------------------------------------------------------
 	log.Info("Step 2: Creating FluxCD workflow engine...")
 
-	wf := fluxcd.NewWorkflowEngineWithConfig(layout.KustomizationExplicit)
+	wf := fluxcd.NewWorkflowEngine()
 
 	// ---------------------------------------------------------------
 	// Step 3: Run the workflow to produce a ManifestLayout.

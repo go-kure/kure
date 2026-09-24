@@ -36,41 +36,13 @@ func NewWorkflowEngine() *WorkflowEngine {
 	}
 }
 
-// NewWorkflowEngineWithConfig creates a workflow engine with custom configuration.
-//
-// Placement is no longer a constructor argument; set it on
-// layout.LayoutRules.FluxPlacement at call time. See LayoutIntegrator for
-// the normalization semantics.
-func NewWorkflowEngineWithConfig(mode layout.KustomizationMode) *WorkflowEngine {
-	resourceGen := NewResourceGenerator()
-	resourceGen.Mode = mode
-
-	layoutInteg := NewLayoutIntegrator(resourceGen)
-
-	bootstrapGen := NewBootstrapGenerator()
-
-	return &WorkflowEngine{
-		ResourceGen:  resourceGen,
-		LayoutInteg:  layoutInteg,
-		BootstrapGen: bootstrapGen,
-	}
-}
-
 // ResourceGenerator interface implementation
 
-// GenerateFromCluster creates Flux resources from a cluster definition.
+// GenerateFromCluster creates Flux resources from a cluster definition, with
+// the spec.path values of a default-rules walk (see
+// ResourceGenerator.GenerateFromCluster).
 func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
 	return we.ResourceGen.GenerateFromCluster(c)
-}
-
-// GenerateFromNode creates Flux resources from a node definition.
-func (we *WorkflowEngine) GenerateFromNode(n *stack.Node) ([]client.Object, error) {
-	return we.ResourceGen.GenerateFromNode(n)
-}
-
-// GenerateFromBundle creates Flux resources from a bundle definition.
-func (we *WorkflowEngine) GenerateFromBundle(b *stack.Bundle) ([]client.Object, error) {
-	return we.ResourceGen.GenerateFromBundle(b)
 }
 
 // LayoutIntegrator interface implementation
@@ -114,11 +86,6 @@ func (we *WorkflowEngine) GetVersion() string {
 }
 
 // Configuration methods
-
-// SetKustomizationMode configures how Kustomization paths are generated.
-func (we *WorkflowEngine) SetKustomizationMode(mode layout.KustomizationMode) {
-	we.ResourceGen.Mode = mode
-}
 
 // GetResourceGenerator returns the underlying resource generator for advanced configuration.
 func (we *WorkflowEngine) GetResourceGenerator() *ResourceGenerator {

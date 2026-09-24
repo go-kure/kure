@@ -83,29 +83,28 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 		if err != nil {
 			return nil, err
 		}
-		return flattenSingleTier(ml, c, rules), nil
+		return flattenSingleTier(ml, rules), nil
 	}
 
 	// Traditional layout without cluster name. The root node's parent is the
 	// tree root ".", so the root sits at <root> and its children at
-	// <root>/<child>: the paths the Flux generator derives from the node
-	// hierarchy. (With no parent at all, Namespace "" would put the root alone
-	// at cluster/<root>, away from its children and its Flux spec.path.) An
-	// unnamed root stays at "cluster" (see rootAncestors).
+	// <root>/<child>, which is also where the Flux bootstrap sync path
+	// ./<root> points. (With no parent at all, Namespace "" would put the root
+	// alone at cluster/<root>, away from its children.) An unnamed root stays
+	// at "cluster" (see rootAncestors).
 	ml, err := walkNode(c.Node, rootAncestors(c.Node), nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
 	if err != nil {
 		return nil, err
 	}
 
-	return flattenSingleTier(ml, c, rules), nil
+	return flattenSingleTier(ml, rules), nil
 }
 
 // walkClusterWithClusterName creates a cluster-aware layout where the cluster
 // name is the root directory and the root node (plus any child-node subtrees)
 // are nested underneath it. Child-node sub-layouts are placed under the root
-// node layout (not as cluster-level siblings) so their accumulated layout
-// path matches stack.Node.GetPath() — the Flux integrator's path-based lookup
-// relies on this correspondence.
+// node layout (not as cluster-level siblings), so the directory tree mirrors
+// the node tree.
 func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bool, filePer FileExportMode) (*ManifestLayout, error) {
 	// Create a cluster-level layout with the cluster name as the root
 	clusterLayout := &ManifestLayout{
@@ -204,10 +203,8 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 		}
 	}
 
-	// Nest child-node sub-layouts under the root node layout so their
-	// accumulated path (clusterName/rootName/childName/...) matches
-	// stack.Node.GetPath() (rootName/childName/...) when the Flux integrator
-	// searches for the corresponding layout node.
+	// Nest child-node sub-layouts under the root node layout
+	// (clusterName/rootName/childName/...).
 	for _, child := range c.Node.Children {
 		childLayout, err := walkNode(child, rootSegments, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
 		if err != nil {
@@ -443,10 +440,11 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 }
 
 // walkUmbrellaChildLayouts renders a slice of umbrella Bundle.Children into a
-// flat ManifestLayout list. Each returned layout carries UmbrellaChild=true so
-// downstream writers emit a flux-system-kustomization-{Name}.yaml reference
-// in the parent directory instead of descending into a subdirectory for the
-// Flux CR. Child application resources are flattened into the child layout's
+// flat ManifestLayout list. Each returned layout carries UmbrellaChild=true:
+// the parent's kustomization.yaml does not list it, because the child is
+// applied by its own Flux Kustomization (hosted in the parent under integrated
+// placement, in flux-system under separate placement), whose spec.path is the
+// child's directory. Child application resources are flattened into the child layout's
 // Resources (single-directory-per-child on disk). Nested umbrellas recurse so
 // grandchildren become sub-layouts of their immediate parent umbrella child.
 func walkUmbrellaChildLayouts(children []*stack.Bundle, currentPath []string, filePer FileExportMode, fluxPlacement FluxPlacement, fileNaming FileNamingMode) ([]*ManifestLayout, error) {

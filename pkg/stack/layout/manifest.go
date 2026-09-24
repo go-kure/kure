@@ -36,11 +36,11 @@ type ManifestLayout struct {
 	// build, so any change to the source file forces re-reconciliation.
 	ConfigMapGenerators []ConfigMapGeneratorSpec
 	// UmbrellaChild marks this layout as rendered from a Bundle.Children
-	// entry. When true, kustomization.yaml writers emit a
-	// flux-system-kustomization-{Name}.yaml reference in the parent directory
-	// (regardless of FluxPlacement), and the layout integrator places the
-	// child's Flux Kustomization CR at the parent layout node rather than in
-	// the child's own directory.
+	// entry. When true, the parent's kustomization.yaml does not list it: the
+	// child is applied by its own Flux Kustomization, which the layout
+	// integrator places at the parent layout node (integrated placement) or
+	// in flux-system (separate placement), with spec.path = this layout's
+	// directory.
 	UmbrellaChild bool
 	// DependsOn lists sibling layout names whose Kustomization CRs must reconcile
 	// before this layout's CR. In FluxIntegratedPerLayout mode the layout integrator
@@ -50,47 +50,6 @@ type ManifestLayout struct {
 	// origin records the stack objects this layout renders (see origin.go).
 	// Set only by the walkers and FlattenSingleTier; never serialised.
 	origin origin
-	// flattenInfo carries the redirects produced by FlattenSingleTier when
-	// this layout absorbed a collapsed child. Set only on the absorbing
-	// layout; never serialised. Consulted by the Flux integrator's
-	// findLayoutNode fallback and by ApplyFlattenPathRewrites; remains
-	// populated after rewrite so that IntegrateWithLayout can be invoked
-	// multiple times on the same flattened layout without losing the alias
-	// state needed by integrated placement.
-	flattenInfo *flattenInfo
-}
-
-// flattenInfo records the redirects produced by a FlattenSingleTier collapse.
-// Two distinct keying schemes are needed because the integrator looks up
-// layouts by node paths while Flux Kustomization Spec.Path values are
-// layout-tree paths (cluster-name-prefixed); a single map cannot serve both.
-type flattenInfo struct {
-	// nodeAliases maps node.GetPath() of the collapsed child node to the
-	// absorbing layout. Used by findLayoutNode (FluxIntegratedPerLayout mode only).
-	nodeAliases map[string]*ManifestLayout
-	// pathRewrites maps pre-collapse layout repo path → post-collapse layout
-	// repo path. Used to rewrite Spec.Path strings on Flux Kustomization
-	// CRs (both modes). Handles exact-match and prefix-match (path/...).
-	pathRewrites map[string]string
-}
-
-// FlattenInfoNodeAlias returns the absorbing layout for the given node path
-// recorded on this layout's flattenInfo, or nil if no alias matches. Exposed
-// for the Flux integrator's findLayoutNode fallback.
-func (ml *ManifestLayout) FlattenInfoNodeAlias(nodePath string) *ManifestLayout {
-	if ml == nil || ml.flattenInfo == nil {
-		return nil
-	}
-	return ml.flattenInfo.nodeAliases[nodePath]
-}
-
-// FlattenInfoPathRewrites returns the path-rewrite map recorded on this
-// layout's flattenInfo, or nil. Exposed for ApplyFlattenPathRewrites.
-func (ml *ManifestLayout) FlattenInfoPathRewrites() map[string]string {
-	if ml == nil || ml.flattenInfo == nil {
-		return nil
-	}
-	return ml.flattenInfo.pathRewrites
 }
 
 // ExtraFile is an arbitrary file written into a ManifestLayout's directory
@@ -118,6 +77,30 @@ func (ml *ManifestLayout) resolveManifestFileName() ManifestFileNameFunc {
 	default:
 		return DefaultManifestFileName
 	}
+}
+
+// listedResourceFiles returns the resource files a layout's kustomization.yaml
+// lists: every one in explicit mode or for a leaf. In recursive mode a layout
+// with children lists its child references instead of its files — and under
+// FluxIntegratedPerLayout those references are the Flux Kustomizations the
+// layout hosts, so the files holding them are listed (and no other).
+func listedResourceFiles(ml *ManifestLayout, kMode KustomizationMode, sorted []string, groups map[string][]client.Object) []string {
+	if kMode == KustomizationExplicit || len(ml.Children) == 0 {
+		return sorted
+	}
+	if ml.FluxPlacement != FluxIntegratedPerLayout {
+		return nil
+	}
+	var out []string
+	for _, f := range sorted {
+		for _, o := range groups[f] {
+			if gvk := o.GetObjectKind().GroupVersionKind(); gvk.Group == "kustomize.toolkit.fluxcd.io" && gvk.Kind == "Kustomization" {
+				out = append(out, f)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // FullRepoPath returns the layout's directory: Namespace joined with Name.
@@ -292,11 +275,6 @@ func (ml *ManifestLayout) writeToDisk(basePath string) error {
 		return errors.NewFileError("create", fullPath, "directory creation failed", err)
 	}
 
-	listedInResources := make(map[string]struct{}, len(sortedFileNames))
-	for _, f := range sortedFileNames {
-		listedInResources[f] = struct{}{}
-	}
-
 	for _, fileName := range sortedFileNames {
 		objs := fileGroups[fileName]
 		f, err := os.Create(filepath.Join(fullPath, fileName))
@@ -359,11 +337,10 @@ func (ml *ManifestLayout) writeToDisk(basePath string) error {
 		writeStr("kind: Kustomization\n")
 		writeStr("resources:\n")
 
-		// Add resource files if in explicit mode OR if it's a leaf directory with no children
-		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
-			for _, file := range sortedFileNames {
-				writeStr(fmt.Sprintf("  - %s\n", file))
-			}
+		// Every resource file in explicit mode or for a leaf; see
+		// listedResourceFiles for recursive mode.
+		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
+			writeStr(fmt.Sprintf("  - %s\n", file))
 		}
 
 		// Add child references
@@ -386,14 +363,11 @@ func (ml *ManifestLayout) writeToDisk(basePath string) error {
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
-				// FluxIntegratedPerLayout: reference Flux Kustomization YAML files.
-				// Use FilePerResource to force per-resource naming even when
-				// the parent directory uses FilePerKind.
-				nameFn := ml.resolveManifestFileName()
-				fluxKustName := nameFn("flux-system", "kustomization", child.Name, FilePerResource)
-				if _, dup := listedInResources[fluxKustName]; !dup {
-					writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
-				}
+				// FluxIntegratedPerLayout: the child is applied by the Flux
+				// Kustomization the integrator placed in ml.Resources, which
+				// the resource list above already names. Nothing is guessed
+				// from the child's name.
+				continue
 			} else {
 				// For package-aware layouts, use relative path
 				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {

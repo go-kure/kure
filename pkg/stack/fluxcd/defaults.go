@@ -15,7 +15,7 @@ import (
 // find every place the value can reach emitted YAML.
 //
 // These are defaults, not policy, and they are overridden in one of two ways.
-// [DefaultNamespace], [DefaultInterval], [DefaultMode] and [DefaultBootstrapName]
+// [DefaultNamespace], [DefaultInterval] and [DefaultBootstrapName]
 // are copied into an exported field of [ResourceGenerator] or
 // [BootstrapGenerator] by its constructor, and a caller that assigns the field
 // afterwards is never overridden. The rest are applied where they are used, and
@@ -123,11 +123,12 @@ const (
 // to fall back to this default.
 const DefaultInterval = 60 * time.Minute
 
-// DefaultMode is the Kustomization path mode [ResourceGenerator] starts in. It
-// has exactly one application site, NewResourceGenerator, and is overridden by
-// assigning [ResourceGenerator.Mode]. The separate Flux layout deliberately
-// leaves its own mode unset rather than seeding it from here — see
-// addSeparateFluxToLayout for why that value could not take effect.
+// DefaultMode names the kustomization.yaml listing mode the layout writers use
+// for a layout with no Mode of its own (they treat KustomizationUnset as
+// KustomizationExplicit). It is informational: no generator field is seeded
+// from it, because a Kustomization's spec.path is not a mode of the generator
+// but the directory of the layout that renders the bundle
+// (layout.OriginIndex.KustomizationPath).
 const DefaultMode = layout.KustomizationExplicit
 
 // pruneValue resolves a tri-state prune input to the bool the upstream field

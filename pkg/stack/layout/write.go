@@ -14,16 +14,46 @@ import (
 )
 
 // WriteManifest writes a ManifestLayout to disk using the provided
-// configuration. It refuses a tree in which two layouts resolve to the same
-// directory (see checkLayoutTree) before writing anything.
+// configuration, every directory under basePath/<cfg.ManifestsDir>: a Flux
+// source for a walked layout must be rooted there, because every Flux
+// Kustomization spec.path is a layout directory relative to that root. It
+// refuses, before writing anything, a tree in which two layouts resolve to the
+// same directory (see checkLayoutTree) and a layout that renders a node or
+// bundle but would be written in AppFileSingle mode (its own mode, or cfg's
+// when unset): that layout's files go into its Namespace, so no directory
+// exists at the path its Flux Kustomization or ArgoCD Application names.
 func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if cfg.ManifestsDir == "" {
 		cfg.ManifestsDir = "clusters"
+	}
+	if err := checkOriginFileModes(ml, cfg); err != nil {
+		return err
 	}
 	if err := checkLayoutTree(ml, manifestOutDir(basePath, cfg)); err != nil {
 		return err
 	}
 	return writeManifest(basePath, cfg, ml)
+}
+
+// checkOriginFileModes refuses a node- or bundle-rendering layout that
+// WriteManifest would write in AppFileSingle mode.
+func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
+	if ml == nil {
+		return nil
+	}
+	mode := ml.ApplicationFileMode
+	if mode == AppFileUnset {
+		mode = cfg.ApplicationFileMode
+	}
+	if mode == AppFileSingle && ml.hasNodeOrBundleOrigin() {
+		return errors.Errorf("layout %q renders a node or bundle and cannot be written as AppFileSingle: its files would go into %q, not into the directory its Flux or ArgoCD path names", ml.FullRepoPath(), ml.Namespace)
+	}
+	for _, child := range ml.Children {
+		if err := checkOriginFileModes(child, cfg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
@@ -75,11 +105,6 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	// Created only after the check, so a refused layout leaves nothing behind.
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
 		return errors.NewFileError("create", fullPath, "directory creation failed", err)
-	}
-
-	listedInResources := make(map[string]struct{}, len(sortedFileNames))
-	for _, f := range sortedFileNames {
-		listedInResources[f] = struct{}{}
 	}
 
 	for _, fileName := range sortedFileNames {
@@ -150,13 +175,11 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 		writeStr("kind: Kustomization\n")
 		writeStr("resources:\n")
 
-		// Add resource files if in explicit mode OR if it's a leaf directory with no children
-		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
-			for _, file := range sortedFileNames {
-				writeStr(fmt.Sprintf("  - %s\n", file))
-			}
+		// Every resource file in explicit mode or for a leaf; see
+		// listedResourceFiles for recursive mode.
+		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
+			writeStr(fmt.Sprintf("  - %s\n", file))
 		}
-		// In recursive mode, only reference child directories, not files
 
 		// Add child references
 		for _, child := range ml.Children {
@@ -177,18 +200,13 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 			}
 			if child.ApplicationFileMode == AppFileSingle {
 				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
-			} else {
-				// For FluxIntegratedPerLayout mode, reference Flux Kustomization YAML files instead of directories.
-				// Always use FilePerResource — each child must have a unique filename.
-				if ml.FluxPlacement == FluxIntegratedPerLayout {
-					fluxKustName := manifestFileName("flux-system", "kustomization", child.Name, FilePerResource)
-					if _, dup := listedInResources[fluxKustName]; !dup {
-						writeStr(fmt.Sprintf("  - %s\n", fluxKustName))
-					}
-				} else {
-					writeStr(fmt.Sprintf("  - %s\n", child.Name))
-				}
+			} else if ml.FluxPlacement != FluxIntegratedPerLayout {
+				writeStr(fmt.Sprintf("  - %s\n", child.Name))
 			}
+			// FluxIntegratedPerLayout: the child is applied by the Flux
+			// Kustomization the integrator placed in ml.Resources, which the
+			// resource list above already names. Nothing is guessed from the
+			// child's name.
 		}
 
 		writeStr(renderConfigMapGeneratorBlock(ml.ConfigMapGenerators))
