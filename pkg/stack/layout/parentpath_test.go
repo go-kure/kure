@@ -398,3 +398,48 @@ func TestWalkClusterByPackage_ReenteredPackageWrites(t *testing.T) {
 		}
 	}
 }
+
+func TestWalkCluster_NoClusterName_UnnamedRootUnchanged(t *testing.T) {
+	// An unnamed root has no directory of its own to move to: without a
+	// ClusterName it stays at "cluster", as before go-kure/kure#771. At "."
+	// it would be indistinguishable from the ClusterName "." container, whose
+	// root kustomization.yaml WriteManifest deliberately skips, so the root's
+	// references to its children would be lost.
+	newCluster := func() *stack.Cluster {
+		a := &stack.Node{Name: "a", Bundle: &stack.Bundle{Name: "a", Applications: []*stack.Application{configMapApp("x")}}}
+		root := &stack.Node{Name: "", Children: []*stack.Node{a}}
+		a.SetParent(root)
+		return &stack.Cluster{Name: "c", Node: root}
+	}
+	ml, err := layout.WalkCluster(newCluster(), layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+	if got := ml.FullRepoPath(); got != "cluster" {
+		t.Errorf("unnamed root at %q, want %q", got, "cluster")
+	}
+	dir := filepath.Join(t.TempDir(), "out")
+	if err := layout.WriteManifest(dir, layout.Config{}, ml); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "clusters", "cluster", "kustomization.yaml"))
+	if err != nil {
+		t.Fatalf("root kustomization.yaml: %v", err)
+	}
+	if !strings.Contains(string(data), "- a\n") {
+		t.Errorf("root kustomization.yaml does not reference a:\n%s", data)
+	}
+	if bad := unresolvedKustomizeRefs(t, dir); len(bad) > 0 {
+		t.Errorf("unresolved kustomize references: %v", bad)
+	}
+
+	pkgs, err := layout.WalkClusterByPackage(newCluster(), layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("WalkClusterByPackage: %v", err)
+	}
+	for key, l := range pkgs {
+		if got := l.FullRepoPath(); got != "cluster" {
+			t.Errorf("package %s: unnamed root at %q, want %q", key, got, "cluster")
+		}
+	}
+}

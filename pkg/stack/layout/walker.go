@@ -24,6 +24,19 @@ func layoutPathSegments(ml *ManifestLayout) []string {
 	return strings.Split(p, "/")
 }
 
+// rootAncestors is the parent path of the root node when no ClusterName is
+// set. A named root's parent is the tree root ".", so it sits at <root>. An
+// unnamed root has no directory of its own; it keeps no parent and so resolves
+// to "cluster", as before go-kure/kure#771. At "." it would look exactly like
+// the ClusterName "." container, whose root kustomization.yaml WriteManifest
+// skips, dropping the root's references to its children.
+func rootAncestors(root *stack.Node) []string {
+	if root.Name == "" {
+		return nil
+	}
+	return []string{"."}
+}
+
 // WalkCluster traverses a stack.Cluster and builds a ManifestLayout tree that
 // mirrors the node and bundle hierarchy. Behaviour is controlled via
 // LayoutRules. When BundleGrouping and ApplicationGrouping are set to
@@ -77,8 +90,9 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 	// tree root ".", so the root sits at <root> and its children at
 	// <root>/<child>: the paths the Flux generator derives from the node
 	// hierarchy. (With no parent at all, Namespace "" would put the root alone
-	// at cluster/<root>, away from its children and its Flux spec.path.)
-	ml, err := walkNode(c.Node, []string{"."}, nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
+	// at cluster/<root>, away from its children and its Flux spec.path.) An
+	// unnamed root stays at "cluster" (see rootAncestors).
+	ml, err := walkNode(c.Node, rootAncestors(c.Node), nodeOnly, nodeFlat, filePer, nil, rules.FluxPlacement, rules.FileNaming)
 	if err != nil {
 		return nil, err
 	}
@@ -258,8 +272,8 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 	// Second pass: build layouts for each package
 	layouts := make(map[string]*ManifestLayout)
 	for pkgKey, pkgRef := range packages {
-		// As in WalkCluster: the root's parent is the tree root ".".
-		layout, err := walkNodeForPackage(c.Node, []string{"."}, nodeOnly, filePer, pkgRef, pkgKey, rules.FileNaming)
+		// As in WalkCluster: a named root's parent is the tree root ".".
+		layout, err := walkNodeForPackage(c.Node, rootAncestors(c.Node), nodeOnly, filePer, pkgRef, pkgKey, rules.FileNaming)
 		if err != nil {
 			return nil, err
 		}
