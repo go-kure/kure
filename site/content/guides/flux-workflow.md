@@ -168,7 +168,7 @@ a directory the layout never wrote whenever a node and its bundle were named dif
 What changed, and what to do:
 
 - **Removed APIs.** `GenerateFromBundle`, `GenerateFromNode`, `EngineWithMode`, `EngineWithConfig`,
-  `NewWorkflowEngineWithConfig`, `SetKustomizationMode` and `ResourceGenerator.Mode` are gone.
+  `NewWorkflowEngineWithConfig`, `SetKustomizationMode` and `ResourceGenerator.Mode` are gone. <!-- doc-api-refs:ignore removed in this release -->
   Generate from a walked layout (`ResourceGenerator.GenerateFromLayout`) or for one bundle at a path
   you supply (`GenerateForBundle`). `GenerateFromCluster` stays and uses the directories of a
   default-rules walk.
