@@ -1,0 +1,858 @@
+package fluxcd_test
+
+import (
+	"archive/tar"
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"maps"
+	"os"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
+	"testing"
+
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
+
+	"github.com/go-kure/kure/pkg/stack"
+	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
+)
+
+// Tests for deriving every Flux Kustomization spec.path from the layout tree:
+// the directory of the layout that renders a bundle is its path, in every
+// placement, grouping, ClusterName and tree shape.
+
+// hookAugmenter is an application config that wants its own layout, attaches
+// a values file and a configMapGenerator to it, and adds one child layout
+// (the way a chart augmenter adds a hook group).
+type hookAugmenter struct{ app string }
+
+func (h *hookAugmenter) Generate(*stack.Application) ([]*client.Object, error) {
+	return []*client.Object{cmObj(h.app + "-cm")}, nil
+}
+
+func (h *hookAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
+	ml.ExtraFiles = append(ml.ExtraFiles, layout.ExtraFile{Name: "values.yaml", Content: []byte("k: v\n")})
+	ml.ConfigMapGenerators = append(ml.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: h.app + "-values", Files: []string{"values.yaml"}})
+	hooks := &layout.ManifestLayout{
+		Name:      h.app + "-hooks",
+		Namespace: ml.FullRepoPath(),
+		Resources: []client.Object{*cmObj(h.app + "-hook")},
+	}
+	ml.Children = append(ml.Children, hooks)
+	return nil
+}
+
+func cmObj(name string) *client.Object {
+	u := &unstructured.Unstructured{}
+	u.SetAPIVersion("v1")
+	u.SetKind("ConfigMap")
+	u.SetName(name)
+	u.SetNamespace("default")
+	var o client.Object = u
+	return &o
+}
+
+func cmApp(name string) *stack.Application {
+	return stack.NewApplication(name, "default", &fakeAppConfig{objs: []*client.Object{cmObj(name + "-cm")}})
+}
+
+func srBundle(name string, apps ...*stack.Application) *stack.Bundle {
+	return &stack.Bundle{Name: name, SourceRef: testSR(), Applications: apps}
+}
+
+// propertyShapes builds a fresh cluster per call (walking mutates bundles).
+// Every tree is platform -> apps -> web, with the shape's feature on web, so a
+// nodeFlat walk always merges it.
+var propertyShapes = map[string]func() *stack.Cluster{
+	"same-name": func() *stack.Cluster {
+		return threeTier("platform", "apps", "web", nil)
+	},
+	"different-name": func() *stack.Cluster {
+		return threeTier("platform-bundle", "apps-bundle", "web-bundle", nil)
+	},
+	"umbrella": func() *stack.Cluster {
+		return threeTier("platform", "apps", "web", func(web *stack.Bundle) {
+			web.Children = []*stack.Bundle{srBundle("web-api", cmApp("web-api-app")), srBundle("web-ui", cmApp("web-ui-app"))}
+		})
+	},
+	"nested umbrella": func() *stack.Cluster {
+		return threeTier("platform", "apps", "web", func(web *stack.Bundle) {
+			api := srBundle("web-api", cmApp("web-api-app"))
+			api.Children = []*stack.Bundle{srBundle("web-api-db", cmApp("web-api-db-app"))}
+			web.Children = []*stack.Bundle{api}
+		})
+	},
+	"augmenter": func() *stack.Cluster {
+		return threeTier("platform", "apps", "web", func(web *stack.Bundle) {
+			web.Applications = append(web.Applications, stack.NewApplication("web-chart", "default", &hookAugmenter{app: "web-chart"}))
+		})
+	},
+	// A bundle-less root with one terminal child: the single tier collapses
+	// wherever the root layout is top-level and has that child only.
+	"FlattenSingleTier": func() *stack.Cluster {
+		web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+		root := &stack.Node{Name: "platform", Children: []*stack.Node{web}}
+		return &stack.Cluster{Name: "demo", Node: root}
+	},
+}
+
+func threeTier(platform, apps, web string, decorate func(*stack.Bundle)) *stack.Cluster {
+	webB := srBundle(web, cmApp(web+"-app"))
+	if decorate != nil {
+		decorate(webB)
+	}
+	webN := &stack.Node{Name: "web", Bundle: webB}
+	appsN := &stack.Node{Name: "apps", Bundle: srBundle(apps, cmApp(apps+"-app")), Children: []*stack.Node{webN}}
+	root := &stack.Node{Name: "platform", Bundle: srBundle(platform, cmApp(platform+"-app")), Children: []*stack.Node{appsN}}
+	return &stack.Cluster{Name: "demo", Node: root}
+}
+
+var propertyGroupings = map[string]layout.LayoutRules{
+	"nodeOnly":    {BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat},
+	"GroupByName": {BundleGrouping: layout.GroupByName, ApplicationGrouping: layout.GroupByName},
+	"nodeFlat":    {NodeGrouping: layout.GroupFlat, BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat},
+}
+
+// reachableBundles returns every bundle reachable from c: node bundles and
+// their umbrella descendants.
+func reachableBundles(c *stack.Cluster) []*stack.Bundle {
+	var out []*stack.Bundle
+	var umb func(b *stack.Bundle)
+	umb = func(b *stack.Bundle) {
+		out = append(out, b)
+		for _, ch := range b.Children {
+			umb(ch)
+		}
+	}
+	var nodes func(n *stack.Node)
+	nodes = func(n *stack.Node) {
+		if n.Bundle != nil {
+			umb(n.Bundle)
+		}
+		for _, ch := range n.Children {
+			nodes(ch)
+		}
+	}
+	nodes(c.Node)
+	return out
+}
+
+// kustomizations returns every Flux Kustomization CR in the tree.
+func kustomizations(ml *layout.ManifestLayout) []*kustv1.Kustomization {
+	var out []*kustv1.Kustomization
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		for _, r := range l.Resources {
+			if k, ok := r.(*kustv1.Kustomization); ok {
+				out = append(out, k)
+			}
+		}
+		for _, c := range l.Children {
+			walk(c)
+		}
+	}
+	walk(ml)
+	return out
+}
+
+// expectedLayoutCRs is the PerLayout contract: every child layout that is not
+// an umbrella child, not AppFileSingle and renders no bundle gets one CR; a
+// bundle-less node layout's is named after its path plus "-node".
+func expectedLayoutCRs(ml *layout.ManifestLayout) map[string]string {
+	want := map[string]string{}
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		for _, c := range l.Children {
+			if !c.UmbrellaChild && c.ApplicationFileMode != layout.AppFileSingle && len(c.OriginBundles()) == 0 {
+				name := c.Name
+				if len(c.OriginNodes()) > 0 {
+					name = strings.ReplaceAll(c.FullRepoPath(), "/", "-") + "-node"
+				}
+				want[name] = c.FullRepoPath()
+			}
+			walk(c)
+		}
+	}
+	walk(ml)
+	return want
+}
+
+// writtenTree is one writer's output: root is the directory the Flux source
+// is rooted at, tops the kustomization.yaml files it applies first.
+type writtenTree struct {
+	root string
+	tops []string
+}
+
+func writeAll(t *testing.T, ml *layout.ManifestLayout) map[string]writtenTree {
+	t.Helper()
+	out := map[string]writtenTree{}
+
+	disk := filepath.Join(t.TempDir(), "disk")
+	if err := ml.WriteToDisk(disk); err != nil {
+		t.Fatalf("WriteToDisk: %v", err)
+	}
+	out["WriteToDisk"] = writtenTree{root: disk}
+
+	var buf bytes.Buffer
+	if err := ml.WriteToTar(&buf); err != nil {
+		t.Fatalf("WriteToTar: %v", err)
+	}
+	tarDir := filepath.Join(t.TempDir(), "tar")
+	extractTar(t, &buf, tarDir)
+	out["WriteToTar"] = writtenTree{root: tarDir}
+
+	base := filepath.Join(t.TempDir(), "manifest")
+	cfg := layout.DefaultLayoutConfig()
+	if err := layout.WriteManifest(base, cfg, ml); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+	out["WriteManifest"] = writtenTree{root: filepath.Join(base, cfg.ManifestsDir)}
+
+	for name, w := range out {
+		top := filepath.Join(w.root, ml.FullRepoPath(), "kustomization.yaml")
+		if _, err := os.Stat(top); err == nil {
+			w.tops = []string{top}
+		} else {
+			// WriteManifest skips an empty cluster root: each child's
+			// kustomization.yaml is then applied directly.
+			for _, c := range ml.Children {
+				w.tops = append(w.tops, filepath.Join(w.root, c.FullRepoPath(), "kustomization.yaml"))
+			}
+		}
+		out[name] = w
+	}
+	return out
+}
+
+func extractTar(t *testing.T, r io.Reader, dir string) {
+	t.Helper()
+	tr := tar.NewReader(r)
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("tar: %v", err)
+		}
+		p := filepath.Join(dir, hdr.Name)
+		if hdr.Typeflag == tar.TypeDir {
+			if err := os.MkdirAll(p, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		data, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// kustomizationRefs returns the `- ref` entries of a kustomization.yaml.
+func kustomizationRefs(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var refs []string
+	inResources := false
+	for _, line := range strings.Split(string(data), "\n") {
+		switch {
+		case line == "resources:":
+			inResources = true
+		case strings.HasPrefix(line, "  - ") && inResources:
+			refs = append(refs, strings.TrimPrefix(line, "  - "))
+		case line != "" && !strings.HasPrefix(line, " "):
+			inResources = false
+		}
+	}
+	return refs
+}
+
+// checkWrittenTree asserts, for one writer's output: every resources entry
+// exists; every file holding a Flux Kustomization is applied — reached from the
+// top kustomization(s) through resources entries and through the spec.path of
+// every Flux Kustomization already reached, as Flux applies them — or sits in
+// flux-system; every expected directory was written.
+func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string) {
+	t.Helper()
+	reached := map[string]bool{}
+	var visit func(kust string)
+	visitFile := func(p string) {
+		if reached[p] {
+			return
+		}
+		reached[p] = true
+		for _, path := range fluxPaths(t, p) {
+			kust := filepath.Join(w.root, path, "kustomization.yaml")
+			if _, err := os.Stat(kust); err != nil {
+				t.Errorf("%s: %s applies spec.path %q, which has no kustomization.yaml", writer, p, path)
+				continue
+			}
+			visit(kust)
+		}
+	}
+	visit = func(kust string) {
+		if reached[kust] {
+			return
+		}
+		reached[kust] = true
+		for _, ref := range kustomizationRefs(t, kust) {
+			p := filepath.Join(filepath.Dir(kust), ref)
+			info, err := os.Stat(p)
+			if err != nil {
+				rel, _ := filepath.Rel(w.root, p)
+				t.Errorf("%s: %s lists %q, which does not exist", writer, kust, rel)
+				continue
+			}
+			if info.IsDir() {
+				visit(filepath.Join(p, "kustomization.yaml"))
+			} else {
+				visitFile(p)
+			}
+		}
+	}
+	for _, top := range w.tops {
+		visit(top)
+	}
+	err := filepath.Walk(w.root, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || info.Name() == "kustomization.yaml" {
+			return err
+		}
+		if len(fluxPaths(t, p)) == 0 {
+			return nil
+		}
+		if !reached[p] && filepath.Base(filepath.Dir(p)) != fluxstack.DefaultFluxDirName {
+			rel, _ := filepath.Rel(w.root, p)
+			t.Errorf("%s: Flux Kustomization file %s is not applied", writer, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dirs {
+		if info, err := os.Stat(filepath.Join(w.root, d)); err != nil || !info.IsDir() {
+			t.Errorf("%s: spec.path %q is not a written directory", writer, d)
+		}
+	}
+}
+
+// fluxPaths returns the spec.path of every Flux Kustomization in a manifest
+// file (a file may hold several documents).
+func fluxPaths(t *testing.T, p string) []string {
+	t.Helper()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, doc := range strings.Split(string(data), "\n---\n") {
+		var obj struct {
+			APIVersion string `json:"apiVersion"`
+			Kind       string `json:"kind"`
+			Spec       struct {
+				Path string `json:"path"`
+			} `json:"spec"`
+		}
+		if err := yaml.Unmarshal([]byte(doc), &obj); err != nil {
+			t.Fatalf("parse %s: %v", p, err)
+		}
+		if obj.Kind == "Kustomization" && strings.HasPrefix(obj.APIVersion, "kustomize.toolkit.fluxcd.io/") {
+			out = append(out, obj.Spec.Path)
+		}
+	}
+	return out
+}
+
+// s3Refused reports whether a cell is refused by the nodeFlat merge: the
+// merged web node has child layouts (umbrella children or an augmenter's).
+func s3Refused(grouping, shape string) bool {
+	return grouping == "nodeFlat" && (shape == "umbrella" || shape == "nested umbrella" || shape == "augmenter")
+}
+
+func TestEverySpecPathIsAWrittenDirectory(t *testing.T) {
+	placements := []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle}
+	shapes := slices.Sorted(maps.Keys(propertyShapes))
+	groupings := []string{"nodeOnly", "GroupByName", "nodeFlat"}
+	for _, placement := range placements {
+		for _, grouping := range groupings {
+			for _, clusterName := range []string{"", ".", "prod", "platform"} {
+				for _, shape := range shapes {
+					name := fmt.Sprintf("%s/%s/ClusterName=%q/%s", placement, grouping, clusterName, shape)
+					t.Run(name, func(t *testing.T) {
+						c := propertyShapes[shape]()
+						rules := propertyGroupings[grouping]
+						rules.FluxPlacement = placement
+						rules.ClusterName = clusterName
+						rules.FlattenSingleTier = shape == "FlattenSingleTier"
+						checkEverySpecPath(t, c, rules, s3Refused(grouping, shape))
+					})
+				}
+			}
+		}
+	}
+}
+
+func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules, refused bool) {
+	t.Helper()
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	ml, err := integrator.CreateLayoutWithResources(c, rules)
+	if refused {
+		if err == nil || !strings.Contains(err.Error(), `cannot merge node "web"`) {
+			t.Fatalf("want the nodeFlat merge refusal, got %v", err)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+	ix, err := layout.IndexOrigins(ml, c)
+	if err != nil {
+		t.Fatalf("IndexOrigins: %v", err)
+	}
+
+	bundles := map[string]*stack.Bundle{}
+	for _, b := range reachableBundles(c) {
+		bundles[b.Name] = b
+	}
+	crs := kustomizations(ml)
+	seen := map[string]int{}
+	layoutCRs := map[string]string{}
+	var dirs []string
+	for _, k := range crs {
+		seen[k.Name]++
+		if b, ok := bundles[k.Name]; ok {
+			want := ix.BundleLayout(b).FullRepoPath()
+			if k.Spec.Path != want {
+				t.Errorf("bundle %s: spec.path %q, want its layout directory %q", k.Name, k.Spec.Path, want)
+			}
+			dirs = append(dirs, k.Spec.Path)
+			continue
+		}
+		layoutCRs[k.Name] = k.Spec.Path
+		dirs = append(dirs, k.Spec.Path)
+	}
+	for name, n := range seen {
+		if n != 1 {
+			t.Errorf("Kustomization %q emitted %d times, want once", name, n)
+		}
+	}
+	for name := range bundles {
+		if seen[name] == 0 {
+			t.Errorf("bundle %s has no Kustomization", name)
+		}
+	}
+	wantLayoutCRs := map[string]string{}
+	if rules.FluxPlacement == layout.FluxIntegratedPerLayout {
+		wantLayoutCRs = expectedLayoutCRs(ml)
+	}
+	if !mapsEqual(layoutCRs, wantLayoutCRs) {
+		t.Errorf("layout CRs = %v, want %v", layoutCRs, wantLayoutCRs)
+	}
+	if rules.FluxPlacement != layout.FluxSeparate {
+		for _, k := range crs {
+			if k.Spec.SourceRef.Name == "" {
+				t.Errorf("Kustomization %s has no sourceRef", k.Name)
+			}
+		}
+	}
+	for writer, w := range writeAll(t, ml) {
+		checkWrittenTree(t, writer, w, dirs)
+	}
+}
+
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if bv, ok := b[k]; !ok || bv != v {
+			return false
+		}
+	}
+	return true
+}
+
+func TestGenerateForBundle_UsesCallerPath(t *testing.T) {
+	b := &stack.Bundle{Name: "web", SourceRef: &stack.SourceRef{Kind: "GitRepository", Name: "web-src", URL: "https://example.com/web.git", Branch: "main"}}
+	objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(b, "clusters/prod/web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(objs) != 2 {
+		t.Fatalf("got %d objects, want the Kustomization and its GitRepository", len(objs))
+	}
+	k, ok := objs[0].(*kustv1.Kustomization)
+	if !ok {
+		t.Fatalf("first object is %T, want a Kustomization", objs[0])
+	}
+	if k.Spec.Path != "clusters/prod/web" {
+		t.Errorf("spec.path = %q, want the caller's path verbatim", k.Spec.Path)
+	}
+	if _, ok := objs[1].(*sourcev1.GitRepository); !ok {
+		t.Errorf("second object is %T, want a GitRepository", objs[1])
+	}
+	if objs, err := fluxstack.NewResourceGenerator().GenerateForBundle(nil, "x"); err != nil || objs != nil {
+		t.Errorf("GenerateForBundle(nil) = %v, %v; want nil, nil", objs, err)
+	}
+}
+
+func crNames(objs []client.Object) []string {
+	var out []string
+	for _, o := range objs {
+		if k, ok := o.(*kustv1.Kustomization); ok {
+			out = append(out, k.Name)
+		}
+	}
+	return out
+}
+
+func TestGenerateFromLayout_Order(t *testing.T) {
+	build := func() *stack.Cluster {
+		svc := srBundle("svc", cmApp("svc-app"))
+		svc.Children = []*stack.Bundle{srBundle("svc-db", cmApp("svc-db-app"))}
+		platform := srBundle("platform", stack.NewApplication("chart", "default", &hookAugmenter{app: "chart"}))
+		platform.Children = []*stack.Bundle{svc}
+		web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: platform, Children: []*stack.Node{web}}}
+	}
+	nodeOnly := propertyGroupings["nodeOnly"]
+
+	// GenerateFromLayout: layout pre-order.
+	c := build()
+	ml, err := layout.WalkCluster(c, nodeOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objs, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := crNames(objs), []string{"platform", "svc", "svc-db", "web"}; !slices.Equal(got, want) {
+		t.Errorf("GenerateFromLayout order = %v, want %v", got, want)
+	}
+
+	// PerLayout host order: the host's own bundle, then the layout CRs of its
+	// children, then the bundle CRs of its children in tree order.
+	c = build()
+	rules := nodeOnly
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	ml, err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := crNames(ml.Resources), []string{"platform", "chart", "svc", "web"}; !slices.Equal(got, want) {
+		t.Errorf("PerLayout root CR order = %v, want %v", got, want)
+	}
+}
+
+func TestGenerateFromCluster_DefaultRules(t *testing.T) {
+	web := &stack.Node{Name: "web", Bundle: srBundle("web-bundle", cmApp("web-app"))}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform-bundle"), Children: []*stack.Node{web}}}
+	objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, o := range objs {
+		if k, ok := o.(*kustv1.Kustomization); ok {
+			got[k.Name] = k.Spec.Path
+		}
+	}
+	// The directories WalkCluster writes under the default rules.
+	want := map[string]string{"platform-bundle": "platform", "web-bundle": "platform/web"}
+	if !mapsEqual(got, want) {
+		t.Errorf("GenerateFromCluster paths = %v, want %v", got, want)
+	}
+}
+
+func integrated(t *testing.T, c *stack.Cluster, rules layout.LayoutRules) *layout.ManifestLayout {
+	t.Helper()
+	ml, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+	return ml
+}
+
+func layoutAtPath(t *testing.T, root *layout.ManifestLayout, p string) *layout.ManifestLayout {
+	t.Helper()
+	var found *layout.ManifestLayout
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		if found == nil && l.FullRepoPath() == p {
+			found = l
+		}
+		for _, c := range l.Children {
+			walk(c)
+		}
+	}
+	walk(root)
+	if found == nil {
+		t.Fatalf("no layout at %q", p)
+	}
+	return found
+}
+
+func TestIntegrateWithLayout_PerLayout_BundleLayoutGetsExactlyOneCR(t *testing.T) {
+	web := &stack.Node{Name: "web", Bundle: srBundle("web-bundle", cmApp("web-app"))}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform-bundle", cmApp("core")), Children: []*stack.Node{web}}}
+	rules := propertyGroupings["GroupByName"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	ml := integrated(t, c, rules)
+	var paths []string
+	for _, k := range kustomizations(ml) {
+		if k.Name == "web-bundle" {
+			paths = append(paths, k.Spec.Path)
+		}
+	}
+	if !slices.Equal(paths, []string{"platform/web/web-bundle"}) {
+		t.Errorf("web-bundle CRs have paths %v, want exactly one at platform/web/web-bundle", paths)
+	}
+	// Hosted by the bundle layout's parent (the web node layout).
+	if got := crNames(layoutAtPath(t, ml, "platform/web").Resources); !slices.Contains(got, "web-bundle") {
+		t.Errorf("platform/web hosts %v, want the web-bundle CR", got)
+	}
+}
+
+func TestIntegrateWithLayout_Idempotent(t *testing.T) {
+	// A flattened layout (the collapsed node's origins live on the absorber)
+	// and an umbrella tree, integrated a second time.
+	flattened := func() (*stack.Cluster, layout.LayoutRules) {
+		c := &stack.Cluster{Name: "arc-runners", Node: &stack.Node{Name: "apps", Bundle: srBundle("bundle", cmApp("runner"))}}
+		rules := propertyGroupings["nodeOnly"]
+		rules.ClusterName = "arc-runners"
+		rules.FlattenSingleTier = true
+		return c, rules
+	}
+	umbrella := func() (*stack.Cluster, layout.LayoutRules) {
+		rules := propertyGroupings["GroupByName"]
+		rules.ClusterName = "prod"
+		return propertyShapes["umbrella"](), rules
+	}
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		for shape, build := range map[string]func() (*stack.Cluster, layout.LayoutRules){"flattened": flattened, "umbrella": umbrella} {
+			t.Run(string(placement)+"/"+shape, func(t *testing.T) {
+				c, rules := build()
+				rules.FluxPlacement = placement
+				checkIdempotent(t, c, rules)
+			})
+		}
+	}
+}
+
+func checkIdempotent(t *testing.T, c *stack.Cluster, rules layout.LayoutRules) {
+	t.Helper()
+	ml := integrated(t, c, rules)
+	before, objs := len(kustomizations(ml)), countResources(ml)
+	children := len(ml.Children)
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	if err := integrator.IntegrateWithLayout(ml, c, rules); err != nil {
+		t.Fatalf("second IntegrateWithLayout: %v", err)
+	}
+	if after := len(kustomizations(ml)); after != before {
+		t.Errorf("second IntegrateWithLayout changed the CR count %d -> %d", before, after)
+	}
+	if after := countResources(ml); after != objs {
+		t.Errorf("second IntegrateWithLayout changed the resource count %d -> %d", objs, after)
+	}
+	if len(ml.Children) != children {
+		t.Errorf("second IntegrateWithLayout added root children: %d -> %d", children, len(ml.Children))
+	}
+}
+
+func countResources(ml *layout.ManifestLayout) int {
+	n := len(ml.Resources)
+	for _, c := range ml.Children {
+		n += countResources(c)
+	}
+	return n
+}
+
+func TestIntegrateWithLayout_PerLayout_BundlelessNodeGetsLayoutCR(t *testing.T) {
+	perLayout := func(r layout.LayoutRules, clusterName string) layout.LayoutRules {
+		r.FluxPlacement = layout.FluxIntegratedPerLayout
+		r.ClusterName = clusterName
+		return r
+	}
+	for _, tc := range []struct {
+		name  string
+		c     func() *stack.Cluster
+		rules layout.LayoutRules
+		want  map[string]string // CR name -> spec.path
+	}{
+		{
+			name: "bundle-less root",
+			c: func() *stack.Cluster {
+				web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+				return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{web}}}
+			},
+			rules: perLayout(propertyGroupings["nodeOnly"], "prod"),
+			want:  map[string]string{"prod-platform-node": "prod/platform", "web": "prod/platform/web"},
+		},
+		{
+			name: "GroupByName node = bundle name, ClusterName dot",
+			c: func() *stack.Cluster {
+				web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+				return &stack.Cluster{Name: "demo", Node: &stack.Node{Children: []*stack.Node{web}}}
+			},
+			rules: perLayout(propertyGroupings["GroupByName"], "."),
+			want:  map[string]string{"web-node": "web", "web": "web/web", "web-app": "web/web/web-app"},
+		},
+		{
+			name: "GroupByName node = bundle name, ClusterName prod",
+			c: func() *stack.Cluster {
+				web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+				return &stack.Cluster{Name: "demo", Node: &stack.Node{Children: []*stack.Node{web}}}
+			},
+			rules: perLayout(propertyGroupings["GroupByName"], "prod"),
+			want:  map[string]string{"prod-web-node": "prod/web", "web": "prod/web/web", "web-app": "prod/web/web/web-app"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ml := integrated(t, tc.c(), tc.rules)
+			got := map[string]string{}
+			for _, k := range kustomizations(ml) {
+				got[k.Name] = k.Spec.Path
+				if k.Spec.SourceRef.Name != testSR().Name || k.Spec.SourceRef.Kind != testSR().Kind {
+					t.Errorf("%s: sourceRef %+v, want the bundles' shared SourceRef", k.Name, k.Spec.SourceRef)
+				}
+			}
+			if !mapsEqual(got, tc.want) {
+				t.Errorf("CRs = %v, want %v", got, tc.want)
+			}
+			for writer, w := range writeAll(t, ml) {
+				checkWrittenTree(t, writer, w, nil)
+			}
+		})
+	}
+}
+
+func TestIntegrateWithLayout_MixedSourcesErrors(t *testing.T) {
+	other := &stack.SourceRef{Kind: "OCIRepository", Name: "other", Namespace: "flux-system"}
+	build := func(augment bool) *stack.Cluster {
+		web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: other, Applications: []*stack.Application{cmApp("web-app")}}}
+		apps := []*stack.Application{cmApp("core")}
+		if augment {
+			apps = append(apps, stack.NewApplication("chart", "default", &hookAugmenter{app: "chart"}))
+		}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", apps...), Children: []*stack.Node{web}}}
+	}
+	rules := propertyGroupings["nodeFlat"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	_, err := integrator.CreateLayoutWithResources(build(true), rules)
+	if err == nil || !strings.Contains(err.Error(), "different SourceRefs") {
+		t.Fatalf("a merged layout with two sources that hosts layout CRs: got %v, want a different-SourceRefs error", err)
+	}
+	// Without layout CRs to host, the two bundle CRs keep their own sources.
+	if _, err := integrator.CreateLayoutWithResources(build(false), rules); err != nil {
+		t.Errorf("merged layout without layout CRs: %v", err)
+	}
+}
+
+func TestIntegrateWithLayout_SameNameDifferentPathErrors(t *testing.T) {
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+
+	t.Run("existing CR with another path", func(t *testing.T) {
+		c := propertyShapes["different-name"]()
+		ml := integrated(t, c, rules)
+		for _, k := range kustomizations(ml) {
+			if k.Name == "web-bundle" {
+				k.Spec.Path = "somewhere/else"
+			}
+		}
+		err := integrator.IntegrateWithLayout(ml, c, rules)
+		if err == nil || !strings.Contains(err.Error(), `"web-bundle"`) || !strings.Contains(err.Error(), "somewhere/else") {
+			t.Errorf("got %v, want an error naming web-bundle and the conflicting path", err)
+		}
+	})
+	t.Run("layout CR named like a bundle", func(t *testing.T) {
+		web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+		c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform",
+			Bundle:   srBundle("platform", stack.NewApplication("web", "default", &hookAugmenter{app: "web"})),
+			Children: []*stack.Node{web}}}
+		_, err := integrator.CreateLayoutWithResources(c, rules)
+		if err == nil || !strings.Contains(err.Error(), `Flux Kustomization name "web"`) {
+			t.Errorf("got %v, want a CR name collision error", err)
+		}
+	})
+}
+
+func TestIntegrateWithLayout_FlattenSingleTier_PathIsPostCollapseDir(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			c := &stack.Cluster{Name: "arc-runners", Node: &stack.Node{Name: "apps", Bundle: &stack.Bundle{
+				Name:         "bundle",
+				SourceRef:    &stack.SourceRef{Kind: "GitRepository", Name: "test-source", Namespace: "flux-system"},
+				Applications: []*stack.Application{cmApp("runner")},
+			}}}
+			rules := propertyGroupings["nodeOnly"]
+			rules.ClusterName = "arc-runners"
+			rules.FlattenSingleTier = true
+			rules.FluxPlacement = placement
+			ml := integrated(t, c, rules)
+			var got []string
+			for _, k := range kustomizations(ml) {
+				got = append(got, k.Name+"="+k.Spec.Path)
+			}
+			if !slices.Equal(got, []string{"bundle=arc-runners"}) {
+				t.Errorf("CRs %v, want bundle=arc-runners (the post-collapse directory)", got)
+			}
+		})
+	}
+}
+
+func TestIntegrateWithLayout_HandBuiltWithoutOrigins_Rejected(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform")}}
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		hand := &layout.ManifestLayout{Name: "platform", Namespace: "."}
+		err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(hand, c, layout.LayoutRules{FluxPlacement: placement})
+		if err == nil || !strings.Contains(err.Error(), "build it with layout.WalkCluster") {
+			t.Errorf("%s: hand-built layout: got %v, want the origins refusal", placement, err)
+		}
+	}
+}
+
+func TestFluxSeparate_ClusterNamePathsResolve(t *testing.T) {
+	for _, clusterName := range []string{"", ".", "prod", "platform"} {
+		t.Run(clusterName, func(t *testing.T) {
+			c := propertyShapes["different-name"]()
+			rules := propertyGroupings["GroupByName"]
+			rules.ClusterName = clusterName
+			rules.FluxPlacement = layout.FluxSeparate
+			ml := integrated(t, c, rules)
+			var dirs []string
+			for _, k := range kustomizations(ml) {
+				dirs = append(dirs, k.Spec.Path)
+			}
+			sort.Strings(dirs)
+			if len(dirs) != 3 {
+				t.Fatalf("got CR paths %v, want three bundles", dirs)
+			}
+			for writer, w := range writeAll(t, ml) {
+				checkWrittenTree(t, writer, w, dirs)
+			}
+		})
+	}
+}
