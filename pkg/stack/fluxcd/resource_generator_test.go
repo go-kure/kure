@@ -9,15 +9,11 @@ import (
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
-	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 func TestResourceGenerator_NewDefaults(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
 
-	if gen.Mode != layout.KustomizationExplicit {
-		t.Errorf("Mode = %q, want %q", gen.Mode, layout.KustomizationExplicit)
-	}
 	if gen.DefaultInterval != 60*time.Minute {
 		t.Errorf("DefaultInterval = %v, want %v", gen.DefaultInterval, 60*time.Minute)
 	}
@@ -85,9 +81,9 @@ func TestGenerateFromCluster_WithBundle(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_Nil(t *testing.T) {
+func TestGenerateFromLayout_Nil(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
-	objs, err := gen.GenerateFromNode(nil)
+	objs, err := gen.GenerateFromLayout(nil, &stack.Cluster{Node: &stack.Node{Name: "root"}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +92,7 @@ func TestGenerateFromNode_Nil(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_Recursive(t *testing.T) {
+func TestGenerateFromCluster_Recursive(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
 
 	childBundle := &stack.Bundle{Name: "child-bundle"}
@@ -121,7 +117,7 @@ func TestGenerateFromNode_Recursive(t *testing.T) {
 		},
 	}
 
-	objs, err := gen.GenerateFromNode(root)
+	objs, err := gen.GenerateFromCluster(&stack.Cluster{Name: "c", Node: root})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -147,9 +143,9 @@ func TestGenerateFromNode_Recursive(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_Nil(t *testing.T) {
+func TestGenerateForBundle_Nil(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
-	objs, err := gen.GenerateFromBundle(nil)
+	objs, err := gen.GenerateForBundle(nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,15 +154,15 @@ func TestGenerateFromBundle_Nil(t *testing.T) {
 	}
 }
 
-// TestGenerateFromBundle_PruneUnsetIsFalse pins the tri-state pass-through: an
+// TestGenerateForBundle_PruneUnsetIsFalse pins the tri-state pass-through: an
 // unset Bundle.Prune must not collapse onto destructive garbage collection.
 // The upstream field is required with no omitempty, so "unset" is emitted as
 // prune: false rather than omitted.
-func TestGenerateFromBundle_PruneUnsetIsFalse(t *testing.T) {
+func TestGenerateForBundle_PruneUnsetIsFalse(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{Name: "test"}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -177,14 +173,14 @@ func TestGenerateFromBundle_PruneUnsetIsFalse(t *testing.T) {
 	}
 }
 
-// TestGenerateFromBundle_PruneExplicitTrue is the other half: the caller who
+// TestGenerateForBundle_PruneExplicitTrue is the other half: the caller who
 // wants garbage collection still gets it.
-func TestGenerateFromBundle_PruneExplicitTrue(t *testing.T) {
+func TestGenerateForBundle_PruneExplicitTrue(t *testing.T) {
 	wf := fluxstack.Engine()
 	prune := true
 	b := &stack.Bundle{Name: "test", Prune: &prune}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -195,7 +191,7 @@ func TestGenerateFromBundle_PruneExplicitTrue(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_PruneExplicitFalse(t *testing.T) {
+func TestGenerateForBundle_PruneExplicitFalse(t *testing.T) {
 	wf := fluxstack.Engine()
 	pruneVal := false
 	b := &stack.Bundle{
@@ -203,7 +199,7 @@ func TestGenerateFromBundle_PruneExplicitFalse(t *testing.T) {
 		Prune: &pruneVal,
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -214,7 +210,7 @@ func TestGenerateFromBundle_PruneExplicitFalse(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_Wait(t *testing.T) {
+func TestGenerateForBundle_Wait(t *testing.T) {
 	wf := fluxstack.Engine()
 	waitVal := true
 	b := &stack.Bundle{
@@ -222,7 +218,7 @@ func TestGenerateFromBundle_Wait(t *testing.T) {
 		Wait: &waitVal,
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -233,14 +229,14 @@ func TestGenerateFromBundle_Wait(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_Timeout(t *testing.T) {
+func TestGenerateForBundle_Timeout(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{
 		Name:    "test",
 		Timeout: "5m",
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -254,14 +250,14 @@ func TestGenerateFromBundle_Timeout(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_RetryInterval(t *testing.T) {
+func TestGenerateForBundle_RetryInterval(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{
 		Name:          "test",
 		RetryInterval: "2m",
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -275,7 +271,7 @@ func TestGenerateFromBundle_RetryInterval(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_Force(t *testing.T) {
+func TestGenerateForBundle_Force(t *testing.T) {
 	wf := fluxstack.Engine()
 	forceVal := true
 	b := &stack.Bundle{
@@ -283,7 +279,7 @@ func TestGenerateFromBundle_Force(t *testing.T) {
 		Force: &forceVal,
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -294,7 +290,7 @@ func TestGenerateFromBundle_Force(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_Suspend(t *testing.T) {
+func TestGenerateForBundle_Suspend(t *testing.T) {
 	wf := fluxstack.Engine()
 	suspendVal := true
 	b := &stack.Bundle{
@@ -302,7 +298,7 @@ func TestGenerateFromBundle_Suspend(t *testing.T) {
 		Suspend: &suspendVal,
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -313,7 +309,7 @@ func TestGenerateFromBundle_Suspend(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_Labels(t *testing.T) {
+func TestGenerateForBundle_Labels(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{
 		Name: "test",
@@ -323,7 +319,7 @@ func TestGenerateFromBundle_Labels(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -340,7 +336,7 @@ func TestGenerateFromBundle_Labels(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_Annotations(t *testing.T) {
+func TestGenerateForBundle_Annotations(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{
 		Name: "test",
@@ -349,7 +345,7 @@ func TestGenerateFromBundle_Annotations(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -363,7 +359,7 @@ func TestGenerateFromBundle_Annotations(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_SourceRefNamespace(t *testing.T) {
+func TestGenerateForBundle_SourceRefNamespace(t *testing.T) {
 	wf := fluxstack.Engine()
 	b := &stack.Bundle{
 		Name: "test",
@@ -374,7 +370,7 @@ func TestGenerateFromBundle_SourceRefNamespace(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -398,7 +394,7 @@ func TestCreateSource_DefaultNamespace(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -414,74 +410,6 @@ func TestCreateSource_DefaultNamespace(t *testing.T) {
 	}
 	if git.Namespace != "flux-system" {
 		t.Errorf("GitRepository.Namespace = %q, want %q (default)", git.Namespace, "flux-system")
-	}
-}
-
-func TestGeneratePath_Explicit(t *testing.T) {
-	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
-
-	parent := &stack.Bundle{Name: "infra"}
-	child := &stack.Bundle{Name: "networking"}
-	child.SetParent(parent)
-
-	objs, err := wf.GenerateFromBundle(child)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	k := objs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "infra/networking" {
-		t.Errorf("Path = %q, want %q", k.Spec.Path, "infra/networking")
-	}
-}
-
-func TestGeneratePath_Recursive(t *testing.T) {
-	wf := fluxstack.EngineWithMode(layout.KustomizationRecursive)
-
-	parent := &stack.Bundle{Name: "infra"}
-	child := &stack.Bundle{Name: "networking"}
-	child.SetParent(parent)
-
-	objs, err := wf.GenerateFromBundle(child)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	k := objs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "infra" {
-		t.Errorf("Path = %q, want %q", k.Spec.Path, "infra")
-	}
-}
-
-func TestBundlePath_MultiLevel(t *testing.T) {
-	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
-
-	root := &stack.Bundle{Name: "cluster"}
-	mid := &stack.Bundle{Name: "infrastructure"}
-	mid.SetParent(root)
-	leaf := &stack.Bundle{Name: "networking"}
-	leaf.SetParent(mid)
-
-	objs, err := wf.GenerateFromBundle(leaf)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	k := objs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "cluster/infrastructure/networking" {
-		t.Errorf("Path = %q, want %q", k.Spec.Path, "cluster/infrastructure/networking")
-	}
-
-	// In recursive mode, the leaf should use the parent's path
-	wf.SetKustomizationMode(layout.KustomizationRecursive)
-	objs, err = wf.GenerateFromBundle(leaf)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	k = objs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "cluster/infrastructure" {
-		t.Errorf("recursive Path = %q, want %q", k.Spec.Path, "cluster/infrastructure")
 	}
 }
 
@@ -505,38 +433,11 @@ func TestGenerateFromCluster_InvalidUmbrellaRejected(t *testing.T) {
 	}
 }
 
-func TestGeneratePath_UmbrellaChild(t *testing.T) {
-	// Umbrella initialization wires child parent pointers, so the child's
-	// Kustomization path should reflect the umbrella hierarchy.
-	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
-
-	umbrella := &stack.Bundle{
-		Name: "platform",
-		Children: []*stack.Bundle{
-			{Name: "infra"},
-		},
-	}
-
-	// Trigger InitializeUmbrella via GenerateFromBundle on the umbrella.
-	if _, err := wf.GenerateFromBundle(umbrella); err != nil {
-		t.Fatalf("umbrella generate: %v", err)
-	}
-
-	objs, err := wf.GenerateFromBundle(umbrella.Children[0])
-	if err != nil {
-		t.Fatalf("child generate: %v", err)
-	}
-	k := objs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "platform/infra" {
-		t.Errorf("Path = %q, want platform/infra", k.Spec.Path)
-	}
-}
-
-func TestGenerateFromBundle_Patches(t *testing.T) {
+func TestGenerateForBundle_Patches(t *testing.T) {
 	t.Run("empty patches leaves spec nil", func(t *testing.T) {
 		wf := fluxstack.Engine()
 		b := &stack.Bundle{Name: "test"}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -554,7 +455,7 @@ func TestGenerateFromBundle_Patches(t *testing.T) {
 				{Patch: `{"op":"add","path":"/metadata/labels/env","value":"prod"}`},
 			},
 		}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -589,7 +490,7 @@ func TestGenerateFromBundle_Patches(t *testing.T) {
 				},
 			},
 		}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -634,7 +535,7 @@ func TestGenerateFromBundle_Patches(t *testing.T) {
 				{Patch: "third"},
 			},
 		}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -650,11 +551,11 @@ func TestGenerateFromBundle_Patches(t *testing.T) {
 	})
 }
 
-func TestGenerateFromBundle_PostBuild(t *testing.T) {
+func TestGenerateForBundle_PostBuild(t *testing.T) {
 	t.Run("nil PostBuild leaves spec nil", func(t *testing.T) {
 		wf := fluxstack.Engine()
 		b := &stack.Bundle{Name: "test"}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -675,7 +576,7 @@ func TestGenerateFromBundle_PostBuild(t *testing.T) {
 				},
 			},
 		}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -705,7 +606,7 @@ func TestGenerateFromBundle_PostBuild(t *testing.T) {
 				},
 			},
 		}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -744,7 +645,7 @@ func TestGenerateFromBundle_PostBuild(t *testing.T) {
 				},
 			},
 		}
-		objs, err := wf.GenerateFromBundle(b)
+		objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

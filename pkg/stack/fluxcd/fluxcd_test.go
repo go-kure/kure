@@ -38,35 +38,6 @@ func fakeUmbrellaApp(appName, cmName string) *stack.Application {
 	return stack.NewApplication(appName, "default", &fakeAppConfig{objs: []*client.Object{&o}})
 }
 
-func TestWorkflowBundlePathMode(t *testing.T) {
-	parent := &stack.Bundle{Name: "parent"}
-	child := &stack.Bundle{Name: "child"}
-	child.SetParent(parent)
-
-	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
-	objs, err := wf.GenerateFromBundle(child)
-	if err != nil {
-		t.Fatalf("bundle explicit: %v", err)
-	}
-	if len(objs) != 1 {
-		t.Fatalf("expected 1 object, got %d", len(objs))
-	}
-	k := objs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "parent/child" {
-		t.Fatalf("explicit path mismatch: %s", k.Spec.Path)
-	}
-
-	wf.SetKustomizationMode(layout.KustomizationRecursive)
-	objs, err = wf.GenerateFromBundle(child)
-	if err != nil {
-		t.Fatalf("bundle recursive: %v", err)
-	}
-	k = objs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "parent" {
-		t.Fatalf("recursive path mismatch: %s", k.Spec.Path)
-	}
-}
-
 func TestWorkflowBundleMetadata(t *testing.T) {
 	parent := &stack.Bundle{Name: "parent"}
 	dep := &stack.Bundle{Name: "dep"}
@@ -83,7 +54,7 @@ func TestWorkflowBundleMetadata(t *testing.T) {
 	child.SetParent(parent)
 
 	wf := fluxstack.Engine()
-	objs, err := wf.GenerateFromBundle(child)
+	objs, err := wf.ResourceGen.GenerateForBundle(child, child.Name)
 	if err != nil {
 		t.Fatalf("bundle: %v", err)
 	}
@@ -123,9 +94,9 @@ func TestWorkflowBundleHealthChecks(t *testing.T) {
 	}
 
 	wf := fluxstack.Engine()
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
-		t.Fatalf("GenerateFromBundle() error = %v", err)
+		t.Fatalf("GenerateForBundle() error = %v", err)
 	}
 
 	if len(objs) != 1 {
@@ -152,9 +123,9 @@ func TestWorkflowBundleHealthChecksEmpty(t *testing.T) {
 	b := &stack.Bundle{Name: "simple"}
 
 	wf := fluxstack.Engine()
-	objs, err := wf.GenerateFromBundle(b)
+	objs, err := wf.ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
-		t.Fatalf("GenerateFromBundle() error = %v", err)
+		t.Fatalf("GenerateForBundle() error = %v", err)
 	}
 
 	k := objs[0].(*kustv1.Kustomization)
@@ -222,7 +193,7 @@ func TestCreateSource_EmptyURL(t *testing.T) {
 	}
 
 	wf := fluxstack.Engine()
-	objs, err := wf.GenerateFromBundle(bundle)
+	objs, err := wf.ResourceGen.GenerateForBundle(bundle, bundle.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -248,7 +219,7 @@ func TestCreateSource_OCIRepository(t *testing.T) {
 	}
 
 	wf := fluxstack.Engine()
-	objs, err := wf.GenerateFromBundle(bundle)
+	objs, err := wf.ResourceGen.GenerateForBundle(bundle, bundle.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -297,7 +268,7 @@ func TestCreateSource_GitRepository(t *testing.T) {
 	}
 
 	wf := fluxstack.Engine()
-	objs, err := wf.GenerateFromBundle(bundle)
+	objs, err := wf.ResourceGen.GenerateForBundle(bundle, bundle.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -333,7 +304,7 @@ func TestCreateSource_GitRepositoryWithTag(t *testing.T) {
 	}
 
 	wf := fluxstack.Engine()
-	objs, err := wf.GenerateFromBundle(bundle)
+	objs, err := wf.ResourceGen.GenerateForBundle(bundle, bundle.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -358,13 +329,13 @@ func TestCreateSource_InvalidKind(t *testing.T) {
 	}
 
 	wf := fluxstack.Engine()
-	_, err := wf.GenerateFromBundle(bundle)
+	_, err := wf.ResourceGen.GenerateForBundle(bundle, bundle.Name)
 	if err == nil {
 		t.Fatal("expected error for invalid source kind")
 	}
 }
 
-func TestGenerateFromBundle_UmbrellaAutoHealthChecks(t *testing.T) {
+func TestGenerateForBundle_UmbrellaAutoHealthChecks(t *testing.T) {
 	wf := fluxstack.Engine()
 	umbrella := &stack.Bundle{
 		Name: "platform",
@@ -375,7 +346,7 @@ func TestGenerateFromBundle_UmbrellaAutoHealthChecks(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(umbrella)
+	objs, err := wf.ResourceGen.GenerateForBundle(umbrella, umbrella.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -418,7 +389,7 @@ func TestGenerateFromBundle_UmbrellaAutoHealthChecks(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_UmbrellaUserHealthChecksAppended(t *testing.T) {
+func TestGenerateForBundle_UmbrellaUserHealthChecksAppended(t *testing.T) {
 	wf := fluxstack.Engine()
 	umbrella := &stack.Bundle{
 		Name: "platform",
@@ -435,7 +406,7 @@ func TestGenerateFromBundle_UmbrellaUserHealthChecksAppended(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(umbrella)
+	objs, err := wf.ResourceGen.GenerateForBundle(umbrella, umbrella.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -453,7 +424,7 @@ func TestGenerateFromBundle_UmbrellaUserHealthChecksAppended(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_UmbrellaPreservesTimeout(t *testing.T) {
+func TestGenerateForBundle_UmbrellaPreservesTimeout(t *testing.T) {
 	wf := fluxstack.Engine()
 	umbrella := &stack.Bundle{
 		Name:          "platform",
@@ -464,7 +435,7 @@ func TestGenerateFromBundle_UmbrellaPreservesTimeout(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(umbrella)
+	objs, err := wf.ResourceGen.GenerateForBundle(umbrella, umbrella.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -478,8 +449,8 @@ func TestGenerateFromBundle_UmbrellaPreservesTimeout(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_UmbrellaDoesNotRecurse(t *testing.T) {
-	// Assert the GenerateFromBundle self-only invariant: a two-level umbrella
+func TestGenerateForBundle_UmbrellaDoesNotRecurse(t *testing.T) {
+	// Assert the GenerateForBundle self-only invariant: a two-level umbrella
 	// still yields exactly 1 object (just the top bundle's Kustomization).
 	wf := fluxstack.Engine()
 	umbrella := &stack.Bundle{
@@ -494,7 +465,7 @@ func TestGenerateFromBundle_UmbrellaDoesNotRecurse(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromBundle(umbrella)
+	objs, err := wf.ResourceGen.GenerateForBundle(umbrella, umbrella.Name)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -503,8 +474,8 @@ func TestGenerateFromBundle_UmbrellaDoesNotRecurse(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_UmbrellaClosure(t *testing.T) {
-	// GenerateFromNode must walk the umbrella subtree so flat-list consumers
+func TestGenerateFromCluster_UmbrellaClosure(t *testing.T) {
+	// GenerateFromCluster must cover the umbrella subtree so flat-list consumers
 	// (separate Flux placement) see every descendant Kustomization.
 	wf := fluxstack.Engine()
 	n := &stack.Node{
@@ -519,7 +490,7 @@ func TestGenerateFromNode_UmbrellaClosure(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromNode(n)
+	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -543,7 +514,7 @@ func TestGenerateFromNode_UmbrellaClosure(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_NestedUmbrellaClosure(t *testing.T) {
+func TestGenerateFromCluster_NestedUmbrellaClosure(t *testing.T) {
 	wf := fluxstack.Engine()
 	n := &stack.Node{
 		Name: "root",
@@ -562,7 +533,7 @@ func TestGenerateFromNode_NestedUmbrellaClosure(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromNode(n)
+	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -572,7 +543,7 @@ func TestGenerateFromNode_NestedUmbrellaClosure(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_UmbrellaChildWithSource(t *testing.T) {
+func TestGenerateFromCluster_UmbrellaChildWithSource(t *testing.T) {
 	wf := fluxstack.Engine()
 	n := &stack.Node{
 		Name: "root",
@@ -592,7 +563,7 @@ func TestGenerateFromNode_UmbrellaChildWithSource(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromNode(n)
+	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -609,33 +580,6 @@ func TestGenerateFromNode_UmbrellaChildWithSource(t *testing.T) {
 	}
 	if !sawSource {
 		t.Error("expected umbrella child's GitRepository source in output")
-	}
-}
-
-func TestGenerateFromBundle_UmbrellaInitializesParent(t *testing.T) {
-	// Umbrella path should call InitializeUmbrella which sets child parent
-	// pointers, allowing path derivation to work without manual SetParent.
-	wf := fluxstack.EngineWithMode(layout.KustomizationExplicit)
-	umbrella := &stack.Bundle{
-		Name: "platform",
-		Children: []*stack.Bundle{
-			{Name: "infra"},
-		},
-	}
-
-	// Generate the umbrella first — this should initialize children.
-	if _, err := wf.GenerateFromBundle(umbrella); err != nil {
-		t.Fatalf("umbrella generate: %v", err)
-	}
-
-	// Now generate the child — its path must include the parent.
-	childObjs, err := wf.GenerateFromBundle(umbrella.Children[0])
-	if err != nil {
-		t.Fatalf("child generate: %v", err)
-	}
-	k := childObjs[0].(*kustv1.Kustomization)
-	if k.Spec.Path != "platform/infra" {
-		t.Errorf("child Path = %q, want platform/infra (parent not wired)", k.Spec.Path)
 	}
 }
 
@@ -734,17 +678,26 @@ func TestEndToEndUmbrellaFromCluster_Integrated(t *testing.T) {
 		t.Fatalf("could not locate apps node layout")
 	}
 
-	// In GroupFlat/nodeOnly mode, all 4 Flux Kustomization CRs live at the
-	// node layout (umbrella self + 3 children).
+	// In GroupFlat/nodeOnly mode the 3 umbrella children's CRs live at the
+	// node layout (their parent); the umbrella's own CR lives at the node
+	// layout's parent, like every PerLayout child CR.
 	kustsByName := map[string]*kustv1.Kustomization{}
 	for _, r := range nodeLayout.Resources {
 		if k, ok := r.(*kustv1.Kustomization); ok {
 			kustsByName[k.Name] = k
 		}
 	}
-	for _, want := range []string{"platform", "Y-infra", "Y-services", "Y-apps"} {
+	for _, want := range []string{"Y-infra", "Y-services", "Y-apps"} {
 		if kustsByName[want] == nil {
 			t.Errorf("missing Flux Kustomization %q at node layout", want)
+		}
+	}
+	if kustsByName["platform"] != nil {
+		t.Error("umbrella's own CR is at its own node layout; PerLayout hosts it in the parent")
+	}
+	for _, r := range ml.Resources {
+		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == "platform" {
+			kustsByName["platform"] = k
 		}
 	}
 
@@ -882,7 +835,7 @@ func TestEndToEndUmbrellaFromCluster_Separate(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_NamedDependsOn(t *testing.T) {
+func TestGenerateForBundle_NamedDependsOn(t *testing.T) {
 	b := &stack.Bundle{
 		Name: "app-post",
 		SourceRef: &stack.SourceRef{
@@ -892,9 +845,9 @@ func TestGenerateFromBundle_NamedDependsOn(t *testing.T) {
 		},
 		NamedDependsOn: []string{"app-main", "app-pre"},
 	}
-	objs, err := fluxstack.Engine().GenerateFromBundle(b)
+	objs, err := fluxstack.Engine().ResourceGen.GenerateForBundle(b, b.Name)
 	if err != nil {
-		t.Fatalf("GenerateFromBundle: %v", err)
+		t.Fatalf("GenerateForBundle: %v", err)
 	}
 	var kust *kustv1.Kustomization
 	for _, o := range objs {
@@ -935,23 +888,10 @@ func TestFluxWorkflowFactory_Init(t *testing.T) {
 	}
 }
 
-func TestEngineWithConfig(t *testing.T) {
-	e := fluxstack.EngineWithConfig(layout.KustomizationExplicit)
+func TestNewWorkflowEngine_Components(t *testing.T) {
+	e := fluxstack.NewWorkflowEngine()
 	if e == nil {
 		t.Fatal("expected non-nil engine")
-	}
-	if e.ResourceGen.Mode != layout.KustomizationExplicit {
-		t.Errorf("expected KustomizationExplicit, got %v", e.ResourceGen.Mode)
-	}
-}
-
-func TestNewWorkflowEngineWithConfig(t *testing.T) {
-	e := fluxstack.NewWorkflowEngineWithConfig(layout.KustomizationRecursive)
-	if e == nil {
-		t.Fatal("expected non-nil engine")
-	}
-	if e.ResourceGen.Mode != layout.KustomizationRecursive {
-		t.Errorf("expected KustomizationRecursive, got %v", e.ResourceGen.Mode)
 	}
 	if e.LayoutInteg == nil || e.BootstrapGen == nil {
 		t.Error("expected all components initialized")

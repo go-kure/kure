@@ -135,19 +135,19 @@ func TestGenerateFromCluster_Success(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_NilNode(t *testing.T) {
+func TestGenerateFromLayout_NilInputs(t *testing.T) {
 	engine := Engine()
 
-	objs, err := engine.GenerateFromNode(nil)
+	objs, err := engine.generateFromLayout(nil, &stack.Cluster{Node: &stack.Node{Name: "root"}})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if objs != nil {
-		t.Error("expected nil objects for nil node")
+		t.Error("expected nil objects for a nil layout")
 	}
 }
 
-func TestGenerateFromNode_WithBundle(t *testing.T) {
+func TestGenerateFromCluster_WithBundle(t *testing.T) {
 	engine := Engine()
 
 	bundle := &stack.Bundle{
@@ -158,7 +158,7 @@ func TestGenerateFromNode_WithBundle(t *testing.T) {
 		Bundle: bundle,
 	}
 
-	objs, err := engine.GenerateFromNode(node)
+	objs, err := engine.GenerateFromCluster(&stack.Cluster{Node: node})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestGenerateFromNode_WithBundle(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_WithChildren(t *testing.T) {
+func TestGenerateFromCluster_WithChildren(t *testing.T) {
 	engine := Engine()
 
 	childBundle1 := &stack.Bundle{Name: "child1"}
@@ -182,31 +182,28 @@ func TestGenerateFromNode_WithChildren(t *testing.T) {
 		Bundle:   parentBundle,
 		Children: []*stack.Node{child1, child2},
 	}
+	cluster := &stack.Cluster{Node: parent}
 
-	objs, err := engine.GenerateFromNode(parent)
+	objs, err := engine.GenerateFromCluster(cluster)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	// Should have 3 applications: parent + 2 children
-	if len(objs) != 3 {
-		t.Errorf("expected 3 objects, got %d", len(objs))
-	}
-}
-
-func TestGenerateFromBundle_NilBundle(t *testing.T) {
-	engine := Engine()
-
-	objs, err := engine.GenerateFromBundle(nil)
+	// One Application per bundle the default-rules walk renders.
+	ml, err := layout.WalkCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-	if objs != nil {
-		t.Error("expected nil objects for nil bundle")
+	ix, err := layout.IndexOrigins(ml, cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := len(ix.Bundles()); len(objs) != want || want != 3 {
+		t.Errorf("expected %d objects (parent + 2 children), got %d", want, len(objs))
 	}
 }
 
-func TestGenerateFromBundle_Success(t *testing.T) {
+func TestApplicationForBundle_Success(t *testing.T) {
 	engine := Engine()
 	engine.SetRepoURL("https://github.com/test/repo.git")
 	engine.SetDefaultNamespace("test-namespace")
@@ -220,17 +217,13 @@ func TestGenerateFromBundle_Success(t *testing.T) {
 		},
 	}
 
-	objs, err := engine.GenerateFromBundle(bundle)
+	obj, err := engine.applicationForBundle(bundle, "clusters/test-bundle")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if len(objs) != 1 {
-		t.Errorf("expected 1 object, got %d", len(objs))
-	}
-
 	// Verify the generated Application
-	app := objs[0].(*unstructured.Unstructured)
+	app := obj.(*unstructured.Unstructured)
 
 	if app.GetAPIVersion() != "argoproj.io/v1alpha1" {
 		t.Errorf("expected APIVersion 'argoproj.io/v1alpha1', got %s", app.GetAPIVersion())
@@ -268,6 +261,9 @@ func TestGenerateFromBundle_Success(t *testing.T) {
 	if source["repoURL"] != "https://github.com/test/repo.git" {
 		t.Errorf("expected repoURL 'https://github.com/test/repo.git', got %s", source["repoURL"])
 	}
+	if source["path"] != "clusters/test-bundle" {
+		t.Errorf("expected the caller's path 'clusters/test-bundle', got %s", source["path"])
+	}
 
 	// Check destination configuration
 	dest, found, err := unstructured.NestedMap(app.Object, "spec", "destination")
@@ -303,23 +299,19 @@ func TestGenerateFromBundle_Success(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_NoDependencies(t *testing.T) {
+func TestApplicationForBundle_NoDependencies(t *testing.T) {
 	engine := Engine()
 
 	bundle := &stack.Bundle{
 		Name: "simple-bundle",
 	}
 
-	objs, err := engine.GenerateFromBundle(bundle)
+	obj, err := engine.applicationForBundle(bundle, "simple-bundle")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if len(objs) != 1 {
-		t.Errorf("expected 1 object, got %d", len(objs))
-	}
-
-	app := objs[0].(*unstructured.Unstructured)
+	app := obj.(*unstructured.Unstructured)
 
 	// Dependencies should not be set
 	_, found, err := unstructured.NestedStringSlice(app.Object, "spec", "dependencies")
@@ -432,42 +424,6 @@ func TestGenerateBootstrap_Enabled(t *testing.T) {
 	}
 }
 
-func TestBundlePath(t *testing.T) {
-	engine := Engine()
-
-	tests := []struct {
-		name         string
-		bundle       *stack.Bundle
-		expectedPath string
-	}{
-		{
-			name:         "simple bundle",
-			bundle:       &stack.Bundle{Name: "app"},
-			expectedPath: "app",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path := engine.bundlePath(tt.bundle)
-			if path != tt.expectedPath {
-				t.Errorf("expected path '%s', got '%s'", tt.expectedPath, path)
-			}
-		})
-	}
-}
-
-func TestBundlePath_EmptyName(t *testing.T) {
-	engine := Engine()
-
-	// Test empty name handling
-	emptyBundle := &stack.Bundle{Name: ""}
-	path := engine.bundlePath(emptyBundle)
-	if path != "" {
-		t.Errorf("expected empty path for empty name, got '%s'", path)
-	}
-}
-
 func TestWorkflowEngineImplementsInterfaces(t *testing.T) {
 	engine := Engine()
 
@@ -475,22 +431,16 @@ func TestWorkflowEngineImplementsInterfaces(t *testing.T) {
 	var _ stack.Workflow = engine
 }
 
-func TestGenerateFromBundle_ClientObjectInterface(t *testing.T) {
+func TestApplicationForBundle_ClientObjectInterface(t *testing.T) {
 	engine := Engine()
 	bundle := &stack.Bundle{Name: "test"}
 
-	objs, err := engine.GenerateFromBundle(bundle)
+	obj, err := engine.applicationForBundle(bundle, "test")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if len(objs) != 1 {
-		t.Errorf("expected 1 object, got %d", len(objs))
-		return
-	}
-
 	// Verify it implements client.Object
-	obj := objs[0]
 	if obj == nil {
 		t.Error("object should not be nil")
 		return

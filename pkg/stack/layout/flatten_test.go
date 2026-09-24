@@ -3,7 +3,6 @@ package layout
 import (
 	"testing"
 
-	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,9 +51,6 @@ func TestFlatten_DisabledIsNoOp(t *testing.T) {
 	if len(ml.Resources) != 0 {
 		t.Errorf("synthetic root should not have resources when flatten is disabled, got %d", len(ml.Resources))
 	}
-	if ml.flattenInfo != nil {
-		t.Errorf("no flattenInfo expected when flag is off")
-	}
 }
 
 func TestFlatten_EnabledCollapsesSingleTier(t *testing.T) {
@@ -74,16 +70,6 @@ func TestFlatten_EnabledCollapsesSingleTier(t *testing.T) {
 	}
 	if len(ml.Resources) != 1 {
 		t.Errorf("expected child resources lifted to root, got %d", len(ml.Resources))
-	}
-	if ml.flattenInfo == nil {
-		t.Fatal("expected flattenInfo populated after collapse")
-	}
-	if got := ml.FlattenInfoNodeAlias("apps"); got != ml {
-		t.Errorf("expected node alias for 'apps' to point at root, got %p", got)
-	}
-	rewrites := ml.FlattenInfoPathRewrites()
-	if rewrites["arc-runners/apps"] != "arc-runners" {
-		t.Errorf("expected path rewrite arc-runners/apps -> arc-runners, got %v", rewrites)
 	}
 }
 
@@ -116,7 +102,7 @@ func TestFlatten_PropagatesExtraFilesAndCMGen(t *testing.T) {
 			},
 		}},
 	}
-	flattenSingleTier(parent, cluster, rules)
+	flattenSingleTier(parent, rules)
 	if len(parent.ExtraFiles) != 1 || parent.ExtraFiles[0].Name != "values.yaml" {
 		t.Errorf("ExtraFiles not propagated: %+v", parent.ExtraFiles)
 	}
@@ -146,7 +132,6 @@ func TestFlatten_HandBuiltStillCollapses(t *testing.T) {
 }
 
 func TestFlatten_NoCollapseWhenMultipleChildren(t *testing.T) {
-	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{FlattenSingleTier: true}
 
 	parent := &ManifestLayout{
@@ -157,17 +142,13 @@ func TestFlatten_NoCollapseWhenMultipleChildren(t *testing.T) {
 			{Name: "b", Namespace: "arc-runners/b"},
 		},
 	}
-	flattenSingleTier(parent, cluster, rules)
+	flattenSingleTier(parent, rules)
 	if len(parent.Children) != 2 {
 		t.Errorf("expected no collapse with multiple children")
-	}
-	if parent.flattenInfo != nil {
-		t.Errorf("no flattenInfo expected when no collapse occurred")
 	}
 }
 
 func TestFlatten_NoCollapseWhenUmbrellaChild(t *testing.T) {
-	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{FlattenSingleTier: true}
 
 	parent := &ManifestLayout{
@@ -177,14 +158,13 @@ func TestFlatten_NoCollapseWhenUmbrellaChild(t *testing.T) {
 			{Name: "apps", Namespace: "arc-runners/apps", UmbrellaChild: true},
 		},
 	}
-	flattenSingleTier(parent, cluster, rules)
+	flattenSingleTier(parent, rules)
 	if len(parent.Children) != 1 {
 		t.Errorf("expected no collapse with umbrella child")
 	}
 }
 
 func TestFlatten_NoCollapseWhenChildHasChildren(t *testing.T) {
-	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{FlattenSingleTier: true}
 
 	parent := &ManifestLayout{
@@ -198,7 +178,7 @@ func TestFlatten_NoCollapseWhenChildHasChildren(t *testing.T) {
 			},
 		},
 	}
-	flattenSingleTier(parent, cluster, rules)
+	flattenSingleTier(parent, rules)
 	if len(parent.Children) != 1 {
 		t.Errorf("expected no collapse when child has its own children")
 	}
@@ -207,7 +187,6 @@ func TestFlatten_NoCollapseWhenChildHasChildren(t *testing.T) {
 func TestFlatten_NoCollapseWhenParentHasResources(t *testing.T) {
 	obj := &unstructured.Unstructured{}
 	obj.SetKind("ConfigMap")
-	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{FlattenSingleTier: true}
 
 	parent := &ManifestLayout{
@@ -216,14 +195,13 @@ func TestFlatten_NoCollapseWhenParentHasResources(t *testing.T) {
 		Resources: []client.Object{obj},
 		Children:  []*ManifestLayout{{Name: "apps", Namespace: "arc-runners/apps"}},
 	}
-	flattenSingleTier(parent, cluster, rules)
+	flattenSingleTier(parent, rules)
 	if len(parent.Children) != 1 {
 		t.Errorf("expected no collapse when parent has its own Resources")
 	}
 }
 
 func TestFlatten_NoCollapseWhenParentNamespaceHasSeparator(t *testing.T) {
-	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{FlattenSingleTier: true}
 
 	parent := &ManifestLayout{
@@ -231,7 +209,7 @@ func TestFlatten_NoCollapseWhenParentNamespaceHasSeparator(t *testing.T) {
 		Namespace: "arc-runners/intermediate",
 		Children:  []*ManifestLayout{{Name: "apps", Namespace: "arc-runners/intermediate/apps"}},
 	}
-	flattenSingleTier(parent, cluster, rules)
+	flattenSingleTier(parent, rules)
 	if len(parent.Children) != 1 {
 		t.Errorf("expected no collapse when parent is not top-level")
 	}
@@ -248,87 +226,11 @@ func TestFlatten_PackageWalkIsNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WalkClusterByPackage: %v", err)
 	}
-	for _, ml := range packages {
-		if ml.flattenInfo != nil {
-			t.Errorf("WalkClusterByPackage should not invoke flattenSingleTier; got flattenInfo on a package layout")
-		}
-	}
-}
-
-func TestApplyFlattenPathRewrites(t *testing.T) {
-	kust := &kustomizev1.Kustomization{}
-	kust.Spec.Path = "arc-runners/apps"
-
-	deepKust := &kustomizev1.Kustomization{}
-	deepKust.Spec.Path = "arc-runners/apps/sub"
-
-	unrelated := &kustomizev1.Kustomization{}
-	unrelated.Spec.Path = "other/path"
-
-	root := &ManifestLayout{
-		Name:      "",
-		Namespace: "arc-runners",
-		Resources: []client.Object{kust, unrelated},
-		flattenInfo: &flattenInfo{
-			pathRewrites: map[string]string{"arc-runners/apps": "arc-runners"},
-		},
-		Children: []*ManifestLayout{
-			{
-				Name:      "flux-system",
-				Namespace: "arc-runners",
-				Resources: []client.Object{deepKust},
-			},
-		},
-	}
-
-	ApplyFlattenPathRewrites(root)
-
-	if kust.Spec.Path != "arc-runners" {
-		t.Errorf("exact-match rewrite failed: got %q, want %q", kust.Spec.Path, "arc-runners")
-	}
-	if deepKust.Spec.Path != "arc-runners/sub" {
-		t.Errorf("prefix-match rewrite failed: got %q, want %q", deepKust.Spec.Path, "arc-runners/sub")
-	}
-	if unrelated.Spec.Path != "other/path" {
-		t.Errorf("unrelated path should not be rewritten: got %q", unrelated.Spec.Path)
-	}
-	if root.flattenInfo == nil {
-		t.Errorf("flattenInfo should remain populated after rewrite so subsequent integrator passes can resolve aliases")
-	}
-}
-
-func TestApplyFlattenPathRewrites_NoOpWhenEmpty(t *testing.T) {
-	root := &ManifestLayout{Name: "x", Namespace: "ns"}
-	ApplyFlattenPathRewrites(root) // must not panic
-}
-
-func TestApplyFlattenPathRewrites_IsIdempotent(t *testing.T) {
-	// After a rewrite pass leaves flattenInfo intact, a second pass on the
-	// same layout must be a no-op (the already-rewritten Spec.Path no
-	// longer matches the rewrite key).
-	kust := &kustomizev1.Kustomization{}
-	kust.Spec.Path = "arc-runners/apps"
-	root := &ManifestLayout{
-		Name:      "",
-		Namespace: "arc-runners",
-		Resources: []client.Object{kust},
-		flattenInfo: &flattenInfo{
-			pathRewrites: map[string]string{"arc-runners/apps": "arc-runners"},
-		},
-	}
-
-	ApplyFlattenPathRewrites(root)
-	if kust.Spec.Path != "arc-runners" {
-		t.Fatalf("first pass: got %q, want %q", kust.Spec.Path, "arc-runners")
-	}
-
-	// Second pass: must not double-rewrite or panic.
-	ApplyFlattenPathRewrites(root)
-	if kust.Spec.Path != "arc-runners" {
-		t.Errorf("second pass should be idempotent: got %q, want %q", kust.Spec.Path, "arc-runners")
-	}
-	if root.flattenInfo == nil {
-		t.Errorf("flattenInfo must remain populated for repeated integration calls")
+	// The same cluster collapses under WalkCluster (TestFlatten_Enabled...):
+	// the package walk must keep its single tier.
+	ml := packages["default"]
+	if ml == nil || len(ml.Children) != 0 || len(ml.Resources) != 1 || ml.FullRepoPath() != "apps" {
+		t.Fatalf("package layout changed shape: %+v", ml)
 	}
 }
 
@@ -352,7 +254,6 @@ func TestCanFlatten_NilChild(t *testing.T) {
 func TestFlattenSingleTier_InheritsChildMode(t *testing.T) {
 	// When parent has KustomizationUnset and child has a set Mode, the parent
 	// should inherit the child's Mode after collapsing.
-	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{FlattenSingleTier: true}
 
 	parent := &ManifestLayout{
@@ -368,7 +269,7 @@ func TestFlattenSingleTier_InheritsChildMode(t *testing.T) {
 			FileNaming:          FileNamingKindName,
 		}},
 	}
-	flattenSingleTier(parent, cluster, rules)
+	flattenSingleTier(parent, rules)
 	if parent.Mode != KustomizationExplicit {
 		t.Errorf("expected Mode=KustomizationExplicit after inherit, got %v", parent.Mode)
 	}
@@ -380,49 +281,6 @@ func TestFlattenSingleTier_InheritsChildMode(t *testing.T) {
 	}
 	if parent.FileNaming != FileNamingKindName {
 		t.Errorf("expected FileNaming=FileNamingKindName after inherit, got %v", parent.FileNaming)
-	}
-}
-
-func TestCollectPathRewrites_NilRoot(t *testing.T) {
-	// collectPathRewrites with nil root should return nil without panic
-	result := collectPathRewrites(nil)
-	if result != nil {
-		t.Errorf("expected nil for nil root, got %v", result)
-	}
-}
-
-func TestRewriteFluxPaths_Nil(t *testing.T) {
-	// Must not panic with nil layout
-	rewriteFluxPaths(nil, map[string]string{"a": "b"})
-}
-
-func TestRewriteFluxPaths_NonKustomizationSkipped(t *testing.T) {
-	// A non-Kustomization object in Resources must be skipped (the !ok branch).
-	kust := &kustomizev1.Kustomization{}
-	kust.Spec.Path = "cluster/apps"
-
-	nonKust := &unstructured.Unstructured{}
-	nonKust.SetAPIVersion("v1")
-	nonKust.SetKind("ConfigMap")
-	nonKust.SetName("config")
-
-	root := &ManifestLayout{
-		Namespace: "cluster",
-		Resources: []client.Object{nonKust, kust},
-		flattenInfo: &flattenInfo{
-			pathRewrites: map[string]string{"cluster/apps": "cluster"},
-		},
-	}
-	ApplyFlattenPathRewrites(root)
-	// The Kustomization must be rewritten; the ConfigMap must not cause a panic.
-	if kust.Spec.Path != "cluster" {
-		t.Errorf("kust.Spec.Path = %q, want %q", kust.Spec.Path, "cluster")
-	}
-}
-
-func TestFindByNodeAlias_Nil(t *testing.T) {
-	if got := FindByNodeAlias(nil, "path"); got != nil {
-		t.Errorf("expected nil for nil layout, got %v", got)
 	}
 }
 
@@ -480,105 +338,5 @@ func TestWalkUmbrellaChildLayouts_NilChild(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Errorf("expected 1 result (nil child skipped), got %d", len(results))
-	}
-}
-
-func TestCollectPathRewrites_MultipleChildren(t *testing.T) {
-	// Build a tree with rewrites in two separate children so the merge branch
-	// in collectPathRewrites is exercised.
-	childA := &ManifestLayout{
-		Name:      "a",
-		Namespace: "cluster",
-		flattenInfo: &flattenInfo{
-			pathRewrites: map[string]string{"cluster/a/apps": "cluster/a"},
-		},
-	}
-	childB := &ManifestLayout{
-		Name:      "b",
-		Namespace: "cluster",
-		flattenInfo: &flattenInfo{
-			pathRewrites: map[string]string{"cluster/b/apps": "cluster/b"},
-		},
-	}
-	root := &ManifestLayout{
-		Name:     "",
-		Children: []*ManifestLayout{childA, childB},
-	}
-
-	// ApplyFlattenPathRewrites calls collectPathRewrites internally
-	kustA := &kustomizev1.Kustomization{}
-	kustA.Spec.Path = "cluster/a/apps"
-	childA.Resources = []client.Object{kustA}
-
-	kustB := &kustomizev1.Kustomization{}
-	kustB.Spec.Path = "cluster/b/apps"
-	childB.Resources = []client.Object{kustB}
-
-	ApplyFlattenPathRewrites(root)
-
-	if kustA.Spec.Path != "cluster/a" {
-		t.Errorf("childA rewrite failed: got %q, want %q", kustA.Spec.Path, "cluster/a")
-	}
-	if kustB.Spec.Path != "cluster/b" {
-		t.Errorf("childB rewrite failed: got %q, want %q", kustB.Spec.Path, "cluster/b")
-	}
-}
-
-func TestFindNodeByLayoutName_Nil(t *testing.T) {
-	got := findNodeByLayoutName(nil, "any")
-	if got != nil {
-		t.Errorf("expected nil for nil node, got %v", got)
-	}
-}
-
-func TestFindNodeByLayoutName_RootMatch(t *testing.T) {
-	root := &stack.Node{Name: "root"}
-	got := findNodeByLayoutName(root, "root")
-	if got == nil || got.Name != "root" {
-		t.Errorf("expected root node, got %v", got)
-	}
-}
-
-func TestFindNodeByLayoutName_DeepMatch(t *testing.T) {
-	grandchild := &stack.Node{Name: "leaf"}
-	child := &stack.Node{Name: "middle", Children: []*stack.Node{grandchild}}
-	root := &stack.Node{Name: "root", Children: []*stack.Node{child}}
-
-	got := findNodeByLayoutName(root, "leaf")
-	if got == nil || got.Name != "leaf" {
-		t.Errorf("expected 'leaf' node, got %v", got)
-	}
-}
-
-func TestFindNodeByLayoutName_NoMatch(t *testing.T) {
-	root := &stack.Node{Name: "root", Children: []*stack.Node{{Name: "child"}}}
-	got := findNodeByLayoutName(root, "nonexistent")
-	if got != nil {
-		t.Errorf("expected nil for no match, got %v", got)
-	}
-}
-
-func TestFindByNodeAlias(t *testing.T) {
-	leaf := &ManifestLayout{Name: "leaf"}
-	root := &ManifestLayout{
-		Name: "",
-		Children: []*ManifestLayout{
-			{
-				Name: "branch",
-				Children: []*ManifestLayout{
-					leaf,
-				},
-			},
-		},
-	}
-	leaf.flattenInfo = &flattenInfo{
-		nodeAliases: map[string]*ManifestLayout{"deep/path": leaf},
-	}
-
-	if got := FindByNodeAlias(root, "deep/path"); got != leaf {
-		t.Errorf("expected alias to resolve to leaf, got %p", got)
-	}
-	if got := FindByNodeAlias(root, "missing"); got != nil {
-		t.Errorf("expected nil for missing alias, got %p", got)
 	}
 }
