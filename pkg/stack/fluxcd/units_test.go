@@ -415,11 +415,13 @@ func TestReconcileOrder_WaitOnRootReachableCR(t *testing.T) {
 	root.Bundle.Wait = &yes
 	b.Bundle.DependsOn = []*stack.Bundle{root.Bundle}
 	b.SetParent(root)
-	rules := propertyGroupings["nodeOnly"]
-	rules.FluxPlacement = layout.FluxIntegratedPerLayout
-	_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules)
-	if err == nil || !strings.Contains(err.Error(), "never") {
-		t.Fatalf("got %v, want a reconcile-order refusal (a waits for b, b depends on a)", err)
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout} {
+		rules := propertyGroupings["nodeOnly"]
+		rules.FluxPlacement = placement
+		_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules)
+		if err == nil || !strings.Contains(err.Error(), "never") {
+			t.Errorf("%s: got %v, want a reconcile-order refusal (a waits for b, b depends on a)", placement, err)
+		}
 	}
 }
 
@@ -438,5 +440,46 @@ func TestPerLayout_SharedSourceEffectiveNamespace(t *testing.T) {
 	rules.FluxPlacement = layout.FluxIntegratedPerLayout
 	if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: root}, rules); err != nil {
 		t.Fatalf("equivalent SourceRefs below a bundle-less layout refused: %v", err)
+	}
+}
+
+// cycleAugmenter gives its application layout a hooks child, and makes the
+// two layout CRs depend on each other.
+type cycleAugmenter struct{ app string }
+
+func (c *cycleAugmenter) Generate(*stack.Application) ([]*client.Object, error) {
+	return []*client.Object{cmObj(c.app + "-cm")}, nil
+}
+
+func (c *cycleAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
+	hooks := &layout.ManifestLayout{
+		Name:          c.app + "-hooks",
+		Namespace:     ml.FullRepoPath(),
+		Resources:     []client.Object{*cmObj(c.app + "-hook")},
+		FluxPlacement: ml.FluxPlacement,
+		DependsOn:     []string{ml.Name},
+	}
+	ml.DependsOn = []string{hooks.Name}
+	ml.Children = append(ml.Children, hooks)
+	return nil
+}
+
+// TestIntegrateWithLayout_RepeatedCycleRefusal pins that a refused cycle stays
+// refused when the same tree is integrated again: layout CRs an earlier call
+// placed are still part of what the check covers.
+func TestIntegrateWithLayout_RepeatedCycleRefusal(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform",
+		stack.NewApplication("chart", "default", &cycleAugmenter{app: "chart"}))}}
+	rules := propertyGroupings["GroupByName"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	for call := 1; call <= 2; call++ {
+		if err := integrator.IntegrateWithLayout(ml, c, rules); err == nil || !strings.Contains(err.Error(), "never") {
+			t.Fatalf("call %d: got %v, want the reconcile-order refusal (chart <-> chart-hooks)", call, err)
+		}
 	}
 }
