@@ -89,12 +89,21 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 		return nil, err
 	}
 	var out []client.Object
+	var kusts []*kustv1.Kustomization
 	for _, l := range ix.Units() {
 		objs, err := g.generateForUnit(l, ix)
 		if err != nil {
 			return nil, err
 		}
+		for _, o := range objs {
+			if k, ok := o.(*kustv1.Kustomization); ok {
+				kusts = append(kusts, k)
+			}
+		}
 		out = append(out, objs...)
+	}
+	if err := checkReconcileOrder(kusts, nil); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

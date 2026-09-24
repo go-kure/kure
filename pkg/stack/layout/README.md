@@ -183,6 +183,8 @@ file per application while nodes and bundles keep their directories.
 Flux Kustomization or ArgoCD Application applies. `UnitName(b)` is the unit that applies `b` (the
 first bundle its directory renders), and `UnitDependencies(l)` / `UnitNamedDependencies(l)` map the
 bundles' `DependsOn` / `NamedDependsOn` to units, dropping dependencies inside `l`'s own unit.
+`IndexOrigins` refuses a cycle in those dependencies; waits a workflow adds on top (Flux health
+checks, creation order) are checked by that workflow.
 Bundles are resolved by name, which is unique, so a copy of a bundle resolves like the original.
 
 `NodeGrouping: GroupFlat` (as in the `CentralizedControlPlane` preset) moves a merged node's

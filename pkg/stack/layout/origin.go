@@ -198,28 +198,17 @@ func (ix *OriginIndex) mapToUnits(l *ManifestLayout, names []string) []string {
 	return out
 }
 
-// checkUnitCycles refuses a cycle in what units wait for: Flux and ArgoCD
-// would wait on each other forever. A unit waits for its DependsOn and
-// NamedDependsOn units and, through health checks, for the units of its
-// bundles' umbrella children. Merging bundles into one unit can close a cycle
-// their own dependencies did not have (b1 -> u -> b2 becomes rb -> u -> rb
-// when b1 and b2 merge into rb's directory; an umbrella child that depends on
-// a bundle merged into its parent's unit waits for a unit that waits for it).
+// checkUnitCycles refuses a dependency cycle between units (DependsOn and
+// NamedDependsOn, mapped to units): Flux and ArgoCD would wait on each other
+// forever. Merging bundles into one unit can close a cycle their own
+// dependencies did not have (b1 -> u -> b2 becomes rb -> u -> rb when b1 and
+// b2 merge into rb's directory). Waits a workflow adds on top — Flux health
+// checks on umbrella children, creation order — are that workflow's to check
+// (see the fluxcd reconcile-order check).
 func (ix *OriginIndex) checkUnitCycles() error {
 	deps := map[string][]string{}
 	for _, l := range ix.units {
-		name := ix.UnitName(l.origin.bundles[0])
-		waits := append(ix.UnitDependencies(l), ix.UnitNamedDependencies(l)...)
-		for _, b := range l.origin.bundles {
-			for _, child := range b.Children {
-				if child != nil {
-					if unit := ix.UnitName(child); unit != name {
-						waits = append(waits, unit)
-					}
-				}
-			}
-		}
-		deps[name] = waits
+		deps[ix.UnitName(l.origin.bundles[0])] = append(ix.UnitDependencies(l), ix.UnitNamedDependencies(l)...)
 	}
 	const (
 		visiting = 1
