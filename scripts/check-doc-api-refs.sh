@@ -132,14 +132,15 @@ EXTERNAL=(
 	CreateReplace      # helm-controller's CRDsPolicy constant, not a constructor
 )
 
-symbols=$(mktemp)    # "<package dir> <name>" per exported declaration
+symbols=$(mktemp)    # "<package dir> <name> <receiver>" per exported declaration
+types=$(mktemp)      # "<package dir> <type>" per exported type a method can be declared on
 pkgdirs=$(mktemp)    # every package directory under pkg/, exported symbols or not
 external=$(mktemp)   # EXTERNAL, one name per line
 referenced=$(mktemp) # "<page>:<line>:<reference>" per builder-shaped reference
 removed=$(mktemp)    # names a LEDGER_PAGES table lists as removed, one per line
 selftest_dir=
 # shellcheck disable=SC2064 # expand now: the paths must survive the function that set them
-trap 'rm -rf "$symbols" "$pkgdirs" "$external" "$referenced" "$removed" ${selftest_dir:+"$selftest_dir"}' EXIT
+trap 'rm -rf "$symbols" "$types" "$pkgdirs" "$external" "$referenced" "$removed" ${selftest_dir:+"$selftest_dir"}' EXIT
 
 # One "file:line:identifier" row per builder-shaped reference in the pages named
 # on stdin (NUL-separated), skipping any passage a page fenced off. An unclosed
@@ -721,6 +722,37 @@ pkg/a CreatePtr Recv'
 		failures=$((failures + 1))
 	fi
 
+	# The type index: one row per exported type a method can be declared on,
+	# whether or not it has any exported method left. Plain and generic
+	# declarations count; an alias (its methods are another type's), an
+	# interface (its methods are not `func` declarations the symbol index could
+	# hold) and an unexported type do not.
+	cat >"$d/idx/pkg/a/types.go" <<-'EOF'
+		package a
+
+		type Recv struct{}
+		type Bare struct {
+			f int
+		}
+		type Gen[K comparable, V any] struct{}
+		type Named string
+		type Alias = Recv
+		type GenAlias[T any] = Gen[T, T]
+		type Iface interface {
+			CreateX()
+		}
+		type hidden struct{}
+	EOF
+	local want_types='pkg/a Bare
+pkg/a Gen
+pkg/a Named
+pkg/a Recv'
+	got=$(printf '%s\0' "$d/idx/pkg/a/types.go" | scan_types | type_rows | sed "s#^$d/idx/##" | LC_ALL=C sort)
+	if [ "$got" != "$want_types" ]; then
+		printf 'self-test: type index mismatch\nwant:\n%s\ngot:\n%s\n' "$want_types" "$got" >&2
+		failures=$((failures + 1))
+	fi
+
 	# A name absent from the symbol set must be reported; one present must not.
 	# CreateDeployment is in the set and CreateDeployment_Gone is not, so the
 	# suffix must survive extraction or the fourth line resolves wrongly.
@@ -738,6 +770,16 @@ pkg/a CreatePtr Recv'
 		pkg/stack/fluxcd CreateOnEngine WorkflowEngine
 		pkg/stack/fluxcd CreateOnIntegrator LayoutIntegrator
 		pkg/stack/fluxcd CreateReal -
+	EOF
+	# Types as the type index holds them: every one a method is declared on,
+	# plus Integrator, which is declared beside LayoutIntegrator but whose last
+	# exported method is gone, and Lonely, declared in argocd with none at all.
+	cat >"$types" <<-'EOF'
+		pkg/stack/argocd Lonely
+		pkg/stack/argocd WorkflowEngine
+		pkg/stack/fluxcd Integrator
+		pkg/stack/fluxcd LayoutIntegrator
+		pkg/stack/fluxcd WorkflowEngine
 	EOF
 	printf 'pkg/kubernetes\npkg/kubernetes/fluxcd\npkg/stack/argocd\npkg/stack/fluxcd\n' >"$pkgdirs"
 	printf 'AddCommand\n' >"$external"
@@ -774,25 +816,34 @@ pkg/kubernetes/fluxcd/README.md:1:fluxcd.CreateElsewhere'
 	# The receiver rule. Line 1: a method named on the type that declares it
 	# resolves, and one that moved to another type does not, even though the
 	# bare name survives. Line 2: a type declared in two packages answers from
-	# either on a page outside both; a selector the index knows no receiver
+	# either on a page outside both; a selector the index knows no type
 	# for -- a variable, a type from another module -- falls back to the bare
 	# name, resolving CreateReal and failing CreateGone. Line 3: a lower-case
 	# selector is a variable, never a type, and falls back the same way. The
 	# package page pins the page-local half: it lives in a package declaring
 	# WorkflowEngine, so its own WorkflowEngine is the one it means, and the
 	# method only argocd's has is unresolved here while the shared one is not.
+	# Line 4 and the package page's line 2 pin that a type is a type because it
+	# is declared, not because it still has an exported method: Integrator's
+	# last one is gone and Lonely never had one, so a method named on either is
+	# unresolved even though another type still exports that name.
 	cat >"$d/docs/receiver.md" <<-'EOF'
 		`LayoutIntegrator.CreateOnIntegrator` is declared; `LayoutIntegrator.CreateOnEngine` moved.
 		`WorkflowEngine.CreateOnlyInArgo` resolves through argocd; `Unknown.CreateReal` and `Unknown.CreateGone` fall back.
 		`engine.CreateOnIntegrator` is a variable selector and falls back too.
+		`Integrator.CreateOnEngine` lost its last method; `Lonely.CreateOnEngine` never had one.
 	EOF
 	cat >"$d/pkg/stack/fluxcd/engine.md" <<-'EOF'
 		`WorkflowEngine.CreateOnlyInArgo` is argocd's; `WorkflowEngine.CreateOnEngine` is ours.
+		`Integrator.CreateOnIntegrator` is LayoutIntegrator's, not our Integrator's.
 	EOF
 	extract_refs "$d/docs/receiver.md" "$d/pkg/stack/fluxcd/engine.md" | sort -u >"$referenced"
 	local want_receiver='docs/receiver.md:1:LayoutIntegrator.CreateOnEngine
 docs/receiver.md:2:Unknown.CreateGone
-pkg/stack/fluxcd/engine.md:1:WorkflowEngine.CreateOnlyInArgo'
+docs/receiver.md:4:Integrator.CreateOnEngine
+docs/receiver.md:4:Lonely.CreateOnEngine
+pkg/stack/fluxcd/engine.md:1:WorkflowEngine.CreateOnlyInArgo
+pkg/stack/fluxcd/engine.md:2:Integrator.CreateOnIntegrator'
 	unresolved=$(report_unresolved | sed "s#^$d/##")
 	if [ "$unresolved" != "$want_receiver" ]; then
 		printf 'self-test: receiver-scope mismatch\nwant:\n%s\ngot:\n%s\n' "$want_receiver" "$unresolved" >&2
@@ -936,8 +987,8 @@ check_removed_are_gone() {
 #       -> Name must be declared in that exact package
 #   qualified `pkg.Name` anywhere else
 #       -> Name must be declared in a package whose base name is pkg
-#   qualified `Type.Name`, Type exported and a receiver somewhere in the index,
-#   on a page that lives in a package declaring methods on Type
+#   qualified `Type.Name`, Type an exported type declared somewhere in the
+#   index, on a page that lives in a package declaring Type
 #       -> Name must be a method of Type in that exact package
 #   qualified `Type.Name` anywhere else
 #       -> Name must be a method of Type in some package
@@ -962,7 +1013,13 @@ check_removed_are_gone() {
 # the same shape and the same limit as the package rules -- WorkflowEngine is
 # declared in both stack packages, and only a page under one of them settles
 # which it means. A selector is taken as a type only when it starts upper-case
-# and the index holds methods on a type of that name. Anything else -- a
+# and the index holds a type of that name -- from its type declaration, not
+# from its methods, so a type whose last exported method moved away is still a
+# type and a page naming that method on it fails. Methods a struct gets from
+# an embedded field are not its own here; no page in the tree names one that
+# way, and one that did would fail and want the declaring type instead. An
+# interface is not in the index (its methods are not `func` declarations),
+# nor is an alias, whose methods are its target's. Anything else -- a
 # variable (`engine.CreateLayoutWithResources`), an upper-case field
 # (`Spec.Template`), a type from another module -- names nothing the index can
 # check, and falls back to the bare-name rule: the last rule is a deliberate
@@ -978,8 +1035,8 @@ check_removed_are_gone() {
 # later. Failing on those would buy one more catchable removal and cost three
 # suppressions on pages that are correct, which is a worse check.
 report_unresolved() {
-	awk -v symfile="$symbols" -v dirfile="$pkgdirs" -v extfile="$external" \
-		-v remfile="$removed" -v ledgers="${LEDGER_LIST:-}" '
+	awk -v symfile="$symbols" -v typefile="$types" -v dirfile="$pkgdirs" \
+		-v extfile="$external" -v remfile="$removed" -v ledgers="${LEDGER_LIST:-}" '
 		BEGIN {
 			nl = split(ledgers, l, " ")
 			for (li = 1; li <= nl; li++) isledger[l[li]] = 1
@@ -992,11 +1049,16 @@ report_unresolved() {
 			sub(/.*\//, "", base)
 			bybase[base " " $2] = 1
 			if ($3 != "-") {
-				isrecv[$3] = 1
+				istype[$3] = 1
 				byrecv[$3 " " $2] = 1
-				pkgrecv[$1 " " $3] = 1
+				pkgtype[$1 " " $3] = 1
 				recvdecl[$1 " " $3 " " $2] = 1
 			}
+			next
+		}
+		FILENAME == typefile {
+			istype[$2] = 1
+			pkgtype[$1 " " $2] = 1
 			next
 		}
 		FILENAME == dirfile {
@@ -1045,8 +1107,8 @@ report_unresolved() {
 				found = 1
 				next
 			}
-			if (qual ~ /^[A-Z]/ && (qual in isrecv)) {
-				# An exported selector the index knows as a receiver type
+			if (qual ~ /^[A-Z]/ && (qual in istype)) {
+				# An exported selector the index knows as a declared type
 				# names that type, so the method must be its own. The same
 				# page-local rule as above: a type declared in more than one
 				# package (WorkflowEngine, in both stack packages) means the
@@ -1054,7 +1116,7 @@ report_unresolved() {
 				pagedir = file
 				sub(/\/[^\/]*$/, "", pagedir)
 				sub(/^.*\/pkg\//, "pkg/", pagedir)
-				if ((pagedir " " qual) in pkgrecv) {
+				if ((pagedir " " qual) in pkgtype) {
 					if ((pagedir " " qual " " name) in recvdecl) next
 					print
 					found = 1
@@ -1070,7 +1132,7 @@ report_unresolved() {
 			found = 1
 		}
 		END { exit !found }
-	' "$symbols" "$pkgdirs" "$external" "$removed" "$referenced"
+	' "$symbols" "$types" "$pkgdirs" "$external" "$removed" "$referenced"
 }
 
 # The pages outside pkg/ and the site map, one path per line, relative to the
@@ -1158,6 +1220,46 @@ index_rows() {
 	'
 }
 
+# Exported type declarations in the same public tree, for the same xargs
+# tolerance. The receiver column of the symbol index cannot stand in for this:
+# it only knows a type through a method the scan still finds, so a type whose
+# last exported method was moved or removed would drop out of it and a
+# `Type.Method` reference naming that method would fall back to the bare-name
+# rule -- answered by any other type still exporting the name. The match needs
+# a token after the name that is not `=`, which leaves aliases out: an alias's
+# methods are its target's, declared under the target's name. Interfaces are
+# dropped by type_rows: their methods are not `func` declarations, so the
+# symbol index can never answer for them and they stay on the bare-name floor.
+# Only top-level `type Name ...` lines are read; pkg/ has no grouped
+# `type ( ... )` block today, and a type declared in one would fall back to
+# the floor rather than fail a page.
+scan_types() {
+	xargs -0 grep -HoE '^type [A-Z][A-Za-z0-9_]*(\[[^]]*\])? +[^ =]+' || [ "$?" -eq 123 ]
+}
+
+# One "<package dir> <type>" row per scan_types line that is not an interface.
+# An unreadable line is an error for the reason index_rows gives.
+type_rows() {
+	awk '
+		{
+			i = index($0, ".go:type ")
+			if (i == 0) {
+				print "check-doc-api-refs: unreadable type row: " $0 > "/dev/stderr"
+				exit 1
+			}
+			dir = substr($0, 1, i - 1)
+			sub(/\/[^\/]*$/, "", dir)
+			rest = substr($0, i + 9)
+			name = rest
+			sub(/[[ ].*$/, "", name)
+			kind = rest
+			sub(/^[A-Za-z0-9_]+(\[[^]]*\])? +/, "", kind)
+			if (kind ~ /^interface/) next
+			print dir " " name
+		}
+	'
+}
+
 if [ "${1:-}" = "--self-test" ]; then
 	self_test
 	exit
@@ -1169,10 +1271,14 @@ printf '%s\n' "$go_files" | tr '\n' '\0' |
 	scan_symbols |
 	index_rows |
 	sort -u >"$symbols"
+printf '%s\n' "$go_files" | tr '\n' '\0' |
+	scan_types |
+	type_rows |
+	sort -u >"$types"
 
 printf '%s\n' "${EXTERNAL[@]}" >"$external"
 
-for _list in go_files symbols pkgdirs external; do
+for _list in go_files symbols types pkgdirs external; do
 	case "$_list" in
 	go_files) [ -n "$go_files" ] && continue ;;
 	*) [ -s "${!_list}" ] && continue ;;
@@ -1266,6 +1372,7 @@ check_removed_are_gone || exit 1
 
 if [ "${1:-}" = "--list" ]; then
 	printf 'declarations: %s\n' "$(wc -l <"$symbols")"
+	printf 'types:        %s\n' "$(wc -l <"$types")"
 	printf 'packages:     %s\n' "$(wc -l <"$pkgdirs")"
 	printf 'pages:        %s (Markdown pages plus public Go files)\n' "${#pages[@]}"
 	printf 'removed:      %s (names the ledgers may mention)\n' "$(wc -l <"$removed")"

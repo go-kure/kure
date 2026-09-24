@@ -179,11 +179,13 @@ temporary branch — the merged result — before the PR is allowed to land.
   written with a package selector (`fluxcd.CreateGitRepository`) is resolved in the
   package that selector names rather than anywhere in the tree, so a helper that moves or is
   removed from one package is not answered by a same-named declaration in another. A reference
-  written with an exported type selector that the index knows as a method receiver
+  written with an exported type selector that names a type declared under `pkg/`
   (`LayoutIntegrator.CreateLayoutWithResources`) is resolved against that type's own methods — in
   the page's own package first when it lives in one declaring the type, otherwise in any package
   that does — so a method that moves between types is not answered by its old name on the other;
-  the index keeps the receiver type of every method for this. A reference
+  the index keeps the receiver type of every method, and every exported non-interface,
+  non-alias type from its own declaration, so a type whose last exported method moved away still
+  counts as a type and the stale reference fails. A reference
   written with a selector that is neither — a variable, a field, a type from another module — or
   without one still resolves tree-wide, because an import alias and a variable receiver are
   spelled alike. The generic constructor is recognised both qualified (`kubernetes.Create[T]`)
