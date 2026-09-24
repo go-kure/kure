@@ -50,8 +50,9 @@ Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured per call on
 `layout.DefaultLayoutRules()` and the walker. The call's placement is the
 tree's: `IntegrateWithLayout` sets it on every layout it integrates,
 whatever placement the tree was walked with. A tree that already holds Flux
-Kustomizations keeps the placement they were made for (another is refused),
-and a refused call leaves every placement as it was. See
+Kustomizations an earlier integration or the caller placed keeps the placement
+they were made for (another is refused; Kustomizations an application emits
+do not count), and a refused call leaves the tree exactly as it was. See
 [Layout Integration](#layout-integration).
 
 ## Resource Generation
@@ -146,8 +147,11 @@ that instead of generating it:
 - a targeted patch is refused when its `Target` selects any object another bundle in that
   directory renders, a ConfigMap an augmenter's `configMapGenerator` makes included. Matching is
   kustomize's own: `Group`, `Version`, `Kind`, `Name` and `Namespace` are anchored regular
-  expressions (an empty one matches anything), `LabelSelector` and `AnnotationSelector` are
-  Kubernetes selector expressions. A bundle `b1` with `Target: {Kind: ConfigMap}` merged with a
+  expressions (an empty one matches anything; `Namespace` is matched against the object's
+  effective namespace, `default` for a namespaced object that names none), `LabelSelector` and
+  `AnnotationSelector` are Kubernetes selector expressions. Only objects the shared Kustomization
+  builds count: under `FluxIntegratedPerLayout` a per-app directory is applied by its own CR, so
+  its objects are outside the patch's reach. A bundle `b1` with `Target: {Kind: ConfigMap}` merged with a
   bundle that renders a ConfigMap is refused; `Target: {Kind: ConfigMap, Name: one-cm}`, naming
   `b1`'s own ConfigMap, is accepted.
 
