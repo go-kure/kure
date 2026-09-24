@@ -647,3 +647,38 @@ func TestGenerateFromLayout_HealthChecksNormalizeDefaultNamespace(t *testing.T) 
 		}
 	}
 }
+
+// nestedAugmenter adds chart/hooks/job, neither level carrying a Flux
+// placement of its own.
+type nestedAugmenter struct{}
+
+func (nestedAugmenter) Generate(*stack.Application) ([]*client.Object, error) {
+	return []*client.Object{cmObj("chart-cm")}, nil
+}
+
+func (nestedAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
+	hooks := &layout.ManifestLayout{Name: "hooks", Namespace: ml.FullRepoPath(), Resources: []client.Object{*cmObj("hook")}}
+	job := &layout.ManifestLayout{Name: "job", Namespace: hooks.FullRepoPath(), Resources: []client.Object{*cmObj("job")}}
+	hooks.Children = []*layout.ManifestLayout{job}
+	ml.Children = append(ml.Children, hooks)
+	return nil
+}
+
+// TestIntegrateWithLayout_NestedAugmenter_NoDuplicateApplication pins that
+// under PerLayout a nested augmenter layout is applied once, by its own
+// Kustomization: its parent's kustomization.yaml lists the CR, not the
+// directory, in every writer.
+func TestIntegrateWithLayout_NestedAugmenter_NoDuplicateApplication(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "root", Bundle: srBundle("root",
+		stack.NewApplication("chart", "default", nestedAugmenter{}))}}
+	rules := allFlat
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	ml := integrated(t, c, rules)
+	var dirs []string
+	for _, k := range kustomizations(ml) {
+		dirs = append(dirs, k.Spec.Path)
+	}
+	for writer, w := range writeAll(t, ml) {
+		checkWrittenTree(t, writer, w, dirs, true)
+	}
+}

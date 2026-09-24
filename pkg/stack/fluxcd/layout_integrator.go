@@ -388,6 +388,13 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 }
 
 func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceScope) error {
+	// The integration's placement is the tree's: a layout that did not say
+	// (an augmenter's child, say) is placed per layout like its parent, so
+	// the writers list its children's CRs, not their directories, which
+	// their own Kustomizations apply.
+	if p.perLayout && l.FluxPlacement == layout.FluxUnset {
+		l.FluxPlacement = layout.FluxIntegratedPerLayout
+	}
 	scope := inherited
 	bundles := l.OriginBundles()
 	if len(bundles) > 0 {
