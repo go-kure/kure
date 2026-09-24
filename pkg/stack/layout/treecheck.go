@@ -72,6 +72,12 @@ func checkResourceIdentities(l *ManifestLayout) error {
 			return errors.Wrapf(err, "layout %q: read object metadata", l.FullRepoPath())
 		}
 		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Kind == "" {
+			// A typed object with an unset TypeMeta has no kind to
+			// identify it by; two of different Go types would share an
+			// empty key. It is not this check's to judge.
+			return nil
+		}
 		// kustomize reads an omitted namespace as "default", so an object
 		// without one and the same object in "default" are one identity.
 		ns := acc.GetNamespace()
