@@ -139,8 +139,11 @@ What changed, and what to do:
   sits inside the root's directory, at `<root>/flux-system`, where the root's `kustomization.yaml`
   references it. Before, it was written beside the root, and that reference dangled. The ArgoCD
   `argocd/` layout moved the same way. Point anything outside kure that reads these directories
-  (CI scripts, a hand-written sync path) at the new paths. An unnamed root node is unchanged: it
-  still sits at `cluster/`.
+  (CI scripts, a hand-written sync path) at the new paths.
+- **No `ClusterName`, unnamed root.** The root and its child nodes stay at `cluster/` and
+  `cluster/<child>`. Deeper descendants move: a grandchild used to be written at
+  `<child>/<grandchild>`, outside `cluster/` and referenced by nothing. It now sits at
+  `cluster/<child>/<grandchild>`.
 - **With a `ClusterName`.** Most output is unchanged, and `flux-system/` stays at
   `<ClusterName>/flux-system`. When the last segment of `ClusterName` is the root node's name
   (`ClusterName: "platform"`, root `platform`), the root is still the cluster directory. When
