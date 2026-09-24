@@ -617,30 +617,18 @@ type LayoutRules struct {
 
 ### Grouping Strategies
 
-**GroupFlat**: Each item gets its own directory
-```
-clusters/prod/
-├── bundles/
-│   ├── monitoring/
-│   ├── logging/  
-│   └── ingress/
-└── apps/
-    ├── frontend/
-    ├── backend/
-    └── database/
-```
+Each of the three grouping axes (`NodeGrouping`, `BundleGrouping`, `ApplicationGrouping`) decides,
+independently, whether its level gets a directory. `GroupByName` gives every child node, bundle or
+application a directory inside its parent's; `GroupFlat` renders the level into the layout above it
+(its resources, child layouts and origins). Umbrella child bundles and augmenter applications always
+get a directory. For a node `platform` with bundle `web` holding apps `api` and `ui`:
 
-**GroupByParent**: Items grouped under parent directories
-```  
-clusters/prod/
-├── infrastructure/
-│   ├── monitoring/
-│   ├── logging/
-│   └── ingress/
-└── applications/
-    ├── frontend/
-    ├── backend/  
-    └── database/
+```
+Node=ByName, Bundle=ByName, App=ByName   Node=ByName, Bundle=Flat, App=Flat (default)
+platform/                                 platform/
+└── web/                                  └── (api and ui resources)
+    ├── api/
+    └── ui/
 ```
 
 ### GitOps Integration

@@ -70,13 +70,13 @@ func TestWantsOwnLayout_AbsentCompanion(t *testing.T) {
 	}
 }
 
-func TestProcessFlatBundleApps_NilObjectPointer(t *testing.T) {
+func TestRenderApps_NilObjectPointer(t *testing.T) {
 	// App returns a slice containing a nil *client.Object pointer — should be skipped.
 	nilObjPtr := (*client.Object)(nil)
 	app := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{nilObjPtr}})
 	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
 
-	err := processFlatBundleApps([]*stack.Application{app}, parent, FluxSeparate, "")
+	err := renderApps([]*stack.Application{app}, parent, grouping{appFlat: true, flux: FluxSeparate})
 	if err != nil {
 		t.Fatalf("unexpected error with nil object pointer: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestProcessFlatBundleApps_NilObjectPointer(t *testing.T) {
 	}
 }
 
-func TestProcessFlatBundleApps_NilApp(t *testing.T) {
+func TestRenderApps_NilApp(t *testing.T) {
 	// Passing a nil app in the slice should be skipped without error.
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("v1")
@@ -98,7 +98,7 @@ func TestProcessFlatBundleApps_NilApp(t *testing.T) {
 	plainApp := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{&o}})
 	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
 
-	err := processFlatBundleApps([]*stack.Application{nil, plainApp}, parent, FluxSeparate, "")
+	err := renderApps([]*stack.Application{nil, plainApp}, parent, grouping{appFlat: true, flux: FluxSeparate})
 	if err != nil {
 		t.Fatalf("unexpected error with nil app entry: %v", err)
 	}

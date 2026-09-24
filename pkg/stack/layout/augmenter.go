@@ -36,7 +36,7 @@ type LayoutAugmenter interface {
 // per instance instead.
 //
 // WantsOwnLayout() gates placement only, on the flat-bundle walker path
-// (processFlatBundleApps): false is treated as-if-absent for that decision —
+// (renderApps with ApplicationGrouping flat): false is treated as-if-absent for that decision —
 // the app's resources merge flat into the parent layout instead of getting a
 // per-app child, and AugmentLayout is not invoked because no per-app layout
 // exists to pass it. It has no effect on the GroupByName or by-package

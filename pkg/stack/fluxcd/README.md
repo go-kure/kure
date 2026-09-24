@@ -98,6 +98,10 @@ The path is emitted as `FullRepoPath()` returns it (no `./` prefix; Flux treats 
 alike) and is relative to the root of what the writer wrote: the `WriteToDisk` / `WriteToTar`
 base, or `<basePath>/<ManifestsDir>` for `layout.WriteManifest`. Root the Flux source there.
 
+The guarantee is one written directory per CR, not one CR per directory: when a `GroupFlat` axis
+renders several bundles into one directory (a node's bundle with its merged child nodes' bundles,
+say), each of those bundles still gets its own Kustomization, and they all target that directory.
+
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
 rewrites nothing afterwards: when it collapses a tier, the surviving layout takes over the
 collapsed layout's origins, so both bundles' paths are the surviving directory. An umbrella

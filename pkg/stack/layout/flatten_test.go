@@ -293,8 +293,8 @@ func TestCollectPackageRefs_NilNode(t *testing.T) {
 	}
 }
 
-func TestWalkNodeForPackageInternal_Nil(t *testing.T) {
-	got, err := walkNodeForPackageInternal(nil, nil, false, FilePerResource, nil, nil, "default", "")
+func TestWalkNode_PackageWalkNil(t *testing.T) {
+	got, err := walkNode(nil, nil, grouping{filePer: FilePerResource, pkgKey: "default"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error for nil node: %v", err)
 	}
@@ -305,7 +305,7 @@ func TestWalkNodeForPackageInternal_Nil(t *testing.T) {
 
 func TestWalkNode_Nil(t *testing.T) {
 	// walkNode(nil, ...) should return nil without error
-	got, err := walkNode(nil, nil, false, false, FilePerResource, nil, FluxSeparate, "")
+	got, err := walkNode(nil, nil, grouping{filePer: FilePerResource, flux: FluxSeparate}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -314,7 +314,7 @@ func TestWalkNode_Nil(t *testing.T) {
 	}
 }
 
-func TestWalkUmbrellaChildLayouts_NilChild(t *testing.T) {
+func TestRenderUmbrellaChildren_NilChild(t *testing.T) {
 	// Passing a nil child bundle in the slice should be silently skipped.
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("v1")
@@ -326,16 +326,16 @@ func TestWalkUmbrellaChildLayouts_NilChild(t *testing.T) {
 	app := stack.NewApplication("app", "ns", &flattenFakeConfig{objs: []*client.Object{&o}})
 	realChild := &stack.Bundle{Name: "real", Applications: []*stack.Application{app}}
 
-	results, err := walkUmbrellaChildLayouts(
+	parent := &ManifestLayout{Name: "parent", Namespace: "cluster"}
+	err := renderUmbrellaChildren(
 		[]*stack.Bundle{nil, realChild},
-		[]string{"cluster"},
-		FilePerResource,
-		FluxSeparate,
-		"",
+		parent,
+		grouping{appFlat: true, filePer: FilePerResource, flux: FluxSeparate},
 	)
 	if err != nil {
 		t.Fatalf("unexpected error with nil child: %v", err)
 	}
+	results := parent.Children
 	if len(results) != 1 {
 		t.Errorf("expected 1 result (nil child skipped), got %d", len(results))
 	}

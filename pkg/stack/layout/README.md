@@ -42,9 +42,18 @@ layouts that resolve to the same file. Directories are compared case-insensitive
 macOS volumes.
 
 ### 2. LayoutRules Configuration
-- **NodeGrouping**: How nodes are organized (GroupByName creates dirs, GroupFlat flattens)
-- **BundleGrouping**: How bundles within nodes are organized  
-- **ApplicationGrouping**: How applications within bundles are organized
+- **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
+- **BundleGrouping**: whether each bundle gets a directory inside its node's (`GroupByName`) or renders in the node's directory (`GroupFlat`, default)
+- **ApplicationGrouping**: whether each application gets a directory inside its bundle's (`GroupByName`) or writes into the bundle's directory (`GroupFlat`, default)
+
+The three axes are independent and apply the same way to the root node (also under a
+`ClusterName`), to umbrella children and in `WalkClusterByPackage`. A level set to `GroupFlat` is
+rendered into the layout above it: its resources, its child layouts and its origins. Umbrella child
+bundles and augmenter applications always keep their own directory, because each carries its own
+Flux Kustomization or writer-owned files. `FilePer` is honoured on every layout. The writers refuse
+a merge that makes two layouts claim one directory, and a directory that would hold two objects
+with the same group, kind, namespace and name (kustomize cannot build it); objects that merely
+share a file name are written into one multi-document file, as `FilePerKind` intends.
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
 - **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; children included as directories)
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
@@ -152,11 +161,11 @@ Controls how resource YAML files are named:
 ### Layout origins
 
 Every layout the walkers build records what it renders: `OriginNodes()`, `OriginBundles()` and
-`OriginApplication()`. A node layout renders its node (plus the node's bundle in nodeOnly mode, and
-the root bundle `ClusterName` layouts always flatten into the root layout); a GroupByName bundle
-layout and an umbrella-child layout render their bundle; a per-app layout its application. A
-`NodeGrouping: GroupFlat` merge and a `FlattenSingleTier` collapse move the absorbed layout's
-origins into the absorbing one. Hand-built layouts have none.
+`OriginApplication()`. A node layout renders its node (plus its bundle when `BundleGrouping` is
+`GroupFlat`); a GroupByName bundle layout and an umbrella-child layout render their bundle; a
+per-app layout its application. A level merged by a `GroupFlat` axis, and a `FlattenSingleTier`
+collapse, move the absorbed nodes and bundles into the absorbing layout's origins; a merged
+application has no origin of its own. Hand-built layouts have none.
 
 `IndexOrigins(root, cluster)` resolves a cluster's bundles and nodes to those layouts
 (`BundleLayout`, `NodeLayout`, `Parent`, `Bundles` in layout pre-order) and
@@ -168,10 +177,9 @@ layout in `AppFileSingle` mode. `WriteManifest` refuses the last case too, inclu
 comes from its `Config`: such a layout's files go into its `Namespace`, so no directory would exist
 at its path.
 
-`NodeGrouping: GroupFlat` (with flat bundles and applications, as in the `CentralizedControlPlane`
-preset) refuses to merge a node whose layout has child layouts (umbrella children or augmenter
-layouts): the merge moves only resources and origins, and those layouts, their extra files and
-their Flux CRs would be dropped.
+`NodeGrouping: GroupFlat` (as in the `CentralizedControlPlane` preset) moves a merged node's
+umbrella children and augmenter layouts under the absorbing node, where they keep their own
+directories, files and Flux CRs.
 
 ### Extra Files and ConfigMap Generators
 
