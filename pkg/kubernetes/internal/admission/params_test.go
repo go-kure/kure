@@ -87,6 +87,13 @@ func UpCallback(f func(*up.Spec) error)               {}
 func GenericOwn(w up.Wrapper[Config])                 {}
 func GenericUp(w *up.Wrapper[up.Spec])                {}
 func Constrained[T Variant](v T)                      {}
+func ConstrainedStruct[T Config](v T)                 {}
+func ConstrainedEmbed[T interface{ Config }](v T)     {}
+func ConstrainedUnion[T interface{ Config | *Config }](v T) {}
+func ConstrainedTilde[T interface{ ~struct{ Name string } }](v T) {}
+func ConstrainedScalar[T ~string | ~int](v T)         {}
+func ConstrainedUp[T up.Spec | *up.Spec](v T)         {}
+func ConstrainedComparable[T comparable](v T)         {}
 func Label(o *up.Obj, l Level)                        {}
 func Plain(o *up.Obj, s *up.Spec, n int)              {}
 func Generic[T any](o *up.Obj, v T)                   {}
@@ -135,6 +142,10 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 		{"Build", "cfg", "*fixture/own.Config"},
 		{"Callback", "f", "func(*fixture/own.Config)"},
 		{"Constrained", "v", "T"},
+		{"ConstrainedEmbed", "v", "T"},
+		{"ConstrainedStruct", "v", "T"},
+		{"ConstrainedTilde", "v", "T"},
+		{"ConstrainedUnion", "v", "T"},
 		{"Defined", "w", "*fixture/own.Wrapped"},
 		{"GenericOwn", "w", "fixture/up.Wrapper[fixture/own.Config]"},
 		{"LitIface", "v", "[]fixture/own.LitVariant"},
@@ -165,7 +176,7 @@ func TestOwnParameterTypes_Fixture(t *testing.T) {
 // named spec for an alias to a struct literal. Ownership is decided where an
 // alias is declared, so an upstream alias to a literal is upstream: the
 // parameters that take it directly, through a callback, or through an
-// in-tree re-export are not findings, and the 21 findings are unchanged
+// in-tree re-export are not findings, and the 25 findings are unchanged
 // (Wrapped is still declared in-tree, whatever its upstream base).
 func TestOwnParameterTypes_UpstreamLiteralAliases(t *testing.T) {
 	dir := writeParamsFixture(t)
@@ -190,8 +201,8 @@ func TestOwnParameterTypes_UpstreamLiteralAliases(t *testing.T) {
 			t.Errorf("%s(%s %s): an upstream alias to a literal is not a kure-defined type", f.Name, f.Param, f.Type)
 		}
 	}
-	if len(findings) != 21 {
-		t.Errorf("expected the same 21 findings as with a named upstream spec, got %d: %+v", len(findings), findings)
+	if len(findings) != 25 {
+		t.Errorf("expected the same 25 findings as with a named upstream spec, got %d: %+v", len(findings), findings)
 	}
 }
 
@@ -227,8 +238,8 @@ func TestOwnParameterTypes_UpstreamGenericAliases(t *testing.T) {
 	if up {
 		t.Error("GenericUp(up.Wrapper[up.Spec]) must not be a finding")
 	}
-	if len(findings) != 21 {
-		t.Errorf("expected the same 21 findings as with a defined generic, got %d", len(findings))
+	if len(findings) != 25 {
+		t.Errorf("expected the same 25 findings as with a defined generic, got %d", len(findings))
 	}
 }
 
