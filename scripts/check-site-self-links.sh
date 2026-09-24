@@ -152,7 +152,11 @@ collect_pages() {
 run_check() {
 	cd "$ROOT"
 	local base pages offenders
-	base=$(sed -n "s/^baseURL[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" site/hugo.toml 2>/dev/null | head -n 1)
+	if [ ! -f site/hugo.toml ]; then
+		printf 'check-site-self-links: site/hugo.toml is missing under %s\n' "$ROOT" >&2
+		return 1
+	fi
+	base=$(sed -n "s/^baseURL[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" site/hugo.toml | head -n 1)
 	if [ -z "$base" ]; then
 		printf 'check-site-self-links: no baseURL in site/hugo.toml\n' >&2
 		return 1
@@ -276,6 +280,16 @@ site/content/concepts/_index.md:1: https://www.gokure.dev/kure/api-reference/x/'
 		printf 'self-test: missing mapped page exited %s, want 1 naming it\n%s\n' "$rc" "$out" >&2
 		failures=$((failures + 1))
 	fi
+
+	# A tree without the Hugo config must fail with a reason, not silently.
+	mv "$tmp/site/hugo.toml" "$tmp/site/hugo.toml.off"
+	rc=0
+	out=$(bash "$0" --root "$tmp" 2>&1) || rc=$?
+	if [ "$rc" -ne 1 ] || ! printf '%s' "$out" | grep -q 'site/hugo.toml is missing'; then
+		printf 'self-test: missing hugo.toml exited %s, want 1 naming it\n%s\n' "$rc" "$out" >&2
+		failures=$((failures + 1))
+	fi
+	mv "$tmp/site/hugo.toml.off" "$tmp/site/hugo.toml"
 
 	# An unreadable map must fail, not check an empty page set.
 	printf 'packages: [\n' >"$tmp/site/docs-map.yaml"
