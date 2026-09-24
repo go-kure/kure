@@ -372,7 +372,8 @@ checkout for local use.
   `https://www.gokure.dev/kure/...`: the release root is rebuilt only on `set-latest` and
   lacks newer pages. Text also read on GitHub (`CHANGELOG.md`, `cliff.toml`) uses the dev
   slot, `https://www.gokure.dev/kure/dev/...`. Kure-local `scripts/check-site-self-links.sh`
-  enforces this (blocking, `docs-build` job; `mise run site:check-self-links`).
+  enforces this, and rejects a dev-slot link from any other page (blocking, `docs-build`
+  job; `mise run site:check-self-links`).
 - `check-doc-gate` — a mapped package's source change must touch its mapped docs
   (the `doc-gate` job). Bypass with the maintainer-restricted `docs-skip` label, or
   automatically for a generated-table row whose only change is a provenance field
