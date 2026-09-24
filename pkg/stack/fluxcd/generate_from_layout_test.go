@@ -325,6 +325,13 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string,
 			return
 		}
 		reached[kust] = true
+		// A listed directory without a kustomization.yaml is reported by
+		// name, and the walk goes on, rather than aborting the subtest.
+		if _, err := os.Stat(kust); err != nil {
+			rel, _ := filepath.Rel(w.root, filepath.Dir(kust))
+			t.Errorf("%s: directory %q is applied but has no kustomization.yaml", writer, rel)
+			return
+		}
 		for _, ref := range kustomizationRefs(t, kust) {
 			p := filepath.Join(filepath.Dir(kust), ref)
 			info, err := os.Stat(p)

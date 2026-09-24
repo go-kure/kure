@@ -397,7 +397,13 @@ func fluxKustomizationPath(obj client.Object) (string, bool) {
 func crKey(namespace, name string) string { return namespace + "/" + name }
 
 // claim records that this pass emits a Kustomization named name: a second
-// claim of one name is a CR identity collision.
+// claim of one name is a CR identity collision. The bare name is the key on
+// purpose: every Kustomization this pass generates is placed in
+// g.DefaultNamespace (kustomizationForBundle, createKustomizationForLayout),
+// so name and namespace/name identify the same object here, and a bundle's
+// name is its CR identity (IndexOrigins refuses two bundles with one name).
+// Objects already in the tree may sit in other namespaces; those are keyed by
+// crKey in indexExistingKustomizations.
 func (p *integratedPlacement) claim(name, path string) error {
 	if prev, dup := p.names[name]; dup {
 		return errors.Errorf("Flux Kustomization name %q is used twice (spec.path %q and %q): Kustomization names must be unique", name, prev, path)
