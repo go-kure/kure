@@ -185,7 +185,15 @@ temporary branch — the merged result — before the PR is allowed to land.
   that does — so a method that moves between types is not answered by its old name on the other;
   the index keeps the receiver type of every method, and every exported non-interface,
   non-alias type from its own declaration, so a type whose last exported method moved away still
-  counts as a type and the stale reference fails. A reference
+  counts as a type and the stale reference fails. The index is built by parsing the Go source —
+  `scripts/docapiindex`, a `go/parser` walk the check builds with the job's Go toolchain — not by
+  matching its text: a `func Create…` line inside a block comment or a raw string is not a
+  declaration, where a text match indexed it and so let a page keep naming the function after the
+  real one was deleted; and declarations in grouped `const`/`var`/`type` blocks, parenthesised
+  receivers and type-parameter lists holding a bracket are read like any other. Exported consts,
+  vars and types answer a reference as functions do, since a page naming one names live API; which
+  names are checked is unchanged. A Go file under `pkg/` that does not parse fails the run rather
+  than dropping out of the index. A reference
   written with a selector that is neither — a variable, a field, a type from another module — or
   without one still resolves tree-wide, because an import alias and a variable receiver are
   spelled alike. The generic constructor is recognised both qualified (`kubernetes.Create[T]`)
@@ -203,7 +211,7 @@ temporary branch — the merged result — before the PR is allowed to land.
   the same day, silently. The list is validated rather than trusted — every name in it must be
   absent from `pkg/`, and a live name there fails the run with the names to drop — and a removed
   name the ledger mentions but the list omits fails the run too, with the name to add. The step
-  runs `--self-test` first, which pins the extractor and the
+  runs `--self-test` first, which pins the extractor, the declaration index and the
   resolver against a synthetic tree — a fence marker that matches too much, an identifier boundary
   that stops matching, or a selector that stops being carried would otherwise turn the repo run
   quietly green. Every malformed suppression is an error rather than a silent pass: an

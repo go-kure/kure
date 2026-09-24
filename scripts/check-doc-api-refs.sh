@@ -13,10 +13,12 @@
 #
 # What it checks: every identifier shaped like a kure builder call -- Create, Set
 # or Add followed by an upper-case letter, or the generic constructor's
-# `Create[T]` bracket -- that appears in a live page must be declared in pkg/ as a
-# function or method. Names outside that shape are not builders and are not
-# checked; upstream and third-party calls that happen to fit the shape are listed
-# in EXTERNAL below.
+# `Create[T]` bracket -- that appears in a live page must be declared in pkg/, as a
+# function, method, const, var or type. Names outside that shape are not builders
+# and are not checked; upstream and third-party calls that happen to fit the shape
+# are listed in EXTERNAL below. The declarations come from parsing the Go source
+# (scripts/docapiindex, built with go on each run), not from matching its text;
+# build_indexer says why.
 #
 # Resolution is package-aware where the page says which package it means, and
 # type-aware where it says which type. pkg/ holds same-named declarations in
@@ -139,8 +141,9 @@ external=$(mktemp)   # EXTERNAL, one name per line
 referenced=$(mktemp) # "<page>:<line>:<reference>" per builder-shaped reference
 removed=$(mktemp)    # names a LEDGER_PAGES table lists as removed, one per line
 selftest_dir=
+indexer_dir=         # the built declaration indexer, see build_indexer
 # shellcheck disable=SC2064 # expand now: the paths must survive the function that set them
-trap 'rm -rf "$symbols" "$types" "$pkgdirs" "$external" "$referenced" "$removed" ${selftest_dir:+"$selftest_dir"}' EXIT
+trap 'rm -rf "$symbols" "$types" "$pkgdirs" "$external" "$referenced" "$removed" ${selftest_dir:+"$selftest_dir"} ${indexer_dir:+"$indexer_dir"}' EXIT
 
 # One "file:line:identifier" row per builder-shaped reference in the pages named
 # on stdin (NUL-separated), skipping any passage a page fenced off. An unclosed
@@ -693,13 +696,32 @@ fenced.md:4:CreateReal'
 	done
 
 	# The symbol index: one row per declaration, its receiver type in the third
-	# column and `-` for a plain function. Every receiver shape gofmt emits
+	# column and `-` for anything that is not a method. Every receiver shape
 	# must yield the bare type name: named or unnamed, pointer or value, with
-	# or without type parameters. A row that lost its receiver would let a
-	# method resolve on any type, which is the residual this column closes.
+	# or without type parameters, parenthesised or not. A row that lost its
+	# receiver would let a method resolve on any type, which is the residual
+	# this column closes.
+	#
+	# The index is parsed, not matched, and this file is what pins it. The
+	# `func` lines in the block comment and the raw string are not declarations
+	# and must not be indexed: a ghost row is a false negative in the check,
+	# since a page naming it resolves after the real function is deleted. The
+	# parenthesised receiver, the grouped const and var blocks and the
+	# top-level var and type are declarations a text match does not see.
 	mkdir -p "$d/idx/pkg/a"
 	cat >"$d/idx/pkg/a/a.go" <<-'EOF'
 		package a
+
+		/*
+		Example usage:
+
+		func CreateGoneFromComment(name string) *T { return nil }
+		func (r *Recv) CreateGoneMethodFromComment() {}
+		*/
+
+		var example = `
+		func CreateGoneFromString() {}
+		`
 
 		func CreatePlain() {}
 		func (r *Recv) CreatePtr() {}
@@ -707,16 +729,40 @@ fenced.md:4:CreateReal'
 		func (*Recv) CreateBarePtr() {}
 		func (g *Gen[T]) CreateGeneric() {}
 		func (g Gen[K, V]) CreateGenericPair() {}
+		func (r (*Recv)) CreateParen() {}
+		func CreateGenericFunc[T any, S ~[]T](s S) T { return s[0] }
 		func (r *Recv) unexported() {}
 		func helper() {}
+
+		const (
+			SetDefault = "x"
+			hidden     = 1
+		)
+
+		var (
+			AddDefault           = func() {}
+			CreateOne, CreateTwo = 1, 2
+		)
+
+		var CreateSingle = CreatePlain
+
+		type SetOptions struct{}
 	EOF
-	local want_index='pkg/a CreateBare Recv
+	local want_index='pkg/a AddDefault -
+pkg/a CreateBare Recv
 pkg/a CreateBarePtr Recv
 pkg/a CreateGeneric Gen
+pkg/a CreateGenericFunc -
 pkg/a CreateGenericPair Gen
+pkg/a CreateOne -
+pkg/a CreateParen Recv
 pkg/a CreatePlain -
-pkg/a CreatePtr Recv'
-	got=$(printf '%s\0' "$d/idx/pkg/a/a.go" | scan_symbols | index_rows | sed "s#^$d/idx/##" | LC_ALL=C sort)
+pkg/a CreatePtr Recv
+pkg/a CreateSingle -
+pkg/a CreateTwo -
+pkg/a SetDefault -
+pkg/a SetOptions -'
+	got=$(printf '%s\0' "$d/idx/pkg/a/a.go" | index_symbols | sed "s#^$d/idx/##" | LC_ALL=C sort)
 	if [ "$got" != "$want_index" ]; then
 		printf 'self-test: symbol index mismatch\nwant:\n%s\ngot:\n%s\n' "$want_index" "$got" >&2
 		failures=$((failures + 1))
@@ -724,9 +770,11 @@ pkg/a CreatePtr Recv'
 
 	# The type index: one row per exported type a method can be declared on,
 	# whether or not it has any exported method left. Plain and generic
-	# declarations count; an alias (its methods are another type's), an
-	# interface (its methods are not `func` declarations the symbol index could
-	# hold) and an unexported type do not.
+	# declarations count, in a grouped `type ( ... )` block too, and so does a
+	# type-parameter list that holds a bracket or spans lines; an alias (its
+	# methods are another type's), an interface (its methods are not `func`
+	# declarations the symbol index could hold), an unexported type and a type
+	# written inside a comment do not.
 	cat >"$d/idx/pkg/a/types.go" <<-'EOF'
 		package a
 
@@ -742,14 +790,50 @@ pkg/a CreatePtr Recv'
 			CreateX()
 		}
 		type hidden struct{}
+
+		type (
+			Grouped      struct{}
+			GroupedAlias = Recv
+			GroupedIface interface{ CreateX() }
+		)
+
+		type Slice[T ~[]E, E any] struct{}
+
+		type Multi[
+			K comparable,
+			V any,
+		] struct{}
+
+		/*
+		type CommentGhost struct{}
+		*/
 	EOF
 	local want_types='pkg/a Bare
 pkg/a Gen
+pkg/a Grouped
+pkg/a Multi
 pkg/a Named
-pkg/a Recv'
-	got=$(printf '%s\0' "$d/idx/pkg/a/types.go" | scan_types | type_rows | sed "s#^$d/idx/##" | LC_ALL=C sort)
+pkg/a Recv
+pkg/a Slice'
+	got=$(printf '%s\0' "$d/idx/pkg/a/types.go" | index_types | sed "s#^$d/idx/##" | LC_ALL=C sort)
 	if [ "$got" != "$want_types" ]; then
 		printf 'self-test: type index mismatch\nwant:\n%s\ngot:\n%s\n' "$want_types" "$got" >&2
+		failures=$((failures + 1))
+	fi
+
+	# A file that does not parse fails the index rather than contributing
+	# nothing: a thinner index is a greener check.
+	cat >"$d/idx/pkg/a/broken.go" <<-'EOF'
+		package a
+
+		func CreateBroken( {
+	EOF
+	if printf '%s\0' "$d/idx/pkg/a/broken.go" | index_symbols >/dev/null 2>&1; then
+		printf 'self-test: an unparseable Go file did not fail the symbol index\n' >&2
+		failures=$((failures + 1))
+	fi
+	if printf '%s\0' "$d/idx/pkg/a/broken.go" | index_types >/dev/null 2>&1; then
+		printf 'self-test: an unparseable Go file did not fail the type index\n' >&2
 		failures=$((failures + 1))
 	fi
 
@@ -1159,121 +1243,80 @@ list_page_candidates() {
 	find examples -name '*.go' ! -name '*_test.go' -type f || return
 }
 
-# Exported functions and methods declared in the public tree, each paired with
-# the package directory that declares it. Test files do not count: a symbol that
-# only exists in a _test.go file is not importable, and no page may cite one.
-# Neither does anything under an internal/ directory, for the same reason one
-# step further out -- pkg/kubernetes/internal is closed to consumers, so a
-# declaration there must never be what makes a public page resolve. It holds no
-# builder-shaped name today; the exclusion is what keeps that from mattering.
+# The declaration index is built by parsing Go, not by matching its text:
+# scripts/docapiindex walks each file's syntax tree with go/parser, so a
+# `func Create...` line inside a block comment or a raw string is not a
+# declaration, and a declaration in a grouped `const`/`var`/`type` block, a
+# parenthesised receiver or a type-parameter list holding a bracket is read the
+# same as any other. A text match got every one of those wrong, and the
+# direction mattered: a ghost row from a comment is a false negative in the
+# check, since a page naming it resolves after the real function is deleted.
 #
-# -H is not optional. Without it grep omits the file name whenever xargs hands it
-# a single path, which happens for the last batch of a long list -- the rows would
-# then lose the package half of the pair for an arbitrary tail of the tree.
-#
-# scan_symbols exists to tolerate one status and only one. A batch holding no
-# file with an exported declaration makes grep exit 1, which xargs reports as
-# 123; under `set -e` with `pipefail` that would end the run right here, before
-# the emptiness guard below could say why. It is latent rather than live -- the
-# list is one batch at this tree's size -- but the failure it would produce is a
-# bare exit status with no message, so it is worth closing while it is cheap.
-# The tolerance cannot be finer than xargs allows: 123 also covers grep exiting
-# 2 on an unreadable file, because xargs collapses every child status in 1-125
-# into it. The guard below is the backstop for a scan that produced nothing, and
-# the resolution step after it for one that produced too little. Every other
-# xargs status -- 1 for its own errors, 126 cannot-run, 127 not-found -- still
-# aborts, which is the difference between this and `|| true`.
-scan_symbols() {
-	xargs -0 grep -HoE '^func (\([^)]*\) )?[A-Z][A-Za-z0-9_]*' || [ "$?" -eq 123 ]
+# The indexer is built once per run into a temporary directory. GOWORK is off
+# unless the caller set it, as scripts/gen-builders.sh does, so a workspace
+# file above the checkout cannot redirect the build. A file that does not
+# parse fails the run with the parser's message rather than dropping out of the
+# index: a silently thinner index is a greener check.
+indexer=
+build_indexer() {
+	if ! command -v go >/dev/null 2>&1; then
+		printf 'check-doc-api-refs: go is required to build the declaration index\n' >&2
+		return 1
+	fi
+	indexer_dir=$(mktemp -d)
+	indexer="$indexer_dir/docapiindex"
+	GOWORK="${GOWORK:-off}" go build -o "$indexer" ./scripts/docapiindex
 }
 
-# One "<package dir> <name> <receiver>" row per scan_symbols line, `-` for a
-# function. The receiver is the bare type name: the parameter name, the `*`
-# and any type-parameter list are dropped, so `(li *LayoutIntegrator)`,
-# `(*Recv)`, `(Recv)` and `(g Gen[K, V])` all reduce to the type. The type is
-# what a page names in `Type.Method`, and keeping it is what lets that form
-# resolve against the type's own methods instead of against every method of
-# that name in the tree. A line the scan produced that this cannot read is an
-# error rather than a dropped row: a silently thinner index is a greener check.
-index_rows() {
-	awk '
-		{
-			i = index($0, ".go:func ")
-			if (i == 0) {
-				print "check-doc-api-refs: unreadable declaration row: " $0 > "/dev/stderr"
-				exit 1
-			}
-			dir = substr($0, 1, i - 1)
-			sub(/\/[^\/]*$/, "", dir)
-			rest = substr($0, i + 9)
-			recv = "-"
-			if (substr(rest, 1, 1) == "(") {
-				j = index(rest, ")")
-				recv = substr(rest, 2, j - 2)
-				rest = substr(rest, j + 2)
-				sub(/^[A-Za-z0-9_]+ /, "", recv)
-				sub(/^\*/, "", recv)
-				sub(/\[.*$/, "", recv)
-			}
-			print dir " " rest " " recv
-		}
-	'
+# One "<package dir> <name> <receiver>" row per exported declaration in the Go
+# files named on stdin (NUL-separated). Functions, consts, vars and types have
+# `-` as receiver; a method has the bare receiver type, with the parameter
+# name, the `*`, any parentheses and any type-parameter list dropped, so
+# `(li *LayoutIntegrator)`, `(*Recv)`, `(Recv)`, `(r (*Recv))` and
+# `(g Gen[K, V])` all reduce to the type. The type is what a page names in
+# `Type.Method`, and keeping it is what lets that form resolve against the
+# type's own methods instead of against every method of that name in the tree.
+# A const, var or type is in the index because a page naming one names live
+# API; which names a page is checked for is decided by extract_refs alone.
+index_symbols() {
+	"$indexer" symbols
 }
 
-# Exported type declarations in the same public tree, for the same xargs
-# tolerance. The receiver column of the symbol index cannot stand in for this:
-# it only knows a type through a method the scan still finds, so a type whose
-# last exported method was moved or removed would drop out of it and a
-# `Type.Method` reference naming that method would fall back to the bare-name
-# rule -- answered by any other type still exporting the name. The match needs
-# a token after the name that is not `=`, which leaves aliases out: an alias's
-# methods are its target's, declared under the target's name. Interfaces are
-# dropped by type_rows: their methods are not `func` declarations, so the
-# symbol index can never answer for them and they stay on the bare-name floor.
-# Only top-level `type Name ...` lines are read; pkg/ has no grouped
-# `type ( ... )` block today, and a type declared in one would fall back to
-# the floor rather than fail a page.
-scan_types() {
-	xargs -0 grep -HoE '^type [A-Z][A-Za-z0-9_]*(\[[^]]*\])? +[^ =]+' || [ "$?" -eq 123 ]
+# One "<package dir> <type>" row per exported type a method can be declared on,
+# in the Go files named on stdin (NUL-separated), whether or not it has any
+# exported method left. The receiver column of the symbol index cannot stand in
+# for this: it only knows a type through a method the index still holds, so a
+# type whose last exported method was moved or removed would drop out of it and
+# a `Type.Method` reference naming that method would fall back to the
+# bare-name rule -- answered by any other type still exporting the name.
+# Aliases are left out, since an alias's methods are its target's, declared
+# under the target's name. So are interfaces: their methods are not `func`
+# declarations, so the symbol index can never answer for them and they stay on
+# the bare-name floor.
+index_types() {
+	"$indexer" types
 }
 
-# One "<package dir> <type>" row per scan_types line that is not an interface.
-# An unreadable line is an error for the reason index_rows gives.
-type_rows() {
-	awk '
-		{
-			i = index($0, ".go:type ")
-			if (i == 0) {
-				print "check-doc-api-refs: unreadable type row: " $0 > "/dev/stderr"
-				exit 1
-			}
-			dir = substr($0, 1, i - 1)
-			sub(/\/[^\/]*$/, "", dir)
-			rest = substr($0, i + 9)
-			name = rest
-			sub(/[[ ].*$/, "", name)
-			kind = rest
-			sub(/^[A-Za-z0-9_]+(\[[^]]*\])? +/, "", kind)
-			if (kind ~ /^interface/) next
-			print dir " " name
-		}
-	'
-}
+build_indexer
 
 if [ "${1:-}" = "--self-test" ]; then
 	self_test
 	exit
 fi
 
+# The public tree. Test files do not count: a symbol that only exists in a
+# _test.go file is not importable, and no page may cite one. Neither does
+# anything under an internal/ directory, for the same reason one step further
+# out -- pkg/kubernetes/internal is closed to consumers, so a declaration there
+# must never be what makes a public page resolve. It holds no builder-shaped
+# name today; the exclusion is what keeps that from mattering.
 go_files=$(find pkg -name '*.go' ! -name '*_test.go' ! -path '*/internal/*' -type f)
 printf '%s\n' "$go_files" | sed 's#/[^/]*$##' | sort -u >"$pkgdirs"
 printf '%s\n' "$go_files" | tr '\n' '\0' |
-	scan_symbols |
-	index_rows |
+	index_symbols |
 	sort -u >"$symbols"
 printf '%s\n' "$go_files" | tr '\n' '\0' |
-	scan_types |
-	type_rows |
+	index_types |
 	sort -u >"$types"
 
 printf '%s\n' "${EXTERNAL[@]}" >"$external"
