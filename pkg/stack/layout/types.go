@@ -80,9 +80,10 @@ const (
 	// FluxSeparate places all Flux Kustomizations in a separate directory.
 	FluxSeparate FluxPlacement = "separate"
 	// FluxIntegratedPerLayout places a Flux Kustomization CR inline for every
-	// layout node, including augmenter-added child layouts. Children are
-	// referenced from the parent kustomization.yaml as kustomization-<child>.yaml
-	// CR files. Finest granularity; use when each child should be reconciled by
+	// layout node, including augmenter-added child layouts. Each child's CR is
+	// hosted in its parent layout and listed there as a resource file; the
+	// parent does not reference the child directory. Finest granularity; use
+	// when each child should be reconciled by
 	// its own Flux Kustomization (e.g. hook-group dependsOn).
 	FluxIntegratedPerLayout FluxPlacement = "integrated"
 	// FluxIntegratedPerBundle places Flux Kustomization CRs inline at bundle/node
@@ -141,11 +142,11 @@ type LayoutRules struct {
 	// Only effective for WalkCluster (not WalkClusterByPackage, which uses
 	// synthetic unnamed wrappers to express package boundaries).
 	//
-	// When the layout participates in Flux integration, the flatten helper
-	// records pathRewrites/nodeAliases on the absorbing layout.
-	// IntegrateWithLayout consults aliases via findLayoutNode and calls
-	// ApplyFlattenPathRewrites before returning, so generated Flux
-	// Kustomization CRs resolve to the post-collapse directory.
+	// The absorbing layout takes over the collapsed layout's origins (the
+	// nodes, bundles and application it rendered), so every Flux
+	// Kustomization and ArgoCD Application generated from the layout names
+	// the post-collapse directory. Nothing is rewritten afterwards: a Flux
+	// CR a caller adds to the walked tree keeps the spec.path it was given.
 	FlattenSingleTier bool
 }
 

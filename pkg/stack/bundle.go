@@ -297,9 +297,8 @@ func (a *Bundle) IsUmbrella() bool {
 }
 
 // InitializeUmbrella walks the umbrella Children subtree and sets each child's
-// runtime parent pointer (via SetParent) so that path-derivation code (e.g.
-// bundlePath) can walk upward from any child. Idempotent and safe to call
-// multiple times.
+// runtime parent pointer (via SetParent) so that code can walk upward from any
+// child (GetParent). Idempotent and safe to call multiple times.
 func (a *Bundle) InitializeUmbrella() {
 	if a == nil {
 		return

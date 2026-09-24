@@ -79,11 +79,6 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		return err
 	}
 
-	listedInResources := make(map[string]struct{}, len(sortedFileNames))
-	for _, f := range sortedFileNames {
-		listedInResources[f] = struct{}{}
-	}
-
 	// Write resource files
 	for _, fileName := range sortedFileNames {
 		objs := fileGroups[fileName]
@@ -119,10 +114,10 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		kustomBuf.WriteString("kind: Kustomization\n")
 		kustomBuf.WriteString("resources:\n")
 
-		if kMode == KustomizationExplicit || len(ml.Children) == 0 {
-			for _, file := range sortedFileNames {
-				kustomBuf.WriteString(fmt.Sprintf("  - %s\n", file))
-			}
+		// Every resource file in explicit mode or for a leaf; see
+		// listedResourceFiles for recursive mode.
+		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
+			kustomBuf.WriteString(fmt.Sprintf("  - %s\n", file))
 		}
 
 		for _, child := range ml.Children {
@@ -144,13 +139,11 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 			if child.ApplicationFileMode == AppFileSingle {
 				kustomBuf.WriteString(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
-				// FluxIntegratedPerLayout: reference Flux Kustomization YAML files.
-				// Always use FilePerResource here — each child must have a
-				// unique filename; FilePerKind would drop child.Name.
-				fluxKustName := nameFn("flux-system", "kustomization", child.Name, FilePerResource)
-				if _, dup := listedInResources[fluxKustName]; !dup {
-					kustomBuf.WriteString(fmt.Sprintf("  - %s\n", fluxKustName))
-				}
+				// FluxIntegratedPerLayout: the child is applied by the Flux
+				// Kustomization the integrator placed in ml.Resources, which
+				// the resource list above already names. Nothing is guessed
+				// from the child's name.
+				continue
 			} else {
 				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {
 					continue

@@ -2,7 +2,6 @@ package fluxcd
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -21,8 +20,6 @@ import (
 // ResourceGenerator implements the workflow.ResourceGenerator interface for Flux.
 // It focuses purely on generating Flux CRDs from stack components.
 type ResourceGenerator struct {
-	// Mode controls how spec.path is generated in Kustomizations
-	Mode layout.KustomizationMode
 	// DefaultInterval is the default reconciliation interval for generated resources
 	DefaultInterval time.Duration
 	// DefaultNamespace is the default namespace for generated Flux resources
@@ -36,20 +33,28 @@ type ResourceGenerator struct {
 }
 
 // NewResourceGenerator creates a FluxCD resource generator seeded with the
-// exported defaults ([DefaultMode], [DefaultInterval], [DefaultNamespace]).
+// exported defaults ([DefaultInterval], [DefaultNamespace]).
 // Assign the fields afterwards to override any of them; nothing else is
 // injected into generated resources.
 func NewResourceGenerator() *ResourceGenerator {
 	return &ResourceGenerator{
-		Mode:             DefaultMode,
 		DefaultInterval:  DefaultInterval,
 		DefaultNamespace: DefaultNamespace,
 	}
 }
 
-// GenerateFromCluster creates Flux Kustomizations and Sources from a cluster definition.
-// It runs stack.ValidateCluster first to fail fast on structural errors
-// (umbrella cycles, disjointness violations, etc.).
+// GenerateFromCluster creates Flux Kustomizations and Sources from a cluster
+// definition. It runs stack.ValidateCluster first to fail fast on structural
+// errors (umbrella cycles, disjointness violations, etc.), then walks the
+// cluster with layout.DefaultLayoutRules and generates from that layout (see
+// GenerateFromLayout).
+//
+// The spec.path values are therefore the directories WalkCluster writes under
+// the default rules: the root node at <root>, its children at <root>/<child>.
+// Callers that write the layout with other rules must generate from the
+// layout they write instead — CreateLayoutWithResources, or GenerateFromLayout
+// on their own WalkCluster result. The walk renders every application and
+// runs every LayoutAugmenter, so their errors surface here.
 func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
 	if c == nil || c.Node == nil {
 		return nil, nil
@@ -57,108 +62,58 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Obje
 	if err := stack.ValidateCluster(c); err != nil {
 		return nil, err
 	}
-	return g.GenerateFromNode(c.Node)
+	ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
+	if err != nil {
+		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
+			fmt.Sprintf("failed to walk the cluster with the default layout rules: %v", err), err)
+	}
+	return g.GenerateFromLayout(ml, c)
 }
 
-// GenerateFromNode creates Flux resources from a node and its children.
-// When a node's bundle is an umbrella (len(Bundle.Children) > 0), the umbrella
-// closure is walked and flattened into the returned slice so flat-list
-// consumers (e.g. separate Flux placement) see every child Kustomization CR.
-func (g *ResourceGenerator) GenerateFromNode(n *stack.Node) ([]client.Object, error) {
-	if n == nil {
+// GenerateFromLayout creates a Kustomization (and, when its SourceRef has a
+// URL, a Source) for every bundle the layout tree root renders, in layout
+// pre-order. root must have been walked from c (layout.WalkCluster):
+// layout.IndexOrigins refuses anything else. Each spec.path is the directory
+// of the layout that renders the bundle (OriginIndex.KustomizationPath),
+// relative to the writer's output root.
+func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
+	if root == nil || c == nil || c.Node == nil {
 		return nil, nil
 	}
-
-	var resources []client.Object
-
-	// Generate resources for this node's bundle
-	if n.Bundle != nil {
-		bundleResources, err := g.GenerateFromBundle(n.Bundle)
-		if err != nil {
-			return nil, errors.ResourceValidationError("Node", n.Name, "bundle",
-				fmt.Sprintf("failed to generate bundle resources: %v", err), err)
-		}
-		resources = append(resources, bundleResources...)
-
-		// Walk umbrella closure so flat-list consumers see descendant CRs.
-		if len(n.Bundle.Children) > 0 {
-			n.Bundle.InitializeUmbrella()
-			closure, err := g.generateUmbrellaClosure(n.Bundle)
-			if err != nil {
-				return nil, errors.ResourceValidationError("Node", n.Name, "umbrella",
-					fmt.Sprintf("failed to generate umbrella closure: %v", err), err)
-			}
-			resources = append(resources, closure...)
-		}
+	ix, err := layout.IndexOrigins(root, c)
+	if err != nil {
+		return nil, err
 	}
-
-	// Generate resources for child nodes
-	for _, child := range n.Children {
-		childResources, err := g.GenerateFromNode(child)
-		if err != nil {
-			return nil, errors.ResourceValidationError("Node", n.Name, "children",
-				fmt.Sprintf("failed to generate child node resources: %v", err), err)
-		}
-		resources = append(resources, childResources...)
-	}
-
-	return resources, nil
-}
-
-// generateUmbrellaClosure walks a bundle's umbrella Children subtree and emits
-// a Kustomization (and, when URL is set, a Source) for every descendant. The
-// parent umbrella itself is NOT emitted here — callers handle it separately
-// via createKustomization / GenerateFromBundle. The walk is depth-first and
-// emits nested umbrella descendants in declaration order.
-func (g *ResourceGenerator) generateUmbrellaClosure(umbrella *stack.Bundle) ([]client.Object, error) {
 	var out []client.Object
-	for _, c := range umbrella.Children {
-		if c == nil {
-			continue
-		}
-		kust, err := g.createKustomization(c)
+	for _, b := range ix.Bundles() {
+		path, err := ix.KustomizationPath(b)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, kust)
-		if c.SourceRef != nil && c.SourceRef.URL != "" {
-			src, err := g.createSource(c.SourceRef, c.Name)
-			if err != nil {
-				return nil, errors.ResourceValidationError("Bundle", c.Name, "source",
-					fmt.Sprintf("failed to create source: %v", err), err)
-			}
-			if src != nil {
-				out = append(out, src)
-			}
+		objs, err := g.GenerateForBundle(b, path)
+		if err != nil {
+			return nil, err
 		}
-		if len(c.Children) > 0 {
-			nested, err := g.generateUmbrellaClosure(c)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, nested...)
-		}
+		out = append(out, objs...)
 	}
 	return out, nil
 }
 
-// GenerateFromBundle creates Flux resources (Kustomization, and optionally a
-// Source) for b itself only. Umbrella Children are NOT recursed — callers that
-// need the closure should use GenerateFromNode, which walks the subtree, or
-// iterate b.Children directly.
-func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object, error) {
+// GenerateForBundle creates the Flux resources for b itself: a Kustomization
+// whose spec.path is path, verbatim, and a Source when b.SourceRef has a URL.
+// Umbrella Children are not recursed. The generator computes no path: take
+// it from the layout that renders b (layout.OriginIndex.KustomizationPath).
+func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]client.Object, error) {
 	if b == nil {
 		return nil, nil
 	}
 
-	// Create the main Kustomization for this bundle
-	kustomization, err := g.createKustomization(b)
+	kustomization, err := g.kustomizationForBundle(b, path)
 	if err != nil {
 		return nil, err
 	}
 	resources := []client.Object{kustomization}
 
-	// Create source if specified
 	if b.SourceRef != nil {
 		source, err := g.createSource(b.SourceRef, b.Name)
 		if err != nil {
@@ -173,13 +128,13 @@ func (g *ResourceGenerator) GenerateFromBundle(b *stack.Bundle) ([]client.Object
 	return resources, nil
 }
 
-// createKustomization creates a Flux Kustomization resource from a bundle.
-// An empty Interval takes g.DefaultInterval and an empty Timeout or
+// kustomizationForBundle creates a Flux Kustomization resource from a bundle,
+// with spec.path set to path. An empty Interval takes g.DefaultInterval and an empty Timeout or
 // RetryInterval leaves the field unset; a non-empty value that does not parse
 // is an error, never a silent fallback. Bundle.Validate reports the same
 // error earlier; checking here as well covers callers that generate without
 // validating first.
-func (g *ResourceGenerator) createKustomization(b *stack.Bundle) (client.Object, error) {
+func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string) (client.Object, error) {
 	interval := g.DefaultInterval
 	if b.Interval != "" {
 		d, err := parseBundleDuration(b, "interval", b.Interval)
@@ -206,7 +161,7 @@ func (g *ResourceGenerator) createKustomization(b *stack.Bundle) (client.Object,
 		},
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: interval},
-			Path:     g.generatePath(b),
+			Path:     path,
 			Prune:    pruneValue(b.Prune),
 			Wait:     waitValue(b.Wait),
 		},
@@ -345,10 +300,11 @@ func parseBundleDuration(b *stack.Bundle, field, value string) (time.Duration, e
 	return d, nil
 }
 
-// createKustomizationForLayout creates a Flux Kustomization CR for a
-// ManifestLayout child in FluxIntegratedPerLayout mode. The CR name equals ml.Name;
-// spec.path is ml.FullRepoPath(); spec.dependsOn is populated from ml.DependsOn.
+// createKustomizationForLayout creates a Flux Kustomization CR named name for a
+// ManifestLayout child in FluxIntegratedPerLayout mode. spec.path is
+// ml.FullRepoPath(); spec.dependsOn is populated from ml.DependsOn.
 func (g *ResourceGenerator) createKustomizationForLayout(
+	name string,
 	ml *layout.ManifestLayout,
 	sourceRef kustv1.CrossNamespaceSourceReference,
 ) client.Object {
@@ -358,7 +314,7 @@ func (g *ResourceGenerator) createKustomizationForLayout(
 			Kind:       "Kustomization",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ml.Name,
+			Name:      name,
 			Namespace: g.DefaultNamespace,
 		},
 		Spec: kustv1.KustomizationSpec{
@@ -411,28 +367,6 @@ func (g *ResourceGenerator) createSource(ref *stack.SourceRef, name string) (cli
 		return nil, errors.NewValidationError("kind", ref.Kind, "SourceRef",
 			[]string{"GitRepository", "OCIRepository"})
 	}
-}
-
-// generatePath generates the path for a Kustomization based on the bundle hierarchy.
-// This replicates the logic from the original bundlePath function to maintain compatibility.
-func (g *ResourceGenerator) generatePath(b *stack.Bundle) string {
-	path := g.bundlePath(b)
-	if g.Mode == layout.KustomizationRecursive && b.GetParent() != nil {
-		path = g.bundlePath(b.GetParent())
-	}
-	return path
-}
-
-// bundlePath builds a repository path for the bundle based on its ancestry.
-// This is copied from the original implementation to maintain compatibility.
-func (g *ResourceGenerator) bundlePath(b *stack.Bundle) string {
-	var parts []string
-	for p := b; p != nil; p = p.GetParent() {
-		if p.Name != "" {
-			parts = append([]string{p.Name}, parts...)
-		}
-	}
-	return filepath.ToSlash(filepath.Join(parts...))
 }
 
 // GetName returns the name of this resource generator.

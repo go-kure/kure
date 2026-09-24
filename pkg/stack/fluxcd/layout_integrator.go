@@ -2,6 +2,9 @@ package fluxcd
 
 import (
 	"fmt"
+	"reflect"
+	"slices"
+	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,44 +34,38 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 	}
 }
 
-// IntegrateWithLayout adds Flux resources to an existing manifest layout.
+// IntegrateWithLayout adds Flux resources to a manifest layout that
+// layout.WalkCluster built from c.
 //
 // Placement is driven by rules.FluxPlacement. FluxUnset is treated as
-// FluxSeparate to match DefaultLayoutRules and the walker's normalization
-// in pkg/stack/layout/walker.go:42-44.
+// FluxSeparate to match DefaultLayoutRules and the walker's normalization.
 //
-// If the layout was post-processed by FlattenSingleTier (recorded as
-// flattenInfo on the absorbing layouts), this method consults nodeAliases
-// during integrated placement (see findLayoutNode) and rewrites Flux
-// Kustomization Spec.Path values via layout.ApplyFlattenPathRewrites before
-// returning, regardless of placement mode.
+// Every placement first indexes the layout's origins (layout.IndexOrigins): a
+// hand-built, partial or other-cluster tree is refused rather than matched by
+// name, and every Kustomization's spec.path is the directory of the layout
+// that renders its bundle. Integrating the same layout again adds nothing: a
+// CR already present with the same name and spec.path is kept, one with the
+// same name and another path is an error.
 func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
-	if ml == nil || c == nil {
+	if ml == nil || c == nil || c.Node == nil {
 		return nil
 	}
 
 	rules = normalizeRulesPlacement(rules)
 
-	var err error
 	switch rules.FluxPlacement {
 	case layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle:
-		// Both place Flux CRs inline. They differ only in granularity, handled
-		// inside addIntegratedFluxToLayout: PerLayout emits a CR for every
-		// layout node (incl. augmenter-added child layouts); PerBundle stops at
-		// bundle/node boundaries and lets kustomize include child directories.
-		err = li.addIntegratedFluxToLayout(ml, c, rules)
+		// Both place Flux CRs inline. They differ only in granularity:
+		// PerLayout emits a CR for every layout node (incl. augmenter-added
+		// child layouts); PerBundle stops at bundle boundaries and lets
+		// kustomize include child directories.
+		return li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
 	case layout.FluxSeparate:
-		err = li.addSeparateFluxToLayout(ml, c, rules)
+		return li.addSeparateFluxToLayout(ml, c)
 	default:
 		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
 			[]string{string(layout.FluxIntegratedPerLayout), string(layout.FluxIntegratedPerBundle), string(layout.FluxSeparate)})
 	}
-	if err != nil {
-		return err
-	}
-
-	layout.ApplyFlattenPathRewrites(ml)
-	return nil
 }
 
 // CreateLayoutWithResources creates a new layout that includes Flux resources.
@@ -115,311 +112,272 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 	return ml, nil
 }
 
-// addIntegratedFluxToLayout places Flux Kustomizations alongside their target manifests.
-//
-// PerLayout emits a Flux Kustomization CR for every eligible layout child
-// (including augmenter-added sub-layouts), so the writer references each child
-// as a CR file. PerBundle emits CRs only at bundle/node boundaries
-// (GenerateFromBundle + umbrella bundle children); non-bundle layout children
-// get no CR and the writer references them as directories — a single kustomize
-// build per bundle.
-func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
-	emitPerChildCRs := rules.FluxPlacement == layout.FluxIntegratedPerLayout
-	return li.processNodeForIntegratedFlux(ml, c.Node, c.Name, emitPerChildCRs)
+// integratedPlacement is one pass of inline placement over a walked layout.
+type integratedPlacement struct {
+	gen       *ResourceGenerator
+	ix        *layout.OriginIndex
+	perLayout bool
+	// nodeOf maps a node bundle to its node (umbrella children have none).
+	nodeOf map[*stack.Bundle]*stack.Node
+	// names maps every Kustomization name this pass emitted to its
+	// spec.path: Flux Kustomizations share one namespace, so a name is an
+	// identity.
+	names map[string]string
 }
 
-// processNodeForIntegratedFlux recursively processes nodes to add integrated Flux resources.
-// The root parameter is always the top-level layout so that path-based lookups
-// resolve against the full tree (node paths are absolute).
-func (li *LayoutIntegrator) processNodeForIntegratedFlux(root *layout.ManifestLayout, node *stack.Node, clusterName string, emitPerChildCRs bool) error {
-	// Find the corresponding layout node
-	layoutNode := li.findLayoutNode(root, node)
-	if layoutNode == nil {
-		return errors.ResourceValidationError("Node", node.Name, "layout",
-			"corresponding layout node not found", nil)
+// sourceScope is the SourceRef a layout's subtree sources its layout CRs
+// from: that of the nearest layout (itself or an ancestor) rendering bundles.
+type sourceScope struct {
+	ref kustv1.CrossNamespaceSourceReference
+	// mixedAt is the layout whose bundles have different SourceRefs, which
+	// therefore cannot source a layout CR.
+	mixedAt string
+}
+
+// addIntegratedFluxToLayout places Flux Kustomizations alongside their target
+// manifests in one walk over the layout tree.
+//
+// Each bundle's CR (and Source) is generated with spec.path = the directory of
+// the layout that renders it. Host: under PerLayout the parent of that layout
+// (the root hosts its own), the same rule as every other PerLayout child CR;
+// under PerBundle the node's layout for a node bundle and the enclosing parent
+// for an umbrella child.
+//
+// PerLayout also gives every child layout that is not an umbrella child, not
+// AppFileSingle and renders no bundle (application, augmenter and bundle-less
+// node layouts) a CR in its parent, so the writer lists every child of a
+// PerLayout layout as a CR file. A bundle-less node layout's CR is named
+// <path with "/" replaced by "-">-node: with ClusterName "." node web's path is
+// "web", which is also the name of its bundle's CR.
+func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, perLayout bool) error {
+	ix, err := layout.IndexOrigins(ml, c)
+	if err != nil {
+		return err
+	}
+	p := &integratedPlacement{
+		gen:       li.Generator,
+		ix:        ix,
+		perLayout: perLayout,
+		nodeOf:    map[*stack.Bundle]*stack.Node{},
+		names:     map[string]string{},
+	}
+	var index func(n *stack.Node)
+	index = func(n *stack.Node) {
+		if n == nil {
+			return
+		}
+		if n.Bundle != nil {
+			p.nodeOf[n.Bundle] = n
+		}
+		for _, ch := range n.Children {
+			index(ch)
+		}
+	}
+	index(c.Node)
+	return p.place(ml, sourceScope{})
+}
+
+func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceScope) error {
+	scope := inherited
+	bundles := l.OriginBundles()
+	if len(bundles) > 0 {
+		scope = sourceScope{ref: sourceRefOf(bundles[0])}
+		for _, b := range bundles[1:] {
+			if sourceRefOf(b) != scope.ref {
+				scope.mixedAt = l.FullRepoPath()
+			}
+		}
 	}
 
-	// Generate Flux resources for this node
-	if node.Bundle != nil {
-		fluxResources, err := li.Generator.GenerateFromBundle(node.Bundle)
+	for _, b := range bundles {
+		path, err := p.ix.KustomizationPath(b)
 		if err != nil {
-			return errors.ResourceValidationError("Node", node.Name, "flux-resources",
+			return err
+		}
+		objs, err := p.gen.GenerateForBundle(b, path)
+		if err != nil {
+			return errors.ResourceValidationError("Bundle", b.Name, "flux-resources",
 				fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 		}
-
-		// Add Flux resources to the layout node
-		layoutNode.Resources = append(layoutNode.Resources, fluxResources...)
-
-		// For umbrella bundles, place child Flux Kustomization CRs at the
-		// immediate enclosing parent layout directory (not in child subdirs).
-		if len(node.Bundle.Children) > 0 {
-			// In non-nodeOnly layouts, the walker creates an intermediate
-			// bundle layout under the node layout. Umbrella children live
-			// there. In nodeOnly layouts the umbrella children sit directly
-			// under the node layout, so the node layout IS the parent.
-			parentForChildren := layoutNode
-			if bl := findBundleLayout(layoutNode, node.Bundle.Name); bl != nil {
-				parentForChildren = bl
-			}
-			if err := li.placeUmbrellaChildrenFlux(parentForChildren, node.Bundle, emitPerChildCRs); err != nil {
-				return errors.ResourceValidationError("Node", node.Name, "umbrella",
-					fmt.Sprintf("failed to place umbrella child Flux resources: %v", err), err)
-			}
+		if err := p.add(p.host(l, b), objs); err != nil {
+			return err
 		}
 	}
 
-	// In FluxIntegratedPerLayout mode, emit Kustomization CRs for all eligible direct
-	// children of layoutNode and recurse into their subtrees.
-	//
-	// "Eligible" mirrors the writer condition: !UmbrellaChild &&
-	// ApplicationFileMode != AppFileSingle. Stack-node children are skipped
-	// because processNodeForIntegratedFlux handles them recursively below.
-	//
-	// This covers two cases with the same code:
-	//   (a) Flat/nodeOnly: app layouts are direct children of the node layout;
-	//       writers reference each as flux-system-kustomization-{name}.yaml
-	//       from the node kustomization.yaml, so a CR is required at that level.
-	//   (b) Augmenter sub-layouts: hook-group children of app layouts;
-	//       generateChildFluxCRs recurses and places those CRs in the app
-	//       layout's Resources.
-	//
-	// Skipped entirely in FluxIntegratedPerBundle mode: there, a bundle's
-	// interior is a single kustomize build and the writer references children as
-	// directories, so no per-child CRs are emitted.
-	if emitPerChildCRs && node.Bundle != nil {
-		var eligibleChildren []*layout.ManifestLayout
-		for _, child := range layoutNode.Children {
-			if child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle {
+	if p.perLayout {
+		for _, child := range l.Children {
+			if child == nil || child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle || len(child.OriginBundles()) > 0 {
 				continue
 			}
-			if li.isStackNodeChild(child.Name, node) {
-				continue
-			}
-			eligibleChildren = append(eligibleChildren, child)
-		}
-
-		if len(eligibleChildren) > 0 {
-			// Determine which eligible children need a NEW CR (not already placed
-			// by GenerateFromBundle, e.g. umbrella bundle layouts already have one).
-			var newCRChildren []*layout.ManifestLayout
-			for _, child := range eligibleChildren {
-				if !li.hasKustomizationCR(layoutNode.Resources, child.Name) {
-					newCRChildren = append(newCRChildren, child)
-				}
-			}
-
-			// Resolve sourceRef once; used for both new CRs and recursion.
-			var sr kustv1.CrossNamespaceSourceReference
-			if node.Bundle.SourceRef != nil &&
-				node.Bundle.SourceRef.Kind != "" &&
-				node.Bundle.SourceRef.Name != "" {
-				sr = kustv1.CrossNamespaceSourceReference{
-					Kind:      node.Bundle.SourceRef.Kind,
-					Name:      node.Bundle.SourceRef.Name,
-					Namespace: node.Bundle.SourceRef.Namespace,
-				}
-			}
-
-			// A new CR without spec.sourceRef is invalid — fail fast.
-			// Children that already have CRs (e.g. umbrella bundle layouts) are
-			// exempt from this check; they were placed by GenerateFromBundle which
-			// handles absent SourceRef separately. Descendant children are validated
-			// inside generateChildFluxCRs as it recurses.
-			if len(newCRChildren) > 0 && sr.Kind == "" {
-				return errors.ResourceValidationError(
-					"Bundle", node.Bundle.Name, "sourceRef",
-					"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name on bundles "+
-						"whose layout has eligible children without existing Kustomization CRs; "+
-						"omitting it produces invalid Flux Kustomization CRs",
-					nil,
-				)
-			}
-
-			// Emit direct-child CRs and recurse into all eligible children.
-			// Recursion is unconditional: even when sr is empty (all direct children
-			// already have CRs), grandchildren may need new CRs — generateChildFluxCRs
-			// will error if it encounters one that needs a CR but sr is invalid.
-			for _, child := range eligibleChildren {
-				if !li.hasKustomizationCR(layoutNode.Resources, child.Name) {
-					// sr.Kind is guaranteed non-empty here (checked above).
-					layoutNode.Resources = append(layoutNode.Resources,
-						li.Generator.createKustomizationForLayout(child, sr))
-				}
-				if err := li.generateChildFluxCRs(child, sr); err != nil {
+			name := layoutCRName(child)
+			if k := findKustomization(l.Resources, name); k != nil && k.Spec.Path == child.FullRepoPath() {
+				// Placed by an earlier integration: kept as is, so its
+				// source need not be resolved again.
+				if err := p.claim(name, k.Spec.Path); err != nil {
 					return err
 				}
+				continue
 			}
-		}
-	}
-
-	// Process child nodes — always search from root for path-based matching
-	for _, child := range node.Children {
-		if err := li.processNodeForIntegratedFlux(root, child, clusterName, emitPerChildCRs); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// isStackNodeChild returns true when name matches a direct child stack.Node of
-// node. Used to skip ManifestLayout.Children that correspond to child nodes
-// already processed by the recursive processNodeForIntegratedFlux call.
-func (li *LayoutIntegrator) isStackNodeChild(name string, node *stack.Node) bool {
-	for _, child := range node.Children {
-		if child.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-// hasKustomizationCR returns true when resources already contains a
-// *kustv1.Kustomization with the given name.
-func (li *LayoutIntegrator) hasKustomizationCR(resources []client.Object, name string) bool {
-	for _, r := range resources {
-		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-// generateChildFluxCRs places a Kustomization CR in parent.Resources for each
-// eligible child of parent, then recurses. A child is eligible when:
-//   - !child.UmbrellaChild
-//   - child.ApplicationFileMode != layout.AppFileSingle
-//
-// These conditions match exactly what the writers use to emit
-// flux-system-kustomization-{child.Name}.yaml from the parent kustomization.yaml,
-// ensuring every reference the writers produce has a backing CR.
-func (li *LayoutIntegrator) generateChildFluxCRs(
-	parent *layout.ManifestLayout,
-	sourceRef kustv1.CrossNamespaceSourceReference,
-) error {
-	for _, child := range parent.Children {
-		if child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle {
-			continue
-		}
-		if !li.hasKustomizationCR(parent.Resources, child.Name) {
-			if sourceRef.Kind == "" {
-				return errors.ResourceValidationError(
-					"ManifestLayout", child.Name, "sourceRef",
-					"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
-						"this descendant layout needs a Kustomization CR but the "+
-						"ancestor bundle has no valid SourceRef",
-					nil,
-				)
-			}
-			parent.Resources = append(parent.Resources,
-				li.Generator.createKustomizationForLayout(child, sourceRef))
-		}
-		if err := li.generateChildFluxCRs(child, sourceRef); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// placeUmbrellaChildrenFlux walks a bundle's umbrella Children subtree and
-// places each child's Flux Kustomization CR (and Source CR if the child's
-// SourceRef has a URL) at the PARENT layout node. Nested umbrella
-// grandchildren are placed at their immediate enclosing umbrella child's
-// layout node, which the walker has already marked with UmbrellaChild=true.
-func (li *LayoutIntegrator) placeUmbrellaChildrenFlux(parentLayout *layout.ManifestLayout, umbrella *stack.Bundle, emitPerChildCRs bool) error {
-	umbrella.InitializeUmbrella()
-	for _, child := range umbrella.Children {
-		if child == nil {
-			continue
-		}
-		childKust, err := li.Generator.createKustomization(child)
-		if err != nil {
-			return err
-		}
-		parentLayout.Resources = append(parentLayout.Resources, childKust)
-
-		if child.SourceRef != nil && child.SourceRef.URL != "" {
-			src, err := li.Generator.createSource(child.SourceRef, child.Name)
+			ref, err := p.layoutSource(child, scope)
 			if err != nil {
-				return errors.ResourceValidationError("Bundle", child.Name, "source",
-					fmt.Sprintf("failed to create source: %v", err), err)
+				return err
 			}
-			if src != nil {
-				parentLayout.Resources = append(parentLayout.Resources, src)
-			}
-		}
-
-		childLayoutNode := findUmbrellaChildLayout(parentLayout, child.Name)
-
-		if len(child.Children) > 0 {
-			if childLayoutNode == nil {
-				return errors.ResourceValidationError("Bundle", child.Name, "umbrella",
-					"nested umbrella child layout not found", nil)
-			}
-			if err := li.placeUmbrellaChildrenFlux(childLayoutNode, child, emitPerChildCRs); err != nil {
+			cr := p.gen.createKustomizationForLayout(name, child, ref)
+			if err := p.add(l, []client.Object{cr}); err != nil {
 				return err
 			}
 		}
+	}
 
-		// Emit CRs for augmenter-added non-umbrella layout children of this
-		// umbrella child layout. placeUmbrellaChildrenFlux only walks the
-		// bundle model; layout children injected by external augmenters are
-		// invisible to it. Use the child bundle's own
-		// SourceRef so that each CR points to the correct source, not the
-		// parent umbrella's source.
-		//
-		// Skipped in FluxIntegratedPerBundle mode: there the umbrella child's
-		// interior is a single kustomize build and the writer references those
-		// augmenter sub-layouts as directories, so emitting per-child CRs here
-		// would duplicate reconciliation (a CR file ref plus a directory ref).
-		if emitPerChildCRs && childLayoutNode != nil {
-			var childSR kustv1.CrossNamespaceSourceReference
-			if child.SourceRef != nil && child.SourceRef.Kind != "" && child.SourceRef.Name != "" {
-				childSR = kustv1.CrossNamespaceSourceReference{
-					Kind:      child.SourceRef.Kind,
-					Name:      child.SourceRef.Name,
-					Namespace: child.SourceRef.Namespace,
+	for _, child := range l.Children {
+		if child == nil {
+			continue
+		}
+		if err := p.place(child, scope); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// host returns the layout whose Resources receive the CR of bundle b, which
+// layout l renders.
+func (p *integratedPlacement) host(l *layout.ManifestLayout, b *stack.Bundle) *layout.ManifestLayout {
+	if !p.perLayout {
+		if n, ok := p.nodeOf[b]; ok {
+			return p.ix.NodeLayout(n)
+		}
+	}
+	if parent := p.ix.Parent(l); parent != nil {
+		return parent
+	}
+	return l
+}
+
+// layoutSource returns the SourceRef of child's layout CR: the scope's (the
+// nearest bundle-rendering layout at or above the host), else the one
+// SourceRef the URL-less bundles below child share.
+func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
+	if scope.mixedAt != "" {
+		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
+			fmt.Sprintf("layout %q renders bundles with different SourceRefs, so it cannot source the Flux Kustomization of its child layout %q", scope.mixedAt, child.FullRepoPath()), nil)
+	}
+	if scope.ref.Kind != "" && scope.ref.Name != "" {
+		return scope.ref, nil
+	}
+	var refs []kustv1.CrossNamespaceSourceReference
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		for _, b := range l.OriginBundles() {
+			if b.SourceRef == nil || b.SourceRef.URL != "" {
+				continue
+			}
+			ref := sourceRefOf(b)
+			if ref.Kind != "" && ref.Name != "" && !slices.Contains(refs, ref) {
+				refs = append(refs, ref)
+			}
+		}
+		for _, c := range l.Children {
+			if c != nil {
+				walk(c)
+			}
+		}
+	}
+	walk(child)
+	switch len(refs) {
+	case 1:
+		return refs[0], nil
+	case 0:
+		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
+			"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
+				fmt.Sprintf("layout %q needs a Kustomization CR but no enclosing bundle and no bundle below it has one", child.FullRepoPath()), nil)
+	default:
+		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
+			fmt.Sprintf("layout %q has no enclosing bundle and the bundles below it have different SourceRefs, so its Flux Kustomization has no single source", child.FullRepoPath()), nil)
+	}
+}
+
+// add appends objs to host.Resources. A Kustomization whose name this pass
+// already emitted is an identity collision; one already present in host with
+// the same spec.path is kept (a repeated integration adds nothing), with
+// another spec.path it is an error. A Source already present is kept.
+func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object) error {
+	for _, obj := range objs {
+		if k, ok := obj.(*kustv1.Kustomization); ok {
+			if err := p.claim(k.Name, k.Spec.Path); err != nil {
+				return err
+			}
+			if existing := findKustomization(host.Resources, k.Name); existing != nil {
+				if existing.Spec.Path == k.Spec.Path {
+					continue
 				}
+				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q; this integration derives %q", host.FullRepoPath(), k.Name, existing.Spec.Path, k.Spec.Path)
 			}
-			if err := li.generateChildFluxCRs(childLayoutNode, childSR); err != nil {
-				return errors.ResourceValidationError("Bundle", child.Name, "umbrella",
-					fmt.Sprintf("failed to generate child Flux CRs for augmenter sub-layouts under %q: %v",
-						child.Name, err), err)
-			}
+		} else if hasObject(host.Resources, obj) {
+			continue
+		}
+		host.Resources = append(host.Resources, obj)
+	}
+	return nil
+}
+
+// claim records that this pass emits a Kustomization named name: a second
+// claim of one name is a CR identity collision.
+func (p *integratedPlacement) claim(name, path string) error {
+	if prev, dup := p.names[name]; dup {
+		return errors.Errorf("Flux Kustomization name %q is used twice (spec.path %q and %q): Kustomization names must be unique", name, prev, path)
+	}
+	p.names[name] = path
+	return nil
+}
+
+// layoutCRName names the PerLayout CR of a child layout that renders no
+// bundle: a node layout gets "<path with / replaced by ->-node" (see
+// addIntegratedFluxToLayout), any other layout its Name.
+func layoutCRName(l *layout.ManifestLayout) string {
+	if len(l.OriginNodes()) > 0 {
+		return strings.ReplaceAll(l.FullRepoPath(), "/", "-") + "-node"
+	}
+	return l.Name
+}
+
+func sourceRefOf(b *stack.Bundle) kustv1.CrossNamespaceSourceReference {
+	if b.SourceRef == nil {
+		return kustv1.CrossNamespaceSourceReference{}
+	}
+	return kustv1.CrossNamespaceSourceReference{
+		Kind:      b.SourceRef.Kind,
+		Name:      b.SourceRef.Name,
+		Namespace: b.SourceRef.Namespace,
+	}
+}
+
+func findKustomization(resources []client.Object, name string) *kustv1.Kustomization {
+	for _, r := range resources {
+		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == name {
+			return k
 		}
 	}
 	return nil
 }
 
-// findBundleLayout returns the direct child layout named after the given
-// bundle, if any. In non-nodeOnly layouts, the walker inserts an intermediate
-// bundle layout between the node layout and its application/umbrella-child
-// layouts — this helper locates it so umbrella children can be placed there.
-func findBundleLayout(parent *layout.ManifestLayout, bundleName string) *layout.ManifestLayout {
-	for _, c := range parent.Children {
-		if c.Name == bundleName && !c.UmbrellaChild {
-			return c
+func hasObject(resources []client.Object, obj client.Object) bool {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	for _, r := range resources {
+		if r.GetObjectKind().GroupVersionKind() == gvk && r.GetNamespace() == obj.GetNamespace() && r.GetName() == obj.GetName() {
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
-// findUmbrellaChildLayout returns the direct umbrella-child sub-layout with
-// the given name. Per-level lookup is sufficient because
-// placeUmbrellaChildrenFlux recurses into nested umbrellas explicitly.
-func findUmbrellaChildLayout(parent *layout.ManifestLayout, name string) *layout.ManifestLayout {
-	for _, c := range parent.Children {
-		if c.UmbrellaChild && c.Name == name {
-			return c
-		}
-	}
-	return nil
-}
-
-// addSeparateFluxToLayout creates a separate flux-system directory for Flux resources.
-func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
-	// Generate all Flux resources for the cluster
-	fluxResources, err := li.Generator.GenerateFromCluster(c)
+// addSeparateFluxToLayout creates a separate flux-system directory for Flux
+// resources, generated from the layout itself (GenerateFromLayout) so every
+// spec.path is a directory this layout writes. A flux-system child left by an
+// earlier integration is kept when it holds the same resources and is an
+// error when it does not.
+func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster) error {
+	fluxResources, err := li.Generator.GenerateFromLayout(ml, c)
 	if err != nil {
 		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
 			fmt.Sprintf("failed to generate Flux resources: %v", err), err)
@@ -429,18 +387,25 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		return nil
 	}
 
+	for _, child := range ml.Children {
+		if child == nil || child.Name != DefaultFluxDirName || child.OriginApplication() != nil ||
+			len(child.OriginNodes()) > 0 || len(child.OriginBundles()) > 0 {
+			continue
+		}
+		if reflect.DeepEqual(child.Resources, fluxResources) {
+			return nil
+		}
+		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
+	}
+
 	// Create a separate Flux layout. The directory name is
 	// [DefaultFluxDirName]; the file granularity is whatever
-	// layout.DefaultLayoutRules declares rather than a second copy of it
-	// (pkg/stack/layout/types.go:154-163).
+	// layout.DefaultLayoutRules declares rather than a second copy of it.
 	//
-	// Mode is deliberately left unset rather than seeded with [DefaultMode].
-	// It cannot affect this layout: the writer treats KustomizationUnset as
-	// KustomizationExplicit (pkg/stack/layout/manifest.go:324-326), and this
-	// layout never gains children, so the branch that mode selects lists the
-	// resource files either way (manifest.go:352). Seeding it here would have
-	// made DefaultMode look overrideable via ResourceGenerator.Mode at a site
-	// that never consults that field.
+	// Mode is left unset: the writer treats KustomizationUnset as
+	// KustomizationExplicit, and this layout never gains children, so the
+	// resource files are listed either way.
+	//
 	// Namespace is ml's own directory: ml's kustomization.yaml references
 	// this layout as a child, so it must sit below ml. Joined onto
 	// ml.Namespace instead, it landed beside ml when ml had a Name, and the
@@ -452,47 +417,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		Resources: fluxResources,
 	}
 
-	// Add to the main layout
 	ml.Children = append(ml.Children, fluxLayout)
-
-	return nil
-}
-
-// findLayoutNode finds the layout node corresponding to a stack node using path-based matching.
-// It computes the layout's full path and compares against the node's path to avoid
-// ambiguity when nodes at different hierarchy levels share the same name.
-// When path-based search misses (because FlattenSingleTier collapsed the
-// target's layout into an ancestor), it falls back to the flattenInfo alias
-// recorded on the absorbing layout.
-func (li *LayoutIntegrator) findLayoutNode(ml *layout.ManifestLayout, node *stack.Node) *layout.ManifestLayout {
-	targetPath := node.GetPath()
-	if found := li.findLayoutNodeByPath(ml, targetPath, ""); found != nil {
-		return found
-	}
-	return layout.FindByNodeAlias(ml, targetPath)
-}
-
-// findLayoutNodeByPath recursively searches the layout tree for a node whose
-// accumulated path matches the target path.
-func (li *LayoutIntegrator) findLayoutNodeByPath(ml *layout.ManifestLayout, targetPath string, parentPath string) *layout.ManifestLayout {
-	// Build the current layout node's path
-	currentPath := ml.Name
-	if parentPath != "" && ml.Name != "" {
-		currentPath = parentPath + "/" + ml.Name
-	} else if parentPath != "" {
-		currentPath = parentPath
-	}
-
-	if currentPath == targetPath {
-		return ml
-	}
-
-	// Search in children
-	for _, child := range ml.Children {
-		if found := li.findLayoutNodeByPath(child, targetPath, currentPath); found != nil {
-			return found
-		}
-	}
 
 	return nil
 }
