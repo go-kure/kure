@@ -1204,3 +1204,36 @@ func TestEmptyApplicationDirectoriesBuild(t *testing.T) {
 		})
 	}
 }
+
+// TestIntegrateWithLayout_DefaultNamespaceIdentity pins that a Kustomization
+// with no namespace and the same one in "default" are one CR identity to the
+// integrator, as they are to Kubernetes and to the writers: with the
+// generator's DefaultNamespace set to "default", integrating again over CRs
+// whose namespace was left out adds no duplicate. (Under FluxSeparate the
+// existing flux-system child is compared by content, so an edited CR there is
+// refused instead, as TestFluxSeparate_RejectsExistingCRCollision pins.)
+func TestIntegrateWithLayout_DefaultNamespaceIdentity(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			gen := fluxstack.NewResourceGenerator()
+			gen.DefaultNamespace = "default"
+			c := propertyShapes["different-name"]()
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			ml, err := fluxstack.NewLayoutIntegrator(gen).CreateLayoutWithResources(c, rules)
+			if err != nil {
+				t.Fatalf("CreateLayoutWithResources: %v", err)
+			}
+			before := len(kustomizations(ml))
+			for _, k := range kustomizations(ml) {
+				k.SetNamespace("")
+			}
+			if err := fluxstack.NewLayoutIntegrator(gen).IntegrateWithLayout(ml, c, rules); err != nil {
+				t.Fatalf("second IntegrateWithLayout: %v", err)
+			}
+			if after := len(kustomizations(ml)); after != before {
+				t.Errorf("CR count %d -> %d: a CR without a namespace was not recognised as the one in \"default\"", before, after)
+			}
+		})
+	}
+}

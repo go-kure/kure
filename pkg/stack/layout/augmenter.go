@@ -299,15 +299,11 @@ func tarOutDir(basePath string) outDirFunc {
 	}
 }
 
-// manifestOutDir is WriteManifest's outDirFunc: an unset application mode
-// takes cfg's, and every directory sits under cfg.ManifestsDir.
+// manifestOutDir is WriteManifest's outDirFunc: the application mode is
+// manifestAppMode's, and every directory sits under cfg.ManifestsDir.
 func manifestOutDir(basePath string, cfg Config) outDirFunc {
 	return func(l *ManifestLayout) (string, bool) {
-		mode := l.ApplicationFileMode
-		if mode == AppFileUnset {
-			mode = cfg.ApplicationFileMode
-		}
-		if mode == AppFileSingle {
+		if manifestAppMode(l, cfg) == AppFileSingle {
 			return filepath.Join(basePath, cfg.ManifestsDir, l.Namespace), true
 		}
 		return filepath.Join(basePath, cfg.ManifestsDir, l.FullRepoPath()), false

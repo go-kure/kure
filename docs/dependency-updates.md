@@ -458,6 +458,14 @@ go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 
 `cloudnative-pg`, `barman-cloud`, `machinery`, and `plugin-barman-cloud` are related but versioned independently. Check compatibility notes in `versions.yaml` before upgrading.
 
+### Kustomize (`sigs.k8s.io/kustomize/*`)
+
+`sigs.k8s.io/kustomize/api` and `sigs.k8s.io/kustomize/kyaml` are direct requirements only because
+the `pkg/stack/fluxcd` tests build every written tree with the real kustomize library
+(`krusty`), to prove each Flux `spec.path` names a directory kustomize can build. No package code
+imports them, so they have no runtime or API surface; keep the two on the same version, and treat
+a bump as a test-only change unless a build of the written trees starts failing.
+
 ### Vendored `go-kure/.github` Guard
 
 `.github/workflows/ci.yml`'s `forbidden-terms` job byte-compares a vendored copy,

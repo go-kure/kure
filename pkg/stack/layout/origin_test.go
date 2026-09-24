@@ -1,6 +1,8 @@
 package layout_test
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -441,14 +443,29 @@ func TestIndexOrigins_EdgeRefusals(t *testing.T) {
 	assertIndexError(t, walk(t, twice, nodeOnly), twice, `node "shared" is rendered by two layouts`)
 }
 
-// TestWriteManifest_RefusesAppFileSingleOrigin: a node or bundle layout written
-// as AppFileSingle — its own mode, or Config's for an unset one — would put its
-// files into its Namespace, not the directory its Flux path names.
+// TestWriteManifest_RefusesAppFileSingleOrigin: a node or bundle layout set to
+// AppFileSingle would put its files into its Namespace, not the directory its
+// Flux path names, so it is refused. Config's ApplicationFileMode is the
+// default for application layouts only: under AppFileSingle there (the Argo
+// profile's setting) node and bundle layouts keep their own directories and
+// only application layouts become single files.
 func TestWriteManifest_RefusesAppFileSingleOrigin(t *testing.T) {
 	c := twoTier("platform", "web-bundle")
 	ml := walk(t, c, nodeOnly)
-	if err := layout.WriteManifest(t.TempDir(), layout.Config{ApplicationFileMode: layout.AppFileSingle}, ml); err == nil || !strings.Contains(err.Error(), "AppFileSingle") {
-		t.Errorf("Config AppFileSingle: got %v, want a refusal", err)
+	out := t.TempDir()
+	if err := layout.WriteManifest(out, layout.DefaultConfigForProfile(layout.ArgoProfile), ml); err != nil {
+		t.Fatalf("Argo profile (Config AppFileSingle): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "applications", "platform", "web", "kustomization.yaml")); err != nil {
+		t.Errorf("Argo profile: node layout platform/web not written as a directory: %v", err)
+	}
+	apps := walk(t, twoTier("platform", "web-bundle"), groupByName)
+	out = t.TempDir()
+	if err := layout.WriteManifest(out, layout.DefaultConfigForProfile(layout.ArgoProfile), apps); err != nil {
+		t.Fatalf("Argo profile, per-app layouts: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "applications", "platform", "web", "web-bundle", "frontend.yaml")); err != nil {
+		t.Errorf("Argo profile: application layout frontend not written as a single file: %v", err)
 	}
 	layoutAt(t, ml, "platform/web").ApplicationFileMode = layout.AppFileSingle
 	if err := layout.WriteManifest(t.TempDir(), layout.DefaultLayoutConfig(), ml); err == nil || !strings.Contains(err.Error(), `"platform/web"`) {

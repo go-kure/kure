@@ -393,8 +393,15 @@ func fluxKustomizationPath(obj client.Object) (string, bool) {
 	return "", true
 }
 
-// crKey is a Kustomization's identity: Flux Kustomizations are namespaced.
-func crKey(namespace, name string) string { return namespace + "/" + name }
+// crKey is a Kustomization's identity: Flux Kustomizations are namespaced,
+// and an omitted namespace is "default", as Kubernetes and the writers'
+// identity check read it.
+func crKey(namespace, name string) string {
+	if namespace == "" {
+		namespace = "default"
+	}
+	return namespace + "/" + name
+}
 
 // claim records that this pass emits a Kustomization named name: a second
 // claim of one name is a CR identity collision. The bare name is the key on
