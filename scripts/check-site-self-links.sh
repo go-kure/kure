@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # check-site-self-links.sh — fail when a published page links to the docs site
-# itself with an absolute URL outside the dev slot.
+# itself with an absolute URL, except a dev-slot link from a page also read
+# outside the site.
 #
 #   scripts/check-site-self-links.sh              # exit 1 and list every offending link
 #   scripts/check-site-self-links.sh --self-test  # prove the check can still fail
@@ -20,9 +21,10 @@
 #   - where the page is also read outside the site (CHANGELOG.md on GitHub, and
 #     cliff.toml, which writes CHANGELOG.md), link to the dev slot:
 #     https://www.gokure.dev/kure/dev/concepts/x/.
-# Any other absolute URL under the site base fails, including the base itself
-# and a pinned release slot (/kure/vX.Y/): no published page should depend on a
-# build that newer content never reaches.
+# Any other absolute URL under the site base fails, including the base itself,
+# a pinned release slot (/kure/vX.Y/), and a dev-slot link from any other page,
+# which would send a reader of a stable version into changing docs. Scheme-
+# relative URLs (//www.gokure.dev/kure/...) count as absolute.
 #
 # The site base comes from site/hugo.toml's baseURL, so the check follows the
 # site if it moves. Scheme and host are matched case-insensitively and with or
@@ -37,6 +39,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The pages also read outside the site, where a version-relative link does not
+# resolve: the only ones allowed to link to the dev slot.
+DUAL_USE="CHANGELOG.md cliff.toml"
 MODE=check
 
 while [ $# -gt 0 ]; do
@@ -62,7 +67,7 @@ done
 scan_links() {
 	local base="$1"
 	shift
-	awk -v base="$base" '
+	awk -v base="$base" -v dual_use="$DUAL_USE" '
 	BEGIN {
 		# base is scheme://host/path/ ; split it once.
 		if (!match(base, /^[A-Za-z]+:\/\/[^\/]+/)) {
@@ -74,9 +79,12 @@ scan_links() {
 		sub(/^www\./, "", host)
 		path = substr(base, RLENGTH + 1)          # e.g. /kure/
 		sub(/\/+$/, "", path)                       # e.g. /kure
-		# Any http(s) URL: stop at whitespace and the characters that end a
-		# URL in Markdown, HTML or TOML.
-		url_re = "[Hh][Tt][Tt][Pp][Ss]?://[^][[:space:]()<>\"'"'"'`]+"
+		# Any http(s) or scheme-relative (//host/...) URL: stop at whitespace
+		# and the characters that end a URL in Markdown, HTML or TOML. A bare
+		# "//" also starts code comments; the host test below discards those.
+		url_re = "([Hh][Tt][Tt][Pp][Ss]?:)?//[^][[:space:]()<>\"'"'"'`]+"
+		n = split(dual_use, d, " ")
+		for (i = 1; i <= n; i++) is_dual[d[i]] = 1
 	}
 	{
 		line = $0
@@ -84,7 +92,7 @@ scan_links() {
 			url = substr(line, RSTART, RLENGTH)
 			line = substr(line, RSTART + RLENGTH)
 			rest = url
-			sub(/^[A-Za-z]+:\/\//, "", rest)
+			sub(/^([A-Za-z]+:)?\/\//, "", rest)
 			h = rest; sub(/[\/?#].*$/, "", h)
 			h = tolower(h); sub(/^www\./, "", h)
 			if (h != host) continue
@@ -93,8 +101,10 @@ scan_links() {
 			# by /, ? or #. /kurel/ is another site and passes.
 			if (p != path && index(p, path "/") != 1 && index(p, path "?") != 1 && index(p, path "#") != 1) continue
 			tail = substr(p, length(path) + 1)
-			# The dev slot: base/dev, base/dev/..., base/dev?..., base/dev#...
-			if (tail ~ /^\/dev($|[\/?#])/) continue
+			# The dev slot (base/dev, base/dev/..., base/dev?..., base/dev#...)
+			# is allowed only in the pages also read outside the site; every
+			# other page links version-relatively.
+			if (tail ~ /^\/dev($|[\/?#])/ && (FILENAME in is_dual)) continue
 			printf "%s:%d: %s\n", FILENAME, FNR, url
 		}
 	}' "$@"
@@ -116,12 +126,14 @@ collect_pages() {
 	# `||`, where set -e does not apply, so an unchecked yq or find failure
 	# would shorten the page list instead of stopping the run.
 	# Only packages with a mount: block are published; a `mounted: false`
-	# README is read on GitHub alone and is out of this check's scope.
-	map_pages=$(yq -r '(.packages[] | select(.mount) | .readme), .extra_mounts[].source' "$map") || {
+	# README is read on GitHub alone and is out of this check's scope. yq
+	# drops empty entries and duplicates itself, so there is no second
+	# pipeline whose failure could shorten the list.
+	map_pages=$(yq -r '[(.packages[] | select(.mount) | .readme), .extra_mounts[].source]
+		| map(select(. != null and . != "")) | unique | .[]' "$map") || {
 		printf 'check-site-self-links: yq could not read %s\n' "$map" >&2
 		return 1
 	}
-	map_pages=$(printf '%s\n' "$map_pages" | grep -v -x -e '' -e 'null' | sort -u || true)
 	if [ -z "$map_pages" ]; then
 		printf 'check-site-self-links: %s names no pages -- refusing to check a partial set\n' "$map" >&2
 		return 1
@@ -169,18 +181,18 @@ run_check() {
 		return 1
 	}
 	if [ -n "$offenders" ]; then
-		printf 'check-site-self-links: absolute links to %s outside the dev slot:\n\n' "$base" >&2
+		printf 'check-site-self-links: absolute links to %s:\n\n' "$base" >&2
 		printf '%s\n' "$offenders" | sed 's/^/  /' >&2
 		cat >&2 <<EOF
 
 The release root is rebuilt only when a release is marked latest, so a link
 into it breaks for every page added since. Use a version-relative path
-(/concepts/page/) in site pages, or the dev slot (${base%/}/dev/...) in text
-also read outside the site (CHANGELOG.md, cliff.toml).
+(/concepts/page/). Only ${DUAL_USE// / and }, which are also read outside the
+site, may link to the dev slot (${base%/}/dev/...).
 EOF
 		return 1
 	fi
-	printf 'check-site-self-links: %s pages, no absolute links outside the dev slot.\n' "${#files[@]}"
+	printf 'check-site-self-links: %s pages, no absolute links to the site outside the dual-use dev slot.\n' "${#files[@]}"
 }
 
 self_test() {
@@ -209,12 +221,15 @@ EOF
 [ok dev](https://www.gokure.dev/kure/dev/concepts/a/) [ok dev bare](https://www.gokure.dev/kure/dev)
 [ok dev fragment](https://www.gokure.dev/kure/dev#top) [ok relative](/concepts/a/)
 [ok other site](https://www.gokure.dev/kurel/) [ok org](https://www.gokure.dev/) [ok elsewhere](https://example.com/kure/x/)
+[scheme-relative](//www.gokure.dev/kure/concepts/e/) [ok other](//example.com/kure/x/)
 EOF
 	cat >"$tmp/CHANGELOG.md" <<'EOF'
 > see <a href="https://www.gokure.dev/kure/concepts/c/">notes</a>
 > see [dev](https://www.gokure.dev/kure/dev/concepts/c/)
+> [ok dev bare](https://www.gokure.dev/kure/dev) <https://www.gokure.dev/kure/dev#top> [ok](//www.gokure.dev/kure/dev/x/)
 EOF
-	printf '[in content](https://www.gokure.dev/kure/api-reference/x/)\n' >"$tmp/site/content/concepts/_index.md"
+	printf '[in content](https://www.gokure.dev/kure/api-reference/x/)\n[dev in content](https://www.gokure.dev/kure/dev/y/)\n' \
+		>"$tmp/site/content/concepts/_index.md"
 	printf 'body = """\n> [x](https://www.gokure.dev/kure/concepts/d/)\n"""\n' >"$tmp/cliff.toml"
 	printf '[unpublished](https://www.gokure.dev/kure/concepts/z/)\n' >"$tmp/docs/history/old.md"
 	printf '[unpublished](https://www.gokure.dev/kure/concepts/y/)\n' >"$tmp/pkg/b/README.md"
@@ -229,7 +244,12 @@ pkg/a/README.md:3: https://www.gokure.dev/kure/
 pkg/a/README.md:4: https://www.gokure.dev/kure/devtools/
 pkg/a/README.md:4: https://www.gokure.dev/kure/v0.1/x/
 pkg/a/README.md:5: https://www.gokure.dev/kure?x=1
-site/content/concepts/_index.md:1: https://www.gokure.dev/kure/api-reference/x/'
+pkg/a/README.md:6: https://www.gokure.dev/kure/dev
+pkg/a/README.md:6: https://www.gokure.dev/kure/dev/concepts/a/
+pkg/a/README.md:7: https://www.gokure.dev/kure/dev#top
+pkg/a/README.md:9: //www.gokure.dev/kure/concepts/e/
+site/content/concepts/_index.md:1: https://www.gokure.dev/kure/api-reference/x/
+site/content/concepts/_index.md:2: https://www.gokure.dev/kure/dev/y/'
 
 	rc=0
 	out=$(bash "$0" --root "$tmp" 2>&1) || rc=$?
@@ -245,7 +265,7 @@ site/content/concepts/_index.md:1: https://www.gokure.dev/kure/api-reference/x/'
 	fi
 
 	# Clean tree: only the allowed forms left.
-	printf '[ok](https://www.gokure.dev/kure/dev/concepts/a/) [ok](/concepts/a/)\n' >"$tmp/pkg/a/README.md"
+	printf '[ok](/concepts/a/) [ok](https://www.gokure.dev/kurel/)\n' >"$tmp/pkg/a/README.md"
 	printf '[ok](https://www.gokure.dev/kure/dev/concepts/c/)\n' >"$tmp/CHANGELOG.md"
 	printf '[ok](/api-reference/x/)\n' >"$tmp/site/content/concepts/_index.md"
 	printf 'body = "[x](https://www.gokure.dev/kure/dev/concepts/d/)"\n' >"$tmp/cliff.toml"

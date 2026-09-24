@@ -213,7 +213,9 @@ temporary branch — the merged result — before the PR is allowed to land.
   a single line, so the spelling never decides whether a malformed suppression is an error
 - **Site self-link check** - `docs-build` also runs `scripts/check-site-self-links.sh`
   (`mise run site:check-self-links` locally), which fails when a published page links to the docs
-  site itself with an absolute URL outside the dev slot. `check-links` cannot see these: it runs
+  site itself with an absolute or scheme-relative URL. Only `CHANGELOG.md` and `cliff.toml`, which
+  are also read outside the site, may link to the dev slot; every other page links
+  version-relatively. `check-links` cannot see these: it runs
   lychee `--offline`, which skips every `http(s)` URL. They break because the release root is
   rebuilt only by `set-latest` (see [Versioned Documentation](#versioned-documentation)), so an
   absolute link into it 404s for every page added since the last release. The page set is every
@@ -963,9 +965,10 @@ Each slot is built separately, and only `/dev/` follows `main`. The root `/` is 
 `set-latest` run, so it lacks every page added since that release. Link between site pages with a
 version-relative path such as `/api-reference/kubernetes-builders/`; Hugo resolves it inside the
 version being built. Text that is also read outside the site (`CHANGELOG.md` on GitHub, and the
-`cliff.toml` header that writes it) links to the dev slot,
-`https://www.gokure.dev/kure/dev/...`. Any other absolute link to the site fails the
-`docs-build` job (`scripts/check-site-self-links.sh`).
+`cliff.toml` header that writes it) links to the dev slot, the site's base URL followed by
+`dev/`. Any other absolute or scheme-relative (`//host/...`) link to the site, including a
+dev-slot link from any other page, fails the `docs-build` job
+(`scripts/check-site-self-links.sh`).
 
 ---
 
