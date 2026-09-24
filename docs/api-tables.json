@@ -8,7 +8,7 @@
       "goType": "Binding",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -19,7 +19,7 @@
       "goType": "ComponentStatus",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -30,7 +30,7 @@
       "goType": "ConfigMap",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -41,7 +41,7 @@
       "goType": "Endpoints",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -52,7 +52,7 @@
       "goType": "Event",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -63,7 +63,7 @@
       "goType": "LimitRange",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -74,7 +74,7 @@
       "goType": "Namespace",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -85,7 +85,7 @@
       "goType": "Node",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -96,7 +96,7 @@
       "goType": "PersistentVolume",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -107,7 +107,7 @@
       "goType": "PersistentVolumeClaim",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -118,7 +118,7 @@
       "goType": "Pod",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -129,7 +129,7 @@
       "goType": "PodTemplate",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -140,7 +140,7 @@
       "goType": "RangeAllocation",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -151,7 +151,7 @@
       "goType": "ReplicationController",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -162,7 +162,7 @@
       "goType": "ResourceQuota",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -173,7 +173,7 @@
       "goType": "Secret",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -184,7 +184,7 @@
       "goType": "Service",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -195,7 +195,7 @@
       "goType": "ServiceAccount",
       "importPath": "k8s.io/api/core/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -228,7 +228,7 @@
       "goType": "CustomResourceDefinition",
       "importPath": "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
       "module": "k8s.io/apiextensions-apiserver",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -239,7 +239,7 @@
       "goType": "ControllerRevision",
       "importPath": "k8s.io/api/apps/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -250,7 +250,7 @@
       "goType": "DaemonSet",
       "importPath": "k8s.io/api/apps/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -261,7 +261,7 @@
       "goType": "Deployment",
       "importPath": "k8s.io/api/apps/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -272,7 +272,7 @@
       "goType": "ReplicaSet",
       "importPath": "k8s.io/api/apps/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -283,7 +283,7 @@
       "goType": "StatefulSet",
       "importPath": "k8s.io/api/apps/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -294,7 +294,7 @@
       "goType": "HorizontalPodAutoscaler",
       "importPath": "k8s.io/api/autoscaling/v2",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -316,7 +316,7 @@
       "goType": "CronJob",
       "importPath": "k8s.io/api/batch/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -327,7 +327,7 @@
       "goType": "Job",
       "importPath": "k8s.io/api/batch/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -976,7 +976,7 @@
       "goType": "IPAddress",
       "importPath": "k8s.io/api/networking/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -987,7 +987,7 @@
       "goType": "Ingress",
       "importPath": "k8s.io/api/networking/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -998,7 +998,7 @@
       "goType": "IngressClass",
       "importPath": "k8s.io/api/networking/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1009,7 +1009,7 @@
       "goType": "NetworkPolicy",
       "importPath": "k8s.io/api/networking/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -1020,7 +1020,7 @@
       "goType": "ServiceCIDR",
       "importPath": "k8s.io/api/networking/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1064,7 +1064,7 @@
       "goType": "Eviction",
       "importPath": "k8s.io/api/policy/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -1075,7 +1075,7 @@
       "goType": "PodDisruptionBudget",
       "importPath": "k8s.io/api/policy/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -1207,7 +1207,7 @@
       "goType": "ClusterRole",
       "importPath": "k8s.io/api/rbac/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1218,7 +1218,7 @@
       "goType": "ClusterRoleBinding",
       "importPath": "k8s.io/api/rbac/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1229,7 +1229,7 @@
       "goType": "Role",
       "importPath": "k8s.io/api/rbac/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -1240,7 +1240,7 @@
       "goType": "RoleBinding",
       "importPath": "k8s.io/api/rbac/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -1328,7 +1328,7 @@
       "goType": "CSIDriver",
       "importPath": "k8s.io/api/storage/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1339,7 +1339,7 @@
       "goType": "CSINode",
       "importPath": "k8s.io/api/storage/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1350,7 +1350,7 @@
       "goType": "CSIStorageCapacity",
       "importPath": "k8s.io/api/storage/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": true,
       "scopeSource": "builtin"
     },
@@ -1361,7 +1361,7 @@
       "goType": "StorageClass",
       "importPath": "k8s.io/api/storage/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1372,7 +1372,7 @@
       "goType": "VolumeAttachment",
       "importPath": "k8s.io/api/storage/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1383,7 +1383,7 @@
       "goType": "VolumeAttributesClass",
       "importPath": "k8s.io/api/storage/v1",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0",
+      "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
     },
@@ -1763,7 +1763,7 @@
       ],
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/autoscaling/v2",
@@ -1774,7 +1774,7 @@
         "HPAConfigurableTolerance"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/batch/v1",
@@ -1786,7 +1786,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1798,7 +1798,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1810,7 +1810,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1821,7 +1821,7 @@
         "InPlacePodVerticalScaling"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1832,7 +1832,7 @@
         "ContainerRestartRules"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1844,7 +1844,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1856,7 +1856,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1868,7 +1868,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1879,7 +1879,7 @@
         "EnvFiles"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1890,7 +1890,7 @@
         "InPlacePodVerticalScaling"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1901,7 +1901,7 @@
         "ContainerRestartRules"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1912,7 +1912,7 @@
         "GRPCContainerProbeTLS"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1923,7 +1923,7 @@
         "H2CContainerProbe"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1935,7 +1935,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1944,7 +1944,7 @@
       "goField": "DisableResizePreemption",
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1953,7 +1953,7 @@
       "goField": "ConfigSource",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1965,7 +1965,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1974,7 +1974,7 @@
       "goField": "DataSourceRef",
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1985,7 +1985,7 @@
         "VolumeAttributesClass"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -1994,7 +1994,7 @@
       "goField": "AWSElasticBlockStore",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2003,7 +2003,7 @@
       "goField": "AzureDisk",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2012,7 +2012,7 @@
       "goField": "AzureFile",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2021,7 +2021,7 @@
       "goField": "CephFS",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2030,7 +2030,7 @@
       "goField": "Cinder",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2039,7 +2039,7 @@
       "goField": "FlexVolume",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2048,7 +2048,7 @@
       "goField": "Flocker",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2057,7 +2057,7 @@
       "goField": "GCEPersistentDisk",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2066,7 +2066,7 @@
       "goField": "Glusterfs",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2075,7 +2075,7 @@
       "goField": "PhotonPersistentDisk",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2084,7 +2084,7 @@
       "goField": "PortworxVolume",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2093,7 +2093,7 @@
       "goField": "Quobyte",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2102,7 +2102,7 @@
       "goField": "RBD",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2111,7 +2111,7 @@
       "goField": "ScaleIO",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2120,7 +2120,7 @@
       "goField": "StorageOS",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2129,7 +2129,7 @@
       "goField": "VsphereVolume",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2140,7 +2140,7 @@
         "VolumeAttributesClass"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2152,7 +2152,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2163,7 +2163,7 @@
         "SELinuxChangePolicy"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2175,7 +2175,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2186,7 +2186,7 @@
         "EvictionRequestAPI"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2197,7 +2197,7 @@
         "HostnameOverride"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2208,7 +2208,7 @@
         "DynamicResourceAllocation"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2220,7 +2220,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2231,7 +2231,7 @@
         "GenericWorkload"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2240,7 +2240,7 @@
       "goField": "DeprecatedServiceAccount",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2249,7 +2249,7 @@
       "goField": "TerminationGracePeriodSeconds",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2261,7 +2261,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2272,7 +2272,7 @@
         "DynamicResourceAllocation"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2284,7 +2284,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2296,7 +2296,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2305,7 +2305,7 @@
       "goField": "LoadBalancerIP",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2314,7 +2314,7 @@
       "goField": "MatchLabelKeys",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2326,7 +2326,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2338,7 +2338,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2347,7 +2347,7 @@
       "goField": "MountPropagation",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2359,7 +2359,7 @@
       ],
       "stability": "alpha",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2370,7 +2370,7 @@
         "PodCertificateProjection"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2379,7 +2379,7 @@
       "goField": "AWSElasticBlockStore",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2388,7 +2388,7 @@
       "goField": "AzureDisk",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2397,7 +2397,7 @@
       "goField": "AzureFile",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2406,7 +2406,7 @@
       "goField": "CephFS",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2415,7 +2415,7 @@
       "goField": "Cinder",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2424,7 +2424,7 @@
       "goField": "FlexVolume",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2433,7 +2433,7 @@
       "goField": "Flocker",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2442,7 +2442,7 @@
       "goField": "GCEPersistentDisk",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2451,7 +2451,7 @@
       "goField": "GitRepo",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2460,7 +2460,7 @@
       "goField": "Glusterfs",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2469,7 +2469,7 @@
       "goField": "PhotonPersistentDisk",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2478,7 +2478,7 @@
       "goField": "PortworxVolume",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2487,7 +2487,7 @@
       "goField": "Quobyte",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2496,7 +2496,7 @@
       "goField": "RBD",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2505,7 +2505,7 @@
       "goField": "ScaleIO",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2514,7 +2514,7 @@
       "goField": "StorageOS",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/core/v1",
@@ -2523,7 +2523,7 @@
       "goField": "VsphereVolume",
       "stability": "deprecated",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/networking/v1",
@@ -2532,7 +2532,7 @@
       "goField": "Egress",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/networking/v1",
@@ -2541,7 +2541,7 @@
       "goField": "PolicyTypes",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2552,7 +2552,7 @@
         "MutableCSINodeAllocatableCount"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2564,7 +2564,7 @@
       ],
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2575,7 +2575,7 @@
         "SELinuxMountReadWriteOncePod"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2586,7 +2586,7 @@
         "CSIServiceAccountTokenSecrets"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2597,7 +2597,7 @@
         "CSIStorageCapacity"
       ],
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2606,7 +2606,7 @@
       "goField": "VolumeLifecycleModes",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2615,7 +2615,7 @@
       "goField": "Allocatable",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/api/storage/v1",
@@ -2624,7 +2624,7 @@
       "goField": "InlineVolumeSpec",
       "stability": "beta",
       "module": "k8s.io/api",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
@@ -2635,7 +2635,7 @@
         "CustomResourceFieldSelectors"
       ],
       "module": "k8s.io/apiextensions-apiserver",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     },
     {
       "importPath": "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
@@ -2644,7 +2644,7 @@
       "goField": "Default",
       "stability": "beta",
       "module": "k8s.io/apiextensions-apiserver",
-      "moduleVersion": "v0.37.0"
+      "moduleVersion": "v0.37.1"
     }
   ]
 }

@@ -14,36 +14,36 @@ for the kinds whose scope the API server defines.
 
 | API version | Kind | Scope | Scope from | Go type | Module |
 |---|---|---|---|---|---|
-| `v1` | `Binding` | Namespaced | `builtin` | `Binding` | `k8s.io/api@v0.37.0` |
-| `v1` | `ComponentStatus` | Cluster | `builtin` | `ComponentStatus` | `k8s.io/api@v0.37.0` |
-| `v1` | `ConfigMap` | Namespaced | `builtin` | `ConfigMap` | `k8s.io/api@v0.37.0` |
-| `v1` | `Endpoints` | Namespaced | `builtin` | `Endpoints` | `k8s.io/api@v0.37.0` |
-| `v1` | `Event` | Namespaced | `builtin` | `Event` | `k8s.io/api@v0.37.0` |
-| `v1` | `LimitRange` | Namespaced | `builtin` | `LimitRange` | `k8s.io/api@v0.37.0` |
-| `v1` | `Namespace` | Cluster | `builtin` | `Namespace` | `k8s.io/api@v0.37.0` |
-| `v1` | `Node` | Cluster | `builtin` | `Node` | `k8s.io/api@v0.37.0` |
-| `v1` | `PersistentVolume` | Cluster | `builtin` | `PersistentVolume` | `k8s.io/api@v0.37.0` |
-| `v1` | `PersistentVolumeClaim` | Namespaced | `builtin` | `PersistentVolumeClaim` | `k8s.io/api@v0.37.0` |
-| `v1` | `Pod` | Namespaced | `builtin` | `Pod` | `k8s.io/api@v0.37.0` |
-| `v1` | `PodTemplate` | Namespaced | `builtin` | `PodTemplate` | `k8s.io/api@v0.37.0` |
-| `v1` | `RangeAllocation` | Cluster | `builtin` | `RangeAllocation` | `k8s.io/api@v0.37.0` |
-| `v1` | `ReplicationController` | Namespaced | `builtin` | `ReplicationController` | `k8s.io/api@v0.37.0` |
-| `v1` | `ResourceQuota` | Namespaced | `builtin` | `ResourceQuota` | `k8s.io/api@v0.37.0` |
-| `v1` | `Secret` | Namespaced | `builtin` | `Secret` | `k8s.io/api@v0.37.0` |
-| `v1` | `Service` | Namespaced | `builtin` | `Service` | `k8s.io/api@v0.37.0` |
-| `v1` | `ServiceAccount` | Namespaced | `builtin` | `ServiceAccount` | `k8s.io/api@v0.37.0` |
+| `v1` | `Binding` | Namespaced | `builtin` | `Binding` | `k8s.io/api@v0.37.1` |
+| `v1` | `ComponentStatus` | Cluster | `builtin` | `ComponentStatus` | `k8s.io/api@v0.37.1` |
+| `v1` | `ConfigMap` | Namespaced | `builtin` | `ConfigMap` | `k8s.io/api@v0.37.1` |
+| `v1` | `Endpoints` | Namespaced | `builtin` | `Endpoints` | `k8s.io/api@v0.37.1` |
+| `v1` | `Event` | Namespaced | `builtin` | `Event` | `k8s.io/api@v0.37.1` |
+| `v1` | `LimitRange` | Namespaced | `builtin` | `LimitRange` | `k8s.io/api@v0.37.1` |
+| `v1` | `Namespace` | Cluster | `builtin` | `Namespace` | `k8s.io/api@v0.37.1` |
+| `v1` | `Node` | Cluster | `builtin` | `Node` | `k8s.io/api@v0.37.1` |
+| `v1` | `PersistentVolume` | Cluster | `builtin` | `PersistentVolume` | `k8s.io/api@v0.37.1` |
+| `v1` | `PersistentVolumeClaim` | Namespaced | `builtin` | `PersistentVolumeClaim` | `k8s.io/api@v0.37.1` |
+| `v1` | `Pod` | Namespaced | `builtin` | `Pod` | `k8s.io/api@v0.37.1` |
+| `v1` | `PodTemplate` | Namespaced | `builtin` | `PodTemplate` | `k8s.io/api@v0.37.1` |
+| `v1` | `RangeAllocation` | Cluster | `builtin` | `RangeAllocation` | `k8s.io/api@v0.37.1` |
+| `v1` | `ReplicationController` | Namespaced | `builtin` | `ReplicationController` | `k8s.io/api@v0.37.1` |
+| `v1` | `ResourceQuota` | Namespaced | `builtin` | `ResourceQuota` | `k8s.io/api@v0.37.1` |
+| `v1` | `Secret` | Namespaced | `builtin` | `Secret` | `k8s.io/api@v0.37.1` |
+| `v1` | `Service` | Namespaced | `builtin` | `Service` | `k8s.io/api@v0.37.1` |
+| `v1` | `ServiceAccount` | Namespaced | `builtin` | `ServiceAccount` | `k8s.io/api@v0.37.1` |
 | `acme.cert-manager.io/v1` | `Challenge` | Namespaced | `marker` | `Challenge` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `acme.cert-manager.io/v1` | `Order` | Namespaced | `marker` | `Order` | `github.com/cert-manager/cert-manager@v1.21.2` |
-| `apiextensions.k8s.io/v1` | `CustomResourceDefinition` | Cluster | `builtin` | `CustomResourceDefinition` | `k8s.io/apiextensions-apiserver@v0.37.0` |
-| `apps/v1` | `ControllerRevision` | Namespaced | `builtin` | `ControllerRevision` | `k8s.io/api@v0.37.0` |
-| `apps/v1` | `DaemonSet` | Namespaced | `builtin` | `DaemonSet` | `k8s.io/api@v0.37.0` |
-| `apps/v1` | `Deployment` | Namespaced | `builtin` | `Deployment` | `k8s.io/api@v0.37.0` |
-| `apps/v1` | `ReplicaSet` | Namespaced | `builtin` | `ReplicaSet` | `k8s.io/api@v0.37.0` |
-| `apps/v1` | `StatefulSet` | Namespaced | `builtin` | `StatefulSet` | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2` | `HorizontalPodAutoscaler` | Namespaced | `builtin` | `HorizontalPodAutoscaler` | `k8s.io/api@v0.37.0` |
+| `apiextensions.k8s.io/v1` | `CustomResourceDefinition` | Cluster | `builtin` | `CustomResourceDefinition` | `k8s.io/apiextensions-apiserver@v0.37.1` |
+| `apps/v1` | `ControllerRevision` | Namespaced | `builtin` | `ControllerRevision` | `k8s.io/api@v0.37.1` |
+| `apps/v1` | `DaemonSet` | Namespaced | `builtin` | `DaemonSet` | `k8s.io/api@v0.37.1` |
+| `apps/v1` | `Deployment` | Namespaced | `builtin` | `Deployment` | `k8s.io/api@v0.37.1` |
+| `apps/v1` | `ReplicaSet` | Namespaced | `builtin` | `ReplicaSet` | `k8s.io/api@v0.37.1` |
+| `apps/v1` | `StatefulSet` | Namespaced | `builtin` | `StatefulSet` | `k8s.io/api@v0.37.1` |
+| `autoscaling/v2` | `HorizontalPodAutoscaler` | Namespaced | `builtin` | `HorizontalPodAutoscaler` | `k8s.io/api@v0.37.1` |
 | `barmancloud.cnpg.io/v1` | `ObjectStore` | Namespaced | `crd` | `ObjectStore` | `github.com/cloudnative-pg/plugin-barman-cloud@v0.15.0` |
-| `batch/v1` | `CronJob` | Namespaced | `builtin` | `CronJob` | `k8s.io/api@v0.37.0` |
-| `batch/v1` | `Job` | Namespaced | `builtin` | `Job` | `k8s.io/api@v0.37.0` |
+| `batch/v1` | `CronJob` | Namespaced | `builtin` | `CronJob` | `k8s.io/api@v0.37.1` |
+| `batch/v1` | `Job` | Namespaced | `builtin` | `Job` | `k8s.io/api@v0.37.1` |
 | `cert-manager.io/v1` | `Certificate` | Namespaced | `marker` | `Certificate` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `cert-manager.io/v1` | `CertificateRequest` | Namespaced | `marker` | `CertificateRequest` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `cert-manager.io/v1` | `ClusterIssuer` | Cluster | `marker` | `ClusterIssuer` | `github.com/cert-manager/cert-manager@v1.21.2` |
@@ -102,16 +102,16 @@ for the kinds whose scope the API server defines.
 | `monitoring.coreos.com/v1` | `PrometheusRule` | Namespaced | `marker` | `PrometheusRule` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
 | `monitoring.coreos.com/v1` | `ServiceMonitor` | Namespaced | `marker` | `ServiceMonitor` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
 | `monitoring.coreos.com/v1` | `ThanosRuler` | Namespaced | `marker` | `ThanosRuler` | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `networking.k8s.io/v1` | `IPAddress` | Cluster | `builtin` | `IPAddress` | `k8s.io/api@v0.37.0` |
-| `networking.k8s.io/v1` | `Ingress` | Namespaced | `builtin` | `Ingress` | `k8s.io/api@v0.37.0` |
-| `networking.k8s.io/v1` | `IngressClass` | Cluster | `builtin` | `IngressClass` | `k8s.io/api@v0.37.0` |
-| `networking.k8s.io/v1` | `NetworkPolicy` | Namespaced | `builtin` | `NetworkPolicy` | `k8s.io/api@v0.37.0` |
-| `networking.k8s.io/v1` | `ServiceCIDR` | Cluster | `builtin` | `ServiceCIDR` | `k8s.io/api@v0.37.0` |
+| `networking.k8s.io/v1` | `IPAddress` | Cluster | `builtin` | `IPAddress` | `k8s.io/api@v0.37.1` |
+| `networking.k8s.io/v1` | `Ingress` | Namespaced | `builtin` | `Ingress` | `k8s.io/api@v0.37.1` |
+| `networking.k8s.io/v1` | `IngressClass` | Cluster | `builtin` | `IngressClass` | `k8s.io/api@v0.37.1` |
+| `networking.k8s.io/v1` | `NetworkPolicy` | Namespaced | `builtin` | `NetworkPolicy` | `k8s.io/api@v0.37.1` |
+| `networking.k8s.io/v1` | `ServiceCIDR` | Cluster | `builtin` | `ServiceCIDR` | `k8s.io/api@v0.37.1` |
 | `notification.toolkit.fluxcd.io/v1beta3` | `Alert` | Namespaced | `marker` | `Alert` | `github.com/fluxcd/notification-controller/api@v1.9.4` |
 | `notification.toolkit.fluxcd.io/v1beta3` | `Provider` | Namespaced | `marker` | `Provider` | `github.com/fluxcd/notification-controller/api@v1.9.4` |
 | `notification.toolkit.fluxcd.io/v1` | `Receiver` | Namespaced | `marker` | `Receiver` | `github.com/fluxcd/notification-controller/api@v1.9.4` |
-| `policy/v1` | `Eviction` | Namespaced | `builtin` | `Eviction` | `k8s.io/api@v0.37.0` |
-| `policy/v1` | `PodDisruptionBudget` | Namespaced | `builtin` | `PodDisruptionBudget` | `k8s.io/api@v0.37.0` |
+| `policy/v1` | `Eviction` | Namespaced | `builtin` | `Eviction` | `k8s.io/api@v0.37.1` |
+| `policy/v1` | `PodDisruptionBudget` | Namespaced | `builtin` | `PodDisruptionBudget` | `k8s.io/api@v0.37.1` |
 | `postgresql.cnpg.io/v1` | `Backup` | Namespaced | `crd` | `Backup` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `postgresql.cnpg.io/v1` | `Cluster` | Namespaced | `crd` | `Cluster` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `postgresql.cnpg.io/v1` | `ClusterImageCatalog` | Cluster | `marker` | `ClusterImageCatalog` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
@@ -123,10 +123,10 @@ for the kinds whose scope the API server defines.
 | `postgresql.cnpg.io/v1` | `Publication` | Namespaced | `crd` | `Publication` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `postgresql.cnpg.io/v1` | `ScheduledBackup` | Namespaced | `crd` | `ScheduledBackup` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `postgresql.cnpg.io/v1` | `Subscription` | Namespaced | `crd` | `Subscription` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
-| `rbac.authorization.k8s.io/v1` | `ClusterRole` | Cluster | `builtin` | `ClusterRole` | `k8s.io/api@v0.37.0` |
-| `rbac.authorization.k8s.io/v1` | `ClusterRoleBinding` | Cluster | `builtin` | `ClusterRoleBinding` | `k8s.io/api@v0.37.0` |
-| `rbac.authorization.k8s.io/v1` | `Role` | Namespaced | `builtin` | `Role` | `k8s.io/api@v0.37.0` |
-| `rbac.authorization.k8s.io/v1` | `RoleBinding` | Namespaced | `builtin` | `RoleBinding` | `k8s.io/api@v0.37.0` |
+| `rbac.authorization.k8s.io/v1` | `ClusterRole` | Cluster | `builtin` | `ClusterRole` | `k8s.io/api@v0.37.1` |
+| `rbac.authorization.k8s.io/v1` | `ClusterRoleBinding` | Cluster | `builtin` | `ClusterRoleBinding` | `k8s.io/api@v0.37.1` |
+| `rbac.authorization.k8s.io/v1` | `Role` | Namespaced | `builtin` | `Role` | `k8s.io/api@v0.37.1` |
+| `rbac.authorization.k8s.io/v1` | `RoleBinding` | Namespaced | `builtin` | `RoleBinding` | `k8s.io/api@v0.37.1` |
 | `source.extensions.fluxcd.io/v1beta1` | `ArtifactGenerator` | Namespaced | `marker` | `ArtifactGenerator` | `github.com/fluxcd/source-watcher/api/v2@v2.2.4` |
 | `source.toolkit.fluxcd.io/v1` | `Bucket` | Namespaced | `marker` | `Bucket` | `github.com/fluxcd/source-controller/api@v1.9.5` |
 | `source.toolkit.fluxcd.io/v1` | `ExternalArtifact` | Namespaced | `marker` | `ExternalArtifact` | `github.com/fluxcd/source-controller/api@v1.9.5` |
@@ -134,12 +134,12 @@ for the kinds whose scope the API server defines.
 | `source.toolkit.fluxcd.io/v1` | `HelmChart` | Namespaced | `marker` | `HelmChart` | `github.com/fluxcd/source-controller/api@v1.9.5` |
 | `source.toolkit.fluxcd.io/v1` | `HelmRepository` | Namespaced | `marker` | `HelmRepository` | `github.com/fluxcd/source-controller/api@v1.9.5` |
 | `source.toolkit.fluxcd.io/v1` | `OCIRepository` | Namespaced | `marker` | `OCIRepository` | `github.com/fluxcd/source-controller/api@v1.9.5` |
-| `storage.k8s.io/v1` | `CSIDriver` | Cluster | `builtin` | `CSIDriver` | `k8s.io/api@v0.37.0` |
-| `storage.k8s.io/v1` | `CSINode` | Cluster | `builtin` | `CSINode` | `k8s.io/api@v0.37.0` |
-| `storage.k8s.io/v1` | `CSIStorageCapacity` | Namespaced | `builtin` | `CSIStorageCapacity` | `k8s.io/api@v0.37.0` |
-| `storage.k8s.io/v1` | `StorageClass` | Cluster | `builtin` | `StorageClass` | `k8s.io/api@v0.37.0` |
-| `storage.k8s.io/v1` | `VolumeAttachment` | Cluster | `builtin` | `VolumeAttachment` | `k8s.io/api@v0.37.0` |
-| `storage.k8s.io/v1` | `VolumeAttributesClass` | Cluster | `builtin` | `VolumeAttributesClass` | `k8s.io/api@v0.37.0` |
+| `storage.k8s.io/v1` | `CSIDriver` | Cluster | `builtin` | `CSIDriver` | `k8s.io/api@v0.37.1` |
+| `storage.k8s.io/v1` | `CSINode` | Cluster | `builtin` | `CSINode` | `k8s.io/api@v0.37.1` |
+| `storage.k8s.io/v1` | `CSIStorageCapacity` | Namespaced | `builtin` | `CSIStorageCapacity` | `k8s.io/api@v0.37.1` |
+| `storage.k8s.io/v1` | `StorageClass` | Cluster | `builtin` | `StorageClass` | `k8s.io/api@v0.37.1` |
+| `storage.k8s.io/v1` | `VolumeAttachment` | Cluster | `builtin` | `VolumeAttachment` | `k8s.io/api@v0.37.1` |
+| `storage.k8s.io/v1` | `VolumeAttributesClass` | Cluster | `builtin` | `VolumeAttributesClass` | `k8s.io/api@v0.37.1` |
 | `volsync.backube/v1alpha1` | `ReplicationDestination` | Namespaced | `marker` | `ReplicationDestination` | `github.com/backube/volsync@v0.16.0` |
 | `volsync.backube/v1alpha1` | `ReplicationSource` | Namespaced | `marker` | `ReplicationSource` | `github.com/backube/volsync@v0.16.0` |
 
@@ -193,91 +193,91 @@ by a caller.
 | `monitoring/v1.ShardingStrategy` | `mode` | alpha | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
 | `monitoring/v1.StorageSpec` | `ephemeral` | beta | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
 | `monitoring/v1.ThanosRulerSpec` | `prometheusRulesExcludedFromEnforce` | deprecated | — | `github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring@v0.94.1` |
-| `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.0` |
-| `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.0` |
-| `batch/v1.JobSpec` | `scheduling` | alpha | `WorkloadWithJob` | `k8s.io/api@v0.37.0` |
-| `core/v1.ClusterTrustBundleProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.ConfigMapVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.Container` | `resizePolicy` | stable | `InPlacePodVerticalScaling` | `k8s.io/api@v0.37.0` |
-| `core/v1.Container` | `restartPolicyRules` | stable | `ContainerRestartRules` | `k8s.io/api@v0.37.0` |
-| `core/v1.DownwardAPIVolumeFile` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.DownwardAPIVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.EmptyDirVolumeSource` | `mode` | alpha | `EmptyDirVolumeMode` | `k8s.io/api@v0.37.0` |
-| `core/v1.EnvVarSource` | `fileKeyRef` | stable | `EnvFiles` | `k8s.io/api@v0.37.0` |
-| `core/v1.EphemeralContainerCommon` | `resizePolicy` | stable | `InPlacePodVerticalScaling` | `k8s.io/api@v0.37.0` |
-| `core/v1.EphemeralContainerCommon` | `restartPolicyRules` | stable | `ContainerRestartRules` | `k8s.io/api@v0.37.0` |
-| `core/v1.GRPCAction` | `mode` | stable | `GRPCContainerProbeTLS` | `k8s.io/api@v0.37.0` |
-| `core/v1.HTTPGetAction` | `protocol` | stable | `H2CContainerProbe` | `k8s.io/api@v0.37.0` |
-| `core/v1.KeyToPath` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.NodePodPreemptionPolicy` | `disableResizePreemption` | alpha | — | `k8s.io/api@v0.37.0` |
-| `core/v1.NodeSpec` | `configSource` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.NodeSpec` | `podPreemptionPolicy` | alpha | `InPlacePodVerticalScalingSchedulerPreemption` | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeClaimSpec` | `dataSourceRef` | alpha | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeClaimSpec` | `volumeAttributesClassName` | stable | `VolumeAttributesClass` | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `awsElasticBlockStore` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `azureDisk` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `azureFile` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `cephfs` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `cinder` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `flexVolume` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `flocker` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `gcePersistentDisk` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `glusterfs` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `photonPersistentDisk` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `portworxVolume` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `quobyte` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `rbd` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `scaleIO` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `storageos` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSource` | `vsphereVolume` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.PersistentVolumeSpec` | `volumeAttributesClassName` | stable | `VolumeAttributesClass` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodCertificateProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSecurityContext` | `seLinuxChangePolicy` | stable | `SELinuxChangePolicy` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSecurityContext` | `supplementalGroupsPolicy` | alpha | `SupplementalGroupsPolicy` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `evictionResponders` | stable | `EvictionRequestAPI` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `hostnameOverride` | stable | `HostnameOverride` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `resourceClaims` | stable | `DynamicResourceAllocation` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `resources` | alpha | `PodLevelResources` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `schedulingGroup` | stable | `GenericWorkload` | `k8s.io/api@v0.37.0` |
-| `core/v1.PodSpec` | `serviceAccount` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.Probe` | `terminationGracePeriodSeconds` | beta | — | `k8s.io/api@v0.37.0` |
-| `core/v1.ProjectedVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.ResourceRequirements` | `claims` | stable | `DynamicResourceAllocation` | `k8s.io/api@v0.37.0` |
-| `core/v1.SecretVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.ServiceAccountTokenProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.0` |
-| `core/v1.ServiceSpec` | `loadBalancerIP` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.TopologySpreadConstraint` | `matchLabelKeys` | beta | — | `k8s.io/api@v0.37.0` |
-| `core/v1.TypedObjectReference` | `namespace` | alpha | `CrossNamespaceVolumeDataSource` | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeMount` | `bindMountOptions` | alpha | `VolumeBindMountOptions` | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeMount` | `mountPropagation` | beta | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeProjection` | `clusterTrustBundle` | alpha | `ClusterTrustBundleProjection` | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeProjection` | `podCertificate` | stable | `PodCertificateProjection` | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `awsElasticBlockStore` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `azureDisk` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `azureFile` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `cephfs` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `cinder` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `flexVolume` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `flocker` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `gcePersistentDisk` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `gitRepo` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `glusterfs` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `photonPersistentDisk` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `portworxVolume` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `quobyte` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `rbd` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `scaleIO` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `storageos` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `core/v1.VolumeSource` | `vsphereVolume` | deprecated | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.NetworkPolicySpec` | `egress` | beta | — | `k8s.io/api@v0.37.0` |
-| `networking/v1.NetworkPolicySpec` | `policyTypes` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSIDriverSpec` | `nodeAllocatableUpdatePeriodSeconds` | stable | `MutableCSINodeAllocatableCount` | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSIDriverSpec` | `preventPodSchedulingIfMissing` | beta | `VolumeLimitScaling` | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSIDriverSpec` | `seLinuxMount` | stable | `SELinuxMountReadWriteOncePod` | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSIDriverSpec` | `serviceAccountTokenInSecrets` | stable | `CSIServiceAccountTokenSecrets` | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSIDriverSpec` | `storageCapacity` | stable | `CSIStorageCapacity` | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSIDriverSpec` | `volumeLifecycleModes` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.CSINodeDriver` | `allocatable` | beta | — | `k8s.io/api@v0.37.0` |
-| `storage/v1.VolumeAttachmentSource` | `inlineVolumeSpec` | beta | — | `k8s.io/api@v0.37.0` |
-| `apiextensions/v1.CustomResourceDefinitionVersion` | `selectableFields` | stable | `CustomResourceFieldSelectors` | `k8s.io/apiextensions-apiserver@v0.37.0` |
-| `apiextensions/v1.JSONSchemaProps` | `default` | beta | — | `k8s.io/apiextensions-apiserver@v0.37.0` |
+| `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.1` |
+| `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.1` |
+| `batch/v1.JobSpec` | `scheduling` | alpha | `WorkloadWithJob` | `k8s.io/api@v0.37.1` |
+| `core/v1.ClusterTrustBundleProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.ConfigMapVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.Container` | `resizePolicy` | stable | `InPlacePodVerticalScaling` | `k8s.io/api@v0.37.1` |
+| `core/v1.Container` | `restartPolicyRules` | stable | `ContainerRestartRules` | `k8s.io/api@v0.37.1` |
+| `core/v1.DownwardAPIVolumeFile` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.DownwardAPIVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.EmptyDirVolumeSource` | `mode` | alpha | `EmptyDirVolumeMode` | `k8s.io/api@v0.37.1` |
+| `core/v1.EnvVarSource` | `fileKeyRef` | stable | `EnvFiles` | `k8s.io/api@v0.37.1` |
+| `core/v1.EphemeralContainerCommon` | `resizePolicy` | stable | `InPlacePodVerticalScaling` | `k8s.io/api@v0.37.1` |
+| `core/v1.EphemeralContainerCommon` | `restartPolicyRules` | stable | `ContainerRestartRules` | `k8s.io/api@v0.37.1` |
+| `core/v1.GRPCAction` | `mode` | stable | `GRPCContainerProbeTLS` | `k8s.io/api@v0.37.1` |
+| `core/v1.HTTPGetAction` | `protocol` | stable | `H2CContainerProbe` | `k8s.io/api@v0.37.1` |
+| `core/v1.KeyToPath` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.NodePodPreemptionPolicy` | `disableResizePreemption` | alpha | — | `k8s.io/api@v0.37.1` |
+| `core/v1.NodeSpec` | `configSource` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.NodeSpec` | `podPreemptionPolicy` | alpha | `InPlacePodVerticalScalingSchedulerPreemption` | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeClaimSpec` | `dataSourceRef` | alpha | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeClaimSpec` | `volumeAttributesClassName` | stable | `VolumeAttributesClass` | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `awsElasticBlockStore` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `azureDisk` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `azureFile` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `cephfs` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `cinder` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `flexVolume` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `flocker` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `gcePersistentDisk` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `glusterfs` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `photonPersistentDisk` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `portworxVolume` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `quobyte` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `rbd` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `scaleIO` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `storageos` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSource` | `vsphereVolume` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.PersistentVolumeSpec` | `volumeAttributesClassName` | stable | `VolumeAttributesClass` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodCertificateProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSecurityContext` | `seLinuxChangePolicy` | stable | `SELinuxChangePolicy` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSecurityContext` | `supplementalGroupsPolicy` | alpha | `SupplementalGroupsPolicy` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSpec` | `evictionResponders` | stable | `EvictionRequestAPI` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSpec` | `hostnameOverride` | stable | `HostnameOverride` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSpec` | `resourceClaims` | stable | `DynamicResourceAllocation` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSpec` | `resources` | alpha | `PodLevelResources` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSpec` | `schedulingGroup` | stable | `GenericWorkload` | `k8s.io/api@v0.37.1` |
+| `core/v1.PodSpec` | `serviceAccount` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.Probe` | `terminationGracePeriodSeconds` | beta | — | `k8s.io/api@v0.37.1` |
+| `core/v1.ProjectedVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.ResourceRequirements` | `claims` | stable | `DynamicResourceAllocation` | `k8s.io/api@v0.37.1` |
+| `core/v1.SecretVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.ServiceAccountTokenProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
+| `core/v1.ServiceSpec` | `loadBalancerIP` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.TopologySpreadConstraint` | `matchLabelKeys` | beta | — | `k8s.io/api@v0.37.1` |
+| `core/v1.TypedObjectReference` | `namespace` | alpha | `CrossNamespaceVolumeDataSource` | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeMount` | `bindMountOptions` | alpha | `VolumeBindMountOptions` | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeMount` | `mountPropagation` | beta | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeProjection` | `clusterTrustBundle` | alpha | `ClusterTrustBundleProjection` | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeProjection` | `podCertificate` | stable | `PodCertificateProjection` | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `awsElasticBlockStore` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `azureDisk` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `azureFile` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `cephfs` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `cinder` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `flexVolume` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `flocker` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `gcePersistentDisk` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `gitRepo` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `glusterfs` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `photonPersistentDisk` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `portworxVolume` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `quobyte` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `rbd` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `scaleIO` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `storageos` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `core/v1.VolumeSource` | `vsphereVolume` | deprecated | — | `k8s.io/api@v0.37.1` |
+| `networking/v1.NetworkPolicySpec` | `egress` | beta | — | `k8s.io/api@v0.37.1` |
+| `networking/v1.NetworkPolicySpec` | `policyTypes` | beta | — | `k8s.io/api@v0.37.1` |
+| `storage/v1.CSIDriverSpec` | `nodeAllocatableUpdatePeriodSeconds` | stable | `MutableCSINodeAllocatableCount` | `k8s.io/api@v0.37.1` |
+| `storage/v1.CSIDriverSpec` | `preventPodSchedulingIfMissing` | beta | `VolumeLimitScaling` | `k8s.io/api@v0.37.1` |
+| `storage/v1.CSIDriverSpec` | `seLinuxMount` | stable | `SELinuxMountReadWriteOncePod` | `k8s.io/api@v0.37.1` |
+| `storage/v1.CSIDriverSpec` | `serviceAccountTokenInSecrets` | stable | `CSIServiceAccountTokenSecrets` | `k8s.io/api@v0.37.1` |
+| `storage/v1.CSIDriverSpec` | `storageCapacity` | stable | `CSIStorageCapacity` | `k8s.io/api@v0.37.1` |
+| `storage/v1.CSIDriverSpec` | `volumeLifecycleModes` | beta | — | `k8s.io/api@v0.37.1` |
+| `storage/v1.CSINodeDriver` | `allocatable` | beta | — | `k8s.io/api@v0.37.1` |
+| `storage/v1.VolumeAttachmentSource` | `inlineVolumeSpec` | beta | — | `k8s.io/api@v0.37.1` |
+| `apiextensions/v1.CustomResourceDefinitionVersion` | `selectableFields` | stable | `CustomResourceFieldSelectors` | `k8s.io/apiextensions-apiserver@v0.37.1` |
+| `apiextensions/v1.JSONSchemaProps` | `default` | beta | — | `k8s.io/apiextensions-apiserver@v0.37.1` |
