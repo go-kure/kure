@@ -279,8 +279,8 @@ err = layout.WriteManifest("./out", layout.DefaultLayoutConfig(), ml.(*layout.Ma
 refuses a tree `layout.WalkCluster` did not build from that cluster (see
 [Kustomization paths](#kustomization-paths)). Integrating the same layout twice adds nothing: a
 CR already present with the same name and `spec.path` is kept, the same name with another path is
-an error, and under `FluxSeparate` an identical `flux-system` child is kept rather than a second
-one appended. Every Flux Kustomization already in the tree counts — typed or unstructured, placed
+an error, and under `FluxSeparate` an identical `flux-system` child — same directory, same
+resources, nothing beneath it — is kept rather than a second one appended; any other is refused. Every Flux Kustomization already in the tree counts — typed or unstructured, placed
 by an earlier integration, by the caller or emitted by an application: an identity
 (namespace/name) present twice, or taken by a generated CR elsewhere, is refused in every
 placement, since the kustomize build would register the id twice.

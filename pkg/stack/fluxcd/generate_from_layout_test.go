@@ -1148,3 +1148,22 @@ func TestPerLayout_EmptyBundlelessNodeSurvivesGitTree(t *testing.T) {
 		}
 	}
 }
+
+// TestFluxSeparate_RejectsRelocatedFluxSystem: an earlier flux-system child is
+// kept only in the directory the parent's kustomization.yaml references;
+// moved elsewhere, the parent's "- flux-system" reference would dangle.
+func TestFluxSeparate_RejectsRelocatedFluxSystem(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("web", cmApp("web-app"))}}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxSeparate
+	ml := integrated(t, c, rules)
+	for _, ch := range ml.Children {
+		if ch.Name == fluxstack.DefaultFluxDirName {
+			ch.Namespace = "elsewhere"
+		}
+	}
+	err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+	if err == nil || !strings.Contains(err.Error(), fluxstack.DefaultFluxDirName) {
+		t.Errorf("got %v, want a refusal of the relocated flux-system child", err)
+	}
+}
