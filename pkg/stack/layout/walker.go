@@ -122,6 +122,7 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 	// intermediate subdirectory. The clusterLayout itself holds the bundle's
 	// resources so WriteToDisk writes a single directory (no path collision).
 	if c.Node.Name == "" {
+		clusterLayout.origin = nodeOrigin(c.Node, c.Node.Bundle != nil)
 		if c.Node.Bundle != nil {
 			if err := processFlatBundleApps(c.Node.Bundle.Applications, clusterLayout, rules.FluxPlacement, rules.FileNaming); err != nil {
 				return nil, err
@@ -172,6 +173,8 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bo
 		FluxPlacement: rules.FluxPlacement,
 		FileNaming:    rules.FileNaming,
 		Children:      []*ManifestLayout{},
+		// The root bundle is always flattened into the root node layout.
+		origin: nodeOrigin(c.Node, c.Node.Bundle != nil),
 	}
 
 	// Descendants take the root's directory as their parent path.
@@ -306,6 +309,9 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 		FilePer:       filePer,
 		FluxPlacement: fluxPlacement,
 		FileNaming:    fileNaming,
+		// In nodeOnly mode the bundle's resources live in the node's own
+		// directory; otherwise in the bundle layout below.
+		origin: nodeOrigin(n, nodeOnly),
 	}
 	// Children take this layout's own directory as their parent path. Built
 	// from raw name segments instead, a root with no ClusterName (which
@@ -354,6 +360,7 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 					Mode:          KustomizationExplicit,
 					FluxPlacement: fluxPlacement,
 					FileNaming:    fileNaming,
+					origin:        origin{app: app},
 				}
 				if err := augmentAppLayout(app, appLayout); err != nil {
 					return nil, err
@@ -370,13 +377,19 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 				}
 				bundleChildren = append(bundleChildren, umbrellaChildren...)
 			}
+			// Explicit, not Recursive: a Recursive layout with children
+			// lists none of its own files, so a Flux CR hosted here (an
+			// umbrella child's, a PerLayout application's) was never
+			// applied. The layout has no own workloads, so the listing is
+			// otherwise unchanged.
 			bundleLayout := &ManifestLayout{
 				Name:          b.Name,
 				Namespace:     filepath.Join(currentPath...),
 				Children:      bundleChildren,
-				Mode:          KustomizationRecursive,
+				Mode:          KustomizationExplicit,
 				FluxPlacement: fluxPlacement,
 				FileNaming:    fileNaming,
+				origin:        origin{bundles: []*stack.Bundle{b}},
 			}
 			children = append(children, bundleLayout)
 		}
@@ -403,11 +416,16 @@ func walkNode(n *stack.Node, ancestors []string, nodeOnly bool, nodeFlat bool, f
 					return nil, err
 				}
 				if cl != nil {
-					ml.Resources = append(ml.Resources, cl.Resources...)
-					// Recursively collect from grandchildren too
-					for _, gc := range cl.Children {
-						ml.Resources = append(ml.Resources, gc.Resources...)
+					// The merge moves only resources and origins. Child
+					// layouts (umbrella children, augmenter layouts) would
+					// be dropped with their files and Flux CRs, so a node
+					// that has any is refused rather than half-merged.
+					if len(cl.Children) > 0 {
+						return nil, errors.Errorf("NodeGrouping flat cannot merge node %q into %q: its layout has child layouts (umbrella children or augmenter layouts) that the merge would drop", child.Name, ml.FullRepoPath())
 					}
+					ml.Resources = append(ml.Resources, cl.Resources...)
+					ml.origin.nodes = append(ml.origin.nodes, cl.origin.nodes...)
+					ml.origin.bundles = append(ml.origin.bundles, cl.origin.bundles...)
 				}
 			} else {
 				cl, err := walkNode(child, currentPath, nodeOnly, nodeFlat, filePer, resolvePackageRef(n, inheritedPackageRef), fluxPlacement, fileNaming)
@@ -445,6 +463,7 @@ func walkUmbrellaChildLayouts(children []*stack.Bundle, currentPath []string, fi
 			FileNaming:    fileNaming,
 			Mode:          KustomizationExplicit,
 			UmbrellaChild: true,
+			origin:        origin{bundles: []*stack.Bundle{cb}},
 		}
 		if err := processFlatBundleApps(cb.Applications, ml, fluxPlacement, fileNaming); err != nil {
 			return nil, err
@@ -533,6 +552,7 @@ func processFlatBundleApps(apps []*stack.Application, parent *ManifestLayout, fl
 				Mode:          KustomizationExplicit,
 				FluxPlacement: fluxPlacement,
 				FileNaming:    fileNaming,
+				origin:        origin{app: app},
 			}
 			if err := augmentAppLayout(app, appLayout); err != nil {
 				return err
@@ -543,6 +563,16 @@ func processFlatBundleApps(apps []*stack.Application, parent *ManifestLayout, fl
 		parent.Resources = append(parent.Resources, objs...)
 	}
 	return nil
+}
+
+// nodeOrigin is the origin of n's own layout: the node, plus its bundle when
+// the bundle's resources are written into that same directory.
+func nodeOrigin(n *stack.Node, withBundle bool) origin {
+	o := origin{nodes: []*stack.Node{n}}
+	if withBundle && n.Bundle != nil {
+		o.bundles = []*stack.Bundle{n.Bundle}
+	}
+	return o
 }
 
 // resolvePackageRef returns the effective PackageRef for a node, using inheritance from parent
@@ -611,6 +641,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 			Namespace:  filepath.Join(ancestors...),
 			FilePer:    filePer,
 			FileNaming: fileNaming,
+			origin:     nodeOrigin(n, nodeOnly),
 		}
 		// As in walkNode: children take this layout's directory as parent.
 		currentPath := layoutPathSegments(ml)
@@ -649,6 +680,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 						Namespace:  filepath.Join(append(currentPath, b.Name)...),
 						Resources:  objs,
 						FileNaming: fileNaming,
+						origin:     origin{app: app},
 					}
 					if err := augmentAppLayout(app, appLayout); err != nil {
 						return nil, err
@@ -661,6 +693,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 						Namespace:  filepath.Join(currentPath...),
 						Children:   bundleChildren,
 						FileNaming: fileNaming,
+						origin:     origin{bundles: []*stack.Bundle{b}},
 					}
 					children = append(children, bundleLayout)
 				}
