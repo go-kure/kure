@@ -272,8 +272,15 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 	// Second pass: build layouts for each package
 	layouts := make(map[string]*ManifestLayout)
 	for pkgKey, pkgRef := range packages {
-		// As in WalkCluster: a named root's parent is the tree root ".".
-		layout, err := walkNodeForPackage(c.Node, rootAncestors(c.Node), nodeOnly, filePer, pkgRef, pkgKey, rules.FileNaming)
+		// As in WalkCluster: a named root's parent is the tree root ".". A
+		// root outside this package has no directory in it either, so like
+		// an unnamed root it keeps no parent and its wrapper stays at
+		// "cluster" (see rootAncestors).
+		ancestors := rootAncestors(c.Node)
+		if packageRefKey(resolvePackageRef(c.Node, nil)) != pkgKey {
+			ancestors = nil
+		}
+		layout, err := walkNodeForPackage(c.Node, ancestors, nodeOnly, filePer, pkgRef, pkgKey, rules.FileNaming)
 		if err != nil {
 			return nil, err
 		}
