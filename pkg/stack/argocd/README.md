@@ -35,15 +35,9 @@ engine.SetDefaultNamespace("argocd")
 ```go
 // Generate ArgoCD Applications from a cluster
 objects, err := engine.GenerateFromCluster(cluster)
-
-// Generate from a specific node subtree
-objects, err := engine.GenerateFromNode(node)
-
-// Generate from a single bundle
-objects, err := engine.GenerateFromBundle(bundle)
 ```
 
-Each `Bundle` in the cluster produces one ArgoCD `Application` (`argoproj.io/v1alpha1`). The Application's `spec.source.path` is derived from the bundle's ancestry in the node tree. `spec.destination.server` defaults to `https://kubernetes.default.svc`.
+`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()` and produces one ArgoCD `Application` (`argoproj.io/v1alpha1`) per bundle that walk renders, umbrella children included. Each Application's `spec.source.path` is the directory of the layout that renders the bundle (`layout.OriginIndex.KustomizationPath`), not a path guessed from bundle names. `spec.destination.server` defaults to `https://kubernetes.default.svc`.
 
 ## Layout Integration
 
@@ -55,7 +49,7 @@ ml, err := engine.CreateLayoutWithResources(cluster, layout.LayoutRules{})
 err = engine.IntegrateWithLayout(ml, cluster, layout.LayoutRules{})
 ```
 
-`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster`, then appends an `argocd/` child layout containing the generated Applications. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it.
+`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster` with the caller's rules, generates the Applications from that same layout (so every `source.path` is a directory it writes), then appends an `argocd/` child layout containing them. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it. An integrated `FluxPlacement` (`FluxIntegratedPerLayout`, `FluxIntegratedPerBundle`) is refused: the writer would then reference child layouts through Flux CRs, which an Argo layout does not have, so nothing would apply `argocd/`.
 
 ## Known Limitations
 
