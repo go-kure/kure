@@ -487,10 +487,12 @@ func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules
 	crs := kustomizations(ml)
 	seen := map[string]int{}
 	layoutCRs := map[string]string{}
+	unitPaths := map[string]int{}
 	var dirs []string
 	for _, k := range crs {
 		seen[k.Name]++
 		if b, ok := bundles[k.Name]; ok {
+			unitPaths[k.Spec.Path]++
 			want := ix.BundleLayout(b).FullRepoPath()
 			if k.Spec.Path != want {
 				t.Errorf("bundle %s: spec.path %q, want its layout directory %q", k.Name, k.Spec.Path, want)
@@ -506,10 +508,20 @@ func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules
 			t.Errorf("Kustomization %q emitted %d times, want once", name, n)
 		}
 	}
-	for name := range bundles {
-		if seen[name] == 0 {
-			t.Errorf("bundle %s has no Kustomization", name)
+	// One Kustomization per directory that renders bundles, named after its
+	// first bundle; a bundle merged into another's directory has none.
+	for name, b := range bundles {
+		if unit := ix.UnitName(b); seen[unit] == 0 {
+			t.Errorf("bundle %s: its unit %s has no Kustomization", name, unit)
 		}
+	}
+	for path, n := range unitPaths {
+		if n != 1 {
+			t.Errorf("directory %q has %d bundle Kustomizations, want one", path, n)
+		}
+	}
+	if len(unitPaths) != len(ix.Units()) {
+		t.Errorf("%d bundle Kustomizations for %d bundle directories", len(unitPaths), len(ix.Units()))
 	}
 	wantLayoutCRs := map[string]string{}
 	if rules.FluxPlacement == layout.FluxIntegratedPerLayout {
@@ -814,13 +826,13 @@ func TestIntegrateWithLayout_MixedSourcesErrors(t *testing.T) {
 	rules := propertyGroupings["nodeFlat"]
 	rules.FluxPlacement = layout.FluxIntegratedPerLayout
 	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	_, err := integrator.CreateLayoutWithResources(build(true), rules)
-	if err == nil || !strings.Contains(err.Error(), "different SourceRefs") {
-		t.Fatalf("a merged layout with two sources that hosts layout CRs: got %v, want a different-SourceRefs error", err)
-	}
-	// Without layout CRs to host, the two bundle CRs keep their own sources.
-	if _, err := integrator.CreateLayoutWithResources(build(false), rules); err != nil {
-		t.Errorf("merged layout without layout CRs: %v", err)
+	// The merged bundles share one Kustomization, which holds one source:
+	// refused whether or not the layout also hosts layout CRs.
+	for _, augment := range []bool{true, false} {
+		_, err := integrator.CreateLayoutWithResources(build(augment), rules)
+		if err == nil || !strings.Contains(err.Error(), "sourceRef") {
+			t.Errorf("augment=%v: merged bundles with two sources: got %v, want a sourceRef refusal", augment, err)
+		}
 	}
 }
 

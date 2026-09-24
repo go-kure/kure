@@ -66,8 +66,9 @@ objects, err = engine.ResourceGen.GenerateFromLayout(ml, cluster)
 objects, err = engine.ResourceGen.GenerateForBundle(bundle, "clusters/prod/apps")
 ```
 
-Each bundle produces a Flux Kustomization resource with:
-- `spec.path` = the directory of the layout that renders the bundle
+Each directory that renders bundles produces one Flux Kustomization resource (see
+[One Kustomization per directory](#one-kustomization-per-directory)) with:
+- `spec.path` = that directory
 - Source reference from `Bundle.SourceRef` (and a Source when it has a `URL`)
 - Dependency ordering from `Bundle.DependsOn` and `Bundle.NamedDependsOn`
 - Interval and pruning configuration
@@ -98,13 +99,30 @@ The path is emitted as `FullRepoPath()` returns it (no `./` prefix; Flux treats 
 alike) and is relative to the root of what the writer wrote: the `WriteToDisk` / `WriteToTar`
 base, or `<basePath>/<ManifestsDir>` for `layout.WriteManifest`. Root the Flux source there.
 
-The guarantee is one written directory per CR, not one CR per directory: when a `GroupFlat` axis
-renders several bundles into one directory (a node's bundle with its merged child nodes' bundles,
-say), each of those bundles still gets its own Kustomization, and they all target that directory.
+### One Kustomization per directory
+
+A directory is what a Flux Kustomization applies, so kure emits exactly one per directory that
+renders bundles. When a `GroupFlat` axis (or `FlattenSingleTier`) merges several bundles into one
+directory, they share that Kustomization, named after the first of them (the absorbing node's own
+bundle when it has one):
+
+| Bundle setting | In the shared Kustomization |
+|---|---|
+| `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild` | must be the same for every merged bundle (unset compares as the default), else an error naming the setting and the bundles |
+| `HealthChecks`, umbrella health checks | combined, each listed once |
+| `Labels`, `Annotations` | combined; one key with two values is an error |
+| `Patches` | combined, but only when every patch has a `Target`: an untargeted patch would reach the other bundles' objects |
+| `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
+| `NamedDependsOn` | combined |
+
+A dependency cycle between Kustomizations, including one a merge closes, is an error. ArgoCD
+Applications follow the same rule. Give bundles directories of their own (`NodeGrouping` or
+`BundleGrouping` `GroupByName`) when they need different settings.
 
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
 rewrites nothing afterwards: when it collapses a tier, the surviving layout takes over the
-collapsed layout's origins, so both bundles' paths are the surviving directory. An umbrella
+collapsed layout's origins, so when both carried a bundle they share the surviving directory's one
+Kustomization. An umbrella
 child's path is its own directory, in every mode (the removed `KustomizationRecursive` rule
 pointed it at the parent bundle's directory, whose kustomization excludes the child).
 

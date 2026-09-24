@@ -2,6 +2,8 @@ package fluxcd
 
 import (
 	"fmt"
+	"reflect"
+	"slices"
 	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -70,12 +72,13 @@ func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Obje
 	return g.GenerateFromLayout(ml, c)
 }
 
-// GenerateFromLayout creates a Kustomization (and, when its SourceRef has a
-// URL, a Source) for every bundle the layout tree root renders, in layout
-// pre-order. root must have been walked from c (layout.WalkCluster):
-// layout.IndexOrigins refuses anything else. Each spec.path is the directory
-// of the layout that renders the bundle (OriginIndex.KustomizationPath),
-// relative to the writer's output root.
+// GenerateFromLayout creates one Kustomization (and, when its SourceRef has a
+// URL, a Source) for every reconciliation unit of the layout tree root — every
+// directory that renders bundles — in layout pre-order. root must have been
+// walked from c (layout.WalkCluster): layout.IndexOrigins refuses anything
+// else. Each spec.path is that directory, relative to the writer's output
+// root; the bundles a grouping axis merged into it share the Kustomization
+// (see generateForUnit).
 func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
 	if root == nil || c == nil || c.Node == nil {
 		return nil, nil
@@ -85,18 +88,149 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 		return nil, err
 	}
 	var out []client.Object
-	for _, b := range ix.Bundles() {
-		path, err := ix.KustomizationPath(b)
-		if err != nil {
-			return nil, err
-		}
-		objs, err := g.GenerateForBundle(b, path)
+	for _, l := range ix.Units() {
+		objs, err := g.generateForUnit(l, ix)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, objs...)
 	}
 	return out, nil
+}
+
+// generateForUnit creates the one Kustomization (and Source) for layout l, a
+// directory that renders bundles. It is named after l's first bundle. Bundles
+// merged into l must agree on every setting a Kustomization holds once; their
+// health checks, labels, annotations and targeted patches are combined; and
+// spec.dependsOn is the units they depend on (OriginIndex.UnitDependencies)
+// plus their NamedDependsOn.
+func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout.OriginIndex) ([]client.Object, error) {
+	bundles := l.OriginBundles()
+	if len(bundles) == 0 {
+		return nil, nil
+	}
+	path := l.FullRepoPath()
+	first := bundles[0]
+	obj, err := g.kustomizationForBundle(first, path)
+	if err != nil {
+		return nil, err
+	}
+	unit := obj.(*kustv1.Kustomization)
+	for _, b := range bundles[1:] {
+		o, err := g.kustomizationForBundle(b, path)
+		if err != nil {
+			return nil, err
+		}
+		if err := mergeIntoUnit(unit, o.(*kustv1.Kustomization), first, b, path); err != nil {
+			return nil, err
+		}
+	}
+	if len(bundles) > 1 {
+		for _, b := range bundles {
+			for _, p := range b.Patches {
+				if p.Target == nil {
+					return nil, unitConflict(first, b, path, "patches", "an untargeted patch would apply to every merged bundle's objects")
+				}
+			}
+		}
+	}
+	unit.Spec.DependsOn = nil
+	named := map[string]bool{}
+	for _, name := range ix.UnitDependencies(l) {
+		named[name] = true
+		unit.Spec.DependsOn = append(unit.Spec.DependsOn, kustv1.DependencyReference{Name: name})
+	}
+	for _, b := range bundles {
+		for _, name := range b.NamedDependsOn {
+			if !named[name] {
+				named[name] = true
+				unit.Spec.DependsOn = append(unit.Spec.DependsOn, kustv1.DependencyReference{Name: name})
+			}
+		}
+	}
+	resources := []client.Object{unit}
+	if first.SourceRef != nil {
+		source, err := g.createSource(first.SourceRef, first.Name)
+		if err != nil {
+			return nil, errors.ResourceValidationError("Bundle", first.Name, "source",
+				fmt.Sprintf("failed to create source: %v", err), err)
+		}
+		if source != nil {
+			resources = append(resources, source)
+		}
+	}
+	return resources, nil
+}
+
+// mergeIntoUnit folds other, the Kustomization bundle b would have had on its
+// own, into unit, the one for its directory.
+func mergeIntoUnit(unit, other *kustv1.Kustomization, first, b *stack.Bundle, path string) error {
+	same := []struct {
+		field string
+		a, b  any
+	}{
+		{"sourceRef", first.SourceRef, b.SourceRef},
+		{"interval", unit.Spec.Interval, other.Spec.Interval},
+		{"timeout", unit.Spec.Timeout, other.Spec.Timeout},
+		{"retryInterval", unit.Spec.RetryInterval, other.Spec.RetryInterval},
+		{"prune", unit.Spec.Prune, other.Spec.Prune},
+		{"wait", unit.Spec.Wait, other.Spec.Wait},
+		{"force", unit.Spec.Force, other.Spec.Force},
+		{"suspend", unit.Spec.Suspend, other.Spec.Suspend},
+		{"postBuild", unit.Spec.PostBuild, other.Spec.PostBuild},
+	}
+	for _, s := range same {
+		if !reflect.DeepEqual(s.a, s.b) {
+			return unitConflict(first, b, path, s.field, "one Kustomization holds one value")
+		}
+	}
+	for field, maps := range map[string][2]map[string]string{
+		"labels":      {unit.Labels, other.Labels},
+		"annotations": {unit.Annotations, other.Annotations},
+	} {
+		merged, err := unionStrings(maps[0], maps[1])
+		if err != nil {
+			return unitConflict(first, b, path, field, err.Error())
+		}
+		if field == "labels" {
+			unit.Labels = merged
+		} else {
+			unit.Annotations = merged
+		}
+	}
+	for _, hc := range other.Spec.HealthChecks {
+		if !slices.ContainsFunc(unit.Spec.HealthChecks, func(x metaapi.NamespacedObjectKindReference) bool { return reflect.DeepEqual(x, hc) }) {
+			unit.Spec.HealthChecks = append(unit.Spec.HealthChecks, hc)
+		}
+	}
+	unit.Spec.Patches = append(unit.Spec.Patches, other.Spec.Patches...)
+	return nil
+}
+
+// unionStrings merges two string maps, refusing one key with two values.
+func unionStrings(a, b map[string]string) (map[string]string, error) {
+	if len(a) == 0 && len(b) == 0 {
+		return a, nil
+	}
+	out := make(map[string]string, len(a)+len(b))
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		if prev, ok := out[k]; ok && prev != v {
+			return nil, errors.Errorf("key %q is %q and %q", k, prev, v)
+		}
+		out[k] = v
+	}
+	return out, nil
+}
+
+// unitConflict is the refusal for bundles merged into one directory whose
+// Kustomization cannot express both.
+func unitConflict(first, b *stack.Bundle, path, field, why string) error {
+	return errors.ResourceValidationError("Bundle", b.Name, field,
+		fmt.Sprintf("bundles %q and %q render one directory %q and so share one Kustomization, but their %s differ (%s); give them directories of their own (NodeGrouping or BundleGrouping GroupByName) or align them",
+			first.Name, b.Name, path, field, why), nil)
 }
 
 // GenerateForBundle creates the Flux resources for b itself: a Kustomization

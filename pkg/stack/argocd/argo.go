@@ -54,10 +54,13 @@ func (w *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object,
 	return w.generateFromLayout(ml, c)
 }
 
-// generateFromLayout creates an Application for every bundle the layout tree
-// root renders (umbrella children included), in layout pre-order. root must
-// have been walked from c: layout.IndexOrigins refuses anything else. Each
-// source.path is the directory of the layout that renders the bundle.
+// generateFromLayout creates one Application for every reconciliation unit of
+// the layout tree root — every directory that renders bundles, umbrella
+// children included — in layout pre-order. root must have been walked from c:
+// layout.IndexOrigins refuses anything else. Each source.path is that
+// directory; the bundles a grouping axis merged into it share the
+// Application, named after the first of them, with their labels combined and
+// spec.dependencies mapped to units (OriginIndex.UnitDependencies).
 func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stack.Cluster) ([]client.Object, error) {
 	if root == nil || c == nil || c.Node == nil {
 		return nil, nil
@@ -67,14 +70,28 @@ func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stac
 		return nil, err
 	}
 	var objs []client.Object
-	for _, b := range ix.Bundles() {
-		path, err := ix.KustomizationPath(b)
+	for _, l := range ix.Units() {
+		bundles := l.OriginBundles()
+		labels := map[string]string{}
+		for _, b := range bundles {
+			for k, v := range b.Labels {
+				if prev, ok := labels[k]; ok && prev != v {
+					return nil, errors.Errorf("bundles merged into %q share one Application but set label %q to %q and %q", l.FullRepoPath(), k, prev, v)
+				}
+				labels[k] = v
+			}
+		}
+		unit := *bundles[0]
+		unit.Labels = labels
+		unit.DependsOn = nil
+		app, err := w.applicationForBundle(&unit, l.FullRepoPath())
 		if err != nil {
 			return nil, err
 		}
-		app, err := w.applicationForBundle(b, path)
-		if err != nil {
-			return nil, err
+		if deps := ix.UnitDependencies(l); len(deps) > 0 {
+			if err := unstructured.SetNestedStringSlice(app.(*unstructured.Unstructured).Object, deps, "spec", "dependencies"); err != nil {
+				return nil, errors.Wrap(err, "failed to set spec.dependencies")
+			}
 		}
 		objs = append(objs, app)
 	}
