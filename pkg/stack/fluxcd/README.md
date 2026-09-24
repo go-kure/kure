@@ -24,11 +24,8 @@ import "github.com/go-kure/kure/pkg/stack/fluxcd"
 // Create engine with defaults
 engine := fluxcd.Engine()
 
-// Generate all Flux resources for a cluster
+// Generate all Flux resources for a cluster (paths of a default-rules walk)
 objects, err := engine.GenerateFromCluster(cluster)
-
-// Or with a specific kustomization mode
-engine = fluxcd.EngineWithConfig(layout.KustomizationExplicit)
 
 // Placement is set on the LayoutRules passed to the layout call,
 // not on the engine — see Layout Integration below.
@@ -40,15 +37,12 @@ engine = fluxcd.EngineWithConfig(layout.KustomizationExplicit)
 // Default engine
 engine := fluxcd.Engine()
 
-// Engine with specific kustomization mode
-engine := fluxcd.EngineWithMode(layout.KustomizationExplicit)
-
-// Engine with a specific kustomization mode (alias)
-engine := fluxcd.EngineWithConfig(mode)
-
-// Engine with custom components
+// The same, built from its components
 engine := fluxcd.NewWorkflowEngine()
 ```
+
+The engine has no path mode: every Kustomization `spec.path` is a layout directory (see
+[Kustomization paths](#kustomization-paths)).
 
 Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured per call on
 `layout.LayoutRules.FluxPlacement`. `FluxUnset` is normalized to
@@ -58,24 +52,64 @@ Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured per call on
 
 ## Resource Generation
 
-Generate Flux resources at different hierarchy levels:
+Generate Flux resources from a cluster, from a layout walked from it, or for one bundle:
 
 ```go
-// From entire cluster
+// From an entire cluster: walks it with layout.DefaultLayoutRules()
 objects, err := engine.GenerateFromCluster(cluster)
 
-// From a single node
-objects, err := engine.GenerateFromNode(node)
+// From a layout you walked (and will write) yourself
+ml, err := layout.WalkCluster(cluster, rules)
+objects, err = engine.ResourceGen.GenerateFromLayout(ml, cluster)
 
-// From a single bundle
-objects, err := engine.GenerateFromBundle(bundle)
+// For one bundle, at a path you supply
+objects, err = engine.ResourceGen.GenerateForBundle(bundle, "clusters/prod/apps")
 ```
 
 Each bundle produces a Flux Kustomization resource with:
-- Path matching the layout directory structure
-- Source reference from the node's package ref
-- Dependency ordering from `Bundle.DependsOn`
+- `spec.path` = the directory of the layout that renders the bundle
+- Source reference from `Bundle.SourceRef` (and a Source when it has a `URL`)
+- Dependency ordering from `Bundle.DependsOn` and `Bundle.NamedDependsOn`
 - Interval and pruning configuration
+
+`GenerateFromCluster` walks the cluster itself, so it renders every application and runs every
+`LayoutAugmenter`: their errors surface there. Its paths are the directories `WalkCluster` writes
+under the default rules — the root node at `<root>`, its children at `<root>/<child>` — which is
+also what the bootstrap sync path `./<root>` expects. A caller that writes the layout with other
+rules generates from that layout instead: `CreateLayoutWithResources`, or `GenerateFromLayout` on
+its own `WalkCluster` result.
+
+## Kustomization paths
+
+The layout tree is the only authority on directories. Every walked layout records which stack
+nodes, bundles and application it renders (`ManifestLayout.OriginNodes`, `OriginBundles`,
+`OriginApplication`), and `layout.IndexOrigins(root, cluster)` resolves each bundle to the one
+layout whose directory holds its resources. A bundle's Kustomization `spec.path` is that layout's
+`FullRepoPath()` — `OriginIndex.KustomizationPath(b)` — and nothing else:
+
+| Tree | Rules | Bundle | `spec.path` |
+|---|---|---|---|
+| node `platform`, bundle `web` | `GroupByName` | `web` | `platform/web` |
+| node `platform`, bundle `platform` | `GroupByName` | `platform` | `platform/platform` |
+| node `platform` (bundle `platform`) with child node `apps` (bundle `apps-bundle`) | nodeOnly, `ClusterName: "prod"` | `platform`, `apps-bundle` | `prod/platform`, `prod/platform/apps` |
+| unnamed root node, bundle `web` | nodeOnly, `ClusterName: "."` | `web` | `.` |
+
+The path is emitted as `FullRepoPath()` returns it (no `./` prefix; Flux treats `x` and `./x`
+alike) and is relative to the root of what the writer wrote: the `WriteToDisk` / `WriteToTar`
+base, or `<basePath>/<ManifestsDir>` for `layout.WriteManifest`. Root the Flux source there.
+
+The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
+rewrites nothing afterwards: when it collapses a tier, the surviving layout takes over the
+collapsed layout's origins, so both bundles' paths are the surviving directory. An umbrella
+child's path is its own directory, in every mode (the removed `KustomizationRecursive` rule
+pointed it at the parent bundle's directory, whose kustomization excludes the child).
+
+`IndexOrigins` refuses a tree it cannot resolve unambiguously: a hand-built, partial or
+other-cluster tree (the rendered set is not what the cluster reaches), a bundle or node rendered
+twice, two bundles with one name (the name is the Kustomization's identity), and a node or bundle
+layout in `AppFileSingle` mode (written into its `Namespace`, not its own directory). Build the
+tree with `layout.WalkCluster`. Not covered: a bundle whose `SourceRef.URL` names another
+artifact — its path is relative to that artifact.
 
 ## Defaults are declared, named and exported
 
@@ -89,7 +123,7 @@ for the identifier to find every place its value can reach emitted YAML.
 |---|---|---|---|
 | `DefaultInterval` | `60m` | the caller names no interval (a non-empty `Bundle.Interval` that does not parse is a validation error, not a fallback) | assigning `.DefaultInterval` on either generator |
 | `DefaultNamespace` | `flux-system` | generated resources need a namespace | assigning `.DefaultNamespace` on either generator |
-| `DefaultMode` | `layout.KustomizationExplicit` | `ResourceGenerator` is constructed — its only site | assigning `ResourceGenerator.Mode` |
+| `DefaultMode` | `layout.KustomizationExplicit` | informational: the listing mode the layout writers use for a layout with no `Mode` of its own | setting `ManifestLayout.Mode` (or `Config.KustomizationMode` for `WriteManifest`) |
 | `DefaultBootstrapName` | `flux-system` | naming the bootstrap Kustomization | assigning `BootstrapGenerator.BootstrapName` |
 | `FluxInstanceName` | `flux` | naming the `FluxInstance` in `flux-operator` mode | not overrideable; the CRD admits no other name (see below) |
 | `DefaultSourceName` | `flux-system` | the root node has no name | naming the root `stack.Node` |
@@ -100,7 +134,7 @@ for the identifier to find every place its value can reach emitted YAML.
 | `DefaultSourceRef` | `latest` | an OCI source, or an OCI `FluxInstance` sync, has no `SourceRef` | setting `BootstrapConfig.SourceRef` |
 | `DefaultSyncPath` | `./` | the root node has no name | not overrideable; it is the prefix a sync path is built from |
 
-Four of these — `DefaultInterval`, `DefaultNamespace`, `DefaultMode` and `DefaultBootstrapName` —
+Three of these — `DefaultInterval`, `DefaultNamespace` and `DefaultBootstrapName` —
 are copied into exported generator fields by `NewResourceGenerator` / `NewBootstrapGenerator`, and
 a field assigned afterwards is never overridden. The rest are applied where they are used and are
 overridden by naming the corresponding input, as the last column says. Three defaults have no
@@ -170,10 +204,9 @@ layout's file granularity and the fallback for an unset `FluxPlacement` both com
 walker reads them from. A constant here would be a second copy of a value that can change
 independently.
 
-The third is that layout's own `Mode`, left unset rather than seeded from `DefaultMode`. The
-layout writer resolves an unset mode to `KustomizationExplicit`, and the separate Flux layout
-never has children, so the mode selects nothing there — seeding it would have implied an override
-via `ResourceGenerator.Mode` at a site that never reads that field.
+The third is that layout's own `Mode`, left unset. The layout writer resolves an unset mode to
+`KustomizationExplicit`, and the separate Flux layout never has children, so the mode selects
+nothing there.
 
 ### One resolved source kind, not three
 
@@ -238,9 +271,16 @@ Combine resource generation with directory structure:
 // Create layout with Flux resources integrated
 ml, err := engine.CreateLayoutWithResources(cluster, rules)
 
-// Write to disk
-err = layout.WriteManifest(ml, "./clusters")
+// Write to disk: every spec.path is relative to ./out/clusters
+err = layout.WriteManifest("./out", layout.DefaultLayoutConfig(), ml.(*layout.ManifestLayout))
 ```
+
+`IntegrateWithLayout(ml, cluster, rules)` does the same for a layout you walked yourself. It
+refuses a tree `layout.WalkCluster` did not build from that cluster (see
+[Kustomization paths](#kustomization-paths)). Integrating the same layout twice adds nothing: a
+CR already present with the same name and `spec.path` is kept, the same name with another path is
+an error, and under `FluxSeparate` an identical `flux-system` child is kept rather than a second
+one appended.
 
 ## Bootstrap Generation
 
@@ -323,7 +363,7 @@ Controls how kustomization.yaml files reference resources:
 Controls where Flux Kustomization resources are placed:
 
 - `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories
-- `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout node (incl. augmenter-added child layouts), placed alongside its manifests; children referenced as `kustomization-<child>.yaml` CR files. Finest granularity.
+- `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout (incl. augmenter-added child layouts), hosted in its parent layout; the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle/node boundaries only**; a bundle's interior (incl. augmenter-added child layouts) is a single kustomize build, with children referenced as directories. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
@@ -338,7 +378,7 @@ umbrella contains.
 
 ### Resource generation
 
-`ResourceGenerator.createKustomization` detects umbrella bundles and:
+`ResourceGenerator.GenerateForBundle` detects umbrella bundles and:
 - prepends one `HealthChecks` entry per direct child (referencing the child's
   own Kustomization by name/namespace)
 - leaves user-supplied `HealthChecks` appended after the auto entries
@@ -350,54 +390,56 @@ Leaving `wait` unset is what makes them take effect. A caller who does set `Wait
 upstream's whole-of-resources health assessment instead, which also gates on the child
 Kustomizations.
 
-`GenerateFromBundle(b)` is strictly self-only — it never recurses into
-`b.Children`. Callers that want the entire umbrella closure as a flat list use
-`GenerateFromNode` or `GenerateFromCluster`, which walk umbrella children via
-`generateUmbrellaClosure` internally.
+`GenerateForBundle(b, path)` is strictly self-only — it never recurses into
+`b.Children`. `GenerateFromLayout` and `GenerateFromCluster` cover the whole
+umbrella closure, because the walker renders every umbrella child as a layout
+of its own.
 
 ### Placement in layouts
 
 `LayoutIntegrator` places umbrella child Flux CRs at the **parent** layout
-node:
+node, with `spec.path` = the child's own directory:
 
-- **FluxIntegratedPerLayout, non-nodeOnly**: the walker creates a bundle sub-layout
+- **Integrated, non-nodeOnly**: the walker creates a bundle sub-layout
   under the node layout. Umbrella child Kustomization CRs (and their Source
   CRs, if the child has a `SourceRef.URL`) are appended to the bundle
-  sub-layout's `Resources`. Nested umbrella children are placed at their
+  sub-layout's `Resources`, which that layout lists (it is written in
+  `KustomizationExplicit` mode). Nested umbrella children are placed at their
   enclosing umbrella child's layout node.
-- **FluxIntegratedPerLayout, nodeOnly (GroupFlat)**: there is no intermediate bundle
+- **Integrated, nodeOnly (GroupFlat)**: there is no intermediate bundle
   layer, so umbrella children become direct sub-layouts of the node layout,
-  and their Flux CRs sit at the node layout alongside the umbrella self CR.
-- **FluxSeparate**: `GenerateFromCluster` walks the full umbrella closure, so
-  the `flux-system` layout directory receives every descendant's Kustomization
-  CR as a flat list.
+  and their Flux CRs sit at the node layout.
+- **FluxSeparate**: the `flux-system` layout directory receives every bundle's
+  Kustomization CR, umbrella descendants included, as a flat list.
+
+Under `FluxIntegratedPerLayout` a node bundle's own CR follows the same rule
+as every other PerLayout CR: it is hosted by the **parent** of the layout that
+renders the bundle (the root layout hosts its own). Under
+`FluxIntegratedPerBundle` it stays at the node's layout.
 
 ### On-disk shape
 
 When a parent layout has an umbrella child, the parent's `kustomization.yaml`
-references the child via `flux-system-kustomization-{child}.yaml` (the
-Kustomization CR file sitting in the parent directory) instead of the child
-subdirectory. The child subdirectory still exists and still contains its own
+lists the child's Kustomization CR file (it is one of the parent's own
+resources) instead of the child subdirectory. The child subdirectory still exists and still contains its own
 `kustomization.yaml` plus workload YAML files — but **no** Flux CR files, so
 Flux does not double-apply the child's resources.
 
 ## Non-Bundle Child Layout CRs
 
-In `FluxIntegratedPerLayout` mode the layout integrator generates `Kustomization` CRs for **all eligible children** of each node layout, not only the node's own bundle. A child is eligible when `!UmbrellaChild && ApplicationFileMode != AppFileSingle`.
+In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) This covers:
 
-This covers two cases with the same code path:
+- **Application layouts** — per-app layouts (GroupByName, or augmenter apps in nodeOnly mode). The CR is named after the layout.
+- **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
+- **Bundle-less node layouts** — a GroupByName node layout above its bundle layout, or a node without a bundle. The CR is named `<path with "/" replaced by "-">-node` (with `ClusterName: "."`, node `web`'s path is `web`, which is also its bundle's CR name).
 
-- **Flat/nodeOnly layouts** — app layouts are direct children of the node layout. Each eligible app layout gets a `Kustomization` CR placed in the node layout's `Resources`, with `spec.path` set to `child.FullRepoPath()`.
-- **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. Each eligible child gets a CR placed in the app layout's `Resources`. `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
-
-The integrator applies this rule recursively: it covers children at any depth, always placing the CR in the immediate parent's `Resources`.
-
-If the ancestor bundle has a nil, empty, or incomplete `SourceRef` (missing `Kind` or `Name`) and eligible children without existing CRs are present, `IntegrateWithLayout` returns a hard error. A `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently.
+The integrator applies this rule at any depth. The CR's `spec.sourceRef` is the `SourceRef` of the nearest layout at or above the host that renders bundles; with none, the one `SourceRef` the URL-less bundles below the child share. A missing, incomplete or ambiguous source is a hard error — a `Kustomization` without a valid `spec.sourceRef` is rejected by Flux and must not be emitted silently — and so is a layout whose bundles have different `SourceRef`s (a `NodeGrouping: GroupFlat` merge) hosting a layout CR. A CR name used twice (a layout named like a bundle, say) is an error, not a silent skip: Flux Kustomizations share one namespace.
 
 ## Validation
 
 All cluster-level entry points (`GenerateFromCluster`, `CreateLayoutWithResources`)
-call `stack.ValidateCluster` before walking the tree. Invalid umbrella
+call `stack.ValidateCluster` before walking the tree, and every generation from a
+layout runs `layout.IndexOrigins` (see [Kustomization paths](#kustomization-paths)). Invalid umbrella
 configurations — such as a bundle referenced both by a `Node` and by another
 bundle's `Children`, shared umbrella ownership, or multi-package umbrellas —
 fail fast with a validation error rather than producing malformed output.

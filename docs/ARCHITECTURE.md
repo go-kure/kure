@@ -282,8 +282,9 @@ The workflow architecture implements **Interface Segregation Principle** by spli
 
 type ResourceGenerator interface {
     GenerateFromCluster(*stack.Cluster) ([]client.Object, error)
-    GenerateFromNode(*stack.Node) ([]client.Object, error)
-    GenerateFromBundle(*stack.Bundle) ([]client.Object, error)
+    // Paths come from the walked layout: the directory that renders each bundle.
+    GenerateFromLayout(*layout.ManifestLayout, *stack.Cluster) ([]client.Object, error)
+    GenerateForBundle(b *stack.Bundle, path string) ([]client.Object, error)
 }
 
 type LayoutIntegrator interface {
@@ -722,8 +723,7 @@ func NewWorkflowEngine() *WorkflowEngine
 func NewResourceGenerator() *ResourceGenerator
 
 // Public APIs use descriptive names
-func Engine() *WorkflowEngine                                    // Default engine
-func EngineWithMode(mode layout.KustomizationMode) *WorkflowEngine // Configured engine
+func Engine() *WorkflowEngine // Default engine
 ```
 
 ### Package Organization Standards
@@ -1203,8 +1203,9 @@ The domain-model row is about bundles, plus one shape rule for nodes. `ValidateC
 nodes themselves: a node name may be empty, a `ParentPath` may resolve to nothing, and a node
 reachable from two parents is not rejected, although it is not a supported shape either. A caller
 that builds a `Node` tree by hand is responsible for that part of its shape. The check runs where
-`ValidateCluster` does; generator entry points that take a `Node` directly, such as
-`GenerateFromNode`, do not call it.
+`ValidateCluster` does; generation from an already walked layout (`GenerateFromLayout`,
+`IntegrateWithLayout`) does not run it again. A node reachable from two parents is walked twice,
+and `layout.IndexOrigins` refuses the result before any Flux or ArgoCD path is derived from it.
 
 ```go
 // Validation is a call the caller makes, not a side effect of construction.

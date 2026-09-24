@@ -98,13 +98,13 @@ clusters/
 ## GitOps Tool Compatibility
 
 ### Flux Integration
-- Uses `spec.path: ./clusters/cluster-name/node` format
+- Every Kustomization `spec.path` is the directory of the layout that renders the bundle,
+  e.g. `cluster-name/node` (see [Layout origins](#layout-origins))
 - Auto-generates kustomization.yaml files
-- Supports recursive discovery of manifests
-- Handles FluxSeparate vs FluxIntegratedPerLayout placement modes
+- Handles FluxSeparate, FluxIntegratedPerLayout and FluxIntegratedPerBundle placement modes
 
 ### ArgoCD Integration  
-- Uses `spec.source.path: clusters/cluster-name/node` format
+- `spec.source.path` is the same layout directory, e.g. `cluster-name/node`
 - Requires explicit kustomization.yaml files (no auto-discovery)
 - Each target directory needs its own Application
 
@@ -133,8 +133,38 @@ Controls how resource YAML files are named:
 
 ### Kustomization Generation
 - **KustomizationExplicit**: Lists all manifest files explicitly
-- **KustomizationRecursive**: References subdirectories only
-- Smart handling of cross-references and child relationships
+- **KustomizationRecursive**: References subdirectories only — except that a
+  `FluxIntegratedPerLayout` layout still lists the files holding the Flux Kustomizations it
+  hosts, which stand in for its child references
+- A `FluxIntegratedPerLayout` layout references no child directory: each child is applied by the
+  Flux Kustomization the integrator placed in the parent's `Resources`, listed as one of its own
+  files. No reference is derived from a child's name.
+- GroupByName bundle layouts are written `KustomizationExplicit`, so the CRs hosted there
+  (umbrella children, PerLayout applications) are listed
+
+### Layout origins
+
+Every layout the walkers build records what it renders: `OriginNodes()`, `OriginBundles()` and
+`OriginApplication()`. A node layout renders its node (plus the node's bundle in nodeOnly mode, and
+the root bundle `ClusterName` layouts always flatten into the root layout); a GroupByName bundle
+layout and an umbrella-child layout render their bundle; a per-app layout its application. A
+`NodeGrouping: GroupFlat` merge and a `FlattenSingleTier` collapse move the absorbed layout's
+origins into the absorbing one. Hand-built layouts have none.
+
+`IndexOrigins(root, cluster)` resolves a cluster's bundles and nodes to those layouts
+(`BundleLayout`, `NodeLayout`, `Parent`, `Bundles` in layout pre-order) and
+`KustomizationPath(b)` is the directory of the layout that renders `b` — the one path every Flux
+Kustomization and ArgoCD Application kure emits for a bundle uses. It refuses a tree it cannot
+resolve: an object rendered twice, a rendered set that differs from what the cluster reaches
+(hand-built, partial or other-cluster trees), two bundles with one name, and a node or bundle
+layout in `AppFileSingle` mode. `WriteManifest` refuses the last case too, including when the mode
+comes from its `Config`: such a layout's files go into its `Namespace`, so no directory would exist
+at its path.
+
+`NodeGrouping: GroupFlat` (with flat bundles and applications, as in the `CentralizedControlPlane`
+preset) refuses to merge a node whose layout has child layouts (umbrella children or augmenter
+layouts): the merge moves only resources and origins, and those layouts, their extra files and
+their Flux CRs would be dropped.
 
 ### Extra Files and ConfigMap Generators
 
@@ -194,16 +224,17 @@ Augmenters may attach sub-layouts as `Children` of a per-app `ManifestLayout`. I
 
 **Eligibility for CR generation.** A child layout receives a Flux `Kustomization` CR when ALL of the following hold:
 
-- The ancestor node bundle's layout operates in `FluxIntegratedPerLayout` mode.
+- Integration runs with `FluxIntegratedPerLayout`.
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
-- The ancestor bundle has a non-nil, non-empty `SourceRef` with both `Kind` and `Name` set. A nil, empty struct, or incomplete `SourceRef` (missing either field) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
+- The child renders no bundle (a child that does already has that bundle's CR in the parent).
+- A source can be resolved: the `SourceRef` of the nearest layout at or above the parent that renders bundles, else the one `SourceRef` the URL-less bundles below the child share. A missing or incomplete `SourceRef` (nil, empty, or without `Kind` or `Name`) causes `IntegrateWithLayout` to return a hard error — a `Kustomization` without `spec.sourceRef` is rejected by Flux.
 
-This rule mirrors exactly what the writers use to emit `flux-system-kustomization-{child.Name}.yaml` from the parent's `kustomization.yaml`, so every file reference the writers produce has a backing CR. The integrator applies this rule recursively: it covers both direct children of the node layout and augmenter-added sub-layouts at any depth.
+The parent's `kustomization.yaml` lists that CR file as one of its own resources, so every child the writers do not reference as a directory has a backing CR. The integrator applies this rule at any depth.
 
 #### Naming Constraint
 
-Child layout `Name` is used as the Flux `Kustomization` CR name in `FluxIntegratedPerLayout` mode (matching the filename emitted by the writers: `flux-system-kustomization-{child.Name}.yaml`). Flux `Kustomization` CRs live in the `flux-system` namespace, so names must be **globally unique across all apps in the cluster** — two CRs with the same `metadata.name` collide.
+Child layout `Name` is used as the Flux `Kustomization` CR name in `FluxIntegratedPerLayout` mode. Flux `Kustomization` CRs live in the `flux-system` namespace, so names must be **globally unique across all apps in the cluster** — two CRs with the same `metadata.name` collide, and the integrator refuses such a tree rather than skipping one of them.
 
 Augmenters are responsible for ensuring uniqueness. The recommended convention is to prefix each child name with the app name: `{appName}-{hookGroupDir}` (e.g. `nginx-00-pre-install`).
 
@@ -215,7 +246,7 @@ Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegr
 
 Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters. When the last segment of `ClusterName` is the root node's name (for example `ClusterName` `platform` with a root node `platform`), the root node is the cluster directory itself: the output is `platform/...`, not `platform/platform/...`.
 
-Without a `ClusterName` the root node sits at `{rootName}` and every child node nests under it (`{rootName}/{childName}/...`), the paths the Flux generator derives from the node hierarchy. An unnamed root node has no directory of its own and stays at `cluster`, with its children at `cluster/{childName}` as before; deeper descendants now nest under them (`cluster/{childName}/{grandchildName}`), where they used to be written outside `cluster/`, unreferenced. `WalkClusterByPackage` places each package's root the same way, below the package directory; a package whose root node belongs to another package has no root directory of its own either, so its unnamed wrapper stays at `cluster`. A node outside the package adds no directory of its own: its in-package descendants attach to the nearest in-package ancestor (or the package root), including where the tree leaves a package and re-enters it lower down.
+Without a `ClusterName` the root node sits at `{rootName}` and every child node nests under it (`{rootName}/{childName}/...`), which is also where the Flux bootstrap sync path `./{rootName}` points. An unnamed root node has no directory of its own and stays at `cluster`, with its children at `cluster/{childName}` as before; deeper descendants now nest under them (`cluster/{childName}/{grandchildName}`), where they used to be written outside `cluster/`, unreferenced. `WalkClusterByPackage` places each package's root the same way, below the package directory; a package whose root node belongs to another package has no root directory of its own either, so its unnamed wrapper stays at `cluster`. A node outside the package adds no directory of its own: its in-package descendants attach to the nearest in-package ancestor (or the package root), including where the tree leaves a package and re-enters it lower down.
 
 ### Flatten Single Tier (opt-in)
 
@@ -232,7 +263,7 @@ Conservative collapse preconditions — ALL must hold:
 
 Multi-tier apps with sub-Kustomizations are unaffected: the precondition that the child be terminal preserves them. Empty containers (`only-Children`) are also unaffected: the precondition requiring the parent to have no own resources doesn't apply to them.
 
-When the layout participates in Flux integration, the flatten helper records redirect tables (`nodeAliases` for `findLayoutNode` lookups, `pathRewrites` for `Spec.Path` rewriting). `IntegrateWithLayout` consults the aliases during integrated placement and calls `ApplyFlattenPathRewrites(root)` before returning, regardless of placement mode (FluxIntegratedPerLayout or FluxSeparate). Direct callers using `WalkCluster` + `IntegrateWithLayout` (without going through `CreateLayoutWithResources`) get the rewrite for free.
+The absorbing layout takes over the collapsed layout's origins (see [Layout origins](#layout-origins)), so every Flux Kustomization and ArgoCD Application generated from the tree names the surviving directory — for both bundles, when parent and child each carried one. Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
 
 Scoped to `WalkCluster`. `WalkClusterByPackage` is unaffected — its synthetic unnamed wrappers express package boundaries that the flatten helper would otherwise erroneously collapse.
 

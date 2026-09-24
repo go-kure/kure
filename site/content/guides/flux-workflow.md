@@ -48,9 +48,7 @@ import (
     "github.com/go-kure/kure/pkg/stack/layout"
 )
 
-engine := fluxcd.EngineWithConfig(
-    layout.KustomizationExplicit,  // List files in kustomization.yaml
-)
+engine := fluxcd.Engine()
 ```
 
 Placement is configured per call on `layout.LayoutRules.FluxPlacement` (see Step 3
@@ -79,10 +77,12 @@ if err != nil {
 ## Step 4: Write to Disk
 
 ```go
-err := layout.WriteManifest(ml, "./clusters")
+err := layout.WriteManifest("./out", layout.DefaultLayoutConfig(), ml.(*layout.ManifestLayout))
 ```
 
-This produces a directory structure like:
+`WriteManifest` writes under `<basePath>/<ManifestsDir>` (`./out/clusters` here). Every Flux
+Kustomization `spec.path` is a layout directory relative to that root, so root the Flux source
+there. This produces a directory structure like:
 
 ```
 clusters/
@@ -156,6 +156,35 @@ What changed, and what to do:
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 
+### Flux paths come from the layout (breaking change)
+
+Every Flux Kustomization `spec.path` (and ArgoCD Application `source.path`) is now the directory of
+the layout that renders the bundle, taken from the walked layout tree. Before, the generator
+derived it from bundle names alone, so a node-level bundle's path was just its name and pointed at
+a directory the layout never wrote whenever a node and its bundle were named differently, or a
+`ClusterName` prefixed the tree. See
+[Kustomization paths](/api-reference/flux-engine/#kustomization-paths) for the rule.
+
+What changed, and what to do:
+
+- **Removed APIs.** `GenerateFromBundle`, `GenerateFromNode`, `EngineWithMode`, `EngineWithConfig`,
+  `NewWorkflowEngineWithConfig`, `SetKustomizationMode` and `ResourceGenerator.Mode` are gone.
+  Generate from a walked layout (`ResourceGenerator.GenerateFromLayout`) or for one bundle at a path
+  you supply (`GenerateForBundle`). `GenerateFromCluster` stays and uses the directories of a
+  default-rules walk.
+- **Integrate walked layouts only.** `IntegrateWithLayout` refuses a layout `layout.WalkCluster`
+  did not build from the same cluster — build the tree with `WalkCluster` instead of by hand.
+- **PerLayout hosts.** Under `FluxIntegratedPerLayout` a node bundle's CR now sits in the parent of
+  the layout that renders it, like every other PerLayout CR, and the parent's `kustomization.yaml`
+  lists it as a resource file. The writers no longer emit a `flux-system-kustomization-<child>.yaml`
+  reference guessed from a child's name. A bundle-less node layout gets its own CR named
+  `<path, "/" → "-">-node`.
+- **Refusals.** Two bundles with one name, a CR name used twice, a `NodeGrouping: GroupFlat` merge
+  of a node that has umbrella children or augmenter layouts, and a node or bundle layout written as
+  `AppFileSingle` are errors.
+- **FlattenSingleTier** no longer rewrites Flux CRs a caller added to the tree; generated CRs
+  already name the surviving directory.
+
 ## Umbrella Bundles — Readiness Aggregation
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
@@ -216,17 +245,18 @@ the `Bundle` of a `stack.Node` and appear in another bundle's `Children`.
 
 ### Disk layout
 
-In `FluxIntegratedPerLayout` placement, the umbrella children's Flux Kustomization CRs
-live alongside the parent's, and the parent's `kustomization.yaml` references
-each child via the CR file (not the child subdirectory):
+In `FluxIntegratedPerLayout` placement, each Flux Kustomization CR sits in the
+parent of the directory it applies, and that parent's `kustomization.yaml`
+lists the CR file (not the child subdirectory). With `GroupByName` bundles:
 
 ```
-clusters/production/apps/
+clusters/production/apps/                         # node directory
+  flux-system-kustomization-platform.yaml         # umbrella self CR (healthChecks), spec.path: .../apps/platform
+  kustomization.yaml                              # lists the platform CR file
   platform/                                       # umbrella bundle directory
-    flux-system-kustomization-platform.yaml       # umbrella self CR (healthChecks)
-    flux-system-kustomization-platform-infra.yaml # child CR (placed at parent)
+    flux-system-kustomization-platform-infra.yaml # child CR (placed at parent), spec.path: .../platform/platform-infra
     flux-system-kustomization-platform-apps.yaml  # child CR (placed at parent)
-    kustomization.yaml                            # references the CR files
+    kustomization.yaml                            # lists the child CR files
     platform-infra/                               # umbrella child subdirectory
       workload-*.yaml
       kustomization.yaml                          # workloads only, no Flux CRs
@@ -253,7 +283,8 @@ A `LayoutAugmenter` can attach sub-`ManifestLayout` children to a per-app layout
 A child layout receives a CR when:
 - `!child.UmbrellaChild`
 - `child.ApplicationFileMode != AppFileSingle`
-- The ancestor bundle's `SourceRef` has both `Kind` and `Name` set (nil, empty struct, or missing either field is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
+- it renders no bundle (a child that does already has that bundle's CR in the parent)
+- a source resolves: the `SourceRef` of the nearest bundle-rendering layout at or above the parent, with both `Kind` and `Name` set, else the one `SourceRef` the URL-less bundles below the child share (nil, empty struct, missing either field, or ambiguous is a hard error — a `Kustomization` without `spec.sourceRef` is invalid)
 
 `CreateLayoutWithResources` validates SourceRef completeness for all bundles before layout walking. Both the node bundle and every umbrella child bundle must have `SourceRef.Kind` and `SourceRef.Name` set when either inline mode (`FluxIntegratedPerLayout` or `FluxIntegratedPerBundle`) is active — both emit bundle/node CRs carrying a `spec.sourceRef`. `FluxSeparate` and non-Flux callers are unaffected.
 

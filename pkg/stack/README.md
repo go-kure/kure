@@ -190,6 +190,11 @@ wf, err := stack.NewWorkflow("flux")
 objects, err := wf.GenerateFromCluster(cluster)
 ```
 
+`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()`: every Flux
+Kustomization `spec.path` and ArgoCD Application `source.path` is a directory that walk writes.
+To write the layout with other rules, use `CreateLayoutWithResources`, which generates from the
+layout it walks.
+
 Supported workflow providers: `"flux"` / `"fluxcd"` and `"argo"` / `"argocd"`.
 
 ## Source References

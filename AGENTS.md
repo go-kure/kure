@@ -268,6 +268,8 @@ wf, err := stack.NewWorkflow("argocd")
 if err != nil {
     return err
 }
+// Application paths are the directories a default-rules WalkCluster writes;
+// CreateLayoutWithResources generates from the layout it walks with your rules.
 apps, err := wf.GenerateFromCluster(cluster)
 ```
 
