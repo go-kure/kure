@@ -264,6 +264,19 @@ func TestWalkCluster_FlatMergeCollisionRefused(t *testing.T) {
 			},
 			wantErr: "same object",
 		},
+		{
+			// kustomize reads an omitted namespace as "default": the two
+			// objects are one.
+			name: "omitted_vs_default_namespace",
+			apps: func(i string) []*stack.Application {
+				ns := "default"
+				if i == "1" {
+					ns = ""
+				}
+				return []*stack.Application{stack.NewApplication("dup"+i, "default", &fakeConfig{objs: []*client.Object{axisObj("cm", ns)}})}
+			},
+			wantErr: "same object",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
