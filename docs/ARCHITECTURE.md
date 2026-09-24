@@ -502,7 +502,7 @@ rule: `SetLabels`, `AddLabel`, `SetAnnotations` and `AddAnnotation` write throug
 `metav1.Object` interface rather than into a field, so they match no write shape and the classifier
 admits them by name as a fourth outcome (`Exempt`). That is what lets one metadata helper set cover
 every kind, including kinds kure does not register; the normative statement is
-[Kubernetes Builders](https://www.gokure.dev/kure/api-reference/kubernetes-builders/) §5. It is a
+[Kubernetes Builders](/api-reference/kubernetes-builders/) §5. It is a
 fixed set, not an exclusion list — it never grows.
 
 Constructors are outside the test's remit — `Create*` is not sugar, and the generator is what keeps
