@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -955,5 +956,114 @@ func TestGenerateFromLayout_PatchScopeAfterFlattenSingleTier(t *testing.T) {
 	_, err := generateUnits(t, &stack.Cluster{Name: "demo", Node: r}, rules)
 	if err == nil || !strings.Contains(err.Error(), "one-cm") {
 		t.Fatalf("GenerateFromLayout: err = %v; want a refusal naming b1's one-cm", err)
+	}
+}
+
+// TestIntegrateWithLayout_AppKustomizationIsNotAPlacement: a Kustomization an
+// application emits is the application's output, not one an integration
+// placed, so a tree carrying one is still integrated with any placement.
+func TestIntegrateWithLayout_AppKustomizationIsNotAPlacement(t *testing.T) {
+	tenant := &kustv1.Kustomization{}
+	tenant.SetGroupVersionKind(kustv1.GroupVersion.WithKind("Kustomization"))
+	tenant.SetName("tenant")
+	tenant.SetNamespace("tenants")
+	tenant.Spec.Path = "./tenant"
+	var obj client.Object = tenant
+	c := mergedCluster(func(rb, _, _ *stack.Bundle) {
+		rb.Applications = append(rb.Applications, stack.NewApplication("tenants", "default", &fakeAppConfig{objs: []*client.Object{&obj}}))
+	})
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerBundle
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	rules.FluxPlacement = layout.FluxSeparate
+	if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+		t.Fatalf("IntegrateWithLayout: %v", err)
+	}
+}
+
+// TestGenerateFromLayout_PatchScopeUsesEffectiveNamespace: kustomize matches
+// a target's namespace against an object's effective namespace, "default"
+// for a namespaced object that names none; generated ConfigMaps name none.
+func TestGenerateFromLayout_PatchScopeUsesEffectiveNamespace(t *testing.T) {
+	bare := &unstructured.Unstructured{}
+	bare.SetAPIVersion("v1")
+	bare.SetKind("ConfigMap")
+	bare.SetName("bare-cm")
+	var obj client.Object = bare
+	for name, edit := range map[string]func(b2 *stack.Bundle){
+		"written": func(b2 *stack.Bundle) {
+			b2.Applications = append(b2.Applications, stack.NewApplication("bare", "default", &fakeAppConfig{objs: []*client.Object{&obj}}))
+		},
+		"generated": func(b2 *stack.Bundle) {
+			b2.Applications = append(b2.Applications, stack.NewApplication("hook", "default", &hookAugmenter{app: "hook"}))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := mergedCluster(func(_, b1, b2 *stack.Bundle) {
+				edit(b2)
+				b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "bare-cm|hook-values", Namespace: "default"}}}
+			})
+			if _, err := generateUnits(t, c, allFlat); err == nil {
+				t.Fatal("GenerateFromLayout accepted a target that selects b2's namespace-less ConfigMap in namespace default")
+			}
+		})
+	}
+}
+
+// TestIntegrateWithLayout_PerLayoutPatchScopeIsWhatTheUnitBuilds: under
+// FluxIntegratedPerLayout per-app directories are applied by their own CRs,
+// not built by the bundle's unit, so a patch cannot reach their objects and
+// is not refused for them.
+func TestIntegrateWithLayout_PerLayoutPatchScopeIsWhatTheUnitBuilds(t *testing.T) {
+	c := mergedCluster(func(_, b1, _ *stack.Bundle) {
+		b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap"}}}
+	})
+	rules := allFlat
+	rules.ApplicationGrouping = layout.GroupByName
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	if _, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules); err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+}
+
+// TestIntegrateWithLayout_RefusedCallLeavesTreeUntouched: a call refused
+// part-way leaves no CR, pinned file mode or child behind, so a retry
+// produces what a first integration would.
+func TestIntegrateWithLayout_RefusedCallLeavesTreeUntouched(t *testing.T) {
+	var b2 *stack.Bundle
+	c := mergedCluster(func(_, _, bb *stack.Bundle) { b2 = bb })
+	rules := propertyGroupings["GroupByName"]
+	rules.FluxPlacement = layout.FluxIntegratedPerBundle
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	b2.Interval = "bogus"
+	perLayout := rules
+	perLayout.FluxPlacement = layout.FluxIntegratedPerLayout
+	if err := li.IntegrateWithLayout(ml, c, perLayout); err == nil {
+		t.Fatal("IntegrateWithLayout accepted interval \"bogus\"")
+	}
+	b2.Interval = ""
+	if err := li.IntegrateWithLayout(ml, c, rules); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	fresh, err := li.CreateLayoutWithResources(mergedCluster(nil), rules)
+	if err != nil {
+		t.Fatalf("fresh: %v", err)
+	}
+	if got, want := len(kustomizations(ml)), len(kustomizations(fresh)); got != want {
+		t.Errorf("retry left %d Kustomizations; a first integration has %d", got, want)
+	}
+	var dirs []string
+	for _, k := range kustomizations(ml) {
+		dirs = append(dirs, k.Spec.Path)
+	}
+	for writer, w := range writeAll(t, ml) {
+		checkWrittenTree(t, writer, w, dirs, false)
 	}
 }

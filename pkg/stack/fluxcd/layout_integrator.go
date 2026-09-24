@@ -59,22 +59,19 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	// each layout's own FluxPlacement whether a child is listed as a
 	// directory or through its CR, so a tree walked with another placement
 	// would apply directories twice or leave CRs unapplied. A tree that
-	// already holds Flux Kustomizations was placed by them, so it is not
-	// re-placed; and a refused call puts every placement back.
+	// already holds Flux Kustomizations placed outside its applications (an
+	// earlier integration's, or a caller's) was placed by them, so it is not
+	// re-placed; and a refused call puts the tree back as it was.
 	if !isFluxPlacement(rules.FluxPlacement) {
 		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
 			[]string{string(layout.FluxIntegratedPerLayout), string(layout.FluxIntegratedPerBundle), string(layout.FluxSeparate)})
 	}
 	if ml.FluxPlacement != rules.FluxPlacement {
-		existing, err := indexExistingKustomizations(ml, nil)
-		if err != nil {
-			return err
-		}
-		if len(existing) > 0 {
-			return errors.Errorf("layout %q already holds Flux Kustomizations placed %q: it cannot be integrated again as %q", ml.FullRepoPath(), ml.FluxPlacement, rules.FluxPlacement)
+		if placed := placedKustomization(ml); placed != "" {
+			return errors.Errorf("layout %q already holds Flux Kustomization %q, placed for %q: it cannot be integrated again as %q", ml.FullRepoPath(), placed, ml.FluxPlacement, rules.FluxPlacement)
 		}
 	}
-	restore := savePlacement(ml)
+	restore := saveLayouts(ml)
 	setPlacement(ml, rules.FluxPlacement)
 
 	var err error
@@ -93,26 +90,75 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	return err
 }
 
-// savePlacement records the placement of l and every layout below it and
-// returns a function that puts them back.
-func savePlacement(l *layout.ManifestLayout) func() {
-	saved := map[*layout.ManifestLayout]layout.FluxPlacement{}
+// saveLayouts records what an integration changes on l and every layout
+// below it — placement, application file mode, resources and children — and
+// returns a function that puts it back, so a refused call leaves the tree as
+// the caller gave it.
+func saveLayouts(l *layout.ManifestLayout) func() {
+	type state struct {
+		placement layout.FluxPlacement
+		fileMode  layout.ApplicationFileMode
+		resources []client.Object
+		children  []*layout.ManifestLayout
+	}
+	saved := map[*layout.ManifestLayout]state{}
 	var walk func(l *layout.ManifestLayout)
 	walk = func(l *layout.ManifestLayout) {
 		if l == nil {
 			return
 		}
-		saved[l] = l.FluxPlacement
+		saved[l] = state{l.FluxPlacement, l.ApplicationFileMode, slices.Clone(l.Resources), slices.Clone(l.Children)}
 		for _, child := range l.Children {
 			walk(child)
 		}
 	}
 	walk(l)
 	return func() {
-		for l, p := range saved {
-			l.FluxPlacement = p
+		for l, st := range saved {
+			l.FluxPlacement, l.ApplicationFileMode = st.placement, st.fileMode
+			l.Resources, l.Children = st.resources, st.children
 		}
 	}
+}
+
+// placedKustomization returns the name of a Flux Kustomization in the tree
+// under ml that no application emitted — one an earlier integration or the
+// caller placed — or "" when there is none. A Kustomization an application
+// emits is that application's output (OriginBundleObjects), not a placement.
+func placedKustomization(ml *layout.ManifestLayout) string {
+	emitted := map[client.Object]bool{}
+	var collect func(l *layout.ManifestLayout)
+	collect = func(l *layout.ManifestLayout) {
+		for _, b := range l.OriginBundles() {
+			for _, o := range l.OriginBundleObjects(b) {
+				emitted[o] = true
+			}
+		}
+		for _, c := range l.Children {
+			if c != nil {
+				collect(c)
+			}
+		}
+	}
+	collect(ml)
+	var find func(l *layout.ManifestLayout) string
+	find = func(l *layout.ManifestLayout) string {
+		for _, r := range l.Resources {
+			if _, ok := fluxKustomizationPath(r); ok && !emitted[r] {
+				return r.GetName()
+			}
+		}
+		for _, c := range l.Children {
+			if c == nil {
+				continue
+			}
+			if name := find(c); name != "" {
+				return name
+			}
+		}
+		return ""
+	}
+	return find(ml)
 }
 
 // isFluxPlacement reports whether p is one of the three placements.

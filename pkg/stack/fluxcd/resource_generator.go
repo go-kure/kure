@@ -355,25 +355,53 @@ func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSe
 	if err != nil {
 		return errors.Wrapf(err, "bundle %q: patch target annotation selector", b.Name)
 	}
+	// Under FluxIntegratedPerLayout a per-app directory is applied by its own
+	// CR, not built by this unit: only the objects in l's own directory are.
+	built := func(client.Object) bool { return true }
+	if l.FluxPlacement == layout.FluxIntegratedPerLayout {
+		own := map[client.Object]bool{}
+		for _, o := range l.Resources {
+			own[o] = true
+		}
+		built = func(o client.Object) bool { return own[o] }
+	}
 	for _, other := range l.OriginBundles() {
 		if other == b {
 			continue
 		}
 		for _, o := range l.OriginBundleObjects(other) {
 			gvk := o.GetObjectKind().GroupVersionKind()
-			if gvk.Kind == "" ||
-				!sr.MatchGvk(resid.Gvk{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind}) ||
-				!sr.MatchName(o.GetName()) || !sr.MatchNamespace(o.GetNamespace()) ||
+			// kustomize matches the effective namespace: "default" for a
+			// namespaced object that names none.
+			id := resid.NewResIdWithNamespace(resid.Gvk{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind}, o.GetName(), o.GetNamespace())
+			if gvk.Kind == "" || !built(o) ||
+				!sr.MatchGvk(id.Gvk) ||
+				!sr.MatchName(o.GetName()) || !sr.MatchNamespace(id.EffectiveNamespace()) ||
 				!labelSel.Matches(labels.Set(o.GetLabels())) ||
 				!annotationSel.Matches(labels.Set(o.GetAnnotations())) {
 				continue
 			}
 			return errors.ResourceValidationError("Bundle", b.Name, "patches",
 				fmt.Sprintf("bundles %q and %q render one directory %q and so share one Kustomization, which applies every patch to everything it builds: bundle %q's patch target %s also selects %s %q of bundle %q; narrow the target to %q's own objects, or give the bundles directories of their own (NodeGrouping or BundleGrouping GroupByName)",
-					b.Name, other.Name, path, b.Name, sel.String(), gvk.Kind, objectName(o), other.Name, b.Name), nil)
+					b.Name, other.Name, path, b.Name, describeTarget(t), gvk.Kind, objectName(o), other.Name, b.Name), nil)
 		}
 	}
 	return nil
+}
+
+// describeTarget renders a patch target as its set fields, e.g.
+// {kind: ConfigMap, name: one-.*}.
+func describeTarget(t *stack.PatchSelector) string {
+	var parts []string
+	for _, f := range []struct{ k, v string }{
+		{"group", t.Group}, {"version", t.Version}, {"kind", t.Kind}, {"name", t.Name},
+		{"namespace", t.Namespace}, {"labelSelector", t.LabelSelector}, {"annotationSelector", t.AnnotationSelector},
+	} {
+		if f.v != "" {
+			parts = append(parts, f.k+": "+f.v)
+		}
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
 }
 
 // objectName is obj's namespace/name, or its name when it has no namespace.
