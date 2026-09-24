@@ -504,3 +504,81 @@ func TestIntegrateWithLayout_RepeatedCycleRefusal(t *testing.T) {
 		})
 	}
 }
+
+// TestFluxSeparate_SharedGeneratedSource pins that bundles sharing one
+// URL-bearing SourceRef get that Source once, in every writer and on a repeat
+// integration; two different definitions of one Source are refused.
+func TestFluxSeparate_SharedGeneratedSource(t *testing.T) {
+	shared := func() *stack.SourceRef {
+		return &stack.SourceRef{Kind: "GitRepository", Name: "shared", URL: "https://example.com/repo.git", Branch: "main"}
+	}
+	build := func(bSrc *stack.SourceRef) *stack.Cluster {
+		a := &stack.Node{Name: "a", Bundle: &stack.Bundle{Name: "a", SourceRef: shared(), Applications: []*stack.Application{cmApp("a-app")}}}
+		b := &stack.Node{Name: "b", Bundle: &stack.Bundle{Name: "b", SourceRef: bSrc, Applications: []*stack.Application{cmApp("b-app")}}}
+		r := &stack.Node{Name: "r", Children: []*stack.Node{a, b}}
+		a.SetParent(r)
+		b.SetParent(r)
+		return &stack.Cluster{Name: "demo", Node: r}
+	}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxSeparate
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	c := build(shared())
+	ml, err := integrator.CreateLayoutWithResources(c, rules)
+	if err != nil {
+		t.Fatalf("shared Source: %v", err)
+	}
+	if err := integrator.IntegrateWithLayout(ml, c, rules); err != nil {
+		t.Fatalf("repeat integration: %v", err)
+	}
+	writeAll(t, ml)
+
+	other := shared()
+	other.Branch = "develop"
+	if _, err := integrator.CreateLayoutWithResources(build(other), rules); err == nil || !strings.Contains(err.Error(), "shared") {
+		t.Errorf("two definitions of GitRepository shared: got %v, want a refusal naming it", err)
+	}
+}
+
+// TestIntegrateWithLayout_SourceDefaultNamespaceIdentity pins that a Source
+// already in its host without a namespace is the same object as the one
+// generated in "default": a repeat integration keeps it instead of adding a
+// second copy the writers would refuse.
+func TestIntegrateWithLayout_SourceDefaultNamespaceIdentity(t *testing.T) {
+	gen := fluxstack.NewResourceGenerator()
+	gen.DefaultNamespace = "default"
+	src := &stack.SourceRef{Kind: "GitRepository", Name: "shared", URL: "https://example.com/repo.git", Branch: "main"}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform", SourceRef: src, Applications: []*stack.Application{cmApp("core")}}}}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	integrator := fluxstack.NewLayoutIntegrator(gen)
+	ml, err := integrator.CreateLayoutWithResources(c, rules)
+	if err != nil {
+		t.Fatalf("CreateLayoutWithResources: %v", err)
+	}
+	sources := func() int {
+		n := 0
+		var walk func(l *layout.ManifestLayout)
+		walk = func(l *layout.ManifestLayout) {
+			for _, o := range l.Resources {
+				if o.GetObjectKind().GroupVersionKind().Kind == "GitRepository" {
+					n++
+					o.SetNamespace("")
+				}
+			}
+			for _, ch := range l.Children {
+				walk(ch)
+			}
+		}
+		walk(ml)
+		return n
+	}
+	before := sources()
+	if err := integrator.IntegrateWithLayout(ml, c, rules); err != nil {
+		t.Fatalf("repeat integration: %v", err)
+	}
+	if after := sources(); after != before {
+		t.Errorf("GitRepository count %d -> %d: the Source without a namespace was not recognised", before, after)
+	}
+	writeAll(t, ml)
+}
