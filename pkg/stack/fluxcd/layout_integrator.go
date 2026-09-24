@@ -123,6 +123,15 @@ type integratedPlacement struct {
 	// spec.path: Flux Kustomizations share one namespace, so a name is an
 	// identity.
 	names map[string]string
+	// existing maps every Kustomization already in the tree (an earlier
+	// integration's, or a caller's) to where it sits.
+	existing map[string]existingCR
+}
+
+// existingCR is a Kustomization found in the tree before this pass.
+type existingCR struct {
+	host *layout.ManifestLayout
+	path string
 }
 
 // sourceScope is the SourceRef a layout's subtree sources its layout CRs
@@ -160,6 +169,10 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		perLayout: perLayout,
 		nodeOf:    map[*stack.Bundle]*stack.Node{},
 		names:     map[string]string{},
+		existing:  map[string]existingCR{},
+	}
+	if err := p.indexExisting(ml); err != nil {
+		return err
 	}
 	var index func(n *stack.Node)
 	index = func(n *stack.Node) {
@@ -210,10 +223,10 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 				continue
 			}
 			name := layoutCRName(child)
-			if k := findKustomization(l.Resources, name); k != nil && k.Spec.Path == child.FullRepoPath() {
+			if e, ok := p.existing[name]; ok && e.host == l && e.path == child.FullRepoPath() {
 				// Placed by an earlier integration: kept as is, so its
 				// source need not be resolved again.
-				if err := p.claim(name, k.Spec.Path); err != nil {
+				if err := p.claim(name, e.path); err != nil {
 					return err
 				}
 				continue
@@ -307,16 +320,40 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			if err := p.claim(k.Name, k.Spec.Path); err != nil {
 				return err
 			}
-			if existing := findKustomization(host.Resources, k.Name); existing != nil {
-				if existing.Spec.Path == k.Spec.Path {
+			if e, ok := p.existing[k.Name]; ok {
+				if e.host == host && e.path == k.Spec.Path {
 					continue
 				}
-				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q; this integration derives %q", host.FullRepoPath(), k.Name, existing.Spec.Path, k.Spec.Path)
+				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q; this integration derives %q in layout %q", e.host.FullRepoPath(), k.Name, e.path, k.Spec.Path, host.FullRepoPath())
 			}
 		} else if hasObject(host.Resources, obj) {
 			continue
 		}
 		host.Resources = append(host.Resources, obj)
+	}
+	return nil
+}
+
+// indexExisting records every Kustomization already in the tree. One name
+// present twice is an identity collision before this pass adds anything.
+func (p *integratedPlacement) indexExisting(l *layout.ManifestLayout) error {
+	for _, r := range l.Resources {
+		k, ok := r.(*kustv1.Kustomization)
+		if !ok {
+			continue
+		}
+		if prev, dup := p.existing[k.Name]; dup {
+			return errors.Errorf("Flux Kustomization name %q is present twice (in layout %q with spec.path %q and in layout %q with spec.path %q): Kustomization names must be unique", k.Name, prev.host.FullRepoPath(), prev.path, l.FullRepoPath(), k.Spec.Path)
+		}
+		p.existing[k.Name] = existingCR{host: l, path: k.Spec.Path}
+	}
+	for _, c := range l.Children {
+		if c == nil {
+			continue
+		}
+		if err := p.indexExisting(c); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -350,15 +387,6 @@ func sourceRefOf(b *stack.Bundle) kustv1.CrossNamespaceSourceReference {
 		Name:      b.SourceRef.Name,
 		Namespace: b.SourceRef.Namespace,
 	}
-}
-
-func findKustomization(resources []client.Object, name string) *kustv1.Kustomization {
-	for _, r := range resources {
-		if k, ok := r.(*kustv1.Kustomization); ok && k.Name == name {
-			return k
-		}
-	}
-	return nil
 }
 
 func hasObject(resources []client.Object, obj client.Object) bool {

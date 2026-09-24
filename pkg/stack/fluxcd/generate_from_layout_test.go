@@ -348,12 +348,12 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string,
 		if err != nil || info.IsDir() || info.Name() == "kustomization.yaml" {
 			return err
 		}
-		if len(fluxPaths(t, p)) == 0 {
+		if len(fluxPaths(t, p)) == 0 && !holdsFluxSource(t, p) {
 			return nil
 		}
 		if !reached[p] && filepath.Base(filepath.Dir(p)) != fluxstack.DefaultFluxDirName {
 			rel, _ := filepath.Rel(w.root, p)
-			t.Errorf("%s: Flux Kustomization file %s is not applied", writer, rel)
+			t.Errorf("%s: Flux Kustomization or Source file %s is not applied", writer, rel)
 		}
 		return nil
 	})
@@ -365,6 +365,18 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string,
 			t.Errorf("%s: spec.path %q is not a written directory", writer, d)
 		}
 	}
+}
+
+// holdsFluxSource reports whether a manifest file holds a Flux source
+// (GitRepository, OCIRepository, ...): a generated Kustomization references it,
+// so it must be applied too.
+func holdsFluxSource(t *testing.T, p string) bool {
+	t.Helper()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Contains(string(data), "apiVersion: source.toolkit.fluxcd.io/")
 }
 
 // fluxPaths returns the spec.path of every Flux Kustomization in a manifest
@@ -868,6 +880,73 @@ func TestFluxSeparate_ClusterNamePathsResolve(t *testing.T) {
 			}
 			for writer, w := range writeAll(t, ml) {
 				checkWrittenTree(t, writer, w, dirs, false)
+			}
+		})
+	}
+}
+
+// setRecursive writes every layout that has children in KustomizationRecursive
+// mode, which lists child references instead of the layout's own files.
+func setRecursive(ml *layout.ManifestLayout) {
+	if len(ml.Children) > 0 {
+		ml.Mode = layout.KustomizationRecursive
+	}
+	for _, c := range ml.Children {
+		setRecursive(c)
+	}
+}
+
+// TestPerLayoutRecursive_AppliesGeneratedSources: in Recursive mode a
+// PerLayout layout lists the Flux objects it hosts in place of its child
+// references — the Sources generated for a URL-bearing SourceRef included, or
+// the Kustomization referencing them cannot reconcile.
+func TestPerLayoutRecursive_AppliesGeneratedSources(t *testing.T) {
+	for _, ref := range []*stack.SourceRef{
+		{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"},
+		{Kind: "OCIRepository", Name: "web-oci", Namespace: "flux-system", URL: "oci://example.com/web", Tag: "v1"},
+	} {
+		t.Run(ref.Kind, func(t *testing.T) {
+			web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: ref, Applications: []*stack.Application{cmApp("web-app")}}}
+			root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{web}}
+			rules := propertyGroupings["nodeOnly"]
+			rules.ClusterName = "prod"
+			rules.FluxPlacement = layout.FluxIntegratedPerLayout
+			ml := integrated(t, &stack.Cluster{Name: "demo", Node: root}, rules)
+			setRecursive(ml)
+			var dirs []string
+			for _, k := range kustomizations(ml) {
+				dirs = append(dirs, k.Spec.Path)
+			}
+			for writer, w := range writeAll(t, ml) {
+				checkWrittenTree(t, writer, w, dirs, true)
+			}
+		})
+	}
+}
+
+// TestIntegrateWithLayout_RejectsExistingDuplicateCRs: a Kustomization name
+// already present twice in the tree is a CR identity collision, wherever the
+// duplicate sits.
+func TestIntegrateWithLayout_RejectsExistingDuplicateCRs(t *testing.T) {
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	for name, pick := range map[string]func(ml *layout.ManifestLayout) *layout.ManifestLayout{
+		"same host":    func(ml *layout.ManifestLayout) *layout.ManifestLayout { return ml.Children[0] },
+		"another host": func(ml *layout.ManifestLayout) *layout.ManifestLayout { return ml },
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := propertyShapes["different-name"]()
+			ml := integrated(t, c, rules)
+			// web-bundle's CR is hosted by the apps layout (ml.Children[0]).
+			dup := &kustv1.Kustomization{}
+			dup.Name = "web-bundle"
+			dup.Namespace = "flux-system"
+			dup.Spec.Path = "wrong/path"
+			host := pick(ml)
+			host.Resources = append(host.Resources, dup)
+			err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+			if err == nil || !strings.Contains(err.Error(), `"web-bundle"`) {
+				t.Errorf("got %v, want an error naming the duplicated web-bundle", err)
 			}
 		})
 	}
