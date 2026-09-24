@@ -555,6 +555,18 @@ func collectPackageRefs(n *stack.Node, inheritedPackageRef *schema.GroupVersionK
 	}
 }
 
+// packageChildren returns what to attach to parent for the child layout cl.
+// An excluded node adds no path segment, so the unnamed wrapper the package
+// walk builds around it sits in the directory of the layout it is attached
+// to; its children are attached directly instead, so two layouts never share
+// one directory (the writers refuse that).
+func packageChildren(parent, cl *ManifestLayout) []*ManifestLayout {
+	if cl.Name == "" && len(cl.Resources) == 0 && cl.FullRepoPath() == parent.FullRepoPath() {
+		return cl.Children
+	}
+	return []*ManifestLayout{cl}
+}
+
 // walkNodeForPackage walks the tree but only includes nodes that belong to the specified package
 func walkNodeForPackage(n *stack.Node, ancestors []string, nodeOnly bool, filePer FileExportMode, targetPackageRef *schema.GroupVersionKind, targetKey string, fileNaming FileNamingMode) (*ManifestLayout, error) {
 	return walkNodeForPackageInternal(n, ancestors, nodeOnly, filePer, nil, targetPackageRef, targetKey, fileNaming)
@@ -639,7 +651,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 					return nil, err
 				}
 				if cl != nil {
-					children = append(children, cl)
+					children = append(children, packageChildren(ml, cl)...)
 				}
 			}
 
@@ -653,7 +665,7 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 					return nil, err
 				}
 				if cl != nil {
-					ml.Children = append(ml.Children, cl)
+					ml.Children = append(ml.Children, packageChildren(ml, cl)...)
 				}
 			}
 		}
@@ -666,14 +678,6 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 				return nil, err
 			}
 			if cl != nil {
-				// An excluded child returns its own unnamed wrapper at this
-				// same directory (excluded nodes add no path segment). Take
-				// its children instead of nesting a second wrapper in one
-				// directory, which the writers refuse.
-				kids := []*ManifestLayout{cl}
-				if cl.Name == "" && cl.Namespace == filepath.Join(ancestors...) && len(cl.Resources) == 0 {
-					kids = cl.Children
-				}
 				// If we get a valid layout from a child but this node doesn't belong to the package,
 				// we need to create a minimal parent structure
 				if ml == nil {
@@ -682,11 +686,9 @@ func walkNodeForPackageInternal(n *stack.Node, ancestors []string, nodeOnly bool
 						Namespace:  filepath.Join(ancestors...),
 						FilePer:    filePer,
 						FileNaming: fileNaming,
-						Children:   kids,
 					}
-				} else {
-					ml.Children = append(ml.Children, kids...)
 				}
+				ml.Children = append(ml.Children, packageChildren(ml, cl)...)
 			}
 		}
 	}

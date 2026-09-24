@@ -215,7 +215,7 @@ Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegr
 
 Setting `LayoutRules.ClusterName` prepends the cluster name as a root directory, producing paths like `{clusterName}/{nodeName}/...` instead of `{nodeName}/...`. This is useful when a single repository manages multiple clusters. When the last segment of `ClusterName` is the root node's name (for example `ClusterName` `platform` with a root node `platform`), the root node is the cluster directory itself: the output is `platform/...`, not `platform/platform/...`.
 
-Without a `ClusterName` the root node sits at `{rootName}` and every child node nests under it (`{rootName}/{childName}/...`), the paths the Flux generator derives from the node hierarchy. `WalkClusterByPackage` places each package's root the same way, below the package directory.
+Without a `ClusterName` the root node sits at `{rootName}` and every child node nests under it (`{rootName}/{childName}/...`), the paths the Flux generator derives from the node hierarchy. `WalkClusterByPackage` places each package's root the same way, below the package directory. A node outside the package adds no directory of its own: its in-package descendants attach to the nearest in-package ancestor (or the package root), including where the tree leaves a package and re-enters it lower down.
 
 ### Flatten Single Tier (opt-in)
 
