@@ -234,3 +234,87 @@ func TestIntegrateWithLayout_OneKustomizationPerDirectory(t *testing.T) {
 }
 
 var _ client.Object = (*kustv1.Kustomization)(nil)
+
+// TestGenerateFromLayout_HealthChecksMapToUnits pins that a health check on a
+// Flux Kustomization follows the merge: one naming a bundle whose Kustomization
+// the merge removed names that bundle's unit, and one on the unit itself is
+// dropped (it would wait for itself). Other health checks are kept.
+func TestGenerateFromLayout_HealthChecksMapToUnits(t *testing.T) {
+	kust := func(name string) stack.HealthCheck {
+		return stack.HealthCheck{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: name, Namespace: "flux-system"}
+	}
+	deploy := stack.HealthCheck{APIVersion: "apps/v1", Kind: "Deployment", Name: "core", Namespace: "default"}
+	c := mergedCluster(func(rb, b1, b2 *stack.Bundle) {
+		rb.HealthChecks = []stack.HealthCheck{kust("b1"), deploy}
+		b2.HealthChecks = []stack.HealthCheck{kust("external")}
+	})
+	kusts, err := generateUnits(t, c, allFlat)
+	if err != nil {
+		t.Fatalf("GenerateFromLayout: %v", err)
+	}
+	var got []string
+	for _, hc := range kusts[0].Spec.HealthChecks {
+		got = append(got, hc.Kind+"/"+hc.Name)
+	}
+	sort.Strings(got)
+	if want := []string{"Deployment/core", "Kustomization/external"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("health checks = %v, want %v (b1 is rb's own unit)", got, want)
+	}
+}
+
+// TestGenerateFromLayout_MergedEquivalentSourceNamespaces pins that SourceRefs
+// are compared by effective value: an omitted namespace is the generator's
+// default namespace.
+func TestGenerateFromLayout_MergedEquivalentSourceNamespaces(t *testing.T) {
+	c := mergedCluster(func(rb, b1, b2 *stack.Bundle) {
+		for _, b := range []*stack.Bundle{rb, b1} {
+			b.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: "repo", Namespace: "flux-system"}
+		}
+		b2.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: "repo"}
+	})
+	if _, err := generateUnits(t, c, allFlat); err != nil {
+		t.Fatalf("equivalent SourceRefs refused: %v", err)
+	}
+}
+
+// TestIntegrateWithLayout_RefusesDependencyOnHostedDescendant pins that a
+// Kustomization cannot depend on one whose CR it creates: Flux waits for the
+// dependency before applying the directory that holds it. With the merge, rb
+// depends on u (b1 -> u), and under integrated placements u's CR lives in
+// rb's directory. Separate placement applies every CR from flux-system.
+func TestIntegrateWithLayout_RefusesDependencyOnHostedDescendant(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			u := &stack.Bundle{Name: "u", SourceRef: testSR(), Applications: []*stack.Application{cmApp("ua")}}
+			c := mergedCluster(func(rb, b1, _ *stack.Bundle) {
+				rb.Children = []*stack.Bundle{u}
+				b1.DependsOn = []*stack.Bundle{u}
+			})
+			rules := allFlat
+			rules.FluxPlacement = placement
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			if placement == layout.FluxSeparate {
+				if err != nil {
+					t.Fatalf("separate placement: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "creates") {
+				t.Fatalf("got %v, want a refusal: rb depends on u, whose CR rb's directory creates", err)
+			}
+		})
+	}
+}
+
+// TestIntegrateWithLayout_Idempotent_Merged pins re-integration of a merged
+// (NodeGrouping flat) tree: the one unit Kustomization is recognised, not
+// added again.
+func TestIntegrateWithLayout_Idempotent_Merged(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := allFlat
+			rules.FluxPlacement = placement
+			checkIdempotent(t, mergedCluster(nil), rules)
+		})
+	}
+}

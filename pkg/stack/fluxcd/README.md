@@ -108,14 +108,17 @@ bundle when it has one):
 
 | Bundle setting | In the shared Kustomization |
 |---|---|
-| `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild` | must be the same for every merged bundle (unset compares as the default), else an error naming the setting and the bundles |
-| `HealthChecks`, umbrella health checks | combined, each listed once |
+| `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`), else an error naming the setting and the bundles |
+| `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped |
 | `Labels`, `Annotations` | combined; one key with two values is an error |
 | `Patches` | combined, but only when every patch has a `Target`: an untargeted patch would reach the other bundles' objects |
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
 | `NamedDependsOn` | combined |
 
-A dependency cycle between Kustomizations, including one a merge closes, is an error. ArgoCD
+A dependency cycle between Kustomizations, including one a merge closes or one through an umbrella
+parent's health checks on its children, is an error. So is, under integrated placement, a
+Kustomization that depends on one whose CR it creates (directly or through Kustomizations it
+creates): Flux waits for the dependency before applying the directory that would create it. ArgoCD
 Applications follow the same rule. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
 

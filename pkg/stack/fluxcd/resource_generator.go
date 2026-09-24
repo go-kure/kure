@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -121,7 +122,7 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 		if err != nil {
 			return nil, err
 		}
-		if err := mergeIntoUnit(unit, o.(*kustv1.Kustomization), first, b, path); err != nil {
+		if err := g.mergeIntoUnit(unit, o.(*kustv1.Kustomization), first, b, path); err != nil {
 			return nil, err
 		}
 	}
@@ -134,6 +135,24 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 			}
 		}
 	}
+	// A health check on a Flux Kustomization this pass generates names a
+	// bundle; it follows the merge to that bundle's unit, and one on the
+	// unit itself is dropped (it would wait for itself).
+	var checks []metaapi.NamespacedObjectKindReference
+	for _, hc := range unit.Spec.HealthChecks {
+		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
+			(hc.Namespace == "" || hc.Namespace == g.DefaultNamespace) {
+			hc.Name = ix.UnitOfName(hc.Name)
+			if hc.Name == unit.Name {
+				continue
+			}
+		}
+		if !slices.ContainsFunc(checks, func(x metaapi.NamespacedObjectKindReference) bool { return reflect.DeepEqual(x, hc) }) {
+			checks = append(checks, hc)
+		}
+	}
+	unit.Spec.HealthChecks = checks
+
 	unit.Spec.DependsOn = nil
 	named := map[string]bool{}
 	for _, name := range append(ix.UnitDependencies(l), ix.UnitNamedDependencies(l)...) {
@@ -158,12 +177,12 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 
 // mergeIntoUnit folds other, the Kustomization bundle b would have had on its
 // own, into unit, the one for its directory.
-func mergeIntoUnit(unit, other *kustv1.Kustomization, first, b *stack.Bundle, path string) error {
+func (g *ResourceGenerator) mergeIntoUnit(unit, other *kustv1.Kustomization, first, b *stack.Bundle, path string) error {
 	same := []struct {
 		field string
 		a, b  any
 	}{
-		{"sourceRef", first.SourceRef, b.SourceRef},
+		{"sourceRef", g.effectiveSourceRef(first.SourceRef), g.effectiveSourceRef(b.SourceRef)},
 		{"interval", unit.Spec.Interval, other.Spec.Interval},
 		{"timeout", unit.Spec.Timeout, other.Spec.Timeout},
 		{"retryInterval", unit.Spec.RetryInterval, other.Spec.RetryInterval},
@@ -199,6 +218,20 @@ func mergeIntoUnit(unit, other *kustv1.Kustomization, first, b *stack.Bundle, pa
 	}
 	unit.Spec.Patches = append(unit.Spec.Patches, other.Spec.Patches...)
 	return nil
+}
+
+// effectiveSourceRef is ref as the generated objects use it: an omitted
+// namespace is the generator's DefaultNamespace (createSource, and the
+// Kustomization's own namespace for its sourceRef).
+func (g *ResourceGenerator) effectiveSourceRef(ref *stack.SourceRef) *stack.SourceRef {
+	if ref == nil {
+		return nil
+	}
+	out := *ref
+	if out.Namespace == "" {
+		out.Namespace = g.DefaultNamespace
+	}
+	return &out
 }
 
 // unionStrings merges two string maps, refusing one key with two values.

@@ -142,12 +142,14 @@ func (ix *OriginIndex) Units() []*ManifestLayout { return ix.units }
 // fluent builder copies bundles) resolves like the original. A bundle outside
 // the index keeps its own name.
 func (ix *OriginIndex) UnitName(b *stack.Bundle) string {
-	return ix.unitOfName(b.Name)
+	return ix.UnitOfName(b.Name)
 }
 
-// unitOfName maps a bundle name to the name of the unit that applies it; a
-// name no rendered bundle has is returned unchanged.
-func (ix *OriginIndex) unitOfName(name string) string {
+// UnitOfName maps a bundle name to the name of the unit that applies it; a
+// name no rendered bundle has (an external Kustomization, say) is returned
+// unchanged. References to a bundle's Kustomization by name — health checks,
+// dependencies — resolve through it.
+func (ix *OriginIndex) UnitOfName(name string) string {
 	if b := ix.byName[name]; b != nil {
 		if l := ix.bundleLayout[b]; l != nil && len(l.origin.bundles) > 0 {
 			return l.origin.bundles[0].Name
@@ -184,11 +186,11 @@ func (ix *OriginIndex) UnitNamedDependencies(l *ManifestLayout) []string {
 }
 
 func (ix *OriginIndex) mapToUnits(l *ManifestLayout, names []string) []string {
-	self := ix.unitOfName(l.origin.bundles[0].Name)
+	self := ix.UnitOfName(l.origin.bundles[0].Name)
 	seen := map[string]bool{self: true}
 	var out []string
 	for _, name := range names {
-		if unit := ix.unitOfName(name); !seen[unit] {
+		if unit := ix.UnitOfName(name); !seen[unit] {
 			seen[unit] = true
 			out = append(out, unit)
 		}

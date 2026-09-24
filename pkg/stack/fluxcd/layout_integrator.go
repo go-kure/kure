@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"fmt"
+	"path"
 	"reflect"
 	"slices"
 	"strings"
@@ -186,7 +187,72 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		}
 	}
 	index(c.Node)
-	return p.place(ml, sourceScope{})
+	if err := p.place(ml, sourceScope{}); err != nil {
+		return err
+	}
+	return checkCreationOrder(ml)
+}
+
+// checkCreationOrder refuses a Kustomization that depends on one whose CR it
+// creates, directly or through Kustomizations it creates. Under integrated
+// placement a CR is applied by the Kustomization whose spec.path is the
+// nearest directory at or above the one holding the CR's file, and Flux waits
+// for a dependency to be Ready before applying: the dependency would never be
+// created. (A bundle depending on its own umbrella child is refused earlier;
+// merging bundles, or a parent node's bundle depending on a child node's
+// whose CR it hosts, reaches the same deadlock.)
+func checkCreationOrder(root *layout.ManifestLayout) error {
+	type cr struct {
+		host string
+		deps []string
+	}
+	crs := map[string]cr{}
+	byPath := map[string]string{}
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		for _, obj := range l.Resources {
+			k, ok := obj.(*kustv1.Kustomization)
+			if !ok {
+				continue
+			}
+			var deps []string
+			for _, d := range k.Spec.DependsOn {
+				deps = append(deps, d.Name)
+			}
+			crs[k.Name] = cr{host: path.Clean(l.FullRepoPath()), deps: deps}
+			byPath[path.Clean(k.Spec.Path)] = k.Name
+		}
+		for _, child := range l.Children {
+			if child != nil {
+				walk(child)
+			}
+		}
+	}
+	walk(root)
+	creator := func(name string) string {
+		for dir := crs[name].host; ; dir = path.Dir(dir) {
+			if applier, ok := byPath[dir]; ok && applier != name {
+				return applier
+			}
+			if dir == "." || dir == "/" || path.Dir(dir) == dir {
+				return ""
+			}
+		}
+	}
+	for name, c := range crs {
+		for _, dep := range c.deps {
+			if _, ours := crs[dep]; !ours {
+				continue
+			}
+			for cur, hops := creator(dep), 0; cur != "" && hops <= len(crs); cur, hops = creator(cur), hops+1 {
+				if cur == name {
+					return errors.ResourceValidationError("Kustomization", name, "dependsOn",
+						fmt.Sprintf("Kustomization %q depends on %q, whose CR it creates (in %q): Flux waits for the dependency before applying, so it would never be created; drop the dependency or give the bundles directories of their own", name, dep, crs[dep].host), nil)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceScope) error {
