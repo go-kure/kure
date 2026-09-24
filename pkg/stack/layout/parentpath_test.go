@@ -316,3 +316,57 @@ func TestWriters_RefuseEquivalentSingleFilePaths(t *testing.T) {
 		t.Errorf("refused WriteToDisk created %s (err %v)", dir, err)
 	}
 }
+
+func TestWalkClusterByPackage_ReenteredPackageWrites(t *testing.T) {
+	// root(OCI) -> middle(Git) -> leaf(OCI): in the OCI package, middle is
+	// excluded and returns an unnamed wrapper at root's own directory. It is
+	// coalesced into root instead of sitting beside it in one directory.
+	oci := &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}
+	git := &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "GitRepository"}
+	for _, rules := range []layout.LayoutRules{
+		{},
+		{BundleGrouping: layout.GroupByName, ApplicationGrouping: layout.GroupByName},
+	} {
+		leaf := &stack.Node{Name: "leaf", PackageRef: oci, Bundle: &stack.Bundle{Name: "leaf", Applications: []*stack.Application{configMapApp("l")}}}
+		middle := &stack.Node{Name: "middle", PackageRef: git, Bundle: &stack.Bundle{Name: "middle", Applications: []*stack.Application{configMapApp("m")}}, Children: []*stack.Node{leaf}}
+		root := &stack.Node{Name: "root", PackageRef: oci, Bundle: &stack.Bundle{Name: "root", Applications: []*stack.Application{configMapApp("r")}}, Children: []*stack.Node{middle}}
+		leaf.SetParent(middle)
+		middle.SetParent(root)
+		layouts, err := layout.WalkClusterByPackage(&stack.Cluster{Name: "c", Node: root}, rules)
+		if err != nil {
+			t.Fatalf("rules %+v: WalkClusterByPackage: %v", rules, err)
+		}
+		for key, l := range layouts {
+			for name, err := range writers(t, l) {
+				if err != nil {
+					t.Errorf("rules %+v: package %s: %s: %v", rules, key, name, err)
+				}
+			}
+		}
+		// The OCI package holds root's and leaf's resources, all reachable.
+		ociLayout := layouts[oci.String()]
+		if ociLayout == nil {
+			t.Fatalf("rules %+v: no OCI package in %v", rules, layouts)
+		}
+		dir := writeTreeToDisk(t, ociLayout)
+		var content strings.Builder
+		_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				data, _ := os.ReadFile(p)
+				content.Write(data)
+			}
+			return nil
+		})
+		for _, want := range []string{"r-cm", "l-cm"} {
+			if !strings.Contains(content.String(), want) {
+				t.Errorf("rules %+v: OCI package lacks %s", rules, want)
+			}
+		}
+		if strings.Contains(content.String(), "m-cm") {
+			t.Errorf("rules %+v: OCI package contains the Git node's m-cm", rules)
+		}
+		if bad := unresolvedKustomizeRefs(t, dir); len(bad) > 0 {
+			t.Errorf("rules %+v: unresolved kustomize references: %v", rules, bad)
+		}
+	}
+}
