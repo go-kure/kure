@@ -35,17 +35,30 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	return writeManifest(basePath, cfg, ml)
 }
 
-// checkOriginFileModes refuses a node- or bundle-rendering layout that
-// WriteManifest would write in AppFileSingle mode.
+// manifestAppMode is the application file mode WriteManifest writes l with.
+// A layout's own mode wins. Config's ApplicationFileMode is the default for
+// application layouts (and hand-built ones); a layout that renders a node or
+// bundle never takes it, because in AppFileSingle mode its files would go
+// into its Namespace, not the directory its Flux or ArgoCD path names. That
+// is what lets a profile such as ArgoProfile write single files per
+// application while nodes and bundles keep their directories.
+func manifestAppMode(l *ManifestLayout, cfg Config) ApplicationFileMode {
+	if l.ApplicationFileMode != AppFileUnset {
+		return l.ApplicationFileMode
+	}
+	if l.hasNodeOrBundleOrigin() {
+		return AppFilePerResource
+	}
+	return cfg.ApplicationFileMode
+}
+
+// checkOriginFileModes refuses a node- or bundle-rendering layout whose own
+// ApplicationFileMode is AppFileSingle.
 func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
 	if ml == nil {
 		return nil
 	}
-	mode := ml.ApplicationFileMode
-	if mode == AppFileUnset {
-		mode = cfg.ApplicationFileMode
-	}
-	if mode == AppFileSingle && ml.hasNodeOrBundleOrigin() {
+	if manifestAppMode(ml, cfg) == AppFileSingle && ml.hasNodeOrBundleOrigin() {
 		return errors.Errorf("layout %q renders a node or bundle and cannot be written as AppFileSingle: its files would go into %q, not into the directory its Flux or ArgoCD path names", ml.FullRepoPath(), ml.Namespace)
 	}
 	for _, child := range ml.Children {
@@ -65,10 +78,7 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if mode == FilePerUnset {
 		mode = cfg.FilePer
 	}
-	appMode := ml.ApplicationFileMode
-	if appMode == AppFileUnset {
-		appMode = cfg.ApplicationFileMode
-	}
+	appMode := manifestAppMode(ml, cfg)
 	kMode := ml.Mode
 	if kMode == KustomizationUnset {
 		kMode = cfg.ResolveKustomizationMode(ml.FluxPlacement)
