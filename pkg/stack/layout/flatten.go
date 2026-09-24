@@ -66,6 +66,14 @@ func flattenSingleTier(root *ManifestLayout, c *stack.Cluster, rules LayoutRules
 	if root.FileNaming == FileNamingUnset && child.FileNaming != FileNamingUnset {
 		root.FileNaming = child.FileNaming
 	}
+	// The absorbed layout's resources now live in root's directory, so root
+	// renders what it rendered: when both carry bundles, both bundles' paths
+	// are this surviving directory.
+	root.origin.nodes = append(root.origin.nodes, child.origin.nodes...)
+	root.origin.bundles = append(root.origin.bundles, child.origin.bundles...)
+	if child.origin.app != nil {
+		root.origin.app = child.origin.app
+	}
 
 	// Populate redirects.
 	if root.flattenInfo == nil {
