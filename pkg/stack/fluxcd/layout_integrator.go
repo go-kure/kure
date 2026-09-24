@@ -55,6 +55,14 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 
 	rules = normalizeRulesPlacement(rules)
 
+	// The integration's placement is the tree's: the writers decide from
+	// each layout's own FluxPlacement whether a child is listed as a
+	// directory or through its CR, so a tree walked with another placement
+	// would apply directories twice or leave CRs unapplied.
+	if isFluxPlacement(rules.FluxPlacement) {
+		setPlacement(ml, rules.FluxPlacement)
+	}
+
 	switch rules.FluxPlacement {
 	case layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle:
 		// Both place Flux CRs inline. They differ only in granularity:
@@ -67,6 +75,23 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	default:
 		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
 			[]string{string(layout.FluxIntegratedPerLayout), string(layout.FluxIntegratedPerBundle), string(layout.FluxSeparate)})
+	}
+}
+
+// isFluxPlacement reports whether p is one of the three placements.
+func isFluxPlacement(p layout.FluxPlacement) bool {
+	return p == layout.FluxSeparate || p == layout.FluxIntegratedPerLayout || p == layout.FluxIntegratedPerBundle
+}
+
+// setPlacement sets placement on l and every layout below it, augmenter
+// children included.
+func setPlacement(l *layout.ManifestLayout, placement layout.FluxPlacement) {
+	if l == nil {
+		return
+	}
+	l.FluxPlacement = placement
+	for _, child := range l.Children {
+		setPlacement(child, placement)
 	}
 }
 
@@ -306,9 +331,9 @@ func set(kusts []*kustv1.Kustomization) map[string]*kustv1.Kustomization {
 // every Kustomization it health-checks — unless wait is set, when Flux ignores
 // health checks and waits for everything the Kustomization applied (applied,
 // if set, lists the generated CRs among it). creator, if set, names the
-// Kustomization whose apply creates a CR. Identities are namespace/name; references to objects outside
-// the set (other namespaces, Kustomizations an application emits) are not
-// modelled. A cycle is a deadlock on a fresh install: a merge can close one
+// Kustomization whose apply creates a CR. Identities are namespace/name;
+// references to objects outside the set (other namespaces, Kustomizations an
+// application emits) are not modelled. A cycle is a deadlock on a fresh install: a merge can close one
 // (a health check or dependency on a bundle merged into a unit that waits for
 // it), and so can a dependency chain ending at a CR its first member creates.
 func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string) string, applied func(key string) []string) error {
@@ -388,13 +413,6 @@ func checkReconcileOrder(kusts []*kustv1.Kustomization, creator func(key string)
 }
 
 func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceScope) error {
-	// The integration's placement is the tree's: a layout that did not say
-	// (an augmenter's child, say) is placed per layout like its parent, so
-	// the writers list its children's CRs, not their directories, which
-	// their own Kustomizations apply.
-	if p.perLayout && l.FluxPlacement == layout.FluxUnset {
-		l.FluxPlacement = layout.FluxIntegratedPerLayout
-	}
 	scope := inherited
 	bundles := l.OriginBundles()
 	if len(bundles) > 0 {

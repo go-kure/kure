@@ -47,7 +47,9 @@ The engine has no path mode: every Kustomization `spec.path` is a layout directo
 Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured per call on
 `layout.LayoutRules.FluxPlacement`. `FluxUnset` is normalized to
 `FluxSeparate` by `LayoutIntegrator.CreateLayoutWithResources` — matching
-`layout.DefaultLayoutRules()` and the walker. See
+`layout.DefaultLayoutRules()` and the walker. The call's placement is the
+tree's: `IntegrateWithLayout` sets it on every layout it integrates,
+whatever placement the tree was walked with. See
 [Layout Integration](#layout-integration).
 
 ## Resource Generation
@@ -125,7 +127,8 @@ cycle among these waits is refused, naming the chain. Kustomizations an applicat
 and objects in other namespaces, are outside this check. A merge can close one (a health
 check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
 bundle depending on a child node's bundle whose CR only the parent's directory holds (PerLayout). ArgoCD
-Applications follow the same rule. Give bundles directories of their own (`NodeGrouping` or
+Applications get the unit rule but not this check: only a `DependsOn` cycle between units is
+refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
 
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
