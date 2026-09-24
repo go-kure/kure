@@ -125,6 +125,26 @@ func TestFlatten_PropagatesExtraFilesAndCMGen(t *testing.T) {
 	}
 }
 
+// TestFlatten_HandBuiltStillCollapses: a hand-built tree carries no origins;
+// the collapse itself does not depend on them.
+func TestFlatten_HandBuiltStillCollapses(t *testing.T) {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("v1")
+	obj.SetKind("ConfigMap")
+	obj.SetName("cm")
+	parent := &ManifestLayout{
+		Namespace: "arc-runners",
+		Children:  []*ManifestLayout{{Name: "apps", Namespace: "arc-runners", Resources: []client.Object{obj}}},
+	}
+	got := flattenSingleTier(parent, LayoutRules{FlattenSingleTier: true})
+	if got != parent || len(parent.Children) != 0 || len(parent.Resources) != 1 {
+		t.Fatalf("hand-built single tier not collapsed: children %d, resources %d", len(parent.Children), len(parent.Resources))
+	}
+	if len(parent.OriginNodes()) != 0 || len(parent.OriginBundles()) != 0 || parent.OriginApplication() != nil {
+		t.Errorf("a hand-built collapse invented origins: %v %v %v", parent.OriginNodes(), parent.OriginBundles(), parent.OriginApplication())
+	}
+}
+
 func TestFlatten_NoCollapseWhenMultipleChildren(t *testing.T) {
 	cluster := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "apps"}}
 	rules := LayoutRules{FlattenSingleTier: true}

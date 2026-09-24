@@ -1,9 +1,11 @@
 package argocd
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -600,6 +602,90 @@ func TestCreateLayoutWithResources_ArgoCDInsideRootDirectory(t *testing.T) {
 		}
 		if got, want := argo.FullRepoPath(), tc.wantRoot+"/argocd"; got != want {
 			t.Errorf("ClusterName %q: argocd at %q, want %q", tc.clusterName, got, want)
+		}
+	}
+}
+
+// appPaths maps every Application's name to its spec.source.path.
+func appPaths(t *testing.T, objs []client.Object) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, o := range objs {
+		u, ok := o.(*unstructured.Unstructured)
+		if !ok {
+			t.Fatalf("object %T is not unstructured", o)
+		}
+		p, _, err := unstructured.NestedString(u.Object, "spec", "source", "path")
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[u.GetName()] = p
+	}
+	return out
+}
+
+func pathsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func argoTestCluster() *stack.Cluster {
+	umbrella := &stack.Bundle{Name: "web-bundle", Children: []*stack.Bundle{{Name: "web-db"}}}
+	web := &stack.Node{Name: "web", Bundle: umbrella}
+	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform-bundle"}, Children: []*stack.Node{web}}}
+}
+
+// TestGenerateFromCluster_ApplicationPathIsLayoutDir: every Application's
+// path is the directory the default-rules walk writes its bundle to, and
+// umbrella children get Applications too.
+func TestGenerateFromCluster_ApplicationPathIsLayoutDir(t *testing.T) {
+	objs, err := Engine().GenerateFromCluster(argoTestCluster())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"platform-bundle": "platform", "web-bundle": "platform/web", "web-db": "platform/web/web-db"}
+	if got := appPaths(t, objs); !pathsEqual(got, want) {
+		t.Errorf("Application paths = %v, want %v", got, want)
+	}
+}
+
+// TestCreateLayoutWithResources_UsesWalkedRules: the Applications point at the
+// directories of the layout this call walked with the caller's rules, not at
+// a second derivation.
+func TestCreateLayoutWithResources_UsesWalkedRules(t *testing.T) {
+	rules := layout.LayoutRules{BundleGrouping: layout.GroupByName, ApplicationGrouping: layout.GroupByName, ClusterName: "prod"}
+	result, err := Engine().CreateLayoutWithResources(argoTestCluster(), rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ml := result.(*layout.ManifestLayout)
+	var argo *layout.ManifestLayout
+	for _, c := range ml.Children {
+		if c.Name == "argocd" {
+			argo = c
+		}
+	}
+	if argo == nil {
+		t.Fatal("no argocd layout")
+	}
+	want := map[string]string{"platform-bundle": "prod/platform", "web-bundle": "prod/platform/web/web-bundle", "web-db": "prod/platform/web/web-bundle/web-db"}
+	if got := appPaths(t, argo.Resources); !pathsEqual(got, want) {
+		t.Errorf("Application paths = %v, want %v", got, want)
+	}
+
+	// No Flux CRs exist in an Argo layout to reference argocd/, so an
+	// integrated Flux placement is refused.
+	for _, p := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		rules.FluxPlacement = p
+		if _, err := Engine().CreateLayoutWithResources(argoTestCluster(), rules); err == nil || !strings.Contains(err.Error(), "FluxPlacement") {
+			t.Errorf("FluxPlacement %s: got %v, want a refusal", p, err)
 		}
 	}
 }
