@@ -130,17 +130,23 @@ What changed, and what to do:
   it. A caller that set a child's `Namespace` to the full path, including the child's own `Name`
   (`Namespace: "apps/web", Name: "web"`), now gets that name twice (`apps/web/web`). Pass the
   parent's path instead (`Namespace: "apps"`).
-- **Same-name layouts nest.** A bundle and an application with the same name now give `web/web`.
-  Before, they collapsed onto `web/`, and one of the two `kustomization.yaml` files replaced the
-  other.
-- **No `ClusterName`.** The root node now sits at `<root>` instead of `cluster/<root>`, and its
-  child nodes stay at `<root>/<child>`. With `FluxSeparate`, the `flux-system/` layout now sits inside
-  the root's directory, at `<root>/flux-system`, where the root's `kustomization.yaml` references it.
-  Before, it was written beside the root, and that reference dangled. The ArgoCD `argocd/` layout
-  moved the same way. Point anything outside kure that reads these directories (CI scripts, a
-  hand-written sync path) at the new paths.
-- **With a `ClusterName`.** The output is unchanged. The root layout is the cluster directory, and
-  `flux-system/` is still at `<ClusterName>/flux-system`.
+- **Same-name and suffix-sharing layouts nest.** A bundle and an application with the same name
+  now give `web/web`. Before, they collapsed onto `web/`, and one of the two `kustomization.yaml`
+  files replaced the other. The same applies to a name that merely ends another as a string: `oo`
+  under `foo` now gives `foo/oo`.
+- **No `ClusterName`, named root.** The root node now sits at `<root>` instead of `cluster/<root>`,
+  and its child nodes stay at `<root>/<child>`. With `FluxSeparate`, the `flux-system/` layout now
+  sits inside the root's directory, at `<root>/flux-system`, where the root's `kustomization.yaml`
+  references it. Before, it was written beside the root, and that reference dangled. The ArgoCD
+  `argocd/` layout moved the same way. Point anything outside kure that reads these directories
+  (CI scripts, a hand-written sync path) at the new paths. An unnamed root node is unchanged: it
+  still sits at `cluster/`.
+- **With a `ClusterName`.** Most output is unchanged, and `flux-system/` stays at
+  `<ClusterName>/flux-system`. When the last segment of `ClusterName` is the root node's name
+  (`ClusterName: "platform"`, root `platform`), the root is still the cluster directory. When
+  `ClusterName` only ends with the root's name as a string (`ClusterName: "myprod"`, root `prod`),
+  the old rule collapsed the root onto `myprod`. It now nests at `myprod/prod`, so move any
+  external sync path that pointed at `myprod`.
 - **Collisions are refused.** `WriteToDisk`, `WriteToTar` and `WriteManifest` check the whole tree
   before writing anything. They refuse two layouts that resolve to the same directory (compared
   case-insensitively), and two `AppFileSingle` layouts that resolve to the same file.
