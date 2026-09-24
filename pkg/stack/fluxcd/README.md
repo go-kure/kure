@@ -115,7 +115,7 @@ bundle when it has one):
 | `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`; without a `URL` only its kind, name and namespace are compared, the fields a Kustomization carries), else an error naming the setting and the bundles |
 | `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped |
 | `Labels`, `Annotations` | combined; one key with two values is an error |
-| `Patches` | combined, but only when every patch has a `Target`: an untargeted patch would reach the other bundles' objects |
+| `Patches` | combined, but only when every patch has a `Target` that selects none of the other merged bundles' objects (see [Patches in a shared directory](#patches-in-a-shared-directory)) |
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
 | `NamedDependsOn` | combined |
 
@@ -132,6 +132,29 @@ bundle depending on a child node's bundle whose CR only the parent's directory h
 Applications get the unit rule but not this check: only a `DependsOn` cycle between units is
 refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
+
+#### Patches in a shared directory
+
+Flux applies a Kustomization's patches to **everything that Kustomization builds**, not to the
+bundle that declared them. While a bundle has a directory of its own that is the same thing. Once
+a `GroupFlat` axis or `FlattenSingleTier` puts several bundles in one directory, the shared
+Kustomization builds all their objects, so a patch meant for one bundle would also change the
+others' — and a layout setting would silently change what a bundle's patch does. kure refuses
+that instead of generating it:
+
+- an untargeted patch in a shared directory is refused;
+- a targeted patch is refused when its `Target` selects any object another bundle in that
+  directory renders, a ConfigMap an augmenter's `configMapGenerator` makes included. Matching is
+  kustomize's own: `Group`, `Version`, `Kind`, `Name` and `Namespace` are anchored regular
+  expressions (an empty one matches anything), `LabelSelector` and `AnnotationSelector` are
+  Kubernetes selector expressions. A bundle `b1` with `Target: {Kind: ConfigMap}` merged with a
+  bundle that renders a ConfigMap is refused; `Target: {Kind: ConfigMap, Name: one-cm}`, naming
+  `b1`'s own ConfigMap, is accepted.
+
+The error names both bundles, the target and the object it reaches. Narrow the target to the
+bundle's own objects, or give the bundles directories of their own (`NodeGrouping` or
+`BundleGrouping` `GroupByName`). Not covered: objects inside an `ExtraFiles` file (they are not
+kustomize resources) and objects without a kind.
 
 The generator computes no path, the integrator matches nothing by name, and `FlattenSingleTier`
 rewrites nothing afterwards: when it collapses a tier, the surviving layout takes over the

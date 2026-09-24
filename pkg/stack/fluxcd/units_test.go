@@ -858,3 +858,102 @@ func TestUnitDependencies_LayoutWithoutBundles(t *testing.T) {
 		t.Errorf("UnitNamedDependencies(root) = %v; want nil", got)
 	}
 }
+
+// TestGenerateFromLayout_PatchMustNotReachAnotherBundle pins that in a
+// directory several bundles share, a bundle's patch is refused when its
+// target also selects an object another of those bundles renders: Flux
+// applies a Kustomization's patches to everything it builds, so the merge
+// would change what the patch does. Matching follows kustomize: anchored
+// regular expressions on group, version, kind, name and namespace, and label
+// and annotation selectors. The objects are core-cm (rb), one-cm (b1) and
+// two-cm (b2), all ConfigMaps.
+func TestGenerateFromLayout_PatchMustNotReachAnotherBundle(t *testing.T) {
+	appsByName := allFlat
+	appsByName.ApplicationGrouping = layout.GroupByName
+	tests := map[string]struct {
+		target  stack.PatchSelector
+		refused bool
+	}{
+		"kind only":                 {stack.PatchSelector{Kind: "ConfigMap"}, true},
+		"kind regex":                {stack.PatchSelector{Kind: "Config.*"}, true},
+		"own object by name":        {stack.PatchSelector{Kind: "ConfigMap", Name: "one-cm"}, false},
+		"name regex, own only":      {stack.PatchSelector{Name: "o.*"}, false},
+		"name regex, reaches b2":    {stack.PatchSelector{Name: "t.*"}, true},
+		"name is anchored":          {stack.PatchSelector{Name: "cm"}, false},
+		"other kind":                {stack.PatchSelector{Kind: "Deployment"}, false},
+		"other namespace":           {stack.PatchSelector{Kind: "ConfigMap", Namespace: "other"}, false},
+		"label selector, all":       {stack.PatchSelector{LabelSelector: "!absent"}, true},
+		"label selector, none":      {stack.PatchSelector{LabelSelector: "absent"}, false},
+		"annotation selector, all":  {stack.PatchSelector{AnnotationSelector: "!absent"}, true},
+		"annotation selector, none": {stack.PatchSelector{AnnotationSelector: "absent"}, false},
+	}
+	for grouping, rules := range map[string]layout.LayoutRules{"apps flat": allFlat, "apps by name": appsByName} {
+		for name, tt := range tests {
+			t.Run(grouping+"/"+name, func(t *testing.T) {
+				c := mergedCluster(func(_, b1, _ *stack.Bundle) {
+					target := tt.target
+					b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &target}}
+				})
+				_, err := generateUnits(t, c, rules)
+				if !tt.refused {
+					if err != nil {
+						t.Fatalf("GenerateFromLayout: %v", err)
+					}
+					return
+				}
+				if err == nil {
+					t.Fatal("GenerateFromLayout accepted a patch that reaches another bundle's object")
+				}
+				for _, want := range []string{"b1", "patch", "ConfigMap"} {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("error %q does not name %q", err, want)
+					}
+				}
+			})
+		}
+	}
+
+	// Bundles in directories of their own each get their own Kustomization:
+	// a broad target reaches only its bundle's objects.
+	t.Run("own directories", func(t *testing.T) {
+		c := mergedCluster(func(_, b1, _ *stack.Bundle) {
+			b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap"}}}
+		})
+		if _, err := generateUnits(t, c, propertyGroupings["nodeOnly"]); err != nil {
+			t.Fatalf("GenerateFromLayout: %v", err)
+		}
+	})
+}
+
+// TestGenerateFromLayout_PatchMustNotReachAnotherBundlesGeneratedConfigMap:
+// a ConfigMap an augmenter generates through kustomize's configMapGenerator
+// is built by the same Kustomization, so a patch selecting it is refused like
+// one selecting a written object.
+func TestGenerateFromLayout_PatchMustNotReachAnotherBundlesGeneratedConfigMap(t *testing.T) {
+	c := mergedCluster(func(_, b1, b2 *stack.Bundle) {
+		b2.Applications = append(b2.Applications, stack.NewApplication("hook", "default", &hookAugmenter{app: "hook"}))
+		b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "hook-values"}}}
+	})
+	_, err := generateUnits(t, c, allFlat)
+	if err == nil || !strings.Contains(err.Error(), "hook-values") {
+		t.Fatalf("GenerateFromLayout: err = %v; want a refusal naming hook-values", err)
+	}
+}
+
+// TestGenerateFromLayout_PatchScopeAfterFlattenSingleTier: FlattenSingleTier
+// is the other way two bundles come to share a directory; the collapsed
+// bundle's objects stay attributed to it, so the same refusal applies.
+func TestGenerateFromLayout_PatchScopeAfterFlattenSingleTier(t *testing.T) {
+	c1 := &stack.Node{Name: "c1", Bundle: srBundle("b1", cmApp("one"))}
+	rb := srBundle("rb") // no own objects: FlattenSingleTier collapses only an empty parent
+	rb.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap"}}}
+	r := &stack.Node{Bundle: rb, Children: []*stack.Node{c1}} // unnamed: the ClusterName directory renders rb
+	c1.SetParent(r)
+	rules := propertyGroupings["nodeOnly"]
+	rules.ClusterName = "prod"
+	rules.FlattenSingleTier = true
+	_, err := generateUnits(t, &stack.Cluster{Name: "demo", Node: r}, rules)
+	if err == nil || !strings.Contains(err.Error(), "one-cm") {
+		t.Fatalf("GenerateFromLayout: err = %v; want a refusal naming b1's one-cm", err)
+	}
+}

@@ -12,7 +12,10 @@ import (
 	metaapi "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	kusttypes "sigs.k8s.io/kustomize/api/types"
+	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/pkg/errors"
 	pubfluxcd "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
@@ -123,7 +126,9 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 // generateForUnit creates the one Kustomization (and Source) for layout l, a
 // directory that renders bundles. It is named after l's first bundle. Bundles
 // merged into l must agree on every setting a Kustomization holds once; their
-// health checks, labels, annotations and targeted patches are combined; and
+// health checks, labels, annotations and patches are combined, a patch only
+// when its target selects none of the other bundles' objects
+// (checkPatchScope); and
 // spec.dependsOn is the units they depend on (OriginIndex.UnitDependencies)
 // plus their NamedDependsOn.
 func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout.OriginIndex) ([]client.Object, error) {
@@ -156,6 +161,9 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 						other = bundles[1]
 					}
 					return nil, unitConflict(other, b, path, "patches", "an untargeted patch would apply to every merged bundle's objects")
+				}
+				if err := checkPatchScope(l, b, p.Target, path); err != nil {
+					return nil, err
 				}
 			}
 		}
@@ -314,6 +322,66 @@ func unitConflict(first, b *stack.Bundle, path, field, why string) error {
 	return errors.ResourceValidationError("Bundle", b.Name, field,
 		fmt.Sprintf("bundles %q and %q render one directory %q and so share one Kustomization, but their %s differ (%s); give them directories of their own (NodeGrouping or BundleGrouping GroupByName) or align them",
 			first.Name, b.Name, path, field, why), nil)
+}
+
+// checkPatchScope refuses a patch of bundle b whose target selects an object
+// another bundle of unit l renders. Flux applies a Kustomization's patches to
+// everything it builds, and the unit builds every merged bundle's objects, so
+// such a patch would change objects its bundle does not own — something it
+// did not do while b had a directory of its own. The target is matched the
+// way kustomize matches it: group, version, kind, name and namespace as
+// anchored regular expressions (an empty one matches anything), label and
+// annotation selectors as Kubernetes selector expressions. Objects without a
+// kind cannot be matched and are skipped.
+func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSelector, path string) error {
+	sel := kusttypes.Selector{
+		ResId: resid.ResId{
+			Gvk:       resid.Gvk{Group: t.Group, Version: t.Version, Kind: t.Kind},
+			Name:      t.Name,
+			Namespace: t.Namespace,
+		},
+		LabelSelector:      t.LabelSelector,
+		AnnotationSelector: t.AnnotationSelector,
+	}
+	sr, err := kusttypes.NewSelectorRegex(&sel)
+	if err != nil {
+		return errors.Wrapf(err, "bundle %q: patch target %s", b.Name, sel.String())
+	}
+	labelSel, err := labels.Parse(t.LabelSelector)
+	if err != nil {
+		return errors.Wrapf(err, "bundle %q: patch target label selector", b.Name)
+	}
+	annotationSel, err := labels.Parse(t.AnnotationSelector)
+	if err != nil {
+		return errors.Wrapf(err, "bundle %q: patch target annotation selector", b.Name)
+	}
+	for _, other := range l.OriginBundles() {
+		if other == b {
+			continue
+		}
+		for _, o := range l.OriginBundleObjects(other) {
+			gvk := o.GetObjectKind().GroupVersionKind()
+			if gvk.Kind == "" ||
+				!sr.MatchGvk(resid.Gvk{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind}) ||
+				!sr.MatchName(o.GetName()) || !sr.MatchNamespace(o.GetNamespace()) ||
+				!labelSel.Matches(labels.Set(o.GetLabels())) ||
+				!annotationSel.Matches(labels.Set(o.GetAnnotations())) {
+				continue
+			}
+			return errors.ResourceValidationError("Bundle", b.Name, "patches",
+				fmt.Sprintf("bundles %q and %q render one directory %q and so share one Kustomization, which applies every patch to everything it builds: bundle %q's patch target %s also selects %s %q of bundle %q; narrow the target to %q's own objects, or give the bundles directories of their own (NodeGrouping or BundleGrouping GroupByName)",
+					b.Name, other.Name, path, b.Name, sel.String(), gvk.Kind, objectName(o), other.Name, b.Name), nil)
+		}
+	}
+	return nil
+}
+
+// objectName is obj's namespace/name, or its name when it has no namespace.
+func objectName(obj client.Object) string {
+	if obj.GetNamespace() == "" {
+		return obj.GetName()
+	}
+	return obj.GetNamespace() + "/" + obj.GetName()
 }
 
 // GenerateForBundle creates the Flux resources for b itself: a Kustomization

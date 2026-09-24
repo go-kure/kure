@@ -166,6 +166,10 @@ Every layout the walkers build records what it renders: `OriginNodes()`, `Origin
 per-app layout its application. A level merged by a `GroupFlat` axis, and a `FlattenSingleTier`
 collapse, move the absorbed nodes and bundles into the absorbing layout's origins; a merged
 application has no origin of its own. Hand-built layouts have none.
+`OriginBundleObjects(b)` returns the objects bundle `b`'s applications render in that directory
+or its per-app directories (plus a kind-and-name stand-in for each ConfigMap an augmenter's
+`configMapGenerator` makes): the Flux generator uses it to refuse a patch that would reach another
+bundle sharing the directory.
 
 `IndexOrigins(root, cluster)` resolves a cluster's bundles and nodes to those layouts
 (`BundleLayout`, `NodeLayout`, `Parent`, `Bundles` in layout pre-order) and
