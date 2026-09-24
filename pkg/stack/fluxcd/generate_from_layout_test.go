@@ -1029,3 +1029,32 @@ func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
 		t.Errorf("root hosts %d GitRepository objects, want the identical Source once", n)
 	}
 }
+
+// TestFluxSeparate_RejectsDuplicateCRInExistingFluxSystemSubtree: an earlier
+// flux-system child is kept only when it is exactly what this integration
+// generates; a layout added beneath it (here holding a copy of a generated
+// Kustomization) is not something the integrator produced.
+func TestFluxSeparate_RejectsDuplicateCRInExistingFluxSystemSubtree(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("web", cmApp("web-app"))}}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxSeparate
+	ml := integrated(t, c, rules)
+	var fluxDir *layout.ManifestLayout
+	for _, ch := range ml.Children {
+		if ch.Name == fluxstack.DefaultFluxDirName {
+			fluxDir = ch
+		}
+	}
+	if fluxDir == nil {
+		t.Fatal("no flux-system child")
+	}
+	fluxDir.Children = append(fluxDir.Children, &layout.ManifestLayout{
+		Name:      "extra",
+		Namespace: fluxDir.FullRepoPath(),
+		Resources: []client.Object{fluxKustomization("web", "platform")},
+	})
+	err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+	if err == nil || !strings.Contains(err.Error(), fluxstack.DefaultFluxDirName) {
+		t.Errorf("got %v, want a refusal of the modified flux-system child", err)
+	}
+}
