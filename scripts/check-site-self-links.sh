@@ -29,10 +29,10 @@
 # without a leading "www.". A URL on the same host outside the base path (the
 # org landing page, another project's site) is not this site and passes.
 #
-# Pages checked: every package README and extra mount in site/docs-map.yaml (the
-# authority for what is published), every file under site/content/, and
-# cliff.toml. Needs yq. Pages outside that set (docs/history/, reviews) are not
-# published and are not checked.
+# Pages checked: every package README with a mount: block and every extra mount
+# in site/docs-map.yaml (the authority for what is published), every file under
+# site/content/, and cliff.toml. Needs yq. Pages outside that set (a `mounted:
+# false` README, docs/history/, reviews) are not published and are not checked.
 
 set -euo pipefail
 
@@ -112,15 +112,24 @@ collect_pages() {
 		printf 'check-site-self-links: yq is required to read %s\n' "$map" >&2
 		return 1
 	}
-	# A plain assignment so a yq failure stops the run instead of shortening
-	# the page list.
-	map_pages=$(yq -r '.packages[].readme, .extra_mounts[].source' "$map")
+	# Each failure is checked explicitly: this function runs on the left of
+	# `||`, where set -e does not apply, so an unchecked yq or find failure
+	# would shorten the page list instead of stopping the run.
+	# Only packages with a mount: block are published; a `mounted: false`
+	# README is read on GitHub alone and is out of this check's scope.
+	map_pages=$(yq -r '(.packages[] | select(.mount) | .readme), .extra_mounts[].source' "$map") || {
+		printf 'check-site-self-links: yq could not read %s\n' "$map" >&2
+		return 1
+	}
 	map_pages=$(printf '%s\n' "$map_pages" | grep -v -x -e '' -e 'null' | sort -u || true)
 	if [ -z "$map_pages" ]; then
 		printf 'check-site-self-links: %s names no pages -- refusing to check a partial set\n' "$map" >&2
 		return 1
 	fi
-	content_pages=$(find site/content -type f 2>/dev/null | sort)
+	content_pages=$(find site/content -type f | sort) || {
+		printf 'check-site-self-links: cannot list site/content\n' >&2
+		return 1
+	}
 	if [ -z "$content_pages" ]; then
 		printf 'check-site-self-links: site/content holds no pages -- refusing to check a partial set\n' >&2
 		return 1
@@ -174,13 +183,15 @@ self_test() {
 	local tmp failures=0 out rc expected
 	tmp=$(mktemp -d)
 	trap 'rm -rf "$tmp"' RETURN
-	mkdir -p "$tmp/site/content/concepts" "$tmp/pkg/a" "$tmp/docs/history"
+	mkdir -p "$tmp/site/content/concepts" "$tmp/pkg/a" "$tmp/pkg/b" "$tmp/docs/history" "$tmp/stub"
 	printf "baseURL = 'https://www.gokure.dev/kure/'\n" >"$tmp/site/hugo.toml"
 	cat >"$tmp/site/docs-map.yaml" <<'EOF'
 packages:
   - path: pkg/a
     readme: pkg/a/README.md
+    mount: {target: api-reference/a.md, title: A}
   - path: pkg/b
+    readme: pkg/b/README.md
     mounted: false
 extra_mounts:
   - {source: CHANGELOG.md, target: changelog/releases.md}
@@ -202,6 +213,7 @@ EOF
 	printf '[in content](https://www.gokure.dev/kure/api-reference/x/)\n' >"$tmp/site/content/concepts/_index.md"
 	printf 'body = """\n> [x](https://www.gokure.dev/kure/concepts/d/)\n"""\n' >"$tmp/cliff.toml"
 	printf '[unpublished](https://www.gokure.dev/kure/concepts/z/)\n' >"$tmp/docs/history/old.md"
+	printf '[unpublished](https://www.gokure.dev/kure/concepts/y/)\n' >"$tmp/pkg/b/README.md"
 
 	expected='CHANGELOG.md:1: https://www.gokure.dev/kure/concepts/c/
 cliff.toml:2: https://www.gokure.dev/kure/concepts/d/
@@ -240,12 +252,37 @@ site/content/concepts/_index.md:1: https://www.gokure.dev/kure/api-reference/x/'
 		failures=$((failures + 1))
 	fi
 
+	# A page lister that prints part of its list and then fails must stop the
+	# run, not check the part it printed.
+	local tool
+	for tool in yq find; do
+		printf '#!/bin/sh\necho pkg/a/README.md\nexit 1\n' >"$tmp/stub/$tool"
+		chmod +x "$tmp/stub/$tool"
+		rc=0
+		out=$(PATH="$tmp/stub:$PATH" bash "$0" --root "$tmp" 2>&1) || rc=$?
+		if [ "$rc" -ne 1 ]; then
+			printf 'self-test: %s failing after partial output exited %s, want 1\n%s\n' \
+				"$tool" "$rc" "$out" >&2
+			failures=$((failures + 1))
+		fi
+		rm "$tmp/stub/$tool"
+	done
+
 	# A mapped page that does not exist must fail, not shrink the page set.
 	rm "$tmp/pkg/a/README.md"
 	rc=0
 	out=$(bash "$0" --root "$tmp" 2>&1) || rc=$?
 	if [ "$rc" -ne 1 ] || ! printf '%s' "$out" | grep -q 'which does not exist'; then
 		printf 'self-test: missing mapped page exited %s, want 1 naming it\n%s\n' "$rc" "$out" >&2
+		failures=$((failures + 1))
+	fi
+
+	# An unreadable map must fail, not check an empty page set.
+	printf 'packages: [\n' >"$tmp/site/docs-map.yaml"
+	rc=0
+	out=$(bash "$0" --root "$tmp" 2>&1) || rc=$?
+	if [ "$rc" -ne 1 ]; then
+		printf 'self-test: unreadable map exited %s, want 1\n%s\n' "$rc" "$out" >&2
 		failures=$((failures + 1))
 	fi
 

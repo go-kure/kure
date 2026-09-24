@@ -217,10 +217,12 @@ temporary branch — the merged result — before the PR is allowed to land.
   lychee `--offline`, which skips every `http(s)` URL. They break because the release root is
   rebuilt only by `set-latest` (see [Versioned Documentation](#versioned-documentation)), so an
   absolute link into it 404s for every page added since the last release. The page set is every
-  package README and extra mount in `site/docs-map.yaml` (needs `yq`), every file under
-  `site/content/`, and `cliff.toml`, whose header template writes the links at the top of
-  `CHANGELOG.md`. The site base comes from `site/hugo.toml`'s `baseURL`. The step runs
-  `--self-test` first, which pins the URL classifier against a synthetic tree
+  package README with a `mount:` block and every extra mount in `site/docs-map.yaml` (needs
+  `yq`), every file under `site/content/`, and `cliff.toml`, whose header template writes the
+  links at the top of `CHANGELOG.md`; a `mounted: false` README is not published and not checked.
+  A page lister that fails part-way stops the run rather than shortening the set. The site base
+  comes from `site/hugo.toml`'s `baseURL`. The step runs `--self-test` first, which pins the URL
+  classifier and those failure paths against a synthetic tree
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the canonical
   action, checked out at a ref derived from that action's own `uses:@<sha>` pin rather than a
@@ -1146,8 +1148,9 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
 - `docs:` filter — triggers the `docs-build` job (`doc-gate` runs on every PR regardless). Includes
   `site/**`, `docs/**`, `**.md` (every Markdown file, `.claude/CLAUDE.md` included), `pkg/**`,
   `examples/**` (the builder-reference check reads the comments of `examples/` Go files),
-  `scripts/**`, and `.github/workflows/ci.yml` (only ci.yml, since other workflows don't affect the
-  docs build).
+  `scripts/**`, `cliff.toml` (the site self-link check reads it, since its header template writes
+  the links at the top of `CHANGELOG.md`), and `.github/workflows/ci.yml` (only ci.yml, since
+  other workflows don't affect the docs build).
 
 ### Branch Patterns
 
