@@ -479,9 +479,11 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	}
 	if fluxDir != nil {
 		// Kept only when it is exactly what this integration generates: the
+		// same directory (the one ml's kustomization.yaml references), the
 		// same resources and no layout beneath it (which the identity index
 		// above leaves out with the child).
-		if len(fluxDir.Children) == 0 && reflect.DeepEqual(fluxDir.Resources, fluxResources) {
+		if fluxDir.Namespace == ml.FullRepoPath() && len(fluxDir.Children) == 0 &&
+			reflect.DeepEqual(fluxDir.Resources, fluxResources) {
 			return nil
 		}
 		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
