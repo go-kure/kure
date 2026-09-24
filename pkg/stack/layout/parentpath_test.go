@@ -243,6 +243,34 @@ func TestWriters_RefusalWritesNothing(t *testing.T) {
 	if h, err := tr.Next(); err != io.EOF {
 		t.Errorf("refused WriteToTar wrote an entry (%v, %v)", h, err)
 	}
+	mdir := filepath.Join(t.TempDir(), "out")
+	if err := layout.WriteManifest(mdir, layout.Config{}, parent); err == nil {
+		t.Fatal("WriteManifest: want refusal")
+	}
+	if _, err := os.Stat(mdir); !os.IsNotExist(err) {
+		t.Errorf("refused WriteManifest created %s (err %v)", mdir, err)
+	}
+}
+
+func TestWriters_RefuseCaseFoldedPaths(t *testing.T) {
+	// "X" and "x" are one directory (or file) on a case-insensitive volume.
+	parent := &layout.ManifestLayout{Name: "p", Namespace: ".", Children: []*layout.ManifestLayout{cmLayout("X", "p"), cmLayout("x", "p")}}
+	for name, err := range writers(t, parent) {
+		if err == nil || !strings.Contains(err.Error(), "same directory") {
+			t.Errorf("%s: err = %v, want a same-directory refusal", name, err)
+		}
+	}
+	single := func(name string) *layout.ManifestLayout {
+		l := cmLayout(name, "p")
+		l.ApplicationFileMode = layout.AppFileSingle
+		return l
+	}
+	parent = &layout.ManifestLayout{Name: "p", Namespace: ".", Children: []*layout.ManifestLayout{single("X"), single("x")}}
+	for name, err := range writers(t, parent) {
+		if err == nil || !strings.Contains(err.Error(), "same file") {
+			t.Errorf("%s: err = %v, want a same-file refusal", name, err)
+		}
+	}
 }
 
 func TestWriters_AcceptParentPathTree(t *testing.T) {
