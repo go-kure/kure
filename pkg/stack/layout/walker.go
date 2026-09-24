@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -327,9 +328,11 @@ func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 		target.origin = origin{bundles: []*stack.Bundle{b}}
 		into.Children = append(into.Children, target)
 	}
-	if err := renderApps(b.Applications, target, g); err != nil {
+	objs, err := renderApps(b.Applications, target, g)
+	if err != nil {
 		return err
 	}
+	target.origin.addObjects(b, objs)
 	if len(b.Children) > 0 {
 		b.InitializeUmbrella()
 		if err := renderUmbrellaChildren(b.Children, target, g); err != nil {
@@ -355,9 +358,11 @@ func renderUmbrellaChildren(children []*stack.Bundle, parent *ManifestLayout, g 
 		ml.Mode = KustomizationExplicit
 		ml.UmbrellaChild = true
 		ml.origin = origin{bundles: []*stack.Bundle{cb}}
-		if err := renderApps(cb.Applications, ml, g); err != nil {
+		objs, err := renderApps(cb.Applications, ml, g)
+		if err != nil {
 			return err
 		}
+		ml.origin.addObjects(cb, objs)
 		if len(cb.Children) > 0 {
 			cb.InitializeUmbrella()
 			if err := renderUmbrellaChildren(cb.Children, ml, g); err != nil {
@@ -375,15 +380,17 @@ func renderUmbrellaChildren(children []*stack.Bundle, parent *ManifestLayout, g 
 // of its own; an augmenter application that wants its own layout still gets
 // one, so its extra files and generators do not collide with its siblings'.
 // Otherwise every application gets its own directory inside target's, and a
-// LayoutAugmenter is invoked on it.
-func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) error {
+// LayoutAugmenter is invoked on it. It returns every object the applications
+// emitted, wherever they were written.
+func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) ([]client.Object, error) {
+	var all []client.Object
 	for _, app := range apps {
 		if app == nil {
 			continue
 		}
 		objsPtr, err := app.Generate()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		var objs []client.Object
 		for _, o := range objsPtr {
@@ -392,6 +399,7 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) e
 			}
 			objs = append(objs, *o)
 		}
+		all = append(all, objs...)
 		if g.appFlat && !isAugmenter(app) {
 			target.Resources = append(target.Resources, objs...)
 			continue
@@ -401,11 +409,25 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) e
 		appLayout.Mode = KustomizationExplicit
 		appLayout.origin = origin{app: app}
 		if err := augmentAppLayout(app, appLayout); err != nil {
-			return err
+			return nil, err
+		}
+		for _, gen := range appLayout.ConfigMapGenerators {
+			all = append(all, generatedConfigMap(gen.Name))
 		}
 		target.Children = append(target.Children, appLayout)
 	}
-	return nil
+	return all, nil
+}
+
+// generatedConfigMap stands for the ConfigMap a configMapGenerator entry
+// makes when kustomize builds the directory: its identity only (kind, and the
+// name before the content-hash suffix), for matching patch targets.
+func generatedConfigMap(name string) client.Object {
+	cm := &unstructured.Unstructured{}
+	cm.SetAPIVersion("v1")
+	cm.SetKind("ConfigMap")
+	cm.SetName(name)
+	return cm
 }
 
 // augmentAppLayout invokes the LayoutAugmenter on app.Config when it satisfies

@@ -76,7 +76,7 @@ func TestRenderApps_NilObjectPointer(t *testing.T) {
 	app := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{nilObjPtr}})
 	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
 
-	err := renderApps([]*stack.Application{app}, parent, grouping{appFlat: true, flux: FluxSeparate})
+	_, err := renderApps([]*stack.Application{app}, parent, grouping{appFlat: true, flux: FluxSeparate})
 	if err != nil {
 		t.Fatalf("unexpected error with nil object pointer: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestRenderApps_NilApp(t *testing.T) {
 	plainApp := stack.NewApplication("plain", "ns", &flattenFakeConfig{objs: []*client.Object{&o}})
 	parent := &ManifestLayout{Name: "parent", Namespace: "ns"}
 
-	err := renderApps([]*stack.Application{nil, plainApp}, parent, grouping{appFlat: true, flux: FluxSeparate})
+	_, err := renderApps([]*stack.Application{nil, plainApp}, parent, grouping{appFlat: true, flux: FluxSeparate})
 	if err != nil {
 		t.Fatalf("unexpected error with nil app entry: %v", err)
 	}

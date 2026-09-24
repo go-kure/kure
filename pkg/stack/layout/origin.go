@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -20,6 +22,18 @@ type origin struct {
 	bundles []*stack.Bundle
 	// app is the application of a per-app layout.
 	app *stack.Application
+	// objects are the objects each of bundles renders, per-app directories
+	// inside this one included: what a Kustomization for this directory
+	// builds, attributed to the bundle whose applications emitted it.
+	objects map[*stack.Bundle][]client.Object
+}
+
+// addObjects records objs as rendered by bundle b.
+func (o *origin) addObjects(b *stack.Bundle, objs []client.Object) {
+	if o.objects == nil {
+		o.objects = map[*stack.Bundle][]client.Object{}
+	}
+	o.objects[b] = append(o.objects[b], objs...)
 }
 
 // OriginNodes returns the stack nodes whose directory this layout is. Nil for
@@ -29,6 +43,13 @@ func (ml *ManifestLayout) OriginNodes() []*stack.Node { return ml.origin.nodes }
 // OriginBundles returns the bundles whose resources this layout's directory
 // holds. Nil for a hand-built layout.
 func (ml *ManifestLayout) OriginBundles() []*stack.Bundle { return ml.origin.bundles }
+
+// OriginBundleObjects returns the objects bundle b's applications render in
+// this layout's directory or its per-app directories. Nil when b is not one
+// of OriginBundles.
+func (ml *ManifestLayout) OriginBundleObjects(b *stack.Bundle) []client.Object {
+	return ml.origin.objects[b]
+}
 
 // OriginApplication returns the application a per-app layout renders, or nil.
 func (ml *ManifestLayout) OriginApplication() *stack.Application { return ml.origin.app }

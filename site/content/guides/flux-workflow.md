@@ -191,7 +191,9 @@ What changed, and what to do:
   directories and CRs.
 - **One Kustomization per directory.** Bundles merged into one directory share one Kustomization
   (and one ArgoCD Application), named after the first of them; they must agree on the settings a
-  Kustomization holds once, and dependency cycles are refused.
+  Kustomization holds once, and dependency cycles are refused. A patch is refused there when its
+  target would also select another merged bundle's objects: Flux patches everything the shared
+  Kustomization builds, so the merge would widen the patch.
 - **FlattenSingleTier** no longer rewrites Flux CRs a caller added to the tree; generated CRs
   already name the surviving directory.
 

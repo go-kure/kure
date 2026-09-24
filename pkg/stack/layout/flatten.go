@@ -56,6 +56,9 @@ func flattenSingleTier(root *ManifestLayout, rules LayoutRules) *ManifestLayout 
 	// are this surviving directory.
 	root.origin.nodes = append(root.origin.nodes, child.origin.nodes...)
 	root.origin.bundles = append(root.origin.bundles, child.origin.bundles...)
+	for b, objs := range child.origin.objects {
+		root.origin.addObjects(b, objs)
+	}
 	if child.origin.app != nil {
 		root.origin.app = child.origin.app
 	}
