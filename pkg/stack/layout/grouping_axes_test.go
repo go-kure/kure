@@ -413,3 +413,67 @@ func TestWalkClusterByPackage_FlatEmptyBundleRetainsOrigins(t *testing.T) {
 		})
 	}
 }
+
+// TestWriters_DisjointLists pins that the writers' object-identity check reads
+// a List's items, not its envelope: two unnamed v1 Lists holding different
+// ConfigMaps build fine with kustomize and must be written, while two Lists
+// carrying one ConfigMap are refused.
+func TestWriters_DisjointLists(t *testing.T) {
+	list := func(items ...string) *client.Object {
+		l := &unstructured.UnstructuredList{}
+		l.SetAPIVersion("v1")
+		l.SetKind("List")
+		for _, name := range items {
+			l.Items = append(l.Items, *(*axisObj(name, "default")).(*unstructured.Unstructured))
+		}
+		u := &unstructured.Unstructured{}
+		if err := u.UnmarshalJSON(mustJSON(t, l)); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		var o client.Object = u
+		return &o
+	}
+	for _, tc := range []struct {
+		name    string
+		second  string
+		wantErr string
+	}{
+		{"disjoint", "cm-b", ""},
+		{"shared_item", "cm-a", "same object"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			build := func() *layout.ManifestLayout {
+				app := stack.NewApplication("lists", "default", &fakeConfig{objs: []*client.Object{list("cm-a"), list(tc.second)}})
+				r := &stack.Node{Name: "r", Bundle: &stack.Bundle{Name: "b", Applications: []*stack.Application{app}}}
+				ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: r}, layout.LayoutRules{})
+				if err != nil {
+					t.Fatalf("walk: %v", err)
+				}
+				return ml
+			}
+			dir := t.TempDir()
+			errs := map[string]error{
+				"WriteToDisk":   build().WriteToDisk(filepath.Join(dir, "disk")),
+				"WriteToTar":    build().WriteToTar(&strings.Builder{}),
+				"WriteManifest": layout.WriteManifest(filepath.Join(dir, "manifest"), layout.DefaultLayoutConfig(), build()),
+			}
+			for writer, err := range errs {
+				if tc.wantErr == "" && err != nil {
+					t.Errorf("%s: %v", writer, err)
+				}
+				if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+					t.Errorf("%s: err = %v, want one containing %q", writer, err, tc.wantErr)
+				}
+			}
+		})
+	}
+}
+
+func mustJSON(t *testing.T, v interface{ MarshalJSON() ([]byte, error) }) []byte {
+	t.Helper()
+	b, err := v.MarshalJSON()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return b
+}
