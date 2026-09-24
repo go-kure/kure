@@ -278,29 +278,31 @@ func TestGenerateFromLayout_MergedEquivalentSourceNamespaces(t *testing.T) {
 }
 
 // TestIntegrateWithLayout_RefusesDependencyOnHostedDescendant pins that a
-// Kustomization cannot depend on one whose CR it creates: Flux waits for the
-// dependency before applying the directory that holds it. With the merge, rb
-// depends on u (b1 -> u), and under integrated placements u's CR lives in
-// rb's directory. Separate placement applies every CR from flux-system.
+// Kustomization cannot depend on one whose CR only it creates: a depends on
+// its child node's bundle b, and under PerLayout b's CR lives in a's
+// directory, which only a's Kustomization applies. Separate placement (every
+// CR in flux-system, applied by the bootstrap) and PerBundle (child
+// directories listed from the root) create b's CR without a.
 func TestIntegrateWithLayout_RefusesDependencyOnHostedDescendant(t *testing.T) {
 	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
 		t.Run(string(placement), func(t *testing.T) {
-			u := &stack.Bundle{Name: "u", SourceRef: testSR(), Applications: []*stack.Application{cmApp("ua")}}
-			c := mergedCluster(func(rb, b1, _ *stack.Bundle) {
-				rb.Children = []*stack.Bundle{u}
-				b1.DependsOn = []*stack.Bundle{u}
-			})
-			rules := allFlat
+			b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
+			a := &stack.Node{Name: "a", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
+			a.Bundle.DependsOn = []*stack.Bundle{b.Bundle}
+			r := &stack.Node{Name: "r", Children: []*stack.Node{a}}
+			b.SetParent(a)
+			a.SetParent(r)
+			rules := propertyGroupings["nodeOnly"]
 			rules.FluxPlacement = placement
-			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
-			if placement == layout.FluxSeparate {
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: r}, rules)
+			if placement != layout.FluxIntegratedPerLayout {
 				if err != nil {
-					t.Fatalf("separate placement: %v", err)
+					t.Fatalf("%s: %v", placement, err)
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), "creates") {
-				t.Fatalf("got %v, want a refusal: rb depends on u, whose CR rb's directory creates", err)
+			if err == nil || !strings.Contains(err.Error(), "never") {
+				t.Fatalf("got %v, want a reconcile-order refusal: a depends on b, whose CR only a creates", err)
 			}
 		})
 	}
@@ -316,5 +318,45 @@ func TestIntegrateWithLayout_Idempotent_Merged(t *testing.T) {
 			rules.FluxPlacement = placement
 			checkIdempotent(t, mergedCluster(nil), rules)
 		})
+	}
+}
+
+// TestGenerateFromLayout_RefusesHealthCheckCycleAfterMerge pins that a health
+// check a merge turns into a cycle is refused: u checks b2's Kustomization,
+// b2 merges into rb's unit, and rb waits for its umbrella child u.
+func TestGenerateFromLayout_RefusesHealthCheckCycleAfterMerge(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			u := &stack.Bundle{Name: "u", SourceRef: testSR(), Applications: []*stack.Application{cmApp("ua")},
+				HealthChecks: []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "b2", Namespace: "flux-system"}}}
+			c := mergedCluster(func(rb, _, _ *stack.Bundle) { rb.Children = []*stack.Bundle{u} })
+			rules := allFlat
+			rules.FluxPlacement = placement
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			if err == nil || !strings.Contains(err.Error(), "never") {
+				t.Fatalf("got %v, want a reconcile-order refusal (rb waits for u, u waits for rb)", err)
+			}
+		})
+	}
+}
+
+// TestIntegrateWithLayout_RefusesTransitiveDependencyOnHostedDescendant pins
+// the creation rule through a dependency chain: a depends on c, c on b, and
+// b's CR is created by a (PerLayout hosts it in a's directory).
+func TestIntegrateWithLayout_RefusesTransitiveDependencyOnHostedDescendant(t *testing.T) {
+	b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
+	a := &stack.Node{Name: "a", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
+	cn := &stack.Node{Name: "c", Bundle: srBundle("c", cmApp("c-app"))}
+	a.Bundle.DependsOn = []*stack.Bundle{cn.Bundle}
+	cn.Bundle.DependsOn = []*stack.Bundle{b.Bundle}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{a, cn}}
+	b.SetParent(a)
+	a.SetParent(r)
+	cn.SetParent(r)
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: r}, rules)
+	if err == nil || !strings.Contains(err.Error(), "never") {
+		t.Fatalf("got %v, want a reconcile-order refusal (a -> c -> b, b created by a)", err)
 	}
 }
