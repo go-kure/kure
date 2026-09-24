@@ -290,9 +290,18 @@ func kustomizationRefs(t *testing.T, path string) []string {
 // exists; every file holding a Flux Kustomization is applied — reached from the
 // top kustomization(s) through resources entries and through the spec.path of
 // every Flux Kustomization already reached, as Flux applies them — or sits in
-// flux-system; every expected directory was written.
-func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string) {
+// flux-system; every expected directory was written. With exclusive set
+// (FluxIntegratedPerLayout), a directory some Flux Kustomization applies is
+// never also pulled in by a kustomization reference: it would be applied, and
+// owned, twice.
+func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string, exclusive bool) {
 	t.Helper()
+	crDirs := map[string]bool{}
+	if exclusive {
+		for _, d := range dirs {
+			crDirs[filepath.Clean(d)] = true
+		}
+	}
 	reached := map[string]bool{}
 	var visit func(kust string)
 	visitFile := func(p string) {
@@ -323,6 +332,9 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string)
 				continue
 			}
 			if info.IsDir() {
+				if rel, _ := filepath.Rel(w.root, p); crDirs[rel] {
+					t.Errorf("%s: %s lists directory %q, which its Flux Kustomization also applies", writer, kust, rel)
+				}
 				visit(filepath.Join(p, "kustomization.yaml"))
 			} else {
 				visitFile(p)
@@ -475,7 +487,7 @@ func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules
 		}
 	}
 	for writer, w := range writeAll(t, ml) {
-		checkWrittenTree(t, writer, w, dirs)
+		checkWrittenTree(t, writer, w, dirs, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
 	}
 }
 
@@ -740,7 +752,11 @@ func TestIntegrateWithLayout_PerLayout_BundlelessNodeGetsLayoutCR(t *testing.T) 
 				t.Errorf("CRs = %v, want %v", got, tc.want)
 			}
 			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, nil)
+				var dirs []string
+				for _, k := range kustomizations(ml) {
+					dirs = append(dirs, k.Spec.Path)
+				}
+				checkWrittenTree(t, writer, w, dirs, true)
 			}
 		})
 	}
@@ -851,7 +867,7 @@ func TestFluxSeparate_ClusterNamePathsResolve(t *testing.T) {
 				t.Fatalf("got CR paths %v, want three bundles", dirs)
 			}
 			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, dirs)
+				checkWrittenTree(t, writer, w, dirs, false)
 			}
 		})
 	}

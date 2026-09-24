@@ -106,13 +106,18 @@ func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
 // node layout (not as cluster-level siblings), so the directory tree mirrors
 // the node tree.
 func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, nodeOnly bool, filePer FileExportMode) (*ManifestLayout, error) {
-	// Create a cluster-level layout with the cluster name as the root
+	// Create a cluster-level layout with the cluster name as the root.
+	// It carries the placement like every other walked layout: under
+	// FluxIntegratedPerLayout it hosts its children's Flux CRs (the root
+	// bundle's, among others), so it must not also reference their
+	// directories, which would apply them twice.
 	clusterLayout := &ManifestLayout{
-		Name:       "",
-		Namespace:  rules.ClusterName,
-		FilePer:    filePer,
-		FileNaming: rules.FileNaming,
-		Children:   []*ManifestLayout{},
+		Name:          "",
+		Namespace:     rules.ClusterName,
+		FilePer:       filePer,
+		FluxPlacement: rules.FluxPlacement,
+		FileNaming:    rules.FileNaming,
+		Children:      []*ManifestLayout{},
 	}
 
 	nodeFlat := rules.NodeGrouping == GroupFlat
