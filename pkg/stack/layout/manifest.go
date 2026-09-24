@@ -47,6 +47,9 @@ type ManifestLayout struct {
 	// translates these into spec.dependsOn on the emitted Kustomization CR.
 	// Augmenters (LayoutAugmenter) set this field; the integrator reads it.
 	DependsOn []string
+	// origin records the stack objects this layout renders (see origin.go).
+	// Set only by the walkers and FlattenSingleTier; never serialised.
+	origin origin
 	// flattenInfo carries the redirects produced by FlattenSingleTier when
 	// this layout absorbed a collapsed child. Set only on the absorbing
 	// layout; never serialised. Consulted by the Flux integrator's
