@@ -53,6 +53,7 @@ type OriginIndex struct {
 	bundles      []*stack.Bundle
 	nodes        []*stack.Node
 	units        []*ManifestLayout
+	byName       map[string]*stack.Bundle
 }
 
 // IndexOrigins indexes a layout tree walked from cluster c (WalkCluster) by
@@ -119,6 +120,7 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 	if err := walk(root, nil); err != nil {
 		return nil, err
 	}
+	ix.byName = byName
 	if err := ix.checkCoverage(c); err != nil {
 		return nil, err
 	}
@@ -135,48 +137,87 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 func (ix *OriginIndex) Units() []*ManifestLayout { return ix.units }
 
 // UnitName returns the name of the reconciliation unit that applies bundle b:
-// the first bundle the layout rendering b renders. A bundle outside the index
-// keeps its own name.
+// the first bundle the layout rendering b renders. b is resolved by name,
+// which IndexOrigins proves unique, so a copy of a rendered bundle (the
+// fluent builder copies bundles) resolves like the original. A bundle outside
+// the index keeps its own name.
 func (ix *OriginIndex) UnitName(b *stack.Bundle) string {
-	if l := ix.bundleLayout[b]; l != nil && len(l.origin.bundles) > 0 {
-		return l.origin.bundles[0].Name
-	}
-	return b.Name
+	return ix.unitOfName(b.Name)
 }
 
-// UnitDependencies returns the units the unit of layout l depends on: every
-// DependsOn of the bundles l renders, mapped to the unit that applies it, in
-// order and without repeats. A dependency between two bundles l renders is
-// dropped: they are applied together.
-func (ix *OriginIndex) UnitDependencies(l *ManifestLayout) []string {
-	own := map[*stack.Bundle]bool{}
-	for _, b := range l.origin.bundles {
-		own[b] = true
+// unitOfName maps a bundle name to the name of the unit that applies it; a
+// name no rendered bundle has is returned unchanged.
+func (ix *OriginIndex) unitOfName(name string) string {
+	if b := ix.byName[name]; b != nil {
+		if l := ix.bundleLayout[b]; l != nil && len(l.origin.bundles) > 0 {
+			return l.origin.bundles[0].Name
+		}
 	}
-	seen := map[string]bool{}
-	var out []string
+	return name
+}
+
+// UnitDependencies returns the units the unit of layout l depends on through
+// the DependsOn of the bundles it renders: each dependency mapped to the unit
+// that applies it, in order and without repeats. A dependency applied by l's
+// own unit is dropped: the bundles are applied together.
+func (ix *OriginIndex) UnitDependencies(l *ManifestLayout) []string {
+	var names []string
 	for _, b := range l.origin.bundles {
 		for _, d := range b.DependsOn {
-			if d == nil || own[d] {
-				continue
+			if d != nil {
+				names = append(names, d.Name)
 			}
-			if name := ix.UnitName(d); !seen[name] {
-				seen[name] = true
-				out = append(out, name)
-			}
+		}
+	}
+	return ix.mapToUnits(l, names)
+}
+
+// UnitNamedDependencies is UnitDependencies for the bundles' NamedDependsOn:
+// a name that is a rendered bundle's is mapped to its unit (and dropped when
+// that is l's own), any other name is kept as the external dependency it is.
+func (ix *OriginIndex) UnitNamedDependencies(l *ManifestLayout) []string {
+	var names []string
+	for _, b := range l.origin.bundles {
+		names = append(names, b.NamedDependsOn...)
+	}
+	return ix.mapToUnits(l, names)
+}
+
+func (ix *OriginIndex) mapToUnits(l *ManifestLayout, names []string) []string {
+	self := ix.unitOfName(l.origin.bundles[0].Name)
+	seen := map[string]bool{self: true}
+	var out []string
+	for _, name := range names {
+		if unit := ix.unitOfName(name); !seen[unit] {
+			seen[unit] = true
+			out = append(out, unit)
 		}
 	}
 	return out
 }
 
-// checkUnitCycles refuses a dependency cycle between units: Flux and ArgoCD
-// would wait on each other forever. Merging bundles into one unit can close a
-// cycle that their own DependsOn did not have (b1 -> u -> b2 becomes
-// rb -> u -> rb when b1 and b2 merge into rb's directory).
+// checkUnitCycles refuses a cycle in what units wait for: Flux and ArgoCD
+// would wait on each other forever. A unit waits for its DependsOn and
+// NamedDependsOn units and, through health checks, for the units of its
+// bundles' umbrella children. Merging bundles into one unit can close a cycle
+// their own dependencies did not have (b1 -> u -> b2 becomes rb -> u -> rb
+// when b1 and b2 merge into rb's directory; an umbrella child that depends on
+// a bundle merged into its parent's unit waits for a unit that waits for it).
 func (ix *OriginIndex) checkUnitCycles() error {
 	deps := map[string][]string{}
 	for _, l := range ix.units {
-		deps[ix.UnitName(l.origin.bundles[0])] = ix.UnitDependencies(l)
+		name := ix.UnitName(l.origin.bundles[0])
+		waits := append(ix.UnitDependencies(l), ix.UnitNamedDependencies(l)...)
+		for _, b := range l.origin.bundles {
+			for _, child := range b.Children {
+				if child != nil {
+					if unit := ix.UnitName(child); unit != name {
+						waits = append(waits, unit)
+					}
+				}
+			}
+		}
+		deps[name] = waits
 	}
 	const (
 		visiting = 1

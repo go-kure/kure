@@ -150,13 +150,16 @@ func TestGenerateFromLayout_MergedSettingsMustAgree(t *testing.T) {
 
 // TestGenerateFromLayout_DependsOnMapsToUnits pins how dependsOn survives a
 // merge: a dependency between bundles merged into one directory is dropped,
-// and a dependency on a merged bundle names that directory's Kustomization.
+// whether it is a bundle pointer, a copy of that bundle (the fluent builder
+// copies bundles) or a NamedDependsOn naming it; a dependency on another unit
+// names that unit's Kustomization; an external name is kept.
 func TestGenerateFromLayout_DependsOnMapsToUnits(t *testing.T) {
 	u := &stack.Bundle{Name: "u", SourceRef: testSR(), Applications: []*stack.Application{cmApp("ua")}}
 	c := mergedCluster(func(rb, b1, b2 *stack.Bundle) {
 		rb.Children = []*stack.Bundle{u}
-		b1.DependsOn = []*stack.Bundle{b2} // both merged into r: dropped
-		u.DependsOn = []*stack.Bundle{b2}  // b2 is applied by rb's Kustomization
+		copyOfB2 := *b2
+		b1.DependsOn = []*stack.Bundle{b2, &copyOfB2, u}
+		b1.NamedDependsOn = []string{"rb", "external"}
 	})
 	kusts, err := generateUnits(t, c, allFlat)
 	if err != nil {
@@ -169,11 +172,30 @@ func TestGenerateFromLayout_DependsOnMapsToUnits(t *testing.T) {
 	if len(kusts) != 2 || byName["rb"] == nil || byName["u"] == nil {
 		t.Fatalf("Kustomizations = %v, want rb (r) and u (its umbrella directory)", byName)
 	}
-	if got := dependsOnNames(byName["rb"]); len(got) != 0 {
-		t.Errorf("rb dependsOn = %v, want none (b1 -> b2 is inside rb's directory)", got)
+	if got := dependsOnNames(byName["rb"]); !reflect.DeepEqual(got, []string{"external", "u"}) {
+		t.Errorf("rb dependsOn = %v, want [external u]", got)
 	}
-	if got := dependsOnNames(byName["u"]); !reflect.DeepEqual(got, []string{"rb"}) {
-		t.Errorf("u dependsOn = %v, want [rb] (b2 is applied by rb)", got)
+}
+
+// TestGenerateFromLayout_RefusesUmbrellaReadinessCycle pins that an umbrella
+// parent waits for its children (health checks): an umbrella child that
+// depends on a bundle merged into its parent's unit closes a cycle, by
+// pointer or by name.
+func TestGenerateFromLayout_RefusesUmbrellaReadinessCycle(t *testing.T) {
+	for name, edit := range map[string]func(u, b2 *stack.Bundle){
+		"DependsOn":      func(u, b2 *stack.Bundle) { u.DependsOn = []*stack.Bundle{b2} },
+		"NamedDependsOn": func(u, _ *stack.Bundle) { u.NamedDependsOn = []string{"b2"} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			u := &stack.Bundle{Name: "u", SourceRef: testSR(), Applications: []*stack.Application{cmApp("ua")}}
+			c := mergedCluster(func(rb, _, b2 *stack.Bundle) {
+				rb.Children = []*stack.Bundle{u}
+				edit(u, b2)
+			})
+			if _, err := generateUnits(t, c, allFlat); err == nil || !strings.Contains(err.Error(), "cycle") {
+				t.Fatalf("got %v, want a cycle refusal (rb waits for u, u depends on rb)", err)
+			}
+		})
 	}
 }
 

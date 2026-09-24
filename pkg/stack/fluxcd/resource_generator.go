@@ -136,16 +136,10 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 	}
 	unit.Spec.DependsOn = nil
 	named := map[string]bool{}
-	for _, name := range ix.UnitDependencies(l) {
-		named[name] = true
-		unit.Spec.DependsOn = append(unit.Spec.DependsOn, kustv1.DependencyReference{Name: name})
-	}
-	for _, b := range bundles {
-		for _, name := range b.NamedDependsOn {
-			if !named[name] {
-				named[name] = true
-				unit.Spec.DependsOn = append(unit.Spec.DependsOn, kustv1.DependencyReference{Name: name})
-			}
+	for _, name := range append(ix.UnitDependencies(l), ix.UnitNamedDependencies(l)...) {
+		if !named[name] {
+			named[name] = true
+			unit.Spec.DependsOn = append(unit.Spec.DependsOn, kustv1.DependencyReference{Name: name})
 		}
 	}
 	resources := []client.Object{unit}
