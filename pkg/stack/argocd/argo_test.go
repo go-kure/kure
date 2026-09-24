@@ -686,3 +686,19 @@ func TestGenerateFromLayout_UmbrellaDependencyChain(t *testing.T) {
 		t.Fatalf("acyclic ArgoCD dependencies refused: %v", err)
 	}
 }
+
+// TestGenerateFromCluster_ArgoNamedDependenciesMatchValidation pins that
+// ArgoCD, which emits no NamedDependsOn, is not refused for a cycle through
+// them: reciprocal named dependencies are the Flux workflow's to check.
+func TestGenerateFromCluster_ArgoNamedDependenciesMatchValidation(t *testing.T) {
+	a := &stack.Bundle{Name: "a", NamedDependsOn: []string{"b"}}
+	b := &stack.Bundle{Name: "b", NamedDependsOn: []string{"a"}}
+	an := &stack.Node{Name: "an", Bundle: a}
+	bn := &stack.Node{Name: "bn", Bundle: b}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{an, bn}}
+	an.SetParent(r)
+	bn.SetParent(r)
+	if _, err := Engine().GenerateFromCluster(&stack.Cluster{Name: "demo", Node: r}); err != nil {
+		t.Fatalf("ArgoCD refused for named dependencies it does not emit: %v", err)
+	}
+}

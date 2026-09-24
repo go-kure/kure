@@ -162,7 +162,7 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 	var checks []metaapi.NamespacedObjectKindReference
 	for _, hc := range unit.Spec.HealthChecks {
 		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
-			(hc.Namespace == "" || hc.Namespace == g.DefaultNamespace) {
+			effectiveNS(hc.Namespace, g.DefaultNamespace) == effectiveNS(g.DefaultNamespace, "") {
 			hc.Name = ix.UnitOfName(hc.Name)
 			if hc.Name == unit.Name {
 				continue
@@ -239,6 +239,18 @@ func (g *ResourceGenerator) mergeIntoUnit(unit, other *kustv1.Kustomization, fir
 	}
 	unit.Spec.Patches = append(unit.Spec.Patches, other.Spec.Patches...)
 	return nil
+}
+
+// effectiveNS is namespace as Kubernetes reads it: an omitted one is fallback,
+// or "default" when fallback is empty too.
+func effectiveNS(namespace, fallback string) string {
+	if namespace != "" {
+		return namespace
+	}
+	if fallback != "" {
+		return fallback
+	}
+	return "default"
 }
 
 // sourceOwner names the unit whose generated objects include obj.
