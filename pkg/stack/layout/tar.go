@@ -25,10 +25,10 @@ func (ml *ManifestLayout) WriteToTar(w io.Writer) error {
 	}
 	tw := tar.NewWriter(w)
 	defer func() { _ = tw.Close() }()
-	return ml.writeToTarRecursive(tw, "", false)
+	return ml.writeToTarRecursive(tw, "")
 }
 
-func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, fluxTarget bool) error {
+func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) error {
 	fileMode := ml.FilePer
 	if fileMode == FilePerUnset {
 		fileMode = FilePerResource
@@ -108,7 +108,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, f
 		kMode = KustomizationExplicit
 	}
 
-	if len(fileGroups) > 0 || len(ml.Children) > 0 || (appMode != AppFileSingle && (fluxTarget || ml.rendersBundle())) {
+	if len(fileGroups) > 0 || len(ml.Children) > 0 || appMode != AppFileSingle {
 		var kustomBuf strings.Builder
 		kustomBuf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
 		kustomBuf.WriteString("kind: Kustomization\n")
@@ -174,7 +174,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, f
 
 	// Recurse into children
 	for _, child := range ml.Children {
-		if err := child.writeToTarRecursive(tw, basePath, ml.FluxPlacement == FluxIntegratedPerLayout); err != nil {
+		if err := child.writeToTarRecursive(tw, basePath); err != nil {
 			return err
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -370,5 +371,32 @@ func TestWalkCluster_AbsorbThenFlatten(t *testing.T) {
 	}
 	if got := layoutResources(t, ml); !reflect.DeepEqual(got, map[string][]string{"r": {"x"}}) {
 		t.Errorf("layout tree = %v, want r:[x]", got)
+	}
+}
+
+// TestWalkClusterByPackage_FlatEmptyBundleRetainsOrigins pins that a package
+// whose only content is an empty bundle, merged by NodeGrouping flat into the
+// wrapper of a root outside the package, is still returned: the wrapper
+// renders that node and bundle even though it holds no resources.
+func TestWalkClusterByPackage_FlatEmptyBundleRetainsOrigins(t *testing.T) {
+	oci := &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}
+	c := &stack.Node{Name: "c", PackageRef: oci, Bundle: &stack.Bundle{Name: "cb"}}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{c}}
+	c.SetParent(r)
+	for _, node := range []layout.GroupingMode{layout.GroupByName, layout.GroupFlat} {
+		t.Run(string(node), func(t *testing.T) {
+			pkgs, err := layout.WalkClusterByPackage(&stack.Cluster{Name: "demo", Node: r}, layout.LayoutRules{NodeGrouping: node})
+			if err != nil {
+				t.Fatalf("walk: %v", err)
+			}
+			ml := pkgs[oci.String()]
+			if ml == nil {
+				t.Fatalf("package %s missing; got %v", oci.String(), pkgs)
+			}
+			_, bundles := originPaths(ml)
+			if _, ok := bundles["cb"]; !ok {
+				t.Errorf("empty bundle cb not rendered by any layout of the package")
+			}
+		})
 	}
 }

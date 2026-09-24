@@ -210,7 +210,7 @@ type LayoutAugmenter interface {
 }
 ```
 
-When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles`, `ConfigMapGenerators`, and sub-`ManifestLayout` children. It runs on per-app layouts on every walker path that creates one, including the flat-bundle (`GroupFlat`) path and umbrella children — an augmenter app there gets its own per-app sub-layout instead of merging flat into the parent.
+When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-app `ManifestLayout` after resource generation, giving the config a chance to attach `ExtraFiles`, `ConfigMapGenerators`, and sub-`ManifestLayout` children. It runs on every per-app layout a walker creates, in both walkers and inside umbrella children — with `ApplicationGrouping: GroupFlat` an augmenter app still gets its own per-app sub-layout instead of merging into its bundle's directory.
 
 `LayoutIntentAugmenter` is an optional companion to `LayoutAugmenter`, for a config whose desire for its own layout varies per instance rather than being fixed for the whole type:
 
@@ -221,15 +221,13 @@ type LayoutIntentAugmenter interface {
 }
 ```
 
-`WantsOwnLayout()` gates placement only, and only on the flat-bundle walker path:
+`WantsOwnLayout()` gates placement only, and only where `ApplicationGrouping` is `GroupFlat` (in
+`WalkCluster` and `WalkClusterByPackage` alike, umbrella children included):
 
-| Walker path | `WantsOwnLayout()` absent, `true`, or `false` |
-|---|---|
-| `GroupByName` and by-package | own layout + `AugmentLayout`, unconditionally — identical to today's behaviour in every case |
-
-| Flat bundle (`GroupFlat`, incl. umbrella children) | `WantsOwnLayout()` absent or `true` | `WantsOwnLayout() == false` |
+| `ApplicationGrouping` | `WantsOwnLayout()` absent or `true` | `WantsOwnLayout() == false` |
 |---|---|---|
-| | own child layout + `AugmentLayout` | resources merged flat into parent, `AugmentLayout` **not** called (no layout exists to pass it) |
+| `GroupByName` | own layout + `AugmentLayout` | own layout + `AugmentLayout` |
+| `GroupFlat` | own child layout + `AugmentLayout` | resources merged into the bundle's directory, `AugmentLayout` **not** called (no layout exists to pass it) |
 
 A config that implements only `LayoutAugmenter` keeps today's presence-only behaviour unchanged.
 
