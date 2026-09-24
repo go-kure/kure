@@ -115,7 +115,7 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 | BundleGrouping | `GroupByName`, `GroupFlat` | A directory per bundle, or render bundles in their node's directory |
 | ApplicationGrouping | `GroupByName`, `GroupFlat` | A directory per app, or write apps into their bundle's directory |
 | FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
-| FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout`, `FluxIntegratedPerBundle` | Separate dir; a Flux CR per layout node; or Flux CRs at bundle boundaries with children as directories |
+| FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout`, `FluxIntegratedPerBundle` | Separate dir; a Flux CR per layout node; or Flux CRs at bundle boundaries with application children as directories |
 
 The three grouping axes are independent; umbrella child bundles and augmenter applications always get
 a directory of their own.
@@ -194,6 +194,12 @@ What changed, and what to do:
   Kustomization holds once, and dependency cycles are refused. A patch is refused there when its
   target would also select another merged bundle's objects: Flux patches everything the shared
   Kustomization builds, so the merge would widen the patch.
+- **One owner per directory.** A directory that renders bundles is applied only by its own
+  Kustomization: no parent `kustomization.yaml` lists it, in any placement. Under
+  `FluxIntegratedPerBundle` a bundle's CR now sits in the parent directory (as under PerLayout),
+  and a parent bundle can no longer depend on a child node's bundle there — the child's CR only
+  exists once the parent has applied. Building a parent directory no longer includes its child
+  units.
 - **FlattenSingleTier** no longer rewrites Flux CRs a caller added to the tree; generated CRs
   already name the surviving directory.
 

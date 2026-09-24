@@ -405,9 +405,13 @@ func TestWalkCluster_NoClusterName_UnnamedRootUnchanged(t *testing.T) {
 	// it would be indistinguishable from the ClusterName "." container, whose
 	// root kustomization.yaml WriteManifest deliberately skips, so the root's
 	// references to its children would be lost.
+	// a renders no bundle, so the root lists its directory; b, a unit, is
+	// applied by its own Kustomization and listed by no parent.
 	newCluster := func() *stack.Cluster {
-		a := &stack.Node{Name: "a", Bundle: &stack.Bundle{Name: "a", Applications: []*stack.Application{configMapApp("x")}}}
+		b := &stack.Node{Name: "b", Bundle: &stack.Bundle{Name: "b", Applications: []*stack.Application{configMapApp("x")}}}
+		a := &stack.Node{Name: "a", Children: []*stack.Node{b}}
 		root := &stack.Node{Name: "", Children: []*stack.Node{a}}
+		b.SetParent(a)
 		a.SetParent(root)
 		return &stack.Cluster{Name: "c", Node: root}
 	}
@@ -428,6 +432,9 @@ func TestWalkCluster_NoClusterName_UnnamedRootUnchanged(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "- a\n") {
 		t.Errorf("root kustomization.yaml does not reference a:\n%s", data)
+	}
+	if a, err := os.ReadFile(filepath.Join(dir, "clusters", "cluster", "a", "kustomization.yaml")); err != nil || strings.Contains(string(a), "- b\n") {
+		t.Errorf("a's kustomization.yaml (err %v) lists b, a unit applied by its own Kustomization:\n%s", err, a)
 	}
 	if bad := unresolvedKustomizeRefs(t, dir); len(bad) > 0 {
 		t.Errorf("unresolved kustomize references: %v", bad)
@@ -451,8 +458,12 @@ func TestWalkClusterByPackage_ExcludedRootUnchanged(t *testing.T) {
 	// WriteManifest skips, leaving the package's children unreferenced.
 	oci := &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}
 	git := &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "GitRepository"}
-	leaf := &stack.Node{Name: "leaf", PackageRef: oci, Bundle: &stack.Bundle{Name: "leaf", Applications: []*stack.Application{configMapApp("l")}}}
+	// leaf renders no bundle, so the wrapper lists its directory; its child
+	// unit u is applied by its own Kustomization and listed by no parent.
+	u := &stack.Node{Name: "u", PackageRef: oci, Bundle: &stack.Bundle{Name: "u", Applications: []*stack.Application{configMapApp("l")}}}
+	leaf := &stack.Node{Name: "leaf", PackageRef: oci, Children: []*stack.Node{u}}
 	root := &stack.Node{Name: "root", PackageRef: git, Bundle: &stack.Bundle{Name: "root", Applications: []*stack.Application{configMapApp("r")}}, Children: []*stack.Node{leaf}}
+	u.SetParent(leaf)
 	leaf.SetParent(root)
 	pkgs, err := layout.WalkClusterByPackage(&stack.Cluster{Name: "c", Node: root}, layout.LayoutRules{})
 	if err != nil {

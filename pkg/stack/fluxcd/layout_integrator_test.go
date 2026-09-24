@@ -260,13 +260,12 @@ func TestLayoutIntegrator_IntegrateWithNestedNodes(t *testing.T) {
 		Node: root,
 	}
 
-	// PerBundle hosts each node bundle's CR in the node's own layout, so
-	// every level gets one; PerLayout hosts it in the parent layout, so the
-	// root hosts its own and the child's, and the child the grandchild's.
-	for placement, want := range map[layout.FluxPlacement][3][]string{
-		layout.FluxIntegratedPerBundle: {{"root-bundle"}, {"child-bundle"}, {"grandchild-bundle"}},
-		layout.FluxIntegratedPerLayout: {{"root-bundle", "child-bundle"}, {"grandchild-bundle"}, nil},
-	} {
+	// Both integrated placements host a bundle's CR in the parent layout
+	// (a directory is applied by its own Kustomization only, so the CR
+	// cannot live inside it): the root hosts its own and the child's, and
+	// the child the grandchild's.
+	want := [3][]string{{"root-bundle", "child-bundle"}, {"grandchild-bundle"}, nil}
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
 		rules := layout.DefaultLayoutRules()
 		rules.FluxPlacement = placement
 		rootLayout := mustWalk(t, cluster, rules)

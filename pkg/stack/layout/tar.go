@@ -146,6 +146,14 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 				// workloads + own kustomization.yaml.
 				continue
 			}
+			if child.rendersBundle() {
+				// The child renders bundles, so it is a reconciliation unit:
+				// its own Flux Kustomization (or ArgoCD Application) applies
+				// it, and only that one. Listing it here too would apply its
+				// objects twice, under two owners, and put them in reach of
+				// this directory's patches.
+				continue
+			}
 			if child.ApplicationFileMode == AppFileSingle {
 				entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegratedPerLayout {

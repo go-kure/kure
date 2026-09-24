@@ -55,7 +55,7 @@ a merge that makes two layouts claim one directory, and a directory that would h
 with the same group, kind, namespace and name (kustomize cannot build it); objects that merely
 share a file name are written into one multi-document file, as `FilePerKind` intends.
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
-- **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; children included as directories)
+- **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; application children included as directories)
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
 - **ClusterName**: Optional cluster name prefix for cluster-aware directory paths
 
@@ -149,6 +149,10 @@ Controls how resource YAML files are named:
 - A `FluxIntegratedPerLayout` layout references no child directory: each child is applied by the
   Flux Kustomization the integrator placed in the parent's `Resources`, listed as one of its own
   files. No reference is derived from a child's name.
+- No layout references a child that renders bundles, in any placement: that child is a
+  reconciliation unit, applied by its own Flux Kustomization or ArgoCD Application and by nothing
+  else, so every object has one owner. Building a parent directory therefore does not include its
+  child units; a tree written without Flux or ArgoCD integration has no CR applying them.
 - GroupByName bundle layouts are written `KustomizationExplicit`, so the CRs hosted there
   (umbrella children, PerLayout applications) are listed
 - A layout that renders a bundle, and every child of a `FluxIntegratedPerLayout` layout, always
