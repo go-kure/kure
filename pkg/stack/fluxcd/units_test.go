@@ -1,6 +1,8 @@
 package fluxcd_test
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -581,4 +583,54 @@ func TestIntegrateWithLayout_SourceDefaultNamespaceIdentity(t *testing.T) {
 		t.Errorf("GitRepository count %d -> %d: the Source without a namespace was not recognised", before, after)
 	}
 	writeAll(t, ml)
+}
+
+// TestWriteManifest_PerLayout_ConfigSinglePreservesCRTargets pins that a
+// layout a PerLayout Kustomization targets keeps its directory under a Config
+// whose ApplicationFileMode is AppFileSingle: that setting is a default for
+// application files, not for directories a CR applies.
+func TestWriteManifest_PerLayout_ConfigSinglePreservesCRTargets(t *testing.T) {
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "root", Bundle: srBundle("root", stack.NewApplication("app", "default", &fakeAppConfig{}))}}
+	rules := propertyGroupings["GroupByName"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	ml := integrated(t, c, rules)
+	cfg := layout.DefaultLayoutConfig()
+	cfg.ApplicationFileMode = layout.AppFileSingle
+	out := t.TempDir()
+	if err := layout.WriteManifest(out, cfg, ml); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+	for _, k := range kustomizations(ml) {
+		if _, err := os.Stat(filepath.Join(out, cfg.ManifestsDir, k.Spec.Path, "kustomization.yaml")); err != nil {
+			t.Errorf("Kustomization %s targets %q, which WriteManifest did not write as a directory: %v", k.Name, k.Spec.Path, err)
+		}
+	}
+}
+
+// TestGenerateFromLayout_HealthChecksNormalizeDefaultNamespace pins the
+// health-check remap with an empty DefaultNamespace: a check on
+// "default/b2" names the same generated Kustomization as one on "b2".
+func TestGenerateFromLayout_HealthChecksNormalizeDefaultNamespace(t *testing.T) {
+	c := mergedCluster(func(rb, b1, _ *stack.Bundle) {
+		b1.HealthChecks = []stack.HealthCheck{{APIVersion: kustv1.GroupVersion.String(), Kind: "Kustomization", Name: "b2", Namespace: "default"}}
+	})
+	ml, err := layout.WalkCluster(c, allFlat)
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	gen := fluxstack.NewResourceGenerator()
+	gen.DefaultNamespace = ""
+	objs, err := gen.GenerateFromLayout(ml, c)
+	if err != nil {
+		t.Fatalf("GenerateFromLayout: %v", err)
+	}
+	for _, o := range objs {
+		if k, ok := o.(*kustv1.Kustomization); ok {
+			for _, hc := range k.Spec.HealthChecks {
+				if hc.Name == "b2" {
+					t.Errorf("%s still health-checks b2, which the merge removed", k.Name)
+				}
+			}
+		}
+	}
 }

@@ -38,7 +38,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 // manifestAppMode is the application file mode WriteManifest writes l with.
 // A layout's own mode wins. Config's ApplicationFileMode is the default for
 // application layouts (and hand-built ones); a layout that renders a node or
-// bundle never takes it, because in AppFileSingle mode its files would go
+// bundle, or that a PerLayout Kustomization targets, never takes it, because in AppFileSingle mode its files would go
 // into its Namespace, not the directory its Flux or ArgoCD path names. That
 // is what lets a profile such as ArgoProfile write single files per
 // application while nodes and bundles keep their directories.
@@ -46,7 +46,10 @@ func manifestAppMode(l *ManifestLayout, cfg Config) ApplicationFileMode {
 	if l.ApplicationFileMode != AppFileUnset {
 		return l.ApplicationFileMode
 	}
-	if l.hasNodeOrBundleOrigin() {
+	// A layout that renders a node or bundle, or any walked layout under
+	// FluxIntegratedPerLayout (every one gets a Kustomization targeting its
+	// directory), must keep that directory.
+	if l.hasNodeOrBundleOrigin() || l.FluxPlacement == FluxIntegratedPerLayout {
 		return AppFilePerResource
 	}
 	return cfg.ApplicationFileMode
