@@ -238,7 +238,9 @@ func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*Mani
 			if err := renderChildren(c.Node.Children, ml, g, rootPkg); err != nil {
 				return nil, err
 			}
-			if len(ml.Children) == 0 && len(ml.Resources) == 0 {
+			// Nothing of this package lies below: no layout, resource or
+			// merged node. A merged node with an empty bundle still counts.
+			if len(ml.Children) == 0 && len(ml.Resources) == 0 && len(ml.origin.nodes) == 0 {
 				ml = nil
 			}
 		}

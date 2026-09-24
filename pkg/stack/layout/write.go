@@ -32,7 +32,7 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if err := checkLayoutTree(ml, manifestOutDir(basePath, cfg)); err != nil {
 		return err
 	}
-	return writeManifest(basePath, cfg, ml, false)
+	return writeManifest(basePath, cfg, ml)
 }
 
 // checkOriginFileModes refuses a node- or bundle-rendering layout that
@@ -56,9 +56,10 @@ func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
 	return nil
 }
 
-// fluxTarget is set for a child of a FluxIntegratedPerLayout layout: its
-// directory is a Flux Kustomization's spec.path (see ManifestLayout.writeToDisk).
-func writeManifest(basePath string, cfg Config, ml *ManifestLayout, fluxTarget bool) error {
+// writeManifest writes ml and its children; every directory gets a
+// kustomization.yaml (see ManifestLayout.writeToDisk), except the empty
+// synthetic cluster root.
+func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	manifestFileName := cfg.ResolveManifestFileName()
 	mode := ml.FilePer
 	if mode == FilePerUnset {
@@ -154,11 +155,11 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout, fluxTarget b
 		strings.Count(ml.Namespace, string(filepath.Separator)) == 0 &&
 		ml.Name == "" &&
 		len(fileGroups) == 0 &&
-		!(appMode != AppFileSingle && (fluxTarget || ml.rendersBundle()))
+		!ml.rendersBundle()
 
 	// Generate kustomization.yaml if there are resources or children, except at the empty cluster root.
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow.
-	if !skipClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0 || (appMode != AppFileSingle && (fluxTarget || ml.rendersBundle()))) {
+	if !skipClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0 || appMode != AppFileSingle) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -238,7 +239,7 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout, fluxTarget b
 	}
 
 	for _, child := range ml.Children {
-		if err := writeManifest(basePath, cfg, child, ml.FluxPlacement == FluxIntegratedPerLayout); err != nil {
+		if err := writeManifest(basePath, cfg, child); err != nil {
 			return err
 		}
 	}

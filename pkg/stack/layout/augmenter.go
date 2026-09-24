@@ -35,13 +35,13 @@ type LayoutAugmenter interface {
 // unconditionally and answer "do I want the walker to carve me a directory"
 // per instance instead.
 //
-// WantsOwnLayout() gates placement only, on the flat-bundle walker path
-// (renderApps with ApplicationGrouping flat): false is treated as-if-absent for that decision —
-// the app's resources merge flat into the parent layout instead of getting a
-// per-app child, and AugmentLayout is not invoked because no per-app layout
-// exists to pass it. It has no effect on the GroupByName or by-package
-// walker paths, where an app already gets its own layout and AugmentLayout
-// already runs unconditionally, regardless of augmenter status.
+// WantsOwnLayout() gates placement only, and only where ApplicationGrouping
+// is GroupFlat (in every walker, WalkClusterByPackage included): false is
+// treated as-if-absent for that decision — the app's resources merge into
+// the bundle's layout instead of getting a per-app child, and AugmentLayout
+// is not invoked because no per-app layout exists to pass it. With
+// ApplicationGrouping GroupByName every app already gets its own layout and
+// AugmentLayout runs unconditionally, regardless of augmenter status.
 //
 // A config that does not implement this interface keeps LayoutAugmenter's
 // existing presence-only behaviour unchanged.

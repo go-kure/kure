@@ -1179,3 +1179,28 @@ func TestFluxSeparate_RejectsRelocatedFluxSystem(t *testing.T) {
 		t.Errorf("got %v, want a refusal of the relocated flux-system child", err)
 	}
 }
+
+// TestEmptyApplicationDirectoriesBuild pins that every directory the writers
+// reference has a kustomization.yaml, including an application that renders
+// nothing: with ApplicationGrouping by name it still gets a directory, in a
+// bundle and inside an umbrella child, and its parent lists it.
+func TestEmptyApplicationDirectoriesBuild(t *testing.T) {
+	empty := func(name string) *stack.Application {
+		return stack.NewApplication(name, "default", &fakeAppConfig{})
+	}
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			u := &stack.Bundle{Name: "u", SourceRef: testSR(), Applications: []*stack.Application{empty("u-empty"), cmApp("ua")}}
+			b := srBundle("b", empty("b-empty"), cmApp("api"))
+			b.Children = []*stack.Bundle{u}
+			web := &stack.Node{Name: "web", Bundle: b}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{web}}}
+			rules := propertyGroupings["GroupByName"]
+			rules.FluxPlacement = placement
+			ml := integrated(t, c, rules)
+			for writer, w := range writeAll(t, ml) {
+				checkWrittenTree(t, writer, w, nil, false)
+			}
+		})
+	}
+}

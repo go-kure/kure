@@ -225,16 +225,15 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	if err := checkLayoutTree(ml, diskOutDir(basePath)); err != nil {
 		return err
 	}
-	return ml.writeToDisk(basePath, false)
+	return ml.writeToDisk(basePath)
 }
 
-// writeToDisk writes ml and its children. fluxTarget is set for a child of a
-// FluxIntegratedPerLayout layout: the parent hosts a Flux Kustomization whose
-// spec.path is this directory, so it gets a kustomization.yaml even when empty
-// (an empty directory does not survive a Git tree), as a layout that renders a
-// bundle always does. An AppFileSingle layout writes into its parent's
-// directory and never gets one of its own.
-func (ml *ManifestLayout) writeToDisk(basePath string, fluxTarget bool) error {
+// writeToDisk writes ml and its children. Every layout's directory gets a
+// kustomization.yaml, even when it lists nothing ("resources: []"): its parent
+// lists the directory, or a Flux Kustomization's spec.path names it, and an
+// empty directory does not survive a Git tree either. An AppFileSingle layout
+// writes into its parent's directory and never gets one of its own.
+func (ml *ManifestLayout) writeToDisk(basePath string) error {
 	fileMode := ml.FilePer
 	if fileMode == FilePerUnset {
 		fileMode = FilePerResource
@@ -324,7 +323,7 @@ func (ml *ManifestLayout) writeToDisk(basePath string, fluxTarget bool) error {
 
 	// Generate kustomization.yaml if there are resources or children
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
-	if len(fileGroups) > 0 || len(ml.Children) > 0 || (appMode != AppFileSingle && (fluxTarget || ml.rendersBundle())) {
+	if len(fileGroups) > 0 || len(ml.Children) > 0 || appMode != AppFileSingle {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -411,7 +410,7 @@ func (ml *ManifestLayout) writeToDisk(basePath string, fluxTarget bool) error {
 	}
 
 	for _, child := range ml.Children {
-		if err := child.writeToDisk(basePath, ml.FluxPlacement == FluxIntegratedPerLayout); err != nil {
+		if err := child.writeToDisk(basePath); err != nil {
 			return err
 		}
 	}
