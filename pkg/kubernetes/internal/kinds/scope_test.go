@@ -1,6 +1,7 @@
 package kinds
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/go-kure/kure/pkg/kubernetes/internal/crds"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/upstream"
 )
@@ -314,6 +316,90 @@ spec:
 		return
 	}
 	t.Fatal("the unmarked kind was not resolved")
+}
+
+// unmarkedFixtureIn returns the marker fixture with every type unpacked in a
+// fresh directory that ships a Cluster-scoped CRD for the unmarked kind.
+func unmarkedFixtureIn(t *testing.T) (string, []Kind, map[string]upstream.Type) {
+	t.Helper()
+	dir := t.TempDir()
+	manifest := `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: unmarkeds.example.com
+spec:
+  group: example.com
+  names:
+    kind: Unmarked
+  scope: Cluster
+`
+	if err := os.WriteFile(filepath.Join(dir, "crd.yaml"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	all, types := markerFixture()
+	for key, tp := range types {
+		tp.ModuleDir = dir
+		types[key] = tp
+	}
+	return dir, all, types
+}
+
+// countCRDLoads wraps loadCRDIndex for the rest of the test, counting walks per
+// directory. fail, when set, makes the next walk of that directory fail once.
+func countCRDLoads(t *testing.T) (loads map[string]int, fail map[string]bool) {
+	t.Helper()
+	loads, fail = map[string]int{}, map[string]bool{}
+	orig := loadCRDIndex
+	loadCRDIndex = func(dir string) (crds.Index, error) {
+		loads[dir]++
+		if fail[dir] {
+			delete(fail, dir)
+			return nil, errors.New("injected walk failure")
+		}
+		return orig(dir)
+	}
+	t.Cleanup(func() { loadCRDIndex = orig })
+	return loads, fail
+}
+
+// Walking a module for its CRDs decodes every manifest it ships, which under
+// the race detector is most of what a resolution costs; the generator's tests
+// resolve dozens of times. A module directory is walked once per process, not
+// once per resolution.
+func TestResolveScopesWalksAModuleDirectoryOncePerProcess(t *testing.T) {
+	dir, all, types := unmarkedFixtureIn(t)
+	loads, _ := countCRDLoads(t)
+	for i := range 3 {
+		resolved, err := ResolveScopes(all, types)
+		if err != nil {
+			t.Fatalf("ResolveScopes #%d: %v", i+1, err)
+		}
+		for _, d := range resolved {
+			if d.Key == "example.com/Unmarked" && d.Scope != markers.ScopeCluster {
+				t.Errorf("resolution #%d: %s resolved %s, want Cluster from the shipped CRD", i+1, d.Key, d.Scope)
+			}
+		}
+	}
+	if loads[dir] != 1 {
+		t.Errorf("walked %s %d times over three resolutions, want 1", dir, loads[dir])
+	}
+}
+
+// A walk that failed is not remembered: the next resolution walks again rather
+// than repeating an error the directory may no longer produce.
+func TestResolveScopesDoesNotRememberAFailedWalk(t *testing.T) {
+	dir, all, types := unmarkedFixtureIn(t)
+	loads, fail := countCRDLoads(t)
+	fail[dir] = true
+	if _, err := ResolveScopes(all, types); err == nil {
+		t.Fatal("ResolveScopes succeeded through an injected walk failure")
+	}
+	if _, err := ResolveScopes(all, types); err != nil {
+		t.Fatalf("ResolveScopes after a failed walk: %v", err)
+	}
+	if loads[dir] != 2 {
+		t.Errorf("walked %s %d times, want 2: the failure must not be cached", dir, loads[dir])
+	}
 }
 
 // A module that ships CRDs but none for this kind is still unanswerable. The

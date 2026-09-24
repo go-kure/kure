@@ -301,6 +301,9 @@ them. Five internal packages do it, and none of them is part of the public API:
   (cilium's `XDSResource` embeds `*anypb.Any` that way).
 - `internal/crds` reads the `CustomResourceDefinition` manifests a module ships in
   that directory, which is where the scope comes from for a type carrying no marker.
+  Each module directory is walked once per process and its index kept: the walk
+  decodes every manifest the module ships, and a module-cache directory never
+  changes under a fixed version. A walk that fails is not kept.
 - `internal/kinds` resolves a scope per registered kind; `internal/maturity` walks
   the type graph for the field table.
 

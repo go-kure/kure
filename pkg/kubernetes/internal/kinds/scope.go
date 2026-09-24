@@ -2,6 +2,7 @@ package kinds
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/crds"
@@ -91,7 +92,6 @@ func ResolveScopes(all []Kind, types map[string]upstream.Type) ([]DerivedScope, 
 	for _, k := range all {
 		registered[k.Key()] = true
 	}
-	shipped := newCRDIndexes()
 	out := make([]DerivedScope, 0, len(derived))
 	for _, d := range derived {
 		if !registered[d.Key] {
@@ -120,13 +120,25 @@ func ResolveScopes(all []Kind, types map[string]upstream.Type) ([]DerivedScope, 
 }
 
 // crdIndexes caches one CRD index per module directory. Indexing walks the
-// whole module, so it happens once per module and only when a kind actually
-// needs it — most kinds are answered by their own marker.
+// whole module and decodes every manifest it ships, so it happens once per
+// module and only when a kind actually needs it — most kinds are answered by
+// their own marker.
 type crdIndexes struct {
+	mu    sync.Mutex
 	byDir map[string]crds.Index
 }
 
-func newCRDIndexes() *crdIndexes { return &crdIndexes{byDir: map[string]crds.Index{}} }
+// shipped is the one cache every resolution in the process shares. A pinned
+// module's directory is a module-cache entry, which Go never rewrites in place
+// — a new version unpacks to a new directory — and the generator is a one-shot
+// process, so an index read once stays the answer for as long as anything asks.
+// Walking afresh per resolution is what pushed the generator's own tests, which
+// resolve dozens of times, past CI's timeout under the race detector. A walk
+// that fails is not kept.
+var shipped = &crdIndexes{byDir: map[string]crds.Index{}}
+
+// loadCRDIndex is [crds.Load], held in a variable so a test can count the walks.
+var loadCRDIndex = crds.Load
 
 // scopeOf answers for a kind whose own type carries no +kubebuilder:resource
 // marker, from the CRD its module ships.
@@ -141,10 +153,12 @@ func (c *crdIndexes) scopeOf(d DerivedScope) (markers.Scope, error) {
 	if d.ModuleDir == "" {
 		return markers.ScopeNamespaced, errors.Errorf("kinds: %s (%s) declares no +kubebuilder:resource marker on its own type and its module directory is unknown, so the shipped CRD cannot be read", d.Key, d.Module)
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	index, ok := c.byDir[d.ModuleDir]
 	if !ok {
 		var err error
-		index, err = crds.Load(d.ModuleDir)
+		index, err = loadCRDIndex(d.ModuleDir)
 		if err != nil {
 			return markers.ScopeNamespaced, errors.Wrapf(err, "kinds: %s (%s)", d.Key, d.Module)
 		}
