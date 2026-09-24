@@ -478,3 +478,55 @@ func TestWriteManifest_RefusesAppFileSingleOrigin(t *testing.T) {
 		t.Errorf("application layout in AppFileSingle: %v", err)
 	}
 }
+
+// TestIndexOrigins_Units pins the reconciliation units of a flat tree: one per
+// directory that renders bundles, named after its first bundle, with
+// dependencies mapped by bundle name (a copy of a bundle resolves like the
+// original) and dependencies inside a unit dropped.
+func TestIndexOrigins_Units(t *testing.T) {
+	flat := layout.LayoutRules{NodeGrouping: layout.GroupFlat, BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat}
+	u := &stack.Bundle{Name: "u", Applications: []*stack.Application{configMapApp("ua")}}
+	b2 := &stack.Bundle{Name: "b2", Applications: []*stack.Application{configMapApp("two")}}
+	copyOfB2 := *b2
+	b1 := &stack.Bundle{Name: "b1", Applications: []*stack.Application{configMapApp("one")},
+		DependsOn: []*stack.Bundle{&copyOfB2, u}, NamedDependsOn: []string{"rb", "external"}}
+	rb := &stack.Bundle{Name: "rb", Applications: []*stack.Application{configMapApp("core")}, Children: []*stack.Bundle{u}}
+	c1 := &stack.Node{Name: "c1", Bundle: b1}
+	c2 := &stack.Node{Name: "c2", Bundle: b2}
+	r := &stack.Node{Name: "r", Bundle: rb, Children: []*stack.Node{c1, c2}}
+	c1.SetParent(r)
+	c2.SetParent(r)
+	c := &stack.Cluster{Name: "demo", Node: r}
+	ml := walk(t, c, flat)
+	ix, err := layout.IndexOrigins(ml, c)
+	if err != nil {
+		t.Fatalf("IndexOrigins: %v", err)
+	}
+	var units []string
+	for _, l := range ix.Units() {
+		units = append(units, l.FullRepoPath())
+	}
+	if want := []string{"r", "r/u"}; !slices.Equal(units, want) {
+		t.Errorf("Units = %v, want %v", units, want)
+	}
+	for b, want := range map[*stack.Bundle]string{rb: "rb", b1: "rb", b2: "rb", &copyOfB2: "rb", u: "u", {Name: "outside"}: "outside"} {
+		if got := ix.UnitName(b); got != want {
+			t.Errorf("UnitName(%s) = %q, want %q", b.Name, got, want)
+		}
+	}
+	root := ix.Units()[0]
+	if got := ix.UnitDependencies(root); !slices.Equal(got, []string{"u"}) {
+		t.Errorf("UnitDependencies = %v, want [u] (b2 and its copy are inside rb's unit)", got)
+	}
+	if got := ix.UnitNamedDependencies(root); !slices.Equal(got, []string{"external"}) {
+		t.Errorf("UnitNamedDependencies = %v, want [external] (rb is rb's own unit)", got)
+	}
+
+	// u depending on a bundle merged into its umbrella parent's unit waits
+	// for a unit that waits for it (health checks): a cycle.
+	u.DependsOn = []*stack.Bundle{b2}
+	b1.DependsOn = nil
+	if _, err := layout.IndexOrigins(walk(t, c, flat), c); err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("got %v, want a unit cycle refusal", err)
+	}
+}
