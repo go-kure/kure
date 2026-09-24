@@ -115,10 +115,13 @@ bundle when it has one):
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
 | `NamedDependsOn` | combined |
 
-A dependency cycle between Kustomizations, including one a merge closes or one through an umbrella
-parent's health checks on its children, is an error. So is, under integrated placement, a
-Kustomization that depends on one whose CR it creates (directly or through Kustomizations it
-creates): Flux waits for the dependency before applying the directory that would create it. ArgoCD
+The integrator refuses Kustomizations that can never all become Ready. Applying waits for every
+`dependsOn` to be Ready; becoming Ready waits for every Kustomization it health-checks (with
+`wait`, for every CR it created too); and a CR exists only once the Kustomization whose directory
+references reach its file has applied. A CR the root directory reaches is created by the Flux
+bootstrap. A cycle among these waits is refused, naming the chain. A merge can close one (a health
+check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
+bundle depending on a child node's bundle whose CR only the parent's directory holds (PerLayout). ArgoCD
 Applications follow the same rule. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
 

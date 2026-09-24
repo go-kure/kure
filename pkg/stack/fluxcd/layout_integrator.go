@@ -190,65 +190,153 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.place(ml, sourceScope{}); err != nil {
 		return err
 	}
-	return checkCreationOrder(ml)
+	return checkReconcileOrder(ml)
 }
 
-// checkCreationOrder refuses a Kustomization that depends on one whose CR it
-// creates, directly or through Kustomizations it creates. Under integrated
-// placement a CR is applied by the Kustomization whose spec.path is the
-// nearest directory at or above the one holding the CR's file, and Flux waits
-// for a dependency to be Ready before applying: the dependency would never be
-// created. (A bundle depending on its own umbrella child is refused earlier;
-// merging bundles, or a parent node's bundle depending on a child node's
-// whose CR it hosts, reaches the same deadlock.)
-func checkCreationOrder(root *layout.ManifestLayout) error {
-	type cr struct {
-		host string
-		deps []string
+// checkReconcileOrder refuses Flux Kustomizations that can never all become
+// Ready. Each has two states: applied, and Ready. Applying waits for every
+// dependsOn to be Ready; Ready waits for being applied and for every
+// Kustomization it health-checks (with wait, for every one it created too); a
+// Kustomization is applied only once the one that creates its CR has applied —
+// the one whose directory references reach the CR's file. A CR the root
+// directory reaches is created by the Flux bootstrap and waits on nothing. A
+// cycle among these waits is a deadlock on a fresh install: a merge can close
+// one (a health check or dependency on a bundle merged into a unit that waits
+// for it), and so can a dependency chain that ends at a CR its first member
+// creates.
+func checkReconcileOrder(root *layout.ManifestLayout) error {
+	type kust struct {
+		host         *layout.ManifestLayout
+		path         string
+		deps, checks []string
+		wait         bool
 	}
-	crs := map[string]cr{}
-	byPath := map[string]string{}
-	var walk func(l *layout.ManifestLayout)
-	walk = func(l *layout.ManifestLayout) {
+	ks := map[string]*kust{}
+	var names []string
+	layoutAt := map[string]*layout.ManifestLayout{}
+	var index func(l *layout.ManifestLayout)
+	index = func(l *layout.ManifestLayout) {
+		layoutAt[path.Clean(l.FullRepoPath())] = l
 		for _, obj := range l.Resources {
 			k, ok := obj.(*kustv1.Kustomization)
 			if !ok {
 				continue
 			}
-			var deps []string
+			e := &kust{host: l, path: path.Clean(k.Spec.Path), wait: k.Spec.Wait}
 			for _, d := range k.Spec.DependsOn {
-				deps = append(deps, d.Name)
+				e.deps = append(e.deps, d.Name)
 			}
-			crs[k.Name] = cr{host: path.Clean(l.FullRepoPath()), deps: deps}
-			byPath[path.Clean(k.Spec.Path)] = k.Name
+			for _, hc := range k.Spec.HealthChecks {
+				if hc.Kind == "Kustomization" {
+					e.checks = append(e.checks, hc.Name)
+				}
+			}
+			ks[k.Name] = e
+			names = append(names, k.Name)
 		}
 		for _, child := range l.Children {
 			if child != nil {
-				walk(child)
+				index(child)
 			}
 		}
 	}
-	walk(root)
-	creator := func(name string) string {
-		for dir := crs[name].host; ; dir = path.Dir(dir) {
-			if applier, ok := byPath[dir]; ok && applier != name {
-				return applier
-			}
-			if dir == "." || dir == "/" || path.Dir(dir) == dir {
-				return ""
-			}
-		}
-	}
-	for name, c := range crs {
-		for _, dep := range c.deps {
-			if _, ours := crs[dep]; !ours {
+	index(root)
+
+	// reach is the set of layouts a kustomization build of l includes: l and
+	// the child directories its kustomization.yaml lists, recursively. The
+	// writers list a child unless it is an umbrella child (applied by its
+	// own CR), an AppFileSingle file, or its parent is PerLayout (which lists
+	// the child's CR instead).
+	var reach func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool)
+	reach = func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool) {
+		into[l] = true
+		for _, child := range l.Children {
+			if child == nil || child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle ||
+				l.FluxPlacement == layout.FluxIntegratedPerLayout {
 				continue
 			}
-			for cur, hops := creator(dep), 0; cur != "" && hops <= len(crs); cur, hops = creator(cur), hops+1 {
-				if cur == name {
-					return errors.ResourceValidationError("Kustomization", name, "dependsOn",
-						fmt.Sprintf("Kustomization %q depends on %q, whose CR it creates (in %q): Flux waits for the dependency before applying, so it would never be created; drop the dependency or give the bundles directories of their own", name, dep, crs[dep].host), nil)
-				}
+			reach(child, into)
+		}
+	}
+	fromRoot := map[*layout.ManifestLayout]bool{}
+	reach(root, fromRoot)
+	reached := map[string]map[*layout.ManifestLayout]bool{}
+	creator := func(name string) string {
+		host := ks[name].host
+		if fromRoot[host] {
+			return ""
+		}
+		best := ""
+		for _, other := range names {
+			if other == name {
+				continue
+			}
+			l := layoutAt[ks[other].path]
+			if l == nil {
+				continue
+			}
+			if reached[other] == nil {
+				reached[other] = map[*layout.ManifestLayout]bool{}
+				reach(l, reached[other])
+			}
+			if reached[other][host] && (best == "" || len(ks[other].path) > len(ks[best].path)) {
+				best = other
+			}
+		}
+		return best
+	}
+
+	// Nodes are "apply <name>" and "ready <name>"; an edge says the first
+	// waits for the second.
+	edges := map[string][]string{}
+	for _, name := range names {
+		k := ks[name]
+		ready, apply := "ready "+name, "apply "+name
+		edges[ready] = append(edges[ready], apply)
+		for _, d := range k.deps {
+			if _, ours := ks[d]; ours {
+				edges[apply] = append(edges[apply], "ready "+d)
+			}
+		}
+		for _, h := range k.checks {
+			if _, ours := ks[h]; ours {
+				edges[ready] = append(edges[ready], "ready "+h)
+			}
+		}
+		if c := creator(name); c != "" {
+			edges[apply] = append(edges[apply], "apply "+c)
+			if ks[c].wait {
+				edges["ready "+c] = append(edges["ready "+c], ready)
+			}
+		}
+	}
+	state := map[string]int{}
+	var stack []string
+	var visit func(n string) error
+	visit = func(n string) error {
+		switch state[n] {
+		case 2:
+			return nil
+		case 1:
+			i := slices.Index(stack, n)
+			return errors.Errorf("Flux Kustomizations can never all become Ready: %s waits for itself (%s); a dependsOn waits before applying, a health check before becoming Ready, and a CR exists only once the Kustomization that creates it has applied",
+				strings.TrimPrefix(strings.TrimPrefix(n, "ready "), "apply "), strings.Join(append(stack[i:], n), " -> "))
+		}
+		state[n] = 1
+		stack = append(stack, n)
+		for _, next := range edges[n] {
+			if err := visit(next); err != nil {
+				return err
+			}
+		}
+		stack = stack[:len(stack)-1]
+		state[n] = 2
+		return nil
+	}
+	for _, name := range names {
+		for _, n := range []string{"ready " + name, "apply " + name} {
+			if err := visit(n); err != nil {
+				return err
 			}
 		}
 	}
@@ -577,7 +665,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 
 	ml.Children = append(ml.Children, fluxLayout)
 
-	return nil
+	return checkReconcileOrder(ml)
 }
 
 // normalizeRulesPlacement returns a copy of rules with FluxPlacement filled in
