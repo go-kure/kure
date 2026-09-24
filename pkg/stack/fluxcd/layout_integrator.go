@@ -417,10 +417,12 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			name := layoutCRName(child)
 			if e, ok := p.existing[crKey(p.gen.DefaultNamespace, name)]; ok && e.host == l && e.path == child.FullRepoPath() {
 				// Placed by an earlier integration: kept as is, so its
-				// source need not be resolved again.
+				// source need not be resolved again. It is still one of
+				// this integration's CRs for the reconcile-order check.
 				if err := p.claim(name, e.path); err != nil {
 					return err
 				}
+				p.generated[crKey(p.gen.DefaultNamespace, name)] = true
 				continue
 			}
 			ref, err := p.layoutSource(child, scope)
@@ -719,7 +721,16 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 
 	ml.Children = append(ml.Children, fluxLayout)
 
-	return nil
+	// GenerateFromLayout checked dependencies and health checks; the
+	// placement adds what a wait on the root's Kustomization covers: the
+	// root's kustomization.yaml lists flux-system, so it applies every CR.
+	generated := map[string]bool{}
+	for _, obj := range fluxResources {
+		if k, ok := obj.(*kustv1.Kustomization); ok {
+			generated[crKey(k.Namespace, k.Name)] = true
+		}
+	}
+	return checkPlacedReconcileOrder(ml, generated)
 }
 
 // normalizeRulesPlacement returns a copy of rules with FluxPlacement filled in
