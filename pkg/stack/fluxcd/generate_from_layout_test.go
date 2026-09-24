@@ -363,6 +363,10 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string,
 	for _, d := range dirs {
 		if info, err := os.Stat(filepath.Join(w.root, d)); err != nil || !info.IsDir() {
 			t.Errorf("%s: spec.path %q is not a written directory", writer, d)
+		} else if _, err := os.Stat(filepath.Join(w.root, d, "kustomization.yaml")); err != nil {
+			// An empty directory is not a directory in Git (or in most
+			// artifacts built from one): Flux would find nothing there.
+			t.Errorf("%s: spec.path %q has no kustomization.yaml", writer, d)
 		}
 	}
 }
@@ -1056,5 +1060,33 @@ func TestFluxSeparate_RejectsDuplicateCRInExistingFluxSystemSubtree(t *testing.T
 	err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
 	if err == nil || !strings.Contains(err.Error(), fluxstack.DefaultFluxDirName) {
 		t.Errorf("got %v, want a refusal of the modified flux-system child", err)
+	}
+}
+
+// TestPerLayout_EmptyNodeBundleSurvivesGitTree: a bundle with no applications
+// renders a directory with nothing in it. Its Kustomization still names that
+// directory, so the writers give it a kustomization.yaml — an empty directory
+// does not survive a Git tree.
+func TestPerLayout_EmptyNodeBundleSurvivesGitTree(t *testing.T) {
+	for _, grouping := range []string{"nodeOnly", "GroupByName"} {
+		for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+			for _, clusterName := range []string{"", ".", "prod"} {
+				t.Run(fmt.Sprintf("%s/%s/%q", grouping, placement, clusterName), func(t *testing.T) {
+					web := &stack.Node{Name: "web", Bundle: srBundle("web")}
+					c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{web}}}
+					rules := propertyGroupings[grouping]
+					rules.FluxPlacement = placement
+					rules.ClusterName = clusterName
+					ml := integrated(t, c, rules)
+					var dirs []string
+					for _, k := range kustomizations(ml) {
+						dirs = append(dirs, k.Spec.Path)
+					}
+					for writer, w := range writeAll(t, ml) {
+						checkWrittenTree(t, writer, w, dirs, placement == layout.FluxIntegratedPerLayout)
+					}
+				})
+			}
+		}
 	}
 }
