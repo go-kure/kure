@@ -224,7 +224,7 @@ infrastructure:
       (verified — no other controller-runtime subpackage is imported anywhere),
       whose Client interface is unchanged; IndexerFunc/FieldIndexer became type
       aliases to a new cacheapi package but kure uses neither. kure already
-      requires k8s.io/api v0.37.0 directly, so the k8s.io/* bump is a no-op
+      requires k8s.io/api v0.37.x directly, so the k8s.io/* bump is a no-op
       here. Build and tests pass unchanged.
     related_packages:
       - "sigs.k8s.io/kustomize/api"
