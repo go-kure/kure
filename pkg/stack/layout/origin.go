@@ -200,8 +200,9 @@ func (ix *OriginIndex) mapToUnits(l *ManifestLayout, names []string) []string {
 
 // checkUnitCycles refuses a DependsOn cycle between units: both Flux and
 // ArgoCD emit those dependencies, and would wait on each other forever.
-// NamedDependsOn only reaches Flux, whose reconcile-order check covers it. Merging bundles into one unit can close a cycle their own
-// dependencies did not have (b1 -> u -> b2 becomes rb -> u -> rb when b1 and
+// NamedDependsOn only reaches Flux, whose reconcile-order check covers it.
+// Merging bundles into one unit can close a cycle their own dependencies did
+// not have (b1 -> u -> b2 becomes rb -> u -> rb when b1 and
 // b2 merge into rb's directory). Waits a workflow adds on top — Flux health
 // checks on umbrella children, creation order — are that workflow's to check
 // (see the fluxcd reconcile-order check).

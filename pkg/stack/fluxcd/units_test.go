@@ -682,3 +682,41 @@ func TestIntegrateWithLayout_NestedAugmenter_NoDuplicateApplication(t *testing.T
 		checkWrittenTree(t, writer, w, dirs, true)
 	}
 }
+
+// TestIntegrateWithLayout_PlacementIsTheIntegrations pins that the
+// integration's placement is the tree's, whatever placement the tree was
+// walked with: every directory is applied once and every CR is applied, in
+// every writer, for each walk/integration pair.
+func TestIntegrateWithLayout_PlacementIsTheIntegrations(t *testing.T) {
+	placements := []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle}
+	for _, walked := range placements {
+		for _, integrated := range placements {
+			if walked == integrated {
+				continue
+			}
+			t.Run(string(walked)+"->"+string(integrated), func(t *testing.T) {
+				child := &stack.Node{Name: "child", Bundle: srBundle("childb", cmApp("child-app"))}
+				root := &stack.Node{Name: "root", Bundle: srBundle("root", cmApp("root-app")), Children: []*stack.Node{child}}
+				child.SetParent(root)
+				c := &stack.Cluster{Name: "demo", Node: root}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = walked
+				ml, err := layout.WalkCluster(c, rules)
+				if err != nil {
+					t.Fatalf("walk: %v", err)
+				}
+				rules.FluxPlacement = integrated
+				if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+					t.Fatalf("IntegrateWithLayout: %v", err)
+				}
+				var dirs []string
+				for _, k := range kustomizations(ml) {
+					dirs = append(dirs, k.Spec.Path)
+				}
+				for writer, w := range writeAll(t, ml) {
+					checkWrittenTree(t, writer, w, dirs, integrated == layout.FluxIntegratedPerLayout)
+				}
+			})
+		}
+	}
+}

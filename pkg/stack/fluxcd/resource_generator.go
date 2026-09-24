@@ -109,7 +109,7 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 					continue
 				}
 				return nil, errors.Errorf("%s %q is defined twice with different content: bundles %q and %q name one Source differently",
-					o.GetObjectKind().GroupVersionKind().Kind, o.GetName(), sourceOwner(ix, out, same), l.OriginBundles()[0].Name)
+					o.GetObjectKind().GroupVersionKind().Kind, o.GetName(), sourceOwner(out, same), l.OriginBundles()[0].Name)
 			}
 			out = append(out, o)
 		}
@@ -254,7 +254,7 @@ func effectiveNS(namespace, fallback string) string {
 }
 
 // sourceOwner names the unit whose generated objects include obj.
-func sourceOwner(ix *layout.OriginIndex, out []client.Object, obj client.Object) string {
+func sourceOwner(out []client.Object, obj client.Object) string {
 	owner := ""
 	for _, o := range out {
 		if k, ok := o.(*kustv1.Kustomization); ok {
