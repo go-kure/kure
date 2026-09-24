@@ -67,7 +67,13 @@ func checkResourceIdentities(l *ManifestLayout) error {
 			continue
 		}
 		gvk := obj.GetObjectKind().GroupVersionKind()
-		id := fmt.Sprintf("%s/%s %s/%s", gvk.Group, gvk.Kind, obj.GetNamespace(), obj.GetName())
+		// kustomize reads an omitted namespace as "default", so an object
+		// without one and the same object in "default" are one identity.
+		ns := obj.GetNamespace()
+		if ns == "" {
+			ns = "default"
+		}
+		id := fmt.Sprintf("%s/%s %s/%s", gvk.Group, gvk.Kind, ns, obj.GetName())
 		if _, dup := seen[id]; dup {
 			return errors.NewFileError("write", l.FullRepoPath(),
 				fmt.Sprintf("layout %q holds the same object %s twice", l.FullRepoPath(), id), nil)
