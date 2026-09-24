@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -476,4 +477,27 @@ func mustJSON(t *testing.T, v interface{ MarshalJSON() ([]byte, error) }) []byte
 		t.Fatalf("marshal: %v", err)
 	}
 	return b
+}
+
+// TestWriters_IdentityIgnoresObjectsWithoutKind pins that the writers'
+// identity check only compares objects it can identify: typed objects with an
+// unset TypeMeta carry no kind, and two of different Go types sharing a name
+// must not be refused as "the same object".
+func TestWriters_IdentityIgnoresObjectsWithoutKind(t *testing.T) {
+	cm := &corev1.ConfigMap{}
+	cm.SetName("app")
+	cm.SetNamespace("default")
+	secret := &corev1.Secret{}
+	secret.SetName("app")
+	secret.SetNamespace("default")
+	var a, b client.Object = cm, secret
+	app := stack.NewApplication("typed", "default", &fakeConfig{objs: []*client.Object{&a, &b}})
+	r := &stack.Node{Name: "r", Bundle: &stack.Bundle{Name: "b", Applications: []*stack.Application{app}}}
+	ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: r}, layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	if err := ml.WriteToTar(&strings.Builder{}); err != nil && strings.Contains(err.Error(), "same object") {
+		t.Errorf("WriteToTar refused two objects of different Go types: %v", err)
+	}
 }
