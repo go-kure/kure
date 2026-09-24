@@ -282,10 +282,10 @@ func TestGenerateFromLayout_MergedEquivalentSourceNamespaces(t *testing.T) {
 
 // TestIntegrateWithLayout_RefusesDependencyOnHostedDescendant pins that a
 // Kustomization cannot depend on one whose CR only it creates: a depends on
-// its child node's bundle b, and under PerLayout b's CR lives in a's
-// directory, which only a's Kustomization applies. Separate placement (every
-// CR in flux-system, applied by the bootstrap) and PerBundle (child
-// directories listed from the root) create b's CR without a.
+// its child node's bundle b, and under both integrated placements b's CR
+// lives in a's directory, which only a's Kustomization applies. Separate
+// placement (every CR in flux-system, applied by the bootstrap) creates b's
+// CR without a.
 func TestIntegrateWithLayout_RefusesDependencyOnHostedDescendant(t *testing.T) {
 	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
 		t.Run(string(placement), func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestIntegrateWithLayout_RefusesDependencyOnHostedDescendant(t *testing.T) {
 			rules := propertyGroupings["nodeOnly"]
 			rules.FluxPlacement = placement
 			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(&stack.Cluster{Name: "demo", Node: r}, rules)
-			if placement != layout.FluxIntegratedPerLayout {
+			if placement == layout.FluxSeparate {
 				if err != nil {
 					t.Fatalf("%s: %v", placement, err)
 				}
@@ -680,7 +680,7 @@ func TestIntegrateWithLayout_NestedAugmenter_NoDuplicateApplication(t *testing.T
 		dirs = append(dirs, k.Spec.Path)
 	}
 	for writer, w := range writeAll(t, ml) {
-		checkWrittenTree(t, writer, w, dirs, true)
+		checkWrittenTree(t, writer, w, dirs)
 	}
 }
 
@@ -777,7 +777,7 @@ func TestIntegrateWithLayout_PlacementIsTheIntegrations(t *testing.T) {
 					dirs = append(dirs, k.Spec.Path)
 				}
 				for writer, w := range writeAll(t, ml) {
-					checkWrittenTree(t, writer, w, dirs, integrated == layout.FluxIntegratedPerLayout)
+					checkWrittenTree(t, writer, w, dirs)
 				}
 			})
 		}
@@ -803,7 +803,7 @@ func TestRecursive_HostedFluxObjectsListedInEveryPlacement(t *testing.T) {
 				dirs = append(dirs, k.Spec.Path)
 			}
 			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, dirs, placement == layout.FluxIntegratedPerLayout)
+				checkWrittenTree(t, writer, w, dirs)
 			}
 		})
 	}
@@ -1064,6 +1064,6 @@ func TestIntegrateWithLayout_RefusedCallLeavesTreeUntouched(t *testing.T) {
 		dirs = append(dirs, k.Spec.Path)
 	}
 	for writer, w := range writeAll(t, ml) {
-		checkWrittenTree(t, writer, w, dirs, false)
+		checkWrittenTree(t, writer, w, dirs)
 	}
 }

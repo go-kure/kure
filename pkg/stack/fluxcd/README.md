@@ -109,7 +109,15 @@ base, or `<basePath>/<ManifestsDir>` for `layout.WriteManifest`. Root the Flux s
 A directory is what a Flux Kustomization applies, so kure emits exactly one per directory that
 renders bundles. When a `GroupFlat` axis (or `FlattenSingleTier`) merges several bundles into one
 directory, they share that Kustomization, named after the first of them (the absorbing node's own
-bundle when it has one):
+bundle when it has one).
+
+Each such directory has **one owner**: it is applied by its own Kustomization and by nothing else.
+No parent `kustomization.yaml` lists a child directory that renders bundles, in any placement, so
+two Kustomizations never apply (and prune, and patch) the same objects. The child's CR is what
+applies it — in `flux-system` under `FluxSeparate`, in the parent directory under the integrated
+placements. Building a parent directory therefore does not include its child units.
+
+The bundles merged into one directory combine as follows:
 
 | Bundle setting | In the shared Kustomization |
 |---|---|
@@ -129,7 +137,8 @@ the root directory reaches is created by the Flux bootstrap. Identities are name
 cycle among these waits is refused, naming the chain. Kustomizations an application emits itself,
 and objects in other namespaces, are outside this check. A merge can close one (a health
 check or dependency on a bundle merged into a unit that waits for it), and so can a parent node's
-bundle depending on a child node's bundle whose CR only the parent's directory holds (PerLayout). ArgoCD
+bundle depending on a child node's bundle whose CR only the parent's directory holds (both
+integrated placements). ArgoCD
 Applications get the unit rule but not this check: only a `DependsOn` cycle between units is
 refused there. Give bundles directories of their own (`NodeGrouping` or
 `BundleGrouping` `GroupByName`) when they need different settings.
@@ -429,9 +438,9 @@ Controls how kustomization.yaml files reference resources:
 
 Controls where Flux Kustomization resources are placed:
 
-- `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories
+- `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply
 - `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout (incl. augmenter-added child layouts), hosted in its parent layout; the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Finest granularity.
-- `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle/node boundaries only**; a bundle's interior (incl. augmenter-added child layouts) is a single kustomize build, with children referenced as directories. Coarser: Flux reconciles per bundle, kustomize handles the interior.
+- `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle boundaries only**, each hosted in its parent layout; a bundle's interior (application and augmenter-added child layouts) is a single kustomize build, with those children referenced as directories. A child that renders bundles is not referenced: its own CR applies it. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
 
@@ -479,10 +488,10 @@ node, with `spec.path` = the child's own directory:
 - **FluxSeparate**: the `flux-system` layout directory receives every bundle's
   Kustomization CR, umbrella descendants included, as a flat list.
 
-Under `FluxIntegratedPerLayout` a node bundle's own CR follows the same rule
-as every other PerLayout CR: it is hosted by the **parent** of the layout that
-renders the bundle (the root layout hosts its own). Under
-`FluxIntegratedPerBundle` it stays at the node's layout.
+Under both integrated placements a node bundle's own CR is hosted by the
+**parent** of the layout that renders the bundle (the root layout hosts its
+own): that directory is applied by its own Kustomization only, so the CR that
+creates it cannot live inside it.
 
 ### On-disk shape
 

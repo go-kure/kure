@@ -307,17 +307,16 @@ func kustomizationRefs(t *testing.T, path string) []string {
 // exists; every file holding a Flux Kustomization is applied — reached from the
 // top kustomization(s) through resources entries and through the spec.path of
 // every Flux Kustomization already reached, as Flux applies them — or sits in
-// flux-system; every expected directory was written. With exclusive set
-// (FluxIntegratedPerLayout), a directory some Flux Kustomization applies is
-// never also pulled in by a kustomization reference: it would be applied, and
-// owned, twice.
-func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string, exclusive bool) {
+// flux-system; every expected directory was written; and a directory some
+// Flux Kustomization applies is never also pulled in by a kustomization
+// reference: it would be applied, and owned, twice.
+func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string) {
 	t.Helper()
+	// Every directory has one owner: a Kustomization's directory is applied
+	// by that Kustomization alone, never also listed by its parent's.
 	crDirs := map[string]bool{}
-	if exclusive {
-		for _, d := range dirs {
-			crDirs[filepath.Clean(d)] = true
-		}
+	for _, d := range dirs {
+		crDirs[filepath.Clean(d)] = true
 	}
 	reached := map[string]bool{}
 	var visit func(kust string)
@@ -538,7 +537,7 @@ func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules
 		}
 	}
 	for writer, w := range writeAll(t, ml) {
-		checkWrittenTree(t, writer, w, dirs, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
+		checkWrittenTree(t, writer, w, dirs)
 	}
 }
 
@@ -807,7 +806,7 @@ func TestIntegrateWithLayout_PerLayout_BundlelessNodeGetsLayoutCR(t *testing.T) 
 				for _, k := range kustomizations(ml) {
 					dirs = append(dirs, k.Spec.Path)
 				}
-				checkWrittenTree(t, writer, w, dirs, true)
+				checkWrittenTree(t, writer, w, dirs)
 			}
 		})
 	}
@@ -918,7 +917,7 @@ func TestFluxSeparate_ClusterNamePathsResolve(t *testing.T) {
 				t.Fatalf("got CR paths %v, want three bundles", dirs)
 			}
 			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, dirs, false)
+				checkWrittenTree(t, writer, w, dirs)
 			}
 		})
 	}
@@ -957,7 +956,7 @@ func TestPerLayoutRecursive_AppliesGeneratedSources(t *testing.T) {
 				dirs = append(dirs, k.Spec.Path)
 			}
 			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, dirs, true)
+				checkWrittenTree(t, writer, w, dirs)
 			}
 		})
 	}
@@ -1118,7 +1117,7 @@ func TestPerLayout_EmptyNodeBundleSurvivesGitTree(t *testing.T) {
 						dirs = append(dirs, k.Spec.Path)
 					}
 					for writer, w := range writeAll(t, ml) {
-						checkWrittenTree(t, writer, w, dirs, placement == layout.FluxIntegratedPerLayout)
+						checkWrittenTree(t, writer, w, dirs)
 					}
 				})
 			}
@@ -1166,7 +1165,7 @@ func TestPerLayout_EmptyBundlelessNodeSurvivesGitTree(t *testing.T) {
 					dirs = append(dirs, k.Spec.Path)
 				}
 				for writer, w := range writeAll(t, ml) {
-					checkWrittenTree(t, writer, w, dirs, true)
+					checkWrittenTree(t, writer, w, dirs)
 				}
 			})
 		}
@@ -1211,7 +1210,7 @@ func TestEmptyApplicationDirectoriesBuild(t *testing.T) {
 			rules.FluxPlacement = placement
 			ml := integrated(t, c, rules)
 			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, nil, false)
+				checkWrittenTree(t, writer, w, nil)
 			}
 		})
 	}

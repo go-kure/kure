@@ -86,10 +86,12 @@ const (
 	// when each child should be reconciled by
 	// its own Flux Kustomization (e.g. hook-group dependsOn).
 	FluxIntegratedPerLayout FluxPlacement = "integrated"
-	// FluxIntegratedPerBundle places Flux Kustomization CRs inline at bundle/node
-	// boundaries only; a bundle's interior (including augmenter-added child
-	// layouts) is a single kustomize build, with children referenced as
-	// directories. Coarser than PerLayout: Flux reconciles per bundle, kustomize
+	// FluxIntegratedPerBundle places Flux Kustomization CRs inline at bundle
+	// boundaries only, each hosted in the parent of the directory it applies;
+	// a bundle's interior (application and augmenter-added child layouts) is a
+	// single kustomize build, with those children referenced as directories.
+	// A child that renders bundles is never referenced: its own CR applies
+	// it. Coarser than PerLayout: Flux reconciles per bundle, kustomize
 	// handles the interior. Use when the unit of Flux reconciliation is the
 	// bundle, not each layout node.
 	FluxIntegratedPerBundle FluxPlacement = "integrated-per-bundle"

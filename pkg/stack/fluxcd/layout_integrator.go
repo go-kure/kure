@@ -81,7 +81,8 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 		// Both inline placements put Flux CRs in the tree. They differ only
 		// in granularity: PerLayout emits a CR for every layout node (incl.
 		// augmenter-added child layouts); PerBundle stops at bundle
-		// boundaries and lets kustomize include child directories.
+		// boundaries and lets kustomize include a bundle's application
+		// directories.
 		err = li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
 	}
 	if err != nil {
@@ -227,8 +228,6 @@ type integratedPlacement struct {
 	gen       *ResourceGenerator
 	ix        *layout.OriginIndex
 	perLayout bool
-	// nodeOf maps a node bundle to its node (umbrella children have none).
-	nodeOf map[*stack.Bundle]*stack.Node
 	// names maps every Kustomization name this pass emitted to its
 	// spec.path: Flux Kustomizations share one namespace, so a name is an
 	// identity.
@@ -256,11 +255,11 @@ type sourceScope struct {
 // addIntegratedFluxToLayout places Flux Kustomizations alongside their target
 // manifests in one walk over the layout tree.
 //
-// Each bundle's CR (and Source) is generated with spec.path = the directory of
-// the layout that renders it. Host: under PerLayout the parent of that layout
-// (the root hosts its own), the same rule as every other PerLayout child CR;
-// under PerBundle the node's layout for a node bundle and the enclosing parent
-// for an umbrella child.
+// Each unit's CR (and Source) is generated with spec.path = the directory of
+// the layout that renders its bundles, and hosted in the parent of that layout
+// (the root hosts its own), under both placements: a unit's directory is
+// applied by its own Kustomization only, so its CR cannot live inside it, and
+// no parent lists it (the writers skip a child that renders bundles).
 //
 // PerLayout also gives every child layout that is not an umbrella child, not
 // AppFileSingle and renders no bundle (application, augmenter and bundle-less
@@ -277,7 +276,6 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		gen:       li.Generator,
 		ix:        ix,
 		perLayout: perLayout,
-		nodeOf:    map[*stack.Bundle]*stack.Node{},
 		names:     map[string]string{},
 		generated: map[string]bool{},
 	}
@@ -286,19 +284,6 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return err
 	}
 	p.existing = existing
-	var index func(n *stack.Node)
-	index = func(n *stack.Node) {
-		if n == nil {
-			return
-		}
-		if n.Bundle != nil {
-			p.nodeOf[n.Bundle] = n
-		}
-		for _, ch := range n.Children {
-			index(ch)
-		}
-	}
-	index(c.Node)
 	if err := p.place(ml, sourceScope{}); err != nil {
 		return err
 	}
@@ -335,15 +320,15 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 
 	// reach is the set of layouts a kustomization build of l includes: l and
 	// the child directories its kustomization.yaml lists, recursively. The
-	// writers list a child unless it is an umbrella child (applied by its
-	// own CR), an AppFileSingle file, or its parent is PerLayout (which lists
-	// the child's CR instead).
+	// writers list a child unless it is an umbrella child or renders bundles
+	// (a unit, applied by its own CR only), an AppFileSingle file, or its
+	// parent is PerLayout (which lists the child's CR instead).
 	var reach func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool)
 	reach = func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool) {
 		into[l] = true
 		for _, child := range l.Children {
 			if child == nil || child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle ||
-				l.FluxPlacement == layout.FluxIntegratedPerLayout {
+				len(child.OriginBundles()) > 0 || l.FluxPlacement == layout.FluxIntegratedPerLayout {
 				continue
 			}
 			reach(child, into)
@@ -512,7 +497,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 			return errors.ResourceValidationError("Bundle", bundles[0].Name, "flux-resources",
 				fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 		}
-		if err := p.add(p.host(l, bundles[0]), objs); err != nil {
+		if err := p.add(p.host(l), objs); err != nil {
 			return err
 		}
 	}
@@ -563,12 +548,7 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 
 // host returns the layout whose Resources receive the CR of bundle b, which
 // layout l renders.
-func (p *integratedPlacement) host(l *layout.ManifestLayout, b *stack.Bundle) *layout.ManifestLayout {
-	if !p.perLayout {
-		if n, ok := p.nodeOf[b]; ok {
-			return p.ix.NodeLayout(n)
-		}
-	}
+func (p *integratedPlacement) host(l *layout.ManifestLayout) *layout.ManifestLayout {
 	if parent := p.ix.Parent(l); parent != nil {
 		return parent
 	}
