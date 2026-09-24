@@ -276,7 +276,7 @@ Conservative collapse preconditions — ALL must hold:
 
 Multi-tier apps with sub-Kustomizations are unaffected: the precondition that the child be terminal preserves them. Empty containers (`only-Children`) are also unaffected: the precondition requiring the parent to have no own resources doesn't apply to them.
 
-The absorbing layout takes over the collapsed layout's origins (see [Layout origins](#layout-origins)), so every Flux Kustomization and ArgoCD Application generated from the tree names the surviving directory — for both bundles, when parent and child each carried one. Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
+The absorbing layout takes over the collapsed layout's origins (see [Layout origins](#layout-origins)), so the Flux Kustomization and ArgoCD Application generated from the tree name the surviving directory; when parent and child each carried a bundle, the two share that directory's one Kustomization (see the fluxcd README, "One Kustomization per directory"). Nothing is rewritten after generation: a Flux CR a caller adds to the walked tree keeps the `spec.path` it was given.
 
 Scoped to `WalkCluster`. `WalkClusterByPackage` is unaffected — its synthetic unnamed wrappers express package boundaries that the flatten helper would otherwise erroneously collapse.
 

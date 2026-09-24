@@ -139,9 +139,6 @@ type existingCR struct {
 // from: that of the nearest layout (itself or an ancestor) rendering bundles.
 type sourceScope struct {
 	ref kustv1.CrossNamespaceSourceReference
-	// mixedAt is the layout whose bundles have different SourceRefs, which
-	// therefore cannot source a layout CR.
-	mixedAt string
 }
 
 // addIntegratedFluxToLayout places Flux Kustomizations alongside their target
@@ -196,25 +193,20 @@ func (p *integratedPlacement) place(l *layout.ManifestLayout, inherited sourceSc
 	scope := inherited
 	bundles := l.OriginBundles()
 	if len(bundles) > 0 {
+		// The bundles l renders share one Kustomization, so one SourceRef:
+		// generateForUnit refuses them otherwise.
 		scope = sourceScope{ref: sourceRefOf(bundles[0])}
-		for _, b := range bundles[1:] {
-			if sourceRefOf(b) != scope.ref {
-				scope.mixedAt = l.FullRepoPath()
-			}
-		}
 	}
 
-	for _, b := range bundles {
-		path, err := p.ix.KustomizationPath(b)
+	// One Kustomization per directory that renders bundles: the bundles a
+	// grouping axis merged into l share it (generateForUnit).
+	if len(bundles) > 0 {
+		objs, err := p.gen.generateForUnit(l, p.ix)
 		if err != nil {
-			return err
-		}
-		objs, err := p.gen.GenerateForBundle(b, path)
-		if err != nil {
-			return errors.ResourceValidationError("Bundle", b.Name, "flux-resources",
+			return errors.ResourceValidationError("Bundle", bundles[0].Name, "flux-resources",
 				fmt.Sprintf("failed to generate Flux resources: %v", err), err)
 		}
-		if err := p.add(p.host(l, b), objs); err != nil {
+		if err := p.add(p.host(l, bundles[0]), objs); err != nil {
 			return err
 		}
 	}
@@ -273,10 +265,6 @@ func (p *integratedPlacement) host(l *layout.ManifestLayout, b *stack.Bundle) *l
 // nearest bundle-rendering layout at or above the host), else the one
 // SourceRef the URL-less bundles below child share.
 func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope sourceScope) (kustv1.CrossNamespaceSourceReference, error) {
-	if scope.mixedAt != "" {
-		return kustv1.CrossNamespaceSourceReference{}, errors.ResourceValidationError("ManifestLayout", child.Name, "sourceRef",
-			fmt.Sprintf("layout %q renders bundles with different SourceRefs, so it cannot source the Flux Kustomization of its child layout %q", scope.mixedAt, child.FullRepoPath()), nil)
-	}
 	if scope.ref.Kind != "" && scope.ref.Name != "" {
 		return scope.ref, nil
 	}

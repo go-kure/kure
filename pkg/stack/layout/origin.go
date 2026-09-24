@@ -2,6 +2,7 @@ package layout
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -51,6 +52,7 @@ type OriginIndex struct {
 	parent       map[*ManifestLayout]*ManifestLayout
 	bundles      []*stack.Bundle
 	nodes        []*stack.Node
+	units        []*ManifestLayout
 }
 
 // IndexOrigins indexes a layout tree walked from cluster c (WalkCluster) by
@@ -63,7 +65,8 @@ type OriginIndex struct {
 //   - two bundles with one Name: a bundle's Flux Kustomization and ArgoCD
 //     Application are named after it, so the name is its identity;
 //   - a layout rendering a node or bundle in AppFileSingle mode: it is
-//     written into its Namespace, not into its own directory.
+//     written into its Namespace, not into its own directory;
+//   - a dependency cycle between reconciliation units (see Units).
 func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) {
 	if root == nil || c == nil || c.Node == nil {
 		return nil, errors.New("IndexOrigins: nil layout or cluster")
@@ -100,6 +103,9 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 			ix.bundleLayout[b] = l
 			ix.bundles = append(ix.bundles, b)
 		}
+		if len(l.origin.bundles) > 0 {
+			ix.units = append(ix.units, l)
+		}
 		for _, child := range l.Children {
 			if child == nil {
 				continue
@@ -116,7 +122,97 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 	if err := ix.checkCoverage(c); err != nil {
 		return nil, err
 	}
+	if err := ix.checkUnitCycles(); err != nil {
+		return nil, err
+	}
 	return ix, nil
+}
+
+// Units returns the layouts that render bundles, in layout pre-order. Each is
+// one reconciliation unit: the directory is what a Flux Kustomization or an
+// ArgoCD Application applies, so the bundles a grouping axis merged into one
+// directory share one, named after the first of them (UnitName).
+func (ix *OriginIndex) Units() []*ManifestLayout { return ix.units }
+
+// UnitName returns the name of the reconciliation unit that applies bundle b:
+// the first bundle the layout rendering b renders. A bundle outside the index
+// keeps its own name.
+func (ix *OriginIndex) UnitName(b *stack.Bundle) string {
+	if l := ix.bundleLayout[b]; l != nil && len(l.origin.bundles) > 0 {
+		return l.origin.bundles[0].Name
+	}
+	return b.Name
+}
+
+// UnitDependencies returns the units the unit of layout l depends on: every
+// DependsOn of the bundles l renders, mapped to the unit that applies it, in
+// order and without repeats. A dependency between two bundles l renders is
+// dropped: they are applied together.
+func (ix *OriginIndex) UnitDependencies(l *ManifestLayout) []string {
+	own := map[*stack.Bundle]bool{}
+	for _, b := range l.origin.bundles {
+		own[b] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, b := range l.origin.bundles {
+		for _, d := range b.DependsOn {
+			if d == nil || own[d] {
+				continue
+			}
+			if name := ix.UnitName(d); !seen[name] {
+				seen[name] = true
+				out = append(out, name)
+			}
+		}
+	}
+	return out
+}
+
+// checkUnitCycles refuses a dependency cycle between units: Flux and ArgoCD
+// would wait on each other forever. Merging bundles into one unit can close a
+// cycle that their own DependsOn did not have (b1 -> u -> b2 becomes
+// rb -> u -> rb when b1 and b2 merge into rb's directory).
+func (ix *OriginIndex) checkUnitCycles() error {
+	deps := map[string][]string{}
+	for _, l := range ix.units {
+		deps[ix.UnitName(l.origin.bundles[0])] = ix.UnitDependencies(l)
+	}
+	const (
+		visiting = 1
+		done     = 2
+	)
+	state := map[string]int{}
+	var path []string
+	var visit func(n string) error
+	visit = func(n string) error {
+		switch state[n] {
+		case done:
+			return nil
+		case visiting:
+			i := slices.Index(path, n)
+			return errors.Errorf("dependency cycle between reconciliation units: %s", strings.Join(append(path[i:], n), " -> "))
+		}
+		state[n] = visiting
+		path = append(path, n)
+		for _, d := range deps[n] {
+			if _, unit := deps[d]; !unit {
+				continue // a dependency outside the tree
+			}
+			if err := visit(d); err != nil {
+				return err
+			}
+		}
+		path = path[:len(path)-1]
+		state[n] = done
+		return nil
+	}
+	for _, l := range ix.units {
+		if err := visit(ix.UnitName(l.origin.bundles[0])); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkCoverage compares the rendered set with what is reachable from c.

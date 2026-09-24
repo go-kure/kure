@@ -189,6 +189,9 @@ What changed, and what to do:
   always flattened the root bundle. Combinations that were silently rendered fully nested now
   render as configured, and a merged node's umbrella children and augmenter layouts keep their own
   directories and CRs.
+- **One Kustomization per directory.** Bundles merged into one directory share one Kustomization
+  (and one ArgoCD Application), named after the first of them; they must agree on the settings a
+  Kustomization holds once, and dependency cycles are refused.
 - **FlattenSingleTier** no longer rewrites Flux CRs a caller added to the tree; generated CRs
   already name the surviving directory.
 
