@@ -26,7 +26,7 @@ An organizational grouping within a cluster. Nodes form a tree structure — for
 
 Nodes map to **directory structures** in the GitOps repository. Each node can also reference a source (Git repository, OCI registry, S3 bucket) for multi-source deployments.
 
-`stack.ValidateCluster` rejects a cycle in the node graph (a `Node` reached again from one of its own descendants), naming the node where the cycle closes. It does not reject a node shared by two parents; the Flux generator would then emit that node once through each parent, so keep the graph a tree.
+`stack.ValidateCluster` rejects a cycle in the node graph (a `Node` reached again from one of its own descendants), naming the node where the cycle closes. It does not reject a node shared by two parents, but such a node is walked once under each parent, and Flux and ArgoCD generation refuse the result (`layout.IndexOrigins`: a node or bundle rendered by two layouts has no single path) — keep the graph a tree.
 
 ### Bundle
 
