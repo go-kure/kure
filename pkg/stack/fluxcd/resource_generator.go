@@ -151,7 +151,11 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 		for _, b := range bundles {
 			for _, p := range b.Patches {
 				if p.Target == nil {
-					return nil, unitConflict(first, b, path, "patches", "an untargeted patch would apply to every merged bundle's objects")
+					other := first
+					if b == first {
+						other = bundles[1]
+					}
+					return nil, unitConflict(other, b, path, "patches", "an untargeted patch would apply to every merged bundle's objects")
 				}
 			}
 		}
@@ -277,6 +281,11 @@ func (g *ResourceGenerator) effectiveSourceRef(ref *stack.SourceRef) *stack.Sour
 	out := *ref
 	if out.Namespace == "" {
 		out.Namespace = g.DefaultNamespace
+	}
+	if out.URL == "" {
+		// Without a URL no Source is generated: only the reference's kind,
+		// name and namespace reach an object.
+		out.Tag, out.Branch = "", ""
 	}
 	return &out
 }

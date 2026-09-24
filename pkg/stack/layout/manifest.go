@@ -81,16 +81,13 @@ func (ml *ManifestLayout) resolveManifestFileName() ManifestFileNameFunc {
 
 // listedResourceFiles returns the resource files a layout's kustomization.yaml
 // lists: every one in explicit mode or for a leaf. In recursive mode a layout
-// with children lists its child references instead of its files — and under
-// FluxIntegratedPerLayout those references are the Flux objects the layout
-// hosts (each child's Kustomization and any Source generated for it), so the
-// files holding them are listed, and no other.
+// with children lists its child references instead of its files — except the
+// Flux objects the layout hosts (a Kustomization and any Source generated for
+// it), which nothing else applies: the files holding them are listed, in
+// every placement, and no other.
 func listedResourceFiles(ml *ManifestLayout, kMode KustomizationMode, sorted []string, groups map[string][]client.Object) []string {
 	if kMode == KustomizationExplicit || len(ml.Children) == 0 {
 		return sorted
-	}
-	if ml.FluxPlacement != FluxIntegratedPerLayout {
-		return nil
 	}
 	var out []string
 	for _, f := range sorted {

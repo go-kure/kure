@@ -782,3 +782,79 @@ func TestIntegrateWithLayout_PlacementIsTheIntegrations(t *testing.T) {
 		}
 	}
 }
+
+// TestRecursive_HostedFluxObjectsListedInEveryPlacement: in Recursive mode a
+// layout with children lists the Flux objects it hosts, whatever the
+// placement, or the CR it hosts is never applied.
+func TestRecursive_HostedFluxObjectsListedInEveryPlacement(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+			root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{web}}
+			web.SetParent(root)
+			rules := propertyGroupings["nodeOnly"]
+			rules.ClusterName = "prod"
+			rules.FluxPlacement = placement
+			ml := integrated(t, &stack.Cluster{Name: "demo", Node: root}, rules)
+			setRecursive(ml)
+			var dirs []string
+			for _, k := range kustomizations(ml) {
+				dirs = append(dirs, k.Spec.Path)
+			}
+			for writer, w := range writeAll(t, ml) {
+				checkWrittenTree(t, writer, w, dirs, placement == layout.FluxIntegratedPerLayout)
+			}
+		})
+	}
+}
+
+// TestGenerateFromLayout_URLlessSourceRefComparesWhatIsEmitted: a SourceRef
+// without a URL emits only kind, name and namespace, so merged bundles that
+// differ only in a ref field nothing emits share one unit.
+func TestGenerateFromLayout_URLlessSourceRefComparesWhatIsEmitted(t *testing.T) {
+	c := mergedCluster(func(rb, _, _ *stack.Bundle) {
+		rb.SourceRef.Branch = "main"
+	})
+	if _, err := generateUnits(t, c, allFlat); err != nil {
+		t.Fatalf("GenerateFromLayout: %v", err)
+	}
+}
+
+// TestGenerateFromLayout_UntargetedPatchNamesTwoBundles: the refusal of an
+// untargeted patch on the first bundle of a unit names another bundle, not
+// the first one twice.
+func TestGenerateFromLayout_UntargetedPatchNamesTwoBundles(t *testing.T) {
+	c := mergedCluster(func(rb, _, _ *stack.Bundle) {
+		rb.Patches = []stack.Patch{{Patch: "- op: add"}} // no Target
+	})
+	_, err := generateUnits(t, c, allFlat)
+	if err == nil {
+		t.Fatal("GenerateFromLayout accepted an untargeted patch in a merged unit")
+	}
+	if strings.Contains(err.Error(), `"rb" and "rb"`) {
+		t.Errorf("error names one bundle twice: %v", err)
+	}
+}
+
+// TestUnitDependencies_LayoutWithoutBundles: a layout that renders no bundle
+// is no unit and has no unit dependencies.
+func TestUnitDependencies_LayoutWithoutBundles(t *testing.T) {
+	x := &stack.Node{Name: "x", Bundle: srBundle("xb", cmApp("x-app"))}
+	r := &stack.Node{Name: "r", Children: []*stack.Node{x}}
+	x.SetParent(r)
+	c := &stack.Cluster{Name: "demo", Node: r}
+	ml, err := layout.WalkCluster(c, propertyGroupings["nodeOnly"])
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	ix, err := layout.IndexOrigins(ml, c)
+	if err != nil {
+		t.Fatalf("IndexOrigins: %v", err)
+	}
+	if got := ix.UnitDependencies(ml); got != nil {
+		t.Errorf("UnitDependencies(root) = %v; want nil", got)
+	}
+	if got := ix.UnitNamedDependencies(ml); got != nil {
+		t.Errorf("UnitNamedDependencies(root) = %v; want nil", got)
+	}
+}

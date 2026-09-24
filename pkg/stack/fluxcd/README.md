@@ -49,7 +49,9 @@ Placement (FluxIntegratedPerLayout vs FluxSeparate) is configured per call on
 `FluxSeparate` by `LayoutIntegrator.CreateLayoutWithResources` — matching
 `layout.DefaultLayoutRules()` and the walker. The call's placement is the
 tree's: `IntegrateWithLayout` sets it on every layout it integrates,
-whatever placement the tree was walked with. See
+whatever placement the tree was walked with. A tree that already holds Flux
+Kustomizations keeps the placement they were made for (another is refused),
+and a refused call leaves every placement as it was. See
 [Layout Integration](#layout-integration).
 
 ## Resource Generation
@@ -110,7 +112,7 @@ bundle when it has one):
 
 | Bundle setting | In the shared Kustomization |
 |---|---|
-| `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`), else an error naming the setting and the bundles |
+| `SourceRef`, `Interval`, `Timeout`, `RetryInterval`, `Prune`, `Wait`, `Force`, `Suspend`, `PostBuild` | must be the same for every merged bundle (unset compares as the default; an omitted `SourceRef` namespace is the generator's `DefaultNamespace`; without a `URL` only its kind, name and namespace are compared, the fields a Kustomization carries), else an error naming the setting and the bundles |
 | `HealthChecks`, umbrella health checks | combined, each listed once; a check on a Flux Kustomization names the unit that applies that bundle, and one on the unit itself is dropped |
 | `Labels`, `Annotations` | combined; one key with two values is an error |
 | `Patches` | combined, but only when every patch has a `Target`: an untargeted patch would reach the other bundles' objects |
@@ -393,7 +395,8 @@ bootstrapConfig := &stack.BootstrapConfig{
 Controls how kustomization.yaml files reference resources:
 
 - `KustomizationExplicit` - Lists all manifest files explicitly
-- `KustomizationRecursive` - References subdirectories only
+- `KustomizationRecursive` - References subdirectories only, plus the files holding the Flux
+  objects the layout hosts
 
 ### Flux Placement
 

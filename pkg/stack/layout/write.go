@@ -19,9 +19,10 @@ import (
 // Kustomization spec.path is a layout directory relative to that root. It
 // refuses, before writing anything, a tree in which two layouts resolve to the
 // same directory (see checkLayoutTree) and a layout that renders a node or
-// bundle but would be written in AppFileSingle mode (its own mode, or cfg's
-// when unset): that layout's files go into its Namespace, so no directory
-// exists at the path its Flux Kustomization or ArgoCD Application names.
+// bundle but sets AppFileSingle as its own mode: that layout's files go into
+// its Namespace, so no directory exists at the path its Flux Kustomization or
+// ArgoCD Application names. cfg's AppFileSingle never applies to such a
+// layout (see manifestAppMode).
 func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if cfg.ManifestsDir == "" {
 		cfg.ManifestsDir = "clusters"

@@ -186,6 +186,9 @@ func (ix *OriginIndex) UnitNamedDependencies(l *ManifestLayout) []string {
 }
 
 func (ix *OriginIndex) mapToUnits(l *ManifestLayout, names []string) []string {
+	if l == nil || len(l.origin.bundles) == 0 {
+		return nil // not a unit
+	}
 	self := ix.UnitOfName(l.origin.bundles[0].Name)
 	seen := map[string]bool{self: true}
 	var out []string
