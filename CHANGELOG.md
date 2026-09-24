@@ -16,6 +16,83 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.13] - 2026-09-24
+
+### Breaking
+
+- Refuse colliding or non-portable ExtraFiles, and ".." in layout paths
+- Reject unparsable Bundle durations instead of silently using the 60m default interval or dropping Timeout/RetryInterval
+- Remove the 61 sentinels no kure code returns
+- Retire the config-struct layer and unseal the issuer sums
+- Retire the config-struct layer and its invented defaults
+- Retire the config-struct layer
+- Retire the config-struct layer
+- Retire the config-struct layer
+- Retire the config-struct layer and its mover sums
+
+### Build
+
+- Update module github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring to v0.94.1
+- Fail docs-build on absolute links to the site outside the dev slot
+- Update module github.com/cloudnative-pg/cloudnative-pg to v1.30.1
+- Update dependency golangci-lint to v2.14.0
+- Update kubernetes to v0.37.1
+
+### CI
+
+- Run CI on pull requests against any base branch
+- Run the Go jobs unless a PR is docs-only
+
+### Changed
+
+- Remove internal/kubernetes, which nothing imports
+
+### Documentation
+
+- Drop three Features bullets ci.yml does not implement
+- Correct five overclaims in the builder-contract release-1 notes
+- Stop promising decoded YAML always marshals
+- Show that a Job must set its restartPolicy
+- Restore two entries a regeneration made ungrammatical
+- Name the two resource setters and mark a struct field for the reference checker
+- Record the retired layer's empty-input guards in the release 2 ledger
+- Scope the empty-input guard to the fields that had one
+- State the bootstrap and resource-quantity guards of the retired builder
+- Correct the retired builder's reach to two spec fields
+- State the guards behind every constant-valued ledger row
+- Recount the fluxcd defaults inventory after the FluxInstance name split
+- Point site links at the version being read, not the release root
+- Name the k8s.io/api minor, not a patch, in the controller-runtime note
+
+### Fixed
+
+- Make widen append to notes instead of replacing them
+- Reject a malformed supported_range before comparing it
+- Reject a cyclic Node graph in ValidateCluster
+- Accept Wait=false on an umbrella bundle
+- Close six check-doc-api-refs residuals that passed stale pages
+- Build gotk bootstrap from a vendored flux2 bundle
+- Prepend each release's changelog section, never regenerate
+- Name the FluxInstance flux, not BootstrapName
+- Resolve Type.Method against the type's own methods
+- Know a type from its declaration, not its surviving methods
+- Check only published READMEs and stop on a partial page list
+- Name a missing site/hugo.toml instead of exiting silently
+- Allow dev-slot links only from CHANGELOG.md and cliff.toml
+- Walk each module's CRDs once per process, not per resolution
+
+### Testing
+
+- Add a hermetic suite for check-pin-impact.sh
+- Capture the config-struct layer output as goldens
+- Forbid kure-defined parameter types under pkg/kubernetes
+- Catch aliases to struct and interface literals in the parameter rule
+- Follow ownership through every layer a parameter type can hide behind
+- Decide alias ownership where the alias is declared
+- Check generic type arguments and fail closed on an empty load
+- Check generic-alias type arguments and type-parameter constraints
+- Follow a constraint's type set and state what the rule guards against
+
 ## [0.2.0-beta.12] - 2026-09-22
 
 ### Added
