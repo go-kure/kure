@@ -313,7 +313,8 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 // add appends objs to host.Resources. A Kustomization whose name this pass
 // already emitted is an identity collision; one already present in host with
 // the same spec.path is kept (a repeated integration adds nothing), with
-// another spec.path it is an error. A Source already present is kept.
+// another spec.path it is an error. An identical Source already present is
+// kept; a different one with its identity is an error.
 func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object) error {
 	for _, obj := range objs {
 		if k, ok := obj.(*kustv1.Kustomization); ok {
@@ -326,8 +327,14 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 				}
 				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q; this integration derives %q in layout %q", e.host.FullRepoPath(), k.Name, e.path, k.Spec.Path, host.FullRepoPath())
 			}
-		} else if hasObject(host.Resources, obj) {
-			continue
+		} else if same := findObject(host.Resources, obj); same != nil {
+			// One identity, one object: an identical Source (a repeated
+			// integration, or two bundles sharing a SourceRef) is kept once;
+			// a different one would silently repoint a Kustomization.
+			if reflect.DeepEqual(same, obj) {
+				continue
+			}
+			return errors.Errorf("layout %q already has %s %q with different content: two SourceRefs name one Source differently", host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
 		}
 		host.Resources = append(host.Resources, obj)
 	}
@@ -389,14 +396,16 @@ func sourceRefOf(b *stack.Bundle) kustv1.CrossNamespaceSourceReference {
 	}
 }
 
-func hasObject(resources []client.Object, obj client.Object) bool {
+// findObject returns the object in resources with obj's kind, namespace and
+// name, or nil.
+func findObject(resources []client.Object, obj client.Object) client.Object {
 	gvk := obj.GetObjectKind().GroupVersionKind()
 	for _, r := range resources {
 		if r.GetObjectKind().GroupVersionKind() == gvk && r.GetNamespace() == obj.GetNamespace() && r.GetName() == obj.GetName() {
-			return true
+			return r
 		}
 	}
-	return false
+	return nil
 }
 
 // addSeparateFluxToLayout creates a separate flux-system directory for Flux

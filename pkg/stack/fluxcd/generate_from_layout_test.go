@@ -951,3 +951,38 @@ func TestIntegrateWithLayout_RejectsExistingDuplicateCRs(t *testing.T) {
 		})
 	}
 }
+
+// TestIntegrateWithLayout_ConflictingSourcesErrors: two bundles whose
+// URL-bearing SourceRefs share a name but not a URL generate two Sources with
+// one identity in one host. Keeping either would silently point the other
+// bundle's Kustomization at the wrong artifact.
+func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
+	ref := func(url string) *stack.SourceRef {
+		return &stack.SourceRef{Kind: "GitRepository", Name: "shared", Namespace: "flux-system", URL: url, Branch: "main"}
+	}
+	build := func(urlB string) *stack.Cluster {
+		a := &stack.Node{Name: "a", Bundle: &stack.Bundle{Name: "a", SourceRef: ref("https://example.com/a.git"), Applications: []*stack.Application{cmApp("a-app")}}}
+		b := &stack.Node{Name: "b", Bundle: &stack.Bundle{Name: "b", SourceRef: ref(urlB), Applications: []*stack.Application{cmApp("b-app")}}}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{a, b}}}
+	}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	if _, err := integrator.CreateLayoutWithResources(build("https://example.com/b.git"), rules); err == nil || !strings.Contains(err.Error(), `"shared"`) {
+		t.Errorf("two different Sources named shared: got %v, want a conflict error naming it", err)
+	}
+	// The same Source twice is one object, kept once.
+	ml, err := integrator.CreateLayoutWithResources(build("https://example.com/a.git"), rules)
+	if err != nil {
+		t.Fatalf("identical Sources: %v", err)
+	}
+	n := 0
+	for _, r := range ml.Resources {
+		if r.GetObjectKind().GroupVersionKind().Kind == "GitRepository" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("root hosts %d GitRepository objects, want the identical Source once", n)
+	}
+}
