@@ -1086,7 +1086,7 @@
       "goType": "Backup",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1097,7 +1097,7 @@
       "goType": "Cluster",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1108,7 +1108,7 @@
       "goType": "ClusterImageCatalog",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": false,
       "scopeSource": "marker"
     },
@@ -1119,7 +1119,7 @@
       "goType": "Database",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1130,7 +1130,7 @@
       "goType": "DatabaseRole",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1141,7 +1141,7 @@
       "goType": "FailoverQuorum",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1152,7 +1152,7 @@
       "goType": "ImageCatalog",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1163,7 +1163,7 @@
       "goType": "Pooler",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1174,7 +1174,7 @@
       "goType": "Publication",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1185,7 +1185,7 @@
       "goType": "ScheduledBackup",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1196,7 +1196,7 @@
       "goType": "Subscription",
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0",
+      "moduleVersion": "v1.30.1",
       "namespaced": true,
       "scopeSource": "crd"
     },
@@ -1436,7 +1436,7 @@
       "goField": "Options",
       "stability": "deprecated",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
@@ -1445,7 +1445,7 @@
       "goField": "EnablePodMonitor",
       "stability": "deprecated",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
@@ -1454,7 +1454,7 @@
       "goField": "PodMonitorMetricRelabelConfigs",
       "stability": "deprecated",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
@@ -1463,7 +1463,7 @@
       "goField": "PodMonitorRelabelConfigs",
       "stability": "deprecated",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
@@ -1472,7 +1472,7 @@
       "goField": "EnablePodMonitor",
       "stability": "deprecated",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
@@ -1481,7 +1481,7 @@
       "goField": "PodMonitorMetricRelabelConfigs",
       "stability": "deprecated",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
@@ -1490,7 +1490,7 @@
       "goField": "PodMonitorRelabelConfigs",
       "stability": "deprecated",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/cloudnative-pg/cloudnative-pg/api/v1",
@@ -1499,7 +1499,7 @@
       "goField": "TerminationGracePeriodSeconds",
       "stability": "beta",
       "module": "github.com/cloudnative-pg/cloudnative-pg",
-      "moduleVersion": "v1.30.0"
+      "moduleVersion": "v1.30.1"
     },
     {
       "importPath": "github.com/external-secrets/external-secrets/apis/externalsecrets/v1",
