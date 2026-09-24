@@ -318,7 +318,7 @@ func (ml *ManifestLayout) writeToDisk(basePath string) error {
 
 	// Generate kustomization.yaml if there are resources or children
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
-	if len(fileGroups) > 0 || len(ml.Children) > 0 {
+	if len(fileGroups) > 0 || len(ml.Children) > 0 || ml.rendersBundle() {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {

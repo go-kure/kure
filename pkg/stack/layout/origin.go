@@ -32,6 +32,12 @@ func (ml *ManifestLayout) OriginBundles() []*stack.Bundle { return ml.origin.bun
 // OriginApplication returns the application a per-app layout renders, or nil.
 func (ml *ManifestLayout) OriginApplication() *stack.Application { return ml.origin.app }
 
+// rendersBundle reports whether a bundle's resources live in this layout's
+// directory. A Flux Kustomization or ArgoCD Application names that directory,
+// so the writers give it a kustomization.yaml even when it holds nothing
+// else: an empty directory does not survive a Git tree.
+func (ml *ManifestLayout) rendersBundle() bool { return len(ml.origin.bundles) > 0 }
+
 func (ml *ManifestLayout) hasNodeOrBundleOrigin() bool {
 	return len(ml.origin.nodes) > 0 || len(ml.origin.bundles) > 0
 }

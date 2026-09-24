@@ -151,11 +151,12 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	skipClusterRoot := ml.Namespace != "" &&
 		strings.Count(ml.Namespace, string(filepath.Separator)) == 0 &&
 		ml.Name == "" &&
-		len(fileGroups) == 0
+		len(fileGroups) == 0 &&
+		!ml.rendersBundle()
 
 	// Generate kustomization.yaml if there are resources or children, except at the empty cluster root.
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow.
-	if !skipClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0) {
+	if !skipClusterRoot && (len(fileGroups) > 0 || len(ml.Children) > 0 || ml.rendersBundle()) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {

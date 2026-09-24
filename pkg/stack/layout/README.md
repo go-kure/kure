@@ -142,6 +142,9 @@ Controls how resource YAML files are named:
   files. No reference is derived from a child's name.
 - GroupByName bundle layouts are written `KustomizationExplicit`, so the CRs hosted there
   (umbrella children, PerLayout applications) are listed
+- A layout that renders a bundle always gets a `kustomization.yaml`, even when it holds nothing
+  else (a bundle with no applications): a Flux Kustomization or ArgoCD Application names that
+  directory, and an empty directory does not survive a Git tree
 
 ### Layout origins
 
