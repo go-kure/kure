@@ -112,17 +112,17 @@ for the kinds whose scope the API server defines.
 | `notification.toolkit.fluxcd.io/v1` | `Receiver` | Namespaced | `marker` | `Receiver` | `github.com/fluxcd/notification-controller/api@v1.9.4` |
 | `policy/v1` | `Eviction` | Namespaced | `builtin` | `Eviction` | `k8s.io/api@v0.37.0` |
 | `policy/v1` | `PodDisruptionBudget` | Namespaced | `builtin` | `PodDisruptionBudget` | `k8s.io/api@v0.37.0` |
-| `postgresql.cnpg.io/v1` | `Backup` | Namespaced | `crd` | `Backup` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `Cluster` | Namespaced | `crd` | `Cluster` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `ClusterImageCatalog` | Cluster | `marker` | `ClusterImageCatalog` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `Database` | Namespaced | `crd` | `Database` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `DatabaseRole` | Namespaced | `crd` | `DatabaseRole` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `FailoverQuorum` | Namespaced | `crd` | `FailoverQuorum` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `ImageCatalog` | Namespaced | `crd` | `ImageCatalog` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `Pooler` | Namespaced | `crd` | `Pooler` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `Publication` | Namespaced | `crd` | `Publication` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `ScheduledBackup` | Namespaced | `crd` | `ScheduledBackup` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `postgresql.cnpg.io/v1` | `Subscription` | Namespaced | `crd` | `Subscription` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
+| `postgresql.cnpg.io/v1` | `Backup` | Namespaced | `crd` | `Backup` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `Cluster` | Namespaced | `crd` | `Cluster` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `ClusterImageCatalog` | Cluster | `marker` | `ClusterImageCatalog` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `Database` | Namespaced | `crd` | `Database` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `DatabaseRole` | Namespaced | `crd` | `DatabaseRole` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `FailoverQuorum` | Namespaced | `crd` | `FailoverQuorum` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `ImageCatalog` | Namespaced | `crd` | `ImageCatalog` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `Pooler` | Namespaced | `crd` | `Pooler` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `Publication` | Namespaced | `crd` | `Publication` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `ScheduledBackup` | Namespaced | `crd` | `ScheduledBackup` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `postgresql.cnpg.io/v1` | `Subscription` | Namespaced | `crd` | `Subscription` | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `rbac.authorization.k8s.io/v1` | `ClusterRole` | Cluster | `builtin` | `ClusterRole` | `k8s.io/api@v0.37.0` |
 | `rbac.authorization.k8s.io/v1` | `ClusterRoleBinding` | Cluster | `builtin` | `ClusterRoleBinding` | `k8s.io/api@v0.37.0` |
 | `rbac.authorization.k8s.io/v1` | `Role` | Namespaced | `builtin` | `Role` | `k8s.io/api@v0.37.0` |
@@ -157,14 +157,14 @@ by a caller.
 |---|---|---|---|---|
 | `acme/v1.ACMEExternalAccountBinding` | `keyAlgorithm` | deprecated | — | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `certmanager/v1.CertificateSpec` | `nameConstraints` | alpha | — | `github.com/cert-manager/cert-manager@v1.21.2` |
-| `api/v1.BootstrapInitDB` | `options` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `api/v1.MonitoringConfiguration` | `enablePodMonitor` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `api/v1.MonitoringConfiguration` | `podMonitorMetricRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `api/v1.MonitoringConfiguration` | `podMonitorRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `api/v1.PoolerMonitoringConfiguration` | `enablePodMonitor` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `api/v1.PoolerMonitoringConfiguration` | `podMonitorMetricRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `api/v1.PoolerMonitoringConfiguration` | `podMonitorRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
-| `api/v1.Probe` | `terminationGracePeriodSeconds` | beta | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.0` |
+| `api/v1.BootstrapInitDB` | `options` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `api/v1.MonitoringConfiguration` | `enablePodMonitor` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `api/v1.MonitoringConfiguration` | `podMonitorMetricRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `api/v1.MonitoringConfiguration` | `podMonitorRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `api/v1.PoolerMonitoringConfiguration` | `enablePodMonitor` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `api/v1.PoolerMonitoringConfiguration` | `podMonitorMetricRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `api/v1.PoolerMonitoringConfiguration` | `podMonitorRelabelings` | deprecated | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
+| `api/v1.Probe` | `terminationGracePeriodSeconds` | beta | — | `github.com/cloudnative-pg/cloudnative-pg@v1.30.1` |
 | `externalsecrets/v1.ClusterExternalSecretSpec` | `namespaceSelector` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20260918141056-e8f12e1f1646` |
 | `externalsecrets/v1.ClusterExternalSecretSpec` | `namespaces` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20260918141056-e8f12e1f1646` |
 | `externalsecrets/v1.PulumiProvider` | `accessToken` | deprecated | — | `github.com/external-secrets/external-secrets/apis@v0.0.0-20260918141056-e8f12e1f1646` |
