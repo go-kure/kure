@@ -367,7 +367,12 @@ checkout for local use.
 - `check-doc-sync` — every public package is mapped; READMEs and mount targets exist;
   generated tables are current (blocking, `docs-build` job).
 - `check-links` — all internal links resolve in a root-relative Hugo build of the site
-  (lychee, blocking, `docs-build` job).
+  (lychee, blocking, `docs-build` job). It skips every `http(s)` URL, so link to another
+  site page with a version-relative path (`/api-reference/kubernetes-builders/`), never
+  `https://www.gokure.dev/kure/...`: the release root is rebuilt only on `set-latest` and
+  lacks newer pages. Text also read on GitHub (`CHANGELOG.md`, `cliff.toml`) uses the dev
+  slot, `https://www.gokure.dev/kure/dev/...`. Kure-local `scripts/check-site-self-links.sh`
+  enforces this (blocking, `docs-build` job; `mise run site:check-self-links`).
 - `check-doc-gate` — a mapped package's source change must touch its mapped docs
   (the `doc-gate` job). Bypass with the maintainer-restricted `docs-skip` label, or
   automatically for a generated-table row whose only change is a provenance field

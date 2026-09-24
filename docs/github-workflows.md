@@ -108,7 +108,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, and the documented builder references via `scripts/check-doc-api-refs.sh` |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented builder references via `scripts/check-doc-api-refs.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
 | `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
 | `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
@@ -211,6 +211,16 @@ temporary branch — the merged result — before the PR is allowed to land.
   a second `ignore-start` inside an open fence, which would otherwise be closed by the first
   `ignore-end` and leave the outer fence open with nothing said, and the same repetition written on
   a single line, so the spelling never decides whether a malformed suppression is an error
+- **Site self-link check** - `docs-build` also runs `scripts/check-site-self-links.sh`
+  (`mise run site:check-self-links` locally), which fails when a published page links to the docs
+  site itself with an absolute URL outside the dev slot. `check-links` cannot see these: it runs
+  lychee `--offline`, which skips every `http(s)` URL. They break because the release root is
+  rebuilt only by `set-latest` (see [Versioned Documentation](#versioned-documentation)), so an
+  absolute link into it 404s for every page added since the last release. The page set is every
+  package README and extra mount in `site/docs-map.yaml` (needs `yq`), every file under
+  `site/content/`, and `cliff.toml`, whose header template writes the links at the top of
+  `CHANGELOG.md`. The site base comes from `site/hugo.toml`'s `baseURL`. The step runs
+  `--self-test` first, which pins the URL classifier against a synthetic tree
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
   tracked tree and keeps the release script's vendored guard byte-identical to the canonical
   action, checked out at a ref derived from that action's own `uses:@<sha>` pin rather than a
@@ -944,6 +954,16 @@ The script:
 ### WIP Banner
 
 The development version shows a warning banner linking to the latest stable version (if one exists). Stable versions show no banner.
+
+### Links Between Pages
+
+Each slot is built separately, and only `/dev/` follows `main`. The root `/` is rebuilt only by a
+`set-latest` run, so it lacks every page added since that release. Link between site pages with a
+version-relative path such as `/api-reference/kubernetes-builders/`; Hugo resolves it inside the
+version being built. Text that is also read outside the site (`CHANGELOG.md` on GitHub, and the
+`cliff.toml` header that writes it) links to the dev slot,
+`https://www.gokure.dev/kure/dev/...`. Any other absolute link to the site fails the
+`docs-build` job (`scripts/check-site-self-links.sh`).
 
 ---
 

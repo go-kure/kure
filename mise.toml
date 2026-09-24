@@ -115,6 +115,13 @@ git -C ../dot-github archive origin/main scripts | tar -x -C "$d"
 bash "$d/scripts/check-doc-sync.sh" .
 """
 
+[tasks."site:check-self-links"]
+description = "Fail if a published page links to the docs site with an absolute URL outside the dev slot"
+run = """
+bash scripts/check-site-self-links.sh --self-test
+bash scripts/check-site-self-links.sh
+"""
+
 [tasks."site:gen"]
 description = "Regenerate doc tables from docs-map.yaml"
 run = "bash site/scripts/gen-docs-tables.sh"
