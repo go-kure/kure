@@ -142,9 +142,11 @@ Controls how resource YAML files are named:
   files. No reference is derived from a child's name.
 - GroupByName bundle layouts are written `KustomizationExplicit`, so the CRs hosted there
   (umbrella children, PerLayout applications) are listed
-- A layout that renders a bundle always gets a `kustomization.yaml`, even when it holds nothing
-  else (a bundle with no applications): a Flux Kustomization or ArgoCD Application names that
-  directory, and an empty directory does not survive a Git tree
+- A layout that renders a bundle, and every child of a `FluxIntegratedPerLayout` layout, always
+  gets a `kustomization.yaml`, even when it holds nothing else (a bundle with no applications, an
+  empty node, an empty augmenter layout): a Flux Kustomization or ArgoCD Application names that
+  directory, and an empty directory does not survive a Git tree. An `AppFileSingle` layout, which
+  writes into its parent's directory, never gets one of its own
 
 ### Layout origins
 

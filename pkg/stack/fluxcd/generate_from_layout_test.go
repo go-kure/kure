@@ -1090,3 +1090,49 @@ func TestPerLayout_EmptyNodeBundleSurvivesGitTree(t *testing.T) {
 		}
 	}
 }
+
+// emptyAugmenter wants its own layout and adds an empty hook-group child.
+type emptyAugmenter struct{}
+
+func (emptyAugmenter) Generate(*stack.Application) ([]*client.Object, error) { return nil, nil }
+
+func (emptyAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
+	ml.Children = append(ml.Children, &layout.ManifestLayout{Name: ml.Name + "-hooks", Namespace: ml.FullRepoPath(), FluxPlacement: ml.FluxPlacement})
+	return nil
+}
+
+// TestPerLayout_EmptyBundlelessNodeSurvivesGitTree: every directory a
+// PerLayout CR targets gets a kustomization.yaml — an empty bundle-less node,
+// an application that renders nothing and an empty augmenter layout included.
+func TestPerLayout_EmptyBundlelessNodeSurvivesGitTree(t *testing.T) {
+	for _, grouping := range []string{"nodeOnly", "GroupByName"} {
+		for _, clusterName := range []string{"", ".", "prod"} {
+			t.Run(fmt.Sprintf("%s/%q", grouping, clusterName), func(t *testing.T) {
+				empty := &stack.Node{Name: "empty"}
+				chart := &stack.Node{Name: "chart", Bundle: srBundle("chart", stack.NewApplication("chart-app", "default", emptyAugmenter{}))}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{empty, chart}}}
+				rules := propertyGroupings[grouping]
+				rules.FluxPlacement = layout.FluxIntegratedPerLayout
+				rules.ClusterName = clusterName
+				if grouping == "GroupByName" && clusterName == "" {
+					// The root node layout renders no bundle here (its bundle
+					// has a layout of its own) and nothing below "empty" has a
+					// SourceRef: its CR has no source, which S5 refuses.
+					_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+					if err == nil || !strings.Contains(err.Error(), `layout "platform/empty" needs a Kustomization CR`) {
+						t.Fatalf("got %v, want the no-source refusal for platform/empty", err)
+					}
+					return
+				}
+				ml := integrated(t, c, rules)
+				var dirs []string
+				for _, k := range kustomizations(ml) {
+					dirs = append(dirs, k.Spec.Path)
+				}
+				for writer, w := range writeAll(t, ml) {
+					checkWrittenTree(t, writer, w, dirs, true)
+				}
+			})
+		}
+	}
+}
