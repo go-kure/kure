@@ -456,6 +456,7 @@ func TestWriteManifest_FluxIntegrated(t *testing.T) {
 	cfg := DefaultLayoutConfig()
 	dir := t.TempDir()
 
+	hostChildCRs(root)
 	if err := WriteManifest(dir, cfg, root); err != nil {
 		t.Fatalf("WriteManifest failed: %v", err)
 	}
@@ -542,6 +543,7 @@ func TestWriteToDisk_FluxIntegrated(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	hostChildCRs(root)
 	if err := root.WriteToDisk(dir); err != nil {
 		t.Fatalf("WriteToDisk failed: %v", err)
 	}
@@ -767,6 +769,7 @@ func TestWriteManifest_FluxKustomizationMode_PerPlacement(t *testing.T) {
 	}
 	dir := t.TempDir()
 
+	hostChildCRs(root)
 	if err := WriteManifest(dir, cfg, root); err != nil {
 		t.Fatalf("WriteManifest failed: %v", err)
 	}
@@ -952,7 +955,7 @@ func TestWriteToDisk_KustomizationGenerated(t *testing.T) {
 func TestWriteManifest_UmbrellaChild(t *testing.T) {
 	// Mirrors the layout produced by the Flux LayoutIntegrator in
 	// FluxIntegratedPerLayout mode: the parent carries the child's Kustomization CR
-	// in Resources (via placeUmbrellaChildrenFlux) and an UmbrellaChild
+	// in Resources (placed there by the integrator) and an UmbrellaChild
 	// sub-layout in Children. Asserts the parent kustomization.yaml
 	// references the child CR filename exactly once (no duplication), and
 	// each child subdir carries its own workloads + own kustomization.yaml
@@ -1046,6 +1049,7 @@ func TestWriteManifest_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	cfg.ManifestFileName = nil // Let FileNaming take effect
 	dir := t.TempDir()
 
+	hostChildCRs(root)
 	if err := WriteManifest(dir, cfg, root); err != nil {
 		t.Fatalf("WriteManifest failed: %v", err)
 	}
@@ -1230,6 +1234,7 @@ func TestWriteToDisk_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	hostChildCRs(root)
 	if err := root.WriteToDisk(dir); err != nil {
 		t.Fatalf("WriteToDisk failed: %v", err)
 	}
@@ -1315,4 +1320,17 @@ func TestWriteToDisk_NoDuplicateFluxEntries(t *testing.T) {
 	if count := strings.Count(string(data), target); count != 1 {
 		t.Errorf("expected 1 reference to %q, got %d:\n%s", target, count, data)
 	}
+}
+
+// hostChildCRs puts a Flux Kustomization for each child into parent.Resources,
+// as the Flux layout integrator does under FluxIntegratedPerLayout. The
+// writers list those files; they guess no reference from a child's name.
+func hostChildCRs(parent *ManifestLayout) *ManifestLayout {
+	for _, c := range parent.Children {
+		if c.UmbrellaChild {
+			continue
+		}
+		parent.Resources = append(parent.Resources, testObject("kustomize.toolkit.fluxcd.io/v1", "Kustomization", c.Name, "flux-system"))
+	}
+	return parent
 }

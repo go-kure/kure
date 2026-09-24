@@ -165,6 +165,7 @@ func TestWriteToTar_FluxIntegrated(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+	hostChildCRs(root)
 	if err := root.WriteToTar(&buf); err != nil {
 		t.Fatalf("WriteToTar failed: %v", err)
 	}
@@ -183,7 +184,7 @@ func TestWriteToTar_FluxIntegrated(t *testing.T) {
 func TestWriteToTar_UmbrellaChild(t *testing.T) {
 	// Mirrors the layout produced by the Flux LayoutIntegrator in
 	// FluxIntegratedPerLayout mode: the umbrella parent carries the child's
-	// Kustomization CR in Resources (placed there by placeUmbrellaChildrenFlux),
+	// Kustomization CR in Resources (placed there by the integrator),
 	// and an UmbrellaChild sub-layout in Children (carrying the child's
 	// workloads). Verifies:
 	//   1) The parent kustomization.yaml references the child CR filename
@@ -349,6 +350,7 @@ func TestWriteToTar_FileNamingKindName_FluxIntegrated(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+	hostChildCRs(root)
 	if err := root.WriteToTar(&buf); err != nil {
 		t.Fatalf("WriteToTar failed: %v", err)
 	}
@@ -372,8 +374,9 @@ func TestWriteToTar_FileNamingKindName_FluxIntegrated(t *testing.T) {
 }
 
 func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
-	// Regression: FilePerKind must not collapse FluxIntegratedPerLayout kustomization
-	// references — each child needs a unique filename including child.Name.
+	// FilePerKind groups the Flux Kustomizations the root hosts into one file:
+	// that file is listed once and applies every child. (Before, each child
+	// got a reference guessed from its name, which FilePerKind collapsed.)
 	childA := &ManifestLayout{
 		Name:      "team-a",
 		Namespace: "cl/flux-system",
@@ -409,6 +412,7 @@ func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+	hostChildCRs(root)
 	if err := root.WriteToTar(&buf); err != nil {
 		t.Fatalf("WriteToTar failed: %v", err)
 	}
@@ -416,12 +420,14 @@ func TestWriteToTar_FilePerKind_FluxIntegrated(t *testing.T) {
 	files := extractTarFiles(t, &buf)
 	rootKustom := string(files["cl/flux-system/flux-root/kustomization.yaml"])
 
-	// Each child must have a distinct reference
-	if !bytes.Contains([]byte(rootKustom), []byte("flux-system-kustomization-team-a.yaml")) {
-		t.Errorf("expected flux-system-kustomization-team-a.yaml reference, got:\n%s", rootKustom)
+	if got := strings.Count(rootKustom, "  - flux-system-kustomization.yaml\n"); got != 1 {
+		t.Errorf("expected the grouped flux-system-kustomization.yaml listed once, got %d:\n%s", got, rootKustom)
 	}
-	if !bytes.Contains([]byte(rootKustom), []byte("flux-system-kustomization-team-b.yaml")) {
-		t.Errorf("expected flux-system-kustomization-team-b.yaml reference, got:\n%s", rootKustom)
+	crs := string(files["cl/flux-system/flux-root/flux-system-kustomization.yaml"])
+	for _, name := range []string{"team-a", "team-b"} {
+		if !strings.Contains(crs, "name: "+name+"\n") {
+			t.Errorf("grouped file lacks the %s Kustomization:\n%s", name, crs)
+		}
 	}
 }
 

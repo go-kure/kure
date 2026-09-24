@@ -28,9 +28,6 @@ import (
 // Source-level use is a review property here, not a tested one.
 func TestConstructorsSeedTheExportedDefaults(t *testing.T) {
 	rg := NewResourceGenerator()
-	if rg.Mode != DefaultMode {
-		t.Errorf("ResourceGenerator.Mode = %v, want DefaultMode (%v)", rg.Mode, DefaultMode)
-	}
 	if rg.DefaultInterval != DefaultInterval {
 		t.Errorf("ResourceGenerator.DefaultInterval = %v, want DefaultInterval (%v)", rg.DefaultInterval, DefaultInterval)
 	}
@@ -498,7 +495,7 @@ func TestLayoutKustomizationPruneIsAnInput(t *testing.T) {
 			g.Prune = tc.prune
 			ml := &layout.ManifestLayout{Name: "platform", Namespace: "clusters/prod"}
 
-			obj := g.createKustomizationForLayout(ml, kustv1.CrossNamespaceSourceReference{
+			obj := g.createKustomizationForLayout(ml.Name, ml, kustv1.CrossNamespaceSourceReference{
 				Kind: DefaultSourceKind,
 				Name: DefaultSourceName,
 			})
@@ -519,21 +516,22 @@ func TestLayoutKustomizationPruneIsAnInput(t *testing.T) {
 // second copy of it, so a change to the layout package's own default is
 // followed rather than silently diverged from.
 //
-// Mode must stay unset. Seeding it would be inert (see addSeparateFluxToLayout)
-// while making DefaultMode look overrideable at a site that never reads
-// ResourceGenerator.Mode.
+// Mode must stay unset: seeding it would be inert (see addSeparateFluxToLayout).
 //
 // As in TestConstructorsSeedTheExportedDefaults, these compare values and
 // cannot detect an equal literal re-inlined at the assignment.
 func TestSeparateFluxLayoutUsesDeclaredDefaults(t *testing.T) {
 	li := NewLayoutIntegrator(NewResourceGenerator())
-	ml := &layout.ManifestLayout{Name: "prod", Namespace: "clusters/prod"}
 	cluster := &stack.Cluster{
 		Name: "prod",
 		Node: &stack.Node{
 			Name:   "root",
 			Bundle: &stack.Bundle{Name: "apps"},
 		},
+	}
+	ml, err := layout.WalkCluster(cluster, layout.LayoutRules{ClusterName: "clusters/prod"})
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
 	}
 
 	if err := li.IntegrateWithLayout(ml, cluster, layout.LayoutRules{

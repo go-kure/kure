@@ -30,12 +30,12 @@ func bundleWith(field, value string) *stack.Bundle {
 	return b
 }
 
-func TestGenerateFromBundle_RejectsInvalidDurations(t *testing.T) {
+func TestGenerateForBundle_RejectsInvalidDurations(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
 	for _, field := range []string{"interval", "timeout", "retryInterval"} {
 		for _, v := range invalidDurations {
 			t.Run(field+"="+v, func(t *testing.T) {
-				_, err := gen.GenerateFromBundle(bundleWith(field, v))
+				_, err := gen.GenerateForBundle(bundleWith(field, v), "b")
 				if err == nil {
 					t.Fatalf("expected an error for %s %q", field, v)
 				}
@@ -47,9 +47,9 @@ func TestGenerateFromBundle_RejectsInvalidDurations(t *testing.T) {
 	}
 }
 
-func TestGenerateFromBundle_EmptyDurationsKeepDefaults(t *testing.T) {
+func TestGenerateForBundle_EmptyDurationsKeepDefaults(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
-	objs, err := gen.GenerateFromBundle(&stack.Bundle{Name: "b"})
+	objs, err := gen.GenerateForBundle(&stack.Bundle{Name: "b"}, "b")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,13 +62,20 @@ func TestGenerateFromBundle_EmptyDurationsKeepDefaults(t *testing.T) {
 	}
 }
 
-func TestGenerateFromNode_RejectsInvalidDurationOnNestedUmbrellaChild(t *testing.T) {
-	// GenerateFromNode does not run ValidateCluster; the generator itself must
-	// refuse the value on a grandchild of the umbrella.
-	grandchild := &stack.Bundle{Name: "gc", Timeout: "5min"}
+func TestGenerateFromLayout_RejectsInvalidDurationOnNestedUmbrellaChild(t *testing.T) {
+	// GenerateFromLayout does not run ValidateCluster; the generator itself
+	// must refuse the value on a grandchild of the umbrella. Walk a valid
+	// cluster, then corrupt the grandchild.
+	grandchild := &stack.Bundle{Name: "gc"}
 	child := &stack.Bundle{Name: "c", Children: []*stack.Bundle{grandchild}}
 	umbrella := &stack.Bundle{Name: "u", Children: []*stack.Bundle{child}}
-	_, err := fluxstack.NewResourceGenerator().GenerateFromNode(&stack.Node{Name: "n", Bundle: umbrella})
+	c := &stack.Cluster{Name: "c", Node: &stack.Node{Name: "n", Bundle: umbrella}}
+	ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("WalkCluster: %v", err)
+	}
+	grandchild.Timeout = "5min"
+	_, err = fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
 	if err == nil || !strings.Contains(err.Error(), `"5min"`) {
 		t.Fatalf("expected an error naming the rejected timeout, got %v", err)
 	}
