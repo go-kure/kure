@@ -443,3 +443,43 @@ func TestWalkCluster_NoClusterName_UnnamedRootUnchanged(t *testing.T) {
 		}
 	}
 }
+
+func TestWalkClusterByPackage_ExcludedRootUnchanged(t *testing.T) {
+	// A root outside the target package has no directory in that package: its
+	// wrapper stays at "cluster", as before go-kure/kure#771. At "." it would
+	// look like the ClusterName "." container, whose root kustomization.yaml
+	// WriteManifest skips, leaving the package's children unreferenced.
+	oci := &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}
+	git := &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "GitRepository"}
+	leaf := &stack.Node{Name: "leaf", PackageRef: oci, Bundle: &stack.Bundle{Name: "leaf", Applications: []*stack.Application{configMapApp("l")}}}
+	root := &stack.Node{Name: "root", PackageRef: git, Bundle: &stack.Bundle{Name: "root", Applications: []*stack.Application{configMapApp("r")}}, Children: []*stack.Node{leaf}}
+	leaf.SetParent(root)
+	pkgs, err := layout.WalkClusterByPackage(&stack.Cluster{Name: "c", Node: root}, layout.LayoutRules{})
+	if err != nil {
+		t.Fatalf("WalkClusterByPackage: %v", err)
+	}
+	if got := pkgs[git.String()].FullRepoPath(); got != "root" {
+		t.Errorf("Git package: in-package root at %q, want %q", got, "root")
+	}
+	ociLayout := pkgs[oci.String()]
+	if ociLayout == nil {
+		t.Fatalf("no OCI package in %v", pkgs)
+	}
+	if got := ociLayout.FullRepoPath(); got != "cluster" {
+		t.Errorf("OCI package: excluded root's wrapper at %q, want %q", got, "cluster")
+	}
+	dir := filepath.Join(t.TempDir(), "out")
+	if err := layout.WriteManifest(dir, layout.Config{}, ociLayout); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "clusters", "cluster", "kustomization.yaml"))
+	if err != nil {
+		t.Fatalf("package root kustomization.yaml: %v", err)
+	}
+	if !strings.Contains(string(data), "- leaf\n") {
+		t.Errorf("package root kustomization.yaml does not reference leaf:\n%s", data)
+	}
+	if bad := unresolvedKustomizeRefs(t, dir); len(bad) > 0 {
+		t.Errorf("unresolved kustomize references: %v", bad)
+	}
+}
