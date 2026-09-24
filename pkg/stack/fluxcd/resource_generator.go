@@ -356,12 +356,21 @@ func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSe
 		return errors.Wrapf(err, "bundle %q: patch target annotation selector", b.Name)
 	}
 	// Under FluxIntegratedPerLayout a per-app directory is applied by its own
-	// CR, not built by this unit: only the objects in l's own directory are.
+	// CR, not built by this unit: only the objects in l's own directory are,
+	// and those of an AppFileSingle application child, whose one file l's
+	// kustomization.yaml lists.
 	built := func(client.Object) bool { return true }
 	if l.FluxPlacement == layout.FluxIntegratedPerLayout {
 		own := map[client.Object]bool{}
 		for _, o := range l.Resources {
 			own[o] = true
+		}
+		for _, child := range l.Children {
+			if child != nil && child.ApplicationFileMode == layout.AppFileSingle {
+				for _, o := range child.Resources {
+					own[o] = true
+				}
+			}
 		}
 		built = func(o client.Object) bool { return own[o] }
 	}
