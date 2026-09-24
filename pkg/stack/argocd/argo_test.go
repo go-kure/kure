@@ -569,3 +569,37 @@ func TestCreateLayoutWithResources_InvalidCluster(t *testing.T) {
 type badArgoRules struct{}
 
 func (badArgoRules) Validate() error { return nil }
+
+func TestCreateLayoutWithResources_ArgoCDInsideRootDirectory(t *testing.T) {
+	// The argocd layout is a child of the root layout, whose kustomization.yaml
+	// references it as "- argocd": it must live in the root's own directory.
+	for _, tc := range []struct {
+		clusterName, wantRoot string
+	}{
+		{"", "test-node"},
+		{"prod", "prod"}, // the cluster wrapper is the returned root
+	} {
+		cluster := &stack.Cluster{Name: "test-cluster", Node: &stack.Node{Name: "test-node", Bundle: &stack.Bundle{Name: "test-bundle"}}}
+		rules := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat, ClusterName: tc.clusterName}
+		result, err := Engine().CreateLayoutWithResources(cluster, rules)
+		if err != nil {
+			t.Fatalf("ClusterName %q: %v", tc.clusterName, err)
+		}
+		ml := result.(*layout.ManifestLayout)
+		if got := ml.FullRepoPath(); got != tc.wantRoot {
+			t.Fatalf("ClusterName %q: root at %q, want %q", tc.clusterName, got, tc.wantRoot)
+		}
+		var argo *layout.ManifestLayout
+		for _, c := range ml.Children {
+			if c.Name == "argocd" {
+				argo = c
+			}
+		}
+		if argo == nil {
+			t.Fatalf("ClusterName %q: no argocd child", tc.clusterName)
+		}
+		if got, want := argo.FullRepoPath(), tc.wantRoot+"/argocd"; got != want {
+			t.Errorf("ClusterName %q: argocd at %q, want %q", tc.clusterName, got, want)
+		}
+	}
+}
