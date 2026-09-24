@@ -1067,3 +1067,29 @@ func TestIntegrateWithLayout_RefusedCallLeavesTreeUntouched(t *testing.T) {
 		checkWrittenTree(t, writer, w, dirs)
 	}
 }
+
+// TestIntegrateWithLayout_PerLayoutPatchScopeCountsSingleFileApps: an
+// AppFileSingle application child has no CR of its own; its file is listed by
+// the unit's directory, so the unit builds its objects and a patch reaching
+// them is refused.
+func TestIntegrateWithLayout_PerLayoutPatchScopeCountsSingleFileApps(t *testing.T) {
+	c := mergedCluster(func(_, b1, _ *stack.Bundle) {
+		b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Kind: "ConfigMap", Name: "two-cm"}}}
+	})
+	rules := allFlat
+	rules.ApplicationGrouping = layout.GroupByName
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	for _, child := range ml.Children {
+		if child.Name == "two" {
+			child.ApplicationFileMode = layout.AppFileSingle
+		}
+	}
+	err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+	if err == nil || !strings.Contains(err.Error(), "two-cm") {
+		t.Fatalf("IntegrateWithLayout: err = %v; want a refusal naming b2's two-cm", err)
+	}
+}
