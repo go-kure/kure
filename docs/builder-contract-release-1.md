@@ -1398,23 +1398,32 @@ injected values are not deleted:
 
 | Disposition | Sites |
 |---|---|
-| declared inputs with exported named defaults | 17 |
+| declared inputs with exported named defaults | 16 |
+| fixed by a CRD constraint; not a default | 1 |
 | pass-through tri-state inputs | 4 |
 | deferred to the package that owns the value | 3 |
 | never defaults at all; removed outright | 2 |
 
-The seventeen exported-default sites collapse onto **eleven** identifiers.
-Interval, namespace, source name, bootstrap name and the Flux directory name
-were each written as a separate literal in two places, and the source kind in
-two more with opposite polarities — six identifiers covering twelve sites, plus
-five that appear once each. Those copies could have been changed apart. They now
-cannot.
+The sixteen exported-default sites collapse onto **eleven** identifiers.
+Interval, namespace, source name and the Flux directory name were each written
+as a separate literal in two places, and the source kind in two more with
+opposite polarities — five identifiers covering ten sites, plus six that appear
+once each. Those copies could have been changed apart. They now cannot.
 
-`defaults.go` declares a twelfth name, `ModeGotk`, which is not a default —
-nothing falls back to it. It exists so the bootstrap mode set has one authority:
-`DefaultFluxMode` is both the fallback for an empty `FluxMode` and the value
-`GenerateBootstrap` dispatches on, so the two cannot be changed apart into a
-state where an empty `FluxMode` resolves to a mode the switch rejects.
+The bootstrap name was also written in two places, and the defaults PR counted
+both under `DefaultBootstrapName`. One of them was the `FluxInstance`'s
+`metadata.name`, which the flux-operator CRD fixes at `flux` and rejects any
+other value for, so it was never a default: since go-kure/kure#847 it is
+`FluxInstanceName` and has its own entry below. `DefaultBootstrapName` keeps
+the one remaining site, the bootstrap `Kustomization`'s name.
+
+`defaults.go` declares two further names that are not defaults. `ModeGotk` is
+one — nothing falls back to it. It exists so the bootstrap mode set has one
+authority: `DefaultFluxMode` is both the fallback for an empty `FluxMode` and
+the value `GenerateBootstrap` dispatches on, so the two cannot be changed apart
+into a state where an empty `FluxMode` resolves to a mode the switch rejects.
+`FluxInstanceName` is the other: a value the CRD requires, not an opinion the
+package holds, so it has no override.
 
 The ticket's own figure was twenty, and that number was too low. It counted
 `resource_generator.go` and `bootstrap_generator.go` only: `layout_integrator.go`
@@ -1474,7 +1483,9 @@ and renaming the namespace must not silently rename the directory.
 
 Except for `DefaultSourceKind`, none of these changes emitted YAML — they change
 where the value comes from. `DefaultSourceKind` does change it, and has its own
-entry below.
+entry below. So does `FluxInstanceName`, which is not one of these identifiers:
+the `FluxInstance` is now named `flux` rather than `flux-system` (see
+[Changed: the `FluxInstance` is named `flux`](#changed-the-fluxinstance-is-named-flux)).
 
 ### Deferred, not renamed: three values this package does not own
 
@@ -1527,6 +1538,25 @@ which is what an unnamed kind actually yields. The previous
 `DefaultBootstrapSourceKind = "GitRepository"` named the losing side of the
 disagreement rather than the package's behaviour, so it is gone rather than
 renamed.
+
+### Changed: the `FluxInstance` is named `flux`
+
+In `flux-operator` mode the `FluxInstance` took its `metadata.name` from
+`BootstrapGenerator.BootstrapName`, the same field that names the bootstrap
+`Kustomization`. The flux-operator CRD admits exactly one name
+(`x-kubernetes-validations` rule `self.metadata.name == 'flux'`), so every
+bundle emitted with the default name was refused at admission with "the only
+accepted name for a FluxInstance is 'flux'". Since go-kure/kure#847 the name is
+the constant `FluxInstanceName`, and `BootstrapName` names the `Kustomization`
+only.
+
+| `BootstrapName` | `FluxInstance` name before | after | bootstrap `Kustomization` name |
+|---|---|---|---|
+| unset (`DefaultBootstrapName`) | `flux-system` — refused | `flux` | `flux-system` |
+| `flux` | `flux` | `flux` | `flux` |
+| anything else | that value — refused | `flux` | that value |
+
+`gotk` mode emits no `FluxInstance` and is unchanged.
 
 ### Removed: the placeholder registry URL
 

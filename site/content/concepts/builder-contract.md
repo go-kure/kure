@@ -157,8 +157,8 @@ fluxcd.DefaultNamespace   // "flux-system"
 fluxcd.DefaultSourceKind  // "OCIRepository"
 ```
 
-Eleven exported identifiers replaced seventeen anonymous literals, several of which were the same
-value written in two places and could therefore have drifted apart. For a consumer this buys three
+Eleven exported identifiers now stand where sixteen anonymous literals were, several of which were
+the same value written in two places and could therefore have drifted apart. For a consumer this buys three
 things:
 
 1. **Discoverability** — the package's opinions are a file you can read, not a value you find by
