@@ -683,6 +683,68 @@ func TestIntegrateWithLayout_NestedAugmenter_NoDuplicateApplication(t *testing.T
 	}
 }
 
+// TestIntegrateWithLayout_IntegratedTreeKeepsItsPlacement pins that a tree
+// already integrated with one placement is not re-placed by a call with
+// another: that call is refused, and a refused call leaves every layout's
+// placement as the caller gave it.
+func TestIntegrateWithLayout_IntegratedTreeKeepsItsPlacement(t *testing.T) {
+	placements := []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle}
+	for _, grouping := range []string{"nodeOnly", "GroupByName"} {
+		for _, first := range placements {
+			for _, second := range placements {
+				if first == second {
+					continue
+				}
+				t.Run(grouping+"/"+string(first)+"->"+string(second), func(t *testing.T) {
+					child := &stack.Node{Name: "child", Bundle: srBundle("childb", cmApp("child-app"))}
+					root := &stack.Node{Name: "root", Bundle: srBundle("root", cmApp("root-app")), Children: []*stack.Node{child}}
+					child.SetParent(root)
+					c := &stack.Cluster{Name: "demo", Node: root}
+					rules := propertyGroupings[grouping]
+					rules.FluxPlacement = first
+					li := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+					ml, err := li.CreateLayoutWithResources(c, rules)
+					if err != nil {
+						t.Fatalf("CreateLayoutWithResources: %v", err)
+					}
+					rules.FluxPlacement = second
+					if err := li.IntegrateWithLayout(ml, c, rules); err == nil {
+						t.Fatalf("integrating a %s tree as %s succeeded; want a refusal", first, second)
+					}
+					var walk func(l *layout.ManifestLayout)
+					walk = func(l *layout.ManifestLayout) {
+						if l.Name != fluxstack.DefaultFluxDirName && l.FluxPlacement != first {
+							t.Errorf("layout %q placement = %q after the refused call; want %q", l.FullRepoPath(), l.FluxPlacement, first)
+						}
+						for _, ch := range l.Children {
+							walk(ch)
+						}
+					}
+					walk(ml)
+				})
+			}
+		}
+	}
+
+	// A tree without Flux CRs is re-placed, and put back when the call is
+	// refused later: a hand-built tree fails the origins index.
+	t.Run("refused after re-placing", func(t *testing.T) {
+		child := &layout.ManifestLayout{Name: "child", FluxPlacement: layout.FluxIntegratedPerLayout}
+		ml := &layout.ManifestLayout{Name: "root", FluxPlacement: layout.FluxIntegratedPerLayout, Children: []*layout.ManifestLayout{child}}
+		c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "root", Bundle: srBundle("root", cmApp("root-app"))}}
+		rules := layout.DefaultLayoutRules()
+		rules.FluxPlacement = layout.FluxSeparate
+		if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err == nil {
+			t.Fatal("integrating a hand-built tree succeeded; want a refusal")
+		}
+		for _, l := range []*layout.ManifestLayout{ml, child} {
+			if l.FluxPlacement != layout.FluxIntegratedPerLayout {
+				t.Errorf("layout %q placement = %q after the refused call; want %q", l.Name, l.FluxPlacement, layout.FluxIntegratedPerLayout)
+			}
+		}
+	})
+}
+
 // TestIntegrateWithLayout_PlacementIsTheIntegrations pins that the
 // integration's placement is the tree's, whatever placement the tree was
 // walked with: every directory is applied once and every CR is applied, in

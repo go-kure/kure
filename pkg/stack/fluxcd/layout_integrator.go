@@ -58,23 +58,60 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	// The integration's placement is the tree's: the writers decide from
 	// each layout's own FluxPlacement whether a child is listed as a
 	// directory or through its CR, so a tree walked with another placement
-	// would apply directories twice or leave CRs unapplied.
-	if isFluxPlacement(rules.FluxPlacement) {
-		setPlacement(ml, rules.FluxPlacement)
-	}
-
-	switch rules.FluxPlacement {
-	case layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle:
-		// Both place Flux CRs inline. They differ only in granularity:
-		// PerLayout emits a CR for every layout node (incl. augmenter-added
-		// child layouts); PerBundle stops at bundle boundaries and lets
-		// kustomize include child directories.
-		return li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
-	case layout.FluxSeparate:
-		return li.addSeparateFluxToLayout(ml, c)
-	default:
+	// would apply directories twice or leave CRs unapplied. A tree that
+	// already holds Flux Kustomizations was placed by them, so it is not
+	// re-placed; and a refused call puts every placement back.
+	if !isFluxPlacement(rules.FluxPlacement) {
 		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
 			[]string{string(layout.FluxIntegratedPerLayout), string(layout.FluxIntegratedPerBundle), string(layout.FluxSeparate)})
+	}
+	if ml.FluxPlacement != rules.FluxPlacement {
+		existing, err := indexExistingKustomizations(ml, nil)
+		if err != nil {
+			return err
+		}
+		if len(existing) > 0 {
+			return errors.Errorf("layout %q already holds Flux Kustomizations placed %q: it cannot be integrated again as %q", ml.FullRepoPath(), ml.FluxPlacement, rules.FluxPlacement)
+		}
+	}
+	restore := savePlacement(ml)
+	setPlacement(ml, rules.FluxPlacement)
+
+	var err error
+	if rules.FluxPlacement == layout.FluxSeparate {
+		err = li.addSeparateFluxToLayout(ml, c)
+	} else {
+		// Both inline placements put Flux CRs in the tree. They differ only
+		// in granularity: PerLayout emits a CR for every layout node (incl.
+		// augmenter-added child layouts); PerBundle stops at bundle
+		// boundaries and lets kustomize include child directories.
+		err = li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
+	}
+	if err != nil {
+		restore()
+	}
+	return err
+}
+
+// savePlacement records the placement of l and every layout below it and
+// returns a function that puts them back.
+func savePlacement(l *layout.ManifestLayout) func() {
+	saved := map[*layout.ManifestLayout]layout.FluxPlacement{}
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		if l == nil {
+			return
+		}
+		saved[l] = l.FluxPlacement
+		for _, child := range l.Children {
+			walk(child)
+		}
+	}
+	walk(l)
+	return func() {
+		for l, p := range saved {
+			l.FluxPlacement = p
+		}
 	}
 }
 
