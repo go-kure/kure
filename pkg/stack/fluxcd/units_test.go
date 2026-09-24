@@ -468,18 +468,39 @@ func (c *cycleAugmenter) AugmentLayout(ml *layout.ManifestLayout) error {
 // refused when the same tree is integrated again: layout CRs an earlier call
 // placed are still part of what the check covers.
 func TestIntegrateWithLayout_RepeatedCycleRefusal(t *testing.T) {
-	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform",
-		stack.NewApplication("chart", "default", &cycleAugmenter{app: "chart"}))}}
-	rules := propertyGroupings["GroupByName"]
-	rules.FluxPlacement = layout.FluxIntegratedPerLayout
-	ml, err := layout.WalkCluster(c, rules)
-	if err != nil {
-		t.Fatalf("walk: %v", err)
+	yes := true
+	cases := map[string]func() (*stack.Cluster, layout.LayoutRules){
+		"PerLayout layout CRs": func() (*stack.Cluster, layout.LayoutRules) {
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform",
+				stack.NewApplication("chart", "default", &cycleAugmenter{app: "chart"}))}}
+			rules := propertyGroupings["GroupByName"]
+			rules.FluxPlacement = layout.FluxIntegratedPerLayout
+			return c, rules
+		},
+		"Separate wait on the root": func() (*stack.Cluster, layout.LayoutRules) {
+			b := &stack.Node{Name: "b", Bundle: srBundle("b", cmApp("b-app"))}
+			root := &stack.Node{Name: "r", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
+			root.Bundle.Wait = &yes
+			b.Bundle.DependsOn = []*stack.Bundle{root.Bundle}
+			b.SetParent(root)
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = layout.FluxSeparate
+			return &stack.Cluster{Name: "demo", Node: root}, rules
+		},
 	}
-	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
-	for call := 1; call <= 2; call++ {
-		if err := integrator.IntegrateWithLayout(ml, c, rules); err == nil || !strings.Contains(err.Error(), "never") {
-			t.Fatalf("call %d: got %v, want the reconcile-order refusal (chart <-> chart-hooks)", call, err)
-		}
+	for name, build := range cases {
+		t.Run(name, func(t *testing.T) {
+			c, rules := build()
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatalf("walk: %v", err)
+			}
+			integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+			for call := 1; call <= 2; call++ {
+				if err := integrator.IntegrateWithLayout(ml, c, rules); err == nil || !strings.Contains(err.Error(), "never") {
+					t.Fatalf("call %d: got %v, want the reconcile-order refusal", call, err)
+				}
+			}
+		})
 	}
 }
