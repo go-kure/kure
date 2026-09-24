@@ -1,7 +1,7 @@
 [tools]
 # Use exact versions for reproducibility across environments
 go = "1.26.8"
-golangci-lint = "2.13.2"
+golangci-lint = "2.14.0"
 git-cliff = "2.14.2"
 hugo = "0.166.0"
 # Required by scripts/sync-versions.sh and its versions:test guard harness,

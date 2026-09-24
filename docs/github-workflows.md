@@ -115,7 +115,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 ### Configuration
 
 - Go Version: read from `go.mod` (`go-version-file: go.mod`)
-- Golangci-lint Version: `v2.13.2`
+- Golangci-lint Version: `v2.14.0`
 - govulncheck Version: `v1.8.0` (pinned, cached binary, `-scan symbol` mode)
 - Coverage Threshold (total): `90%` — the overall figure from `go tool cover -func`
 - Coverage Threshold (per-package): `90%` — checked separately for every package, and a single
