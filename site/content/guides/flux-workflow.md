@@ -117,6 +117,36 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 | FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
 | FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout`, `FluxIntegratedPerBundle` | Separate dir; a Flux CR per layout node; or Flux CRs at bundle boundaries with children as directories |
 
+### Layout paths (breaking change in go-kure/kure#771)
+
+A layout's directory is `FullRepoPath()`, which is `Namespace` joined with `Name`. `Namespace` is
+always the **parent's** directory, and `"."` is the root of the tree. The walkers build every layout
+this way. If you build `ManifestLayout` trees by hand, or add child layouts to a walked tree, set each
+child's `Namespace` to its parent's `FullRepoPath()`.
+
+What changed, and what to do:
+
+- **Hand-built children.** `FullRepoPath()` used to drop `Name` when `Namespace` already ended with
+  it. A caller that set a child's `Namespace` to the full path, including the child's own `Name`
+  (`Namespace: "apps/web", Name: "web"`), now gets that name twice (`apps/web/web`). Pass the
+  parent's path instead (`Namespace: "apps"`).
+- **Same-name layouts nest.** A bundle and an application with the same name now give `web/web`.
+  Before, they collapsed onto `web/`, and one of the two `kustomization.yaml` files replaced the
+  other.
+- **No `ClusterName`.** The root node now sits at `<root>` instead of `cluster/<root>`, and its
+  child nodes stay at `<root>/<child>`. With `FluxSeparate`, the `flux-system/` layout now sits inside
+  the root's directory, at `<root>/flux-system`, where the root's `kustomization.yaml` references it.
+  Before, it was written beside the root, and that reference dangled. The ArgoCD `argocd/` layout
+  moved the same way. Point anything outside kure that reads these directories (CI scripts, a
+  hand-written sync path) at the new paths.
+- **With a `ClusterName`.** The output is unchanged. The root layout is the cluster directory, and
+  `flux-system/` is still at `<ClusterName>/flux-system`.
+- **Collisions are refused.** `WriteToDisk`, `WriteToTar` and `WriteManifest` check the whole tree
+  before writing anything. They refuse two layouts that resolve to the same directory (compared
+  case-insensitively), and two `AppFileSingle` layouts that resolve to the same file.
+
+See the [Layout Engine reference](/api-reference/layout/) for the full rule.
+
 ## Umbrella Bundles — Readiness Aggregation
 
 A bundle with non-empty `Children` becomes an **umbrella**: Flux will only mark
