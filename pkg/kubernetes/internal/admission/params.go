@@ -42,6 +42,11 @@ func (f ParamFinding) Key() string { return f.Package + "." + f.Name }
 // spec type and is not reported; a type parameter only when its constraint
 // is.
 //
+// Like Classify, this is a guard against the Config layer drifting back in by
+// ordinary authorship, not against a signature written to evade it: it
+// follows the type-system layers listed on ownSpecType, and anything outside
+// them is caught by review and by this package's own fixture, not here.
+//
 // This is the contract's rule that the upstream struct is the construction
 // API: a function that takes a struct or a sum type kure invented is a
 // second vocabulary for the same object, and the one this check exists to
@@ -148,7 +153,8 @@ func OwnParameterTypes(opts Options, prefix string) ([]ParamFinding, error) {
 //
 // A named type from outside prefix (the upstream API) is not entered, beyond
 // the type arguments of an instantiated generic or generic alias; a type
-// parameter is reported only when its constraint is, and an interface with no methods (any) is not a
+// parameter is reported only when its constraint is — including the embedded
+// types and union terms of its type set — and an interface with no methods (any) is not a
 // spec type. The seen set stops a self-referential name (type Tree []Tree)
 // from recursing forever.
 func ownSpecType(t types.Type, prefix string, inTree bool) bool {
@@ -226,7 +232,22 @@ func ownSpecTypeIn(t types.Type, prefix string, owned bool, seen map[*types.Name
 	case *types.Struct:
 		return owned
 	case *types.Interface:
+		// Embedded types carry a constraint's type set ([T Config],
+		// [T interface{ Config | *Config }]); they are written where the
+		// interface is, so they keep its ownership.
+		for i := 0; i < x.NumEmbeddeds(); i++ {
+			if ownSpecTypeIn(x.EmbeddedType(i), prefix, owned, seen) {
+				return true
+			}
+		}
 		return owned && x.NumMethods() > 0
+	case *types.Union:
+		for i := 0; i < x.Len(); i++ {
+			if ownSpecTypeIn(x.Term(i).Type(), prefix, owned, seen) {
+				return true
+			}
+		}
+		return false
 	}
 	return false
 }

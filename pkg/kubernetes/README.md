@@ -156,9 +156,13 @@ layers, a callback's parameters and results, an alias or a named container decla
 under `pkg/kubernetes` (`type Config = *struct{...}`, `type List []struct{...}`), and a
 struct or method-bearing interface literal written in the signature itself, and the type
 arguments of an instantiated generic or generic alias (`up.Wrapper[Config]`), and the
-constraint of a type parameter (`[T Variant]`). It does not
+constraint of a type parameter, embedded types and union terms included (`[T Variant]`,
+`[T interface{ Config | *Config }]`). It does not
 enter an upstream named type otherwise. A named scalar with no upstream counterpart (`PSALevel`, a
 string enum) and an interface with no methods (`any`) are not spec types and pass.
+Like the sugar classifier, the check guards against the layer drifting back in through
+ordinary authorship; a signature written to evade it is a review matter, not a gap in
+the test.
 
 ## 4. Purity
 
