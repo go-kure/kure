@@ -924,31 +924,74 @@ func TestPerLayoutRecursive_AppliesGeneratedSources(t *testing.T) {
 	}
 }
 
+// fluxKustomization returns an unstructured Flux Kustomization, as an
+// application or a caller may emit one.
+func fluxKustomization(name, path string) client.Object {
+	u := &unstructured.Unstructured{}
+	u.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
+	u.SetKind("Kustomization")
+	u.SetName(name)
+	u.SetNamespace("flux-system")
+	_ = unstructured.SetNestedField(u.Object, path, "spec", "path")
+	return u
+}
+
 // TestIntegrateWithLayout_RejectsExistingDuplicateCRs: a Kustomization name
-// already present twice in the tree is a CR identity collision, wherever the
-// duplicate sits.
+// already present in the tree is a CR identity collision, whether the object
+// is typed or unstructured and wherever it sits.
 func TestIntegrateWithLayout_RejectsExistingDuplicateCRs(t *testing.T) {
-	rules := propertyGroupings["nodeOnly"]
-	rules.FluxPlacement = layout.FluxIntegratedPerLayout
-	for name, pick := range map[string]func(ml *layout.ManifestLayout) *layout.ManifestLayout{
-		"same host":    func(ml *layout.ManifestLayout) *layout.ManifestLayout { return ml.Children[0] },
-		"another host": func(ml *layout.ManifestLayout) *layout.ManifestLayout { return ml },
-	} {
-		t.Run(name, func(t *testing.T) {
-			c := propertyShapes["different-name"]()
-			ml := integrated(t, c, rules)
-			// web-bundle's CR is hosted by the apps layout (ml.Children[0]).
-			dup := &kustv1.Kustomization{}
-			dup.Name = "web-bundle"
-			dup.Namespace = "flux-system"
-			dup.Spec.Path = "wrong/path"
-			host := pick(ml)
-			host.Resources = append(host.Resources, dup)
-			err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
-			if err == nil || !strings.Contains(err.Error(), `"web-bundle"`) {
-				t.Errorf("got %v, want an error naming the duplicated web-bundle", err)
+	typed := func() client.Object {
+		dup := &kustv1.Kustomization{}
+		dup.Name = "web-bundle"
+		dup.Namespace = "flux-system"
+		dup.Spec.Path = "wrong/path"
+		return dup
+	}
+	objects := map[string]func() client.Object{
+		"typed":        typed,
+		"unstructured": func() client.Object { return fluxKustomization("web-bundle", "wrong/path") },
+	}
+	hosts := map[string]func(ml *layout.ManifestLayout) *layout.ManifestLayout{
+		// web-bundle's CR is hosted by the apps layout (ml.Children[0]) under
+		// PerLayout, and by the web node layout under PerBundle.
+		"child layout": func(ml *layout.ManifestLayout) *layout.ManifestLayout { return ml.Children[0] },
+		"root layout":  func(ml *layout.ManifestLayout) *layout.ManifestLayout { return ml },
+	}
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		for oname, obj := range objects {
+			for hname, pick := range hosts {
+				t.Run(string(placement)+"/"+oname+"/"+hname, func(t *testing.T) {
+					rules := propertyGroupings["nodeOnly"]
+					rules.FluxPlacement = placement
+					c := propertyShapes["different-name"]()
+					ml := integrated(t, c, rules)
+					host := pick(ml)
+					host.Resources = append(host.Resources, obj())
+					err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+					if err == nil || !strings.Contains(err.Error(), `"web-bundle"`) {
+						t.Errorf("got %v, want an error naming the duplicated web-bundle", err)
+					}
+				})
 			}
-		})
+		}
+	}
+}
+
+// TestFluxSeparate_RejectsExistingCRCollision: an application that emits a
+// Flux Kustomization with a generated CR's identity would make the root
+// kustomize build register one id twice.
+func TestFluxSeparate_RejectsExistingCRCollision(t *testing.T) {
+	platformApp := stack.NewApplication("platform-ks", "default", &fakeAppConfig{objs: func() []*client.Object {
+		o := fluxKustomization("web-bundle", "elsewhere")
+		return []*client.Object{&o}
+	}()})
+	web := &stack.Node{Name: "web", Bundle: srBundle("web-bundle", cmApp("web-app"))}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxSeparate
+	_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+	if err == nil || !strings.Contains(err.Error(), `"web-bundle"`) {
+		t.Errorf("got %v, want an error naming the colliding web-bundle", err)
 	}
 }
 
