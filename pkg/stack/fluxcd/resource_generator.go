@@ -98,9 +98,21 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 		for _, o := range objs {
 			if k, ok := o.(*kustv1.Kustomization); ok {
 				kusts = append(kusts, k)
+				out = append(out, o)
+				continue
 			}
+			// Bundles in different units may share one URL-bearing
+			// SourceRef: the Source is emitted once, and two different
+			// definitions of one Source are refused.
+			if same := findObject(out, o); same != nil {
+				if sameObject(same, o) {
+					continue
+				}
+				return nil, errors.Errorf("%s %q is defined twice with different content: bundles %q and %q name one Source differently",
+					o.GetObjectKind().GroupVersionKind().Kind, o.GetName(), sourceOwner(ix, out, same), l.OriginBundles()[0].Name)
+			}
+			out = append(out, o)
 		}
-		out = append(out, objs...)
 	}
 	if err := checkReconcileOrder(kusts, nil, nil); err != nil {
 		return nil, err
@@ -227,6 +239,20 @@ func (g *ResourceGenerator) mergeIntoUnit(unit, other *kustv1.Kustomization, fir
 	}
 	unit.Spec.Patches = append(unit.Spec.Patches, other.Spec.Patches...)
 	return nil
+}
+
+// sourceOwner names the unit whose generated objects include obj.
+func sourceOwner(ix *layout.OriginIndex, out []client.Object, obj client.Object) string {
+	owner := ""
+	for _, o := range out {
+		if k, ok := o.(*kustv1.Kustomization); ok {
+			owner = k.Name
+		}
+		if o == obj {
+			return owner
+		}
+	}
+	return owner
 }
 
 // effectiveSourceRef is ref as the generated objects use it: an omitted

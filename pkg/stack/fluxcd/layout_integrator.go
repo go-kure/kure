@@ -531,7 +531,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			// One identity, one object: an identical Source (a repeated
 			// integration, or two bundles sharing a SourceRef) is kept once;
 			// a different one would silently repoint a Kustomization.
-			if reflect.DeepEqual(same, obj) {
+			if sameObject(same, obj) {
 				continue
 			}
 			return errors.Errorf("layout %q already has %s %q with different content: two SourceRefs name one Source differently", host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
@@ -643,11 +643,33 @@ func sourceRefOf(b *stack.Bundle) kustv1.CrossNamespaceSourceReference {
 func findObject(resources []client.Object, obj client.Object) client.Object {
 	gvk := obj.GetObjectKind().GroupVersionKind()
 	for _, r := range resources {
-		if r.GetObjectKind().GroupVersionKind() == gvk && r.GetNamespace() == obj.GetNamespace() && r.GetName() == obj.GetName() {
+		if r.GetObjectKind().GroupVersionKind() == gvk && effectiveNamespace(r) == effectiveNamespace(obj) && r.GetName() == obj.GetName() {
 			return r
 		}
 	}
 	return nil
+}
+
+// sameObject reports whether a and b are the same object with the same
+// content, reading an omitted namespace as "default".
+func sameObject(a, b client.Object) bool {
+	ca, okA := a.DeepCopyObject().(client.Object)
+	cb, okB := b.DeepCopyObject().(client.Object)
+	if !okA || !okB {
+		return reflect.DeepEqual(a, b)
+	}
+	ca.SetNamespace(effectiveNamespace(ca))
+	cb.SetNamespace(effectiveNamespace(cb))
+	return reflect.DeepEqual(ca, cb)
+}
+
+// effectiveNamespace is obj's namespace as Kubernetes and the writers' identity
+// check read it: an omitted one is "default".
+func effectiveNamespace(obj client.Object) string {
+	if ns := obj.GetNamespace(); ns != "" {
+		return ns
+	}
+	return "default"
 }
 
 // addSeparateFluxToLayout creates a separate flux-system directory for Flux
