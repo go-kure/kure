@@ -738,9 +738,14 @@ func TestWalkCluster_Umbrella_NonNodeOnly(t *testing.T) {
 	if umbrellaChildLayout.Namespace != "root/apps/platform" {
 		t.Errorf("umbrella child Namespace = %q, want root/apps/platform", umbrellaChildLayout.Namespace)
 	}
-	// Child workload should live in the umbrella child's Resources.
-	if len(umbrellaChildLayout.Resources) != 1 {
-		t.Errorf("expected 1 resource in umbrella child layout, got %d", len(umbrellaChildLayout.Resources))
+	// ApplicationGrouping by name applies inside the umbrella child too: the
+	// child workload lives in its own application directory below it.
+	if len(umbrellaChildLayout.Resources) != 0 {
+		t.Errorf("expected no resources directly in the umbrella child layout, got %d", len(umbrellaChildLayout.Resources))
+	}
+	if len(umbrellaChildLayout.Children) != 1 || umbrellaChildLayout.Children[0].Name != "child-app" ||
+		len(umbrellaChildLayout.Children[0].Resources) != 1 {
+		t.Errorf("expected one child-app layout with 1 resource under the umbrella child, got %v", umbrellaChildLayout.Children)
 	}
 }
 

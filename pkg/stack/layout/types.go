@@ -102,14 +102,20 @@ const (
 // Zero values are interpreted as the defaults described in the field
 // documentation.
 type LayoutRules struct {
-	// NodeGrouping controls how nodes are written to disk. Defaults to
-	// GroupByName.
+	// NodeGrouping says whether each child node gets its own directory
+	// (GroupByName) or is merged into its parent's (GroupFlat): its bundle,
+	// child nodes and origins then render in the parent's directory. The root
+	// node always keeps its directory. Defaults to GroupByName.
 	NodeGrouping GroupingMode
-	// BundleGrouping controls how bundles are written to disk. Defaults to
-	// GroupByName.
+	// BundleGrouping says whether each bundle gets its own directory inside
+	// its node's (GroupByName) or is rendered in the node's directory
+	// (GroupFlat). Defaults to GroupFlat.
 	BundleGrouping GroupingMode
-	// ApplicationGrouping controls how applications are written to disk.
-	// Defaults to GroupByName.
+	// ApplicationGrouping says whether each application gets its own
+	// directory inside its bundle's (GroupByName) or writes its resources into
+	// the bundle's directory (GroupFlat). An augmenter application that wants
+	// its own layout gets a directory either way, and so does every umbrella
+	// child bundle. The three axes are independent. Defaults to GroupFlat.
 	ApplicationGrouping GroupingMode
 	// ApplicationFileMode controls whether application resources are
 	// combined into a single file or split per resource. Defaults to

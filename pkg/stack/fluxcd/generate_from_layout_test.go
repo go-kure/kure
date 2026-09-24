@@ -123,6 +123,21 @@ var propertyGroupings = map[string]layout.LayoutRules{
 	"nodeFlat":    {NodeGrouping: layout.GroupFlat, BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupFlat},
 }
 
+// allGroupings is every (Node, Bundle, App) grouping combination, named
+// node_bundle_app; each axis is honoured on its own.
+func allGroupings() map[string]layout.LayoutRules {
+	out := map[string]layout.LayoutRules{}
+	modes := []layout.GroupingMode{layout.GroupByName, layout.GroupFlat}
+	for _, n := range modes {
+		for _, b := range modes {
+			for _, a := range modes {
+				out[string(n)+"_"+string(b)+"_"+string(a)] = layout.LayoutRules{NodeGrouping: n, BundleGrouping: b, ApplicationGrouping: a}
+			}
+		}
+	}
+	return out
+}
+
 // reachableBundles returns every bundle reachable from c: node bundles and
 // their umbrella descendants.
 func reachableBundles(c *stack.Cluster) []*stack.Bundle {
@@ -429,16 +444,11 @@ func fluxPaths(t *testing.T, p string) []string {
 	return out
 }
 
-// s3Refused reports whether a cell is refused by the nodeFlat merge: the
-// merged web node has child layouts (umbrella children or an augmenter's).
-func s3Refused(grouping, shape string) bool {
-	return grouping == "nodeFlat" && (shape == "umbrella" || shape == "nested umbrella" || shape == "augmenter")
-}
-
 func TestEverySpecPathIsAWrittenDirectory(t *testing.T) {
 	placements := []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle}
 	shapes := slices.Sorted(maps.Keys(propertyShapes))
-	groupings := []string{"nodeOnly", "GroupByName", "nodeFlat"}
+	groupingRules := allGroupings()
+	groupings := slices.Sorted(maps.Keys(groupingRules))
 	for _, placement := range placements {
 		for _, grouping := range groupings {
 			for _, clusterName := range []string{"", ".", "prod", "platform"} {
@@ -446,11 +456,11 @@ func TestEverySpecPathIsAWrittenDirectory(t *testing.T) {
 					name := fmt.Sprintf("%s/%s/ClusterName=%q/%s", placement, grouping, clusterName, shape)
 					t.Run(name, func(t *testing.T) {
 						c := propertyShapes[shape]()
-						rules := propertyGroupings[grouping]
+						rules := groupingRules[grouping]
 						rules.FluxPlacement = placement
 						rules.ClusterName = clusterName
 						rules.FlattenSingleTier = shape == "FlattenSingleTier"
-						checkEverySpecPath(t, c, rules, s3Refused(grouping, shape))
+						checkEverySpecPath(t, c, rules)
 					})
 				}
 			}
@@ -458,16 +468,10 @@ func TestEverySpecPathIsAWrittenDirectory(t *testing.T) {
 	}
 }
 
-func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules, refused bool) {
+func checkEverySpecPath(t *testing.T, c *stack.Cluster, rules layout.LayoutRules) {
 	t.Helper()
 	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
 	ml, err := integrator.CreateLayoutWithResources(c, rules)
-	if refused {
-		if err == nil || !strings.Contains(err.Error(), `cannot merge node "web"`) {
-			t.Fatalf("want the nodeFlat merge refusal, got %v", err)
-		}
-		return
-	}
 	if err != nil {
 		t.Fatalf("CreateLayoutWithResources: %v", err)
 	}
@@ -1133,12 +1137,13 @@ func TestPerLayout_EmptyBundlelessNodeSurvivesGitTree(t *testing.T) {
 				rules := propertyGroupings[grouping]
 				rules.FluxPlacement = layout.FluxIntegratedPerLayout
 				rules.ClusterName = clusterName
-				if grouping == "GroupByName" && clusterName == "" {
+				if grouping == "GroupByName" {
 					// The root node layout renders no bundle here (its bundle
-					// has a layout of its own) and nothing below "empty" has a
-					// SourceRef: its CR has no source, which S5 refuses.
+					// has a layout of its own, with or without a ClusterName)
+					// and nothing below "empty" has a SourceRef: its CR has no
+					// source, which S5 refuses.
 					_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
-					if err == nil || !strings.Contains(err.Error(), `layout "platform/empty" needs a Kustomization CR`) {
+					if err == nil || !strings.Contains(err.Error(), `platform/empty" needs a Kustomization CR`) {
 						t.Fatalf("got %v, want the no-source refusal for platform/empty", err)
 					}
 					return

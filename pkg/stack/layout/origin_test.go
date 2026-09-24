@@ -152,7 +152,7 @@ func TestWalkCluster_Origins_NodeFlatMergesBundles(t *testing.T) {
 	assertOrigin(t, ml, []string{"platform", "web", "api"}, []string{"platform", "web", "api"})
 }
 
-func TestWalkCluster_NodeFlatRefusesChildLayouts(t *testing.T) {
+func TestWalkCluster_NodeFlatReparentsChildLayouts(t *testing.T) {
 	for name, child := range map[string]*stack.Node{
 		"umbrella child": {Name: "web", Bundle: &stack.Bundle{Name: "web", Children: []*stack.Bundle{{Name: "web-db"}}}},
 		"augmenter app": {Name: "web", Bundle: &stack.Bundle{Name: "web", Applications: []*stack.Application{
@@ -161,12 +161,16 @@ func TestWalkCluster_NodeFlatRefusesChildLayouts(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := &stack.Node{Name: "platform", Bundle: &stack.Bundle{Name: "platform"}, Children: []*stack.Node{child}}
-			_, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: root}, nodeFlat)
-			if err == nil {
-				t.Fatal("WalkCluster merged a node that has child layouts; want a refusal (the merge drops them)")
+			ml := walk(t, &stack.Cluster{Name: "demo", Node: root}, nodeFlat)
+			// The merged node's child layout moves under the absorbing root
+			// instead of being dropped, and web's node and bundle origins
+			// land on the root.
+			assertOrigin(t, ml, []string{"platform", "web"}, []string{"platform", "web"})
+			if len(ml.Children) != 1 {
+				t.Fatalf("root has %d child layouts, want web's one child layout re-parented", len(ml.Children))
 			}
-			if !strings.Contains(err.Error(), `cannot merge node "web"`) {
-				t.Errorf("error %q does not name the refused merge", err)
+			if got, want := ml.Children[0].Namespace, ml.FullRepoPath(); got != want {
+				t.Errorf("re-parented layout Namespace = %q, want the absorbing root's directory %q", got, want)
 			}
 		})
 	}
@@ -201,8 +205,14 @@ func TestWalkClusterWithClusterName_Origins_NamedRoot(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ml := walk(t, twoTier("platform", "web-bundle"), tc.rules)
-			// The root bundle is always flattened into the root node layout.
-			assertOrigin(t, layoutAt(t, ml, tc.rootPath), []string{"platform"}, []string{"platform"})
+			// The root bundle follows BundleGrouping like any node's: flat, it
+			// is rendered by the root node layout; by name, by its own layout.
+			if tc.rules.BundleGrouping == layout.GroupByName {
+				assertOrigin(t, layoutAt(t, ml, tc.rootPath), []string{"platform"}, nil)
+				assertOrigin(t, layoutAt(t, ml, tc.rootPath+"/platform"), nil, []string{"platform"})
+			} else {
+				assertOrigin(t, layoutAt(t, ml, tc.rootPath), []string{"platform"}, []string{"platform"})
+			}
 			if tc.wrapper != "" {
 				assertOrigin(t, layoutAt(t, ml, tc.wrapper), nil, nil)
 			}

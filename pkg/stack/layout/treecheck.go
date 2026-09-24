@@ -37,6 +37,9 @@ func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
 			}
 			dirs[key] = l
 		}
+		if err := checkResourceIdentities(l); err != nil {
+			return err
+		}
 		for _, child := range l.Children {
 			if child == nil {
 				continue
@@ -48,4 +51,28 @@ func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
 		return nil
 	}
 	return walk(root)
+}
+
+// checkResourceIdentities refuses a layout that holds two resources with one
+// Kubernetes identity (group, kind, namespace and name). Resources that share
+// a file name are legitimately written into one multi-document file (every
+// FilePerKind file does this), but two objects with one identity in one
+// directory make kustomize fail to build it. A grouping axis set to flat
+// merges several applications' or nodes' resources into one directory, which
+// is where this happens.
+func checkResourceIdentities(l *ManifestLayout) error {
+	seen := make(map[string]struct{}, len(l.Resources))
+	for _, obj := range l.Resources {
+		if obj == nil {
+			continue
+		}
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		id := fmt.Sprintf("%s/%s %s/%s", gvk.Group, gvk.Kind, obj.GetNamespace(), obj.GetName())
+		if _, dup := seen[id]; dup {
+			return errors.NewFileError("write", l.FullRepoPath(),
+				fmt.Sprintf("layout %q holds the same object %s twice", l.FullRepoPath(), id), nil)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
 }

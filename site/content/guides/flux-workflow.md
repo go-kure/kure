@@ -111,9 +111,12 @@ The [Layout Engine](/api-reference/layout) supports multiple grouping and file o
 
 | Option | Values | Effect |
 |--------|--------|--------|
-| NodeGrouping | `GroupByName`, `GroupFlat` | Create subdirectories per node or flatten |
-| BundleGrouping | `GroupByName`, `GroupFlat` | Create subdirectories per bundle or flatten |
-| ApplicationGrouping | `GroupByName`, `GroupFlat` | Create subdirectories per app or flatten |
+| NodeGrouping | `GroupByName`, `GroupFlat` | A directory per child node, or merge child nodes into their parent |
+| BundleGrouping | `GroupByName`, `GroupFlat` | A directory per bundle, or render bundles in their node's directory |
+| ApplicationGrouping | `GroupByName`, `GroupFlat` | A directory per app, or write apps into their bundle's directory |
+
+The three axes are independent; umbrella child bundles and augmenter applications always get a
+directory of their own.
 | FilePer | `FilePerResource`, `FilePerKind` | One file per resource or group by kind |
 | FluxPlacement | `FluxSeparate`, `FluxIntegratedPerLayout`, `FluxIntegratedPerBundle` | Separate dir; a Flux CR per layout node; or Flux CRs at bundle boundaries with children as directories |
 
@@ -179,9 +182,13 @@ What changed, and what to do:
   lists it as a resource file. The writers no longer emit a `flux-system-kustomization-<child>.yaml`
   reference guessed from a child's name. A bundle-less node layout gets its own CR named
   `<path, "/" → "-">-node`.
-- **Refusals.** Two bundles with one name, a CR name used twice, a `NodeGrouping: GroupFlat` merge
-  of a node that has umbrella children or augmenter layouts, and a node or bundle layout written as
-  `AppFileSingle` are errors.
+- **Refusals.** Two bundles with one name, a CR name used twice, a node or bundle layout written as
+  `AppFileSingle`, and a directory holding two objects with one identity are errors.
+- **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
+  they used to take effect only when bundles and applications were both flat, and a `ClusterName`
+  always flattened the root bundle. Combinations that were silently rendered fully nested now
+  render as configured, and a merged node's umbrella children and augmenter layouts keep their own
+  directories and CRs.
 - **FlattenSingleTier** no longer rewrites Flux CRs a caller added to the tree; generated CRs
   already name the surviving directory.
 

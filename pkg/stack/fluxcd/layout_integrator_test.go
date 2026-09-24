@@ -1330,10 +1330,13 @@ func TestCreateLayoutWithResources_ClusterNameEqualsNodeName_SpecPath(t *testing
 	paths := map[string]string{}
 	collectKustPaths(ml, paths)
 
+	// The root node is the cluster directory "platform" (the wrapper is
+	// elided); its GroupByName bundle "platform" has a directory of its own
+	// inside it, like any node's bundle of the same name.
 	want := map[string]string{
-		"platform":          "platform",
-		"platform-services": "platform/platform-services",
-		"platform-apps":     "platform/platform-apps",
+		"platform":          "platform/platform",
+		"platform-services": "platform/platform/platform-services",
+		"platform-apps":     "platform/platform/platform-apps",
 	}
 	for name, exp := range want {
 		got, ok := paths[name]
@@ -1346,9 +1349,12 @@ func TestCreateLayoutWithResources_ClusterNameEqualsNodeName_SpecPath(t *testing
 		}
 	}
 	for name, p := range paths {
-		if p == "platform/platform" || strings.HasPrefix(p, "platform/platform/") {
-			t.Errorf("Kustomization %q has double-nested spec.path %q (equal-root-name regression)", name, p)
+		if strings.HasPrefix(p, "platform/platform/platform/") || p == "platform/platform/platform" {
+			t.Errorf("Kustomization %q has spec.path %q: the root node directory was doubled (equal-root-name regression)", name, p)
 		}
+	}
+	if ml.FullRepoPath() != "platform" {
+		t.Errorf("root layout at %q, want the elided cluster directory %q", ml.FullRepoPath(), "platform")
 	}
 }
 

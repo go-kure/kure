@@ -625,7 +625,9 @@ func TestCreateLayoutWithResources_UsesWalkedRules(t *testing.T) {
 	if argo == nil {
 		t.Fatal("no argocd layout")
 	}
-	want := map[string]string{"platform-bundle": "prod/platform", "web-bundle": "prod/platform/web/web-bundle", "web-db": "prod/platform/web/web-bundle/web-db"}
+	// With BundleGrouping by name the root bundle has its own directory too;
+	// the ClusterName no longer flattens it into the root node's.
+	want := map[string]string{"platform-bundle": "prod/platform/platform-bundle", "web-bundle": "prod/platform/web/web-bundle", "web-db": "prod/platform/web/web-bundle/web-db"}
 	if got := appPaths(t, argo.Resources); !pathsEqual(got, want) {
 		t.Errorf("Application paths = %v, want %v", got, want)
 	}
