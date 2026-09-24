@@ -639,3 +639,28 @@ func TestCreateLayoutWithResources_UsesWalkedRules(t *testing.T) {
 		}
 	}
 }
+
+// TestGenerateFromCluster_Refusals: the walk's validation error and the
+// layout index's refusal (two bundles with one name, the Application's
+// identity) both reach the caller.
+func TestGenerateFromCluster_Refusals(t *testing.T) {
+	invalid := &stack.Cluster{Name: "c", Node: &stack.Node{Name: "n", Bundle: &stack.Bundle{Name: ""}}}
+	if _, err := Engine().GenerateFromCluster(invalid); err == nil {
+		t.Error("GenerateFromCluster accepted a bundle without a name")
+	}
+	dupNames := func() *stack.Cluster {
+		return &stack.Cluster{Name: "c", Node: &stack.Node{Name: "platform", Children: []*stack.Node{
+			{Name: "a", Bundle: &stack.Bundle{Name: "web"}},
+			{Name: "b", Bundle: &stack.Bundle{Name: "web"}},
+		}}}
+	}
+	if _, err := Engine().GenerateFromCluster(dupNames()); err == nil || !strings.Contains(err.Error(), `two bundles are named "web"`) {
+		t.Errorf("GenerateFromCluster: got %v, want the duplicate-name refusal", err)
+	}
+	if _, err := Engine().CreateLayoutWithResources(dupNames(), layout.LayoutRules{}); err == nil || !strings.Contains(err.Error(), `two bundles are named "web"`) {
+		t.Errorf("CreateLayoutWithResources: got %v, want the duplicate-name refusal", err)
+	}
+	if objs, err := Engine().generateFromLayout(&layout.ManifestLayout{Name: "platform", Namespace: "."}, dupNames()); err == nil || objs != nil {
+		t.Errorf("generateFromLayout on a hand-built tree: got %v, %v; want a refusal", objs, err)
+	}
+}
