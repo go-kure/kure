@@ -18,6 +18,8 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/api/krusty"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/stack"
@@ -367,6 +369,9 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string,
 			// An empty directory is not a directory in Git (or in most
 			// artifacts built from one): Flux would find nothing there.
 			t.Errorf("%s: spec.path %q has no kustomization.yaml", writer, d)
+		} else if err := kustomizeBuild(filepath.Join(w.root, d)); err != nil {
+			// What the kustomize-controller does with the directory.
+			t.Errorf("%s: spec.path %q does not build: %v", writer, d, err)
 		}
 	}
 }
@@ -381,6 +386,13 @@ func holdsFluxSource(t *testing.T, p string) bool {
 		t.Fatal(err)
 	}
 	return strings.Contains(string(data), "apiVersion: source.toolkit.fluxcd.io/")
+}
+
+// kustomizeBuild runs a kustomize build of dir, as Flux's kustomize-controller
+// does for a Kustomization's spec.path.
+func kustomizeBuild(dir string) error {
+	_, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(filesys.MakeFsOnDisk(), dir)
+	return err
 }
 
 // fluxPaths returns the spec.path of every Flux Kustomization in a manifest

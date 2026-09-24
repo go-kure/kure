@@ -342,12 +342,22 @@ func (ml *ManifestLayout) writeToDisk(basePath string, fluxTarget bool) error {
 		// Write proper YAML header
 		writeStr("apiVersion: kustomize.config.k8s.io/v1beta1\n")
 		writeStr("kind: Kustomization\n")
-		writeStr("resources:\n")
+		// The header is written with the first entry: a kustomization that
+		// lists nothing says so with "resources: []", since kustomize refuses
+		// a bare "resources:" with nothing else as an empty kustomization.
+		listed := false
+		entry := func(s string) {
+			if !listed {
+				writeStr("resources:\n")
+				listed = true
+			}
+			writeStr(s)
+		}
 
 		// Every resource file in explicit mode or for a leaf; see
 		// listedResourceFiles for recursive mode.
 		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
-			writeStr(fmt.Sprintf("  - %s\n", file))
+			entry(fmt.Sprintf("  - %s\n", file))
 		}
 
 		// Add child references
@@ -368,7 +378,7 @@ func (ml *ManifestLayout) writeToDisk(basePath string, fluxTarget bool) error {
 				continue
 			}
 			if child.ApplicationFileMode == AppFileSingle {
-				writeStr(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
 			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
 				// FluxIntegratedPerLayout: the child is applied by the Flux
 				// Kustomization the integrator placed in ml.Resources, which
@@ -381,8 +391,11 @@ func (ml *ManifestLayout) writeToDisk(basePath string, fluxTarget bool) error {
 					// Different packages - skip cross-package references in kustomization
 					continue
 				}
-				writeStr(fmt.Sprintf("  - %s\n", child.Name))
+				entry(fmt.Sprintf("  - %s\n", child.Name))
 			}
+		}
+		if !listed {
+			writeStr("resources: []\n")
 		}
 
 		writeStr(renderConfigMapGeneratorBlock(ml.ConfigMapGenerators))
