@@ -46,8 +46,9 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 // hand-built, partial or other-cluster tree is refused rather than matched by
 // name, and every Kustomization's spec.path is the directory of the layout
 // that renders its bundle. Integrating the same layout again adds nothing: a
-// CR already present with the same name and spec.path is kept, one with the
-// same name and another path is an error.
+// CR already present with the same name and spec.path in the layout that
+// would host it is kept; one with the same name elsewhere or with another
+// path is an error.
 func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
 	if ml == nil || c == nil || c.Node == nil {
 		return nil

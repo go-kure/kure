@@ -460,11 +460,14 @@ go mod graph | grep 'k8s.io/' | awk '{print $2}' | sort -u
 
 ### Kustomize (`sigs.k8s.io/kustomize/*`)
 
-`sigs.k8s.io/kustomize/api` and `sigs.k8s.io/kustomize/kyaml` are direct requirements only because
-the `pkg/stack/fluxcd` tests build every written tree with the real kustomize library
-(`krusty`), to prove each Flux `spec.path` names a directory kustomize can build. No package code
-imports them, so they have no runtime or API surface; keep the two on the same version, and treat
-a bump as a test-only change unless a build of the written trees starts failing.
+`sigs.k8s.io/kustomize/api` and `sigs.k8s.io/kustomize/kyaml` are direct requirements for two
+reasons. The `pkg/stack/fluxcd` tests build every written tree with the real kustomize library
+(`krusty`), to prove each Flux `spec.path` names a directory kustomize can build. And
+`pkg/stack/fluxcd` uses kustomize's own patch-target matching at runtime (`kustomize/api/types`
+selectors, `kyaml/resid` effective namespaces) to refuse a patch in a shared directory that would
+reach another bundle's objects. A bump can therefore change which patches kure refuses: keep the
+two on the same version, and review a bump against the patch-scope tests
+(`TestGenerateFromLayout_Patch*`) as well as the written-tree builds.
 
 ### Vendored `go-kure/.github` Guard
 

@@ -1,6 +1,7 @@
 package fluxcd_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1045,8 +1046,12 @@ func TestIntegrateWithLayout_RefusedCallLeavesTreeUntouched(t *testing.T) {
 	b2.Interval = "bogus"
 	perLayout := rules
 	perLayout.FluxPlacement = layout.FluxIntegratedPerLayout
+	before := layoutStates(ml)
 	if err := li.IntegrateWithLayout(ml, c, perLayout); err == nil {
 		t.Fatal("IntegrateWithLayout accepted interval \"bogus\"")
+	}
+	if after := layoutStates(ml); !reflect.DeepEqual(after, before) {
+		t.Errorf("refused call changed the tree:\n got %v\nwant %v", after, before)
 	}
 	b2.Interval = ""
 	if err := li.IntegrateWithLayout(ml, c, rules); err != nil {
@@ -1066,6 +1071,22 @@ func TestIntegrateWithLayout_RefusedCallLeavesTreeUntouched(t *testing.T) {
 	for writer, w := range writeAll(t, ml) {
 		checkWrittenTree(t, writer, w, dirs)
 	}
+}
+
+// layoutStates records, per layout path, what IntegrateWithLayout may change:
+// placement, application file mode, resource count and child count.
+func layoutStates(ml *layout.ManifestLayout) map[string]string {
+	states := map[string]string{}
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		states[l.FullRepoPath()] = fmt.Sprintf("placement=%v mode=%v resources=%d children=%d",
+			l.FluxPlacement, l.ApplicationFileMode, len(l.Resources), len(l.Children))
+		for _, child := range l.Children {
+			walk(child)
+		}
+	}
+	walk(ml)
+	return states
 }
 
 // TestIntegrateWithLayout_PerLayoutPatchScopeCountsSingleFileApps: an

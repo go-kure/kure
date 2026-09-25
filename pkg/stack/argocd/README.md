@@ -37,7 +37,9 @@ engine.SetDefaultNamespace("argocd")
 objects, err := engine.GenerateFromCluster(cluster)
 ```
 
-`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()` and produces one ArgoCD `Application` (`argoproj.io/v1alpha1`) per bundle that walk renders, umbrella children included. Each Application's `spec.source.path` is the directory of the layout that renders the bundle (`layout.OriginIndex.KustomizationPath`), not a path guessed from bundle names. `spec.destination.server` defaults to `https://kubernetes.default.svc`.
+`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()` and produces one ArgoCD `Application` (`argoproj.io/v1alpha1`) per directory that renders bundles, umbrella children included. Each Application's `spec.source.path` is that directory (`layout.OriginIndex.KustomizationPath`), not a path guessed from bundle names. `spec.destination.server` defaults to `https://kubernetes.default.svc`.
+
+When a `GroupFlat` axis or `FlattenSingleTier` merges several bundles into one directory, they share one Application, as they share one Flux Kustomization (see the fluxcd package's "One Kustomization per directory"). It is named after the first bundle. Their labels are combined, and one label key with two values is an error. `spec.dependencies` names the Applications of the directories each bundle's `DependsOn` renders, and dependencies between the merged bundles are dropped. With the default rules every bundle has its own directory, so this is one Application per bundle.
 
 ## Layout Integration
 

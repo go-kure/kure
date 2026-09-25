@@ -97,8 +97,8 @@ layout whose directory holds its resources. A bundle's Kustomization `spec.path`
 |---|---|---|---|
 | node `platform`, bundle `web` | `GroupByName` | `web` | `platform/web` |
 | node `platform`, bundle `platform` | `GroupByName` | `platform` | `platform/platform` |
-| node `platform` (bundle `platform`) with child node `apps` (bundle `apps-bundle`) | nodeOnly, `ClusterName: "prod"` | `platform`, `apps-bundle` | `prod/platform`, `prod/platform/apps` |
-| unnamed root node, bundle `web` | nodeOnly, `ClusterName: "."` | `web` | `.` |
+| node `platform` (bundle `platform`) with child node `apps` (bundle `apps-bundle`) | bundles and applications `GroupFlat`, `ClusterName: "prod"` | `platform`, `apps-bundle` | `prod/platform`, `prod/platform/apps` |
+| unnamed root node, bundle `web` | bundles and applications `GroupFlat`, `ClusterName: "."` | `web` | `.` |
 
 The path is emitted as `FullRepoPath()` returns it (no `./` prefix; Flux treats `x` and `./x`
 alike) and is relative to the root of what the writer wrote: the `WriteToDisk` / `WriteToTar`
@@ -126,7 +126,7 @@ The bundles merged into one directory combine as follows:
 | `Labels`, `Annotations` | combined; one key with two values is an error |
 | `Patches` | combined, but only when every patch has a `Target` that selects none of the other merged bundles' objects (see [Patches in a shared directory](#patches-in-a-shared-directory)) |
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
-| `NamedDependsOn` | combined |
+| `NamedDependsOn` | combined and mapped like `DependsOn`: a name that is a rendered bundle's becomes the name of the Kustomization that applies it (dropped when that is this one); any other name is kept as given |
 
 `GenerateFromLayout` and the integrator refuse a set of Kustomizations kure generates that can
 never all become Ready. Applying waits for every `dependsOn` to be Ready; becoming Ready waits for
@@ -350,8 +350,8 @@ err = layout.WriteManifest("./out", layout.DefaultLayoutConfig(), ml.(*layout.Ma
 `IntegrateWithLayout(ml, cluster, rules)` does the same for a layout you walked yourself. It
 refuses a tree `layout.WalkCluster` did not build from that cluster (see
 [Kustomization paths](#kustomization-paths)). Integrating the same layout twice adds nothing: a
-CR already present with the same name and `spec.path` is kept, the same name with another path is
-an error, and under `FluxSeparate` an identical `flux-system` child — same directory, same
+CR already present with the same name and `spec.path`, in the layout that would host it, is kept;
+the same name in another layout or with another path is an error, and under `FluxSeparate` an identical `flux-system` child — same directory, same
 resources, nothing beneath it — is kept rather than a second one appended; any other is refused. Every Flux Kustomization already in the tree counts — typed or unstructured, placed
 by an earlier integration, by the caller or emitted by an application: an identity
 (namespace/name) present twice, or taken by a generated CR elsewhere, is refused in every
@@ -476,13 +476,13 @@ of its own.
 `LayoutIntegrator` places umbrella child Flux CRs at the **parent** layout
 node, with `spec.path` = the child's own directory:
 
-- **Integrated, non-nodeOnly**: the walker creates a bundle sub-layout
+- **Integrated, `BundleGrouping: GroupByName`**: the walker creates a bundle sub-layout
   under the node layout. Umbrella child Kustomization CRs (and their Source
   CRs, if the child has a `SourceRef.URL`) are appended to the bundle
   sub-layout's `Resources`, which that layout lists (it is written in
   `KustomizationExplicit` mode). Nested umbrella children are placed at their
   enclosing umbrella child's layout node.
-- **Integrated, nodeOnly (GroupFlat)**: there is no intermediate bundle
+- **Integrated, `BundleGrouping: GroupFlat`**: there is no intermediate bundle
   layer, so umbrella children become direct sub-layouts of the node layout,
   and their Flux CRs sit at the node layout.
 - **FluxSeparate**: the `flux-system` layout directory receives every bundle's
@@ -505,7 +505,7 @@ Flux does not double-apply the child's resources.
 
 In `FluxIntegratedPerLayout` mode every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle gets a `Kustomization` CR in its parent's `Resources`, with `spec.path` set to `child.FullRepoPath()`. (A child that renders a bundle already has that bundle's CR there.) This covers:
 
-- **Application layouts** — per-app layouts (GroupByName, or augmenter apps in nodeOnly mode). The CR is named after the layout.
+- **Application layouts** — per-app layouts (`ApplicationGrouping: GroupByName`, or augmenter apps, which keep a directory under `GroupFlat`). The CR is named after the layout.
 - **Augmenter sub-layouts** — hook-group child layouts added by a `LayoutAugmenter` are children of an app layout. `spec.dependsOn` is populated from `ManifestLayout.DependsOn`, enabling ordered reconciliation between hook groups.
 - **Bundle-less node layouts** — a GroupByName node layout above its bundle layout, or a node without a bundle. The CR is named `<path with "/" replaced by "-">-node` (with `ClusterName: "."`, node `web`'s path is `web`, which is also its bundle's CR name).
 
