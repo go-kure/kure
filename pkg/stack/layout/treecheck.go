@@ -16,7 +16,8 @@ import (
 // directory (or, for AppFileSingle layouts, the same file), an AppFileSingle
 // child has children (see checkSingleChildLeaf), an extra file takes a path
 // the writer owns (see checkExtraFiles), or an AppFileSingle layout's file or
-// extra file would replace another file in its directory (see checkSingleFiles),
+// extra file would replace another file in its directory, or needs a
+// directory where another path is a file or the reverse (see checkSingleFiles),
 // or a KustomizationRecursive layout contradicts the output (see
 // checkRecursiveLayouts),
 // before anything is written (go-kure/kure#771). Each such layout writes its own files there,
