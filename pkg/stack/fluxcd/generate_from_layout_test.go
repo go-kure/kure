@@ -1066,6 +1066,95 @@ func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
 	if n != 1 {
 		t.Errorf("root hosts %d GitRepository objects, want the identical Source once", n)
 	}
+
+	// Under the integrated placements a unit's CR and Source sit in the
+	// parent of its directory, so units at different depths put their Sources
+	// in different layouts: platform hosts a's, platform/a hosts b's. One
+	// identity is one object across the whole pass, not per host.
+	nested := func(urlB string) *stack.Cluster {
+		b := &stack.Node{Name: "b", Bundle: &stack.Bundle{Name: "b", SourceRef: ref(urlB), Applications: []*stack.Application{cmApp("b-app")}}}
+		a := &stack.Node{Name: "a", Bundle: &stack.Bundle{Name: "a", SourceRef: ref("https://example.com/a.git"), Applications: []*stack.Application{cmApp("a-app")}}, Children: []*stack.Node{b}}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{a}}}
+	}
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run("two hosts/"+string(placement), func(t *testing.T) {
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			if _, err := integrator.CreateLayoutWithResources(nested("https://example.com/b.git"), rules); err == nil || !strings.Contains(err.Error(), `GitRepository "shared" (source.toolkit.fluxcd.io/v1) with different content`) {
+				t.Errorf("two different Sources named shared in platform and platform/a: got %v, want a conflict error naming it", err)
+			}
+			if _, err := integrator.CreateLayoutWithResources(nested("https://example.com/a.git"), rules); err != nil {
+				t.Errorf("identical Sources in two hosts: %v", err)
+			}
+		})
+	}
+
+	// A Source already in the tree at another API version is the same
+	// identity: the generated v1 one is compared with it, not added beside
+	// it, also when it sits inside a List.
+	for _, wrap := range []string{"top-level", "List"} {
+		for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+			t.Run("v1beta2/"+wrap+"/"+string(placement), func(t *testing.T) {
+				old := &unstructured.Unstructured{}
+				old.SetAPIVersion("source.toolkit.fluxcd.io/v1beta2")
+				old.SetKind("GitRepository")
+				old.SetName("web-git")
+				old.SetNamespace("flux-system")
+				_ = unstructured.SetNestedField(old.Object, "https://example.com/old.git", "spec", "url")
+				var obj client.Object = old
+				if wrap == "List" {
+					obj = wrapInList(old)
+				}
+				webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
+				web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
+				platformApp := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				if _, err := integrator.CreateLayoutWithResources(c, rules); err == nil || !strings.Contains(err.Error(), `GitRepository "web-git" (source.toolkit.fluxcd.io/v1beta2) with different content`) {
+					t.Errorf("v1beta2 and v1 GitRepository flux-system/web-git with different content: got %v, want a conflict error naming it", err)
+				}
+			})
+		}
+	}
+}
+
+// wrapInList returns a v1/List holding items, as an application may emit one.
+func wrapInList(items ...*unstructured.Unstructured) client.Object {
+	list := &unstructured.UnstructuredList{}
+	list.SetAPIVersion("v1")
+	list.SetKind("List")
+	for _, it := range items {
+		list.Items = append(list.Items, *it)
+	}
+	u := &unstructured.Unstructured{}
+	u.SetUnstructuredContent(list.UnstructuredContent())
+	return u
+}
+
+// TestIntegrateWithLayout_RejectsListWrappedCRCollision: a Flux Kustomization
+// inside a List an application emits is built by kustomize like a top-level
+// one, so one named like a generated CR is the same identity collision in
+// every placement.
+func TestIntegrateWithLayout_RejectsListWrappedCRCollision(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			ks, ok := fluxKustomization("web", "elsewhere").(*unstructured.Unstructured)
+			if !ok {
+				t.Fatal("fluxKustomization is not unstructured")
+			}
+			list := wrapInList(ks)
+			platformApp := stack.NewApplication("platform-ks", "default", &fakeAppConfig{objs: []*client.Object{&list}})
+			web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+			if err == nil || !strings.Contains(err.Error(), `already has Flux Kustomization "web"`) {
+				t.Errorf("got %v, want an error naming the List-wrapped web Kustomization", err)
+			}
+		})
+	}
 }
 
 // TestFluxSeparate_RejectsDuplicateCRInExistingFluxSystemSubtree: an earlier
