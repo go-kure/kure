@@ -30,15 +30,15 @@
 // from projects like FluxCD, cert-manager and MetalLB are registered so their
 // custom resources can be parsed without further setup.
 //
-// Any decoding errors are aggregated in a ParseErrors value which implements
-// the error interface. Successful objects are returned alongside the error so
-// callers may continue processing valid resources while reporting individual
-// failures.
+// Any decoding errors are aggregated in a ParseErrors value from
+// github.com/go-kure/kure/pkg/errors, which implements the error interface.
+// Successful objects are returned alongside the error so callers may continue
+// processing valid resources while reporting individual failures.
 //
 //	objs, err := io.ParseFile("./manifests.yaml")
 //	if err != nil {
-//	    var pe *io.ParseErrors
-//	    if errors.As(err, &pe) {
+//	    var pe *errors.ParseErrors // github.com/go-kure/kure/pkg/errors
+//	    if stderrors.As(err, &pe) {
 //	        for _, e := range pe.Errors {
 //	            log.Printf("parse error: %v", e)
 //	        }

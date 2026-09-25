@@ -1,4 +1,4 @@
-# Builder names the migration ledgers are licensed to mention.
+# Names the migration ledgers are licensed to mention.
 #
 # docs/builder-contract-release-1.md is the record of what the
 # builder-contract epic deleted, so it names hundreds of functions that
@@ -394,3 +394,16 @@ SetStatefulSetUpdateStrategy
 SetTarget
 SetUpdateStrategyName
 SetUpdateStrategyPath
+
+# release-2 (see docs/builder-contract-release-2.md): the config-struct
+# constructors and their config types. The check reads them only where a
+# page qualifies them with their package (`certmanager.Certificate`), so
+# this block holds the qualified mentions the two ledgers make, not the
+# whole retired layer.
+Certificate
+CertificateConfig
+CiliumCIDRGroup
+Issuer
+PodMonitor
+PrometheusRule
+ServiceMonitor

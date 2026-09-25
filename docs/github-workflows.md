@@ -108,7 +108,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented builder references via `scripts/check-doc-api-refs.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented API references via `scripts/check-doc-api-refs.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
 | `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
 | `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
@@ -157,8 +157,13 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Doc-sync checks** - `docs-build` and `doc-gate` run the canonical
   `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
   longer vendors its own copies under `site/scripts/`
-- **Builder-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
-  when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports. It is the
+- **API-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
+  when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports, or any
+  exported name it qualifies with the base name of a package under `pkg/` (`layout.Config`,
+  `errors.ParseErrors`) that the package does not declare. A variable spelled like a package is read
+  as the package, so a snippet naming one fails until the variable is renamed; standard-library
+  names whose package shares a base name with one of kure's (`errors.Is`, `io.Reader`) are listed
+  in the script's `EXTERNAL_QUALIFIED`. It is the
   kure-specific complement to `check-doc-sync`: that action proves every package has a page, this
   one proves the pages describe the API that shipped. The page set comes from `site/docs-map.yaml`
   (so it needs `yq`, installed earlier in the same job) plus the repository-root Markdown — every
@@ -191,17 +196,16 @@ temporary branch — the merged result — before the PR is allowed to land.
   declaration, where a text match indexed it and so let a page keep naming the function after the
   real one was deleted; and declarations in grouped `const`/`var`/`type` blocks, parenthesised
   receivers and type-parameter lists holding a bracket are read like any other. Exported consts,
-  vars and types answer a reference as functions do, since a page naming one names live API; which
-  names are checked is unchanged. A Go file under `pkg/` that does not parse fails the run rather
+  vars and types answer a reference as functions do, since a page naming one names live API. A Go file under `pkg/` that does not parse fails the run rather
   than dropping out of the index. A reference
   written with a selector that is neither — a variable, a field, a type from another module — or
   without one still resolves tree-wide, because an import alias and a variable receiver are
   spelled alike. The generic constructor is recognised both qualified (`kubernetes.Create[T]`)
   and bare (`Create[T]`); a bare `Set[...]`/`Add[...]` is not, being type syntax elsewhere. Dated records under `docs/history/` and `docs/reviews/`, the generated `CHANGELOG.md` and
   the two proposal documents are exempt by name in the script, each with its reason. The release-1
-  migration ledger is not exempt: it names removed functions and their live replacements on the
-  same table row, so excluding it would stop checking the replacements — the names a caller
-  actually types. The exemption is per name instead of per page, and the names are written down in
+  migration ledger and the release-2 migration notes are not exempt: they name removed functions and
+  their live replacements side by side, so excluding them would stop checking the replacements — the
+  names a caller actually types. The exemption is per name instead of per page, and the names are written down in
   `scripts/doc-api-refs-removed.txt` rather than inferred from where they sit on the page. Inferring
   them does not work: that page's tables are not all removal tables — some pair an old signature
   with a new one under the same name, some pair a builder that still ships with the field it no
