@@ -122,6 +122,13 @@ bash scripts/check-site-self-links.sh --self-test
 bash scripts/check-site-self-links.sh
 """
 
+[tasks."site:check-doc-examples"]
+description = "Fail if a Go block on an enabled page is not generated from an Example function or marked as an excerpt"
+run = """
+bash scripts/gen-doc-examples.sh --self-test
+bash scripts/gen-doc-examples.sh --check
+"""
+
 [tasks."site:gen"]
 description = "Regenerate doc tables from docs-map.yaml"
 run = "bash site/scripts/gen-docs-tables.sh"

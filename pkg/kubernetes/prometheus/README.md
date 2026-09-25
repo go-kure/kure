@@ -8,13 +8,22 @@ The `prometheus` package provides the generated constructors and the admissible 
 
 Every kind is built the same way: the generated `Create<Kind>` wrapper gives you an object carrying identity only, and the upstream `monitoringv1` struct is the construction API — set `Spec` fields directly, or through the few `Set*`/`Add*` helpers the builder contract admits.
 
+Each block on this page is the body of an `Example` function in `example_test.go`, which `go test`
+runs: it imports this package as `prometheus`, `github.com/go-kure/kure/pkg/kubernetes`, the
+upstream API as `monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"`,
+`metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`, `k8s.io/apimachinery/pkg/util/intstr`,
+`k8s.io/utils/ptr`, and `fmt` for the line that prints what the example built.
+
 ## Constructors
 
 Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`.
 
+<!-- doc-example: pkg/kubernetes/prometheus ExampleCreateServiceMonitor -->
 ```go
 obj := prometheus.CreateServiceMonitor("my-app", "monitoring")
+fmt.Println(obj.Kind, obj.Namespace+"/"+obj.Name)
 ```
+<!-- doc-example:end -->
 
 There is no second construction path.
 The config-struct layer this package used to carry (`prometheus.ServiceMonitor(&prometheus.ServiceMonitorConfig{...})`, `PodMonitor`, `PrometheusRule`) was retired by release 2 of the builder contract: it reached 6 of a `ServiceMonitor`'s 19 spec fields and 6 of a `PodMonitor`'s 17, and its `Labels` field was `metadata.labels` under another name. <!-- doc-api-refs:ignore names the retired config-struct layer -->
@@ -28,14 +37,8 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 
 ### ServiceMonitor
 
+<!-- doc-example: pkg/kubernetes/prometheus ExampleSetServiceMonitorSampleLimit -->
 ```go
-import (
-    monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-
-    "github.com/go-kure/kure/pkg/kubernetes"
-    "github.com/go-kure/kure/pkg/kubernetes/prometheus"
-)
-
 sm := prometheus.CreateServiceMonitor("my-app", "monitoring")
 kubernetes.AddLabel(sm, "team", "platform")
 sm.Spec = monitoringv1.ServiceMonitorSpec{
@@ -45,12 +48,15 @@ sm.Spec = monitoringv1.ServiceMonitorSpec{
     TargetLabels: []string{"app", "version"},
 }
 prometheus.SetServiceMonitorSampleLimit(sm, 10000)
+fmt.Println(sm.Labels["team"], sm.Spec.Endpoints[0].Port, *sm.Spec.SampleLimit)
 ```
+<!-- doc-example:end -->
 
 `spec.endpoints` carries no `omitempty` upstream, so a ServiceMonitor with no endpoints renders `endpoints: null`; the same holds for a PodMonitor's `podMetricsEndpoints`.
 
 ### PodMonitor
 
+<!-- doc-example: pkg/kubernetes/prometheus ExampleCreatePodMonitor -->
 ```go
 pm := prometheus.CreatePodMonitor("my-app", "monitoring")
 pm.Spec = monitoringv1.PodMonitorSpec{
@@ -58,10 +64,13 @@ pm.Spec = monitoringv1.PodMonitorSpec{
     PodMetricsEndpoints: []monitoringv1.PodMetricsEndpoint{{Path: "/metrics", Port: ptr.To("http"), Interval: "30s"}},
     NamespaceSelector:   monitoringv1.NamespaceSelector{Any: true},
 }
+fmt.Println(*pm.Spec.PodMetricsEndpoints[0].Port, pm.Spec.NamespaceSelector.Any)
 ```
+<!-- doc-example:end -->
 
 ### PrometheusRule
 
+<!-- doc-example: pkg/kubernetes/prometheus ExampleCreateRuleGroup -->
 ```go
 rule := prometheus.CreatePrometheusRule("alerts", "monitoring")
 kubernetes.AddLabel(rule, "role", "alert-rules")
@@ -73,13 +82,21 @@ prometheus.AddRuleGroupRule(&group, monitoringv1.Rule{
     For:   ptr.To(monitoringv1.Duration("5m")),
 })
 prometheus.AddPrometheusRuleGroup(rule, group)
+fmt.Println(rule.Spec.Groups[0].Name, rule.Spec.Groups[0].Rules[0].Alert)
 ```
+<!-- doc-example:end -->
 
 ## Modifier Functions
 
 Update existing resources after construction:
 
+<!-- doc-example: pkg/kubernetes/prometheus ExampleAddServiceMonitorEndpoint -->
 ```go
+sm := prometheus.CreateServiceMonitor("my-app", "monitoring")
+pm := prometheus.CreatePodMonitor("my-app", "monitoring")
+rule := prometheus.CreatePrometheusRule("alerts", "monitoring")
+group := prometheus.CreateRuleGroup("my-app.rules")
+
 // ServiceMonitor modifiers
 prometheus.AddServiceMonitorEndpoint(sm, monitoringv1.Endpoint{Path: "/metrics", Port: "http"})
 sm.Spec.JobLabel = "app"
@@ -97,7 +114,10 @@ prometheus.SetPodMonitorSampleLimit(pm, 10000)
 // PrometheusRule modifiers
 prometheus.AddPrometheusRuleGroup(rule, monitoringv1.RuleGroup{Name: "extra.rules"})
 prometheus.SetRuleGroupInterval(&group, monitoringv1.Duration("1m"))
+
+fmt.Println(sm.Spec.TargetLabels, pm.Spec.PodTargetLabels, rule.Spec.Groups[0].Name, *group.Interval)
 ```
+<!-- doc-example:end -->
 
 ## Related Packages
 

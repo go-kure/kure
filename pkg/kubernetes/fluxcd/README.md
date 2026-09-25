@@ -4,13 +4,22 @@
 
 Low-level builder functions for FluxCD Kubernetes resources. Each resource type follows the `Create*(name, namespace)` + `Set*()/Add*()` pattern.
 
+Each block on this page, except the one marked as an excerpt, is the body of an `Example` function
+in `example_test.go`, which `go test` runs: it imports this package as `fluxcd`, the Flux APIs as
+`sourcev1`, `kustv1`, `helmv2`, `meta` and `kustomize` (`github.com/fluxcd/...`),
+`metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`, `time`, and `fmt` for the line that prints what
+the example built.
+
 ## Constructors
 
 Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`. The upstream struct is the construction API; set spec fields directly or through the admissible `Set*`/`Add*` sugar below.
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleCreateGitRepository -->
 ```go
 obj := fluxcd.CreateGitRepository("my-repo", "flux-system")
+fmt.Println(obj.Kind, obj.Namespace+"/"+obj.Name)
 ```
+<!-- doc-example:end -->
 
 Twenty-four hand-written constructors for spec fragments remain (`CreateGitSpec`, `CreatePostBuild`, `CreateInstallRemediation`, `CreateCrossNamespaceSourceReference` and the rest). Their sub-types are not `client.Object`, so they get no generated wrapper, and Flux's spec fragments are deep enough that assembling one by literal at every call site is the less readable option. They are not identity constructors and are not covered by the identity test — for anything they do not cover, a struct literal is the idiom.
 
@@ -23,13 +32,16 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 
 ### GitRepository
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetGitRepositoryReference -->
 ```go
 gr := fluxcd.CreateGitRepository("my-repo", "flux-system")
 gr.Spec.URL = "https://github.com/org/repo"
 fluxcd.SetGitRepositoryReference(gr, &sourcev1.GitRepositoryRef{Branch: "main"})
 gr.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 fluxcd.SetGitRepositorySecretRef(gr, &meta.LocalObjectReference{Name: "git-credentials"})
+fmt.Println(gr.Spec.Reference.Branch, gr.Spec.Interval.Duration, gr.Spec.SecretRef.Name)
 ```
+<!-- doc-example:end -->
 
 Additional setters: `SetGitRepositoryTimeout`, `SetGitRepositoryVerification`,
 `SetGitRepositoryProxySecretRef`, `SetGitRepositoryIgnore`, `AddGitRepositoryInclude`,
@@ -37,13 +49,16 @@ Additional setters: `SetGitRepositoryTimeout`, `SetGitRepositoryVerification`,
 
 ### OCIRepository
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetOCIRepositoryReference -->
 ```go
 oci := fluxcd.CreateOCIRepository("my-manifests", "flux-system")
 oci.Spec.URL = "oci://registry.example.com/manifests"
 fluxcd.SetOCIRepositoryReference(oci, &sourcev1.OCIRepositoryRef{Tag: "latest"})
 oci.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetOCIRepositorySecretRef(oci, &meta.LocalObjectReference{Name: "registry-credentials"})
+fmt.Println(oci.Spec.Reference.Tag, oci.Spec.SecretRef.Name)
 ```
+<!-- doc-example:end -->
 
 Additional setters: `SetOCIRepositoryLayerSelector`, `SetOCIRepositoryVerify`,
 `SetOCIRepositoryCertSecretRef`, `SetOCIRepositoryProxySecretRef`, `SetOCIRepositoryTimeout`,
@@ -53,6 +68,7 @@ Additional setters: `SetOCIRepositoryLayerSelector`, `SetOCIRepositoryVerify`,
 
 **HTTP/HTTPS repository:**
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetHelmRepositorySecretRef -->
 ```go
 hr := fluxcd.CreateHelmRepository("bitnami", "flux-system")
 hr.Spec.URL = "https://charts.bitnami.com/bitnami"
@@ -61,10 +77,13 @@ hr.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetHelmRepositoryTimeout(hr, &metav1.Duration{Duration: 60 * time.Second})
 hr.Spec.PassCredentials = true
 fluxcd.SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "bitnami-auth"})
+fmt.Println(hr.Spec.Timeout.Duration, hr.Spec.SecretRef.Name)
 ```
+<!-- doc-example:end -->
 
 **OCI registry:**
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleCreateHelmRepository_oci -->
 ```go
 hr := fluxcd.CreateHelmRepository("ghcr-charts", "flux-system")
 hr.Spec.URL = "oci://ghcr.io/example/charts"
@@ -72,12 +91,15 @@ hr.Spec.Type = "oci"
 hr.Spec.Provider = "generic" // OCI-only: generic, aws, azure, gcp
 hr.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 fluxcd.SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "ghcr-auth"})
+fmt.Println(hr.Spec.Type, hr.Spec.Provider)
 ```
+<!-- doc-example:end -->
 
 Additional setters: `SetHelmRepositoryCertSecretRef`, `SetHelmRepositoryAccessFrom`.
 
 ### HelmChart
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleCreateHelmChart -->
 ```go
 hc := fluxcd.CreateHelmChart("redis", "flux-system")
 hc.Spec.Chart = "redis"
@@ -87,7 +109,9 @@ hc.Spec.SourceRef = sourcev1.LocalHelmChartSourceReference{
     Name: "bitnami",
 }
 hc.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
+fmt.Println(hc.Spec.Chart, hc.Spec.Version, hc.Spec.SourceRef.Kind)
 ```
+<!-- doc-example:end -->
 
 Additional setters: `AddHelmChartValuesFile`, `SetHelmChartVerify`.
 
@@ -98,13 +122,16 @@ Additional setters: `AddHelmChartValuesFile`, `SetHelmChartVerify`.
 
 ### Bucket
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetBucketSecretRef -->
 ```go
 b := fluxcd.CreateBucket("my-bucket", "flux-system")
 b.Spec.Endpoint = "minio.example.com"
 b.Spec.BucketName = "manifests"
 b.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 fluxcd.SetBucketSecretRef(b, &meta.LocalObjectReference{Name: "minio-credentials"})
+fmt.Println(b.Spec.BucketName, b.Spec.SecretRef.Name)
 ```
+<!-- doc-example:end -->
 
 Additional setters: `SetBucketSTS`, `SetBucketCertSecretRef`, `SetBucketProxySecretRef`,
 `SetBucketTimeout`, `SetBucketIgnore`.
@@ -113,6 +140,7 @@ Additional setters: `SetBucketSTS`, `SetBucketCertSecretRef`, `SetBucketProxySec
 
 ### Kustomization
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleAddKustomizationDependsOn -->
 ```go
 k := fluxcd.CreateKustomization("my-app", "flux-system")
 k.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
@@ -125,7 +153,9 @@ k.Spec.Prune = true
 k.Spec.TargetNamespace = "production"
 k.Spec.Wait = true
 fluxcd.AddKustomizationDependsOn(k, kustv1.DependencyReference{Name: "cert-manager"})
+fmt.Println(k.Spec.Path, k.Spec.DependsOn[0].Name)
 ```
+<!-- doc-example:end -->
 
 Additional setters: `SetKustomizationRetryInterval`, `SetKustomizationKubeConfig`,
 `AddKustomizationHealthCheck`, `AddKustomizationHealthCheckExpr`, `AddKustomizationComponent`,
@@ -136,6 +166,7 @@ Additional setters: `SetKustomizationRetryInterval`, `SetKustomizationKubeConfig
 
 **Chart template (chart + version + source reference):**
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetHelmReleaseValuesFromMap -->
 ```go
 hr := fluxcd.CreateHelmRelease("redis", "apps")
 hr.Spec.ReleaseName = "redis-prod"
@@ -160,7 +191,9 @@ fluxcd.AddHelmReleaseValuesFrom(hr, helmv2.ValuesReference{
     Kind: "ConfigMap",
     Name: "redis-defaults",
 })
+fmt.Println(hr.Spec.Chart.Spec.Chart, string(hr.Spec.Values.Raw), hr.Spec.ValuesFrom[0].Name)
 ```
+<!-- doc-example:end -->
 
 `SetHelmReleaseValuesFromMap` panics rather than returning an error, because a
 sugar helper cannot return one under the builder contract. Only a value that
@@ -172,6 +205,7 @@ and returns that error at decode time instead, so a map it produced always
 marshals. When values come from a decoder that could produce such a value,
 marshal them yourself and hand the result to `SetHelmReleaseValues`:
 
+<!-- doc-example:excerpt the body of a caller's own function that returns an error -->
 ```go
 import "github.com/go-kure/kure/pkg/errors"
 
@@ -184,6 +218,7 @@ fluxcd.SetHelmReleaseValues(hr, &apiextensionsv1.JSON{Raw: raw})
 
 **ChartRef mode (existing OCIRepository or HelmChart):**
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetHelmReleaseChartRef -->
 ```go
 hr := fluxcd.CreateHelmRelease("my-app", "apps")
 fluxcd.SetHelmReleaseChartRef(hr, &helmv2.CrossNamespaceSourceReference{
@@ -191,25 +226,37 @@ fluxcd.SetHelmReleaseChartRef(hr, &helmv2.CrossNamespaceSourceReference{
     Name:      "my-oci-source",
     Namespace: "flux-system",
 })
+fmt.Println(hr.Spec.ChartRef.Kind, hr.Spec.ChartRef.Name)
 ```
+<!-- doc-example:end -->
 
 **Drift detection and remediation:**
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetHelmReleaseDriftDetection -->
 ```go
+hr := fluxcd.CreateHelmRelease("my-app", "apps")
+
 fluxcd.SetHelmReleaseDriftDetection(hr, fluxcd.CreateDriftDetection(helmv2.DriftDetectionEnabled))
 fluxcd.SetHelmReleaseInstallCRDs(hr, helmv2.CreateReplace)
 fluxcd.SetHelmReleaseInstallRemediation(hr, fluxcd.CreateInstallRemediation(3))
 fluxcd.SetHelmReleaseUpgradeCRDs(hr, helmv2.CreateReplace)
 fluxcd.SetHelmReleaseUpgradeRemediation(hr, fluxcd.CreateUpgradeRemediation(3))
+fmt.Println(hr.Spec.DriftDetection.Mode, hr.Spec.Install.CRDs, hr.Spec.Upgrade.Remediation.Retries)
 ```
+<!-- doc-example:end -->
 
 **Post-render:**
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleAddHelmReleasePostRenderer -->
 ```go
+hr := fluxcd.CreateHelmRelease("my-app", "apps")
+
 k := fluxcd.CreatePostRendererKustomize()
 fluxcd.AddPostRendererKustomizeImage(k, kustomize.Image{Name: "redis", NewTag: "7.0"})
 fluxcd.AddHelmReleasePostRenderer(hr, helmv2.PostRenderer{Kustomize: k})
+fmt.Println(hr.Spec.PostRenderers[0].Kustomize.Images[0].NewTag)
 ```
+<!-- doc-example:end -->
 
 Additional setters: `SetHelmReleaseKubeConfig`, `AddHelmReleaseDependsOn`, `SetHelmReleaseTimeout`,
 `SetHelmReleaseMaxHistory`, `SetHelmReleasePersistentClient`, `SetHelmReleaseInstall`,
@@ -237,32 +284,38 @@ Upgrade flag setters: `SetHelmReleaseUpgradeTimeout`, `SetHelmReleaseUpgradeCRDs
 > See [compatibility](/api-reference/compatibility/#notification-controller-provider-and-alert-on-v1beta3)
 > for details and tracking issue [#250](https://github.com/go-kure/kure/issues/250).
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetProviderSecretRef -->
 ```go
 provider := fluxcd.CreateProvider("slack", "flux-system")
-provider.Spec.Type = "slack"          // plain fields: assigned, not set
+provider.Spec.Type = "slack" // plain fields: assigned, not set
 provider.Spec.Channel = "#alerts"
 fluxcd.SetProviderSecretRef(provider, &meta.LocalObjectReference{Name: "slack-webhook"})
 
 alert := fluxcd.CreateAlert("slack-alert", "flux-system")
 alert.Spec.ProviderRef = meta.LocalObjectReference{Name: "slack"}
-alert.Spec.EventSeverity = "error"     // no Alert setters remain: all were bare assignments
+alert.Spec.EventSeverity = "error" // no Alert setters remain: all were bare assignments
 
 receiver := fluxcd.CreateReceiver("github-receiver", "flux-system")
 receiver.Spec.Type = "github"
 receiver.Spec.Events = []string{"push"}
 fluxcd.SetReceiverSecretRef(receiver, meta.LocalObjectReference{Name: "webhook-token"})
+fmt.Println(provider.Spec.SecretRef.Name, alert.Spec.EventSeverity, receiver.Spec.SecretRef.Name)
 ```
+<!-- doc-example:end -->
 
 ## Flux Operator
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleCreateFluxInstance -->
 ```go
 instance := fluxcd.CreateFluxInstance("flux", "flux-system")
-instance.Spec.Distribution.Variant = "upstream-alpine"   // Distribution is a plain field
+instance.Spec.Distribution.Variant = "upstream-alpine" // Distribution is a plain field
 // Pointer setters remain for the optional blocks: SetFluxInstanceCluster,
 // SetFluxInstanceSharding, SetFluxInstanceStorage, SetFluxInstanceKustomize,
 // SetFluxInstanceSync, SetFluxInstanceWait, SetFluxInstanceCommonMetadata and
 // SetFluxInstanceMigrateResources.
+fmt.Println(instance.Spec.Distribution.Variant)
 ```
+<!-- doc-example:end -->
 
 ## Extended Resource Types
 
@@ -270,6 +323,7 @@ instance.Spec.Distribution.Variant = "upstream-alpine"   // Distribution is a pl
 
 Allows a Flux source artifact produced outside the cluster to be referenced by other Flux resources.
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleSetExternalArtifactSourceRef -->
 ```go
 ea := fluxcd.CreateExternalArtifact("my-artifact", "flux-system")
 fluxcd.SetExternalArtifactSourceRef(ea, &meta.NamespacedObjectKindReference{
@@ -278,12 +332,15 @@ fluxcd.SetExternalArtifactSourceRef(ea, &meta.NamespacedObjectKindReference{
     Name:       "my-oci-source",
     Namespace:  "flux-system",
 })
+fmt.Println(ea.Spec.SourceRef.Kind, ea.Spec.SourceRef.Name)
 ```
+<!-- doc-example:end -->
 
 ### ArtifactGenerator
 
 Provided by the optional **source-watcher** component. Assembles a new artifact by copying files from one or more source artifacts.
 
+<!-- doc-example: pkg/kubernetes/fluxcd ExampleAddArtifactGeneratorSource -->
 ```go
 ag := fluxcd.CreateArtifactGenerator("my-gen", "flux-system")
 
@@ -296,7 +353,9 @@ out.Revision = "@app"
 cp := fluxcd.CreateCopyOperation("@app/manifests/**", "@artifact/manifests")
 fluxcd.AddOutputArtifactCopyOperation(&out, cp)
 fluxcd.AddArtifactGeneratorOutputArtifact(ag, out)
+fmt.Println(ag.Spec.Sources[0].Alias, ag.Spec.OutputArtifacts[0].Name, ag.Spec.OutputArtifacts[0].Copy[0].From)
 ```
+<!-- doc-example:end -->
 
 ## Related Packages
 

@@ -10,13 +10,22 @@ VolSync replicates persistent volume data between Kubernetes clusters. Each repl
 
 The upstream spec encodes that one-of as a pointer per arm (`Spec.Restic`, `Spec.Rsync`, `Spec.RsyncTLS`, `Spec.Rclone`, `Spec.Syncthing`, `Spec.External`); set the one you mean and leave the others nil. VolSync rejects a spec with two arms at apply time. See [`docs/ARCHITECTURE.md` § One-of Constraints](/concepts/architecture/#one-of-constraints) for how kure treats these.
 
+Each block on this page is the body of an `Example` function in `example_test.go`, which `go test`
+runs: it imports this package as `volsync`, the upstream API as
+`volsyncv1alpha1 "github.com/backube/volsync/api/v1alpha1"`, `corev1 "k8s.io/api/core/v1"`,
+`k8s.io/apimachinery/pkg/api/resource`, `k8s.io/utils/ptr`, and `fmt` for the line that prints
+what the example built.
+
 ## Constructors
 
 Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Both kinds are namespaced and take `(name, namespace)`.
 
+<!-- doc-example: pkg/kubernetes/volsync ExampleCreateReplicationSource -->
 ```go
 obj := volsync.CreateReplicationSource("db-backup", "data")
+fmt.Println(obj.Kind, obj.Namespace+"/"+obj.Name)
 ```
+<!-- doc-example:end -->
 
 There is no second construction path.
 The config-struct layer this package used to carry (`volsync.ReplicationSource(&volsync.ReplicationSourceConfig{...})`, `ReplicationDestination`, the `TriggerConfig` and the sealed `SourceMover` / `DestinationMover` sums with their nine defined-over-upstream mover types) was retired by release 2 of the builder contract: the movers were the upstream specs under another name, and the sealed interfaces walled off nothing the upstream struct did not already carry. <!-- doc-api-refs:ignore names the retired config-struct layer -->
@@ -35,14 +44,8 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 
 ## ReplicationSource
 
+<!-- doc-example: pkg/kubernetes/volsync ExampleCreateReplicationSource_restic -->
 ```go
-import (
-    volsyncv1alpha1 "github.com/backube/volsync/api/v1alpha1"
-    "k8s.io/utils/ptr"
-
-    "github.com/go-kure/kure/pkg/kubernetes/volsync"
-)
-
 rs := volsync.CreateReplicationSource("db-backup", "data")
 rs.Spec = volsyncv1alpha1.ReplicationSourceSpec{
     SourcePVC: "postgres-data",
@@ -59,10 +62,13 @@ rs.Spec = volsyncv1alpha1.ReplicationSourceSpec{
         },
     },
 }
+fmt.Println(rs.Spec.SourcePVC, *rs.Spec.Trigger.Schedule, rs.Spec.Restic.CopyMethod)
 ```
+<!-- doc-example:end -->
 
 ## ReplicationDestination
 
+<!-- doc-example: pkg/kubernetes/volsync ExampleCreateReplicationDestination -->
 ```go
 capacity := resource.MustParse("10Gi")
 
@@ -78,7 +84,9 @@ rd.Spec = volsyncv1alpha1.ReplicationDestinationSpec{
         },
     },
 }
+fmt.Println(rd.Spec.Trigger.Manual, rd.Spec.Restic.Capacity.String())
 ```
+<!-- doc-example:end -->
 
 ## Movers
 
@@ -95,19 +103,29 @@ rd.Spec = volsyncv1alpha1.ReplicationDestinationSpec{
 
 The upstream struct is the only mutation surface this package offers. To change a built resource, assign the field:
 
+<!-- doc-example: pkg/kubernetes/volsync ExampleCreateReplicationSource_modify -->
 ```go
+rs := volsync.CreateReplicationSource("db-backup", "data")
+
 rs.Spec.Paused = false
 rs.Spec.Trigger = &volsyncv1alpha1.ReplicationSourceTriggerSpec{Manual: "go"}
+fmt.Println(rs.Spec.Trigger.Manual)
 ```
+<!-- doc-example:end -->
 
 Switching a mover on an existing resource means clearing the other arms yourself — five on a source, four on a destination, which has no Syncthing mover — exactly the multi-field write [the builder contract](/api-reference/kubernetes-builders/) forbids a `Set<Field>` helper from hiding.
 
 The one appender remains, because a peer list is a slice the contract admits sugar for; it takes the upstream Syncthing spec, which is the value assigned to `Spec.Syncthing`:
 
+<!-- doc-example: pkg/kubernetes/volsync ExampleAddSyncthingPeer -->
 ```go
+rs := volsync.CreateReplicationSource("db-backup", "data")
+
 rs.Spec.Syncthing = &volsyncv1alpha1.ReplicationSourceSyncthingSpec{}
 volsync.AddSyncthingPeer(rs.Spec.Syncthing, "tcp://peer:22000", "PEER-ID", false)
+fmt.Println(rs.Spec.Syncthing.Peers[0].ID, rs.Spec.Syncthing.Peers[0].Address)
 ```
+<!-- doc-example:end -->
 
 `CopyMethod` and its four constants (`CopyMethodDirect`, `CopyMethodNone`, `CopyMethodClone`, `CopyMethodSnapshot`) re-export the upstream copy-method type for convenience; `volsyncv1alpha1.CopyMethodSnapshot` is the same value.
 
