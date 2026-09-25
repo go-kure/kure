@@ -58,7 +58,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 	}{
 		"Explicit parent lists a child directory": {
 			build: dupParent,
-			want:  `layouts "p" and "p/c" both hold the object /ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
+			want:  `layouts "p" and "p/c" both hold the object v1 ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
 		},
 		// p lists c, whose kustomization.yaml lists g.
 		"grandchild, three levels": {
@@ -70,7 +70,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				g.Resources = []client.Object{testObj("v1", "ConfigMap", "x")}
 				return p
 			},
-			want: `layouts "p" and "p/c/g" both hold the object /ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
+			want: `layouts "p" and "p/c/g" both hold the object v1 ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
 		},
 		// The innermost build that takes in both is the one named.
 		"child and grandchild": {
@@ -81,7 +81,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				g.Resources = []client.Object{testObj("v1", "ConfigMap", "x")}
 				return p
 			},
-			want: `layouts "p/c" and "p/c/g" both hold the object /ConfigMap default/x, and the kustomization.yaml of layout "p/c" builds both`,
+			want: `layouts "p/c" and "p/c/g" both hold the object v1 ConfigMap default/x, and the kustomization.yaml of layout "p/c" builds both`,
 		},
 		// p's kustomization.yaml lists s.yaml, s's file in p's directory.
 		"AppFileSingle child": {
@@ -93,7 +93,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				s.Resources = []client.Object{testObj("v1", "ConfigMap", "x")}
 				return p
 			},
-			want: `layouts "p" and "p/s" both hold the object /ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
+			want: `layouts "p" and "p/s" both hold the object v1 ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
 		},
 		"siblings both listed": {
 			build: func() *layout.ManifestLayout {
@@ -103,7 +103,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				b.Resources = []client.Object{testObj("v1", "ConfigMap", "x")}
 				return p
 			},
-			want: `layouts "p/c" and "p/b" both hold the object /ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
+			want: `layouts "p/c" and "p/b" both hold the object v1 ConfigMap default/x, and the kustomization.yaml of layout "p" builds both`,
 		},
 		// kustomize reads an omitted namespace as "default".
 		"omitted namespace is default": {
@@ -112,7 +112,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				p.Children[0].Resources = []client.Object{objIn("v1", "ConfigMap", "", "x")}
 				return p
 			},
-			want: `layouts "p" and "p/c" both hold the object /ConfigMap default/x`,
+			want: `layouts "p" and "p/c" both hold the object v1 ConfigMap default/x`,
 		},
 		// kustomize builds a List's items, so an item is an object of the
 		// build.
@@ -130,7 +130,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				p.Children[0].Resources = []client.Object{list}
 				return p
 			},
-			want: `layouts "p" and "p/c" both hold the object /ConfigMap default/x`,
+			want: `layouts "p" and "p/c" both hold the object v1 ConfigMap default/x`,
 		},
 		// The Flux build of a marked Recursive directory takes in every
 		// directory below it that no kustomization.yaml shields, and each
@@ -145,7 +145,7 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				u.Resources = []client.Object{testObj("v1", "ConfigMap", "x")}
 				return r
 			},
-			want: `layouts "r/c" and "r/u" both hold the object /ConfigMap default/x, and the Flux build of KustomizationRecursive layout "r" includes both`,
+			want: `layouts "r/c" and "r/u" both hold the object v1 ConfigMap default/x, and the Flux build of KustomizationRecursive layout "r" includes both`,
 		},
 		"marked Recursive directory over its own object": {
 			build: func() *layout.ManifestLayout {
@@ -155,7 +155,42 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 				g.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
 				return r
 			},
-			want: `layouts "r" and "r/u/g" both hold the object /ConfigMap default/a, and the Flux build of KustomizationRecursive layout "r" includes both`,
+			want: `layouts "r" and "r/u/g" both hold the object v1 ConfigMap default/a, and the Flux build of KustomizationRecursive layout "r" includes both`,
+		},
+		// r's Flux build takes in c as c's own build, which lists g.
+		"marked Recursive directory over a listed grandchild directory": {
+			build: func() *layout.ManifestLayout {
+				r := recursiveTree()
+				r.SetFluxBuild(true)
+				g := child(r.Children[0], "g", layout.KustomizationExplicit)
+				g.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
+				return r
+			},
+			want: `layouts "r" and "r/c/g" both hold the object v1 ConfigMap default/a, and the Flux build of KustomizationRecursive layout "r" includes both`,
+		},
+		// The same through the file of an AppFileSingle grandchild that c's
+		// kustomization.yaml lists.
+		"marked Recursive directory over a listed AppFileSingle grandchild": {
+			build: func() *layout.ManifestLayout {
+				r := recursiveTree()
+				r.SetFluxBuild(true)
+				g := child(r.Children[0], "g", layout.KustomizationUnset)
+				g.ApplicationFileMode = layout.AppFileSingle
+				g.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
+				return r
+			},
+			want: `layouts "r" and "r/c/g" both hold the object v1 ConfigMap default/a, and the Flux build of KustomizationRecursive layout "r" includes both`,
+		},
+		// kustomize knows Namespace is cluster-scoped and ignores the
+		// namespace field of one: both are the object Namespace foo.
+		"cluster-scoped kind with a namespace field": {
+			build: func() *layout.ManifestLayout {
+				p := dupParent()
+				p.Resources = []client.Object{objIn("v1", "Namespace", "", "foo")}
+				p.Children[0].Resources = []client.Object{objIn("v1", "Namespace", "bar", "foo")}
+				return p
+			},
+			want: `layouts "p" and "p/c" both hold the object v1 Namespace foo, and the kustomization.yaml of layout "p" builds both`,
 		},
 	}
 	for name, tc := range cases {
@@ -181,7 +216,7 @@ func TestWriters_RefuseDuplicateWithListedOtherPackageChild(t *testing.T) {
 		return p
 	}
 	err := writeRefused(t, "WriteManifest", layout.DefaultLayoutConfig(), tree())
-	want := `layouts "p" and "p/c" both hold the object /ConfigMap default/x`
+	want := `layouts "p" and "p/c" both hold the object v1 ConfigMap default/x`
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("WriteManifest: err = %v, want it to contain %q", err, want)
 	}
@@ -241,6 +276,26 @@ func TestWriters_AcceptSameObjectInSeparateBuilds(t *testing.T) {
 			u.UmbrellaChild = true
 			u.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
 			return r
+		},
+		// g's file lands in c's directory, which c's kustomization.yaml
+		// shields from r's Flux build, and c does not list an umbrella
+		// child.
+		"marked Recursive build shielded from an unlisted AppFileSingle file": func() *layout.ManifestLayout {
+			r := recursiveTree()
+			r.SetFluxBuild(true)
+			g := child(r.Children[0], "g", layout.KustomizationUnset)
+			g.ApplicationFileMode = layout.AppFileSingle
+			g.UmbrellaChild = true
+			g.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
+			return r
+		},
+		// kustomize's identity includes the version, so two versions of
+		// one object build.
+		"different version": func() *layout.ManifestLayout {
+			p := dupParent()
+			p.Resources = []client.Object{objIn("autoscaling/v1", "HorizontalPodAutoscaler", "default", "x")}
+			p.Children[0].Resources = []client.Object{objIn("autoscaling/v2", "HorizontalPodAutoscaler", "default", "x")}
+			return p
 		},
 	}
 	for name, build := range cases {

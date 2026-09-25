@@ -9,6 +9,29 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
+// below reports whether p lies strictly below base (both normDir'ed).
+func below(base, p string) bool {
+	rel, ok := relativeTo(base, p)
+	return ok && rel != "."
+}
+
+// shieldedIn reports whether one of kdirs, the normDir'ed directories that get
+// a kustomization.yaml the writer writes, lies strictly below base and at or
+// above p (strictly above it when strict). The kustomization.yaml Flux
+// generates for base adds such a directory as a whole and does not descend
+// into it, so its scan of base does not reach p itself.
+func shieldedIn(kdirs []string, base, p string, strict bool) bool {
+	for _, k := range kdirs {
+		if !below(base, k) {
+			continue
+		}
+		if (!strict && k == p) || below(k, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // checkRecursiveLayouts refuses what a KustomizationRecursive layout, which
 // gets every file except kustomization.yaml (go-kure/kure#868), makes
 // contradictory in the writer's own output:
@@ -105,27 +128,17 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 		return err
 	}
 
-	below := func(base, p string) bool {
-		rel, ok := relativeTo(base, p)
-		return ok && rel != "."
+	var kdirs []string
+	for _, m := range dirs {
+		if m.writesK {
+			kdirs = append(kdirs, m.dir)
+		}
 	}
 	for _, d := range dirs {
 		if !d.l.fluxBuild || plan.kustomizationMode(d.l) != KustomizationRecursive {
 			continue
 		}
-		// shielded reports whether a directory strictly below d.dir, at or
-		// above p (strictly above it when strict), has a kustomization.yaml.
-		shielded := func(p string, strict bool) bool {
-			for _, m := range dirs {
-				if !m.writesK || !below(d.dir, m.dir) {
-					continue
-				}
-				if (!strict && m.dir == p) || below(m.dir, p) {
-					return true
-				}
-			}
-			return false
-		}
+		shielded := func(p string, strict bool) bool { return shieldedIn(kdirs, d.dir, p, strict) }
 		for _, t := range dirs {
 			if !below(d.dir, t.dir) || shielded(t.dir, true) {
 				continue
