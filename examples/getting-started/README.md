@@ -68,6 +68,7 @@ clusters/
 
 Each application type implements the `stack.ApplicationConfig` interface:
 
+<!-- doc-example:excerpt the interface declaration from pkg/stack/application.go, not a call -->
 ```go
 type ApplicationConfig interface {
     Generate(*Application) ([]*client.Object, error)

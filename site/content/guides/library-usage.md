@@ -7,6 +7,15 @@ weight = 10
 
 Kure is primarily a Go library. This guide covers the basics of importing it, creating resources, and generating YAML output.
 
+Each Go block below that is not an import block is the body of an `Example` function in
+`pkg/kubernetes/library_usage_example_test.go`, generated from it, so the page cannot show code
+that no longer compiles. `go test` runs every one of them and compares what it prints, except the
+maturity example, which is compiled only: its output follows the pinned upstream modules. The
+examples add `fmt.Println` lines to print what they built, use `panic(err)` where a program would
+return the error, and use two things declared in the same file: `frontendConfig`, a
+`stack.ApplicationConfig` that emits one Deployment, and `exportedObjects()`, a ConfigMap carrying
+the `resourceVersion`, `uid` and `creationTimestamp` an API server sets.
+
 ## Installation
 
 ```bash
@@ -20,6 +29,7 @@ A constructor gives you an object with an identity and nothing else: its
 `metadata.namespace` for a namespaced kind. From there the upstream Go struct is
 the API, so you set fields on it directly.
 
+<!-- doc-example:excerpt the import block alone, which the two examples below share -->
 ```go
 import (
     appsv1 "k8s.io/api/apps/v1"
@@ -27,12 +37,17 @@ import (
     "k8s.io/utils/ptr"
     "github.com/go-kure/kure/pkg/kubernetes"
 )
+```
 
-dep := kubernetes.CreateDeployment("web", "default")   // identity only
+<!-- doc-example: pkg/kubernetes Example_libraryUsageCreate -->
+```go
+dep := kubernetes.CreateDeployment("web", "default") // identity only
 dep.Spec.Replicas = ptr.To[int32](3)
 dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}
 dep.Spec.Template.Spec.ServiceAccountName = "web"
+fmt.Println(dep.Kind, dep.Name, *dep.Spec.Replicas, dep.Spec.Selector.MatchLabels["app"])
 ```
+<!-- doc-example:end -->
 
 `kubernetes.Create[appsv1.Deployment]("web", "default")` is the generic form;
 the per-kind wrappers are generated from the scheme and carry the scope in
@@ -44,10 +59,15 @@ inserting into a map, setting a pointer field, or composing a small upstream
 struct. A helper never defaults, never validates, and never touches a field you
 did not name.
 
+<!-- doc-example: pkg/kubernetes Example_libraryUsageHelpers -->
 ```go
-kubernetes.AddLabel(dep, "tier", "frontend")       // works on any kind
+dep := kubernetes.CreateDeployment("web", "default")
+
+kubernetes.AddLabel(dep, "tier", "frontend") // works on any kind
 kubernetes.SetDeploymentReplicas(dep, 3)
+fmt.Println(dep.Labels["tier"], *dep.Spec.Replicas)
 ```
+<!-- doc-example:end -->
 
 The [Kubernetes Builders](/api-reference/kubernetes-builders) page is the
 normative contract: what constructors emit, which helpers exist and why, and
@@ -65,6 +85,7 @@ list the values the CNPG builders used to inject that you now write yourself.
 
 ### FluxCD Resources
 
+<!-- doc-example:excerpt the import block alone, which the example below uses -->
 ```go
 import (
     "time"
@@ -74,7 +95,10 @@ import (
     sourcev1 "github.com/fluxcd/source-controller/api/v1"
     "github.com/go-kure/kure/pkg/kubernetes/fluxcd"
 )
+```
 
+<!-- doc-example: pkg/kubernetes Example_libraryUsageFlux -->
+```go
 // Create a GitRepository source
 repo := fluxcd.CreateGitRepository("my-repo", "flux-system")
 repo.Spec.URL = "https://github.com/org/repo"
@@ -90,7 +114,9 @@ ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
 ks.Spec.Path = "./clusters/production"
 ks.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 ks.Spec.Prune = true
+fmt.Println(repo.Spec.Reference.Branch, ks.Spec.SourceRef.Kind+"/"+ks.Spec.SourceRef.Name, ks.Spec.Path)
 ```
+<!-- doc-example:end -->
 
 Helm values given as a map go through `fluxcd.SetHelmReleaseValuesFromMap`, which marshals them to
 JSON and panics on a value `encoding/json` refuses. Decoded YAML can carry one: `gopkg.in/yaml.v3`
@@ -104,40 +130,78 @@ Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) pac
 
 ## Generating YAML
 
-Use the `io` package to serialize resources:
+Use the `io` package to serialize resources. `io.Marshal` and `io.PrintObjectsAsYAML` write to
+the `io.Writer` you pass; `io.SaveFile` writes one object to a path:
 
+<!-- doc-example:excerpt the import line alone, which the examples in this section use -->
 ```go
 import "github.com/go-kure/kure/pkg/io"
+```
+
+<!-- doc-example: pkg/kubernetes Example_libraryUsageYAML -->
+```go
+cm := kubernetes.CreateConfigMap("app-config", "default")
+cm.Data = map[string]string{"LOG_LEVEL": "info"}
+var obj client.Object = cm
+objects := []*client.Object{&obj}
+dir, err := os.MkdirTemp("", "kure-library-usage")
+if err != nil {
+    panic(err)
+}
+defer func() { _ = os.RemoveAll(dir) }()
 
 // Serialize a single object
-data, err := io.Marshal(deployment)
+if err := io.Marshal(os.Stdout, cm); err != nil {
+    panic(err)
+}
 
 // Write multiple objects to stdout as YAML
-err := io.PrintObjectsAsYAML(objects, os.Stdout)
+if err := io.PrintObjectsAsYAML(objects, os.Stdout); err != nil {
+    panic(err)
+}
 
 // Save to file
-err := io.SaveFile("output.yaml", deployment)
+if err := io.SaveFile(filepath.Join(dir, "output.yaml"), cm); err != nil {
+    panic(err)
+}
 ```
+<!-- doc-example:end -->
 
 ### Clean YAML encoding
 
-When encoding resources exported from a cluster, server-managed metadata fields (`managedFields`, `resourceVersion`, `uid`, etc.) clutter the output. The default encoding strips all of these automatically:
+When encoding resources exported from a cluster, server-managed metadata fields (`managedFields`, `resourceVersion`, `uid`, `generation`, `selfLink` and the `kubectl.kubernetes.io/last-applied-configuration` annotation) clutter the output. The default encoding strips all of these automatically, together with a null `creationTimestamp` and an empty `status`; a `creationTimestamp` that is set is kept:
 
+<!-- doc-example: pkg/kubernetes Example_libraryUsageEncodeDefault -->
 ```go
+objects := exportedObjects()
+
 // Default: strips all server-set fields and uses standard key order
 data, err := io.EncodeObjectsToYAMLWithOptions(objects, io.EncodeOptions{
     KubernetesFieldOrder: true,
 })
+if err != nil {
+    panic(err)
+}
+fmt.Print(string(data))
 ```
+<!-- doc-example:end -->
 
 Use `ServerFieldStripping` to control the level of stripping:
 
+<!-- doc-example: pkg/kubernetes Example_libraryUsageEncodeNone -->
 ```go
+objects := exportedObjects()
+
 // Preserve server fields (e.g. for debugging)
 data, err := io.EncodeObjectsToYAMLWithOptions(objects, io.EncodeOptions{
     ServerFieldStripping: io.StripServerFieldsNone,
 })
+if err != nil {
+    panic(err)
+}
+fmt.Print(string(data))
 ```
+<!-- doc-example:end -->
 
 See the [IO reference](/api-reference/io) for all output formats and stripping options.
 
@@ -148,16 +212,25 @@ module sources — its scope, the module and version it came from, and the field
 upstream documents as gated, alpha, beta or deprecated. The lookups are in
 `pkg/kubernetes`, and they answer from that table rather than from a hand-kept list.
 
+<!-- doc-example:excerpt the import line alone, which the examples in this section use with pkg/manifest -->
 ```go
 import "github.com/go-kure/kure/pkg/kubernetes"
+```
 
-k, ok := kubernetes.KindFor("apps/v1", "Deployment")   // exact group/version/kind
+<!-- doc-example: pkg/kubernetes Example_libraryUsageKindFor -->
+```go
+k, ok := kubernetes.KindFor("apps/v1", "Deployment") // exact group/version/kind
 if ok {
-    fmt.Println(k.Namespaced, k.Module, k.ModuleVersion, k.ScopeSource)
+    fmt.Println(k.Namespaced, k.Module, k.ScopeSource)
 }
 
 namespaced, known := kubernetes.IsNamespaced("autoscaling/v1", "HorizontalPodAutoscaler")
+fmt.Println(namespaced, known)
 ```
+<!-- doc-example:end -->
+
+The row also carries `k.ModuleVersion`, the pinned version of that module; the example leaves it
+out of what it prints because it changes with every dependency bump.
 
 The two answer deliberately different questions. `KindFor` returns the row for one
 exact `group/version/kind`, because `GoType`, `ImportPath` and `ModuleVersion` are
@@ -172,14 +245,16 @@ left unknown.
 `ScopeSource` says what declared the scope, and distinguishes a built-in kind from a
 custom resource without keeping a list:
 
+<!-- doc-example: pkg/kubernetes Example_libraryUsageScopeSource -->
 ```go
 k, _ := kubernetes.KindForAnyVersion("cilium.io/v2", "CiliumNetworkPolicy")
-k.ScopeSource == kubernetes.ScopeSourceBuiltin   // false: declared by a marker
+fmt.Println(k.ScopeSource == kubernetes.ScopeSourceBuiltin) // false: declared by a marker
 
 // pkg/manifest asks both forms of the scope question:
-manifest.IsNamespacedKind("cilium.io/v2", "CiliumNetworkPolicy")        // true
-manifest.IsNamespacedBuiltinKind("cilium.io/v2", "CiliumNetworkPolicy") // false, not a built-in
+fmt.Println(manifest.IsNamespacedKind("cilium.io/v2", "CiliumNetworkPolicy"))        // true
+fmt.Println(manifest.IsNamespacedBuiltinKind("cilium.io/v2", "CiliumNetworkPolicy")) // false, not a built-in
 ```
+<!-- doc-example:end -->
 
 The three sources are `ScopeSourceMarker` (the kind's own `+kubebuilder:resource`
 marker), `ScopeSourceShippedCRD` (a `CustomResourceDefinition` the module ships) and
@@ -189,14 +264,18 @@ the table, while for a custom resource a `CustomResourceDefinition` in the same
 context governs — it names the scope the target cluster will serve, where the table
 only records what the pinned module declared at build time.
 
-Maturity is reported, never enforced:
+Maturity is reported, never enforced (this example is compiled, not run, because what it prints
+follows the pinned upstream modules):
 
+<!-- doc-example: pkg/kubernetes Example_libraryUsageMaturity -->
 ```go
 for _, f := range kubernetes.MaturityForType("k8s.io/api/core/v1", "PodSpec") {
     fmt.Println(f.Field, f.Stability, f.Gates)
 }
-gated := kubernetes.GatedFields()   // every field behind a feature gate
+gated := kubernetes.GatedFields() // every field behind a feature gate
+fmt.Println(len(gated) > 0)
 ```
+<!-- doc-example:end -->
 
 kure does not warn, reject or filter on any of it — a consumer with cluster knowledge
 decides. The table exists because the failure it describes is silent: the API server
@@ -210,17 +289,28 @@ each column means and how it is derived.
 
 For more complex scenarios, use the [Stack](/api-reference/stack) package to define cluster topologies:
 
+<!-- doc-example:excerpt the import line alone, which the example below uses -->
 ```go
 import "github.com/go-kure/kure/pkg/stack"
+```
 
-cluster := stack.NewClusterBuilder("production").
+<!-- doc-example: pkg/kubernetes Example_libraryUsageDomainModel -->
+```go
+cluster, err := stack.NewClusterBuilder("production").
     WithNode("apps").
-        WithBundle("web").
-            WithApplication("frontend", frontendConfig).
-        End().
+    WithBundle("web").
+    WithApplication("frontend", frontendConfig).
+    End().
     End().
     Build()
+if err != nil {
+    panic(err)
+}
+fmt.Println(cluster.Name, cluster.Node.Name, cluster.Node.Bundle.Name)
 ```
+<!-- doc-example:end -->
+
+`Build` returns the cluster and an error, which reports an invalid tree.
 
 Then use the [Flux Engine](/api-reference/flux-engine) and [Layout Engine](/api-reference/layout) to generate a complete GitOps repository structure. See the [Generating Flux Manifests](/guides/flux-workflow/) guide for the full workflow.
 
@@ -228,13 +318,23 @@ Then use the [Flux Engine](/api-reference/flux-engine) and [Layout Engine](/api-
 
 All Kure packages use the [errors](/api-reference/errors) package:
 
+<!-- doc-example:excerpt the import line alone, which the example below uses -->
 ```go
 import "github.com/go-kure/kure/pkg/errors"
-
-if err != nil {
-    return errors.Wrap(err, "failed to generate manifests")
-}
 ```
+
+<!-- doc-example: pkg/kubernetes Example_libraryUsageErrors -->
+```go
+load := func(path string) error {
+    _, err := io.ParseFile(path)
+    if err != nil {
+        return errors.Wrap(err, "failed to generate manifests")
+    }
+    return nil
+}
+fmt.Println(load("does-not-exist.yaml"))
+```
+<!-- doc-example:end -->
 
 ## Next Steps
 

@@ -286,6 +286,7 @@ extra file silently replaced the generated one on disk, or shadowed it as a late
 
 `LayoutAugmenter` is an optional interface on `stack.ApplicationConfig`:
 
+<!-- doc-example:excerpt the interface declaration, not a call -->
 ```go
 type LayoutAugmenter interface {
     AugmentLayout(layout *ManifestLayout) error
@@ -296,6 +297,7 @@ When `app.Config` implements it, the walker invokes `AugmentLayout` on the per-a
 
 `LayoutIntentAugmenter` is an optional companion to `LayoutAugmenter`, for a config whose desire for its own layout varies per instance rather than being fixed for the whole type:
 
+<!-- doc-example:excerpt the interface declaration, not a call -->
 ```go
 type LayoutIntentAugmenter interface {
     LayoutAugmenter
@@ -374,10 +376,26 @@ Three named presets provide pre-configured LayoutRules for common deployment pat
 | `SiblingControlPlane` | B | FluxSeparate | GroupByName | FileNamingDefault |
 | `ParentDeployedControl` | C | FluxIntegratedPerLayout | GroupByName | FileNamingDefault |
 
+This block and the one under [Example Usage](#example-usage) are the bodies of `Example` functions
+in `example_test.go`, which `go test` runs; the two interface blocks above are declarations, shown
+as excerpts. The examples import this package as `layout`, `os`, `path/filepath`, and `fmt` for the
+lines that print what they built. Two helpers are declared in the same file: `exampleCluster()`
+builds cluster `prod`, whose root node `apps` holds one bundle `web` with applications `api` and
+`ui`, each emitting a ConfigMap; `printFiles(dir)` prints every file below `dir`.
+
+<!-- doc-example: pkg/stack/layout ExampleLayoutRulesForPreset -->
 ```go
 rules, err := layout.LayoutRulesForPreset(layout.PresetCentralizedControlPlane)
+if err != nil {
+    panic(err)
+}
 cfg, err := layout.ConfigForPreset(layout.PresetCentralizedControlPlane)
+if err != nil {
+    panic(err)
+}
+fmt.Println(rules.FluxPlacement, rules.NodeGrouping, rules.FileNaming, cfg.KustomizationFileName("web"))
 ```
+<!-- doc-example:end -->
 
 ## Real-World Use Cases
 
@@ -388,7 +406,15 @@ cfg, err := layout.ConfigForPreset(layout.PresetCentralizedControlPlane)
 
 ## Example Usage
 
+<!-- doc-example: pkg/stack/layout ExampleWalkCluster -->
 ```go
+cluster := exampleCluster()
+out, err := os.MkdirTemp("", "kure-layout-example")
+if err != nil {
+    panic(err)
+}
+defer func() { _ = os.RemoveAll(out) }()
+
 // Create layout rules
 rules := layout.DefaultLayoutRules()
 rules.BundleGrouping = layout.GroupFlat
@@ -397,13 +423,18 @@ rules.ApplicationGrouping = layout.GroupFlat
 // Walk cluster to create layout
 ml, err := layout.WalkCluster(cluster, rules)
 if err != nil {
-    return err
+    panic(err)
 }
 
 // Write to disk
 cfg := layout.DefaultLayoutConfig()
-err = layout.WriteManifest("out/manifests", cfg, ml)
+err = layout.WriteManifest(filepath.Join(out, "out/manifests"), cfg, ml)
+if err != nil {
+    panic(err)
+}
+printFiles(out)
 ```
+<!-- doc-example:end -->
 
 ## Key Files
 

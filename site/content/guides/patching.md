@@ -9,7 +9,9 @@ The patch system in [go-kure/launcher](https://github.com/go-kure/launcher) lets
 declaratively modify Kubernetes resources using JSONPath expressions. Patches are applied
 after resource generation, making them useful for environment-specific customization.
 
-> **Note**: `pkg/patch` lives in `go-kure/launcher`, not in kure itself.
+> **Note**: `pkg/patch` lives in `go-kure/launcher`, not in kure itself. kure does not depend on
+> launcher, so the Go blocks on this page are marked as excerpts and are not compiled by kure's
+> doc-example check.
 > <!-- TODO: update link when launcher docs site is published -->
 
 ## When to Patch vs Configure
@@ -49,6 +51,7 @@ patches:
 
 ## Applying Patches
 
+<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
 ```go
 import "github.com/go-kure/launcher/pkg/patch"
 
@@ -78,9 +81,10 @@ Patches can reference variables:
 image = "${registry}/${image}:${tag}"
 ```
 
+<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
 ```go
 varCtx := &patch.VariableContext{
-    Variables: map[string]interface{}{
+    Values: map[string]interface{}{
         "registry": "docker.io",
         "image":    "myapp",
         "tag":      "v2.0.0",
@@ -165,6 +169,7 @@ SMP and field-level patches can coexist in the same file. SMP patches are applie
 
 ### Enabling Kind-Aware Merging
 
+<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
 ```go
 import "github.com/go-kure/launcher/pkg/patch"
 
@@ -177,6 +182,7 @@ patchSet.KindLookup = lookup
 
 When multiple SMP patches target the same resource, check for conflicts:
 
+<!-- doc-example:excerpt calls go-kure/launcher's pkg/patch, which kure does not depend on, so it cannot compile here -->
 ```go
 resolved, reports, err := patchSet.ResolveWithConflictCheck()
 for _, r := range reports {

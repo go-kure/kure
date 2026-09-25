@@ -93,6 +93,7 @@ declares the field separately — `k8s.io/api@v0.37.0` `apps/v1/types.go:697-702
 with the matching template labels the same constructors stopped setting — the
 selector must match them:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 obj.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}
 obj.Spec.Template.Labels = map[string]string{"app": name}
@@ -107,6 +108,7 @@ allowed `template.spec.restartPolicy` values are `Never` or `OnFailure`"*
 (`batch/v1/types.go:405`). So leaving it unset is rejected just as surely as omitting
 the schedule, and this is why `+optional` on its own settles nothing:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 cj.Spec.Schedule = "*/5 * * * *"
 cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -138,6 +140,7 @@ defaults to an empty selector."* (`networking/v1/types.go:62-69`; note the field
 emitted). A policy that applied to one app now applies to every
 pod in its namespace. Restore the scope explicitly:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 np.Spec.PodSelector = metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}
 ```
@@ -148,6 +151,7 @@ to 1"* (`apps/v1/types.go:201-207`). A StatefulSet built to start scaled to zero
 starts one pod. If zero was
 deliberate, say so:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 sts.Spec.Replicas = ptr.To[int32](0)
 ```
@@ -161,6 +165,7 @@ adopted by whatever controller owns the cluster's default class, which may not b
 one you meant. What happens when no default class exists is not stated by the type and
 is not claimed here:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 ing.Spec.IngressClassName = ptr.To("nginx")
 ```
@@ -181,6 +186,7 @@ manifest is refused anyway, for the schedule and restart policy above. The label
 consequence is real and starts applying the moment those two are restored, which is why
 the row names it behind the rejection rather than instead of it.
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 job.Spec.Template.Labels = map[string]string{"app": name}
 ```
@@ -195,6 +201,7 @@ against them. The four CRD constructors — `CreateServiceMonitor`, `CreatePodMo
 the RBAC constructors, which were already identity-only. Restore it where you relied on
 it:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 kubernetes.AddLabel(obj, "app", name)
 kubernetes.AddAnnotation(obj, "app", name)
@@ -286,6 +293,7 @@ is emitted, the second whether it may be missing — and reading one for the oth
 exactly how the third row above would have been filed with the first. If you build these
 kinds with no entries, set the empty slice explicitly:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 sm.Spec.Endpoints = []monitoringv1.Endpoint{}
 ```
@@ -486,6 +494,7 @@ default for an omitted limit and for an omitted request alike
 no longer carries the old numbers — not that nothing takes their place. The
 behaviour-preserving replacement:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 &corev1.Container{
     Name:    name,
@@ -559,6 +568,7 @@ serialises as `containers: []` where nil serialises as `containers: null`. To
 keep the old value (all but `restartPolicy: Always`, which the old constructor
 also wrote and which is the server-side default, so the Pod behaves the same):
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 &corev1.PodSpec{
     Containers:                    []corev1.Container{},
@@ -592,6 +602,7 @@ immediate termination.
 left `StorageClassName` nil when the option was empty, which is how the API
 selects the cluster default — the literal must keep that condition:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 pvc := corev1.PersistentVolumeClaim{
     ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels},
@@ -617,6 +628,7 @@ ways: it serialises without the `http: {paths: []}` value; a caller that writes
 `AddIngressRulePath` is safe either way — it nil-initialises `HTTP` before
 appending — so most callers need no change. To keep the old value exactly:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 &netv1.IngressRule{
     Host: host,
@@ -633,6 +645,7 @@ appended.
 
 The cert-manager five:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 // CreateACMEIssuer(server, email, key)
 &cmacme.ACMEIssuer{Server: server, Email: email, PrivateKey: key}
@@ -1098,6 +1111,7 @@ listed by name with its before and after.
 
 Drop the error check; there is nothing left to check.
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 // before
 if err := AddPodSpecEphemeralContainer(spec, ec); err != nil {
@@ -1339,6 +1353,7 @@ reached one kind each and are removed.
 Every one of them has the same replacement shape, so the tables below give the
 kinds rather than repeating one row per function:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 // before
 cnpg.AddClusterLabel(cluster, "env", "prod")
@@ -1618,6 +1633,7 @@ The two resolve differently, because their upstream tags differ. Both tags are i
 asked for it. It now emits `prune: false`. A caller that wants garbage
 collection sets `Prune` explicitly:
 
+<!-- doc-example:excerpt migration ledger: a replacement fragment whose identifiers stand for the caller's own objects and values -->
 ```go
 prune := true
 bundle.Prune = &prune

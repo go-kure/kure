@@ -179,6 +179,7 @@ Cluster
 
 The root abstraction representing a complete Kubernetes cluster configuration:
 
+<!-- doc-example:excerpt the type declaration from pkg/stack/cluster.go, not a call -->
 ```go
 type Cluster struct {
     Name   string        `yaml:"name"`
@@ -192,10 +193,11 @@ type Cluster struct {
 - GitOps configuration at cluster level for global policies
 - Name field provides unique identification across environments
 
-#### Node (`pkg/stack/cluster.go:47-64`)
+#### Node (`pkg/stack/cluster.go`)
 
 Hierarchical containers for organizing related bundles:
 
+<!-- doc-example:excerpt the type declaration from pkg/stack/cluster.go, not a call -->
 ```go
 type Node struct {
     Name       string                    `yaml:"name"`
@@ -219,25 +221,36 @@ type Node struct {
 
 Deployment units typically corresponding to single GitOps resources:
 
+<!-- doc-example:excerpt the type declaration from pkg/stack/bundle.go, abridged to its structural fields -->
 ```go
 type Bundle struct {
-    Name         string         `yaml:"name"`
-    ParentPath   string         `yaml:"parentPath,omitempty"`
-    DependsOn    []*Bundle      `yaml:"dependsOn,omitempty"`
-    Applications []*Application `yaml:"applications"`
-    SourceRef    *SourceRef     `yaml:"sourceRef,omitempty"`
+    Name           string
+    ParentPath     string
+    DependsOn      []*Bundle
+    NamedDependsOn []string
+    Children       []*Bundle
+    Interval       string
+    SourceRef      *SourceRef
+    Applications   []*Application
+    // ... labels, annotations and the Flux reconciliation settings
 }
 ```
 
 #### Application (`pkg/stack/application.go`)
 
-Individual Kubernetes workloads or resource collections:
+Individual Kubernetes workloads or resource collections. An application holds no resources of its
+own: its `Config` generates them when the tree is walked.
 
+<!-- doc-example:excerpt the type declarations from pkg/stack/application.go, not a call -->
 ```go
 type Application struct {
-    Name      string           `yaml:"name"`
-    Resources []client.Object  `yaml:"resources"`
-    Labels    map[string]string `yaml:"labels,omitempty"`
+    Name      string
+    Namespace string
+    Config    ApplicationConfig
+}
+
+type ApplicationConfig interface {
+    Generate(*Application) ([]*client.Object, error)
 }
 ```
 
@@ -246,6 +259,7 @@ type Application struct {
 The domain model implements efficient tree traversal through a dual approach:
 
 **1. Path-Based Navigation**
+<!-- doc-example:excerpt a method body from pkg/stack/cluster.go, not a call -->
 ```go
 func (n *Node) GetPath() string {
     if n.ParentPath == "" {
@@ -256,6 +270,7 @@ func (n *Node) GetPath() string {
 ```
 
 **2. Runtime Parent References**
+<!-- doc-example:excerpt a method body from pkg/stack/cluster.go, not a call -->
 ```go
 func (n *Node) InitializePathMap() {
     pathMap := make(map[string]*Node)
@@ -275,35 +290,28 @@ This design enables:
 
 ### Interface Segregation Pattern
 
-The workflow architecture implements **Interface Segregation Principle** by splitting monolithic interfaces into focused components:
+The workflow architecture applies the **Interface Segregation Principle**: the abstraction every
+engine implements is one small interface, and each engine is composed of focused components (see
+[FluxCD Implementation](#fluxcd-implementation)). `pkg/stack` cannot import `pkg/stack/layout`,
+which imports it, so the layout types cross the interface as two narrow interfaces:
 
+<!-- doc-example:excerpt the interface declarations from pkg/stack/workflow.go, comments omitted -->
 ```go
 // pkg/stack/workflow.go
 
-type ResourceGenerator interface {
-    GenerateFromCluster(*stack.Cluster) ([]client.Object, error)
-    // Paths come from the walked layout: the directory that renders each bundle.
-    GenerateFromLayout(*layout.ManifestLayout, *stack.Cluster) ([]client.Object, error)
-    GenerateForBundle(b *stack.Bundle, path string) ([]client.Object, error)
+type LayoutRulesProvider interface { // implemented by layout.LayoutRules
+    Validate() error
 }
 
-type LayoutIntegrator interface {
-    IntegrateWithLayout(*layout.ManifestLayout, *stack.Cluster, layout.LayoutRules) error
-    CreateLayoutWithResources(*stack.Cluster, layout.LayoutRules) (*layout.ManifestLayout, error)
+type ManifestLayoutResult interface { // implemented by *layout.ManifestLayout
+    WriteToDisk(basePath string) error
+    FullRepoPath() string
 }
 
-type BootstrapGenerator interface {
-    GenerateBootstrap(*stack.BootstrapConfig, *stack.Node) ([]client.Object, error)
-    SupportedBootstrapModes() []string
-}
-
-type WorkflowEngine interface {
-    ResourceGenerator
-    LayoutIntegrator
-    BootstrapGenerator
-    
-    GetName() string
-    GetVersion() string
+type Workflow interface {
+    GenerateFromCluster(*Cluster) ([]client.Object, error)
+    CreateLayoutWithResources(*Cluster, LayoutRulesProvider) (ManifestLayoutResult, error)
+    GenerateBootstrap(*BootstrapConfig, *Node) ([]client.Object, error)
 }
 ```
 
@@ -311,6 +319,7 @@ type WorkflowEngine interface {
 
 The FluxCD workflow engine demonstrates the composition pattern:
 
+<!-- doc-example:excerpt the type and constructor from pkg/stack/fluxcd/workflow_engine.go, not a call -->
 ```go
 // pkg/stack/fluxcd/workflow_engine.go
 
@@ -369,6 +378,7 @@ Adding new GitOps workflows follows a clear pattern:
 
 Kure implements a sophisticated error handling system based on typed errors with contextual information:
 
+<!-- doc-example:excerpt the type declarations from pkg/errors/errors.go, not a call -->
 ```go
 // pkg/errors/errors.go
 
@@ -376,7 +386,7 @@ type KureError interface {
     error
     Type() ErrorType
     Suggestion() string
-    Context() map[string]interface{}
+    Context() map[string]any
 }
 
 type ErrorType string
@@ -389,6 +399,7 @@ const (
     ErrorTypeFile          ErrorType = "file"
     ErrorTypeConfiguration ErrorType = "configuration"
     ErrorTypeInternal      ErrorType = "internal"
+    ErrorTypePSA           ErrorType = "psa"
 )
 ```
 
@@ -416,8 +427,11 @@ const (
 
 ### Error Wrapping Strategy
 
-Kure follows Go's error wrapping conventions while adding structured context:
+Kure follows Go's error wrapping conventions while adding structured context. The method below
+illustrates the convention; the Flux engine's own `GenerateFromCluster` delegates to its
+`ResourceGen` unchanged:
 
+<!-- doc-example:excerpt an illustrative method body for a hypothetical engine, not the current source -->
 ```go
 func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
     if c == nil {
@@ -449,11 +463,23 @@ object, stamps `TypeMeta` from the registered scheme and writes `metadata.name` 
 `metadata.namespace` for a namespaced kind). Everything else is a field on the upstream type,
 assigned by the caller:
 
+<!-- doc-example: pkg/kubernetes ExampleCreateDeployment -->
 ```go
 d := kubernetes.CreateDeployment("web", "default")
 d.Spec.Replicas = ptr.To[int32](3)
 d.Spec.Template.Spec.ServiceAccountName = "web"
+fmt.Println(d.Kind, *d.Spec.Replicas, d.Spec.Template.Spec.ServiceAccountName)
 ```
+<!-- doc-example:end -->
+
+That block is `ExampleCreateDeployment` in `pkg/kubernetes`, generated from it, and `go test` runs
+it. So are the blocks of [Security Model](#security-model) (`Example_architectureSecrets`,
+`Example_architectureSecretReference` and `Example_architectureCertificate` in
+`pkg/kubernetes/certmanager`, `Example_architectureRBAC` in `pkg/kubernetes`) and the
+`ValidateCluster` block under [Input Validation](#input-validation) (`Example_architectureValidate`
+in `pkg/stack`); each adds a `fmt.Println` of what it built. Every other Go block in this document
+is marked as an excerpt — a declaration or source excerpt, a signature list, a test template, or a
+sketch of code that does not exist yet — and is not compiled.
 
 A helper whose entire body assigns one argument to one *value-typed* field is that assignment
 written twice, and the admission test rejects it. A *pointer-typed* field is the pointer/nil-init
@@ -520,6 +546,7 @@ enforced rather than merely documented.
 
 Example implementation:
 
+<!-- doc-example:excerpt function declarations from pkg/kubernetes source files, not calls -->
 ```go
 // pkg/kubernetes/zz_generated_create.go (generated from the scheme)
 
@@ -599,6 +626,7 @@ Until release 2 of the builder contract, `pkg/kubernetes/volsync` and `pkg/kuber
 
 The layout system manages directory structure and manifest organization:
 
+<!-- doc-example:excerpt the type declaration from pkg/stack/layout/manifest.go, abridged, not a call -->
 ```go
 // pkg/stack/layout/manifest.go (abridged: PackageRef, UmbrellaChild and
 // DependsOn omitted)
@@ -665,6 +693,7 @@ Layout integrates with GitOps tools through specialized placement:
 
 ### Directory Structure Generation
 
+<!-- doc-example:excerpt function signatures from pkg/stack/layout/walker.go, not calls -->
 ```go
 // pkg/stack/layout/walker.go
 
@@ -687,6 +716,7 @@ above.
 Kure follows strict naming conventions based on function purpose:
 
 #### Constructor Functions
+<!-- doc-example:excerpt function signatures illustrating a naming convention, not calls -->
 ```go
 // Go type constructors use New* prefix
 func NewCluster(name string, tree *Node) *Cluster
@@ -698,6 +728,7 @@ func CreateService(name, namespace string) *corev1.Service
 ```
 
 #### Helper Functions
+<!-- doc-example:excerpt function signatures illustrating a naming convention, not calls -->
 ```go
 // Adders for collection modifications
 func AddPodSpecContainer(spec *corev1.PodSpec, container *corev1.Container)
@@ -712,6 +743,7 @@ embeds it: the pod-template helpers live on `PodSpec` and are reached through
 `&<workload>.Spec.Template.Spec`.
 
 #### Workflow Functions
+<!-- doc-example:excerpt function signatures illustrating a naming convention, not calls -->
 ```go
 // Engine constructors follow New* pattern
 func NewWorkflowEngine() *WorkflowEngine
@@ -796,6 +828,7 @@ fixed set and not a precedent to argue from:
 
 <!-- doc-api-refs:ignore-start NewKind is a placeholder for the kind being added -->
 
+<!-- doc-example:excerpt a helper template: NewKind and v1 are placeholders for the kind being added -->
 ```go
 // pkg/kubernetes/<family>/<kind>.go — appender: append is not a plain assignment
 func AddNewKindRule(obj *v1.NewKind, rule v1.Rule) {
@@ -815,6 +848,7 @@ everything the constructor did not write, and a field-by-field check cannot make
 label, a defaulted status or a populated selector all pass a test that only looks at `Name`,
 `TypeMeta` and `Spec`. Build the object you expect and `DeepEqual` against it.
 
+<!-- doc-example:excerpt a test template: NewKind and v1 are placeholders for the kind being added -->
 ```go
 // pkg/kubernetes/<family>/<kind>_test.go
 
@@ -891,6 +925,7 @@ mise run site:check
 When extending the core domain model:
 
 #### 1. Maintain Hierarchy Consistency
+<!-- doc-example:excerpt a template for a new domain type: NewDomainType and ParentType are placeholders -->
 ```go
 // Add new domain types following existing patterns
 type NewDomainType struct {
@@ -906,6 +941,7 @@ type NewDomainType struct {
 ```
 
 #### 2. Implement Navigation Methods
+<!-- doc-example:excerpt a template for a new domain type: NewDomainType and ParentType are placeholders -->
 ```go
 func (n *NewDomainType) SetParent(parent *ParentType) {
     n.parent = parent
@@ -932,6 +968,7 @@ Ensure all workflow engines handle the new domain type appropriately.
 To add support for new GitOps tools:
 
 #### 1. Implement Core Interfaces
+<!-- doc-example:excerpt a skeleton for a hypothetical pkg/stack/newtool package, with elided bodies -->
 ```go
 // pkg/stack/newtool/resource_generator.go
 type ResourceGenerator struct {
@@ -946,6 +983,7 @@ func (rg *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Obj
 ```
 
 #### 2. Create Layout Integration
+<!-- doc-example:excerpt a skeleton for a hypothetical pkg/stack/newtool package, with elided bodies -->
 ```go
 // pkg/stack/newtool/layout_integrator.go  
 type LayoutIntegrator struct {
@@ -959,6 +997,7 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 ```
 
 #### 3. Compose Workflow Engine
+<!-- doc-example:excerpt a skeleton for a hypothetical pkg/stack/newtool package, with elided bodies -->
 ```go
 // pkg/stack/newtool/workflow_engine.go
 type WorkflowEngine struct {
@@ -975,6 +1014,7 @@ func NewWorkflowEngine() *WorkflowEngine {
 ```
 
 #### 4. Add Public API
+<!-- doc-example:excerpt a skeleton for a hypothetical pkg/stack/newtool package -->
 ```go
 // pkg/stack/newtool/newtool.go
 func Engine() *WorkflowEngine {
@@ -987,6 +1027,7 @@ func Engine() *WorkflowEngine {
 Kure maintains comprehensive test coverage through consistent patterns:
 
 #### Unit Testing
+<!-- doc-example:excerpt test-function patterns with elided assertions, not an Example -->
 ```go
 func TestServiceConstruction(t *testing.T) {
     svc := kubernetes.CreateService("web", "default")
@@ -1003,6 +1044,7 @@ func TestClusterValidation(t *testing.T) {
 ```
 
 #### Integration Testing  
+<!-- doc-example:excerpt a test-function pattern with elided assertions; rootNode stands for the test's tree -->
 ```go
 func TestWorkflowGeneration(t *testing.T) {
     // Create domain model
@@ -1014,17 +1056,6 @@ func TestWorkflowGeneration(t *testing.T) {
     
     // Validate generated resources
     // Test layout integration
-}
-```
-
-#### Facade Testing
-```go
-func TestFacadeNilConfig(t *testing.T) {
-    // Test nil config returns nil object
-    obj := NewResource(nil)
-    if obj != nil {
-        t.Error("expected nil for nil config")
-    }
 }
 ```
 
@@ -1050,6 +1081,7 @@ Kure is optimized for batch resource generation rather than individual operation
 ### Optimization Strategies
 
 #### 1. Lazy Initialization
+<!-- doc-example:excerpt a sketch of a lazy variant; the current InitializePathMap in pkg/stack/cluster.go rebuilds the map on every call -->
 ```go
 func (n *Node) InitializePathMap() {
     // Only build path map when needed
@@ -1062,6 +1094,7 @@ func (n *Node) InitializePathMap() {
 ```
 
 #### 2. Batch Operations
+<!-- doc-example:excerpt a method outline with an elided body, not the current source -->
 ```go
 func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
     // Generate all resources in single pass
@@ -1090,6 +1123,8 @@ func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object
 Kure follows Kubernetes security best practices for secret handling:
 
 #### 1. No Hardcoded Secrets
+
+<!-- doc-example: pkg/kubernetes/certmanager Example_architectureSecrets -->
 ```go
 // NEVER do this - a literal secret in the program that generates the manifests
 // is a literal secret in the Git repository those manifests are committed to.
@@ -1099,14 +1134,18 @@ secret.Data = map[string][]byte{"password": []byte("hunter2")} // WRONG
 // CORRECT approach - name the secret, let the cluster hold the value
 cert := certmanager.CreateCertificate("tls-cert", "default")
 cert.Spec.SecretName = "tls-cert-secret" // where cert-manager writes the key
+fmt.Println(len(secret.Data), cert.Spec.SecretName)
 ```
+<!-- doc-example:end -->
 
 #### 2. Secret Reference Pattern
+
+<!-- doc-example: pkg/kubernetes/certmanager Example_architectureSecretReference -->
 ```go
 // Standard pattern for secret references
 key := cmmeta.SecretKeySelector{
     LocalObjectReference: cmmeta.LocalObjectReference{Name: "secret-name"},
-    Key: "key-name",
+    Key:                  "key-name",
 }
 
 // The reference is a field on the upstream struct; there is no kure setter for it
@@ -1116,12 +1155,15 @@ issuer.Spec.Vault = &certv1.VaultIssuer{
     Path:   "pki/sign/example",
     Auth:   certv1.VaultAuth{TokenSecretRef: &key},
 }
+fmt.Println(issuer.Spec.Vault.Auth.TokenSecretRef.Name, issuer.Spec.Vault.Auth.TokenSecretRef.Key)
 ```
+<!-- doc-example:end -->
 
 ### RBAC Integration
 
 Resource builders provide granular RBAC control:
 
+<!-- doc-example: pkg/kubernetes Example_architectureRBAC -->
 ```go
 // Create minimal privilege roles
 role := kubernetes.CreateRole("app-reader", "default")
@@ -1143,12 +1185,15 @@ kubernetes.AddRoleBindingSubject(binding, rbacv1.Subject{
     Kind: "ServiceAccount",
     Name: "app-sa",
 })
+fmt.Println(role.Rules[0].Verbs, binding.RoleRef.Kind, binding.Subjects[0].Name)
 ```
+<!-- doc-example:end -->
 
 ### Certificate Management
 
 cert-manager integration provides secure TLS:
 
+<!-- doc-example: pkg/kubernetes/certmanager Example_architectureCertificate -->
 ```go
 // ACME challenge configuration. SetClusterIssuerACME assigns a pointer-typed
 // field, which is what makes it admissible sugar — it takes the *ACMEIssuer,
@@ -1177,7 +1222,9 @@ cert.Spec.IssuerRef = cmmeta.IssuerReference{
     Kind: "ClusterIssuer",
 }
 certmanager.AddCertificateDNSName(cert, "api.example.com")
+fmt.Println(issuer.Spec.ACME.Solvers[0].DNS01.Cloudflare.APIToken.Name, cert.Spec.IssuerRef.Kind, cert.Spec.DNSNames)
 ```
+<!-- doc-example:end -->
 
 ### Input Validation
 
@@ -1202,12 +1249,23 @@ that builds a `Node` tree by hand is responsible for that part of its shape. The
 `IntegrateWithLayout`) does not run it again. A node reachable from two parents is walked twice,
 and `layout.IndexOrigins` refuses the result before any Flux or ArgoCD path is derived from it.
 
+<!-- doc-example: pkg/stack Example_architectureValidate -->
 ```go
-// Validation is a call the caller makes, not a side effect of construction.
-if err := stack.ValidateCluster(c); err != nil {
-    return errors.Wrap(err, "cluster is not layoutable")
+c := stack.NewCluster("prod", &stack.Node{
+    Name:   "apps",
+    Bundle: &stack.Bundle{Name: "web", Applications: []*stack.Application{nil}},
+})
+
+check := func(c *stack.Cluster) error {
+    // Validation is a call the caller makes, not a side effect of construction.
+    if err := stack.ValidateCluster(c); err != nil {
+        return errors.Wrap(err, "cluster is not layoutable")
+    }
+    return nil
 }
+fmt.Println(check(c))
 ```
+<!-- doc-example:end -->
 
 ---
 
@@ -1239,6 +1297,7 @@ CI enforces a repository floor of 90% statement coverage and the same 90% for ev
 ### Testing Patterns
 
 #### Constructor Testing
+<!-- doc-example:excerpt a test-function pattern, written as inside package kubernetes -->
 ```go
 func TestCreateDeployment(t *testing.T) {
     deployment := CreateDeployment("test-app", "default")
@@ -1266,6 +1325,7 @@ func TestCreateDeployment(t *testing.T) {
 ```
 
 #### Helper Function Testing
+<!-- doc-example:excerpt a test-function pattern, written as inside package kubernetes; assertPanics is the test's own helper -->
 ```go
 func TestAddPodSpecContainer(t *testing.T) {
     deployment := CreateDeployment("test-app", "default")
@@ -1288,15 +1348,11 @@ func TestAddPodSpecContainer(t *testing.T) {
 ```
 
 #### Workflow Testing
+<!-- doc-example:excerpt a test-function pattern; deploymentConfig stands for the test's ApplicationConfig -->
 ```go
 func TestFluxWorkflowGeneration(t *testing.T) {
-    // Create test cluster
-    app := &stack.Application{
-        Name: "test-app",
-        Resources: []client.Object{
-            kubernetes.CreateDeployment("app", "default"),
-        },
-    }
+    // Create test cluster; deploymentConfig's Generate returns one Deployment
+    app := stack.NewApplication("test-app", "default", deploymentConfig)
     
     bundle := &stack.Bundle{
         Name: "test-bundle",
@@ -1338,10 +1394,11 @@ func TestFluxWorkflowGeneration(t *testing.T) {
 ```
 
 #### Error Testing
+<!-- doc-example:excerpt a test-function pattern, not an Example -->
 ```go
 func TestValidationErrors(t *testing.T) {
-    // Test validation error structure
-    err := validation.NewValidator().ValidateDeployment(nil)
+    // Test validation error structure: an unknown grouping is a validation error
+    err := layout.LayoutRules{NodeGrouping: "sideways"}.Validate()
     
     if err == nil {
         t.Fatal("expected validation error")
@@ -1374,6 +1431,7 @@ func TestValidationErrors(t *testing.T) {
 
 Common test utilities for consistent testing:
 
+<!-- doc-example:excerpt test-helper outlines with elided bodies -->
 ```go
 // Test helper functions
 func createTestCluster(name string) *stack.Cluster {

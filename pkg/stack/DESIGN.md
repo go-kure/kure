@@ -26,6 +26,7 @@ Cluster                    # Top-level configuration
 - **Purpose**: Represents complete cluster configuration
 - **Contains**: Root Node and GitOps bootstrap configuration
 - **Current Structure**:
+  <!-- doc-example:excerpt the struct declaration from pkg/stack/cluster.go, not a call -->
   ```go
   type Cluster struct {
       Name   string        `yaml:"name"`
@@ -82,6 +83,7 @@ rejection, and multi-package rejection (initial patch restriction).
 
 The ApplicationConfig interface provides pluggable resource generation:
 
+<!-- doc-example:excerpt the interface declaration from pkg/stack/application.go, not a call -->
 ```go
 type ApplicationConfig interface {
     Generate(*Application) ([]*client.Object, error)
@@ -235,6 +237,7 @@ interval "500ms" is too short, minimum is 1s
 
 Create `pkg/gvk` package with reusable components:
 
+<!-- doc-example:excerpt the planned shape of pkg/gvk as proposed, declarations only, not its current API -->
 ```go
 // Generic GVK representation
 type GVK struct {
@@ -347,12 +350,18 @@ spec:
 
 The GVK-wrapped stack format of Phase 2 was removed (see Implementation Status below), so there is
 one format, direct struct construction:
+<!-- doc-example: pkg/stack ExampleCluster -->
 ```go
 cluster := &stack.Cluster{
     Name: "prod",
-    Node: &stack.Node{...},
+    Node: &stack.Node{Name: "apps"},
 }
+fmt.Println(cluster.Name, cluster.Node.Name)
 ```
+<!-- doc-example:end -->
+
+That block is `ExampleCluster` in `pkg/stack`, which `go test` runs; the other Go blocks in this
+document are declarations or proposals, marked as excerpts.
 
 ### Migration Path
 

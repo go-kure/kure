@@ -73,7 +73,9 @@ resources.requests.cpu: "${values.cpu_request}"
 debug.enabled: "${features.enable_debug}"
 ```
 
-Variable context:
+Variable context (a `go-kure/launcher` `pkg/patch` value, which kure does not compile):
+
+<!-- doc-example:excerpt a go-kure/launcher pkg/patch value; kure does not depend on launcher, so it cannot compile here -->
 ```go
 &patch.VariableContext{
     Values: map[string]interface{}{

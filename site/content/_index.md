@@ -25,34 +25,43 @@ Kure answers this in three layers. A **domain model** says what a cluster contai
 
 ## Quick Example
 
-Go code generates plain Kubernetes YAML — no templates, no runtime.
+Go code generates plain Kubernetes YAML — no templates, no runtime. The Go block after the
+imports is the body of `Example_siteIndex` in `pkg/kubernetes`, which `go test` runs and checks
+against the YAML shown.
 
 {{< tabs >}}
 {{< tab title="Go" >}}
+<!-- doc-example:excerpt the import block alone, which the example below uses -->
 ```go
 import (
     "os"
     "github.com/go-kure/kure/pkg/io"
     "github.com/go-kure/kure/pkg/kubernetes"
 )
+```
 
+<!-- doc-example: pkg/kubernetes Example_siteIndex -->
+```go
 cm := kubernetes.CreateConfigMap("app-config", "default")
 kubernetes.AddConfigMapData(cm, "DATABASE_HOST", "postgres.db.svc")
 kubernetes.AddConfigMapData(cm, "DATABASE_PORT", "5432")
 
-io.Marshal(os.Stdout, cm)
+if err := io.Marshal(os.Stdout, cm); err != nil {
+    panic(err)
+}
 ```
+<!-- doc-example:end -->
 {{< /tab >}}
 {{< tab title="YAML Output" >}}
 ```yaml
 apiVersion: v1
+data:
+  DATABASE_HOST: postgres.db.svc
+  DATABASE_PORT: "5432"
 kind: ConfigMap
 metadata:
   name: app-config
   namespace: default
-data:
-  DATABASE_HOST: postgres.db.svc
-  DATABASE_PORT: "5432"
 ```
 {{< /tab >}}
 {{< /tabs >}}

@@ -19,24 +19,39 @@ The normative text is the [Kubernetes Builders](/api-reference/kubernetes-builde
 Every registered kind has a constructor. It returns the upstream type, carrying `apiVersion`,
 `kind`, `metadata.name` and — for a namespaced kind — `metadata.namespace`. Nothing else.
 
+<!-- doc-example: pkg/kubernetes ExampleCreateDeployment -->
 ```go
 d := kubernetes.CreateDeployment("web", "default")
 d.Spec.Replicas = ptr.To[int32](3)
 d.Spec.Template.Spec.ServiceAccountName = "web"
+fmt.Println(d.Kind, *d.Spec.Replicas, d.Spec.Template.Spec.ServiceAccountName)
 ```
+<!-- doc-example:end -->
+
+Every Go block on this page is the body of an `Example` function that `go test` runs: the
+defaults block below is in `pkg/stack/fluxcd/builder_contract_example_test.go`, the others are in
+`pkg/kubernetes` (`example_test.go` and `builder_contract_example_test.go`). They import
+`github.com/go-kure/kure/pkg/kubernetes`, `appsv1` (`k8s.io/api/apps/v1`), `k8s.io/utils/ptr` and
+`github.com/go-kure/kure/pkg/stack/fluxcd`, and add `fmt.Println` lines that print what they built.
 
 Cluster-scoped kinds take one argument, and the signature is how you tell:
 
+<!-- doc-example: pkg/kubernetes Example_builderContractNamespace -->
 ```go
 ns := kubernetes.CreateNamespace("platform")
+fmt.Println(ns.Kind, ns.Name, ns.Namespace == "")
 ```
+<!-- doc-example:end -->
 
 The wrapper is a spelling, not a separate implementation: it calls the generic form, which you can
 write directly when naming the type reads better than naming the kind.
 
+<!-- doc-example: pkg/kubernetes Example_builderContractGeneric -->
 ```go
 d := kubernetes.Create[appsv1.Deployment]("web", "default")
+fmt.Println(d.APIVersion, d.Kind, d.Namespace, d.Name)
 ```
+<!-- doc-example:end -->
 
 The wrappers are generated from the registered scheme, so the set of constructors and the set of
 kinds kure knows about cannot drift apart. An unregistered type panics — that is a programming
@@ -79,10 +94,15 @@ Everything else you write yourself:
 
 <!-- doc-api-refs:ignore-start names a removed helper to say it is removed -->
 
+<!-- doc-example: pkg/kubernetes Example_builderContractStrategy -->
 ```go
+d := kubernetes.CreateDeployment("web", "default")
+
 // There is no SetDeploymentStrategy. This is what it would have done.
 d.Spec.Strategy = appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType}
+fmt.Println(d.Spec.Strategy.Type)
 ```
+<!-- doc-example:end -->
 
 <!-- doc-api-refs:ignore-end -->
 
@@ -150,12 +170,14 @@ The workflow layer above it — `pkg/stack/fluxcd` — goes further and defaults
 has to decide a reconcile interval, a namespace, a source kind. The rule there is not "have no
 defaults", it is **every default is a name you can see**.
 
+<!-- doc-example: pkg/stack/fluxcd Example_builderContractDefaults -->
 ```go
-// pkg/stack/fluxcd/defaults.go
-fluxcd.DefaultInterval    // 60 * time.Minute
-fluxcd.DefaultNamespace   // "flux-system"
-fluxcd.DefaultSourceKind  // "OCIRepository"
+// declared in pkg/stack/fluxcd/defaults.go
+fmt.Println(fluxcd.DefaultInterval)   // 60 * time.Minute
+fmt.Println(fluxcd.DefaultNamespace)  // "flux-system"
+fmt.Println(fluxcd.DefaultSourceKind) // "OCIRepository"
 ```
+<!-- doc-example:end -->
 
 Eleven exported identifiers now stand where sixteen anonymous literals were, several of which were
 the same value written in two places and could therefore have drifted apart. For a consumer this buys three

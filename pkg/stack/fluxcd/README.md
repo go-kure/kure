@@ -18,28 +18,52 @@ The engine is composed of three specialized components:
 
 ## Quick Start
 
+<!-- doc-example:excerpt the import line alone, which every example on this page uses -->
 ```go
 import "github.com/go-kure/kure/pkg/stack/fluxcd"
+```
 
-// Create engine with defaults
+Every other Go block on this page, except the one marked as an excerpt of the generator's own
+source, is the body of an `Example` function in `example_test.go`, which `go test` runs: it
+imports this package as `fluxcd`, `github.com/go-kure/kure/pkg/stack` as `stack`,
+`github.com/go-kure/kure/pkg/stack/layout` as `layout`, `kustv1`
+(`github.com/fluxcd/kustomize-controller/api/v1`), `os`, and `fmt` for the lines that print what
+the example built. Two helpers are declared in the same file: `exampleCluster()` builds cluster
+`prod`, whose root node `apps` holds one bundle `web` with one application, which emits a
+ConfigMap through `github.com/go-kure/kure/pkg/kubernetes` and
+`sigs.k8s.io/controller-runtime/pkg/client`; `printFiles(dir)` prints every file below `dir`.
+
+<!-- doc-example: pkg/stack/fluxcd ExampleEngine -->
+```go
+cluster := exampleCluster()
+
+// Create engine with defaults. Placement is set on the LayoutRules passed
+// to the layout call, not on the engine — see Layout Integration below.
 engine := fluxcd.Engine()
 
 // Generate all Flux resources for a cluster (paths of a default-rules walk)
 objects, err := engine.GenerateFromCluster(cluster)
-
-// Placement is set on the LayoutRules passed to the layout call,
-// not on the engine — see Layout Integration below.
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    fmt.Println(obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+}
 ```
+<!-- doc-example:end -->
 
 ## Engine Construction
 
+<!-- doc-example: pkg/stack/fluxcd ExampleNewWorkflowEngine -->
 ```go
 // Default engine
 engine := fluxcd.Engine()
 
 // The same, built from its components
-engine := fluxcd.NewWorkflowEngine()
+built := fluxcd.NewWorkflowEngine()
+fmt.Println(engine.GetName() == built.GetName(), built.SupportedBootstrapModes())
 ```
+<!-- doc-example:end -->
 
 The engine has no path mode: every Kustomization `spec.path` is a layout directory (see
 [Kustomization paths](#kustomization-paths)).
@@ -59,17 +83,39 @@ do not count), and a refused call leaves the tree exactly as it was. See
 
 Generate Flux resources from a cluster, from a layout walked from it, or for one bundle:
 
+<!-- doc-example: pkg/stack/fluxcd ExampleResourceGenerator_GenerateFromLayout -->
 ```go
+cluster := exampleCluster()
+engine := fluxcd.Engine()
+rules := layout.DefaultLayoutRules()
+bundle := cluster.Node.Bundle
+
 // From an entire cluster: walks it with layout.DefaultLayoutRules()
 objects, err := engine.GenerateFromCluster(cluster)
+if err != nil {
+    panic(err)
+}
+fmt.Println(objects[0].GetName(), objects[0].(*kustv1.Kustomization).Spec.Path)
 
 // From a layout you walked (and will write) yourself
 ml, err := layout.WalkCluster(cluster, rules)
+if err != nil {
+    panic(err)
+}
 objects, err = engine.ResourceGen.GenerateFromLayout(ml, cluster)
+if err != nil {
+    panic(err)
+}
+fmt.Println(objects[0].GetName(), objects[0].(*kustv1.Kustomization).Spec.Path)
 
 // For one bundle, at a path you supply
 objects, err = engine.ResourceGen.GenerateForBundle(bundle, "clusters/prod/apps")
+if err != nil {
+    panic(err)
+}
+fmt.Println(objects[0].GetName(), objects[0].(*kustv1.Kustomization).Spec.Path)
 ```
+<!-- doc-example:end -->
 
 Each directory that renders bundles produces one Flux Kustomization resource (see
 [One Kustomization per directory](#one-kustomization-per-directory)) with:
@@ -323,6 +369,7 @@ Sources (`GitRepository`, `OCIRepository`) and the `FluxInstance` are built the 
 builder contract prescribes: the `pkg/kubernetes/fluxcd` `Create<Kind>` constructor returns a
 typed object, and the generator assigns the plain fields directly.
 
+<!-- doc-example:excerpt the generator's own source: g is the ResourceGenerator, ref the bundle's SourceRef -->
 ```go
 gr := pubfluxcd.CreateGitRepository(ref.Name, namespace)
 gr.Spec.URL = ref.URL
@@ -339,13 +386,31 @@ rules.
 
 Combine resource generation with directory structure:
 
+<!-- doc-example: pkg/stack/fluxcd ExampleWorkflowEngine_CreateLayoutWithResources -->
 ```go
+cluster := exampleCluster()
+engine := fluxcd.Engine()
+rules := layout.DefaultLayoutRules()
+out, err := os.MkdirTemp("", "kure-fluxcd-example")
+if err != nil {
+    panic(err)
+}
+defer func() { _ = os.RemoveAll(out) }()
+
 // Create layout with Flux resources integrated
 ml, err := engine.CreateLayoutWithResources(cluster, rules)
+if err != nil {
+    panic(err)
+}
 
-// Write to disk: every spec.path is relative to ./out/clusters
-err = layout.WriteManifest("./out", layout.DefaultLayoutConfig(), ml.(*layout.ManifestLayout))
+// Write to disk: every spec.path is relative to <out>/clusters
+err = layout.WriteManifest(out, layout.DefaultLayoutConfig(), ml.(*layout.ManifestLayout))
+if err != nil {
+    panic(err)
+}
+printFiles(out)
 ```
+<!-- doc-example:end -->
 
 `IntegrateWithLayout(ml, cluster, rules)` does the same for a layout you walked yourself. It
 refuses a tree `layout.WalkCluster` did not build from that cluster (see
@@ -407,16 +472,30 @@ image in the gotk bundle differs from the matching `fluxcd/<controller>/api` req
 without an API module, such as image-reflector-controller, are not compared); see
 `gotk_install.go` for the refresh procedure after a flux2 bump.
 
+<!-- doc-example: pkg/stack/fluxcd ExampleWorkflowEngine_GenerateBootstrap -->
 ```go
+engine := fluxcd.Engine()
+rootNode := &stack.Node{Name: "prod"}
+
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
     FluxMode:    "flux-operator", // or "gotk"; empty defaults to "flux-operator"
     FluxVersion: "v2.8.2",
-    SourceRef:   sourceRef,
+    SourceURL:   "oci://registry.example.com/fleet",
+    SourceRef:   "latest",
 }
 
 objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    if obj.GetObjectKind().GroupVersionKind().Kind == "FluxInstance" {
+        fmt.Println(obj.GetNamespace(), obj.GetName())
+    }
+}
 ```
+<!-- doc-example:end -->
 
 ### Sync name
 
@@ -427,14 +506,25 @@ not kure's, which is why the defaults table above has no row for it. Set `SyncNa
 Kustomizations you generate reference the sync source by another name; otherwise their
 `sourceRef` points at a source nothing creates.
 
+<!-- doc-example: pkg/stack/fluxcd ExampleBootstrapGenerator_GenerateFluxInstance -->
 ```go
+engine := fluxcd.Engine()
+rootNode := &stack.Node{Name: "prod"}
+
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:   true,
     SourceURL: "oci://registry.example.com/fleet",
     SourceRef: "latest",
     SyncName:  "fleet",
 }
+
+fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)
+if err != nil {
+    panic(err)
+}
+fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 ```
+<!-- doc-example:end -->
 
 - flux-operator mode only: gotk mode ignores it, as flux-operator mode ignores `Prune`.
 - It needs `SourceURL`: without one no sync block is emitted, so there is nothing to name.

@@ -12,8 +12,10 @@ go get github.com/go-kure/kure@latest
 
 ## Hello World: Generate a Simple Cluster Config
 
-Create a minimal Go program that generates Kubernetes manifests:
+Create a minimal Go program that generates Kubernetes manifests. Start `main.go` with the package
+clause and imports:
 
+<!-- doc-example:excerpt the file header alone; the body of main follows as a generated block -->
 ```go
 package main
 
@@ -26,20 +28,29 @@ import (
     kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+```
 
-func main() {
-    ks := fluxcd.CreateKustomization("hello-world", "flux-system")
-    ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
-        Kind: "GitRepository",
-        Name: "flux-system",
-    }
-    ks.Spec.Path = "./clusters/production"
-    ks.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
-    ks.Spec.Prune = true
+and put this in `func main() { ... }`:
 
-    io.Marshal(os.Stdout, ks)
+<!-- doc-example: pkg/kubernetes/fluxcd Example_quickstart -->
+```go
+ks := fluxcd.CreateKustomization("hello-world", "flux-system")
+ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
+    Kind: "GitRepository",
+    Name: "flux-system",
+}
+ks.Spec.Path = "./clusters/production"
+ks.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
+ks.Spec.Prune = true
+
+if err := io.Marshal(os.Stdout, ks); err != nil {
+    panic(err)
 }
 ```
+<!-- doc-example:end -->
+
+That body is `Example_quickstart` in `pkg/kubernetes/fluxcd`, which `go test` runs and checks
+against the output below.
 
 Run the program to see the generated YAML:
 
@@ -56,12 +67,13 @@ metadata:
   name: hello-world
   namespace: flux-system
 spec:
-  interval: 5m
+  interval: 5m0s
   path: ./clusters/production
   prune: true
   sourceRef:
     kind: GitRepository
     name: flux-system
+status: {}
 ```
 
 ## Deploy with Flux

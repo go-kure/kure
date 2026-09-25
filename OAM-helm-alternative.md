@@ -754,6 +754,8 @@ spec:
 ### Recursion Termination
 
 The compiler walks down until it hits a standard `cue` schematic:
+
+<!-- doc-example:excerpt design sketch of a proposed compiler; none of these types exist -->
 ```go
 func (c *Compiler) ResolveComponent(comp Component) ([]KubeResource, error) {
     def := c.GetComponentDefinition(comp.Type)
