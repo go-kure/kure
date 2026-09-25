@@ -424,7 +424,7 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 		cfg     layout.Config
 		build   func() *layout.ManifestLayout
 		writers []string
-		want    string // the path the refusal names
+		want    string // what the refusal says the file would replace
 	}{
 		"child named kustomization": {
 			build: func() *layout.ManifestLayout {
@@ -433,7 +433,7 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 				return p
 			},
 			writers: allWriters,
-			want:    "kustomization.yaml",
+			want:    `would replace the kustomization.yaml of layout "p"`,
 		},
 		// Names are compared as checkLayoutTree compares directories:
 		// case-insensitively, as on default macOS volumes, where
@@ -445,7 +445,7 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 				return p
 			},
 			writers: allWriters,
-			want:    "Kustomization.yaml",
+			want:    `would replace the kustomization.yaml of layout "p"`,
 		},
 		"child named like a generated file": {
 			build: func() *layout.ManifestLayout {
@@ -454,7 +454,7 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 				return p
 			},
 			writers: allWriters,
-			want:    "default-configmap-a.yaml",
+			want:    `would replace the resource file "default-configmap-a.yaml" of layout "p"`,
 		},
 		"child named like a kind file, layout naming": {
 			build: func() *layout.ManifestLayout {
@@ -465,7 +465,7 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 				return p
 			},
 			writers: []string{"WriteToDisk", "WriteToTar"},
-			want:    "configmap.yaml",
+			want:    `would replace the resource file "configmap.yaml" of layout "p"`,
 		},
 		// WriteManifest names files from Config, not the layout.
 		"child named like a kind file, Config naming": {
@@ -476,7 +476,7 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 				return p
 			},
 			writers: []string{"WriteManifest"},
-			want:    "configmap.yaml",
+			want:    `would replace the resource file "configmap.yaml" of layout "p"`,
 		},
 		"child single through Config": {
 			cfg: layout.Config{ApplicationFileMode: layout.AppFileSingle},
@@ -486,7 +486,7 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 				return p
 			},
 			writers: []string{"WriteManifest"},
-			want:    "kustomization.yaml",
+			want:    `would replace the kustomization.yaml of layout "p"`,
 		},
 		// A root has no parent, but writes its file and its own
 		// kustomization.yaml into one directory, its Namespace.
@@ -497,14 +497,28 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 				return root
 			},
 			writers: allWriters,
-			want:    "kustomization.yaml",
+			want:    `would replace the kustomization.yaml of layout "demo/kustomization"`,
+		},
+		// The directory's owner need not be the single layout's parent: x
+		// is p's child but lands in sib's directory, next to sib's extra
+		// file x.yaml.
+		"single file over another layout's extra file": {
+			build: func() *layout.ManifestLayout {
+				sib := cmLayout("sib", "p")
+				sib.ExtraFiles = []layout.ExtraFile{{Name: "x.yaml", Content: []byte("k: v\n")}}
+				x := cmLayout("x", "p/sib")
+				x.ApplicationFileMode = layout.AppFileSingle
+				return &layout.ManifestLayout{Name: "p", Namespace: ".", Children: []*layout.ManifestLayout{sib, x}}
+			},
+			writers: allWriters,
+			want:    `would replace the extra file "x.yaml" of layout "p/sib"`,
 		},
 	}
 	for name, tc := range cases {
 		for _, writer := range tc.writers {
 			t.Run(name+"/"+writer, func(t *testing.T) {
 				err := writeRefused(t, writer, tc.cfg, tc.build())
-				if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "would replace") {
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
 					t.Fatalf("err = %v, want a refusal naming %s", err, tc.want)
 				}
 			})
