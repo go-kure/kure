@@ -381,6 +381,13 @@ checkout for local use.
   automatically for a generated-table row whose only change is a provenance field
   (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or
   re-scoping a kind is not exempt.
+- `scripts/gen-doc-examples.sh --check` — on the pages the script enables, every
+  ```` ```go ```` block is generated from an `Example` function in the package's
+  `example_test.go` (between `<!-- doc-example: <pkgdir> <ExampleName> -->` and
+  `<!-- doc-example:end -->`), or sits directly under
+  `<!-- doc-example:excerpt <reason> -->`. To change such a block, edit the `Example` and run
+  `scripts/gen-doc-examples.sh` (blocking, `docs-build` job;
+  `mise run site:check-doc-examples`).
 
 ### Cross-cutting guides
 

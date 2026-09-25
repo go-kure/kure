@@ -164,7 +164,7 @@ cluster := cnpg.CreateCluster("pg-main", "databases")
 cluster.Spec.Monitoring = &cnpgv1.MonitoringConfiguration{
     EnablePodMonitor: true, //nolint:staticcheck
 }
-fmt.Println(cluster.Spec.Monitoring.EnablePodMonitor) //nolint:staticcheck
+fmt.Println(cluster.Spec.Monitoring != nil)
 ```
 <!-- doc-example:end -->
 

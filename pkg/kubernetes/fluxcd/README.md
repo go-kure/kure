@@ -6,7 +6,10 @@ Low-level builder functions for FluxCD Kubernetes resources. Each resource type 
 
 Each block on this page, except the one marked as an excerpt, is the body of an `Example` function
 in `example_test.go`, which `go test` runs: it imports this package as `fluxcd`, the Flux APIs as
-`sourcev1`, `kustv1`, `helmv2`, `meta` and `kustomize` (`github.com/fluxcd/...`),
+`sourcev1` (`github.com/fluxcd/source-controller/api/v1`), `kustv1`
+(`github.com/fluxcd/kustomize-controller/api/v1`), `helmv2`
+(`github.com/fluxcd/helm-controller/api/v2`), `meta` and `kustomize`
+(`github.com/fluxcd/pkg/apis/meta`, `github.com/fluxcd/pkg/apis/kustomize`),
 `metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`, `time`, and `fmt` for the line that prints what
 the example built.
 

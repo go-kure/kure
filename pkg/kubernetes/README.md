@@ -14,7 +14,7 @@ under `pkg/kubernetes/...` follows it, and the tests described below enforce it.
 import "github.com/go-kure/kure/pkg/kubernetes"
 ```
 
-Every other block on this page is the body of an `Example` function in `example_test.go`, which
+Every other Go block on this page is the body of an `Example` function in `example_test.go`, which
 `go test` runs: it imports this package, the upstream APIs under their usual aliases (`appsv1`,
 `batchv1`, `corev1`, `netv1`, `metav1`), `k8s.io/apimachinery/pkg/api/resource`,
 `k8s.io/apimachinery/pkg/runtime/schema`, `k8s.io/apimachinery/pkg/util/intstr`,
@@ -681,7 +681,6 @@ whose value comes from the caller.
 container := &corev1.Container{Name: "app", Image: "nginx:1.25", SecurityContext: kubernetes.RestrictedSecurityContext()}
 podSpec := &corev1.PodSpec{Containers: []corev1.Container{*container}}
 
-sc := kubernetes.RestrictedSecurityContext()
 psc, err := kubernetes.PodSecurityContextForLevel(kubernetes.PSARestricted)
 if err != nil {
     panic(err)
@@ -689,7 +688,7 @@ if err != nil {
 podSpec.SecurityContext = psc
 
 err = kubernetes.ValidateContainerPSA(container, kubernetes.PSARestricted)
-fmt.Println(*sc.RunAsNonRoot, err)
+fmt.Println(*container.SecurityContext.RunAsNonRoot, err)
 err = kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSARestricted)
 fmt.Println(err)
 ```
