@@ -801,7 +801,7 @@ workflow — it is the native equivalent of GitLab's merged-results pipelines.
 - **Merge method:** `REBASE` (linear history)
 - **Grouping:** `ALLGREEN` (a failing entry is dropped from the group)
 - **Batch size:** 1 (conservative; tune after observing runner load)
-- **Required checks on the queue:** `lint`, `test`, `build` (must also trigger on `merge_group`)
+- **Required checks on the queue:** `lint`, `test`, `build`, `pr-review / AI Code Review` (each must also trigger on `merge_group`)
 
 Auto-merge is **not** enabled — every PR is reviewed and queued manually. The merge queue rule is
 managed centrally in `go-kure/.github` (`governance/repository-settings-policy.yaml`).

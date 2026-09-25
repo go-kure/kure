@@ -38,4 +38,4 @@ git push -u origin feat/my-feature
 gh pr create
 ```
 
-Required CI checks: `lint`, `test`, `build`.
+Required CI checks: `lint`, `test`, `build`, `pr-review / AI Code Review`.

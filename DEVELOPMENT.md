@@ -40,9 +40,9 @@ The `main` branch is protected — all changes must go through pull requests.
    ```
    Fill out the PR template (`.github/PULL_REQUEST_TEMPLATE.md`).
 
-4. **Pass required CI checks**: `lint`, `test`, `build`
+4. **Pass required CI checks**: `lint`, `test`, `build`, `pr-review / AI Code Review`
 
-5. **Get 1 approving review**, resolve all conversations
+5. **Resolve all conversations** (no approving review is required)
 
 6. **Merge** (linear history required — rebase, no merge commits)
 
@@ -50,7 +50,7 @@ The `main` branch is protected — all changes must go through pull requests.
 
 Enforced via the `main-protection` [repository ruleset](https://github.com/go-kure/kure/rules/12903081):
 
-- **Required status checks**: `lint`, `test`, `build`
+- **Required status checks**: `lint`, `test`, `build`, `pr-review / AI Code Review`
 - **Merge queue**: merging goes through a GitHub merge queue (rebase method) that rebases and tests the merged result before landing — no manual rebasing, no auto-rebase force-pushes
 - **Pull requests required**: all changes must go through a PR
 - **Conversation resolution**: all review threads must be resolved

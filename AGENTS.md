@@ -126,7 +126,7 @@ make precommit
 - **Branch prefixes**: `feat/`, `fix/`, `docs/`, `chore/`
 - **Required CI checks** that must pass: `lint`, `test`, `build`, `pr-review / AI Code Review`
 - **Merge queue**: merging goes through a GitHub merge queue (rebase method) that rebases and tests the merged result before landing — no manual rebasing needed
-- **No approving review** is required, except for changes that are not attributed to the PR's author (`require_extra_approval_for_unattributed_changes`)
+- **No approving review** is required (`required_approving_review_count: 0`; the ruleset's extra approval for unattributed Copilot pull requests only raises a non-zero count, so it has no effect here)
 - **Linear history** enforced — rebase only, no merge commits
 - **All conversations** must be resolved before merge
 - Use `gh pr create` to open pull requests
