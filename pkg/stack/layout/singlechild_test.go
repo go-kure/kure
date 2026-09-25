@@ -835,6 +835,9 @@ func TestWriters_DirectoryNamedLikeUnwrittenControlFile(t *testing.T) {
 	cases := map[string]struct {
 		build func() *layout.ManifestLayout
 		want  string // a file the writers must write
+		// listed, when set, is what p/kustomization.yaml must list, and
+		// kustomize must build the written tree.
+		listed []string
 	}{
 		"directory child kustomization": {
 			build: func() *layout.ManifestLayout {
@@ -860,13 +863,16 @@ func TestWriters_DirectoryNamedLikeUnwrittenControlFile(t *testing.T) {
 			},
 			want: "p/kustomization.yml/kustomization.yaml",
 		},
+		// p lists s's file by its path below p's directory
+		// (go-kure/kure#879), and kustomize builds p.
 		"single layout's file in directory kustomization": {
 			build: func() *layout.ManifestLayout {
 				p := singleChildParent(layout.AppFileSingle)
 				p.Children = []*layout.ManifestLayout{singleLayout("s", "p/kustomization")}
 				return p
 			},
-			want: "p/kustomization/s.yaml",
+			want:   "p/kustomization/s.yaml",
+			listed: []string{"default-configmap-a.yaml", "default-secret-b.yaml", "kustomization/s.yaml"},
 		},
 	}
 	for name, tc := range cases {
@@ -879,6 +885,13 @@ func TestWriters_DirectoryNamedLikeUnwrittenControlFile(t *testing.T) {
 				if _, ok := files["p/kustomization.yaml"]; !ok {
 					t.Errorf("no p/kustomization.yaml written; wrote %v", slices.Sorted(maps.Keys(files)))
 				}
+				if tc.listed == nil {
+					return
+				}
+				if got := listedResources(t, files, "p/kustomization.yaml"); !slices.Equal(got, tc.listed) {
+					t.Errorf("p/kustomization.yaml lists %v, want %v", got, tc.listed)
+				}
+				requireBuilds(t, writer, files)
 			})
 		}
 	}

@@ -38,8 +38,10 @@ type writerPlan struct {
 }
 
 // childEntry returns the entry a parent's kustomization.yaml lists for a
-// child, as outDir resolves the child: "<Name>.yaml" for an AppFileSingle
-// child that writes its file, "<Name>" for a directory child, and "" for a
+// child, as outDir resolves the child: for an AppFileSingle child that writes
+// its file, that file's path relative to the parent's directory (see
+// childFileEntry: "<Name>.yaml" in the parent's directory, "sub/<Name>.yaml"
+// below it, go-kure/kure#879); "<Name>" for a directory child; and "" for a
 // child it does not list:
 //   - an umbrella child: under FluxIntegratedPerLayout its Kustomization CR is
 //     already in the parent's Resources, whose file the parent lists; under
@@ -55,7 +57,10 @@ type writerPlan struct {
 //   - with skipCrossPackage (WriteToDisk, WriteToTar), a directory child of
 //     another package: both PackageRefs set and their values differ.
 //
-// Such children are still written, each into its own directory.
+// Such children are still written, each into its own directory. A listed
+// AppFileSingle child whose file lands outside the parent's directory gets an
+// entry climbing out of it with "../", which kustomize refuses; checkLayoutTree
+// refuses such a tree before anything is written (see checkSingleChildEntry).
 func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *ManifestLayout) string {
 	return func(parent, child *ManifestLayout) string {
 		if child == nil || child.UmbrellaChild || child.rendersBundle() {
@@ -63,7 +68,8 @@ func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *Ma
 		}
 		if _, single := outDir(child); single {
 			if child.writesSingleFile() {
-				return child.Name + ".yaml"
+				entry, _ := childFileEntry(outDir, parent, child)
+				return entry
 			}
 			return ""
 		}
@@ -75,6 +81,82 @@ func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *Ma
 		}
 		return child.Name
 	}
+}
+
+// childFileEntry returns the path of an AppFileSingle child's file relative
+// to its parent's directory, both as outDir resolves them, slash-separated:
+// "<Name>.yaml" when the child's directory is the parent's, "<sub>/<Name>.yaml"
+// when it lies below it (go-kure/kure#879). Directories compare as normDir
+// compares them, so a child directory that differs only in case from one at or
+// below the parent's is taken to be it; <sub> is spelled as the child's
+// directory spells it. inside is false when the file lands outside the
+// parent's directory, and the entry then climbs out of it with "../".
+func childFileEntry(outDir outDirFunc, parent, child *ManifestLayout) (entry string, inside bool) {
+	parentDir, _ := outDir(parent)
+	childDir, _ := outDir(child)
+	rel, inside := relPath(parentDir, childDir)
+	if rel == "." {
+		return child.Name + ".yaml", inside
+	}
+	return rel + "/" + child.Name + ".yaml", inside
+}
+
+// relPath returns target relative to base, slash-separated, and whether
+// target lies at or below base. Path segments compare as normDir compares
+// them; below the directories they share, the result keeps target's own
+// spelling, and it climbs out of base with "..". Both are cleaned first, and
+// both are rooted or both relative, since every writer joins them onto one
+// base path.
+func relPath(base, target string) (string, bool) {
+	segs := func(p string) []string {
+		switch p = path.Clean(filepath.ToSlash(p)); p {
+		case ".":
+			return nil
+		case "/":
+			return []string{""}
+		}
+		return strings.Split(p, "/")
+	}
+	b, t := segs(base), segs(target)
+	n := 0
+	for n < len(b) && n < len(t) && normDir(b[n]) == normDir(t[n]) {
+		n++
+	}
+	var rel []string
+	for range len(b) - n {
+		rel = append(rel, "..")
+	}
+	rel = append(rel, t[n:]...)
+	if len(rel) == 0 {
+		return ".", true
+	}
+	return strings.Join(rel, "/"), n == len(b)
+}
+
+// checkSingleChildEntry refuses an AppFileSingle child whose file lands
+// outside its parent's directory when the parent's kustomization.yaml lists it
+// (go-kure/kure#879): the entry would climb out with "../", and kustomize's
+// default load restrictor builds no resource that is not in or below the
+// kustomization's directory, so the kustomization.yaml kure writes would not
+// build. A file at or below the parent's directory is listed by its relative
+// path (see childFileEntry). A child the parent does not list (see
+// childEntry), and every child of a parent that writes no kustomization.yaml,
+// is not refused: nothing lists its file. root is true when parent is the tree
+// root.
+func checkSingleChildEntry(parent, child *ManifestLayout, plan writerPlan, root bool) error {
+	dir, single := plan.outDir(child)
+	if !single || plan.childEntry(parent, child) == "" || !plan.writesKustomization(parent, root) {
+		return nil
+	}
+	entry, inside := childFileEntry(plan.outDir, parent, child)
+	if inside {
+		return nil
+	}
+	parentDir, _ := plan.outDir(parent)
+	file := filepath.Join(dir, child.Name+".yaml")
+	return errors.NewFileError("write", file, fmt.Sprintf(
+		"layout %q is AppFileSingle and its file %q lands outside the directory %q of layout %q, whose kustomization.yaml would list it as %q: kustomize builds no resource that is not in or below the kustomization's directory",
+		child.FullRepoPath(), filepath.ToSlash(file), filepath.ToSlash(parentDir), parent.FullRepoPath(), entry), nil)
 }
 
 // groupResourceFiles groups l's resources into files: all of them into

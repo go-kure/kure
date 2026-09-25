@@ -25,6 +25,18 @@ writes one file, `<Namespace>/<Name>.yaml`, into its parent's directory, which t
 into its `Namespace`, and lists its children there: build them with the root's `Namespace`, not its
 `FullRepoPath()`.
 
+The parent lists an `AppFileSingle` child's file by its path relative to the parent's directory,
+slash-separated (go-kure/kure#879): `svc.yaml` when the child's `Namespace` is the parent's
+directory, `sub/svc.yaml` when it is `<parent directory>/sub`. Before, the entry was always
+`<Name>.yaml`, which named no file for a child below the parent's directory, and named one file
+twice for two such children with one name. A listed child whose file lands outside the parent's
+directory (a sibling or an ancestor directory) is refused before anything is written: the entry
+would start with `../`, and kustomize builds no resource outside a kustomization's directory. A
+child the parent does not list (an umbrella child, one that renders bundles), or any child of a
+parent that writes no `kustomization.yaml`, may land anywhere. Directories compare
+case-insensitively here as well, so a child `Namespace` of `P/Sub` under a parent directory `p` is
+listed as `Sub/svc.yaml`; the part below the parent's directory keeps the child's own spelling.
+
 When a parent's `kustomization.yaml` references a child by directory (`- <Name>`), the child's
 directory must be `<parent directory>/<Name>` for the reference to resolve; building every child
 with its parent's `FullRepoPath()` as `Namespace` gives exactly that. Layouts with the same name nest:
@@ -211,6 +223,9 @@ Controls how resource YAML files are named:
     can produce one): Flux would skip it, where Explicit mode lists it;
   - the file of an `AppFileSingle` umbrella child, or of one that renders bundles, in its build:
     Flux would apply it, where Explicit mode leaves it to the child's own Kustomization;
+  - the file of an `AppFileSingle` child in its build that a `kustomization.yaml` at or above the
+    Recursive directory lists (the child's parent lists it by its path below the parent's
+    directory, see "Layout paths"): both builds would apply it;
   - a child directory its parent's `kustomization.yaml` would not list, in its build: under
     `WriteToDisk` and `WriteToTar`, a child of another package (its `PackageRef` and its parent's
     are both set, with different values). Flux would apply
@@ -242,10 +257,13 @@ Controls how resource YAML files are named:
   empty node, an empty augmenter layout): a Flux Kustomization or ArgoCD Application names that
   directory, and an empty directory does not survive a Git tree. A kustomization that lists
   nothing is written `resources: []` (kustomize rejects a bare `resources:` as empty).
-- An `AppFileSingle` child writes one file, `<Name>.yaml`, into its parent's directory and never a
+- An `AppFileSingle` child writes one file, `<Name>.yaml`, into its `Namespace`, normally its
+  parent's directory, and never a
   `kustomization.yaml` of its own (before go-kure/kure#860 it replaced the parent's, dropping the
   parent's files), and its file may not take the name of a file the parent writes there (see
-  "Layout paths"). The parent's `kustomization.yaml` lists that file next to its own; in
+  "Layout paths"). The parent's `kustomization.yaml` lists that file next to its own, by its path
+  relative to the parent's directory (`sub/<Name>.yaml` for a child below it), and the writers
+  refuse a listed file outside that directory; in
   `WriteManifest` the child's mode is its effective one, so a child with no mode of its own under
   `ArgoProfile`'s `AppFileSingle` is listed as `<Name>.yaml`, not as a directory, and the unnamed
   cluster root, which `WriteManifest` otherwise leaves without a `kustomization.yaml`, gets one
