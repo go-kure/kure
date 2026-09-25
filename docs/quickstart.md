@@ -50,7 +50,8 @@ if err := io.Marshal(os.Stdout, ks); err != nil {
 <!-- doc-example:end -->
 
 That body is `Example_quickstart` in `pkg/kubernetes/fluxcd`, which `go test` runs and checks
-against the output below.
+against the Example's own `// Output:` comment. The output below reproduces that comment by hand;
+it is not generated.
 
 Run the program to see the generated YAML:
 

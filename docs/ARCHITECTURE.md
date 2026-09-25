@@ -365,8 +365,15 @@ func NewWorkflowEngine() *WorkflowEngine {
 
 Adding new GitOps workflows follows a clear pattern:
 
-1. **Implement Core Interfaces**: ResourceGenerator, LayoutIntegrator, BootstrapGenerator
-2. **Compose WorkflowEngine**: Combine specialized generators
+1. **Implement `stack.Workflow`** (`pkg/stack/workflow.go`): `GenerateFromCluster`,
+   `CreateLayoutWithResources` and `GenerateBootstrap`. The Flux engine composes its
+   implementation from the `ResourceGenerator`, `LayoutIntegrator` and `BootstrapGenerator`
+   structs above; those are `fluxcd` types, not interfaces a new workflow implements.
+2. **Register it**: the package's `init` registers a factory so that `stack.NewWorkflow` can return
+   the workflow, as `pkg/stack/fluxcd` does with `stack.RegisterFluxWorkflow` and
+   `pkg/stack/argocd` with `stack.RegisterArgoWorkflow`. `NewWorkflow` resolves only the `flux`
+   and `argocd` providers, so a new provider name also needs its own case and register function
+   there.
 3. **Register with Layout**: Add layout rules for the new workflow
 4. **Provide Public API**: Create user-facing convenience functions
 
@@ -405,22 +412,24 @@ const (
 
 ### Error Type Architecture
 
-**ValidationError** (`pkg/errors/errors.go:155-185`)
+All four are declared in `pkg/errors/errors.go`.
+
+**ValidationError** (`errors.ValidationError`)
 - Field-level validation failures
 - Provides valid value suggestions
 - Component context for debugging
 
-**ResourceError** (`pkg/errors/errors.go:188-250`)
+**ResourceError** (`errors.ResourceError`)
 - Resource-specific errors (not found, validation failed)
 - Includes resource type, name, and namespace
 - Lists available alternatives when applicable
 
-**PatchError** (`pkg/errors/errors.go:253-294`)
+**PatchError** (`errors.PatchError`)
 - Patch operation failures
 - Path and operation context
 - Graceful degradation suggestions
 
-**ParseError** (`pkg/errors/errors.go:297-340`)
+**ParseError** (`errors.ParseError`)
 - File parsing errors with location information
 - Line and column numbers
 - Format-specific help suggestions
@@ -965,9 +974,11 @@ Ensure all workflow engines handle the new domain type appropriately.
 
 ### Implementing New GitOps Workflows
 
-To add support for new GitOps tools:
+To add support for new GitOps tools, implement `stack.Workflow` and register it (see
+[Extensibility Pattern](#extensibility-pattern)). The skeleton below splits the implementation the
+way `pkg/stack/fluxcd` does; only the composed engine has to satisfy `stack.Workflow`.
 
-#### 1. Implement Core Interfaces
+#### 1. Write a Resource Generator
 <!-- doc-example:excerpt a skeleton for a hypothetical pkg/stack/newtool package, with elided bodies -->
 ```go
 // pkg/stack/newtool/resource_generator.go
@@ -1010,7 +1021,7 @@ func NewWorkflowEngine() *WorkflowEngine {
     // Compose components
 }
 
-// Implement workflow.WorkflowEngine interface
+// Implement stack.Workflow: GenerateFromCluster, CreateLayoutWithResources, GenerateBootstrap
 ```
 
 #### 4. Add Public API

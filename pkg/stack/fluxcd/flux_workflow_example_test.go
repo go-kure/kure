@@ -3,9 +3,12 @@ package fluxcd_test
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/stack"
@@ -35,14 +38,17 @@ var (
 )
 
 // productionCluster is the cluster Example_fluxWorkflowDefine builds, for the
-// steps that start from it. Keep the two in step.
+// steps that start from it. Keep the two in step: the Example spells the
+// cluster out because its body is the guide's Step 1, so it cannot call this.
 func productionCluster() *stack.Cluster {
+	source := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system"}
 	certManager, err := stack.NewBundle("cert-manager", []*stack.Application{
 		stack.NewApplication("cert-manager", "cert-manager", certManagerConfig),
 	}, nil)
 	if err != nil {
 		panic(err)
 	}
+	certManager.SourceRef = source
 	webTier, err := stack.NewBundle("web-tier", []*stack.Application{
 		stack.NewApplication("frontend", "web", frontendConfig),
 		stack.NewApplication("api-gateway", "web", apiConfig),
@@ -50,6 +56,7 @@ func productionCluster() *stack.Cluster {
 	if err != nil {
 		panic(err)
 	}
+	webTier.SourceRef = source
 	return stack.NewCluster("production", &stack.Node{
 		Name: "production",
 		Children: []*stack.Node{
@@ -76,12 +83,16 @@ func productionLayout() stack.ManifestLayoutResult {
 }
 
 func Example_fluxWorkflowDefine() {
+	// The Flux source every bundle's Kustomization reads from.
+	source := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system"}
+
 	certManager, err := stack.NewBundle("cert-manager", []*stack.Application{
 		stack.NewApplication("cert-manager", "cert-manager", certManagerConfig),
 	}, nil)
 	if err != nil {
 		panic(err)
 	}
+	certManager.SourceRef = source
 	webTier, err := stack.NewBundle("web-tier", []*stack.Application{
 		stack.NewApplication("frontend", "web", frontendConfig),
 		stack.NewApplication("api-gateway", "web", apiConfig),
@@ -89,6 +100,7 @@ func Example_fluxWorkflowDefine() {
 	if err != nil {
 		panic(err)
 	}
+	webTier.SourceRef = source
 
 	cluster := stack.NewCluster("production", &stack.Node{
 		Name: "production",
@@ -98,11 +110,44 @@ func Example_fluxWorkflowDefine() {
 		},
 	})
 	for _, node := range cluster.Node.Children {
-		fmt.Println(node.Name, node.Bundle.Name, len(node.Bundle.Applications))
+		b := node.Bundle
+		fmt.Println(node.Name, b.Name, len(b.Applications), b.SourceRef.Kind, b.SourceRef.Name)
 	}
 	// Output:
-	// infrastructure cert-manager 1
-	// applications web-tier 2
+	// infrastructure cert-manager 1 GitRepository flux-system
+	// applications web-tier 2 GitRepository flux-system
+}
+
+// TestFluxWorkflowSourceRef checks what the guide's Step 4 writes to
+// flux-system/: every Flux Kustomization names the bundles' source, since
+// FluxSeparate does not refuse a bundle without one and Flux's CRD rejects a
+// Kustomization whose sourceRef is empty.
+func TestFluxWorkflowSourceRef(t *testing.T) {
+	out := t.TempDir()
+	err := layout.WriteManifest(out, layout.DefaultLayoutConfig(), productionLayout().(*layout.ManifestLayout))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(out, "clusters/production/flux-system/flux-system-kustomization-*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("want 2 Flux Kustomization files, got %v", files)
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f) //nolint:gosec // G304: a file this test just wrote under t.TempDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ks kustv1.Kustomization
+		if err := yaml.Unmarshal(data, &ks); err != nil {
+			t.Fatal(err)
+		}
+		if ks.Spec.SourceRef.Kind != "GitRepository" || ks.Spec.SourceRef.Name != "flux-system" {
+			t.Errorf("%s: sourceRef = %+v, want GitRepository flux-system", filepath.Base(f), ks.Spec.SourceRef)
+		}
+	}
 }
 
 func Example_fluxWorkflowEngine() {

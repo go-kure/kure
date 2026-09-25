@@ -148,6 +148,58 @@ self_test_unlisted_pages() {
 	printf 'ok  unlisted_pages\n'
 }
 
+# check_drift fails, with a message on stderr, when the Markdown paths in $1
+# (one per line) are empty or differ from ENABLED_PAGES less EXEMPT_PAGES.
+# --check runs it on the tracked Markdown; the self-test runs it on made-up
+# lists.
+check_drift() {
+	local drift
+	if [ -z "$1" ]; then
+		printf 'gen-doc-examples: git ls-files listed no Markdown -- refusing to check an empty set\n' >&2
+		return 1
+	fi
+	drift=$(printf '%s\n' "$1" | unlisted_pages)
+	if [ -n "$drift" ]; then
+		printf 'gen-doc-examples: ENABLED_PAGES differs from the tracked Markdown less EXEMPT_PAGES\n(+ missing from the list, - listed but not tracked):\n%s\n' "$drift" >&2
+		return 1
+	fi
+}
+
+self_test_check_drift() {
+	if ! check_drift "$(printf '%s\n' "${ENABLED_PAGES[@]}" CHANGELOG.md)" 2>/dev/null; then
+		printf 'self-test: check_drift refused the listed set\n' >&2
+		return 1
+	fi
+	if check_drift "$(printf '%s\n' "${ENABLED_PAGES[@]}" docs/new.md)" 2>/dev/null; then
+		printf 'self-test: check_drift passed a list with an unlisted page\n' >&2
+		return 1
+	fi
+	if check_drift "$(printf '%s\n' "${ENABLED_PAGES[@]:1}")" 2>/dev/null; then
+		printf 'self-test: check_drift passed a list missing an enabled page\n' >&2
+		return 1
+	fi
+	if check_drift "" 2>/dev/null; then
+		printf 'self-test: check_drift passed an empty list\n' >&2
+		return 1
+	fi
+	printf 'ok  check_drift\n'
+}
+
+# self_test_check_calls_drift runs --check against an index that does not
+# exist, so git ls-files lists nothing, and expects check_drift's refusal:
+# a --check that skipped check_drift would go on to pass.
+self_test_check_calls_drift() {
+	local dir err rc=0
+	dir=$(mktemp -d)
+	err=$(GIT_INDEX_FILE="$dir/index" bash "$repo_root/scripts/gen-doc-examples.sh" --check 2>&1 >/dev/null) || rc=$?
+	rmdir "$dir"
+	if [ "$rc" -ne 1 ] || [[ "$err" != *"refusing to check an empty set"* ]]; then
+		printf 'self-test: --check with no tracked Markdown exited %s without the empty-set refusal:\n%s\n' "$rc" "$err" >&2
+		return 1
+	fi
+	printf 'ok  --check calls check_drift\n'
+}
+
 export GOWORK="${GOWORK:-off}"
 case "${1:-}" in
 "") exec go run ./scripts/docexamples generate "${ENABLED_PAGES[@]}" ;;
@@ -155,19 +207,13 @@ case "${1:-}" in
 	# Tracked files only: an untracked page is local until it is committed,
 	# and CI sees it then.
 	tracked=$(git ls-files -- '*.md')
-	if [ -z "$tracked" ]; then
-		printf 'gen-doc-examples: git ls-files listed no Markdown -- refusing to check an empty set\n' >&2
-		exit 1
-	fi
-	drift=$(printf '%s\n' "$tracked" | unlisted_pages)
-	if [ -n "$drift" ]; then
-		printf 'gen-doc-examples: ENABLED_PAGES differs from the tracked Markdown less EXEMPT_PAGES\n(+ missing from the list, - listed but not tracked):\n%s\n' "$drift" >&2
-		exit 1
-	fi
+	check_drift "$tracked" || exit 1
 	exec go run ./scripts/docexamples check "${ENABLED_PAGES[@]}"
 	;;
 --self-test)
 	self_test_unlisted_pages
+	self_test_check_drift
+	self_test_check_calls_drift
 	exec go test ./scripts/docexamples
 	;;
 *)

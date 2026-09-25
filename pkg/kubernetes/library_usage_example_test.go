@@ -131,7 +131,7 @@ func Example_libraryUsageYAML() {
 func Example_libraryUsageEncodeDefault() {
 	objects := exportedObjects()
 
-	// Default: strips all server-set fields and uses standard key order
+	// Default: strips server-managed fields and uses standard key order
 	data, err := io.EncodeObjectsToYAMLWithOptions(objects, io.EncodeOptions{
 		KubernetesFieldOrder: true,
 	})
