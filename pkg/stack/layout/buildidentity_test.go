@@ -192,6 +192,17 @@ func TestWriters_RefuseDuplicateAcrossBuild(t *testing.T) {
 			},
 			want: `layouts "p" and "p/c" both hold the object v1 Namespace foo, and the kustomization.yaml of layout "p" builds both`,
 		},
+		// The same in one layout: checkResourceIdentities keeps the
+		// namespace field, so only the build's identity sees one object.
+		"cluster-scoped kind twice in one layout": {
+			build: func() *layout.ManifestLayout {
+				p := dupParent()
+				p.Resources = []client.Object{objIn("v1", "Namespace", "", "foo"), objIn("v1", "Namespace", "bar", "foo")}
+				p.Children[0].Resources = []client.Object{testObj("v1", "Secret", "c")}
+				return p
+			},
+			want: `layout "p" holds the object v1 Namespace foo twice, and the kustomization.yaml of layout "p" builds both`,
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
