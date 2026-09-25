@@ -650,26 +650,15 @@ Layout integrates with GitOps tools through specialized placement:
 ```go
 // pkg/stack/layout/walker.go
 
-func WalkCluster(cluster *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
-    layout := &ManifestLayout{
-        Root:     ".",
-        Clusters: make(map[string]*ClusterLayout),
-    }
-    
-    clusterLayout := &ClusterLayout{
-        Name: cluster.Name,
-        Path: filepath.Join("clusters", cluster.Name),
-    }
-    
-    // Walk node hierarchy
-    if err := walkNode(cluster.Node, clusterLayout, rules); err != nil {
-        return nil, err
-    }
-    
-    layout.Clusters[cluster.Name] = clusterLayout
-    return layout, nil
-}
+// One ManifestLayout tree mirroring the node, bundle and application hierarchy.
+func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error)
+
+// One ManifestLayout tree per PackageRef, keyed by the package's GVK.
+func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*ManifestLayout, error)
 ```
+
+Both validate the cluster first (`stack.ValidateCluster`), then apply the grouping axes described
+above.
 
 ---
 

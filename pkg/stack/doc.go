@@ -47,9 +47,9 @@
 // The [Workflow] interface abstracts the generation of GitOps-specific
 // resources. Implementations exist for both Flux CD and ArgoCD:
 //
-//   - [github.com/go-kure/kure/pkg/stack/fluxcd.FluxWorkflow]: Generates
+//   - [github.com/go-kure/kure/pkg/stack/fluxcd.WorkflowEngine]: Generates
 //     Flux Kustomizations, GitRepositories, and related resources
-//   - [github.com/go-kure/kure/pkg/stack/argocd.ArgoCDWorkflow]: Generates
+//   - [github.com/go-kure/kure/pkg/stack/argocd.WorkflowEngine]: Generates
 //     ArgoCD Applications and AppProjects
 //
 // Use the workflow to generate all manifests for a cluster:

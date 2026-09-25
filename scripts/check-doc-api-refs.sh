@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # check-doc-api-refs.sh — fail when a live documentation page names a builder
-# function kure does not export.
+# function, or a name qualified with one of kure's packages, that kure does not
+# export.
 #
 #   scripts/check-doc-api-refs.sh              # exit 1 and list every stale reference
 #   scripts/check-doc-api-refs.sh --list       # print the input sizes and exit 0
@@ -14,9 +15,14 @@
 # What it checks: every identifier shaped like a kure builder call -- Create, Set
 # or Add followed by an upper-case letter, or the generic constructor's
 # `Create[T]` bracket -- that appears in a live page must be declared in pkg/, as a
-# function, method, const, var or type. Names outside that shape are not builders
-# and are not checked; upstream and third-party calls that happen to fit the shape
-# are listed in EXTERNAL below. The declarations come from parsing the Go source
+# function, method, const, var or type. So must every exported name of any shape
+# that a page qualifies with the base name of a package under pkg/ --
+# `layout.Config`, `errors.ParseErrors`, `fluxcd.WorkflowEngine` -- which is how
+# a renamed type or constant is caught, not only a removed builder. Other
+# unqualified names are not checked; upstream and third-party calls that happen
+# to fit the builder shape are listed in EXTERNAL below, and standard-library
+# names whose package shares a base name with one of kure's (errors.Is,
+# io.Reader) in EXTERNAL_QUALIFIED. The declarations come from parsing the Go source
 # (scripts/docapiindex, built with go on each run), not from matching its text;
 # build_indexer says why.
 #
@@ -27,9 +33,11 @@
 # `fluxcd.CreateX` is resolved in fluxcd and not answered by an X that only
 # argocd declares, and one written `LayoutIntegrator.CreateX` is resolved
 # against that type's methods and not answered by a CreateX on WorkflowEngine.
-# A name written with a selector that is neither -- a variable, a field -- or
-# with none is still resolved against the whole tree; report_unresolved records
-# why that limit is deliberate.
+# A builder name written with a selector that is neither -- a variable, a field
+# -- or with none is still resolved against the whole tree; report_unresolved
+# records why that limit is deliberate. A variable spelled like a package is read
+# as the package, so a snippet that names one (`layout.Children`) fails: rename
+# the variable.
 #
 # Which pages count comes from site/docs-map.yaml plus the docs trees a reader
 # browses on GitHub, so a page mounted from a new directory cannot escape the
@@ -117,6 +125,7 @@ EXCLUDED_PAGES=(
 # build with the name to add.
 LEDGER_PAGES=(
 	docs/builder-contract-release-1.md # release-1 ledger: removed names left, live replacements right
+	docs/builder-contract-release-2.md # release-2 migration: removed config-struct calls beside their replacements
 )
 
 # The names LEDGER_PAGES may mention. Validated, not trusted: every name in it
@@ -132,6 +141,18 @@ EXTERNAL=(
 	SetGroupVersionKind # k8s.io/apimachinery runtime.Object
 	SetupWithManager   # sigs.k8s.io/controller-runtime
 	CreateReplace      # helm-controller's CRDsPolicy constant, not a constructor
+)
+
+# Qualified names from the standard library whose package shares its base name
+# with one under pkg/. Matched on the whole `pkg.Name`, so a name kure's own
+# package of that name exports (errors.Wrap) is still resolved against it, and
+# one it does not (errors.Gone) still fails. Every entry is a real standard
+# library name.
+EXTERNAL_QUALIFIED=(
+	errors.Is # standard library errors
+	errors.As # standard library errors
+	io.Reader # standard library io
+	io.Writer # standard library io
 )
 
 symbols=$(mktemp)    # "<package dir> <name> <receiver>" per exported declaration
@@ -151,7 +172,11 @@ trap 'rm -rf "$symbols" "$types" "$pkgdirs" "$external" "$referenced" "$removed"
 # ENDFILE is a gawk extension and the CI runner's awk is mawk, so the unclosed
 # check runs on the first line of the NEXT file and again at END.
 extract_refs() {
-	awk '
+	awk -v pkgbases="${PKG_BASES:-}" '
+		BEGIN {
+			nb = split(pkgbases, b, " ")
+			for (bi = 1; bi <= nb; bi++) pkgbase[b[bi]] = 1
+		}
 		# The comment text of one line of Go source, given the lexer state
 		# carried from the previous line (inblock: inside /* */; inraw: inside
 		# a raw string). Sets hadcomment when any part of the line is comment.
@@ -344,6 +369,26 @@ extract_refs() {
 						print FILENAME ":" FNR ":" ref
 					}
 				}
+				offset += RSTART + RLENGTH - 1
+				line = substr(line, RSTART + RLENGTH)
+			}
+			# Any exported name a page qualifies with one of our package names,
+			# whatever its shape: `layout.Config`, `errors.ParseErrors`,
+			# `fluxcd.ModeSeparate`. The selector must be a whole identifier --
+			# not the tail of a longer one (`myfluxcd.X`) or of a longer selector
+			# chain (`cfg.layout.X`) -- and must be the base name of a package
+			# under pkg/, so a selector from any other module names nothing
+			# here. A builder-shaped name is emitted by the loop above too; the
+			# caller sorts the rows unique, so it is checked once.
+			line = $0
+			offset = 0
+			while (match(line, /[a-z][a-z0-9_]*\.[A-Z][A-Za-z0-9_]*/)) {
+				abs = RSTART + offset
+				ref = substr(line, RSTART, RLENGTH)
+				sel = substr(ref, 1, index(ref, ".") - 1)
+				if ((sel in pkgbase) &&
+					(abs == 1 || substr($0, abs - 1, 1) !~ /[A-Za-z0-9_.]/))
+					print FILENAME ":" FNR ":" ref
 				offset += RSTART + RLENGTH - 1
 				line = substr(line, RSTART + RLENGTH)
 			}
@@ -992,6 +1037,51 @@ notledger.md:1:SetGoneThing'
 	LEDGER_LIST=
 	: >"$removed"
 
+	# Qualified names of any shape. Line 1: a name the package does not
+	# declare fails, one it does resolves. Line 2: the standard library's
+	# errors and io names are allowed on the whole `pkg.Name`, while a name
+	# kure's own errors package lacks still fails. Line 3: a selector that is
+	# the tail of a longer identifier or of a selector chain, or that names no
+	# package under pkg/, extracts nothing. Line 4: a variable named like a
+	# package is read as the package, so its field fails -- rename the
+	# variable. Line 5: a doc-example marker names a package path and a
+	# function with a space between them, so it extracts nothing either.
+	mkdir -p "$d/docs"
+	cat >"$d/docs/qnames.md" <<-'EOF'
+		`pkgx.Missing` is gone; `pkgx.RealConst` is declared.
+		`errors.Is` and `io.Reader` are the standard library's; `errors.Wrap` is ours and `errors.Gone` is not.
+		`myerrors.Missing`, `cfg.pkgx.Missing` and `pkgxy.Missing` are not our selectors.
+		`pkgx := load(); pkgx.Children` names a field of a variable.
+		<!-- doc-example: pkg/pkgx ExampleRealConst -->
+	EOF
+	local want_qextract='docs/qnames.md:1:pkgx.Missing
+docs/qnames.md:1:pkgx.RealConst
+docs/qnames.md:2:errors.Gone
+docs/qnames.md:2:errors.Is
+docs/qnames.md:2:errors.Wrap
+docs/qnames.md:2:io.Reader
+docs/qnames.md:4:pkgx.Children'
+	got=$(PKG_BASES="errors io pkgx" extract_refs "$d/docs/qnames.md" | sort | sed "s#^$d/##")
+	if [ "$got" != "$want_qextract" ]; then
+		printf 'self-test: qualified extraction mismatch\nwant:\n%s\ngot:\n%s\n' \
+			"$want_qextract" "$got" >&2
+		failures=$((failures + 1))
+	fi
+	printf 'pkg/errors Wrap -\npkg/pkgx RealConst -\n' >"$symbols"
+	: >"$types"
+	printf 'pkg/errors\npkg/io\npkg/pkgx\n' >"$pkgdirs"
+	printf 'errors.Is\nio.Reader\n' >"$external"
+	PKG_BASES="errors io pkgx" extract_refs "$d/docs/qnames.md" | sort -u >"$referenced"
+	local want_qnames='docs/qnames.md:1:pkgx.Missing
+docs/qnames.md:2:errors.Gone
+docs/qnames.md:4:pkgx.Children'
+	unresolved=$(report_unresolved | sed "s#^$d/##")
+	if [ "$unresolved" != "$want_qnames" ]; then
+		printf 'self-test: qualified resolution mismatch\nwant:\n%s\ngot:\n%s\n' \
+			"$want_qnames" "$unresolved" >&2
+		failures=$((failures + 1))
+	fi
+
 	# The page set: .claude/CLAUDE.md and a public Go file under examples/
 	# are pages; a worktree under .claude/, a *.local.md file there and an
 	# examples/ test file are not.
@@ -1165,7 +1255,7 @@ report_unresolved() {
 			i = index(ref, ".")
 			if (i > 0) { qual = substr(ref, 1, i - 1); name = substr(ref, i + 1) }
 
-			if (name in ext) next
+			if ((name in ext) || (ref in ext)) next
 			# A ledger page may name what it says it removed, anywhere on the
 			# page: its own tables are the list of what that is. Everything else
 			# it names, prose included, is a live recommendation and resolves.
@@ -1321,7 +1411,7 @@ printf '%s\n' "$go_files" | tr '\n' '\0' |
 	index_types |
 	sort -u >"$types"
 
-printf '%s\n' "${EXTERNAL[@]}" >"$external"
+printf '%s\n' "${EXTERNAL[@]}" "${EXTERNAL_QUALIFIED[@]}" >"$external"
 
 for _list in go_files symbols types pkgdirs external; do
 	case "$_list" in
@@ -1424,26 +1514,31 @@ if [ "${1:-}" = "--list" ]; then
 	exit 0
 fi
 
+PKG_BASES=$(sed 's#.*/##' "$pkgdirs" | sort -u | tr '\n' ' ')
 extract_refs "${pages[@]}" | sort -u >"$referenced"
 
 if unresolved=$(report_unresolved); then
-	printf 'Documentation names builder functions that pkg/ does not export:\n\n' >&2
+	printf 'Documentation names API that pkg/ does not export:\n\n' >&2
 	while IFS= read -r row; do printf '  %s\n' "$row" >&2; done <<<"$unresolved"
 	cat >&2 <<-'EOF'
 
-		Each row is a page naming a function that is not in the public API where the
+		Each row is a page naming something that is not in the public API where the
 		page says it is. A row written `pkg.Name` was resolved in the package that
 		selector names, and one written `Type.Name` against the methods of that
 		type, so it can appear because the name lives in another package or on
-		another type rather than because it was deleted. Fix the page -- the replacement
-		expression for every function the builder-contract epic removed is in
-		docs/builder-contract-release-1.md. If the reference is deliberate (a dated
-		record, or a third-party API that happens to match the Create/Set/Add shape),
-		add the page to EXCLUDED_PAGES or the name to EXTERNAL in
-		scripts/check-doc-api-refs.sh, with the reason.
+		another type rather than because it was deleted. A `pkg.Name` row whose
+		selector is really a variable spelled like the package is fixed by renaming
+		the variable. Otherwise fix the page -- the replacement expression for every
+		function the builder-contract epic removed is in
+		docs/builder-contract-release-1.md, and for every config-struct call in
+		docs/builder-contract-release-2.md. If the reference is deliberate (a dated
+		record, a third-party API that happens to match the Create/Set/Add shape, or
+		a standard-library name whose package shares a name with one of kure's),
+		add the page to EXCLUDED_PAGES, the name to EXTERNAL or EXTERNAL_QUALIFIED,
+		or a doc-api-refs:ignore marker on the line, with the reason.
 	EOF
 	exit 1
 fi
 
-printf 'check-doc-api-refs: %s pages and Go files, %s builder references, all resolved.\n' \
+printf 'check-doc-api-refs: %s pages and Go files, %s API references, all resolved.\n' \
 	"${#pages[@]}" "$(wc -l <"$referenced")"

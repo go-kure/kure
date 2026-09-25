@@ -146,7 +146,7 @@ against it, but nothing would ever produce it. `TestExportedSentinelsHaveProduce
 if an exported `Err*` sentinel, declared in any file of this package, has no producer outside it: a
 non-test reference through an import of this package. A comparison (`errors.Is`/`errors.As`
 argument, `==`/`!=` operand, `switch` tag or case) is not a producer, and neither is an assignment
-to the blank identifier (`var _ = errors.ErrX`). The check reads the source, so any other mention,
+to the blank identifier (`var _ = errors.ErrX`). The check reads the source, so any other mention, <!-- doc-api-refs:ignore ErrX is a placeholder for any sentinel -->
 such as a sentinel stored in a variable and only then compared, or passed to a logger, still counts
 as produced.
 

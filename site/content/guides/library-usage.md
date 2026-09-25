@@ -55,8 +55,8 @@ the [migration notes](/concepts/builder-contract-release-1/) for the
 constructor defaults that earlier releases injected and no longer do. If you
 upgraded and a field you relied on is now empty, that page lists it.
 
-The per-kind config-struct builders (`certmanager.Certificate(&CertificateConfig{...})`,
-`cnpg.Cluster(&ClusterConfig{...})` and the like in `certmanager`, `cnpg`,
+The per-kind config-struct builders (`certmanager.Certificate(&CertificateConfig{...})`, <!-- doc-api-refs:ignore retired config-struct builder, named as gone -->
+`cnpg.Cluster(&ClusterConfig{...})` and the like in `certmanager`, `cnpg`, <!-- doc-api-refs:ignore retired config-struct builder, named as gone -->
 `externalsecrets`, `prometheus`, `cilium` and `volsync`) are gone too: build
 those kinds with `Create<Kind>` and the upstream struct, exactly as above. The
 [release 2 migration notes](/concepts/builder-contract-release-2/) map every

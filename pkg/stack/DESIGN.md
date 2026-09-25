@@ -345,18 +345,13 @@ spec:
 
 ### Backward Compatibility
 
-During transition, support both formats:
+The GVK-wrapped stack format of Phase 2 was removed (see Implementation Status below), so there is
+one format, direct struct construction:
 ```go
-// Current direct struct usage
 cluster := &stack.Cluster{
     Name: "prod",
     Node: &stack.Node{...},
 }
-
-// New GVK-based usage
-var wrapper stack.ClusterWrapper
-yaml.Unmarshal(data, &wrapper)
-cluster := wrapper.ToCluster()
 ```
 
 ### Migration Path
