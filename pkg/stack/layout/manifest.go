@@ -56,7 +56,9 @@ type ManifestLayout struct {
 // SetFluxBuild records whether a Flux Kustomization kure generated builds this
 // layout's directory: its spec.path names the directory, or it is the root of
 // a tree whose integration generated one (the Flux bootstrap applies the
-// root). fluxcd's LayoutIntegrator sets it. For a KustomizationRecursive
+// root). Only fluxcd's LayoutIntegrator sets it; a caller that places Flux
+// Kustomizations itself, from fluxcd's GenerateFromLayout or its own code,
+// marks their spec.path layouts here. For a KustomizationRecursive
 // layout so marked the writers refuse a build that differs from what the
 // Explicit mode would build (see checkRecursiveLayouts).
 func (ml *ManifestLayout) SetFluxBuild(b bool) { ml.fluxBuild = b }
