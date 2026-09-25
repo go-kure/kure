@@ -263,27 +263,43 @@ temporary branch — the merged result — before the PR is allowed to land.
   - **Action scripts.** It follows each `$GITHUB_ACTION_PATH/<rel>.sh` in an action's single
     `run:` step. The path is resolved from the action's own directory, counting its `..` hops.
   - **Sibling scripts.** It follows, transitively, a whole line
-    `source "$SCRIPT_DIR/<name>.sh"` or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]`.
+    `source "$SCRIPT_DIR/<name>.sh"` or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]`. It
+    trusts only `SCRIPT_DIR` defined as exactly `$(dirname "$0")` or
+    `$(cd "$(dirname "$0")" && pwd)`, optionally with `&>/dev/null` or `>/dev/null 2>&1` before the
+    `&&`, and either with `"${BASH_SOURCE[0]}"` for `"$0"`. The definition may sit behind
+    `declare -r`, `readonly` or `export`.
 
   It refuses rather than guesses on:
   - **Pins.** Inconsistent pins. Any `go-kure/.github` reference in a `uses:` or `repository:`
-    context that yields no 40-hex pin: `@main`, a flow-mapping checkout, a checkout with a branch
-    or no `ref:`, and similar. Only a `${{ }}` `ref:` and a reusable-workflow call are exempt.
+    context that yields no 40-hex pin: `@main`, a flow-mapping checkout, a checkout with a branch,
+    another expression or no `ref:`, and similar. Only two are exempt: a `ref:` that is exactly
+    `${{ steps.<id>.outputs.<name> }}`, and a job-level reusable-workflow call at a non-SHA ref.
+    A reusable-workflow call pinned to a SHA, or one inside a step, is refused.
   - **Actions.** An action that is not a composite action (JavaScript or Docker). A nested
-    `uses:`, or more than one `run:` step. A non-`.sh` or unaccounted-for script reference.
+    `uses:`, or more than one `run:` step. A `github.action_path` expression. A non-`.sh` or
+    unaccounted-for script reference.
   - **Paths.** A path that climbs above the repository root, or that has a `.`, `..` or empty
     (`//`) segment where it cannot be normalised.
   - **Scripts.** Any line using `$SCRIPT_DIR` in another shape, which includes `if !`, a wrapper
-    command, `$( )`, a pipe and a non-`.sh` sibling. Any other way of computing the script's own
-    directory (`dirname "$0"`, `${0%/*}`, `BASH_SOURCE`) outside a plain `SCRIPT_DIR=` definition.
-    Any other `source` or script invocation at a command position, and a sibling that cannot be
-    fetched.
+    command, `$( )`, a pipe and a non-`.sh` sibling. Any `SCRIPT_DIR=` assignment other than the
+    trusted definitions. Any other way of computing the script's own directory (`dirname "$0"`,
+    `${0%/*}`, `BASH_SOURCE`). Any other `source` or script invocation at a command position, and
+    a sibling that cannot be fetched.
   - **The compare.** A compare that is not `ahead`, and the pagination cap.
 
-  It does not see a sibling reached through a hard-coded absolute path or through `PATH`. It also
-  leaves reusable-workflow calls (`go-kure/.github/.github/workflows/<file>.yml@<ref>`) alone:
-  they run at their own ref, `@main` here, so no pin bump changes them. These
-  paths, plus the no-change, inert, affected and acknowledged outcomes, are pinned by hermetic
+  It does not see:
+  - A sibling reached through a hard-coded absolute path or through `PATH`.
+  - Job-level reusable-workflow calls at a non-SHA ref
+    (`go-kure/.github/.github/workflows/<file>.yml@main` here). They run at their own ref, so no
+    pin bump changes them.
+  - YAML shapes a line scan cannot parse: quoted keys (`"uses":`, `"repository":`, `"using":`),
+    a `uses:` value continued on the next line, anchors and aliases, and a repository given as an
+    expression (`${{ github.repository_owner }}/.github`).
+  - A sourced file's `$SCRIPT_DIR`, which is its caller's.
+
+  It also aborts, harmlessly but falsely, on a `[[ "${BASH_SOURCE[0]}" == "$0" ]]` guard and on
+  another directory derived from the script's own, such as `ROOT=$(cd "$(dirname "$0")/.." && pwd)`.
+  The refusal paths, plus the no-change, inert, affected and acknowledged outcomes, are pinned by hermetic
   cases in `scripts/test/cases/`
   (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
   has reviewed a real hit and judged it safe adds
