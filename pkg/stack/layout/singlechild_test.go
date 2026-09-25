@@ -810,7 +810,7 @@ func TestWriters_SingleExtraFileInSubdirectory(t *testing.T) {
 			p := singleChildParent(layout.AppFileSingle)
 			p.Children = []*layout.ManifestLayout{
 				singleLayout("svc", "p", "sub/v.yaml"),
-				singleLayout("a", "p", "sub/w.yaml"),
+				singleLayout("w", "p", "sub/w.yaml"),
 				cmLayout("other", "p"),
 			}
 			files := writtenFiles(t, writer, layout.Config{}, p)
@@ -819,7 +819,7 @@ func TestWriters_SingleExtraFileInSubdirectory(t *testing.T) {
 					t.Errorf("%s = %q, want the single layout's extra file; wrote %v", f, files[f], slices.Sorted(maps.Keys(files)))
 				}
 			}
-			want := []string{"a.yaml", "default-configmap-a.yaml", "default-secret-b.yaml", "other", "svc.yaml"}
+			want := []string{"default-configmap-a.yaml", "default-secret-b.yaml", "other", "svc.yaml", "w.yaml"}
 			if got := listedResources(t, files, "p/kustomization.yaml"); !slices.Equal(got, want) {
 				t.Errorf("p/kustomization.yaml lists %v, want %v", got, want)
 			}
