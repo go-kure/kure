@@ -14,8 +14,9 @@ import (
 
 // checkLayoutTree refuses a tree in which two layouts resolve to the same
 // directory (or, for AppFileSingle layouts, the same file), an AppFileSingle
-// child has children (see checkSingleChildLeaf), or an AppFileSingle layout's
-// file would replace another file in its directory (see checkSingleFiles),
+// child has children (see checkSingleChildLeaf), an extra file takes a path
+// the writer owns (see checkExtraFiles), or an AppFileSingle layout's file or
+// extra file would replace another file in its directory (see checkSingleFiles),
 // before anything is written (go-kure/kure#771). Each such layout writes its own files there,
 // and the later kustomization.yaml silently replaces the earlier one, dropping
 // its resources from the kustomize graph. Directories are compared
@@ -46,6 +47,12 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 			dirs[key] = l
 		}
 		if err := checkResourceIdentities(l); err != nil {
+			return err
+		}
+		// The writers run it again as they write l; here it refuses before
+		// any layout of the tree is written.
+		sorted, _ := plan.files(l)
+		if err := checkExtraFiles(l, outDir, sorted); err != nil {
 			return err
 		}
 		for _, child := range l.Children {

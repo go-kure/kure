@@ -412,12 +412,13 @@ func writeRefused(t *testing.T, writer string, cfg layout.Config, ml *layout.Man
 	return err
 }
 
-// TestWriters_RefuseSingleFileOverParentFile: an AppFileSingle child's file,
-// <Name>.yaml, lands in its parent's directory, so every writer refuses a
-// child whose file is the parent's kustomization.yaml or one of the parent's
-// resource files before writing anything (go-kure/kure#871). Without the
-// refusal the child's file replaced the parent's, dropping its objects or its
-// whole kustomization.
+// TestWriters_RefuseSingleFileOverParentFile: an AppFileSingle layout's file,
+// <Name>.yaml, and its extra files land in the directory of another layout,
+// usually its parent, so every writer refuses one that is that layout's
+// kustomization.yaml or one of its resource or extra files, or another
+// AppFileSingle layout's file there, before writing anything
+// (go-kure/kure#871). Without the refusal the file replaced the other,
+// dropping its objects or its whole kustomization.
 func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 	allWriters := []string{"WriteToDisk", "WriteToTar", "WriteManifest"}
 	cases := map[string]struct {
@@ -512,6 +513,48 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 			},
 			writers: allWriters,
 			want:    `would replace the extra file "x.yaml" of layout "p/sib"`,
+		},
+		// The parent's own extra file is checkExtraFiles', which now also
+		// runs before anything is written, including the files of the
+		// layouts above the parent.
+		"single file over its parent's extra file": {
+			build: func() *layout.ManifestLayout {
+				root := cmLayout("r", ".")
+				p := singleChildParent(layout.AppFileSingle)
+				p.Namespace = root.FullRepoPath()
+				p.Children[0].Namespace = p.FullRepoPath()
+				p.ExtraFiles = []layout.ExtraFile{{Name: "svc.yaml", Content: []byte("k: v\n")}}
+				root.Children = []*layout.ManifestLayout{p}
+				return root
+			},
+			writers: allWriters,
+			want:    `extra file "svc.yaml" would replace the child file "svc.yaml"`,
+		},
+		// An AppFileSingle layout's extra files land in the same directory
+		// as its file.
+		"single layout's extra file over a resource file": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children[0].ExtraFiles = []layout.ExtraFile{{Name: "default-configmap-a.yaml", Content: []byte("k: v\n")}}
+				return p
+			},
+			writers: allWriters,
+			want:    `layout "p/svc" is AppFileSingle and its extra file "default-configmap-a.yaml" would replace the resource file "default-configmap-a.yaml" of layout "p"`,
+		},
+		"single layout's extra file over a sibling's file": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children = append(p.Children, &layout.ManifestLayout{
+					Name:                "a",
+					Namespace:           p.FullRepoPath(),
+					ApplicationFileMode: layout.AppFileSingle,
+					Resources:           []client.Object{testObj("v1", "ConfigMap", "a-config")},
+					ExtraFiles:          []layout.ExtraFile{{Name: "svc.yaml", Content: []byte("k: v\n")}},
+				})
+				return p
+			},
+			writers: allWriters,
+			want:    `layout "p/a" is AppFileSingle and its extra file "svc.yaml" would replace the file "svc.yaml" of AppFileSingle layout "p/svc"`,
 		},
 	}
 	for name, tc := range cases {
