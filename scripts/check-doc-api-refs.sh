@@ -1102,7 +1102,7 @@ check_removed_are_gone() {
 # type and a page naming that method on it fails. Methods a struct gets from
 # an embedded field are not its own here; no page in the tree names one that
 # way, and one that did would fail and want the declaring type instead. An
-# interface is not in the index (its methods are not `func` declarations),
+# interface is not in the type index (its methods are not `func` declarations),
 # nor is an alias, whose methods are its target's. Anything else -- a
 # variable (`engine.CreateLayoutWithResources`), an upper-case field
 # (`Spec.Template`), a type from another module -- names nothing the index can
@@ -1309,8 +1309,10 @@ fi
 # anything under an internal/ directory, for the same reason one step further
 # out -- pkg/kubernetes/internal is closed to consumers, so a declaration there
 # must never be what makes a public page resolve. It holds no builder-shaped
-# name today; the exclusion is what keeps that from mattering.
-go_files=$(find pkg -name '*.go' ! -name '*_test.go' ! -path '*/internal/*' -type f)
+# name today; the exclusion is what keeps that from mattering. Nor does
+# testdata/: go tooling ignores it, so a fixture there is not API, and one
+# that is deliberately invalid Go must not fail the parse.
+go_files=$(find pkg -name '*.go' ! -name '*_test.go' ! -path '*/internal/*' ! -path '*/testdata/*' -type f)
 printf '%s\n' "$go_files" | sed 's#/[^/]*$##' | sort -u >"$pkgdirs"
 printf '%s\n' "$go_files" | tr '\n' '\0' |
 	index_symbols |
