@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"fmt"
+	"maps"
 	"path"
 	"reflect"
 	"slices"
@@ -246,6 +247,11 @@ type integratedPlacement struct {
 	// before this pass or placed by it — to each copy and the layout holding
 	// it: one identity is one object across the whole pass, not per host.
 	sources map[string][]hostedObject
+	// derived is the sourceKey of every Source this pass derived, and placed
+	// every copy it added to a layout (not those it found already there):
+	// hostSourcesOncePerBuild keeps each derived Source once per build.
+	derived map[string]bool
+	placed  map[client.Object]bool
 }
 
 // hostedObject is an object and the layout whose Resources hold it (directly
@@ -293,6 +299,8 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		perLayout: perLayout,
 		names:     map[string]string{},
 		generated: map[string]bool{},
+		derived:   map[string]bool{},
+		placed:    map[client.Object]bool{},
 	}
 	existing, err := indexExistingKustomizations(ml, nil)
 	if err != nil {
@@ -305,6 +313,9 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	}
 	p.sources = sources
 	if err := p.place(ml, sourceScope{}); err != nil {
+		return err
+	}
+	if err := p.hostSourcesOncePerBuild(ml); err != nil {
 		return err
 	}
 	return checkPlacedReconcileOrder(ml, p.generated)
@@ -338,20 +349,9 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 	}
 	index(root)
 
-	// reach is the set of layouts a kustomization build of l includes: l and
-	// the child directories its kustomization.yaml lists, recursively. The
-	// writers list a child unless it is an umbrella child or renders bundles
-	// (a unit, applied by its own CR only), an AppFileSingle file, or its
-	// parent is PerLayout (which lists the child's CR instead).
-	var reach func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool)
-	reach = func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool) {
-		into[l] = true
-		for _, child := range l.Children {
-			if child == nil || child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle ||
-				len(child.OriginBundles()) > 0 || l.FluxPlacement == layout.FluxIntegratedPerLayout {
-				continue
-			}
-			reach(child, into)
+	reach := func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool) {
+		for _, b := range buildDirectories(l) {
+			into[b] = true
 		}
 	}
 	fromRoot := map[*layout.ManifestLayout]bool{}
@@ -402,6 +402,117 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 		return out
 	}
 	return checkReconcileOrder(kusts, creator, applied)
+}
+
+// buildDirectories returns, in pre-order, the layouts whose directories a
+// kustomize build of l includes: l and the child directories its
+// kustomization.yaml lists, recursively. The writers list a child unless it is
+// an umbrella child or renders bundles (a unit, applied by its own CR only), an
+// AppFileSingle file, or its parent is PerLayout (which lists the child's CR
+// instead).
+func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
+	out := []*layout.ManifestLayout{l}
+	for _, child := range l.Children {
+		if child == nil || child.UmbrellaChild || child.ApplicationFileMode == layout.AppFileSingle ||
+			len(child.OriginBundles()) > 0 || l.FluxPlacement == layout.FluxIntegratedPerLayout {
+			continue
+		}
+		out = append(out, buildDirectories(child)...)
+	}
+	return out
+}
+
+// hostSourcesOncePerBuild keeps each Source this pass derived once per
+// kustomize build, which refuses one object twice: add keeps an identical
+// Source once per host, but one build can include several hosts. The builds
+// are the root directory's (the Flux bootstrap applies it) and the spec.path
+// of every Kustomization this pass placed or kept, each with the directories
+// buildDirectories lists from it and the AppFileSingle files written into
+// them. Caller and application Kustomizations are not builds kure answers for.
+//
+// Per build and Source, a copy this pass did not place (an earlier
+// integration's, a caller's or an application's) is the one kept; otherwise
+// the first copy in layout pre-order, the topmost host. Every other copy this
+// pass placed in that build is removed: a sourceRef names the object, not the
+// layout holding it. Two copies this pass did not place cannot be reduced to
+// one, so they are an error. Copies in separate builds are all kept, each
+// applied by its own build.
+func (p *integratedPlacement) hostSourcesOncePerBuild(root *layout.ManifestLayout) error {
+	if len(p.derived) == 0 {
+		return nil
+	}
+	layoutAt := map[string]*layout.ManifestLayout{}
+	var crs []*kustv1.Kustomization
+	var index func(l *layout.ManifestLayout)
+	index = func(l *layout.ManifestLayout) {
+		layoutAt[path.Clean(l.FullRepoPath())] = l
+		for _, obj := range l.Resources {
+			if k, ok := obj.(*kustv1.Kustomization); ok && p.generated[crKey(k.Namespace, k.Name)] {
+				crs = append(crs, k)
+			}
+		}
+		for _, child := range l.Children {
+			if child != nil {
+				index(child)
+			}
+		}
+	}
+	index(root)
+	builds := []*layout.ManifestLayout{root}
+	seen := map[*layout.ManifestLayout]bool{root: true}
+	for _, k := range crs {
+		if b := layoutAt[path.Clean(k.Spec.Path)]; b != nil && !seen[b] {
+			seen[b] = true
+			builds = append(builds, b)
+		}
+	}
+
+	for _, b := range builds {
+		var scope []*layout.ManifestLayout
+		for _, l := range buildDirectories(b) {
+			scope = append(scope, l)
+			for _, child := range l.Children {
+				if child != nil && child.ApplicationFileMode == layout.AppFileSingle {
+					scope = append(scope, child)
+				}
+			}
+		}
+		copies := map[string][]hostedObject{}
+		for _, l := range scope {
+			objs, err := resourceItems(l)
+			if err != nil {
+				return err
+			}
+			for _, obj := range objs {
+				if key, ok := sourceKey(obj); ok && p.derived[key] {
+					copies[key] = append(copies[key], hostedObject{host: l, obj: obj})
+				}
+			}
+		}
+		for _, key := range slices.Sorted(maps.Keys(copies)) {
+			all := copies[key]
+			var trees []hostedObject
+			for _, c := range all {
+				if !p.placed[c.obj] {
+					trees = append(trees, c)
+				}
+			}
+			if len(trees) > 1 {
+				obj := trees[0].obj
+				return errors.Errorf("layouts %q and %q both hold %s %q, and the kustomize build of %q includes both: kustomize refuses one object twice", trees[0].host.FullRepoPath(), trees[1].host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), b.FullRepoPath())
+			}
+			keep := all[0].obj
+			if len(trees) == 1 {
+				keep = trees[0].obj
+			}
+			for _, c := range all {
+				if c.obj != keep {
+					c.host.Resources = slices.DeleteFunc(c.host.Resources, func(o client.Object) bool { return o == c.obj })
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // set indexes Kustomizations by namespace/name.
@@ -648,7 +759,9 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			// integration, or two bundles sharing a SourceRef) is kept once
 			// per host; a different one anywhere in the pass would silently
 			// repoint a Kustomization, or leave two directories overwriting
-			// each other's Source.
+			// each other's Source. hostSourcesOncePerBuild then keeps it
+			// once per kustomize build.
+			p.derived[key] = true
 			kept := false
 			for _, s := range p.sources[key] {
 				if !sameObject(s.obj, obj) {
@@ -664,6 +777,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 				continue
 			}
 			p.sources[key] = append(p.sources[key], hostedObject{host: host, obj: obj})
+			p.placed[obj] = true
 		}
 		host.Resources = append(host.Resources, obj)
 	}
