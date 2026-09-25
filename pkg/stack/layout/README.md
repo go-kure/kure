@@ -39,8 +39,8 @@ now gets that name twice (`.../<name>/<name>`); pass the parent's path instead.
 
 Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
 anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
-layouts that resolve to the same file. Directories are compared case-insensitively, as on default
-macOS volumes.
+layouts that resolve to the same file, or an `AppFileSingle` child with children of its own.
+Directories are compared case-insensitively, as on default macOS volumes.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
@@ -167,8 +167,14 @@ Controls how resource YAML files are named:
   `WriteManifest` the child's mode is its effective one, so a child with no mode of its own under
   `ArgoProfile`'s `AppFileSingle` is listed as `<Name>.yaml`, not as a directory, and the unnamed
   cluster root, which `WriteManifest` otherwise leaves without a `kustomization.yaml`, gets one
-  when it holds such a file.
-  An `AppFileSingle` root, with no parent to list its file, still writes one next to it
+  when it holds such a file. A child with no resources writes no file, so nothing lists it and
+  it gives the cluster root no `kustomization.yaml`.
+  An `AppFileSingle` root, with no parent to list its file, still writes a `kustomization.yaml`
+  next to it.
+- Every writer refuses an `AppFileSingle` child that has children of its own before writing
+  anything: it writes no `kustomization.yaml`, so nothing would list them and they would drop out
+  of the build. The walkers never build one themselves; the root is not checked, since the synthetic cluster
+  wrapper a walker builds takes `ArgoProfile`'s `AppFileSingle` in `WriteManifest`.
 
 ### Layout origins
 

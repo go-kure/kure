@@ -159,7 +159,9 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, r
 				continue
 			}
 			if child.ApplicationFileMode == AppFileSingle {
-				entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				if child.writesSingleFile() {
+					entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				}
 			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
 				// FluxIntegratedPerLayout: the child is applied by the Flux
 				// Kustomization the integrator placed in ml.Resources, which

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -211,5 +213,154 @@ func TestWriteManifest_ArgoProfileAppChildrenResolve(t *testing.T) {
 	files := writtenFiles(t, "WriteManifest", layout.DefaultConfigForProfile(layout.ArgoProfile), walk(t, twoTier("platform", "web-bundle"), groupByName))
 	if got, want := listedResources(t, files, "platform/web/web-bundle/kustomization.yaml"), []string{"frontend.yaml"}; !slices.Equal(got, want) {
 		t.Errorf("platform/web/web-bundle/kustomization.yaml lists %v, want %v", got, want)
+	}
+}
+
+// danglingRefs returns every kustomization.yaml entry among files that names
+// neither a written file nor a directory holding one.
+func danglingRefs(t *testing.T, files map[string]string) []string {
+	t.Helper()
+	var bad []string
+	for p := range files {
+		if path.Base(p) != "kustomization.yaml" {
+			continue
+		}
+		for _, ref := range listedResources(t, files, p) {
+			target := path.Join(path.Dir(p), ref)
+			if _, ok := files[target]; ok {
+				continue
+			}
+			if !slices.ContainsFunc(slices.Collect(maps.Keys(files)), func(f string) bool {
+				return strings.HasPrefix(f, target+"/")
+			}) {
+				bad = append(bad, target)
+			}
+		}
+	}
+	slices.Sort(bad)
+	return bad
+}
+
+// TestWriters_RefuseSingleChildWithChildren: an AppFileSingle child writes
+// one file and no kustomization.yaml, so nothing would list a layout below
+// it. Every writer refuses the tree before writing anything.
+func TestWriters_RefuseSingleChildWithChildren(t *testing.T) {
+	cases := map[string]struct {
+		cfg       layout.Config
+		childMode layout.ApplicationFileMode
+	}{
+		"own mode":    {childMode: layout.AppFileSingle},
+		"Config mode": {cfg: layout.Config{ApplicationFileMode: layout.AppFileSingle}, childMode: layout.AppFileUnset},
+	}
+	for name, tc := range cases {
+		for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+			if tc.childMode == layout.AppFileUnset && writer != "WriteManifest" {
+				continue // only WriteManifest takes a mode from Config
+			}
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				p := singleChildParent(tc.childMode)
+				svc := p.Children[0]
+				svc.Children = []*layout.ManifestLayout{cmLayout("gc", svc.FullRepoPath())}
+				dir := filepath.Join(t.TempDir(), "out")
+				var buf bytes.Buffer
+				var err error
+				switch writer {
+				case "WriteToDisk":
+					err = p.WriteToDisk(dir)
+				case "WriteToTar":
+					err = p.WriteToTar(&buf)
+				case "WriteManifest":
+					err = layout.WriteManifest(dir, tc.cfg, p)
+				}
+				if err == nil || !strings.Contains(err.Error(), `"p/svc"`) || !strings.Contains(err.Error(), "child layouts") {
+					t.Fatalf("err = %v, want a refusal naming p/svc and its child layouts", err)
+				}
+				if _, statErr := os.Stat(dir); !errors.Is(statErr, fs.ErrNotExist) {
+					t.Errorf("a refused tree left output at %s (stat: %v)", dir, statErr)
+				}
+				if buf.Len() > 0 {
+					t.Errorf("a refused tree wrote %d tar bytes", buf.Len())
+				}
+			})
+		}
+	}
+}
+
+// TestWriteManifest_ArgoProfileWalkedTreesAreWritten: the refusal of an
+// AppFileSingle layout with children never fires on a walked tree. Under the
+// Argo profile the synthetic cluster wrapper (no origin, one child) takes
+// Config's AppFileSingle, but it is the root, which the refusal leaves alone.
+func TestWriteManifest_ArgoProfileWalkedTreesAreWritten(t *testing.T) {
+	cfg := layout.DefaultConfigForProfile(layout.ArgoProfile)
+	for name, rules := range map[string]layout.LayoutRules{
+		"groupByName":              groupByName,
+		"nodeOnly":                 nodeOnly,
+		"nodeFlat":                 nodeFlat,
+		"groupByName/cluster demo": withClusterName(groupByName, "demo"),
+		"nodeOnly/cluster demo":    withClusterName(nodeOnly, "demo"),
+		"nodeFlat/cluster demo":    withClusterName(nodeFlat, "demo"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := t.TempDir()
+			if err := layout.WriteManifest(out, cfg, walk(t, twoTier("platform", "web-bundle"), rules)); err != nil {
+				t.Fatalf("WriteManifest: %v", err)
+			}
+		})
+	}
+}
+
+// TestWriters_SingleChildWithoutResourcesIsNotListed: an AppFileSingle child
+// with no resources writes no file, so no kustomization.yaml lists one, and
+// the synthetic cluster root holding only such a child stays without one.
+func TestWriters_SingleChildWithoutResourcesIsNotListed(t *testing.T) {
+	cases := map[string]struct {
+		cfg       layout.Config
+		childMode layout.ApplicationFileMode
+		writers   []string
+	}{
+		"own mode":    {childMode: layout.AppFileSingle, writers: []string{"WriteToDisk", "WriteToTar", "WriteManifest"}},
+		"Config mode": {cfg: layout.Config{ApplicationFileMode: layout.AppFileSingle}, childMode: layout.AppFileUnset, writers: []string{"WriteManifest"}},
+	}
+	for name, tc := range cases {
+		for _, writer := range tc.writers {
+			t.Run(name+"/"+writer+"/parent", func(t *testing.T) {
+				p := singleChildParent(tc.childMode)
+				p.Children[0].Resources = nil
+				files := writtenFiles(t, writer, tc.cfg, p)
+				want := []string{"default-configmap-a.yaml", "default-secret-b.yaml"}
+				if got := listedResources(t, files, "p/kustomization.yaml"); !slices.Equal(got, want) {
+					t.Errorf("p/kustomization.yaml lists %v, want %v", got, want)
+				}
+				if bad := danglingRefs(t, files); len(bad) > 0 {
+					t.Errorf("kustomization.yaml entries name nothing written: %v", bad)
+				}
+			})
+			t.Run(name+"/"+writer+"/cluster root", func(t *testing.T) {
+				root := &layout.ManifestLayout{Namespace: "demo"}
+				root.Children = []*layout.ManifestLayout{{Name: "svc", Namespace: root.FullRepoPath(), ApplicationFileMode: tc.childMode}}
+				files := writtenFiles(t, writer, tc.cfg, root)
+				if bad := danglingRefs(t, files); len(bad) > 0 {
+					t.Errorf("kustomization.yaml entries name nothing written: %v", bad)
+				}
+				if _, ok := files["demo/kustomization.yaml"]; ok && writer == "WriteManifest" {
+					t.Errorf("WriteManifest wrote the empty cluster root's kustomization.yaml:\n%s", files["demo/kustomization.yaml"])
+				}
+			})
+		}
+	}
+}
+
+// TestWriters_SingleRootWritesKustomization: an AppFileSingle root has no
+// parent to list its file, so it writes a kustomization.yaml next to it.
+func TestWriters_SingleRootWritesKustomization(t *testing.T) {
+	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+		t.Run(writer, func(t *testing.T) {
+			root := cmLayout("svc", "demo")
+			root.ApplicationFileMode = layout.AppFileSingle
+			files := writtenFiles(t, writer, layout.Config{}, root)
+			if got, want := listedResources(t, files, "demo/kustomization.yaml"), []string{"svc.yaml"}; !slices.Equal(got, want) {
+				t.Errorf("demo/kustomization.yaml lists %v, want %v", got, want)
+			}
+		})
 	}
 }
