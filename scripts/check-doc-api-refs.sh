@@ -410,7 +410,8 @@ extract_refs() {
 # The base name of every package directory in $pkgdirs, space-separated and
 # unique: the selectors extract_refs reads a qualified reference by. Two
 # packages sharing a base name (pkg/stack/fluxcd, pkg/kubernetes/fluxcd) give
-# one selector, and the resolver accepts a name either declares.
+# one selector, and the resolver accepts a name either declares, except on a
+# page inside one of them, which resolves against its own package.
 pkg_bases() {
 	sed 's#.*/##' "$pkgdirs" | sort -u | tr '\n' ' ' | sed 's/ $//'
 }
@@ -1059,7 +1060,7 @@ notledger.md:1:SetGoneThing'
 	# declare fails, one it does resolves. Line 2: the standard library's
 	# errors and io names are allowed on the whole `pkg.Name`, while a name
 	# kure's own errors package lacks still fails. Line 3: a selector that is
-	# preceded by an identifier character or a dot (`Xpkgx`, `_pkgx`,
+	# preceded by an identifier character or a dot (`Xpkgx`, `_pkgx`, `9pkgx`,
 	# `cfg.pkgx`), or that names no package under pkg/ (`myerrors`, `pkgxy`),
 	# extracts nothing. Line 4: a variable named like a
 	# package is read as the package, so its field fails -- rename the
@@ -1069,7 +1070,7 @@ notledger.md:1:SetGoneThing'
 	cat >"$d/docs/qnames.md" <<-'EOF'
 		`pkgx.Missing` is gone; `pkgx.RealConst` is declared.
 		`errors.Is` and `io.Reader` are the standard library's; `errors.Wrap` is ours and `errors.Gone` is not.
-		`myerrors.Missing`, `Xpkgx.Missing`, `_pkgx.Missing`, `cfg.pkgx.Missing` and `pkgxy.Missing` are not our selectors.
+		`myerrors.Missing`, `Xpkgx.Missing`, `_pkgx.Missing`, `9pkgx.Missing`, `cfg.pkgx.Missing` and `pkgxy.Missing` are not our selectors.
 		`pkgx := load(); pkgx.Children` names a field of a variable.
 		<!-- doc-example: pkg/pkgx ExampleRealConst -->
 	EOF
@@ -1197,14 +1198,14 @@ check_removed_are_gone() {
 # The qualified rules are what makes a removal in one package fail a page that
 # names that package, even while a same-named declaration survives elsewhere.
 # Base names are not unique -- pkg/kubernetes/fluxcd and pkg/stack/fluxcd are
-# both `fluxcd`, and 60 references in this tree use that selector -- so the union
+# both `fluxcd`, and dozens of references in this tree use that selector -- so the union
 # of same-named packages answers a reference that only one of them should. The
 # page's own location is the only disambiguation the text offers, and the first
 # rule takes it. It is not complete: nothing distinguishes the two for a page
 # under docs/ or site/content/, so a name removed from one while the other keeps
-# it still resolves there. The two packages currently share no builder-shaped
-# name at all (184 in pkg/kubernetes/fluxcd, 2 in pkg/stack/fluxcd, no overlap),
-# so no reference in the tree is ambiguous today.
+# it still resolves there. The two packages currently share no exported
+# package-level name at all (184 in pkg/kubernetes/fluxcd, 25 in
+# pkg/stack/fluxcd, no overlap), so no reference in the tree is ambiguous today.
 #
 # The receiver rules do the same for a method that moved between types: without
 # them `LayoutIntegrator.CreateLayoutWithResources` resolved as long as any type
