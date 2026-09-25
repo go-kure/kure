@@ -139,8 +139,9 @@ jobs:
         go-version-file: go.mod
         cache: false
 
-    - name: Cache Go modules
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    - name: Restore Go modules cache
+      id: gomod
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -318,6 +319,14 @@ jobs:
       with:
         path: ~/.cache/go-build
         key: ${{ steps.gocache.outputs.cache-primary-key }}
+
+    - name: Save Go modules cache
+      # Default-branch only, same reasoning as the build cache above.
+      if: success() && steps.gomod.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ steps.gomod.outputs.cache-primary-key }}
 
   action-pins:
     name: action-pins
@@ -522,8 +531,9 @@ jobs:
         go-version-file: go.mod
         cache: false
 
-    - name: Cache Go modules
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    - name: Restore Go modules cache
+      id: gomod
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -574,6 +584,14 @@ jobs:
       with:
         path: ~/.cache/go-build
         key: ${{ steps.gocache.outputs.cache-primary-key }}
+
+    - name: Save Go modules cache
+      # Default-branch only, same reasoning as the build cache above.
+      if: success() && steps.gomod.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ steps.gomod.outputs.cache-primary-key }}
 
     - name: Upload test log
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -626,8 +644,9 @@ jobs:
         go-version-file: go.mod
         cache: false
 
-    - name: Cache Go modules
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    - name: Restore Go modules cache
+      id: gomod
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -739,6 +758,14 @@ jobs:
       with:
         path: ~/.cache/go-build
         key: ${{ steps.gocache.outputs.cache-primary-key }}
+
+    - name: Save Go modules cache
+      # Default-branch only, same reasoning as the build cache above.
+      if: success() && steps.gomod.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ steps.gomod.outputs.cache-primary-key }}
 
     - name: Check for outdated dependencies
       run: make outdated
@@ -975,8 +1002,9 @@ jobs:
         go-version-file: go.mod
         cache: false
 
-    - name: Cache Go modules
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    - name: Restore Go modules cache
+      id: gomod
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
@@ -1119,6 +1147,15 @@ jobs:
       uses: go-kure/.github/.github/actions/check-links@1d748512f0bf84271b66cb8c8f4e311b6cde684a # main
       with:
         built-dir: site/.linkcheck
+
+    - name: Save Go modules cache
+      # Default-branch only: a PR's or merge-queue run's entry can never be restored by anything
+      # else, so saving from those refs only fills the shared actions-cache bucket.
+      if: success() && steps.gomod.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ steps.gomod.outputs.cache-primary-key }}
 
   # =============================================================================
   # PR-only Jobs (parallel, non-blocking)
