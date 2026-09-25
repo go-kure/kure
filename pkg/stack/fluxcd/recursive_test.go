@@ -37,6 +37,16 @@ func recursiveCluster() *stack.Cluster {
 	return &stack.Cluster{Name: "demo", Node: root}
 }
 
+// recursiveClusterSharedSource is recursiveCluster with web on platform's
+// Source, so a build that holds both bundles holds two identical copies
+// unless the integrator hosts it once per build.
+func recursiveClusterSharedSource() *stack.Cluster {
+	c := recursiveCluster()
+	shared := *c.Node.Bundle.SourceRef
+	c.Node.Children[0].Bundle.SourceRef = &shared
+	return c
+}
+
 func recursiveRules(grouping string, placement layout.FluxPlacement) layout.LayoutRules {
 	rules := propertyGroupings[grouping]
 	rules.ClusterName = "prod"
@@ -129,24 +139,34 @@ func TestRecursive_RootBuildRefused(t *testing.T) {
 // kustomization.yaml, then Flux's own build — applies the same objects as the
 // same build of the Explicit output.
 func TestRecursive_BuildsLikeExplicit(t *testing.T) {
-	for _, tc := range []struct {
+	type testCase struct {
 		grouping  string
 		placement layout.FluxPlacement
-	}{
-		// Leaf bundle directories.
-		{"nodeOnly", layout.FluxSeparate},
-		{"nodeOnly", layout.FluxIntegratedPerLayout},
-		{"nodeOnly", layout.FluxIntegratedPerBundle},
-		// Bundle directories over the application directories they list.
-		{"GroupByName", layout.FluxSeparate},
-		{"GroupByName", layout.FluxIntegratedPerBundle},
-	} {
-		{
+	}
+	var cases []testCase
+	for _, grouping := range []string{"nodeOnly", "GroupByName"} {
+		for _, placement := range placements {
+			// GroupByName under PerLayout gives every application
+			// directory a Kustomization, which the writers refuse below a
+			// Recursive target.
+			if grouping == "GroupByName" && placement == layout.FluxIntegratedPerLayout {
+				continue
+			}
+			cases = append(cases, testCase{grouping, placement})
+		}
+	}
+	for _, tc := range cases {
+		for name, cluster := range map[string]func() *stack.Cluster{
+			"distinct": recursiveCluster,
+			// One Source for both bundles: every Flux build must hold one
+			// copy of it, or the build fails on a duplicate object.
+			"shared": recursiveClusterSharedSource,
+		} {
 			grouping, placement := tc.grouping, tc.placement
-			t.Run(grouping+"/"+string(placement), func(t *testing.T) {
+			t.Run(grouping+"/"+string(placement)+"/"+name, func(t *testing.T) {
 				rules := recursiveRules(grouping, placement)
-				explicit := integrated(t, recursiveCluster(), rules)
-				recursive := integrated(t, recursiveCluster(), rules)
+				explicit := integrated(t, cluster(), rules)
+				recursive := integrated(t, cluster(), rules)
 				if setTargetsRecursive(recursive) == 0 {
 					t.Fatal("no target layout to make Recursive")
 				}

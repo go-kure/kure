@@ -319,10 +319,11 @@ func renderBundle(b *stack.Bundle, into *ManifestLayout, g grouping) error {
 	if g.bundleFlat {
 		into.origin.bundles = append(into.origin.bundles, b)
 	} else {
-		// Explicit, not Recursive: a Recursive layout with children lists
-		// none of its own files, so a Flux CR hosted here (an umbrella
-		// child's, a PerLayout application's) was never applied. The layout
-		// has no own workloads, so the listing is otherwise unchanged.
+		// Explicit, not Recursive: a Flux CR hosted here (an umbrella
+		// child's, a PerLayout application's) targets a directory below
+		// this one, and the writers refuse a Recursive build that would
+		// include that target. The layout has no own workloads, so the
+		// listing is otherwise unchanged.
 		target = g.newLayout(b.Name, into.FullRepoPath())
 		target.Mode = KustomizationExplicit
 		target.origin = origin{bundles: []*stack.Bundle{b}}
