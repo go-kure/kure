@@ -216,6 +216,26 @@ func TestWriters_RecursiveRefusals(t *testing.T) {
 	}
 }
 
+// TestWriters_RecursiveRefusesUnlistedSingleChildFile: an AppFileSingle
+// umbrella child writes its file into its parent's directory, and its
+// parent's Explicit kustomization.yaml does not list it (the umbrella's own
+// Kustomization applies it). The Flux build of a marked Recursive parent
+// would apply that file too.
+func TestWriters_RecursiveRefusesUnlistedSingleChildFile(t *testing.T) {
+	for _, writer := range allWriters {
+		r := recursiveTree()
+		r.SetFluxBuild(true)
+		u := child(r, "u", layout.KustomizationUnset)
+		u.ApplicationFileMode = layout.AppFileSingle
+		u.UmbrellaChild = true
+		err := writeRefused(t, writer, layout.DefaultLayoutConfig(), r)
+		want := `the Flux build of KustomizationRecursive layout "r" would apply the file "u.yaml" of layout "r/u", which the Explicit mode does not list`
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
+		}
+	}
+}
+
 // TestWriteManifest_RecursiveRefusesFilesFluxDoesNotScan: a Config's
 // ManifestFileName can name resource files the Flux build of a marked
 // Recursive directory skips (not *.yaml or *.yml) or reads as the

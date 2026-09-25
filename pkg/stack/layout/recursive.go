@@ -35,7 +35,11 @@ import (
 //     does not read as a manifest: one not named *.yaml or *.yml, which Flux
 //     skips, or one named like a kustomization file. An Explicit
 //     kustomization.yaml lists it by name. Only a Config's ManifestFileName
-//     can produce either.
+//     can produce either;
+//   - the file of an AppFileSingle child in D's build that its parent's
+//     kustomization.yaml does not list (an umbrella child, or one that
+//     renders bundles): Flux would apply it, where the Explicit mode leaves
+//     it to the child's own Kustomization.
 //
 // Flux's tests are its own: the file extension as it is, and the base name
 // against the kustomization file names exactly. Directories are compared as
@@ -47,26 +51,32 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 		writesK bool
 	}
 	type file struct {
-		l     *ManifestLayout
-		name  string
-		dir   string // normDir'ed directory the file lands in
-		extra bool   // an ExtraFile, not a resource file
+		l        *ManifestLayout
+		name     string
+		dir      string // normDir'ed directory the file lands in
+		raw      string // that directory as written, for messages
+		extra    bool   // an ExtraFile, not a resource file
+		unlisted bool   // a resource file its directory's kustomization.yaml does not list
 	}
 	var dirs []dirLayout
 	var files []file
 	var walk func(l, parent *ManifestLayout) error
 	walk = func(l, parent *ManifestLayout) error {
 		dir, single := plan.outDir(l)
-		landsIn := func(name string) string {
-			return normDir(path.Dir(path.Join(filepath.ToSlash(dir), name)))
+		add := func(name string, extra, unlisted bool) {
+			raw := path.Dir(path.Join(filepath.ToSlash(dir), name))
+			files = append(files, file{l, name, normDir(raw), raw, extra, unlisted})
 		}
 		for _, ef := range l.ExtraFiles {
-			files = append(files, file{l, ef.Name, landsIn(ef.Name), true})
+			add(ef.Name, true, false)
+		}
+		if single && parent != nil && l.writesSingleFile() && plan.childEntry(parent, l) == "" {
+			add(l.Name+".yaml", false, true)
 		}
 		if !single {
 			names, _ := plan.files(l)
 			for _, name := range names {
-				files = append(files, file{l, name, landsIn(name), false})
+				add(name, false, false)
 			}
 			dirs = append(dirs, dirLayout{l, normDir(dir), plan.writesKustomization(l, parent == nil)})
 			if plan.kustomizationMode(l) == KustomizationRecursive {
@@ -136,12 +146,14 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 				why = fmt.Sprintf("would read the resource file %q of layout %q as a kustomization, where the Explicit mode lists it as a manifest", f.name, f.l.FullRepoPath())
 			case f.extra && manifest:
 				why = fmt.Sprintf("would apply the extra file %q of layout %q, which the Explicit mode never lists", f.name, f.l.FullRepoPath())
+			case f.unlisted && manifest:
+				why = fmt.Sprintf("would apply the file %q of layout %q, which the Explicit mode does not list", f.name, f.l.FullRepoPath())
 			case !f.extra && !manifest:
 				why = fmt.Sprintf("would skip the resource file %q of layout %q, as Flux reads only *.yaml and *.yml files, where the Explicit mode lists it", f.name, f.l.FullRepoPath())
 			default:
 				continue
 			}
-			return errors.NewFileError("write", path.Join(f.dir, path.Base(f.name)), fmt.Sprintf(
+			return errors.NewFileError("write", path.Join(f.raw, path.Base(f.name)), fmt.Sprintf(
 				"the Flux build of KustomizationRecursive layout %q %s", d.l.FullRepoPath(), why), nil)
 		}
 	}
