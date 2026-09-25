@@ -270,8 +270,10 @@ temporary branch — the merged result — before the PR is allowed to land.
     the plain keys, in a workflow and an `action.yml`.
   - **Action scripts.** It follows each `$GITHUB_ACTION_PATH/<rel>.sh` or
     `${GITHUB_ACTION_PATH}/<rel>.sh` in an action's single `run:` step, written as one whole word:
-    the path, at most a closing quote, then whitespace, `;&|)<>` or the line end. The path is
-    resolved from the action's own directory, counting its `..` hops.
+    the path, at most a closing quote, then whitespace, `;&|)<>` or the line end. The word must be
+    the command run: at a line start or after a separator, optionally behind `if`, `then`, `do`
+    or `!` and `exec`, `bash`, `sh`, `source` or `.` with options. The path is resolved from the
+    action's own directory, counting its `..` hops.
   - **Sibling scripts.** It follows, transitively, a whole line
     `source "$SCRIPT_DIR/<name>.sh"` or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]`. It
     trusts only `SCRIPT_DIR` defined as exactly `$(dirname "$0")` or
@@ -287,9 +289,12 @@ temporary branch — the merged result — before the PR is allowed to land.
     context that yields no 40-hex pin: `@main`, a flow-mapping checkout, a checkout with a branch,
     another expression or no `ref:`, and similar. Only two are exempt: a `ref:` that is exactly
     `${{ steps.<id>.outputs.<name> }}`, and a job-level reusable-workflow call at a non-SHA ref.
-    A reusable-workflow call pinned to a SHA, or one inside a step, is refused. A checkout step
-    with a `ref:` anywhere but its `with:` mapping (under `env:`, in a block scalar body, at the
-    step's own level), more than one `ref:` in any letter case, or more than one `with:`.
+    A reusable-workflow call pinned to a SHA, or one inside a step, is refused. A
+    `go-kure/.github` checkout step is also refused when it has a `ref:` other than a key at the
+    column of the `with:` mapping's first child (under `env:` or another key, in a block scalar
+    body, at the step's own level), a line that is no key the scan parses (`a b:`, `a/b:`, the
+    rest of a multi-line value), a value that does not end on its line (an unterminated or
+    escaped quote), more than one `ref:` in any letter case, or more than one `with:`.
   - **Workflow YAML a line scan cannot read**, whatever it names. A `uses:` or `repository:`
     value that is not whole on its own line: empty, continued on the next line, a block scalar,
     an alias, anchor, tag or flow collection, or a quoted value with an escape (`\` in double
@@ -304,7 +309,10 @@ temporary branch — the merged result — before the PR is allowed to land.
     expression. Any `GITHUB_ACTION_PATH` mention that is not one whole
     `$GITHUB_ACTION_PATH/<path>` or `${GITHUB_ACTION_PATH}/<path>` word (reassigned, cut down with
     `${GITHUB_ACTION_PATH%/*}`, a bare trailing `/`, or a suffix after the path), and the
-    runner's `_actions` directory by path. A quoted key with an escape sequence, or a `? `
+    runner's `_actions` directory by path. In an action that mentions `GITHUB_ACTION_PATH`:
+    `dirname`, `realpath`, `readlink`, a parameter trim (`${name%...}`, `${name#...}`,
+    `${name/...}`, `${name:offset}`), and a `$GITHUB_ACTION_PATH/<path>` word other than as the
+    command run (assigned, or passed as an argument). A quoted key with an escape sequence, or a `? `
     complex key. A non-`.sh` or unaccounted-for script reference. Whether the runner reads
     `USES:`, `Using:` or `RUN:` as its key is not established here, so each is taken as that key.
   - **Paths.** A path that climbs above the repository root, or that has a `.`, `..` or empty
@@ -314,9 +322,11 @@ temporary branch — the merged result — before the PR is allowed to land.
     trusted definitions. The word `SCRIPT_DIR` in any other form (`SCRIPT_DIR+=`,
     `SCRIPT_DIR[0]=`, `read SCRIPT_DIR`, `for SCRIPT_DIR in`, `n=SCRIPT_DIR`). Name indirection:
     `${!name}` (the array-keys form `${!name[@]}` is allowed), a `declare -n`, `local -n` or
-    `typeset -n` nameref, and `eval`. Any other way of computing the script's own directory
-    (`dirname "$0"`, `${0%/*}`, `BASH_SOURCE`, `BASH_ARGV`, a positional slice `${@:...}` or
-    `${*:...}`). Any `$0` outside a message to stderr (`echo "usage: $0 ..." >&2` or `1>&2`), a
+    `typeset -n` nameref, `eval`, and a `declare`, `typeset`, `local`, `export` or `readonly`
+    whose variable name holds a `$` or a backtick (`declare -g "$n+=/lib"`). Any other way of
+    computing the script's own directory (`dirname "$0"`, `${0%/*}`, `BASH_SOURCE`, `BASH_ARGV`,
+    a positional slice `${@:...}` or `${*:...}`, and `$_` or `${_}`, which holds the script's
+    path right after an exempted `$0` message). Any `$0` outside a message to stderr (`echo "usage: $0 ..." >&2` or `1>&2`), a
     `sed -n '<lines>p' "$0"` read of the script itself or an awk record (`f($0`, `, $0`, ` = $0`,
     `$0 ~`, `$0 !~`): `x=$0`, `a=($0)`, `printf -v`, `read <<<"$0"`, a function argument or a
     message to another fd would carry the directory under another name. A line naming
@@ -331,7 +341,9 @@ temporary branch — the merged result — before the PR is allowed to land.
     subshell).
   - **The compare.** A compare that is not `ahead`, and the pagination cap.
 
-  It does not see:
+  It does not see the following. Its threat model is a trusted organisation's own files: it
+  catches shapes written by accident that would hide consumed code, not a determined adversary,
+  and a shape built to evade a line scan can still pass.
   - A sibling reached without naming `$SCRIPT_DIR`, `$0` or the checkout: a hard-coded absolute
     path, a name found on `PATH`, or a path assembled at run time (`/proc/self`, a variable filled
     from a file).
@@ -344,6 +356,9 @@ temporary branch — the merged result — before the PR is allowed to land.
   - A `$0` message to stderr that is read back: the stderr exemption assumes stderr is not
     redirected into a file or a capture (`exec 2>f`, `$(f 2>&1)`) that the script then reads.
   - The script's path taken from the call stack with `caller`, which names no `$0`.
+  - An assignment through a name built at run time other than by a declaration builtin:
+    `printf -v "$n"`, `read "$n"`, `mapfile "$n"`. A consumed script assigns through
+    `printf -v "$destination"`, so refusing it would abort real runs.
 
   It also aborts, harmlessly but falsely, on:
   - another directory derived from the script's own, such as
@@ -352,8 +367,12 @@ temporary branch — the merged result — before the PR is allowed to land.
     for argument-derived paths;
   - `uses:` or `repository:` text anywhere in a single-line workflow value
     (`run: grep -n "repository:" ci.yml`, `with: { repository: foo/bar }`), and `ref:` text
-    anywhere in a `go-kure/.github` checkout step;
-  - `${!prefix@}`, and `export SCRIPT_DIR` or `readonly SCRIPT_DIR` on a line of its own.
+    anywhere in a `go-kure/.github` checkout step, and a ` #` inside a quoted value there (read
+    as a comment, which leaves the quote open);
+  - `${!prefix@}`, and `export SCRIPT_DIR` or `readonly SCRIPT_DIR` on a line of its own;
+  - `dirname`, `realpath`, `readlink` or a parameter trim anywhere in an action that mentions
+    `GITHUB_ACTION_PATH`, and a `$GITHUB_ACTION_PATH/<path>` command behind a wrapper (`env`,
+    `timeout`).
   The refusal paths, plus the no-change, inert, affected and acknowledged outcomes, are pinned by hermetic
   cases in `scripts/test/cases/`
   (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
