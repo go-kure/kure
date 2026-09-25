@@ -80,7 +80,9 @@ func sourceCopies(ml *layout.ManifestLayout, name string) map[string]int {
 			}
 		}
 		for _, c := range l.Children {
-			walk(c)
+			if c != nil {
+				walk(c)
+			}
 		}
 	}
 	walk(ml)
