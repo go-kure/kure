@@ -42,9 +42,10 @@ now gets that name twice (`.../<name>/<name>`); pass the parent's path instead.
 Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
 anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
 layouts that resolve to the same file, or an `AppFileSingle` child with children of its own.
-It also refuses an `AppFileSingle` layout whose file, `<Name>.yaml`, would replace another file
-written into the same directory: the `kustomization.yaml` there, or one of the resource or extra
-files of the layout that owns the directory (go-kure/kure#871). A child named `kustomization`, or
+It also refuses an `AppFileSingle` layout whose file, `<Name>.yaml`, or one of whose extra files
+would replace another file written into the same directory: the `kustomization.yaml` there, one of
+the resource or extra files of the layout that owns the directory, or another `AppFileSingle`
+layout's file (go-kure/kure#871). A child named `kustomization`, or
 named like one of its parent's generated files (`default-configmap-a`, or `configmap` under
 `FileNamingKindName` + `FilePerKind`), is refused, as is an `AppFileSingle` root named
 `kustomization`. A child with no resources writes no file, so this check never refuses it.
@@ -230,7 +231,7 @@ directories, files and Flux CRs.
 An `ExtraFile.Name` is a relative path of `/`-separated segments made of letters, digits, `.`, `_`
 and `-`, with no `.` or `..` segment; a name in a subdirectory (`assets/dashboard.json`) creates
 that directory. Every writer (`WriteToDisk`, `WriteManifest`, `WriteToTar`) refuses, before writing
-any file of the layout, an extra file that would take a path it owns in that directory: a generated
+any file of the tree, an extra file that would take a path it owns in that directory: a generated
 resource file, a kustomize control file (`kustomization.yaml`, `kustomization.yml`,
 `Kustomization`), a child layout's output directory where it lies inside this layout's (umbrella
 children included; anything under it, or a file on the way to it) or an `AppFileSingle` child's
@@ -239,7 +240,7 @@ a directory (`kustomization.yaml/x`), or be a file where one of them needs a dir
 output directory is the one its writer uses (for `WriteManifest`, after applying the `Config`
 defaults). All names are compared case-insensitively, as on default macOS volumes. When a layout
 has extra files, a `..` segment in its `Namespace` or `Name`, in a direct child's `Namespace` or
-`Name`, or in a generated file name refuses the layout before any of its files is written; a
+`Name`, or in a generated file name refuses the tree before any file is written; a
 rooted name (`/x`) is not refused, since every writer joins it under its base. Previously such an
 extra file silently replaced the generated one on disk, or shadowed it as a later tar entry, while
 `kustomization.yaml` still listed the path.
