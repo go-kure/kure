@@ -264,15 +264,20 @@ temporary branch — the merged result — before the PR is allowed to land.
   - **Pins.** It reads `uses: go-kure/.github/.github/actions/<subpath>@<sha>`, including nested
     or dotted subpaths. It also reads the `ref: <sha>` of a block-style
     `repository: go-kure/.github` checkout, whatever the key order. The repository name is matched
-    case-insensitively, and the SHA may be written in either case.
-  - **Action scripts.** It follows each `$GITHUB_ACTION_PATH/<rel>.sh` in an action's single
-    `run:` step. The path is resolved from the action's own directory, counting its `..` hops.
+    case-insensitively, and the SHA may be written in either case. Keys are read as YAML reads
+    them: `"uses":`, `'ref':` and `repository :` are the plain keys, in a workflow and an
+    `action.yml`.
+  - **Action scripts.** It follows each `$GITHUB_ACTION_PATH/<rel>.sh` or
+    `${GITHUB_ACTION_PATH}/<rel>.sh` in an action's single `run:` step. The path is resolved from
+    the action's own directory, counting its `..` hops.
   - **Sibling scripts.** It follows, transitively, a whole line
     `source "$SCRIPT_DIR/<name>.sh"` or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]`. It
     trusts only `SCRIPT_DIR` defined as exactly `$(dirname "$0")` or
     `$(cd "$(dirname "$0")" && pwd)`, optionally with `&>/dev/null` or `>/dev/null 2>&1` before the
     `&&`, and either with `"${BASH_SOURCE[0]}"` for `"$0"`. The definition may sit behind
-    `declare -r`, `readonly` or `export`.
+    `declare -r`, `readonly` or `export`; `cd --`, `dirname --` and a space after `&>` or `>` are
+    the same definition. The run-when-executed guard `if [[ "${BASH_SOURCE[0]}" == "$0" ]]`
+    (also `!=`, `"${0}"` and `; then`), alone on its line, names no directory and is accepted.
 
   It refuses rather than guesses on:
   - **Pins.** Inconsistent pins. Any `go-kure/.github` reference in a `uses:` or `repository:`
@@ -280,30 +285,53 @@ temporary branch — the merged result — before the PR is allowed to land.
     another expression or no `ref:`, and similar. Only two are exempt: a `ref:` that is exactly
     `${{ steps.<id>.outputs.<name> }}`, and a job-level reusable-workflow call at a non-SHA ref.
     A reusable-workflow call pinned to a SHA, or one inside a step, is refused.
-  - **Actions.** An action that is not a composite action (JavaScript or Docker). A nested
-    `uses:`, or more than one `run:` step. A `github.action_path` expression. A non-`.sh` or
-    unaccounted-for script reference.
+  - **Workflow YAML a line scan cannot read**, whatever it names. A `uses:` or `repository:`
+    value that is not whole on its own line: empty, continued on the next line, a block scalar,
+    an alias, anchor, tag or flow collection, or a double-quoted value with an escape or no
+    closing quote. A `repository:` given as an expression
+    (`${{ github.repository_owner }}/.github`). A `uses` or `repository` key that does not start
+    its line (a flow mapping, a tagged or anchored key). A quoted key with an escape sequence, and
+    a `? ` complex key.
+  - **Actions.** An action that is not a composite action (JavaScript or Docker), a `using` in a
+    flow mapping included. A nested `uses:`, quoted or in a flow mapping, or more than one `run:`
+    step. A `github.action_path` expression. `$GITHUB_ACTION_PATH` other than as
+    `$GITHUB_ACTION_PATH/` or `${GITHUB_ACTION_PATH}/` (reassigned, or cut down with
+    `${GITHUB_ACTION_PATH%/*}`), and the runner's `_actions` directory by path. A quoted key with
+    an escape sequence, or a `? ` complex key. A non-`.sh` or unaccounted-for script reference.
   - **Paths.** A path that climbs above the repository root, or that has a `.`, `..` or empty
     (`//`) segment where it cannot be normalised.
   - **Scripts.** Any line using `$SCRIPT_DIR` in another shape, which includes `if !`, a wrapper
     command, `$( )`, a pipe and a non-`.sh` sibling. Any `SCRIPT_DIR=` assignment other than the
     trusted definitions. Any other way of computing the script's own directory (`dirname "$0"`,
-    `${0%/*}`, `BASH_SOURCE`). Any other `source` or script invocation at a command position, and
-    a sibling that cannot be fetched.
+    `${0%/*}`, `BASH_SOURCE`, `BASH_ARGV0`). Any `$0` outside a message (`echo "usage: $0 ..."`),
+    a `sed -n '<lines>p' "$0"` read of the script itself or an awk record (`f($0`, `, $0`,
+    ` = $0`, `$0 ~`): `x=$0`, `a=($0)`, `printf -v`, `read <<<"$0"` or a function argument would
+    carry the directory under another name. A line naming `$GITHUB_ACTION_PATH` or the runner's
+    `_actions` directory. Any other `source` or script invocation at a command position, and a
+    sibling that cannot be fetched.
+  - **`$SCRIPT_DIR` that is not the script's own directory.** A file sourced from a script in
+    another directory that names `SCRIPT_DIR` at all, since it shares its caller's. A script run
+    as its own process that uses `$SCRIPT_DIR` before a trusted definition, since it reads an
+    inherited one. A relative definition, `$(dirname "$0")`, in any walked script while any walked
+    script changes the working directory (`cd`, `pushd` or `popd` outside a `$(cd` or `(cd`
+    subshell).
   - **The compare.** A compare that is not `ahead`, and the pagination cap.
 
   It does not see:
-  - A sibling reached through a hard-coded absolute path or through `PATH`.
+  - A sibling reached without naming `$SCRIPT_DIR`, `$0` or the checkout: a hard-coded absolute
+    path, a name found on `PATH`, or a path assembled at run time (`/proc/self`, a variable filled
+    from a file).
   - Job-level reusable-workflow calls at a non-SHA ref
     (`go-kure/.github/.github/workflows/<file>.yml@main` here). They run at their own ref, so no
     pin bump changes them.
-  - YAML shapes a line scan cannot parse: quoted keys (`"uses":`, `"repository":`, `"using":`),
-    a `uses:` value continued on the next line, anchors and aliases, and a repository given as an
-    expression (`${{ github.repository_owner }}/.github`).
-  - A sourced file's `$SCRIPT_DIR`, which is its caller's.
+  - The order in which a script runs: a trusted `SCRIPT_DIR` definition inside a function or a
+    branch that never runs still counts as defining it for the lines below.
+  - A `,$0` outside awk, which is taken for an awk record (`for p in {x,$0}`).
 
-  It also aborts, harmlessly but falsely, on a `[[ "${BASH_SOURCE[0]}" == "$0" ]]` guard and on
-  another directory derived from the script's own, such as `ROOT=$(cd "$(dirname "$0")/.." && pwd)`.
+  It also aborts, harmlessly but falsely, on another directory derived from the script's own, such
+  as `ROOT=$(cd "$(dirname "$0")/.." && pwd)`. Following it would mean tracking an arbitrary
+  variable through every script that sources or inherits it, and real scripts reuse such names for
+  argument-derived paths.
   The refusal paths, plus the no-change, inert, affected and acknowledged outcomes, are pinned by hermetic
   cases in `scripts/test/cases/`
   (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
