@@ -19,7 +19,9 @@ obj := cilium.CreateCiliumNetworkPolicy("allow-internal", "default")
 cl := cilium.CreateCiliumCIDRGroup("internal-ranges")
 ```
 
-There is no second construction path. <!-- doc-api-refs:ignore names the retired config-struct layer --> The config-struct layer this package used to carry (`cilium.CiliumNetworkPolicy(&cilium.CiliumNetworkPolicyConfig{...})` and its twelve siblings) was retired by release 2 of the builder contract: every one of the thirteen was `obj.Spec = cfg.Spec` behind a `Name` and a `Namespace`, so it was retired for uniformity rather than reach. The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+There is no second construction path.
+The config-struct layer this package used to carry (`cilium.CiliumNetworkPolicy(&cilium.CiliumNetworkPolicyConfig{...})` and its twelve siblings) was retired by release 2 of the builder contract: every one of the thirteen was `obj.Spec = cfg.Spec` behind a `Name` and a `Namespace`, so it was retired for uniformity rather than reach. <!-- doc-api-refs:ignore names the retired config-struct layer -->
+The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 

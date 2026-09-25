@@ -600,20 +600,37 @@ Until release 2 of the builder contract, `pkg/kubernetes/volsync` and `pkg/kuber
 The layout system manages directory structure and manifest organization:
 
 ```go
-// pkg/stack/layout/types.go
-
+// pkg/stack/layout/manifest.go (abridged: PackageRef, UmbrellaChild and
+// DependsOn omitted)
 type ManifestLayout struct {
-    Root      string                    // Repository root path
-    Clusters  map[string]*ClusterLayout // Per-cluster layouts
-    Global    *GlobalLayout            // Shared resources
+    Name                string
+    Namespace           string
+    FilePer             FileExportMode
+    ApplicationFileMode ApplicationFileMode
+    Mode                KustomizationMode
+    FluxPlacement       FluxPlacement
+    FileNaming          FileNamingMode
+    Resources           []client.Object
+    Children            []*ManifestLayout
+    ExtraFiles          []ExtraFile
+    ConfigMapGenerators []ConfigMapGeneratorSpec
 }
 
+// pkg/stack/layout/types.go
 type LayoutRules struct {
-    BundleGrouping      GroupingStrategy  // How to group bundles
-    ApplicationGrouping GroupingStrategy  // How to group applications
-    KustomizationMode   KustomizationMode // Kustomization generation
+    NodeGrouping        GroupingMode
+    BundleGrouping      GroupingMode
+    ApplicationGrouping GroupingMode
+    ApplicationFileMode ApplicationFileMode
+    FilePer             FileExportMode
+    ClusterName         string
+    FluxPlacement       FluxPlacement
+    FileNaming          FileNamingMode
 }
 ```
+
+A `ManifestLayout` is one directory: its own resources and files, and its child directories. The
+walkers build the tree from a `stack.Cluster` according to `LayoutRules`.
 
 ### Grouping Strategies
 

@@ -195,7 +195,9 @@ Kustomization `spec.path` and ArgoCD Application `source.path` is a directory th
 To write the layout with other rules, use `CreateLayoutWithResources`, which generates from the
 layout it walks.
 
-Supported workflow providers: `"flux"` / `"fluxcd"` and `"argo"` / `"argocd"`.
+Supported workflow providers: `"flux"` / `"fluxcd"` and `"argo"` / `"argocd"`. Each is registered by
+importing its package, and `NewWorkflow` returns that package's `*fluxcd.WorkflowEngine` or
+`*argocd.WorkflowEngine`; without the import it fails with an error naming the package to import.
 
 ## Source References
 
