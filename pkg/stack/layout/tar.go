@@ -25,10 +25,14 @@ func (ml *ManifestLayout) WriteToTar(w io.Writer) error {
 	}
 	tw := tar.NewWriter(w)
 	defer func() { _ = tw.Close() }()
-	return ml.writeToTarRecursive(tw, "")
+	return ml.writeToTarRecursive(tw, "", true)
 }
 
-func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) error {
+// writeToTarRecursive writes ml and its children as writeToDisk does; root
+// is false for a child, and an AppFileSingle child adds no
+// kustomization.yaml entry (a later entry for its parent's path would shadow
+// the parent's, go-kure/kure#860).
+func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, root bool) error {
 	fileMode := ml.FilePer
 	if fileMode == FilePerUnset {
 		fileMode = FilePerResource
@@ -108,7 +112,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 		kMode = KustomizationExplicit
 	}
 
-	if len(fileGroups) > 0 || len(ml.Children) > 0 || appMode != AppFileSingle {
+	if appMode != AppFileSingle || (root && (len(fileGroups) > 0 || len(ml.Children) > 0)) {
 		var kustomBuf strings.Builder
 		kustomBuf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
 		kustomBuf.WriteString("kind: Kustomization\n")
@@ -182,7 +186,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string) e
 
 	// Recurse into children
 	for _, child := range ml.Children {
-		if err := child.writeToTarRecursive(tw, basePath); err != nil {
+		if err := child.writeToTarRecursive(tw, basePath, false); err != nil {
 			return err
 		}
 	}

@@ -20,7 +20,8 @@ The layout module transforms Kure's in-memory stack representation (Clusters →
 A layout's directory is `FullRepoPath()`, which is `Namespace` joined with `Name`. `Namespace` is
 always the **parent's** directory: set a child's `Namespace` to its parent's `FullRepoPath()`, and
 use `"."` for the root of the tree. An empty `Namespace` means `cluster`. An `AppFileSingle` layout
-writes one file, `<Namespace>/<Name>.yaml`, into its parent's directory.
+writes one file, `<Namespace>/<Name>.yaml`, into its parent's directory, which the parent's
+`kustomization.yaml` lists.
 
 When a parent's `kustomization.yaml` references a child by directory (`- <Name>`), the child's
 directory must be `<parent directory>/<Name>` for the reference to resolve; building every child
@@ -159,8 +160,15 @@ Controls how resource YAML files are named:
   gets a `kustomization.yaml`, even when it holds nothing else (a bundle with no applications, an
   empty node, an empty augmenter layout): a Flux Kustomization or ArgoCD Application names that
   directory, and an empty directory does not survive a Git tree. A kustomization that lists
-  nothing is written `resources: []` (kustomize rejects a bare `resources:` as empty). An
-  `AppFileSingle` layout, which writes into its parent's directory, never gets one of its own
+  nothing is written `resources: []` (kustomize rejects a bare `resources:` as empty).
+- An `AppFileSingle` child writes one file, `<Name>.yaml`, into its parent's directory and never a
+  `kustomization.yaml` of its own (before go-kure/kure#860 it replaced the parent's, dropping the
+  parent's files). The parent's `kustomization.yaml` lists that file next to its own; in
+  `WriteManifest` the child's mode is its effective one, so a child with no mode of its own under
+  `ArgoProfile`'s `AppFileSingle` is listed as `<Name>.yaml`, not as a directory, and the unnamed
+  cluster root, which `WriteManifest` otherwise leaves without a `kustomization.yaml`, gets one
+  when it holds such a file.
+  An `AppFileSingle` root, with no parent to list its file, still writes one next to it
 
 ### Layout origins
 
