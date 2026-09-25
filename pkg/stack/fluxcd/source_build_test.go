@@ -2,6 +2,7 @@ package fluxcd_test
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -188,4 +189,33 @@ func intMapsEqual(a, b map[string]int) bool {
 		}
 	}
 	return true
+}
+
+// TestIntegrate_SharedSourceKeepsTheCallersDeeperCopy: the caller's copy is
+// kept even where it is not the topmost in the build; the integration drops
+// its own copy instead, whichever layout it placed it in.
+func TestIntegrate_SharedSourceKeepsTheCallersDeeperCopy(t *testing.T) {
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerBundle
+	c := issue873Tree()
+	ml, err := layout.WalkCluster(c, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := layoutAtPath(t, ml, "platform/group")
+	callers := sharedSource(t)
+	group.Resources = append(group.Resources, callers)
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	for i := range 2 {
+		if err := integrator.IntegrateWithLayout(ml, c, rules); err != nil {
+			t.Fatalf("IntegrateWithLayout %d: %v", i+1, err)
+		}
+		if got, want := sourceCopies(ml, "shared"), map[string]int{"platform/group": 1}; !intMapsEqual(got, want) {
+			t.Errorf("integration %d: GitRepository shared hosted %v, want only the caller's copy %v", i+1, got, want)
+		}
+		if !slices.Contains(group.Resources, callers) {
+			t.Errorf("integration %d dropped the caller's copy from platform/group", i+1)
+		}
+	}
+	checkEveryBuild(t, ml)
 }
