@@ -152,6 +152,24 @@ func TestGenerateFromLayout_MergedSettingsMustAgree(t *testing.T) {
 	}
 }
 
+// TestGenerateFromLayout_LabelConflictReportedFirst: a bundle conflicting on
+// both labels and annotations is refused with the same message on every run,
+// naming labels.
+func TestGenerateFromLayout_LabelConflictReportedFirst(t *testing.T) {
+	for range 20 {
+		c := mergedCluster(func(rb, _, b2 *stack.Bundle) {
+			rb.Labels = map[string]string{"team": "platform"}
+			rb.Annotations = map[string]string{"owner": "a"}
+			b2.Labels = map[string]string{"team": "other"}
+			b2.Annotations = map[string]string{"owner": "b"}
+		})
+		_, err := generateUnits(t, c, allFlat)
+		if err == nil || !strings.Contains(err.Error(), "labels") {
+			t.Fatalf("got %v, want the labels conflict", err)
+		}
+	}
+}
+
 // TestGenerateFromLayout_DependsOnMapsToUnits pins how dependsOn survives a
 // merge: a dependency between bundles merged into one directory is dropped,
 // whether it is a bundle pointer, a copy of that bundle (the fluent builder
@@ -255,6 +273,9 @@ func TestGenerateFromLayout_HealthChecksMapToUnits(t *testing.T) {
 	kusts, err := generateUnits(t, c, allFlat)
 	if err != nil {
 		t.Fatalf("GenerateFromLayout: %v", err)
+	}
+	if len(kusts) != 1 {
+		t.Fatalf("got %d Kustomizations, want the one merged unit", len(kusts))
 	}
 	var got []string
 	for _, hc := range kusts[0].Spec.HealthChecks {
