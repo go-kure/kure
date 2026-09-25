@@ -364,3 +364,23 @@ func TestWriters_SingleRootWritesKustomization(t *testing.T) {
 		})
 	}
 }
+
+// TestWriters_SingleRootListsChildrenInItsNamespace: a named AppFileSingle
+// root writes its file and kustomization.yaml into its Namespace, so a child
+// built with the root's Namespace is listed there and resolves.
+func TestWriters_SingleRootListsChildrenInItsNamespace(t *testing.T) {
+	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+		t.Run(writer, func(t *testing.T) {
+			root := cmLayout("svc", "demo")
+			root.ApplicationFileMode = layout.AppFileSingle
+			root.Children = []*layout.ManifestLayout{cmLayout("gc", root.Namespace)}
+			files := writtenFiles(t, writer, layout.Config{}, root)
+			if got, want := listedResources(t, files, "demo/kustomization.yaml"), []string{"gc", "svc.yaml"}; !slices.Equal(got, want) {
+				t.Errorf("demo/kustomization.yaml lists %v, want %v", got, want)
+			}
+			if _, ok := files["demo/gc/kustomization.yaml"]; !ok {
+				t.Errorf("listed child directory demo/gc has no kustomization.yaml; wrote %v", slices.Sorted(maps.Keys(files)))
+			}
+		})
+	}
+}

@@ -21,7 +21,9 @@ A layout's directory is `FullRepoPath()`, which is `Namespace` joined with `Name
 always the **parent's** directory: set a child's `Namespace` to its parent's `FullRepoPath()`, and
 use `"."` for the root of the tree. An empty `Namespace` means `cluster`. An `AppFileSingle` layout
 writes one file, `<Namespace>/<Name>.yaml`, into its parent's directory, which the parent's
-`kustomization.yaml` lists.
+`kustomization.yaml` lists. An `AppFileSingle` root writes that file and its `kustomization.yaml`
+into its `Namespace`, and lists its children there: build them with the root's `Namespace`, not its
+`FullRepoPath()`.
 
 When a parent's `kustomization.yaml` references a child by directory (`- <Name>`), the child's
 directory must be `<parent directory>/<Name>` for the reference to resolve; building every child
@@ -170,7 +172,7 @@ Controls how resource YAML files are named:
   when it holds such a file. A child with no resources writes no file, so nothing lists it and
   it gives the cluster root no `kustomization.yaml`.
   An `AppFileSingle` root, with no parent to list its file, still writes a `kustomization.yaml`
-  next to it.
+  next to it, which lists its children in that same directory (see "Layout paths").
 - Every writer refuses an `AppFileSingle` child that has children of its own before writing
   anything: it writes no `kustomization.yaml`, so nothing would list them and they would drop out
   of the build. The walkers never build one themselves; the root is not checked, since the synthetic cluster
