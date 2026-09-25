@@ -3,10 +3,12 @@ package layout
 import (
 	"archive/tar"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -137,12 +139,12 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 	for _, f := range kustomizeControlFiles {
 		taken[strings.ToLower(f)] = "a kustomize control file"
 	}
-	// A child whose output directory lies at or below base reserves that
-	// directory, or its file for an AppFileSingle child (umbrella children
-	// included: kustomization.yaml does not list them, but the writers still
-	// write them).
-	childDirs := map[string]string{} // lower-cased directory relative to base -> child name
-	neededDirs := map[string]string{}
+	// A child whose output directory lies below base reserves that directory
+	// (umbrella children included: kustomization.yaml does not list them, but
+	// the writers still write them). An AppFileSingle child reserves its
+	// directory and every directory above it, and its file when it writes one.
+	childDirs := map[string]string{}  // lower-cased directory relative to base -> child name
+	singleDirs := map[string]string{} // lower-cased directory relative to base -> the single child needing it
 	for _, child := range ml.Children {
 		if child == nil {
 			continue
@@ -159,7 +161,9 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 			}
 			if rel, ok := relativeTo(base, normDir(dir)); ok && rel != "." {
 				for d := rel; d != "." && d != "/"; d = path.Dir(d) {
-					neededDirs[d] = fmt.Sprintf("child layout %q", child.Name)
+					if _, ok := singleDirs[d]; !ok {
+						singleDirs[d] = fmt.Sprintf("child layout %q", child.Name)
+					}
 				}
 			}
 			continue
@@ -171,9 +175,18 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 
 	// Every directory a reserved file sits in (a generated name in a
 	// subdirectory, an AppFileSingle child written below ml's directory) must
-	// stay a directory, so no extra may be a file there.
-	for p, what := range taken {
+	// stay a directory, so no extra may be a file there. Where several files
+	// need one directory, the first in path order is the one a refusal names.
+	neededDirs := map[string]string{}
+	for _, p := range slices.Sorted(maps.Keys(taken)) {
 		for d := path.Dir(p); d != "." && d != "/"; d = path.Dir(d) {
+			if _, ok := neededDirs[d]; !ok {
+				neededDirs[d] = taken[p]
+			}
+		}
+	}
+	for d, what := range singleDirs {
+		if _, ok := neededDirs[d]; !ok {
 			neededDirs[d] = what
 		}
 	}
@@ -193,7 +206,8 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 		if what, ok := taken[key]; ok {
 			return errors.NewFileError("write", ef.Name, fmt.Sprintf("extra file %q would replace %s", ef.Name, what), nil)
 		}
-		for dir, child := range childDirs {
+		for _, dir := range slices.Sorted(maps.Keys(childDirs)) {
+			child := childDirs[dir]
 			// Inside the child's directory, or a file where one of the
 			// directories leading to it must be.
 			if key == dir || strings.HasPrefix(key, dir+"/") || strings.HasPrefix(dir, key+"/") {
@@ -206,7 +220,8 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 		extras[key] = true
 	}
 	// No file, generated or extra, can also be the directory an extra sits in.
-	for key := range extras {
+	for _, ef := range ml.ExtraFiles {
+		key := strings.ToLower(ef.Name)
 		for d := path.Dir(key); d != "." && d != "/"; d = path.Dir(d) {
 			if what, ok := taken[d]; ok {
 				return errors.NewFileError("write", key, fmt.Sprintf("extra file %q would use %s as a directory", key, what), nil)
