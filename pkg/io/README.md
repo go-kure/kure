@@ -8,19 +8,37 @@ The `io` package provides utilities for parsing, serializing, and printing Kuber
 
 This package handles the I/O boundary of Kure: reading Kubernetes manifests from files, serializing resources to YAML/JSON, and printing resources in human-readable formats. It integrates with Kure's registered scheme for type-aware parsing.
 
+Each Go block on this page is the body of an `Example` function in `example_test.go`, which
+`go test` runs: it imports this package as `io`, `github.com/go-kure/kure/pkg/kubernetes` for the
+objects it encodes, `appsv1 "k8s.io/api/apps/v1"`, `corev1 "k8s.io/api/core/v1"`,
+`sigs.k8s.io/controller-runtime/pkg/client`, `bytes`, `os`, `path/filepath`, `strings`, and `fmt`
+for the lines that print what the example read or wrote. `testdata/manifests.yaml` is a
+Deployment and a Service.
+
 ## Parsing
 
 ### Parse YAML Files
 
+<!-- doc-example: pkg/io ExampleParseFile -->
 ```go
-import "github.com/go-kure/kure/pkg/io"
-
 // Parse a multi-document YAML file into typed Kubernetes objects
-objects, err := io.ParseFile("manifests/deployment.yaml")
+objects, err := io.ParseFile("testdata/manifests.yaml")
+if err != nil {
+    panic(err)
+}
 
 // Parse YAML bytes directly
-objects, err := io.ParseYAML(yamlData)
+yamlData := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app-config\n")
+more, err := io.ParseYAML(yamlData)
+if err != nil {
+    panic(err)
+}
+
+for _, obj := range append(objects, more...) {
+    fmt.Printf("%T %s\n", obj, obj.GetName())
+}
 ```
+<!-- doc-example:end -->
 
 ### Unstructured Fallback
 
@@ -28,82 +46,168 @@ By default, only GVKs registered in the kure scheme are accepted. To parse
 arbitrary Kubernetes YAML (CRDs, custom operators, etc.) use
 `ParseYAMLWithOptions` or `ParseFileWithOptions` with `AllowUnstructured`:
 
+<!-- doc-example: pkg/io ExampleParseYAMLWithOptions -->
 ```go
+yamlData := []byte(`apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+---
+apiVersion: example.com/v1
+kind: Widget
+metadata:
+  name: my-widget
+`)
+
 opts := io.ParseOptions{AllowUnstructured: true}
 objects, err := io.ParseYAMLWithOptions(yamlData, opts)
+if err != nil {
+    panic(err)
+}
 // Known types are returned as typed objects (e.g. *corev1.Pod).
 // Unknown types are returned as *unstructured.Unstructured.
+for _, obj := range objects {
+    fmt.Printf("%T\n", obj)
+}
 ```
+<!-- doc-example:end -->
 
 ### Load and Save
 
+`SaveFile` writes one object as YAML; `LoadFile` reads YAML into an object you pass:
+
+<!-- doc-example: pkg/io ExampleSaveFile -->
 ```go
-// Load a single object from file
-obj, err := io.LoadFile("service.yaml")
+dir, err := os.MkdirTemp("", "kure-io-example")
+if err != nil {
+    panic(err)
+}
+defer func() { _ = os.RemoveAll(dir) }()
+path := filepath.Join(dir, "service.yaml")
 
 // Save an object to file
-err := io.SaveFile("output.yaml", deployment)
+service := kubernetes.CreateService("web", "default")
+if err := io.SaveFile(path, service); err != nil {
+    panic(err)
+}
+
+// Load a single object from file
+var loaded corev1.Service
+if err := io.LoadFile(path, &loaded); err != nil {
+    panic(err)
+}
+fmt.Println(loaded.Kind, loaded.Namespace+"/"+loaded.Name)
 ```
+<!-- doc-example:end -->
 
 ## Serialization
 
 ### Marshal and Unmarshal
 
-```go
-// Serialize to YAML bytes
-data, err := io.Marshal(deployment)
+`Marshal` writes YAML to an `io.Writer`, and `Unmarshal` reads it from an `io.Reader`:
 
-// Deserialize from YAML bytes
+<!-- doc-example: pkg/io ExampleMarshal -->
+```go
+deployment := kubernetes.CreateDeployment("web", "default")
+
+// Serialize to YAML
+var buf bytes.Buffer
+if err := io.Marshal(&buf, deployment); err != nil {
+    panic(err)
+}
+
+// Deserialize from YAML
 var obj appsv1.Deployment
-err := io.Unmarshal(data, &obj)
+if err := io.Unmarshal(&buf, &obj); err != nil {
+    panic(err)
+}
+fmt.Println(obj.Kind, obj.Namespace+"/"+obj.Name)
 ```
+<!-- doc-example:end -->
 
 ### Encode Multiple Objects
 
+The encoders take `[]*client.Object`, where the parsers return `[]client.Object`. The YAML
+encoder separates documents with `---`. The JSON encoder writes one object per line and follows
+each, the last included, with a `---` line, so its output is not a JSON array.
+
+<!-- doc-example: pkg/io ExampleEncodeObjectsToYAML -->
 ```go
+var configMap client.Object = kubernetes.CreateConfigMap("app-config", "default")
+var service client.Object = kubernetes.CreateService("web", "default")
+objects := []*client.Object{&configMap, &service}
+
 // Encode as multi-document YAML
 yamlData, err := io.EncodeObjectsToYAML(objects)
+if err != nil {
+    panic(err)
+}
 
-// Encode as JSON array
+// Encode as JSON: one object per line, each followed by a --- separator
 jsonData, err := io.EncodeObjectsToJSON(objects)
+if err != nil {
+    panic(err)
+}
+
+fmt.Print(string(yamlData))
+fmt.Print(string(jsonData))
 ```
+<!-- doc-example:end -->
 
 ### Deterministic Field Ordering
 
+<!-- doc-example: pkg/io ExampleEncodeObjectsToYAMLWithOptions -->
 ```go
-// Encode with Kubernetes-conventional field ordering
+configMap := kubernetes.CreateConfigMap("app-config", "default")
+configMap.Data = map[string]string{"LOG_LEVEL": "info"}
+var obj client.Object = configMap
+objects := []*client.Object{&obj}
+
+// Encode with Kubernetes-conventional field ordering:
+// apiVersion, kind, metadata, spec, ... status (last)
 opts := io.EncodeOptions{KubernetesFieldOrder: true}
 yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
-// Output: apiVersion, kind, metadata, spec, ... status (last)
+if err != nil {
+    panic(err)
+}
+fmt.Print(string(yamlData))
 ```
+<!-- doc-example:end -->
 
 ### Server-Set Field Stripping
 
 By default, encoding strips server-managed metadata fields that should not appear in client-generated manifests: `managedFields`, `resourceVersion`, `uid`, `generation`, `selfLink`, the `kubectl.kubernetes.io/last-applied-configuration` annotation, null `creationTimestamp`, and empty `status`.
 
+The example encodes one Service at each stripping level and reports whether its
+`resourceVersion` and its empty `status` survived:
+
+<!-- doc-example: pkg/io ExampleServerFieldStripping -->
 ```go
-// Default behavior — full stripping (zero value of ServerFieldStripping)
-yamlData, err := io.EncodeObjectsToYAML(objects)
+// A Service as read back from a cluster: a resourceVersion, and an empty status
+service := kubernetes.CreateService("web", "default")
+service.ResourceVersion = "12345"
+var obj client.Object = service
+objects := []*client.Object{&obj}
 
-// Explicit full stripping with field ordering
-opts := io.EncodeOptions{
-    KubernetesFieldOrder: true,
-    ServerFieldStripping: io.StripServerFieldsFull,
+for _, opts := range []io.EncodeOptions{
+    // Default behavior — full stripping (the zero value, which EncodeObjectsToYAML uses)
+    {},
+    // Explicit full stripping with field ordering
+    {KubernetesFieldOrder: true, ServerFieldStripping: io.StripServerFieldsFull},
+    // Basic stripping (only null creationTimestamp and empty status)
+    {ServerFieldStripping: io.StripServerFieldsBasic},
+    // No stripping — preserve all fields as-is
+    {ServerFieldStripping: io.StripServerFieldsNone},
+} {
+    yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
+    if err != nil {
+        panic(err)
+    }
+    out := string(yamlData)
+    fmt.Println(strings.Contains(out, "resourceVersion:"), strings.Contains(out, "status:"))
 }
-yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
-
-// Basic stripping (only null creationTimestamp and empty status)
-opts := io.EncodeOptions{
-    ServerFieldStripping: io.StripServerFieldsBasic,
-}
-yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
-
-// No stripping — preserve all fields as-is
-opts := io.EncodeOptions{
-    ServerFieldStripping: io.StripServerFieldsNone,
-}
-yamlData, err := io.EncodeObjectsToYAMLWithOptions(objects, opts)
 ```
+<!-- doc-example:end -->
 
 ## Printing
 
@@ -121,26 +225,47 @@ The package supports kubectl-compatible output formats:
 
 ### Usage
 
+`ValidateOutputFormat` turns a user-supplied string into an `OutputFormat`, and fails on one it
+does not know:
+
+<!-- doc-example: pkg/io ExampleNewResourcePrinter -->
 ```go
+configMap := kubernetes.CreateConfigMap("app-config", "default")
+configMap.Labels = map[string]string{"app": "web"}
+var obj client.Object = configMap
+objects := []*client.Object{&obj}
+
 // Print as YAML to stdout
-err := io.PrintObjectsAsYAML(objects, os.Stdout)
+if err := io.PrintObjectsAsYAML(objects, os.Stdout); err != nil {
+    panic(err)
+}
 
 // Print as table
-err := io.PrintObjectsAsTable(objects, false, false, os.Stdout)
+if err := io.PrintObjectsAsTable(objects, false, false, os.Stdout); err != nil {
+    panic(err)
+}
 
 // Use ResourcePrinter for configurable output
 printer := io.NewResourcePrinter(io.PrintOptions{
     OutputFormat: io.OutputFormatTable,
     ShowLabels:   true,
 })
-err := printer.Print(objects, os.Stdout)
-
-// Format-agnostic printing (selects printer by format string)
-err := io.PrintObjects(objects, "yaml", os.Stdout)
+if err := printer.Print(objects, os.Stdout); err != nil {
+    panic(err)
+}
 
 // Validate a format string before use
-err := io.ValidateOutputFormat("table")
+format, err := io.ValidateOutputFormat("name")
+if err != nil {
+    panic(err)
+}
+
+// Format-agnostic printing (selects the printer by format)
+if err := io.PrintObjects(objects, format, io.PrintOptions{}, os.Stdout); err != nil {
+    panic(err)
+}
 ```
+<!-- doc-example:end -->
 
 ## Related Packages
 

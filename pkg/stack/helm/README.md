@@ -13,17 +13,22 @@ This package provides two utilities:
 
 No Kubernetes cluster connection is required.
 
+Each Go block on this page, except the two marked as excerpts, is the body of an `Example`
+function in `example_test.go`: it imports this package as `helm`,
+`github.com/go-kure/kure/pkg/io`, and `fmt`. `go test` runs the `SplitByHookWeight` example and
+checks its output; it compiles the `RenderChart` examples without running them, because they
+pull a chart from a registry.
+
 ## RenderChart
 
 **OCI registry:**
 
+<!-- doc-example: pkg/stack/helm ExampleRenderChart -->
 ```go
-import "github.com/go-kure/kure/pkg/stack/helm"
-
 manifests, err := helm.RenderChart(
     "oci://registry.example.com/charts/cilium", // OCI chart URL
-    "1.16.5",                                   // chart version
-    map[string]any{                             // value overrides (merged on top of chart defaults)
+    "1.16.5", // chart version
+    map[string]any{ // value overrides (merged on top of chart defaults)
         "kubeProxyReplacement": true,
         "ipam": map[string]any{
             "mode": "kubernetes",
@@ -31,20 +36,28 @@ manifests, err := helm.RenderChart(
     },
 )
 if err != nil {
-    return fmt.Errorf("render cilium: %w", err)
+    panic(err)
 }
 // manifests is multi-doc YAML suitable for kubectl apply -f -
+fmt.Print(string(manifests))
 ```
+<!-- doc-example:end -->
 
 **HTTP/HTTPS repository (public only):**
 
+<!-- doc-example: pkg/stack/helm ExampleRenderChart_http -->
 ```go
 manifests, err := helm.RenderChart(
     "https://charts.bitnami.com/bitnami/redis", // repo base URL + chart name
     "19.0.0",
     map[string]any{"replicaCount": 3},
 )
+if err != nil {
+    panic(err)
+}
+fmt.Print(string(manifests))
 ```
+<!-- doc-example:end -->
 
 The chart name is the last path segment; the rest is the repository base URL.
 HTTP repositories must be publicly accessible — basic auth, client TLS, and
@@ -55,7 +68,10 @@ other credential mechanisms are not supported.
 By default rendering uses release name `"release"` in namespace `"default"`.
 Pass `RenderOption`s to override either:
 
+<!-- doc-example: pkg/stack/helm ExampleWithReleaseName -->
 ```go
+values := map[string]any{"kubeProxyReplacement": true}
+
 manifests, err := helm.RenderChart(
     "oci://registry.example.com/charts/cilium",
     "1.16.5",
@@ -63,10 +79,16 @@ manifests, err := helm.RenderChart(
     helm.WithReleaseName("my-cilium"),
     helm.WithNamespace("kube-system"),
 )
+if err != nil {
+    panic(err)
+}
+fmt.Print(string(manifests))
 ```
+<!-- doc-example:end -->
 
 ## API
 
+<!-- doc-example:excerpt the declarations from render.go, not calls -->
 ```go
 // RenderChart pulls a Helm chart and renders it client-side, returning multi-doc YAML.
 //
@@ -97,9 +119,36 @@ func WithNamespace(namespace string) RenderOption
 Groups a slice of rendered Helm objects by `helm.sh/hook` phase and
 `helm.sh/hook-weight` for ordered FluxCD Kustomization generation.
 
+`io.ParseYAML` turns the multi-doc YAML `RenderChart` returns into the `[]client.Object` this
+takes. Here the `test` hook is excluded, as the table below says:
+
+<!-- doc-example: pkg/stack/helm ExampleSplitByHookWeight -->
 ```go
-objects, _ := helm.RenderChart("oci://example.com/chart", "1.0.0", nil)
-parsed := parseYAML(objects) // []client.Object
+// Multi-doc YAML as RenderChart returns it
+rendered := []byte(`apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "-5"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-test
+  annotations:
+    helm.sh/hook: test
+`)
+parsed, err := io.ParseYAML(rendered) // []client.Object
+if err != nil {
+    panic(err)
+}
 
 groups := helm.SplitByHookWeight(parsed)
 for _, g := range groups {
@@ -107,6 +156,7 @@ for _, g := range groups {
     fmt.Printf("phase=%q weight=%d resources=%d\n", g.Phase, g.Weight, len(g.Resources))
 }
 ```
+<!-- doc-example:end -->
 
 **Phase ordering policy:**
 
@@ -124,6 +174,7 @@ Comma-separated annotations (e.g. `"pre-install,post-install"`) are treated as
 a single opaque phase string and placed in the unknown group to avoid SSA
 ownership conflicts between multiple Kustomizations.
 
+<!-- doc-example:excerpt the declarations from hooks.go, not calls -->
 ```go
 // HookGroup is a set of Helm manifests sharing the same hook phase and weight.
 type HookGroup struct {

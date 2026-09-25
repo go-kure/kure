@@ -17,6 +17,12 @@ had to be edited whenever the scheme gained a kind and were silently wrong until
 someone noticed. It is one-directional and data-only — this package calls a lookup
 and reads a bool; nothing in `pkg/kubernetes` imports `manifest`.
 
+Each Go block on this page is the body of an `Example` function in `example_test.go`, which
+`go test` runs: it imports this package as `manifest`,
+`apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"`,
+`k8s.io/apimachinery/pkg/apis/meta/v1/unstructured`, `k8s.io/apimachinery/pkg/runtime/schema`,
+and `fmt` for the line that prints what the example found.
+
 ## CRD recognition
 
 `IsCRD` reports whether an object is a `CustomResourceDefinition`, by type or GVK,
@@ -25,9 +31,18 @@ returns the `GroupKind` a CRD defines (`spec.group` + `spec.names.kind`), and
 `CRDScope` additionally returns its declared scope, defaulting to `NamespaceScoped`
 when `spec.scope` is absent (matching Kubernetes):
 
+<!-- doc-example: pkg/manifest ExampleCRDScope -->
 ```go
+obj := &apiextv1.CustomResourceDefinition{}
+obj.SetName("widgets.example.com")
+obj.Spec.Group = "example.com"
+obj.Spec.Names.Kind = "Widget"
+obj.Spec.Scope = apiextv1.ClusterScoped
+
 gk, scope, ok := manifest.CRDScope(obj)
+fmt.Println(gk, scope, ok)
 ```
+<!-- doc-example:end -->
 
 ## Scope determination
 
@@ -59,16 +74,32 @@ this order:
 Anything else is `ScopeUnknown` — callers are expected to fail closed rather than
 guess:
 
+<!-- doc-example: pkg/manifest ExampleScope -->
 ```go
+obj := &unstructured.Unstructured{Object: map[string]any{
+    "apiVersion": "example.com/v1",
+    "kind":       "Widget",
+    "metadata":   map[string]any{"name": "my-widget"},
+}}
+
+// The spec.scope of the CRDs known in the same context
+crdScopes := map[schema.GroupKind]apiextv1.ResourceScope{
+    {Group: "example.com", Kind: "Widget"}: apiextv1.NamespaceScoped,
+}
+
 switch manifest.Scope(obj, crdScopes) {
 case manifest.ScopeNamespaced:
     // must declare metadata.namespace
+    fmt.Println("namespaced")
 case manifest.ScopeCluster:
     // cluster-scoped
+    fmt.Println("cluster-scoped")
 case manifest.ScopeUnknown:
     // unknown custom resource with no defining CRD in scope
+    fmt.Println("unknown")
 }
 ```
+<!-- doc-example:end -->
 
 ## API overview
 
