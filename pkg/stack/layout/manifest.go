@@ -225,6 +225,12 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	return ml.writeToDisk(basePath, true)
 }
 
+// writesSingleFile reports whether ml, written AppFileSingle, writes its one
+// file, <Name>.yaml: only when it has a resource. Its parent's
+// kustomization.yaml lists that file only then, or the entry would name a
+// file that does not exist.
+func (ml *ManifestLayout) writesSingleFile() bool { return len(ml.Resources) > 0 }
+
 // writeToDisk writes ml and its children. Every layout's directory gets a
 // kustomization.yaml, even when it lists nothing ("resources: []"): its parent
 // lists the directory, or a Flux Kustomization's spec.path names it, and an
@@ -385,7 +391,9 @@ func (ml *ManifestLayout) writeToDisk(basePath string, root bool) error {
 				continue
 			}
 			if child.ApplicationFileMode == AppFileSingle {
-				entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				if child.writesSingleFile() {
+					entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				}
 			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
 				// FluxIntegratedPerLayout: the child is applied by the Flux
 				// Kustomization the integrator placed in ml.Resources, which

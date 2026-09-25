@@ -3,6 +3,7 @@ package layout
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -12,8 +13,9 @@ import (
 )
 
 // checkLayoutTree refuses a tree in which two layouts resolve to the same
-// directory (or, for AppFileSingle layouts, the same file), before anything
-// is written (go-kure/kure#771). Each such layout writes its own files there,
+// directory (or, for AppFileSingle layouts, the same file), or an
+// AppFileSingle child has children (see checkSingleChildLeaf), before
+// anything is written (go-kure/kure#771). Each such layout writes its own files there,
 // and the later kustomization.yaml silently replaces the earlier one, dropping
 // its resources from the kustomize graph. Directories are compared
 // case-insensitively, as on default macOS volumes. outDir is the writer's own
@@ -48,6 +50,9 @@ func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
 			if child == nil {
 				continue
 			}
+			if err := checkSingleChildLeaf(child, outDir); err != nil {
+				return err
+			}
 			if err := walk(child); err != nil {
 				return err
 			}
@@ -55,6 +60,22 @@ func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
 		return nil
 	}
 	return walk(root)
+}
+
+// checkSingleChildLeaf refuses an AppFileSingle child (as outDir treats it)
+// that has children of its own. Such a child writes one file into its
+// parent's directory and no kustomization.yaml, so nothing would list the
+// layouts below it and they would silently drop out of the build
+// (go-kure/kure#860). The root is not checked: it has no parent directory to
+// write into, and the synthetic cluster wrapper a walker builds (no origin,
+// one child) takes Config's AppFileSingle in WriteManifest.
+func checkSingleChildLeaf(child *ManifestLayout, outDir outDirFunc) error {
+	dir, single := outDir(child)
+	if !single || !slices.ContainsFunc(child.Children, func(c *ManifestLayout) bool { return c != nil }) {
+		return nil
+	}
+	return errors.NewFileError("write", filepath.Join(dir, child.Name+".yaml"),
+		fmt.Sprintf("layout %q is AppFileSingle and has child layouts: it writes one file into its parent's directory and no kustomization.yaml, so nothing would list them", child.FullRepoPath()), nil)
 }
 
 // checkResourceIdentities refuses a layout that holds two resources with one

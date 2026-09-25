@@ -169,14 +169,14 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout, root bool) e
 	// single-segment Namespace. With FlattenSingleTier the root may absorb a
 	// collapsed child's Resources, in which case it does need a
 	// kustomization.yaml, and so does one that holds an AppFileSingle
-	// child's file.
+	// child's file (a child with no resources writes none).
 	skipClusterRoot := ml.Namespace != "" &&
 		strings.Count(ml.Namespace, string(filepath.Separator)) == 0 &&
 		ml.Name == "" &&
 		len(fileGroups) == 0 &&
 		!ml.rendersBundle() &&
 		!slices.ContainsFunc(ml.Children, func(c *ManifestLayout) bool {
-			return c != nil && manifestAppMode(c, cfg) == AppFileSingle
+			return c != nil && manifestAppMode(c, cfg) == AppFileSingle && c.writesSingleFile()
 		})
 
 	// Generate kustomization.yaml if there are resources or children, except at the empty cluster root.
@@ -247,7 +247,9 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout, root bool) e
 			// The child's effective mode, as manifestOutDir writes it: a
 			// child with no mode of its own takes cfg's.
 			if manifestAppMode(child, cfg) == AppFileSingle {
-				entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				if child.writesSingleFile() {
+					entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
+				}
 			} else if ml.FluxPlacement != FluxIntegratedPerLayout {
 				entry(fmt.Sprintf("  - %s\n", child.Name))
 			}
