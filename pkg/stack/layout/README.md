@@ -48,8 +48,9 @@ the resource or extra files of the layout that owns the directory, or another `A
 layout's file (go-kure/kure#871). A child named `kustomization`, or
 named like one of its parent's generated files (`default-configmap-a`, or `configmap` under
 `FileNamingKindName` + `FilePerKind`), is refused, as is an `AppFileSingle` root named
-`kustomization`. A child with no resources writes no `<Name>.yaml`, so its name is never refused;
-its extra files, which it still writes, are checked.
+`kustomization`. A child with no resources writes no `<Name>.yaml`, so its name is never refused as
+replacing another file; its directory, which the writers still create, and its extra files are
+checked.
 Directories and file names are compared case-insensitively, as on default macOS volumes: a child
 named `Kustomization`, or `Default-ConfigMap-A`, is refused too.
 
