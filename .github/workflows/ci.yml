@@ -120,7 +120,9 @@ jobs:
   validate:
     name: lint
     runs-on: autops-kube-kure
-    timeout-minutes: 15
+    # The two cache restores alone take ~4.5 min each on the in-cluster runner;
+    # 15 min was hit once with the linters themselves under a minute.
+    timeout-minutes: 25
     needs: [changes]
     if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
 
