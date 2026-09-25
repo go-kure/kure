@@ -62,7 +62,11 @@ func shieldedIn(kdirs []string, base, p string, strict bool) bool {
 //   - the file of an AppFileSingle child in D's build that its parent's
 //     kustomization.yaml does not list (an umbrella child, or one that
 //     renders bundles): Flux would apply it, where the Explicit mode leaves
-//     it to the child's own Kustomization.
+//     it to the child's own Kustomization;
+//   - the file of an AppFileSingle child in D's build that a kustomization.yaml
+//     outside D's build lists: its parent's, which lists the file by its path
+//     below the parent's directory (go-kure/kure#879), so the parent's
+//     directory is D's or above it. Both builds would apply it.
 //
 // Flux's tests are its own: the file extension as it is, and the base name
 // against the kustomization file names exactly. Directories are compared as
@@ -81,26 +85,34 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 		raw      string // that directory as written, for messages
 		extra    bool   // an ExtraFile, not a resource file
 		unlisted bool   // a resource file its directory's kustomization.yaml does not list
+		// lister is the parent whose kustomization.yaml lists this
+		// AppFileSingle file, possibly from a directory above it.
+		lister *ManifestLayout
 	}
 	var dirs []dirLayout
 	var files []file
 	var walk func(l, parent *ManifestLayout) error
 	walk = func(l, parent *ManifestLayout) error {
 		dir, single := plan.outDir(l)
-		add := func(name string, extra, unlisted bool) {
+		add := func(name string, extra, unlisted bool, lister *ManifestLayout) {
 			raw := path.Dir(path.Join(filepath.ToSlash(dir), name))
-			files = append(files, file{l, name, normDir(raw), raw, extra, unlisted})
+			files = append(files, file{l, name, normDir(raw), raw, extra, unlisted, lister})
 		}
 		for _, ef := range l.ExtraFiles {
-			add(ef.Name, true, false)
+			add(ef.Name, true, false, nil)
 		}
-		if single && parent != nil && l.writesSingleFile() && plan.childEntry(parent, l) == "" {
-			add(l.Name+".yaml", false, true)
+		if single && parent != nil && l.writesSingleFile() {
+			switch {
+			case plan.childEntry(parent, l) == "":
+				add(l.Name+".yaml", false, true, nil)
+			case plan.writesKustomization(parent, parent == root):
+				add(l.Name+".yaml", false, false, parent)
+			}
 		}
 		if !single {
 			names, _ := plan.files(l)
 			for _, name := range names {
-				add(name, false, false)
+				add(name, false, false, nil)
 			}
 			dirs = append(dirs, dirLayout{l, normDir(dir), plan.writesKustomization(l, parent == nil), parent != nil && plan.childEntry(parent, l) == ""})
 			if plan.kustomizationMode(l) == KustomizationRecursive {
@@ -163,6 +175,10 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 			control := slices.Contains(kustomizeControlFiles, path.Base(f.name))
 			var why string
 			switch {
+			case f.lister != nil:
+				// No kustomization.yaml shields the file, so its lister's
+				// is not below D: that build applies it, and so would D's.
+				why = fmt.Sprintf("would apply the file %q of layout %q, which the kustomization.yaml of layout %q lists as well: its objects would be applied twice", f.name, f.l.FullRepoPath(), f.lister.FullRepoPath())
 			case control && (f.extra || f.unlisted):
 				kind := "extra file"
 				if f.unlisted {

@@ -21,6 +21,8 @@ import (
 //     there, and the later kustomization.yaml silently replaces the earlier
 //     one, dropping its resources from the kustomize graph;
 //   - an AppFileSingle child has children (see checkSingleChildLeaf);
+//   - an AppFileSingle child's file, which its parent's kustomization.yaml
+//     lists, lands outside the parent's directory (see checkSingleChildEntry);
 //   - an extra file takes a path the writer owns (see checkExtraFiles);
 //   - an AppFileSingle layout's file or extra file replaces another layout's
 //     file, needs a directory where another layout writes a file, or is a
@@ -74,6 +76,9 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 			if err := checkSingleChildLeaf(child, outDir); err != nil {
 				return err
 			}
+			if err := checkSingleChildEntry(l, child, plan, l == root); err != nil {
+				return err
+			}
 			if err := walk(child); err != nil {
 				return err
 			}
@@ -99,9 +104,10 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 // kure writes, or the Flux build of its Recursive directory, would not build
 // (go-kure/kure#880). The builds, each checked on its own, are:
 //   - every layout the writer writes a kustomization.yaml for: its own
-//     resource files, the file of each AppFileSingle child it lists, and the
-//     build of each directory it lists, each entry resolved against its
-//     directory as kustomize resolves it;
+//     resource files, the file of each AppFileSingle child it lists (by its
+//     path below the directory, see childFileEntry), and the build of each
+//     directory it lists, each entry resolved against its directory as
+//     kustomize resolves it;
 //   - every KustomizationRecursive layout marked with SetFluxBuild: the
 //     objects of every layout whose files land in its directory or below it,
 //     where a directory with a kustomization.yaml the writer writes is taken in
@@ -180,7 +186,11 @@ func checkBuildIdentities(root *ManifestLayout, plan writerPlan) error {
 	// recursive adds to in the layouts whose objects the Flux build of the
 	// Recursive layout d takes in. A directory layout's own kustomization.yaml
 	// does not shield it (Flux adds its directory); an AppFileSingle file is
-	// shielded by the one in its own directory, which lists it or not.
+	// shielded by one in its own directory or above it, below d, which lists
+	// it or not. A listed file lies at or below its lister's directory, so a
+	// lister below d shields it and its build takes it in; one that no
+	// kustomization.yaml shields, listed from d's directory or above,
+	// checkRecursiveLayouts refuses.
 	recursive := func(d laid, in map[*ManifestLayout]bool) {
 		for _, t := range all {
 			if (t.dir != d.dir && !below(d.dir, t.dir)) || shieldedIn(kdirs, d.dir, t.dir, !t.single) {
