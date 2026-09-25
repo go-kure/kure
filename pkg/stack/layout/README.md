@@ -74,7 +74,7 @@ resource with an already registered id`), so that build would fail. The identity
 own: group, version, kind, name and namespace, where an omitted namespace counts as `default` and
 a kind kustomize knows is cluster-scoped (such as `Namespace`) has none, even when the object sets
 one. Two versions of one object (`autoscaling/v1` and `autoscaling/v2`) are two identities, and
-build. A build is every `kustomization.yaml` a writer writes, with the files and the
+kustomize builds both. A build is every `kustomization.yaml` a writer writes, with the files and the
 `AppFileSingle` child files it lists and, recursively, the build of each child directory it lists;
 and the Flux build of a `KustomizationRecursive` directory marked with `SetFluxBuild` (see
 "Kustomization Generation"). The error names both layouts and the innermost build. A child its
