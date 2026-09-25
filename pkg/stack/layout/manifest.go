@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -219,10 +218,11 @@ func sanitizePackageKey(packageKey string) string {
 // which two layouts resolve to the same directory (see checkLayoutTree)
 // before writing anything.
 func (ml *ManifestLayout) WriteToDisk(basePath string) error {
-	if err := checkLayoutTree(ml, diskOutDir(basePath)); err != nil {
+	plan := diskPlan(basePath)
+	if err := checkLayoutTree(ml, plan); err != nil {
 		return err
 	}
-	return ml.writeToDisk(basePath, true)
+	return ml.writeToDisk(plan, true)
 }
 
 // writesSingleFile reports whether ml, written AppFileSingle, writes its one
@@ -239,47 +239,10 @@ func (ml *ManifestLayout) writesSingleFile() bool { return len(ml.Resources) > 0
 // kustomization.yaml: the parent's lists that file, and one of the child's
 // would replace it (go-kure/kure#860). An AppFileSingle root, which has no
 // parent to list its file, still writes one.
-func (ml *ManifestLayout) writeToDisk(basePath string, root bool) error {
-	fileMode := ml.FilePer
-	if fileMode == FilePerUnset {
-		fileMode = FilePerResource
-	}
-	appMode := ml.ApplicationFileMode
-	if appMode == AppFileUnset {
-		appMode = AppFilePerResource
-	}
-
-	outDir := diskOutDir(basePath)
-	fullPath, _ := outDir(ml)
-
-	fileGroups := map[string][]client.Object{}
-	for _, obj := range ml.Resources {
-		ns := obj.GetNamespace()
-		if ns == "" {
-			ns = "cluster"
-		}
-
-		kind := strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind)
-		name := obj.GetName()
-
-		var fileName string
-		if appMode == AppFileSingle {
-			fileName = fmt.Sprintf("%s.yaml", ml.Name)
-		} else {
-			nameFn := ml.resolveManifestFileName()
-			fileName = nameFn(ns, kind, name, fileMode)
-		}
-
-		fileGroups[fileName] = append(fileGroups[fileName], obj)
-	}
-
-	// Sort file names for deterministic output
-	sortedFileNames := make([]string, 0, len(fileGroups))
-	for fileName := range fileGroups {
-		sortedFileNames = append(sortedFileNames, fileName)
-	}
-	sort.Strings(sortedFileNames)
-	if err := checkExtraFiles(ml, outDir, sortedFileNames); err != nil {
+func (ml *ManifestLayout) writeToDisk(plan writerPlan, root bool) error {
+	fullPath, _ := plan.outDir(ml)
+	sortedFileNames, fileGroups := plan.files(ml)
+	if err := checkExtraFiles(ml, plan.outDir, sortedFileNames); err != nil {
 		return err
 	}
 	// Created only after the check, so a refused layout leaves nothing behind.
@@ -322,14 +285,11 @@ func (ml *ManifestLayout) writeToDisk(basePath string, root bool) error {
 		return err
 	}
 
-	kMode := ml.Mode
-	if kMode == KustomizationUnset {
-		kMode = KustomizationExplicit
-	}
+	kMode := plan.kustomizationMode(ml)
 
 	// Generate kustomization.yaml if there are resources or children
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
-	if appMode != AppFileSingle || (root && (len(fileGroups) > 0 || len(ml.Children) > 0)) {
+	if plan.writesKustomization(ml, root) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -426,7 +386,7 @@ func (ml *ManifestLayout) writeToDisk(basePath string, root bool) error {
 	}
 
 	for _, child := range ml.Children {
-		if err := child.writeToDisk(basePath, false); err != nil {
+		if err := child.writeToDisk(plan, false); err != nil {
 			return err
 		}
 	}

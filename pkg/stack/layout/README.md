@@ -42,7 +42,13 @@ now gets that name twice (`.../<name>/<name>`); pass the parent's path instead.
 Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
 anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
 layouts that resolve to the same file, or an `AppFileSingle` child with children of its own.
-Directories are compared case-insensitively, as on default macOS volumes.
+It also refuses an `AppFileSingle` layout whose file, `<Name>.yaml`, would replace another file
+written into the same directory: the `kustomization.yaml` there, or one of the resource files of
+the layout that owns the directory (go-kure/kure#871). A child named `kustomization`, or named like
+one of its parent's generated files (`default-configmap-a`, or `configmap` under
+`FileNamingKindName` + `FilePerKind`), is refused, as is an `AppFileSingle` root named
+`kustomization`. A child with no resources writes no file and is never refused. Directories and
+file names are compared case-insensitively, as on default macOS volumes.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
@@ -165,7 +171,8 @@ Controls how resource YAML files are named:
   nothing is written `resources: []` (kustomize rejects a bare `resources:` as empty).
 - An `AppFileSingle` child writes one file, `<Name>.yaml`, into its parent's directory and never a
   `kustomization.yaml` of its own (before go-kure/kure#860 it replaced the parent's, dropping the
-  parent's files). The parent's `kustomization.yaml` lists that file next to its own; in
+  parent's files), and its file may not take the name of a file the parent writes there (see
+  "Layout paths"). The parent's `kustomization.yaml` lists that file next to its own; in
   `WriteManifest` the child's mode is its effective one, so a child with no mode of its own under
   `ArgoProfile`'s `AppFileSingle` is listed as `<Name>.yaml`, not as a directory, and the unnamed
   cluster root, which `WriteManifest` otherwise leaves without a `kustomization.yaml`, gets one

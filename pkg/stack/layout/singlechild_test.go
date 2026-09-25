@@ -384,3 +384,148 @@ func TestWriters_SingleRootListsChildrenInItsNamespace(t *testing.T) {
 		})
 	}
 }
+
+// writeRefused runs one writer on ml and returns its error, failing the test
+// when the writer left any output behind: a refusal comes before anything is
+// written.
+func writeRefused(t *testing.T, writer string, cfg layout.Config, ml *layout.ManifestLayout) error {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "out")
+	var buf bytes.Buffer
+	var err error
+	switch writer {
+	case "WriteToDisk":
+		err = ml.WriteToDisk(dir)
+	case "WriteToTar":
+		err = ml.WriteToTar(&buf)
+	case "WriteManifest":
+		err = layout.WriteManifest(dir, cfg, ml)
+	default:
+		t.Fatalf("unknown writer %q", writer)
+	}
+	if _, statErr := os.Stat(dir); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("%s: a refused tree left output at %s (stat: %v)", writer, dir, statErr)
+	}
+	if buf.Len() > 0 {
+		t.Errorf("%s: a refused tree wrote %d tar bytes", writer, buf.Len())
+	}
+	return err
+}
+
+// TestWriters_RefuseSingleFileOverParentFile: an AppFileSingle child's file,
+// <Name>.yaml, lands in its parent's directory, so every writer refuses a
+// child whose file is the parent's kustomization.yaml or one of the parent's
+// resource files before writing anything (go-kure/kure#871). Without the
+// refusal the child's file replaced the parent's, dropping its objects or its
+// whole kustomization.
+func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
+	allWriters := []string{"WriteToDisk", "WriteToTar", "WriteManifest"}
+	cases := map[string]struct {
+		cfg     layout.Config
+		build   func() *layout.ManifestLayout
+		writers []string
+		want    string // the path the refusal names
+	}{
+		"child named kustomization": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children[0].Name = "kustomization"
+				return p
+			},
+			writers: allWriters,
+			want:    "kustomization.yaml",
+		},
+		// Names are compared as checkLayoutTree compares directories:
+		// case-insensitively, as on default macOS volumes, where
+		// Kustomization.yaml and kustomization.yaml are one file.
+		"child named Kustomization": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children[0].Name = "Kustomization"
+				return p
+			},
+			writers: allWriters,
+			want:    "Kustomization.yaml",
+		},
+		"child named like a generated file": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children[0].Name = "default-configmap-a"
+				return p
+			},
+			writers: allWriters,
+			want:    "default-configmap-a.yaml",
+		},
+		"child named like a kind file, layout naming": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.FileNaming = layout.FileNamingKindName
+				p.FilePer = layout.FilePerKind
+				p.Children[0].Name = "configmap"
+				return p
+			},
+			writers: []string{"WriteToDisk", "WriteToTar"},
+			want:    "configmap.yaml",
+		},
+		// WriteManifest names files from Config, not the layout.
+		"child named like a kind file, Config naming": {
+			cfg: layout.Config{FileNaming: layout.FileNamingKindName, FilePer: layout.FilePerKind},
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children[0].Name = "configmap"
+				return p
+			},
+			writers: []string{"WriteManifest"},
+			want:    "configmap.yaml",
+		},
+		"child single through Config": {
+			cfg: layout.Config{ApplicationFileMode: layout.AppFileSingle},
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileUnset)
+				p.Children[0].Name = "kustomization"
+				return p
+			},
+			writers: []string{"WriteManifest"},
+			want:    "kustomization.yaml",
+		},
+		// A root has no parent, but writes its file and its own
+		// kustomization.yaml into one directory, its Namespace.
+		"root named kustomization": {
+			build: func() *layout.ManifestLayout {
+				root := cmLayout("kustomization", "demo")
+				root.ApplicationFileMode = layout.AppFileSingle
+				return root
+			},
+			writers: allWriters,
+			want:    "kustomization.yaml",
+		},
+	}
+	for name, tc := range cases {
+		for _, writer := range tc.writers {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				err := writeRefused(t, writer, tc.cfg, tc.build())
+				if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "would replace") {
+					t.Fatalf("err = %v, want a refusal naming %s", err, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// TestWriters_ResourcelessSingleChildNamedLikeParentFile: an AppFileSingle
+// child without resources writes no file, so its name replaces nothing and
+// the tree is written.
+func TestWriters_ResourcelessSingleChildNamedLikeParentFile(t *testing.T) {
+	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+		t.Run(writer, func(t *testing.T) {
+			p := singleChildParent(layout.AppFileSingle)
+			p.Children[0].Name = "kustomization"
+			p.Children[0].Resources = nil
+			files := writtenFiles(t, writer, layout.Config{}, p)
+			want := []string{"default-configmap-a.yaml", "default-secret-b.yaml"}
+			if got := listedResources(t, files, "p/kustomization.yaml"); !slices.Equal(got, want) {
+				t.Errorf("p/kustomization.yaml lists %v, want %v", got, want)
+			}
+		})
+	}
+}
