@@ -58,11 +58,15 @@ directory `sub` is (or a directory below it), or an extra file `x` of one `AppFi
 and `x/y.yaml` of another. Nor may a layout's directory, including the one the writers create for
 an `AppFileSingle` layout without resources, be or lie beneath a file another layout writes.
 Before this, `WriteToDisk` and `WriteManifest` failed partway with `not a directory`, and
-`WriteToTar` wrote an archive `tar` could not extract. An extra file inside a child layout's
-directory (`sub/v.yaml` next to a directory child `sub`) is written; that directory's
-`kustomization.yaml` does not list it.
-Directories and file names are compared case-insensitively, as on default macOS volumes: a child
-named `Kustomization`, or `Default-ConfigMap-A`, is refused too.
+`WriteToTar` wrote an archive `tar` could not extract. Of the kustomize control files only
+`kustomization.yaml` is written, so a directory named `kustomization`, `Kustomization` or
+`kustomization.yml` clashes with nothing. An `AppFileSingle` layout's extra file inside a sibling
+layout's directory (`sub/v.yaml` next to its parent's directory child `sub`) is written; that
+directory's `kustomization.yaml` does not list it. A layout's own extra file inside its own
+child's directory is refused (see [Extra Files and ConfigMap Generators](#extra-files-and-configmap-generators)).
+Directories and file names are compared case-insensitively, as on default macOS volumes: an
+`AppFileSingle` child named `Kustomization`, or `Default-ConfigMap-A`, is refused too, and so is a
+directory child `Default-ConfigMap-A.yaml` next to its parent's `default-configmap-a.yaml`.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)

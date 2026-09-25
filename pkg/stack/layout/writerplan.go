@@ -292,8 +292,17 @@ func checkSingleFiles(root *ManifestLayout, plan writerPlan) error {
 			}
 		}
 		if plan.writesKustomization(l, root) {
+			// The writers write kustomization.yaml and no other control
+			// file, so only it can clash with a directory. A single layout's
+			// file named like another would still become a second
+			// kustomization of the directory, and is refused as replacing it.
 			for _, f := range kustomizeControlFiles {
-				own(dir, f, fmt.Sprintf("the %s of layout %q", f, l.FullRepoPath()))
+				what := fmt.Sprintf("the %s of layout %q", f, l.FullRepoPath())
+				if f == "kustomization.yaml" {
+					own(dir, f, what)
+				} else {
+					owned[normDir(path.Join(filepath.ToSlash(dir), f))] = "replace " + what
+				}
 			}
 		} else if !isSingle && plan.kustomizationMode(l) == KustomizationRecursive {
 			// A Recursive directory has no kustomization.yaml, and must not
@@ -317,7 +326,7 @@ func checkSingleFiles(root *ManifestLayout, plan writerPlan) error {
 	for _, s := range singles {
 		key := normDir(path.Join(filepath.ToSlash(s.dir), s.file))
 		what, ok := owned[key]
-		if other, landedThere := landed[key]; !ok && landedThere && other.l != s.l {
+		if other, landedThere := landed[key]; !ok && landedThere {
 			what, ok = fmt.Sprintf("replace the %s %q of AppFileSingle layout %q", other.what, other.file, other.l.FullRepoPath()), true
 		}
 		if !ok {
