@@ -915,9 +915,10 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q); the generated one would register the same id in the kustomize build", e.host.FullRepoPath(), obj.GetName(), e.path)
 		}
 	}
-	// A generated Source is one object with every Source of its identity
-	// already in the tree, whatever the API version: a different one would
-	// be a second, competing definition.
+	// Likewise a generated Source's identity (kind, namespace, name, whatever
+	// the API version) must not already be in the tree: flux-system is built
+	// beside it, so even an identical copy would be a second resource with
+	// the same id, and a different one a competing definition.
 	sources, err := indexExistingSources(ml, fluxDir)
 	if err != nil {
 		return err
@@ -927,10 +928,9 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		if !ok {
 			continue
 		}
-		for _, s := range sources[key] {
-			if !sameObject(s.obj, obj) {
-				return errors.Errorf("layout %q already has %s %q (%s) with different content than the one this integration generates: one Source identity must have one definition", s.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), s.obj.GetObjectKind().GroupVersionKind().GroupVersion())
-			}
+		if existing := sources[key]; len(existing) > 0 {
+			s := existing[0]
+			return errors.Errorf("layout %q already has %s %q (%s); the one generated in %s would define the same Source a second time in the kustomize build", s.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), s.obj.GetObjectKind().GroupVersionKind().GroupVersion(), DefaultFluxDirName)
 		}
 	}
 	generated := map[string]bool{}

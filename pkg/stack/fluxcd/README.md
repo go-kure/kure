@@ -356,11 +356,14 @@ resources, nothing beneath it — is kept rather than a second one appended; any
 by an earlier integration, by the caller or emitted by an application, top-level or inside a
 `List` (kustomize builds a List's items): an identity (namespace/name) present twice, or taken by
 a generated CR elsewhere, is refused in every placement, since the kustomize build would register
-the id twice. A generated Source is one object across the whole pass: every Source of its
+the id twice. A generated Source has one definition across the whole pass: every Source of its
 identity — kind, namespace and name, whatever the API version (a `v1beta2` `GitRepository` is the
 same Source as the generated `v1` one) — anywhere in the tree, top-level or inside a `List`, and
 every Source the pass places in another layout, must have the same content, or the integration is
-refused in every placement. An identical Source is kept once per layout that hosts it.
+refused. Under the integrated placements an identical Source is kept once per host layout: two
+layouts that each host it keep a copy each. Under `FluxSeparate` every generated Source goes into
+`flux-system`, which is built beside the rest of the tree, so a Source with a generated Source's
+identity anywhere else in the tree is refused even when it is identical.
 
 ## Bootstrap Generation
 

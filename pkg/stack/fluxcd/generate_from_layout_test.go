@@ -1033,6 +1033,31 @@ func TestFluxSeparate_RejectsExistingCRCollision(t *testing.T) {
 	}
 }
 
+// TestFluxSeparate_RejectsExistingSource: FluxSeparate places every generated
+// Source in flux-system, which the root kustomize build lists beside the rest
+// of the tree, so a Source of that identity already in the tree — even one
+// identical to the generated one — would be built twice.
+func TestFluxSeparate_RejectsExistingSource(t *testing.T) {
+	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
+	gen, err := fluxstack.NewResourceGenerator().GenerateForBundle(&stack.Bundle{Name: "web", SourceRef: webRef}, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gen) != 2 {
+		t.Fatalf("got %d generated objects, want the Kustomization and its GitRepository", len(gen))
+	}
+	same := gen[1]
+	platformApp := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&same}})
+	web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
+	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxSeparate
+	_, err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+	if err == nil || !strings.Contains(err.Error(), `already has GitRepository "web-git"`) {
+		t.Errorf("an identical GitRepository flux-system/web-git already in the tree: got %v, want a refusal naming it", err)
+	}
+}
+
 // TestIntegrateWithLayout_ConflictingSourcesErrors: two bundles whose
 // URL-bearing SourceRefs share a name but not a URL generate two Sources with
 // one identity in one host. Keeping either would silently point the other
@@ -1111,8 +1136,14 @@ func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
 				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
 				rules := propertyGroupings["nodeOnly"]
 				rules.FluxPlacement = placement
-				if _, err := integrator.CreateLayoutWithResources(c, rules); err == nil || !strings.Contains(err.Error(), `GitRepository "web-git" (source.toolkit.fluxcd.io/v1beta2) with different content`) {
-					t.Errorf("v1beta2 and v1 GitRepository flux-system/web-git with different content: got %v, want a conflict error naming it", err)
+				want := `GitRepository "web-git" (source.toolkit.fluxcd.io/v1beta2) with different content`
+				if placement == layout.FluxSeparate {
+					// Separate refuses any Source of a generated identity
+					// already in the tree (TestFluxSeparate_RejectsExistingSource).
+					want = `already has GitRepository "web-git" (source.toolkit.fluxcd.io/v1beta2)`
+				}
+				if _, err := integrator.CreateLayoutWithResources(c, rules); err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("v1beta2 and v1 GitRepository flux-system/web-git with different content: got %v, want an error containing %s", err, want)
 				}
 			})
 		}
