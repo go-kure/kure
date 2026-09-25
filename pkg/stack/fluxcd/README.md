@@ -361,8 +361,19 @@ identity — kind, namespace and name, whatever the API version (a `v1beta2` `Gi
 same Source as the generated `v1` one) — anywhere in the tree, top-level or inside a `List`, and
 every Source the pass places in another layout, must have the same API version and content, or the
 integration is refused. Content is compared as the objects' unstructured form, so a typed Source
-and an unstructured copy of it are the same. Under the integrated placements an identical Source is kept once per host layout: two
-layouts that each host it keep a copy each. Under `FluxSeparate` every generated Source goes into
+and an unstructured copy of it are the same.
+
+Under the integrated placements an identical Source is kept **once per kustomize build**, since
+kustomize refuses one object twice. The builds are the root directory's, which the Flux bootstrap
+applies, and each generated Kustomization's `spec.path`. A build also covers the child
+directories its `kustomization.yaml` lists and the `AppFileSingle` files written into them. When
+the build already holds a copy that the integration did not add (an earlier integration's, the
+caller's or an application's), that copy is kept. Otherwise the topmost copy the integration
+added is kept, and the others in that build are not added: a `sourceRef` names the object, not
+the layout holding it. Two copies the integration did not add, in one build, are refused. Copies
+in separate builds are all kept, each applied by its own build; both Kustomizations then own the
+Source (go-kure/kure#876). Kustomizations the caller or an application places are not builds
+kure answers for. Under `FluxSeparate` every generated Source goes into
 `flux-system`, which is built beside the rest of the tree, so a Source with a generated Source's
 identity anywhere else in the tree is refused even when it is identical.
 
