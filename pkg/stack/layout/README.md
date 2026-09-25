@@ -68,6 +68,17 @@ Directories and file names are compared case-insensitively, as on default macOS 
 `AppFileSingle` child named `Kustomization`, or `Default-ConfigMap-A`, is refused too, and so is a
 directory child `Default-ConfigMap-A.yaml` next to its parent's `default-configmap-a.yaml`.
 
+The writers also refuse two layouts that hold an object with one identity (group, kind, namespace
+and name, an omitted namespace counting as `default`) when one kustomize build takes in both
+(go-kure/kure#880): kustomize refuses the second copy (`may not add resource with an already
+registered id`), so that build would fail. A build is every `kustomization.yaml` a writer writes,
+with the files and the `AppFileSingle` child files it lists and, recursively, the build of each
+child directory it lists; and the Flux build of a `KustomizationRecursive` directory marked with
+`SetFluxBuild` (see "Kustomization Generation"). The error names both layouts and the innermost
+build. A child its parent does not list (an umbrella child, one that renders bundles, a child of a
+`FluxIntegratedPerLayout` parent, or under `WriteToDisk` and `WriteToTar` a child of another
+package) is a build of its own, so it may hold an object its parent holds.
+
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
 - **BundleGrouping**: whether each bundle gets a directory inside its node's (`GroupByName`) or renders in the node's directory (`GroupFlat`, default)
@@ -200,7 +211,9 @@ Controls how resource YAML files are named:
     `WriteToDisk` and `WriteToTar`, a child of another package (its `PackageRef` and its parent's
     are both set, with different values). Flux would apply
     it, where Explicit mode leaves it out. `WriteManifest` lists such a child, so it is accepted
-    there.
+    there;
+  - two layouts in its build that hold one object: kustomize refuses the second copy, as in any
+    other build (see "Layout paths").
 
   So Recursive fits a generated target with no other target below it: a leaf bundle directory,
   or a GroupByName bundle directory over the application directories it lists, plus any unmarked

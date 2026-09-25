@@ -237,7 +237,10 @@ What changed, and what to do:
   external sync path that pointed at `myprod`.
 - **Collisions are refused.** `WriteToDisk`, `WriteToTar` and `WriteManifest` check the whole tree
   before writing anything. They refuse two layouts that resolve to the same directory (compared
-  case-insensitively), and two `AppFileSingle` layouts that resolve to the same file.
+  case-insensitively), and two `AppFileSingle` layouts that resolve to the same file. They also
+  refuse two layouts holding one object when one kustomize build takes in both: a
+  `kustomization.yaml` and the child directories it lists, or the Flux build of a marked
+  `KustomizationRecursive` directory. kustomize would refuse the second copy.
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 
