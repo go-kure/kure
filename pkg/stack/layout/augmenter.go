@@ -149,9 +149,10 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 		dir, single := outDir(child)
 		if single {
 			// The file is joined onto the child's directory as the writer
-			// joins it, then made relative to base.
+			// joins it, then made relative to base. A child without
+			// resources writes no file.
 			file := normDir(path.Join(filepath.ToSlash(dir), child.Name+".yaml"))
-			if rel, ok := relativeTo(base, file); ok && rel != "." {
+			if rel, ok := relativeTo(base, file); ok && rel != "." && child.writesSingleFile() {
 				taken[rel] = fmt.Sprintf("the child file %q", rel)
 			}
 			continue

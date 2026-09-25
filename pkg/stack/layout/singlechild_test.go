@@ -569,6 +569,23 @@ func TestWriters_RefuseSingleFileOverParentFile(t *testing.T) {
 	}
 }
 
+// TestWriters_ResourcelessSingleChildNamedLikeParentExtraFile: an
+// AppFileSingle child without resources writes no <Name>.yaml, so a parent's
+// extra file of that name replaces nothing and the tree is written.
+func TestWriters_ResourcelessSingleChildNamedLikeParentExtraFile(t *testing.T) {
+	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+		t.Run(writer, func(t *testing.T) {
+			p := singleChildParent(layout.AppFileSingle)
+			p.Children[0].Resources = nil
+			p.ExtraFiles = []layout.ExtraFile{{Name: "svc.yaml", Content: []byte("k: v\n")}}
+			files := writtenFiles(t, writer, layout.Config{}, p)
+			if files["p/svc.yaml"] != "k: v\n" {
+				t.Errorf("p/svc.yaml = %q, want the parent's extra file", files["p/svc.yaml"])
+			}
+		})
+	}
+}
+
 // TestWriters_ResourcelessSingleChildNamedLikeParentFile: an AppFileSingle
 // child without resources writes no file, so its name replaces nothing and
 // the tree is written.

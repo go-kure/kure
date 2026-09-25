@@ -152,8 +152,8 @@ func manifestPlan(basePath string, cfg Config) writerPlan {
 // in the owner's directory, so the owner's file would be silently replaced,
 // dropping its objects or its whole kustomization. An AppFileSingle root is
 // checked against the kustomization.yaml it writes next to its own file.
-// checkLayoutTree runs checkExtraFiles first, so a single child named like
-// its parent's extra file is refused there, in its words.
+// checkLayoutTree runs checkExtraFiles first, so a single child with
+// resources named like its parent's extra file is refused there, in its words.
 //
 // Every file another layout writes is indexed first, since the directory's
 // owner may come later in the walk than the single-file layout. Paths are
