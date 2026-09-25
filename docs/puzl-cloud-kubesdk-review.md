@@ -2552,6 +2552,7 @@ path_replicas.json_path_pointer()  # Returns: "/spec/replicas"
 
 **kure's Current Approach:**
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // String-based paths in pkg/patch/
 patch := patch.NewOp().
@@ -2569,6 +2570,7 @@ patch := patch.NewOp().
 
 Implement code-generated path builders:
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // pkg/patch/paths/deployment.go (code-generated)
 
@@ -2649,6 +2651,7 @@ smp = jsonpatch_to_smp(new_deployment, json_patch)
 
 **kure's Current Approach:**
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // Separate code paths - user must choose
 // pkg/stack/generators/kurelpackage/v1alpha1.go
@@ -2672,6 +2675,7 @@ jsonPatch := []PatchOp{
 
 **Recommendation for kure:**
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // Add to pkg/patch/conversion.go
 
@@ -2723,6 +2727,7 @@ print(app.spec.source.repoURL)  # Autocomplete works!
 
 **kure's Current Approach:**
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // Uses pre-vendored client-go types
 import appsv1 "k8s.io/api/apps/v1"
@@ -2756,6 +2761,7 @@ kure generate-types \
 ```
 
 **Generated Go code:**
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // generated/argoproj_io_v1alpha1/application.go
 
@@ -2804,6 +2810,7 @@ replicas = deployment.spec.replicas  # Constructed here
 
 **kure's Approach:**
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // Eager construction
 deployment := kubernetes.CreateDeployment("app", "default")
@@ -2838,6 +2845,7 @@ await create_k8s_resource(secret, server=eu_cluster.server)
 
 **kure's Approach:**
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // Generate manifests for multiple clusters
 us_cluster := stack.NewCluster("us-west-2", usTree)
@@ -2872,6 +2880,7 @@ eu_cluster := stack.NewCluster("eu-central-1", euTree)
 
 **kure's Fluent Builder Pattern:**
 
+<!-- doc-example:excerpt review record: sketches and proposals quoted as reviewed in December 2025, not current kure code -->
 ```go
 // Immutable, type-safe builder with hierarchical navigation
 cluster := stack.NewClusterBuilder("production").

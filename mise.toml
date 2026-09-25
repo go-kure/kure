@@ -123,7 +123,7 @@ bash scripts/check-site-self-links.sh
 """
 
 [tasks."site:check-doc-examples"]
-description = "Fail if a Go block on an enabled page is not generated from an Example function or marked as an excerpt"
+description = "Fail if a Go block on a documentation page is not generated from an Example function or marked as an excerpt"
 run = """
 bash scripts/gen-doc-examples.sh --self-test
 bash scripts/gen-doc-examples.sh --check

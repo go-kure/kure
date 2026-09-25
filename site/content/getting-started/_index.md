@@ -17,6 +17,7 @@ go get github.com/go-kure/kure
 
 Then import the packages you need:
 
+<!-- doc-example:excerpt an import block alone, with no code to compile against it -->
 ```go
 import (
     "github.com/go-kure/kure/pkg/stack"

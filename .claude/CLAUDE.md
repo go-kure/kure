@@ -43,6 +43,7 @@ Compare the whole object, not a few of its fields — "identity and nothing else
 everything the constructor did not write:
 
 <!-- doc-api-refs:ignore-start CreateNewKind is a placeholder for the kind being added -->
+<!-- doc-example:excerpt a test template: NewKind and v1 are placeholders for the kind under test -->
 ```go
 func TestCreateNewKind(t *testing.T) {
     got := CreateNewKind("test", "default")
@@ -69,6 +70,8 @@ object then fails the same comparison, which is the point of comparing the whole
 ### Error Handling
 
 Always use the kure/errors package:
+
+<!-- doc-example:excerpt the import and one return statement, a fragment of a function that returns an error -->
 ```go
 import "github.com/go-kure/kure/pkg/errors"
 

@@ -13,6 +13,7 @@ Traditional Kubernetes tooling relies on string-based templating (Helm, Kustomiz
 
 Kure uses Go's type system instead. The type it uses is the upstream one: a Flux `Kustomization` is `kustomizev1.Kustomization`, not a kure struct that resembles it.
 
+<!-- doc-example: pkg/kubernetes/fluxcd Example_designPhilosophy -->
 ```go
 // Compile-time checked against the real API type — typos and type errors are
 // caught by the compiler, and the field names are the ones in the CRD.
@@ -20,7 +21,14 @@ ks := fluxcd.CreateKustomization("my-app", "flux-system")
 ks.Spec.Path = "./clusters/production/apps"
 ks.Spec.Interval = metav1.Duration{Duration: 10 * time.Minute}
 ks.Spec.Prune = true
+fmt.Println(ks.Kind, ks.Spec.Path, ks.Spec.Interval.Duration, ks.Spec.Prune)
 ```
+<!-- doc-example:end -->
+
+The block is the body of `Example_designPhilosophy` in `pkg/kubernetes/fluxcd`, so the claim is
+tested, not asserted: `go test` compiles and runs it. It imports
+`github.com/go-kure/kure/pkg/kubernetes/fluxcd`, `metav1` (`k8s.io/apimachinery/pkg/apis/meta/v1`)
+and `time`, and prints what it built.
 
 If you misspell a field name, the Go compiler tells you immediately. And because the struct is upstream's, a field added in the next controller release is reachable the moment the module pin moves — no kure release in between, no forwarder to write. That is the whole argument for keeping the foundation thin, and it is written down as the [builder contract](/concepts/builder-contract/).
 

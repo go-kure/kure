@@ -52,6 +52,7 @@ an upstream struct (volsync's former `SourceResticConfig`) does not.
 Every `Kind(&KindConfig{Name: n, Namespace: ns, ...})` becomes the generated
 constructor plus assignments on the upstream struct:
 
+<!-- doc-example:excerpt migration ledger: a before/after pair whose before half calls a builder this release removed -->
 ```go
 // before
 cert := certmanager.Certificate(&certmanager.CertificateConfig{

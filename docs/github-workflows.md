@@ -108,7 +108,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
 | `build` | `build` | 1 min | validate, test, docs-build, coverage-check, doc-gate, action-pins, forbidden-terms, security, pin-impact | Aggregation gate — fails if any required job failed; `forbidden-terms` must report success and may not be skipped |
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
-| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented API references via `scripts/check-doc-api-refs.sh`, the Go blocks generated from `Example` functions via `scripts/gen-doc-examples.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
+| `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented API references via `scripts/check-doc-api-refs.sh`, the Go blocks of every documentation page, generated from `Example` functions or marked as excerpts, via `scripts/gen-doc-examples.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
 | `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
 | `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
@@ -224,7 +224,11 @@ temporary branch — the merged result — before the PR is allowed to land.
   `ignore-end` and leave the outer fence open with nothing said, and the same repetition written on
   a single line, so the spelling never decides whether a malformed suppression is an error
 - **Doc-example check** - `docs-build` also runs `scripts/gen-doc-examples.sh --self-test` and
-  `--check`. On every page in the script's `ENABLED_PAGES` list, each ```` ```go ```` block is either
+  `--check`. Every page is enabled: the script's `ENABLED_PAGES` list is every tracked Markdown file
+  except its `EXEMPT_PAGES` (`.github/`, and the dated records and proposals that
+  `scripts/check-doc-api-refs.sh` excludes too), and `--check` fails when the list and the tracked
+  files drift apart, so a new page with a Go block cannot go unchecked by not being listed. On
+  every enabled page, each ```` ```go ```` block is either
   generated from an `Example` function (between `<!-- doc-example: <pkgdir> <ExampleName> -->` and
   `<!-- doc-example:end -->`) or sits directly under `<!-- doc-example:excerpt <reason> -->`. The
   generated block is the function body with its `// Output:` comment dropped, and the `test` job's
@@ -233,7 +237,8 @@ temporary branch — the merged result — before the PR is allowed to land.
   without a reason or not directly above a ```` ```go ```` fence, a doc-example marker with no end
   marker, an unrecognised marker, a missing Example and a block that drifted from its function;
   `scripts/gen-doc-examples.sh` with no argument rewrites the blocks.
-  The self-test is `go test ./scripts/docexamples`; `mise run site:check-doc-examples` runs both locally
+  The self-test covers the page-list comparison and runs `go test ./scripts/docexamples`;
+  `mise run site:check-doc-examples` runs both locally
 - **Site self-link check** - `docs-build` also runs `scripts/check-site-self-links.sh`
   (`mise run site:check-self-links` locally), which fails when a published page links to the docs
   site itself with an absolute or scheme-relative URL. Only `CHANGELOG.md` and `cliff.toml`, which

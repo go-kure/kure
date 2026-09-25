@@ -145,6 +145,7 @@ make precommit
 
 Always use `github.com/go-kure/kure/pkg/errors` in application code — never call `fmt.Errorf` directly outside of `pkg/errors` itself. The `pkg/errors` package wraps `fmt.Errorf` internally; this is correct and expected.
 
+<!-- doc-example:excerpt a list of alternative return statements, one per errors function, not code that runs in sequence -->
 ```go
 import "github.com/go-kure/kure/pkg/errors"
 
@@ -161,17 +162,28 @@ return errors.Errorf("invalid value: %s", val)
 
 ### Logging
 
-Always use pkg/logger for logging:
+Always use pkg/logger for logging. The package has no package-level log functions: take a
+`logger.Logger` from `logger.Default()` (stderr, timestamped, Debug dropped) or `logger.New`, and
+its methods format printf-style. This block is `ExampleNew` in `pkg/logger`, which `go test` runs:
 
+<!-- doc-example: pkg/logger ExampleNew -->
 ```go
-import "github.com/go-kure/kure/pkg/logger"
+// logger.Default() writes to stderr with a timestamp and drops Debug; these
+// options log every level to stdout without one.
+log := logger.New(logger.Options{Output: os.Stdout, Level: logger.LevelDebug})
+log.Info("loading package: %s", "/path/to/package")
+log.Error("failed to parse %s: %v", "config.yaml", errors.New("unexpected end of stream"))
+log.Debug("parsed %d resources", 3)
 
-logger.Info("message", "key", value)
-logger.Error("message", "error", err)
+// No-op logger for quiet mode
+log = logger.Noop()
+log.Info("discarded")
 ```
+<!-- doc-example:end -->
 
 ### Testing Patterns
 
+<!-- doc-example:excerpt a test template: <ResourceType> is a placeholder for the kind under test -->
 ```go
 func TestCreate<ResourceType>(t *testing.T) {
     obj := Create<ResourceType>("test", "default")
@@ -220,12 +232,15 @@ Full procedure, with the scope-derivation failure modes: [`docs/ARCHITECTURE.md`
 - Always reference secrets through Kubernetes Secret objects
 - Use `SecretKeySelector` and `LocalObjectReference` patterns
 
+<!-- doc-example: pkg/kubernetes/certmanager Example_agentsSecretKeySelector -->
 ```go
 key := cmmeta.SecretKeySelector{
     LocalObjectReference: cmmeta.LocalObjectReference{Name: "secret-name"},
-    Key: "key-name",
+    Key:                  "key-name",
 }
+fmt.Println(key.Name, key.Key)
 ```
+<!-- doc-example:end -->
 
 ### RBAC
 
@@ -248,8 +263,20 @@ contracts rather than consumer-specific types, identifiers, or documentation.
 
 ## Integration Patterns
 
+The Go blocks in this section and in [Fluent Builders](#fluent-builders) are the bodies of
+`Example` functions that `go test` runs, generated from them by `scripts/gen-doc-examples.sh`:
+`Example_agentsFlux` (`pkg/kubernetes/fluxcd`, importing `kustv1`
+`github.com/fluxcd/kustomize-controller/api/v1`), `Example_agentsWorkflow` (`pkg/stack/argocd`),
+`Example_agentsLayout` (`pkg/stack/layout`) and `ExampleNewClusterBuilder` (`pkg/stack`). The
+Secret Management block above is `Example_agentsSecretKeySelector` (`pkg/kubernetes/certmanager`,
+importing `cmmeta` `github.com/cert-manager/cert-manager/pkg/apis/meta/v1`). `cluster` comes from
+the package's `exampleCluster()` test helper — one node, one bundle, and in the layout package
+two applications that each emit a ConfigMap — and `myConfig` is `pkg/stack`'s test
+`ApplicationConfig`.
+
 ### Flux Integration
 
+<!-- doc-example: pkg/kubernetes/fluxcd Example_agentsFlux -->
 ```go
 ks := fluxcd.CreateKustomization("app", "default")
 ks.Spec.Path = "./manifests"
@@ -257,31 +284,49 @@ ks.Spec.SourceRef = kustv1.CrossNamespaceSourceReference{
     Kind: "GitRepository",
     Name: "repo",
 }
+fmt.Println(ks.Spec.Path, ks.Spec.SourceRef.Kind+"/"+ks.Spec.SourceRef.Name)
 ```
+<!-- doc-example:end -->
 
 ### ArgoCD Integration
 
+<!-- doc-example: pkg/stack/argocd Example_agentsWorkflow -->
 ```go
+cluster := exampleCluster()
+
 // The provider registers itself from its init, so the package has to be
 // imported: import _ "github.com/go-kure/kure/pkg/stack/argocd"
 wf, err := stack.NewWorkflow("argocd")
 if err != nil {
-    return err
+    panic(err)
 }
 // Application paths are the directories a default-rules WalkCluster writes;
 // CreateLayoutWithResources generates from the layout it walks with your rules.
 apps, err := wf.GenerateFromCluster(cluster)
+if err != nil {
+    panic(err)
+}
+fmt.Println(len(apps), apps[0].GetObjectKind().GroupVersionKind().Kind, apps[0].GetName())
 ```
+<!-- doc-example:end -->
 
 ### Layout Generation
 
+<!-- doc-example: pkg/stack/layout Example_agentsLayout -->
 ```go
+cluster := exampleCluster()
+
 rules := layout.LayoutRules{
     BundleGrouping:      layout.GroupFlat,
     ApplicationGrouping: layout.GroupFlat,
 }
 ml, err := layout.WalkCluster(cluster, rules)
+if err != nil {
+    panic(err)
+}
+fmt.Println(ml.FullRepoPath(), len(ml.Resources))
 ```
+<!-- doc-example:end -->
 
 See [OCI Artifact Layout](https://github.com/go-kure/.github/blob/main/docs/design/oci-layout.md)
 for the directory structure and naming conventions that `ManifestLayout` and `WriteToTar` enforce.
@@ -290,15 +335,23 @@ for the directory structure and naming conventions that `ManifestLayout` and `Wr
 
 Kure provides fluent builders for ergonomic configuration:
 
+<!-- doc-example: pkg/stack ExampleNewClusterBuilder -->
 ```go
-cluster := stack.NewClusterBuilder("production").
+appConfig := &myConfig{Port: 9090}
+
+cluster, err := stack.NewClusterBuilder("production").
     WithNode("infrastructure").
-        WithBundle("monitoring").
-            WithApplication("prometheus", appConfig).
-        End().
+    WithBundle("monitoring").
+    WithApplication("prometheus", appConfig).
+    End().
     End().
     Build()
+if err != nil {
+    panic(err)
+}
+fmt.Println(cluster.Name, cluster.Node.Name, cluster.Node.Bundle.Name)
 ```
+<!-- doc-example:end -->
 
 Fluent builders follow an immutable pattern - each `With*` method returns a new builder instance.
 
@@ -381,13 +434,14 @@ checkout for local use.
   automatically for a generated-table row whose only change is a provenance field
   (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or
   re-scoping a kind is not exempt.
-- `scripts/gen-doc-examples.sh --check` — on the pages the script enables, every
-  ```` ```go ```` block is generated from an `Example` function in the package's
-  `example_test.go` (between `<!-- doc-example: <pkgdir> <ExampleName> -->` and
+- `scripts/gen-doc-examples.sh --check` — on every documentation page, every
+  ```` ```go ```` block is generated from an `Example` function in a test file of the
+  package it demonstrates (between `<!-- doc-example: <pkgdir> <ExampleName> -->` and
   `<!-- doc-example:end -->`), or sits directly under
   `<!-- doc-example:excerpt <reason> -->`. To change such a block, edit the `Example` and run
-  `scripts/gen-doc-examples.sh` (blocking, `docs-build` job;
-  `mise run site:check-doc-examples`).
+  `scripts/gen-doc-examples.sh`. A new Markdown page goes into the script's `ENABLED_PAGES`
+  (or `EXEMPT_PAGES`, with its reason); `--check` fails until it is listed (blocking,
+  `docs-build` job; `mise run site:check-doc-examples`).
 
 ### Cross-cutting guides
 

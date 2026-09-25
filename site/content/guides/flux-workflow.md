@@ -16,40 +16,77 @@ The workflow has four stages:
 3. **Generate** Flux resources and directory layout
 4. **Write** manifests to disk
 
-## Step 1: Define the Cluster
+The code on this page imports:
 
-Use the fluent builder to define your cluster's structure:
-
-```go
-import "github.com/go-kure/kure/pkg/stack"
-
-cluster := stack.NewClusterBuilder("production").
-    WithNode("infrastructure").
-        WithBundle("cert-manager").
-            WithApplication("cert-manager", certManagerConfig).
-        End().
-    End().
-    WithNode("applications").
-        WithBundle("web-tier").
-            WithApplication("frontend", frontendConfig).
-            WithApplication("api-gateway", apiConfig).
-        End().
-    End().
-    Build()
-```
-
-Each bundle becomes a Flux Kustomization, and each application generates its Kubernetes manifests.
-
-## Step 2: Create the Flux Engine
-
+<!-- doc-example:excerpt the import block alone, which the examples below share -->
 ```go
 import (
+    "github.com/go-kure/kure/pkg/stack"
     "github.com/go-kure/kure/pkg/stack/fluxcd"
     "github.com/go-kure/kure/pkg/stack/layout"
 )
-
-engine := fluxcd.Engine()
 ```
+
+Every other Go block on this page is the body of an `Example` function in
+`pkg/stack/fluxcd`, which `go test` runs: the bootstrap and sync-name blocks are shared with the
+[Flux Engine reference](/api-reference/flux-engine) and live in its `example_test.go`, the others
+in `flux_workflow_example_test.go`. Besides the imports above they use `os`, `kustv1`
+(`github.com/fluxcd/kustomize-controller/api/v1`), and `fmt` for the lines that print what the
+example built. The test file declares what the examples take as given: `certManagerConfig`,
+`frontendConfig` and `apiConfig`, which each emit a Deployment and a Service named after their
+application; `productionCluster()` and `productionLayout()`, the cluster Step 1 builds and the
+layout Step 3 creates; and `printFiles(dir)`, which prints every file below `dir`.
+
+## Step 1: Define the Cluster
+
+Define your cluster's structure. A cluster has one root node, a node holds at most one bundle, and
+a bundle holds applications, so the two groups here are two child nodes of the root, each with a
+bundle of its own:
+
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDefine -->
+```go
+certManager, err := stack.NewBundle("cert-manager", []*stack.Application{
+    stack.NewApplication("cert-manager", "cert-manager", certManagerConfig),
+}, nil)
+if err != nil {
+    panic(err)
+}
+webTier, err := stack.NewBundle("web-tier", []*stack.Application{
+    stack.NewApplication("frontend", "web", frontendConfig),
+    stack.NewApplication("api-gateway", "web", apiConfig),
+}, nil)
+if err != nil {
+    panic(err)
+}
+
+cluster := stack.NewCluster("production", &stack.Node{
+    Name: "production",
+    Children: []*stack.Node{
+        {Name: "infrastructure", Bundle: certManager},
+        {Name: "applications", Bundle: webTier},
+    },
+})
+for _, node := range cluster.Node.Children {
+    fmt.Println(node.Name, node.Bundle.Name, len(node.Bundle.Applications))
+}
+```
+<!-- doc-example:end -->
+
+Each bundle becomes a Flux Kustomization, and each application generates its Kubernetes manifests.
+
+The fluent builder (`stack.NewClusterBuilder`) builds a single path from the root, not a tree
+like this one: `WithNode` sets the root node, so a second call replaces it; a second `WithBundle`
+on one node replaces the first; and `WithChild` descends into the child it adds, with no way back
+to its parent. Build a tree with sibling nodes from `stack.Node` values, as above.
+
+## Step 2: Create the Flux Engine
+
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowEngine -->
+```go
+engine := fluxcd.Engine()
+fmt.Println(engine.GetName())
+```
+<!-- doc-example:end -->
 
 Placement is configured per call on `layout.LayoutRules.FluxPlacement` (see Step 3
 below). `FluxUnset` normalizes to `FluxSeparate`. See the
@@ -57,7 +94,11 @@ below). `FluxUnset` normalizes to `FluxSeparate`. See the
 
 ## Step 3: Generate Resources with Layout
 
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowLayout -->
 ```go
+cluster := productionCluster()
+engine := fluxcd.Engine()
+
 // Define layout rules
 rules := layout.LayoutRules{
     NodeGrouping:        layout.GroupByName,
@@ -70,40 +111,69 @@ rules := layout.LayoutRules{
 // Generate layout with Flux resources integrated
 ml, err := engine.CreateLayoutWithResources(cluster, rules)
 if err != nil {
-    return errors.Wrap(err, "failed to create layout")
+    panic(err)
+}
+for _, child := range ml.(*layout.ManifestLayout).Children {
+    fmt.Println(child.FullRepoPath())
 }
 ```
+<!-- doc-example:end -->
 
 ## Step 4: Write to Disk
 
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowWrite -->
 ```go
-err := layout.WriteManifest("./out", layout.DefaultLayoutConfig(), ml.(*layout.ManifestLayout))
-```
+ml := productionLayout()
+out, err := os.MkdirTemp("", "kure-flux-workflow")
+if err != nil {
+    panic(err)
+}
+defer func() { _ = os.RemoveAll(out) }()
 
-`WriteManifest` writes under `<basePath>/<ManifestsDir>` (`./out/clusters` here). Every Flux
+err = layout.WriteManifest(out, layout.DefaultLayoutConfig(), ml.(*layout.ManifestLayout))
+if err != nil {
+    panic(err)
+}
+printFiles(out)
+```
+<!-- doc-example:end -->
+
+`WriteManifest` writes under `<basePath>/<ManifestsDir>` (`<out>/clusters` here). Every Flux
 Kustomization `spec.path` is a layout directory relative to that root, so root the Flux source
-there. This produces a directory structure like:
+there. The example prints the tree it wrote:
 
 ```
 clusters/
   production/
-    infrastructure/
-      cert-manager/
-        cert-manager/
-          deployment.yaml
-          service.yaml
+    kustomization.yaml
+    flux-system/                  # FluxSeparate: every Flux Kustomization, one file each
+      flux-system-kustomization-cert-manager.yaml
+      flux-system-kustomization-web-tier.yaml
+      kustomization.yaml
+    infrastructure/               # node
+      kustomization.yaml
+      cert-manager/               # bundle, applied by its Flux Kustomization
+        kustomization.yaml
+        cert-manager/             # application
+          cert-manager-deployment-cert-manager.yaml
+          cert-manager-service-cert-manager.yaml
           kustomization.yaml
-        kustomization.yaml        # Flux Kustomization
     applications/
+      kustomization.yaml
       web-tier/
+        kustomization.yaml
         frontend/
-          deployment.yaml
-          service.yaml
+          web-deployment-frontend.yaml
+          web-service-frontend.yaml
+          kustomization.yaml
         api-gateway/
-          deployment.yaml
-          service.yaml
-        kustomization.yaml        # Flux Kustomization
+          web-deployment-api-gateway.yaml
+          web-service-api-gateway.yaml
+          kustomization.yaml
 ```
+
+Every `kustomization.yaml` outside `flux-system/` is a kustomize file listing its directory's
+manifests; the Flux Kustomizations are the files in `flux-system/`.
 
 ## Layout Configuration
 
@@ -222,6 +292,7 @@ it unset is what makes the `healthChecks` entries take effect — upstream ignor
 The resulting umbrella Kustomization aggregates child readiness regardless of
 how many children there are, giving external consumers a single stable anchor:
 
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowUmbrella -->
 ```go
 umbrella := &stack.Bundle{
     Name: "platform",
@@ -231,7 +302,17 @@ umbrella := &stack.Bundle{
         {Name: "platform-apps"},
     },
 }
+
+objects, err := fluxcd.Engine().ResourceGen.GenerateForBundle(umbrella, "production/apps/platform")
+if err != nil {
+    panic(err)
+}
+ks := objects[0].(*kustv1.Kustomization)
+for _, hc := range ks.Spec.HealthChecks {
+    fmt.Println(hc.Kind, hc.Namespace, hc.Name)
+}
 ```
+<!-- doc-example:end -->
 
 ```yaml
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -315,6 +396,7 @@ A child layout receives a CR when:
 
 Set `ManifestLayout.DependsOn` to a list of sibling layout names to express reconciliation order between hook groups. The integrator translates these into `spec.dependsOn` entries on the emitted CR:
 
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDependsOn -->
 ```go
 preInstall := &layout.ManifestLayout{
     Name: "nginx-00-pre-install",
@@ -325,7 +407,9 @@ hooks := &layout.ManifestLayout{
     DependsOn: []string{"nginx-00-pre-install"},
     // ...
 }
+fmt.Println(hooks.Name, "after", hooks.DependsOn[0] == preInstall.Name)
 ```
+<!-- doc-example:end -->
 
 This produces a `nginx-01-hooks` Kustomization CR with:
 
@@ -396,16 +480,30 @@ the flux2 release Kure depends on (`GotkVersion`), with no network access, as lo
 `"latest"`, opts in to downloading manifests from GitHub each time the bundle is generated: the
 named release when written `vX.Y.Z`, otherwise the latest release.
 
+<!-- doc-example: pkg/stack/fluxcd ExampleWorkflowEngine_GenerateBootstrap -->
 ```go
+engine := fluxcd.Engine()
+rootNode := &stack.Node{Name: "prod"}
+
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
     FluxMode:    "flux-operator", // or "gotk"; empty defaults to "flux-operator"
     FluxVersion: "v2.8.2",
-    SourceRef:   sourceRef,
+    SourceURL:   "oci://registry.example.com/fleet",
+    SourceRef:   "latest",
 }
 
 objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    if obj.GetObjectKind().GroupVersionKind().Kind == "FluxInstance" {
+        fmt.Println(obj.GetNamespace(), obj.GetName())
+    }
+}
 ```
+<!-- doc-example:end -->
 
 `SourceRef` names the revision to sync, and the same value works in both modes: an OCI tag
 (empty means `latest`) or a Git branch name. In `"flux-operator"` mode Kure turns a branch name
@@ -419,11 +517,28 @@ The bootstrap namespace is not part of `BootstrapConfig` — it lives on the gen
 holds its own generator and `engine.GenerateBootstrap` delegates to that one, so configure it
 through the engine rather than building a second generator the call never reads:
 
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowBootstrapNamespace -->
 ```go
+engine := fluxcd.Engine()
+rootNode := &stack.Node{Name: "production"}
+bootstrapConfig := &stack.BootstrapConfig{Enabled: true}
+
 engine.GetBootstrapGenerator().DefaultNamespace = "custom-flux" // default: "flux-system"
 
 objects, err := engine.GenerateBootstrap(bootstrapConfig, rootNode)
+if err != nil {
+    panic(err)
+}
+for _, obj := range objects {
+    switch obj.GetObjectKind().GroupVersionKind().Kind {
+    case "FluxInstance":
+        fmt.Println("FluxInstance in", obj.GetNamespace())
+    case "Namespace":
+        fmt.Println("Namespace", obj.GetName())
+    }
+}
 ```
+<!-- doc-example:end -->
 
 **How much it moves depends on the mode, and the two differ sharply.**
 
@@ -453,14 +568,25 @@ Left empty, the operator names them after the `FluxInstance`'s namespace — `fl
 you moved it as above. Set `SyncName` when the Kustomizations you generate reference the sync
 source under another name, or their `sourceRef` points at a source nothing creates:
 
+<!-- doc-example: pkg/stack/fluxcd ExampleBootstrapGenerator_GenerateFluxInstance -->
 ```go
+engine := fluxcd.Engine()
+rootNode := &stack.Node{Name: "prod"}
+
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:   true,
     SourceURL: "oci://registry.example.com/fleet",
     SourceRef: "latest",
     SyncName:  "fleet",
 }
+
+fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)
+if err != nil {
+    panic(err)
+}
+fmt.Println(fi.Name, fi.Spec.Sync.Name, fi.Spec.Sync.Ref)
 ```
+<!-- doc-example:end -->
 
 It only takes effect with `SourceURL` set, since no sync block is emitted without one, and
 `"gotk"` mode ignores it: there kure creates and names the root source itself. kure does not
