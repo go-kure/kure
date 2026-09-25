@@ -1264,15 +1264,16 @@ which has no Syncthing mover — a verbatim duplicate of the type switch in
 `ReplicationSource` / `ReplicationDestination`. A sealed-union discriminator is
 a multi-field write by nature, so it belongs where the invariant is already
 owned — the constructor — not behind a `Set<Field>` name. The constructor's own
-tests exercise that switch, including a typed-nil mover for three of its eleven
-arms (`pkg/kubernetes/volsync/create_test.go`).
+tests exercised that switch, including a typed-nil mover for three of its eleven
+arms. (Release 2 retired the constructor and its sealed mover types; see the
+release 2 migration notes.)
 
-`AddSyncthingPeer` stays: appending to `cfg.Peers` is class (a). Its nil
+`AddSyncthingPeer` stayed: appending to `cfg.Peers` is class (a). Its nil
 handling is a behaviour break in its own right:
 
 | Behaviour change | Before | After |
 |---|---|---|
-| `AddSyncthingPeer(nil, addr, id, introducer)` | `if cfg == nil { return }` — the peer is silently discarded | panics with `AddSyncthingPeer: cfg must not be nil` |
+| `AddSyncthingPeer(nil, addr, id, introducer)` | `if cfg == nil { return }` — the peer is silently discarded | panics with `AddSyncthingPeer: cfg must not be nil` (since release 2, which takes the upstream spec: `spec must not be nil`) |
 
 A nil receiver is a programming error, and swallowing the caller's write is the
 one outcome that cannot be diagnosed from the output. Every other appender in
