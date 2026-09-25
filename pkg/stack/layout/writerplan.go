@@ -53,7 +53,7 @@ type writerPlan struct {
 //     Kustomization the integrator placed in the parent's Resources applies
 //     it, and nothing is guessed from the child's name;
 //   - with skipCrossPackage (WriteToDisk, WriteToTar), a directory child of
-//     another package.
+//     another package: both PackageRefs set and their values differ.
 //
 // Such children are still written, each into its own directory.
 func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *ManifestLayout) string {
@@ -70,7 +70,7 @@ func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *Ma
 		if parent.FluxPlacement == FluxIntegratedPerLayout {
 			return ""
 		}
-		if skipCrossPackage && parent.PackageRef != nil && child.PackageRef != nil && parent.PackageRef != child.PackageRef {
+		if skipCrossPackage && parent.PackageRef != nil && child.PackageRef != nil && *parent.PackageRef != *child.PackageRef {
 			return ""
 		}
 		return child.Name
