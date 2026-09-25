@@ -223,10 +223,16 @@ func checkBuildIdentities(root *ManifestLayout, plan writerPlan) error {
 				continue
 			}
 			for _, id := range ids[li.l] {
-				if other, dup := seen[id]; dup && other != li.l {
+				// One layout counts too: checkResourceIdentities keeps the
+				// namespace field of a cluster-scoped kind, which kustomize
+				// ignores.
+				if other, dup := seen[id]; dup {
+					held := fmt.Sprintf("layouts %q and %q both hold the object %s", other.FullRepoPath(), li.l.FullRepoPath(), id)
+					if other == li.l {
+						held = fmt.Sprintf("layout %q holds the object %s twice", li.l.FullRepoPath(), id)
+					}
 					return errors.NewFileError("write", b.l.FullRepoPath(), fmt.Sprintf(
-						"layouts %q and %q both hold the object %s, and %s: kustomize refuses one object twice",
-						other.FullRepoPath(), li.l.FullRepoPath(), id, what), nil)
+						"%s, and %s: kustomize refuses one object twice", held, what), nil)
 				}
 				seen[id] = li.l
 			}

@@ -73,7 +73,7 @@ kustomize build takes in both (go-kure/kure#880): kustomize refuses the second c
 resource with an already registered id`), so that build would fail. The identity is kustomize's
 own: group, version, kind, name and namespace, where an omitted namespace counts as `default` and
 a kind kustomize knows is cluster-scoped (such as `Namespace`) has none, even when the object sets
-one. Two versions of one object (`autoscaling/v1` and `autoscaling/v2`) are two identities, and
+one; so one layout holding such an object with and without a namespace field is refused too. Two versions of one object (`autoscaling/v1` and `autoscaling/v2`) are two identities, and
 kustomize builds both. A build is every `kustomization.yaml` a writer writes, with the files and the
 `AppFileSingle` child files it lists and, recursively, the build of each child directory it lists;
 and the Flux build of a `KustomizationRecursive` directory marked with `SetFluxBuild` (see
