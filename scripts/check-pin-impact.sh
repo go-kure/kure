@@ -49,8 +49,10 @@
 #     `repository :` are the plain keys, in a workflow and an action.yml.
 #   - per action: each `$GITHUB_ACTION_PATH/<rel>.sh` (or
 #     `${GITHUB_ACTION_PATH}/<rel>.sh`) in its one `run:` step, one whole
-#     word, resolved against .github/actions/<subpath>/ with `..` hops
-#     counted.
+#     word and the command run (at a line start or after a separator,
+#     optionally behind `if`/`then`/`do`/`!` and `exec`/`bash`/`sh`/
+#     `source`/`.` with options), resolved against .github/actions/<subpath>/
+#     with `..` hops counted.
 #   - per script, transitively: a whole line `source|. "$SCRIPT_DIR/<name>.sh"`
 #     or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]` (args without
 #     separators or substitutions; fd redirects, `&>file` and `&>>file`
@@ -73,10 +75,14 @@
 #     no `ref:`, a reusable-workflow call pinned to a SHA or inside a step) —
 #     only a checkout whose `ref:` is exactly
 #     `${{ steps.<id>.outputs.<name> }}`, and a job-level reusable-workflow
-#     call at a non-SHA ref (below), may carry none. A checkout step with a
-#     `ref:` anywhere but its `with:` mapping (under `env:`, in a block
-#     scalar body, at the step's own level), more than one `ref:` in any
-#     letter case, or more than one `with:`.
+#     call at a non-SHA ref (below), may carry none. A go-kure/.github
+#     checkout step is also refused when it has a `ref:` other than a key
+#     at the column of the `with:` mapping's first child (under `env:` or
+#     another key, in a block scalar body, at the step's own level), a line
+#     that is no key this scan parses (`a b:`, `a/b:`, the rest of a
+#     multi-line value), a value that does not end on its line (an
+#     unterminated or escaped quote), more than one `ref:` in any letter
+#     case, or more than one `with:`.
 #   - workflow YAML the line scan cannot read, whatever it names: a
 #     `uses:`/`repository:` value not whole on its own line (empty, continued
 #     on the next line, a block scalar, an alias, anchor, tag or flow
@@ -96,7 +102,11 @@
 #     `${GITHUB_ACTION_PATH}/<path>` word — the path of `[A-Za-z0-9_./-]`,
 #     then at most a closing quote, then whitespace, `;&|)<>` or the line end
 #     (so not reassigned, `${GITHUB_ACTION_PATH%/*}`, a bare trailing `/`, a
-#     path after a closing quote or a suffix after it); the runner's
+#     path after a closing quote or a suffix after it); in an action that
+#     mentions $GITHUB_ACTION_PATH, dirname, realpath, readlink, a parameter
+#     trim (`${name%...}`, `${name#...}`, `${name/...}`, `${name:offset}`)
+#     or a `$GITHUB_ACTION_PATH/<path>` word other than as the command run
+#     (assigned, or passed as an argument); the runner's
 #     `_actions` directory by path; a quoted key with an escape sequence or a
 #     `? ` complex key; a `run:` step with no `$GITHUB_ACTION_PATH` script; a
 #     non-.sh `$GITHUB_ACTION_PATH` target; a .sh path mentioned that no
@@ -109,9 +119,11 @@
 #     any other form (`SCRIPT_DIR+=`, `SCRIPT_DIR[0]=`, `read SCRIPT_DIR`, `for
 #     SCRIPT_DIR in`, `n=SCRIPT_DIR`); name indirection — `${!name}` (not the
 #     array-keys `${!name[@]}`), a `declare -n`/`local -n`/`typeset -n`
-#     nameref, `eval`; any other line computing the script's own directory
-#     (dirname "$0", ${0%/*}, BASH_SOURCE, BASH_ARGV, a positional slice
-#     `${@:...}`/`${*:...}`), or naming `$0` at all outside a message to
+#     nameref, `eval`, a declare/typeset/local/export/readonly whose variable
+#     name holds a `$` or a backtick (`declare -g "$n+=/lib"`); any other
+#     line computing the script's own directory (dirname "$0", ${0%/*},
+#     BASH_SOURCE, BASH_ARGV, a positional slice `${@:...}`/`${*:...}`, `$_`
+#     or `${_}`, which follows an exempted `$0` message), or naming `$0` at all outside a message to
 #     stderr (`echo "usage: $0 ..." >&2` or `1>&2`), a `sed -n '<lines>p'
 #     "$0"` read of the script itself or an awk record (`f($0`, `, $0`, ` =
 #     $0`, `$0 ~`, `$0 !~`) — `x=$0`, `a=($0)`, `printf -v`, `read <<<"$0"`,
@@ -130,7 +142,10 @@
 #   - the compare: a status other than `ahead`; a file count near GitHub's
 #     pagination cap.
 #
-# Not covered, knowingly:
+# Not covered, knowingly. The threat model is a trusted organisation's own
+# files: this gate catches shapes written by accident that would hide
+# consumed code, not a determined adversary, and a shape built to evade a
+# line scan can still pass.
 #   - job-level reusable-workflow calls at a non-SHA ref, `uses:
 #     go-kure/.github/.github/workflows/<file>.yml@<ref>`: they run at their
 #     own ref (kure's call @main), not at the action pin, so no pin bump
@@ -146,6 +161,9 @@
 #     stderr is not redirected into a file or a capture (`exec 2>f`, `$(f
 #     2>&1)`) that the script then reads.
 #   - the script's path from the call stack, `caller`: it names no `$0`.
+#   - an assignment through a name built at run time other than by a
+#     declaration builtin: `printf -v "$n"`, `read "$n"`, `mapfile "$n"`
+#     (a consumed script assigns through `printf -v "$destination"`).
 #   - false aborts, refused although harmless: a directory other than the
 #     script's own derived from it, such as `ROOT=$(cd "$(dirname "$0")/.."
 #     && pwd)` — following it would mean tracking an arbitrary variable
@@ -153,8 +171,13 @@
 #     reuse such names for argument-derived paths; `uses:` or `repository:`
 #     text anywhere in a single-line workflow value (`run: grep -n
 #     "repository:" ci.yml`, `with: { repository: foo/bar }`), and `ref:`
-#     text anywhere in a checkout step of go-kure/.github; `${!prefix@}`,
-#     `export SCRIPT_DIR` or `readonly SCRIPT_DIR` on a line of its own.
+#     text anywhere in a checkout step of go-kure/.github, and a ` #` inside
+#     a quoted value there (read as a comment, leaving the quote open);
+#     `${!prefix@}`, `export SCRIPT_DIR` or `readonly SCRIPT_DIR` on a line
+#     of its own; dirname, realpath, readlink or a parameter trim anywhere in
+#     an action that mentions $GITHUB_ACTION_PATH, and a
+#     `$GITHUB_ACTION_PATH/<path>` command behind a wrapper (`env`,
+#     `timeout`).
 #
 # A genuine hit (a consumed path did change) is not necessarily wrong to
 # merge — the pin bump may have been reviewed and found fine. There is no
@@ -182,7 +205,7 @@ while [[ $# -gt 0 ]]; do
     --base-ref) BASE_REF="${2:-}"; [[ -n "$BASE_REF" ]] || { echo "check-pin-impact: --base-ref needs a REF" >&2; exit 2; }; shift 2 ;;
     --old) OLD_SHA="${2:-}"; [[ -n "$OLD_SHA" ]] || { echo "check-pin-impact: --old needs a SHA" >&2; exit 2; }; shift 2 ;;
     --new) NEW_SHA="${2:-}"; [[ -n "$NEW_SHA" ]] || { echo "check-pin-impact: --new needs a SHA" >&2; exit 2; }; shift 2 ;;
-    -h|--help) sed -n '2,167p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,190p' "$0"; exit 0 ;;
     *) echo "check-pin-impact: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -221,12 +244,17 @@ is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 # until the next line indented no deeper than that dash, so a nested list
 # inside the step stays part of it and another step's `ref:` is never
 # attributed to this checkout. Within the step, a key stack tracks the mapping
-# each key sits in; a `ref:` anywhere else (under `env:`, at the step's own
-# level, in a block scalar body, in a flow mapping), a second `ref:` in any
-# letter case (action inputs are case-insensitive) or a second `with:` makes
-# the checkout refused — any of them used to be read as the pin, the last one
-# winning, so a decoy at the new SHA hid the real checkout (go-kure/kure#888
-# review). A `ref:` that is exactly
+# each key sits in, and the pin is a `ref:` key at the column of the `with:`
+# mapping's first child. A `ref:` anywhere else (under `env:` or another key,
+# off that column, at the step's own level, in a block scalar body, in a flow
+# mapping), a second `ref:` in any letter case (action inputs are
+# case-insensitive) or a second `with:` makes the checkout refused — any of
+# them used to be read as the pin, the last one winning, so a decoy at the new
+# SHA hid the real checkout (go-kure/kure#888 review). The key stack sees only
+# keys it parses, so a checkout step with any other line (a key such as `a
+# b:` or `a/b:`, the rest of a multi-line value) or a value that does not end
+# on its line is refused too: either could put a `ref:` that reads as
+# `with.ref` somewhere else in YAML. A `ref:` that is exactly
 # `${{ steps.<id>.outputs.<name> }}` (the forbidden-terms checkout derives its
 # ref from a `uses:` pin that way) is no pin and no refusal; any other
 # expression is refused, since it could name any commit.
@@ -275,13 +303,15 @@ scan_workflow() {
     function bad(n, l) { sub(/^[[:space:]]+/, "", l); print "bad " n ": " l }
     function flush() {
       if (is_repo) {
-        if (with_n > 1) bad(repo_nr, repo_text " (more than one with: in this checkout step)")
+        if (step_bad) bad(repo_nr, repo_text " (a line in this checkout step that is no key this scan can read: " step_bad_text ")")
+        else if (with_n > 1) bad(repo_nr, repo_text " (more than one with: in this checkout step)")
         else if (stray_ref || ref_n > 1) bad(repo_nr, repo_text " (a ref: outside the step'"'"'s with: mapping, or more than one ref:)")
         else if (sha != "") print "pin " sha
         else if (!ref_expr) bad(repo_nr, repo_text " (no 40-hex ref: in this checkout step)")
       }
       in_step = 0; is_repo = 0; sha = ""; ref_expr = 0
       sp = 0; step_keycol = -1; ref_n = 0; stray_ref = 0; with_n = 0
+      step_bad = 0; step_bad_text = ""; with_childcol = -1
     }
     # A value this scan can take whole from its own line.
     function readable(v) {
@@ -290,7 +320,7 @@ scan_workflow() {
       if (v ~ ("^" q)) return (v ~ ("^" q "[^" q "]*" q "$"))
       return 1
     }
-    BEGIN { prefix = repo "/.github/actions/"; blk = 0; sp = 0; step_keycol = -1 }
+    BEGIN { prefix = repo "/.github/actions/"; blk = 0; sp = 0; step_keycol = -1; with_childcol = -1 }
     /^[[:space:]]*(#|$)/ { next }
     {
       code = $0
@@ -335,9 +365,11 @@ scan_workflow() {
             if (step_keycol < 0) step_keycol = keycol
             while (sp > 0 && st_ind[sp] >= keycol) sp--
             if (sp == 0 && lk == "with") with_n++
+            # The column of the with: mapping'"'"'s children is its first key'"'"'s.
+            if (sp == 1 && st_key[1] == "with" && st_ind[1] == step_keycol && with_childcol < 0) with_childcol = keycol
             if (lk == "ref") {
               ref_n++
-              if (key == "ref" && sp == 1 && st_key[1] == "with" && st_ind[1] == step_keycol) {
+              if (key == "ref" && sp == 1 && st_key[1] == "with" && st_ind[1] == step_keycol && keycol == with_childcol) {
                 v = scalar(val)
                 if (is_hex40(tolower(v))) sha = tolower(v)
                 else if (v ~ /^\$\{\{ *steps\.[A-Za-z0-9_-]+\.outputs\.[A-Za-z0-9_-]+ *\}\}$/) ref_expr = 1
@@ -348,6 +380,9 @@ scan_workflow() {
               ref_n++; stray_ref = 1
             }
             sp++; st_ind[sp] = keycol; st_key[sp] = lk
+            # A value that does not end on its line (an unterminated or
+            # escaped quote) may hold the lines after it, `ref:` included.
+            if (val != "" && val !~ /^[|>][-+0-9]*$/ && !readable(val) && !step_bad) { step_bad = 1; step_bad_text = line }
           }
           if ((key == "uses" || key == "repository") && !readable(val)) {
             bad(NR, $0 " (a value this scan cannot read whole from its line)"); next
@@ -358,6 +393,10 @@ scan_workflow() {
           blk = 1; blk_ind = ind
         }
         if (in_step && !iskey && reftok) { ref_n++; stray_ref = 1 }
+        # Neither a key nor a comment: a key this scan does not parse (`a b:`,
+        # `a/b:`) or the rest of a multi-line value, either of which can move
+        # a `ref:` out of `with:`.
+        if (in_step && !iskey && !step_bad) { step_bad = 1; step_bad_text = line }
         if (keytok && !(key == "uses" || key == "repository")) { bad(NR, $0); next }
       } else if (in_step && reftok) {
         # A `ref:` in a block scalar body is text, but a checkout step that
@@ -664,6 +703,31 @@ while IFS= read -r name; do
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} names the go-kure/.github checkout other than as \$GITHUB_ACTION_PATH/<path>, one whole word — refusing to guess what it invokes" >&2
     exit 1
   fi
+  # A whole word can still be taken apart again: kept in a variable
+  # (`x=$GITHUB_ACTION_PATH/...sh`), passed on as an argument, or cut to its
+  # directory (`${x%/*}`, `$(dirname ...)`), from which the step reaches a
+  # file no reference names (go-kure/kure#888 review). Tracking which values
+  # carry the path is out of proportion here, so an action that mentions
+  # $GITHUB_ACTION_PATH may not use dirname, realpath or readlink, nor trim
+  # any parameter (`${name%...}`, `${name#...}`, `${name/...}`, a substring
+  # `${name:offset}`; the defaults `${name:-...}` and the like stay allowed),
+  # and each $GITHUB_ACTION_PATH word must be the command run: at the start of
+  # a line or after a separator, optionally behind `if`/`then`/`do`/`!` and
+  # `exec`/`bash`/`sh`/`source`/`.` with options.
+  if [[ "$gap_all" -gt 0 ]]; then
+    derive_re='(^|[^A-Za-z0-9_.-])(dirname|realpath|readlink)([^A-Za-z0-9_.-]|$)|\$\{([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*])(\[[^]]*\])?(%|#|/|:[^-=+?])'
+    # shellcheck disable=SC2016 # a literal $, matched, not expanded
+    gap_cmd_re='(^[[:space:]]*(-[[:space:]]+)?(run:[[:space:]]*)?|[;&|(][[:space:]]*)((if|then|do|else|elif|while|until|!)[[:space:]]+)*((exec|bash|sh|source|\.)([[:space:]]+-[A-Za-z]+)*[[:space:]]+)*["'\'']?(\$GITHUB_ACTION_PATH|\$\{GITHUB_ACTION_PATH\})/'
+    gap_cmd="$( { grep -oE "$gap_cmd_re" <<<"$code_yml" || true; } | wc -l)"
+    if grep -qE "$derive_re" <<<"$code_yml"; then
+      echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} derives a path (dirname, realpath, readlink or a \${name%...}-style trim) beside \$GITHUB_ACTION_PATH — refusing to guess what it reaches" >&2
+      exit 1
+    fi
+    if [[ "$gap_cmd" -ne "$gap_ref" ]]; then
+      echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} uses a \$GITHUB_ACTION_PATH/<path> word other than as the command it runs (assigned, or passed as an argument) — refusing to guess what it reaches" >&2
+      exit 1
+    fi
+  fi
   action_path_refs="$( { [[ -z "$gap_words" ]] || printf '%s\n' "$gap_words"; } | sort -u)"
   if [[ -z "$action_path_refs" ]] && grep -qiE '^[[:space:]]*(-[[:space:]]+)?run:' <<<"$key_yml"; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has a 'run:' step but no recognized \$GITHUB_ACTION_PATH/<path>.sh reference — refusing to under-report" >&2
@@ -763,10 +827,16 @@ SCRIPT_DIR_WORD_RE='(^|[^A-Za-z0-9_])SCRIPT_DIR([^A-Za-z0-9_]|$)'
 INDIRECTION_RE='\$\{!|(^|[^A-Za-z0-9_])(declare|local|typeset)([[:space:]]+[-+][A-Za-z]+)*[[:space:]]+-[A-Za-z]*n|(^|[^A-Za-z0-9_.-])eval([[:space:]]|$)'
 # shellcheck disable=SC2016 # a literal ${!, matched, not expanded
 ARRAY_KEYS_RE='\$\{![A-Za-z_][A-Za-z0-9_]*\[[@*]\]\}'
+# A declaration builtin as a word; dynamic_decl_name below reads its operands.
+DECL_BUILTIN_RE='(^|[^A-Za-z0-9_.-])(declare|typeset|local|export|readonly)([[:space:]]|$)'
 # An expression for the script's own location: BASH_SOURCE, BASH_ARGV (and
 # BASH_ARGV0), ${0...}, a positional slice `${@:...}`/`${*:...}` (an offset
-# of 0, however computed, is $0), or dirname/realpath/readlink of $0.
-SELF_DIR_RE='BASH_SOURCE|BASH_ARGV|\$\{0([^0-9A-Za-z_]|$)|\$\{[@*]:[^-+?=]|(dirname|realpath|readlink)[^;&|]*\$\{?0\}?([^0-9A-Za-z_]|$)'
+# of 0, however computed, is $0), dirname/realpath/readlink of $0, or `$_`
+# (`${_}`), the last argument of the previous command — the script's path
+# right after an exempted `echo "... $0" >&2` or `sed -n '1p' "$0"`
+# (go-kure/kure#888 review).
+# shellcheck disable=SC2016 # a literal $_, matched, not expanded
+SELF_DIR_RE='BASH_SOURCE|BASH_ARGV|\$\{0([^0-9A-Za-z_]|$)|\$\{[@*]:[^-+?=]|(dirname|realpath|readlink)[^;&|]*\$\{?0\}?([^0-9A-Za-z_]|$)|\$_([^0-9A-Za-z_]|$)|\$\{_([^0-9A-Za-z_]|$)'
 # A bare $0: the script's own path, refused unless strip_self_path_uses below
 # accounts for it. `x=$0` and then `"${x%/*}/tool.py"`, `printf -v x ... "$0"`,
 # `read x <<<"$0"` or a function called with "$0" carry the directory under
@@ -799,6 +869,48 @@ strip_self_path_uses() {
     -e 's/([A-Za-z0-9_]\(|,)[[:space:]]*\$0([^0-9A-Za-z_]|$)/\2/g' \
     -e 's/[[:space:]]=[[:space:]]+\$0([^0-9A-Za-z_]|$)/\1/g' \
     -e 's/\$0[[:space:]]+!?~//g'
+}
+
+# dynamic_decl_name -- on stdin, one line; print each operand of a
+# declare/typeset/local/export/readonly at a command position whose name (the
+# part before `=`, `+=` or `[`) holds a `$` or a backtick: `declare -g
+# "$n+=/lib"` with n built as SCRIPT_DIR at run time repoints it under a name
+# this scan never sees (go-kure/kure#888 review). A crude shell-word split:
+# quotes group, and an unquoted `;&|<>()` ends the command, so a compound
+# array value `a=([$k]=v)` is not read as a name.
+dynamic_decl_name() {
+  awk '
+    function flushw() { if (inw) { w[++nw] = cur; wop[nw] = 0 }; cur = ""; inw = 0 }
+    {
+      nw = 0; cur = ""; inw = 0; sq = 0; dq = 0
+      n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (sq) { if (c == "'"'"'") sq = 0; else cur = cur c; continue }
+        if (dq) { if (c == "\"") dq = 0; else cur = cur c; continue }
+        if (c == "'"'"'") { sq = 1; inw = 1; continue }
+        if (c == "\"") { dq = 1; inw = 1; continue }
+        if (c ~ /[[:space:]]/) { flushw(); continue }
+        if (c ~ /[;&|<>()]/) { flushw(); w[++nw] = c; wop[nw] = 1; continue }
+        cur = cur c; inw = 1
+      }
+      flushw()
+      cmdpos = 1
+      for (k = 1; k <= nw; k++) {
+        t = w[k]
+        if (wop[k]) { cmdpos = (t != ">" && t != "<"); if (!cmdpos) k++; continue }
+        if (cmdpos && t ~ /^(declare|typeset|local|export|readonly)$/) {
+          for (k++; k <= nw && !wop[k]; k++) {
+            if (w[k] ~ /^[-+]/) continue
+            nm = w[k]; sub(/[+]?=.*$/, "", nm); sub(/\[.*$/, "", nm)
+            if (nm ~ /[$`]/) print w[k]
+          }
+          k--; cmdpos = 0; continue
+        }
+        if (cmdpos && (t ~ /^(!|\{|then|do|else|elif|if|while|until|builtin|command|time)$/ || t ~ /^[A-Za-z_][A-Za-z0-9_]*=/)) continue
+        cmdpos = 0
+      }
+    }'
 }
 
 # Any assignment to SCRIPT_DIR, whatever precedes it (`export`, `readonly`,
@@ -919,7 +1031,7 @@ while [[ ${#queue[@]} -gt 0 ]]; do
   # name SCRIPT_DIR, use it before defining it, define it relatively, or
   # change the working directory.
   code_lines="$(printf '%s\n' "$content" | { grep -vE '^[[:space:]]*#' || true; })"
-  candidate_lines="$( { grep -E "${SEP_RE}(source|\\.)[[:space:]]|${SEP_RE}${EXEC_CANDIDATE_RE}|${SCRIPT_DIR_RE}|${SCRIPT_DIR_ASSIGN_RE}|${SCRIPT_DIR_WORD_RE}|${INDIRECTION_RE}|${SELF_DIR_RE}|${BARE_SELF_RE}|${CHECKOUT_NAME_RE}" <<<"$code_lines" || true; })"
+  candidate_lines="$( { grep -E "${SEP_RE}(source|\\.)[[:space:]]|${SEP_RE}${EXEC_CANDIDATE_RE}|${SCRIPT_DIR_RE}|${SCRIPT_DIR_ASSIGN_RE}|${SCRIPT_DIR_WORD_RE}|${INDIRECTION_RE}|${DECL_BUILTIN_RE}|${SELF_DIR_RE}|${BARE_SELF_RE}|${CHECKOUT_NAME_RE}" <<<"$code_lines" || true; })"
   # The first such line, read to the end: an early `exit` would kill the
   # writer with SIGPIPE and, under pipefail, the whole run with rc 141.
   cwd_line="$(awk -v re="$CWD_CHANGE_RE" '!found { l = $0; gsub(/\$?\([[:space:]]*(cd|pushd|popd)/, "(", l); if (l ~ re) { print; found = 1 } }' <<<"$code_lines")"
@@ -943,6 +1055,12 @@ while [[ ${#queue[@]} -gt 0 ]]; do
     # review).
     if grep -qE "$INDIRECTION_RE" <<<"$(sed -E "s/${ARRAY_KEYS_RE}//g" <<<"$line")"; then
       echo "check-pin-impact: name indirection (\${!name}, a nameref or eval) in ${script} — refusing to guess which variable it reaches:" >&2
+      echo "  $line" >&2
+      exit 1
+    fi
+    if [[ "$line" =~ $DECL_BUILTIN_RE && ( "$line" == *'$'* || "$line" == *'`'* ) ]] \
+        && [[ -n "$(dynamic_decl_name <<<"$line")" ]]; then
+      echo "check-pin-impact: a declaration whose variable name is built at run time in ${script} — refusing to guess which variable it sets:" >&2
       echo "  $line" >&2
       exit 1
     fi
