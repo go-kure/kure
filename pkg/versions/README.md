@@ -10,10 +10,16 @@ that file so consumers do not have to read it off disk and decode key paths by h
 
 ## Usage
 
-```go
-import "github.com/go-kure/kure/pkg/versions"
+The block below is the body of an `Example` function in `example_test.go`, which imports this
+package as `versions`, and `fmt`. `go test` compiles it but does not run it: it has no expected
+output, for the reason the next paragraph gives.
 
-k8s, ok := versions.Get("kubernetes")   // ok == false if the key was renamed or removed
+<!-- doc-example: pkg/versions ExampleGet -->
+```go
+k8s, ok := versions.Get("kubernetes")
+if !ok {
+    return // the key was renamed or removed
+}
 fmt.Println(k8s.SupportedRange, k8s.Min, k8s.Max)
 
 for _, d := range versions.All() {
@@ -22,6 +28,7 @@ for _, d := range versions.All() {
 
 fmt.Println(versions.GoVersion) // versions.yaml's go.current
 ```
+<!-- doc-example:end -->
 
 None of these values are repeated here: `SupportedRange`, `Min`, `Max` and `GoVersion` all move
 on a routine dependency or toolchain bump, and a literal example printed in this file would go

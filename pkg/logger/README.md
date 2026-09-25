@@ -10,17 +10,26 @@ The logger provides a simple printf-style interface with support for different l
 
 ## Usage
 
-```go
-import "github.com/go-kure/kure/pkg/logger"
+`logger.New` takes `Options` for the output, the minimum level, a prefix and whether to print a
+timestamp; `logger.Default()` is `logger.New(logger.DefaultOptions())`.
 
-log := logger.Default()
+The block below is the body of an `Example` function in `example_test.go`, which `go test` runs:
+it imports this package as `logger`, `github.com/go-kure/kure/pkg/errors`, and `os`.
+
+<!-- doc-example: pkg/logger ExampleNew -->
+```go
+// logger.Default() writes to stderr with a timestamp and drops Debug; these
+// options log every level to stdout without one.
+log := logger.New(logger.Options{Output: os.Stdout, Level: logger.LevelDebug})
 log.Info("loading package: %s", "/path/to/package")
-log.Error("failed to parse %s: %v", "config.yaml", err)
-log.Debug("parsed %d resources", count)
+log.Error("failed to parse %s: %v", "config.yaml", errors.New("unexpected end of stream"))
+log.Debug("parsed %d resources", 3)
 
 // No-op logger for quiet mode
 log = logger.Noop()
+log.Info("discarded")
 ```
+<!-- doc-example:end -->
 
 ## Log Levels
 

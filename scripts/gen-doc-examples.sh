@@ -28,6 +28,15 @@ cd "$repo_root"
 
 # The pages whose every Go block must be generated or marked as an excerpt.
 ENABLED_PAGES=(
+	pkg/errors/README.md
+	pkg/gvk/README.md
+	pkg/io/README.md
+	pkg/logger/README.md
+	pkg/manifest/README.md
+	pkg/stack/README.md
+	pkg/stack/argocd/README.md
+	pkg/stack/helm/README.md
+	pkg/versions/README.md
 	pkg/kubernetes/README.md
 	pkg/kubernetes/certmanager/README.md
 	pkg/kubernetes/cilium/README.md
