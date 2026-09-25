@@ -140,8 +140,12 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 			control := slices.Contains(kustomizeControlFiles, path.Base(f.name))
 			var why string
 			switch {
-			case control && f.extra:
-				why = fmt.Sprintf("would build the extra file %q of layout %q as a kustomization, which the Explicit mode never lists", f.name, f.l.FullRepoPath())
+			case control && (f.extra || f.unlisted):
+				kind := "extra file"
+				if f.unlisted {
+					kind = "file"
+				}
+				why = fmt.Sprintf("would build the %s %q of layout %q as a kustomization, which the Explicit mode never lists", kind, f.name, f.l.FullRepoPath())
 			case control:
 				why = fmt.Sprintf("would read the resource file %q of layout %q as a kustomization, where the Explicit mode lists it as a manifest", f.name, f.l.FullRepoPath())
 			case f.extra && manifest:
