@@ -191,6 +191,18 @@ func TestWriters_RecursiveRefusals(t *testing.T) {
 			},
 			want: `would apply the extra file "x.yaml" of layout "r/c"`,
 		},
+		// F2 for a file Flux reads as a kustomization rather than by its
+		// extension: an extensionless Kustomization makes Flux add its
+		// directory to the build as a kustomization of its own.
+		"Kustomization extra file in a subdirectory": {
+			build: func() *layout.ManifestLayout {
+				r := recursiveTree()
+				r.SetFluxBuild(true)
+				r.ExtraFiles = []layout.ExtraFile{{Name: "sub/Kustomization", Content: []byte("configMapGenerator:\n- name: sneaky\n  literals: [a=b]\n")}}
+				return r
+			},
+			want: `the Flux build of KustomizationRecursive layout "r" would build the extra file "sub/Kustomization" of layout "r" as a kustomization`,
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -202,6 +214,56 @@ func TestWriters_RecursiveRefusals(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWriteManifest_RecursiveRefusesFilesFluxDoesNotScan: a Config's
+// ManifestFileName can name resource files the Flux build of a marked
+// Recursive directory skips (not *.yaml or *.yml) or reads as the
+// directory's kustomization. Explicit mode lists either kind by name, so the
+// two builds would differ. A file in a directory with a kustomization.yaml
+// of its own is listed there and stays accepted.
+func TestWriteManifest_RecursiveRefusesFilesFluxDoesNotScan(t *testing.T) {
+	naming := func(name func(kind string) string) layout.Config {
+		cfg := layout.DefaultLayoutConfig()
+		cfg.ManifestFileName = func(_, kind, _ string, _ layout.FileExportMode) string { return name(kind) }
+		return cfg
+	}
+	refused := map[string]struct {
+		cfg  layout.Config
+		want string
+	}{
+		"JSON resource file": {
+			cfg:  naming(func(kind string) string { return kind + ".json" }),
+			want: `the Flux build of KustomizationRecursive layout "r" would skip the resource file "configmap.json" of layout "r"`,
+		},
+		"resource file named like a kustomization": {
+			cfg:  naming(func(string) string { return "kustomization.yml" }),
+			want: `the Flux build of KustomizationRecursive layout "r" would read the resource file "kustomization.yml" of layout "r" as a kustomization`,
+		},
+	}
+	for name, tc := range refused {
+		t.Run(name, func(t *testing.T) {
+			r := recursiveTree()
+			r.SetFluxBuild(true)
+			err := writeRefused(t, "WriteManifest", tc.cfg, r)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+	t.Run("JSON file in a directory with its own kustomization.yaml", func(t *testing.T) {
+		r := recursiveTree()
+		r.SetFluxBuild(true)
+		cfg := naming(func(kind string) string {
+			if kind == "secret" {
+				return "secret.json"
+			}
+			return kind + ".yaml"
+		})
+		if err := layout.WriteManifest(t.TempDir(), cfg, r); err != nil {
+			t.Fatalf("WriteManifest: %v", err)
+		}
+	})
 }
 
 // TestWriters_RecursiveAccepted: shapes whose Recursive output is kure's own

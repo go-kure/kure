@@ -166,13 +166,19 @@ Controls how resource YAML files are named:
 
   A Flux Kustomization kure generated builds a directory when `SetFluxBuild` marks it: the fluxcd
   integrator marks each generated `spec.path` layout, and the root, which the Flux bootstrap
-  applies. For a marked Recursive directory, the writers also refuse what would make its build
-  differ from the Explicit mode's:
+  applies. Nothing else marks: a caller placing Flux Kustomizations from `GenerateFromLayout` or its
+  own code calls `SetFluxBuild` on their `spec.path` layouts to get these checks. For a marked
+  Recursive directory, the writers also refuse what would make its build differ from the Explicit
+  mode's. Its build is every directory below it that no `kustomization.yaml` shields:
   - another marked layout below it with no `kustomization.yaml` in any directory in between (its
     own does not count): its objects would be applied twice;
-  - an extra file named `*.yaml` or `*.yml` in its build, outside every such directory: Flux would
-    apply it, or fail the whole build on one it cannot decode, and Explicit mode never lists
-    extra files.
+  - an extra file named `*.yaml` or `*.yml` in its build: Flux would apply it, or fail the whole
+    build on one it cannot decode, and Explicit mode never lists extra files;
+  - an extra or resource file named like a kustomization file (`kustomization.yaml`,
+    `kustomization.yml`, `Kustomization`) in its build: Flux would build the directory holding it
+    as a kustomization;
+  - a resource file whose name does not end in `.yaml` or `.yml` (a custom `FileNaming`): Flux
+    would skip it, where Explicit mode lists it.
 
   So Recursive fits a generated target with no other target below it: a leaf bundle directory,
   or a GroupByName bundle directory over the application directories it lists, plus any unmarked

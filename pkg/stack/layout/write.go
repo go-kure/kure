@@ -75,7 +75,8 @@ func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
 
 // writeManifest writes ml and its children; every directory gets a
 // kustomization.yaml (see ManifestLayout.writeToDisk), except the empty
-// synthetic cluster root. root is false for a child: an AppFileSingle child
+// synthetic cluster root and a layout whose mode resolves to
+// KustomizationRecursive. root is false for a child: an AppFileSingle child
 // writes its one file into its parent's directory, whose kustomization.yaml
 // the parent writes and which lists that file (go-kure/kure#860).
 func writeManifest(plan writerPlan, cfg Config, ml *ManifestLayout, root bool) error {

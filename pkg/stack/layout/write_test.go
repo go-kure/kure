@@ -776,8 +776,8 @@ func TestWriteManifest_FluxKustomizationMode_PerPlacement(t *testing.T) {
 		t.Errorf("recursive root got a kustomization.yaml (stat: %v)", err)
 	}
 
-	// The child has no placement of its own, so it keeps Config's Explicit mode
-	// Child (leaf) kustomization should list its own files regardless of parent mode
+	// The child has no placement of its own, so it keeps Config's Explicit
+	// mode: its kustomization.yaml lists its own files.
 	childK := filepath.Join(dir, "clusters", "cl", "ns", "root", "team-a", "kustomization.yaml")
 	childData, err := os.ReadFile(childK)
 	if err != nil {

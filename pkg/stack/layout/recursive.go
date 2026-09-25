@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
@@ -25,31 +26,48 @@ import (
 //     in any directory strictly between D and T (T's own does not count, as
 //     Flux adds T's directory as a resource): D's Kustomization would apply
 //     T's objects, and T's would too;
-//   - an extra file named *.yaml or *.yml in D's build, outside every such
-//     directory: Flux would apply it (or fail the whole build on one it
-//     cannot decode), and an Explicit kustomization.yaml never lists it.
+//   - an extra file in D's build, outside every such directory, that Flux
+//     reads: one named *.yaml or *.yml, which Flux would apply (or fail the
+//     whole build on one it cannot decode), or one named like a kustomization
+//     file, which Flux would build as a kustomization of its own. An Explicit
+//     kustomization.yaml lists neither;
+//   - a resource file in D's build, outside every such directory, that Flux
+//     does not read as a manifest: one not named *.yaml or *.yml, which Flux
+//     skips, or one named like a kustomization file. An Explicit
+//     kustomization.yaml lists it by name. Only a Config's ManifestFileName
+//     can produce either.
 //
-// Directories are compared as normDir compares them.
+// Flux's tests are its own: the file extension as it is, and the base name
+// against the kustomization file names exactly. Directories are compared as
+// normDir compares them.
 func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 	type dirLayout struct {
 		l       *ManifestLayout
 		dir     string // normDir'ed
 		writesK bool
 	}
-	type extraFile struct {
-		l    *ManifestLayout
-		name string
-		dir  string // normDir'ed directory the file lands in
+	type file struct {
+		l     *ManifestLayout
+		name  string
+		dir   string // normDir'ed directory the file lands in
+		extra bool   // an ExtraFile, not a resource file
 	}
 	var dirs []dirLayout
-	var extras []extraFile
+	var files []file
 	var walk func(l, parent *ManifestLayout) error
 	walk = func(l, parent *ManifestLayout) error {
 		dir, single := plan.outDir(l)
+		landsIn := func(name string) string {
+			return normDir(path.Dir(path.Join(filepath.ToSlash(dir), name)))
+		}
 		for _, ef := range l.ExtraFiles {
-			extras = append(extras, extraFile{l, ef.Name, normDir(path.Dir(path.Join(filepath.ToSlash(dir), ef.Name)))})
+			files = append(files, file{l, ef.Name, landsIn(ef.Name), true})
 		}
 		if !single {
+			names, _ := plan.files(l)
+			for _, name := range names {
+				files = append(files, file{l, name, landsIn(name), false})
+			}
 			dirs = append(dirs, dirLayout{l, normDir(dir), plan.writesKustomization(l, parent == nil)})
 			if plan.kustomizationMode(l) == KustomizationRecursive {
 				if len(l.ConfigMapGenerators) > 0 {
@@ -103,15 +121,28 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 					"the Flux build of KustomizationRecursive layout %q would include layout %q, which a Flux Kustomization kure generated builds as well: its objects would be applied twice", d.l.FullRepoPath(), t.l.FullRepoPath()), nil)
 			}
 		}
-		for _, e := range extras {
-			// Flux's own test: the file extension, as it is.
-			if ext := path.Ext(e.name); ext != ".yaml" && ext != ".yml" {
+		for _, f := range files {
+			if (f.dir != d.dir && !below(d.dir, f.dir)) || shielded(f.dir, false) {
 				continue
 			}
-			if (e.dir == d.dir || below(d.dir, e.dir)) && !shielded(e.dir, false) {
-				return errors.NewFileError("write", path.Join(e.dir, e.name), fmt.Sprintf(
-					"the Flux build of KustomizationRecursive layout %q would apply the extra file %q of layout %q, which the Explicit mode never lists", d.l.FullRepoPath(), e.name, e.l.FullRepoPath()), nil)
+			ext := path.Ext(f.name)
+			manifest := ext == ".yaml" || ext == ".yml"
+			control := slices.Contains(kustomizeControlFiles, path.Base(f.name))
+			var why string
+			switch {
+			case control && f.extra:
+				why = fmt.Sprintf("would build the extra file %q of layout %q as a kustomization, which the Explicit mode never lists", f.name, f.l.FullRepoPath())
+			case control:
+				why = fmt.Sprintf("would read the resource file %q of layout %q as a kustomization, where the Explicit mode lists it as a manifest", f.name, f.l.FullRepoPath())
+			case f.extra && manifest:
+				why = fmt.Sprintf("would apply the extra file %q of layout %q, which the Explicit mode never lists", f.name, f.l.FullRepoPath())
+			case !f.extra && !manifest:
+				why = fmt.Sprintf("would skip the resource file %q of layout %q, as Flux reads only *.yaml and *.yml files, where the Explicit mode lists it", f.name, f.l.FullRepoPath())
+			default:
+				continue
 			}
+			return errors.NewFileError("write", path.Join(f.dir, path.Base(f.name)), fmt.Sprintf(
+				"the Flux build of KustomizationRecursive layout %q %s", d.l.FullRepoPath(), why), nil)
 		}
 	}
 	return nil
