@@ -50,8 +50,9 @@
 #   - per action: each `$GITHUB_ACTION_PATH/<rel>.sh` (or
 #     `${GITHUB_ACTION_PATH}/<rel>.sh`) in its one `run:` step, one whole
 #     word and the command run (at a line start or after a separator,
-#     optionally behind `if`/`then`/`do`/`!` and `exec`/`bash`/`sh`/
-#     `source`/`.` with options), resolved against .github/actions/<subpath>/
+#     optionally behind a shell keyword (`if`, `then`, `else`, `elif`, `do`,
+#     `while`, `until`, `!`) and `exec`/`bash`/`sh`/`source`/`.` with
+#     options), resolved against .github/actions/<subpath>/
 #     with `..` hops counted.
 #   - per script, transitively: a whole line `source|. "$SCRIPT_DIR/<name>.sh"`
 #     or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]` (args without
@@ -164,6 +165,16 @@
 #   - an assignment through a name built at run time other than by a
 #     declaration builtin: `printf -v "$n"`, `read "$n"`, `mapfile "$n"`
 #     (a consumed script assigns through `printf -v "$destination"`).
+#   - a declaration builtin not written as a plain word at a command
+#     position: `\declare -g "$n+=/lib"`, `d=declare; $d -g ...`, or one
+#     continued onto the next line with `\`.
+#   - in an action's `run:` step, the action path carried past the command
+#     and cut to its directory by a tool other than dirname, realpath,
+#     readlink or a trim (sed, awk, cut, a Python one-liner): carried by `$_`
+#     after the command, an array assignment `x=("$GITHUB_ACTION_PATH/...")`
+#     or an argument on a `\` continuation line.
+#   - the action path read through a name built at run time
+#     (`n=GITHUB_ACTION; n+=_PATH; "${!n}/..."`).
 #   - false aborts, refused although harmless: a directory other than the
 #     script's own derived from it, such as `ROOT=$(cd "$(dirname "$0")/.."
 #     && pwd)` — following it would mean tracking an arbitrary variable
@@ -177,7 +188,8 @@
 #     of its own; dirname, realpath, readlink or a parameter trim anywhere in
 #     an action that mentions $GITHUB_ACTION_PATH, and a
 #     `$GITHUB_ACTION_PATH/<path>` command behind a wrapper (`env`,
-#     `timeout`).
+#     `timeout`), an environment assignment (`VAR=1 "$GITHUB_ACTION_PATH/..."`),
+#     a shell option (`bash --noprofile`), a `{ ...; }` group or a `case` arm.
 #
 # A genuine hit (a consumed path did change) is not necessarily wrong to
 # merge — the pin bump may have been reviewed and found fine. There is no
@@ -205,7 +217,7 @@ while [[ $# -gt 0 ]]; do
     --base-ref) BASE_REF="${2:-}"; [[ -n "$BASE_REF" ]] || { echo "check-pin-impact: --base-ref needs a REF" >&2; exit 2; }; shift 2 ;;
     --old) OLD_SHA="${2:-}"; [[ -n "$OLD_SHA" ]] || { echo "check-pin-impact: --old needs a SHA" >&2; exit 2; }; shift 2 ;;
     --new) NEW_SHA="${2:-}"; [[ -n "$NEW_SHA" ]] || { echo "check-pin-impact: --new needs a SHA" >&2; exit 2; }; shift 2 ;;
-    -h|--help) sed -n '2,190p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,/^$/{/^$/q;p;}' "$0"; exit 0 ;;
     *) echo "check-pin-impact: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -712,7 +724,8 @@ while IFS= read -r name; do
   # any parameter (`${name%...}`, `${name#...}`, `${name/...}`, a substring
   # `${name:offset}`; the defaults `${name:-...}` and the like stay allowed),
   # and each $GITHUB_ACTION_PATH word must be the command run: at the start of
-  # a line or after a separator, optionally behind `if`/`then`/`do`/`!` and
+  # a line or after a separator, optionally behind a shell keyword (`if`,
+  # `then`, `else`, `elif`, `do`, `while`, `until`, `!`) and
   # `exec`/`bash`/`sh`/`source`/`.` with options.
   if [[ "$gap_all" -gt 0 ]]; then
     derive_re='(^|[^A-Za-z0-9_.-])(dirname|realpath|readlink)([^A-Za-z0-9_.-]|$)|\$\{([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*])(\[[^]]*\])?(%|#|/|:[^-=+?])'
