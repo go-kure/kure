@@ -9,6 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/pkg/errors"
 )
@@ -91,7 +93,7 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 }
 
 // checkBuildIdentities refuses two layouts holding objects with one identity
-// (as checkResourceIdentities defines it) that one kustomize build the writer
+// (kustomize's own, see buildIdentity) that one kustomize build the writer
 // produces takes in together: kustomize refuses to add the second object ("may
 // not add resource with an already registered id"), so the kustomization.yaml
 // kure writes, or the Flux build of its Recursive directory, would not build
@@ -169,28 +171,19 @@ func checkBuildIdentities(root *ManifestLayout, plan writerPlan) error {
 			}
 		}
 	}
-	below := func(base, p string) bool {
-		rel, ok := relativeTo(base, p)
-		return ok && rel != "."
+	var kdirs []string
+	for _, m := range all {
+		if !m.single && m.writesK {
+			kdirs = append(kdirs, m.dir)
+		}
 	}
 	// recursive adds to in the layouts whose objects the Flux build of the
-	// Recursive layout d takes in.
+	// Recursive layout d takes in. A directory layout's own kustomization.yaml
+	// does not shield it (Flux adds its directory); an AppFileSingle file is
+	// shielded by the one in its own directory, which lists it or not.
 	recursive := func(d laid, in map[*ManifestLayout]bool) {
-		// shielded reports whether a directory strictly below d's, at or
-		// above p (strictly above it when strict), has a kustomization.yaml.
-		shielded := func(p string, strict bool) bool {
-			for _, m := range all {
-				if m.single || !m.writesK || !below(d.dir, m.dir) {
-					continue
-				}
-				if (!strict && m.dir == p) || below(m.dir, p) {
-					return true
-				}
-			}
-			return false
-		}
 		for _, t := range all {
-			if (t.dir != d.dir && !below(d.dir, t.dir)) || shielded(t.dir, !t.single) {
+			if (t.dir != d.dir && !below(d.dir, t.dir)) || shieldedIn(kdirs, d.dir, t.dir, !t.single) {
 				continue
 			}
 			if !t.single && t.l != d.l && t.writesK {
@@ -203,7 +196,7 @@ func checkBuildIdentities(root *ManifestLayout, plan writerPlan) error {
 
 	ids := map[*ManifestLayout][]string{}
 	for _, li := range all {
-		if err := eachIdentity(li.l, func(id string) error {
+		if err := eachIdentity(li.l, buildIdentity, func(id string) error {
 			ids[li.l] = append(ids[li.l], id)
 			return nil
 		}); err != nil {
@@ -261,15 +254,17 @@ func checkSingleChildLeaf(child *ManifestLayout, outDir outDirFunc) error {
 }
 
 // checkResourceIdentities refuses a layout that holds two resources with one
-// Kubernetes identity (group, kind, namespace and name). Resources that share
-// a file name are legitimately written into one multi-document file (every
-// FilePerKind file does this), but two objects with one identity in one
-// directory make kustomize fail to build it. A grouping axis set to flat
-// merges several applications' or nodes' resources into one directory, which
-// is where this happens.
+// identity as layoutIdentity defines it (group, kind, namespace and name).
+// Resources that share a file name are legitimately written into one
+// multi-document file (every FilePerKind file does this), but two objects with
+// one kustomize identity in one directory make kustomize fail to build it. The
+// version is not compared here, so two versions of one object, which
+// kustomize builds, are refused as well. A grouping axis set to flat merges
+// several applications' or nodes' resources into one directory, which is
+// where this happens.
 func checkResourceIdentities(l *ManifestLayout) error {
 	seen := make(map[string]struct{}, len(l.Resources))
-	return eachIdentity(l, func(id string) error {
+	return eachIdentity(l, layoutIdentity, func(id string) error {
 		if _, dup := seen[id]; dup {
 			return errors.NewFileError("write", l.FullRepoPath(),
 				fmt.Sprintf("layout %q holds the same object %s twice", l.FullRepoPath(), id), nil)
@@ -279,10 +274,40 @@ func checkResourceIdentities(l *ManifestLayout) error {
 	})
 }
 
-// eachIdentity calls fn, in order, with the identity of every object l holds,
-// "<group>/<kind> <namespace>/<name>", a List's items standing in for the
-// List. An object without a kind has none and is skipped.
-func eachIdentity(l *ManifestLayout, fn func(id string) error) error {
+// identityKey renders an object's identity from its group, version and kind,
+// its namespace as set (possibly empty) and its name.
+type identityKey func(gvk schema.GroupVersionKind, namespace, name string) string
+
+// layoutIdentity is checkResourceIdentities' key,
+// "<group>/<kind> <namespace>/<name>". kustomize reads an omitted namespace as
+// "default", so an object without one and the same object in "default" are
+// one identity.
+func layoutIdentity(gvk schema.GroupVersionKind, namespace, name string) string {
+	if namespace == "" {
+		namespace = "default"
+	}
+	return fmt.Sprintf("%s/%s %s/%s", gvk.Group, gvk.Kind, namespace, name)
+}
+
+// buildIdentity is kustomize's own identity (resid.ResId.Equals), the one it
+// refuses twice in a build: group, version, kind, name and the effective
+// namespace. A kind kustomize knows is cluster-scoped has no namespace, even
+// when the object sets one; any other kind with no namespace is in "default".
+// It renders as "<apiVersion> <kind> [<namespace>/]<name>".
+func buildIdentity(gvk schema.GroupVersionKind, namespace, name string) string {
+	if resid.NewGvk(gvk.Group, gvk.Version, gvk.Kind).IsClusterScoped() {
+		return fmt.Sprintf("%s %s %s", gvk.GroupVersion(), gvk.Kind, name)
+	}
+	if namespace == "" {
+		namespace = "default"
+	}
+	return fmt.Sprintf("%s %s %s/%s", gvk.GroupVersion(), gvk.Kind, namespace, name)
+}
+
+// eachIdentity calls fn, in order, with the identity key renders for every
+// object l holds, a List's items standing in for the List. An object without
+// a kind has none and is skipped.
+func eachIdentity(l *ManifestLayout, key identityKey, fn func(id string) error) error {
 	claim := func(obj runtime.Object) error {
 		acc, err := meta.Accessor(obj)
 		if err != nil {
@@ -295,13 +320,7 @@ func eachIdentity(l *ManifestLayout, fn func(id string) error) error {
 			// empty key. It is not this check's to judge.
 			return nil
 		}
-		// kustomize reads an omitted namespace as "default", so an object
-		// without one and the same object in "default" are one identity.
-		ns := acc.GetNamespace()
-		if ns == "" {
-			ns = "default"
-		}
-		return fn(fmt.Sprintf("%s/%s %s/%s", gvk.Group, gvk.Kind, ns, acc.GetName()))
+		return fn(key(gvk, acc.GetNamespace(), acc.GetName()))
 	}
 	for _, obj := range l.Resources {
 		if obj == nil {

@@ -68,16 +68,20 @@ Directories and file names are compared case-insensitively, as on default macOS 
 `AppFileSingle` child named `Kustomization`, or `Default-ConfigMap-A`, is refused too, and so is a
 directory child `Default-ConfigMap-A.yaml` next to its parent's `default-configmap-a.yaml`.
 
-The writers also refuse two layouts that hold an object with one identity (group, kind, namespace
-and name, an omitted namespace counting as `default`) when one kustomize build takes in both
-(go-kure/kure#880): kustomize refuses the second copy (`may not add resource with an already
-registered id`), so that build would fail. A build is every `kustomization.yaml` a writer writes,
-with the files and the `AppFileSingle` child files it lists and, recursively, the build of each
-child directory it lists; and the Flux build of a `KustomizationRecursive` directory marked with
-`SetFluxBuild` (see "Kustomization Generation"). The error names both layouts and the innermost
-build. A child its parent does not list (an umbrella child, one that renders bundles, a child of a
-`FluxIntegratedPerLayout` parent, or under `WriteToDisk` and `WriteToTar` a child of another
-package) is a build of its own, so it may hold an object its parent holds.
+The writers also refuse two layouts that hold an object with one kustomize identity when one
+kustomize build takes in both (go-kure/kure#880): kustomize refuses the second copy (`may not add
+resource with an already registered id`), so that build would fail. The identity is kustomize's
+own: group, version, kind, name and namespace, where an omitted namespace counts as `default` and
+a kind kustomize knows is cluster-scoped (such as `Namespace`) has none, even when the object sets
+one. Two versions of one object (`autoscaling/v1` and `autoscaling/v2`) are two identities, and
+build. A build is every `kustomization.yaml` a writer writes, with the files and the
+`AppFileSingle` child files it lists and, recursively, the build of each child directory it lists;
+and the Flux build of a `KustomizationRecursive` directory marked with `SetFluxBuild` (see
+"Kustomization Generation"). The error names both layouts and the innermost build. A child its
+parent does not list (an umbrella child, one that renders bundles, a directory child of a
+`FluxIntegratedPerLayout` parent, or under `WriteToDisk` and `WriteToTar` a directory child of
+another package) is a build of its own, so it may hold an object its parent holds. An
+`AppFileSingle` child of such a parent is still listed, so its objects count in the parent's build.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
@@ -211,9 +215,10 @@ Controls how resource YAML files are named:
     `WriteToDisk` and `WriteToTar`, a child of another package (its `PackageRef` and its parent's
     are both set, with different values). Flux would apply
     it, where Explicit mode leaves it out. `WriteManifest` lists such a child, so it is accepted
-    there;
-  - two layouts in its build that hold one object: kustomize refuses the second copy, as in any
-    other build (see "Layout paths").
+    there.
+
+  Two layouts in a marked Recursive directory's build that hold one object are refused as well,
+  as in any other build (see "Layout paths"): that fails the Flux build and the Explicit one alike.
 
   So Recursive fits a generated target with no other target below it: a leaf bundle directory,
   or a GroupByName bundle directory over the application directories it lists, plus any unmarked
