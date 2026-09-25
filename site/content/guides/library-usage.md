@@ -10,11 +10,12 @@ Kure is primarily a Go library. This guide covers the basics of importing it, cr
 Each Go block below that is not an import block is the body of an `Example` function in
 `pkg/kubernetes/library_usage_example_test.go`, generated from it, so the page cannot show code
 that no longer compiles. `go test` runs every one of them and compares what it prints, except the
-maturity example, which is compiled only: its output follows the pinned upstream modules. The
-examples add `fmt.Println` lines to print what they built, use `panic(err)` where a program would
-return the error, and use two things declared in the same file: `frontendConfig`, a
-`stack.ApplicationConfig` that emits one Deployment, and `exportedObjects()`, a ConfigMap carrying
-the `resourceVersion`, `uid` and `creationTimestamp` an API server sets.
+maturity example, which is compiled only: its output follows the pinned upstream modules. Each
+import block lists what the examples after it import, less `fmt`: the examples add `fmt.Println`
+lines to print what they built. They use `panic(err)` where a program would return the error, and
+two things declared in the same file: `frontendConfig`, a `stack.ApplicationConfig` that emits one
+Deployment, and `exportedObjects()`, a ConfigMap carrying the `resourceVersion`, `uid` and
+`creationTimestamp` an API server sets.
 
 ## Installation
 
@@ -29,10 +30,9 @@ A constructor gives you an object with an identity and nothing else: its
 `metadata.namespace` for a namespaced kind. From there the upstream Go struct is
 the API, so you set fields on it directly.
 
-<!-- doc-example:excerpt the import block alone, which the two examples below share -->
+<!-- doc-example:excerpt the import block alone, which the two examples below use -->
 ```go
 import (
-    appsv1 "k8s.io/api/apps/v1"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     "k8s.io/utils/ptr"
     "github.com/go-kure/kure/pkg/kubernetes"
@@ -133,9 +133,16 @@ Beyond FluxCD, the [Kubernetes Builders](/api-reference/kubernetes-builders) pac
 Use the `io` package to serialize resources. `io.Marshal` and `io.PrintObjectsAsYAML` write to
 the `io.Writer` you pass; `io.SaveFile` writes one object to a path:
 
-<!-- doc-example:excerpt the import line alone, which the examples in this section use -->
+<!-- doc-example:excerpt the import block alone, which the examples in this section use -->
 ```go
-import "github.com/go-kure/kure/pkg/io"
+import (
+    "os"
+    "path/filepath"
+
+    "sigs.k8s.io/controller-runtime/pkg/client"
+    "github.com/go-kure/kure/pkg/io"
+    "github.com/go-kure/kure/pkg/kubernetes"
+)
 ```
 
 <!-- doc-example: pkg/kubernetes Example_libraryUsageYAML -->
@@ -175,7 +182,7 @@ When encoding resources exported from a cluster, server-managed metadata fields 
 ```go
 objects := exportedObjects()
 
-// Default: strips all server-set fields and uses standard key order
+// Default: strips server-managed fields and uses standard key order
 data, err := io.EncodeObjectsToYAMLWithOptions(objects, io.EncodeOptions{
     KubernetesFieldOrder: true,
 })
@@ -212,9 +219,12 @@ module sources — its scope, the module and version it came from, and the field
 upstream documents as gated, alpha, beta or deprecated. The lookups are in
 `pkg/kubernetes`, and they answer from that table rather than from a hand-kept list.
 
-<!-- doc-example:excerpt the import line alone, which the examples in this section use with pkg/manifest -->
+<!-- doc-example:excerpt the import block alone, which the examples in this section use -->
 ```go
-import "github.com/go-kure/kure/pkg/kubernetes"
+import (
+    "github.com/go-kure/kure/pkg/kubernetes"
+    "github.com/go-kure/kure/pkg/manifest"
+)
 ```
 
 <!-- doc-example: pkg/kubernetes Example_libraryUsageKindFor -->
@@ -318,9 +328,12 @@ Then use the [Flux Engine](/api-reference/flux-engine) and [Layout Engine](/api-
 
 All Kure packages use the [errors](/api-reference/errors) package:
 
-<!-- doc-example:excerpt the import line alone, which the example below uses -->
+<!-- doc-example:excerpt the import block alone, which the example below uses -->
 ```go
-import "github.com/go-kure/kure/pkg/errors"
+import (
+    "github.com/go-kure/kure/pkg/errors"
+    "github.com/go-kure/kure/pkg/io"
+)
 ```
 
 <!-- doc-example: pkg/kubernetes Example_libraryUsageErrors -->

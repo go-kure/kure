@@ -45,12 +45,16 @@ bundle of its own:
 
 <!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDefine -->
 ```go
+// The Flux source every bundle's Kustomization reads from.
+source := &stack.SourceRef{Kind: "GitRepository", Name: "flux-system"}
+
 certManager, err := stack.NewBundle("cert-manager", []*stack.Application{
     stack.NewApplication("cert-manager", "cert-manager", certManagerConfig),
 }, nil)
 if err != nil {
     panic(err)
 }
+certManager.SourceRef = source
 webTier, err := stack.NewBundle("web-tier", []*stack.Application{
     stack.NewApplication("frontend", "web", frontendConfig),
     stack.NewApplication("api-gateway", "web", apiConfig),
@@ -58,6 +62,7 @@ webTier, err := stack.NewBundle("web-tier", []*stack.Application{
 if err != nil {
     panic(err)
 }
+webTier.SourceRef = source
 
 cluster := stack.NewCluster("production", &stack.Node{
     Name: "production",
@@ -67,12 +72,16 @@ cluster := stack.NewCluster("production", &stack.Node{
     },
 })
 for _, node := range cluster.Node.Children {
-    fmt.Println(node.Name, node.Bundle.Name, len(node.Bundle.Applications))
+    b := node.Bundle
+    fmt.Println(node.Name, b.Name, len(b.Applications), b.SourceRef.Kind, b.SourceRef.Name)
 }
 ```
 <!-- doc-example:end -->
 
 Each bundle becomes a Flux Kustomization, and each application generates its Kubernetes manifests.
+Each bundle needs a `SourceRef` naming the Flux source its Kustomization reads from: `FluxSeparate`,
+the placement Step 3 uses, does not enforce one, and without it the Kustomizations written to
+`flux-system/` carry an empty `sourceRef`, which Flux's CRD rejects.
 
 The fluent builder (`stack.NewClusterBuilder`) builds a single path from the root, not a tree
 like this one: `WithNode` sets the root node, so a second call replaces it; a second `WithBundle`
@@ -140,7 +149,8 @@ printFiles(out)
 
 `WriteManifest` writes under `<basePath>/<ManifestsDir>` (`<out>/clusters` here). Every Flux
 Kustomization `spec.path` is a layout directory relative to that root, so root the Flux source
-there. The example prints the tree it wrote:
+there. The example prints every file it wrote, and `go test` checks that list against the
+Example's `// Output:` comment. The tree below draws the same files by hand; it is not generated:
 
 ```
 clusters/
@@ -172,8 +182,10 @@ clusters/
           kustomization.yaml
 ```
 
-Every `kustomization.yaml` outside `flux-system/` is a kustomize file listing its directory's
-manifests; the Flux Kustomizations are the files in `flux-system/`.
+Every `kustomization.yaml`, the one in `flux-system/` included, is a kustomize file, not a Flux
+Kustomization: it lists the manifests and subdirectories kustomize builds from its directory. The
+Flux Kustomizations are the `flux-system-kustomization-*.yaml` files, which
+`flux-system/kustomization.yaml` lists.
 
 ## Layout Configuration
 

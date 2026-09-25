@@ -27,7 +27,8 @@ Kure answers this in three layers. A **domain model** says what a cluster contai
 
 Go code generates plain Kubernetes YAML — no templates, no runtime. The Go block after the
 imports is the body of `Example_siteIndex` in `pkg/kubernetes`, which `go test` runs and checks
-against the YAML shown.
+against the Example's own `// Output:` comment. The YAML tab reproduces that output by hand; it is
+not generated.
 
 {{< tabs >}}
 {{< tab title="Go" >}}
