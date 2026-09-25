@@ -215,12 +215,13 @@ func manifestPlan(basePath string, cfg Config) writerPlan {
 //
 // It also refuses such a file where one path needs a directory and another is
 // a file (go-kure/kure#878): a file beneath one another layout writes, a file
-// that another layout's file needs as a directory, a file at or above a
-// directory the writers create for a layout, or a file inside the directory
-// of a non-single layout below the one it lands in, as checkExtraFiles
-// refuses for a layout's own directory. Without it WriteToDisk and
-// WriteManifest failed partway with "not a directory", and WriteToTar wrote
-// an archive tar could not extract.
+// that another layout's file needs as a directory, or a file at or above a
+// directory the writers create for a layout; and a layout's directory, a
+// single layout's without resources included, at or beneath a file another
+// layout writes. Without it WriteToDisk and WriteManifest failed partway with
+// "not a directory", and WriteToTar wrote an archive tar could not extract.
+// A file inside another layout's directory is accepted: that directory's
+// kustomization.yaml does not list it, which contradicts nothing written.
 //
 // Every file another layout writes is indexed first, since the directory's
 // owner may come later in the walk than the single-file layout. Paths are
@@ -259,12 +260,18 @@ func checkSingleFiles(root *ManifestLayout, plan writerPlan) error {
 		what      string // "file" or "extra file"
 	}
 	var singles []single
+	type layoutDir struct {
+		l   *ManifestLayout
+		dir string
+	}
+	var dirs []layoutDir
 	var walk func(l *ManifestLayout, root bool)
 	walk = func(l *ManifestLayout, root bool) {
 		dir, isSingle := plan.outDir(l)
 		// The writers create every layout's directory, a single layout's
 		// included, whether or not they write a file into it.
 		need(normDir(dir), true, fmt.Sprintf("layout %q", l.FullRepoPath()))
+		dirs = append(dirs, layoutDir{l, dir})
 		sorted, _ := plan.files(l)
 		if isSingle {
 			// sorted is empty for a single layout without resources,
@@ -302,8 +309,9 @@ func checkSingleFiles(root *ManifestLayout, plan writerPlan) error {
 		}
 	}
 	walk(root, true)
-	// A single layout's own paths are checkExtraFiles', so its files are
-	// checked only against other layouts' here.
+	// checkLayoutTree runs checkExtraFiles first, and it refuses a single
+	// layout whose own paths clash with each other, so every landed path a
+	// clash below meets is another layout's.
 	landed := map[string]single{}     // normDir'ed file path -> the single layout's file there
 	landedDirs := map[string]single{} // normDir'ed directory a landed file needs -> the first such file
 	for _, s := range singles {
@@ -313,13 +321,13 @@ func checkSingleFiles(root *ManifestLayout, plan writerPlan) error {
 			what, ok = fmt.Sprintf("replace the %s %q of AppFileSingle layout %q", other.what, other.file, other.l.FullRepoPath()), true
 		}
 		if !ok {
-			what, ok = singleDirClash(normDir(s.dir), key, ownedFiles, neededDirs, layoutDirs)
+			what, ok = singleDirClash(key, ownedFiles, neededDirs, layoutDirs)
 		}
-		if other, landedThere := landedDirs[key]; !ok && landedThere && other.l != s.l {
+		if other, landedThere := landedDirs[key]; !ok && landedThere {
 			what, ok = fmt.Sprintf("take a directory that the %s %q of AppFileSingle layout %q needs", other.what, other.file, other.l.FullRepoPath()), true
 		}
 		for d := path.Dir(key); !ok && d != "." && d != "/"; d = path.Dir(d) {
-			if other, landedThere := landed[d]; landedThere && other.l != s.l {
+			if other, landedThere := landed[d]; landedThere {
 				what, ok = fmt.Sprintf("use the %s %q of AppFileSingle layout %q as a directory", other.what, other.file, other.l.FullRepoPath()), true
 			}
 		}
@@ -335,24 +343,40 @@ func checkSingleFiles(root *ManifestLayout, plan writerPlan) error {
 			landedDirs[d] = s
 		}
 	}
+	// A layout's directory, or one above it, must not be a file another
+	// layout writes: a single layout without resources writes no file, but
+	// the writers still create its directory. Every such directory is in
+	// neededDirs, which each landed file was checked against above.
+	for _, ld := range dirs {
+		key := normDir(ld.dir)
+		var what string
+		if file, written := ownedFiles[key]; written {
+			what = "replace " + file
+		}
+		for d := path.Dir(key); what == "" && d != "." && d != "/"; d = path.Dir(d) {
+			if file, written := ownedFiles[d]; written {
+				what = "use " + file + " as a directory"
+			}
+		}
+		if what != "" {
+			return errors.NewFileError("write", ld.dir, fmt.Sprintf(
+				"the directory of layout %q would %s", ld.l.FullRepoPath(), what), nil)
+		}
+	}
 	return nil
 }
 
-// singleDirClash reports what an AppFileSingle layout's file at key, landing
-// in the directory base (both normDir'ed), would do where it needs a
-// directory that another layout's path makes a file, or is a file where
-// another layout's path needs a directory: take the directory of a non-single
-// layout, or land in one that lies below base; take a directory that another
+// singleDirClash reports what an AppFileSingle layout's file at key
+// (normDir'ed) would do where it needs a directory that another layout's
+// file takes, or is a file where another layout's path needs a directory:
+// take the directory of a non-single layout; take a directory that another
 // layout's file, or a layout's own directory, needs; or use another layout's
-// file as a directory.
-func singleDirClash(base, key string, ownedFiles, neededDirs, layoutDirs map[string]string) (string, bool) {
+// file as a directory. A file inside another layout's directory is none of
+// these: that directory's kustomization.yaml does not list it, which
+// contradicts nothing the writers produce.
+func singleDirClash(key string, ownedFiles, neededDirs, layoutDirs map[string]string) (string, bool) {
 	if other, ok := layoutDirs[key]; ok {
 		return fmt.Sprintf("take the directory of layout %q", other), true
-	}
-	for d := path.Dir(key); d != base && d != "." && d != "/"; d = path.Dir(d) {
-		if other, ok := layoutDirs[d]; ok {
-			return fmt.Sprintf("land in the directory of layout %q", other), true
-		}
 	}
 	if what, ok := neededDirs[key]; ok {
 		return fmt.Sprintf("take a directory that %s needs", what), true

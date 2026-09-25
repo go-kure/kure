@@ -12,19 +12,23 @@ import (
 	"github.com/go-kure/kure/pkg/errors"
 )
 
-// checkLayoutTree refuses a tree in which two layouts resolve to the same
-// directory (or, for AppFileSingle layouts, the same file), an AppFileSingle
-// child has children (see checkSingleChildLeaf), an extra file takes a path
-// the writer owns (see checkExtraFiles), or an AppFileSingle layout's file or
-// extra file would replace another file in its directory, or needs a
-// directory where another path is a file or the reverse (see checkSingleFiles),
-// or a KustomizationRecursive layout contradicts the output (see
-// checkRecursiveLayouts),
-// before anything is written (go-kure/kure#771). Each such layout writes its own files there,
-// and the later kustomization.yaml silently replaces the earlier one, dropping
-// its resources from the kustomize graph. Directories are compared
-// case-insensitively, as on default macOS volumes. plan is the writer's own,
-// so the check and the write agree on every path and file name.
+// checkLayoutTree refuses, before anything is written, a tree in which:
+//   - two layouts resolve to the same directory, or, for AppFileSingle
+//     layouts, the same file (go-kure/kure#771): each writes its own files
+//     there, and the later kustomization.yaml silently replaces the earlier
+//     one, dropping its resources from the kustomize graph;
+//   - an AppFileSingle child has children (see checkSingleChildLeaf);
+//   - an extra file takes a path the writer owns (see checkExtraFiles);
+//   - an AppFileSingle layout's file or extra file replaces another layout's
+//     file, needs a directory where another layout writes a file, or is a
+//     file where another layout needs a directory, or a layout's directory is
+//     or lies beneath another layout's file (see checkSingleFiles);
+//   - a KustomizationRecursive layout contradicts the output (see
+//     checkRecursiveLayouts).
+//
+// Directories are compared case-insensitively, as on default macOS volumes.
+// plan is the writer's own, so the check and the write agree on every path
+// and file name.
 func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 	outDir := plan.outDir
 	dirs := map[string]*ManifestLayout{}
