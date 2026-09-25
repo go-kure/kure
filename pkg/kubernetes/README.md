@@ -9,19 +9,29 @@ under `pkg/kubernetes/...` follows it, and the tests described below enforce it.
 
 ## Import
 
+<!-- doc-example:excerpt the import line alone, which every example on this page uses -->
 ```go
 import "github.com/go-kure/kure/pkg/kubernetes"
 ```
+
+Every other block on this page is the body of an `Example` function in `example_test.go`, which
+`go test` runs: it imports this package, the upstream APIs under their usual aliases (`appsv1`,
+`batchv1`, `corev1`, `netv1`, `metav1`), `k8s.io/apimachinery/pkg/api/resource`,
+`k8s.io/apimachinery/pkg/runtime/schema`, `k8s.io/apimachinery/pkg/util/intstr`,
+`k8s.io/utils/ptr`, and `fmt` for the line that prints what the example built.
 
 ## 1. Canonical path
 
 For every registered kind the upstream Go struct is the construction API:
 
+<!-- doc-example: pkg/kubernetes ExampleCreateDeployment -->
 ```go
 d := kubernetes.CreateDeployment("web", "default")
 d.Spec.Replicas = ptr.To[int32](3)
 d.Spec.Template.Spec.ServiceAccountName = "web"
+fmt.Println(d.Kind, *d.Spec.Replicas, d.Spec.Template.Spec.ServiceAccountName)
 ```
+<!-- doc-example:end -->
 
 kure does not provide, and its docs do not suggest, a kure function for plain field
 access: a helper whose body assigns one argument to one value-typed field is that
@@ -49,10 +59,13 @@ it out.
 `GetGroupVersionKind` uses), sets `metadata.name` and `metadata.namespace`, and
 nothing else. The pointer type is inferred from the one type argument:
 
+<!-- doc-example: pkg/kubernetes ExampleCreate -->
 ```go
-d  := kubernetes.Create[appsv1.Deployment]("web", "default")
-ns := kubernetes.Create[corev1.Namespace]("platform", "")   // cluster-scoped: pass ""
+d := kubernetes.Create[appsv1.Deployment]("web", "default")
+ns := kubernetes.Create[corev1.Namespace]("platform", "") // cluster-scoped: pass ""
+fmt.Println(d.APIVersion, d.Kind, ns.APIVersion, ns.Kind)
 ```
+<!-- doc-example:end -->
 
 An unregistered type panics. That is a programming error, the same rule as a nil
 receiver, not a runtime condition to handle.
@@ -183,12 +196,17 @@ the test.
 One helper set over `metav1.Object` covers every kind, including kinds kure never
 names:
 
+<!-- doc-example: pkg/kubernetes ExampleAddLabel -->
 ```go
+obj := kubernetes.CreateDeployment("web", "default")
+
 kubernetes.SetLabels(obj, map[string]string{"app": "web"})
-kubernetes.AddLabel(obj, "tier", "frontend")           // initialises a nil map
+kubernetes.AddLabel(obj, "tier", "frontend") // initialises a nil map
 kubernetes.SetAnnotations(obj, map[string]string{"owner": "platform"})
 kubernetes.AddAnnotation(obj, "note", "rotated 2026-09")
+fmt.Println(obj.Labels["app"], obj.Labels["tier"], obj.Annotations["note"])
 ```
+<!-- doc-example:end -->
 
 <!-- doc-api-refs:ignore-start the paragraph names removed helpers to say they are removed -->
 
@@ -462,16 +480,28 @@ fails on a registered kind with no wrapper and on a wrapper with no registered k
 
 ## GVK utilities and scheme
 
+<!-- doc-example: pkg/kubernetes ExampleGetGroupVersionKind -->
 ```go
+myDeployment := kubernetes.CreateDeployment("web", "default")
+allowedGVKs := []schema.GroupVersionKind{appsv1.SchemeGroupVersion.WithKind("Deployment")}
+
 // Lazily registers every supported API group (core K8s, FluxCD, cert-manager, ...)
 err := kubernetes.RegisterSchemes()
+if err != nil {
+    panic(err)
+}
 
 // Resolve the GVK of any registered runtime.Object
 gvk, err := kubernetes.GetGroupVersionKind(myDeployment)
+if err != nil {
+    panic(err)
+}
 
 // Check if a GVK is in an allow list
 ok := kubernetes.IsGVKAllowed(gvk, allowedGVKs)
+fmt.Println(gvk, ok)
 ```
+<!-- doc-example:end -->
 
 ## Examples
 
@@ -480,6 +510,7 @@ a field write on the upstream struct.
 
 ### Deployment
 
+<!-- doc-example: pkg/kubernetes ExampleSetDeploymentReplicas -->
 ```go
 dep := kubernetes.CreateDeployment("my-app", "default")
 kubernetes.AddLabel(dep, "app", "my-app")
@@ -490,7 +521,9 @@ podSpec := &dep.Spec.Template.Spec
 kubernetes.AddPodSpecContainer(podSpec, &corev1.Container{Name: "app", Image: "nginx:1.25"})
 kubernetes.AddPodSpecToleration(podSpec, &corev1.Toleration{Key: "dedicated", Value: "web"})
 kubernetes.SetDeploymentReplicas(dep, 3)
+fmt.Println(podSpec.Containers[0].Image, podSpec.Tolerations[0].Key, *dep.Spec.Replicas)
 ```
+<!-- doc-example:end -->
 
 There is no `AddDeploymentContainer`. <!-- doc-api-refs:ignore names a removed helper to say it is gone --> A workload kind's pod template is a
 `corev1.PodSpec`, so the `PodSpec` helpers serve every kind — pass
@@ -500,13 +533,16 @@ nests one level deeper: `&cj.Spec.JobTemplate.Spec.Template.Spec`). `ServiceAcco
 
 ### Job
 
+<!-- doc-example: pkg/kubernetes ExampleCreateJob -->
 ```go
 job := kubernetes.CreateJob("migrate", "default")
 job.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 kubernetes.AddPodSpecContainer(&job.Spec.Template.Spec,
-	&corev1.Container{Name: "migrate", Image: "busybox:1.36"})
+    &corev1.Container{Name: "migrate", Image: "busybox:1.36"})
+fmt.Println(job.Spec.Template.Spec.RestartPolicy, job.Spec.Template.Spec.Containers[0].Name)
 ```
+<!-- doc-example:end -->
 
 `CreateJob` writes identity only, so `restartPolicy` is yours to set. Leave it
 out and the API server defaults it to `Always`, which it then rejects for a Job
@@ -515,28 +551,35 @@ The CronJob example below sets it for the same reason.
 
 ### CronJob
 
+<!-- doc-example: pkg/kubernetes ExampleCreateCronJob -->
 ```go
 cj := kubernetes.CreateCronJob("my-job", "default")
 cj.Spec.Schedule = "*/5 * * * *"
 cj.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 kubernetes.AddPodSpecContainer(&cj.Spec.JobTemplate.Spec.Template.Spec,
-	&corev1.Container{Name: "worker", Image: "busybox:1.36"})
+    &corev1.Container{Name: "worker", Image: "busybox:1.36"})
 cj.Spec.ConcurrencyPolicy = batchv1.ForbidConcurrent
+fmt.Println(cj.Spec.Schedule, cj.Spec.ConcurrencyPolicy)
 ```
+<!-- doc-example:end -->
 
 ### Service
 
+<!-- doc-example: pkg/kubernetes ExampleAddServicePort -->
 ```go
 svc := kubernetes.CreateService("my-app", "default")
 svc.Spec.Selector = map[string]string{"app": "my-app"}
 kubernetes.AddServicePort(svc, corev1.ServicePort{Name: "http", Port: 80, TargetPort: intstr.FromInt32(8080)})
 svc.Spec.Type = corev1.ServiceTypeLoadBalancer
 kubernetes.AddAnnotation(svc, "external-dns.alpha.kubernetes.io/hostname", "app.example.com")
+fmt.Println(svc.Spec.Ports[0].Port, svc.Spec.Ports[0].TargetPort.IntValue(), svc.Spec.Type)
 ```
+<!-- doc-example:end -->
 
 ### Ingress
 
+<!-- doc-example: pkg/kubernetes ExampleAddIngressRule -->
 ```go
 ing := kubernetes.CreateIngress("my-app", "default")
 kubernetes.SetIngressClassName(ing, "nginx")
@@ -547,10 +590,13 @@ path := kubernetes.CreateIngressPath("/", &pt, "my-app", "http")
 kubernetes.AddIngressRulePath(rule, path)
 kubernetes.AddIngressRule(ing, rule)
 kubernetes.AddIngressTLS(ing, netv1.IngressTLS{Hosts: []string{"app.example.com"}, SecretName: "my-app-tls"})
+fmt.Println(*ing.Spec.IngressClassName, ing.Spec.Rules[0].Host, ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name)
 ```
+<!-- doc-example:end -->
 
 ### HPA and PDB
 
+<!-- doc-example: pkg/kubernetes ExampleAddHPACPUMetric -->
 ```go
 hpa := kubernetes.CreateHorizontalPodAutoscaler("my-app", "default")
 kubernetes.SetHPAScaleTargetRef(hpa, "apps/v1", "Deployment", "my-app")
@@ -560,19 +606,28 @@ kubernetes.AddHPACPUMetric(hpa, 80)
 pdb := kubernetes.CreatePodDisruptionBudget("my-app", "default")
 kubernetes.SetPDBMinAvailable(pdb, intstr.FromInt32(2))
 kubernetes.SetPDBSelector(pdb, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "my-app"}})
+fmt.Println(*hpa.Spec.MinReplicas, hpa.Spec.MaxReplicas, *hpa.Spec.Metrics[0].Resource.Target.AverageUtilization, pdb.Spec.MinAvailable.IntValue())
 ```
+<!-- doc-example:end -->
 
 `MinAvailable` and `MaxUnavailable` are mutually exclusive upstream, and each setter
 writes only the field it names — a helper does not clear a field the caller did not
 mention. Switching from one to the other is two statements:
 
+<!-- doc-example: pkg/kubernetes ExampleSetPDBMaxUnavailable -->
 ```go
+pdb := kubernetes.CreatePodDisruptionBudget("my-app", "default")
+kubernetes.SetPDBMinAvailable(pdb, intstr.FromInt32(2))
+
 pdb.Spec.MinAvailable = nil
 kubernetes.SetPDBMaxUnavailable(pdb, intstr.FromString("25%"))
+fmt.Println(pdb.Spec.MinAvailable == nil, pdb.Spec.MaxUnavailable.String())
 ```
+<!-- doc-example:end -->
 
 ### Namespace and Pod Security Admission
 
+<!-- doc-example: pkg/kubernetes ExamplePSALabels -->
 ```go
 ns := kubernetes.CreateNamespace("my-app")
 kubernetes.AddLabel(ns, "env", "prod")
@@ -581,7 +636,9 @@ kubernetes.AddLabel(ns, "env", "prod")
 for k, v := range kubernetes.PSALabels(kubernetes.PSARestricted, kubernetes.PSARestricted, kubernetes.PSARestricted, "v1.28") {
     kubernetes.AddLabel(ns, k, v)
 }
+fmt.Println(len(ns.Labels), ns.Labels["pod-security.kubernetes.io/enforce"])
 ```
+<!-- doc-example:end -->
 
 `PSALabels` returns the label map and writes nothing. One argument expanding into six
 labels is not something a `Set<Field>` helper may hide, so the expansion is a value
@@ -589,7 +646,11 @@ helper and the write stays with `AddLabel`.
 
 ### ConfigMap
 
+<!-- doc-example: pkg/kubernetes ExampleAddConfigMapData -->
 ```go
+certBytes := []byte("-----BEGIN CERTIFICATE-----")
+defaults := map[string]string{"log-level": "info"}
+
 cm := kubernetes.CreateConfigMap("my-config", "default")
 kubernetes.AddConfigMapData(cm, "key", "value")
 kubernetes.AddConfigMapBinaryData(cm, "cert", certBytes)
@@ -602,7 +663,9 @@ cm.Data = map[string]string{"key": "value"}
 for k, v := range defaults {
     kubernetes.AddConfigMapData(cm, k, v)
 }
+fmt.Println(len(cm.Data), cm.Data["log-level"], *cm.Immutable)
 ```
+<!-- doc-example:end -->
 
 `SetConfigMapData`, `SetConfigMapBinaryData`, `AddConfigMapDataMap` and <!-- doc-api-refs:ignore names removed helpers to say they are gone -->
 `AddConfigMapBinaryDataMap` are gone: <!-- doc-api-refs:ignore same sentence, second line -->
@@ -613,21 +676,35 @@ whose value comes from the caller.
 
 ### PSA security contexts
 
+<!-- doc-example: pkg/kubernetes ExampleValidatePodSpecPSA -->
 ```go
-sc := kubernetes.RestrictedSecurityContext()
-psc := kubernetes.PodSecurityContextForLevel(kubernetes.PSARestricted)
+container := &corev1.Container{Name: "app", Image: "nginx:1.25", SecurityContext: kubernetes.RestrictedSecurityContext()}
+podSpec := &corev1.PodSpec{Containers: []corev1.Container{*container}}
 
-err := kubernetes.ValidateContainerPSA(container, kubernetes.PSARestricted)
-violations := kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSARestricted)
+sc := kubernetes.RestrictedSecurityContext()
+psc, err := kubernetes.PodSecurityContextForLevel(kubernetes.PSARestricted)
+if err != nil {
+    panic(err)
+}
+podSpec.SecurityContext = psc
+
+err = kubernetes.ValidateContainerPSA(container, kubernetes.PSARestricted)
+fmt.Println(*sc.RunAsNonRoot, err)
+err = kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSARestricted)
+fmt.Println(err)
 ```
+<!-- doc-example:end -->
 
 ### ResourceRequirements
 
+<!-- doc-example: pkg/kubernetes ExampleSetResourceRequest -->
 ```go
 reqs := kubernetes.CreateResourceRequirements()
 kubernetes.SetResourceRequest(reqs, corev1.ResourceCPU, resource.MustParse("100m"))
 kubernetes.SetResourceLimit(reqs, corev1.ResourceMemory, resource.MustParse("512Mi"))
+fmt.Println(reqs.Requests.Cpu(), reqs.Limits.Memory())
 ```
+<!-- doc-example:end -->
 
 Two helpers cover every resource name; there is no `SetResourceRequestCPU` or <!-- doc-api-refs:ignore names removed helpers to say they are gone -->
 `SetResourceLimitMemory`. <!-- doc-api-refs:ignore same sentence, second line -->

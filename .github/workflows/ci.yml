@@ -1040,6 +1040,14 @@ jobs:
         ./scripts/check-doc-api-refs.sh --self-test
         ./scripts/check-doc-api-refs.sh
 
+    # A Go block on an enabled page is the body of a compiled Example function
+    # (go test runs it), or carries an excerpt marker with a reason. --check
+    # fails on an unmarked block and on a block that drifted from its Example.
+    - name: Check doc examples are generated from Example functions
+      run: |
+        ./scripts/gen-doc-examples.sh --self-test
+        ./scripts/gen-doc-examples.sh --check
+
     # check-links below runs lychee --offline, which skips every http(s) URL --
     # including an absolute link to this site's own release root, which only a
     # manual set-latest rebuilds, so such a link 404s for every page added

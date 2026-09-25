@@ -8,14 +8,23 @@ The `externalsecrets` package provides the generated constructors and the admiss
 
 Every kind is built the same way: the generated `Create<Kind>` wrapper gives you an object carrying identity only, and the upstream external-secrets struct is the construction API — set `Spec` fields directly, or through the few `Set*`/`Add*` helpers the builder contract admits.
 
+Each block on this page is the body of an `Example` function in `example_test.go`, which `go test`
+runs: it imports this package as `externalsecrets`, `github.com/go-kure/kure/pkg/kubernetes`, the
+upstream API as `esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"`,
+`metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`, `time`, and `fmt` for the line that prints what
+the example built.
+
 ## Constructors
 
 Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_generated_create.go`, produced from the scheme by `pkg/kubernetes/internal/gen` (`make gen-builders`, checked by `make check-builders` in CI). A wrapper delegates to `kubernetes.Create[T]` and emits **TypeMeta and identity only**: no default, no label, no spec value. Namespaced kinds take `(name, namespace)`, cluster-scoped kinds take `(name)`.
 
+<!-- doc-example: pkg/kubernetes/externalsecrets ExampleCreateExternalSecret -->
 ```go
 obj := externalsecrets.CreateExternalSecret("my-secret", "default")
 cl := externalsecrets.CreateClusterSecretStore("global-vault")
+fmt.Println(obj.Kind, obj.Namespace+"/"+obj.Name, cl.Kind, cl.Name)
 ```
+<!-- doc-example:end -->
 
 There is no second construction path.
 The config-struct layer this package used to carry (`externalsecrets.ExternalSecret(&externalsecrets.ExternalSecretConfig{...})`, `SecretStore`, `ClusterSecretStore`) was retired by release 2 of the builder contract: it reached 2 of an `ExternalSecret`'s 7 spec fields (`secretStoreRef` and `data`) and was otherwise a copy of the assignments below. <!-- doc-api-refs:ignore names the retired config-struct layer -->
@@ -29,13 +38,8 @@ See the [Kubernetes Builders](/api-reference/kubernetes-builders/) page for the 
 
 ### External Secrets
 
+<!-- doc-example: pkg/kubernetes/externalsecrets ExampleAddExternalSecretData -->
 ```go
-import (
-    esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
-
-    "github.com/go-kure/kure/pkg/kubernetes/externalsecrets"
-)
-
 es := externalsecrets.CreateExternalSecret("my-secret", "default")
 es.Spec.SecretStoreRef = esv1.SecretStoreRef{Name: "vault", Kind: "ClusterSecretStore"}
 es.Spec.Target = esv1.ExternalSecretTarget{Name: "my-secret"}
@@ -44,41 +48,60 @@ externalsecrets.AddExternalSecretData(es, esv1.ExternalSecretData{
     RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "secret/data/myapp"},
 })
 externalsecrets.SetRefreshInterval(es, metav1.Duration{Duration: time.Hour})
+fmt.Println(es.Spec.Data[0].SecretKey, es.Spec.RefreshInterval.Duration)
 ```
+<!-- doc-example:end -->
 
 ### Secret Stores
 
+<!-- doc-example: pkg/kubernetes/externalsecrets ExampleSetSecretStoreProvider -->
 ```go
 ss := externalsecrets.CreateSecretStore("aws-store", "default")
 externalsecrets.SetSecretStoreProvider(ss, &esv1.SecretStoreProvider{
     AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "us-east-1"},
 })
 ss.Spec.Controller = "my-controller"
+fmt.Println(ss.Spec.Provider.AWS.Region, ss.Spec.Controller)
 ```
+<!-- doc-example:end -->
 
 ### Cluster Secret Stores
 
+<!-- doc-example: pkg/kubernetes/externalsecrets ExampleSetClusterSecretStoreProvider -->
 ```go
 css := externalsecrets.CreateClusterSecretStore("global-vault")
 externalsecrets.SetClusterSecretStoreProvider(css, &esv1.SecretStoreProvider{
     AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "us-east-1"},
 })
+fmt.Println(css.Spec.Provider.AWS.Region)
 ```
+<!-- doc-example:end -->
 
 ## Modifier Functions
 
 Update existing resources:
 
+<!-- doc-example: pkg/kubernetes/externalsecrets ExampleAddDataFrom -->
 ```go
-// Replace full spec
-es.Spec = newSpec
-ss.Spec = newSpec
-css.Spec = newSpec
+es := externalsecrets.CreateExternalSecret("my-secret", "default")
+ss := externalsecrets.CreateSecretStore("aws-store", "default")
+css := externalsecrets.CreateClusterSecretStore("global-vault")
+provider := &esv1.SecretStoreProvider{
+    AWS: &esv1.AWSProvider{Service: esv1.AWSServiceSecretsManager, Region: "us-east-1"},
+}
+
+// Replace the full spec
+es.Spec = esv1.ExternalSecretSpec{Target: esv1.ExternalSecretTarget{Name: "my-secret"}}
 
 // Granular updates
-externalsecrets.AddExternalSecretData(es, data)
-externalsecrets.AddDataFrom(es, source)
-es.Spec.SecretStoreRef = ref
+externalsecrets.AddExternalSecretData(es, esv1.ExternalSecretData{
+    SecretKey: "password",
+    RemoteRef: esv1.ExternalSecretDataRemoteRef{Key: "secret/data/myapp"},
+})
+externalsecrets.AddDataFrom(es, esv1.ExternalSecretDataFromRemoteRef{
+    Extract: &esv1.ExternalSecretDataRemoteRef{Key: "secret/data/shared"},
+})
+es.Spec.SecretStoreRef = esv1.SecretStoreRef{Name: "vault", Kind: "ClusterSecretStore"}
 
 externalsecrets.SetSecretStoreProvider(ss, provider)
 ss.Spec.Controller = "my-controller"
@@ -91,7 +114,10 @@ css.Spec.Controller = "global"
 kubernetes.AddLabel(es, "app", "myapp")
 kubernetes.AddAnnotation(ss, "desc", "value")
 kubernetes.AddLabel(css, "team", "platform")
+
+fmt.Println(len(es.Spec.Data), es.Spec.DataFrom[0].Extract.Key, css.Spec.Controller, es.Labels["app"])
 ```
+<!-- doc-example:end -->
 
 ## Related Packages
 
