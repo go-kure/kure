@@ -230,11 +230,17 @@ func (g *ResourceGenerator) mergeIntoUnit(unit, other *kustv1.Kustomization, fir
 			return unitConflict(first, b, path, s.field, "one Kustomization holds one value")
 		}
 	}
-	for field, maps := range map[string][2]map[string]string{
-		"labels":      {unit.Labels, other.Labels},
-		"annotations": {unit.Annotations, other.Annotations},
+	// A slice, not a map: labels are checked before annotations on every
+	// run, so a bundle conflicting on both is refused with one stable message.
+	for _, m := range []struct {
+		field string
+		maps  [2]map[string]string
+	}{
+		{"labels", [2]map[string]string{unit.Labels, other.Labels}},
+		{"annotations", [2]map[string]string{unit.Annotations, other.Annotations}},
 	} {
-		merged, err := unionStrings(maps[0], maps[1])
+		field := m.field
+		merged, err := unionStrings(m.maps[0], m.maps[1])
 		if err != nil {
 			return unitConflict(first, b, path, field, err.Error())
 		}
