@@ -1076,16 +1076,24 @@ was written.
 CI jobs use explicit `actions/cache` steps with `cache: false` on `setup-go` to control
 cache keys precisely. Two Go caches are maintained.
 
-**Module cache** — dependency-only, one combined step per Go job:
+**Module cache** — dependency-only, split restore + save per Go job:
 
 ```yaml
-- name: Cache Go modules
-  uses: actions/cache@v6
+- name: Restore Go modules cache
+  id: gomod
+  uses: actions/cache/restore@v6
   with:
     path: ~/go/pkg/mod
     key: ${{ runner.os }}-gomod-${{ hashFiles('**/go.sum') }}
     restore-keys: |
       ${{ runner.os }}-gomod-
+# ... end of job ...
+- name: Save Go modules cache
+  if: success() && steps.gomod.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+  uses: actions/cache/save@v6
+  with:
+    path: ~/go/pkg/mod
+    key: ${{ steps.gomod.outputs.cache-primary-key }}
 ```
 
 **Go build cache** (`~/.cache/go-build`) — split `actions/cache/restore` + `actions/cache/save`
@@ -1106,7 +1114,7 @@ overwrite each other's entry:
       ${{ runner.os }}-${{ runner.arch }}-go-<GOVER>-gocache-<purpose>-
 # ... compile / test ...
 - name: Save Go build cache
-  if: success() && steps.gocache.outputs.cache-hit != 'true'
+  if: success() && steps.gocache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
   uses: actions/cache/save@v6
   with:
     path: ~/.cache/go-build
@@ -1115,14 +1123,22 @@ overwrite each other's entry:
 
 Purpose prefixes: `gocache-validate-`, `gocache-test-race-cover-`, `gocache-security-`. `<GOVER>`
 comes from a `Read Go version from go.mod` step. The source hash covers `**/*.go`, `go.mod`,
-`go.sum`, `Makefile`, `**/testdata/**`. Save runs only on a non-exact (fallback/miss) restore and
-only when the run succeeded, so a broken build never publishes a cache.
+`go.sum`, `Makefile`, `**/testdata/**`. Save runs only on a non-exact (fallback/miss) restore,
+only when the run succeeded (so a broken build never publishes a cache), and only on `main`.
 
 **Cross-ref scoping.** GitHub caches are ref-scoped: a `merge_group` (queue) run cannot restore a
 `pull_request` run's cache — only the default branch (`main`) is shared. So these caches are warmed
 by push-to-main and restored by PR + queue via restore-key fallback. This lowers both runs'
 absolute cost but does not deduplicate the PR↔queue build (inherent to the merge queue). Measured
 in launcher: warmed cycles cut `test` ~50%, `build`/`lint` ~30%.
+
+**Saves are default-branch only.** Nothing but the PR itself can read a PR-scoped entry, and the
+`gh-readonly-queue/*` branch a queue run saves to is deleted right after the run, so every Go
+cache save is gated on `github.ref == 'refs/heads/main'`. Saving from those refs only fills the
+size-capped cache server, whose LRU eviction then pushes out the `main` entries runs restore. New
+cache steps follow the same rule: split restore/save with a `main`-gated save, never the combined
+`actions/cache` (which saves on a miss from any ref). The small tool-binary and Hugo-module caches
+are the exception: they are small and rarely re-keyed, so the combined form writes little.
 
 Tool binaries are also cached to avoid reinstalling on every run:
 - `goimports` — keyed by `go.sum` hash (tied to `golang.org/x/tools` version)
