@@ -48,7 +48,8 @@ the resource or extra files of the layout that owns the directory, or another `A
 layout's file (go-kure/kure#871). A child named `kustomization`, or
 named like one of its parent's generated files (`default-configmap-a`, or `configmap` under
 `FileNamingKindName` + `FilePerKind`), is refused, as is an `AppFileSingle` root named
-`kustomization`. A child with no resources writes no file, so this check never refuses it.
+`kustomization`. A child with no resources writes no `<Name>.yaml`, so its name is never refused;
+its extra files, which it still writes, are checked.
 Directories and file names are compared case-insensitively, as on default macOS volumes: a child
 named `Kustomization`, or `Default-ConfigMap-A`, is refused too.
 
@@ -234,8 +235,8 @@ that directory. Every writer (`WriteToDisk`, `WriteManifest`, `WriteToTar`) refu
 any file of the tree, an extra file that would take a path it owns in that directory: a generated
 resource file, a kustomize control file (`kustomization.yaml`, `kustomization.yml`,
 `Kustomization`), a child layout's output directory where it lies inside this layout's (umbrella
-children included; anything under it, or a file on the way to it) or an `AppFileSingle` child's
-`<name>.yaml`, or another extra file (listed twice); nor may it use any of those files as
+children included; anything under it, or a file on the way to it) or the `<name>.yaml` of an
+`AppFileSingle` child with resources, or another extra file (listed twice); nor may it use any of those files as
 a directory (`kustomization.yaml/x`), or be a file where one of them needs a directory. A child's
 output directory is the one its writer uses (for `WriteManifest`, after applying the `Config`
 defaults). All names are compared case-insensitively, as on default macOS volumes. When a layout
