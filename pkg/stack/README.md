@@ -31,7 +31,8 @@ function in `example_test.go`, which `go test` runs: it imports this package as 
 `github.com/go-kure/kure/pkg/stack/fluxcd` for its side effect of registering the `"flux"`
 workflow provider, `k8s.io/apimachinery/pkg/runtime/schema`, and `fmt` for the line that prints
 what the example built. The `myConfig` type the examples use is the one the
-[Optional Validation](#optional-validation) section declares.
+[Optional Validation](#optional-validation) section declares; its `Generate` method also needs
+`strconv`.
 
 ### Cluster
 
