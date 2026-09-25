@@ -11,6 +11,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -651,7 +652,11 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			kept := false
 			for _, s := range p.sources[key] {
 				if !sameObject(s.obj, obj) {
-					return errors.Errorf("layout %q already has %s %q (%s) with different content than the one this integration derives in layout %q: one Source identity must have one definition", s.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), s.obj.GetObjectKind().GroupVersionKind().GroupVersion(), host.FullRepoPath())
+					have, want := s.obj.GetObjectKind().GroupVersionKind(), obj.GetObjectKind().GroupVersionKind()
+					if have.Version != want.Version {
+						return errors.Errorf("layout %q already has %s %q at %s; this integration derives it at %s in layout %q: one Source identity must have one definition, at one API version", s.host.FullRepoPath(), want.Kind, obj.GetName(), have.GroupVersion(), want.GroupVersion(), host.FullRepoPath())
+					}
+					return errors.Errorf("layout %q already has %s %q (%s) with different content than the one this integration derives in layout %q: one Source identity must have one definition", s.host.FullRepoPath(), want.Kind, obj.GetName(), have.GroupVersion(), host.FullRepoPath())
 				}
 				kept = kept || s.host == host
 			}
@@ -856,16 +861,49 @@ func findObject(resources []client.Object, obj client.Object) client.Object {
 }
 
 // sameObject reports whether a and b are the same object with the same
-// content, reading an omitted namespace as "default".
+// content, typed or unstructured: both are compared in their unstructured
+// form, with apiVersion and kind set, an omitted namespace read as "default",
+// and the null and empty-object fields a typed object's conversion emits
+// (metadata.creationTimestamp, status) left out.
 func sameObject(a, b client.Object) bool {
-	ca, okA := a.DeepCopyObject().(client.Object)
-	cb, okB := b.DeepCopyObject().(client.Object)
-	if !okA || !okB {
+	ua, errA := comparableContent(a)
+	ub, errB := comparableContent(b)
+	if errA != nil || errB != nil {
 		return reflect.DeepEqual(a, b)
 	}
-	ca.SetNamespace(effectiveNamespace(ca))
-	cb.SetNamespace(effectiveNamespace(cb))
-	return reflect.DeepEqual(ca, cb)
+	return reflect.DeepEqual(ua, ub)
+}
+
+// comparableContent is obj's unstructured content as sameObject compares it.
+// It converts a copy: for an unstructured object the converter returns the
+// object's own map, which the normalisation below must not touch.
+func comparableContent(obj client.Object) (map[string]any, error) {
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj.DeepCopyObject())
+	if err != nil {
+		return nil, errors.Wrap(err, "convert to unstructured")
+	}
+	u := &unstructured.Unstructured{Object: content}
+	u.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+	u.SetNamespace(effectiveNamespace(obj))
+	pruneEmpty(u.Object)
+	return u.Object, nil
+}
+
+// pruneEmpty removes, depth first, every nil value and every map left empty
+// from m: an omitted field and a null or empty one are the same content.
+func pruneEmpty(m map[string]any) {
+	for k, v := range m {
+		if child, ok := v.(map[string]any); ok {
+			pruneEmpty(child)
+			if len(child) == 0 {
+				delete(m, k)
+			}
+			continue
+		}
+		if v == nil {
+			delete(m, k)
+		}
+	}
 }
 
 // effectiveNamespace is obj's namespace as Kubernetes and the writers' identity

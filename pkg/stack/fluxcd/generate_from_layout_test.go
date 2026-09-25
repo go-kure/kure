@@ -1058,6 +1058,53 @@ func TestFluxSeparate_RejectsExistingSource(t *testing.T) {
 	}
 }
 
+// TestIntegrateWithLayout_SourceComparedAcrossForms: under the integrated
+// placements a Source already in the tree is compared with the generated one
+// by content, not by Go type: an unstructured copy of the generated typed
+// Source is the same Source, and one with another URL is not.
+func TestIntegrateWithLayout_SourceComparedAcrossForms(t *testing.T) {
+	webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
+	gen, err := fluxstack.NewResourceGenerator().GenerateForBundle(&stack.Bundle{Name: "web", SourceRef: webRef}, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed, ok := gen[1].(*sourcev1.GitRepository)
+	if !ok {
+		t.Fatalf("second generated object is %T, want a GitRepository", gen[1])
+	}
+	// The generated Source as an application would emit it unstructured.
+	unstructuredCopy := func(url string) client.Object {
+		u := &unstructured.Unstructured{}
+		u.SetAPIVersion("source.toolkit.fluxcd.io/v1")
+		u.SetKind("GitRepository")
+		u.SetName("web-git")
+		u.SetNamespace("flux-system")
+		_ = unstructured.SetNestedField(u.Object, url, "spec", "url")
+		_ = unstructured.SetNestedField(u.Object, typed.Spec.Interval.Duration.String(), "spec", "interval")
+		_ = unstructured.SetNestedField(u.Object, "main", "spec", "ref", "branch")
+		return u
+	}
+	build := func(obj client.Object) *stack.Cluster {
+		platformApp := stack.NewApplication("sources", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+		web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+	}
+	integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			if _, err := integrator.CreateLayoutWithResources(build(unstructuredCopy(webRef.URL)), rules); err != nil {
+				t.Errorf("an unstructured copy of the generated GitRepository: %v", err)
+			}
+			_, err := integrator.CreateLayoutWithResources(build(unstructuredCopy("https://example.com/other.git")), rules)
+			if err == nil || !strings.Contains(err.Error(), `GitRepository "web-git" (source.toolkit.fluxcd.io/v1) with different content`) {
+				t.Errorf("an unstructured GitRepository with another URL: got %v, want a conflict error naming it", err)
+			}
+		})
+	}
+}
+
 // TestIntegrateWithLayout_ConflictingSourcesErrors: two bundles whose
 // URL-bearing SourceRefs share a name but not a URL generate two Sources with
 // one identity in one host. Keeping either would silently point the other
@@ -1136,7 +1183,9 @@ func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
 				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
 				rules := propertyGroupings["nodeOnly"]
 				rules.FluxPlacement = placement
-				want := `GitRepository "web-git" (source.toolkit.fluxcd.io/v1beta2) with different content`
+				// The versions differ, and the refusal says so rather than
+				// reporting different content.
+				want := `GitRepository "web-git" at source.toolkit.fluxcd.io/v1beta2; this integration derives it at source.toolkit.fluxcd.io/v1`
 				if placement == layout.FluxSeparate {
 					// Separate refuses any Source of a generated identity
 					// already in the tree (TestFluxSeparate_RejectsExistingSource).
