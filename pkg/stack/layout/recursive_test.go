@@ -262,6 +262,32 @@ func TestWriters_RecursiveRefusesUnlistedChildDirectory(t *testing.T) {
 	}
 }
 
+// TestWriters_SamePackageChildListed: a parent and child whose PackageRefs
+// are separately allocated but equal are one package, so the parent's
+// kustomization.yaml lists the child and a marked Recursive parent over it
+// is accepted.
+func TestWriters_SamePackageChildListed(t *testing.T) {
+	gvk := func() *schema.GroupVersionKind {
+		return &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}
+	}
+	for _, writer := range []string{"WriteToDisk", "WriteToTar"} {
+		t.Run(writer, func(t *testing.T) {
+			r := recursiveTree()
+			r.Mode = layout.KustomizationExplicit
+			r.PackageRef, r.Children[0].PackageRef = gvk(), gvk()
+			files := writtenFiles(t, writer, layout.DefaultLayoutConfig(), r)
+			if got := listedResources(t, files, "r/kustomization.yaml"); !slices.Contains(got, "c") {
+				t.Errorf("r/kustomization.yaml lists %v, want it to list c", got)
+			}
+
+			r = recursiveTree()
+			r.SetFluxBuild(true)
+			r.PackageRef, r.Children[0].PackageRef = gvk(), gvk()
+			writtenFiles(t, writer, layout.DefaultLayoutConfig(), r)
+		})
+	}
+}
+
 // TestWriteManifest_RecursiveRefusesFilesFluxDoesNotScan: a Config's
 // ManifestFileName can name resource files the Flux build of a marked
 // Recursive directory skips (not *.yaml or *.yml) or reads as the

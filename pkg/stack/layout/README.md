@@ -183,7 +183,8 @@ Controls how resource YAML files are named:
   - the file of an `AppFileSingle` umbrella child, or of one that renders bundles, in its build:
     Flux would apply it, where Explicit mode leaves it to the child's own Kustomization;
   - a child directory its parent's `kustomization.yaml` would not list, in its build: under
-    `WriteToDisk` and `WriteToTar`, a child of another package (`PackageRef`). Flux would apply
+    `WriteToDisk` and `WriteToTar`, a child of another package (its `PackageRef` and its parent's
+    are both set, with different values). Flux would apply
     it, where Explicit mode leaves it out. `WriteManifest` lists such a child, so it is accepted
     there.
 
