@@ -271,8 +271,9 @@ temporary branch — the merged result — before the PR is allowed to land.
   - **Action scripts.** It follows each `$GITHUB_ACTION_PATH/<rel>.sh` or
     `${GITHUB_ACTION_PATH}/<rel>.sh` in an action's single `run:` step, written as one whole word:
     the path, at most a closing quote, then whitespace, `;&|)<>` or the line end. The word must be
-    the command run: at a line start or after a separator, optionally behind `if`, `then`, `do`
-    or `!` and `exec`, `bash`, `sh`, `source` or `.` with options. The path is resolved from the
+    the command run: at a line start or after a separator, optionally behind a shell keyword
+    (`if`, `then`, `else`, `elif`, `do`, `while`, `until` or `!`) and `exec`, `bash`, `sh`,
+    `source` or `.` with options. The path is resolved from the
     action's own directory, counting its `..` hops.
   - **Sibling scripts.** It follows, transitively, a whole line
     `source "$SCRIPT_DIR/<name>.sh"` or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]`. It
@@ -359,6 +360,14 @@ temporary branch — the merged result — before the PR is allowed to land.
   - An assignment through a name built at run time other than by a declaration builtin:
     `printf -v "$n"`, `read "$n"`, `mapfile "$n"`. A consumed script assigns through
     `printf -v "$destination"`, so refusing it would abort real runs.
+  - A declaration builtin not written as a plain word at a command position:
+    `\declare -g "$n+=/lib"`, `d=declare; $d -g …`, or one continued onto the next line with `\`.
+  - In an action's `run:` step, the action path carried past the command and cut to its directory
+    by a tool other than `dirname`, `realpath`, `readlink` or a trim (`sed`, `awk`, `cut`, a
+    Python one-liner). It can be carried by `$_` after the command, an array assignment
+    `x=("$GITHUB_ACTION_PATH/…")`, or an argument on a `\` continuation line.
+  - The action path read through a name built at run time
+    (`n=GITHUB_ACTION; n+=_PATH; "${!n}/…"`).
 
   It also aborts, harmlessly but falsely, on:
   - another directory derived from the script's own, such as
@@ -372,7 +381,8 @@ temporary branch — the merged result — before the PR is allowed to land.
   - `${!prefix@}`, and `export SCRIPT_DIR` or `readonly SCRIPT_DIR` on a line of its own;
   - `dirname`, `realpath`, `readlink` or a parameter trim anywhere in an action that mentions
     `GITHUB_ACTION_PATH`, and a `$GITHUB_ACTION_PATH/<path>` command behind a wrapper (`env`,
-    `timeout`).
+    `timeout`), an environment assignment (`VAR=1 "$GITHUB_ACTION_PATH/…"`), a shell option
+    (`bash --noprofile`), a `{ …; }` group or a `case` arm.
   The refusal paths, plus the no-change, inert, affected and acknowledged outcomes, are pinned by hermetic
   cases in `scripts/test/cases/`
   (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
