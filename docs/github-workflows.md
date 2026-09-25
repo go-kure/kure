@@ -110,7 +110,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented API references via `scripts/check-doc-api-refs.sh`, the Go blocks generated from `Example` functions via `scripts/gen-doc-examples.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
 | `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
-| `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and one transitive `source`) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
+| `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and the sibling scripts those `source` or run, transitively) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
 ### Configuration
 
@@ -258,7 +258,11 @@ temporary branch — the merged result — before the PR is allowed to land.
   (go-kure/kure#719, 2026-08-30). Its fail-closed paths — no pin change, inert and affected bumps,
   the acknowledgement, inconsistent pins, a non-ahead compare, nested `uses:`, more than one `run:`
   step, mixed dependencies in one `run:` block, transitive, dot-segment, compound-line and
-  unfetchable `source`, the pagination cap — are pinned by hermetic cases in `scripts/test/cases/`
+  unfetchable `source`, the pagination cap, a non-composite (JavaScript or Docker) action, a
+  sibling script run as a subprocess (`bash`/`sh`/`exec`/direct, resolved only as
+  `$SCRIPT_DIR/<name>.sh` and otherwise refused like `source`), a `repository: go-kure/.github`
+  checkout whose `ref:` is not the key right after `repository:`, and nested or dotted action
+  subpaths (`actions/group/check`, `actions/check.v2`) — are pinned by hermetic cases in `scripts/test/cases/`
   (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
   has reviewed a real hit and judged it safe adds
   the `pin-impact-ack` label to merge anyway — same convention as `check-doc-gate`'s `docs-skip`

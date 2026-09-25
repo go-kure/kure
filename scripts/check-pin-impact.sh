@@ -37,11 +37,20 @@
 # job runs bare like action-pins/forbidden-terms — no yq, no python. Plain
 # bash + curl + grep + sed + awk only.
 #
+# Resolved automatically: `uses:` action paths with nested or dotted subpaths
+# (`actions/group/check@`, `actions/check.v2@`); a `repository:`/`ref:`
+# checkout whatever the order of its step's keys; sibling scripts reached from
+# a consumed script through `source`/`.` or run as a subprocess (`bash`/`sh`/
+# `exec`/direct), each only in the `$SCRIPT_DIR/<name>.sh` form.
+#
 # Fails closed: any construct this script cannot confidently resolve (an
-# ambiguous/inconsistent pin, a `source` line it doesn't recognize the shape
-# of, a compare response near GitHub's pagination cap) aborts loudly rather
-# than silently under-reporting the consumed set. A false "no impact" is the
-# one failure mode this script exists to prevent.
+# ambiguous/inconsistent pin, an action that is not `runs.using: composite`
+# (JavaScript and Docker actions execute code no scripts/*.sh scan can see),
+# a '.'/'..' segment in an action or sibling path, a `source` or
+# sibling-script invocation it doesn't recognize the shape of, a compare
+# response near GitHub's pagination cap) aborts loudly rather than silently
+# under-reporting the consumed set. A false "no impact" is the one failure
+# mode this script exists to prevent.
 #
 # A genuine hit (a consumed path did change) is not necessarily wrong to
 # merge — the pin bump may have been reviewed and found fine. There is no
@@ -69,7 +78,7 @@ while [[ $# -gt 0 ]]; do
     --base-ref) BASE_REF="${2:-}"; [[ -n "$BASE_REF" ]] || { echo "check-pin-impact: --base-ref needs a REF" >&2; exit 2; }; shift 2 ;;
     --old) OLD_SHA="${2:-}"; [[ -n "$OLD_SHA" ]] || { echo "check-pin-impact: --old needs a SHA" >&2; exit 2; }; shift 2 ;;
     --new) NEW_SHA="${2:-}"; [[ -n "$NEW_SHA" ]] || { echo "check-pin-impact: --new needs a SHA" >&2; exit 2; }; shift 2 ;;
-    -h|--help) sed -n '2,44p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,53p' "$0"; exit 0 ;;
     *) echo "check-pin-impact: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -84,10 +93,18 @@ fi
 
 is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 
-# Every `go-kure/.github/.github/actions/<name>@<sha>` and every `ref:` line
-# immediately following a `repository: go-kure/.github` checkout, across the
-# given file's content (read from stdin). One SHA per line; the action-name
-# form's name is not needed here, only its SHA.
+# `uses: go-kure/.github/.github/actions/<subpath>@` prefix, as an ERE. The
+# subpath may be nested (`group/check`) or dotted (`check.v2`): a
+# single-segment `[A-Za-z0-9_-]+` pattern silently skipped both, dropping
+# their SHA from the consistency check and their scripts from the consumed
+# set (go-kure/kure#731 round 9). A '.'/'..' segment is matched here and
+# refused where the action is resolved.
+USES_PREFIX_RE="${DOTGITHUB_REPO//./\\.}/\\.github/actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*@"
+
+# Every `go-kure/.github/.github/actions/<subpath>@<sha>` and every `ref: <sha>`
+# of a step that checks out `repository: go-kure/.github`, across the given
+# file's content (read from stdin). One SHA per line; the action-name form's
+# name is not needed here, only its SHA.
 extract_shas() {
   # Read stdin into a variable first: the `uses:@sha` pipeline below would
   # otherwise drain stdin, leaving the `ref:` awk pass with nothing to read —
@@ -102,24 +119,60 @@ extract_shas() {
   # `set -e` context (this function's output commonly feeds a `$(...)`
   # assignment, not just a process substitution).
   printf '%s' "$content" \
-    | { grep -oE "${DOTGITHUB_REPO//./\\.}/\.github/actions/[A-Za-z0-9_-]+@[0-9a-f]{40}" || true; } \
+    | { grep -oE "${USES_PREFIX_RE}[0-9a-f]{40}" || true; } \
     | { grep -oE '[0-9a-f]{40}$' || true; }
-  # `repository: go-kure/.github` checkouts: the very next `ref:` line is the
-  # pin (same fragile-but-established anchor as vendor-guard.sh; refuses via
-  # the consistency check below rather than guessing if this ever matches
-  # more than intended).
-  printf '%s' "$content" | awk -v repo="$DOTGITHUB_REPO" '
-    $0 ~ "repository:[[:space:]]*" repo "[[:space:]]*$" { want=1; next }
-    want && /ref:[[:space:]]*[0-9a-f]{40}/ { sub(/^.*ref:[[:space:]]*/, ""); sub(/[[:space:]].*$/, ""); print; want=0; next }
-    want { want=0 }
+  # `repository: go-kure/.github` checkouts: the `ref:` of the same step is
+  # the pin, whatever the order of the step's keys. This used to take only a
+  # `ref:` on the line right after `repository:`, so a `path:` between them or
+  # a `ref:` written first silently dropped the SHA from the consistency check
+  # (go-kure/kure#731 round 9). A step is a list item: it runs from its `-`
+  # line until the next line indented no deeper than that dash, so a nested
+  # list inside the step stays part of it and another step's `ref:` is never
+  # attributed to this checkout. A non-SHA `ref:` (an expression, like the
+  # forbidden-terms checkout's) is not a pin and yields nothing. Still refuses
+  # via the consistency check below rather than guessing if this ever matches
+  # more than intended.
+  printf '%s\n' "$content" | awk -v repo="$DOTGITHUB_REPO" -v q="'" '
+    function flush() {
+      if (is_repo && sha != "") print sha
+      in_step = 0; is_repo = 0; sha = ""
+    }
+    function scalar(v) {
+      sub(/[[:space:]]+#.*$/, "", v); sub(/[[:space:]]+$/, "", v)
+      if (v ~ /^".*"$/ || v ~ ("^" q ".*" q "$")) v = substr(v, 2, length(v) - 2)
+      return v
+    }
+    /^[[:space:]]*(#|$)/ { next }
+    {
+      match($0, /^ */); ind = RLENGTH
+      if ($0 ~ /^ *-([[:space:]]|$)/) {
+        if (!in_step || ind <= step_ind) { flush(); in_step = 1; step_ind = ind }
+      } else if (in_step && ind <= step_ind) {
+        flush()
+      }
+      if (!in_step) next
+      line = $0
+      sub(/^ *(-[[:space:]]+)?/, "", line)
+      if (line ~ /^repository:/) {
+        sub(/^repository:[[:space:]]*/, "", line)
+        if (scalar(line) == repo) is_repo = 1
+      } else if (line ~ /^ref:/) {
+        sub(/^ref:[[:space:]]*/, "", line)
+        line = scalar(line)
+        if (line ~ /^[0-9a-f]+$/ && length(line) == 40) sha = line
+      }
+    }
+    END { flush() }
   '
   return 0
 }
 
-# All distinct action names referenced, across the given file's content
-# (stdin). Action names, not SHAs — stable across a pin bump.
+# All distinct action subpaths referenced, across the given file's content
+# (stdin). Action names, not SHAs — stable across a pin bump. The strip is
+# anchored to the repo prefix grep -o emits, so a nested subpath that itself
+# contains an `actions/` segment keeps it.
 extract_action_names() {
-  grep -oE "${DOTGITHUB_REPO//./\\.}/\.github/actions/[A-Za-z0-9_-]+@" | sed -E 's#.*/actions/##; s/@$//'
+  grep -oE "$USES_PREFIX_RE" | sed -E "s#^${DOTGITHUB_REPO//./\\.}/\\.github/actions/##; s/@\$//"
 }
 
 # Resolve a single consistent SHA out of every workflow file's content, or
@@ -206,12 +259,34 @@ enqueue() { [[ -n "${queued[$1]:-}" ]] && return 0; queued["$1"]=1; queue+=("$1"
 
 while IFS= read -r name; do
   [[ -n "$name" ]] || continue
+  # Same reason as the '.'/'..' check on sourced paths below: the compare
+  # names canonical paths, so an uncanonicalized one would never match.
+  if [[ "/${name}/" == *"/./"* || "/${name}/" == *"/../"* ]]; then
+    echo "check-pin-impact: action path has a '.'/'..' segment — refusing to guess its normalized form: ${DOTGITHUB_REPO}/.github/actions/${name}" >&2
+    exit 1
+  fi
   action_path=".github/actions/${name}/action.yml"
   add_consumed "$action_path"
   content="$(fetch "$NEW_SHA" "$action_path")" || {
     echo "check-pin-impact: could not fetch ${action_path} at ${NEW_SHA:0:8} — refusing to under-report" >&2
     exit 1
   }
+
+  # Everything below resolves what a composite action's `run:` steps execute.
+  # A JavaScript (`node20`, `node24`) or Docker action runs an entrypoint no
+  # scripts/*.sh scan can see — with no `run:` step it would pass every check
+  # below and contribute only its action.yml, so a change to its real code
+  # read as an inert bump (go-kure/kure#731 rounds 8-9). Require exactly one
+  # `using:` and that it is `composite`; anything else, including none,
+  # fails closed.
+  using_values="$(printf '%s\n' "$content" \
+    | { grep -E '^[[:space:]]+using:' || true; } \
+    | sed -E "s/^[[:space:]]+using:[[:space:]]*//; s/[[:space:]]+#.*\$//; s/[[:space:]]+\$//; s/^[\"']//; s/[\"']\$//")"
+  if [[ "$using_values" != "composite" ]]; then
+    using_values="${using_values:-<none>}"
+    echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} is not a composite action (runs.using: ${using_values//$'\n'/, }) — this script cannot resolve what a JavaScript or Docker action executes, refusing to under-report" >&2
+    exit 1
+  fi
 
   # A YAML step's first key can sit right after the list dash (`- uses:
   # foo`, no separate `- name:` line) — a shape none of the three checks
@@ -292,7 +367,44 @@ enqueue "$guard_script"
 # check-doc-sync.sh -> exact-array-member.sh) is resolved automatically —
 # resolving arbitrary `source` targets in general is not something a regex
 # scanner should claim to do reliably. Anything else that looks like a source
-# of another file aborts the run rather than silently skipping it.
+# of another file aborts the run rather than silently skipping it. The same
+# holds for a sibling run as a subprocess (see below the `source` scan).
+
+# What may precede a command word for it to count as one: line start, a
+# `;`/`&`/`|` separator, or a compound-command keyword.
+SEP_RE='(^|[;&|]|\b(then|do|if|elif|while|until)\b)[[:space:]]*'
+# A command that looks like it runs another script: `bash`/`sh` with a .sh
+# file later on the line, or a command word that is a `$VAR/`, `${VAR}/`,
+# `$(...)/`, `./` or `../` path to a .sh file, the quote around the directory
+# part closed before the `/` or not; optionally behind `exec`. `$(.*)` is
+# greedy so a nested substitution (`$(cd "$(dirname "$0")" && pwd)/x.sh`)
+# is still seen.
+EXEC_CANDIDATE_RE='(exec[[:space:]]+)?((bash|sh)[[:space:]][^;&|]*\.sh\b|"?(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|\$\(.*\)|\.{1,2})"?/[^[:space:];&|]*\.sh\b)'
+# The one invocation shape resolved: `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh"
+# [args]`, the whole line, args free of separators and substitutions.
+# BASH_REMATCH[4] is <name>.sh.
+EXEC_RE='^[[:space:]]*(exec[[:space:]]+)?((bash|sh)[[:space:]]+)?"?\$\{?SCRIPT_DIR\}?/([A-Za-z0-9_./-]+\.sh)"?([[:space:]]+[^;&|`()]*)?$'
+
+# consume_sibling <sourced|invoked> <from-script> <target> -- add a resolved
+# sibling to the consumed set and the walk. A '.'/'..' segment in the matched
+# suffix (e.g. `$SCRIPT_DIR/../x.sh`) would store this uncanonicalized path in
+# `consumed`, but GitHub's compare response names the canonical repo path —
+# the exact-string comparison below would then never match a later change to
+# the file actually sourced (found by chatgpt-codex-connector review on
+# go-kure/kure#729, 2026-08-30). Only single-hop sibling resolution
+# (`$SCRIPT_DIR/x.sh`) is automatic by design (see the fixed-point comment
+# above); a dot-segment target is exactly the kind of shape that resolution
+# deliberately doesn't claim to handle.
+consume_sibling() {
+  local kind="$1" from="$2" target="$3"
+  if [[ "$target" == *".."* || "$target" == *"/./"* ]]; then
+    echo "check-pin-impact: ${kind} path in ${from} has a '.'/'..' segment — refusing to guess its normalized form: $target" >&2
+    exit 1
+  fi
+  add_consumed "$target"
+  enqueue "$target"
+}
+
 i=0
 while [[ ${#queue[@]} -gt 0 ]]; do
   i=$((i + 1))
@@ -324,30 +436,38 @@ while [[ ${#queue[@]} -gt 0 ]]; do
   # too, at the cost of not catching every conceivable compound shape — an
   # unrecognized one still aborts via the branch below, so under-reporting
   # isn't the failure mode this trades away.
-  candidate_lines="$(printf '%s\n' "$content" | grep -vE '^[[:space:]]*#' | grep -E '(^|[;&|]|\b(then|do|if|elif|while|until)\b)[[:space:]]*(source|\.)[[:space:]]' || true)"
-  [[ -n "$candidate_lines" ]] || continue
-
+  code_lines="$(printf '%s\n' "$content" | { grep -vE '^[[:space:]]*#' || true; })"
+  candidate_lines="$(printf '%s\n' "$code_lines" | { grep -E "${SEP_RE}(source|\\.)[[:space:]]" || true; })"
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
     if [[ "$line" =~ ^[[:space:]]*(source|\.)[[:space:]]+\"?\$\{?SCRIPT_DIR\}?/([A-Za-z0-9_./-]+\.sh)\"?[[:space:]]*$ ]]; then
-      target="${script_dir}/${BASH_REMATCH[2]}"
-      # A '.'/'..' segment in the matched suffix (e.g. `$SCRIPT_DIR/../x.sh`)
-      # would store this uncanonicalized path in `consumed`, but GitHub's
-      # compare response names the canonical repo path — the exact-string
-      # comparison below would then never match a later change to the file
-      # actually sourced (found by chatgpt-codex-connector review on
-      # go-kure/kure#729, 2026-08-30). Only single-hop sibling sourcing
-      # (`$SCRIPT_DIR/x.sh`) is resolved automatically by design (see the
-      # fixed-point comment above); a dot-segment target is exactly the kind
-      # of shape that resolution deliberately doesn't claim to handle.
-      if [[ "$target" == *".."* || "$target" == *"/./"* ]]; then
-        echo "check-pin-impact: sourced path in ${script} has a '.'/'..' segment — refusing to guess its normalized form: $target" >&2
-        exit 1
-      fi
-      add_consumed "$target"
-      enqueue "$target"
+      consume_sibling sourced "$script" "${script_dir}/${BASH_REMATCH[2]}"
     else
       echo "check-pin-impact: unrecognized source expression in ${script} — refusing to guess whether it needs resolving:" >&2
+      echo "  $line" >&2
+      exit 1
+    fi
+  done <<<"$candidate_lines"
+
+  # A sibling run as a subprocess rather than sourced (`bash
+  # "$SCRIPT_DIR/helper.sh"`, `sh ...`, `exec ...`, or the path itself as the
+  # command word) executes just the same, but the walk above only followed
+  # `source`/`.` — the helper never reached the consumed set, so a change to
+  # it read as inert (go-kure/kure#731 round 8). Detected broadly (after the
+  # same separators, a `bash`/`sh` line naming a .sh file, or a command word
+  # that is a `$VAR/`, `$(...)/`, `./` or `../` path to a .sh file) and
+  # resolved narrowly, under the same rules as `source`: only the whole-line
+  # `$SCRIPT_DIR/<name>.sh` form, with arguments free of command separators
+  # and substitutions, is followed. Anything else detected aborts —
+  # `"$(dirname "$0")/x.sh"` included, since a sourced file's `$0` is its
+  # caller's.
+  candidate_lines="$(printf '%s\n' "$code_lines" | { grep -E "${SEP_RE}${EXEC_CANDIDATE_RE}" || true; })"
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    if [[ "$line" =~ $EXEC_RE ]]; then
+      consume_sibling invoked "$script" "${script_dir}/${BASH_REMATCH[4]}"
+    else
+      echo "check-pin-impact: unrecognized sibling-script invocation in ${script} — refusing to guess whether it needs resolving:" >&2
       echo "  $line" >&2
       exit 1
     fi
