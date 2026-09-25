@@ -68,8 +68,6 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, plan writerPlan, r
 	}
 
 	// Write kustomization.yaml
-	kMode := plan.kustomizationMode(ml)
-
 	if plan.writesKustomization(ml, root) {
 		var kustomBuf strings.Builder
 		kustomBuf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
@@ -86,51 +84,12 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, plan writerPlan, r
 			kustomBuf.WriteString(s)
 		}
 
-		// Every resource file in explicit mode or for a leaf; see
-		// listedResourceFiles for recursive mode.
-		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
+		for _, file := range sortedFileNames {
 			entry(fmt.Sprintf("  - %s\n", file))
 		}
-
 		for _, child := range ml.Children {
-			if child.UmbrellaChild {
-				// Umbrella children are not referenced from the parent
-				// kustomization.yaml's Children loop:
-				//   - FluxIntegratedPerLayout: the child's Kustomization CR is
-				//     already in ml.Resources (placed there by the
-				//     LayoutIntegrator), so the Resources loop above
-				//     emits the filename exactly once.
-				//   - FluxSeparate: the child is applied by its own CR
-				//     under flux-system/ with spec.path pointing directly
-				//     at the child subdir, so the parent must not
-				//     reference it at all.
-				// The sub-layout is still walked below to write its
-				// workloads + own kustomization.yaml.
-				continue
-			}
-			if child.rendersBundle() {
-				// The child renders bundles, so it is a reconciliation unit:
-				// its own Flux Kustomization (or ArgoCD Application) applies
-				// it, and only that one. Listing it here too would apply its
-				// objects twice, under two owners, and put them in reach of
-				// this directory's patches.
-				continue
-			}
-			if child.ApplicationFileMode == AppFileSingle {
-				if child.writesSingleFile() {
-					entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
-				}
-			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
-				// FluxIntegratedPerLayout: the child is applied by the Flux
-				// Kustomization the integrator placed in ml.Resources, which
-				// the resource list above already names. Nothing is guessed
-				// from the child's name.
-				continue
-			} else {
-				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {
-					continue
-				}
-				entry(fmt.Sprintf("  - %s\n", child.Name))
+			if e := plan.childEntry(ml, child); e != "" {
+				entry(fmt.Sprintf("  - %s\n", e))
 			}
 		}
 		if !listed {

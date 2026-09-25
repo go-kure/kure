@@ -155,10 +155,33 @@ Controls how resource YAML files are named:
 
 ### Kustomization Generation
 - **KustomizationExplicit**: Lists all manifest files explicitly
-- **KustomizationRecursive**: References subdirectories only — except that a layout still lists
-  the files holding the Flux objects it hosts (Kustomizations and any Source generated for them),
-  in every placement, since nothing else applies them; under `FluxIntegratedPerLayout` these
-  stand in for its child references
+- **KustomizationRecursive**: Writes no `kustomization.yaml` into the layout's directory; every
+  other file is written as in Explicit mode. The directory is meant for a Flux Kustomization,
+  which generates the `kustomization.yaml` from every `.yaml` and `.yml` file below it, adding a
+  subdirectory that has its own kustomization file as a whole (go-kure/kure#868). Every writer
+  refuses, before writing anything:
+  - `ConfigMapGenerators` on a Recursive layout: they exist only inside a `kustomization.yaml`;
+  - a parent's `kustomization.yaml` that lists a Recursive layout's directory, which kustomize
+    cannot build without one.
+
+  A Flux Kustomization kure generated builds a directory when `SetFluxBuild` marks it: the fluxcd
+  integrator marks each generated `spec.path` layout, and the root, which the Flux bootstrap
+  applies. For a marked Recursive directory, the writers also refuse what would make its build
+  differ from the Explicit mode's:
+  - another marked layout below it with no `kustomization.yaml` in any directory in between (its
+    own does not count): its objects would be applied twice;
+  - an extra file named `*.yaml` or `*.yml` in its build, outside every such directory: Flux would
+    apply it, or fail the whole build on one it cannot decode, and Explicit mode never lists
+    extra files.
+
+  So Recursive fits a generated target with no other target below it: a leaf bundle directory,
+  or a GroupByName bundle directory over the application directories it lists, plus any unmarked
+  Recursive layout inside one. A Recursive layout with children under `FluxIntegratedPerLayout`
+  is refused (each child is a target), and so is a Recursive root over any target no
+  `kustomization.yaml` shields. How Argo CD, Git or a caller's own Kustomization treats a
+  Recursive directory is not checked: Argo CD Applications do not set `directory.recurse`
+  (go-kure/kure#144), and a Recursive directory holding no file is not refused, although Git does
+  not keep an empty directory.
 - A `FluxIntegratedPerLayout` layout references no child directory: each child is applied by the
   Flux Kustomization the integrator placed in the parent's `Resources`, listed as one of its own
   files. No reference is derived from a child's name.
@@ -169,7 +192,7 @@ Controls how resource YAML files are named:
 - GroupByName bundle layouts are written `KustomizationExplicit`, so the CRs hosted there
   (umbrella children, PerLayout applications) are listed
 - A layout that renders a bundle, and every child of a `FluxIntegratedPerLayout` layout, always
-  gets a `kustomization.yaml`, even when it holds nothing else (a bundle with no applications, an
+  gets a `kustomization.yaml` unless it is `KustomizationRecursive`, even when it holds nothing else (a bundle with no applications, an
   empty node, an empty augmenter layout): a Flux Kustomization or ArgoCD Application names that
   directory, and an empty directory does not survive a Git tree. A kustomization that lists
   nothing is written `resources: []` (kustomize rejects a bare `resources:` as empty).

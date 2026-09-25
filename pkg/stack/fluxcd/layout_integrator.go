@@ -97,7 +97,8 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 }
 
 // saveLayouts records what an integration changes on l and every layout
-// below it — placement, application file mode, resources and children — and
+// below it — placement, application file mode, resources, children and the
+// Flux build marker — and
 // returns a function that puts it back, so a refused call leaves the tree as
 // the caller gave it.
 func saveLayouts(l *layout.ManifestLayout) func() {
@@ -106,6 +107,7 @@ func saveLayouts(l *layout.ManifestLayout) func() {
 		fileMode  layout.ApplicationFileMode
 		resources []client.Object
 		children  []*layout.ManifestLayout
+		fluxBuild bool
 	}
 	saved := map[*layout.ManifestLayout]state{}
 	var walk func(l *layout.ManifestLayout)
@@ -113,7 +115,7 @@ func saveLayouts(l *layout.ManifestLayout) func() {
 		if l == nil {
 			return
 		}
-		saved[l] = state{l.FluxPlacement, l.ApplicationFileMode, slices.Clone(l.Resources), slices.Clone(l.Children)}
+		saved[l] = state{l.FluxPlacement, l.ApplicationFileMode, slices.Clone(l.Resources), slices.Clone(l.Children), l.FluxBuild()}
 		for _, child := range l.Children {
 			walk(child)
 		}
@@ -123,6 +125,7 @@ func saveLayouts(l *layout.ManifestLayout) func() {
 		for l, st := range saved {
 			l.FluxPlacement, l.ApplicationFileMode = st.placement, st.fileMode
 			l.Resources, l.Children = st.resources, st.children
+			l.SetFluxBuild(st.fluxBuild)
 		}
 	}
 }
@@ -318,7 +321,46 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.hostSourcesOncePerBuild(ml); err != nil {
 		return err
 	}
-	return checkPlacedReconcileOrder(ml, p.generated)
+	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
+		return err
+	}
+	markFluxBuilds(ml, p.generated)
+	return nil
+}
+
+// markFluxBuilds marks, with SetFluxBuild, the directory each Kustomization
+// this integration generated builds (generated: their namespace/name keys),
+// and the root when it generated any: the Flux bootstrap applies the root. The
+// writers check a KustomizationRecursive directory so marked against what
+// Flux builds from it. A Kustomization a caller or an application placed marks
+// nothing.
+func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) {
+	layoutAt := map[string]*layout.ManifestLayout{}
+	var paths []string
+	var walk func(l *layout.ManifestLayout)
+	walk = func(l *layout.ManifestLayout) {
+		layoutAt[path.Clean(l.FullRepoPath())] = l
+		for _, obj := range l.Resources {
+			if k, ok := obj.(*kustv1.Kustomization); ok && generated[crKey(k.Namespace, k.Name)] {
+				paths = append(paths, k.Spec.Path)
+			}
+		}
+		for _, c := range l.Children {
+			if c != nil {
+				walk(c)
+			}
+		}
+	}
+	walk(root)
+	if len(paths) == 0 {
+		return
+	}
+	root.SetFluxBuild(true)
+	for _, p := range paths {
+		if l := layoutAt[path.Clean(p)]; l != nil {
+			l.SetFluxBuild(true)
+		}
+	}
 }
 
 // checkPlacedReconcileOrder runs checkReconcileOrder over the Kustomizations
@@ -1098,7 +1140,11 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		// above leaves out with the child).
 		if fluxDir.Namespace == ml.FullRepoPath() && len(fluxDir.Children) == 0 &&
 			reflect.DeepEqual(fluxDir.Resources, fluxResources) {
-			return checkPlacedReconcileOrder(ml, generated)
+			if err := checkPlacedReconcileOrder(ml, generated); err != nil {
+				return err
+			}
+			markFluxBuilds(ml, generated)
+			return nil
 		}
 		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
 	}
@@ -1132,6 +1178,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		ml.Children = ml.Children[:len(ml.Children)-1]
 		return err
 	}
+	markFluxBuilds(ml, generated)
 	return nil
 }
 

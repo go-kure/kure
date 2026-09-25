@@ -173,7 +173,7 @@ The generator computes no path, the integrator matches nothing by name, and `Fla
 rewrites nothing afterwards: when it collapses a tier, the surviving layout takes over the
 collapsed layout's origins, so when both carried a bundle they share the surviving directory's one
 Kustomization. An umbrella
-child's path is its own directory, in every mode (the removed `KustomizationRecursive` rule
+child's path is its own directory, in every mode (an earlier `KustomizationRecursive` rule
 pointed it at the parent bundle's directory, whose kustomization excludes the child).
 
 `IndexOrigins` refuses a tree it cannot resolve unambiguously: a hand-built, partial or
@@ -451,8 +451,12 @@ bootstrapConfig := &stack.BootstrapConfig{
 Controls how kustomization.yaml files reference resources:
 
 - `KustomizationExplicit` - Lists all manifest files explicitly
-- `KustomizationRecursive` - References subdirectories only, plus the files holding the Flux
-  objects the layout hosts
+- `KustomizationRecursive` - Writes no `kustomization.yaml`; the Flux Kustomization that builds
+  the directory generates one from every `.yaml` and `.yml` file below it. The integrator marks
+  every directory a Kustomization it generated builds (`SetFluxBuild`), and the writers refuse a
+  marked Recursive directory whose build would differ from the Explicit mode's: another generated
+  target below it that no `kustomization.yaml` shields, or a YAML extra file in its build. See
+  "Kustomization Generation" in the layout package README.
 
 ### Flux Placement
 

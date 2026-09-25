@@ -55,7 +55,10 @@ type KustomizationMode string
 const (
 	// KustomizationExplicit lists each manifest file in kustomization.yaml.
 	KustomizationExplicit KustomizationMode = "explicit"
-	// KustomizationRecursive references only subdirectories in kustomization.yaml.
+	// KustomizationRecursive writes no kustomization.yaml into the layout's
+	// directory, and every other file as KustomizationExplicit does: a Flux
+	// Kustomization builds the directory from every .yaml and .yml file below
+	// it (go-kure/kure#868).
 	KustomizationRecursive KustomizationMode = "recursive"
 	// KustomizationUnset indicates no kustomization mode preference.
 	KustomizationUnset KustomizationMode = ""

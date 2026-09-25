@@ -49,7 +49,20 @@ type ManifestLayout struct {
 	// origin records the stack objects this layout renders (see origin.go).
 	// Set only by the walkers and FlattenSingleTier; never serialised.
 	origin origin
+	// fluxBuild is set through SetFluxBuild.
+	fluxBuild bool
 }
+
+// SetFluxBuild records whether a Flux Kustomization kure generated builds this
+// layout's directory: its spec.path names the directory, or it is the root of
+// a tree whose integration generated one (the Flux bootstrap applies the
+// root). fluxcd's LayoutIntegrator sets it. For a KustomizationRecursive
+// layout so marked the writers refuse a build that differs from what the
+// Explicit mode would build (see checkRecursiveLayouts).
+func (ml *ManifestLayout) SetFluxBuild(b bool) { ml.fluxBuild = b }
+
+// FluxBuild reports what SetFluxBuild last recorded.
+func (ml *ManifestLayout) FluxBuild() bool { return ml.fluxBuild }
 
 // ExtraFile is an arbitrary file written into a ManifestLayout's directory
 // alongside the resource YAMLs.
@@ -76,28 +89,6 @@ func (ml *ManifestLayout) resolveManifestFileName() ManifestFileNameFunc {
 	default:
 		return DefaultManifestFileName
 	}
-}
-
-// listedResourceFiles returns the resource files a layout's kustomization.yaml
-// lists: every one in explicit mode or for a leaf. In recursive mode a layout
-// with children lists its child references instead of its files — except the
-// Flux objects the layout hosts (a Kustomization and any Source generated for
-// it), which nothing else applies: the files holding them are listed, in
-// every placement, and no other.
-func listedResourceFiles(ml *ManifestLayout, kMode KustomizationMode, sorted []string, groups map[string][]client.Object) []string {
-	if kMode == KustomizationExplicit || len(ml.Children) == 0 {
-		return sorted
-	}
-	var out []string
-	for _, f := range sorted {
-		for _, o := range groups[f] {
-			if g := o.GetObjectKind().GroupVersionKind().Group; g == "kustomize.toolkit.fluxcd.io" || g == "source.toolkit.fluxcd.io" {
-				out = append(out, f)
-				break
-			}
-		}
-	}
-	return out
 }
 
 // FullRepoPath returns the layout's directory: Namespace joined with Name.
@@ -234,7 +225,8 @@ func (ml *ManifestLayout) writesSingleFile() bool { return len(ml.Resources) > 0
 // writeToDisk writes ml and its children. Every layout's directory gets a
 // kustomization.yaml, even when it lists nothing ("resources: []"): its parent
 // lists the directory, or a Flux Kustomization's spec.path names it, and an
-// empty directory does not survive a Git tree either. An AppFileSingle child
+// empty directory does not survive a Git tree either. A KustomizationRecursive
+// layout gets none: Flux generates it (go-kure/kure#868). An AppFileSingle child
 // (root false) writes its one file into its parent's directory and never a
 // kustomization.yaml: the parent's lists that file, and one of the child's
 // would replace it (go-kure/kure#860). An AppFileSingle root, which has no
@@ -285,8 +277,6 @@ func (ml *ManifestLayout) writeToDisk(plan writerPlan, root bool) error {
 		return err
 	}
 
-	kMode := plan.kustomizationMode(ml)
-
 	// Generate kustomization.yaml if there are resources or children
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
 	if plan.writesKustomization(ml, root) {
@@ -319,54 +309,12 @@ func (ml *ManifestLayout) writeToDisk(plan writerPlan, root bool) error {
 			writeStr(s)
 		}
 
-		// Every resource file in explicit mode or for a leaf; see
-		// listedResourceFiles for recursive mode.
-		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
+		for _, file := range sortedFileNames {
 			entry(fmt.Sprintf("  - %s\n", file))
 		}
-
-		// Add child references
 		for _, child := range ml.Children {
-			if child.UmbrellaChild {
-				// Umbrella children are not referenced from the parent
-				// kustomization.yaml's Children loop:
-				//   - FluxIntegratedPerLayout: the child's Kustomization CR is
-				//     already in ml.Resources (placed there by the
-				//     LayoutIntegrator), so the Resources loop above
-				//     emits the filename exactly once.
-				//   - FluxSeparate: the child is applied by its own CR
-				//     under flux-system/ with spec.path pointing directly
-				//     at the child subdir, so the parent must not
-				//     reference it at all.
-				// The sub-layout is still walked below to write its
-				// workloads + own kustomization.yaml.
-				continue
-			}
-			if child.rendersBundle() {
-				// The child renders bundles, so it is a reconciliation unit:
-				// its own Flux Kustomization (or ArgoCD Application) applies
-				// it, and only that one. Listing it here too would apply its
-				// objects twice, under two owners, and put them in reach of
-				// this directory's patches.
-				continue
-			}
-			if child.ApplicationFileMode == AppFileSingle {
-				if child.writesSingleFile() {
-					entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
-				}
-			} else if ml.FluxPlacement == FluxIntegratedPerLayout {
-				// FluxIntegratedPerLayout: the child is applied by the Flux
-				// Kustomization the integrator placed in ml.Resources, which
-				// the resource list above already names. Nothing is guessed
-				// from the child's name.
-				continue
-			} else {
-				// For package-aware layouts, use relative path
-				if ml.PackageRef != nil && child.PackageRef != nil && ml.PackageRef != child.PackageRef {
-					// Different packages - skip cross-package references in kustomization
-					continue
-				}
-				entry(fmt.Sprintf("  - %s\n", child.Name))
+			if e := plan.childEntry(ml, child); e != "" {
+				entry(fmt.Sprintf("  - %s\n", e))
 			}
 		}
 		if !listed {

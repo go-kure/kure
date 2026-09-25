@@ -53,6 +53,10 @@ err = engine.IntegrateWithLayout(ml, cluster, layout.LayoutRules{})
 
 `CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster` with the caller's rules, generates the Applications from that same layout (so every `source.path` is a directory it writes), then appends an `argocd/` child layout containing them. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it. An integrated `FluxPlacement` (`FluxIntegratedPerLayout`, `FluxIntegratedPerBundle`) is refused: the writer would then reference child layouts through Flux CRs, which an Argo layout does not have, so nothing would apply `argocd/`.
 
+A `KustomizationRecursive` layout gets no `kustomization.yaml`, and the Applications do not set
+`source.directory.recurse` (go-kure/kure#144), so Argo CD applies only the manifest files at the
+top of such a directory.
+
 ## Known Limitations
 
 - **Bootstrap not implemented**: `GenerateBootstrap` returns `nil, nil` when `config` is nil or disabled; returns an error when bootstrap is enabled. `SupportedBootstrapModes()` returns nil.

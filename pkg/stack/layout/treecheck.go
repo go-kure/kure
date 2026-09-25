@@ -17,6 +17,8 @@ import (
 // child has children (see checkSingleChildLeaf), an extra file takes a path
 // the writer owns (see checkExtraFiles), or an AppFileSingle layout's file or
 // extra file would replace another file in its directory (see checkSingleFiles),
+// or a KustomizationRecursive layout contradicts the output (see
+// checkRecursiveLayouts),
 // before anything is written (go-kure/kure#771). Each such layout writes its own files there,
 // and the later kustomization.yaml silently replaces the earlier one, dropping
 // its resources from the kustomize graph. Directories are compared
@@ -71,7 +73,10 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 	if err := walk(root); err != nil {
 		return err
 	}
-	return checkSingleFiles(root, plan)
+	if err := checkSingleFiles(root, plan); err != nil {
+		return err
+	}
+	return checkRecursiveLayouts(root, plan)
 }
 
 // checkSingleChildLeaf refuses an AppFileSingle child (as outDir treats it)

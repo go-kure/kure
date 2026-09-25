@@ -243,33 +243,15 @@ func TestManifestLayoutRecursiveMode(t *testing.T) {
 		t.Fatalf("write recursive: %v", err)
 	}
 
-	rootK := filepath.Join(dir, "default", "root", "kustomization.yaml")
-	data, err := os.ReadFile(rootK)
-	if err != nil {
-		t.Fatalf("read root kustomization: %v", err)
+	// Recursive layouts get every file except kustomization.yaml
+	// (go-kure/kure#868).
+	if _, err := os.Stat(filepath.Join(dir, "default", "child", "default-configmap-test.yaml")); err != nil {
+		t.Fatalf("expected the child's manifest: %v", err)
 	}
-	if len(data) == 0 {
-		t.Fatalf("root kustomization empty")
-	}
-	// Child directories with resources should now get kustomization.yaml for proper GitOps workflow
-	childK := filepath.Join(dir, "default", "child", "kustomization.yaml")
-	if _, err := os.Stat(childK); err != nil {
-		t.Fatalf("expected child kustomization.yaml for GitOps compliance: %v", err)
-	}
-
-	// Verify child kustomization lists its manifest files
-	childData, err := os.ReadFile(childK)
-	if err != nil {
-		t.Fatalf("read child kustomization: %v", err)
-	}
-	if !strings.Contains(string(childData), "default-configmap-test.yaml") {
-		t.Fatalf("expected child kustomization to list its manifest files")
-	}
-	if strings.Contains(string(data), "configmap") {
-		t.Fatalf("unexpected manifest file reference")
-	}
-	if !strings.Contains(string(data), "child") {
-		t.Fatalf("missing child reference")
+	for _, d := range []string{"root", "child"} {
+		if _, err := os.Stat(filepath.Join(dir, "default", d, "kustomization.yaml")); !os.IsNotExist(err) {
+			t.Errorf("recursive layout %s got a kustomization.yaml (stat: %v)", d, err)
+		}
 	}
 }
 
@@ -621,7 +603,7 @@ func TestLeafDirectoryKustomizationGeneration(t *testing.T) {
 	leafLayout := &layout.ManifestLayout{
 		Name:      "backend",
 		Namespace: "apps",
-		Mode:      layout.KustomizationRecursive, // Even in recursive mode, leaf should list files
+		Mode:      layout.KustomizationExplicit,
 		Resources: []client.Object{obj1, obj2},
 		Children:  nil, // No children - this is a leaf directory
 	}
