@@ -43,12 +43,13 @@ Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tre
 anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
 layouts that resolve to the same file, or an `AppFileSingle` child with children of its own.
 It also refuses an `AppFileSingle` layout whose file, `<Name>.yaml`, would replace another file
-written into the same directory: the `kustomization.yaml` there, or one of the resource files of
-the layout that owns the directory (go-kure/kure#871). A child named `kustomization`, or named like
-one of its parent's generated files (`default-configmap-a`, or `configmap` under
+written into the same directory: the `kustomization.yaml` there, or one of the resource or extra
+files of the layout that owns the directory (go-kure/kure#871). A child named `kustomization`, or
+named like one of its parent's generated files (`default-configmap-a`, or `configmap` under
 `FileNamingKindName` + `FilePerKind`), is refused, as is an `AppFileSingle` root named
-`kustomization`. A child with no resources writes no file and is never refused. Directories and
-file names are compared case-insensitively, as on default macOS volumes.
+`kustomization`. A child with no resources writes no file, so this check never refuses it.
+Directories and file names are compared case-insensitively, as on default macOS volumes: a child
+named `Kustomization`, or `Default-ConfigMap-A`, is refused too.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)

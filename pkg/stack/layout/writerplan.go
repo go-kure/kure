@@ -39,15 +39,15 @@ type writerPlan struct {
 func groupResourceFiles(l *ManifestLayout, single bool, fileMode FileExportMode, nameFn ManifestFileNameFunc) ([]string, map[string][]client.Object) {
 	groups := map[string][]client.Object{}
 	for _, obj := range l.Resources {
+		ns := obj.GetNamespace()
+		if ns == "" {
+			ns = "cluster"
+		}
+		kind := strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind)
 		var fileName string
 		if single {
 			fileName = fmt.Sprintf("%s.yaml", l.Name)
 		} else {
-			ns := obj.GetNamespace()
-			if ns == "" {
-				ns = "cluster"
-			}
-			kind := strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind)
 			fileName = nameFn(ns, kind, obj.GetName(), fileMode)
 		}
 		groups[fileName] = append(groups[fileName], obj)
@@ -147,54 +147,62 @@ func manifestPlan(basePath string, cfg Config) writerPlan {
 // checkSingleFiles refuses an AppFileSingle layout whose one file, as plan
 // writes it, would replace another file the writer writes into the same
 // directory: the kustomization.yaml of the layout that owns that directory,
-// or one of that layout's resource files (go-kure/kure#871). The file lands
-// in the owner's directory, so the owner's file would be silently replaced,
-// dropping its objects or its whole kustomization. An AppFileSingle root is
-// checked against the kustomization.yaml it writes next to its own file.
+// or one of that layout's resource or extra files (go-kure/kure#871). The
+// file lands in the owner's directory, so the owner's file would be silently
+// replaced, dropping its objects or its whole kustomization. An AppFileSingle
+// root is checked against the kustomization.yaml it writes next to its own
+// file. An extra file of the single layout's own parent is left to
+// checkExtraFiles, which reserves its children's files.
 //
 // Every file another layout writes is indexed first, since the directory's
 // owner may come later in the walk than the single-file layout. Paths are
 // compared as normDir compares them: case-insensitively, as on default macOS
 // volumes.
 func checkSingleFiles(root *ManifestLayout, plan writerPlan) error {
-	owned := map[string]string{} // normDir'ed file path -> what writes it
+	type ownedFile struct {
+		what    string
+		extraOf *ManifestLayout // the layout whose extra file it is, if any
+	}
+	owned := map[string]ownedFile{} // normDir'ed file path -> what writes it
 	type single struct {
-		l    *ManifestLayout
-		dir  string
-		file string
+		l, parent *ManifestLayout
+		dir, file string
 	}
 	var singles []single
-	var walk func(l *ManifestLayout, isRoot bool)
-	walk = func(l *ManifestLayout, isRoot bool) {
+	var walk func(l, parent *ManifestLayout)
+	walk = func(l, parent *ManifestLayout) {
 		dir, isSingle := plan.outDir(l)
 		sorted, _ := plan.files(l)
 		if isSingle {
 			// sorted is empty for a single layout without resources,
 			// which writes no file and so replaces nothing.
 			for _, f := range sorted {
-				singles = append(singles, single{l, dir, f})
+				singles = append(singles, single{l, parent, dir, f})
 			}
 		} else {
 			for _, f := range sorted {
-				owned[normDir(path.Join(filepath.ToSlash(dir), f))] = fmt.Sprintf("the resource file %q of layout %q", f, l.FullRepoPath())
+				owned[normDir(path.Join(filepath.ToSlash(dir), f))] = ownedFile{what: fmt.Sprintf("the resource file %q of layout %q", f, l.FullRepoPath())}
+			}
+			for _, ef := range l.ExtraFiles {
+				owned[normDir(path.Join(filepath.ToSlash(dir), ef.Name))] = ownedFile{what: fmt.Sprintf("the extra file %q of layout %q", ef.Name, l.FullRepoPath()), extraOf: l}
 			}
 		}
-		if plan.writesKustomization(l, isRoot) {
+		if plan.writesKustomization(l, parent == nil) {
 			for _, f := range kustomizeControlFiles {
-				owned[normDir(path.Join(filepath.ToSlash(dir), f))] = fmt.Sprintf("the %s of layout %q", f, l.FullRepoPath())
+				owned[normDir(path.Join(filepath.ToSlash(dir), f))] = ownedFile{what: fmt.Sprintf("the %s of layout %q", f, l.FullRepoPath())}
 			}
 		}
 		for _, child := range l.Children {
 			if child != nil {
-				walk(child, false)
+				walk(child, l)
 			}
 		}
 	}
-	walk(root, true)
+	walk(root, nil)
 	for _, s := range singles {
-		if what, ok := owned[normDir(path.Join(filepath.ToSlash(s.dir), s.file))]; ok {
+		if o, ok := owned[normDir(path.Join(filepath.ToSlash(s.dir), s.file))]; ok && (o.extraOf == nil || o.extraOf != s.parent) {
 			return errors.NewFileError("write", filepath.Join(s.dir, s.file), fmt.Sprintf(
-				"layout %q is AppFileSingle and its file %q would replace %s", s.l.FullRepoPath(), s.file, what), nil)
+				"layout %q is AppFileSingle and its file %q would replace %s", s.l.FullRepoPath(), s.file, o.what), nil)
 		}
 	}
 	return nil
