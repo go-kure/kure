@@ -6,7 +6,8 @@
 //	printf '%s\0' pkg/a/a.go ... | go run ./scripts/docapiindex types
 //
 // The input is a NUL-separated list of Go files on stdin. Each row names the
-// directory of the file that declares it, exactly as the path was given.
+// directory of the file that declares it, cleaned as filepath.Dir cleans it
+// (`./pkg/a/a.go` gives `pkg/a`).
 //
 // symbols prints "<dir> <name> <receiver>" for every exported package-level
 // declaration -- func, const, var and type, `-` in the receiver column -- and
