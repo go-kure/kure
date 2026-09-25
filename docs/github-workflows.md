@@ -255,14 +255,36 @@ temporary branch — the merged result — before the PR is allowed to land.
 - **Pin-impact gate** - `pin-impact` renders a `go-kure/.github` pin bump's real effect (which
   `scripts/*.sh` a referenced action actually runs, whether the compare touches any of them) into
   the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed
-  (go-kure/kure#719, 2026-08-30). Its fail-closed paths — no pin change, inert and affected bumps,
-  the acknowledgement, inconsistent pins, a non-ahead compare, nested `uses:`, more than one `run:`
-  step, mixed dependencies in one `run:` block, transitive, dot-segment, compound-line and
-  unfetchable `source`, the pagination cap, a non-composite (JavaScript or Docker) action, a
-  sibling script run as a subprocess (`bash`/`sh`/`exec`/direct, resolved only as
-  `$SCRIPT_DIR/<name>.sh` and otherwise refused like `source`), a `repository: go-kure/.github`
-  checkout whose `ref:` is not the key right after `repository:`, and nested or dotted action
-  subpaths (`actions/group/check`, `actions/check.v2`) — are pinned by hermetic cases in `scripts/test/cases/`
+  (go-kure/kure#719, 2026-08-30). It follows three things, and nothing else:
+  - **Pins.** It reads `uses: go-kure/.github/.github/actions/<subpath>@<sha>`, including nested
+    or dotted subpaths. It also reads the `ref: <sha>` of a block-style
+    `repository: go-kure/.github` checkout, whatever the key order. The repository name is matched
+    case-insensitively, and the SHA may be written in either case.
+  - **Action scripts.** It follows each `$GITHUB_ACTION_PATH/<rel>.sh` in an action's single
+    `run:` step. The path is resolved from the action's own directory, counting its `..` hops.
+  - **Sibling scripts.** It follows, transitively, a whole line
+    `source "$SCRIPT_DIR/<name>.sh"` or `[exec] [bash|sh] "$SCRIPT_DIR/<name>.sh" [args]`.
+
+  It refuses rather than guesses on:
+  - **Pins.** Inconsistent pins. Any `go-kure/.github` reference in a `uses:` or `repository:`
+    context that yields no 40-hex pin: `@main`, a flow-mapping checkout, a checkout with a branch
+    or no `ref:`, and similar. Only a `${{ }}` `ref:` and a reusable-workflow call are exempt.
+  - **Actions.** An action that is not a composite action (JavaScript or Docker). A nested
+    `uses:`, or more than one `run:` step. A non-`.sh` or unaccounted-for script reference.
+  - **Paths.** A path that climbs above the repository root, or that has a `.`, `..` or empty
+    (`//`) segment where it cannot be normalised.
+  - **Scripts.** Any line using `$SCRIPT_DIR` in another shape, which includes `if !`, a wrapper
+    command, `$( )`, a pipe and a non-`.sh` sibling. Any other way of computing the script's own
+    directory (`dirname "$0"`, `${0%/*}`, `BASH_SOURCE`) outside a plain `SCRIPT_DIR=` definition.
+    Any other `source` or script invocation at a command position, and a sibling that cannot be
+    fetched.
+  - **The compare.** A compare that is not `ahead`, and the pagination cap.
+
+  It does not see a sibling reached through a hard-coded absolute path or through `PATH`. It also
+  leaves reusable-workflow calls (`go-kure/.github/.github/workflows/<file>.yml@<ref>`) alone:
+  they run at their own ref, `@main` here, so no pin bump changes them. These
+  paths, plus the no-change, inert, affected and acknowledged outcomes, are pinned by hermetic
+  cases in `scripts/test/cases/`
   (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
   has reviewed a real hit and judged it safe adds
   the `pin-impact-ack` label to merge anyway — same convention as `check-doc-gate`'s `docs-skip`

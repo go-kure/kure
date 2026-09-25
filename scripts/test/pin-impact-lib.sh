@@ -85,11 +85,15 @@ pi_git() {
 }
 
 # pi_action_yml <name> -- the default composite action.yml: one run step that
-# invokes scripts/<name>.sh the way every go-kure/.github action does.
+# invokes scripts/<name>.sh the way every go-kure/.github action does, climbing
+# from $GITHUB_ACTION_PATH (.github/actions/<name>) to the repo root: three
+# `..` hops plus one per extra segment of a nested <name>.
 pi_action_yml() {
+    local up="../../.." slashes="${1//[!\/]/}" i
+    for ((i = 0; i < ${#slashes}; i++)); do up="$up/.."; done
     # $GITHUB_ACTION_PATH is written literally into the fixture action.yml.
     # shellcheck disable=SC2016
-    printf 'name: %s\nruns:\n  using: composite\n  steps:\n    - name: run\n      shell: bash\n      run: bash "$GITHUB_ACTION_PATH/../../../scripts/%s.sh"\n' "$1" "$1"
+    printf 'name: %s\nruns:\n  using: composite\n  steps:\n    - name: run\n      shell: bash\n      run: bash "$GITHUB_ACTION_PATH/%s/scripts/%s.sh"\n' "$1" "$up" "$1"
 }
 
 # pi_workflow <sha> <action-name>... -- (re)write ci.yml pinning every action to <sha>.
