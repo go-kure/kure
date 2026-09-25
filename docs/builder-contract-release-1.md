@@ -346,10 +346,10 @@ fixing the rejection is exactly when they start to apply.
 | `CreateService` | **silent** | **the object's own `app` label and annotation — a Service that dropped `app: <name>` falls out of any Cilium `K8sServiceSelector` or LoadBalancer IP-pool `serviceSelector` that required it, see above**; empty `spec.selector` map and `spec.ports` slice (both `omitempty`, and an empty selector meant "no selector" exactly as nil does) |
 | `CreateServiceAccount` | **unsettled** | **`automountServiceAccountToken: false` (a pointer to `false`, serialised) — unsettled, see above.** The field is now unset and the effective value comes from the cluster, so if you relied on the injected `false`, restore it with `SetServiceAccountAutomountToken(sa, false)`; empty `secrets` and `imagePullSecrets` slices (`omitempty`, no output change); the object's own `app` label and annotation |
 | `CreateStatefulSet` | **rejected** | **`spec.selector.matchLabels.app: <name>` (required, see above)**; **`spec.replicas: 0` (a pointer to zero, serialised — unset now defaults to 1, silent, see above)**; `spec.template.metadata.labels.app: <name>`; `spec.podManagementPolicy: OrderedReady` (no-op — upstream: *"The default policy is `OrderedReady`"*); empty `spec.volumeClaimTemplates` slice (`omitempty`, no output change); the object's own `app` label and annotation |
-| `prometheus.CreateServiceMonitor` | **unsettled** | empty `spec.endpoints` slice. `+required` with no `omitempty`, so this now renders **`null` instead of `[]`**; whether that is refused depends on a CRD schema not shipped here — see above (also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints) |
-| `prometheus.CreatePodMonitor` | no-op | empty `spec.podMetricsEndpoints` slice. No `omitempty`, so this now renders **`null` instead of `[]`** — but the field is `+optional`, so a pruned `null` is simply an absent optional field, see above (also observable through `prometheus.PodMonitor(cfg)` with no endpoints) |
-| `prometheus.CreatePrometheusRule` | no-op | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)` leaves it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
-| `cilium.CreateCiliumCIDRGroup` | **rejected** | empty `spec.externalCIDRs` slice. Required with `minItems: 0` and no `omitempty`, so this now renders **`null` instead of `[]`** — and Cilium's own bundled CRD makes the field non-nullable, so the `null` is pruned and the required field is then missing, see above (also observable through `cilium.CiliumCIDRGroup(cfg)` with no CIDRs) |
+| `prometheus.CreateServiceMonitor` | **unsettled** | empty `spec.endpoints` slice. `+required` with no `omitempty`, so this now renders **`null` instead of `[]`**; whether that is refused depends on a CRD schema not shipped here — see above (at this release also observable through `prometheus.ServiceMonitor(cfg)` with no endpoints; release 2 retired it) |
+| `prometheus.CreatePodMonitor` | no-op | empty `spec.podMetricsEndpoints` slice. No `omitempty`, so this now renders **`null` instead of `[]`** — but the field is `+optional`, so a pruned `null` is simply an absent optional field, see above (at this release also observable through `prometheus.PodMonitor(cfg)` with no endpoints; release 2 retired it) |
+| `prometheus.CreatePrometheusRule` | no-op | empty `spec.groups` slice (`prometheus.PrometheusRule(cfg)`, retired in release 2, left it nil too, but `spec.groups` carries `omitempty`, so the emitted YAML does not change) |
+| `cilium.CreateCiliumCIDRGroup` | **rejected** | empty `spec.externalCIDRs` slice. Required with `minItems: 0` and no `omitempty`, so this now renders **`null` instead of `[]`** — and Cilium's own bundled CRD makes the field non-nullable, so the `null` is pruned and the required field is then missing, see above (at this release also observable through `cilium.CiliumCIDRGroup(cfg)` with no CIDRs; release 2 retired it) |
 
 #### What a golden file of the old output actually shows
 
@@ -667,8 +667,8 @@ cmacme.ACMEChallengeSolver{DNS01: &cmacme.ACMEChallengeSolverDNS01{
 to `false`, none of which changes what is serialised or what `append` does.
 
 The four cert-manager solver constructors and `CreateACMEIssuer` were only ever
-called from `certmanager.Issuer`/`ClusterIssuer`, which now build the literals
-inline.
+called from `certmanager.Issuer`/`ClusterIssuer`, which from this release built
+the literals inline (release 2 retired both).
 
 `VolumeClaimTemplateOptions` goes with `CreateVolumeClaimTemplate`, its only
 consumer. Its four fields — `StorageClassName`, `AccessModes`, `StorageRequest`

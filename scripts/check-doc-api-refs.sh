@@ -123,6 +123,11 @@ EXCLUDED_PAGES=(
 # itself: delete a builder tomorrow and it becomes exempt on this page the same
 # day, silently. A listed one does not, and an unlisted removed name fails the
 # build with the name to add.
+#
+# REMOVED_LIST is one set for every ledger, not one per page: each ledger may
+# mention any name on it, so the release-2 page may name a release-1 removal
+# without failing. The pages are few and all about removals, so a name one of
+# them should not carry is a review matter, not a build one.
 LEDGER_PAGES=(
 	docs/builder-contract-release-1.md # release-1 ledger: removed names left, live replacements right
 	docs/builder-contract-release-2.md # release-2 migration: removed config-struct calls beside their replacements
@@ -158,21 +163,26 @@ EXTERNAL_QUALIFIED=(
 symbols=$(mktemp)    # "<package dir> <name> <receiver>" per exported declaration
 types=$(mktemp)      # "<package dir> <type>" per exported type a method can be declared on
 pkgdirs=$(mktemp)    # every package directory under pkg/, exported symbols or not
-external=$(mktemp)   # EXTERNAL, one name per line
-referenced=$(mktemp) # "<page>:<line>:<reference>" per builder-shaped reference
+external=$(mktemp)   # EXTERNAL and EXTERNAL_QUALIFIED, one name per line
+referenced=$(mktemp) # "<page>:<line>:<reference>" per API reference
 removed=$(mktemp)    # names a LEDGER_PAGES table lists as removed, one per line
 selftest_dir=
 indexer_dir=         # the built declaration indexer, see build_indexer
 # shellcheck disable=SC2064 # expand now: the paths must survive the function that set them
 trap 'rm -rf "$symbols" "$types" "$pkgdirs" "$external" "$referenced" "$removed" ${selftest_dir:+"$selftest_dir"} ${indexer_dir:+"$indexer_dir"}' EXIT
 
-# One "file:line:identifier" row per builder-shaped reference in the pages named
-# on stdin (NUL-separated), skipping any passage a page fenced off. An unclosed
+# One "file:line:identifier" row per API reference in the pages named after the
+# first argument, skipping any passage a page fenced off. An unclosed
 # fence is an error: it would silently disable the check for the rest of the file.
 # ENDFILE is a gawk extension and the CI runner's awk is mawk, so the unclosed
 # check runs on the first line of the NEXT file and again at END.
+# The first argument is the space-separated base names a qualified reference may
+# use as its selector (see pkg_bases); an empty one extracts builder-shaped
+# names only.
 extract_refs() {
-	awk -v pkgbases="${PKG_BASES:-}" '
+	local bases=$1
+	shift
+	awk -v pkgbases="$bases" '
 		BEGIN {
 			nb = split(pkgbases, b, " ")
 			for (bi = 1; bi <= nb; bi++) pkgbase[b[bi]] = 1
@@ -375,8 +385,8 @@ extract_refs() {
 			# Any exported name a page qualifies with one of our package names,
 			# whatever its shape: `layout.Config`, `errors.ParseErrors`,
 			# `fluxcd.ModeSeparate`. The selector must be a whole identifier --
-			# not the tail of a longer one (`myfluxcd.X`) or of a longer selector
-			# chain (`cfg.layout.X`) -- and must be the base name of a package
+			# not preceded by an identifier character (`Xfluxcd.X`, `_fluxcd.X`)
+			# or a dot (`cfg.layout.X`) -- and must be the base name of a package
 			# under pkg/, so a selector from any other module names nothing
 			# here. A builder-shaped name is emitted by the loop above too; the
 			# caller sorts the rows unique, so it is checked once.
@@ -395,6 +405,14 @@ extract_refs() {
 		}
 		END { unclosed(); exit rc }
 	' "$@"
+}
+
+# The base name of every package directory in $pkgdirs, space-separated and
+# unique: the selectors extract_refs reads a qualified reference by. Two
+# packages sharing a base name (pkg/stack/fluxcd, pkg/kubernetes/fluxcd) give
+# one selector, and the resolver accepts a name either declares.
+pkg_bases() {
+	sed 's#.*/##' "$pkgdirs" | sort -u | tr '\n' ' ' | sed 's/ $//'
 }
 
 # The check is only worth its CI minute if it can go red, and every way it goes
@@ -662,18 +680,18 @@ plain.md:8:Create
 skipped.md:2:CreateGone
 skipped.md:4:CreateReal
 fenced.md:4:CreateReal'
-	got=$(extract_refs "$d/plain.md" "$d/skipped.md" "$d/fenced.md" | sed "s#^$d/##")
+	got=$(extract_refs "" "$d/plain.md" "$d/skipped.md" "$d/fenced.md" | sed "s#^$d/##")
 	if [ "$got" != "$want" ]; then
 		printf 'self-test: extraction mismatch\nwant:\n%s\ngot:\n%s\n' "$want" "$got" >&2
 		failures=$((failures + 1))
 	fi
 
-	if extract_refs "$d/unclosed.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/unclosed.md" >/dev/null 2>&1; then
 		printf 'self-test: an unclosed ignore-start did not fail\n' >&2
 		failures=$((failures + 1))
 	fi
 
-	if extract_refs "$d/typo.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/typo.md" >/dev/null 2>&1; then
 		printf 'self-test: a misspelled marker was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
@@ -681,60 +699,60 @@ fenced.md:4:CreateReal'
 	# The space before `-->` would satisfy a bare `ignore ` / `ignore-start `
 	# pattern, so a reason-less marker must be rejected explicitly rather than
 	# silently honoured.
-	if extract_refs "$d/noreason.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/noreason.md" >/dev/null 2>&1; then
 		printf 'self-test: a reason-less ignore was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
-	if extract_refs "$d/noreason-start.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/noreason-start.md" >/dev/null 2>&1; then
 		printf 'self-test: a reason-less ignore-start was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
 	# A close with nothing open swallows its own line, so accepting it silently
 	# would let the marker documented as suppressing nothing suppress something.
-	if extract_refs "$d/orphan-end.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/orphan-end.md" >/dev/null 2>&1; then
 		printf 'self-test: an unmatched ignore-end was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
-	if extract_refs "$d/reversed-fence.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/reversed-fence.md" >/dev/null 2>&1; then
 		printf 'self-test: a reversed one-line fence was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
 	# The single-line form has the same obligation, and no fence to close it: a
 	# terminator-less bare ignore still swallows its own line.
-	if extract_refs "$d/unterminated-ignore.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/unterminated-ignore.md" >/dev/null 2>&1; then
 		printf 'self-test: an unterminated ignore was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
 	# Nothing about the CreateGone between these two markers may reach the
 	# caller, and the run must fail: the opener is not a complete comment.
-	if extract_refs "$d/unterminated-start.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/unterminated-start.md" >/dev/null 2>&1; then
 		printf 'self-test: an unterminated ignore-start was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
-	if extract_refs "$d/nested-fence.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/nested-fence.md" >/dev/null 2>&1; then
 		printf 'self-test: a nested ignore-start was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
-	if extract_refs "$d/repeated-marker.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/repeated-marker.md" >/dev/null 2>&1; then
 		printf 'self-test: a repeated fence marker on one line was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
-	if extract_refs "$d/nested-comment-marker.md" >/dev/null 2>&1; then
+	if extract_refs "" "$d/nested-comment-marker.md" >/dev/null 2>&1; then
 		printf 'self-test: a marker containing a nested <!-- was accepted instead of reported\n' >&2
 		failures=$((failures + 1))
 	fi
 
 	local comarker
 	for comarker in ignore start end; do
-		if extract_refs "$d/comarker-$comarker.md" >/dev/null 2>&1; then
+		if extract_refs "" "$d/comarker-$comarker.md" >/dev/null 2>&1; then
 			printf 'self-test: a malformed marker sharing a line with a valid %s was accepted\n' "$comarker" >&2
 			failures=$((failures + 1))
 		fi
@@ -913,7 +931,7 @@ pkg/a Slice'
 	printf 'pkg/kubernetes\npkg/kubernetes/fluxcd\npkg/stack/argocd\npkg/stack/fluxcd\n' >"$pkgdirs"
 	printf 'AddCommand\n' >"$external"
 
-	extract_refs "$d/plain.md" | sort -u >"$referenced"
+	extract_refs "" "$d/plain.md" | sort -u >"$referenced"
 	local unresolved
 	# `pkgname` and `kube` name no package, so both fall back to the whole tree:
 	# CreateGone is nowhere in it, Create is.
@@ -931,7 +949,7 @@ plain.md:5:pkgname.CreateGone'
 	# removed from is the only one that fails. A flat name set passes all three.
 	# The fourth page pins the base-name collision -- a selector answered by the
 	# page's own package rather than by whichever package shares its name.
-	extract_refs "$d/docs/qualified.md" "$d/pkg/kubernetes/fluxcd/README.md" \
+	extract_refs "" "$d/docs/qualified.md" "$d/pkg/kubernetes/fluxcd/README.md" \
 		"$d/pkg/stack/fluxcd/README.md" "$d/pkg/stack/argocd/README.md" |
 		sort -u >"$referenced"
 	local want_scoped='docs/qualified.md:1:fluxcd.CreateLayoutWithResources
@@ -966,7 +984,7 @@ pkg/kubernetes/fluxcd/README.md:1:fluxcd.CreateElsewhere'
 		`WorkflowEngine.CreateOnlyInArgo` is argocd's; `WorkflowEngine.CreateOnEngine` is ours.
 		`Integrator.CreateOnIntegrator` is LayoutIntegrator's, not our Integrator's.
 	EOF
-	extract_refs "$d/docs/receiver.md" "$d/pkg/stack/fluxcd/engine.md" | sort -u >"$referenced"
+	extract_refs "" "$d/docs/receiver.md" "$d/pkg/stack/fluxcd/engine.md" | sort -u >"$referenced"
 	local want_receiver='docs/receiver.md:1:LayoutIntegrator.CreateOnEngine
 docs/receiver.md:2:Unknown.CreateGone
 docs/receiver.md:4:Integrator.CreateOnEngine
@@ -985,7 +1003,7 @@ pkg/stack/fluxcd/markerblock.go:5:CreateGoneFromDoc
 pkg/stack/fluxcd/markercode.go:5:CreateGoneFromDoc
 pkg/stack/fluxcd/markerplain.go:3:CreateGoneFromDoc
 pkg/stack/fluxcd/markerraw.go:7:CreateGoneFromDoc'
-	got=$(extract_refs "$d/pkg/stack/fluxcd/block.go" "$d/pkg/stack/fluxcd/doc.go" \
+	got=$(extract_refs "" "$d/pkg/stack/fluxcd/block.go" "$d/pkg/stack/fluxcd/doc.go" \
 		"$d/pkg/stack/fluxcd/markerblock.go" "$d/pkg/stack/fluxcd/markercode.go" \
 		"$d/pkg/stack/fluxcd/markercomment.go" "$d/pkg/stack/fluxcd/markerplain.go" \
 		"$d/pkg/stack/fluxcd/markerraw.go" |
@@ -1015,7 +1033,7 @@ SetGoneThing'
 	# including `CreateReal`, which the page recommends and the list omits.
 	LEDGER_LIST="$d/ledger.md"
 	collect_removed "$d/removed.txt" >"$removed"
-	extract_refs "$d/ledger.md" "$d/notledger.md" | sort -u >"$referenced"
+	extract_refs "" "$d/ledger.md" "$d/notledger.md" | sort -u >"$referenced"
 	local want_ledger='ledger.md:5:CreateGone
 ledger.md:7:CreateGone
 notledger.md:1:SetGoneThing'
@@ -1041,8 +1059,9 @@ notledger.md:1:SetGoneThing'
 	# declare fails, one it does resolves. Line 2: the standard library's
 	# errors and io names are allowed on the whole `pkg.Name`, while a name
 	# kure's own errors package lacks still fails. Line 3: a selector that is
-	# the tail of a longer identifier or of a selector chain, or that names no
-	# package under pkg/, extracts nothing. Line 4: a variable named like a
+	# preceded by an identifier character or a dot (`Xpkgx`, `_pkgx`,
+	# `cfg.pkgx`), or that names no package under pkg/ (`myerrors`, `pkgxy`),
+	# extracts nothing. Line 4: a variable named like a
 	# package is read as the package, so its field fails -- rename the
 	# variable. Line 5: a doc-example marker names a package path and a
 	# function with a space between them, so it extracts nothing either.
@@ -1050,7 +1069,7 @@ notledger.md:1:SetGoneThing'
 	cat >"$d/docs/qnames.md" <<-'EOF'
 		`pkgx.Missing` is gone; `pkgx.RealConst` is declared.
 		`errors.Is` and `io.Reader` are the standard library's; `errors.Wrap` is ours and `errors.Gone` is not.
-		`myerrors.Missing`, `cfg.pkgx.Missing` and `pkgxy.Missing` are not our selectors.
+		`myerrors.Missing`, `Xpkgx.Missing`, `_pkgx.Missing`, `cfg.pkgx.Missing` and `pkgxy.Missing` are not our selectors.
 		`pkgx := load(); pkgx.Children` names a field of a variable.
 		<!-- doc-example: pkg/pkgx ExampleRealConst -->
 	EOF
@@ -1061,7 +1080,14 @@ docs/qnames.md:2:errors.Is
 docs/qnames.md:2:errors.Wrap
 docs/qnames.md:2:io.Reader
 docs/qnames.md:4:pkgx.Children'
-	got=$(PKG_BASES="errors io pkgx" extract_refs "$d/docs/qnames.md" | sort | sed "s#^$d/##")
+	printf 'pkg/errors\npkg/io\npkg/pkgx\npkg/stack/pkgx\n' >"$pkgdirs"
+	local bases
+	bases=$(pkg_bases)
+	if [ "$bases" != "errors io pkgx" ]; then
+		printf 'self-test: pkg_bases gave %q, want "errors io pkgx"\n' "$bases" >&2
+		failures=$((failures + 1))
+	fi
+	got=$(extract_refs "$bases" "$d/docs/qnames.md" | sort | sed "s#^$d/##")
 	if [ "$got" != "$want_qextract" ]; then
 		printf 'self-test: qualified extraction mismatch\nwant:\n%s\ngot:\n%s\n' \
 			"$want_qextract" "$got" >&2
@@ -1069,9 +1095,8 @@ docs/qnames.md:4:pkgx.Children'
 	fi
 	printf 'pkg/errors Wrap -\npkg/pkgx RealConst -\n' >"$symbols"
 	: >"$types"
-	printf 'pkg/errors\npkg/io\npkg/pkgx\n' >"$pkgdirs"
 	printf 'errors.Is\nio.Reader\n' >"$external"
-	PKG_BASES="errors io pkgx" extract_refs "$d/docs/qnames.md" | sort -u >"$referenced"
+	extract_refs "$bases" "$d/docs/qnames.md" | sort -u >"$referenced"
 	local want_qnames='docs/qnames.md:1:pkgx.Missing
 docs/qnames.md:2:errors.Gone
 docs/qnames.md:4:pkgx.Children'
@@ -1514,8 +1539,12 @@ if [ "${1:-}" = "--list" ]; then
 	exit 0
 fi
 
-PKG_BASES=$(sed 's#.*/##' "$pkgdirs" | sort -u | tr '\n' ' ')
-extract_refs "${pages[@]}" | sort -u >"$referenced"
+bases=$(pkg_bases)
+if [ -z "$bases" ]; then
+	printf 'check-doc-api-refs: no package under pkg/ -- qualified references cannot be checked\n' >&2
+	exit 1
+fi
+extract_refs "$bases" "${pages[@]}" | sort -u >"$referenced"
 
 if unresolved=$(report_unresolved); then
 	printf 'Documentation names API that pkg/ does not export:\n\n' >&2

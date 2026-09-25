@@ -17,7 +17,9 @@ obj := certmanager.CreateCertificate("my-cert", "default")
 cl := certmanager.CreateClusterIssuer("letsencrypt-prod")
 ```
 
-There is no second construction path. <!-- doc-api-refs:ignore names the retired config-struct layer --> The config-struct layer this package used to carry (`certmanager.Certificate(&certmanager.CertificateConfig{...})`, `Issuer`, `ClusterIssuer`, and the sealed `IssuerVariant` / `ACMESolver` / `DNS01Provider` sums behind them) was retired by release 2 of the builder contract: it reached 5 of a `Certificate`'s 24 spec fields and 2 of an issuer's 5 arms, and a consumer could not add a Vault issuer or an Azure DNS solver even by hand. The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+There is no second construction path.
+The config-struct layer this package used to carry (`certmanager.Certificate(&certmanager.CertificateConfig{...})`, `Issuer`, `ClusterIssuer`, and the sealed `IssuerVariant` / `ACMESolver` / `DNS01Provider` sums behind them) was retired by release 2 of the builder contract: it reached 5 of a `Certificate`'s 24 spec fields and 2 of an issuer's 5 arms, and a consumer could not add a Vault issuer or an Azure DNS solver even by hand. <!-- doc-api-refs:ignore names the retired config-struct layer -->
+The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 

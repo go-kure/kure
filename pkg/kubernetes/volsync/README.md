@@ -18,7 +18,9 @@ Every kind this package registers has a generated `Create<Kind>` wrapper in `zz_
 obj := volsync.CreateReplicationSource("db-backup", "data")
 ```
 
-There is no second construction path. <!-- doc-api-refs:ignore names the retired config-struct layer --> The config-struct layer this package used to carry (`volsync.ReplicationSource(&volsync.ReplicationSourceConfig{...})`, `ReplicationDestination`, the `TriggerConfig` and the sealed `SourceMover` / `DestinationMover` sums with their nine defined-over-upstream mover types) was retired by release 2 of the builder contract: the movers were the upstream specs under another name, and the sealed interfaces walled off nothing the upstream struct did not already carry. The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
+There is no second construction path.
+The config-struct layer this package used to carry (`volsync.ReplicationSource(&volsync.ReplicationSourceConfig{...})`, `ReplicationDestination`, the `TriggerConfig` and the sealed `SourceMover` / `DestinationMover` sums with their nine defined-over-upstream mover types) was retired by release 2 of the builder contract: the movers were the upstream specs under another name, and the sealed interfaces walled off nothing the upstream struct did not already carry. <!-- doc-api-refs:ignore names the retired config-struct layer -->
+The [release 2 migration notes](/concepts/builder-contract-release-2/) map every removed field to the upstream field that replaces it. No hand-written `Create*` helper for a spec fragment remains either — a sub-type that is not a `client.Object` takes a struct literal, which is shorter and shows every field being set.
 
 The kinds this package registers, their scope, and what stated that scope are rows in the generated [Supported kinds and field maturity](/api-reference/api-tables/) tables. The sections below are worked examples, not the coverage list.
 
