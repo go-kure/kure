@@ -368,8 +368,8 @@ kustomize refuses one object twice. The builds are the root directory's, which t
 applies, and each generated Kustomization's `spec.path`. A build also covers the child
 directories its `kustomization.yaml` lists and the `AppFileSingle` files written into them. When
 the build already holds a copy that the integration did not add (an earlier integration's, the
-caller's or an application's), that copy is kept. Otherwise the topmost copy the integration
-added is kept, and the others in that build are not added: a `sourceRef` names the object, not
+caller's or an application's), that copy is kept. Otherwise the first copy the integration added,
+in depth-first layout order, is kept, and the others in that build are not added: a `sourceRef` names the object, not
 the layout holding it. Two copies the integration did not add, in one build, are refused. Copies
 in separate builds are all kept, each applied by its own build; both Kustomizations then own the
 Source (go-kure/kure#876). Kustomizations the caller or an application places are not builds

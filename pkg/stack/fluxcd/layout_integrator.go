@@ -432,7 +432,7 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 //
 // Per build and Source, a copy this pass did not place (an earlier
 // integration's, a caller's or an application's) is the one kept; otherwise
-// the first copy in layout pre-order, the topmost host. Every other copy this
+// the first copy in depth-first layout order. Every other copy this
 // pass placed in that build is removed: a sourceRef names the object, not the
 // layout holding it. Two copies this pass did not place cannot be reduced to
 // one, so they are an error. Copies in separate builds are all kept, each
