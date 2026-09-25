@@ -116,7 +116,7 @@ func TestIntegrate_SharedSourceOncePerBuild(t *testing.T) {
 		build func() *stack.Cluster
 		want  map[string]int
 	}{
-		// platform's build holds both hosts: one copy, in the topmost.
+		// platform's build holds both hosts: one copy, in the first.
 		{"issue873", issue873Tree, map[string]int{"platform": 1}},
 		{"siblings", siblingTree, map[string]int{"platform/groupA": 1}},
 		// Two builds: each keeps the copy it hosts.
@@ -192,7 +192,7 @@ func intMapsEqual(a, b map[string]int) bool {
 }
 
 // TestIntegrate_SharedSourceKeepsTheCallersDeeperCopy: the caller's copy is
-// kept even where it is not the topmost in the build; the integration drops
+// kept even where it is not the first in the build; the integration drops
 // its own copy instead, whichever layout it placed it in.
 func TestIntegrate_SharedSourceKeepsTheCallersDeeperCopy(t *testing.T) {
 	rules := propertyGroupings["nodeOnly"]
@@ -218,4 +218,33 @@ func TestIntegrate_SharedSourceKeepsTheCallersDeeperCopy(t *testing.T) {
 		}
 	}
 	checkEveryBuild(t, ml)
+}
+
+// TestIntegrate_SharedSourceInSingleFileApplicationCounts: an AppFileSingle
+// application's file is written into its parent's directory, so a copy it
+// holds is in the parent's build, and the integration keeps no copy of its own
+// there.
+func TestIntegrate_SharedSourceInSingleFileApplicationCounts(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
+		t.Run(string(placement), func(t *testing.T) {
+			src := sharedSource(t)
+			emitter := stack.NewApplication("api-src", "default", &fakeAppConfig{objs: []*client.Object{&src}})
+			web := &stack.Node{Name: "web", Bundle: sharedBundle("web")}
+			api := &stack.Node{Name: "api", Bundle: srBundle("api", emitter, cmApp("api-cm")), Children: []*stack.Node{web}}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{api}}}
+			rules := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName, FluxPlacement: placement}
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatal(err)
+			}
+			layoutAtPath(t, ml, "platform/api/api-src").ApplicationFileMode = layout.AppFileSingle
+			if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+				t.Fatal(err)
+			}
+			if got, want := sourceCopies(ml, "shared"), map[string]int{"platform/api/api-src": 1}; !intMapsEqual(got, want) {
+				t.Errorf("GitRepository shared hosted %v, want only the application's copy %v", got, want)
+			}
+			checkEveryBuild(t, ml)
+		})
+	}
 }
