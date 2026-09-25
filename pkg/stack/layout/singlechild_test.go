@@ -772,6 +772,21 @@ func TestWriters_RefuseSingleFileDirectoryClash(t *testing.T) {
 			},
 			want: `the directory of layout "p/default-configmap-a.yaml" would replace the resource file "default-configmap-a.yaml" of layout "p"`,
 		},
+		// Compared case-insensitively, as on default macOS volumes.
+		"directory layout's directory over the parent's resource file, other case": {
+			build: func() *layout.ManifestLayout {
+				return parent(cmLayout("Default-ConfigMap-A.yaml", "p"))
+			},
+			want: `the directory of layout "p/Default-ConfigMap-A.yaml" would replace the resource file "default-configmap-a.yaml" of layout "p"`,
+		},
+		// kustomization.yaml is the one kustomize control file the
+		// writers write.
+		"directory layout's directory over the parent's kustomization.yaml": {
+			build: func() *layout.ManifestLayout {
+				return parent(cmLayout("kustomization.yaml", "p"))
+			},
+			want: `the directory of layout "p/kustomization.yaml" would replace the kustomization.yaml of layout "p"`,
+		},
 	}
 	for name, tc := range cases {
 		for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
@@ -812,10 +827,69 @@ func TestWriters_SingleExtraFileInSubdirectory(t *testing.T) {
 	}
 }
 
+// TestWriters_DirectoryNamedLikeUnwrittenControlFile: the writers write
+// kustomization.yaml and no other kustomize control file, so a directory
+// named kustomization, Kustomization or kustomization.yml next to it clashes
+// with no written file, and every writer writes the tree.
+func TestWriters_DirectoryNamedLikeUnwrittenControlFile(t *testing.T) {
+	cases := map[string]struct {
+		build func() *layout.ManifestLayout
+		want  string // a file the writers must write
+	}{
+		"directory child kustomization": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children = []*layout.ManifestLayout{cmLayout("kustomization", "p")}
+				return p
+			},
+			want: "p/kustomization/kustomization.yaml",
+		},
+		"directory child Kustomization": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children = []*layout.ManifestLayout{cmLayout("Kustomization", "p")}
+				return p
+			},
+			want: "p/Kustomization/kustomization.yaml",
+		},
+		"directory child kustomization.yml": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children = []*layout.ManifestLayout{cmLayout("kustomization.yml", "p")}
+				return p
+			},
+			want: "p/kustomization.yml/kustomization.yaml",
+		},
+		"single layout's file in directory kustomization": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children = []*layout.ManifestLayout{singleLayout("s", "p/kustomization")}
+				return p
+			},
+			want: "p/kustomization/s.yaml",
+		},
+	}
+	for name, tc := range cases {
+		for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				files := writtenFiles(t, writer, layout.Config{}, tc.build())
+				if _, ok := files[tc.want]; !ok {
+					t.Errorf("no %s written; wrote %v", tc.want, slices.Sorted(maps.Keys(files)))
+				}
+				if _, ok := files["p/kustomization.yaml"]; !ok {
+					t.Errorf("no p/kustomization.yaml written; wrote %v", slices.Sorted(maps.Keys(files)))
+				}
+			})
+		}
+	}
+}
+
 // TestWriters_SingleExtraFileInChildDirectory: an AppFileSingle layout's
-// extra file may land inside the directory of a non-single layout below the
-// one it lands in. That directory's kustomization.yaml does not list it,
+// extra file may land inside the directory of a sibling directory layout,
+// its parent's child. That directory's kustomization.yaml does not list it,
 // which contradicts nothing the writers produce, so every writer writes it.
+// (A layout's own extra file inside its child's directory is refused; see
+// checkExtraFiles.)
 func TestWriters_SingleExtraFileInChildDirectory(t *testing.T) {
 	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
 		t.Run(writer, func(t *testing.T) {
