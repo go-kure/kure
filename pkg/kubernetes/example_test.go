@@ -187,7 +187,6 @@ func ExampleValidatePodSpecPSA() {
 	container := &corev1.Container{Name: "app", Image: "nginx:1.25", SecurityContext: kubernetes.RestrictedSecurityContext()}
 	podSpec := &corev1.PodSpec{Containers: []corev1.Container{*container}}
 
-	sc := kubernetes.RestrictedSecurityContext()
 	psc, err := kubernetes.PodSecurityContextForLevel(kubernetes.PSARestricted)
 	if err != nil {
 		panic(err)
@@ -195,7 +194,7 @@ func ExampleValidatePodSpecPSA() {
 	podSpec.SecurityContext = psc
 
 	err = kubernetes.ValidateContainerPSA(container, kubernetes.PSARestricted)
-	fmt.Println(*sc.RunAsNonRoot, err)
+	fmt.Println(*container.SecurityContext.RunAsNonRoot, err)
 	err = kubernetes.ValidatePodSpecPSA(podSpec, kubernetes.PSARestricted)
 	fmt.Println(err)
 	// Output:

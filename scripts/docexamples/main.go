@@ -22,12 +22,14 @@
 // generate replaces everything between a doc-example marker and its end
 // marker with the Example's body: the statements between its braces, less
 // one level of indentation, each remaining leading tab written as four
-// spaces, and without its `// Output:` comment or anything after it. A new
-// block is added by writing the two markers and running generate.
+// spaces, and without its output comment or anything after it. As in go
+// test, the output comment is the body's last comment, when it starts with
+// "Output:" or "Unordered output:" in any case. A new block is added by
+// writing the two markers and running generate.
 //
 // check changes nothing and fails when generate would change a page, or when
-// a page has a ```go block that is neither generated nor marked as an
-// excerpt. A marker line it does not recognise, an excerpt marker with no
+// a page has a ```go block (or ```golang, in any case) that is neither
+// generated nor marked as an excerpt. A marker line it does not recognise, an excerpt marker with no
 // reason or not directly above a ```go fence, a doc-example marker with no
 // end marker, and an Example that does not exist are errors in both modes.
 //
@@ -102,6 +104,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 var (
 	fenceRE   = regexp.MustCompile("^([ \t]*)(`{3,}|~{3,})[ \t]*([^ \t`]*)")
+	outputRE  = regexp.MustCompile(`(?i)^[[:space:]]*(unordered )?output:`) // go/doc's outputPrefix
 	exampleRE = regexp.MustCompile(`^<!-- doc-example: (\S+) (Example\S*) -->$`)
 	excerptRE = regexp.MustCompile(`^<!-- doc-example:excerpt(.*)-->$`)
 	endMarker = "<!-- doc-example:end -->"
@@ -124,8 +127,12 @@ func process(page string, src []byte, examples exampleCache) ([]byte, []string, 
 		trimmed := strings.TrimSpace(text)
 		if m := fenceRE.FindStringSubmatch(text); m != nil {
 			end := closingFence(lines, i, m[2])
-			if m[3] == "go" && !excerpted {
+			isGo := strings.EqualFold(m[3], "go") || strings.EqualFold(m[3], "golang")
+			switch {
+			case isGo && !excerpted:
 				report(i+1, "a ```go block that is neither generated nor marked <!-- doc-example:excerpt <reason> -->")
+			case !isGo && excerpted:
+				report(i, "an excerpt marker must be directly above a ```go fence")
 			}
 			excerpted = false
 			for ; i <= end && i < len(lines); i++ {
@@ -266,15 +273,16 @@ func parseExamples(dir string) (map[string][]string, error) {
 func exampleBody(fset *token.FileSet, src []byte, file *ast.File, body *ast.BlockStmt) []string {
 	start := fset.Position(body.Lbrace).Offset + 1
 	end := fset.Position(body.Rbrace).Offset
+	// go test reads the output from the body's last comment only, and
+	// matches its prefix in any case.
+	var last *ast.CommentGroup
 	for _, cg := range file.Comments {
-		if cg.Pos() < body.Lbrace || cg.End() > body.Rbrace {
-			continue
+		if cg.Pos() > body.Lbrace && cg.End() < body.Rbrace {
+			last = cg
 		}
-		text := strings.TrimSpace(cg.Text())
-		if strings.HasPrefix(text, "Output:") || strings.HasPrefix(text, "Unordered output:") {
-			end = fset.Position(cg.Pos()).Offset
-			break
-		}
+	}
+	if last != nil && outputRE.MatchString(last.Text()) {
+		end = fset.Position(last.Pos()).Offset
 	}
 	lines := strings.Split(string(src[start:end]), "\n")
 	for i, l := range lines {

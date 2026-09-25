@@ -29,6 +29,17 @@ func ExampleNew() {
 func ExampleOther() {
 	fmt.Println("other")
 }
+
+func ExampleLower() {
+	fmt.Println("x")
+	// output: x
+}
+
+func ExampleMid() {
+	// Output: of this call is logged.
+	fmt.Println("mid")
+	// go test reads only this last comment, which is not an output comment.
+}
 `
 
 const generatedNew = "```go\n" +
@@ -114,6 +125,23 @@ func TestGenerate_Indented(t *testing.T) {
 	}
 }
 
+// TestGenerate_OutputComment: the output comment is found as go test finds
+// it, the last comment in the body, in any case; an earlier comment that
+// starts with "Output:" is part of the body.
+func TestGenerate_OutputComment(t *testing.T) {
+	page := tree(t, "<!-- doc-example: pkg/x ExampleLower -->\n<!-- doc-example:end -->\n"+
+		"<!-- doc-example: pkg/x ExampleMid -->\n<!-- doc-example:end -->\n")
+	if code, stderr, _ := runMode(t, "generate", page); code != 0 {
+		t.Fatalf("generate: exit %d, stderr:\n%s", code, stderr)
+	}
+	after, _ := os.ReadFile(page)
+	want := "<!-- doc-example: pkg/x ExampleLower -->\n```go\nfmt.Println(\"x\")\n```\n<!-- doc-example:end -->\n" +
+		"<!-- doc-example: pkg/x ExampleMid -->\n```go\n// Output: of this call is logged.\nfmt.Println(\"mid\")\n// go test reads only this last comment, which is not an output comment.\n```\n<!-- doc-example:end -->\n"
+	if string(after) != want {
+		t.Fatalf("generated page:\n%s\nwant:\n%s", after, want)
+	}
+}
+
 // TestCheck_Failures: every way a page can drift from its Examples, or carry
 // a Go block nobody vouches for, fails check and names the line; check
 // writes nothing.
@@ -133,6 +161,18 @@ func TestCheck_Failures(t *testing.T) {
 		"excerpt marker without a reason": {
 			page: "<!-- doc-example:excerpt -->\n```go\nx := 1\n```\n",
 			want: "page.md:1: an excerpt marker needs a reason",
+		},
+		"unmarked golang block": {
+			page: "```golang\nx := 1\n```\n",
+			want: "page.md:1: a ```go block that is neither generated nor marked",
+		},
+		"unmarked Go block": {
+			page: "```Go\nx := 1\n```\n",
+			want: "page.md:1: a ```go block that is neither generated nor marked",
+		},
+		"excerpt marker above another language": {
+			page: "<!-- doc-example:excerpt shows a shell -->\n```bash\nls\n```\n",
+			want: "page.md:1: an excerpt marker must be directly above a ```go fence",
 		},
 		"excerpt marker not above a fence": {
 			page: "<!-- doc-example:excerpt shows a type -->\n\n```go\nx := 1\n```\n",

@@ -227,10 +227,12 @@ temporary branch — the merged result — before the PR is allowed to land.
   `--check`. On every page in the script's `ENABLED_PAGES` list, each ```` ```go ```` block is either
   generated from an `Example` function (between `<!-- doc-example: <pkgdir> <ExampleName> -->` and
   `<!-- doc-example:end -->`) or sits directly under `<!-- doc-example:excerpt <reason> -->`. The
-  generated block is the function body with its `// Output:` comment dropped, and `go test` runs
-  the function, so a snippet on an enabled page compiles and prints what its `Output` says. `--check`
-  fails on an unmarked block, an excerpt without a reason, a missing Example and a block that
-  drifted from its function; `scripts/gen-doc-examples.sh` with no argument rewrites the blocks.
+  generated block is the function body with its `// Output:` comment dropped, and the `test` job's
+  `go test` runs the function, so a snippet on an enabled page compiles and prints what its
+  `Output` says. `--check` fails on an unmarked block (`go` or `golang`, any case), an excerpt
+  without a reason or not directly above a ```` ```go ```` fence, a doc-example marker with no end
+  marker, an unrecognised marker, a missing Example and a block that drifted from its function;
+  `scripts/gen-doc-examples.sh` with no argument rewrites the blocks.
   The self-test is `go test ./scripts/docexamples`; `mise run site:check-doc-examples` runs both locally
 - **Site self-link check** - `docs-build` also runs `scripts/check-site-self-links.sh`
   (`mise run site:check-self-links` locally), which fails when a published page links to the docs
