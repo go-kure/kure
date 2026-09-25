@@ -183,7 +183,12 @@ What changed, and what to do:
   reference guessed from a child's name. A bundle-less node layout gets its own CR named
   `<path, "/" → "-">-node`.
 - **Refusals.** Two bundles with one name, a CR name used twice, a node or bundle layout written as
-  `AppFileSingle`, and a directory holding two objects with one identity are errors.
+  `AppFileSingle`, and a directory holding two objects with one identity are errors. So are a Flux
+  Kustomization inside a `List` that takes another Kustomization's identity (kustomize builds a
+  List's items); a Source identity (kind, namespace, name) defined with different content
+  anywhere in the pass, in another layout or at another API version; and, under `FluxSeparate`,
+  any Source already in the tree with the identity of one the integration generates into
+  `flux-system`, even an identical one.
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
   they used to take effect only when bundles and applications were both flat, and a `ClusterName`
   always flattened the root bundle. Combinations that were silently rendered fully nested now
