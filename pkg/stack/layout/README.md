@@ -54,10 +54,13 @@ checked.
 Nor may such a file need a directory where another layout writes a file, or be a file where
 another layout needs a directory (go-kure/kure#878): an extra file `default-configmap-a.yaml/v.yaml`
 next to the parent's `default-configmap-a.yaml`, an extra file `sub` where a child layout's
-directory `sub` is (or a directory below it), an extra file `x` of one `AppFileSingle` layout and
-`x/y.yaml` of another, or a file inside the directory of another, non-single layout below the one
-it lands in. Before this, `WriteToDisk` and `WriteManifest` failed partway with `not a directory`,
-and `WriteToTar` wrote an archive `tar` could not extract.
+directory `sub` is (or a directory below it), or an extra file `x` of one `AppFileSingle` layout
+and `x/y.yaml` of another. Nor may a layout's directory, including the one the writers create for
+an `AppFileSingle` layout without resources, be or lie beneath a file another layout writes.
+Before this, `WriteToDisk` and `WriteManifest` failed partway with `not a directory`, and
+`WriteToTar` wrote an archive `tar` could not extract. An extra file inside a child layout's
+directory (`sub/v.yaml` next to a directory child `sub`) is written; that directory's
+`kustomization.yaml` does not list it.
 Directories and file names are compared case-insensitively, as on default macOS volumes: a child
 named `Kustomization`, or `Default-ConfigMap-A`, is refused too.
 

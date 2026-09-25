@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
@@ -656,9 +657,11 @@ func singleLayout(name, ns string, extras ...string) *layout.ManifestLayout {
 // and extra files land in another layout's directory, so every writer
 // refuses one that needs a directory where another written path is a file,
 // or is a file where another written path needs a directory, before writing
-// anything (go-kure/kure#878). Without the refusal WriteToDisk and
+// anything (go-kure/kure#878); so, too, the directory the writers create for
+// a single layout without resources. Without the refusal WriteToDisk and
 // WriteManifest failed partway with "not a directory", and WriteToTar wrote
-// an archive tar could not extract.
+// an archive tar could not extract; names that differ only in case clash
+// that way only on a case-insensitive volume.
 func TestWriters_RefuseSingleFileDirectoryClash(t *testing.T) {
 	parent := func(children ...*layout.ManifestLayout) *layout.ManifestLayout {
 		p := singleChildParent(layout.AppFileSingle)
@@ -692,12 +695,6 @@ func TestWriters_RefuseSingleFileDirectoryClash(t *testing.T) {
 				return parent(singleLayout("svc", "p", "sub"), cmLayout("deeper", "p/sub"))
 			},
 			want: `layout "p/svc" is AppFileSingle and its extra file "sub" would take a directory that layout "p/sub/deeper" needs`,
-		},
-		"extra file inside the directory of a directory child": {
-			build: func() *layout.ManifestLayout {
-				return parent(singleLayout("svc", "p", "sub/v.yaml"), cmLayout("sub", "p"))
-			},
-			want: `layout "p/svc" is AppFileSingle and its extra file "sub/v.yaml" would land in the directory of layout "p/sub"`,
 		},
 		"extra file over the directory of a resourceless single layout": {
 			build: func() *layout.ManifestLayout {
@@ -739,6 +736,42 @@ func TestWriters_RefuseSingleFileDirectoryClash(t *testing.T) {
 			},
 			want: `layout "p/x" is AppFileSingle and its file "x.yaml" would take a directory that the extra file "x.yaml/v.yaml" of AppFileSingle layout "p/b" needs`,
 		},
+		// A single layout without resources writes no file, but the
+		// writers still create its directory.
+		"resourceless single layout's directory over the parent's resource file": {
+			build: func() *layout.ManifestLayout {
+				s := singleLayout("s", "p/default-configmap-a.yaml")
+				s.Resources = nil
+				return parent(s)
+			},
+			want: `the directory of layout "p/default-configmap-a.yaml/s" would replace the resource file "default-configmap-a.yaml" of layout "p"`,
+		},
+		"resourceless single layout's directory over a sibling's extra file": {
+			build: func() *layout.ManifestLayout {
+				c := cmLayout("c", "p")
+				c.ExtraFiles = []layout.ExtraFile{{Name: "sub", Content: []byte("k: v\n")}}
+				s := singleLayout("s", "p/c/sub")
+				s.Resources = nil
+				return parent(c, s)
+			},
+			want: `the directory of layout "p/c/sub/s" would replace the extra file "sub" of layout "p/c"`,
+		},
+		"resourceless single layout's directory beneath a sibling's extra file": {
+			build: func() *layout.ManifestLayout {
+				c := cmLayout("c", "p")
+				c.ExtraFiles = []layout.ExtraFile{{Name: "sub", Content: []byte("k: v\n")}}
+				s := singleLayout("s", "p/c/sub/deeper")
+				s.Resources = nil
+				return parent(c, s)
+			},
+			want: `the directory of layout "p/c/sub/deeper/s" would use the extra file "sub" of layout "p/c" as a directory`,
+		},
+		"directory layout's directory over the parent's resource file": {
+			build: func() *layout.ManifestLayout {
+				return parent(cmLayout("default-configmap-a.yaml", "p"))
+			},
+			want: `the directory of layout "p/default-configmap-a.yaml" would replace the resource file "default-configmap-a.yaml" of layout "p"`,
+		},
 	}
 	for name, tc := range cases {
 		for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
@@ -774,6 +807,89 @@ func TestWriters_SingleExtraFileInSubdirectory(t *testing.T) {
 			want := []string{"a.yaml", "default-configmap-a.yaml", "default-secret-b.yaml", "other", "svc.yaml"}
 			if got := listedResources(t, files, "p/kustomization.yaml"); !slices.Equal(got, want) {
 				t.Errorf("p/kustomization.yaml lists %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// TestWriters_SingleExtraFileInChildDirectory: an AppFileSingle layout's
+// extra file may land inside the directory of a non-single layout below the
+// one it lands in. That directory's kustomization.yaml does not list it,
+// which contradicts nothing the writers produce, so every writer writes it.
+func TestWriters_SingleExtraFileInChildDirectory(t *testing.T) {
+	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+		t.Run(writer, func(t *testing.T) {
+			p := singleChildParent(layout.AppFileSingle)
+			p.Children = []*layout.ManifestLayout{singleLayout("svc", "p", "sub/v.yaml"), cmLayout("sub", "p")}
+			files := writtenFiles(t, writer, layout.Config{}, p)
+			if files["p/sub/v.yaml"] != "k: v\n" {
+				t.Errorf("p/sub/v.yaml = %q, want the single layout's extra file; wrote %v", files["p/sub/v.yaml"], slices.Sorted(maps.Keys(files)))
+			}
+			if got, want := listedResources(t, files, "p/sub/kustomization.yaml"), []string{"default-configmap-sub.yaml"}; !slices.Equal(got, want) {
+				t.Errorf("p/sub/kustomization.yaml lists %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// TestWriteManifest_WalkedSingleAppExtraFileInChildNodeDirectory: the same
+// shape from a walked tree. Under ArgoProfile the root bundle's application
+// monitoring is AppFileSingle and lands in the root's directory, and its
+// augmenter's extra file monitoring/dash.yaml lands in the directory of the
+// root's child node monitoring. The tree is written.
+func TestWriteManifest_WalkedSingleAppExtraFileInChildNodeDirectory(t *testing.T) {
+	aug := &fakeAugmentingConfig{objs: []*client.Object{makeCM("mon")}, extraFileName: "monitoring/dash.yaml", cmgName: "dash"}
+	child := &stack.Node{Name: "monitoring", Bundle: &stack.Bundle{Name: "monitoring", Applications: []*stack.Application{
+		stack.NewApplication("agent", "ns", &fakeConfig{objs: []*client.Object{makeCM("agent")}}),
+	}}}
+	root := &stack.Node{Name: "root", Bundle: &stack.Bundle{Name: "root", Applications: []*stack.Application{
+		stack.NewApplication("monitoring", "ns", aug),
+	}}, Children: []*stack.Node{child}}
+	child.SetParent(root)
+	ml, err := layout.WalkCluster(&stack.Cluster{Name: "demo", Node: root}, layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatalf("walk cluster: %v", err)
+	}
+	files := writtenFiles(t, "WriteManifest", layout.DefaultConfigForProfile(layout.ArgoProfile), ml)
+	var dash string
+	for f := range files {
+		if strings.HasSuffix(f, "/monitoring/dash.yaml") {
+			dash = f
+		}
+	}
+	if dash == "" || files[dash] != "k: v\n" {
+		t.Fatalf("no monitoring/dash.yaml written with the augmenter's content; wrote %v", slices.Sorted(maps.Keys(files)))
+	}
+	kust := path.Join(path.Dir(dash), "kustomization.yaml")
+	if slices.Contains(listedResources(t, files, kust), "dash.yaml") {
+		t.Errorf("%s lists dash.yaml, the parent application's extra file", kust)
+	}
+}
+
+// TestWriters_SingleThroughConfigFollowsEachWritersPlan: a layout that is
+// AppFileSingle only through Config is single in WriteManifest, which refuses
+// its extra file beneath the parent's resource file, and a directory layout
+// in WriteToDisk and WriteToTar, which ignore Config and write the extra file
+// into its own directory. Each writer checks the tree against its own plan.
+func TestWriters_SingleThroughConfigFollowsEachWritersPlan(t *testing.T) {
+	cfg := layout.Config{ApplicationFileMode: layout.AppFileSingle}
+	build := func() *layout.ManifestLayout {
+		p := singleChildParent(layout.AppFileUnset)
+		p.Children[0].ExtraFiles = []layout.ExtraFile{{Name: "default-configmap-a.yaml/v.yaml", Content: []byte("k: v\n")}}
+		return p
+	}
+	t.Run("WriteManifest", func(t *testing.T) {
+		err := writeRefused(t, "WriteManifest", cfg, build())
+		want := `layout "p/svc" is AppFileSingle and its extra file "default-configmap-a.yaml/v.yaml" would use the resource file "default-configmap-a.yaml" of layout "p" as a directory`
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("err = %v, want a refusal naming %s", err, want)
+		}
+	})
+	for _, writer := range []string{"WriteToDisk", "WriteToTar"} {
+		t.Run(writer, func(t *testing.T) {
+			files := writtenFiles(t, writer, cfg, build())
+			if f := "p/svc/default-configmap-a.yaml/v.yaml"; files[f] != "k: v\n" {
+				t.Errorf("%s = %q, want the extra file in the layout's own directory; wrote %v", f, files[f], slices.Sorted(maps.Keys(files)))
 			}
 		})
 	}
