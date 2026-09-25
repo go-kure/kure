@@ -640,3 +640,141 @@ func TestWriters_ExtraFileRefusalNamesOneOwner(t *testing.T) {
 		}
 	}
 }
+
+// singleLayout is an AppFileSingle layout name in directory ns, with one
+// ConfigMap and the named extra files.
+func singleLayout(name, ns string, extras ...string) *layout.ManifestLayout {
+	l := cmLayout(name, ns)
+	l.ApplicationFileMode = layout.AppFileSingle
+	for _, e := range extras {
+		l.ExtraFiles = append(l.ExtraFiles, layout.ExtraFile{Name: e, Content: []byte("k: v\n")})
+	}
+	return l
+}
+
+// TestWriters_RefuseSingleFileDirectoryClash: an AppFileSingle layout's file
+// and extra files land in another layout's directory, so every writer
+// refuses one that needs a directory where another written path is a file,
+// or is a file where another written path needs a directory, before writing
+// anything (go-kure/kure#878). Without the refusal WriteToDisk and
+// WriteManifest failed partway with "not a directory", and WriteToTar wrote
+// an archive tar could not extract.
+func TestWriters_RefuseSingleFileDirectoryClash(t *testing.T) {
+	parent := func(children ...*layout.ManifestLayout) *layout.ManifestLayout {
+		p := singleChildParent(layout.AppFileSingle)
+		p.Children = children
+		return p
+	}
+	cases := map[string]struct {
+		build func() *layout.ManifestLayout
+		want  string
+	}{
+		"extra file beneath the parent's resource file": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("svc", "p", "default-configmap-a.yaml/v.yaml"))
+			},
+			want: `layout "p/svc" is AppFileSingle and its extra file "default-configmap-a.yaml/v.yaml" would use the resource file "default-configmap-a.yaml" of layout "p" as a directory`,
+		},
+		"extra file over the directory of a directory child": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("svc", "p", "sub"), cmLayout("sub", "p"))
+			},
+			want: `layout "p/svc" is AppFileSingle and its extra file "sub" would take the directory of layout "p/sub"`,
+		},
+		"extra file over the directory of a directory child, other case": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("svc", "p", "SUB"), cmLayout("sub", "p"))
+			},
+			want: `layout "p/svc" is AppFileSingle and its extra file "SUB" would take the directory of layout "p/sub"`,
+		},
+		"extra file above the directory of a directory child": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("svc", "p", "sub"), cmLayout("deeper", "p/sub"))
+			},
+			want: `layout "p/svc" is AppFileSingle and its extra file "sub" would take a directory that layout "p/sub/deeper" needs`,
+		},
+		"extra file inside the directory of a directory child": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("svc", "p", "sub/v.yaml"), cmLayout("sub", "p"))
+			},
+			want: `layout "p/svc" is AppFileSingle and its extra file "sub/v.yaml" would land in the directory of layout "p/sub"`,
+		},
+		"extra file over the directory of a resourceless single layout": {
+			build: func() *layout.ManifestLayout {
+				b := singleLayout("b", "p/sub")
+				b.Resources = nil
+				return parent(singleLayout("a", "p", "sub"), b)
+			},
+			want: `layout "p/a" is AppFileSingle and its extra file "sub" would take a directory that layout "p/sub/b" needs`,
+		},
+		"extra file over the directory of the parent's extra file": {
+			build: func() *layout.ManifestLayout {
+				p := parent(singleLayout("svc", "p", "sub"))
+				p.ExtraFiles = []layout.ExtraFile{{Name: "sub/v.yaml", Content: []byte("k: v\n")}}
+				return p
+			},
+			want: `layout "p/svc" is AppFileSingle and its extra file "sub" would take a directory that the extra file "sub/v.yaml" of layout "p" needs`,
+		},
+		"extra file beneath another single layout's extra file": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("a", "p", "x"), singleLayout("b", "p", "x/y.yaml"))
+			},
+			want: `layout "p/b" is AppFileSingle and its extra file "x/y.yaml" would use the extra file "x" of AppFileSingle layout "p/a" as a directory`,
+		},
+		"extra file over the directory of another single layout's extra file": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("a", "p", "x/y.yaml"), singleLayout("b", "p", "x"))
+			},
+			want: `layout "p/b" is AppFileSingle and its extra file "x" would take a directory that the extra file "x/y.yaml" of AppFileSingle layout "p/a" needs`,
+		},
+		"extra file beneath another single layout's file": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("x", "p"), singleLayout("b", "p", "x.yaml/v.yaml"))
+			},
+			want: `layout "p/b" is AppFileSingle and its extra file "x.yaml/v.yaml" would use the file "x.yaml" of AppFileSingle layout "p/x" as a directory`,
+		},
+		"file over the directory of another single layout's extra file": {
+			build: func() *layout.ManifestLayout {
+				return parent(singleLayout("b", "p", "x.yaml/v.yaml"), singleLayout("x", "p"))
+			},
+			want: `layout "p/x" is AppFileSingle and its file "x.yaml" would take a directory that the extra file "x.yaml/v.yaml" of AppFileSingle layout "p/b" needs`,
+		},
+	}
+	for name, tc := range cases {
+		for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				err := writeRefused(t, writer, layout.Config{}, tc.build())
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("err = %v, want a refusal naming %s", err, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// TestWriters_SingleExtraFileInSubdirectory: an AppFileSingle layout's extra
+// file in a subdirectory of the directory it lands in is written when no
+// other path there needs that subdirectory to be a file, or a file in it to
+// be a directory; two such layouts may share the subdirectory.
+func TestWriters_SingleExtraFileInSubdirectory(t *testing.T) {
+	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+		t.Run(writer, func(t *testing.T) {
+			p := singleChildParent(layout.AppFileSingle)
+			p.Children = []*layout.ManifestLayout{
+				singleLayout("svc", "p", "sub/v.yaml"),
+				singleLayout("a", "p", "sub/w.yaml"),
+				cmLayout("other", "p"),
+			}
+			files := writtenFiles(t, writer, layout.Config{}, p)
+			for _, f := range []string{"p/sub/v.yaml", "p/sub/w.yaml"} {
+				if files[f] != "k: v\n" {
+					t.Errorf("%s = %q, want the single layout's extra file; wrote %v", f, files[f], slices.Sorted(maps.Keys(files)))
+				}
+			}
+			want := []string{"a.yaml", "default-configmap-a.yaml", "default-secret-b.yaml", "other", "svc.yaml"}
+			if got := listedResources(t, files, "p/kustomization.yaml"); !slices.Equal(got, want) {
+				t.Errorf("p/kustomization.yaml lists %v, want %v", got, want)
+			}
+		})
+	}
+}

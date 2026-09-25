@@ -51,6 +51,13 @@ named like one of its parent's generated files (`default-configmap-a`, or `confi
 `kustomization`. A child with no resources writes no `<Name>.yaml`, so its name is never refused as
 replacing another file; its directory, which the writers still create, and its extra files are
 checked.
+Nor may such a file need a directory where another layout writes a file, or be a file where
+another layout needs a directory (go-kure/kure#878): an extra file `default-configmap-a.yaml/v.yaml`
+next to the parent's `default-configmap-a.yaml`, an extra file `sub` where a child layout's
+directory `sub` is (or a directory below it), an extra file `x` of one `AppFileSingle` layout and
+`x/y.yaml` of another, or a file inside the directory of another, non-single layout below the one
+it lands in. Before this, `WriteToDisk` and `WriteManifest` failed partway with `not a directory`,
+and `WriteToTar` wrote an archive `tar` could not extract.
 Directories and file names are compared case-insensitively, as on default macOS volumes: a child
 named `Kustomization`, or `Default-ConfigMap-A`, is refused too.
 
