@@ -46,9 +46,10 @@ import (
 // normDir compares them.
 func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 	type dirLayout struct {
-		l       *ManifestLayout
-		dir     string // normDir'ed
-		writesK bool
+		l        *ManifestLayout
+		dir      string // normDir'ed
+		writesK  bool
+		unlisted bool // its parent's kustomization.yaml would not list it
 	}
 	type file struct {
 		l        *ManifestLayout
@@ -78,7 +79,7 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 			for _, name := range names {
 				add(name, false, false)
 			}
-			dirs = append(dirs, dirLayout{l, normDir(dir), plan.writesKustomization(l, parent == nil)})
+			dirs = append(dirs, dirLayout{l, normDir(dir), plan.writesKustomization(l, parent == nil), parent != nil && plan.childEntry(parent, l) == ""})
 			if plan.kustomizationMode(l) == KustomizationRecursive {
 				if len(l.ConfigMapGenerators) > 0 {
 					return errors.NewFileError("write", dir, fmt.Sprintf(
@@ -126,9 +127,18 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 			return false
 		}
 		for _, t := range dirs {
-			if t.l.fluxBuild && below(d.dir, t.dir) && !shielded(t.dir, true) {
+			if !below(d.dir, t.dir) || shielded(t.dir, true) {
+				continue
+			}
+			switch {
+			case t.l.fluxBuild:
 				return errors.NewFileError("write", d.l.FullRepoPath(), fmt.Sprintf(
 					"the Flux build of KustomizationRecursive layout %q would include layout %q, which a Flux Kustomization kure generated builds as well: its objects would be applied twice", d.l.FullRepoPath(), t.l.FullRepoPath()), nil)
+			case t.unlisted:
+				// The Explicit mode leaves this directory out of the
+				// build (a child of another package); Flux scans it.
+				return errors.NewFileError("write", d.l.FullRepoPath(), fmt.Sprintf(
+					"the Flux build of KustomizationRecursive layout %q would include layout %q, which the Explicit mode does not list", d.l.FullRepoPath(), t.l.FullRepoPath()), nil)
 			}
 		}
 		for _, f := range files {
