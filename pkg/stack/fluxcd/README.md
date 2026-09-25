@@ -359,8 +359,9 @@ a generated CR elsewhere, is refused in every placement, since the kustomize bui
 the id twice. A generated Source has one definition across the whole pass: every Source of its
 identity — kind, namespace and name, whatever the API version (a `v1beta2` `GitRepository` is the
 same Source as the generated `v1` one) — anywhere in the tree, top-level or inside a `List`, and
-every Source the pass places in another layout, must have the same content, or the integration is
-refused. Under the integrated placements an identical Source is kept once per host layout: two
+every Source the pass places in another layout, must have the same API version and content, or the
+integration is refused. Content is compared as the objects' unstructured form, so a typed Source
+and an unstructured copy of it are the same. Under the integrated placements an identical Source is kept once per host layout: two
 layouts that each host it keep a copy each. Under `FluxSeparate` every generated Source goes into
 `flux-system`, which is built beside the rest of the tree, so a Source with a generated Source's
 identity anywhere else in the tree is refused even when it is identical.
