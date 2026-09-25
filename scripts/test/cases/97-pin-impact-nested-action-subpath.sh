@@ -1,7 +1,8 @@
 #!/bin/bash
 # Row 97 (go-kure/kure#731): nested (`actions/group/check`) and dotted
 # (`actions/check.v2`) action subpaths are discovered, resolved and pinned like
-# single-segment ones; a '.'/'..' segment in one is refused.
+# single-segment ones; a '.'/'..' segment in one is refused. pi_action_yml
+# climbs four `..` hops from the nested action to scripts/, as a real one must.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../pin-impact-lib.sh"
 

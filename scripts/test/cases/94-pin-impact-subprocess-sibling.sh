@@ -15,7 +15,9 @@ for call in \
     'bash "$SCRIPT_DIR/helper.sh"' \
     'sh "${SCRIPT_DIR}/helper.sh" --flag "$@"' \
     '"$SCRIPT_DIR/helper.sh" "$@"' \
-    'exec "$SCRIPT_DIR/helper.sh" >"$out"'; do
+    'exec "$SCRIPT_DIR/helper.sh" >"$out"' \
+    'bash "$SCRIPT_DIR/helper.sh" >/dev/null 2>&1' \
+    '"$SCRIPT_DIR/helper.sh" 2>&1 >&2 3>&-'; do
     pi_raw "$PI_NEW" scripts/check-a.sh "$(printf '#!/bin/bash\nSCRIPT_DIR="$(dirname "$0")"\n%s\n' "$call")"
     pi_run
     # The impact verdict itself, not merely a mention of the path: a failure to
