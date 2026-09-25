@@ -66,9 +66,11 @@ func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
 // that has children of its own. Such a child writes one file into its
 // parent's directory and no kustomization.yaml, so nothing would list the
 // layouts below it and they would silently drop out of the build
-// (go-kure/kure#860). The root is not checked: it has no parent directory to
-// write into, and the synthetic cluster wrapper a walker builds (no origin,
-// one child) takes Config's AppFileSingle in WriteManifest.
+// (go-kure/kure#860). The root is not checked: it writes a kustomization.yaml
+// of its own, into its Namespace, which lists its children there (so they
+// take the root's Namespace, not its FullRepoPath()); and the synthetic
+// cluster wrapper a walker builds (no origin, one child) takes Config's
+// AppFileSingle in WriteManifest.
 func checkSingleChildLeaf(child *ManifestLayout, outDir outDirFunc) error {
 	dir, single := outDir(child)
 	if !single || !slices.ContainsFunc(child.Children, func(c *ManifestLayout) bool { return c != nil }) {
