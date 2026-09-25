@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"sort"
 	"strings"
 	"time"
 
@@ -20,61 +19,23 @@ import (
 // a tree in which two layouts resolve to the same directory (see
 // checkLayoutTree) before writing any entry.
 func (ml *ManifestLayout) WriteToTar(w io.Writer) error {
-	if err := checkLayoutTree(ml, tarOutDir("")); err != nil {
+	plan := tarPlan("")
+	if err := checkLayoutTree(ml, plan); err != nil {
 		return err
 	}
 	tw := tar.NewWriter(w)
 	defer func() { _ = tw.Close() }()
-	return ml.writeToTarRecursive(tw, "", true)
+	return ml.writeToTarRecursive(tw, plan, true)
 }
 
 // writeToTarRecursive writes ml and its children as writeToDisk does; root
 // is false for a child, and an AppFileSingle child adds no
 // kustomization.yaml entry (a later entry for its parent's path would shadow
 // the parent's, go-kure/kure#860).
-func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, root bool) error {
-	fileMode := ml.FilePer
-	if fileMode == FilePerUnset {
-		fileMode = FilePerResource
-	}
-	appMode := ml.ApplicationFileMode
-	if appMode == AppFileUnset {
-		appMode = AppFilePerResource
-	}
-
-	outDir := tarOutDir(basePath)
-	fullPath, _ := outDir(ml)
-
-	nameFn := ml.resolveManifestFileName()
-
-	// Group resources into files
-	fileGroups := map[string][]client.Object{}
-	for _, obj := range ml.Resources {
-		ns := obj.GetNamespace()
-		if ns == "" {
-			ns = "cluster"
-		}
-
-		kind := strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind)
-		name := obj.GetName()
-
-		var fileName string
-		if appMode == AppFileSingle {
-			fileName = fmt.Sprintf("%s.yaml", ml.Name)
-		} else {
-			fileName = nameFn(ns, kind, name, fileMode)
-		}
-
-		fileGroups[fileName] = append(fileGroups[fileName], obj)
-	}
-
-	// Sort file names for deterministic output
-	sortedFileNames := make([]string, 0, len(fileGroups))
-	for fileName := range fileGroups {
-		sortedFileNames = append(sortedFileNames, fileName)
-	}
-	sort.Strings(sortedFileNames)
-	if err := checkExtraFiles(ml, outDir, sortedFileNames); err != nil {
+func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, plan writerPlan, root bool) error {
+	fullPath, _ := plan.outDir(ml)
+	sortedFileNames, fileGroups := plan.files(ml)
+	if err := checkExtraFiles(ml, plan.outDir, sortedFileNames); err != nil {
 		return err
 	}
 	// Added only after the check: the archive is a stream, so an entry for a
@@ -107,12 +68,9 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, r
 	}
 
 	// Write kustomization.yaml
-	kMode := ml.Mode
-	if kMode == KustomizationUnset {
-		kMode = KustomizationExplicit
-	}
+	kMode := plan.kustomizationMode(ml)
 
-	if appMode != AppFileSingle || (root && (len(fileGroups) > 0 || len(ml.Children) > 0)) {
+	if plan.writesKustomization(ml, root) {
 		var kustomBuf strings.Builder
 		kustomBuf.WriteString("apiVersion: kustomize.config.k8s.io/v1beta1\n")
 		kustomBuf.WriteString("kind: Kustomization\n")
@@ -188,7 +146,7 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, basePath string, r
 
 	// Recurse into children
 	for _, child := range ml.Children {
-		if err := child.writeToTarRecursive(tw, basePath, false); err != nil {
+		if err := child.writeToTarRecursive(tw, plan, false); err != nil {
 			return err
 		}
 	}

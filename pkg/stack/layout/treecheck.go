@@ -13,14 +13,16 @@ import (
 )
 
 // checkLayoutTree refuses a tree in which two layouts resolve to the same
-// directory (or, for AppFileSingle layouts, the same file), or an
-// AppFileSingle child has children (see checkSingleChildLeaf), before
-// anything is written (go-kure/kure#771). Each such layout writes its own files there,
+// directory (or, for AppFileSingle layouts, the same file), an AppFileSingle
+// child has children (see checkSingleChildLeaf), or an AppFileSingle layout's
+// file would replace another file in its directory (see checkSingleFiles),
+// before anything is written (go-kure/kure#771). Each such layout writes its own files there,
 // and the later kustomization.yaml silently replaces the earlier one, dropping
 // its resources from the kustomize graph. Directories are compared
-// case-insensitively, as on default macOS volumes. outDir is the writer's own
-// outDirFunc, so the check and the write agree on every path.
-func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
+// case-insensitively, as on default macOS volumes. plan is the writer's own,
+// so the check and the write agree on every path and file name.
+func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
+	outDir := plan.outDir
 	dirs := map[string]*ManifestLayout{}
 	files := map[string]*ManifestLayout{}
 	var walk func(l *ManifestLayout) error
@@ -59,7 +61,10 @@ func checkLayoutTree(root *ManifestLayout, outDir outDirFunc) error {
 		}
 		return nil
 	}
-	return walk(root)
+	if err := walk(root); err != nil {
+		return err
+	}
+	return checkSingleFiles(root, plan)
 }
 
 // checkSingleChildLeaf refuses an AppFileSingle child (as outDir treats it)

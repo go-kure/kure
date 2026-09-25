@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"sort"
-	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -31,10 +28,11 @@ func WriteManifest(basePath string, cfg Config, ml *ManifestLayout) error {
 	if err := checkOriginFileModes(ml, cfg); err != nil {
 		return err
 	}
-	if err := checkLayoutTree(ml, manifestOutDir(basePath, cfg)); err != nil {
+	plan := manifestPlan(basePath, cfg)
+	if err := checkLayoutTree(ml, plan); err != nil {
 		return err
 	}
-	return writeManifest(basePath, cfg, ml, true)
+	return writeManifest(plan, cfg, ml, true)
 }
 
 // manifestAppMode is the application file mode WriteManifest writes l with.
@@ -80,47 +78,11 @@ func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
 // synthetic cluster root. root is false for a child: an AppFileSingle child
 // writes its one file into its parent's directory, whose kustomization.yaml
 // the parent writes and which lists that file (go-kure/kure#860).
-func writeManifest(basePath string, cfg Config, ml *ManifestLayout, root bool) error {
-	manifestFileName := cfg.ResolveManifestFileName()
-	mode := ml.FilePer
-	if mode == FilePerUnset {
-		mode = cfg.FilePer
-	}
-	appMode := manifestAppMode(ml, cfg)
-	kMode := ml.Mode
-	if kMode == KustomizationUnset {
-		kMode = cfg.ResolveKustomizationMode(ml.FluxPlacement)
-	}
-
-	outDir := manifestOutDir(basePath, cfg)
-	fullPath, _ := outDir(ml)
-
-	fileGroups := map[string][]client.Object{}
-	for _, obj := range ml.Resources {
-		ns := obj.GetNamespace()
-		if ns == "" {
-			ns = "cluster"
-		}
-		kind := strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind)
-		name := obj.GetName()
-
-		var fileName string
-		if appMode == AppFileSingle {
-			fileName = fmt.Sprintf("%s.yaml", ml.Name)
-		} else {
-			fileName = manifestFileName(ns, kind, name, mode)
-		}
-
-		fileGroups[fileName] = append(fileGroups[fileName], obj)
-	}
-
-	// Sort file names for deterministic output
-	sortedFileNames := make([]string, 0, len(fileGroups))
-	for fileName := range fileGroups {
-		sortedFileNames = append(sortedFileNames, fileName)
-	}
-	sort.Strings(sortedFileNames)
-	if err := checkExtraFiles(ml, outDir, sortedFileNames); err != nil {
+func writeManifest(plan writerPlan, cfg Config, ml *ManifestLayout, root bool) error {
+	kMode := plan.kustomizationMode(ml)
+	fullPath, _ := plan.outDir(ml)
+	sortedFileNames, fileGroups := plan.files(ml)
+	if err := checkExtraFiles(ml, plan.outDir, sortedFileNames); err != nil {
 		return err
 	}
 	// Created only after the check, so a refused layout leaves nothing behind.
@@ -163,27 +125,12 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout, root bool) e
 		return err
 	}
 
-	// Skip the kustomization.yaml at the synthetic cluster root only when it
-	// has no resources of its own. The synthetic root is the cluster-name
-	// container created by walkClusterWithClusterName: Name="",
-	// single-segment Namespace. With FlattenSingleTier the root may absorb a
-	// collapsed child's Resources, in which case it does need a
-	// kustomization.yaml, and so does one that holds an AppFileSingle
-	// child's file (a child with no resources writes none).
-	skipClusterRoot := ml.Namespace != "" &&
-		strings.Count(ml.Namespace, string(filepath.Separator)) == 0 &&
-		ml.Name == "" &&
-		len(fileGroups) == 0 &&
-		!ml.rendersBundle() &&
-		!slices.ContainsFunc(ml.Children, func(c *ManifestLayout) bool {
-			return c != nil && manifestAppMode(c, cfg) == AppFileSingle && c.writesSingleFile()
-		})
-
-	// Generate kustomization.yaml if there are resources or children, except at the empty cluster root.
-	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow.
-	// An AppFileSingle child writes none: its file is in its parent's
-	// directory, and the parent's kustomization.yaml lists it.
-	if !skipClusterRoot && (appMode != AppFileSingle || (root && (len(fileGroups) > 0 || len(ml.Children) > 0))) {
+	// Generate kustomization.yaml if there are resources or children, except
+	// at the empty synthetic cluster root (see manifestPlan). Every directory
+	// with manifests should have a kustomization.yaml for proper GitOps
+	// workflow. An AppFileSingle child writes none: its file is in its
+	// parent's directory, and the parent's kustomization.yaml lists it.
+	if plan.writesKustomization(ml, root) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -275,7 +222,7 @@ func writeManifest(basePath string, cfg Config, ml *ManifestLayout, root bool) e
 	}
 
 	for _, child := range ml.Children {
-		if err := writeManifest(basePath, cfg, child, false); err != nil {
+		if err := writeManifest(plan, cfg, child, false); err != nil {
 			return err
 		}
 	}
