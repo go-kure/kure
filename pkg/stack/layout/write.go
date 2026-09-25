@@ -79,7 +79,6 @@ func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
 // writes its one file into its parent's directory, whose kustomization.yaml
 // the parent writes and which lists that file (go-kure/kure#860).
 func writeManifest(plan writerPlan, cfg Config, ml *ManifestLayout, root bool) error {
-	kMode := plan.kustomizationMode(ml)
 	fullPath, _ := plan.outDir(ml)
 	sortedFileNames, fileGroups := plan.files(ml)
 	if err := checkExtraFiles(ml, plan.outDir, sortedFileNames); err != nil {
@@ -160,50 +159,13 @@ func writeManifest(plan writerPlan, cfg Config, ml *ManifestLayout, root bool) e
 			writeStr(s)
 		}
 
-		// Every resource file in explicit mode or for a leaf; see
-		// listedResourceFiles for recursive mode.
-		for _, file := range listedResourceFiles(ml, kMode, sortedFileNames, fileGroups) {
+		for _, file := range sortedFileNames {
 			entry(fmt.Sprintf("  - %s\n", file))
 		}
-
-		// Add child references
 		for _, child := range ml.Children {
-			if child.UmbrellaChild {
-				// Umbrella children are not referenced from the parent
-				// kustomization.yaml's Children loop:
-				//   - FluxIntegratedPerLayout: the child's Kustomization CR is
-				//     already in ml.Resources (placed there by the
-				//     LayoutIntegrator), so the Resources loop above
-				//     emits the filename exactly once.
-				//   - FluxSeparate: the child is applied by its own CR
-				//     under flux-system/ with spec.path pointing directly
-				//     at the child subdir, so the parent must not
-				//     reference it at all.
-				// The sub-layout is still walked below to write its
-				// workloads + own kustomization.yaml.
-				continue
+			if e := plan.childEntry(ml, child); e != "" {
+				entry(fmt.Sprintf("  - %s\n", e))
 			}
-			if child.rendersBundle() {
-				// The child renders bundles, so it is a reconciliation unit:
-				// its own Flux Kustomization (or ArgoCD Application) applies
-				// it, and only that one. Listing it here too would apply its
-				// objects twice, under two owners, and put them in reach of
-				// this directory's patches.
-				continue
-			}
-			// The child's effective mode, as manifestOutDir writes it: a
-			// child with no mode of its own takes cfg's.
-			if manifestAppMode(child, cfg) == AppFileSingle {
-				if child.writesSingleFile() {
-					entry(fmt.Sprintf("  - %s.yaml\n", child.Name))
-				}
-			} else if ml.FluxPlacement != FluxIntegratedPerLayout {
-				entry(fmt.Sprintf("  - %s\n", child.Name))
-			}
-			// FluxIntegratedPerLayout: the child is applied by the Flux
-			// Kustomization the integrator placed in ml.Resources, which the
-			// resource list above already names. Nothing is guessed from the
-			// child's name.
 		}
 		if !listed {
 			writeStr("resources: []\n")

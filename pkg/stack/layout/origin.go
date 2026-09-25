@@ -58,7 +58,8 @@ func (ml *ManifestLayout) OriginApplication() *stack.Application { return ml.ori
 // directory. A Flux Kustomization or ArgoCD Application names that directory,
 // so the writers give it a kustomization.yaml even when it holds nothing
 // else: an empty directory does not survive a Git tree. (The same holds for
-// every child of a FluxIntegratedPerLayout layout; see writeToDisk.)
+// every child of a FluxIntegratedPerLayout layout; see writeToDisk. A
+// KustomizationRecursive layout gets none.)
 func (ml *ManifestLayout) rendersBundle() bool { return len(ml.origin.bundles) > 0 }
 
 func (ml *ManifestLayout) hasNodeOrBundleOrigin() bool {

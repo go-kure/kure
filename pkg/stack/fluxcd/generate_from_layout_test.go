@@ -923,45 +923,6 @@ func TestFluxSeparate_ClusterNamePathsResolve(t *testing.T) {
 	}
 }
 
-// setRecursive writes every layout that has children in KustomizationRecursive
-// mode, which lists child references instead of the layout's own files.
-func setRecursive(ml *layout.ManifestLayout) {
-	if len(ml.Children) > 0 {
-		ml.Mode = layout.KustomizationRecursive
-	}
-	for _, c := range ml.Children {
-		setRecursive(c)
-	}
-}
-
-// TestPerLayoutRecursive_AppliesGeneratedSources: in Recursive mode a
-// PerLayout layout lists the Flux objects it hosts in place of its child
-// references — the Sources generated for a URL-bearing SourceRef included, or
-// the Kustomization referencing them cannot reconcile.
-func TestPerLayoutRecursive_AppliesGeneratedSources(t *testing.T) {
-	for _, ref := range []*stack.SourceRef{
-		{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"},
-		{Kind: "OCIRepository", Name: "web-oci", Namespace: "flux-system", URL: "oci://example.com/web", Tag: "v1"},
-	} {
-		t.Run(ref.Kind, func(t *testing.T) {
-			web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: ref, Applications: []*stack.Application{cmApp("web-app")}}}
-			root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{web}}
-			rules := propertyGroupings["nodeOnly"]
-			rules.ClusterName = "prod"
-			rules.FluxPlacement = layout.FluxIntegratedPerLayout
-			ml := integrated(t, &stack.Cluster{Name: "demo", Node: root}, rules)
-			setRecursive(ml)
-			var dirs []string
-			for _, k := range kustomizations(ml) {
-				dirs = append(dirs, k.Spec.Path)
-			}
-			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, dirs)
-			}
-		})
-	}
-}
-
 // fluxKustomization returns an unstructured Flux Kustomization, as an
 // application or a caller may emit one.
 func fluxKustomization(name, path string) client.Object {

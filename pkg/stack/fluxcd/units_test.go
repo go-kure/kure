@@ -806,31 +806,6 @@ func TestIntegrateWithLayout_PlacementIsTheIntegrations(t *testing.T) {
 	}
 }
 
-// TestRecursive_HostedFluxObjectsListedInEveryPlacement: in Recursive mode a
-// layout with children lists the Flux objects it hosts, whatever the
-// placement, or the CR it hosts is never applied.
-func TestRecursive_HostedFluxObjectsListedInEveryPlacement(t *testing.T) {
-	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
-		t.Run(string(placement), func(t *testing.T) {
-			web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
-			root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{web}}
-			web.SetParent(root)
-			rules := propertyGroupings["nodeOnly"]
-			rules.ClusterName = "prod"
-			rules.FluxPlacement = placement
-			ml := integrated(t, &stack.Cluster{Name: "demo", Node: root}, rules)
-			setRecursive(ml)
-			var dirs []string
-			for _, k := range kustomizations(ml) {
-				dirs = append(dirs, k.Spec.Path)
-			}
-			for writer, w := range writeAll(t, ml) {
-				checkWrittenTree(t, writer, w, dirs)
-			}
-		})
-	}
-}
-
 // TestGenerateFromLayout_URLlessSourceRefComparesWhatIsEmitted: a SourceRef
 // without a URL emits only kind, name and namespace, so merged bundles that
 // differ only in a ref field nothing emits share one unit.

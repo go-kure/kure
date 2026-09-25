@@ -270,29 +270,19 @@ func TestWriteManifest_KustomizationRecursive(t *testing.T) {
 		t.Fatalf("WriteManifest failed: %v", err)
 	}
 
-	parentK := filepath.Join(dir, "clusters", "cl", "ns", "parent", "kustomization.yaml")
-	data, err := os.ReadFile(parentK)
-	if err != nil {
-		t.Fatalf("read parent kustomization: %v", err)
+	// Recursive mode (go-kure/kure#868): every file except
+	// kustomization.yaml, in the parent and in the child, whose mode Config
+	// resolves to Recursive too.
+	base := filepath.Join(dir, "clusters", "cl", "ns", "parent")
+	for _, f := range []string{"ns-configmap-cfg.yaml", filepath.Join("child", "ns-secret-s1.yaml")} {
+		if _, err := os.Stat(filepath.Join(base, f)); err != nil {
+			t.Errorf("expected %s: %v", f, err)
+		}
 	}
-
-	content := string(data)
-	// Recursive mode with children: parent kustomization references child dirs, NOT resource files.
-	if strings.Contains(content, "ns-configmap-cfg.yaml") {
-		t.Errorf("recursive kustomization should NOT list resource files when children exist, got:\n%s", content)
-	}
-	if !strings.Contains(content, "child") {
-		t.Errorf("recursive kustomization missing child directory reference, got:\n%s", content)
-	}
-
-	// Child (leaf) kustomization SHOULD list its own files.
-	childK := filepath.Join(dir, "clusters", "cl", "ns", "parent", "child", "kustomization.yaml")
-	childData, err := os.ReadFile(childK)
-	if err != nil {
-		t.Fatalf("read child kustomization: %v", err)
-	}
-	if !strings.Contains(string(childData), "ns-secret-s1.yaml") {
-		t.Errorf("child leaf kustomization should list its files, got:\n%s", childData)
+	for _, f := range []string{"kustomization.yaml", filepath.Join("child", "kustomization.yaml")} {
+		if _, err := os.Stat(filepath.Join(base, f)); !os.IsNotExist(err) {
+			t.Errorf("recursive layout got %s (stat: %v)", f, err)
+		}
 	}
 }
 
@@ -774,21 +764,19 @@ func TestWriteManifest_FluxKustomizationMode_PerPlacement(t *testing.T) {
 		t.Fatalf("WriteManifest failed: %v", err)
 	}
 
-	// Root's kustomization should NOT list its own resource files (recursive mode)
-	rootK := filepath.Join(dir, "clusters", "cl", "ns", "root", "kustomization.yaml")
-	data, err := os.ReadFile(rootK)
-	if err != nil {
-		t.Fatalf("read root kustomization: %v", err)
+	// The root's mode resolves to Recursive for its placement: its files,
+	// the child's Flux Kustomization among them, and no kustomization.yaml.
+	rootDir := filepath.Join(dir, "clusters", "cl", "ns", "root")
+	for _, f := range []string{"ns-configmap-root-cfg.yaml", "flux-system-kustomization-team-a.yaml"} {
+		if _, err := os.Stat(filepath.Join(rootDir, f)); err != nil {
+			t.Errorf("expected %s: %v", f, err)
+		}
 	}
-	content := string(data)
-	if strings.Contains(content, "ns-configmap-root-cfg.yaml") {
-		t.Errorf("recursive mode should NOT list resource files when children exist, got:\n%s", content)
-	}
-	// Should still reference child via flux kustomization reference
-	if !strings.Contains(content, "flux-system-kustomization-team-a.yaml") {
-		t.Errorf("expected flux kustomization reference for team-a, got:\n%s", content)
+	if _, err := os.Stat(filepath.Join(rootDir, "kustomization.yaml")); !os.IsNotExist(err) {
+		t.Errorf("recursive root got a kustomization.yaml (stat: %v)", err)
 	}
 
+	// The child has no placement of its own, so it keeps Config's Explicit mode
 	// Child (leaf) kustomization should list its own files regardless of parent mode
 	childK := filepath.Join(dir, "clusters", "cl", "ns", "root", "team-a", "kustomization.yaml")
 	childData, err := os.ReadFile(childK)
