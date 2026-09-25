@@ -142,6 +142,7 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 	// included: kustomization.yaml does not list them, but the writers still
 	// write them).
 	childDirs := map[string]string{} // lower-cased directory relative to base -> child name
+	neededDirs := map[string]string{}
 	for _, child := range ml.Children {
 		if child == nil {
 			continue
@@ -150,10 +151,16 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 		if single {
 			// The file is joined onto the child's directory as the writer
 			// joins it, then made relative to base. A child without
-			// resources writes no file.
+			// resources writes no file, but the writers still create its
+			// directory, so that directory is reserved either way.
 			file := normDir(path.Join(filepath.ToSlash(dir), child.Name+".yaml"))
 			if rel, ok := relativeTo(base, file); ok && rel != "." && child.writesSingleFile() {
 				taken[rel] = fmt.Sprintf("the child file %q", rel)
+			}
+			if rel, ok := relativeTo(base, normDir(dir)); ok && rel != "." {
+				for d := rel; d != "." && d != "/"; d = path.Dir(d) {
+					neededDirs[d] = fmt.Sprintf("child layout %q", child.Name)
+				}
 			}
 			continue
 		}
@@ -164,10 +171,7 @@ func checkExtraFiles(ml *ManifestLayout, outDir outDirFunc, resourceFiles []stri
 
 	// Every directory a reserved file sits in (a generated name in a
 	// subdirectory, an AppFileSingle child written below ml's directory) must
-	// stay a directory, so no extra may be a file there. With no ".." in a
-	// child's Name, a single-file child's file always lies below its own
-	// directory, so this also reserves that directory.
-	neededDirs := map[string]string{}
+	// stay a directory, so no extra may be a file there.
 	for p, what := range taken {
 		for d := path.Dir(p); d != "." && d != "/"; d = path.Dir(d) {
 			neededDirs[d] = what

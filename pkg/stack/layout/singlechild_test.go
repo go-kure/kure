@@ -603,3 +603,22 @@ func TestWriters_ResourcelessSingleChildNamedLikeParentFile(t *testing.T) {
 		})
 	}
 }
+
+// TestWriters_RefuseExtraFileOverResourcelessSingleChildDir: the writers
+// create an AppFileSingle child's directory even when the child writes no
+// file, so a parent's extra file at that path is refused before anything is
+// written.
+func TestWriters_RefuseExtraFileOverResourcelessSingleChildDir(t *testing.T) {
+	for _, writer := range []string{"WriteToDisk", "WriteToTar", "WriteManifest"} {
+		t.Run(writer, func(t *testing.T) {
+			p := singleChildParent(layout.AppFileSingle)
+			p.Children[0].Resources = nil
+			p.Children[0].Namespace = "p/sub"
+			p.ExtraFiles = []layout.ExtraFile{{Name: "sub", Content: []byte("k: v\n")}}
+			err := writeRefused(t, writer, layout.Config{}, p)
+			if err == nil || !strings.Contains(err.Error(), `extra file "sub" would take a directory that child layout "svc" needs`) {
+				t.Errorf("got %v, want the extra file refused for the child's directory", err)
+			}
+		})
+	}
+}
