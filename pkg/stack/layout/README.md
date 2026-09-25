@@ -181,7 +181,11 @@ Controls how resource YAML files are named:
   - a resource file whose name does not end in `.yaml` or `.yml` (only a `Config.ManifestFileName`
     can produce one): Flux would skip it, where Explicit mode lists it;
   - the file of an `AppFileSingle` umbrella child, or of one that renders bundles, in its build:
-    Flux would apply it, where Explicit mode leaves it to the child's own Kustomization.
+    Flux would apply it, where Explicit mode leaves it to the child's own Kustomization;
+  - a child directory its parent's `kustomization.yaml` would not list, in its build: under
+    `WriteToDisk` and `WriteToTar`, a child of another package (`PackageRef`). Flux would apply
+    it, where Explicit mode leaves it out. `WriteManifest` lists such a child, so it is accepted
+    there.
 
   So Recursive fits a generated target with no other target below it: a leaf bundle directory,
   or a GroupByName bundle directory over the application directories it lists, plus any unmarked

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -233,6 +234,31 @@ func TestWriters_RecursiveRefusesUnlistedSingleChildFile(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
 		}
+	}
+}
+
+// TestWriters_RecursiveRefusesUnlistedChildDirectory: WriteToDisk and
+// WriteToTar do not list a child directory of another package, but write it
+// below its parent. The Flux build of a marked Recursive parent would apply
+// it, and the Explicit mode would not. WriteManifest lists that child, so the
+// two builds agree there.
+func TestWriters_RecursiveRefusesUnlistedChildDirectory(t *testing.T) {
+	tree := func() *layout.ManifestLayout {
+		r := recursiveTree()
+		r.SetFluxBuild(true)
+		r.PackageRef = &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "OCIRepository"}
+		r.Children[0].PackageRef = &schema.GroupVersionKind{Group: "source.toolkit.fluxcd.io", Version: "v1", Kind: "GitRepository"}
+		return r
+	}
+	for _, writer := range []string{"WriteToDisk", "WriteToTar"} {
+		err := writeRefused(t, writer, layout.DefaultLayoutConfig(), tree())
+		want := `the Flux build of KustomizationRecursive layout "r" would include layout "r/c", which the Explicit mode does not list`
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
+		}
+	}
+	if err := layout.WriteManifest(t.TempDir(), layout.DefaultLayoutConfig(), tree()); err != nil {
+		t.Errorf("WriteManifest: %v, want the listed child accepted", err)
 	}
 }
 
