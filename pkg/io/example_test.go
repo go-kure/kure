@@ -214,11 +214,6 @@ func ExampleNewResourcePrinter() {
 		panic(err)
 	}
 
-	// Print as table
-	if err := io.PrintObjectsAsTable(objects, false, false, os.Stdout); err != nil {
-		panic(err)
-	}
-
 	// Use ResourcePrinter for configurable output
 	printer := io.NewResourcePrinter(io.PrintOptions{
 		OutputFormat: io.OutputFormatTable,
@@ -246,8 +241,6 @@ func ExampleNewResourcePrinter() {
 	//     app: web
 	//   name: app-config
 	//   namespace: default
-	// NAMESPACE  NAME        READY    AGE
-	// default    app-config  Unknown  106752d
 	// NAMESPACE   NAME         AGE         LABELS
 	// default     app-config   <unknown>   app=web
 	// configmap/app-config (namespace: default)

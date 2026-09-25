@@ -176,7 +176,7 @@ fmt.Print(string(yamlData))
 
 ### Server-Set Field Stripping
 
-By default, encoding strips server-managed metadata fields that should not appear in client-generated manifests: `managedFields`, `resourceVersion`, `uid`, `generation`, `selfLink`, the `kubectl.kubernetes.io/last-applied-configuration` annotation, null `creationTimestamp`, and empty `status`.
+By default, YAML encoding (`EncodeObjectsToYAML`, `EncodeObjectsToYAMLWithOptions`) strips server-managed metadata fields that should not appear in client-generated manifests: `managedFields`, `resourceVersion`, `uid`, `generation`, `selfLink`, the `kubectl.kubernetes.io/last-applied-configuration` annotation, null `creationTimestamp`, and empty `status`.
 
 The example encodes one Service at each stripping level and reports whether its
 `resourceVersion` and its empty `status` survived:
@@ -213,7 +213,7 @@ for _, opts := range []io.EncodeOptions{
 
 ### Output Formats
 
-The package supports kubectl-compatible output formats:
+The package supports these output formats, named as kubectl names them:
 
 | Format | Constant | Description |
 |--------|----------|-------------|
@@ -221,12 +221,14 @@ The package supports kubectl-compatible output formats:
 | JSON | `OutputFormatJSON` | Full JSON output |
 | Table | `OutputFormatTable` | Columnar table view |
 | Wide | `OutputFormatWide` | Extended table with extra columns |
-| Name | `OutputFormatName` | Resource names only |
+| Name | `OutputFormatName` | `kind[.group]/name`, with ` (namespace: <ns>)` appended for a namespaced object |
 
 ### Usage
 
-`ValidateOutputFormat` turns a user-supplied string into an `OutputFormat`, and fails on one it
-does not know:
+The example prints one ConfigMap three ways: as YAML, as a table through a `ResourcePrinter`
+(`ShowLabels` adds the `LABELS` column), and in the format a user-supplied string names.
+`ValidateOutputFormat` turns that string into an `OutputFormat`, and fails on one it does not
+know. `PrintObjectsAsTable` prints a table directly, without a `ResourcePrinter`.
 
 <!-- doc-example: pkg/io ExampleNewResourcePrinter -->
 ```go
@@ -237,11 +239,6 @@ objects := []*client.Object{&obj}
 
 // Print as YAML to stdout
 if err := io.PrintObjectsAsYAML(objects, os.Stdout); err != nil {
-    panic(err)
-}
-
-// Print as table
-if err := io.PrintObjectsAsTable(objects, false, false, os.Stdout); err != nil {
     panic(err)
 }
 

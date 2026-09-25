@@ -44,6 +44,20 @@ func exampleCluster() *stack.Cluster {
 	return cluster
 }
 
+// printFiles prints every file below dir, relative to it.
+func printFiles(dir string) {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(dir, path)
+			fmt.Println(rel)
+		}
+		return err
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
 func Example() {
 	cluster := exampleCluster()
 	dir, err := os.MkdirTemp("", "kure-argocd-example")
@@ -64,17 +78,7 @@ func Example() {
 	if err := ml.WriteToDisk(filepath.Join(dir, "clusters/prod")); err != nil {
 		panic(err)
 	}
-
-	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			rel, _ := filepath.Rel(dir, path)
-			fmt.Println(rel)
-		}
-		return err
-	})
-	if err != nil {
-		panic(err)
-	}
+	printFiles(dir)
 	// Output:
 	// clusters/prod/apps/argocd/argocd-application-web.yaml
 	// clusters/prod/apps/argocd/kustomization.yaml

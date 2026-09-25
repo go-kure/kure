@@ -17,11 +17,11 @@ import (
 
 Every other Go block on this page is the body of an `Example` function in `example_test.go`,
 which `go test` runs: it imports this package as `argocd`, `stack` and `layout` as above,
-`k8s.io/apimachinery/pkg/apis/meta/v1/unstructured`, `io/fs`, `os`, `path/filepath`, and `fmt`
-for the lines that print what the example built. `exampleCluster()`, declared in the same file,
-builds a cluster whose one node `apps` holds one bundle `web` with one application, which emits a
-ConfigMap through `github.com/go-kure/kure/pkg/kubernetes` and
-`sigs.k8s.io/controller-runtime/pkg/client`.
+`k8s.io/apimachinery/pkg/apis/meta/v1/unstructured`, `os`, `path/filepath`, and `fmt`
+for the lines that print what the example built. Two helpers are declared in the same file:
+`exampleCluster()` builds a cluster whose one node `apps` holds one bundle `web` with one
+application, which emits a ConfigMap through `github.com/go-kure/kure/pkg/kubernetes` and
+`sigs.k8s.io/controller-runtime/pkg/client`; `printFiles(dir)` prints every file below `dir`.
 
 <!-- doc-example: pkg/stack/argocd Example -->
 ```go
@@ -44,17 +44,7 @@ if err != nil {
 if err := ml.WriteToDisk(filepath.Join(dir, "clusters/prod")); err != nil {
     panic(err)
 }
-
-err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-    if err == nil && !d.IsDir() {
-        rel, _ := filepath.Rel(dir, path)
-        fmt.Println(rel)
-    }
-    return err
-})
-if err != nil {
-    panic(err)
-}
+printFiles(dir)
 ```
 <!-- doc-example:end -->
 
