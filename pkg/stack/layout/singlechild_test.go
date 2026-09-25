@@ -622,3 +622,21 @@ func TestWriters_RefuseExtraFileOverResourcelessSingleChildDir(t *testing.T) {
 		})
 	}
 }
+
+// TestWriters_ExtraFileRefusalNamesOneOwner: when several files need the
+// directory an extra file would take, the refusal names the same one every
+// time.
+func TestWriters_ExtraFileRefusalNamesOneOwner(t *testing.T) {
+	for range 50 {
+		p := singleChildParent(layout.AppFileSingle)
+		p.Children[0].Namespace = "p/sub"
+		second := *p.Children[0]
+		second.Name = "svc2"
+		p.Children = append(p.Children, &second)
+		p.ExtraFiles = []layout.ExtraFile{{Name: "sub", Content: []byte("k: v\n")}}
+		err := writeRefused(t, "WriteToTar", layout.Config{}, p)
+		if err == nil || !strings.Contains(err.Error(), `extra file "sub" would take a directory that the child file "sub/svc.yaml" needs`) {
+			t.Fatalf("got %v, want the refusal to name the first file in path order", err)
+		}
+	}
+}
