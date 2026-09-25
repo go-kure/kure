@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -239,6 +241,17 @@ type integratedPlacement struct {
 	// generated is the namespace/name of every Kustomization this pass
 	// placed: the reconcile-order check covers these.
 	generated map[string]bool
+	// sources maps every Flux Source identity (sourceKey) in the tree — there
+	// before this pass or placed by it — to each copy and the layout holding
+	// it: one identity is one object across the whole pass, not per host.
+	sources map[string][]hostedObject
+}
+
+// hostedObject is an object and the layout whose Resources hold it (directly
+// or inside a List).
+type hostedObject struct {
+	host *layout.ManifestLayout
+	obj  client.Object
 }
 
 // existingCR is a Kustomization found in the tree before this pass.
@@ -285,6 +298,11 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 		return err
 	}
 	p.existing = existing
+	sources, err := indexExistingSources(ml, nil)
+	if err != nil {
+		return err
+	}
+	p.sources = sources
 	if err := p.place(ml, sourceScope{}); err != nil {
 		return err
 	}
@@ -607,8 +625,10 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 // add appends objs to host.Resources. A Kustomization whose name this pass
 // already emitted is an identity collision; one already present in host with
 // the same spec.path is kept (a repeated integration adds nothing), with
-// another spec.path it is an error. An identical Source already present is
-// kept; a different one with its identity is an error.
+// another spec.path it is an error. A Source is checked against every Source
+// with its identity (kind, namespace, name, whatever the API version) anywhere
+// in the tree, and every one this pass placed: a different one is an error,
+// wherever it sits; an identical one in host is kept once.
 func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object) error {
 	for _, obj := range objs {
 		if k, ok := obj.(*kustv1.Kustomization); ok {
@@ -622,14 +642,23 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 				}
 				return errors.Errorf("layout %q already has Flux Kustomization %q with spec.path %q; this integration derives %q in layout %q", e.host.FullRepoPath(), k.Name, e.path, k.Spec.Path, host.FullRepoPath())
 			}
-		} else if same := findObject(host.Resources, obj); same != nil {
+		} else if key, ok := sourceKey(obj); ok {
 			// One identity, one object: an identical Source (a repeated
-			// integration, or two bundles sharing a SourceRef) is kept once;
-			// a different one would silently repoint a Kustomization.
-			if sameObject(same, obj) {
+			// integration, or two bundles sharing a SourceRef) is kept once
+			// per host; a different one anywhere in the pass would silently
+			// repoint a Kustomization, or leave two directories overwriting
+			// each other's Source.
+			kept := false
+			for _, s := range p.sources[key] {
+				if !sameObject(s.obj, obj) {
+					return errors.Errorf("layout %q already has %s %q (%s) with different content than the one this integration derives in layout %q: one Source identity must have one definition", s.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), s.obj.GetObjectKind().GroupVersionKind().GroupVersion(), host.FullRepoPath())
+				}
+				kept = kept || s.host == host
+			}
+			if kept {
 				continue
 			}
-			return errors.Errorf("layout %q already has %s %q with different content: two SourceRefs name one Source differently", host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+			p.sources[key] = append(p.sources[key], hostedObject{host: host, obj: obj})
 		}
 		host.Resources = append(host.Resources, obj)
 	}
@@ -639,7 +668,8 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 // indexExistingKustomizations records every Flux Kustomization already in the
 // tree under ml (an earlier integration's, a caller's, or one an application
 // emits), typed or unstructured, keyed by namespace/name. skip, if set, is left
-// out. One identity present twice is a collision before anything is added:
+// out. A Kustomization inside a List counts: kustomize builds a List's items.
+// One identity present twice is a collision before anything is added:
 // kustomize would register the id twice.
 func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]existingCR, error) {
 	out := map[string]existingCR{}
@@ -648,7 +678,11 @@ func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]ex
 		if l == nil || l == skip {
 			return nil
 		}
-		for _, r := range l.Resources {
+		objs, err := resourceItems(l)
+		if err != nil {
+			return err
+		}
+		for _, r := range objs {
 			path, ok := fluxKustomizationPath(r)
 			if !ok {
 				continue
@@ -667,6 +701,82 @@ func indexExistingKustomizations(ml, skip *layout.ManifestLayout) (map[string]ex
 		return nil
 	}
 	return out, walk(ml)
+}
+
+// indexExistingSources records every Flux Source already in the tree under ml
+// (an earlier integration's, a caller's, or one an application emits), typed
+// or unstructured, top-level or inside a List, keyed by sourceKey. skip, if
+// set, is left out.
+func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedObject, error) {
+	out := map[string][]hostedObject{}
+	var walk func(l *layout.ManifestLayout) error
+	walk = func(l *layout.ManifestLayout) error {
+		if l == nil || l == skip {
+			return nil
+		}
+		objs, err := resourceItems(l)
+		if err != nil {
+			return err
+		}
+		for _, r := range objs {
+			if key, ok := sourceKey(r); ok {
+				out[key] = append(out[key], hostedObject{host: l, obj: r})
+			}
+		}
+		for _, c := range l.Children {
+			if err := walk(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return out, walk(ml)
+}
+
+// resourceItems returns l's resources with every List replaced by its items:
+// a List is an envelope, and kustomize builds the items.
+func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
+	var out []client.Object
+	for _, r := range l.Resources {
+		if r == nil {
+			continue
+		}
+		if u, ok := r.(*unstructured.Unstructured); ok && u.IsList() {
+			list, err := u.ToList()
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			for i := range list.Items {
+				out = append(out, &list.Items[i])
+			}
+			continue
+		}
+		if meta.IsListType(r) {
+			items, err := meta.ExtractList(r)
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+			}
+			for _, item := range items {
+				if obj, ok := item.(client.Object); ok {
+					out = append(out, obj)
+				}
+			}
+			continue
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// sourceKey returns obj's identity as a Flux Source — kind, then effective
+// namespace/name (crKey) — and whether obj is one: any object in the Flux
+// source API group, whatever its version.
+func sourceKey(obj client.Object) (string, bool) {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	if gvk.Group != sourcev1.GroupVersion.Group || gvk.Kind == "" {
+		return "", false
+	}
+	return gvk.Kind + " " + crKey(obj.GetNamespace(), obj.GetName()), true
 }
 
 // fluxKustomizationPath reports whether obj is a Flux Kustomization — typed,
@@ -803,6 +913,24 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		}
 		if e, dup := existing[crKey(obj.GetNamespace(), obj.GetName())]; dup {
 			return errors.Errorf("layout %q already has Flux Kustomization %q (spec.path %q); the generated one would register the same id in the kustomize build", e.host.FullRepoPath(), obj.GetName(), e.path)
+		}
+	}
+	// A generated Source is one object with every Source of its identity
+	// already in the tree, whatever the API version: a different one would
+	// be a second, competing definition.
+	sources, err := indexExistingSources(ml, fluxDir)
+	if err != nil {
+		return err
+	}
+	for _, obj := range fluxResources {
+		key, ok := sourceKey(obj)
+		if !ok {
+			continue
+		}
+		for _, s := range sources[key] {
+			if !sameObject(s.obj, obj) {
+				return errors.Errorf("layout %q already has %s %q (%s) with different content than the one this integration generates: one Source identity must have one definition", s.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), s.obj.GetObjectKind().GroupVersionKind().GroupVersion())
+			}
 		}
 	}
 	generated := map[string]bool{}

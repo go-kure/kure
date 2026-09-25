@@ -353,9 +353,14 @@ refuses a tree `layout.WalkCluster` did not build from that cluster (see
 CR already present with the same name and `spec.path`, in the layout that would host it, is kept;
 the same name in another layout or with another path is an error, and under `FluxSeparate` an identical `flux-system` child — same directory, same
 resources, nothing beneath it — is kept rather than a second one appended; any other is refused. Every Flux Kustomization already in the tree counts — typed or unstructured, placed
-by an earlier integration, by the caller or emitted by an application: an identity
-(namespace/name) present twice, or taken by a generated CR elsewhere, is refused in every
-placement, since the kustomize build would register the id twice.
+by an earlier integration, by the caller or emitted by an application, top-level or inside a
+`List` (kustomize builds a List's items): an identity (namespace/name) present twice, or taken by
+a generated CR elsewhere, is refused in every placement, since the kustomize build would register
+the id twice. A generated Source is one object across the whole pass: every Source of its
+identity — kind, namespace and name, whatever the API version (a `v1beta2` `GitRepository` is the
+same Source as the generated `v1` one) — anywhere in the tree, top-level or inside a `List`, and
+every Source the pass places in another layout, must have the same content, or the integration is
+refused in every placement. An identical Source is kept once per layout that hosts it.
 
 ## Bootstrap Generation
 
