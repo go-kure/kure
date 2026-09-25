@@ -222,15 +222,18 @@ func (ml *ManifestLayout) WriteToDisk(basePath string) error {
 	if err := checkLayoutTree(ml, diskOutDir(basePath)); err != nil {
 		return err
 	}
-	return ml.writeToDisk(basePath)
+	return ml.writeToDisk(basePath, true)
 }
 
 // writeToDisk writes ml and its children. Every layout's directory gets a
 // kustomization.yaml, even when it lists nothing ("resources: []"): its parent
 // lists the directory, or a Flux Kustomization's spec.path names it, and an
-// empty directory does not survive a Git tree either. An AppFileSingle layout
-// writes into its parent's directory and never gets one of its own.
-func (ml *ManifestLayout) writeToDisk(basePath string) error {
+// empty directory does not survive a Git tree either. An AppFileSingle child
+// (root false) writes its one file into its parent's directory and never a
+// kustomization.yaml: the parent's lists that file, and one of the child's
+// would replace it (go-kure/kure#860). An AppFileSingle root, which has no
+// parent to list its file, still writes one.
+func (ml *ManifestLayout) writeToDisk(basePath string, root bool) error {
 	fileMode := ml.FilePer
 	if fileMode == FilePerUnset {
 		fileMode = FilePerResource
@@ -320,7 +323,7 @@ func (ml *ManifestLayout) writeToDisk(basePath string) error {
 
 	// Generate kustomization.yaml if there are resources or children
 	// Every directory with manifests should have a kustomization.yaml for proper GitOps workflow
-	if len(fileGroups) > 0 || len(ml.Children) > 0 || appMode != AppFileSingle {
+	if appMode != AppFileSingle || (root && (len(fileGroups) > 0 || len(ml.Children) > 0)) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)
 		if err != nil {
@@ -415,7 +418,7 @@ func (ml *ManifestLayout) writeToDisk(basePath string) error {
 	}
 
 	for _, child := range ml.Children {
-		if err := child.writeToDisk(basePath); err != nil {
+		if err := child.writeToDisk(basePath, false); err != nil {
 			return err
 		}
 	}
