@@ -306,8 +306,8 @@ temporary branch — the merged result — before the PR is allowed to land.
     names `go-kure/.github`: GitHub does not evaluate expressions in `uses:`.
   - **Actions.** An action that is not a composite action (JavaScript or Docker), a `using` in a
     flow mapping or not in lower case included. A nested `uses:`, quoted, in a flow mapping or in
-    any letter case, or more than one `run:` step (`RUN:` counted). A `github.action_path`
-    expression. Any `GITHUB_ACTION_PATH` mention that is not one whole
+    any letter case, or more than one `run:` step (flow-mapping, quoted and `RUN:` steps counted).
+    A `github.action_path` expression. Any `GITHUB_ACTION_PATH` mention that is not one whole
     `$GITHUB_ACTION_PATH/<path>` or `${GITHUB_ACTION_PATH}/<path>` word (reassigned, cut down with
     `${GITHUB_ACTION_PATH%/*}`, a bare trailing `/`, or a suffix after the path), and the
     runner's `_actions` directory by path. In an action that mentions `GITHUB_ACTION_PATH`:
