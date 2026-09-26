@@ -65,11 +65,11 @@ func renderConfigMapGeneratorBlock(specs []ConfigMapGeneratorSpec) string {
 	var b strings.Builder
 	b.WriteString("configMapGenerator:\n")
 	for _, spec := range specs {
-		b.WriteString(fmt.Sprintf("  - name: %s\n", spec.Name))
+		b.WriteString(fmt.Sprintf("  - name: %s\n", yamlString(spec.Name)))
 		if len(spec.Files) > 0 {
 			b.WriteString("    files:\n")
 			for _, f := range spec.Files {
-				b.WriteString(fmt.Sprintf("      - %s\n", f))
+				b.WriteString(fmt.Sprintf("      - %s\n", yamlString(f)))
 			}
 		}
 	}

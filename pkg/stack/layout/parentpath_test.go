@@ -3,6 +3,7 @@ package layout_test
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/stack"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -66,12 +68,28 @@ func unresolvedKustomizeRefs(t *testing.T, dir string) []string {
 		if err != nil {
 			return err
 		}
-		for _, line := range strings.Split(string(data), "\n") {
-			trimmed := strings.TrimSpace(line)
-			if !strings.HasPrefix(trimmed, "- ") {
-				continue
-			}
-			ref := strings.TrimPrefix(trimmed, "- ")
+		// Read the entries as kustomize reads them, not line by line: a
+		// quoted entry names the file without its quotes, and a plain y is a
+		// bool, which a string entry refuses (go-kure/kure#896).
+		var k struct {
+			Resources          []string `json:"resources"`
+			ConfigMapGenerator []struct {
+				Files []string `json:"files"`
+			} `json:"configMapGenerator"`
+		}
+		j, err := yaml.YAMLToJSON(data)
+		if err == nil {
+			err = json.Unmarshal(j, &k)
+		}
+		if err != nil {
+			rel, _ := filepath.Rel(dir, p)
+			bad = append(bad, rel+": "+err.Error())
+		}
+		refs := k.Resources
+		for _, g := range k.ConfigMapGenerator {
+			refs = append(refs, g.Files...)
+		}
+		for _, ref := range refs {
 			if _, err := os.Stat(filepath.Join(filepath.Dir(p), ref)); err != nil {
 				rel, _ := filepath.Rel(dir, filepath.Join(filepath.Dir(p), ref))
 				bad = append(bad, rel)
