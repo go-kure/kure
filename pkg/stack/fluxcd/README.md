@@ -429,16 +429,18 @@ integration is refused. Content is compared as the objects' unstructured form, s
 and an unstructured copy of it are the same.
 
 Under the integrated placements every Source the integration generates is hosted **once, in the
-root node's layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876):
-the directory the bootstrap sync path `./<root>` names, not a `ClusterName` wrapper above it. The
-Source is then in one build, the root's, and exists before any Kustomization that uses it: each of
-those is applied by the root build or by a build below it. When the root node renders a bundle,
-its own Kustomization builds that same directory beside the bootstrap; both build the same
-content, so neither prunes what the other keeps. A `sourceRef` names the object, not the layout
-holding it.
+root node's layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876),
+and not in a `ClusterName` wrapper above it. Under the default rules that is the directory the
+bootstrap sync path `./<root>` names (see [Kustomization paths](#kustomization-paths) for other
+rules), so the Source is in one build, the root's, and exists before any Kustomization that uses
+it. When the root node renders a bundle, its own Kustomization builds that same directory beside
+the bootstrap: both hold the same objects, so neither prunes what the other keeps, but the root
+bundle's patches and postBuild apply only in its own, so a root patch that selects a hosted Source
+makes the two apply it differently. A `sourceRef` names the object, not the layout holding it.
 
 The root build also covers the child directories the root's `kustomization.yaml` lists and the
-`AppFileSingle` files written into them. When that build already holds a copy the integration did
+`AppFileSingle` files written into them, and a `ClusterName` wrapper's build covers the root
+node's directory when the wrapper lists it. When that build already holds a copy the integration did
 not add (an earlier integration's, the caller's or an application's), that copy is kept and the
 integration adds none, since kustomize refuses one object twice. Two copies the integration did
 not add, in any one build (the root's or a generated Kustomization's `spec.path`), are refused. A

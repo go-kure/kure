@@ -304,7 +304,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	p := &integratedPlacement{
 		gen:       li.Generator,
 		ix:        ix,
-		root:      rootNodeLayout(ml, ix, c),
+		root:      ix.NodeLayout(c.Node),
 		perLayout: perLayout,
 		names:     map[string]string{},
 		generated: map[string]bool{},
@@ -324,7 +324,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.place(ml, sourceScope{}); err != nil {
 		return err
 	}
-	if err := p.hostSourcesOncePerBuild(p.root); err != nil {
+	if err := p.hostSourcesOncePerBuild(ml); err != nil {
 		return err
 	}
 	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
@@ -332,17 +332,6 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	}
 	markFluxBuilds(ml, p.generated)
 	return nil
-}
-
-// rootNodeLayout returns the layout of c's root node, which the bootstrap sync
-// path ./<root> names; ml when c has none, as a tree without a wrapper.
-func rootNodeLayout(ml *layout.ManifestLayout, ix *layout.OriginIndex, c *stack.Cluster) *layout.ManifestLayout {
-	if c != nil {
-		if l := ix.NodeLayout(c.Node); l != nil {
-			return l
-		}
-	}
-	return ml
 }
 
 // markFluxBuilds marks, with SetFluxBuild, the directory each Kustomization
@@ -483,9 +472,11 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 
 // hostSourcesOncePerBuild keeps each Source this pass derived once per
 // kustomize build, which refuses one object twice: add hosts every derived
-// Source in the root, and the root build can include a copy the tree already
-// held. The builds are the root directory's (the Flux bootstrap applies it) and the spec.path
-// of every Kustomization this pass placed or kept, each with the directories
+// Source in the root node's layout, and a build can include a copy the tree
+// already held. The builds are top's, the whole tree's top layout (a
+// ClusterName wrapper's kustomization.yaml lists the root node's directory),
+// the root node's (the Flux bootstrap applies it) and the spec.path of every
+// Kustomization this pass placed or kept, each with the directories
 // buildDirectories lists from it and the AppFileSingle files written into
 // them. Caller and application Kustomizations are not builds kure answers for.
 //
@@ -496,7 +487,7 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 // layout holding it. Two copies this pass did not place cannot be reduced to
 // one, so they are an error. A copy this pass did not place, in a build other
 // than the root's, is kept beside the root's copy: it is the caller's.
-func (p *integratedPlacement) hostSourcesOncePerBuild(root *layout.ManifestLayout) error {
+func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout) error {
 	if len(p.derived) == 0 {
 		return nil
 	}
@@ -516,9 +507,13 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(root *layout.ManifestLayou
 			}
 		}
 	}
-	index(root)
-	builds := []*layout.ManifestLayout{root}
-	seen := map[*layout.ManifestLayout]bool{root: true}
+	index(top)
+	builds := []*layout.ManifestLayout{top}
+	seen := map[*layout.ManifestLayout]bool{top: true}
+	if !seen[p.root] {
+		seen[p.root] = true
+		builds = append(builds, p.root)
+	}
 	for _, k := range crs {
 		if b := layoutAt[path.Clean(k.Spec.Path)]; b != nil && !seen[b] {
 			seen[b] = true
