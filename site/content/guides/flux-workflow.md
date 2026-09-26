@@ -273,13 +273,21 @@ What changed, and what to do:
   lists it as a resource file. The writers no longer emit a `flux-system-kustomization-<child>.yaml`
   reference guessed from a child's name. A bundle-less node layout gets its own CR named
   `<path, "/" → "-">-node`.
+- **Sources live in the root.** Under both integrated placements, every GitRepository or
+  OCIRepository the integration derives from a `SourceRef` URL is written once, into the root
+  node's layout (the directory the bootstrap sync path `./<root>` names, not a `ClusterName`
+  wrapper above it). Before, each unit's parent layout held a copy, so a Source shared by several
+  builds had several owners, and pruning one unit deleted a Source the others still used. Golden
+  files move the Source to the root. `FluxSeparate` is unchanged.
 - **Refusals.** Two bundles with one name, a CR name used twice, a node or bundle layout written as
   `AppFileSingle`, and a directory holding two objects with one identity are errors. So are a Flux
   Kustomization inside a `List` that takes another Kustomization's identity (kustomize builds a
   List's items); a Source identity (kind, namespace, name) defined with different content
   anywhere in the pass, in another layout or at another API version; and, under `FluxSeparate`,
   any Source already in the tree with the identity of one the integration generates into
-  `flux-system`, even an identical one.
+  `flux-system`, even an identical one. Under `FluxIntegratedPerBundle`, a caller's copy of a
+  generated Source in a `ClusterName` wrapper above the root node is refused too: that build also
+  includes the root's copy, and kustomize refuses one object twice.
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
   they used to take effect only when bundles and applications were both flat, and a `ClusterName`
   always flattened the root bundle. Combinations that were silently rendered fully nested now
