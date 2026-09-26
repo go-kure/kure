@@ -22,6 +22,8 @@ import (
 //     one, dropping its resources from the kustomize graph;
 //   - an AppFileSingle child has children (see checkSingleChildLeaf) or
 //     ConfigMapGenerators (see checkSingleChildGenerators);
+//   - any other layout the writer writes no kustomization.yaml for has
+//     ConfigMapGenerators (see checkUnwrittenGenerators);
 //   - an AppFileSingle child's file, which its parent's kustomization.yaml
 //     lists, lands outside the parent's directory or in a spelling of it that
 //     differs only in case, or the child's Name is rooted or holds a path
@@ -65,6 +67,9 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 					fmt.Sprintf("layouts %q and %q resolve to the same directory", other.FullRepoPath(), l.FullRepoPath()), nil)
 			}
 			dirs[key] = l
+		}
+		if err := checkUnwrittenGenerators(l, plan, l == root); err != nil {
+			return err
 		}
 		if err := checkResourceIdentities(l, plan.writesKustomization(l, l == root)); err != nil {
 			return err
@@ -313,6 +318,23 @@ func checkSingleChildGenerators(child *ManifestLayout, outDir outDirFunc) error 
 	}
 	return errors.NewFileError("write", filepath.Join(dir, child.Name+".yaml"), fmt.Sprintf(
 		"layout %q is AppFileSingle, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", child.FullRepoPath()), nil)
+}
+
+// checkUnwrittenGenerators refuses a layout with ConfigMapGenerators that the
+// writer writes no kustomization.yaml for (go-kure/kure#899): a generator
+// exists only inside a kustomization.yaml, so it would be dropped. On a tree
+// root that is an AppFileSingle root with no resources and no children, and
+// WriteManifest's synthetic cluster root with no resources. An AppFileSingle
+// child is refused in its own words by checkSingleChildGenerators before it
+// is walked, and a KustomizationRecursive layout by checkRecursiveLayouts.
+func checkUnwrittenGenerators(l *ManifestLayout, plan writerPlan, root bool) error {
+	if len(l.ConfigMapGenerators) == 0 || plan.writesKustomization(l, root) ||
+		plan.kustomizationMode(l) == KustomizationRecursive {
+		return nil
+	}
+	dir, _ := plan.outDir(l)
+	return errors.NewFileError("write", dir, fmt.Sprintf(
+		"layout %q gets no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", l.FullRepoPath()), nil)
 }
 
 // checkResourceIdentities refuses a layout that holds two resources with one
