@@ -15,7 +15,7 @@ steps() { printf 'jobs:\n  k:\n    steps:\n%s\n' "$1" >"$other"; }
 refused() {
     pi_run
     pi_expect 1 "unrecognized go-kure/.github reference"
-    pi_expect 1 "$1"
+    pi_expect 1 "$1 (a repository: outside the step's with: mapping)"
     if [[ "$PI_OUT" == *"inconsistent"* ]]; then
         printf 'read an unrelated checkout ref as a pin:\n%s\n' "$PI_OUT" >&2
         exit 1
@@ -30,6 +30,14 @@ steps "$co
           repository: other/repo
           ref: $PI_OTHER"
 refused "other.yml:6: repository: go-kure/.github"
+# After with:, where the with: mapping's child column is already known.
+steps "$co
+        with:
+          repository: other/repo
+          ref: $PI_OTHER
+        env:
+          repository: go-kure/.github"
+refused "other.yml:9: repository: go-kure/.github"
 steps "$co
         with:
           repository: other/repo
