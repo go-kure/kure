@@ -233,8 +233,11 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 
 // integratedPlacement is one pass of inline placement over a walked layout.
 type integratedPlacement struct {
-	gen       *ResourceGenerator
-	ix        *layout.OriginIndex
+	gen *ResourceGenerator
+	ix  *layout.OriginIndex
+	// root is the layout the Flux bootstrap applies. It hosts every Source
+	// this pass derives (go-kure/kure#876).
+	root      *layout.ManifestLayout
 	perLayout bool
 	// names maps every Kustomization name this pass emitted to its
 	// spec.path: Flux Kustomizations share one namespace, so a name is an
@@ -279,11 +282,12 @@ type sourceScope struct {
 // addIntegratedFluxToLayout places Flux Kustomizations alongside their target
 // manifests in one walk over the layout tree.
 //
-// Each unit's CR (and Source) is generated with spec.path = the directory of
-// the layout that renders its bundles, and hosted in the parent of that layout
-// (the root hosts its own), under both placements: a unit's directory is
-// applied by its own Kustomization only, so its CR cannot live inside it, and
-// no parent lists it (the writers skip a child that renders bundles).
+// Each unit's CR is generated with spec.path = the directory of the layout
+// that renders its bundles, and hosted in the parent of that layout (the root
+// hosts its own), under both placements: a unit's directory is applied by its
+// own Kustomization only, so its CR cannot live inside it, and no parent lists
+// it (the writers skip a child that renders bundles). The unit's Source, if
+// its SourceRef has a URL, is hosted in the root (go-kure/kure#876).
 //
 // PerLayout also gives every child layout that is not an umbrella child, not
 // AppFileSingle and renders no bundle (application, augmenter and bundle-less
@@ -299,6 +303,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	p := &integratedPlacement{
 		gen:       li.Generator,
 		ix:        ix,
+		root:      ml,
 		perLayout: perLayout,
 		names:     map[string]string{},
 		generated: map[string]bool{},
@@ -465,9 +470,9 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 }
 
 // hostSourcesOncePerBuild keeps each Source this pass derived once per
-// kustomize build, which refuses one object twice: add keeps an identical
-// Source once per host, but one build can include several hosts. The builds
-// are the root directory's (the Flux bootstrap applies it) and the spec.path
+// kustomize build, which refuses one object twice: add hosts every derived
+// Source in the root, and the root build can include a copy the tree already
+// held. The builds are the root directory's (the Flux bootstrap applies it) and the spec.path
 // of every Kustomization this pass placed or kept, each with the directories
 // buildDirectories lists from it and the AppFileSingle files written into
 // them. Caller and application Kustomizations are not builds kure answers for.
@@ -477,8 +482,8 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 // the first copy in depth-first layout order. Every other copy this
 // pass placed in that build is removed: a sourceRef names the object, not the
 // layout holding it. Two copies this pass did not place cannot be reduced to
-// one, so they are an error. Copies in separate builds are all kept, each
-// applied by its own build.
+// one, so they are an error. A copy this pass did not place, in a build other
+// than the root's, is kept beside the root's copy: it is the caller's.
 func (p *integratedPlacement) hostSourcesOncePerBuild(root *layout.ManifestLayout) error {
 	if len(p.derived) == 0 {
 		return nil
@@ -776,15 +781,17 @@ func (p *integratedPlacement) layoutSource(child *layout.ManifestLayout, scope s
 	}
 }
 
-// add appends objs to host.Resources. A Kustomization whose name this pass
-// already emitted is an identity collision; one already present in host with
-// the same spec.path is kept (a repeated integration adds nothing), with
-// another spec.path it is an error. A Source is checked against every Source
-// with its identity (kind, namespace, name, whatever the API version) anywhere
-// in the tree, and every one this pass placed: a different one is an error,
-// wherever it sits; an identical one in host is kept once.
+// add appends objs to host.Resources, except a Source, which goes to the root
+// (go-kure/kure#876). A Kustomization whose name this pass already emitted is
+// an identity collision; one already present in host with the same spec.path
+// is kept (a repeated integration adds nothing), with another spec.path it is
+// an error. A Source is checked against every Source with its identity (kind,
+// namespace, name, whatever the API version) anywhere in the tree, and every
+// one this pass placed: a different one is an error, wherever it sits; an
+// identical one in the root is kept once.
 func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Object) error {
 	for _, obj := range objs {
+		to := host
 		if k, ok := obj.(*kustv1.Kustomization); ok {
 			if err := p.claim(k.Name, k.Spec.Path); err != nil {
 				return err
@@ -798,30 +805,34 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			}
 		} else if key, ok := sourceKey(obj); ok {
 			// One identity, one object: an identical Source (a repeated
-			// integration, or two bundles sharing a SourceRef) is kept once
-			// per host; a different one anywhere in the pass would silently
-			// repoint a Kustomization, or leave two directories overwriting
-			// each other's Source. hostSourcesOncePerBuild then keeps it
-			// once per kustomize build.
+			// integration, or two bundles sharing a SourceRef) is hosted
+			// once, at the root, which the Flux bootstrap applies before any
+			// Kustomization that uses it: one owner, where a copy beside each
+			// Kustomization would give each build its own. A different one
+			// anywhere in the pass would silently repoint a Kustomization,
+			// or leave two directories overwriting each other's Source.
+			// hostSourcesOncePerBuild then drops the root's copy if the root
+			// build already holds one.
+			to = p.root
 			p.derived[key] = true
 			kept := false
 			for _, s := range p.sources[key] {
 				if !sameObject(s.obj, obj) {
 					have, want := s.obj.GetObjectKind().GroupVersionKind(), obj.GetObjectKind().GroupVersionKind()
 					if have.Version != want.Version {
-						return errors.Errorf("layout %q already has %s %q at %s; this integration derives it at %s in layout %q: one Source identity must have one definition, at one API version", s.host.FullRepoPath(), want.Kind, obj.GetName(), have.GroupVersion(), want.GroupVersion(), host.FullRepoPath())
+						return errors.Errorf("layout %q already has %s %q at %s; this integration derives it at %s in layout %q: one Source identity must have one definition, at one API version", s.host.FullRepoPath(), want.Kind, obj.GetName(), have.GroupVersion(), want.GroupVersion(), to.FullRepoPath())
 					}
-					return errors.Errorf("layout %q already has %s %q (%s) with different content than the one this integration derives in layout %q: one Source identity must have one definition", s.host.FullRepoPath(), want.Kind, obj.GetName(), have.GroupVersion(), host.FullRepoPath())
+					return errors.Errorf("layout %q already has %s %q (%s) with different content than the one this integration derives in layout %q: one Source identity must have one definition", s.host.FullRepoPath(), want.Kind, obj.GetName(), have.GroupVersion(), to.FullRepoPath())
 				}
-				kept = kept || s.host == host
+				kept = kept || s.host == to
 			}
 			if kept {
 				continue
 			}
-			p.sources[key] = append(p.sources[key], hostedObject{host: host, obj: obj})
+			p.sources[key] = append(p.sources[key], hostedObject{host: to, obj: obj})
 			p.placed[obj] = true
 		}
-		host.Resources = append(host.Resources, obj)
+		to.Resources = append(to.Resources, obj)
 	}
 	return nil
 }

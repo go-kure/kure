@@ -60,11 +60,31 @@ func siblingTree() *stack.Cluster {
 	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{groupA, groupB}}}
 }
 
-// nestedTree: platform -> a (bundle) -> b (bundle). platform hosts a's Source
-// and platform/a hosts b's: two separate builds, each hosting its own copy.
+// nestedTree: platform -> a (bundle) -> b (bundle). a's Kustomization is in
+// platform and b's in platform/a: two separate builds (go-kure/kure#876).
 func nestedTree() *stack.Cluster {
 	b := &stack.Node{Name: "b", Bundle: sharedBundle("b")}
 	a := &stack.Node{Name: "a", Bundle: sharedBundle("a"), Children: []*stack.Node{b}}
+	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{a}}}
+}
+
+// siblingBuildsTree: platform -> [a (bundle) -> x (bundle), c (bundle) -> y
+// (bundle)]. Only x and y use the shared Source, and their Kustomizations are
+// in platform/a and platform/c: two sibling builds, neither of which the root
+// build includes.
+func siblingBuildsTree() *stack.Cluster {
+	x := &stack.Node{Name: "x", Bundle: sharedBundle("x")}
+	y := &stack.Node{Name: "y", Bundle: sharedBundle("y")}
+	a := &stack.Node{Name: "a", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{x}}
+	c := &stack.Node{Name: "c", Bundle: srBundle("c", cmApp("c-app")), Children: []*stack.Node{y}}
+	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{a, c}}}
+}
+
+// deepTree: platform -> a (bundle) -> b (bundle), where only b uses the shared
+// Source. Its one consumer's Kustomization is in platform/a.
+func deepTree() *stack.Cluster {
+	b := &stack.Node{Name: "b", Bundle: sharedBundle("b")}
+	a := &stack.Node{Name: "a", Bundle: srBundle("a", cmApp("a-app")), Children: []*stack.Node{b}}
 	return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{a}}}
 }
 
@@ -110,35 +130,70 @@ func checkEveryBuild(t *testing.T, ml *layout.ManifestLayout) {
 	}
 }
 
-func TestIntegrate_SharedSourceOncePerBuild(t *testing.T) {
-	perBundle := propertyGroupings["nodeOnly"]
-	perBundle.FluxPlacement = layout.FluxIntegratedPerBundle
-	for _, tc := range []struct {
-		name  string
-		build func() *stack.Cluster
-		want  map[string]int
-	}{
-		// platform's build holds both hosts: one copy, in the first.
-		{"issue873", issue873Tree, map[string]int{"platform": 1}},
-		{"siblings", siblingTree, map[string]int{"platform/groupA": 1}},
-		// Two builds: each keeps the copy it hosts.
-		{"separate builds", nestedTree, map[string]int{"platform": 1, "platform/a": 1}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ml := integrated(t, tc.build(), perBundle)
-			if got := sourceCopies(ml, "shared"); !intMapsEqual(got, tc.want) {
-				t.Errorf("GitRepository shared hosted %v, want %v", got, tc.want)
+// TestIntegrate_SharedSourceAtRoot: every Source the integration derives is
+// hosted once, in the root layout, whichever layouts host the Kustomizations
+// that use it (go-kure/kure#876). The Flux bootstrap applies the root, so the
+// Source has one owner, and it exists before any Kustomization using it: each
+// of those is applied by the root build or by a build below it.
+func TestIntegrate_SharedSourceAtRoot(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
+		for _, tc := range []struct {
+			name  string
+			build func() *stack.Cluster
+			// perBundleOnly: FluxIntegratedPerLayout refuses the tree, as
+			// the bundle-less group's own CR has no SourceRef to use.
+			perBundleOnly bool
+		}{
+			{"issue873", issue873Tree, true},
+			{"siblings", siblingTree, true},
+			{"separate builds", nestedTree, false},
+			{"sibling builds", siblingBuildsTree, false},
+			{"one deep consumer", deepTree, false},
+		} {
+			if tc.perBundleOnly && placement == layout.FluxIntegratedPerLayout {
+				continue
 			}
-			checkEveryBuild(t, ml)
-			checkIdempotent(t, tc.build(), perBundle)
-		})
+			t.Run(string(placement)+"/"+tc.name, func(t *testing.T) {
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				ml := integrated(t, tc.build(), rules)
+				if got, want := sourceCopies(ml, "shared"), map[string]int{"platform": 1}; !intMapsEqual(got, want) {
+					t.Errorf("GitRepository shared hosted %v, want %v", got, want)
+				}
+				checkEveryBuild(t, ml)
+				checkIdempotent(t, tc.build(), rules)
+			})
+		}
 	}
 }
 
-// TestIntegrate_SharedSourceKeepsTheTreesCopy: a Source already in a build —
-// here one an application emits — is the one that build keeps; the copy the
-// integration would add to another layout of that build is not added.
+// TestIntegrate_SharedSourceKeepsTheTreesCopy: a Source already in the root
+// build — here one an application of the root bundle emits — is the one kept;
+// the integration adds no copy of its own.
 func TestIntegrate_SharedSourceKeepsTheTreesCopy(t *testing.T) {
+	build := func(t *testing.T) *stack.Cluster {
+		src := sharedSource(t)
+		emitter := stack.NewApplication("api-src", "default", &fakeAppConfig{objs: []*client.Object{&src}})
+		web := &stack.Node{Name: "web", Bundle: sharedBundle("web")}
+		group := &stack.Node{Name: "group", Children: []*stack.Node{web}}
+		return &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", emitter), Children: []*stack.Node{group}}}
+	}
+	rules := propertyGroupings["nodeOnly"]
+	rules.FluxPlacement = layout.FluxIntegratedPerBundle
+	ml := integrated(t, build(t), rules)
+	if got, want := sourceCopies(ml, "shared"), map[string]int{"platform": 1}; !intMapsEqual(got, want) {
+		t.Errorf("GitRepository shared hosted %v, want only the application's copy %v", got, want)
+	}
+	checkEveryBuild(t, ml)
+	checkIdempotent(t, build(t), rules)
+}
+
+// TestIntegrate_SharedSourceBesideACopyOutsideTheRootBuild: a copy an
+// application emits in a build other than the root's is the application's to
+// keep; the integration still hosts its own at the root, which applies before
+// any Kustomization that uses it. The application's copy is then a second
+// owner, which the integration does not remove.
+func TestIntegrate_SharedSourceBesideACopyOutsideTheRootBuild(t *testing.T) {
 	build := func(t *testing.T) *stack.Cluster {
 		src := sharedSource(t)
 		emitter := stack.NewApplication("api-src", "default", &fakeAppConfig{objs: []*client.Object{&src}})
@@ -150,8 +205,8 @@ func TestIntegrate_SharedSourceKeepsTheTreesCopy(t *testing.T) {
 	rules := propertyGroupings["nodeOnly"]
 	rules.FluxPlacement = layout.FluxIntegratedPerBundle
 	ml := integrated(t, build(t), rules)
-	if got, want := sourceCopies(ml, "shared"), map[string]int{"platform/api": 1}; !intMapsEqual(got, want) {
-		t.Errorf("GitRepository shared hosted %v, want only the application's copy %v", got, want)
+	if got, want := sourceCopies(ml, "shared"), map[string]int{"platform": 1, "platform/api": 1}; !intMapsEqual(got, want) {
+		t.Errorf("GitRepository shared hosted %v, want the root's copy and the application's %v", got, want)
 	}
 	checkEveryBuild(t, ml)
 	checkIdempotent(t, build(t), rules)
@@ -224,26 +279,25 @@ func TestIntegrate_SharedSourceKeepsTheCallersDeeperCopy(t *testing.T) {
 
 // TestIntegrate_SharedSourceInSingleFileApplicationCounts: an AppFileSingle
 // application's file is written into its parent's directory, so a copy it
-// holds is in the parent's build, and the integration keeps no copy of its own
-// there.
+// holds in the root's application is in the root build, and the integration
+// adds no copy of its own there.
 func TestIntegrate_SharedSourceInSingleFileApplicationCounts(t *testing.T) {
 	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
 		t.Run(string(placement), func(t *testing.T) {
 			src := sharedSource(t)
 			emitter := stack.NewApplication("api-src", "default", &fakeAppConfig{objs: []*client.Object{&src}})
 			web := &stack.Node{Name: "web", Bundle: sharedBundle("web")}
-			api := &stack.Node{Name: "api", Bundle: srBundle("api", emitter, cmApp("api-cm")), Children: []*stack.Node{web}}
-			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{api}}}
+			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", emitter, cmApp("platform-cm")), Children: []*stack.Node{web}}}
 			rules := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName, FluxPlacement: placement}
 			ml, err := layout.WalkCluster(c, rules)
 			if err != nil {
 				t.Fatal(err)
 			}
-			layoutAtPath(t, ml, "platform/api/api-src").ApplicationFileMode = layout.AppFileSingle
+			layoutAtPath(t, ml, "platform/api-src").ApplicationFileMode = layout.AppFileSingle
 			if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
 				t.Fatal(err)
 			}
-			if got, want := sourceCopies(ml, "shared"), map[string]int{"platform/api/api-src": 1}; !intMapsEqual(got, want) {
+			if got, want := sourceCopies(ml, "shared"), map[string]int{"platform/api-src": 1}; !intMapsEqual(got, want) {
 				t.Errorf("GitRepository shared hosted %v, want only the application's copy %v", got, want)
 			}
 			checkEveryBuild(t, ml)

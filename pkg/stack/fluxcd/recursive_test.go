@@ -39,7 +39,7 @@ func recursiveCluster() *stack.Cluster {
 
 // recursiveClusterSharedSource is recursiveCluster with web on platform's
 // Source, so a build that holds both bundles holds two identical copies
-// unless the integrator hosts it once per build.
+// unless the integrator hosts it once, in the root.
 func recursiveClusterSharedSource() *stack.Cluster {
 	c := recursiveCluster()
 	shared := *c.Node.Bundle.SourceRef
