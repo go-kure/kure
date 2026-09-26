@@ -35,7 +35,8 @@ func shieldedIn(kdirs []string, base, p string, strict bool) bool {
 // checkRecursiveLayouts refuses what a KustomizationRecursive layout, which
 // gets every file except kustomization.yaml (go-kure/kure#868), makes
 // contradictory in the writer's own output:
-//   - ConfigMapGenerators on it: they exist only inside a kustomization.yaml;
+//   - ConfigMapGenerators on it, AppFileSingle or not: they exist only inside
+//     a kustomization.yaml;
 //   - a kustomization.yaml the writer writes that lists its directory, which
 //     kustomize cannot build without one.
 //
@@ -109,6 +110,13 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 				add(l.Name+".yaml", false, false, parent)
 			}
 		}
+		// An AppFileSingle layout writes no kustomization.yaml either; a child
+		// one is refused by checkSingleChildGenerators first, so this names a
+		// Recursive root, single or not (go-kure/kure#899).
+		if plan.kustomizationMode(l) == KustomizationRecursive && len(l.ConfigMapGenerators) > 0 {
+			return errors.NewFileError("write", layoutPath(l, plan), fmt.Sprintf(
+				"layout %q is KustomizationRecursive, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", l.FullRepoPath()), nil)
+		}
 		if !single {
 			names, _ := plan.files(l)
 			for _, name := range names {
@@ -116,10 +124,6 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 			}
 			dirs = append(dirs, dirLayout{l, normDir(dir), plan.writesKustomization(l, parent == nil), parent != nil && plan.childEntry(parent, l) == ""})
 			if plan.kustomizationMode(l) == KustomizationRecursive {
-				if len(l.ConfigMapGenerators) > 0 {
-					return errors.NewFileError("write", dir, fmt.Sprintf(
-						"layout %q is KustomizationRecursive, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", l.FullRepoPath()), nil)
-				}
 				if parent != nil && plan.writesKustomization(parent, parent == root) && plan.childEntry(parent, l) != "" {
 					return errors.NewFileError("write", dir, fmt.Sprintf(
 						"layout %q is KustomizationRecursive and writes no kustomization.yaml, but the kustomization.yaml of layout %q lists its directory", l.FullRepoPath(), parent.FullRepoPath()), nil)

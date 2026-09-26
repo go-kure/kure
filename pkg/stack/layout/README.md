@@ -312,11 +312,17 @@ Controls how resource YAML files are named:
   `WalkClusterByPackage` with every placement, since it clears the placement. An augmenter that also sets
   its layout's `ApplicationFileMode` to `AppFilePerResource` keeps its generators: the layout gets
   its own directory and `kustomization.yaml`.
-- The same holds for a root the writer writes no `kustomization.yaml` for (go-kure/kure#899): an
-  `AppFileSingle` root with no resources and no children, in every writer, and `WriteManifest`'s
-  synthetic cluster root with no resources. Each is refused before anything is written when it
-  carries `ConfigMapGenerators`, which were silently dropped before. Give such a root a resource,
-  or put the generators on a layout that writes a `kustomization.yaml`.
+- The same holds for any other layout the writer writes no `kustomization.yaml` for
+  (go-kure/kure#899). That is an `AppFileSingle` root with no resources and no children, in every
+  writer, including one made `AppFileSingle` through `Config` in `WriteManifest`. In
+  `WriteManifest` it is also a layout shaped like the synthetic cluster root (`Name ""`, a
+  single-segment `Namespace`) with no resource file, no bundle and no `AppFileSingle` child that
+  writes a file. A `KustomizationRecursive` root, `AppFileSingle` or not, is refused as
+  Recursive. Each is refused before anything is written when it carries `ConfigMapGenerators`,
+  which were silently dropped before. Under `WalkCluster` with `FlattenSingleTier`, this includes
+  an augmenter app that is the only one, emits no objects and sets its layout `AppFileSingle`:
+  flattening moves it and its generators onto the root. Give such a root a resource, or put the
+  generators on a layout that writes a `kustomization.yaml`.
 
 ### Layout origins
 
