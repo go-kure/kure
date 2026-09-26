@@ -229,8 +229,9 @@ func (ml *ManifestLayout) writesSingleFile() bool { return len(ml.Resources) > 0
 // lists the directory, or a Flux Kustomization's spec.path names it, and an
 // empty directory does not survive a Git tree either. A KustomizationRecursive
 // layout gets none: Flux generates it (go-kure/kure#868). An AppFileSingle child
-// (root false) writes its one file into its parent's directory and never a
-// kustomization.yaml: the parent's lists that file, and one of the child's
+// (root false) writes its one file into its Namespace, normally its parent's
+// directory, and never a kustomization.yaml: the parent's lists that file
+// (go-kure/kure#879), and one of the child's
 // would replace it (go-kure/kure#860). An AppFileSingle root, which has no
 // parent to list its file, still writes one.
 func (ml *ManifestLayout) writeToDisk(plan writerPlan, root bool) error {

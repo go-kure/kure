@@ -55,12 +55,17 @@ type writerPlan struct {
 //     Kustomization the integrator placed in the parent's Resources applies
 //     it, and nothing is guessed from the child's name;
 //   - with skipCrossPackage (WriteToDisk, WriteToTar), a directory child of
-//     another package: both PackageRefs set and their values differ.
+//     another package: both PackageRefs set and their values differ;
+//   - an AppFileSingle child with no resources: it writes no file.
 //
-// Such children are still written, each into its own directory. A listed
-// AppFileSingle child whose file lands outside the parent's directory gets an
-// entry climbing out of it with "../", which kustomize refuses; checkLayoutTree
-// refuses such a tree before anything is written (see checkSingleChildEntry).
+// The FluxIntegratedPerLayout and cross-package exemptions are for directory
+// children only: such a parent lists an AppFileSingle child's file. Unlisted
+// children are still written, each into
+// its own directory. A listed AppFileSingle child whose file lands outside the
+// parent's directory gets an entry climbing out of it with "../", which
+// kustomize's default load restrictor rejects; checkLayoutTree refuses such a
+// tree, and one whose directories differ only in case, before anything is
+// written (see checkSingleChildEntry).
 func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *ManifestLayout) string {
 	return func(parent, child *ManifestLayout) string {
 		if child == nil || child.UmbrellaChild || child.rendersBundle() {
@@ -83,43 +88,53 @@ func childEntry(outDir outDirFunc, skipCrossPackage bool) func(parent, child *Ma
 	}
 }
 
+// childFile is the path of an AppFileSingle child's file as the writer
+// writes it: <Name>.yaml joined onto the child's directory, slash-separated
+// and cleaned.
+func childFile(outDir outDirFunc, child *ManifestLayout) string {
+	dir, _ := outDir(child)
+	return path.Join(filepath.ToSlash(dir), child.Name+".yaml")
+}
+
 // childFileEntry returns the path of an AppFileSingle child's file relative
 // to its parent's directory, both as outDir resolves them, slash-separated:
-// "<Name>.yaml" when the child's directory is the parent's, "<sub>/<Name>.yaml"
-// when it lies below it (go-kure/kure#879). Directories compare as normDir
-// compares them, so a child directory that differs only in case from one at or
-// below the parent's is taken to be it; <sub> is spelled as the child's
-// directory spells it. inside is false when the file lands outside the
-// parent's directory, and the entry then climbs out of it with "../".
+// "<Name>.yaml" when the file lands in the parent's directory,
+// "<sub>/<Name>.yaml" below it (go-kure/kure#879). It is computed on the whole
+// file path, so a Name that climbs out with ".." is outside too. Directories
+// must match exactly (see relPath). inside is false when the file lands
+// outside the parent's directory, and the entry then climbs out of it with
+// "../".
 func childFileEntry(outDir outDirFunc, parent, child *ManifestLayout) (entry string, inside bool) {
 	parentDir, _ := outDir(parent)
-	childDir, _ := outDir(child)
-	rel, inside := relPath(parentDir, childDir)
-	if rel == "." {
-		return child.Name + ".yaml", inside
+	return relPath(parentDir, childFile(outDir, child))
+}
+
+// pathSegments is p cleaned and split at "/": nil for ".", and a leading ""
+// for a rooted path.
+func pathSegments(p string) []string {
+	switch p = path.Clean(filepath.ToSlash(p)); p {
+	case ".":
+		return nil
+	case "/":
+		return []string{""}
 	}
-	return rel + "/" + child.Name + ".yaml", inside
+	return strings.Split(p, "/")
 }
 
 // relPath returns target relative to base, slash-separated, and whether
-// target lies at or below base. Path segments compare as normDir compares
-// them; below the directories they share, the result keeps target's own
-// spelling, and it climbs out of base with "..". Both are cleaned first, and
-// both are rooted or both relative, since every writer joins them onto one
-// base path.
+// target lies at or below base. Path segments must match exactly: a segment
+// that differs only in case names another directory on a case-sensitive
+// volume, and a listing computed from it would name no file there (see
+// caseOnlyPrefix). Below base the result keeps target's spelling, and it
+// climbs out of base with "..". A path rooted on one side only is never at or
+// below the other, and is returned as it is.
 func relPath(base, target string) (string, bool) {
-	segs := func(p string) []string {
-		switch p = path.Clean(filepath.ToSlash(p)); p {
-		case ".":
-			return nil
-		case "/":
-			return []string{""}
-		}
-		return strings.Split(p, "/")
+	if path.IsAbs(filepath.ToSlash(base)) != path.IsAbs(filepath.ToSlash(target)) {
+		return path.Clean(filepath.ToSlash(target)), false
 	}
-	b, t := segs(base), segs(target)
+	b, t := pathSegments(base), pathSegments(target)
 	n := 0
-	for n < len(b) && n < len(t) && normDir(b[n]) == normDir(t[n]) {
+	for n < len(b) && n < len(t) && b[n] == t[n] {
 		n++
 	}
 	var rel []string
@@ -133,30 +148,75 @@ func relPath(base, target string) (string, bool) {
 	return strings.Join(rel, "/"), n == len(b)
 }
 
-// checkSingleChildEntry refuses an AppFileSingle child whose file lands
-// outside its parent's directory when the parent's kustomization.yaml lists it
-// (go-kure/kure#879): the entry would climb out with "../", and kustomize's
-// default load restrictor builds no resource that is not in or below the
-// kustomization's directory, so the kustomization.yaml kure writes would not
-// build. A file at or below the parent's directory is listed by its relative
-// path (see childFileEntry). A child the parent does not list (see
-// childEntry), and every child of a parent that writes no kustomization.yaml,
-// is not refused: nothing lists its file. root is true when parent is the tree
-// root.
+// caseOnlyPrefix reports whether target lies at or below base only when path
+// segments compare case-insensitively, as normDir compares them. It returns
+// how target spells the part of base's path that it does not match exactly,
+// and how base spells it.
+func caseOnlyPrefix(base, target string) (targetSpelling, baseSpelling string, ok bool) {
+	if path.IsAbs(filepath.ToSlash(base)) != path.IsAbs(filepath.ToSlash(target)) {
+		return "", "", false
+	}
+	b, t := pathSegments(base), pathSegments(target)
+	if len(t) < len(b) {
+		return "", "", false
+	}
+	n := 0
+	for n < len(b) && b[n] == t[n] {
+		n++
+	}
+	if n == len(b) {
+		return "", "", false
+	}
+	for i := n; i < len(b); i++ {
+		if normDir(b[i]) != normDir(t[i]) {
+			return "", "", false
+		}
+	}
+	return strings.Join(t[n:len(b)], "/"), strings.Join(b[n:], "/"), true
+}
+
+// checkSingleChildEntry refuses, for an AppFileSingle child that writes its
+// file (go-kure/kure#879):
+//   - when its parent's kustomization.yaml lists the file, a file outside the
+//     parent's directory as the writer writes both: the entry would climb out
+//     with "../", which kustomize's default load restrictor rejects. That
+//     covers a Name that climbs out with "..". A file whose directory matches
+//     the parent's only case-insensitively is refused as well: the two
+//     spellings name one directory only on a case-insensitive volume, so no
+//     entry names the file on every volume;
+//   - a Name that is rooted or holds a path separator: the file is then not
+//     one file name, <Name>.yaml, in the child's Namespace, and the disk
+//     writers would fail partway on a directory they never create.
+//
+// A file at or below the parent's directory is listed by its relative path
+// (see childFileEntry). A child the parent does not list (see childEntry), and
+// every child of a parent that writes no kustomization.yaml, may land
+// anywhere: nothing lists its file. root is true when parent is the tree root.
 func checkSingleChildEntry(parent, child *ManifestLayout, plan writerPlan, root bool) error {
-	dir, single := plan.outDir(child)
-	if !single || plan.childEntry(parent, child) == "" || !plan.writesKustomization(parent, root) {
+	_, single := plan.outDir(child)
+	if !single || !child.writesSingleFile() {
 		return nil
 	}
-	entry, inside := childFileEntry(plan.outDir, parent, child)
-	if inside {
-		return nil
+	file := childFile(plan.outDir, child)
+	if plan.childEntry(parent, child) != "" && plan.writesKustomization(parent, root) {
+		parentDir, _ := plan.outDir(parent)
+		if childSpelling, parentSpelling, ok := caseOnlyPrefix(parentDir, file); ok {
+			return errors.NewFileError("write", file, fmt.Sprintf(
+				"layout %q is AppFileSingle and its file lands in %q, which differs only in case from %q in the directory %q of layout %q: the two name one directory only on a case-insensitive volume, so no entry in that layout's kustomization.yaml names the file on every volume",
+				child.FullRepoPath(), childSpelling, parentSpelling, filepath.ToSlash(parentDir), parent.FullRepoPath()), nil)
+		}
+		if entry, inside := childFileEntry(plan.outDir, parent, child); !inside {
+			return errors.NewFileError("write", file, fmt.Sprintf(
+				"layout %q is AppFileSingle and its file %q lands outside the directory %q of layout %q, whose kustomization.yaml would list it as %q: kustomize's default load restrictor rejects a resource that is not in or below the kustomization's directory",
+				child.FullRepoPath(), file, filepath.ToSlash(parentDir), parent.FullRepoPath(), entry), nil)
+		}
 	}
-	parentDir, _ := plan.outDir(parent)
-	file := filepath.Join(dir, child.Name+".yaml")
-	return errors.NewFileError("write", file, fmt.Sprintf(
-		"layout %q is AppFileSingle and its file %q lands outside the directory %q of layout %q, whose kustomization.yaml would list it as %q: kustomize builds no resource that is not in or below the kustomization's directory",
-		child.FullRepoPath(), filepath.ToSlash(file), filepath.ToSlash(parentDir), parent.FullRepoPath(), entry), nil)
+	if strings.ContainsRune(child.Name, '/') || strings.ContainsRune(child.Name, filepath.Separator) || filepath.IsAbs(child.Name) {
+		return errors.NewFileError("write", file, fmt.Sprintf(
+			"layout %q is AppFileSingle and its Name %q is rooted or holds a path separator: its file must be one file name, <Name>.yaml, in its Namespace",
+			child.FullRepoPath(), child.Name), nil)
+	}
+	return nil
 }
 
 // groupResourceFiles groups l's resources into files: all of them into

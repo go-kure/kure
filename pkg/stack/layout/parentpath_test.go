@@ -323,14 +323,17 @@ func TestWalkClusterByPackage_NestedExcludedAncestors_WriteAll(t *testing.T) {
 }
 
 func TestWriters_RefuseEquivalentSingleFilePaths(t *testing.T) {
-	// "x" and "./x" name the same file <dir>/x.yaml once the path is cleaned,
-	// as the writers do; the second would silently replace the first.
-	single := func(name string) *layout.ManifestLayout {
-		l := cmLayout(name, "p")
+	// The Namespaces "p" and "./p" name the same file p/x.yaml once the path
+	// is cleaned, as the writers do; the second would silently replace the
+	// first. (A Name such as "./x" is refused on its own: it holds a path
+	// separator, go-kure/kure#879.)
+	single := func(obj, ns string) *layout.ManifestLayout {
+		l := cmLayout(obj, ns)
+		l.Name = "x"
 		l.ApplicationFileMode = layout.AppFileSingle
 		return l
 	}
-	parent := &layout.ManifestLayout{Name: "p", Namespace: ".", Children: []*layout.ManifestLayout{single("x"), single("./x")}}
+	parent := &layout.ManifestLayout{Name: "p", Namespace: ".", Children: []*layout.ManifestLayout{single("x", "p"), single("y", "./p")}}
 	for name, err := range writers(t, parent) {
 		if err == nil || !strings.Contains(err.Error(), "same file") {
 			t.Errorf("%s: err = %v, want a same-file refusal", name, err)
