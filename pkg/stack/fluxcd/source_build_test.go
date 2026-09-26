@@ -190,6 +190,39 @@ func TestIntegrate_SharedSourceAtRootNodeUnderClusterName(t *testing.T) {
 	}
 }
 
+// TestIntegrate_SharedSourceKeepsACopyInTheClusterNameWrapper: under
+// PerBundle the wrapper's kustomization.yaml lists the root node's directory,
+// so a caller copy in the wrapper shares a build with the integration's; it is
+// the one kept, or the wrapper's build would hold the Source twice. Under
+// PerLayout the root node's directory is its own layout CR's build, so the
+// caller's copy is in another build and kept beside the integration's.
+func TestIntegrate_SharedSourceKeepsACopyInTheClusterNameWrapper(t *testing.T) {
+	for placement, want := range map[layout.FluxPlacement]map[string]int{
+		layout.FluxIntegratedPerBundle: {".": 1},
+		layout.FluxIntegratedPerLayout: {".": 1, "platform": 1},
+	} {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := propertyGroupings["nodeOnly"]
+			rules.FluxPlacement = placement
+			rules.ClusterName = "."
+			c := deepTree()
+			ml, err := layout.WalkCluster(c, rules)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ml.Resources = append(ml.Resources, sharedSource(t))
+			if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+				t.Fatal(err)
+			}
+			if got := sourceCopies(ml, "shared"); !intMapsEqual(got, want) {
+				t.Errorf("GitRepository shared hosted %v, want %v", got, want)
+			}
+			checkEveryBuild(t, ml)
+			checkIdempotent(t, c, rules)
+		})
+	}
+}
+
 // TestIntegrate_SharedSourceKeepsTheTreesCopy: a Source already in the root
 // build — here one an application of the root bundle emits — is the one kept;
 // the integration adds no copy of its own.
