@@ -43,10 +43,9 @@
 #     subpath nested or dotted (`group/check`, `check.v2`), and the `ref:
 #     <40-hex>` in the `with:` mapping of a block-style checkout step whose
 #     same `with:` mapping holds `repository: go-kure/.github`, in any key
-#     order; the repository name
-#     case-insensitively and with or without a trailing `.git` (actions/
-#     checkout clones https://github.com/<repository>), the hex in either
-#     case. A key is read as YAML reads it: `"uses":`, `'ref':` and
+#     order; the repository name case-insensitively and with or without a
+#     trailing `.git` (actions/checkout clones
+#     https://github.com/<repository>), the hex in either case. A key is read as YAML reads it: `"uses":`, `'ref':` and
 #     `repository :` are the plain keys, in a workflow and an action.yml.
 #   - per action: each `$GITHUB_ACTION_PATH/<rel>.sh` (or
 #     `${GITHUB_ACTION_PATH}/<rel>.sh`) in its one `run:` step, one whole
@@ -187,7 +186,9 @@
 #     text anywhere in a single-line workflow value (`run: grep -n
 #     "repository:" ci.yml`, `with: { repository: foo/bar }`), and `ref:`
 #     text anywhere in a checkout step of go-kure/.github, and a ` #` inside
-#     a quoted value there (read as a comment, leaving the quote open);
+#     a quoted value there (read as a comment, leaving the quote open); a
+#     second `repository: go-kure/.github` outside the `with:` mapping of a
+#     checkout that already names it there (under `env:`);
 #     `${!prefix@}`, `export SCRIPT_DIR` or `readonly SCRIPT_DIR` on a line
 #     of its own; dirname, realpath, readlink or a parameter trim anywhere in
 #     an action that mentions $GITHUB_ACTION_PATH, and a
@@ -463,6 +464,8 @@ scan_workflow() {
         # reading it would take another checkout'"'"'s ref: as a pin.
         if (v == repo && at_with) {
           is_repo = 1; repo_nr = NR; repo_text = $0
+        } else if (v == repo && in_step) {
+          bad(NR, $0 " (a repository: outside the step'"'"'s with: mapping)")
         } else if (mentions) {
           bad(NR, $0)
         }

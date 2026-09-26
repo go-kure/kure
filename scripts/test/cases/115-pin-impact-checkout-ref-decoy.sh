@@ -31,6 +31,12 @@ refused
 steps "$co
         with:
           repository: go-kure/.github
+        env:
+          ref: $PI_NEW"
+refused
+steps "$co
+        with:
+          repository: go-kure/.github
           ref: $PI_OTHER
           sparse-checkout: |
             ref: $PI_NEW"

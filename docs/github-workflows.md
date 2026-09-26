@@ -264,10 +264,9 @@ temporary branch — the merged result — before the PR is allowed to land.
   - **Pins.** It reads `uses: go-kure/.github/.github/actions/<subpath>@<sha>`, including nested
     or dotted subpaths. It also reads the `ref: <sha>` in the `with:` mapping of a block-style
     checkout whose same `with:` mapping holds `repository: go-kure/.github`, whatever the key
-    order. The repository name is matched
-    case-insensitively and with or without a trailing `.git` (`actions/checkout` clones
-    `https://github.com/<repository>`, the same repository either way), and the SHA may be written
-    in either case. Keys are read as YAML reads them: `"uses":`, `'ref':` and `repository :` are
+    order. The repository name is matched case-insensitively and with or without a trailing `.git`
+    (`actions/checkout` clones `https://github.com/<repository>`, the same repository either way),
+    and the SHA may be written in either case. Keys are read as YAML reads them: `"uses":`, `'ref':` and `repository :` are
     the plain keys, in a workflow and an `action.yml`.
   - **Action scripts.** It follows each `$GITHUB_ACTION_PATH/<rel>.sh` or
     `${GITHUB_ACTION_PATH}/<rel>.sh` in an action's single `run:` step, written as one whole word:
@@ -383,6 +382,8 @@ temporary branch — the merged result — before the PR is allowed to land.
     (`run: grep -n "repository:" ci.yml`, `with: { repository: foo/bar }`), and `ref:` text
     anywhere in a `go-kure/.github` checkout step, and a ` #` inside a quoted value there (read
     as a comment, which leaves the quote open);
+  - a second `repository: go-kure/.github` outside the `with:` mapping of a checkout that already
+    names it there, such as under `env:`;
   - `${!prefix@}`, and `export SCRIPT_DIR` or `readonly SCRIPT_DIR` on a line of its own;
   - `dirname`, `realpath`, `readlink` or a parameter trim anywhere in an action that mentions
     `GITHUB_ACTION_PATH`, and a `$GITHUB_ACTION_PATH/<path>` command behind a wrapper (`env`,
