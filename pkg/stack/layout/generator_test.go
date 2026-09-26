@@ -79,6 +79,28 @@ func TestWriters_RefuseGeneratorsOnSingleChild(t *testing.T) {
 	}
 }
 
+// TestWriters_RecursiveGeneratorRefusedAsDropped: a generator counts as an
+// object only where a kustomization.yaml holds it, so on a Recursive layout
+// that also holds ConfigMap x, the refusal names the dropped generator, not a
+// duplicate object.
+func TestWriters_RecursiveGeneratorRefusedAsDropped(t *testing.T) {
+	want := `layout "p" is KustomizationRecursive, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go`
+	for _, writer := range allWriters {
+		p := &layout.ManifestLayout{
+			Name:                "p",
+			Namespace:           ".",
+			Mode:                layout.KustomizationRecursive,
+			ApplicationFileMode: layout.AppFilePerResource,
+			Resources:           []client.Object{testObj("v1", "ConfigMap", "x")},
+		}
+		withGenerator(p, "x")
+		err := writeRefused(t, writer, layout.DefaultLayoutConfig(), p)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
+		}
+	}
+}
+
 // TestWriteManifest_RefuseGeneratorsOnSingleChildFromConfig: WriteManifest
 // writes a child whose own mode is unset AppFileSingle when Config says so, and
 // refuses its ConfigMapGenerators; WriteToDisk and WriteToTar take the child's

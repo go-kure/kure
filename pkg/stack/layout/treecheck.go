@@ -311,7 +311,7 @@ func checkSingleChildGenerators(child *ManifestLayout, outDir outDirFunc) error 
 	if !single || len(child.ConfigMapGenerators) == 0 {
 		return nil
 	}
-	return errors.NewFileError("write", dir, fmt.Sprintf(
+	return errors.NewFileError("write", filepath.Join(dir, child.Name+".yaml"), fmt.Sprintf(
 		"layout %q is AppFileSingle, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", child.FullRepoPath()), nil)
 }
 

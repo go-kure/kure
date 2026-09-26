@@ -107,10 +107,12 @@ The ConfigMap a `configMapGenerator` generates counts as an object of the layout
 `kustomization.yaml` holds the generator (go-kure/kure#894): `v1` `ConfigMap`, the generator's
 name and no namespace, so `default`. kustomize compares the name before the content-hash suffix, so
 two generators of one name are one identity whatever their files hold. It refuses a generator
-whose ConfigMap the build already holds (`id ... exists; ... behavior must be merge or replace`;
-kure writes no `behavior`), and a ConfigMap added after the generator's (`may not add resource with
-an already registered id`). So a generator named `x` is refused next to a ConfigMap `default/x`, or
-one without a namespace, in its own layout or in a layout that layout's build takes in, and so are
+whose ConfigMap its own kustomization already holds (`id ... exists; ... behavior must be merge or
+replace`; kure writes no `behavior`), and one object reaching a kustomization twice from its
+resources, the generator's ConfigMap included (`may not add resource with an already registered
+id`). So a generator named `x` is refused next to a ConfigMap `default/x`, or one without a
+namespace, anywhere in the same kustomize build (its own layout, a listed child, the parent that
+lists it, or a sibling that parent lists), and so are
 two generators named `x` in one layout or in two layouts of one build. A ConfigMap `x` in another
 namespace, or a generator `x` in a child its parent does not list, is written.
 
@@ -303,7 +305,11 @@ Controls how resource YAML files are named:
   `ConfigMapGenerators` (go-kure/kure#891): a `configMapGenerator` exists only inside a
   `kustomization.yaml`, the child writes none, and before this its generators were silently
   dropped. They are not moved into the parent's `kustomization.yaml`. In `WriteManifest` this
-  includes an augmenter application that `ArgoProfile`'s `AppFileSingle` writes as one file.
+  includes any application layout written as one file through `Config` (`ArgoProfile`, or
+  `ApplicationFileMode: AppFileSingle` set explicitly) that an augmenter gives generators, under
+  every walker and every Flux placement but `FluxIntegratedPerLayout`. An augmenter that also sets
+  its layout's `ApplicationFileMode` to `AppFilePerResource` keeps its generators: the layout gets
+  its own directory and `kustomization.yaml`.
 
 ### Layout origins
 
