@@ -336,7 +336,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Check action pins
-      uses: go-kure/.github/.github/actions/check-action-pins@1d748512f0bf84271b66cb8c8f4e311b6cde684a # main
+      uses: go-kure/.github/.github/actions/check-action-pins@7c4928ec8857647fa48195204b2d47052c2ab7db # main
 
   forbidden-terms:
     name: forbidden-terms
@@ -349,7 +349,7 @@ jobs:
     # This job has no path or event filter: full-tree PR and merge-queue scans
     # must use identical scope.
     - name: Check for downstream references
-      uses: go-kure/.github/.github/actions/check-forbidden-terms@1d748512f0bf84271b66cb8c8f4e311b6cde684a # main
+      uses: go-kure/.github/.github/actions/check-forbidden-terms@7c4928ec8857647fa48195204b2d47052c2ab7db # main
 
     # Derives the canonical-guard checkout ref from the check-forbidden-terms
     # action pin above instead of carrying a second, independently-tracked
@@ -720,7 +720,7 @@ jobs:
         fi
 
     - name: Gate on reachable vulnerabilities
-      uses: go-kure/.github/.github/actions/govulncheck-gate@1d748512f0bf84271b66cb8c8f4e311b6cde684a # main
+      uses: go-kure/.github/.github/actions/govulncheck-gate@7c4928ec8857647fa48195204b2d47052c2ab7db # main
       with:
         report: govulncheck.json
         # Accepted-risk advisories: reachable under symbol scan but not exploitable in
@@ -1052,7 +1052,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Validate docs map (code↔docs sync)
-      uses: go-kure/.github/.github/actions/check-doc-sync@1d748512f0bf84271b66cb8c8f4e311b6cde684a # main
+      uses: go-kure/.github/.github/actions/check-doc-sync@7c4928ec8857647fa48195204b2d47052c2ab7db # main
 
     # check-doc-sync proves every package has a page; this proves the pages name
     # functions that still exist. The builder-contract epic removed several
@@ -1144,7 +1144,7 @@ jobs:
       run: hugo --baseURL "/" --destination .linkcheck --quiet
 
     - name: Check internal links (rendered site)
-      uses: go-kure/.github/.github/actions/check-links@1d748512f0bf84271b66cb8c8f4e311b6cde684a # main
+      uses: go-kure/.github/.github/actions/check-links@7c4928ec8857647fa48195204b2d47052c2ab7db # main
       with:
         built-dir: site/.linkcheck
 
@@ -1264,7 +1264,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Enforce docs-with-code (Layer 3)
-      uses: go-kure/.github/.github/actions/check-doc-gate@1d748512f0bf84271b66cb8c8f4e311b6cde684a # main
+      uses: go-kure/.github/.github/actions/check-doc-gate@7c4928ec8857647fa48195204b2d47052c2ab7db # main
       with:
         base-ref: origin/${{ github.base_ref }}
         skip: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip') }}
