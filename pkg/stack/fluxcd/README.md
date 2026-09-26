@@ -435,8 +435,19 @@ the directory the bootstrap sync path `./<root>` names (see [Kustomization paths
 for other rules), so the Source is in one build, the root's, and exists before any Kustomization
 that uses it. When the root node renders a bundle, its own Kustomization builds that same directory beside
 the bootstrap: both hold the same objects, so neither prunes what the other keeps, but the root
-bundle's patches and postBuild apply only in its own, so a root patch that selects a hosted Source
-makes the two apply it differently. A `sourceRef` names the object, not the layout holding it.
+bundle's patches and postBuild apply only in its own. A generated Kustomization whose build holds
+the root node's layout is therefore refused when one of its patches applies to a Source the
+integration hosts there — a target that selects it the way kustomize selects one, or a target-less
+strategic-merge patch whose body names its apiVersion, kind, name and effective namespace — or when
+its postBuild substitution changes one: Flux's own substitution, run offline with the inline
+`substitute` vars and, when `substituteFrom` is set, over any `${...}` expression, since those
+values are only in the cluster. Otherwise the two would apply the Source differently and keep
+overwriting each other. The error names the Kustomization, the Source and the patch index or
+postBuild; narrow the patch target, move the patch or postBuild to a bundle below the root node, or
+drop the `${...}` from the `SourceRef` URL. A patch that selects a hosted Source but leaves it
+unchanged is refused too. A copy the integration did not add, anywhere in the root build (see
+below), is its owner's: the integration hosts none of its own then and does not check what the root
+bundle's patches do to it. A `sourceRef` names the object, not the layout holding it.
 
 The root build also covers the child directories the root's `kustomization.yaml` lists and the
 `AppFileSingle` files written into them. When that build already holds a copy the integration did

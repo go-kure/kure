@@ -1,13 +1,21 @@
 package fluxcd_test
 
 import (
+	"context"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/api/provider"
+	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
@@ -370,5 +378,212 @@ func TestIntegrate_SharedSourceInSingleFileApplicationCounts(t *testing.T) {
 			}
 			checkEveryBuild(t, ml)
 		})
+	}
+}
+
+// sourcePatch is a JSON6902 patch that changes a GitRepository's interval.
+const sourcePatch = "- op: replace\n  path: /spec/interval\n  value: 5m\n"
+
+// rootBundleTree is deepTree with a bundle on the root node, whose
+// Kustomization builds the root node's layout under nodeOnly, and b's
+// SourceRef URL set to url when url is not empty. decorate sets the root
+// bundle's and a's patches or postBuild.
+func rootBundleTree(url string, decorate func(root, a *stack.Bundle)) func() *stack.Cluster {
+	return func() *stack.Cluster {
+		c := deepTree()
+		c.Node.Bundle = srBundle("platform", cmApp("platform-app"))
+		a := c.Node.Children[0]
+		if url != "" {
+			a.Children[0].Bundle.SourceRef.URL = url
+		}
+		decorate(c.Node.Bundle, a.Bundle)
+		return c
+	}
+}
+
+// TestIntegrate_RootBundleBuildChangesHostedSource: the root node renders a
+// bundle, so its Kustomization builds the directory the Flux bootstrap
+// applies, where the integration hosts b's Source. A patch of that
+// Kustomization which applies to the Source, or a postBuild that substitutes
+// into it, would make the two apply the Source differently: refused, the tree
+// untouched (go-kure/kure#908). Anything else is accepted, and the Source the
+// root bundle's Flux build applies is the one the bootstrap's build applies.
+func TestIntegrate_RootBundleBuildChangesHostedSource(t *testing.T) {
+	const templatedURL = "https://${GIT_HOST}/shared.git"
+	rootPatch := func(p stack.Patch) func(root, a *stack.Bundle) {
+		return func(root, _ *stack.Bundle) { root.Patches = []stack.Patch{p} }
+	}
+	rootPostBuild := func(pb *stack.PostBuild) func(root, a *stack.Bundle) {
+		return func(root, _ *stack.Bundle) { root.PostBuild = pb }
+	}
+	sourceKind := stack.Patch{Patch: sourcePatch, Target: &stack.PatchSelector{Kind: "GitRepository"}}
+	for _, tc := range []struct {
+		name  string
+		build func() *stack.Cluster
+		// callerCopy puts the caller's copy of the Source in the root
+		// before integrating.
+		callerCopy bool
+		// refused is what the refusal names besides the CR and the
+		// Source; empty means accepted.
+		refused string
+	}{
+		{name: "1 patch selecting the Source by kind", build: rootBundleTree("", rootPatch(sourceKind)), refused: "patch 0 (target {kind: GitRepository}) selects it"},
+		{name: "2 patch selecting the Source by kind regex", build: rootBundleTree("", rootPatch(stack.Patch{Patch: sourcePatch, Target: &stack.PatchSelector{Kind: "Git.*"}})), refused: "patch 0"},
+		{name: "3 patch selecting another kind", build: rootBundleTree("", rootPatch(stack.Patch{Patch: sourcePatch, Target: &stack.PatchSelector{Kind: "Deployment"}}))},
+		{name: "4 patch selecting by a label the Source lacks", build: rootBundleTree("", rootPatch(stack.Patch{Patch: sourcePatch, Target: &stack.PatchSelector{LabelSelector: "app=x"}}))},
+		{name: "5 target-less patch naming the Source", build: rootBundleTree("", rootPatch(stack.Patch{Patch: "apiVersion: source.toolkit.fluxcd.io/v1\nkind: GitRepository\nmetadata:\n  name: shared\n  namespace: flux-system\nspec:\n  interval: 5m\n"})), refused: "patch 0 (no target) names it"},
+		{name: "6 target-less patch naming another object", build: rootBundleTree("", rootPatch(stack.Patch{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: platform-app-cm\n  namespace: default\ndata:\n  patched: \"true\"\n"}))},
+		{name: "7 postBuild over a plain Source", build: rootBundleTree("", rootPostBuild(&stack.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}}))},
+		{name: "8 postBuild substituting into the Source", build: rootBundleTree(templatedURL, rootPostBuild(&stack.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}})), refused: "postBuild substitution changes it"},
+		{name: "8b postBuild substituteFrom only", build: rootBundleTree(templatedURL, rootPostBuild(&stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}}})), refused: "postBuild substitution changes it"},
+		{name: "9 the patch on a bundle below the root", build: rootBundleTree("", func(_, a *stack.Bundle) { a.Patches = []stack.Patch{sourceKind} })},
+		{name: "10 the patch selecting the caller's copy in the root", build: rootBundleTree("", rootPatch(sourceKind)), callerCopy: true},
+	} {
+		for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
+			t.Run(string(placement)+"/"+tc.name, func(t *testing.T) {
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				integrator := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator())
+				switch {
+				case tc.refused != "":
+					c := tc.build()
+					ml, err := layout.WalkCluster(c, rules)
+					if err != nil {
+						t.Fatal(err)
+					}
+					before := countResources(ml)
+					err = integrator.IntegrateWithLayout(ml, c, rules)
+					if err == nil {
+						t.Fatalf("got no error, want a refusal naming %q", tc.refused)
+					}
+					for _, want := range []string{`Flux Kustomization "platform"`, `GitRepository "shared"`, tc.refused} {
+						if !strings.Contains(err.Error(), want) {
+							t.Errorf("refusal %q does not name %q", err, want)
+						}
+					}
+					if after := countResources(ml); after != before {
+						t.Errorf("refused integration left %d resources, want the walked %d", after, before)
+					}
+				case tc.callerCopy:
+					// checkIdempotent rebuilds from the cluster, which drops
+					// the caller's copy; the root CR's patch changes that
+					// copy by design, so it is not compared either.
+					c := tc.build()
+					ml, err := layout.WalkCluster(c, rules)
+					if err != nil {
+						t.Fatal(err)
+					}
+					callers := sharedSource(t)
+					ml.Resources = append(ml.Resources, callers)
+					count := 0
+					for i := range 2 {
+						if err := integrator.IntegrateWithLayout(ml, c, rules); err != nil {
+							t.Fatalf("IntegrateWithLayout %d: %v", i+1, err)
+						}
+						if i == 0 {
+							count = countResources(ml)
+						} else if after := countResources(ml); after != count {
+							t.Errorf("second IntegrateWithLayout changed the resource count %d -> %d", count, after)
+						}
+						if got, want := sourceCopies(ml, "shared"), map[string]int{"platform": 1}; !intMapsEqual(got, want) {
+							t.Errorf("integration %d: GitRepository shared hosted %v, want only the caller's copy %v", i+1, got, want)
+						}
+						if !slices.Contains(ml.Resources, callers) {
+							t.Errorf("integration %d dropped the caller's copy from the root", i+1)
+						}
+					}
+					checkEveryBuild(t, ml)
+				default:
+					ml := integrated(t, tc.build(), rules)
+					if got, want := sourceCopies(ml, "shared"), map[string]int{"platform": 1}; !intMapsEqual(got, want) {
+						t.Errorf("GitRepository shared hosted %v, want %v", got, want)
+					}
+					checkEveryBuild(t, ml)
+					checkIdempotent(t, tc.build(), rules)
+					checkRootCRAppliesTheBootstrapSource(t, ml)
+				}
+			})
+		}
+	}
+}
+
+// checkRootCRAppliesTheBootstrapSource Flux-builds the root node's directory
+// twice, as the bootstrap does (no patches, no postBuild) and as the root
+// bundle's Kustomization does, and requires the hosted Source to come out the
+// same. fluxBuild runs no postBuild, so when the Kustomization has one every
+// object it built is passed through Flux's substitution with its vars (dry
+// run, and always when substituteFrom is set: its values are in the cluster),
+// and the Source is compared parsed, as the substitution round-trips it
+// through JSON.
+func checkRootCRAppliesTheBootstrapSource(t *testing.T, ml *layout.ManifestLayout) {
+	t.Helper()
+	var cr *kustv1.Kustomization
+	for _, k := range kustomizations(ml) {
+		if filepath.Clean(k.Spec.Path) == ml.FullRepoPath() {
+			cr = k
+		}
+	}
+	if cr == nil {
+		t.Fatalf("no Kustomization builds %q", ml.FullRepoPath())
+	}
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kust := unstructured.Unstructured{Object: content}
+	id := resid.NewResIdWithNamespace(resid.NewGvk(sourcev1.GroupVersion.Group, sourcev1.GroupVersion.Version, "GitRepository"), "shared", "flux-system").String()
+	rf := provider.NewDefaultDepProvider().GetResourceFactory()
+	parse := func(y string) map[string]any {
+		t.Helper()
+		res, err := rf.FromBytes([]byte(y))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err := res.Map()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	for writer, w := range writeAll(t, ml) {
+		bootstrap := fluxBuild(t, w.root, ml.FullRepoPath(), unstructured.Unstructured{Object: map[string]any{}})[id]
+		built := fluxBuild(t, w.root, cr.Spec.Path, kust)
+		if bootstrap == "" || built[id] == "" {
+			t.Errorf("%s: the bootstrap build or %q's holds no %s", writer, cr.Name, id)
+			continue
+		}
+		if cr.Spec.PostBuild == nil {
+			if built[id] != bootstrap {
+				t.Errorf("%s: %q applies the Source as\n%s\nthe bootstrap as\n%s", writer, cr.Name, built[id], bootstrap)
+			}
+			continue
+		}
+		opts := []fluxkustomize.SubstituteOption{fluxkustomize.SubstituteWithDryRun(true)}
+		if len(cr.Spec.PostBuild.SubstituteFrom) > 0 {
+			opts = append(opts, fluxkustomize.SubstituteWithAlways(true))
+		}
+		var got map[string]any
+		for objID, y := range built {
+			res, err := rf.FromBytes([]byte(y))
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := fluxkustomize.SubstituteVariables(context.Background(), nil, kust, res, opts...)
+			if err != nil {
+				t.Errorf("%s: postBuild of %s: %v", writer, objID, err)
+				continue
+			}
+			if out == nil {
+				out = res
+			}
+			if objID == id {
+				if got, err = out.Map(); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if want := parse(bootstrap); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: %q applies the Source as %v after postBuild, the bootstrap as %v", writer, cr.Name, got, want)
+		}
 	}
 }
