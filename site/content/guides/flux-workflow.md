@@ -240,7 +240,8 @@ What changed, and what to do:
   case-insensitively), and two `AppFileSingle` layouts that resolve to the same file. They also
   refuse two layouts holding one object when one kustomize build takes in both: a
   `kustomization.yaml` and the child directories it lists, or the Flux build of a marked
-  `KustomizationRecursive` directory. kustomize would refuse the second copy.
+  `KustomizationRecursive` directory. kustomize would refuse the second copy. The ConfigMap a
+  `configMapGenerator` generates counts as one of those objects.
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 
@@ -446,8 +447,10 @@ The child layout `Name` becomes the Flux `Kustomization` CR's `metadata.name`. S
 `-`, and `/` between segments) and may not take a path the writer owns in the layout's directory:
 a generated resource file, a kustomize control file, a child layout's directory or file, or
 another extra file. The layout writers refuse such a layout with an error instead of letting the
-extra file replace a generated manifest. See the [Layout Engine reference](/api-reference/layout/)
-for the full rule.
+extra file replace a generated manifest. `ConfigMapGenerators` need the layout's own
+`kustomization.yaml`, so the writers refuse them on an application written `AppFileSingle` (as
+`ArgoProfile` writes applications), which gets none. See the
+[Layout Engine reference](/api-reference/layout/) for the full rule.
 
 ### Disk layout
 

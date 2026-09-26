@@ -20,11 +20,14 @@ import (
 //     layouts, the same file (go-kure/kure#771): each writes its own files
 //     there, and the later kustomization.yaml silently replaces the earlier
 //     one, dropping its resources from the kustomize graph;
-//   - an AppFileSingle child has children (see checkSingleChildLeaf);
+//   - an AppFileSingle child has children (see checkSingleChildLeaf) or
+//     ConfigMapGenerators (see checkSingleChildGenerators);
 //   - an AppFileSingle child's file, which its parent's kustomization.yaml
 //     lists, lands outside the parent's directory or in a spelling of it that
 //     differs only in case, or the child's Name is rooted or holds a path
 //     separator (see checkSingleChildEntry);
+//   - a layout holds one object twice, counting the ConfigMaps its
+//     kustomization.yaml generates (see checkResourceIdentities);
 //   - an extra file takes a path the writer owns (see checkExtraFiles);
 //   - an AppFileSingle layout's file or extra file replaces another layout's
 //     file, needs a directory where another layout writes a file, or is a
@@ -63,7 +66,7 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 			}
 			dirs[key] = l
 		}
-		if err := checkResourceIdentities(l); err != nil {
+		if err := checkResourceIdentities(l, plan.writesKustomization(l, l == root)); err != nil {
 			return err
 		}
 		// The writers run it again as they write l; here it refuses before
@@ -77,6 +80,9 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 				continue
 			}
 			if err := checkSingleChildLeaf(child, outDir); err != nil {
+				return err
+			}
+			if err := checkSingleChildGenerators(child, outDir); err != nil {
 				return err
 			}
 			if err := checkSingleChildEntry(l, child, plan, l == root); err != nil {
@@ -105,7 +111,11 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 // produces takes in together: kustomize refuses to add the second object ("may
 // not add resource with an already registered id"), so the kustomization.yaml
 // kure writes, or the Flux build of its Recursive directory, would not build
-// (go-kure/kure#880). The builds, each checked on its own, are:
+// (go-kure/kure#880). A layout's objects include the ConfigMap each of its
+// ConfigMapGenerators generates when the writer writes it a kustomization.yaml
+// (see eachGeneratedIdentity): kustomize refuses a generator whose ConfigMap
+// the build already holds, and a ConfigMap the build adds after a generator's
+// (go-kure/kure#894). The builds, each checked on its own, are:
 //   - every layout the writer writes a kustomization.yaml for: its own
 //     resource files, the file of each AppFileSingle child it lists (by its
 //     path below the directory, see childFileEntry), and the build of each
@@ -207,13 +217,27 @@ func checkBuildIdentities(root *ManifestLayout, plan writerPlan) error {
 		}
 	}
 
-	ids := map[*ManifestLayout][]string{}
+	type held struct {
+		id        string
+		generated bool // by one of the layout's ConfigMapGenerators
+	}
+	ids := map[*ManifestLayout][]held{}
 	for _, li := range all {
 		if err := eachIdentity(li.l, buildIdentity, func(id string) error {
-			ids[li.l] = append(ids[li.l], id)
+			ids[li.l] = append(ids[li.l], held{id, false})
 			return nil
 		}); err != nil {
 			return err
+		}
+		// A layout's generators are objects of its own kustomization.yaml's
+		// build, and so of every build that takes that one in.
+		if li.writesK {
+			if err := eachGeneratedIdentity(li.l, buildIdentity, func(id string) error {
+				ids[li.l] = append(ids[li.l], held{id, true})
+				return nil
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	for i := len(all) - 1; i >= 0; i-- {
@@ -230,24 +254,28 @@ func checkBuildIdentities(root *ManifestLayout, plan writerPlan) error {
 		default:
 			continue
 		}
-		seen := map[string]*ManifestLayout{}
+		type holder struct {
+			l         *ManifestLayout
+			generated bool
+		}
+		seen := map[string]holder{}
 		for _, li := range all {
 			if !in[li.l] {
 				continue
 			}
-			for _, id := range ids[li.l] {
+			for _, h := range ids[li.l] {
 				// One layout counts too: checkResourceIdentities keeps the
 				// namespace field of a cluster-scoped kind, which kustomize
 				// ignores.
-				if other, dup := seen[id]; dup {
-					held := fmt.Sprintf("layouts %q and %q both hold the object %s", other.FullRepoPath(), li.l.FullRepoPath(), id)
-					if other == li.l {
-						held = fmt.Sprintf("layout %q holds the object %s twice", li.l.FullRepoPath(), id)
+				if other, dup := seen[h.id]; dup {
+					both := fmt.Sprintf("layouts %q and %q both hold the object %s", other.l.FullRepoPath(), li.l.FullRepoPath(), h.id)
+					if other.l == li.l {
+						both = fmt.Sprintf("layout %q holds the object %s twice", li.l.FullRepoPath(), h.id)
 					}
 					return errors.NewFileError("write", b.l.FullRepoPath(), fmt.Sprintf(
-						"%s, and %s: kustomize refuses one object twice", held, what), nil)
+						"%s%s, and %s: kustomize refuses one object twice", both, generatedNote(other.generated, h.generated), what), nil)
 				}
-				seen[id] = li.l
+				seen[h.id] = holder{li.l, h.generated}
 			}
 		}
 	}
@@ -272,6 +300,21 @@ func checkSingleChildLeaf(child *ManifestLayout, outDir outDirFunc) error {
 		fmt.Sprintf("layout %q is AppFileSingle and has child layouts: it writes one file into its Namespace, normally its parent's directory, and no kustomization.yaml, so nothing would list them", child.FullRepoPath()), nil)
 }
 
+// checkSingleChildGenerators refuses an AppFileSingle child (as outDir treats
+// it) that carries ConfigMapGenerators, with or without resources. A
+// configMapGenerator exists only inside a kustomization.yaml, and such a child
+// writes none (go-kure/kure#860), so its generators would be silently dropped
+// (go-kure/kure#891). They are not moved into the parent's kustomization.yaml,
+// which the caller did not put them in.
+func checkSingleChildGenerators(child *ManifestLayout, outDir outDirFunc) error {
+	dir, single := outDir(child)
+	if !single || len(child.ConfigMapGenerators) == 0 {
+		return nil
+	}
+	return errors.NewFileError("write", dir, fmt.Sprintf(
+		"layout %q is AppFileSingle, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", child.FullRepoPath()), nil)
+}
+
 // checkResourceIdentities refuses a layout that holds two resources with one
 // identity as layoutIdentity defines it (group, kind, namespace and name).
 // Resources that share a file name are legitimately written into one
@@ -281,16 +324,57 @@ func checkSingleChildLeaf(child *ManifestLayout, outDir outDirFunc) error {
 // kustomize builds, are refused as well. A grouping axis set to flat merges
 // several applications' or nodes' resources into one directory, which is
 // where this happens.
-func checkResourceIdentities(l *ManifestLayout) error {
-	seen := make(map[string]struct{}, len(l.Resources))
-	return eachIdentity(l, layoutIdentity, func(id string) error {
-		if _, dup := seen[id]; dup {
-			return errors.NewFileError("write", l.FullRepoPath(),
-				fmt.Sprintf("layout %q holds the same object %s twice", l.FullRepoPath(), id), nil)
+//
+// When the writer writes l a kustomization.yaml (writesK), the ConfigMap each
+// of its ConfigMapGenerators generates counts as well (go-kure/kure#894):
+// kustomize refuses a generator whose ConfigMap is already in the build
+// ("behavior must be merge or replace"), and kure writes no behavior.
+func checkResourceIdentities(l *ManifestLayout, writesK bool) error {
+	seen := make(map[string]bool, len(l.Resources)) // identity -> generated
+	claim := func(generated bool) func(id string) error {
+		return func(id string) error {
+			if other, dup := seen[id]; dup {
+				return errors.NewFileError("write", l.FullRepoPath(),
+					fmt.Sprintf("layout %q holds the same object %s twice%s", l.FullRepoPath(), id, generatedNote(other, generated)), nil)
+			}
+			seen[id] = generated
+			return nil
 		}
-		seen[id] = struct{}{}
+	}
+	if err := eachIdentity(l, layoutIdentity, claim(false)); err != nil {
+		return err
+	}
+	if !writesK {
 		return nil
-	})
+	}
+	return eachGeneratedIdentity(l, layoutIdentity, claim(true))
+}
+
+// generatedNote says which of two objects with one identity a
+// configMapGenerator generates, if any.
+func generatedNote(a, b bool) string {
+	switch {
+	case a && b:
+		return ", both generated by configMapGenerators"
+	case a || b:
+		return ", one generated by a configMapGenerator"
+	}
+	return ""
+}
+
+// eachGeneratedIdentity calls fn, in order, with the identity key renders for
+// the ConfigMap each of l's ConfigMapGenerators generates: v1 ConfigMap, the
+// generator's name and no namespace. kustomize compares the name before the
+// content-hash suffix, and reads the missing namespace as "default"; kure
+// writes neither a namespace nor a behavior for a generator.
+func eachGeneratedIdentity(l *ManifestLayout, key identityKey, fn func(id string) error) error {
+	gvk := schema.GroupVersionKind{Version: "v1", Kind: "ConfigMap"}
+	for _, gen := range l.ConfigMapGenerators {
+		if err := fn(key(gvk, "", gen.Name)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // identityKey renders an object's identity from its group, version and kind,
