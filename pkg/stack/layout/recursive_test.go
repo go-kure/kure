@@ -438,9 +438,9 @@ func vacant() *layout.ManifestLayout {
 
 // TestWriters_RecursiveRefusesEmptyFluxBuild: a Flux Kustomization kure
 // generated names a Recursive directory, which gets no kustomization.yaml; when
-// nothing else lands at or below it, the directory is not in the written
-// output (WriteManifest) or in a Git tree (WriteToDisk, WriteToTar), so every
-// writer refuses it before writing anything, naming the directory.
+// nothing else lands at or below it, every writer would leave it an empty
+// directory, which a Git tree drops, so every writer refuses it before
+// writing anything, naming the directory.
 func TestWriters_RecursiveRefusesEmptyFluxBuild(t *testing.T) {
 	cases := map[string]struct {
 		build func() *layout.ManifestLayout
@@ -464,6 +464,18 @@ func TestWriters_RecursiveRefusesEmptyFluxBuild(t *testing.T) {
 				s := child(r, "s", layout.KustomizationUnset)
 				s.ApplicationFileMode = layout.AppFileSingle
 				s.Resources = nil
+				return r
+			},
+			dir: "vacant",
+		},
+		// Its file lands in "Vacant", which is not the directory the
+		// Kustomization names in a Git tree or on a case-sensitive volume.
+		"only an AppFileSingle child in a directory that differs in case": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				s := child(r, "s", layout.KustomizationUnset)
+				s.ApplicationFileMode = layout.AppFileSingle
+				s.Namespace = "Vacant"
 				return r
 			},
 			dir: "vacant",
@@ -571,6 +583,72 @@ func TestWriters_RecursiveEmptyFluxBuildCounterparts(t *testing.T) {
 				if slices.Contains(tc.want, "vacant/kustomization.yaml") {
 					if got := listedResources(t, files, "vacant/kustomization.yaml"); len(got) != 0 {
 						t.Errorf("%s: vacant/kustomization.yaml lists %v, want resources: []", writer, got)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestWriteManifest_RecursiveFromConfigRefusesEmptyFluxBuild: a layout with
+// no Mode of its own is Recursive through Config.KustomizationMode, which only
+// WriteManifest resolves; its empty marked directory is refused all the same.
+func TestWriteManifest_RecursiveFromConfigRefusesEmptyFluxBuild(t *testing.T) {
+	r := vacant()
+	r.Mode = layout.KustomizationUnset
+	cfg := layout.DefaultLayoutConfig()
+	cfg.KustomizationMode = layout.KustomizationRecursive
+	err := writeRefused(t, "WriteManifest", cfg, r)
+	if err == nil || !strings.Contains(err.Error(), emptyRecursiveMsg) {
+		t.Errorf("err = %v, want it to contain %q", err, emptyRecursiveMsg)
+	}
+}
+
+// TestWriters_RecursiveFilledFromElsewhere: a marked Recursive directory is
+// filled by a file another layout writes into it, and is written.
+func TestWriters_RecursiveFilledFromElsewhere(t *testing.T) {
+	cases := map[string]struct {
+		build func() *layout.ManifestLayout
+		want  []string // files that must be written
+	}{
+		// The AppFileSingle child's file lands in its own Namespace, p/d, and
+		// not in its parent's directory p.
+		"an AppFileSingle child's file in a directory below its parent's": {
+			build: func() *layout.ManifestLayout {
+				p := &layout.ManifestLayout{Name: "p", Namespace: ".", Mode: layout.KustomizationRecursive}
+				s := child(p, "s", layout.KustomizationUnset)
+				s.ApplicationFileMode = layout.AppFileSingle
+				s.Namespace = "p/d"
+				d := child(p, "d", layout.KustomizationRecursive)
+				d.Resources = nil
+				d.SetFluxBuild(true)
+				return p
+			},
+			want: []string{"p/d/s.yaml"},
+		},
+		// An AppFileSingle root writes its file and a kustomization.yaml into
+		// its Namespace, apps/web, which is its umbrella child's directory.
+		"an AppFileSingle root's files": {
+			build: func() *layout.ManifestLayout {
+				r := &layout.ManifestLayout{
+					Name: "r", Namespace: "apps/web", ApplicationFileMode: layout.AppFileSingle,
+					Resources: []client.Object{testObj("v1", "ConfigMap", "a")},
+				}
+				d := &layout.ManifestLayout{Name: "web", Namespace: "apps", Mode: layout.KustomizationRecursive, UmbrellaChild: true}
+				d.SetFluxBuild(true)
+				r.Children = []*layout.ManifestLayout{d}
+				return r
+			},
+			want: []string{"apps/web/kustomization.yaml", "apps/web/r.yaml"},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, writer := range allWriters {
+				files := writtenFiles(t, writer, layout.DefaultLayoutConfig(), tc.build())
+				for _, f := range tc.want {
+					if _, ok := files[f]; !ok {
+						t.Errorf("%s: %s not written; files = %v", writer, f, slices.Sorted(maps.Keys(files)))
 					}
 				}
 			}

@@ -235,9 +235,8 @@ Controls how resource YAML files are named:
   A marked Recursive directory that holds no file is refused (go-kure/kure#904): no resource file,
   extra file, `AppFileSingle` child file, file of a layout below it or `kustomization.yaml` a
   directory below it gets lands at or below it. The writers write it no `kustomization.yaml`, so
-  `WriteManifest` returns no entry for its path and `WriteToDisk` and `WriteToTar` write an empty
-  directory, which a Git tree drops: the Kustomization would name a path the output does not
-  contain. This happens to a bundle with no applications yet, one whose applications were all
+  every writer would leave an empty directory, which a Git tree drops: the Kustomization would
+  name a path the committed output does not contain. This happens to a bundle with no applications yet, one whose applications were all
   removed, or one whose applications render nothing, when the whole tree is Recursive. Give the
   layout a resource, or write it `KustomizationExplicit`, which writes it `resources: []`.
 
