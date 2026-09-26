@@ -319,9 +319,11 @@ Controls how resource YAML files are named:
   single-segment `Namespace`) with no resource file, no bundle and no `AppFileSingle` child that
   writes a file. A `KustomizationRecursive` root, `AppFileSingle` or not, is refused as
   Recursive. Each is refused before anything is written when it carries `ConfigMapGenerators`,
-  which were silently dropped before. Under `WalkCluster` with `FlattenSingleTier`, this includes
-  an augmenter app that is the only one, emits no objects and sets its layout `AppFileSingle`:
-  flattening moves it and its generators onto the root. Give such a root a resource, or put the
+  which were silently dropped before. Under `WalkCluster` with `FlattenSingleTier`,
+  `WriteToDisk` and `WriteToTar` now refuse an augmenter app that is the only one, emits no
+  objects and sets its layout `AppFileSingle`: flattening moves it and its generators onto the
+  root. `WriteManifest` already refuses that root, since it renders a node or bundle and cannot
+  be written as `AppFileSingle`. Give such a root a resource, or put the
   generators on a layout that writes a `kustomization.yaml`.
 
 ### Layout origins

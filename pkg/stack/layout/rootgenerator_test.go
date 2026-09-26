@@ -51,6 +51,9 @@ func TestWriters_RefuseGeneratorsOnSingleRootWithoutFile(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
 		}
+		if err != nil && !strings.Contains(err.Error(), "r.yaml") {
+			t.Errorf("%s: err = %v, want it to name the root's file r.yaml", writer, err)
+		}
 	}
 }
 
@@ -118,6 +121,9 @@ func TestWriters_RefuseGeneratorsOnRecursiveSingleRoot(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), want) {
 					t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
 				}
+				if err != nil && !strings.Contains(err.Error(), "r.yaml") {
+					t.Errorf("%s: err = %v, want it to name the root's file r.yaml", writer, err)
+				}
 			}
 		})
 	}
@@ -180,6 +186,7 @@ func TestWriteManifest_ClusterRootWithSingleChildGenerators(t *testing.T) {
 	if !generated {
 		t.Errorf("WriteManifest: no cluster/kustomization.yaml generates x:\n%v", files)
 	}
+	kustomizeBuildsAll(t, tree(true))
 	err := writeRefused(t, "WriteManifest", layout.DefaultLayoutConfig(), tree(false))
 	want := `layout "cluster" gets no kustomization.yaml, so its ConfigMapGenerators have nowhere to go`
 	if err == nil || !strings.Contains(err.Error(), want) {

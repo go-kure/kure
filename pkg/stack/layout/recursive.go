@@ -110,9 +110,9 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 				add(l.Name+".yaml", false, false, parent)
 			}
 		}
-		// An AppFileSingle layout writes no kustomization.yaml either; a child
-		// one is refused by checkSingleChildGenerators first, so this names a
-		// Recursive root, single or not (go-kure/kure#899).
+		// A Recursive AppFileSingle layout writes none either; a child one is
+		// refused by checkSingleChildGenerators first, so for a single layout
+		// this fires only on the root (go-kure/kure#899).
 		if plan.kustomizationMode(l) == KustomizationRecursive && len(l.ConfigMapGenerators) > 0 {
 			return errors.NewFileError("write", layoutPath(l, plan), fmt.Sprintf(
 				"layout %q is KustomizationRecursive, which writes no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", l.FullRepoPath()), nil)
