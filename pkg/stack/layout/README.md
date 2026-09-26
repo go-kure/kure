@@ -61,7 +61,8 @@ now gets that name twice (`.../<name>/<name>`); pass the parent's path instead.
 Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
 anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
 layouts that resolve to the same file, or an `AppFileSingle` child with children of its own or
-with `ConfigMapGenerators`.
+with `ConfigMapGenerators`, or any other layout it writes no `kustomization.yaml` for that has
+`ConfigMapGenerators`.
 It also refuses an `AppFileSingle` layout whose file, `<Name>.yaml`, or one of whose extra files
 would replace another file written into the same directory: the `kustomization.yaml` there, one of
 the resource or extra files of the layout that owns the directory, or another `AppFileSingle`
@@ -311,6 +312,11 @@ Controls how resource YAML files are named:
   `WalkClusterByPackage` with every placement, since it clears the placement. An augmenter that also sets
   its layout's `ApplicationFileMode` to `AppFilePerResource` keeps its generators: the layout gets
   its own directory and `kustomization.yaml`.
+- The same holds for a root the writer writes no `kustomization.yaml` for (go-kure/kure#899): an
+  `AppFileSingle` root with no resources and no children, in every writer, and `WriteManifest`'s
+  synthetic cluster root with no resources. Each is refused before anything is written when it
+  carries `ConfigMapGenerators`, which were silently dropped before. Give such a root a resource,
+  or put the generators on a layout that writes a `kustomization.yaml`.
 
 ### Layout origins
 
@@ -354,7 +360,8 @@ directories, files and Flux CRs.
 `ManifestLayout.ExtraFiles` lets callers attach arbitrary files (e.g. a `values.yaml`) into a layout's directory alongside the resource YAMLs. `ManifestLayout.ConfigMapGenerators` adds entries to a `configMapGenerator:` section in the generated `kustomization.yaml`. kustomize appends a content-hash suffix to the generated ConfigMap name and rewrites references (e.g. `HelmRelease.spec.valuesFrom`) on build, so any change to the source file forces re-reconciliation — the canonical FluxCD pattern for tracking Helm values changes.
 
 A generator needs a `kustomization.yaml` the writer writes, so the writers refuse one on a
-`KustomizationRecursive` layout or an `AppFileSingle` child, and they refuse a generated ConfigMap
+`KustomizationRecursive` layout, an `AppFileSingle` child, or a root that writes no
+`kustomization.yaml`, and they refuse a generated ConfigMap
 whose identity its build already holds (see "Layout paths").
 
 An `ExtraFile.Name` is a relative path of `/`-separated segments made of letters, digits, `.`, `_`
