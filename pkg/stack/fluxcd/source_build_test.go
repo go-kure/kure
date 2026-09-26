@@ -131,10 +131,11 @@ func checkEveryBuild(t *testing.T, ml *layout.ManifestLayout) {
 }
 
 // TestIntegrate_SharedSourceAtRoot: every Source the integration derives is
-// hosted once, in the root layout, whichever layouts host the Kustomizations
-// that use it (go-kure/kure#876). The Flux bootstrap applies the root, so the
-// Source has one owner, and it exists before any Kustomization using it: each
-// of those is applied by the root build or by a build below it.
+// hosted once, in the root node's layout, whichever layouts host the
+// Kustomizations that use it (go-kure/kure#876). The Flux bootstrap applies
+// the root, so the Source is in one build, and it exists before any
+// Kustomization using it: each of those is applied by the root build or by a
+// build below it.
 func TestIntegrate_SharedSourceAtRoot(t *testing.T) {
 	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
 		for _, tc := range []struct {
@@ -162,6 +163,28 @@ func TestIntegrate_SharedSourceAtRoot(t *testing.T) {
 				}
 				checkEveryBuild(t, ml)
 				checkIdempotent(t, tc.build(), rules)
+			})
+		}
+	}
+}
+
+// TestIntegrate_SharedSourceAtRootNodeUnderClusterName: with a ClusterName
+// the walker keeps a wrapper layout above the root node's. The bootstrap sync
+// path, ./<root>, names the root node's directory, not the wrapper's, so the
+// Source goes there.
+func TestIntegrate_SharedSourceAtRootNodeUnderClusterName(t *testing.T) {
+	for _, placement := range []layout.FluxPlacement{layout.FluxIntegratedPerBundle, layout.FluxIntegratedPerLayout} {
+		for clusterName, want := range map[string]string{".": "platform", "prod": "prod/platform"} {
+			t.Run(string(placement)+"/"+clusterName, func(t *testing.T) {
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				rules.ClusterName = clusterName
+				ml := integrated(t, deepTree(), rules)
+				if got, want := sourceCopies(ml, "shared"), map[string]int{want: 1}; !intMapsEqual(got, want) {
+					t.Errorf("GitRepository shared hosted %v, want %v", got, want)
+				}
+				checkEveryBuild(t, ml)
+				checkIdempotent(t, deepTree(), rules)
 			})
 		}
 	}
