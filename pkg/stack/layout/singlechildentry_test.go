@@ -64,9 +64,9 @@ func requireBuilds(t *testing.T, writer string, files map[string]string) {
 // TestWriters_SingleChildBelowParentListedByPath: an AppFileSingle child whose
 // directory lies below its parent's is listed by its file's path relative to
 // the parent's directory, slash-separated, and every writer's output builds.
-// Directories compare case-insensitively, as on default macOS volumes, so a
-// child directory that differs only in case from one below the parent's is
-// below it; the entry keeps the child directory's own spelling.
+// The part below the parent's directory keeps the child's own spelling. A
+// rooted Namespace resolves under the writer's root in every writer, as the
+// parent's does.
 func TestWriters_SingleChildBelowParentListedByPath(t *testing.T) {
 	below := func(ns string) func() *layout.ManifestLayout {
 		return func() *layout.ManifestLayout {
@@ -75,20 +75,21 @@ func TestWriters_SingleChildBelowParentListedByPath(t *testing.T) {
 			return p
 		}
 	}
+	// with is p's own files and the given entries, sorted as
+	// listedResources sorts them.
+	with := func(entries ...string) []string {
+		return slices.Sorted(slices.Values(append([]string{"default-configmap-a.yaml", "default-secret-b.yaml"}, entries...)))
+	}
 	cases := map[string]struct {
-		build func() *layout.ManifestLayout
-		entry string // what p/kustomization.yaml lists for svc
-		file  string // where svc's file is written
-		// caseFolded marks a tree whose entry resolves only on a
-		// case-insensitive volume, so kustomize is not run on it here.
-		caseFolded bool
+		build  func() *layout.ManifestLayout
+		listed []string // everything p/kustomization.yaml lists
+		file   string   // where svc's file is written
 	}{
-		"one level below":        {build: below("p/sub"), entry: "sub/svc.yaml", file: "p/sub/svc.yaml"},
-		"two levels below":       {build: below("p/a/b"), entry: "a/b/svc.yaml", file: "p/a/b/svc.yaml"},
-		"below, other case":      {build: below("p/Sub"), entry: "Sub/svc.yaml", file: "p/Sub/svc.yaml"},
-		"parent's own directory": {build: below("p"), entry: "svc.yaml", file: "p/svc.yaml"},
-		// "P/Sub" is "p/sub" on a case-insensitive volume.
-		"parent's directory in other case": {build: below("P/Sub"), entry: "Sub/svc.yaml", file: "P/Sub/svc.yaml", caseFolded: true},
+		"one level below":        {build: below("p/sub"), listed: with("sub/svc.yaml"), file: "p/sub/svc.yaml"},
+		"two levels below":       {build: below("p/a/b"), listed: with("a/b/svc.yaml"), file: "p/a/b/svc.yaml"},
+		"below, other case":      {build: below("p/Sub"), listed: with("Sub/svc.yaml"), file: "p/Sub/svc.yaml"},
+		"parent's own directory": {build: below("p"), listed: with("svc.yaml"), file: "p/svc.yaml"},
+		"rooted Namespace below": {build: below("/p/sub"), listed: with("sub/svc.yaml"), file: "p/sub/svc.yaml"},
 		// The file lands in the directory of p's listed child sub, whose
 		// kustomization.yaml does not list it: p's build takes it in once.
 		"inside a listed directory child": {
@@ -97,28 +98,120 @@ func TestWriters_SingleChildBelowParentListedByPath(t *testing.T) {
 				p.Children = append(p.Children, cmLayout("sub", "p"))
 				return p
 			},
-			entry: "sub/svc.yaml",
-			file:  "p/sub/svc.yaml",
+			listed: with("sub", "sub/svc.yaml"),
+			file:   "p/sub/svc.yaml",
 		},
 	}
 	for name, tc := range cases {
 		for _, writer := range allWriters {
 			t.Run(name+"/"+writer, func(t *testing.T) {
 				files := writtenFiles(t, writer, layout.Config{}, tc.build())
-				listed := listedResources(t, files, "p/kustomization.yaml")
-				if !slices.Contains(listed, tc.entry) {
-					t.Errorf("p/kustomization.yaml lists %v, want it to list %s", listed, tc.entry)
+				if got := listedResources(t, files, "p/kustomization.yaml"); !slices.Equal(got, tc.listed) {
+					t.Errorf("p/kustomization.yaml lists %v, want %v", got, tc.listed)
 				}
 				if !strings.Contains(files[tc.file], "name: svc-config") {
 					t.Errorf("%s does not hold the child's ConfigMap; wrote %v", tc.file, slices.Sorted(maps.Keys(files)))
 				}
-				if tc.caseFolded {
-					if got := strings.ToLower(path.Join("p", tc.entry)); got != strings.ToLower(tc.file) {
-						t.Errorf("entry %s resolves to %s, not to %s even case-insensitively", tc.entry, got, tc.file)
-					}
-					return
-				}
 				requireBuilds(t, writer, files)
+			})
+		}
+	}
+}
+
+// TestWriters_RootListsRootedSingleChild: a root in "." with an AppFileSingle
+// child whose Namespace is "/x" lists x/svc.yaml in every writer, which is
+// where every writer writes the file, never the rooted /x/svc.yaml, which
+// kustomize refuses as absolute.
+func TestWriters_RootListsRootedSingleChild(t *testing.T) {
+	for _, writer := range allWriters {
+		t.Run(writer, func(t *testing.T) {
+			r := &layout.ManifestLayout{Namespace: ".", Resources: []client.Object{testObj("v1", "ConfigMap", "a")}}
+			r.Children = []*layout.ManifestLayout{singleLayout("svc", "/x")}
+			files := writtenFiles(t, writer, layout.Config{}, r)
+			want := []string{"default-configmap-a.yaml", "x/svc.yaml"}
+			if got := listedResources(t, files, "kustomization.yaml"); !slices.Equal(got, want) {
+				t.Errorf("kustomization.yaml lists %v, want %v", got, want)
+			}
+			if _, ok := files["x/svc.yaml"]; !ok {
+				t.Errorf("no x/svc.yaml written; wrote %v", slices.Sorted(maps.Keys(files)))
+			}
+			requireBuilds(t, writer, files)
+		})
+	}
+}
+
+// TestWriters_SingleRootListsChildBelowItsNamespace: an AppFileSingle root
+// lists a child below its Namespace, where it writes its own
+// kustomization.yaml, by that child's path below it.
+func TestWriters_SingleRootListsChildBelowItsNamespace(t *testing.T) {
+	for _, writer := range allWriters {
+		t.Run(writer, func(t *testing.T) {
+			root := singleLayout("r", "x")
+			root.Children = []*layout.ManifestLayout{singleLayout("s", "x/sub")}
+			files := writtenFiles(t, writer, layout.Config{}, root)
+			if got, want := listedResources(t, files, "x/kustomization.yaml"), []string{"r.yaml", "sub/s.yaml"}; !slices.Equal(got, want) {
+				t.Errorf("x/kustomization.yaml lists %v, want %v", got, want)
+			}
+			requireBuilds(t, writer, files)
+		})
+	}
+}
+
+// TestWriters_RefuseSingleChildCaseOnlyMismatch: an AppFileSingle child whose
+// directory spells the parent's directory in another case is one directory
+// with it only on a case-insensitive volume. On a case-sensitive one the file
+// lands elsewhere and the entry names no file, so every writer refuses the
+// tree before writing anything, naming both spellings.
+func TestWriters_RefuseSingleChildCaseOnlyMismatch(t *testing.T) {
+	cases := map[string]struct {
+		ns, child string
+	}{
+		"parent's directory in other case":             {ns: "P", child: "P/svc"},
+		"below the parent's directory in other case":   {ns: "P/Sub", child: "P/Sub/svc"},
+		"below the parent's directory, mixed spelling": {ns: "P/sub", child: "P/sub/svc"},
+	}
+	for name, tc := range cases {
+		for _, writer := range allWriters {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children[0].Namespace = tc.ns
+				err := writeRefused(t, writer, layout.Config{}, p)
+				want := `layout "` + tc.child + `" is AppFileSingle and its file lands in "P", which differs only in case from "p"`
+				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), `of layout "p"`) {
+					t.Fatalf("err = %v, want it to contain %q and name layout p", err, want)
+				}
+			})
+		}
+	}
+}
+
+// TestWriters_RefuseSingleChildNameEscapes: an AppFileSingle child's file is
+// <Name>.yaml in its Namespace. A Name that climbs out of the parent's
+// directory is refused as landing outside it; any other Name that is rooted
+// or holds a path separator is refused as a name, since the file is then not
+// one file name in its Namespace.
+func TestWriters_RefuseSingleChildNameEscapes(t *testing.T) {
+	cases := map[string]struct {
+		name string
+		want string
+	}{
+		"climbs out":            {name: "../q/svc", want: `is AppFileSingle and its file "`},
+		"climbs out from below": {name: "sub/../../q/svc", want: `is AppFileSingle and its file "`},
+		"rooted":                {name: "/svc", want: `is AppFileSingle and its Name "/svc" is rooted or holds a path separator`},
+		"in a subdirectory":     {name: "sub/svc", want: `is AppFileSingle and its Name "sub/svc" is rooted or holds a path separator`},
+	}
+	for name, tc := range cases {
+		for _, writer := range allWriters {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				p := singleChildParent(layout.AppFileSingle)
+				p.Children[0].Name = tc.name
+				err := writeRefused(t, writer, layout.Config{}, p)
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("err = %v, want it to contain %q", err, tc.want)
+				}
+				if strings.HasPrefix(name, "climbs out") && !strings.Contains(err.Error(), "lands outside the directory") {
+					t.Errorf("err = %v, want the outside-the-parent refusal", err)
+				}
 			})
 		}
 	}
@@ -274,5 +367,78 @@ func TestWriters_RefuseListedSingleFileInMarkedRecursiveBuild(t *testing.T) {
 			}
 			requireBuilds(t, writer, files)
 		})
+	}
+}
+
+// TestWriters_ShieldedListedSingleFileInMarkedRecursiveBuild: a listed file in
+// a marked Recursive directory's build is accepted where a kustomization.yaml
+// below that directory shields it, since Flux then adds that directory as a
+// whole and does not scan the file itself: the lister's own, when the lister
+// is below the Recursive directory, or another layout's, between the
+// Recursive directory and the file. A file inside an unmarked Recursive
+// directory below the marked one has no such shield, and is refused.
+func TestWriters_ShieldedListedSingleFileInMarkedRecursiveBuild(t *testing.T) {
+	cases := map[string]struct {
+		build  func() *layout.ManifestLayout
+		lister string   // the kustomization.yaml that lists svc
+		listed []string // everything it lists
+		want   string   // the refusal, when refused
+	}{
+		"lister below the Recursive directory": {
+			build: func() *layout.ManifestLayout {
+				d := &layout.ManifestLayout{Name: "d", Namespace: ".", Mode: layout.KustomizationRecursive, Resources: []client.Object{testObj("v1", "ConfigMap", "d")}}
+				d.SetFluxBuild(true)
+				p := singleChildParent(layout.AppFileSingle)
+				p.Namespace = "d"
+				p.Children[0].Namespace = "d/p/sub"
+				d.Children = []*layout.ManifestLayout{p}
+				return d
+			},
+			lister: "d/p/kustomization.yaml",
+			listed: []string{"default-configmap-a.yaml", "default-secret-b.yaml", "sub/svc.yaml"},
+		},
+		"lister above, another kustomization.yaml between": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				d := child(p, "d", layout.KustomizationRecursive)
+				d.UmbrellaChild = true
+				d.SetFluxBuild(true)
+				child(d, "x", layout.KustomizationExplicit)
+				p.Children[0].Namespace = "p/d/x/y"
+				return p
+			},
+			lister: "p/kustomization.yaml",
+			listed: []string{"d/x/y/svc.yaml", "default-configmap-a.yaml", "default-secret-b.yaml"},
+		},
+		"lister above, inside an unmarked Recursive directory": {
+			build: func() *layout.ManifestLayout {
+				p := singleChildParent(layout.AppFileSingle)
+				d := child(p, "d", layout.KustomizationRecursive)
+				d.UmbrellaChild = true
+				d.SetFluxBuild(true)
+				child(d, "r", layout.KustomizationRecursive)
+				p.Children[0].Namespace = "p/d/r"
+				return p
+			},
+			want: `the Flux build of KustomizationRecursive layout "p/d" would apply the file "svc.yaml" of layout "p/d/r/svc", which the kustomization.yaml of layout "p" lists as well`,
+		},
+	}
+	for name, tc := range cases {
+		for _, writer := range allWriters {
+			t.Run(name+"/"+writer, func(t *testing.T) {
+				if tc.want != "" {
+					err := writeRefused(t, writer, layout.Config{}, tc.build())
+					if err == nil || !strings.Contains(err.Error(), tc.want) {
+						t.Fatalf("err = %v, want it to contain %q", err, tc.want)
+					}
+					return
+				}
+				files := writtenFiles(t, writer, layout.Config{}, tc.build())
+				if got := listedResources(t, files, tc.lister); !slices.Equal(got, tc.listed) {
+					t.Errorf("%s lists %v, want %v", tc.lister, got, tc.listed)
+				}
+				requireBuilds(t, writer, files)
+			})
+		}
 	}
 }

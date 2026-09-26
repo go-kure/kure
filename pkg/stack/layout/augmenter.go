@@ -309,15 +309,22 @@ func diskOutDir(basePath string) outDirFunc {
 	}
 }
 
-// tarOutDir is WriteToTar's outDirFunc (archive paths are slash-separated).
+// tarOutDir is WriteToTar's outDirFunc (archive paths are slash-separated). A
+// rooted Namespace resolves under the archive root, as filepath.Join resolves
+// it under WriteToDisk's basePath: "/p/sub" is the archive directory "p/sub",
+// so the three writers agree on where a layout lands and on how its parent
+// lists it (go-kure/kure#879).
 func tarOutDir(basePath string) outDirFunc {
 	return func(l *ManifestLayout) (string, bool) {
 		if l.ApplicationFileMode == AppFileSingle {
-			return path.Join(basePath, l.Namespace), true
+			return path.Join(basePath, unrooted(l.Namespace)), true
 		}
-		return path.Join(basePath, l.FullRepoPath()), false
+		return path.Join(basePath, unrooted(l.FullRepoPath())), false
 	}
 }
+
+// unrooted drops the leading slashes of a slash-form path.
+func unrooted(p string) string { return strings.TrimLeft(filepath.ToSlash(p), "/") }
 
 // manifestOutDir is WriteManifest's outDirFunc: the application mode is
 // manifestAppMode's, and every directory sits under cfg.ManifestsDir.

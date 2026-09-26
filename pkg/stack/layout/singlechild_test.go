@@ -23,8 +23,8 @@ import (
 )
 
 // Tests for AppFileSingle children (go-kure/kure#860): such a child writes one
-// file, <child>.yaml, into its parent's directory. The parent's
-// kustomization.yaml must list it next to every one of the parent's own
+// file, <child>.yaml, into its Namespace, normally its parent's directory. The
+// parent's kustomization.yaml must list it next to every one of the parent's own
 // files, and the child must never replace that kustomization.yaml with one of
 // its own.
 

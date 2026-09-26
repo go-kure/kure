@@ -77,8 +77,9 @@ func checkOriginFileModes(ml *ManifestLayout, cfg Config) error {
 // kustomization.yaml (see ManifestLayout.writeToDisk), except the empty
 // synthetic cluster root and a layout whose mode resolves to
 // KustomizationRecursive. root is false for a child: an AppFileSingle child
-// writes its one file into its parent's directory, whose kustomization.yaml
-// the parent writes and which lists that file (go-kure/kure#860).
+// writes its one file into its Namespace, normally its parent's directory,
+// and the kustomization.yaml the parent writes lists that file by its path
+// relative to the parent's directory (go-kure/kure#860, go-kure/kure#879).
 func writeManifest(plan writerPlan, cfg Config, ml *ManifestLayout, root bool) error {
 	fullPath, _ := plan.outDir(ml)
 	sortedFileNames, fileGroups := plan.files(ml)
@@ -128,8 +129,8 @@ func writeManifest(plan writerPlan, cfg Config, ml *ManifestLayout, root bool) e
 	// Generate kustomization.yaml if there are resources or children, except
 	// at the empty synthetic cluster root (see manifestPlan). Every directory
 	// with manifests should have a kustomization.yaml for proper GitOps
-	// workflow. An AppFileSingle child writes none: its file is in its
-	// parent's directory, and the parent's kustomization.yaml lists it.
+	// workflow. An AppFileSingle child writes none: its parent's
+	// kustomization.yaml lists its file.
 	if plan.writesKustomization(ml, root) {
 		kustomPath := filepath.Join(fullPath, "kustomization.yaml")
 		kf, err := os.Create(kustomPath)

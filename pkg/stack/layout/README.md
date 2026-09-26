@@ -20,8 +20,8 @@ The layout module transforms Kure's in-memory stack representation (Clusters →
 A layout's directory is `FullRepoPath()`, which is `Namespace` joined with `Name`. `Namespace` is
 always the **parent's** directory: set a child's `Namespace` to its parent's `FullRepoPath()`, and
 use `"."` for the root of the tree. An empty `Namespace` means `cluster`. An `AppFileSingle` layout
-writes one file, `<Namespace>/<Name>.yaml`, into its parent's directory, which the parent's
-`kustomization.yaml` lists. An `AppFileSingle` root writes that file and its `kustomization.yaml`
+writes one file, `<Namespace>/<Name>.yaml`, into its `Namespace`, normally its parent's directory,
+and the parent's `kustomization.yaml` lists it. An `AppFileSingle` root writes that file and its `kustomization.yaml`
 into its `Namespace`, and lists its children there: build them with the root's `Namespace`, not its
 `FullRepoPath()`.
 
@@ -31,11 +31,18 @@ directory, `sub/svc.yaml` when it is `<parent directory>/sub`. Before, the entry
 `<Name>.yaml`, which named no file for a child below the parent's directory, and named one file
 twice for two such children with one name. A listed child whose file lands outside the parent's
 directory (a sibling or an ancestor directory) is refused before anything is written: the entry
-would start with `../`, and kustomize builds no resource outside a kustomization's directory. A
-child the parent does not list (an umbrella child, one that renders bundles), or any child of a
-parent that writes no `kustomization.yaml`, may land anywhere. Directories compare
-case-insensitively here as well, so a child `Namespace` of `P/Sub` under a parent directory `p` is
-listed as `Sub/svc.yaml`; the part below the parent's directory keeps the child's own spelling.
+would start with `../`, and kustomize's default load restrictor rejects it. The parent's directory
+must match exactly: a child `Namespace` of `P` or `P/sub` under a parent directory `p` is refused
+too, since the two spellings name one directory only on a case-insensitive volume. Below the
+parent's directory the child's own spelling is kept, so `p/Sub` under `p` is listed as
+`Sub/svc.yaml`. A child the parent does not list (an umbrella child, one that renders bundles, one
+with no resources), or any child of a parent that writes no `kustomization.yaml`, may land
+anywhere. A `FluxIntegratedPerLayout` parent, or a parent of another package, lists an
+`AppFileSingle` child's file all the same. An `AppFileSingle` child's `Name` must be one file name:
+one that is rooted or holds a path separator (`/svc`, `sub/svc`, `../q/svc`) is refused, listed or
+not. A rooted `Namespace` is joined onto the writer's base path, and `WriteToTar` resolves it
+under the archive root, so a child `Namespace` of `/p/sub` under a parent directory `p` is listed
+as `sub/svc.yaml` by all three writers.
 
 When a parent's `kustomization.yaml` references a child by directory (`- <Name>`), the child's
 directory must be `<parent directory>/<Name>` for the reference to resolve; building every child
@@ -263,7 +270,7 @@ Controls how resource YAML files are named:
   parent's files), and its file may not take the name of a file the parent writes there (see
   "Layout paths"). The parent's `kustomization.yaml` lists that file next to its own, by its path
   relative to the parent's directory (`sub/<Name>.yaml` for a child below it), and the writers
-  refuse a listed file outside that directory; in
+  refuse a listed file outside that directory or in a spelling of it that differs only in case; in
   `WriteManifest` the child's mode is its effective one, so a child with no mode of its own under
   `ArgoProfile`'s `AppFileSingle` is listed as `<Name>.yaml`, not as a directory, and the unnamed
   cluster root, which `WriteManifest` otherwise leaves without a `kustomization.yaml`, gets one

@@ -22,7 +22,9 @@ import (
 //     one, dropping its resources from the kustomize graph;
 //   - an AppFileSingle child has children (see checkSingleChildLeaf);
 //   - an AppFileSingle child's file, which its parent's kustomization.yaml
-//     lists, lands outside the parent's directory (see checkSingleChildEntry);
+//     lists, lands outside the parent's directory or in a spelling of it that
+//     differs only in case, or the child's Name is rooted or holds a path
+//     separator (see checkSingleChildEntry);
 //   - an extra file takes a path the writer owns (see checkExtraFiles);
 //   - an AppFileSingle layout's file or extra file replaces another layout's
 //     file, needs a directory where another layout writes a file, or is a
@@ -253,7 +255,7 @@ func checkBuildIdentities(root *ManifestLayout, plan writerPlan) error {
 
 // checkSingleChildLeaf refuses an AppFileSingle child (as outDir treats it)
 // that has children of its own. Such a child writes one file into its
-// parent's directory and no kustomization.yaml, so nothing would list the
+// Namespace and no kustomization.yaml, so nothing would list the
 // layouts below it and they would silently drop out of the build
 // (go-kure/kure#860). The root is not checked: it writes a kustomization.yaml
 // of its own, into its Namespace, which lists its children there (so they
@@ -266,7 +268,7 @@ func checkSingleChildLeaf(child *ManifestLayout, outDir outDirFunc) error {
 		return nil
 	}
 	return errors.NewFileError("write", filepath.Join(dir, child.Name+".yaml"),
-		fmt.Sprintf("layout %q is AppFileSingle and has child layouts: it writes one file into its parent's directory and no kustomization.yaml, so nothing would list them", child.FullRepoPath()), nil)
+		fmt.Sprintf("layout %q is AppFileSingle and has child layouts: it writes one file into its Namespace, normally its parent's directory, and no kustomization.yaml, so nothing would list them", child.FullRepoPath()), nil)
 }
 
 // checkResourceIdentities refuses a layout that holds two resources with one
