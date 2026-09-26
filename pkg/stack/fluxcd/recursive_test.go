@@ -134,6 +134,44 @@ func TestRecursive_RootBuildRefused(t *testing.T) {
 	}
 }
 
+// TestRecursive_EmptyTargetRefused: a bundle with no applications yet gets a
+// generated Kustomization over its directory. Written Recursive, that
+// directory holds no file, so the Kustomization would name a path the written
+// output does not contain; every writer refuses it, naming the directory
+// (go-kure/kure#904). Written Explicit, it gets "resources: []" and is kept.
+func TestRecursive_EmptyTargetRefused(t *testing.T) {
+	cluster := func() *stack.Cluster {
+		web := &stack.Node{Name: "web", Bundle: srBundle("web")}
+		root := &stack.Node{Name: "platform", Bundle: srBundle("platform", cmApp("core")), Children: []*stack.Node{web}}
+		web.SetParent(root)
+		return &stack.Cluster{Name: "demo", Node: root}
+	}
+	for _, placement := range placements {
+		t.Run(string(placement), func(t *testing.T) {
+			rules := recursiveRules("nodeOnly", placement)
+			writeAll(t, integrated(t, cluster(), rules))
+
+			ml := integrated(t, cluster(), rules)
+			if setTargetsRecursive(ml) == 0 {
+				t.Fatal("no target layout to make Recursive")
+			}
+			if web := layoutAtPath(t, ml, "prod/platform/web"); !web.FluxBuild() || web.Mode != layout.KustomizationRecursive {
+				t.Fatalf("prod/platform/web: FluxBuild %v, Mode %q, want a marked Recursive target", web.FluxBuild(), web.Mode)
+			}
+			want := `layout "prod/platform/web" is KustomizationRecursive and a Flux Kustomization kure generated builds its directory, but it holds no file`
+			for writer, err := range writeErrs(t, ml) {
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("%s: got %v, want it to contain %q", writer, err, want)
+					continue
+				}
+				if !strings.Contains(err.Error(), "prod/platform/web'") {
+					t.Errorf("%s: %v does not name the directory", writer, err)
+				}
+			}
+		})
+	}
+}
+
 // TestRecursive_BuildsLikeExplicit: for the shapes the writers accept, each
 // Flux build of the Recursive output — the Flux generator writing the
 // kustomization.yaml, then Flux's own build — applies the same objects as the

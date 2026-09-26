@@ -1,8 +1,10 @@
 package layout_test
 
 import (
+	"errors"
 	"io"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -10,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	kerrors "github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
@@ -418,6 +421,160 @@ func TestWriters_RecursiveKeepsControlFileReservation(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "kustomize control file") {
 			t.Errorf("%s: err = %v, want the control file refused", writer, err)
 		}
+	}
+}
+
+// emptyRecursiveMsg is the refusal of a marked Recursive directory that
+// holds no file (go-kure/kure#904).
+const emptyRecursiveMsg = "a Flux Kustomization kure generated builds its directory, but it holds no file"
+
+// vacant is a marked Recursive root named vacant with no resource, extra
+// file or child.
+func vacant() *layout.ManifestLayout {
+	r := &layout.ManifestLayout{Name: "vacant", Namespace: ".", Mode: layout.KustomizationRecursive}
+	r.SetFluxBuild(true)
+	return r
+}
+
+// TestWriters_RecursiveRefusesEmptyFluxBuild: a Flux Kustomization kure
+// generated names a Recursive directory, which gets no kustomization.yaml; when
+// nothing else lands at or below it, the directory is not in the written
+// output (WriteManifest) or in a Git tree (WriteToDisk, WriteToTar), so every
+// writer refuses it before writing anything, naming the directory.
+func TestWriters_RecursiveRefusesEmptyFluxBuild(t *testing.T) {
+	cases := map[string]struct {
+		build func() *layout.ManifestLayout
+		dir   string
+	}{
+		"no resource, extra file or child": {build: vacant, dir: "vacant"},
+		// A descendant directory that itself holds no file adds none.
+		"only an empty unmarked Recursive child": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				c := child(r, "c", layout.KustomizationRecursive)
+				c.Resources = nil
+				return r
+			},
+			dir: "vacant",
+		},
+		// An AppFileSingle child with no resource writes no file.
+		"only an AppFileSingle child with no resource": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				s := child(r, "s", layout.KustomizationUnset)
+				s.ApplicationFileMode = layout.AppFileSingle
+				s.Resources = nil
+				return r
+			},
+			dir: "vacant",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, writer := range allWriters {
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), tc.build())
+				want := `layout "vacant" is KustomizationRecursive and ` + emptyRecursiveMsg
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
+					continue
+				}
+				var fe *kerrors.FileError
+				if !errors.As(err, &fe) {
+					t.Errorf("%s: err is %T, want a *errors.FileError", writer, err)
+					continue
+				}
+				if p := filepath.ToSlash(fe.Path); p != tc.dir && !strings.HasSuffix(p, "/"+tc.dir) {
+					t.Errorf("%s: error names %q, want the directory %q", writer, fe.Path, tc.dir)
+				}
+			}
+		})
+	}
+}
+
+// TestWriters_RecursiveEmptyFluxBuildCounterparts: a marked Recursive
+// directory with any file at or below it, an unmarked empty Recursive
+// directory, and a marked empty Explicit directory (which gets "resources:
+// []") are written.
+func TestWriters_RecursiveEmptyFluxBuildCounterparts(t *testing.T) {
+	cases := map[string]struct {
+		build func() *layout.ManifestLayout
+		want  []string // every file written
+	}{
+		"marked Recursive with one resource": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				r.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
+				return r
+			},
+			want: []string{"vacant/default-configmap-a.yaml"},
+		},
+		// The child's resource file lands below the marked directory; the
+		// child writes no kustomization.yaml either.
+		"marked Recursive whose only content is a Recursive child with a resource": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				child(r, "c", layout.KustomizationRecursive)
+				return r
+			},
+			want: []string{"vacant/c/default-secret-c.yaml"},
+		},
+		// A descendant's own kustomization.yaml is a file too.
+		"marked Recursive whose only content is an empty Explicit child": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				child(r, "c", layout.KustomizationExplicit).Resources = nil
+				return r
+			},
+			want: []string{"vacant/c/kustomization.yaml"},
+		},
+		"marked Recursive whose only content is an extra file": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				r.ExtraFiles = []layout.ExtraFile{{Name: "notes.txt", Content: []byte("x")}}
+				return r
+			},
+			want: []string{"vacant/notes.txt"},
+		},
+		"marked Recursive whose only content is an AppFileSingle child's file": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				child(r, "s", layout.KustomizationUnset).ApplicationFileMode = layout.AppFileSingle
+				return r
+			},
+			want: []string{"vacant/s.yaml"},
+		},
+		// No Flux Kustomization kure generated names it.
+		"unmarked empty Recursive": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				r.SetFluxBuild(false)
+				return r
+			},
+			want: nil,
+		},
+		"marked empty Explicit": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				r.Mode = layout.KustomizationExplicit
+				return r
+			},
+			want: []string{"vacant/kustomization.yaml"},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, writer := range allWriters {
+				files := writtenFiles(t, writer, layout.DefaultLayoutConfig(), tc.build())
+				if got := slices.Sorted(maps.Keys(files)); !slices.Equal(got, tc.want) {
+					t.Errorf("%s: files = %v, want %v", writer, got, tc.want)
+				}
+				if slices.Contains(tc.want, "vacant/kustomization.yaml") {
+					if got := listedResources(t, files, "vacant/kustomization.yaml"); len(got) != 0 {
+						t.Errorf("%s: vacant/kustomization.yaml lists %v, want resources: []", writer, got)
+					}
+				}
+			}
+		})
 	}
 }
 

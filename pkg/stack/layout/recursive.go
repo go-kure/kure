@@ -44,8 +44,14 @@ func shieldedIn(kdirs []string, base, p string, strict bool) bool {
 // Kustomization kure generated, and Flux generates the kustomization.yaml:
 // every .yaml and .yml file below the directory, where a subdirectory that
 // has a kustomization file is added as a whole and not descended into. For
-// such a directory D it also refuses what makes that build differ from the
-// one Explicit mode would give:
+// such a directory D it also refuses a D that holds no file (go-kure/kure#904):
+// no resource file, extra file, AppFileSingle child file or kustomization.yaml
+// the writer writes lands in D or below it, so D is not in the written output
+// (WriteManifest) or in a Git tree, and the Kustomization names a path that
+// does not exist. Explicit mode writes such a directory "resources: []". An
+// unmarked Recursive directory is not checked: a Flux Kustomization or Argo CD
+// Application a caller places is not a build kure answers for. It also
+// refuses what makes D's build differ from the one Explicit mode would give:
 //   - a marked layout T below D with no kustomization.yaml the writer writes
 //     in any directory strictly between D and T (T's own does not count, as
 //     Flux adds T's directory as a resource): D's Kustomization would apply
@@ -76,6 +82,7 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 	type dirLayout struct {
 		l        *ManifestLayout
 		dir      string // normDir'ed
+		raw      string // dir as written, for messages
 		writesK  bool
 		unlisted bool // its parent's kustomization.yaml would not list it
 	}
@@ -92,12 +99,17 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 	}
 	var dirs []dirLayout
 	var files []file
+	// filled holds the normDir'ed directory of every file the writer writes:
+	// every entry of files, an AppFileSingle child's file that files leaves
+	// out, and each kustomization.yaml.
+	var filled []string
 	var walk func(l, parent *ManifestLayout) error
 	walk = func(l, parent *ManifestLayout) error {
 		dir, single := plan.outDir(l)
 		add := func(name string, extra, unlisted bool, lister *ManifestLayout) {
 			raw := path.Dir(path.Join(filepath.ToSlash(dir), name))
 			files = append(files, file{l, name, normDir(raw), raw, extra, unlisted, lister})
+			filled = append(filled, normDir(raw))
 		}
 		for _, ef := range l.ExtraFiles {
 			add(ef.Name, true, false, nil)
@@ -108,6 +120,10 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 				add(l.Name+".yaml", false, true, nil)
 			case plan.writesKustomization(parent, parent == root):
 				add(l.Name+".yaml", false, false, parent)
+			default:
+				// Its parent writes no kustomization.yaml to list it (a
+				// Recursive parent); the file is written all the same.
+				filled = append(filled, normDir(path.Dir(path.Join(filepath.ToSlash(dir), l.Name+".yaml"))))
 			}
 		}
 		// A Recursive AppFileSingle layout writes none either; a child one is
@@ -122,7 +138,11 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 			for _, name := range names {
 				add(name, false, false, nil)
 			}
-			dirs = append(dirs, dirLayout{l, normDir(dir), plan.writesKustomization(l, parent == nil), parent != nil && plan.childEntry(parent, l) == ""})
+			writesK := plan.writesKustomization(l, parent == nil)
+			if writesK {
+				filled = append(filled, normDir(dir))
+			}
+			dirs = append(dirs, dirLayout{l, normDir(dir), dir, writesK, parent != nil && plan.childEntry(parent, l) == ""})
 			if plan.kustomizationMode(l) == KustomizationRecursive {
 				if parent != nil && plan.writesKustomization(parent, parent == root) && plan.childEntry(parent, l) != "" {
 					return errors.NewFileError("write", dir, fmt.Sprintf(
@@ -153,6 +173,10 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 	for _, d := range dirs {
 		if !d.l.fluxBuild || plan.kustomizationMode(d.l) != KustomizationRecursive {
 			continue
+		}
+		if !slices.ContainsFunc(filled, func(p string) bool { return p == d.dir || below(d.dir, p) }) {
+			return errors.NewFileError("write", d.raw, fmt.Sprintf(
+				"layout %q is KustomizationRecursive and a Flux Kustomization kure generated builds its directory, but it holds no file: the writer writes it no kustomization.yaml and nothing else lands at or below it, so the path the Kustomization names does not exist in the written output or in a Git tree; give it a resource, or write it KustomizationExplicit", d.l.FullRepoPath()), nil)
 		}
 		shielded := func(p string, strict bool) bool { return shieldedIn(kdirs, d.dir, p, strict) }
 		for _, t := range dirs {
