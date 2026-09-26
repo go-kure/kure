@@ -46,8 +46,9 @@ func checkLayoutTree(root *ManifestLayout, plan writerPlan) error {
 	walk = func(l *ManifestLayout) error {
 		dir, single := outDir(l)
 		if single {
-			// The whole file path is cleaned, as the writers clean it, so
-			// "x" and "./x" are the same file.
+			// The whole file path is cleaned, as the writers clean it. The
+			// writers already clean the Namespace, and a Name holding a
+			// separator is refused, so this is a backstop.
 			key := normDir(filepath.Join(dir, l.Name+".yaml"))
 			if other, ok := files[key]; ok {
 				return errors.NewFileError("write", filepath.Join(dir, l.Name+".yaml"),

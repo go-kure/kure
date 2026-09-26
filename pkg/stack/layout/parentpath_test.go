@@ -325,7 +325,9 @@ func TestWalkClusterByPackage_NestedExcludedAncestors_WriteAll(t *testing.T) {
 func TestWriters_RefuseEquivalentSingleFilePaths(t *testing.T) {
 	// The Namespaces "p" and "./p" name the same file p/x.yaml once the path
 	// is cleaned, as the writers do; the second would silently replace the
-	// first. (A Name such as "./x" is refused on its own: it holds a path
+	// first. The writers clean the Namespace before the same-file check, so
+	// this pins the refusal, not the check's own cleaning, which is a
+	// backstop. (A Name such as "./x" is refused on its own: it holds a path
 	// separator, go-kure/kure#879.)
 	single := func(obj, ns string) *layout.ManifestLayout {
 		l := cmLayout(obj, ns)

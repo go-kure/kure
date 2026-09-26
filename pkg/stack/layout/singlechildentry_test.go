@@ -20,8 +20,8 @@ import (
 // child whose file lands below the parent's directory (go-kure/kure#879): the
 // file's path relative to the parent's directory, so the entry resolves and
 // kustomize builds it. A listed file outside the parent's directory is
-// refused, since kustomize builds no resource outside a kustomization's
-// directory.
+// refused: it would need a "../" entry, and kustomize's default load
+// restrictor rejects it.
 
 // kustomizeBuildFiles writes files, keyed as writtenFiles keys them, into a
 // fresh directory and runs a kustomize build of every directory among them
