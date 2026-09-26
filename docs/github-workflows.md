@@ -263,7 +263,8 @@ temporary branch — the merged result — before the PR is allowed to land.
   (go-kure/kure#719, 2026-08-30). It follows three things, and nothing else:
   - **Pins.** It reads `uses: go-kure/.github/.github/actions/<subpath>@<sha>`, including nested
     or dotted subpaths. It also reads the `ref: <sha>` in the `with:` mapping of a block-style
-    `repository: go-kure/.github` checkout, whatever the key order. The repository name is matched
+    checkout whose same `with:` mapping holds `repository: go-kure/.github`, whatever the key
+    order. The repository name is matched
     case-insensitively and with or without a trailing `.git` (`actions/checkout` clones
     `https://github.com/<repository>`, the same repository either way), and the SHA may be written
     in either case. Keys are read as YAML reads them: `"uses":`, `'ref':` and `repository :` are
@@ -295,7 +296,10 @@ temporary branch — the merged result — before the PR is allowed to land.
     column of the `with:` mapping's first child (under `env:` or another key, in a block scalar
     body, at the step's own level), a line that is no key the scan parses (`a b:`, `a/b:`, the
     rest of a multi-line value), a value that does not end on its line (an unterminated or
-    escaped quote), more than one `ref:` in any letter case, or more than one `with:`.
+    escaped quote), more than one `ref:` in any letter case, or more than one `with:`. A
+    `repository: go-kure/.github` anywhere else in a step (under `env:`, deeper under `with:`, at
+    the step's own level) is refused too: it used to mark the step as that checkout, so another
+    repository's `ref:` in the same step was read as a pin.
   - **Workflow YAML a line scan cannot read**, whatever it names. A `uses:` or `repository:`
     value that is not whole on its own line: empty, continued on the next line, a block scalar,
     an alias, anchor, tag or flow collection, or a quoted value with an escape (`\` in double

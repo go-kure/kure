@@ -41,8 +41,9 @@
 # Followed:
 #   - pins: `uses: go-kure/.github/.github/actions/<subpath>@<40-hex>`, the
 #     subpath nested or dotted (`group/check`, `check.v2`), and the `ref:
-#     <40-hex>` in the `with:` mapping of a block-style `repository:
-#     go-kure/.github` checkout step, in any key order; the repository name
+#     <40-hex>` in the `with:` mapping of a block-style checkout step whose
+#     same `with:` mapping holds `repository: go-kure/.github`, in any key
+#     order; the repository name
 #     case-insensitively and with or without a trailing `.git` (actions/
 #     checkout clones https://github.com/<repository>), the hex in either
 #     case. A key is read as YAML reads it: `"uses":`, `'ref':` and
@@ -83,7 +84,9 @@
 #     that is no key this scan parses (`a b:`, `a/b:`, the rest of a
 #     multi-line value), a value that does not end on its line (an
 #     unterminated or escaped quote), more than one `ref:` in any letter
-#     case, or more than one `with:`.
+#     case, or more than one `with:`. So is a `repository: go-kure/.github`
+#     anywhere in a step but a key of its `with:` mapping (under `env:`,
+#     deeper under `with:`, at the step's own level).
 #   - workflow YAML the line scan cannot read, whatever it names: a
 #     `uses:`/`repository:` value not whole on its own line (empty, continued
 #     on the next line, a block scalar, an alias, anchor, tag or flow
@@ -250,7 +253,10 @@ is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 #
 # `repository: go-kure/.github` checkouts: the `ref:` key of the step's own
 # `with:` mapping is the pin, whatever the order of the step's keys (it used
-# to be only a `ref:` on the very next line, round 9). The repository value
+# to be only a `ref:` on the very next line, round 9). The `repository:` is
+# read at the same key position as that `ref:`; one anywhere else in the step
+# is refused, since it used to mark the step as this checkout and make
+# another repository's `ref:` a pin (go-kure/kure#901). The repository value
 # is matched case-insensitively and with or without a trailing `.git`:
 # actions/checkout clones https://github.com/<value>, which names the same
 # repository either way. A step is a list item: it runs from its `-` line
@@ -362,7 +368,7 @@ scan_workflow() {
         keycol = length(code) - length(line)
         if (line ~ /^\?([[:space:]]|$)/) { bad(NR, $0 " (a complex key this scan cannot read)"); next }
         if (line ~ /"[^"]*\\[^"]*"[[:space:]]*:([[:space:]]|$)/) { bad(NR, $0 " (a quoted key with an escape sequence)"); next }
-        iskey = 0; key = ""
+        iskey = 0; key = ""; at_with = 0
         if (match(line, /^"[^"]*"[[:space:]]*:([[:space:]]|$)/) \
             || match(line, ("^" q "[^" q "]*" q "[[:space:]]*:([[:space:]]|$)")) \
             || match(line, /^[A-Za-z0-9_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) {
@@ -382,9 +388,12 @@ scan_workflow() {
             if (sp == 0 && lk == "with") with_n++
             # The column of the with: mapping'"'"'s children is its first key'"'"'s.
             if (sp == 1 && st_key[1] == "with" && st_ind[1] == step_keycol && with_childcol < 0) with_childcol = keycol
+            # A key of the step'"'"'s own with: mapping: the only place a
+            # checkout'"'"'s ref: and repository: are read.
+            at_with = (sp == 1 && st_key[1] == "with" && st_ind[1] == step_keycol && keycol == with_childcol)
             if (lk == "ref") {
               ref_n++
-              if (key == "ref" && sp == 1 && st_key[1] == "with" && st_ind[1] == step_keycol && keycol == with_childcol) {
+              if (key == "ref" && at_with) {
                 v = scalar(val)
                 if (is_hex40(tolower(v))) sha = tolower(v)
                 else if (v ~ /^\$\{\{ *steps\.[A-Za-z0-9_-]+\.outputs\.[A-Za-z0-9_-]+ *\}\}$/) ref_expr = 1
@@ -449,7 +458,10 @@ scan_workflow() {
         # `.git` names the same repository.
         v = tolower(scalar(line))
         sub(/[.]git$/, "", v)
-        if (v == repo && in_step) {
+        # Only the with: mapping'"'"'s own repository: makes the step this
+        # checkout; one nested elsewhere in the step is refused below, since
+        # reading it would take another checkout'"'"'s ref: as a pin.
+        if (v == repo && at_with) {
           is_repo = 1; repo_nr = NR; repo_text = $0
         } else if (mentions) {
           bad(NR, $0)
