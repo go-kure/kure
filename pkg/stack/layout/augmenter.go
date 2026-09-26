@@ -283,8 +283,8 @@ type outDirFunc func(l *ManifestLayout) (dir string, single bool)
 // for comparisons made the way a case-insensitive volume would.
 func normDir(p string) string { return strings.ToLower(path.Clean(filepath.ToSlash(p))) }
 
-// relativeTo returns p relative to base (both normDir'ed) and whether p lies
-// at or below base.
+// relativeTo returns p relative to base (both in one form: normDir'ed, or
+// both cleaned and slash-separated) and whether p lies at or below base.
 func relativeTo(base, p string) (string, bool) {
 	switch {
 	case p == base:

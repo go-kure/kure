@@ -77,7 +77,8 @@ func shieldedIn(kdirs []string, base, p string, strict bool) bool {
 //
 // Flux's tests are its own: the file extension as it is, and the base name
 // against the kustomization file names exactly. Directories are compared as
-// normDir compares them.
+// normDir compares them, except in the emptiness check, which compares them
+// exactly: a directory that differs only in case does not fill D.
 func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 	type dirLayout struct {
 		l        *ManifestLayout
