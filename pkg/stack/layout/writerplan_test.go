@@ -21,6 +21,12 @@ func TestRelPath(t *testing.T) {
 		{"p", "p2/svc.yaml", "../p2/svc.yaml", false},
 		{"p", "svc.yaml", "../svc.yaml", false},
 		{"p", "P/Sub/svc.yaml", "../P/Sub/svc.yaml", false},
+		// A base with no segments still climbs out of a target above it.
+		{".", "../svc.yaml", "../svc.yaml", false},
+		{".", "../q/svc.yaml", "../q/svc.yaml", false},
+		{"", "..", "..", false},
+		{"../a", "../a/svc.yaml", "svc.yaml", true},
+		{"../a", "../svc.yaml", "../svc.yaml", false},
 		// Rooted on one side only.
 		{".", "/x/svc.yaml", "/x/svc.yaml", false},
 		{"/out/p", "p/svc.yaml", "p/svc.yaml", false},
