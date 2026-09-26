@@ -322,19 +322,30 @@ func checkSingleChildGenerators(child *ManifestLayout, outDir outDirFunc) error 
 
 // checkUnwrittenGenerators refuses a layout with ConfigMapGenerators that the
 // writer writes no kustomization.yaml for (go-kure/kure#899): a generator
-// exists only inside a kustomization.yaml, so it would be dropped. On a tree
-// root that is an AppFileSingle root with no resources and no children, and
-// WriteManifest's synthetic cluster root with no resources. An AppFileSingle
-// child is refused in its own words by checkSingleChildGenerators before it
-// is walked, and a KustomizationRecursive layout by checkRecursiveLayouts.
+// exists only inside a kustomization.yaml, so it would be dropped. That is an
+// AppFileSingle root with no resources and no children, and, in
+// WriteManifest, a layout shaped like the synthetic cluster root (Name "", a
+// single-segment Namespace) with no resource file, no bundle and no
+// AppFileSingle child that writes a file. An AppFileSingle child is refused in
+// its own words by checkSingleChildGenerators before it is walked, and a
+// KustomizationRecursive layout by checkRecursiveLayouts.
 func checkUnwrittenGenerators(l *ManifestLayout, plan writerPlan, root bool) error {
 	if len(l.ConfigMapGenerators) == 0 || plan.writesKustomization(l, root) ||
 		plan.kustomizationMode(l) == KustomizationRecursive {
 		return nil
 	}
-	dir, _ := plan.outDir(l)
-	return errors.NewFileError("write", dir, fmt.Sprintf(
+	return errors.NewFileError("write", layoutPath(l, plan), fmt.Sprintf(
 		"layout %q gets no kustomization.yaml, so its ConfigMapGenerators have nowhere to go", l.FullRepoPath()), nil)
+}
+
+// layoutPath is the path an error about l names: its file for an
+// AppFileSingle layout, its directory otherwise.
+func layoutPath(l *ManifestLayout, plan writerPlan) string {
+	dir, single := plan.outDir(l)
+	if single {
+		return filepath.Join(dir, l.Name+".yaml")
+	}
+	return dir
 }
 
 // checkResourceIdentities refuses a layout that holds two resources with one
