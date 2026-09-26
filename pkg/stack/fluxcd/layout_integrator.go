@@ -235,8 +235,9 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 type integratedPlacement struct {
 	gen *ResourceGenerator
 	ix  *layout.OriginIndex
-	// root is the layout the Flux bootstrap applies. It hosts every Source
-	// this pass derives (go-kure/kure#876).
+	// root is the layout the Flux bootstrap applies: the root node's, which
+	// its sync path ./<root> names, and not a ClusterName wrapper above it.
+	// It hosts every Source this pass derives (go-kure/kure#876).
 	root      *layout.ManifestLayout
 	perLayout bool
 	// names maps every Kustomization name this pass emitted to its
@@ -303,7 +304,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	p := &integratedPlacement{
 		gen:       li.Generator,
 		ix:        ix,
-		root:      ml,
+		root:      rootNodeLayout(ml, ix, c),
 		perLayout: perLayout,
 		names:     map[string]string{},
 		generated: map[string]bool{},
@@ -323,7 +324,7 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.place(ml, sourceScope{}); err != nil {
 		return err
 	}
-	if err := p.hostSourcesOncePerBuild(ml); err != nil {
+	if err := p.hostSourcesOncePerBuild(p.root); err != nil {
 		return err
 	}
 	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
@@ -331,6 +332,17 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	}
 	markFluxBuilds(ml, p.generated)
 	return nil
+}
+
+// rootNodeLayout returns the layout of c's root node, which the bootstrap sync
+// path ./<root> names; ml when c has none, as a tree without a wrapper.
+func rootNodeLayout(ml *layout.ManifestLayout, ix *layout.OriginIndex, c *stack.Cluster) *layout.ManifestLayout {
+	if c != nil {
+		if l := ix.NodeLayout(c.Node); l != nil {
+			return l
+		}
+	}
+	return ml
 }
 
 // markFluxBuilds marks, with SetFluxBuild, the directory each Kustomization
@@ -807,7 +819,7 @@ func (p *integratedPlacement) add(host *layout.ManifestLayout, objs []client.Obj
 			// One identity, one object: an identical Source (a repeated
 			// integration, or two bundles sharing a SourceRef) is hosted
 			// once, at the root, which the Flux bootstrap applies before any
-			// Kustomization that uses it: one owner, where a copy beside each
+			// Kustomization that uses it: one build, where a copy beside each
 			// Kustomization would give each build its own. A different one
 			// anywhere in the pass would silently repoint a Kustomization,
 			// or leave two directories overwriting each other's Source.

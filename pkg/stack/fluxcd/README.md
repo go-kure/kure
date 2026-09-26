@@ -429,10 +429,13 @@ integration is refused. Content is compared as the objects' unstructured form, s
 and an unstructured copy of it are the same.
 
 Under the integrated placements every Source the integration generates is hosted **once, in the
-root layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876). The Flux
-bootstrap applies the root directory, so the Source has one owner, and it exists before any
-Kustomization that uses it: each of those is applied by the root build or by a build below it. A
-`sourceRef` names the object, not the layout holding it.
+root node's layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876):
+the directory the bootstrap sync path `./<root>` names, not a `ClusterName` wrapper above it. The
+Source is then in one build, the root's, and exists before any Kustomization that uses it: each of
+those is applied by the root build or by a build below it. When the root node renders a bundle,
+its own Kustomization builds that same directory beside the bootstrap; both build the same
+content, so neither prunes what the other keeps. A `sourceRef` names the object, not the layout
+holding it.
 
 The root build also covers the child directories the root's `kustomization.yaml` lists and the
 `AppFileSingle` files written into them. When that build already holds a copy the integration did
@@ -597,10 +600,10 @@ of its own.
 node, with `spec.path` = the child's own directory:
 
 - **Integrated, `BundleGrouping: GroupByName`**: the walker creates a bundle sub-layout
-  under the node layout. Umbrella child Kustomization CRs (and their Source
-  CRs, if the child has a `SourceRef.URL`) are appended to the bundle
-  sub-layout's `Resources`, which that layout lists (it is written in
-  `KustomizationExplicit` mode). Nested umbrella children are placed at their
+  under the node layout. Umbrella child Kustomization CRs are appended to the
+  bundle sub-layout's `Resources`, which that layout lists (it is written in
+  `KustomizationExplicit` mode); their Source CRs, if the child has a
+  `SourceRef.URL`, go to the root node's layout like every generated Source. Nested umbrella children are placed at their
   enclosing umbrella child's layout node.
 - **Integrated, `BundleGrouping: GroupFlat`**: there is no intermediate bundle
   layer, so umbrella children become direct sub-layouts of the node layout,
