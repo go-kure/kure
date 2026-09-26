@@ -264,6 +264,11 @@ Controls how resource YAML files are named:
   empty node, an empty augmenter layout): a Flux Kustomization or ArgoCD Application names that
   directory, and an empty directory does not survive a Git tree. A kustomization that lists
   nothing is written `resources: []` (kustomize rejects a bare `resources:` as empty).
+- A `resources` entry, a `configMapGenerator` name and a generator's `files` entry are written
+  plain when kustomize reads them back as the same string, and double-quoted otherwise
+  (go-kure/kure#896). kustomize reads a `kustomization.yaml` as YAML 1.1, so a child directory or
+  generator named `y`, `on`, `null` or `1e3` would otherwise be read as a bool, null or number and
+  fail the build.
 - An `AppFileSingle` child writes one file, `<Name>.yaml`, into its `Namespace`, normally its
   parent's directory, and never a
   `kustomization.yaml` of its own (before go-kure/kure#860 it replaced the parent's, dropping the

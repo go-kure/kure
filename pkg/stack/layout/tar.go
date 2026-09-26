@@ -85,11 +85,11 @@ func (ml *ManifestLayout) writeToTarRecursive(tw *tar.Writer, plan writerPlan, r
 		}
 
 		for _, file := range sortedFileNames {
-			entry(fmt.Sprintf("  - %s\n", file))
+			entry(fmt.Sprintf("  - %s\n", yamlString(file)))
 		}
 		for _, child := range ml.Children {
 			if e := plan.childEntry(ml, child); e != "" {
-				entry(fmt.Sprintf("  - %s\n", e))
+				entry(fmt.Sprintf("  - %s\n", yamlString(e)))
 			}
 		}
 		if !listed {
