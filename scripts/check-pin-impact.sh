@@ -97,8 +97,8 @@
 #   - actions: `runs.using` other than composite (JavaScript and Docker
 #     actions execute code no scan here can see), a `using` in a flow mapping
 #     or not in lower case included; a nested `uses:`, flow-mapping, quoted
-#     or in any letter case; more than one `run:` step, `RUN:` and the like
-#     counted; a `github.action_path` expression; $GITHUB_ACTION_PATH other
+#     or in any letter case; more than one `run:` step, flow-mapping,
+#     quoted and `RUN:` steps counted; a `github.action_path` expression; $GITHUB_ACTION_PATH other
 #     than as one whole `$GITHUB_ACTION_PATH/<path>` or
 #     `${GITHUB_ACTION_PATH}/<path>` word — the path of `[A-Za-z0-9_./-]`,
 #     then at most a closing quote, then whitespace, `;&|)<>` or the line end
@@ -415,7 +415,10 @@ scan_workflow() {
         # carries one is refused rather than read.
         ref_n++; stray_ref = 1
       }
-      if (line ~ /^uses:/) {
+      # A block scalar body line is text: it names no pin, action or
+      # checkout, whatever it starts with.
+      if (in_blk) {
+      } else if (line ~ /^uses:/) {
         sub(/^uses:[[:space:]]*/, "", line)
         v = scalar(line)
         lv = tolower(v)
@@ -676,7 +679,10 @@ while IFS= read -r name; do
   # 2026-08-30). This script only audits at whole-action.yml granularity, so
   # more than one `run:` step is unauditable — refuse to guess which one a
   # given scripts/*.sh reference belongs to.
-  run_step_count="$(grep -ciE '^[[:space:]]*(-[[:space:]]+)?run:' <<<"$key_yml" || true)"
+  # The key is looked for anywhere on a line, like `uses:` above, so a
+  # flow-mapping step (`- { run: ... }`) is counted too (go-kure/kure#888).
+  run_key_re="(^|[^A-Za-z0-9_-])[\"']?run[\"']?[[:space:]]*:"
+  run_step_count="$(grep -ciE "$run_key_re" <<<"$key_yml" || true)"
   if [[ "$run_step_count" -gt 1 ]]; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has ${run_step_count} 'run:' steps — this script cannot confidently attribute scripts/*.sh references to individual steps, refusing to guess" >&2
     exit 1
@@ -742,7 +748,7 @@ while IFS= read -r name; do
     fi
   fi
   action_path_refs="$( { [[ -z "$gap_words" ]] || printf '%s\n' "$gap_words"; } | sort -u)"
-  if [[ -z "$action_path_refs" ]] && grep -qiE '^[[:space:]]*(-[[:space:]]+)?run:' <<<"$key_yml"; then
+  if [[ -z "$action_path_refs" ]] && grep -qiE "$run_key_re" <<<"$key_yml"; then
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has a 'run:' step but no recognized \$GITHUB_ACTION_PATH/<path>.sh reference — refusing to under-report" >&2
     exit 1
   fi
