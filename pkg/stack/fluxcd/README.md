@@ -545,7 +545,7 @@ Controls how kustomization.yaml files reference resources:
   the directory generates one from every `.yaml` and `.yml` file below it. The integrator marks
   every directory a Kustomization it generated builds (`SetFluxBuild`), and the writers refuse a
   marked Recursive directory that holds no file (a bundle with no applications, say), since the
-  Kustomization would name a path the written output does not contain, and one whose build would
+  Kustomization would name an empty directory, which a Git tree drops, and one whose build would
   differ from the Explicit mode's: another generated target below it that no `kustomization.yaml`
   shields, or a YAML extra file in its build. See "Kustomization Generation" in the layout package
   README.
