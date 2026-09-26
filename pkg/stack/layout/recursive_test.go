@@ -468,6 +468,17 @@ func TestWriters_RecursiveRefusesEmptyFluxBuild(t *testing.T) {
 			},
 			dir: "vacant",
 		},
+		// An AppFileSingle root with no resource writes no file, and a
+		// Recursive one no kustomization.yaml either. Its directory is the
+		// writer's output directory itself, which differs per writer, so
+		// the error's path is not compared.
+		"an AppFileSingle root with no resource": {
+			build: func() *layout.ManifestLayout {
+				r := vacant()
+				r.ApplicationFileMode = layout.AppFileSingle
+				return r
+			},
+		},
 		// Its file lands in "Vacant", which is not the directory the
 		// Kustomization names in a Git tree or on a case-sensitive volume.
 		"only an AppFileSingle child in a directory that differs in case": {
@@ -495,7 +506,7 @@ func TestWriters_RecursiveRefusesEmptyFluxBuild(t *testing.T) {
 					t.Errorf("%s: err is %T, want a *errors.FileError", writer, err)
 					continue
 				}
-				if p := filepath.ToSlash(fe.Path); p != tc.dir && !strings.HasSuffix(p, "/"+tc.dir) {
+				if p := filepath.ToSlash(fe.Path); tc.dir != "" && p != tc.dir && !strings.HasSuffix(p, "/"+tc.dir) {
 					t.Errorf("%s: error names %q, want the directory %q", writer, fe.Path, tc.dir)
 				}
 			}
