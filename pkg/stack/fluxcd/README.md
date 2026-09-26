@@ -428,17 +428,21 @@ every Source the pass places in another layout, must have the same API version a
 integration is refused. Content is compared as the objects' unstructured form, so a typed Source
 and an unstructured copy of it are the same.
 
-Under the integrated placements an identical Source is kept **once per kustomize build**, since
-kustomize refuses one object twice. The builds are the root directory's, which the Flux bootstrap
-applies, and each generated Kustomization's `spec.path`. A build also covers the child
-directories its `kustomization.yaml` lists and the `AppFileSingle` files written into them. When
-the build already holds a copy that the integration did not add (an earlier integration's, the
-caller's or an application's), that copy is kept. Otherwise the first copy the integration added,
-in depth-first layout order, is kept, and the others in that build are not added: a `sourceRef` names the object, not
-the layout holding it. Two copies the integration did not add, in one build, are refused. Copies
-in separate builds are all kept, each applied by its own build; both Kustomizations then own the
-Source (go-kure/kure#876). Kustomizations the caller or an application places are not builds
-kure answers for. Under `FluxSeparate` every generated Source goes into
+Under the integrated placements every Source the integration generates is hosted **once, in the
+root layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876). The Flux
+bootstrap applies the root directory, so the Source has one owner, and it exists before any
+Kustomization that uses it: each of those is applied by the root build or by a build below it. A
+`sourceRef` names the object, not the layout holding it.
+
+The root build also covers the child directories the root's `kustomization.yaml` lists and the
+`AppFileSingle` files written into them. When that build already holds a copy the integration did
+not add (an earlier integration's, the caller's or an application's), that copy is kept and the
+integration adds none, since kustomize refuses one object twice. Two copies the integration did
+not add, in any one build (the root's or a generated Kustomization's `spec.path`), are refused. A
+copy the caller or an application puts in any other build is theirs to keep, and the integration
+still hosts its own at the root: that Source then has two owners, one of them the caller's.
+Kustomizations the caller or an application places are not builds kure answers for. Under
+`FluxSeparate` every generated Source goes into
 `flux-system`, which is built beside the rest of the tree, so a Source with a generated Source's
 identity anywhere else in the tree is refused even when it is identical.
 

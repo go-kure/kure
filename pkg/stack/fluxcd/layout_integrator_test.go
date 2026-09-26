@@ -624,8 +624,9 @@ func TestCreateLayoutWithResources_UmbrellaNestedIntegratedPlacement(t *testing.
 }
 
 func TestCreateLayoutWithResources_UmbrellaChildWithSource(t *testing.T) {
-	// When an umbrella child has a SourceRef with URL, the Source CR should
-	// be placed at the parent layout alongside the child Kustomization.
+	// When an umbrella child has a SourceRef with URL, the Source CR is placed
+	// at the root, which the Flux bootstrap applies (go-kure/kure#876), not
+	// beside the child Kustomization in the parent bundle layout.
 	umbrella := &stack.Bundle{
 		Name:      "platform",
 		SourceRef: testSR(),
@@ -657,15 +658,20 @@ func TestCreateLayoutWithResources_UmbrellaChildWithSource(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	bundleLayout := ml.Children[0].Children[0]
-	sawSource := false
-	for _, r := range bundleLayout.Resources {
-		if _, ok := r.(*sourcev1.GitRepository); ok {
-			sawSource = true
+	gitRepos := func(l *layout.ManifestLayout) int {
+		n := 0
+		for _, r := range l.Resources {
+			if _, ok := r.(*sourcev1.GitRepository); ok {
+				n++
+			}
 		}
+		return n
 	}
-	if !sawSource {
-		t.Error("expected umbrella child's GitRepository at parent bundle layout")
+	if n := gitRepos(ml); n != 1 {
+		t.Errorf("root holds %d GitRepository, want the umbrella child's one", n)
+	}
+	if n := gitRepos(ml.Children[0].Children[0]); n != 0 {
+		t.Errorf("parent bundle layout holds %d GitRepository, want none: the root hosts it", n)
 	}
 }
 
