@@ -32,12 +32,14 @@ func (f *fakeConfig) Generate(*stack.Application) ([]*client.Object, error) {
 // layout.LayoutAugmenter. It records the layout it was called with.
 // extraFileName and cmgName default to "values.yaml" and "augmented-values";
 // override per-instance to verify multi-app no-collision in shared bundles.
+// noCMG attaches the extra file only.
 type fakeAugmentingConfig struct {
 	objs          []*client.Object
 	augmentErr    error
 	called        *layout.ManifestLayout
 	extraFileName string
 	cmgName       string
+	noCMG         bool
 }
 
 func (f *fakeAugmentingConfig) Generate(*stack.Application) ([]*client.Object, error) {
@@ -58,6 +60,9 @@ func (f *fakeAugmentingConfig) AugmentLayout(ml *layout.ManifestLayout) error {
 		cmg = "augmented-values"
 	}
 	ml.ExtraFiles = append(ml.ExtraFiles, layout.ExtraFile{Name: name, Content: []byte("k: v\n")})
+	if f.noCMG {
+		return nil
+	}
 	ml.ConfigMapGenerators = append(ml.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{
 		Name:  cmg,
 		Files: []string{name},

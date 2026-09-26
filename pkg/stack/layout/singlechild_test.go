@@ -923,9 +923,11 @@ func TestWriters_SingleExtraFileInChildDirectory(t *testing.T) {
 // shape from a walked tree. Under ArgoProfile the root bundle's application
 // monitoring is AppFileSingle and lands in the root's directory, and its
 // augmenter's extra file monitoring/dash.yaml lands in the directory of the
-// root's child node monitoring. The tree is written.
+// root's child node monitoring. The tree is written. (A configMapGenerator on
+// the application is refused: see
+// TestWriteManifest_RefuseWalkedSingleAppGenerators.)
 func TestWriteManifest_WalkedSingleAppExtraFileInChildNodeDirectory(t *testing.T) {
-	aug := &fakeAugmentingConfig{objs: []*client.Object{makeCM("mon")}, extraFileName: "monitoring/dash.yaml", cmgName: "dash"}
+	aug := &fakeAugmentingConfig{objs: []*client.Object{makeCM("mon")}, extraFileName: "monitoring/dash.yaml", noCMG: true}
 	child := &stack.Node{Name: "monitoring", Bundle: &stack.Bundle{Name: "monitoring", Applications: []*stack.Application{
 		stack.NewApplication("agent", "ns", &fakeConfig{objs: []*client.Object{makeCM("agent")}}),
 	}}}

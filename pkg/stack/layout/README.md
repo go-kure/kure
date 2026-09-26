@@ -60,7 +60,8 @@ now gets that name twice (`.../<name>/<name>`); pass the parent's path instead.
 
 Every writer (`WriteToDisk`, `WriteToTar`, `WriteManifest`) checks the whole tree before writing
 anything, and refuses two layouts that resolve to the same directory, or two `AppFileSingle`
-layouts that resolve to the same file, or an `AppFileSingle` child with children of its own.
+layouts that resolve to the same file, or an `AppFileSingle` child with children of its own or
+with `ConfigMapGenerators`.
 It also refuses an `AppFileSingle` layout whose file, `<Name>.yaml`, or one of whose extra files
 would replace another file written into the same directory: the `kustomization.yaml` there, one of
 the resource or extra files of the layout that owns the directory, or another `AppFileSingle`
@@ -101,6 +102,17 @@ parent does not list (an umbrella child, one that renders bundles, a directory c
 `FluxIntegratedPerLayout` parent, or under `WriteToDisk` and `WriteToTar` a directory child of
 another package) is a build of its own, so it may hold an object its parent holds. An
 `AppFileSingle` child of such a parent is still listed, so its objects count in the parent's build.
+
+The ConfigMap a `configMapGenerator` generates counts as an object of the layout whose
+`kustomization.yaml` holds the generator (go-kure/kure#894): `v1` `ConfigMap`, the generator's
+name and no namespace, so `default`. kustomize compares the name before the content-hash suffix, so
+two generators of one name are one identity whatever their files hold. It refuses a generator
+whose ConfigMap the build already holds (`id ... exists; ... behavior must be merge or replace`;
+kure writes no `behavior`), and a ConfigMap added after the generator's (`may not add resource with
+an already registered id`). So a generator named `x` is refused next to a ConfigMap `default/x`, or
+one without a namespace, in its own layout or in a layout that layout's build takes in, and so are
+two generators named `x` in one layout or in two layouts of one build. A ConfigMap `x` in another
+namespace, or a generator `x` in a child its parent does not list, is written.
 
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
@@ -287,6 +299,11 @@ Controls how resource YAML files are named:
   anything: it writes no `kustomization.yaml`, so nothing would list them and they would drop out
   of the build. The walkers never build one themselves; the root is not checked, since the synthetic cluster
   wrapper a walker builds takes `ArgoProfile`'s `AppFileSingle` in `WriteManifest`.
+- Every writer likewise refuses an `AppFileSingle` child, with or without resources, that carries
+  `ConfigMapGenerators` (go-kure/kure#891): a `configMapGenerator` exists only inside a
+  `kustomization.yaml`, the child writes none, and before this its generators were silently
+  dropped. They are not moved into the parent's `kustomization.yaml`. In `WriteManifest` this
+  includes an augmenter application that `ArgoProfile`'s `AppFileSingle` writes as one file.
 
 ### Layout origins
 
@@ -328,6 +345,10 @@ directories, files and Flux CRs.
 ### Extra Files and ConfigMap Generators
 
 `ManifestLayout.ExtraFiles` lets callers attach arbitrary files (e.g. a `values.yaml`) into a layout's directory alongside the resource YAMLs. `ManifestLayout.ConfigMapGenerators` adds entries to a `configMapGenerator:` section in the generated `kustomization.yaml`. kustomize appends a content-hash suffix to the generated ConfigMap name and rewrites references (e.g. `HelmRelease.spec.valuesFrom`) on build, so any change to the source file forces re-reconciliation — the canonical FluxCD pattern for tracking Helm values changes.
+
+A generator needs a `kustomization.yaml` the writer writes, so the writers refuse one on a
+`KustomizationRecursive` layout or an `AppFileSingle` child, and they refuse a generated ConfigMap
+whose identity its build already holds (see "Layout paths").
 
 An `ExtraFile.Name` is a relative path of `/`-separated segments made of letters, digits, `.`, `_`
 and `-`, with no `.` or `..` segment; a name in a subdirectory (`assets/dashboard.json`) creates
