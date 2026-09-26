@@ -474,8 +474,8 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 // kustomize build, which refuses one object twice: add hosts every derived
 // Source in the root node's layout, and a build can include a copy the tree
 // already held. The builds are top's, the whole tree's top layout (a
-// ClusterName wrapper's kustomization.yaml lists the root node's directory),
-// the root node's (the Flux bootstrap applies it) and the spec.path of every
+// ClusterName wrapper's kustomization.yaml can list the root node's
+// directory), the root node's (the Flux bootstrap applies it) and the spec.path of every
 // Kustomization this pass placed or kept, each with the directories
 // buildDirectories lists from it and the AppFileSingle files written into
 // them. Caller and application Kustomizations are not builds kure answers for.
@@ -485,8 +485,12 @@ func buildDirectories(l *layout.ManifestLayout) []*layout.ManifestLayout {
 // the first copy in depth-first layout order. Every other copy this
 // pass placed in that build is removed: a sourceRef names the object, not the
 // layout holding it. Two copies this pass did not place cannot be reduced to
-// one, so they are an error. A copy this pass did not place, in a build other
-// than the root's, is kept beside the root's copy: it is the caller's.
+// one, so they are an error. So is such a copy outside the root node's build
+// in a build that also holds the root's copy (a ClusterName wrapper's): the
+// root's copy cannot stay, and dropping it would leave the Source out of every
+// build the bootstrap applies. A copy this pass did not place, in a build
+// other than the root's, is otherwise kept beside the root's copy: it is the
+// caller's.
 func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout) error {
 	if len(p.derived) == 0 {
 		return nil
@@ -521,7 +525,7 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 		}
 	}
 
-	for _, b := range builds {
+	scopeOf := func(b *layout.ManifestLayout) []*layout.ManifestLayout {
 		var scope []*layout.ManifestLayout
 		for _, l := range buildDirectories(b) {
 			scope = append(scope, l)
@@ -531,6 +535,12 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 				}
 			}
 		}
+		return scope
+	}
+	rootScope := scopeOf(p.root)
+
+	for _, b := range builds {
+		scope := scopeOf(b)
 		copies := map[string][]hostedObject{}
 		for _, l := range scope {
 			objs, err := resourceItems(l)
@@ -558,6 +568,10 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 			keep := all[0].obj
 			if len(trees) == 1 {
 				keep = trees[0].obj
+				if t := trees[0]; !slices.Contains(rootScope, t.host) && slices.ContainsFunc(all, func(c hostedObject) bool { return c.host == p.root }) {
+					obj := t.obj
+					return errors.Errorf("layout %q holds %s %q, and the kustomize build of %q includes it and the copy the integration hosts in %q, the root node's layout the Flux bootstrap applies: kustomize refuses one object twice, and without the root's copy no build the bootstrap applies holds the Source; move the copy into %q's build or remove it", t.host.FullRepoPath(), obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), b.FullRepoPath(), p.root.FullRepoPath(), p.root.FullRepoPath())
+				}
 			}
 			for _, c := range all {
 				if c.obj != keep {

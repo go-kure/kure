@@ -430,22 +430,24 @@ and an unstructured copy of it are the same.
 
 Under the integrated placements every Source the integration generates is hosted **once, in the
 root node's layout**, whichever layouts hold the Kustomizations that use it (go-kure/kure#876),
-and not in a `ClusterName` wrapper above it. Under the default rules that is the directory the
-bootstrap sync path `./<root>` names (see [Kustomization paths](#kustomization-paths) for other
-rules), so the Source is in one build, the root's, and exists before any Kustomization that uses
-it. When the root node renders a bundle, its own Kustomization builds that same directory beside
+and not in a `ClusterName` wrapper above it. For a named root node under the default rules that is
+the directory the bootstrap sync path `./<root>` names (see [Kustomization paths](#kustomization-paths)
+for other rules), so the Source is in one build, the root's, and exists before any Kustomization
+that uses it. When the root node renders a bundle, its own Kustomization builds that same directory beside
 the bootstrap: both hold the same objects, so neither prunes what the other keeps, but the root
 bundle's patches and postBuild apply only in its own, so a root patch that selects a hosted Source
 makes the two apply it differently. A `sourceRef` names the object, not the layout holding it.
 
 The root build also covers the child directories the root's `kustomization.yaml` lists and the
-`AppFileSingle` files written into them, and a `ClusterName` wrapper's build covers the root
-node's directory when the wrapper lists it. When that build already holds a copy the integration did
+`AppFileSingle` files written into them. When that build already holds a copy the integration did
 not add (an earlier integration's, the caller's or an application's), that copy is kept and the
 integration adds none, since kustomize refuses one object twice. Two copies the integration did
-not add, in any one build (the root's or a generated Kustomization's `spec.path`), are refused. A
-copy the caller or an application puts in any other build is theirs to keep, and the integration
-still hosts its own at the root: that Source then has two owners, one of them the caller's.
+not add, in any one build (the root's, a `ClusterName` wrapper's or a generated Kustomization's
+`spec.path`), are refused. So is one such copy in a wrapper whose `kustomization.yaml` lists the
+root node's directory: the root's copy cannot stay beside it, and without the root's copy no build
+the bootstrap applies holds the Source. A copy the caller or an application puts in any other
+build is theirs to keep, and the integration still hosts its own at the root: that Source then has
+two owners, one of them the caller's.
 Kustomizations the caller or an application places are not builds kure answers for. Under
 `FluxSeparate` every generated Source goes into
 `flux-system`, which is built beside the rest of the tree, so a Source with a generated Source's
