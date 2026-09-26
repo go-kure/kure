@@ -79,7 +79,10 @@ allowed() {
   local ctx
   ctx="$(sed -n "$((lineno > 1 ? lineno - 1 : 1)),$((lineno + 1))p" "$file" 2>/dev/null || true)"
   for w in $words; do
-    printf '%s' "$ctx" | grep -qiE "allow-term:${w}\b" || return 1
+    # Here-string, not `printf | grep -q`: grep -q exits on the first match, and under
+    # pipefail a printf that then hits the closed pipe turns a covered hit into a
+    # false FORBIDDEN, intermittently (it depends on scheduling).
+    grep -qiE "allow-term:${w}\b" <<<"$ctx" || return 1
   done
   return 0
 }
