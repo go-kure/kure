@@ -435,7 +435,23 @@ func TestIntegrate_RootBundleBuildChangesHostedSource(t *testing.T) {
 		{name: "6 target-less patch naming another object", build: rootBundleTree("", rootPatch(stack.Patch{Patch: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: platform-app-cm\n  namespace: default\ndata:\n  patched: \"true\"\n"}))},
 		{name: "7 postBuild over a plain Source", build: rootBundleTree("", rootPostBuild(&stack.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}}))},
 		{name: "8 postBuild substituting into the Source", build: rootBundleTree(templatedURL, rootPostBuild(&stack.PostBuild{Substitute: map[string]string{"GIT_HOST": "git.example.com"}})), refused: "postBuild substitution changes it"},
-		{name: "8b postBuild substituteFrom only", build: rootBundleTree(templatedURL, rootPostBuild(&stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}}})), refused: "postBuild substitution changes it"},
+		{name: "8b postBuild substituteFrom only", build: rootBundleTree(templatedURL, rootPostBuild(&stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}}})), refused: "postBuild substitution reads GIT_HOST, which the inline vars do not set and substituteFrom can"},
+		// $$ escapes a $ and reads no var: only running the substitution
+		// without inline vars, as Flux does with substituteFrom set, shows
+		// that it changes the URL.
+		{name: "8e postBuild substituteFrom only, escaped expression", build: rootBundleTree("https://git.example.com/$${REPO}.git", rootPostBuild(&stack.PostBuild{SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}}})), refused: "postBuild substitution changes it"},
+		// The inline PREFIX reproduces the expression offline, but a SUFFIX
+		// from the cluster's ConfigMap would change the URL.
+		{name: "8c postBuild substituteFrom var the offline result hides", build: rootBundleTree("https://git.example.com/${PREFIX}${SUFFIX}.git", rootPostBuild(&stack.PostBuild{
+			Substitute:     map[string]string{"PREFIX": "${PREFIX}${SUFFIX}"},
+			SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}},
+		})), refused: "postBuild substitution reads SUFFIX, which the inline vars do not set and substituteFrom can"},
+		// An inline var overrides substituteFrom's, so an expression reading
+		// only inline vars is decided offline: here it is unchanged.
+		{name: "8d postBuild substituteFrom with an inline var that keeps the Source", build: rootBundleTree("https://git.example.com/${REPO}.git", rootPostBuild(&stack.PostBuild{
+			Substitute:     map[string]string{"REPO": "${REPO}"},
+			SubstituteFrom: []stack.SubstituteRef{{Kind: "ConfigMap", Name: "cluster-vars"}},
+		}))},
 		{name: "9 the patch on a bundle below the root", build: rootBundleTree("", func(_, a *stack.Bundle) { a.Patches = []stack.Patch{sourceKind} })},
 		{name: "10 the patch selecting the caller's copy in the root", build: rootBundleTree("", rootPatch(sourceKind)), callerCopy: true},
 	} {
