@@ -190,15 +190,16 @@ func TestIntegrate_SharedSourceAtRootNodeUnderClusterName(t *testing.T) {
 	}
 }
 
-// TestIntegrate_SharedSourceKeepsACopyInTheClusterNameWrapper: under
-// PerBundle the wrapper's kustomization.yaml lists the root node's directory,
-// so a caller copy in the wrapper shares a build with the integration's; it is
-// the one kept, or the wrapper's build would hold the Source twice. Under
-// PerLayout the root node's directory is its own layout CR's build, so the
-// caller's copy is in another build and kept beside the integration's.
-func TestIntegrate_SharedSourceKeepsACopyInTheClusterNameWrapper(t *testing.T) {
+// TestIntegrate_SharedSourceCopyInTheClusterNameWrapper: under PerBundle the
+// wrapper's kustomization.yaml lists the root node's directory, so a caller
+// copy in the wrapper shares a build with the integration's root copy. Both
+// cannot stay, the caller's is not dropped, and without the root's copy no
+// build the bootstrap applies holds the Source: refused, the tree untouched.
+// Under PerLayout the root node's directory is its own layout CR's build, so
+// the caller's copy is in another build and kept beside the integration's.
+func TestIntegrate_SharedSourceCopyInTheClusterNameWrapper(t *testing.T) {
 	for placement, want := range map[layout.FluxPlacement]map[string]int{
-		layout.FluxIntegratedPerBundle: {".": 1},
+		layout.FluxIntegratedPerBundle: nil,
 		layout.FluxIntegratedPerLayout: {".": 1, "platform": 1},
 	} {
 		t.Run(string(placement), func(t *testing.T) {
@@ -211,7 +212,18 @@ func TestIntegrate_SharedSourceKeepsACopyInTheClusterNameWrapper(t *testing.T) {
 				t.Fatal(err)
 			}
 			ml.Resources = append(ml.Resources, sharedSource(t))
-			if err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules); err != nil {
+			before := countResources(ml)
+			err = fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).IntegrateWithLayout(ml, c, rules)
+			if want == nil {
+				if err == nil || !strings.Contains(err.Error(), `layout "." holds GitRepository "shared"`) || !strings.Contains(err.Error(), `hosts in "platform"`) {
+					t.Fatalf("caller copy in the wrapper's build: got %v, want a refusal naming both layouts", err)
+				}
+				if after := countResources(ml); after != before {
+					t.Errorf("refused integration left %d resources, want the caller's %d", after, before)
+				}
+				return
+			}
+			if err != nil {
 				t.Fatal(err)
 			}
 			if got := sourceCopies(ml, "shared"); !intMapsEqual(got, want) {
