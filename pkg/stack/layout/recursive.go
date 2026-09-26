@@ -106,6 +106,9 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 	// AppFileSingle child's file that files leaves out, an AppFileSingle
 	// root's files, and each kustomization.yaml.
 	var filled []string
+	// targets holds every marked Recursive layout with its directory, an
+	// AppFileSingle one included, which dirs leaves out.
+	var targets []dirLayout
 	var walk func(l, parent *ManifestLayout) error
 	walk = func(l, parent *ManifestLayout) error {
 		dir, single := plan.outDir(l)
@@ -147,6 +150,9 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 				filled = append(filled, path.Clean(filepath.ToSlash(dir)))
 			}
 		}
+		if l.fluxBuild && plan.kustomizationMode(l) == KustomizationRecursive {
+			targets = append(targets, dirLayout{l: l, raw: dir})
+		}
 		if !single {
 			names, _ := plan.files(l)
 			for _, name := range names {
@@ -184,14 +190,16 @@ func checkRecursiveLayouts(root *ManifestLayout, plan writerPlan) error {
 			kdirs = append(kdirs, m.dir)
 		}
 	}
-	for _, d := range dirs {
-		if !d.l.fluxBuild || plan.kustomizationMode(d.l) != KustomizationRecursive {
-			continue
-		}
+	for _, d := range targets {
 		base := path.Clean(filepath.ToSlash(d.raw))
 		if !slices.ContainsFunc(filled, func(p string) bool { _, ok := relativeTo(base, p); return ok }) {
 			return errors.NewFileError("write", d.raw, fmt.Sprintf(
 				"layout %q is KustomizationRecursive and a Flux Kustomization kure generated builds its directory, but it holds no file: the writer writes it no kustomization.yaml and nothing else lands at or below it, so the directory the Kustomization names would be empty, which a Git tree drops; give it a resource, or write it KustomizationExplicit", d.l.FullRepoPath()), nil)
+		}
+	}
+	for _, d := range dirs {
+		if !d.l.fluxBuild || plan.kustomizationMode(d.l) != KustomizationRecursive {
+			continue
 		}
 		shielded := func(p string, strict bool) bool { return shieldedIn(kdirs, d.dir, p, strict) }
 		for _, t := range dirs {

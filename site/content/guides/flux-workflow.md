@@ -242,6 +242,11 @@ What changed, and what to do:
   `kustomization.yaml` and the child directories it lists, or the Flux build of a marked
   `KustomizationRecursive` directory. kustomize would refuse the second copy. The ConfigMap a
   `configMapGenerator` generates counts as one of those objects.
+- **Empty Recursive targets are refused.** A marked `KustomizationRecursive` directory gets no
+  `kustomization.yaml`. When no other file lands at or below it (a bundle with no applications,
+  or applications that render nothing), every writer would leave it empty, and a Git tree drops
+  an empty directory, so the Flux Kustomization would name a path that is not committed. Give the
+  layout a resource, or write it `KustomizationExplicit`, which writes it `resources: []`.
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 
