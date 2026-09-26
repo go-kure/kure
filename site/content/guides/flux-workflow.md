@@ -287,7 +287,13 @@ What changed, and what to do:
   any Source already in the tree with the identity of one the integration generates into
   `flux-system`, even an identical one. Under `FluxIntegratedPerBundle`, a caller's copy of a
   generated Source in a `ClusterName` wrapper above the root node is refused too: that build also
-  includes the root's copy, and kustomize refuses one object twice.
+  includes the root's copy, and kustomize refuses one object twice. When the root node renders a
+  bundle, its Kustomization builds the directory the bootstrap applies, so a patch of it that
+  applies to a Source the integration hosts there, or a postBuild substitution that changes one
+  (with `substituteFrom` set, any `${...}` in the `SourceRef` URL reading a var the inline
+  `substitute` does not set), is refused: the bootstrap
+  applies that directory without either, and the two would keep overwriting each other's Source.
+  Narrow the patch target or move the patch or postBuild to a bundle below the root node.
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
   they used to take effect only when bundles and applications were both flat, and a `ClusterName`
   always flattened the root bundle. Combinations that were silently rendered fully nested now

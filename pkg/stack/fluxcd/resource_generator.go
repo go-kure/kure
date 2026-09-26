@@ -334,32 +334,12 @@ func unitConflict(first, b *stack.Bundle, path, field, why string) error {
 // another bundle of unit l renders. Flux applies a Kustomization's patches to
 // everything it builds, and the unit builds every merged bundle's objects, so
 // such a patch would change objects its bundle does not own — something it
-// did not do while b had a directory of its own. The target is matched the
-// way kustomize matches it: group, version, kind, name and namespace as
-// anchored regular expressions (an empty one matches anything), label and
-// annotation selectors as Kubernetes selector expressions. Objects without a
-// kind cannot be matched and are skipped.
+// did not do while b had a directory of its own. The target is matched as
+// patchTargetMatcher matches it.
 func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSelector, path string) error {
-	sel := kusttypes.Selector{
-		ResId: resid.ResId{
-			Gvk:       resid.Gvk{Group: t.Group, Version: t.Version, Kind: t.Kind},
-			Name:      t.Name,
-			Namespace: t.Namespace,
-		},
-		LabelSelector:      t.LabelSelector,
-		AnnotationSelector: t.AnnotationSelector,
-	}
-	sr, err := kusttypes.NewSelectorRegex(&sel)
+	selects, err := patchTargetMatcher(t)
 	if err != nil {
-		return errors.Wrapf(err, "bundle %q: patch target %s", b.Name, sel.String())
-	}
-	labelSel, err := labels.Parse(t.LabelSelector)
-	if err != nil {
-		return errors.Wrapf(err, "bundle %q: patch target label selector", b.Name)
-	}
-	annotationSel, err := labels.Parse(t.AnnotationSelector)
-	if err != nil {
-		return errors.Wrapf(err, "bundle %q: patch target annotation selector", b.Name)
+		return errors.Wrapf(err, "bundle %q", b.Name)
 	}
 	// Under FluxIntegratedPerLayout a per-app directory is applied by its own
 	// CR, not built by this unit: only the objects in l's own directory are,
@@ -385,23 +365,54 @@ func checkPatchScope(l *layout.ManifestLayout, b *stack.Bundle, t *stack.PatchSe
 			continue
 		}
 		for _, o := range l.OriginBundleObjects(other) {
-			gvk := o.GetObjectKind().GroupVersionKind()
-			// kustomize matches the effective namespace: "default" for a
-			// namespaced object that names none.
-			id := resid.NewResIdWithNamespace(resid.Gvk{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind}, o.GetName(), o.GetNamespace())
-			if gvk.Kind == "" || !built(o) ||
-				!sr.MatchGvk(id.Gvk) ||
-				!sr.MatchName(o.GetName()) || !sr.MatchNamespace(id.EffectiveNamespace()) ||
-				!labelSel.Matches(labels.Set(o.GetLabels())) ||
-				!annotationSel.Matches(labels.Set(o.GetAnnotations())) {
+			if !built(o) || !selects(o) {
 				continue
 			}
 			return errors.ResourceValidationError("Bundle", b.Name, "patches",
 				fmt.Sprintf("bundles %q and %q render one directory %q and so share one Kustomization, which applies every patch to everything it builds: bundle %q's patch target %s also selects %s %q of bundle %q; narrow the target to %q's own objects, or give the bundles directories of their own (NodeGrouping or BundleGrouping GroupByName)",
-					b.Name, other.Name, path, b.Name, describeTarget(t), gvk.Kind, objectName(o), other.Name, b.Name), nil)
+					b.Name, other.Name, path, b.Name, describeTarget(t), o.GetObjectKind().GroupVersionKind().Kind, objectName(o), other.Name, b.Name), nil)
 		}
 	}
 	return nil
+}
+
+// patchTargetMatcher returns whether patch target t selects an object, the
+// way kustomize selects a patch's targets (ResMap.Select): group, version,
+// kind, name and namespace as anchored regular expressions (an empty one
+// matches anything) against the object's effective namespace — "default" for
+// a namespaced object that names none — and label and annotation selectors as
+// Kubernetes selector expressions. An object without a kind cannot be matched
+// and is never selected.
+func patchTargetMatcher(t *stack.PatchSelector) (func(client.Object) bool, error) {
+	sel := kusttypes.Selector{
+		ResId: resid.ResId{
+			Gvk:       resid.Gvk{Group: t.Group, Version: t.Version, Kind: t.Kind},
+			Name:      t.Name,
+			Namespace: t.Namespace,
+		},
+		LabelSelector:      t.LabelSelector,
+		AnnotationSelector: t.AnnotationSelector,
+	}
+	sr, err := kusttypes.NewSelectorRegex(&sel)
+	if err != nil {
+		return nil, errors.Wrapf(err, "patch target %s", sel.String())
+	}
+	labelSel, err := labels.Parse(t.LabelSelector)
+	if err != nil {
+		return nil, errors.Wrap(err, "patch target label selector")
+	}
+	annotationSel, err := labels.Parse(t.AnnotationSelector)
+	if err != nil {
+		return nil, errors.Wrap(err, "patch target annotation selector")
+	}
+	return func(o client.Object) bool {
+		gvk := o.GetObjectKind().GroupVersionKind()
+		id := resid.NewResIdWithNamespace(resid.Gvk{Group: gvk.Group, Version: gvk.Version, Kind: gvk.Kind}, o.GetName(), o.GetNamespace())
+		return gvk.Kind != "" && sr.MatchGvk(id.Gvk) &&
+			sr.MatchName(o.GetName()) && sr.MatchNamespace(id.EffectiveNamespace()) &&
+			labelSel.Matches(labels.Set(o.GetLabels())) &&
+			annotationSel.Matches(labels.Set(o.GetAnnotations()))
+	}, nil
 }
 
 // describeTarget renders a patch target as its set fields, e.g.

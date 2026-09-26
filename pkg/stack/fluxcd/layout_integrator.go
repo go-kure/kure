@@ -1,6 +1,7 @@
 package fluxcd
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"path"
@@ -9,11 +10,16 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/envsubst"
+	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kustomize/api/provider"
+	"sigs.k8s.io/kustomize/api/resource"
+	"sigs.k8s.io/kustomize/kyaml/resid"
 
 	"github.com/go-kure/kure/pkg/errors"
 	"github.com/go-kure/kure/pkg/stack"
@@ -327,6 +333,9 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := p.hostSourcesOncePerBuild(ml); err != nil {
 		return err
 	}
+	if err := p.checkRootBuildKeepsHostedSources(ml); err != nil {
+		return err
+	}
 	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
 		return err
 	}
@@ -495,23 +504,7 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 	if len(p.derived) == 0 {
 		return nil
 	}
-	layoutAt := map[string]*layout.ManifestLayout{}
-	var crs []*kustv1.Kustomization
-	var index func(l *layout.ManifestLayout)
-	index = func(l *layout.ManifestLayout) {
-		layoutAt[path.Clean(l.FullRepoPath())] = l
-		for _, obj := range l.Resources {
-			if k, ok := obj.(*kustv1.Kustomization); ok && p.generated[crKey(k.Namespace, k.Name)] {
-				crs = append(crs, k)
-			}
-		}
-		for _, child := range l.Children {
-			if child != nil {
-				index(child)
-			}
-		}
-	}
-	index(top)
+	layoutAt, crs := p.indexGenerated(top)
 	builds := []*layout.ManifestLayout{top}
 	seen := map[*layout.ManifestLayout]bool{top: true}
 	if !seen[p.root] {
@@ -525,22 +518,10 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 		}
 	}
 
-	scopeOf := func(b *layout.ManifestLayout) []*layout.ManifestLayout {
-		var scope []*layout.ManifestLayout
-		for _, l := range buildDirectories(b) {
-			scope = append(scope, l)
-			for _, child := range l.Children {
-				if child != nil && child.ApplicationFileMode == layout.AppFileSingle {
-					scope = append(scope, child)
-				}
-			}
-		}
-		return scope
-	}
-	rootScope := scopeOf(p.root)
+	rootScope := buildScope(p.root)
 
 	for _, b := range builds {
-		scope := scopeOf(b)
+		scope := buildScope(b)
 		copies := map[string][]hostedObject{}
 		for _, l := range scope {
 			objs, err := resourceItems(l)
@@ -581,6 +562,213 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 		}
 	}
 	return nil
+}
+
+// indexGenerated maps every layout under top by its directory, and returns in
+// depth-first layout order every Kustomization this pass placed or kept
+// (generated).
+func (p *integratedPlacement) indexGenerated(top *layout.ManifestLayout) (map[string]*layout.ManifestLayout, []*kustv1.Kustomization) {
+	layoutAt := map[string]*layout.ManifestLayout{}
+	var crs []*kustv1.Kustomization
+	var index func(l *layout.ManifestLayout)
+	index = func(l *layout.ManifestLayout) {
+		layoutAt[path.Clean(l.FullRepoPath())] = l
+		for _, obj := range l.Resources {
+			if k, ok := obj.(*kustv1.Kustomization); ok && p.generated[crKey(k.Namespace, k.Name)] {
+				crs = append(crs, k)
+			}
+		}
+		for _, child := range l.Children {
+			if child != nil {
+				index(child)
+			}
+		}
+	}
+	index(top)
+	return layoutAt, crs
+}
+
+// buildScope returns the layouts whose objects a kustomize build of b holds:
+// the directories buildDirectories lists from b, and the AppFileSingle
+// application files written into them.
+func buildScope(b *layout.ManifestLayout) []*layout.ManifestLayout {
+	var scope []*layout.ManifestLayout
+	for _, l := range buildDirectories(b) {
+		scope = append(scope, l)
+		for _, child := range l.Children {
+			if child != nil && child.ApplicationFileMode == layout.AppFileSingle {
+				scope = append(scope, child)
+			}
+		}
+	}
+	return scope
+}
+
+// checkRootBuildKeepsHostedSources refuses a Kustomization this pass placed
+// or kept whose build holds the root node's layout — the root bundle's, whose
+// spec.path is the directory the Flux bootstrap applies — when one of its
+// patches applies to, or its postBuild substitution changes, a Source this
+// pass hosted there (go-kure/kure#908). The bootstrap applies that directory
+// with neither, so the two would apply the Source differently and keep
+// overwriting each other.
+//
+// A patch with a target applies to the Source when the target selects it
+// (patchTargetMatcher); one without is a strategic-merge patch, which applies
+// to the object whose identity its body names, compared as kustomize compares
+// it (group, version, kind, name and effective namespace). A document that
+// does not parse as one is left out: a JSON6902 patch needs a target, and
+// kustomize refuses the build without one. The postBuild substitution runs as
+// Flux's own, offline, with the inline substitute vars (postBuildChanges);
+// since the substituteFrom values are in the cluster, when substituteFrom is
+// set any ${...} expression reading a var the inline vars do not set is
+// refused whatever the offline result. A patch that selects the Source but
+// leaves it unchanged is refused too.
+//
+// Only the Sources this pass placed are checked. When the root build already
+// held a copy the pass did not place (the caller's, an application's or an
+// earlier integration's), hostSourcesOncePerBuild kept that copy instead, and
+// what the root bundle's patches do to it is its owner's.
+func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.ManifestLayout) error {
+	var hosted []client.Object
+	for _, obj := range p.root.Resources {
+		if _, ok := sourceKey(obj); ok && p.placed[obj] {
+			hosted = append(hosted, obj)
+		}
+	}
+	if len(hosted) == 0 {
+		return nil
+	}
+	layoutAt, crs := p.indexGenerated(top)
+	rf := provider.NewDefaultDepProvider().GetResourceFactory()
+	for _, k := range crs {
+		b := layoutAt[path.Clean(k.Spec.Path)]
+		if b == nil || !slices.Contains(buildScope(b), p.root) {
+			continue
+		}
+		refuse := func(s client.Object, cause, remedy string) error {
+			return errors.Errorf("Flux Kustomization %q (spec.path %q) builds %s %q, which the integration hosts in %q, the root node's layout the Flux bootstrap applies without patches or postBuild: its %s, so the two would apply the Source differently and keep overwriting each other; %s",
+				k.Name, k.Spec.Path, s.GetObjectKind().GroupVersionKind().Kind, s.GetName(), p.root.FullRepoPath(), cause, remedy)
+		}
+		const movePatch = "narrow the patch target, or move the patch to a bundle below the root node"
+		for i, patch := range k.Spec.Patches {
+			if patch.Target != nil {
+				t := &stack.PatchSelector{
+					Group: patch.Target.Group, Version: patch.Target.Version, Kind: patch.Target.Kind,
+					Name: patch.Target.Name, Namespace: patch.Target.Namespace,
+					LabelSelector: patch.Target.LabelSelector, AnnotationSelector: patch.Target.AnnotationSelector,
+				}
+				selects, err := patchTargetMatcher(t)
+				if err != nil {
+					return errors.Wrapf(err, "Flux Kustomization %q: patch %d", k.Name, i)
+				}
+				for _, s := range hosted {
+					if selects(s) {
+						return refuse(s, fmt.Sprintf("patch %d (target %s) selects it", i, describeTarget(t)), movePatch)
+					}
+				}
+				continue
+			}
+			docs, err := rf.SliceFromBytes([]byte(patch.Patch))
+			if err != nil {
+				continue
+			}
+			for _, doc := range docs {
+				for _, s := range hosted {
+					if doc.OrgId().Equals(resourceID(s)) {
+						return refuse(s, fmt.Sprintf("patch %d (no target) names it", i), movePatch)
+					}
+				}
+			}
+		}
+		if k.Spec.PostBuild == nil {
+			continue
+		}
+		for _, s := range hosted {
+			cause, err := postBuildChanges(rf, k, s)
+			if err != nil {
+				return errors.Wrapf(err, "Flux Kustomization %q (spec.path %q) builds %s %q, which the integration hosts in %q, the root node's layout the Flux bootstrap applies without postBuild, and its postBuild substitution fails on it",
+					k.Name, k.Spec.Path, s.GetObjectKind().GroupVersionKind().Kind, s.GetName(), p.root.FullRepoPath())
+			}
+			if cause != "" {
+				return refuse(s, cause, "drop the ${...} expression from the SourceRef, or move the postBuild to a bundle below the root node")
+			}
+		}
+	}
+	return nil
+}
+
+// resourceID is obj's identity as kustomize reads it from the object's
+// apiVersion, kind, name and namespace.
+func resourceID(obj client.Object) resid.ResId {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	return resid.NewResIdWithNamespace(resid.NewGvk(gvk.Group, gvk.Version, gvk.Kind), obj.GetName(), obj.GetNamespace())
+}
+
+// postBuildChanges reports how Flux's postBuild substitution with k's vars
+// can change obj, or "" when it cannot. It runs Flux's own substitution in
+// dry-run mode, which reads no cluster: the inline substitute vars are
+// applied, and with substituteFrom set it runs even without them (Always).
+// The substituteFrom values are in the cluster, so with substituteFrom set
+// an expression that reads a var the inline vars do not set — which is the
+// one substituteFrom can supply — can change obj whatever the offline result
+// is; the inline vars override substituteFrom's, so an expression reading
+// only those is decided by the offline result. An object Flux's opt-out
+// label or annotation excludes is unchanged.
+func postBuildChanges(rf *resource.Factory, k *kustv1.Kustomization, obj client.Object) (string, error) {
+	content, err := comparableContent(obj)
+	if err != nil {
+		return "", err
+	}
+	res, err := rf.FromMap(content)
+	if err != nil {
+		return "", errors.Wrap(err, "read the Source")
+	}
+	before, err := res.Map()
+	if err != nil {
+		return "", errors.Wrap(err, "read the Source")
+	}
+	text, err := res.AsYAML()
+	if err != nil {
+		return "", errors.Wrap(err, "read the Source")
+	}
+	kust, err := runtime.DefaultUnstructuredConverter.ToUnstructured(k)
+	if err != nil {
+		return "", errors.Wrap(err, "convert the Kustomization to unstructured")
+	}
+	opts := []fluxkustomize.SubstituteOption{fluxkustomize.SubstituteWithDryRun(true)}
+	if len(k.Spec.PostBuild.SubstituteFrom) > 0 {
+		opts = append(opts, fluxkustomize.SubstituteWithAlways(true))
+	}
+	out, err := fluxkustomize.SubstituteVariables(context.Background(), nil, unstructured.Unstructured{Object: kust}, res, opts...)
+	if err != nil {
+		return "", err
+	}
+	if out == nil {
+		return "", nil
+	}
+	if len(k.Spec.PostBuild.SubstituteFrom) > 0 {
+		var fromCluster []string
+		if _, err := envsubst.Eval(string(text), func(name string) (string, bool) {
+			v, inline := k.Spec.PostBuild.Substitute[name]
+			if !inline && !slices.Contains(fromCluster, name) {
+				fromCluster = append(fromCluster, name)
+			}
+			return v, true
+		}); err != nil {
+			return "", errors.Wrap(err, "read the Source's ${...} expressions")
+		}
+		if len(fromCluster) > 0 {
+			return fmt.Sprintf("postBuild substitution reads %s, which the inline vars do not set and substituteFrom can", strings.Join(fromCluster, ", ")), nil
+		}
+	}
+	after, err := out.Map()
+	if err != nil {
+		return "", errors.Wrap(err, "read the substituted Source")
+	}
+	if !reflect.DeepEqual(before, after) {
+		return "postBuild substitution changes it", nil
+	}
+	return "", nil
 }
 
 // set indexes Kustomizations by namespace/name.
