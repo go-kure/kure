@@ -641,6 +641,34 @@ func TestWriters_RecursiveFilledFromElsewhere(t *testing.T) {
 			},
 			want: []string{"apps/web/kustomization.yaml", "apps/web/r.yaml"},
 		},
+		// With no resource, its kustomization.yaml ("resources: []") is the
+		// one file there.
+		"an AppFileSingle root's kustomization.yaml": {
+			build: func() *layout.ManifestLayout {
+				r := &layout.ManifestLayout{Name: "r", Namespace: "apps/web", ApplicationFileMode: layout.AppFileSingle}
+				d := &layout.ManifestLayout{Name: "web", Namespace: "apps", Mode: layout.KustomizationRecursive, UmbrellaChild: true}
+				d.SetFluxBuild(true)
+				r.Children = []*layout.ManifestLayout{d}
+				return r
+			},
+			want: []string{"apps/web/kustomization.yaml"},
+		},
+		// A Recursive one writes no kustomization.yaml: its resource file is
+		// the one file there.
+		"a Recursive AppFileSingle root's resource file": {
+			build: func() *layout.ManifestLayout {
+				r := &layout.ManifestLayout{
+					Name: "r", Namespace: "apps/web", ApplicationFileMode: layout.AppFileSingle,
+					Mode:      layout.KustomizationRecursive,
+					Resources: []client.Object{testObj("v1", "ConfigMap", "a")},
+				}
+				d := &layout.ManifestLayout{Name: "web", Namespace: "apps", Mode: layout.KustomizationRecursive, UmbrellaChild: true}
+				d.SetFluxBuild(true)
+				r.Children = []*layout.ManifestLayout{d}
+				return r
+			},
+			want: []string{"apps/web/r.yaml"},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
