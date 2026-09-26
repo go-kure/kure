@@ -98,7 +98,8 @@
 #     actions execute code no scan here can see), a `using` in a flow mapping
 #     or not in lower case included; a nested `uses:`, flow-mapping, quoted
 #     or in any letter case; more than one `run:` step, flow-mapping,
-#     quoted and `RUN:` steps counted; a `github.action_path` expression; $GITHUB_ACTION_PATH other
+#     quoted and `RUN:` steps counted (the lines of a `run: |` body are
+#     text, not keys); a `github.action_path` expression; $GITHUB_ACTION_PATH other
 #     than as one whole `$GITHUB_ACTION_PATH/<path>` or
 #     `${GITHUB_ACTION_PATH}/<path>` word — the path of `[A-Za-z0-9_./-]`,
 #     then at most a closing quote, then whitespace, `;&|)<>` or the line end
@@ -355,6 +356,8 @@ scan_workflow() {
 
       line = code
       sub(/^ *(-[[:space:]]+)?/, "", line)
+      # A list dash alone on its line opens a step whose keys follow.
+      if (!in_blk && line ~ /^ *-$/) next
       if (!in_blk) {
         keycol = length(code) - length(line)
         if (line ~ /^\?([[:space:]]|$)/) { bad(NR, $0 " (a complex key this scan cannot read)"); next }
@@ -635,7 +638,20 @@ while IFS= read -r name; do
     echo "check-pin-impact: ${action_path} at ${NEW_SHA:0:8} has a quoted key with an escape sequence, or a '?' complex key — this scan cannot tell which key it is, refusing to guess" >&2
     exit 1
   fi
-  key_yml="$(printf '%s\n' "$code_yml" | sed -E \
+  # The key checks below read key_yml: code_yml without the body of any
+  # block scalar (a `run: |` script), whose lines are text, not keys —
+  # `echo "Dry run: ..."` is no second run step. A body is every line
+  # indented deeper than the key that opened it, as scan_workflow reads it.
+  key_yml="$(printf '%s\n' "$code_yml" | awk '
+    { match($0, /^ */); ind = RLENGTH }
+    blk && (ind > blk_ind || $0 ~ /^[[:space:]]*$/) { next }
+    { blk = 0; code = $0; sub(/[[:space:]]+#.*$/, "", code) }
+    code ~ /:[[:space:]]*[|>][-+0-9]*[[:space:]]*$/ {
+      blk = 1
+      match(code, /^ *(-[[:space:]]+)?/); blk_ind = RLENGTH
+    }
+    { print }
+  ' | sed -E \
     -e "s/^([[:space:]]*(-[[:space:]]+)?)[\"']([A-Za-z0-9_-]+)[\"'][[:space:]]*:/\\1\\3:/" \
     -e "s/^([[:space:]]*(-[[:space:]]+)?)([A-Za-z0-9_-]+)[[:space:]]+:([[:space:]]|\$)/\\1\\3:\\4/")"
   # A `using` key that does not start its line (a flow mapping), or is not
