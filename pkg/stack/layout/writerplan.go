@@ -145,7 +145,10 @@ func relPath(base, target string) (string, bool) {
 	if len(rel) == 0 {
 		return ".", true
 	}
-	return strings.Join(rel, "/"), n == len(b)
+	// A cleaned path holds ".." only as leading segments, so a target that
+	// climbs past every segment base shares with it starts its remainder with
+	// "..". That matters when base has no segments (".").
+	return strings.Join(rel, "/"), n == len(b) && (n == len(t) || t[n] != "..")
 }
 
 // caseOnlyPrefix reports whether target lies at or below base only when path

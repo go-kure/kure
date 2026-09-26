@@ -217,6 +217,26 @@ func TestWriters_RefuseSingleChildNameEscapes(t *testing.T) {
 	}
 }
 
+// TestWriters_RefuseSingleChildAboveRootDirectory: WriteToTar gives the root
+// the directory ".", which has no path segments, so a child whose Namespace
+// climbs above it must still be found outside it and refused.
+func TestWriters_RefuseSingleChildAboveRootDirectory(t *testing.T) {
+	for _, ns := range []string{"..", "../q"} {
+		for _, writer := range allWriters {
+			t.Run(ns+"/"+writer, func(t *testing.T) {
+				single := cmLayout("a", ns)
+				single.Name = "svc"
+				single.ApplicationFileMode = layout.AppFileSingle
+				root := &layout.ManifestLayout{Namespace: ".", Children: []*layout.ManifestLayout{single}}
+				err := writeRefused(t, writer, layout.Config{}, root)
+				if err == nil || !strings.Contains(err.Error(), "lands outside the directory") {
+					t.Fatalf("err = %v, want the outside-the-parent refusal", err)
+				}
+			})
+		}
+	}
+}
+
 // TestWriteManifest_ConfigSingleChildBelowParentListedByPath: a child that is
 // AppFileSingle through Config, not its own mode, is listed by its relative
 // path as well.
