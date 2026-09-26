@@ -306,8 +306,9 @@ Controls how resource YAML files are named:
   `kustomization.yaml`, the child writes none, and before this its generators were silently
   dropped. They are not moved into the parent's `kustomization.yaml`. In `WriteManifest` this
   includes any application layout written as one file through `Config` (`ArgoProfile`, or
-  `ApplicationFileMode: AppFileSingle` set explicitly) that an augmenter gives generators, under
-  every walker and every Flux placement but `FluxIntegratedPerLayout`. An augmenter that also sets
+  `ApplicationFileMode: AppFileSingle` set explicitly) that an augmenter gives generators: under
+  `WalkCluster` with every Flux placement but `FluxIntegratedPerLayout`, and under
+  `WalkClusterByPackage` with every placement, since it clears the placement. An augmenter that also sets
   its layout's `ApplicationFileMode` to `AppFilePerResource` keeps its generators: the layout gets
   its own directory and `kustomization.yaml`.
 

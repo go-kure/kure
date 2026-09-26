@@ -74,6 +74,10 @@ func TestWriters_RefuseGeneratorsOnSingleChild(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), want) {
 					t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
 				}
+				// The error names the child's own file, not the directory.
+				if err != nil && !strings.Contains(err.Error(), "s.yaml") {
+					t.Errorf("%s: err = %v, want it to name the child's file s.yaml", writer, err)
+				}
 			}
 		})
 	}
