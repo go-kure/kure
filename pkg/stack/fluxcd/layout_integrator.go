@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	"github.com/fluxcd/pkg/envsubst"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -617,10 +618,11 @@ func buildScope(b *layout.ManifestLayout) []*layout.ManifestLayout {
 // it (group, version, kind, name and effective namespace). A document that
 // does not parse as one is left out: a JSON6902 patch needs a target, and
 // kustomize refuses the build without one. The postBuild substitution runs as
-// Flux's own, offline: the inline substitute vars, and — since the
-// substituteFrom values are in the cluster — any ${...} expression when
-// substituteFrom is set, which Flux replaces with the value or with nothing.
-// A patch that selects the Source but leaves it unchanged is refused too.
+// Flux's own, offline, with the inline substitute vars (postBuildChanges);
+// since the substituteFrom values are in the cluster, when substituteFrom is
+// set any ${...} expression reading a var the inline vars do not set is
+// refused whatever the offline result. A patch that selects the Source but
+// leaves it unchanged is refused too.
 //
 // Only the Sources this pass placed are checked. When the root build already
 // held a copy the pass did not place (the caller's, an application's or an
@@ -682,13 +684,13 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 			continue
 		}
 		for _, s := range hosted {
-			changed, err := postBuildChanges(rf, k, s)
+			cause, err := postBuildChanges(rf, k, s)
 			if err != nil {
 				return errors.Wrapf(err, "Flux Kustomization %q (spec.path %q) builds %s %q, which the integration hosts in %q, the root node's layout the Flux bootstrap applies without postBuild, and its postBuild substitution fails on it",
 					k.Name, k.Spec.Path, s.GetObjectKind().GroupVersionKind().Kind, s.GetName(), p.root.FullRepoPath())
 			}
-			if changed {
-				return refuse(s, "postBuild substitution changes it", "drop the ${...} expression from the SourceRef, or move the postBuild to a bundle below the root node")
+			if cause != "" {
+				return refuse(s, cause, "drop the ${...} expression from the SourceRef, or move the postBuild to a bundle below the root node")
 			}
 		}
 	}
@@ -702,29 +704,36 @@ func resourceID(obj client.Object) resid.ResId {
 	return resid.NewResIdWithNamespace(resid.NewGvk(gvk.Group, gvk.Version, gvk.Kind), obj.GetName(), obj.GetNamespace())
 }
 
-// postBuildChanges reports whether Flux's postBuild substitution with k's vars
-// changes obj. It runs Flux's own substitution in dry-run mode, which reads no
-// cluster: the inline substitute vars are applied, and with substituteFrom set
-// it runs even without them (Always), since Flux loads those vars in the
-// cluster; an expression whose var is unknown then becomes empty, as Flux's
-// non-strict mode makes it. An object Flux's opt-out label or annotation
-// excludes is unchanged.
-func postBuildChanges(rf *resource.Factory, k *kustv1.Kustomization, obj client.Object) (bool, error) {
+// postBuildChanges reports how Flux's postBuild substitution with k's vars
+// can change obj, or "" when it cannot. It runs Flux's own substitution in
+// dry-run mode, which reads no cluster: the inline substitute vars are
+// applied, and with substituteFrom set it runs even without them (Always).
+// The substituteFrom values are in the cluster, so with substituteFrom set
+// an expression that reads a var the inline vars do not set — which is the
+// one substituteFrom can supply — can change obj whatever the offline result
+// is; the inline vars override substituteFrom's, so an expression reading
+// only those is decided by the offline result. An object Flux's opt-out
+// label or annotation excludes is unchanged.
+func postBuildChanges(rf *resource.Factory, k *kustv1.Kustomization, obj client.Object) (string, error) {
 	content, err := comparableContent(obj)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	res, err := rf.FromMap(content)
 	if err != nil {
-		return false, errors.Wrap(err, "read the Source")
+		return "", errors.Wrap(err, "read the Source")
 	}
 	before, err := res.Map()
 	if err != nil {
-		return false, errors.Wrap(err, "read the Source")
+		return "", errors.Wrap(err, "read the Source")
+	}
+	text, err := res.AsYAML()
+	if err != nil {
+		return "", errors.Wrap(err, "read the Source")
 	}
 	kust, err := runtime.DefaultUnstructuredConverter.ToUnstructured(k)
 	if err != nil {
-		return false, errors.Wrap(err, "convert the Kustomization to unstructured")
+		return "", errors.Wrap(err, "convert the Kustomization to unstructured")
 	}
 	opts := []fluxkustomize.SubstituteOption{fluxkustomize.SubstituteWithDryRun(true)}
 	if len(k.Spec.PostBuild.SubstituteFrom) > 0 {
@@ -732,16 +741,34 @@ func postBuildChanges(rf *resource.Factory, k *kustv1.Kustomization, obj client.
 	}
 	out, err := fluxkustomize.SubstituteVariables(context.Background(), nil, unstructured.Unstructured{Object: kust}, res, opts...)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	if out == nil {
-		return false, nil
+		return "", nil
+	}
+	if len(k.Spec.PostBuild.SubstituteFrom) > 0 {
+		var fromCluster []string
+		if _, err := envsubst.Eval(string(text), func(name string) (string, bool) {
+			v, inline := k.Spec.PostBuild.Substitute[name]
+			if !inline && !slices.Contains(fromCluster, name) {
+				fromCluster = append(fromCluster, name)
+			}
+			return v, true
+		}); err != nil {
+			return "", errors.Wrap(err, "read the Source's ${...} expressions")
+		}
+		if len(fromCluster) > 0 {
+			return fmt.Sprintf("postBuild substitution reads %s, which the inline vars do not set and substituteFrom can", strings.Join(fromCluster, ", ")), nil
+		}
 	}
 	after, err := out.Map()
 	if err != nil {
-		return false, errors.Wrap(err, "read the substituted Source")
+		return "", errors.Wrap(err, "read the substituted Source")
 	}
-	return !reflect.DeepEqual(before, after), nil
+	if !reflect.DeepEqual(before, after) {
+		return "postBuild substitution changes it", nil
+	}
+	return "", nil
 }
 
 // set indexes Kustomizations by namespace/name.

@@ -290,7 +290,8 @@ What changed, and what to do:
   includes the root's copy, and kustomize refuses one object twice. When the root node renders a
   bundle, its Kustomization builds the directory the bootstrap applies, so a patch of it that
   applies to a Source the integration hosts there, or a postBuild substitution that changes one
-  (any `${...}` in the `SourceRef` URL when `substituteFrom` is set), is refused: the bootstrap
+  (with `substituteFrom` set, any `${...}` in the `SourceRef` URL reading a var the inline
+  `substitute` does not set), is refused: the bootstrap
   applies that directory without either, and the two would keep overwriting each other's Source.
   Narrow the patch target or move the patch or postBuild to a bundle below the root node.
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;

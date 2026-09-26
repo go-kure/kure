@@ -440,8 +440,10 @@ the root node's layout is therefore refused when one of its patches applies to a
 integration hosts there — a target that selects it the way kustomize selects one, or a target-less
 strategic-merge patch whose body names its apiVersion, kind, name and effective namespace — or when
 its postBuild substitution changes one: Flux's own substitution, run offline with the inline
-`substitute` vars and, when `substituteFrom` is set, over any `${...}` expression, since those
-values are only in the cluster. Otherwise the two would apply the Source differently and keep
+`substitute` vars. When `substituteFrom` is set, whose values are only in the cluster, a `${...}`
+expression that reads a var the inline vars do not set is refused whatever the offline result; one
+that reads only inline vars, which override `substituteFrom`'s, is decided by it. Otherwise the two
+would apply the Source differently and keep
 overwriting each other. The error names the Kustomization, the Source and the patch index or
 postBuild; narrow the patch target, move the patch or postBuild to a bundle below the root node, or
 drop the `${...}` from the `SourceRef` URL. A patch that selects a hosted Source but leaves it

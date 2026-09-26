@@ -43,6 +43,7 @@ require (
 	github.com/fluxcd/pkg/apis/acl v0.11.0
 	github.com/fluxcd/pkg/apis/kustomize v1.21.0
 	github.com/fluxcd/pkg/apis/meta v1.32.0
+	github.com/fluxcd/pkg/envsubst v1.7.1
 	github.com/fluxcd/pkg/kustomize v1.39.0
 	github.com/fluxcd/pkg/tar v1.2.0
 	github.com/fluxcd/source-controller/api v1.9.5
@@ -89,7 +90,6 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/extism/go-sdk v1.7.1 // indirect
-	github.com/fluxcd/pkg/envsubst v1.7.1 // indirect
 	github.com/fluxcd/pkg/sourceignore v0.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
