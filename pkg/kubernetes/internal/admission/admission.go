@@ -634,9 +634,9 @@ func isNilInitGuard(s *ast.IfStmt, info *types.Info) bool {
 	}
 	var tested ast.Expr
 	switch {
-	case isNilIdent(cond.Y):
+	case isNilIdent(cond.Y, info):
 		tested = cond.X
-	case isNilIdent(cond.X):
+	case isNilIdent(cond.X, info):
 		tested = cond.Y
 	default:
 		return false
@@ -663,11 +663,17 @@ func isNilInitGuard(s *ast.IfStmt, info *types.Info) bool {
 	return true
 }
 
-// isNilIdent reports whether e is the nil identifier, recognised by name as
-// isNilValue does.
-func isNilIdent(e ast.Expr) bool {
+// isNilIdent reports whether e is the predeclared nil, resolved through type
+// information rather than by spelling: a parameter or local named nil is a
+// caller value, and a guard comparing against it is a set-if-equal, not a
+// nil-init.
+func isNilIdent(e ast.Expr, info *types.Info) bool {
 	id, ok := ast.Unparen(e).(*ast.Ident)
-	return ok && id.Name == "nil"
+	if !ok {
+		return false
+	}
+	_, isNil := info.ObjectOf(id).(*types.Nil)
+	return isNil
 }
 
 // isBuiltinCall reports whether e calls the named builtin.

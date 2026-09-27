@@ -585,6 +585,15 @@ func SetRefBlock(o *Obj, ref *Ref) {
 	}
 }
 
+// inadmissible: the guard compares against a parameter named nil, not the
+// predeclared nil, so the write runs only when the field equals a caller value
+func SetRefNameShadowedNil(o *Obj, nil *Ref, n string) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
 
@@ -703,6 +712,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefBlockIf":            Inadmissible,
 		"SetRefLabeledLoop":        Inadmissible,
 		"SetRefBlock":              Pointer,
+		"SetRefNameShadowedNil":    Inadmissible,
 		"SetExempted":              Exempt,
 	}
 	got := map[string]Finding{}
@@ -745,6 +755,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefIfSet":           "writes o.Spec.Ref (under if ref != nil) only on some paths",
 		"SetRefNameNestedInit":  `(under if n != "")`,
 		"SetRefGoto":            "goto",
+		"SetRefNameShadowedNil": "writes o.Spec.Ref (under if o.Spec.Ref == nil) only on some paths",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
