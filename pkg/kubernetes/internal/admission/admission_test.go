@@ -894,6 +894,13 @@ func SetReplicasCommaOkRange(o *Obj, k string, xs []string, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// inadmissible: a collection read from one field replaces another
+func AddItemCommaOkCrossField(o *Obj, k, s string) {
+	items, _ := o.Spec.Groups[k]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
 // class b: a comma-ok read of a temporary map reaches no caller
 func SetReplicasCommaOkTemp(o *Obj, k, s string, n int32) {
 	m := map[string][]string{}
@@ -1063,6 +1070,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasCommaOkVarConcat": Inadmissible,
 		"SetReplicasCommaOkRange":     Inadmissible,
 		"SetReplicasCommaOkTemp":      Pointer,
+		"AddItemCommaOkCrossField":    Inadmissible,
 		"SetExempted":                 Exempt,
 	}
 	got := map[string]Finding{}
