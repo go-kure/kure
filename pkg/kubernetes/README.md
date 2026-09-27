@@ -138,8 +138,8 @@ An increment, decrement or compound assignment of a field (`o.Spec.Count++`,
 `o.Spec.Count += n`) writes a value computed from what the field held rather than the
 caller's value, and is inadmissible for the same reason. The same holds for a map or
 slice element reached through any chain of locals copied or sliced from the caller's
-object (`labels := o.Labels; labels[k] += v`, `items := o.Spec.Items[:]`), even after a
-nil-init guard on one of them.
+object (`labels := o.Labels; labels[k] += v`, `items := o.Spec.Items[:]`,
+`items, ok := o.Spec.Groups[k]`), even after a nil-init guard on one of them.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
