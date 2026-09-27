@@ -28,7 +28,9 @@
 // conservatively treated as a default. An increment, decrement or compound
 // assignment of anything that reaches the caller (o.Spec.Count++,
 // o.Spec.Count += n) writes a value computed from what the target held, so it
-// is such a default too. That includes an element of a map or slice reached
+// is such a default too, and so is a plain assignment whose value reads its
+// own target (o.Labels[k] = o.Labels[k] + v) other than as the slice an append
+// extends. That includes an element of a map or slice reached
 // through any chain of locals copied or sliced from a caller's object
 // (labels := o.Labels; labels[k] += v; items := o.Spec.Items[:]; items, ok :=
 // o.Spec.Groups[k]), even when a nil-init guard may have replaced one of them
@@ -381,6 +383,11 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			// the same read-modify-write as an increment, not a forward of the
 			// caller's value.
 			if s.Tok != token.ASSIGN && s.Tok != token.DEFINE && reachesCaller(lhs, s.Pos()) {
+				defaulted = append(defaulted, types.ExprString(lhs))
+			}
+			// So is a plain assignment whose value reads the target it
+			// overwrites (o.Labels[k] = o.Labels[k] + v), spelled out.
+			if s.Tok == token.ASSIGN && rhs != nil && reachesCaller(lhs, s.Pos()) && readsTarget(lhs, rhs, info) {
 				defaulted = append(defaulted, types.ExprString(lhs))
 			}
 			if !fieldWrite {
@@ -1192,6 +1199,33 @@ func isMapIndex(lhs ast.Expr, info *types.Info) bool {
 	}
 	_, isMap := t.Underlying().(*types.Map)
 	return isMap
+}
+
+// readsTarget reports whether rhs reads the target lhs it is assigned to,
+// other than as the slice an append extends
+// (o.Spec.Items = append(o.Spec.Items, s)), which is class a. Targets are
+// compared as written, outer parentheses aside.
+func readsTarget(lhs, rhs ast.Expr, info *types.Info) bool {
+	target := types.ExprString(ast.Unparen(lhs))
+	reads := func(e ast.Expr) bool {
+		found := false
+		ast.Inspect(e, func(n ast.Node) bool {
+			if x, ok := n.(ast.Expr); ok && !found && types.ExprString(ast.Unparen(x)) == target {
+				found = true
+			}
+			return !found
+		})
+		return found
+	}
+	if isAppend(rhs, info) {
+		for i, arg := range ast.Unparen(rhs).(*ast.CallExpr).Args {
+			if i > 0 && reads(arg) {
+				return true
+			}
+		}
+		return false
+	}
+	return reads(rhs)
 }
 
 func isAppend(rhs ast.Expr, info *types.Info) bool {
