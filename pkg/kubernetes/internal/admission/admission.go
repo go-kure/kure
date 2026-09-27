@@ -63,13 +63,25 @@
 // A function literal's body is not the helper's own: an uncalled closure that
 // appends is a no-op no caller sees, so no walk descends into one.
 //
+// A counted write (a rooted field write, or a map insert or append into a
+// local) that runs only on some paths is inadmissible whatever else the body
+// does: `if name != "" { o.Spec.Name = name }` is the conditional no-op §4
+// forbids, and so is a write inside a loop, a switch, a type switch or a
+// select, or in an if's else branch. A goto is refused like an early return,
+// because it can jump over the write. The one guard admitted is the nil-init
+// that classes a and b are written around: a top-level
+// `if P == nil { P = <zero value> }` (nil may be on either side) whose only
+// statement zero-initialises the path it tests, with no Init and no else. Any
+// other guard, including a set-if-unset (`if o.Spec.Ref == nil {
+// o.Spec.Ref = ref }`), makes the writes under it conditional.
+//
 // The classifier is syntactic with type information (go/packages): it never
 // executes code, and it is deliberately conservative, so an unusual but
 // legitimate helper shows up as inadmissible rather than slipping through.
-// Its dataflow is bounded to what is described above; it does not follow
-// control flow (a write-back on one branch only, a loop, a closure), calls,
-// or aliases created any other way. A helper written to evade it is caught by
-// its own unit test and by review, not by this package.
+// Its dataflow is bounded to what is described above; it does not follow a
+// conditionally created alias (a local assigned a parameter inside a branch),
+// calls, or aliases created any other way. A helper written to evade it is
+// caught by its own unit test and by review, not by this package.
 package admission
 
 import (
@@ -238,11 +250,16 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	if hasEarlyReturn(fn.Body) {
 		return Inadmissible, "returns early instead of writing; a nil receiver panics and sugar has no conditional no-op (purity §4)"
 	}
+	if hasGoto(fn.Body) {
+		return Inadmissible, "jumps over the write with goto; sugar has no conditional no-op (purity §4)"
+	}
+	guards := conditionalAssigns(fn.Body, info)
 	var (
 		appendOrMap bool
 		ptrAssign   bool
 		bigLiteral  bool
 		nilClear    string
+		conditional []string // counted writes that run only on some paths, with their guard
 		writes      = map[string]bool{}
 		ptrPaths    = map[string]bool{}         // pointer fields assigned, by expression, for writes through them
 		ptrInit     = map[string]bool{}         // of those, the ones assigned a bare new(T)/&T{} with no value
@@ -265,6 +282,12 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		if !ok {
 			return true
 		}
+		// "" means the statement runs on every path; a statement the pre-pass
+		// has no entry for is treated as conditional.
+		guard, known := guards[s]
+		if !known {
+			guard = "a nested statement"
+		}
 		for i, lhs := range s.Lhs {
 			var rhs ast.Expr
 			if len(s.Rhs) == len(s.Lhs) {
@@ -273,17 +296,26 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 				rhs = s.Rhs[0]
 			}
 			fieldWrite := isFieldWrite(lhs) && rooted.at(rootObj(lhs, info), s.Pos())
+			localOp := false
 			if isMapIndex(lhs, info) || isAppend(rhs, info) {
 				switch {
 				case fieldWrite:
 					appendOrMap = true
 				case !isFieldWrite(lhs):
 					if obj := rootObj(lhs, info); obj != nil {
+						localOp = true
 						if _, seen := localOps[obj]; !seen {
 							localOps[obj] = s.Pos()
 						}
 					}
 				}
+			}
+			// A counted write is a rooted field write or a map insert or append
+			// into a local. Either one under a guard runs only on some paths,
+			// which is the conditional no-op §4 forbids. Uncounted local
+			// assignments (labels = map[string]string{}) stay ignored.
+			if (fieldWrite || localOp) && guard != "" {
+				conditional = append(conditional, fmt.Sprintf("%s (under %s)", types.ExprString(lhs), guard))
 			}
 			if !fieldWrite {
 				continue
@@ -386,6 +418,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	switch {
 	case nilClear != "":
 		return Inadmissible, fmt.Sprintf("assigns nil to %s, a field the caller did not name (purity §4)", nilClear)
+	case len(conditional) > 0:
+		return Inadmissible, fmt.Sprintf("writes %s only on some paths; sugar has no conditional no-op (purity §4)", strings.Join(conditional, ", "))
 	case len(defaulted) > 0:
 		return Inadmissible, fmt.Sprintf("writes a value the caller did not supply to %s (purity §4)", strings.Join(defaulted, ", "))
 	case len(extra) > 0 && (appendOrMap || ptrAssign || bigLiteral):
@@ -478,6 +512,162 @@ func hasEarlyReturn(body *ast.BlockStmt) bool {
 		return true
 	})
 	return found
+}
+
+// hasGoto reports whether body contains a goto outside a nested function
+// literal. `if v == "" { goto done }` skips the write exactly as an early
+// return does.
+func hasGoto(body *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		switch s := n.(type) {
+		case *ast.FuncLit:
+			return false
+		case *ast.BranchStmt:
+			if s.Tok == token.GOTO {
+				found = true
+				return false
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// conditionalAssigns maps every assignment in body outside a function literal
+// to "" when it runs on every path through the body, or to the text of the
+// outermost statement guarding it (`if <cond>`, `for <cond>`, `range <x>`,
+// `switch <tag>`, `type switch`, `select`).
+//
+// Unconditional is defined positively: an assignment in the top-level
+// statement list (descending through bare blocks and labels), the Init of a
+// top-level if, for, switch or type switch, and the single assignment of a
+// top-level nil-init guard (isNilInitGuard). Everything a top-level if, for,
+// range, switch, type switch or select contains maps to that statement's
+// guard, including its else branch, post statement, select communication and
+// any nested Init. A statement kind this pass does not know leaves its
+// assignments without an entry, which the caller treats as conditional, so
+// an omission errs toward refusal.
+func conditionalAssigns(body *ast.BlockStmt, info *types.Info) map[*ast.AssignStmt]string {
+	m := map[*ast.AssignStmt]string{}
+	guarded := func(stmt, init ast.Stmt, text string) {
+		ast.Inspect(stmt, func(n ast.Node) bool {
+			if init != nil && n == ast.Node(init) {
+				return false
+			}
+			switch s := n.(type) {
+			case *ast.FuncLit:
+				return false
+			case *ast.AssignStmt:
+				m[s] = text
+			}
+			return true
+		})
+	}
+	unconditionalInit := func(init ast.Stmt) {
+		if s, ok := init.(*ast.AssignStmt); ok {
+			m[s] = ""
+		}
+	}
+	var top func(stmt ast.Stmt)
+	top = func(stmt ast.Stmt) {
+		switch s := stmt.(type) {
+		case *ast.AssignStmt:
+			m[s] = ""
+		case *ast.BlockStmt:
+			for _, inner := range s.List {
+				top(inner)
+			}
+		case *ast.LabeledStmt:
+			top(s.Stmt)
+		case *ast.IfStmt:
+			unconditionalInit(s.Init)
+			if isNilInitGuard(s, info) {
+				m[s.Body.List[0].(*ast.AssignStmt)] = ""
+				return
+			}
+			guarded(s, s.Init, "if "+types.ExprString(s.Cond))
+		case *ast.ForStmt:
+			unconditionalInit(s.Init)
+			text := "for"
+			if s.Cond != nil {
+				text = "for " + types.ExprString(s.Cond)
+			}
+			guarded(s, s.Init, text)
+		case *ast.RangeStmt:
+			guarded(s, nil, "range "+types.ExprString(s.X))
+		case *ast.SwitchStmt:
+			unconditionalInit(s.Init)
+			text := "switch"
+			if s.Tag != nil {
+				text = "switch " + types.ExprString(s.Tag)
+			}
+			guarded(s, s.Init, text)
+		case *ast.TypeSwitchStmt:
+			unconditionalInit(s.Init)
+			guarded(s, s.Init, "type switch")
+		case *ast.SelectStmt:
+			guarded(s, nil, "select")
+		}
+	}
+	top(body)
+	return m
+}
+
+// isNilInitGuard reports whether s is the one guard the contract admits: it
+// tests a path for nil and zero-initialises that same path, with nothing else
+// in it (`if o.Labels == nil { o.Labels = map[string]string{} }`). No Init, no
+// else, exactly one plain assignment of one value, and a zero-init as defined
+// by isZeroInit, except that new counts only with a type argument: Go 1.26's
+// new(x) allocates the value of x, which makes
+// `if o.Spec.Ref == nil { o.Spec.Ref = new(ref) }` a set-if-unset.
+func isNilInitGuard(s *ast.IfStmt, info *types.Info) bool {
+	if s.Init != nil || s.Else != nil || len(s.Body.List) != 1 {
+		return false
+	}
+	cond, ok := ast.Unparen(s.Cond).(*ast.BinaryExpr)
+	if !ok || cond.Op != token.EQL {
+		return false
+	}
+	var tested ast.Expr
+	switch {
+	case isNilIdent(cond.Y):
+		tested = cond.X
+	case isNilIdent(cond.X):
+		tested = cond.Y
+	default:
+		return false
+	}
+	assign, ok := s.Body.List[0].(*ast.AssignStmt)
+	if !ok || assign.Tok != token.ASSIGN || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+		return false
+	}
+	if types.ExprString(ast.Unparen(assign.Lhs[0])) != types.ExprString(ast.Unparen(tested)) {
+		return false
+	}
+	rhs := assign.Rhs[0]
+	if !isZeroInit(rhs, info) {
+		return false
+	}
+	if isBuiltinCall(rhs, info, "new") {
+		call := ast.Unparen(rhs).(*ast.CallExpr)
+		if len(call.Args) != 1 {
+			return false
+		}
+		tv, ok := info.Types[call.Args[0]]
+		return ok && tv.IsType()
+	}
+	return true
+}
+
+// isNilIdent reports whether e is the nil identifier, recognised by name as
+// isNilValue does.
+func isNilIdent(e ast.Expr) bool {
+	id, ok := ast.Unparen(e).(*ast.Ident)
+	return ok && id.Name == "nil"
 }
 
 // isBuiltinCall reports whether e calls the named builtin.

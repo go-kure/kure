@@ -368,6 +368,223 @@ func SetReplicasReturning(o *Obj, n int32) *Obj {
 	return o
 }
 
+// inadmissible: the optional-argument idiom as a guard around the write (§4)
+func SetRefIfSet(o *Obj, ref *Ref) {
+	if ref != nil {
+		o.Spec.Ref = ref
+	}
+}
+
+// inadmissible: a guarded composite is still conditional
+func SetNestedRefIfSet(o *Obj, n string) {
+	if n != "" {
+		o.Spec.Nested.Ref = Ref{Name: n, Kind: n}
+	}
+}
+
+// inadmissible: a guarded append is still conditional
+func AddItemIfSet(o *Obj, s string) {
+	if s != "" {
+		o.Spec.Items = append(o.Spec.Items, s)
+	}
+}
+
+// inadmissible: the insert into the local runs only on some paths
+func AddLabelIfSetViaLocal(o *Obj, k, v string) {
+	labels := o.Labels
+	if v != "" {
+		labels[k] = v
+	}
+	o.Labels = labels
+}
+
+// inadmissible: a set-if-unset drops the caller's value when the field is set
+func SetRefUnlessSet(o *Obj, ref *Ref) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = ref
+	}
+}
+
+// inadmissible: a nil-init guard with an else is not the admitted shape
+func SetRefNameElse(o *Obj, n string) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+	} else {
+		_ = n
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: a nil-init nested under an optional-value guard
+func SetRefNameNestedInit(o *Obj, n string) {
+	if n != "" {
+		if o.Spec.Ref == nil {
+			o.Spec.Ref = &Ref{}
+		}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: the guard tests one path and initialises another
+func SetRefGuardedByOther(o *Obj, n string) {
+	if o.Spec.Replicas == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: a nil-init guard with an init statement is not the admitted shape
+func SetRefNameIfInit(o *Obj, n string) {
+	if _ = n; o.Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: a write under a switch case
+func SetReplicasSwitch(o *Obj, n int32) {
+	switch {
+	case n > 0:
+		o.Spec.Replicas = &n
+	}
+}
+
+// inadmissible: a write inside a range loop
+func AddItemsLoop(o *Obj, items []string) {
+	for i := range items {
+		o.Spec.Items = append(o.Spec.Items, items[i])
+	}
+}
+
+// inadmissible: goto jumps over the write
+func SetRefGoto(o *Obj, n string) {
+	if n == "" {
+		goto done
+	}
+	o.Spec.Ref = &Ref{Name: n}
+done:
+}
+
+// class b: a nil-init guard with nil on the left is the admitted shape
+func SetRefNameNilFirst(o *Obj, n string) {
+	if nil == o.Spec.Ref {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: new of a value is a set-if-unset, not a zero-init
+func SetRefIfUnsetNewValue(o *Obj, ref Ref, n string) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = new(ref)
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: a nil-init guard with a second statement is not the admitted shape
+func SetRefNameGuardExtra(o *Obj, n string) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+		_ = n
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: a write inside a three-clause for loop
+func AddItemsForLoop(o *Obj, items []string) {
+	for i := 0; i < len(items); i++ {
+		o.Spec.Items = append(o.Spec.Items, items[i])
+	}
+}
+
+// inadmissible: a write under a type switch case
+func SetRefTypeSwitch(o *Obj, v any) {
+	switch v.(type) {
+	case *Ref:
+		o.Spec.Ref = v.(*Ref)
+	}
+}
+
+// inadmissible: a write under a select case
+func SetRefSelect(o *Obj, ch chan *Ref) {
+	select {
+	case r := <-ch:
+		o.Spec.Ref = r
+	}
+}
+
+// inadmissible: a same-path guard that is not a nil test
+func SetRefNameIfNotNil(o *Obj, n string) {
+	if o.Spec.Ref != nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: the write is a for loop's post statement
+func SetReplicasForPost(o *Obj, r int32) {
+	for i := 0; i < 1; o.Spec.Replicas = &r {
+		i++
+	}
+}
+
+// inadmissible: a nil-init guard assigning two paths is not the admitted shape
+func SetRefAndReplicasInGuard(o *Obj, n string, r int32) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref, o.Spec.Replicas = &Ref{}, &r
+	}
+	o.Spec.Ref.Name = n
+}
+
+// inadmissible: the write is only in the else branch
+func SetRefElse(o *Obj, ref *Ref, skip bool) {
+	if skip {
+	} else {
+		o.Spec.Ref = ref
+	}
+}
+
+// inadmissible: the write is a select case's communication
+func SetRefSelectComm(o *Obj, ch chan *Ref) {
+	select {
+	case o.Spec.Ref = <-ch:
+	default:
+	}
+}
+
+// inadmissible: the write is the init of an if nested under a guard
+func SetRefNestedInit(o *Obj, ref *Ref, ok bool) {
+	if ok {
+		if o.Spec.Ref = ref; false {
+		}
+	}
+}
+
+// inadmissible: a guard inside a top-level bare block
+func SetRefBlockIf(o *Obj, ref *Ref) {
+	{
+		if ref != nil {
+			o.Spec.Ref = ref
+		}
+	}
+}
+
+// inadmissible: a write inside a labeled loop
+func SetRefLabeledLoop(o *Obj, ref *Ref) {
+L:
+	for {
+		o.Spec.Ref = ref
+		break L
+	}
+}
+
+// class b: a top-level bare block runs on every path
+func SetRefBlock(o *Obj, ref *Ref) {
+	{
+		o.Spec.Ref = ref
+	}
+}
+
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
 
@@ -458,7 +675,35 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemLocalOnly":       Inadmissible,
 		"AddLabelLocalOnly":      Inadmissible,
 		"AddLabelLocalThenName":  Inadmissible,
-		"SetExempted":            Exempt,
+		// A counted write that runs only on some paths (#751).
+		"SetRefIfSet":              Inadmissible,
+		"SetNestedRefIfSet":        Inadmissible,
+		"AddItemIfSet":             Inadmissible,
+		"AddLabelIfSetViaLocal":    Inadmissible,
+		"SetRefUnlessSet":          Inadmissible,
+		"SetRefNameElse":           Inadmissible,
+		"SetRefNameNestedInit":     Inadmissible,
+		"SetRefGuardedByOther":     Inadmissible,
+		"SetRefNameIfInit":         Inadmissible,
+		"SetReplicasSwitch":        Inadmissible,
+		"AddItemsLoop":             Inadmissible,
+		"SetRefGoto":               Inadmissible,
+		"SetRefNameNilFirst":       Pointer,
+		"SetRefIfUnsetNewValue":    Inadmissible,
+		"SetRefNameGuardExtra":     Inadmissible,
+		"AddItemsForLoop":          Inadmissible,
+		"SetRefTypeSwitch":         Inadmissible,
+		"SetRefSelect":             Inadmissible,
+		"SetRefNameIfNotNil":       Inadmissible,
+		"SetReplicasForPost":       Inadmissible,
+		"SetRefAndReplicasInGuard": Inadmissible,
+		"SetRefElse":               Inadmissible,
+		"SetRefSelectComm":         Inadmissible,
+		"SetRefNestedInit":         Inadmissible,
+		"SetRefBlockIf":            Inadmissible,
+		"SetRefLabeledLoop":        Inadmissible,
+		"SetRefBlock":              Pointer,
+		"SetExempted":              Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -497,6 +742,9 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetNameIfSet":          "returns early instead of writing",
 		"AddLabelFreshMap":      "single bare field assignment",
 		"AddItemInClosure":      "no field write",
+		"SetRefIfSet":           "writes o.Spec.Ref (under if ref != nil) only on some paths",
+		"SetRefNameNestedInit":  `(under if n != "")`,
+		"SetRefGoto":            "goto",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
