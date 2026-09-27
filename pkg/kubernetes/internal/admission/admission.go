@@ -30,11 +30,14 @@
 // o.Spec.Count += n) writes a value computed from what the target held, so it
 // is such a default too, and so is a plain assignment whose value reads its
 // own target (o.Labels[k] = o.Labels[k] + v) other than as the slice an append
-// extends. That includes an element of a map or slice reached
-// through any chain of locals copied or sliced from a caller's object
-// (labels := o.Labels; labels[k] += v; items := o.Spec.Items[:]; items, ok :=
-// o.Spec.Groups[k]), even when a nil-init guard may have replaced one of them
-// since.
+// extends or as the whole value. That includes an element of a map or slice
+// reached through any chain of locals copied, sliced or appended from a
+// caller's object or bound to its elements by a range clause (labels :=
+// o.Labels; labels[k] += v; items := o.Spec.Items[:]; items, ok :=
+// o.Spec.Groups[k]; items := append(o.Spec.Items, s); for _, items := range
+// o.Spec.Groups), even when a nil-init guard may have replaced one of them
+// since, and the target read through such a local counts as read however it
+// is spelled (labels[k] = o.Labels[k] + v).
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -102,8 +105,9 @@
 // legitimate helper shows up as inadmissible rather than slipping through.
 // Its dataflow is bounded to what is described above; it does not follow a
 // conditionally created alias (a local assigned a parameter inside a branch),
-// calls, or aliases created any other way. A helper written to evade it is
-// caught by its own unit test and by review, not by this package.
+// calls other than append, or aliases created any other way. A helper written
+// to evade it is caught by its own unit test and by review, not by this
+// package.
 package admission
 
 import (
@@ -312,6 +316,23 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		}
 		return false
 	}
+	// isAlias reports whether e is a local, not a parameter, that may have
+	// reached a caller's object by pos: it may hold any caller path of its
+	// type, where a parameter is the caller's own distinct argument.
+	params := map[types.Object]bool{}
+	for _, field := range fn.Type.Params.List {
+		for _, name := range field.Names {
+			params[info.Defs[name]] = true
+		}
+	}
+	isAlias := func(e ast.Expr, pos token.Pos) bool {
+		id, ok := ast.Unparen(e).(*ast.Ident)
+		if !ok {
+			return false
+		}
+		obj := info.ObjectOf(id)
+		return obj != nil && !params[obj] && mayReach.rootedBy(obj, pos)
+	}
 	// guardOf returns the guard a statement runs under: "" means it runs on
 	// every path, and a statement the pre-pass has no entry for is treated
 	// as conditional.
@@ -387,7 +408,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			}
 			// So is a plain assignment whose value reads the target it
 			// overwrites (o.Labels[k] = o.Labels[k] + v), spelled out.
-			if s.Tok == token.ASSIGN && rhs != nil && reachesCaller(lhs, s.Pos()) && readsTarget(lhs, rhs, info) {
+			if s.Tok == token.ASSIGN && rhs != nil && reachesCaller(lhs, s.Pos()) &&
+				readsTarget(lhs, rhs, info, func(e ast.Expr) bool { return isAlias(e, s.Pos()) }) {
 				defaulted = append(defaulted, types.ExprString(lhs))
 			}
 			if !fieldWrite {
@@ -954,12 +976,13 @@ func isFieldWrite(lhs ast.Expr) bool {
 // rootIdent returns the identifier at the root of a selector, index,
 // dereference or address-of chain (o in o.Spec.Items[i], labels in
 // labels[k], spec in *spec), or nil when the chain is not rooted in one.
-func rootIdent(e ast.Expr) *ast.Ident { return chainRoot(e, false) }
+func rootIdent(e ast.Expr) *ast.Ident { return chainRoot(e, nil) }
 
-// chainRoot is rootIdent, and with throughSlices it also steps through a
-// slice expression (o in o.Spec.Items[:][0]): a slice shares its operand's
+// chainRoot is rootIdent, and given info it also steps through a slice
+// expression (o in o.Spec.Items[:][0]) and an append to its first argument
+// (o in append(o.Spec.Items, s)): either result may share its operand's
 // backing array, so a write into it may reach whatever the operand reaches.
-func chainRoot(e ast.Expr, throughSlices bool) *ast.Ident {
+func chainRoot(e ast.Expr, info *types.Info) *ast.Ident {
 	for {
 		switch v := e.(type) {
 		case *ast.Ident:
@@ -969,10 +992,15 @@ func chainRoot(e ast.Expr, throughSlices bool) *ast.Ident {
 		case *ast.IndexExpr:
 			e = v.X
 		case *ast.SliceExpr:
-			if !throughSlices {
+			if info == nil {
 				return nil
 			}
 			e = v.X
+		case *ast.CallExpr:
+			if info == nil || !isAppend(v, info) || len(v.Args) == 0 {
+				return nil
+			}
+			e = v.Args[0]
 		case *ast.StarExpr:
 			e = v.X
 		case *ast.ParenExpr:
@@ -989,9 +1017,9 @@ func chainRoot(e ast.Expr, throughSlices bool) *ast.Ident {
 }
 
 // mayReachObj returns the object at the root of e seen through slice
-// expressions, or nil.
+// expressions and appends, or nil.
 func mayReachObj(e ast.Expr, info *types.Info) types.Object {
-	if id := chainRoot(e, true); id != nil {
+	if id := chainRoot(e, info); id != nil {
 		return info.ObjectOf(id)
 	}
 	return nil
@@ -1093,8 +1121,10 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 // at any point up to there. Queried with rootedBy, a local stays rooted
 // whatever it is reassigned to since, so a copy of a local a nil-init may
 // have replaced (q := p after `if p == nil { p = new(int32) }`) is rooted too,
-// and so is a local assigned with its name in parentheses ((q) = p), and the
-// first name of a comma-ok map read (items, ok := o.Spec.Groups[k]).
+// and so is a local assigned with its name in parentheses ((q) = p), the
+// result of an append (items := append(o.Spec.Items, s)), the first name of a
+// comma-ok map read (items, ok := o.Spec.Groups[k]), and a range clause's
+// variable that carries writes (for _, items := range o.Spec.Groups).
 func mayReachCaller(fn *ast.FuncDecl, info *types.Info) roots {
 	return trackRoots(fn, info, mayReachObj, roots.rootedBy, ast.Unparen, true)
 }
@@ -1102,10 +1132,11 @@ func mayReachCaller(fn *ast.FuncDecl, info *types.Info) roots {
 // trackRoots seeds fn's parameters and records, for each local declared or
 // assigned in its body, whether the object root finds in its value reaches a
 // caller's object at that statement, as held reads it. dest normalises an
-// assignment's destination before it is matched as a local's name; commaOk
-// also roots the first name of a comma-ok map read.
+// assignment's destination before it is matched as a local's name; copies
+// also roots the first name of a comma-ok map read and a range clause's
+// variables.
 func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.Info) types.Object,
-	held func(roots, types.Object, token.Pos) bool, dest func(ast.Expr) ast.Expr, commaOk bool,
+	held func(roots, types.Object, token.Pos) bool, dest func(ast.Expr) ast.Expr, copies bool,
 ) roots {
 	r := roots{}
 	for _, field := range fn.Type.Params.List {
@@ -1133,7 +1164,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 					continue
 				}
 				for i, id := range vs.Names {
-					v := assignedValue(vs.Values, len(vs.Names), i, info, commaOk)
+					v := assignedValue(vs.Values, len(vs.Names), i, info, copies)
 					rooted := v != nil && held(r, root(v, info), s.Pos())
 					r.add(info.Defs[id], s.Pos(), rooted)
 				}
@@ -1144,9 +1175,22 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 				if !ok {
 					continue
 				}
-				v := assignedValue(s.Rhs, len(s.Lhs), i, info, commaOk)
+				v := assignedValue(s.Rhs, len(s.Lhs), i, info, copies)
 				rooted := v != nil && held(r, root(v, info), s.Pos())
 				r.add(info.ObjectOf(id), s.Pos(), rooted)
+			}
+		case *ast.RangeStmt:
+			// Each key and element is a copy, which shares its referent with
+			// the ranged collection when it carries writes.
+			if !copies {
+				return true
+			}
+			rooted := held(r, root(s.X, info), s.Pos())
+			for _, x := range []ast.Expr{s.Key, s.Value} {
+				if id, ok := dest(x).(*ast.Ident); ok {
+					obj := info.ObjectOf(id)
+					r.add(obj, s.Pos(), rooted && obj != nil && carriesWrites(obj.Type()))
+				}
 			}
 		}
 		return true
@@ -1203,14 +1247,18 @@ func isMapIndex(lhs ast.Expr, info *types.Info) bool {
 
 // readsTarget reports whether rhs reads the target lhs it is assigned to,
 // other than as the slice an append extends
-// (o.Spec.Items = append(o.Spec.Items, s)), which is class a. Targets are
-// compared as written, outer parentheses aside.
-func readsTarget(lhs, rhs ast.Expr, info *types.Info) bool {
-	target := types.ExprString(ast.Unparen(lhs))
+// (o.Spec.Items = append(o.Spec.Items, s)), which is class a, or as the
+// whole value (o.Labels = labels), which writes back what the target already
+// held. alias reports whether an expression is a local that may reach the
+// caller (sameTarget).
+func readsTarget(lhs, rhs ast.Expr, info *types.Info, alias func(ast.Expr) bool) bool {
+	if sameTarget(rhs, lhs, info, alias) {
+		return false
+	}
 	reads := func(e ast.Expr) bool {
 		found := false
 		ast.Inspect(e, func(n ast.Node) bool {
-			if x, ok := n.(ast.Expr); ok && !found && types.ExprString(ast.Unparen(x)) == target {
+			if x, ok := n.(ast.Expr); ok && !found && sameTarget(x, lhs, info, alias) {
 				found = true
 			}
 			return !found
@@ -1226,6 +1274,34 @@ func readsTarget(lhs, rhs ast.Expr, info *types.Info) bool {
 		return false
 	}
 	return reads(rhs)
+}
+
+// sameTarget reports whether x may denote the location target does: the same
+// expression as written, outer parentheses aside, or the same element, field
+// or pointee of operands that may be the same, where a local that may reach
+// the caller may be any caller path of its type (labels[k] and o.Labels[k]
+// after labels := o.Labels).
+func sameTarget(x, target ast.Expr, info *types.Info, alias func(ast.Expr) bool) bool {
+	x, target = ast.Unparen(x), ast.Unparen(target)
+	if types.ExprString(x) == types.ExprString(target) {
+		return true
+	}
+	if tx, tt := info.TypeOf(x), info.TypeOf(target); tx != nil && tt != nil &&
+		(alias(x) || alias(target)) && types.Identical(tx, tt) {
+		return true
+	}
+	switch t := target.(type) {
+	case *ast.IndexExpr:
+		v, ok := x.(*ast.IndexExpr)
+		return ok && types.ExprString(v.Index) == types.ExprString(t.Index) && sameTarget(v.X, t.X, info, alias)
+	case *ast.SelectorExpr:
+		v, ok := x.(*ast.SelectorExpr)
+		return ok && v.Sel.Name == t.Sel.Name && sameTarget(v.X, t.X, info, alias)
+	case *ast.StarExpr:
+		v, ok := x.(*ast.StarExpr)
+		return ok && sameTarget(v.X, t.X, info, alias)
+	}
+	return false
 }
 
 func isAppend(rhs ast.Expr, info *types.Info) bool {

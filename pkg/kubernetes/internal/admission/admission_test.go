@@ -932,6 +932,78 @@ func SetReplicasTempExpandedConcat(o *Obj, k, v string, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// inadmissible: the target read through the caller's path, written through an alias
+func AddLabelExpandedCrossAlias(o *Obj, k, v string) {
+	labels := o.Labels
+	labels[k] = o.Labels[k] + v
+	o.Labels = labels
+}
+
+// inadmissible: the target read through an alias, written through the caller's path
+func AddLabelExpandedFromAlias(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	labels := o.Labels
+	o.Labels[k] = labels[k] + v
+}
+
+// class a: a local that never reached the caller is not the target
+func AddLabelFromTemp(o *Obj, k, v string) {
+	m := map[string]string{}
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels[k] = m[k] + v
+}
+
+// inadmissible: an append result shares the caller's backing array
+func SetReplicasAppendAliasConcat(o *Obj, s string, n int32) {
+	items := append(o.Spec.Items, s)
+	items[0] += s
+	o.Spec.Replicas = &n
+}
+
+// class b: an append to a temporary reaches no caller
+func SetReplicasAppendTempConcat(o *Obj, s string, n int32) {
+	items := append([]string{}, s)
+	items[0] += s
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a range variable holds each of the caller's slices in turn
+func SetReplicasRangeAliasConcat(o *Obj, v string, n int32) {
+	for _, items := range o.Spec.Groups {
+		items[0] += v
+	}
+	o.Spec.Replicas = &n
+}
+
+// class a: another parameter is the caller's own argument, not the target
+func AddLabelFromOther(o, src *Obj, k string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels[k] = src.Labels[k] + "x"
+}
+
+// class b: a range over a temporary reaches no caller
+func SetReplicasRangeTempConcat(o *Obj, v string, n int32) {
+	for _, items := range map[string][]string{} {
+		items[0] += v
+	}
+	o.Spec.Replicas = &n
+}
+
+// class b: a range variable holding a struct is a copy
+func SetReplicasRangeCopyConcat(o *Obj, refs []Ref, n int32) {
+	for _, r := range refs {
+		r.Name += "x"
+		_ = r
+	}
+	o.Spec.Replicas = &n
+}
+
 // class a: the slice an append extends is not a read of the target
 func AddGroupItem(o *Obj, k, s string) {
 	if o.Spec.Groups == nil {
@@ -1116,7 +1188,17 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelExpandedParen":         Inadmissible,
 		"AddGroupItem":                  Append,
 		"SetReplicasTempExpandedConcat": Pointer,
-		"SetExempted":                   Exempt,
+		// Aliases: a copy of the caller's path, an append result, a range variable.
+		"AddLabelExpandedCrossAlias":   Inadmissible,
+		"AddLabelExpandedFromAlias":    Inadmissible,
+		"AddLabelFromTemp":             Append,
+		"SetReplicasAppendAliasConcat": Inadmissible,
+		"SetReplicasAppendTempConcat":  Pointer,
+		"SetReplicasRangeAliasConcat":  Inadmissible,
+		"SetReplicasRangeCopyConcat":   Pointer,
+		"AddLabelFromOther":            Append,
+		"SetReplicasRangeTempConcat":   Pointer,
+		"SetExempted":                  Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -1193,6 +1275,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelExpandedConcat":          "value the caller did not supply to o.Labels[k]",
 		"AddLabelExpandedViaLocal":        "value the caller did not supply to labels[k]",
 		"AddLabelExpandedParen":           "value the caller did not supply to",
+		"AddLabelExpandedCrossAlias":      "value the caller did not supply to labels[k]",
+		"AddLabelExpandedFromAlias":       "value the caller did not supply to o.Labels[k]",
+		"SetReplicasAppendAliasConcat":    "value the caller did not supply to items[0]",
+		"SetReplicasRangeAliasConcat":     "value the caller did not supply to items[0]",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)

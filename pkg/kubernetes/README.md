@@ -139,9 +139,12 @@ An increment, decrement or compound assignment of a field (`o.Spec.Count++`,
 caller's value, and is inadmissible for the same reason; so is the same write spelled
 out (`o.Labels[k] = o.Labels[k] + v`), though extending a slice with
 `o.Spec.Items = append(o.Spec.Items, s)` is not. The same holds for a map or
-slice element reached through any chain of locals copied or sliced from the caller's
-object (`labels := o.Labels; labels[k] += v`, `items := o.Spec.Items[:]`,
-`items, ok := o.Spec.Groups[k]`), even after a nil-init guard on one of them.
+slice element reached through any chain of locals copied, sliced or appended from the
+caller's object or bound to its elements by a range clause
+(`labels := o.Labels; labels[k] += v`, `items := o.Spec.Items[:]`,
+`items, ok := o.Spec.Groups[k]`, `items := append(o.Spec.Items, s)`,
+`for _, items := range o.Spec.Groups`), even after a nil-init guard on one of them,
+and whichever of the two spellings reads the target (`labels[k] = o.Labels[k] + v`).
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
