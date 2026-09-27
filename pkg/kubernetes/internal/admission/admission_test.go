@@ -30,6 +30,7 @@ type Spec struct {
 	Payload  any
 	Box      *Box
 	Count    int
+	Groups   map[string][]string
 }
 
 type Box struct {
@@ -870,6 +871,37 @@ func SetReplicasIncParenAliasNilInit(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// inadmissible: a comma-ok map read copies the caller's slice header
+func SetReplicasCommaOkConcat(o *Obj, k, s string, n int32) {
+	items, _ := o.Spec.Groups[k]
+	items[0] += s
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the same read in a var declaration
+func SetReplicasCommaOkVarConcat(o *Obj, k, s string, n int32) {
+	var items, _ = o.Spec.Groups[k]
+	items[0] += s
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a range clause writing through a comma-ok alias
+func SetReplicasCommaOkRange(o *Obj, k string, xs []string, n int32) {
+	items, ok := o.Spec.Groups[k]
+	_ = ok
+	for _, items[0] = range xs {
+	}
+	o.Spec.Replicas = &n
+}
+
+// class b: a comma-ok read of a temporary map reaches no caller
+func SetReplicasCommaOkTemp(o *Obj, k, s string, n int32) {
+	m := map[string][]string{}
+	items, _ := m[k]
+	items[0] += s
+	o.Spec.Replicas = &n
+}
+
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
 
@@ -1026,7 +1058,12 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasIncAliasNilInit":      Inadmissible,
 		"SetReplicasSlicedAliasConcat":    Inadmissible,
 		"SetReplicasIncParenAliasNilInit": Inadmissible,
-		"SetExempted":                     Exempt,
+		// A comma-ok map read is a copy like any other.
+		"SetReplicasCommaOkConcat":    Inadmissible,
+		"SetReplicasCommaOkVarConcat": Inadmissible,
+		"SetReplicasCommaOkRange":     Inadmissible,
+		"SetReplicasCommaOkTemp":      Pointer,
+		"SetExempted":                 Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -1097,6 +1134,9 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasIncAliasNilInit":      "value the caller did not supply to (*q)",
 		"SetReplicasSlicedAliasConcat":    "value the caller did not supply to items[0]",
 		"SetReplicasIncParenAliasNilInit": "value the caller did not supply to (*q)",
+		"SetReplicasCommaOkConcat":        "value the caller did not supply to items[0]",
+		"SetReplicasCommaOkVarConcat":     "value the caller did not supply to items[0]",
+		"SetReplicasCommaOkRange":         "items[0] (under range xs)",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)

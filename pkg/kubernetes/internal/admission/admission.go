@@ -30,8 +30,9 @@
 // o.Spec.Count += n) writes a value computed from what the target held, so it
 // is such a default too. That includes an element of a map or slice reached
 // through any chain of locals copied or sliced from a caller's object
-// (labels := o.Labels; labels[k] += v; items := o.Spec.Items[:]), even when a
-// nil-init guard may have replaced one of them since.
+// (labels := o.Labels; labels[k] += v; items := o.Spec.Items[:]; items, ok :=
+// o.Spec.Groups[k]), even when a nil-init guard may have replaced one of them
+// since.
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -1120,7 +1121,8 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 					continue
 				}
 				for i, id := range vs.Names {
-					rooted := len(vs.Values) == len(vs.Names) && held(r, root(vs.Values[i], info), s.Pos())
+					v := assignedValue(vs.Values, len(vs.Names), i, info)
+					rooted := v != nil && held(r, root(v, info), s.Pos())
 					r.add(info.Defs[id], s.Pos(), rooted)
 				}
 			}
@@ -1130,13 +1132,28 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 				if !ok {
 					continue
 				}
-				rooted := len(s.Lhs) == len(s.Rhs) && held(r, root(s.Rhs[i], info), s.Pos())
+				v := assignedValue(s.Rhs, len(s.Lhs), i, info)
+				rooted := v != nil && held(r, root(v, info), s.Pos())
 				r.add(info.ObjectOf(id), s.Pos(), rooted)
 			}
 		}
 		return true
 	})
 	return r
+}
+
+// assignedValue returns the expression the i-th of n names is assigned from
+// values: the i-th value, or the read itself for the first name of a comma-ok
+// map read (items, ok := o.Spec.Groups[k]), which copies the element as any
+// other read does; nil when no single expression supplies it.
+func assignedValue(values []ast.Expr, n, i int, info *types.Info) ast.Expr {
+	switch {
+	case len(values) == n:
+		return values[i]
+	case n == 2 && len(values) == 1 && i == 0 && isMapIndex(ast.Unparen(values[0]), info):
+		return values[0]
+	}
+	return nil
 }
 
 // nilInLiteral returns the key of the first keyed element of lit, or of a
