@@ -127,7 +127,9 @@ Every admitted operation carries a value the caller supplied. An append of a con
 a map insert of a constant, a struct literal built entirely from constants, or a pointer
 allocated (`new(T)`) and never written through, all set a value the caller never named
 and are inadmissible (§4). The zero-value init a helper guards a nil field with
-(`if o.Labels == nil { o.Labels = map[string]string{} }`) is not such a value.
+(`if o.Labels == nil { o.Labels = map[string]string{} }`) is not such a value. A `make`
+of a slice with a length other than a constant 0 fills it with elements the caller did
+not supply and is not that init; a capacity or a map size hint is.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
@@ -157,7 +159,7 @@ optional-value guard `if name != "" { ... }` that §4 forbids is detected. The s
 exception is the nil-init guard `if P == nil { P = <zero value> }` with nothing else in
 it: no init statement, no `else`, one statement zero-initialising the path it tests. A
 set-if-unset (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`) is not that guard and is
-refused. A conditionally created alias
+refused, and neither is a guard around a slice `make` with a non-zero length. A conditionally created alias
 (`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`) is still not detected; that
 is caught by review and by the helper's own golden test. A function literal's body is not
 the helper's own body: an append inside a closure the helper never calls is a no-op no
