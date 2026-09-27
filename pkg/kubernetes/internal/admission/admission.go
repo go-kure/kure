@@ -17,11 +17,15 @@
 // or map insert of a constant, a struct literal built only from constants, and
 // a pointer allocated with new(T) that nothing is written through, each set a
 // value the caller never named (§4). The zero-value init that guards a nil
-// field (make, new, an empty literal, followed by a write through it) is not
-// such a value. A make counts as that init only when it provably allocates no
-// elements (a map or channel, or a slice of constant length 0); a slice made
-// with any other length may hold zero-valued elements the caller never
-// supplied, so it is conservatively treated as a default.
+// map, slice or pointer field (make, new, an empty literal, followed by a
+// write through it) is not such a value. An empty value (an empty literal or
+// make, or new(T)) written into any other field, an interface, a struct or a
+// channel, is a value the caller did not supply and is refused as a default,
+// including when it is written through a pointer the body initialised.
+// A make counts as that init only when it provably allocates no elements (a
+// map, or a slice of constant length 0); a slice made with any other length
+// may hold zero-valued elements the caller never supplied, so it is
+// conservatively treated as a default.
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -74,9 +78,10 @@
 // because it can jump over the write. The one guard admitted is the nil-init
 // that classes a and b are written around: a top-level
 // `if P == nil { P = <zero value> }` (nil may be on either side) whose only
-// statement zero-initialises the path it tests, with no Init and no else. Any
-// other guard, including a set-if-unset (`if o.Spec.Ref == nil {
-// o.Spec.Ref = ref }`) and a make that may allocate elements
+// statement zero-initialises the map, slice or pointer path it tests, with no
+// Init and no else. Any other guard, including a set-if-unset
+// (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`), one that fills a nil
+// interface field with an empty value, and a make that may allocate elements
 // (`if o.Spec.Items == nil { o.Spec.Items = make([]string, 1) }`), makes the
 // writes under it conditional.
 //
@@ -353,14 +358,24 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			// the purity rule (§4) forbids just as it forbids defaulting a
 			// second field. The zero-value init of a container or of a pointer
 			// intermediate is not a value: it is the guarded nil-init that
-			// classes a and b are written around. A make that may allocate
-			// elements is not that init, whether it is the field's value or the
-			// appended or inserted one: it may fill the slice with zero-valued
-			// elements the caller never supplied, whatever its arguments
-			// mention, so it is conservatively treated as a default.
+			// classes a and b are written around. As the field's own value it
+			// is that init only when the field is a map, slice or pointer
+			// (initsField): an empty value (isEmptyValue) written into any
+			// other field, an interface, a struct or a channel, is a default,
+			// or a wipe of what the caller had there. That holds on every
+			// path, including a write through a pointer the body initialised,
+			// which is otherwise not a bare write. An appended or inserted
+			// empty value is not checked against a field type. A make that may
+			// allocate elements is not that init, whether it is the field's
+			// value or the appended or inserted one: it may fill the slice with
+			// zero-valued elements the caller never supplied, whatever its
+			// arguments mention, so it is conservatively treated as a default.
 			v := admittedValue(lhs, rhs, info)
+			fieldValue := !isAppend(rhs, info) && !isMapIndex(lhs, info)
 			switch {
 			case isFilledMake(rhs, info) || isFilledMake(v, info):
+				defaulted = append(defaulted, lhsPath)
+			case fieldValue && isEmptyValue(rhs, info) && !initsField(info.TypeOf(lhs)):
 				defaulted = append(defaulted, lhsPath)
 			case v != nil && !isZeroInit(v, info) && !mentionsSupplied(v, info, supplied):
 				defaulted = append(defaulted, lhsPath)
@@ -369,7 +384,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			// passed: a parameter (or a local rooted in one) is a forwarder for
 			// a caller-named value; a literal, a call or a computed value is a
 			// default. Container inits (make) and writes through a pointer the
-			// body initialised belong to classes a and b respectively.
+			// body initialised belong to classes a and b respectively; a make
+			// into any other field is refused above as a default.
 			callerValue := rhsObj != nil && supplied[rhsObj]
 			_, through := throughPointer(lhsPath, ptrPaths)
 			if !isPtr && !callerValue && !isMapIndex(lhs, info) && !isAppend(rhs, info) && !isMake(rhs, info) &&
@@ -492,9 +508,11 @@ func admittedValue(lhs, rhs ast.Expr, info *types.Info) ast.Expr {
 
 // isZeroInit reports whether e allocates an empty value rather than carrying
 // one: a make that allocates no elements (isEmptyMake), new(T), or a composite
-// literal with no elements. These are the guarded nil-inits classes a and b
-// are written around, not values. make and new are resolved as builtins, so a
-// function of those names is not one.
+// literal with no elements. It inspects only e: such a value is the guarded
+// nil-init classes a and b are written around only when the field it is
+// written into is a map, slice or pointer (initsField), which the callers
+// check (isEmptyValue narrows new to a type argument). make and new are
+// resolved as builtins, so a function of those names is not one.
 func isZeroInit(e ast.Expr, info *types.Info) bool {
 	if e == nil {
 		return false
@@ -503,6 +521,42 @@ func isZeroInit(e ast.Expr, info *types.Info) bool {
 		return len(lit.Elts) == 0
 	}
 	return isEmptyMake(e, info) || isBuiltinCall(e, info, "new")
+}
+
+// isEmptyValue reports whether e is a zero-init (isZeroInit) that carries no
+// value at all: new counts only with a type argument, because Go 1.26's new(x)
+// allocates the value of x, which is a value rather than an empty one.
+func isEmptyValue(e ast.Expr, info *types.Info) bool {
+	if !isZeroInit(e, info) {
+		return false
+	}
+	if isBuiltinCall(e, info, "new") {
+		call := ast.Unparen(e).(*ast.CallExpr)
+		if len(call.Args) != 1 {
+			return false
+		}
+		tv, ok := info.Types[call.Args[0]]
+		return ok && tv.IsType()
+	}
+	return true
+}
+
+// initsField reports whether a field of type t is one the zero-value init
+// initialises: a map, a slice or a pointer, the fields classes a and b insert
+// into, append to or write through. An interface or struct field holds a value
+// rather than a nil collection or referent, so an empty value written into one
+// is a value the caller did not supply. A type parameter (whose underlying type
+// is its constraint interface) and a channel are conservatively not counted:
+// an empty make of a channel is a default like any other empty value there.
+func initsField(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	switch t.Underlying().(type) {
+	case *types.Map, *types.Slice, *types.Pointer:
+		return true
+	}
+	return false
 }
 
 // isEmptyMake reports whether e is a call to the builtin make that allocates
@@ -670,10 +724,12 @@ func conditionalAssigns(body *ast.BlockStmt, info *types.Info) map[*ast.AssignSt
 // isNilInitGuard reports whether s is the one guard the contract admits: it
 // tests a path for nil and zero-initialises that same path, with nothing else
 // in it (`if o.Labels == nil { o.Labels = map[string]string{} }`). No Init, no
-// else, exactly one plain assignment of one value, and a zero-init as defined
-// by isZeroInit, except that new counts only with a type argument: Go 1.26's
-// new(x) allocates the value of x, which makes
-// `if o.Spec.Ref == nil { o.Spec.Ref = new(ref) }` a set-if-unset.
+// else, exactly one plain assignment of one value, into a map, slice or pointer
+// path (initsField), and an empty value as defined by isEmptyValue: new counts
+// only with a type argument, since Go 1.26's new(x) allocates the value of x,
+// which makes `if o.Spec.Ref == nil { o.Spec.Ref = new(ref) }` a set-if-unset.
+// Filling a nil interface field (`if o.Spec.Payload == nil { o.Spec.Payload =
+// &Ref{} }`) is a set-if-unset too: the empty value is the default it sets.
 func isNilInitGuard(s *ast.IfStmt, info *types.Info) bool {
 	if s.Init != nil || s.Else != nil || len(s.Body.List) != 1 {
 		return false
@@ -698,19 +754,10 @@ func isNilInitGuard(s *ast.IfStmt, info *types.Info) bool {
 	if types.ExprString(ast.Unparen(assign.Lhs[0])) != types.ExprString(ast.Unparen(tested)) {
 		return false
 	}
-	rhs := assign.Rhs[0]
-	if !isZeroInit(rhs, info) {
+	if !initsField(info.TypeOf(assign.Lhs[0])) {
 		return false
 	}
-	if isBuiltinCall(rhs, info, "new") {
-		call := ast.Unparen(rhs).(*ast.CallExpr)
-		if len(call.Args) != 1 {
-			return false
-		}
-		tv, ok := info.Types[call.Args[0]]
-		return ok && tv.IsType()
-	}
-	return true
+	return isEmptyValue(assign.Rhs[0], info)
 }
 
 // isNilIdent reports whether e is the predeclared nil, resolved through type
@@ -819,9 +866,10 @@ func isStructLit(lit *ast.CompositeLit, info *types.Info) bool {
 
 // isMake reports whether e is a call to the builtin make: as a field's value,
 // the nil-init of a map or slice field before inserting into or appending to
-// it, which is not a bare write. A make that may allocate elements is refused
-// as a default before that (isFilledMake), so only an empty one is admitted
-// there.
+// it, which is not a bare write. A make that may allocate elements
+// (isFilledMake), or one into any other field (initsField), is refused as a
+// default before that, so only an empty one into a map or slice field is
+// admitted there.
 func isMake(e ast.Expr, info *types.Info) bool { return isBuiltinCall(e, info, "make") }
 
 // isFieldWrite reports whether lhs writes through a selector or dereference,

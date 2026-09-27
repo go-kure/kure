@@ -27,6 +27,14 @@ type Spec struct {
 	Name     string
 	Ref      *Ref
 	Nested   Inner
+	Payload  any
+	Box      *Box
+}
+
+type Box struct {
+	Payload any
+	Ch      chan string
+	Name    string
 }
 
 type Obj struct {
@@ -202,6 +210,82 @@ func AddLabelMakeHint(o *Obj, k, v string) {
 
 // inadmissible: the appended row is a non-empty make, whatever its capacity mentions
 func AddRowMakeLen(o *Obj, n int) { o.Spec.Rows = append(o.Spec.Rows, make([]string, 1, n)) }
+
+// inadmissible: an empty literal is the nil-init only of a map, slice or
+// pointer field; written into an interface field it is a default
+func SetRefPayloadDefault(o *Obj, r *Ref) {
+	o.Spec.Payload = &Ref{}
+	o.Spec.Ref = r
+}
+
+// inadmissible: guarding an interface field for nil and filling it is a
+// set-if-unset, not the nil-init guard
+func SetRefPayloadGuarded(o *Obj, r *Ref) {
+	if o.Spec.Payload == nil {
+		o.Spec.Payload = &Ref{}
+	}
+	o.Spec.Ref = r
+}
+
+// inadmissible: an empty literal written into a struct field wipes it
+func SetRefNestedReset(o *Obj, r *Ref) {
+	o.Spec.Nested = Inner{}
+	o.Spec.Ref = r
+}
+
+// inadmissible: an empty make into an interface field initialises no
+// collection the body inserts into; it is a default like an empty literal
+func SetRefPayloadMake(o *Obj, r *Ref) {
+	o.Spec.Payload = make(map[string]string)
+	o.Spec.Ref = r
+}
+
+// class b, the control for the three below: a write of a caller value through
+// a pointer the body initialised
+func SetBoxName(o *Obj, name string) {
+	if o.Spec.Box == nil {
+		o.Spec.Box = &Box{}
+	}
+	o.Spec.Box.Name = name
+}
+
+// inadmissible: an empty make written through a pointer the body initialised
+// is still an empty value into an interface field, a default
+func SetBoxPayloadMake(o *Obj, name string) {
+	if o.Spec.Box == nil {
+		o.Spec.Box = &Box{}
+	}
+	o.Spec.Box.Payload = make(map[string]string)
+	o.Spec.Box.Name = name
+}
+
+// inadmissible: new(T) through a pointer the body initialised, into an
+// interface field
+func SetBoxPayloadNew(o *Obj, name string) {
+	if o.Spec.Box == nil {
+		o.Spec.Box = &Box{}
+	}
+	o.Spec.Box.Payload = new(Ref)
+	o.Spec.Box.Name = name
+}
+
+// inadmissible: an empty channel make through a pointer the body initialised;
+// a channel is not a field the zero-value init initialises
+func SetBoxChanMake(o *Obj, name string) {
+	if o.Spec.Box == nil {
+		o.Spec.Box = &Box{}
+	}
+	o.Spec.Box.Ch = make(chan string)
+	o.Spec.Box.Name = name
+}
+
+// class a, an empty slice literal is the nil-init of a slice field
+func AddItemEmptyLit(o *Obj, s string) {
+	if o.Spec.Items == nil {
+		o.Spec.Items = []string{}
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
 
 // inadmissible: the appended element is a constant the caller never supplied
 func AddItemConstant(o *Obj) { o.Spec.Items = append(o.Spec.Items, "fixed") }
@@ -696,6 +780,15 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemMakeCap":         Append,
 		"AddLabelMakeHint":       Append,
 		"AddRowMakeLen":          Inadmissible,
+		"SetRefPayloadDefault":   Inadmissible,
+		"SetRefPayloadGuarded":   Inadmissible,
+		"SetRefNestedReset":      Inadmissible,
+		"SetRefPayloadMake":      Inadmissible,
+		"SetBoxName":             Pointer,
+		"SetBoxPayloadMake":      Inadmissible,
+		"SetBoxPayloadNew":       Inadmissible,
+		"SetBoxChanMake":         Inadmissible,
+		"AddItemEmptyLit":        Append,
 		"AddItemConstant":        Inadmissible,
 		"AddLabelConstant":       Inadmissible,
 		"SetReplicasZero":        Inadmissible,
@@ -807,6 +900,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemGuardedMakeLen": "writes o.Spec.Items (under if o.Spec.Items == nil) only on some paths",
 		"AddItemMakeParamLen":   "writes o.Spec.Items (under if o.Spec.Items == nil) only on some paths",
 		"AddRowMakeLen":         "value the caller did not supply to o.Spec.Rows",
+		"SetRefPayloadDefault":  "value the caller did not supply to o.Spec.Payload",
+		"SetRefPayloadGuarded":  "writes o.Spec.Payload (under if o.Spec.Payload == nil) only on some paths",
+		"SetRefNestedReset":     "value the caller did not supply to o.Spec.Nested",
+		"SetRefPayloadMake":     "value the caller did not supply to o.Spec.Payload",
+		"SetBoxPayloadMake":     "value the caller did not supply to o.Spec.Box.Payload",
+		"SetBoxPayloadNew":      "value the caller did not supply to o.Spec.Box.Payload",
+		"SetBoxChanMake":        "value the caller did not supply to o.Spec.Box.Ch",
 		"AddLabelConstant":      "value the caller did not supply to o.Labels[k]",
 		"SetReplicasZero":       "value the caller did not supply to o.Spec.Replicas",
 		"SetNestedRefConstant":  "value the caller did not supply to o.Spec.Nested.Ref",
