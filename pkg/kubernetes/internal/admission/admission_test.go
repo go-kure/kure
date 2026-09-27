@@ -901,6 +901,45 @@ func AddItemCommaOkCrossField(o *Obj, k, s string) {
 	o.Spec.Items = items
 }
 
+// inadmissible: an expanded read-modify-write is the same default as +=
+func AddLabelExpandedConcat(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels[k] = o.Labels[k] + v
+}
+
+// inadmissible: the same through a local alias of the caller's map
+func AddLabelExpandedViaLocal(o *Obj, k, v string) {
+	labels := o.Labels
+	labels[k] = labels[k] + v
+	o.Labels = labels
+}
+
+// inadmissible: parentheses around the target change nothing
+func AddLabelExpandedParen(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	(o.Labels[k]) = o.Labels[k] + v
+}
+
+// class b: an expanded read-modify-write of a temporary map reaches no caller
+func SetReplicasTempExpandedConcat(o *Obj, k, v string, n int32) {
+	m := map[string]string{}
+	m[k] = m[k] + v
+	_ = m
+	o.Spec.Replicas = &n
+}
+
+// class a: the slice an append extends is not a read of the target
+func AddGroupItem(o *Obj, k, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	o.Spec.Groups[k] = append(o.Spec.Groups[k], s)
+}
+
 // class b: a comma-ok read of a temporary map reaches no caller
 func SetReplicasCommaOkTemp(o *Obj, k, s string, n int32) {
 	m := map[string][]string{}
@@ -1071,7 +1110,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasCommaOkRange":     Inadmissible,
 		"SetReplicasCommaOkTemp":      Pointer,
 		"AddItemCommaOkCrossField":    Inadmissible,
-		"SetExempted":                 Exempt,
+		// An assignment whose value reads the target it overwrites.
+		"AddLabelExpandedConcat":        Inadmissible,
+		"AddLabelExpandedViaLocal":      Inadmissible,
+		"AddLabelExpandedParen":         Inadmissible,
+		"AddGroupItem":                  Append,
+		"SetReplicasTempExpandedConcat": Pointer,
+		"SetExempted":                   Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -1145,6 +1190,9 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasCommaOkConcat":        "value the caller did not supply to items[0]",
 		"SetReplicasCommaOkVarConcat":     "value the caller did not supply to items[0]",
 		"SetReplicasCommaOkRange":         "items[0] (under range xs)",
+		"AddLabelExpandedConcat":          "value the caller did not supply to o.Labels[k]",
+		"AddLabelExpandedViaLocal":        "value the caller did not supply to labels[k]",
+		"AddLabelExpandedParen":           "value the caller did not supply to",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
