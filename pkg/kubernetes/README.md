@@ -134,6 +134,9 @@ is refused as a default, including when it is written through a pointer the help
 initialised. A `make` of a slice with a length other than a constant 0 may fill it with
 elements the caller did not supply, so it is conservatively not that init; a capacity
 or a map size hint is.
+An increment, decrement or compound assignment of a field (`o.Spec.Count++`,
+`o.Spec.Count += n`) writes a value computed from what the field held rather than the
+caller's value, and is inadmissible for the same reason.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
@@ -157,7 +160,8 @@ a helper written that way changes nothing the caller can see and is inadmissible
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
 outside (a)-(c). It is syntactic and deliberately conservative. An admitted write
-inside an `if` (either branch), a loop, a `switch` or a `select` runs only on some
+inside an `if` (either branch), a loop, a `switch` or a `select`, or a range clause
+that assigns to the field (`for _, o.Spec.Ref = range refs`), runs only on some
 paths and is inadmissible, as is a `goto`, which can jump over the write; so the
 optional-value guard `if name != "" { ... }` that §4 forbids is detected. The single
 exception is the nil-init guard `if P == nil { P = <zero value> }` with nothing else in

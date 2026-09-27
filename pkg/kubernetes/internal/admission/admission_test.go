@@ -29,6 +29,7 @@ type Spec struct {
 	Nested   Inner
 	Payload  any
 	Box      *Box
+	Count    int
 }
 
 type Box struct {
@@ -731,6 +732,59 @@ func SetRefNameShadowedNil(o *Obj, nil *Ref, n string) {
 	o.Spec.Ref.Name = n
 }
 
+// inadmissible: a range clause assigns the field once per element, or not at all
+func SetRefRangeValue(o *Obj, refs []*Ref, n int32) {
+	for _, o.Spec.Ref = range refs {
+	}
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a range clause's key is written the same way as its value
+func SetCountRangeKey(o *Obj, xs []string, n int32) {
+	for o.Spec.Count = range xs {
+	}
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: an increment writes a value computed from what the field held
+func SetReplicasIncCount(o *Obj, n int32) {
+	o.Spec.Count++
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: incrementing through the pointer just assigned changes the caller's value
+func SetReplicasIncOnly(o *Obj, n int32) {
+	o.Spec.Replicas = &n
+	*o.Spec.Replicas++
+}
+
+// inadmissible: a decrement is the same read-modify-write
+func SetReplicasDecCount(o *Obj, n int32) {
+	o.Spec.Count--
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a compound assignment writes old + c, not the caller's c
+func SetReplicasAddCount(o *Obj, n int32, c int) {
+	o.Spec.Replicas = &n
+	o.Spec.Count += c
+}
+
+// inadmissible: a compound assignment through a rooted local map writes old + v
+func AddLabelConcatViaLocal(o *Obj, k, v string) {
+	labels := o.Labels
+	labels[k] += v
+	o.Labels = labels
+}
+
+// class b: incrementing a temporary reaches no caller
+func SetReplicasTempCount(o *Obj, n int32) {
+	tmp := Obj{}
+	tmp.Spec.Count++
+	_ = tmp
+	o.Spec.Replicas = &n
+}
+
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
 
@@ -866,7 +920,16 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefLabeledLoop":        Inadmissible,
 		"SetRefBlock":              Pointer,
 		"SetRefNameShadowedNil":    Inadmissible,
-		"SetExempted":              Exempt,
+		// A range-clause target and a read-modify-write (#913).
+		"SetRefRangeValue":       Inadmissible,
+		"SetCountRangeKey":       Inadmissible,
+		"SetReplicasIncCount":    Inadmissible,
+		"SetReplicasIncOnly":     Inadmissible,
+		"SetReplicasDecCount":    Inadmissible,
+		"SetReplicasAddCount":    Inadmissible,
+		"AddLabelConcatViaLocal": Inadmissible,
+		"SetReplicasTempCount":   Pointer,
+		"SetExempted":            Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -920,6 +983,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefNameNestedInit":  `(under if n != "")`,
 		"SetRefGoto":            "goto",
 		"SetRefNameShadowedNil": "writes o.Spec.Ref (under if o.Spec.Ref == nil) only on some paths",
+		// A range clause is conditional; a read-modify-write is a default.
+		"SetRefRangeValue":       "writes o.Spec.Ref (under range refs) only on some paths",
+		"SetCountRangeKey":       "o.Spec.Count (under range xs)",
+		"SetReplicasIncCount":    "value the caller did not supply to o.Spec.Count",
+		"SetReplicasIncOnly":     "value the caller did not supply to *o.Spec.Replicas",
+		"SetReplicasAddCount":    "value the caller did not supply to o.Spec.Count",
+		"AddLabelConcatViaLocal": "value the caller did not supply to labels[k]",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
