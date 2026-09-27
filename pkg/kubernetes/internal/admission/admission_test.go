@@ -827,6 +827,37 @@ func SetReplicasTempCount(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// inadmissible: slicing the caller's slice shares its backing array
+func SetReplicasSliceExprConcat(o *Obj, s string, n int32) {
+	o.Spec.Items[:][0] += s
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a range clause assigns an element of the caller's resliced slice
+func SetReplicasSliceExprRange(o *Obj, xs []string, n int32) {
+	for _, o.Spec.Items[:][0] = range xs {
+	}
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: q copies p, which is still the caller's pointer when it was not nil
+func SetReplicasIncAliasNilInit(o *Obj, n int32) {
+	p := o.Spec.Replicas
+	if p == nil {
+		p = new(int32)
+	}
+	q := p
+	(*q)++
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a local sliced from the caller's slice shares its backing array
+func SetReplicasSlicedAliasConcat(o *Obj, s string, n int32) {
+	items := o.Spec.Items[:]
+	items[0] += s
+	o.Spec.Replicas = &n
+}
+
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
 
@@ -977,7 +1008,12 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelConcatNilInit":       Inadmissible,
 		"SetReplicasIncNilInit":       Inadmissible,
 		"SetReplicasTempCount":        Pointer,
-		"SetExempted":                 Exempt,
+		// A target reached through a slice expression or a chain of aliases.
+		"SetReplicasSliceExprConcat":   Inadmissible,
+		"SetReplicasSliceExprRange":    Inadmissible,
+		"SetReplicasIncAliasNilInit":   Inadmissible,
+		"SetReplicasSlicedAliasConcat": Inadmissible,
+		"SetExempted":                  Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -1032,17 +1068,21 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefGoto":            "goto",
 		"SetRefNameShadowedNil": "writes o.Spec.Ref (under if o.Spec.Ref == nil) only on some paths",
 		// A range clause is conditional; a read-modify-write is a default.
-		"SetRefRangeValue":            "writes o.Spec.Ref (under range refs) only on some paths",
-		"SetCountRangeKey":            "o.Spec.Count (under range xs)",
-		"SetReplicasIncCount":         "value the caller did not supply to o.Spec.Count",
-		"SetReplicasIncOnly":          "value the caller did not supply to *o.Spec.Replicas",
-		"SetReplicasAddCount":         "value the caller did not supply to o.Spec.Count",
-		"AddLabelConcatViaLocal":      "value the caller did not supply to labels[k]",
-		"SetReplicasItemConcat":       "value the caller did not supply to items[0]",
-		"SetReplicasItemRange":        "items[0] (under range xs)",
-		"SetReplicasParenLabelConcat": "value the caller did not supply to",
-		"AddLabelConcatNilInit":       "value the caller did not supply to labels[k]",
-		"SetReplicasIncNilInit":       "value the caller did not supply to *p",
+		"SetRefRangeValue":             "writes o.Spec.Ref (under range refs) only on some paths",
+		"SetCountRangeKey":             "o.Spec.Count (under range xs)",
+		"SetReplicasIncCount":          "value the caller did not supply to o.Spec.Count",
+		"SetReplicasIncOnly":           "value the caller did not supply to *o.Spec.Replicas",
+		"SetReplicasAddCount":          "value the caller did not supply to o.Spec.Count",
+		"AddLabelConcatViaLocal":       "value the caller did not supply to labels[k]",
+		"SetReplicasItemConcat":        "value the caller did not supply to items[0]",
+		"SetReplicasItemRange":         "items[0] (under range xs)",
+		"SetReplicasParenLabelConcat":  "value the caller did not supply to",
+		"AddLabelConcatNilInit":        "value the caller did not supply to labels[k]",
+		"SetReplicasIncNilInit":        "value the caller did not supply to *p",
+		"SetReplicasSliceExprConcat":   "value the caller did not supply to o.Spec.Items[:][0]",
+		"SetReplicasSliceExprRange":    "o.Spec.Items[:][0] (under range xs)",
+		"SetReplicasIncAliasNilInit":   "value the caller did not supply to (*q)",
+		"SetReplicasSlicedAliasConcat": "value the caller did not supply to items[0]",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
