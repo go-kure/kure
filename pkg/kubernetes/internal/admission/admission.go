@@ -1072,7 +1072,7 @@ func (r roots) at(obj types.Object, pos token.Pos) bool {
 // anything else (tmp := &Obj{}, x := f()) is a temporary from that point:
 // writes into it reach no caller-visible object and admit nothing.
 func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
-	return trackRoots(fn, info, rootObj, roots.at)
+	return trackRoots(fn, info, rootObj, roots.at, func(e ast.Expr) ast.Expr { return e })
 }
 
 // mayReachCaller returns, for the read-modify-write check, the objects that
@@ -1081,16 +1081,18 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 // expressions (items := o.Spec.Items[:]) whose root reached a caller's object
 // at any point up to there. Queried with rootedBy, a local stays rooted
 // whatever it is reassigned to since, so a copy of a local a nil-init may
-// have replaced (q := p after `if p == nil { p = new(int32) }`) is rooted too.
+// have replaced (q := p after `if p == nil { p = new(int32) }`) is rooted too,
+// and so is a local assigned with its name in parentheses ((q) = p).
 func mayReachCaller(fn *ast.FuncDecl, info *types.Info) roots {
-	return trackRoots(fn, info, mayReachObj, roots.rootedBy)
+	return trackRoots(fn, info, mayReachObj, roots.rootedBy, ast.Unparen)
 }
 
 // trackRoots seeds fn's parameters and records, for each local declared or
 // assigned in its body, whether the object root finds in its value reaches a
-// caller's object at that statement, as held reads it.
+// caller's object at that statement, as held reads it. dest normalises an
+// assignment's destination before it is matched as a local's name.
 func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.Info) types.Object,
-	held func(roots, types.Object, token.Pos) bool,
+	held func(roots, types.Object, token.Pos) bool, dest func(ast.Expr) ast.Expr,
 ) roots {
 	r := roots{}
 	for _, field := range fn.Type.Params.List {
@@ -1124,7 +1126,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 			}
 		case *ast.AssignStmt:
 			for i, lhs := range s.Lhs {
-				id, ok := lhs.(*ast.Ident)
+				id, ok := dest(lhs).(*ast.Ident)
 				if !ok {
 					continue
 				}
