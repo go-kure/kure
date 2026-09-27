@@ -18,10 +18,10 @@
 // a pointer allocated with new(T) that nothing is written through, each set a
 // value the caller never named (§4). The zero-value init that guards a nil
 // field (make, new, an empty literal, followed by a write through it) is not
-// such a value. A make counts as that init only when it allocates no elements
-// (a map or channel, or a slice of constant length 0); a slice made with any
-// other length holds zero-valued elements the caller never supplied, and is a
-// default.
+// such a value. A make counts as that init only when it provably allocates no
+// elements (a map or channel, or a slice of constant length 0); a slice made
+// with any other length may hold zero-valued elements the caller never
+// supplied, so it is conservatively treated as a default.
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -353,11 +353,11 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			// the purity rule (§4) forbids just as it forbids defaulting a
 			// second field. The zero-value init of a container or of a pointer
 			// intermediate is not a value: it is the guarded nil-init that
-			// classes a and b are written around. A make that allocates
+			// classes a and b are written around. A make that may allocate
 			// elements is not that init, whether it is the field's value or the
-			// appended or inserted one: it fills the slice with zero-valued
+			// appended or inserted one: it may fill the slice with zero-valued
 			// elements the caller never supplied, whatever its arguments
-			// mention.
+			// mention, so it is conservatively treated as a default.
 			v := admittedValue(lhs, rhs, info)
 			switch {
 			case isFilledMake(rhs, info) || isFilledMake(v, info):
@@ -819,8 +819,9 @@ func isStructLit(lit *ast.CompositeLit, info *types.Info) bool {
 
 // isMake reports whether e is a call to the builtin make: as a field's value,
 // the nil-init of a map or slice field before inserting into or appending to
-// it, which is not a bare write. A make that allocates elements is refused as
-// a default before that (isFilledMake), so only an empty one is admitted there.
+// it, which is not a bare write. A make that may allocate elements is refused
+// as a default before that (isFilledMake), so only an empty one is admitted
+// there.
 func isMake(e ast.Expr, info *types.Info) bool { return isBuiltinCall(e, info, "make") }
 
 // isFieldWrite reports whether lhs writes through a selector or dereference,

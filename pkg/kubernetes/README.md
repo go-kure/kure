@@ -128,8 +128,8 @@ a map insert of a constant, a struct literal built entirely from constants, or a
 allocated (`new(T)`) and never written through, all set a value the caller never named
 and are inadmissible (§4). The zero-value init a helper guards a nil field with
 (`if o.Labels == nil { o.Labels = map[string]string{} }`) is not such a value. A `make`
-of a slice with a length other than a constant 0 fills it with elements the caller did
-not supply and is not that init; a capacity or a map size hint is.
+of a slice with a length other than a constant 0 may fill it with elements the caller
+did not supply, so it is conservatively not that init; a capacity or a map size hint is.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
