@@ -25,7 +25,10 @@
 // A make counts as that init only when it provably allocates no elements (a
 // map, or a slice of constant length 0); a slice made with any other length
 // may hold zero-valued elements the caller never supplied, so it is
-// conservatively treated as a default.
+// conservatively treated as a default. An increment, decrement or compound
+// assignment of anything that reaches the caller (o.Spec.Count++,
+// o.Spec.Count += n) writes a value computed from what the field held, so it
+// is such a default too.
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -74,12 +77,14 @@
 // local) that runs only on some paths is inadmissible whatever else the body
 // does: `if name != "" { o.Spec.Name = name }` is the conditional no-op §4
 // forbids, and so is a write inside a loop, a switch, a type switch or a
-// select, or in an if's else branch. A goto is refused like an early return,
-// because it can jump over the write. The one guard admitted is the nil-init
-// that classes a and b are written around: a top-level
-// `if P == nil { P = <zero value> }` (nil may be on either side) whose only
-// statement zero-initialises the map, slice or pointer path it tests, with no
-// Init and no else. Any other guard, including a set-if-unset
+// select, or in an if's else branch. A range clause that assigns to a field
+// or map entry reaching the caller (for _, o.Spec.Ref = range refs) writes it
+// once per element or not at all, so it is conditional too. A goto is refused
+// like an early return, because it can jump over the write. The one guard
+// admitted is the nil-init that classes a and b are written around: a
+// top-level `if P == nil { P = <zero value> }` (nil may be on either side)
+// whose only statement zero-initialises the map, slice or pointer path it
+// tests, with no Init and no else. Any other guard, including a set-if-unset
 // (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`), one that fills a nil
 // interface field with an empty value, and a make that may allocate elements
 // (`if o.Spec.Items == nil { o.Spec.Items = make([]string, 1) }`), makes the
@@ -264,7 +269,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	if hasGoto(fn.Body) {
 		return Inadmissible, "jumps over the write with goto; sugar has no conditional no-op (purity §4)"
 	}
-	guards := conditionalAssigns(fn.Body, info)
+	guards := conditionalWrites(fn.Body, info)
 	var (
 		appendOrMap bool
 		ptrAssign   bool
@@ -283,22 +288,50 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		localOps    = map[types.Object]token.Pos{} // local -> first append or map insert into it
 		writtenBack = map[types.Object]token.Pos{} // local -> last assignment of it to a field
 	)
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		// A function literal's body is not the helper's own: an uncalled
-		// closure that appends is a no-op the caller never sees.
-		if _, isLit := n.(*ast.FuncLit); isLit {
-			return false
+	// reachesCaller reports whether a write to x at pos changes something the
+	// caller can see: a rooted field, or an entry of a map reached through a
+	// rooted local (labels := o.Labels; labels[k]). A plain local is not.
+	reachesCaller := func(x ast.Expr, pos token.Pos) bool {
+		return (isFieldWrite(x) || isMapIndex(x, info)) && rooted.at(rootObj(x, info), pos)
+	}
+	// guardOf returns the guard a statement runs under: "" means it runs on
+	// every path, and a statement the pre-pass has no entry for is treated
+	// as conditional.
+	guardOf := func(s ast.Stmt) string {
+		if guard, known := guards[s]; known {
+			return guard
 		}
-		s, ok := n.(*ast.AssignStmt)
-		if !ok {
+		return "a nested statement"
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		var s *ast.AssignStmt
+		switch n := n.(type) {
+		case *ast.FuncLit:
+			// A function literal's body is not the helper's own: an uncalled
+			// closure that appends is a no-op the caller never sees.
+			return false
+		case *ast.RangeStmt:
+			// A range clause assigning to a target that reaches the caller
+			// writes it once per element or not at all: conditional.
+			for _, x := range []ast.Expr{n.Key, n.Value} {
+				if x != nil && reachesCaller(x, n.Pos()) {
+					conditional = append(conditional, fmt.Sprintf("%s (under %s)", types.ExprString(x), guardOf(n)))
+				}
+			}
+			return true
+		case *ast.IncDecStmt:
+			// An increment or decrement writes a value computed from what the
+			// target held, never one the caller supplied: a default.
+			if reachesCaller(n.X, n.Pos()) {
+				defaulted = append(defaulted, types.ExprString(n.X))
+			}
+			return true
+		case *ast.AssignStmt:
+			s = n
+		default:
 			return true
 		}
-		// "" means the statement runs on every path; a statement the pre-pass
-		// has no entry for is treated as conditional.
-		guard, known := guards[s]
-		if !known {
-			guard = "a nested statement"
-		}
+		guard := guardOf(s)
 		for i, lhs := range s.Lhs {
 			var rhs ast.Expr
 			if len(s.Rhs) == len(s.Lhs) {
@@ -327,6 +360,12 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			// assignments (labels = map[string]string{}) stay ignored.
 			if (fieldWrite || localOp) && guard != "" {
 				conditional = append(conditional, fmt.Sprintf("%s (under %s)", types.ExprString(lhs), guard))
+			}
+			// A compound assignment (+=, |=, ...) writes old op value, which is
+			// the same read-modify-write as an increment, not a forward of the
+			// caller's value.
+			if s.Tok != token.ASSIGN && s.Tok != token.DEFINE && reachesCaller(lhs, s.Pos()) {
+				defaulted = append(defaulted, types.ExprString(lhs))
 			}
 			if !fieldWrite {
 				continue
@@ -641,10 +680,10 @@ func hasGoto(body *ast.BlockStmt) bool {
 	return found
 }
 
-// conditionalAssigns maps every assignment in body outside a function literal
-// to "" when it runs on every path through the body, or to the text of the
-// outermost statement guarding it (`if <cond>`, `for <cond>`, `range <x>`,
-// `switch <tag>`, `type switch`, `select`).
+// conditionalWrites maps every assignment and range statement in body outside
+// a function literal to "" when it runs on every path through the body, or to
+// the text of the outermost statement guarding it (`if <cond>`, `for <cond>`,
+// `range <x>`, `switch <tag>`, `type switch`, `select`).
 //
 // Unconditional is defined positively: an assignment in the top-level
 // statement list (descending through bare blocks and labels), the Init of a
@@ -652,11 +691,13 @@ func hasGoto(body *ast.BlockStmt) bool {
 // top-level nil-init guard (isNilInitGuard). Everything a top-level if, for,
 // range, switch, type switch or select contains maps to that statement's
 // guard, including its else branch, post statement, select communication and
-// any nested Init. A statement kind this pass does not know leaves its
-// assignments without an entry, which the caller treats as conditional, so
-// an omission errs toward refusal.
-func conditionalAssigns(body *ast.BlockStmt, info *types.Info) map[*ast.AssignStmt]string {
-	m := map[*ast.AssignStmt]string{}
+// any nested Init. A range statement is never unconditional: its clause
+// assigns once per element or not at all, so a top-level range maps to its
+// own `range <x>` and a nested one to the outermost guard around it. A
+// statement kind this pass does not know leaves its writes without an entry,
+// which the caller treats as conditional, so an omission errs toward refusal.
+func conditionalWrites(body *ast.BlockStmt, info *types.Info) map[ast.Stmt]string {
+	m := map[ast.Stmt]string{}
 	guarded := func(stmt, init ast.Stmt, text string) {
 		ast.Inspect(stmt, func(n ast.Node) bool {
 			if init != nil && n == ast.Node(init) {
@@ -666,6 +707,8 @@ func conditionalAssigns(body *ast.BlockStmt, info *types.Info) map[*ast.AssignSt
 			case *ast.FuncLit:
 				return false
 			case *ast.AssignStmt:
+				m[s] = text
+			case *ast.RangeStmt:
 				m[s] = text
 			}
 			return true
