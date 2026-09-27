@@ -150,10 +150,16 @@ a helper written that way changes nothing the caller can see and is inadmissible
 
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
-outside (a)-(c). It is syntactic and deliberately conservative: it does not follow
-control flow, so a write guarded by an optional-value condition
-(`if name != "" { ... }`, forbidden by §4) is not detected by the test. That idiom is
-caught by review and by the helper's own golden test. A function literal's body is not
+outside (a)-(c). It is syntactic and deliberately conservative. An admitted write
+inside an `if` (either branch), a loop, a `switch` or a `select` runs only on some
+paths and is inadmissible, as is a `goto`, which can jump over the write; so the
+optional-value guard `if name != "" { ... }` that §4 forbids is detected. The single
+exception is the nil-init guard `if P == nil { P = <zero value> }` with nothing else in
+it: no init statement, no `else`, one statement zero-initialising the path it tests. A
+set-if-unset (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`) is not that guard and is
+refused. A conditionally created alias
+(`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`) is still not detected; that
+is caught by review and by the helper's own golden test. A function literal's body is not
 the helper's own body: an append inside a closure the helper never calls is a no-op no
 caller sees, so it admits nothing. `pkg/kubernetes/testdata/admission_exclusions.txt` listed the
 helpers tolerated while the prune work item of the epic ran; that file is now empty and stays
