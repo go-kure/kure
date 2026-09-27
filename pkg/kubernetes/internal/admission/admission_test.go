@@ -23,6 +23,7 @@ type Inner struct {
 type Spec struct {
 	Replicas *int32
 	Items    []string
+	Rows     [][]string
 	Name     string
 	Ref      *Ref
 	Nested   Inner
@@ -149,6 +150,58 @@ func AddLabelMake(o *Obj, k, v string) {
 	}
 	o.Labels[k] = v
 }
+
+// inadmissible: a make with a non-zero length fills the slice with an empty
+// element the caller never supplied
+func AddItemMakeLen(o *Obj, s string) {
+	o.Spec.Items = make([]string, 1)
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: a guard around a make that fills the slice is not the
+// nil-init guard, so the write under it is conditional
+func AddItemGuardedMakeLen(o *Obj, s string) {
+	if o.Spec.Items == nil {
+		o.Spec.Items = make([]string, 1)
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: a length that is not a constant 0 may allocate elements, so
+// the guard around it is not the nil-init guard either
+func AddItemMakeParamLen(o *Obj, s string, n int) {
+	if o.Spec.Items == nil {
+		o.Spec.Items = make([]string, n)
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// class a, make-init of the slice at length 0 then append
+func AddItemMakeZero(o *Obj, s string) {
+	if o.Spec.Items == nil {
+		o.Spec.Items = make([]string, 0)
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// class a, a capacity allocates no elements
+func AddItemMakeCap(o *Obj, s string) {
+	if o.Spec.Items == nil {
+		o.Spec.Items = make([]string, 0, 4)
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// class a, a map size hint allocates no entries
+func AddLabelMakeHint(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = make(map[string]string, 1)
+	}
+	o.Labels[k] = v
+}
+
+// inadmissible: the appended row is a non-empty make, whatever its capacity mentions
+func AddRowMakeLen(o *Obj, n int) { o.Spec.Rows = append(o.Spec.Rows, make([]string, 1, n)) }
 
 // inadmissible: the appended element is a constant the caller never supplied
 func AddItemConstant(o *Obj) { o.Spec.Items = append(o.Spec.Items, "fixed") }
@@ -636,6 +689,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasAndName":     Pointer,
 		"SetReplicasThroughStar": Pointer,
 		"AddLabelMake":           Append,
+		"AddItemMakeLen":         Inadmissible,
+		"AddItemGuardedMakeLen":  Inadmissible,
+		"AddItemMakeParamLen":    Inadmissible,
+		"AddItemMakeZero":        Append,
+		"AddItemMakeCap":         Append,
+		"AddLabelMakeHint":       Append,
+		"AddRowMakeLen":          Inadmissible,
 		"AddItemConstant":        Inadmissible,
 		"AddLabelConstant":       Inadmissible,
 		"SetReplicasZero":        Inadmissible,
@@ -743,6 +803,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasAndDefault": "bare write to o.Spec.Name alongside",
 		"SetReplicasAndDerived": "bare write to o.Spec.Name alongside",
 		"AddItemConstant":       "value the caller did not supply to o.Spec.Items",
+		"AddItemMakeLen":        "value the caller did not supply to o.Spec.Items",
+		"AddItemGuardedMakeLen": "writes o.Spec.Items (under if o.Spec.Items == nil) only on some paths",
+		"AddItemMakeParamLen":   "writes o.Spec.Items (under if o.Spec.Items == nil) only on some paths",
+		"AddRowMakeLen":         "value the caller did not supply to o.Spec.Rows",
 		"AddLabelConstant":      "value the caller did not supply to o.Labels[k]",
 		"SetReplicasZero":       "value the caller did not supply to o.Spec.Replicas",
 		"SetNestedRefConstant":  "value the caller did not supply to o.Spec.Nested.Ref",
