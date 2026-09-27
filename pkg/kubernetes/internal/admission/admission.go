@@ -28,7 +28,10 @@
 // conservatively treated as a default. An increment, decrement or compound
 // assignment of anything that reaches the caller (o.Spec.Count++,
 // o.Spec.Count += n) writes a value computed from what the field held, so it
-// is such a default too.
+// is such a default too. That includes an element of a map or slice reached
+// through a local that aliased a caller's object at any earlier point
+// (labels := o.Labels; labels[k] += v), even when a nil-init guard may have
+// replaced it since.
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -77,14 +80,15 @@
 // local) that runs only on some paths is inadmissible whatever else the body
 // does: `if name != "" { o.Spec.Name = name }` is the conditional no-op §4
 // forbids, and so is a write inside a loop, a switch, a type switch or a
-// select, or in an if's else branch. A range clause that assigns to a field
-// or map entry reaching the caller (for _, o.Spec.Ref = range refs) writes it
-// once per element or not at all, so it is conditional too. A goto is refused
-// like an early return, because it can jump over the write. The one guard
-// admitted is the nil-init that classes a and b are written around: a
-// top-level `if P == nil { P = <zero value> }` (nil may be on either side)
-// whose only statement zero-initialises the map, slice or pointer path it
-// tests, with no Init and no else. Any other guard, including a set-if-unset
+// select, or in an if's else branch. A range clause that assigns to a target
+// reaching the caller in the read-modify-write sense above (for _, o.Spec.Ref
+// = range refs; for _, items[0] = range xs) writes it once per element or not
+// at all, so it is conditional too. A goto is refused like an early return,
+// because it can jump over the write. The one guard admitted is the nil-init
+// that classes a and b are written around: a top-level
+// `if P == nil { P = <zero value> }` (nil may be on either side) whose only
+// statement zero-initialises the map, slice or pointer path it tests, with no
+// Init and no else. Any other guard, including a set-if-unset
 // (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`), one that fills a nil
 // interface field with an empty value, and a make that may allocate elements
 // (`if o.Spec.Items == nil { o.Spec.Items = make([]string, 1) }`), makes the
@@ -288,11 +292,19 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		localOps    = map[types.Object]token.Pos{} // local -> first append or map insert into it
 		writtenBack = map[types.Object]token.Pos{} // local -> last assignment of it to a field
 	)
-	// reachesCaller reports whether a write to x at pos changes something the
-	// caller can see: a rooted field, or an entry of a map reached through a
-	// rooted local (labels := o.Labels; labels[k]). A plain local is not.
+	// reachesCaller reports whether a write to x at pos may change something
+	// the caller can see: a field, a dereference or an indexed element
+	// (labels := o.Labels; labels[k]), parenthesised or not, whose root has
+	// reached a caller's object at some point up to pos. A later
+	// reassignment does not clear it: after the nil-init
+	// `if labels == nil { labels = map[string]string{} }` labels is still the
+	// caller's map on the other path. A plain local is not.
 	reachesCaller := func(x ast.Expr, pos token.Pos) bool {
-		return (isFieldWrite(x) || isMapIndex(x, info)) && rooted.at(rootObj(x, info), pos)
+		switch ast.Unparen(x).(type) {
+		case *ast.SelectorExpr, *ast.StarExpr, *ast.IndexExpr:
+			return rooted.rootedBy(rootObj(x, info), pos)
+		}
+		return false
 	}
 	// guardOf returns the guard a statement runs under: "" means it runs on
 	// every path, and a statement the pre-pass has no entry for is treated
@@ -983,6 +995,24 @@ func (r roots) everRooted(obj types.Object) bool {
 		return false
 	}
 	for _, e := range r[obj] {
+		if e.rooted {
+			return true
+		}
+	}
+	return false
+}
+
+// rootedBy reports whether obj reached a caller's object at any event at or
+// before pos, whatever it was reassigned to since: the conservative reading
+// for a write that must not reach the caller at all.
+func (r roots) rootedBy(obj types.Object, pos token.Pos) bool {
+	if obj == nil {
+		return false
+	}
+	for _, e := range r[obj] {
+		if e.pos > pos {
+			break
+		}
 		if e.rooted {
 			return true
 		}

@@ -136,7 +136,9 @@ elements the caller did not supply, so it is conservatively not that init; a cap
 or a map size hint is.
 An increment, decrement or compound assignment of a field (`o.Spec.Count++`,
 `o.Spec.Count += n`) writes a value computed from what the field held rather than the
-caller's value, and is inadmissible for the same reason.
+caller's value, and is inadmissible for the same reason. The same holds for a map or
+slice element reached through a local that aliased the caller's object
+(`labels := o.Labels; labels[k] += v`), even after a nil-init guard on that local.
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
@@ -161,8 +163,8 @@ a helper written that way changes nothing the caller can see and is inadmissible
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
 outside (a)-(c). It is syntactic and deliberately conservative. An admitted write
 inside an `if` (either branch), a loop, a `switch` or a `select`, or a range clause
-that assigns to the field (`for _, o.Spec.Ref = range refs`), runs only on some
-paths and is inadmissible, as is a `goto`, which can jump over the write; so the
+that assigns to the field or to such an element (`for _, o.Spec.Ref = range refs`),
+runs only on some paths and is inadmissible, as is a `goto`, which can jump over the write; so the
 optional-value guard `if name != "" { ... }` that §4 forbids is detected. The single
 exception is the nil-init guard `if P == nil { P = <zero value> }` with nothing else in
 it: no init statement, no `else`, one statement zero-initialising the map, slice or

@@ -777,6 +777,48 @@ func AddLabelConcatViaLocal(o *Obj, k, v string) {
 	o.Labels = labels
 }
 
+// inadmissible: a compound assignment to an element of a rooted local slice writes old + s
+func SetReplicasItemConcat(o *Obj, s string, n int32) {
+	items := o.Spec.Items
+	items[0] += s
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a range clause assigns an element of a rooted local slice once per element
+func SetReplicasItemRange(o *Obj, xs []string, n int32) {
+	items := o.Spec.Items
+	for _, items[0] = range xs {
+	}
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: parentheses around the target change nothing
+func SetReplicasParenLabelConcat(o *Obj, k, v string, n int32) {
+	labels := o.Labels
+	(labels[k]) += v
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the nil-init guard leaves labels the caller's map when it was not nil
+func AddLabelConcatNilInit(o *Obj, k, v string) {
+	labels := o.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[k] += v
+	o.Labels = labels
+}
+
+// inadmissible: the nil-init guard leaves p the caller's pointer when it was not nil
+func SetReplicasIncNilInit(o *Obj, n int32) {
+	p := o.Spec.Replicas
+	if p == nil {
+		p = new(int32)
+	}
+	*p++
+	o.Spec.Replicas = &n
+}
+
 // class b: incrementing a temporary reaches no caller
 func SetReplicasTempCount(o *Obj, n int32) {
 	tmp := Obj{}
@@ -928,8 +970,14 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasDecCount":    Inadmissible,
 		"SetReplicasAddCount":    Inadmissible,
 		"AddLabelConcatViaLocal": Inadmissible,
-		"SetReplicasTempCount":   Pointer,
-		"SetExempted":            Exempt,
+		// An indexed, parenthesised or nil-initialised caller-reaching target.
+		"SetReplicasItemConcat":       Inadmissible,
+		"SetReplicasItemRange":        Inadmissible,
+		"SetReplicasParenLabelConcat": Inadmissible,
+		"AddLabelConcatNilInit":       Inadmissible,
+		"SetReplicasIncNilInit":       Inadmissible,
+		"SetReplicasTempCount":        Pointer,
+		"SetExempted":                 Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -984,12 +1032,17 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefGoto":            "goto",
 		"SetRefNameShadowedNil": "writes o.Spec.Ref (under if o.Spec.Ref == nil) only on some paths",
 		// A range clause is conditional; a read-modify-write is a default.
-		"SetRefRangeValue":       "writes o.Spec.Ref (under range refs) only on some paths",
-		"SetCountRangeKey":       "o.Spec.Count (under range xs)",
-		"SetReplicasIncCount":    "value the caller did not supply to o.Spec.Count",
-		"SetReplicasIncOnly":     "value the caller did not supply to *o.Spec.Replicas",
-		"SetReplicasAddCount":    "value the caller did not supply to o.Spec.Count",
-		"AddLabelConcatViaLocal": "value the caller did not supply to labels[k]",
+		"SetRefRangeValue":            "writes o.Spec.Ref (under range refs) only on some paths",
+		"SetCountRangeKey":            "o.Spec.Count (under range xs)",
+		"SetReplicasIncCount":         "value the caller did not supply to o.Spec.Count",
+		"SetReplicasIncOnly":          "value the caller did not supply to *o.Spec.Replicas",
+		"SetReplicasAddCount":         "value the caller did not supply to o.Spec.Count",
+		"AddLabelConcatViaLocal":      "value the caller did not supply to labels[k]",
+		"SetReplicasItemConcat":       "value the caller did not supply to items[0]",
+		"SetReplicasItemRange":        "items[0] (under range xs)",
+		"SetReplicasParenLabelConcat": "value the caller did not supply to",
+		"AddLabelConcatNilInit":       "value the caller did not supply to labels[k]",
+		"SetReplicasIncNilInit":       "value the caller did not supply to *p",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
