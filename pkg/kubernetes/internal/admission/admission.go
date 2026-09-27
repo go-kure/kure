@@ -1071,9 +1071,12 @@ func (r roots) at(obj types.Object, pos token.Pos) bool {
 // selector, index, dereference or address-of chain rooted in one of them
 // (spec := &o.Spec; labels := o.Labels). A local declared or assigned from
 // anything else (tmp := &Obj{}, x := f()) is a temporary from that point:
-// writes into it reach no caller-visible object and admit nothing.
+// writes into it reach no caller-visible object and admit nothing. A
+// comma-ok map read is not followed here: class a asks only whether a local
+// was ever rooted, so rooting one read from another field (items, ok :=
+// o.Spec.Groups[k]) would admit writing it back to a different field.
 func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
-	return trackRoots(fn, info, rootObj, roots.at, func(e ast.Expr) ast.Expr { return e })
+	return trackRoots(fn, info, rootObj, roots.at, func(e ast.Expr) ast.Expr { return e }, false)
 }
 
 // mayReachCaller returns, for the read-modify-write check, the objects that
@@ -1083,17 +1086,19 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 // at any point up to there. Queried with rootedBy, a local stays rooted
 // whatever it is reassigned to since, so a copy of a local a nil-init may
 // have replaced (q := p after `if p == nil { p = new(int32) }`) is rooted too,
-// and so is a local assigned with its name in parentheses ((q) = p).
+// and so is a local assigned with its name in parentheses ((q) = p), and the
+// first name of a comma-ok map read (items, ok := o.Spec.Groups[k]).
 func mayReachCaller(fn *ast.FuncDecl, info *types.Info) roots {
-	return trackRoots(fn, info, mayReachObj, roots.rootedBy, ast.Unparen)
+	return trackRoots(fn, info, mayReachObj, roots.rootedBy, ast.Unparen, true)
 }
 
 // trackRoots seeds fn's parameters and records, for each local declared or
 // assigned in its body, whether the object root finds in its value reaches a
 // caller's object at that statement, as held reads it. dest normalises an
-// assignment's destination before it is matched as a local's name.
+// assignment's destination before it is matched as a local's name; commaOk
+// also roots the first name of a comma-ok map read.
 func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.Info) types.Object,
-	held func(roots, types.Object, token.Pos) bool, dest func(ast.Expr) ast.Expr,
+	held func(roots, types.Object, token.Pos) bool, dest func(ast.Expr) ast.Expr, commaOk bool,
 ) roots {
 	r := roots{}
 	for _, field := range fn.Type.Params.List {
@@ -1121,7 +1126,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 					continue
 				}
 				for i, id := range vs.Names {
-					v := assignedValue(vs.Values, len(vs.Names), i, info)
+					v := assignedValue(vs.Values, len(vs.Names), i, info, commaOk)
 					rooted := v != nil && held(r, root(v, info), s.Pos())
 					r.add(info.Defs[id], s.Pos(), rooted)
 				}
@@ -1132,7 +1137,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 				if !ok {
 					continue
 				}
-				v := assignedValue(s.Rhs, len(s.Lhs), i, info)
+				v := assignedValue(s.Rhs, len(s.Lhs), i, info, commaOk)
 				rooted := v != nil && held(r, root(v, info), s.Pos())
 				r.add(info.ObjectOf(id), s.Pos(), rooted)
 			}
@@ -1143,14 +1148,14 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 }
 
 // assignedValue returns the expression the i-th of n names is assigned from
-// values: the i-th value, or the read itself for the first name of a comma-ok
-// map read (items, ok := o.Spec.Groups[k]), which copies the element as any
-// other read does; nil when no single expression supplies it.
-func assignedValue(values []ast.Expr, n, i int, info *types.Info) ast.Expr {
+// values: the i-th value, or with commaOk the read itself for the first name
+// of a comma-ok map read (items, ok := o.Spec.Groups[k]), which copies the
+// element as any other read does; nil when no single expression supplies it.
+func assignedValue(values []ast.Expr, n, i int, info *types.Info, commaOk bool) ast.Expr {
 	switch {
 	case len(values) == n:
 		return values[i]
-	case n == 2 && len(values) == 1 && i == 0 && isMapIndex(ast.Unparen(values[0]), info):
+	case commaOk && n == 2 && len(values) == 1 && i == 0 && isMapIndex(ast.Unparen(values[0]), info):
 		return values[0]
 	}
 	return nil
