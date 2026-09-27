@@ -27,11 +27,11 @@
 // may hold zero-valued elements the caller never supplied, so it is
 // conservatively treated as a default. An increment, decrement or compound
 // assignment of anything that reaches the caller (o.Spec.Count++,
-// o.Spec.Count += n) writes a value computed from what the field held, so it
+// o.Spec.Count += n) writes a value computed from what the target held, so it
 // is such a default too. That includes an element of a map or slice reached
-// through a local that aliased a caller's object at any earlier point
-// (labels := o.Labels; labels[k] += v), even when a nil-init guard may have
-// replaced it since.
+// through any chain of locals copied or sliced from a caller's object
+// (labels := o.Labels; labels[k] += v; items := o.Spec.Items[:]), even when a
+// nil-init guard may have replaced one of them since.
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -288,21 +288,24 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		defaulted   []string                    // admitted operations carrying a value the caller did not supply
 		locals      = nilLocals(fn, info)
 		rooted      = rootedObjects(fn, info)      // parameters writes reach the caller through, by position
+		mayReach    = mayReachCaller(fn, info)     // the same, conservatively, for read-modify-write targets
 		supplied    = callerValues(fn, info)       // parameters and locals carrying one, for value provenance
 		localOps    = map[types.Object]token.Pos{} // local -> first append or map insert into it
 		writtenBack = map[types.Object]token.Pos{} // local -> last assignment of it to a field
 	)
 	// reachesCaller reports whether a write to x at pos may change something
 	// the caller can see: a field, a dereference or an indexed element
-	// (labels := o.Labels; labels[k]), parenthesised or not, whose root has
-	// reached a caller's object at some point up to pos. A later
-	// reassignment does not clear it: after the nil-init
+	// (labels := o.Labels; labels[k]), parenthesised or not, whose root,
+	// seen through slice expressions (o.Spec.Items[:][0]), may have reached a
+	// caller's object at some point up to pos through any chain of locals
+	// copied or sliced from it (mayReachCaller). A later reassignment does
+	// not clear it: after the nil-init
 	// `if labels == nil { labels = map[string]string{} }` labels is still the
 	// caller's map on the other path. A plain local is not.
 	reachesCaller := func(x ast.Expr, pos token.Pos) bool {
 		switch ast.Unparen(x).(type) {
 		case *ast.SelectorExpr, *ast.StarExpr, *ast.IndexExpr:
-			return rooted.rootedBy(rootObj(x, info), pos)
+			return mayReach.rootedBy(mayReachObj(x, info), pos)
 		}
 		return false
 	}
@@ -943,7 +946,12 @@ func isFieldWrite(lhs ast.Expr) bool {
 // rootIdent returns the identifier at the root of a selector, index,
 // dereference or address-of chain (o in o.Spec.Items[i], labels in
 // labels[k], spec in *spec), or nil when the chain is not rooted in one.
-func rootIdent(e ast.Expr) *ast.Ident {
+func rootIdent(e ast.Expr) *ast.Ident { return chainRoot(e, false) }
+
+// chainRoot is rootIdent, and with throughSlices it also steps through a
+// slice expression (o in o.Spec.Items[:][0]): a slice shares its operand's
+// backing array, so a write into it may reach whatever the operand reaches.
+func chainRoot(e ast.Expr, throughSlices bool) *ast.Ident {
 	for {
 		switch v := e.(type) {
 		case *ast.Ident:
@@ -951,6 +959,11 @@ func rootIdent(e ast.Expr) *ast.Ident {
 		case *ast.SelectorExpr:
 			e = v.X
 		case *ast.IndexExpr:
+			e = v.X
+		case *ast.SliceExpr:
+			if !throughSlices {
+				return nil
+			}
 			e = v.X
 		case *ast.StarExpr:
 			e = v.X
@@ -965,6 +978,15 @@ func rootIdent(e ast.Expr) *ast.Ident {
 			return nil
 		}
 	}
+}
+
+// mayReachObj returns the object at the root of e seen through slice
+// expressions, or nil.
+func mayReachObj(e ast.Expr, info *types.Info) types.Object {
+	if id := chainRoot(e, true); id != nil {
+		return info.ObjectOf(id)
+	}
+	return nil
 }
 
 // rootObj returns the object the root identifier of e denotes, or nil.
@@ -1050,6 +1072,26 @@ func (r roots) at(obj types.Object, pos token.Pos) bool {
 // anything else (tmp := &Obj{}, x := f()) is a temporary from that point:
 // writes into it reach no caller-visible object and admit nothing.
 func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
+	return trackRoots(fn, info, rootObj, roots.at)
+}
+
+// mayReachCaller returns, for the read-modify-write check, the objects that
+// may reach a caller's object: rootedObjects' set, except that a local is
+// rooted from where it is declared or assigned a chain seen through slice
+// expressions (items := o.Spec.Items[:]) whose root reached a caller's object
+// at any point up to there. Queried with rootedBy, a local stays rooted
+// whatever it is reassigned to since, so a copy of a local a nil-init may
+// have replaced (q := p after `if p == nil { p = new(int32) }`) is rooted too.
+func mayReachCaller(fn *ast.FuncDecl, info *types.Info) roots {
+	return trackRoots(fn, info, mayReachObj, roots.rootedBy)
+}
+
+// trackRoots seeds fn's parameters and records, for each local declared or
+// assigned in its body, whether the object root finds in its value reaches a
+// caller's object at that statement, as held reads it.
+func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.Info) types.Object,
+	held func(roots, types.Object, token.Pos) bool,
+) roots {
 	r := roots{}
 	for _, field := range fn.Type.Params.List {
 		for _, name := range field.Names {
@@ -1076,7 +1118,7 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 					continue
 				}
 				for i, id := range vs.Names {
-					rooted := len(vs.Values) == len(vs.Names) && r.at(rootObj(vs.Values[i], info), s.Pos())
+					rooted := len(vs.Values) == len(vs.Names) && held(r, root(vs.Values[i], info), s.Pos())
 					r.add(info.Defs[id], s.Pos(), rooted)
 				}
 			}
@@ -1086,7 +1128,7 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 				if !ok {
 					continue
 				}
-				rooted := len(s.Lhs) == len(s.Rhs) && r.at(rootObj(s.Rhs[i], info), s.Pos())
+				rooted := len(s.Lhs) == len(s.Rhs) && held(r, root(s.Rhs[i], info), s.Pos())
 				r.add(info.ObjectOf(id), s.Pos(), rooted)
 			}
 		}
