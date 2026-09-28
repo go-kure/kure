@@ -117,7 +117,11 @@ body does one of:
   counts only when that local came from the field it is written back to: a collection
   the helper builds itself and then assigns replaces the field's contents, which is
   not adding to it (reading `o.Spec.Groups[k]` and writing it to `o.Spec.Items`
-  replaces `Items` and is refused);
+  replaces `Items` and is refused). Every value the local takes from the caller's
+  object counts, however it is spelled (a parenthesised name, a slice, conversion,
+  comma-ok read or range clause over another field), and an append into the local
+  must extend the local itself or the field it is written back to:
+  `items = append(o.Spec.Rows[0], s)` or `append([]string{}, s)` is refused;
 - **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
   intermediate before assigning through it is the same thing);
 - **(c)** constructs an upstream struct literal setting two or more fields, or a

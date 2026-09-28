@@ -1065,6 +1065,115 @@ func AddItemTwoWriteBacks(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
+// inadmissible: the same with the matching source first
+func AddItemReassignedCrossFieldLast(o *Obj, s string) {
+	items := o.Spec.Items
+	items = o.Spec.Rows[0]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the same with the matching write-back first
+func AddItemTwoWriteBacksLast(o *Obj, s string) {
+	items := o.Spec.Items
+	items = append(items, s)
+	o.Spec.Items = items
+	o.Spec.Rows[0] = items
+}
+
+// inadmissible: a parenthesised reassignment is a source too
+func AddItemParenReassignedCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	(items) = o.Spec.Rows[0]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: so is one of several names assigned together
+func AddItemParenMultiReassigned(o *Obj, s string) {
+	items := o.Spec.Items
+	(items), _ = o.Spec.Rows[0], 0
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: a declared local from another field, parenthesised
+func AddItemVarParenCrossField(o *Obj, s string) {
+	var items = (o.Spec.Rows[0])
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the append extends another field, not the local
+func AddItemAppendCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	items = append(o.Spec.Rows[0], s)
+	o.Spec.Items = items
+}
+
+// class a: the append extends the field the local is written back to
+func AddItemAppendWrittenBackField(o *Obj, s string) {
+	items := o.Spec.Items
+	items = append(o.Spec.Items, s)
+	o.Spec.Items = items
+}
+
+// class a: a nested append still extends the local itself
+func AddItemsNestedAppend(o *Obj, a, b string) {
+	items := o.Spec.Items
+	items = append(append(items, a), b)
+	o.Spec.Items = items
+}
+
+// inadmissible: the append extends a collection the helper built
+func AddItemAppendFresh(o *Obj, s string) {
+	items := o.Spec.Items
+	items = append([]string{}, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: a slice of another field is a source
+func AddItemSliceReassignedCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	items = o.Spec.Rows[0][:]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: so is a conversion of another field
+func AddItemConvertedReassignedCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	items = []string(o.Spec.Rows[0])
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: so is a local holding a slice of another field
+func AddItemCopiedSliceCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	rows := o.Spec.Rows[0][:]
+	items = rows
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: so is a comma-ok read of another field
+func AddItemCommaOkReassignedCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	items, _ = o.Spec.Groups["a"]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: so is a range clause over another field
+func AddItemRangeReassignedCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	for _, items = range o.Spec.Rows {
+	}
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
 // class a: the local goes back to the element it was read from
 func AddGroupItemViaLocal(o *Obj, k, s string) {
 	if o.Spec.Groups == nil {
@@ -1354,11 +1463,26 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemFromParam":            Inadmissible,
 		"AddItemReassignedCrossField": Inadmissible,
 		"AddItemTwoWriteBacks":        Inadmissible,
-		"AddGroupItemViaLocal":        Append,
-		"AddItemViaVarLocal":          Append,
-		"AddGroupItemCrossKey":        Inadmissible,
-		"AddGroupItemLiteralKeys":     Inadmissible,
-		"AddGroupItemConstKey":        Append,
+		// Every value the local is assigned from, however spelled.
+		"AddItemReassignedCrossFieldLast":      Inadmissible,
+		"AddItemTwoWriteBacksLast":             Inadmissible,
+		"AddItemParenReassignedCrossField":     Inadmissible,
+		"AddItemParenMultiReassigned":          Inadmissible,
+		"AddItemVarParenCrossField":            Inadmissible,
+		"AddItemAppendCrossField":              Inadmissible,
+		"AddItemAppendWrittenBackField":        Append,
+		"AddItemsNestedAppend":                 Append,
+		"AddItemAppendFresh":                   Inadmissible,
+		"AddItemSliceReassignedCrossField":     Inadmissible,
+		"AddItemConvertedReassignedCrossField": Inadmissible,
+		"AddItemCopiedSliceCrossField":         Inadmissible,
+		"AddItemCommaOkReassignedCrossField":   Inadmissible,
+		"AddItemRangeReassignedCrossField":     Inadmissible,
+		"AddGroupItemViaLocal":                 Append,
+		"AddItemViaVarLocal":                   Append,
+		"AddGroupItemCrossKey":                 Inadmissible,
+		"AddGroupItemLiteralKeys":              Inadmissible,
+		"AddGroupItemConstKey":                 Append,
 		// A conversion, a parenthesised index, a struct or array copy (#918).
 		"SetReplicasConvertedInc":      Inadmissible,
 		"SetReplicasClonedInc":         Pointer,
@@ -1456,6 +1580,19 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasConvertedInc":      "value the caller did not supply to (*p)",
 		"AddLabelExpandedParenIndex":   "value the caller did not supply to o.Labels[k]",
 		"SetReplicasRangeHolderConcat": "value the caller did not supply to h.Items[0]",
+		// The matching source or write-back first, then every spelling.
+		"AddItemReassignedCrossFieldLast":      "read from o.Spec.Rows[0], back to o.Spec.Items",
+		"AddItemTwoWriteBacksLast":             "read from o.Spec.Items, back to o.Spec.Rows[0]",
+		"AddItemParenReassignedCrossField":     "read from o.Spec.Rows[0], back to o.Spec.Items",
+		"AddItemParenMultiReassigned":          "read from o.Spec.Rows[0], back to o.Spec.Items",
+		"AddItemVarParenCrossField":            "read from (o.Spec.Rows[0]), back to o.Spec.Items",
+		"AddItemAppendCrossField":              "read from o.Spec.Rows[0], back to o.Spec.Items",
+		"AddItemAppendFresh":                   "read from []string{}, back to o.Spec.Items",
+		"AddItemSliceReassignedCrossField":     "read from o.Spec.Rows[0][:], back to o.Spec.Items",
+		"AddItemConvertedReassignedCrossField": "read from []string(o.Spec.Rows[0]), back to o.Spec.Items",
+		"AddItemCopiedSliceCrossField":         "read from rows, back to o.Spec.Items",
+		"AddItemCommaOkReassignedCrossField":   `read from o.Spec.Groups["a"], back to o.Spec.Items`,
+		"AddItemRangeReassignedCrossField":     "read from o.Spec.Rows, back to o.Spec.Items",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
