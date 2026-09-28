@@ -1174,6 +1174,46 @@ func AddItemRangeReassignedCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
+// inadmissible: a multi-assignment reads every value before assigning any name
+func AddItemMultiAssignedCrossField(o *Obj, s string) {
+	items := o.Spec.Items
+	rows := o.Spec.Rows[0][:]
+	items, rows = rows, o.Spec.Items
+	items = append(items, s)
+	o.Spec.Items = items
+	_ = rows
+}
+
+// inadmissible: the same with the local's name last
+func AddItemMultiAssignedCrossFieldLast(o *Obj, s string) {
+	items := o.Spec.Items
+	rows := o.Spec.Rows[0][:]
+	rows, items = o.Spec.Items, rows
+	items = append(items, s)
+	o.Spec.Items = items
+	_ = rows
+}
+
+// inadmissible: swapping two locals read from the field copies a local
+func AddItemSwappedSameField(o *Obj, s string) {
+	items := o.Spec.Items
+	other := o.Spec.Items
+	items, other = other, items
+	items = append(items, s)
+	o.Spec.Items = items
+	_ = other
+}
+
+// inadmissible: the swap leaves tmp holding the caller's spec
+func AddItemSwapHidesWrite(o *Obj, s string) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	spec := &o.Spec
+	tmp := &Spec{}
+	spec, tmp = tmp, spec
+	tmp.Name = "x"
+	_ = spec
+}
+
 // class a: the local goes back to the element it was read from
 func AddGroupItemViaLocal(o *Obj, k, s string) {
 	if o.Spec.Groups == nil {
@@ -1478,6 +1518,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemCopiedSliceCrossField":         Inadmissible,
 		"AddItemCommaOkReassignedCrossField":   Inadmissible,
 		"AddItemRangeReassignedCrossField":     Inadmissible,
+		"AddItemMultiAssignedCrossField":       Inadmissible,
+		"AddItemMultiAssignedCrossFieldLast":   Inadmissible,
+		"AddItemSwappedSameField":              Inadmissible,
+		"AddItemSwapHidesWrite":                Inadmissible,
 		"AddGroupItemViaLocal":                 Append,
 		"AddItemViaVarLocal":                   Append,
 		"AddGroupItemCrossKey":                 Inadmissible,
@@ -1593,6 +1637,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemCopiedSliceCrossField":         "read from rows, back to o.Spec.Items",
 		"AddItemCommaOkReassignedCrossField":   `read from o.Spec.Groups["a"], back to o.Spec.Items`,
 		"AddItemRangeReassignedCrossField":     "read from o.Spec.Rows, back to o.Spec.Items",
+		"AddItemMultiAssignedCrossField":       "read from rows, back to o.Spec.Items",
+		"AddItemMultiAssignedCrossFieldLast":   "read from rows, back to o.Spec.Items",
+		"AddItemSwappedSameField":              "read from other, back to o.Spec.Items",
+		"AddItemSwapHidesWrite":                "bare write to tmp.Name",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)

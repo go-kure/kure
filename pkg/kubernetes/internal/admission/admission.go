@@ -120,8 +120,10 @@
 // legitimate helper shows up as inadmissible rather than slipping through.
 // Its dataflow is bounded to what is described above; it does not follow a
 // conditionally created alias (a local assigned a parameter inside a branch),
-// calls other than append and conversions, or aliases created any other way.
-// A helper written
+// calls other than append and conversions, or aliases created any other way,
+// and a local read from the field and then reassigned to a collection the
+// helper built (items = []string{} outside a nil-init guard) is not yet
+// detected (#921). A helper written
 // to evade it is caught by its own unit test and by review, not by this
 // package.
 package admission
@@ -524,7 +526,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	// replaces at least one of them. A local that was never rooted, or is not
 	// written back after the op, falls through to the bare write and extra
 	// checks below.
-	inputs := classAInputs(fn, info, rooted, mayReach)
+	inputs := classAInputs(fn, info, mayReach)
 	var crossField []string
 	for obj, opPos := range localOps {
 		backs := writtenBack[obj]
@@ -1242,8 +1244,8 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 }
 
 // classAInputs returns, per local, the values it is declared or assigned from
-// that may hold a caller's collection and that rootedObjects does not record
-// as a rooted source, which class a compares with the fields the local is
+// that may hold a caller's collection, including those rootedObjects records
+// as rooted sources, which class a compares with the fields the local is
 // written back to as well. They are the input of an append into the local,
 // seen through nested appends, unless it is the local itself
 // (items = append(o.Spec.Rows[0], s), and a collection the helper built,
@@ -1254,12 +1256,13 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 // o.Spec.Groups[k]; for _, items = range o.Spec.Rows). Any other fresh value
 // (items = []string{}, the nil-init) is not an input. Destinations are
 // matched with their parentheses removed, as in trackRoots.
-func classAInputs(fn *ast.FuncDecl, info *types.Info, rooted, mayReach roots) map[types.Object][]ast.Expr {
+func classAInputs(fn *ast.FuncDecl, info *types.Info, mayReach roots) map[types.Object][]ast.Expr {
 	inputs := map[types.Object][]ast.Expr{}
-	// record notes v as an input of the local id at pos; strict says whether
-	// rootedObjects saw v as this name's value, and so already recorded it as
-	// a rooted source when its root was rooted there.
-	record := func(id *ast.Ident, v ast.Expr, pos token.Pos, strict bool) {
+	// record notes v as an input of the local id at pos. A value rootedObjects
+	// also recorded as a rooted source is kept: matching it twice changes
+	// nothing, and skipping it by its root's state at pos would read that
+	// state after the statement (items, rows = rows, o.Spec.Items).
+	record := func(id *ast.Ident, v ast.Expr, pos token.Pos) {
 		obj := info.ObjectOf(id)
 		if obj == nil || v == nil {
 			return
@@ -1268,9 +1271,6 @@ func classAInputs(fn *ast.FuncDecl, info *types.Info, rooted, mayReach roots) ma
 			if base := appendBase(v, info); !sameExpr(base, id, info) {
 				inputs[obj] = append(inputs[obj], base)
 			}
-			return
-		}
-		if strict && rooted.at(rootObj(v, info), pos) {
 			return
 		}
 		if mayReach.rootedBy(mayReachObj(v, info), pos) {
@@ -1291,7 +1291,7 @@ func classAInputs(fn *ast.FuncDecl, info *types.Info, rooted, mayReach roots) ma
 				if vs, ok := spec.(*ast.ValueSpec); ok {
 					for i, id := range vs.Names {
 						v := assignedValue(vs.Values, len(vs.Names), i, info, true)
-						record(id, v, s.Pos(), len(vs.Values) == len(vs.Names))
+						record(id, v, s.Pos())
 					}
 				}
 			}
@@ -1299,13 +1299,13 @@ func classAInputs(fn *ast.FuncDecl, info *types.Info, rooted, mayReach roots) ma
 			for i, lhs := range s.Lhs {
 				if id, ok := ast.Unparen(lhs).(*ast.Ident); ok {
 					v := assignedValue(s.Rhs, len(s.Lhs), i, info, true)
-					record(id, v, s.Pos(), len(s.Rhs) == len(s.Lhs))
+					record(id, v, s.Pos())
 				}
 			}
 		case *ast.RangeStmt:
 			for _, x := range []ast.Expr{s.Key, s.Value} {
 				if id, ok := ast.Unparen(x).(*ast.Ident); ok {
-					record(id, s.X, s.Pos(), false)
+					record(id, s.X, s.Pos())
 				}
 			}
 		}
@@ -1362,6 +1362,20 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 		reaches = holdsReference
 	}
 	r := roots{}
+	// assign records one statement's names (nil for a destination that is not
+	// a local) from values. Go evaluates every value before it assigns any
+	// name (items, rows = rows, items swaps them), so all are read in the
+	// state before the statement and the events are added after.
+	assign := func(objs []types.Object, values []ast.Expr, pos token.Pos) {
+		events := make([]rootEvent, len(objs))
+		for i := range objs {
+			v := assignedValue(values, len(objs), i, info, copies)
+			events[i] = rootEvent{pos: pos, rooted: v != nil && held(r, root(v, info), pos), src: v}
+		}
+		for i, e := range events {
+			r.add(objs[i], e.pos, e.rooted, e.src)
+		}
+	}
 	for _, field := range fn.Type.Params.List {
 		for _, name := range field.Names {
 			obj := info.Defs[name]
@@ -1388,22 +1402,20 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 				if !ok {
 					continue
 				}
+				objs := make([]types.Object, len(vs.Names))
 				for i, id := range vs.Names {
-					v := assignedValue(vs.Values, len(vs.Names), i, info, copies)
-					rooted := v != nil && held(r, root(v, info), s.Pos())
-					r.add(info.Defs[id], s.Pos(), rooted, v)
+					objs[i] = info.Defs[id]
 				}
+				assign(objs, vs.Values, s.Pos())
 			}
 		case *ast.AssignStmt:
+			objs := make([]types.Object, len(s.Lhs))
 			for i, lhs := range s.Lhs {
-				id, ok := ast.Unparen(lhs).(*ast.Ident)
-				if !ok {
-					continue
+				if id, ok := ast.Unparen(lhs).(*ast.Ident); ok {
+					objs[i] = info.ObjectOf(id)
 				}
-				v := assignedValue(s.Rhs, len(s.Lhs), i, info, copies)
-				rooted := v != nil && held(r, root(v, info), s.Pos())
-				r.add(info.ObjectOf(id), s.Pos(), rooted, v)
 			}
+			assign(objs, s.Rhs, s.Pos())
 		case *ast.RangeStmt:
 			// Each key and element is a copy, which shares its referent with
 			// the ranged collection when it holds a reference, directly or
