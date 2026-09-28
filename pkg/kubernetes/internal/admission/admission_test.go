@@ -43,6 +43,8 @@ type Holder struct {
 
 type Nest struct{ H Holder }
 
+type Items []string
+
 type Box struct {
 	Payload any
 	Ch      chan string
@@ -65,7 +67,7 @@ func AddLabel(o *Obj, k, v string) {
 	o.Labels[k] = v
 }
 
-// class a through a local map variable
+// inadmissible: class a inserts into the field itself, not into a local map
 func AddLabelViaLocal(o *Obj, k, v string) {
 	labels := o.Labels
 	if labels == nil {
@@ -368,36 +370,37 @@ func SetSpecNestedNil(o *Obj, n string) {
 	o.Spec = Spec{Nested: Inner{A: n, Ref: Ref{Name: n}}, Ref: (*Ref)(nil)}
 }
 
-// class a through a local slice variable
+// inadmissible: class a appends to the field itself, not to a local slice
 func AddItemViaLocal(o *Obj, s string) {
 	items := o.Spec.Items
 	items = append(items, s)
 	o.Spec.Items = items
 }
 
-// class a through a parenthesised local map index, written back
+// inadmissible: the same through a parenthesised local map index
 func AddLabelParenLocal(o *Obj, k, v string) {
 	labels := o.Labels
 	(labels)[k] = v
 	o.Labels = labels
 }
 
-// inadmissible: the map is the helper's own, so the write-back replaces the
-// caller's labels instead of adding to them
+// inadmissible: an insert into the helper's own map, whose write-back replaces
+// the caller's labels instead of adding to them
 func AddLabelFreshMap(o *Obj, k, v string) {
 	labels := map[string]string{}
 	labels[k] = v
 	o.Labels = labels
 }
 
-// inadmissible: the append is inside a function literal the helper never
-// calls, so no caller ever sees it
+// inadmissible: a function literal's body is not checked, so a helper holding
+// one is refused whether or not it calls it
 func AddItemInClosure(o *Obj, s string) {
 	f := func() { o.Spec.Items = append(o.Spec.Items, s) }
 	_ = f
 }
 
-// class a through a pointer alias of a field
+// inadmissible: class a extends a field path of the parameter itself, not of
+// an alias
 func AddItemViaAlias(o *Obj, s string) {
 	spec := &o.Spec
 	spec.Items = append(spec.Items, s)
@@ -409,7 +412,7 @@ func SetReplicasViaAlias(o *Obj, n int32) {
 	obj.Spec.Replicas = &n
 }
 
-// inadmissible: the write-back precedes the append, so the appended slice is lost
+// inadmissible: an append into a local, here after its write-back
 func AddItemWriteBackFirst(o *Obj, s string) {
 	items := o.Spec.Items
 	o.Spec.Items = items
@@ -462,7 +465,7 @@ func SetRefAfterAlias(o *Obj, n string) {
 	tmp.Spec.Ref = &Ref{Name: n}
 }
 
-// inadmissible: the appended local and the written-back local are different objects
+// inadmissible: an append into a local, here not the local written back
 func AddItemShadowedLocal(o *Obj, s string) {
 	items := o.Spec.Items
 	{
@@ -487,7 +490,7 @@ func AddLabelLocalOnly(o *Obj, k, v string) {
 	_ = labels
 }
 
-// inadmissible: a local map op plus an unrelated bare write is still a forwarder
+// inadmissible: an insert into a local map, beside a forwarder
 func AddLabelLocalThenName(o *Obj, k, v string) {
 	labels := map[string]string{}
 	labels[k] = v
@@ -538,7 +541,7 @@ func AddItemIfSet(o *Obj, s string) {
 	}
 }
 
-// inadmissible: the insert into the local runs only on some paths
+// inadmissible: an insert into a local, here also only on some paths
 func AddLabelIfSetViaLocal(o *Obj, k, v string) {
 	labels := o.Labels
 	if v != "" {
@@ -904,7 +907,7 @@ func SetReplicasCommaOkRange(o *Obj, k string, xs []string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible: a collection read from one field replaces another
+// inadmissible: an append into a local, here read comma-ok from another field
 func AddItemCommaOkCrossField(o *Obj, k, s string) {
 	items, _ := o.Spec.Groups[k]
 	items = append(items, s)
@@ -934,7 +937,8 @@ func AddLabelExpandedParen(o *Obj, k, v string) {
 	(o.Labels[k]) = o.Labels[k] + v
 }
 
-// class b: an expanded read-modify-write of a temporary map reaches no caller
+// inadmissible: an insert into a temporary map reaches no caller, but is not
+// class a's statement either
 func SetReplicasTempExpandedConcat(o *Obj, k, v string, n int32) {
 	m := map[string]string{}
 	m[k] = m[k] + v
@@ -974,7 +978,7 @@ func SetReplicasAppendAliasConcat(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// class b: an append to a temporary reaches no caller
+// inadmissible: the same for an append to a temporary
 func SetReplicasAppendTempConcat(o *Obj, s string, n int32) {
 	items := append([]string{}, s)
 	items[0] += s
@@ -1033,7 +1037,7 @@ func SetReplicasCommaOkTemp(o *Obj, k, s string, n int32) {
 // clonePtr is not a sugar helper: a call the classifier does not follow.
 func clonePtr(p *int32) *int32 { c := *p; return &c }
 
-// inadmissible: a collection read from one field replaces another
+// inadmissible: an append into a local, here read from another field
 func AddItemCrossField(o *Obj, k, s string) {
 	items := o.Spec.Groups[k]
 	items = append(items, s)
@@ -1047,13 +1051,13 @@ func AddItemRowCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: the caller's own slice replaces the field
+// inadmissible: an append into a slice parameter, which replaces the field
 func AddItemFromParam(o *Obj, items []string, s string) {
 	items = append(items, s)
 	o.Spec.Items = items
 }
 
-// inadmissible: one of the local's sources is another field
+// inadmissible: an append into a local, one of whose sources is another field
 func AddItemReassignedCrossField(o *Obj, s string) {
 	items := o.Spec.Rows[0]
 	items = o.Spec.Items
@@ -1061,7 +1065,7 @@ func AddItemReassignedCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: one of the local's write-backs is another field
+// inadmissible: an append into a local, written back to two fields
 func AddItemTwoWriteBacks(o *Obj, s string) {
 	items := o.Spec.Items
 	items = append(items, s)
@@ -1085,7 +1089,7 @@ func AddItemTwoWriteBacksLast(o *Obj, s string) {
 	o.Spec.Rows[0] = items
 }
 
-// inadmissible: a parenthesised reassignment is a source too
+// inadmissible: the same with a parenthesised reassignment
 func AddItemParenReassignedCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	(items) = o.Spec.Rows[0]
@@ -1093,7 +1097,7 @@ func AddItemParenReassignedCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: so is one of several names assigned together
+// inadmissible: the same with one of several names assigned together
 func AddItemParenMultiReassigned(o *Obj, s string) {
 	items := o.Spec.Items
 	(items), _ = o.Spec.Rows[0], 0
@@ -1108,35 +1112,36 @@ func AddItemVarParenCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: the append extends another field, not the local
+// inadmissible: an append into a local, extending another field
 func AddItemAppendCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	items = append(o.Spec.Rows[0], s)
 	o.Spec.Items = items
 }
 
-// class a: the append extends the field the local is written back to
+// inadmissible: an append into a local, even one extending the field it is
+// written back to
 func AddItemAppendWrittenBackField(o *Obj, s string) {
 	items := o.Spec.Items
 	items = append(o.Spec.Items, s)
 	o.Spec.Items = items
 }
 
-// class a: a nested append still extends the local itself
+// inadmissible: a nested append into a local
 func AddItemsNestedAppend(o *Obj, a, b string) {
 	items := o.Spec.Items
 	items = append(append(items, a), b)
 	o.Spec.Items = items
 }
 
-// inadmissible: the append extends a collection the helper built
+// inadmissible: an append into a local, extending a collection the helper built
 func AddItemAppendFresh(o *Obj, s string) {
 	items := o.Spec.Items
 	items = append([]string{}, s)
 	o.Spec.Items = items
 }
 
-// inadmissible: a slice of another field is a source
+// inadmissible: an append into a local reassigned a slice of another field
 func AddItemSliceReassignedCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	items = o.Spec.Rows[0][:]
@@ -1144,7 +1149,7 @@ func AddItemSliceReassignedCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: so is a conversion of another field
+// inadmissible: the same with a conversion of another field
 func AddItemConvertedReassignedCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	items = []string(o.Spec.Rows[0])
@@ -1152,7 +1157,7 @@ func AddItemConvertedReassignedCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: so is a local holding a slice of another field
+// inadmissible: the same with a local holding a slice of another field
 func AddItemCopiedSliceCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	rows := o.Spec.Rows[0][:]
@@ -1161,7 +1166,7 @@ func AddItemCopiedSliceCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: so is a comma-ok read of another field
+// inadmissible: the same with a comma-ok read of another field
 func AddItemCommaOkReassignedCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	items, _ = o.Spec.Groups["a"]
@@ -1169,7 +1174,7 @@ func AddItemCommaOkReassignedCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: so is a range clause over another field
+// inadmissible: the same with a range clause over another field
 func AddItemRangeReassignedCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	for _, items = range o.Spec.Rows {
@@ -1178,7 +1183,8 @@ func AddItemRangeReassignedCrossField(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: a multi-assignment reads every value before assigning any name
+// inadmissible: the same with a multi-assignment, which reads every value
+// before assigning any name
 func AddItemMultiAssignedCrossField(o *Obj, s string) {
 	items := o.Spec.Items
 	rows := o.Spec.Rows[0][:]
@@ -1198,7 +1204,7 @@ func AddItemMultiAssignedCrossFieldLast(o *Obj, s string) {
 	_ = rows
 }
 
-// inadmissible: swapping two locals read from the field copies a local
+// inadmissible: the same with two locals read from the field and swapped
 func AddItemSwappedSameField(o *Obj, s string) {
 	items := o.Spec.Items
 	other := o.Spec.Items
@@ -1218,8 +1224,8 @@ func AddItemSwapHidesWrite(o *Obj, s string) {
 	_ = spec
 }
 
-// inadmissible: a write-back that is not class a is a bare write, so a
-// pointer write alongside does not hide it (comma-ok read of another field)
+// inadmissible: an append into a local is refused beside a pointer write too
+// (comma-ok read of another field)
 func SetReplicasCommaOkCrossField(o *Obj, k, s string, n int32) {
 	items, _ := o.Spec.Groups[k]
 	items = append(items, s)
@@ -1251,8 +1257,7 @@ func SetReplicasFreshWriteBack(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible: the same with a map the helper built, which carries no
-// caller value until the insert
+// inadmissible: the same with an insert into a map the helper built
 func SetReplicasFreshMapWriteBack(o *Obj, k, v string, n int32) {
 	labels := map[string]string{}
 	labels[k] = v
@@ -1260,8 +1265,7 @@ func SetReplicasFreshMapWriteBack(o *Obj, k, v string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible: a later class-a write-back to the same field does not hide
-// the earlier one
+// inadmissible: the same with two locals written back to one field
 func SetReplicasOverwrittenWriteBack(o *Obj, s string, n int32) {
 	items := []string{}
 	items = append(items, s)
@@ -1272,7 +1276,7 @@ func SetReplicasOverwrittenWriteBack(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible: so is one written through a pointer the body initialised
+// inadmissible: the same written back through a pointer the body initialised
 func SetHoldCommaOkCrossField(o *Obj, k, s string) {
 	if o.Spec.Hold == nil {
 		o.Spec.Hold = &Holder{}
@@ -1282,7 +1286,7 @@ func SetHoldCommaOkCrossField(o *Obj, k, s string) {
 	o.Spec.Hold.Items = items
 }
 
-// inadmissible: so is a map the helper built, written through that pointer
+// inadmissible: the same with a map the helper built
 func SetHoldFreshMapWriteBack(o *Obj, k, v string) {
 	if o.Spec.Hold == nil {
 		o.Spec.Hold = &Holder{}
@@ -1300,7 +1304,8 @@ func SetRefNameComputed(o *Obj, n string) {
 	o.Spec.Ref.Name = n + n
 }
 
-// append: a class-a local written back through that pointer stays exempt
+// inadmissible: an append into a local read through a pointer the body
+// initialised, and written back to the same field
 func AddHoldItemViaLocal(o *Obj, s string) {
 	if o.Spec.Hold == nil {
 		o.Spec.Hold = &Holder{}
@@ -1310,7 +1315,7 @@ func AddHoldItemViaLocal(o *Obj, s string) {
 	o.Spec.Hold.Items = items
 }
 
-// append: a local that is class a stays exempt beside a pointer write
+// inadmissible: an append into a local, beside a pointer write
 func AddItemViaLocalAndReplicas(o *Obj, s string, n int32) {
 	items := o.Spec.Items
 	items = append(items, s)
@@ -1318,7 +1323,8 @@ func AddItemViaLocalAndReplicas(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// class a: the local goes back to the element it was read from
+// inadmissible: an append into a local read from a map element, written back
+// to that element
 func AddGroupItemViaLocal(o *Obj, k, s string) {
 	if o.Spec.Groups == nil {
 		o.Spec.Groups = map[string][]string{}
@@ -1328,7 +1334,8 @@ func AddGroupItemViaLocal(o *Obj, k, s string) {
 	o.Spec.Groups[k] = items
 }
 
-// class a: a declared local from the field it is written back to
+// inadmissible: an append into a declared local, written back to the field it
+// came from
 func AddItemViaVarLocal(o *Obj, s string) {
 	var items = o.Spec.Items
 	items = append(items, s)
@@ -1393,7 +1400,7 @@ func SetReplicasArrayParamConcat(o *Obj, a [1][]string, v string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible: the local goes back under another key
+// inadmissible: an append into a local, written back under another key
 func AddGroupItemCrossKey(o *Obj, k, j, s string) {
 	if o.Spec.Groups == nil {
 		o.Spec.Groups = map[string][]string{}
@@ -1403,7 +1410,7 @@ func AddGroupItemCrossKey(o *Obj, k, j, s string) {
 	o.Spec.Groups[j] = items
 }
 
-// inadmissible: two keys that print alike are not the same key
+// inadmissible: the same with two keys that print alike
 func AddGroupItemLiteralKeys(o *Obj, s string) {
 	if o.Spec.Groups == nil {
 		o.Spec.Groups = map[string][]string{}
@@ -1413,7 +1420,7 @@ func AddGroupItemLiteralKeys(o *Obj, s string) {
 	o.Spec.Groups[string([]byte{'b'})] = items
 }
 
-// class a: the same constant key
+// inadmissible: the same with one constant key
 func AddGroupItemConstKey(o *Obj, s string) {
 	if o.Spec.Groups == nil {
 		o.Spec.Groups = map[string][]string{}
@@ -1422,6 +1429,444 @@ func AddGroupItemConstKey(o *Obj, s string) {
 	items = append(items, s)
 	o.Spec.Groups["a"] = items
 }
+
+// inadmissible: the append extends another field, with no local between
+func AddItemFromRowDirect(o *Obj, s string) { o.Spec.Items = append(o.Spec.Rows[0], s) }
+
+// inadmissible: the append extends a local read from another field
+func AddItemLocalBase(o *Obj, s string) {
+	items := o.Spec.Rows[0]
+	o.Spec.Items = append(items, s)
+}
+
+// inadmissible: the append extends a local, even one read from the same field
+func AddItemSameFieldLocalBase(o *Obj, s string) {
+	items := o.Spec.Items
+	o.Spec.Items = append(items, s)
+}
+
+// inadmissible: an append into a local read comma-ok, written back under
+// another key
+func AddGroupItemCommaOkCrossKey(o *Obj, k, j, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	items, _ := o.Spec.Groups[k]
+	items = append(items, s)
+	o.Spec.Groups[j] = items
+}
+
+// inadmissible: the conversion written back through a pointer the body
+// initialised reads a local that may hold the target, a value the caller did
+// not supply (refused before the append into the local is)
+func SetHoldItemsConverted(o *Obj, s string) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	items := o.Spec.Rows[0]
+	items = append(items, s)
+	o.Spec.Hold.Items = Items(items)
+}
+
+// inadmissible: an append into the helper's own slice, converted on its way
+// back through a pointer the body initialised
+func SetHoldItemsFreshConverted(o *Obj, s string) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	items := []string{}
+	items = append(items, s)
+	o.Spec.Hold.Items = Items(items)
+}
+
+// inadmissible: an append into a local the helper reassigned its own slice
+func AddItemFreshReassigned(o *Obj, s string) {
+	items := o.Spec.Items
+	items = []string{}
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: an append into a local, written back after the key changed
+func AddGroupItemIndexReassigned(o *Obj, k, j, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	items := o.Spec.Groups[k]
+	items = append(items, s)
+	k = j
+	o.Spec.Groups[k] = items
+}
+
+// inadmissible: an append into a local reassigned by a comma-ok type assertion
+func AddItemTypeAssertSource(o *Obj, s string) {
+	items := o.Spec.Items
+	items, _ = o.Spec.Payload.([]string)
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the same with a comma-ok receive
+func AddItemReceiveSource(o *Obj, ch chan []string, s string) {
+	items := o.Spec.Items
+	items, _ = <-ch
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: an append into a local sliced from the field
+func AddItemFullSliceSource(o *Obj, s string) {
+	items := o.Spec.Items[:]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the same with a conversion of the field
+func AddItemConvertedSource(o *Obj, s string) {
+	items := []string(o.Spec.Items)
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the same with an append to the field
+func AddItemsAppendSource(o *Obj, a, s string) {
+	items := append(o.Spec.Items, a)
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the same with a partial slice, which drops the first item
+func AddItemPartialSliceSource(o *Obj, s string) {
+	items := o.Spec.Items[1:]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: a nested append extends the field by a constant first
+func AddItemNestedConstant(o *Obj, s string) {
+	o.Spec.Items = append(append(o.Spec.Items, "fixed"), s)
+}
+
+// inadmissible: an append of two values, one of them a constant
+func AddItemTwoValues(o *Obj, s string) { o.Spec.Items = append(o.Spec.Items, s, "fixed") }
+
+// inadmissible: a spread append splices a slice, not one value
+func AddItemsSpread(o *Obj, xs []string) { o.Spec.Items = append(o.Spec.Items, xs...) }
+
+// inadmissible: the append extends another key's element
+func AddGroupItemCrossKeyDirect(o *Obj, k, j, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	o.Spec.Groups[j] = append(o.Spec.Groups[k], s)
+}
+
+// inadmissible: the append is written through an alias of the field's parent
+func AddItemAliasMismatch(o *Obj, s string) {
+	spec := &o.Spec
+	spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: an append in a var declaration, inserted under another key
+func AddGroupItemVarAppend(o *Obj, k, j, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	var items = append(o.Spec.Groups[k], s)
+	o.Spec.Groups[j] = items
+}
+
+// inadmissible: an append sliced before it is inserted under another key
+func AddGroupItemSlicedAppend(o *Obj, k, j, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	o.Spec.Groups[j] = append(o.Spec.Groups[k], s)[:]
+}
+
+// inadmissible: an append discarded into the blank identifier, beside a
+// pointer write
+func SetReplicasBlankAppend(o *Obj, s string, n int32) {
+	_ = append(o.Spec.Items, s)
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: an append to a temporary's field, beside a pointer write
+func SetReplicasAppendTempField(o *Obj, s string, n int32) {
+	tmp := &Obj{}
+	tmp.Spec.Items = append(tmp.Spec.Items, s)
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a compound assignment into a temporary map, beside a pointer write
+func SetReplicasTempMapConcat(o *Obj, k, v string, n int32) {
+	m := map[string]string{}
+	m[k] += v
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a parenthesised append builtin still appends to a local
+func SetReplicasParenAppendLocal(o *Obj, s string, n int32) {
+	var items []string
+	items = (append)(items, s)
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a parenthesised map-index target still inserts into a local
+func SetReplicasParenMapTarget(o *Obj, k, v string, n int32) {
+	labels := map[string]string{}
+	(labels[k]) = v
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a parenthesised make builtin still fills the appended row
+func AddRowParenMakeLen(o *Obj, n int) {
+	o.Spec.Rows = append(o.Spec.Rows, (make)([]string, 1, n))
+}
+
+// inadmissible: a parenthesised local assigned nil still clears the field
+func SetRefViaParenAssignedNil(o *Obj, ref *Ref) {
+	r := ref
+	(r) = nil
+	o.Spec.Ref = r
+}
+
+// class a: a parenthesised append builtin is still the append
+func AddItemParenBuiltin(o *Obj, s string) { o.Spec.Items = (append)(o.Spec.Items, s) }
+
+// class a: a parenthesised map-index target is still the insert
+func AddLabelParenTarget(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	(o.Labels[k]) = v
+}
+
+// class b: a parenthesised local assigned a parameter carries the caller's value
+func SetRefNameViaParenLocal(o *Obj, n string) {
+	var name string
+	(name) = n
+	o.Spec.Ref = &Ref{Name: name}
+}
+
+// class a: the same constant key on both sides
+func AddGroupItemConstKeyDirect(o *Obj, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	o.Spec.Groups["a"] = append(o.Spec.Groups["a"], s)
+}
+
+// class a: a parenthesised append base is the same field
+func AddItemParenBase(o *Obj, s string) { o.Spec.Items = append((o.Spec.Items), s) }
+
+// class a: the append beside a pointer write
+func AddItemAndReplicas(o *Obj, s string, n int32) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Spec.Replicas = &n
+}
+
+// class b: an element of a temporary slice is not a map element
+func SetReplicasTempSliceExpanded(o *Obj, v string, n int32) {
+	xs := []string{"a"}
+	xs[0] = xs[0] + v
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: an increment of a temporary map's element, beside a pointer write
+func SetReplicasTempMapInc(o *Obj, k string, n int32) {
+	m := map[string]int{}
+	m[k]++
+	_ = m
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a range clause assigning a temporary map's element
+func SetReplicasTempMapRange(o *Obj, k string, xs []string, n int32) {
+	m := map[string]string{}
+	for _, m[k] = range xs {
+	}
+	_ = m
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a type parameter; the classifier reads concrete types only
+func SetReplicasGenericMap[M ~map[string]string](o *Obj, m M, k, v string, n int32) {
+	m[k] = v
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the same for an append of a converted type-parameter value
+func AddItemGeneric[S ~string](o *Obj, s S) { o.Spec.Items = append(o.Spec.Items, string(s)) }
+
+// inadmissible: a function literal the helper calls, whose body is not checked
+func SetReplicasViaClosure(o *Obj, s string, n int32) {
+	func() {
+		items := o.Spec.Rows[0]
+		items = append(items, s)
+		o.Spec.Items = items
+	}()
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the tuple re-roots the alias the append goes through
+func AddItemTupleReroot(o *Obj, s string) {
+	spec := &Spec{}
+	spec, spec.Items = &o.Spec, append(spec.Items, s)
+}
+
+// inadmissible: a tuple initialises the pointer the append goes through
+func AddItemTupleThroughInit(o *Obj, s string) {
+	o.Spec.Hold, o.Spec.Hold.Items = &Holder{}, append(o.Spec.Hold.Items, s)
+}
+
+// inadmissible: an alias that reaches the caller only on some paths
+func AddItemConditionalAlias(o *Obj, s string, ok bool) {
+	spec := &Spec{}
+	if ok {
+		spec = &o.Spec
+	}
+	spec.Items = append(spec.Items, s)
+}
+
+// inadmissible: the parameter is reassigned before the append
+func AddItemParamReassigned(o, other *Obj, s string, ok bool) {
+	if ok {
+		o = &Obj{}
+	} else {
+		o = other
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: a range clause reassigns the parameter
+func AddItemParamRanged(o *Obj, objs []*Obj, s string) {
+	for _, o = range objs {
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: the parameter's address is taken, and it is reassigned through it
+func AddItemParamAddressTaken(o *Obj, s string) {
+	p := &o
+	*p = &Obj{Spec: Spec{Name: s}}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: a struct copy's field is the helper's own
+func AddItemStructCopy(o *Obj, s string) {
+	spec := o.Spec
+	spec.Items = append(spec.Items, s)
+}
+
+// inadmissible: an element of a slice parameter is not a pointer parameter
+func AddItemSliceParam(objs []*Obj, s string) {
+	objs[0].Spec.Items = append(objs[0].Spec.Items, s)
+}
+
+// inadmissible: class a is a single append
+func AddItemTwice(o *Obj, s string) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: class a is a single insert
+func AddLabelTwice(o *Obj, k, j, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels[k] = v
+	o.Labels[j] = v
+}
+
+// inadmissible: an insert into a map parameter, beside a pointer write
+func SetReplicasMapParam(o *Obj, m map[string]string, k, v string, n int32) {
+	m[k] = v
+	o.Spec.Replicas = &n
+}
+
+// class a: an explicit dereference of the parameter
+func AddItemExplicitDeref(o *Obj, s string) {
+	(*o).Spec.Items = append((*o).Spec.Items, s)
+}
+
+// inadmissible: two keys that print alike are not the same key, with no local
+func AddGroupItemLiteralKeysDirect(o *Obj, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	o.Spec.Groups[string([]byte{'b'})] = append(o.Spec.Groups[string([]byte{'a'})], s)
+}
+
+// inadmissible: an append into a local, beside an append extending another
+// field (pins the off-target reason before the indirect one)
+func AddItemLocalThenIndirect(o *Obj, s string) {
+	items := o.Spec.Rows[0]
+	items = append(items, s)
+	o.Spec.Items = append(o.Spec.Rows[1], s)
+}
+
+// inadmissible: an append extending another field, beside an append passed as
+// an argument (indirect before stray)
+func AddItemIndirectBesideStray(o *Obj, s string) {
+	o.Spec.Items = append(o.Spec.Rows[0], s)
+	_ = len(append(o.Spec.Rows[1], s))
+}
+
+// inadmissible: an append passed as an argument, beside two appends (stray
+// before repeated)
+func AddItemStrayBesideTwice(o *Obj, s string) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Spec.Rows = append(o.Spec.Rows, []string{s})
+	_ = len(append(o.Spec.Items, s))
+}
+
+// inadmissible: two appends, beside a bare write of a computed value
+// (repeated before the bare write)
+func AddItemTwiceBesideBare(o *Obj, s string) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Spec.Name = s + s
+}
+
+// inadmissible: the map is reached through an address-of, not a field path
+func AddLabelAddrDeref(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	(*&o.Labels)[k] = v
+}
+
+// inadmissible: a key the comparison cannot equate, even spelled alike
+func AddGroupItemConvKeyDirect(o *Obj, k, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	o.Spec.Groups[string(k)] = append(o.Spec.Groups[string(k)], s)
+}
+
+// inadmissible: a parenthesised reassignment of the parameter
+func AddItemParenParamReassigned(o, other *Obj, s string) {
+	(o) = other
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: a parenthesised address-of the parameter
+func AddItemParenAddressTaken(o *Obj, s string) {
+	p := &(o)
+	*p = &Obj{Spec: Spec{Name: s}}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// inadmissible: a short variable declaration that redeclares the parameter
+func AddItemParamRedeclared(o, other *Obj, s string) {
+	o, n := other, 0
+	_ = n
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// class a: a parenthesised append value is still the append
+func AddItemParenAppendValue(o *Obj, s string) { o.Spec.Items = (append(o.Spec.Items, s)) }
 
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
@@ -1490,7 +1935,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasNilReturn":   Inadmissible,
 		"SetNameIfSet":           Inadmissible,
 		"AddLabel":               Append,
-		"AddLabelViaLocal":       Append,
+		"AddLabelViaLocal":       Inadmissible,
 		"SetReplicas":            Pointer,
 		"SetRefName":             Pointer,
 		"SetNestedRef":           Composite,
@@ -1512,11 +1957,11 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefViaInitNil":       Inadmissible,
 		"SetSpecWithNilRef":      Inadmissible,
 		"SetSpecNestedNil":       Inadmissible,
-		"AddItemViaLocal":        Append,
-		"AddLabelParenLocal":     Append,
+		"AddItemViaLocal":        Inadmissible,
+		"AddLabelParenLocal":     Inadmissible,
 		"AddLabelFreshMap":       Inadmissible,
 		"AddItemInClosure":       Inadmissible,
-		"AddItemViaAlias":        Append,
+		"AddItemViaAlias":        Inadmissible,
 		"SetReplicasViaAlias":    Pointer,
 		"AddItemWriteBackFirst":  Inadmissible,
 		"SetRefOnShadow":         Inadmissible,
@@ -1529,7 +1974,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemLocalOnly":       Inadmissible,
 		"AddLabelLocalOnly":      Inadmissible,
 		"AddLabelLocalThenName":  Inadmissible,
-		// A counted write that runs only on some paths (#751).
+		// A field write that runs only on some paths (#751).
 		"SetRefIfSet":              Inadmissible,
 		"SetNestedRefIfSet":        Inadmissible,
 		"AddItemIfSet":             Inadmissible,
@@ -1590,32 +2035,32 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelExpandedViaLocal":      Inadmissible,
 		"AddLabelExpandedParen":         Inadmissible,
 		"AddGroupItem":                  Append,
-		"SetReplicasTempExpandedConcat": Pointer,
+		"SetReplicasTempExpandedConcat": Inadmissible,
 		// Aliases: a copy of the caller's path, an append result, a range variable.
 		"AddLabelExpandedCrossAlias":   Inadmissible,
 		"AddLabelExpandedFromAlias":    Inadmissible,
 		"AddLabelFromTemp":             Append,
 		"SetReplicasAppendAliasConcat": Inadmissible,
-		"SetReplicasAppendTempConcat":  Pointer,
+		"SetReplicasAppendTempConcat":  Inadmissible,
 		"SetReplicasRangeAliasConcat":  Inadmissible,
 		"SetReplicasRangeCopyConcat":   Pointer,
 		"AddLabelFromOther":            Append,
 		"SetReplicasRangeTempConcat":   Pointer,
-		// Class a writes a local back to the field it came from (#917).
+		// An append into or insert into a local, whatever it is written back to.
 		"AddItemCrossField":           Inadmissible,
 		"AddItemRowCrossField":        Inadmissible,
 		"AddItemFromParam":            Inadmissible,
 		"AddItemReassignedCrossField": Inadmissible,
 		"AddItemTwoWriteBacks":        Inadmissible,
-		// Every value the local is assigned from, however spelled.
+		// Every spelling of such a local's sources and write-backs.
 		"AddItemReassignedCrossFieldLast":      Inadmissible,
 		"AddItemTwoWriteBacksLast":             Inadmissible,
 		"AddItemParenReassignedCrossField":     Inadmissible,
 		"AddItemParenMultiReassigned":          Inadmissible,
 		"AddItemVarParenCrossField":            Inadmissible,
 		"AddItemAppendCrossField":              Inadmissible,
-		"AddItemAppendWrittenBackField":        Append,
-		"AddItemsNestedAppend":                 Append,
+		"AddItemAppendWrittenBackField":        Inadmissible,
+		"AddItemsNestedAppend":                 Inadmissible,
 		"AddItemAppendFresh":                   Inadmissible,
 		"AddItemSliceReassignedCrossField":     Inadmissible,
 		"AddItemConvertedReassignedCrossField": Inadmissible,
@@ -1635,13 +2080,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetHoldCommaOkCrossField":             Inadmissible,
 		"SetHoldFreshMapWriteBack":             Inadmissible,
 		"SetRefNameComputed":                   Pointer,
-		"AddHoldItemViaLocal":                  Append,
-		"AddItemViaLocalAndReplicas":           Append,
-		"AddGroupItemViaLocal":                 Append,
-		"AddItemViaVarLocal":                   Append,
+		"AddHoldItemViaLocal":                  Inadmissible,
+		"AddItemViaLocalAndReplicas":           Inadmissible,
+		"AddGroupItemViaLocal":                 Inadmissible,
+		"AddItemViaVarLocal":                   Inadmissible,
 		"AddGroupItemCrossKey":                 Inadmissible,
 		"AddGroupItemLiteralKeys":              Inadmissible,
-		"AddGroupItemConstKey":                 Append,
+		"AddGroupItemConstKey":                 Inadmissible,
 		// A conversion, a parenthesised index, a struct or array copy (#918).
 		"SetReplicasConvertedInc":      Inadmissible,
 		"SetReplicasClonedInc":         Pointer,
@@ -1651,7 +2096,72 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasRangeNestConcat":   Inadmissible,
 		"SetReplicasHolderParamConcat": Inadmissible,
 		"SetReplicasArrayParamConcat":  Inadmissible,
-		"SetExempted":                  Exempt,
+		// Class a is one direct statement on a stable pointer parameter
+		// (#919, #921, #922, #923, #924).
+		"AddItemFromRowDirect":          Inadmissible,
+		"AddItemLocalBase":              Inadmissible,
+		"AddItemSameFieldLocalBase":     Inadmissible,
+		"AddGroupItemCommaOkCrossKey":   Inadmissible,
+		"SetHoldItemsConverted":         Inadmissible,
+		"SetHoldItemsFreshConverted":    Inadmissible,
+		"AddItemFreshReassigned":        Inadmissible,
+		"AddGroupItemIndexReassigned":   Inadmissible,
+		"AddItemTypeAssertSource":       Inadmissible,
+		"AddItemReceiveSource":          Inadmissible,
+		"AddItemFullSliceSource":        Inadmissible,
+		"AddItemConvertedSource":        Inadmissible,
+		"AddItemsAppendSource":          Inadmissible,
+		"AddItemPartialSliceSource":     Inadmissible,
+		"AddItemNestedConstant":         Inadmissible,
+		"AddItemTwoValues":              Inadmissible,
+		"AddItemsSpread":                Inadmissible,
+		"AddGroupItemCrossKeyDirect":    Inadmissible,
+		"AddItemAliasMismatch":          Inadmissible,
+		"AddGroupItemVarAppend":         Inadmissible,
+		"AddGroupItemSlicedAppend":      Inadmissible,
+		"SetReplicasBlankAppend":        Inadmissible,
+		"SetReplicasAppendTempField":    Inadmissible,
+		"SetReplicasTempMapConcat":      Inadmissible,
+		"SetReplicasParenAppendLocal":   Inadmissible,
+		"SetReplicasParenMapTarget":     Inadmissible,
+		"AddRowParenMakeLen":            Inadmissible,
+		"SetRefViaParenAssignedNil":     Inadmissible,
+		"AddItemParenBuiltin":           Append,
+		"AddLabelParenTarget":           Append,
+		"SetRefNameViaParenLocal":       Pointer,
+		"AddGroupItemConstKeyDirect":    Append,
+		"AddItemParenBase":              Append,
+		"AddItemAndReplicas":            Append,
+		"SetReplicasTempSliceExpanded":  Pointer,
+		"SetReplicasTempMapInc":         Inadmissible,
+		"SetReplicasTempMapRange":       Inadmissible,
+		"SetReplicasGenericMap":         Inadmissible,
+		"AddItemGeneric":                Inadmissible,
+		"SetReplicasViaClosure":         Inadmissible,
+		"AddItemTupleReroot":            Inadmissible,
+		"AddItemTupleThroughInit":       Inadmissible,
+		"AddItemConditionalAlias":       Inadmissible,
+		"AddItemParamReassigned":        Inadmissible,
+		"AddItemParamRanged":            Inadmissible,
+		"AddItemParamAddressTaken":      Inadmissible,
+		"AddItemStructCopy":             Inadmissible,
+		"AddItemSliceParam":             Inadmissible,
+		"AddItemTwice":                  Inadmissible,
+		"AddLabelTwice":                 Inadmissible,
+		"SetReplicasMapParam":           Inadmissible,
+		"AddItemExplicitDeref":          Append,
+		"AddGroupItemLiteralKeysDirect": Inadmissible,
+		"AddItemLocalThenIndirect":      Inadmissible,
+		"AddItemIndirectBesideStray":    Inadmissible,
+		"AddItemStrayBesideTwice":       Inadmissible,
+		"AddItemTwiceBesideBare":        Inadmissible,
+		"AddLabelAddrDeref":             Inadmissible,
+		"AddGroupItemConvKeyDirect":     Inadmissible,
+		"AddItemParenParamReassigned":   Inadmissible,
+		"AddItemParenAddressTaken":      Inadmissible,
+		"AddItemParamRedeclared":        Inadmissible,
+		"AddItemParenAppendValue":       Append,
+		"SetExempted":                   Exempt,
 	}
 	got := map[string]Finding{}
 	for _, f := range findings {
@@ -1699,8 +2209,8 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasByValue":    "no field write",
 		"SetReplicasNilReturn":  "returns early instead of writing",
 		"SetNameIfSet":          "returns early instead of writing",
-		"AddLabelFreshMap":      "single bare field assignment",
-		"AddItemInClosure":      "no field write",
+		"AddLabelFreshMap":      "appends to or inserts into labels[k], not a field",
+		"AddItemInClosure":      "contains a function literal",
 		"SetRefIfSet":           "writes o.Spec.Ref (under if ref != nil) only on some paths",
 		"SetRefNameNestedInit":  `(under if n != "")`,
 		"SetRefGoto":            "goto",
@@ -1732,39 +2242,120 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelExpandedFromAlias":       "value the caller did not supply to o.Labels[k]",
 		"SetReplicasAppendAliasConcat":    "value the caller did not supply to items[0]",
 		"SetReplicasRangeAliasConcat":     "value the caller did not supply to items[0]",
-		// A write-back to another field, and the #918 spellings.
-		"AddItemCrossField":            "read from o.Spec.Groups[k], back to o.Spec.Items",
-		"AddItemFromParam":             "read from a parameter",
-		"AddGroupItemCrossKey":         "back to o.Spec.Groups[j]",
+		// An append into or insert into a local, and the #918 spellings.
+		"AddItemCrossField":            "appends to or inserts into items, not a field",
+		"AddItemFromParam":             "appends to or inserts into items, not a field",
+		"AddGroupItemCrossKey":         "appends to or inserts into items, not a field",
 		"SetReplicasConvertedInc":      "value the caller did not supply to (*p)",
 		"AddLabelExpandedParenIndex":   "value the caller did not supply to o.Labels[k]",
 		"SetReplicasRangeHolderConcat": "value the caller did not supply to h.Items[0]",
-		// The matching source or write-back first, then every spelling.
-		"AddItemReassignedCrossFieldLast":      "read from o.Spec.Rows[0], back to o.Spec.Items",
-		"AddItemTwoWriteBacksLast":             "read from o.Spec.Items, back to o.Spec.Rows[0]",
-		"AddItemParenReassignedCrossField":     "read from o.Spec.Rows[0], back to o.Spec.Items",
-		"AddItemParenMultiReassigned":          "read from o.Spec.Rows[0], back to o.Spec.Items",
-		"AddItemVarParenCrossField":            "read from (o.Spec.Rows[0]), back to o.Spec.Items",
-		"AddItemAppendCrossField":              "read from o.Spec.Rows[0], back to o.Spec.Items",
-		"AddItemAppendFresh":                   "read from []string{}, back to o.Spec.Items",
-		"AddItemSliceReassignedCrossField":     "read from o.Spec.Rows[0][:], back to o.Spec.Items",
-		"AddItemConvertedReassignedCrossField": "read from []string(o.Spec.Rows[0]), back to o.Spec.Items",
-		"AddItemCopiedSliceCrossField":         "read from rows, back to o.Spec.Items",
-		"AddItemCommaOkReassignedCrossField":   `read from o.Spec.Groups["a"], back to o.Spec.Items`,
-		"AddItemRangeReassignedCrossField":     "read from o.Spec.Rows, back to o.Spec.Items",
-		"AddItemMultiAssignedCrossField":       "read from rows, back to o.Spec.Items",
-		"AddItemMultiAssignedCrossFieldLast":   "read from rows, back to o.Spec.Items",
-		"AddItemSwappedSameField":              "read from other, back to o.Spec.Items",
+		// Every spelling of such a local's sources and write-backs.
+		"AddItemReassignedCrossFieldLast":      "appends to or inserts into items, not a field",
+		"AddItemTwoWriteBacksLast":             "appends to or inserts into items, not a field",
+		"AddItemParenReassignedCrossField":     "appends to or inserts into items, not a field",
+		"AddItemParenMultiReassigned":          "appends to or inserts into items, not a field",
+		"AddItemVarParenCrossField":            "appends to or inserts into items, not a field",
+		"AddItemAppendCrossField":              "appends to or inserts into items, not a field",
+		"AddItemAppendFresh":                   "appends to or inserts into items, not a field",
+		"AddItemSliceReassignedCrossField":     "appends to or inserts into items, not a field",
+		"AddItemConvertedReassignedCrossField": "appends to or inserts into items, not a field",
+		"AddItemCopiedSliceCrossField":         "appends to or inserts into items, not a field",
+		"AddItemCommaOkReassignedCrossField":   "appends to or inserts into items, not a field",
+		"AddItemRangeReassignedCrossField":     "appends to or inserts into items, not a field",
+		"AddItemMultiAssignedCrossField":       "appends to or inserts into items, not a field",
+		"AddItemMultiAssignedCrossFieldLast":   "appends to or inserts into items, not a field",
+		"AddItemSwappedSameField":              "appends to or inserts into items, not a field",
 		"AddItemSwapHidesWrite":                "bare write to tmp.Name",
-		// A write-back that is not class a is a bare write.
-		"SetReplicasCommaOkCrossField":    "bare write to o.Spec.Items",
-		"SetReplicasConvertedCrossField":  "bare write to o.Spec.Items",
-		"SetReplicasSlicedCrossField":     "bare write to o.Spec.Items",
-		"SetReplicasFreshWriteBack":       "bare write to o.Spec.Items",
-		"SetReplicasFreshMapWriteBack":    "bare write to o.Labels",
-		"SetReplicasOverwrittenWriteBack": "bare write to o.Spec.Items",
-		"SetHoldCommaOkCrossField":        "bare write to o.Spec.Hold.Items",
-		"SetHoldFreshMapWriteBack":        "bare write to o.Spec.Hold.Labels",
+		// An append into or insert into a local is refused beside any other write.
+		"SetReplicasCommaOkCrossField":    "appends to or inserts into items, not a field",
+		"SetReplicasConvertedCrossField":  "appends to or inserts into items, not a field",
+		"SetReplicasSlicedCrossField":     "appends to or inserts into items, not a field",
+		"SetReplicasFreshWriteBack":       "appends to or inserts into items, not a field",
+		"SetReplicasFreshMapWriteBack":    "appends to or inserts into labels[k], not a field",
+		"SetReplicasOverwrittenWriteBack": "appends to or inserts into items, next, not a field",
+		"SetHoldCommaOkCrossField":        "appends to or inserts into items, not a field",
+		"SetHoldFreshMapWriteBack":        "appends to or inserts into labels[k], not a field",
+		"AddLabelIfSetViaLocal":           "appends to or inserts into labels[k], not a field",
+		// The fixtures class a no longer admits.
+		"AddLabelViaLocal":              "appends to or inserts into labels[k], not a field",
+		"AddItemViaLocal":               "appends to or inserts into items, not a field",
+		"AddLabelParenLocal":            "appends to or inserts into (labels)[k], not a field",
+		"AddItemAppendWrittenBackField": "appends to or inserts into items, not a field",
+		"AddItemsNestedAppend":          "appends to or inserts into items, not a field",
+		"AddHoldItemViaLocal":           "appends to or inserts into items, not a field",
+		"AddItemViaLocalAndReplicas":    "appends to or inserts into items, not a field",
+		"AddGroupItemViaLocal":          "appends to or inserts into items, not a field",
+		"AddItemViaVarLocal":            "appends to or inserts into items, not a field",
+		"AddGroupItemConstKey":          "appends to or inserts into items, not a field",
+		"AddItemViaAlias":               "appends to or inserts into spec.Items, not a field",
+		"SetReplicasTempExpandedConcat": "appends to or inserts into m[k], not a field",
+		"SetReplicasAppendTempConcat":   "appends to or inserts into items, not a field",
+		// Class a is one direct statement on a stable pointer parameter.
+		"AddItemFromRowDirect":          "writes o.Spec.Items other than as the one target",
+		"AddItemLocalBase":              "writes o.Spec.Items other than as the one target",
+		"AddItemSameFieldLocalBase":     "writes o.Spec.Items other than as the one target",
+		"AddGroupItemCommaOkCrossKey":   "appends to or inserts into items, not a field",
+		"SetHoldItemsConverted":         "value the caller did not supply to o.Spec.Hold.Items",
+		"SetHoldItemsFreshConverted":    "appends to or inserts into items, not a field",
+		"AddItemFreshReassigned":        "appends to or inserts into items, not a field",
+		"AddGroupItemIndexReassigned":   "appends to or inserts into items, not a field",
+		"AddItemTypeAssertSource":       "appends to or inserts into items, not a field",
+		"AddItemReceiveSource":          "appends to or inserts into items, not a field",
+		"AddItemFullSliceSource":        "appends to or inserts into items, not a field",
+		"AddItemConvertedSource":        "appends to or inserts into items, not a field",
+		"AddItemsAppendSource":          "appends to or inserts into items, not a field",
+		"AddItemPartialSliceSource":     "appends to or inserts into items, not a field",
+		"AddItemNestedConstant":         "writes o.Spec.Items other than as the one target",
+		"AddItemTwoValues":              "writes o.Spec.Items other than as the one target",
+		"AddItemsSpread":                "writes o.Spec.Items other than as the one target",
+		"AddGroupItemCrossKeyDirect":    "writes o.Spec.Groups[j] other than as the one target",
+		"AddItemAliasMismatch":          "appends to or inserts into spec.Items, not a field",
+		"AddGroupItemVarAppend":         "uses append on o.Spec.Groups[k] other than",
+		"AddGroupItemSlicedAppend":      "uses append on o.Spec.Groups[k] other than",
+		"SetReplicasBlankAppend":        "appends to or inserts into _, not a field",
+		"SetReplicasAppendTempField":    "appends to or inserts into tmp.Spec.Items, not a field",
+		"SetReplicasTempMapConcat":      "appends to or inserts into m[k], not a field",
+		"SetReplicasParenAppendLocal":   "appends to or inserts into items, not a field",
+		"SetReplicasParenMapTarget":     "appends to or inserts into (labels[k]), not a field",
+		"AddRowParenMakeLen":            "value the caller did not supply to o.Spec.Rows",
+		"SetRefViaParenAssignedNil":     "assigns nil to o.Spec.Ref",
+		"AddItemParenBuiltin":           "slice append or map insert (class a)",
+		"AddLabelParenTarget":           "slice append or map insert (class a)",
+		"SetRefNameViaParenLocal":       "pointer-typed field assignment (class b)",
+		"AddGroupItemConstKeyDirect":    "slice append or map insert (class a)",
+		"AddItemParenBase":              "slice append or map insert (class a)",
+		"AddItemAndReplicas":            "slice append or map insert (class a)",
+		"SetReplicasTempSliceExpanded":  "pointer-typed field assignment (class b)",
+		"SetReplicasTempMapInc":         "appends to or inserts into m[k], not a field",
+		"SetReplicasTempMapRange":       "appends to or inserts into m[k], not a field",
+		"SetReplicasGenericMap":         "declares type parameters",
+		"AddItemGeneric":                "declares type parameters",
+		"SetReplicasViaClosure":         "contains a function literal",
+		"AddItemTupleReroot":            "appends to or inserts into spec.Items, not a field",
+		"AddItemTupleThroughInit":       "writes o.Spec.Hold.Items other than as the one target",
+		"AddItemConditionalAlias":       "appends to or inserts into spec.Items, not a field",
+		"AddItemParamReassigned":        "appends to or inserts into o.Spec.Items, not a field",
+		"AddItemParamRanged":            "appends to or inserts into o.Spec.Items, not a field",
+		"AddItemParamAddressTaken":      "appends to or inserts into o.Spec.Items, not a field",
+		"AddItemStructCopy":             "appends to or inserts into spec.Items, not a field",
+		"AddItemSliceParam":             "appends to or inserts into objs[0].Spec.Items, not a field",
+		"AddItemTwice":                  "makes 2 appends or inserts",
+		"AddLabelTwice":                 "makes 2 appends or inserts",
+		"SetReplicasMapParam":           "appends to or inserts into m[k], not a field",
+		"AddItemExplicitDeref":          "slice append or map insert (class a)",
+		"AddGroupItemLiteralKeysDirect": "writes o.Spec.Groups[string([]byte{…})] other than as the one target",
+		// Each adjacent pair of the class-a reasons, in order.
+		"AddItemLocalThenIndirect":   "appends to or inserts into items, not a field",
+		"AddItemIndirectBesideStray": "writes o.Spec.Items other than as the one target",
+		"AddItemStrayBesideTwice":    "uses append on o.Spec.Items other than",
+		"AddItemTwiceBesideBare":     "makes 2 appends or inserts",
+		// A path through &, a key it cannot equate, a parenthesised parameter.
+		"AddLabelAddrDeref":           "appends to or inserts into (*&o.Labels)[k], not a field",
+		"AddGroupItemConvKeyDirect":   "writes o.Spec.Groups[string(k)] other than as the one target",
+		"AddItemParenParamReassigned": "appends to or inserts into o.Spec.Items, not a field",
+		"AddItemParenAddressTaken":    "appends to or inserts into o.Spec.Items, not a field",
+		"AddItemParamRedeclared":      "appends to or inserts into o.Spec.Items, not a field",
+		"AddItemParenAppendValue":     "slice append or map insert (class a)",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
