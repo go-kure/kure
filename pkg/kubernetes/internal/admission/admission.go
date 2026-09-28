@@ -92,8 +92,8 @@
 // conservatively, is an append to a collection the helper built
 // (items = append([]string{}, s)). The write-back of a local the body
 // appended to or inserted into without earning class a is a bare field write,
-// whatever the local was read from, so a pointer write elsewhere in the body
-// does not admit it. Locals are tracked as type-checker
+// whatever the local was read from and even through a pointer the body
+// initialised, so a pointer write elsewhere in the body does not admit it. Locals are tracked as type-checker
 // objects, so a shadowing declaration is a different local and a name shared
 // by two blocks conflates nothing.
 //
@@ -492,15 +492,18 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			// default. Container inits (make) and writes through a pointer the
 			// body initialised belong to classes a and b respectively; a make
 			// into any other field is refused above as a default.
-			// A local carrying a caller value is kept aside (forwarded): it is
-			// a forwarder unless the body appended to or inserted into it.
+			// A local carrying a caller value, and any local written through a
+			// pointer the body initialised, is kept aside (forwarded): it counts
+			// only if the body appended to or inserted into it and class a
+			// refused it.
 			callerValue := rhsObj != nil && supplied[rhsObj]
 			_, through := throughPointer(lhsPath, ptrPaths)
 			if !isPtr && !isMapIndex(lhs, info) && !isAppend(rhs, info) && !isMake(rhs, info) &&
-				compositeOf(rhs) == nil && !through {
-				if callerValue {
+				compositeOf(rhs) == nil {
+				switch {
+				case callerValue || (through && rhsObj != nil):
 					forwarded[lhsPath] = append(forwarded[lhsPath], rhsObj)
-				} else {
+				case !through:
 					bareWrites[lhsPath] = append(bareWrites[lhsPath], rhsObj)
 				}
 			}
