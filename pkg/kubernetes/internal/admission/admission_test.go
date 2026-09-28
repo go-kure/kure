@@ -33,9 +33,13 @@ type Spec struct {
 	Groups   map[string][]string
 	Holders  []Holder
 	Nests    []Nest
+	Hold     *Holder
 }
 
-type Holder struct{ Items []string }
+type Holder struct {
+	Items  []string
+	Labels map[string]string
+}
 
 type Nest struct{ H Holder }
 
@@ -1268,6 +1272,44 @@ func SetReplicasOverwrittenWriteBack(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// inadmissible: so is one written through a pointer the body initialised
+func SetHoldCommaOkCrossField(o *Obj, k, s string) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	items, _ := o.Spec.Groups[k]
+	items = append(items, s)
+	o.Spec.Hold.Items = items
+}
+
+// inadmissible: so is a map the helper built, written through that pointer
+func SetHoldFreshMapWriteBack(o *Obj, k, v string) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	labels := map[string]string{}
+	labels[k] = v
+	o.Spec.Hold.Labels = labels
+}
+
+// class b: a computed value written through a pointer the body initialised
+func SetRefNameComputed(o *Obj, n string) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n + n
+}
+
+// append: a class-a local written back through that pointer stays exempt
+func AddHoldItemViaLocal(o *Obj, s string) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	items := o.Spec.Hold.Items
+	items = append(items, s)
+	o.Spec.Hold.Items = items
+}
+
 // append: a local that is class a stays exempt beside a pointer write
 func AddItemViaLocalAndReplicas(o *Obj, s string, n int32) {
 	items := o.Spec.Items
@@ -1590,6 +1632,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasFreshWriteBack":            Inadmissible,
 		"SetReplicasFreshMapWriteBack":         Inadmissible,
 		"SetReplicasOverwrittenWriteBack":      Inadmissible,
+		"SetHoldCommaOkCrossField":             Inadmissible,
+		"SetHoldFreshMapWriteBack":             Inadmissible,
+		"SetRefNameComputed":                   Pointer,
+		"AddHoldItemViaLocal":                  Append,
 		"AddItemViaLocalAndReplicas":           Append,
 		"AddGroupItemViaLocal":                 Append,
 		"AddItemViaVarLocal":                   Append,
@@ -1717,6 +1763,8 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasFreshWriteBack":       "bare write to o.Spec.Items",
 		"SetReplicasFreshMapWriteBack":    "bare write to o.Labels",
 		"SetReplicasOverwrittenWriteBack": "bare write to o.Spec.Items",
+		"SetHoldCommaOkCrossField":        "bare write to o.Spec.Hold.Items",
+		"SetHoldFreshMapWriteBack":        "bare write to o.Spec.Hold.Labels",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
