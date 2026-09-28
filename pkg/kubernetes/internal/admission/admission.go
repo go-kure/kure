@@ -29,15 +29,18 @@
 // assignment of anything that reaches the caller (o.Spec.Count++,
 // o.Spec.Count += n) writes a value computed from what the target held, so it
 // is such a default too, and so is a plain assignment whose value reads its
-// own target (o.Labels[k] = o.Labels[k] + v) other than as the slice an append
-// extends or as the whole value. That includes an element of a map or slice
-// reached through any chain of locals copied, sliced or appended from a
-// caller's object or bound to its elements by a range clause (labels :=
-// o.Labels; labels[k] += v; items := o.Spec.Items[:]; items, ok :=
-// o.Spec.Groups[k]; items := append(o.Spec.Items, s); for _, items := range
-// o.Spec.Groups), even when a nil-init guard may have replaced one of them
-// since, and the target read through such a local counts as read however it
-// is spelled (labels[k] = o.Labels[k] + v).
+// own target (o.Labels[k] = o.Labels[k] + v, or o.Labels[(k)]) other than as
+// the slice an append extends or as the whole value. That includes an element
+// of a map or slice reached through any chain of locals copied, sliced,
+// appended or converted from a caller's object or bound to its elements by a
+// range clause (labels := o.Labels; labels[k] += v; items := o.Spec.Items[:];
+// items, ok := o.Spec.Groups[k]; items := append(o.Spec.Items, s);
+// p := (*int32)(o.Spec.Replicas); for _, items := range o.Spec.Groups), and
+// one reached through a struct or array copy whose field holds a reference
+// (for _, h := range o.Spec.Holders; h.Items[0] += v, and the same through a
+// by-value struct or array parameter), even when a nil-init guard may have
+// replaced one of them since, and the target read through such a local
+// counts as read however it is spelled (labels[k] = o.Labels[k] + v).
 //
 // A helper that returns before writing is inadmissible whatever its body
 // does: `if obj == nil { return }` swallows the nil receiver §4 says must
@@ -75,7 +78,10 @@
 // &o.Spec; labels := o.Labels): a write into a temporary the helper built
 // itself reaches no caller-visible object and admits nothing. An append or
 // map insert into a local counts as class a only when the body assigns that
-// same local to a rooted field later in source order. Locals are tracked as
+// same local back to the same field it was read from, later in source order:
+// a local read from another field (items := o.Spec.Groups[k] written to
+// o.Spec.Items), passed in as a parameter, or written back to a second field
+// replaces that field's contents and is refused. Locals are tracked as
 // type-checker objects, so a shadowing declaration is a different local and
 // a name shared by two blocks conflates nothing.
 //
@@ -105,7 +111,8 @@
 // legitimate helper shows up as inadmissible rather than slipping through.
 // Its dataflow is bounded to what is described above; it does not follow a
 // conditionally created alias (a local assigned a parameter inside a branch),
-// calls other than append, or aliases created any other way. A helper written
+// calls other than append and conversions, or aliases created any other way.
+// A helper written
 // to evade it is caught by its own unit test and by review, not by this
 // package.
 package admission
@@ -294,11 +301,11 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		bareWrites  = map[string]types.Object{} // bare field writes -> the local assigned, if any
 		defaulted   []string                    // admitted operations carrying a value the caller did not supply
 		locals      = nilLocals(fn, info)
-		rooted      = rootedObjects(fn, info)      // parameters writes reach the caller through, by position
-		mayReach    = mayReachCaller(fn, info)     // the same, conservatively, for read-modify-write targets
-		supplied    = callerValues(fn, info)       // parameters and locals carrying one, for value provenance
-		localOps    = map[types.Object]token.Pos{} // local -> first append or map insert into it
-		writtenBack = map[types.Object]token.Pos{} // local -> last assignment of it to a field
+		rooted      = rootedObjects(fn, info)        // parameters writes reach the caller through, by position
+		mayReach    = mayReachCaller(fn, info)       // the same, conservatively, for read-modify-write targets
+		supplied    = callerValues(fn, info)         // parameters and locals carrying one, for value provenance
+		localOps    = map[types.Object]token.Pos{}   // local -> first append or map insert into it
+		writtenBack = map[types.Object][]writeBack{} // local -> every assignment of it to a field
 	)
 	// reachesCaller reports whether a write to x at pos may change something
 	// the caller can see: a field, a dereference or an indexed element
@@ -480,7 +487,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 				continue
 			}
 			if rhsObj != nil {
-				writtenBack[rhsObj] = s.Pos()
+				writtenBack[rhsObj] = append(writtenBack[rhsObj], writeBack{pos: s.Pos(), lhs: lhs})
 			}
 			if nilClear == "" && isNillable(info.TypeOf(lhs)) && isNilValue(rhs, info, locals) {
 				nilClear = types.ExprString(lhs)
@@ -501,12 +508,24 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	})
 	// A local counts for class a only when it came from the field it is
 	// written back to. A collection the helper made itself replaces whatever
-	// the field held, which is not adding to it.
+	// the field held, which is not adding to it; so does one read from another
+	// field or passed in by the caller (crossField), and a local written back
+	// to two fields replaces at least one of them. A local that was never
+	// rooted, or is not written back after the op, falls through to the bare
+	// write and extra checks below.
+	var crossField []string
 	for obj, opPos := range localOps {
-		if back, ok := writtenBack[obj]; ok && back > opPos && rooted.everRooted(obj) {
-			appendOrMap = true
+		backs := writtenBack[obj]
+		if len(backs) == 0 || backs[len(backs)-1].pos <= opPos || !rooted.everRooted(obj) {
+			continue
 		}
+		if mismatch := sourceMismatch(rooted.sources(obj), backs, info); mismatch != "" {
+			crossField = append(crossField, obj.Name()+", "+mismatch)
+			continue
+		}
+		appendOrMap = true
 	}
+	sort.Strings(crossField)
 	// A bare write is one the admitted operation does not cover: neither the
 	// write-back of a local the body appended to or inserted into (class a),
 	// nor a write through a pointer the body initialised (class b).
@@ -536,6 +555,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		return Inadmissible, fmt.Sprintf("writes %s only on some paths; sugar has no conditional no-op (purity §4)", strings.Join(conditional, ", "))
 	case len(defaulted) > 0:
 		return Inadmissible, fmt.Sprintf("writes a value the caller did not supply to %s (purity §4)", strings.Join(defaulted, ", "))
+	case len(crossField) > 0:
+		return Inadmissible, fmt.Sprintf("writes %s, a different field; class a extends the field a local came from (purity §4)", strings.Join(crossField, "; "))
 	case len(extra) > 0 && (appendOrMap || ptrAssign || bigLiteral):
 		return Inadmissible, fmt.Sprintf("bare write to %s alongside the admitted operation, a field the caller did not name (purity §4)", strings.Join(extra, ", "))
 	case appendOrMap:
@@ -550,6 +571,65 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		return Inadmissible, "single bare field assignment (a forwarder for the struct field)"
 	}
 	return Inadmissible, "no field write (delegation or no-op)"
+}
+
+// writeBack is one assignment of a local to a field: where it is, and the
+// field it writes.
+type writeBack struct {
+	pos token.Pos
+	lhs ast.Expr
+}
+
+// sourceMismatch returns "read from <src>, back to <dest>" for the first
+// source of a local that is not the same expression (sameExpr) as every field
+// it is written back to, with a nil source (a parameter itself) reading as "a
+// parameter"; "" when every source matches every write-back. Class a extends
+// the field a local came from: a local read from another field, or passed in
+// by the caller, replaces the field it is written to.
+func sourceMismatch(sources []ast.Expr, backs []writeBack, info *types.Info) string {
+	for _, src := range sources {
+		for _, back := range backs {
+			switch {
+			case src == nil:
+				return "read from a parameter, back to " + types.ExprString(back.lhs)
+			case !sameExpr(src, back.lhs, info):
+				return "read from " + types.ExprString(src) + ", back to " + types.ExprString(back.lhs)
+			}
+		}
+	}
+	return ""
+}
+
+// sameExpr reports whether a and b are the same expression, parentheses
+// aside: the same object for an identifier, the same field of the same
+// operand for a selector, the same index of the same operand, the same
+// dereference, or the same literal. Anything else is not the same, however it
+// prints: types.ExprString abbreviates composite literals, so
+// string([]byte{'a'}) and string([]byte{'b'}) print alike.
+func sameExpr(a, b ast.Expr, info *types.Info) bool {
+	a, b = ast.Unparen(a), ast.Unparen(b)
+	switch x := a.(type) {
+	case *ast.Ident:
+		y, ok := b.(*ast.Ident)
+		if !ok {
+			return false
+		}
+		obj := info.ObjectOf(x)
+		return obj != nil && obj == info.ObjectOf(y)
+	case *ast.SelectorExpr:
+		y, ok := b.(*ast.SelectorExpr)
+		return ok && x.Sel.Name == y.Sel.Name && sameExpr(x.X, y.X, info)
+	case *ast.IndexExpr:
+		y, ok := b.(*ast.IndexExpr)
+		return ok && sameExpr(x.X, y.X, info) && sameExpr(x.Index, y.Index, info)
+	case *ast.StarExpr:
+		y, ok := b.(*ast.StarExpr)
+		return ok && sameExpr(x.X, y.X, info)
+	case *ast.BasicLit:
+		y, ok := b.(*ast.BasicLit)
+		return ok && x.Kind == y.Kind && x.Value == y.Value
+	}
+	return false
 }
 
 // throughPointer reports whether path writes through a pointer field the body
@@ -979,9 +1059,11 @@ func isFieldWrite(lhs ast.Expr) bool {
 func rootIdent(e ast.Expr) *ast.Ident { return chainRoot(e, nil) }
 
 // chainRoot is rootIdent, and given info it also steps through a slice
-// expression (o in o.Spec.Items[:][0]) and an append to its first argument
-// (o in append(o.Spec.Items, s)): either result may share its operand's
-// backing array, so a write into it may reach whatever the operand reaches.
+// expression (o in o.Spec.Items[:][0]), an append to its first argument
+// (o in append(o.Spec.Items, s)) and a conversion to its operand (o in
+// (*int32)(o.Spec.Replicas)): each result may share its operand's backing
+// array or referent, so a write into it may reach whatever the operand
+// reaches. Any other call is not followed.
 func chainRoot(e ast.Expr, info *types.Info) *ast.Ident {
 	for {
 		switch v := e.(type) {
@@ -997,7 +1079,14 @@ func chainRoot(e ast.Expr, info *types.Info) *ast.Ident {
 			}
 			e = v.X
 		case *ast.CallExpr:
-			if info == nil || !isAppend(v, info) || len(v.Args) == 0 {
+			if info == nil {
+				return nil
+			}
+			if op := conversionOperand(v, info); op != nil {
+				e = op
+				continue
+			}
+			if !isAppend(v, info) || len(v.Args) == 0 {
 				return nil
 			}
 			e = v.Args[0]
@@ -1039,9 +1128,27 @@ func rootObj(e ast.Expr, info *types.Info) types.Object {
 // being a way to reach a caller's object, in source order.
 type roots map[types.Object][]rootEvent
 
+// rootEvent is one such position. src is the value a local was declared or
+// assigned from at a rooted event (o.Spec.Items in items := o.Spec.Items),
+// and nil for a parameter and for an event that is not rooted.
 type rootEvent struct {
 	pos    token.Pos
 	rooted bool
+	src    ast.Expr
+}
+
+// sources returns the value of every rooted event of obj in source order,
+// nil standing for a parameter itself: the fields and elements a local may
+// hold a caller's collection from, which class a compares with the fields it
+// is written back to.
+func (r roots) sources(obj types.Object) []ast.Expr {
+	var srcs []ast.Expr
+	for _, e := range r[obj] {
+		if e.rooted {
+			srcs = append(srcs, e.src)
+		}
+	}
+	return srcs
 }
 
 // everRooted reports whether obj was a way to reach a caller's object at any
@@ -1078,10 +1185,15 @@ func (r roots) rootedBy(obj types.Object, pos token.Pos) bool {
 	return false
 }
 
-func (r roots) add(obj types.Object, pos token.Pos, rooted bool) {
-	if obj != nil {
-		r[obj] = append(r[obj], rootEvent{pos: pos, rooted: rooted})
+// add records an event for obj; src is kept only when the event is rooted.
+func (r roots) add(obj types.Object, pos token.Pos, rooted bool, src ast.Expr) {
+	if obj == nil {
+		return
 	}
+	if !rooted {
+		src = nil
+	}
+	r[obj] = append(r[obj], rootEvent{pos: pos, rooted: rooted, src: src})
 }
 
 // at reports whether obj reaches a caller's object at position pos: the
@@ -1106,10 +1218,11 @@ func (r roots) at(obj types.Object, pos token.Pos) bool {
 // selector, index, dereference or address-of chain rooted in one of them
 // (spec := &o.Spec; labels := o.Labels). A local declared or assigned from
 // anything else (tmp := &Obj{}, x := f()) is a temporary from that point:
-// writes into it reach no caller-visible object and admit nothing. A
-// comma-ok map read is not followed here: class a asks only whether a local
-// was ever rooted, so rooting one read from another field (items, ok :=
-// o.Spec.Groups[k]) would admit writing it back to a different field.
+// writes into it reach no caller-visible object and admit nothing. Each
+// rooted event keeps the value it came from, which class a compares with the
+// field the local is written back to. A parameter roots writes only when its
+// own type carries them (carriesWrites). A comma-ok map read is not followed
+// here; no helper needs it.
 func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 	return trackRoots(fn, info, rootObj, roots.at, func(e ast.Expr) ast.Expr { return e }, false)
 }
@@ -1122,30 +1235,41 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 // whatever it is reassigned to since, so a copy of a local a nil-init may
 // have replaced (q := p after `if p == nil { p = new(int32) }`) is rooted too,
 // and so is a local assigned with its name in parentheses ((q) = p), the
-// result of an append (items := append(o.Spec.Items, s)), the first name of a
-// comma-ok map read (items, ok := o.Spec.Groups[k]), and a range clause's
-// variable that carries writes (for _, items := range o.Spec.Groups).
+// result of an append (items := append(o.Spec.Items, s)) or of a conversion
+// (p := (*int32)(o.Spec.Replicas)), the first name of a comma-ok map read
+// (items, ok := o.Spec.Groups[k]), and a range clause's variable that holds a
+// reference (for _, items := range o.Spec.Groups; for _, h := range
+// o.Spec.Holders). A parameter or range variable is rooted when its type
+// holds a reference anywhere in it (holdsReference): a struct or array copy
+// still shares what its map, slice or pointer fields refer to.
 func mayReachCaller(fn *ast.FuncDecl, info *types.Info) roots {
 	return trackRoots(fn, info, mayReachObj, roots.rootedBy, ast.Unparen, true)
 }
 
 // trackRoots seeds fn's parameters and records, for each local declared or
 // assigned in its body, whether the object root finds in its value reaches a
-// caller's object at that statement, as held reads it. dest normalises an
-// assignment's destination before it is matched as a local's name; copies
-// also roots the first name of a comma-ok map read and a range clause's
-// variables.
+// caller's object at that statement, as held reads it, and on a rooted event
+// the value itself. dest normalises an assignment's destination before it is
+// matched as a local's name; copies also roots the first name of a comma-ok
+// map read and a range clause's variables, and seeds parameters and range
+// variables by holdsReference rather than carriesWrites.
 func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.Info) types.Object,
 	held func(roots, types.Object, token.Pos) bool, dest func(ast.Expr) ast.Expr, copies bool,
 ) roots {
+	reaches := carriesWrites
+	if copies {
+		reaches = holdsReference
+	}
 	r := roots{}
 	for _, field := range fn.Type.Params.List {
 		for _, name := range field.Names {
 			obj := info.Defs[name]
 			// A parameter roots writes only when they can reach the caller
 			// through it. A struct taken by value is a copy: assigning its
-			// fields changes nothing the caller can observe.
-			r.add(obj, fn.Pos(), obj != nil && carriesWrites(obj.Type()))
+			// fields changes nothing the caller can observe. Its map, slice
+			// or pointer fields still share their referents, which only the
+			// read-modify-write tracking (copies) roots.
+			r.add(obj, fn.Pos(), obj != nil && reaches(obj.Type()), nil)
 		}
 	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
@@ -1166,7 +1290,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 				for i, id := range vs.Names {
 					v := assignedValue(vs.Values, len(vs.Names), i, info, copies)
 					rooted := v != nil && held(r, root(v, info), s.Pos())
-					r.add(info.Defs[id], s.Pos(), rooted)
+					r.add(info.Defs[id], s.Pos(), rooted, v)
 				}
 			}
 		case *ast.AssignStmt:
@@ -1177,11 +1301,12 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 				}
 				v := assignedValue(s.Rhs, len(s.Lhs), i, info, copies)
 				rooted := v != nil && held(r, root(v, info), s.Pos())
-				r.add(info.ObjectOf(id), s.Pos(), rooted)
+				r.add(info.ObjectOf(id), s.Pos(), rooted, v)
 			}
 		case *ast.RangeStmt:
 			// Each key and element is a copy, which shares its referent with
-			// the ranged collection when it carries writes.
+			// the ranged collection when it holds a reference, directly or
+			// in a struct or array field (holdsReference).
 			if !copies {
 				return true
 			}
@@ -1189,7 +1314,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 			for _, x := range []ast.Expr{s.Key, s.Value} {
 				if id, ok := dest(x).(*ast.Ident); ok {
 					obj := info.ObjectOf(id)
-					r.add(obj, s.Pos(), rooted && obj != nil && carriesWrites(obj.Type()))
+					r.add(obj, s.Pos(), rooted && obj != nil && reaches(obj.Type()), s.X)
 				}
 			}
 		}
@@ -1280,7 +1405,9 @@ func readsTarget(lhs, rhs ast.Expr, info *types.Info, alias func(ast.Expr) bool)
 // expression as written, outer parentheses aside, or the same element, field
 // or pointee of operands that may be the same, where a local that may reach
 // the caller may be any caller path of its type (labels[k] and o.Labels[k]
-// after labels := o.Labels).
+// after labels := o.Labels). Two indexes are the same when they are the same
+// expression however parenthesised (sameExpr: o.Labels[(k)] is o.Labels[k])
+// or print alike.
 func sameTarget(x, target ast.Expr, info *types.Info, alias func(ast.Expr) bool) bool {
 	x, target = ast.Unparen(x), ast.Unparen(target)
 	if types.ExprString(x) == types.ExprString(target) {
@@ -1293,7 +1420,8 @@ func sameTarget(x, target ast.Expr, info *types.Info, alias func(ast.Expr) bool)
 	switch t := target.(type) {
 	case *ast.IndexExpr:
 		v, ok := x.(*ast.IndexExpr)
-		return ok && types.ExprString(v.Index) == types.ExprString(t.Index) && sameTarget(v.X, t.X, info, alias)
+		return ok && (sameExpr(v.Index, t.Index, info) || types.ExprString(v.Index) == types.ExprString(t.Index)) &&
+			sameTarget(v.X, t.X, info, alias)
 	case *ast.SelectorExpr:
 		v, ok := x.(*ast.SelectorExpr)
 		return ok && v.Sel.Name == t.Sel.Name && sameTarget(v.X, t.X, info, alias)
@@ -1324,22 +1452,30 @@ func isNilValue(e ast.Expr, info *types.Info, locals map[types.Object]bool) bool
 	case *ast.Ident:
 		return v.Name == "nil" || (info.ObjectOf(v) != nil && locals[info.ObjectOf(v)])
 	case *ast.CallExpr:
-		if tv, ok := info.Types[v.Fun]; ok && tv.IsType() && len(v.Args) == 1 {
-			return isNilValue(v.Args[0], info, locals)
+		if op := conversionOperand(v, info); op != nil {
+			return isNilValue(op, info, locals)
 		}
 	}
 	return false
 }
 
-// isNillable reports whether t can hold nil (pointer, map, slice, interface,
-// chan, func), so that assigning a nil value to it is a clear rather than a
-// zero-value write to a scalar.
-// carriesWrites reports whether a write through a value of type t is visible
-// to the caller: a pointer, map, slice, interface or channel shares its
-// referent, a struct or scalar taken by value does not. A map or slice field
-// reached through a by-value struct does share, but the classifier does not
-// trace that: an unusual helper reads as inadmissible rather than slipping
-// through.
+// conversionOperand returns the operand of call when call is a type
+// conversion (T(x), (*T)(x)), and nil for any other call.
+func conversionOperand(call *ast.CallExpr, info *types.Info) ast.Expr {
+	if tv, ok := info.Types[call.Fun]; ok && tv.IsType() && len(call.Args) == 1 {
+		return call.Args[0]
+	}
+	return nil
+}
+
+// carriesWrites reports whether a write through a value of type t itself is
+// visible to the caller: a pointer, map, slice, interface or channel shares
+// its referent, a struct, array or scalar taken by value does not. A map,
+// slice or pointer field of a by-value struct or array does share, which this
+// shallow test ignores: it under-roots, which is conservative for classes a
+// and b (a field write through such a copy admits nothing). The
+// read-modify-write check uses the deep holdsReference instead, which
+// over-roots, conservative there.
 func carriesWrites(t types.Type) bool {
 	if t == nil {
 		return false
@@ -1351,6 +1487,35 @@ func carriesWrites(t types.Type) bool {
 	return false
 }
 
+// holdsReference reports whether a value of type t shares anything with the
+// value it was copied from: t carries writes itself (carriesWrites), or it is
+// a struct any of whose fields, or an array whose element, holds a reference,
+// checked recursively. A type can contain itself only through a type
+// carriesWrites accepts (pointer, slice, map, channel, interface) or a
+// function, which is not descended into, so the recursion terminates.
+func holdsReference(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	if carriesWrites(t) {
+		return true
+	}
+	switch u := t.Underlying().(type) {
+	case *types.Struct:
+		for i := range u.NumFields() {
+			if holdsReference(u.Field(i).Type()) {
+				return true
+			}
+		}
+	case *types.Array:
+		return holdsReference(u.Elem())
+	}
+	return false
+}
+
+// isNillable reports whether t can hold nil (pointer, map, slice, interface,
+// chan, func), so that assigning a nil value to it is a clear rather than a
+// zero-value write to a scalar.
 func isNillable(t types.Type) bool {
 	if t == nil {
 		return false

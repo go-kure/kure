@@ -116,7 +116,8 @@ body does one of:
 - **(a)** appends to a slice field, or inserts into a map field. Going through a local
   counts only when that local came from the field it is written back to: a collection
   the helper builds itself and then assigns replaces the field's contents, which is
-  not adding to it;
+  not adding to it (reading `o.Spec.Groups[k]` and writing it to `o.Spec.Items`
+  replaces `Items` and is refused);
 - **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
   intermediate before assigning through it is the same thing);
 - **(c)** constructs an upstream struct literal setting two or more fields, or a
@@ -139,12 +140,14 @@ An increment, decrement or compound assignment of a field (`o.Spec.Count++`,
 caller's value, and is inadmissible for the same reason; so is the same write spelled
 out (`o.Labels[k] = o.Labels[k] + v`), though extending a slice with
 `o.Spec.Items = append(o.Spec.Items, s)` is not. The same holds for a map or
-slice element reached through any chain of locals copied, sliced or appended from the
-caller's object or bound to its elements by a range clause
+slice element reached through any chain of locals copied, sliced, appended or
+converted from the caller's object or bound to its elements by a range clause
 (`labels := o.Labels; labels[k] += v`, `items := o.Spec.Items[:]`,
 `items, ok := o.Spec.Groups[k]`, `items := append(o.Spec.Items, s)`,
-`for _, items := range o.Spec.Groups`), even after a nil-init guard on one of them,
-and whichever of the two spellings reads the target (`labels[k] = o.Labels[k] + v`).
+`p := (*int32)(o.Spec.Replicas)`, `for _, items := range o.Spec.Groups`, and
+`for _, h := range o.Spec.Holders`, a struct copy whose field shares the caller's
+data), even after a nil-init guard on one of them, and whichever of the two spellings
+reads the target (`labels[k] = o.Labels[k] + v`, or `o.Labels[(k)]`).
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
@@ -163,7 +166,9 @@ argument instead.
 
 A helper reaches the object it writes through a parameter that can carry the write back
 to the caller: a pointer, map, slice or interface. A struct taken by value is a copy, so
-a helper written that way changes nothing the caller can see and is inadmissible.
+a helper written that way changes nothing the caller can see and is inadmissible; a
+read-modify-write through such a copy's map, slice or pointer field still reaches the
+caller, and is refused as above.
 
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
