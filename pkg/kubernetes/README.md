@@ -113,19 +113,17 @@ a kind fails until the wrappers are regenerated and committed. Renovate runs
 An exported `Set*` / `Add*` function under `pkg/kubernetes/...` is admissible when its
 body does one of:
 
-- **(a)** appends to a slice field, or inserts into a map field. Going through a local
-  counts only when that local came from the field it is written back to: a collection
-  the helper builds itself and then assigns replaces the field's contents, which is
-  not adding to it (reading `o.Spec.Groups[k]` and writing it to `o.Spec.Items`
-  replaces `Items` and is refused). Every value the local takes from the caller's
-  object counts, however it is spelled (a parenthesised name, a slice, conversion,
-  comma-ok read or range clause over another field), and an append into the local
-  must extend the local itself or the field it is written back to:
-  `items = append(o.Spec.Rows[0], s)` or `append([]string{}, s)` is refused. Such a
-  write-back is a bare field write, even through a pointer the helper initialised,
-  so a pointer assignment elsewhere in the helper does not admit it. A local
-  read from the field and then reassigned to a collection the helper built
-  (`items = []string{}` outside a nil-init guard) is not yet detected (#921);
+- **(a)** appends one value to a slice field, or inserts one key into a map field, as
+  `F = append(F, v)` or `F[k] = v`: alone in its statement, once per helper, with `F`
+  spelled from a pointer parameter through selectors, indexes and dereferences, and
+  that parameter never reassigned nor its address taken. Anything else that appends or
+  inserts is refused: an append or insert into a local, a temporary, an alias or an
+  element of a map or slice parameter; `F` spelled with `&` or a call; a nested,
+  multi-value or spread append, or one extending another field; an append that is not
+  the whole value of an assignment; `++`, `op=` or a range clause into a map element; a
+  tuple assignment; a second append or insert; and an index key or append base the
+  comparison cannot equate (a call, conversion or slice expression), even when spelled
+  alike;
 - **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
   intermediate before assigning through it is the same thing);
 - **(c)** constructs an upstream struct literal setting two or more fields, or a
@@ -173,10 +171,11 @@ helper that must replace one member of a one-of takes the whole one-of as its
 argument instead.
 
 A helper reaches the object it writes through a parameter that can carry the write back
-to the caller: a pointer, map, slice or interface. A struct taken by value is a copy, so
-a helper written that way changes nothing the caller can see and is inadmissible; a
-read-modify-write through such a copy's map, slice or pointer field still reaches the
-caller, and is refused as above.
+to the caller: a pointer, map, slice or interface, and for class (a) only a pointer
+parameter the body never reassigns or takes the address of. A struct taken by value is a
+copy, so a helper written that way changes nothing the caller can see and is
+inadmissible; a read-modify-write through such a copy's map, slice or pointer field
+still reaches the caller, and is refused as above.
 
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
@@ -189,11 +188,11 @@ exception is the nil-init guard `if P == nil { P = <zero value> }` with nothing 
 it: no init statement, no `else`, one statement zero-initialising the map, slice or
 pointer path it tests. A set-if-unset (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`) is
 not that guard and is refused, and neither is a guard filling a nil interface field with
-an empty value, nor one around a slice `make` with a non-zero length. A conditionally created alias
-(`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`) is still not detected; that
-is caught by review and by the helper's own golden test. A function literal's body is not
-the helper's own body: an append inside a closure the helper never calls is a no-op no
-caller sees, so it admits nothing. `pkg/kubernetes/testdata/admission_exclusions.txt` listed the
+an empty value, nor one around a slice `make` with a non-zero length. For classes (b) and
+(c), a conditionally created alias (`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`)
+is still not detected; that is caught by review and by the helper's own golden test.
+Class (a) refuses any alias. A helper containing a function literal, or declaring type
+parameters, is inadmissible. `pkg/kubernetes/testdata/admission_exclusions.txt` listed the
 helpers tolerated while the prune work item of the epic ran; that file is now empty and stays
 empty. Entries only ever leave, and a stale entry fails the test.
 
