@@ -121,7 +121,9 @@ body does one of:
   object counts, however it is spelled (a parenthesised name, a slice, conversion,
   comma-ok read or range clause over another field), and an append into the local
   must extend the local itself or the field it is written back to:
-  `items = append(o.Spec.Rows[0], s)` or `append([]string{}, s)` is refused. A local
+  `items = append(o.Spec.Rows[0], s)` or `append([]string{}, s)` is refused. Such a
+  write-back is a bare field write, so a pointer assignment elsewhere in the helper
+  does not admit it. A local
   read from the field and then reassigned to a collection the helper built
   (`items = []string{}` outside a nil-init guard) is not yet detected (#921);
 - **(b)** assigns to a pointer-typed field (`x.F = &v`; initialising a nil pointer
