@@ -31,7 +31,13 @@ type Spec struct {
 	Box      *Box
 	Count    int
 	Groups   map[string][]string
+	Holders  []Holder
+	Nests    []Nest
 }
+
+type Holder struct{ Items []string }
+
+type Nest struct{ H Holder }
 
 type Box struct {
 	Payload any
@@ -1020,6 +1026,150 @@ func SetReplicasCommaOkTemp(o *Obj, k, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// clonePtr is not a sugar helper: a call the classifier does not follow.
+func clonePtr(p *int32) *int32 { c := *p; return &c }
+
+// inadmissible: a collection read from one field replaces another
+func AddItemCrossField(o *Obj, k, s string) {
+	items := o.Spec.Groups[k]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the same from an element of another slice field
+func AddItemRowCrossField(o *Obj, s string) {
+	items := o.Spec.Rows[0]
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: the caller's own slice replaces the field
+func AddItemFromParam(o *Obj, items []string, s string) {
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: one of the local's sources is another field
+func AddItemReassignedCrossField(o *Obj, s string) {
+	items := o.Spec.Rows[0]
+	items = o.Spec.Items
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: one of the local's write-backs is another field
+func AddItemTwoWriteBacks(o *Obj, s string) {
+	items := o.Spec.Items
+	items = append(items, s)
+	o.Spec.Rows[0] = items
+	o.Spec.Items = items
+}
+
+// class a: the local goes back to the element it was read from
+func AddGroupItemViaLocal(o *Obj, k, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	items := o.Spec.Groups[k]
+	items = append(items, s)
+	o.Spec.Groups[k] = items
+}
+
+// class a: a declared local from the field it is written back to
+func AddItemViaVarLocal(o *Obj, s string) {
+	var items = o.Spec.Items
+	items = append(items, s)
+	o.Spec.Items = items
+}
+
+// inadmissible: a conversion of the caller's pointer is still the caller's pointer
+func SetReplicasConvertedInc(o *Obj, n int32) {
+	p := (*int32)(o.Spec.Replicas)
+	(*p)++
+	o.Spec.Replicas = &n
+}
+
+// class b: a call other than a conversion is not followed
+func SetReplicasClonedInc(o *Obj, n int32) {
+	p := clonePtr(o.Spec.Replicas)
+	(*p)++
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a parenthesised index reads the same element
+func AddLabelExpandedParenIndex(o *Obj, k, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels[k] = o.Labels[(k)] + v
+}
+
+// class a: another key is not the target
+func AddLabelFromOtherKey(o *Obj, k, j, v string) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels[k] = o.Labels[(j)] + v
+}
+
+// inadmissible: a struct copy's slice field shares the caller's backing array
+func SetReplicasRangeHolderConcat(o *Obj, v string, n int32) {
+	for _, h := range o.Spec.Holders {
+		h.Items[0] += v
+	}
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the same, one struct deeper
+func SetReplicasRangeNestConcat(o *Obj, v string, n int32) {
+	for _, x := range o.Spec.Nests {
+		x.H.Items[0] += v
+	}
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a by-value struct parameter's slice field is the caller's
+func SetReplicasHolderParamConcat(o *Obj, h Holder, v string, n int32) {
+	h.Items[0] += v
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: so is a by-value array parameter's slice element
+func SetReplicasArrayParamConcat(o *Obj, a [1][]string, v string, n int32) {
+	a[0][0] += v
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the local goes back under another key
+func AddGroupItemCrossKey(o *Obj, k, j, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	items := o.Spec.Groups[k]
+	items = append(items, s)
+	o.Spec.Groups[j] = items
+}
+
+// inadmissible: two keys that print alike are not the same key
+func AddGroupItemLiteralKeys(o *Obj, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	items := o.Spec.Groups[string([]byte{'a'})]
+	items = append(items, s)
+	o.Spec.Groups[string([]byte{'b'})] = items
+}
+
+// class a: the same constant key
+func AddGroupItemConstKey(o *Obj, s string) {
+	if o.Spec.Groups == nil {
+		o.Spec.Groups = map[string][]string{}
+	}
+	items := o.Spec.Groups["a"]
+	items = append(items, s)
+	o.Spec.Groups["a"] = items
+}
+
 // exempt by name
 func SetExempted(o *Obj, n string) { o.Spec.Name = n }
 
@@ -1198,6 +1348,26 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasRangeCopyConcat":   Pointer,
 		"AddLabelFromOther":            Append,
 		"SetReplicasRangeTempConcat":   Pointer,
+		// Class a writes a local back to the field it came from (#917).
+		"AddItemCrossField":           Inadmissible,
+		"AddItemRowCrossField":        Inadmissible,
+		"AddItemFromParam":            Inadmissible,
+		"AddItemReassignedCrossField": Inadmissible,
+		"AddItemTwoWriteBacks":        Inadmissible,
+		"AddGroupItemViaLocal":        Append,
+		"AddItemViaVarLocal":          Append,
+		"AddGroupItemCrossKey":        Inadmissible,
+		"AddGroupItemLiteralKeys":     Inadmissible,
+		"AddGroupItemConstKey":        Append,
+		// A conversion, a parenthesised index, a struct or array copy (#918).
+		"SetReplicasConvertedInc":      Inadmissible,
+		"SetReplicasClonedInc":         Pointer,
+		"AddLabelExpandedParenIndex":   Inadmissible,
+		"AddLabelFromOtherKey":         Append,
+		"SetReplicasRangeHolderConcat": Inadmissible,
+		"SetReplicasRangeNestConcat":   Inadmissible,
+		"SetReplicasHolderParamConcat": Inadmissible,
+		"SetReplicasArrayParamConcat":  Inadmissible,
 		"SetExempted":                  Exempt,
 	}
 	got := map[string]Finding{}
@@ -1279,6 +1449,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelExpandedFromAlias":       "value the caller did not supply to o.Labels[k]",
 		"SetReplicasAppendAliasConcat":    "value the caller did not supply to items[0]",
 		"SetReplicasRangeAliasConcat":     "value the caller did not supply to items[0]",
+		// A write-back to another field, and the #918 spellings.
+		"AddItemCrossField":            "read from o.Spec.Groups[k], back to o.Spec.Items",
+		"AddItemFromParam":             "read from a parameter",
+		"AddGroupItemCrossKey":         "back to o.Spec.Groups[j]",
+		"SetReplicasConvertedInc":      "value the caller did not supply to (*p)",
+		"AddLabelExpandedParenIndex":   "value the caller did not supply to o.Labels[k]",
+		"SetReplicasRangeHolderConcat": "value the caller did not supply to h.Items[0]",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
