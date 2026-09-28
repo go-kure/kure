@@ -90,7 +90,10 @@
 // An append into the local must extend the local itself or the field it is
 // written back to: items = append(o.Spec.Rows[0], s) is refused, and so,
 // conservatively, is an append to a collection the helper built
-// (items = append([]string{}, s)). Locals are tracked as type-checker
+// (items = append([]string{}, s)). The write-back of a local the body
+// appended to or inserted into without earning class a is a bare field write,
+// whatever the local was read from, so a pointer write elsewhere in the body
+// does not admit it. Locals are tracked as type-checker
 // objects, so a shadowing declaration is a different local and a name shared
 // by two blocks conflates nothing.
 //
@@ -306,11 +309,12 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		nilClear    string
 		conditional []string // counted writes that run only on some paths, with their guard
 		writes      = map[string]bool{}
-		ptrPaths    = map[string]bool{}         // pointer fields assigned, by expression, for writes through them
-		ptrInit     = map[string]bool{}         // of those, the ones assigned a bare new(T)/&T{} with no value
-		ptrUsed     = map[string]bool{}         // pointer fields a later write goes through
-		bareWrites  = map[string]types.Object{} // bare field writes -> the local assigned, if any
-		defaulted   []string                    // admitted operations carrying a value the caller did not supply
+		ptrPaths    = map[string]bool{}           // pointer fields assigned, by expression, for writes through them
+		ptrInit     = map[string]bool{}           // of those, the ones assigned a bare new(T)/&T{} with no value
+		ptrUsed     = map[string]bool{}           // pointer fields a later write goes through
+		bareWrites  = map[string][]types.Object{} // bare field writes -> every local assigned (nil for none)
+		forwarded   = map[string][]types.Object{} // bare field writes of a local carrying a caller value -> every such local
+		defaulted   []string                      // admitted operations carrying a value the caller did not supply
 		locals      = nilLocals(fn, info)
 		rooted      = rootedObjects(fn, info)        // parameters writes reach the caller through, by position
 		mayReach    = mayReachCaller(fn, info)       // the same, conservatively, for read-modify-write targets
@@ -488,11 +492,17 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			// default. Container inits (make) and writes through a pointer the
 			// body initialised belong to classes a and b respectively; a make
 			// into any other field is refused above as a default.
+			// A local carrying a caller value is kept aside (forwarded): it is
+			// a forwarder unless the body appended to or inserted into it.
 			callerValue := rhsObj != nil && supplied[rhsObj]
 			_, through := throughPointer(lhsPath, ptrPaths)
-			if !isPtr && !callerValue && !isMapIndex(lhs, info) && !isAppend(rhs, info) && !isMake(rhs, info) &&
+			if !isPtr && !isMapIndex(lhs, info) && !isAppend(rhs, info) && !isMake(rhs, info) &&
 				compositeOf(rhs) == nil && !through {
-				bareWrites[lhsPath] = rhsObj
+				if callerValue {
+					forwarded[lhsPath] = append(forwarded[lhsPath], rhsObj)
+				} else {
+					bareWrites[lhsPath] = append(bareWrites[lhsPath], rhsObj)
+				}
 			}
 			if rhs == nil {
 				continue
@@ -524,10 +534,11 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	// assigned it (its rooted sources and its classAInputs, such as the slice
 	// an append into it extends), and a local written back to two fields
 	// replaces at least one of them. A local that was never rooted, or is not
-	// written back after the op, falls through to the bare write and extra
-	// checks below.
+	// written back after the op, is not granted class a, and its write-back
+	// falls through to the bare write and extra checks below.
 	inputs := classAInputs(fn, info, mayReach)
 	var crossField []string
+	granted := map[types.Object]bool{}
 	for obj, opPos := range localOps {
 		backs := writtenBack[obj]
 		if len(backs) == 0 || backs[len(backs)-1].pos <= opPos || !rooted.everRooted(obj) {
@@ -538,18 +549,34 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 			continue
 		}
 		appendOrMap = true
+		granted[obj] = true
 	}
 	sort.Strings(crossField)
 	// A bare write is one the admitted operation does not cover: neither the
-	// write-back of a local the body appended to or inserted into (class a),
-	// nor a write through a pointer the body initialised (class b).
-	var extra []string
-	for path, obj := range bareWrites {
-		if obj != nil {
-			if _, op := localOps[obj]; op {
-				continue
+	// write-back of a local granted class a above, nor a write through a
+	// pointer the body initialised (class b). The write-back of a local the
+	// body appended to or inserted into but that class a refused is a bare
+	// write like any other, even when the local carries a caller value: it is
+	// a collection the body computed, not a forwarder, so a pointer write
+	// alongside cannot hide it. Every write to a path is checked, so a later
+	// class-a write-back to the same field does not hide an earlier one.
+	extraSet := map[string]bool{}
+	for path, objs := range bareWrites {
+		for _, obj := range objs {
+			if obj == nil || !granted[obj] {
+				extraSet[path] = true
 			}
 		}
+	}
+	for path, objs := range forwarded {
+		for _, obj := range objs {
+			if _, op := localOps[obj]; op && !granted[obj] {
+				extraSet[path] = true
+			}
+		}
+	}
+	var extra []string
+	for path := range extraSet {
 		extra = append(extra, path)
 	}
 	sort.Strings(extra)

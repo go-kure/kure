@@ -1214,6 +1214,68 @@ func AddItemSwapHidesWrite(o *Obj, s string) {
 	_ = spec
 }
 
+// inadmissible: a write-back that is not class a is a bare write, so a
+// pointer write alongside does not hide it (comma-ok read of another field)
+func SetReplicasCommaOkCrossField(o *Obj, k, s string, n int32) {
+	items, _ := o.Spec.Groups[k]
+	items = append(items, s)
+	o.Spec.Items = items
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the same with a conversion of another field
+func SetReplicasConvertedCrossField(o *Obj, s string, n int32) {
+	items := []string(o.Spec.Rows[0])
+	items = append(items, s)
+	o.Spec.Items = items
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the same with a slice of another field
+func SetReplicasSlicedCrossField(o *Obj, s string, n int32) {
+	items := o.Spec.Rows[0][:]
+	items = append(items, s)
+	o.Spec.Items = items
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the same with a collection the helper built
+func SetReplicasFreshWriteBack(o *Obj, s string, n int32) {
+	items := []string{}
+	items = append(items, s)
+	o.Spec.Items = items
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: the same with a map the helper built, which carries no
+// caller value until the insert
+func SetReplicasFreshMapWriteBack(o *Obj, k, v string, n int32) {
+	labels := map[string]string{}
+	labels[k] = v
+	o.Labels = labels
+	o.Spec.Replicas = &n
+}
+
+// inadmissible: a later class-a write-back to the same field does not hide
+// the earlier one
+func SetReplicasOverwrittenWriteBack(o *Obj, s string, n int32) {
+	items := []string{}
+	items = append(items, s)
+	o.Spec.Items = items
+	next := o.Spec.Items
+	next = append(next, s)
+	o.Spec.Items = next
+	o.Spec.Replicas = &n
+}
+
+// append: a local that is class a stays exempt beside a pointer write
+func AddItemViaLocalAndReplicas(o *Obj, s string, n int32) {
+	items := o.Spec.Items
+	items = append(items, s)
+	o.Spec.Items = items
+	o.Spec.Replicas = &n
+}
+
 // class a: the local goes back to the element it was read from
 func AddGroupItemViaLocal(o *Obj, k, s string) {
 	if o.Spec.Groups == nil {
@@ -1522,6 +1584,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemMultiAssignedCrossFieldLast":   Inadmissible,
 		"AddItemSwappedSameField":              Inadmissible,
 		"AddItemSwapHidesWrite":                Inadmissible,
+		"SetReplicasCommaOkCrossField":         Inadmissible,
+		"SetReplicasConvertedCrossField":       Inadmissible,
+		"SetReplicasSlicedCrossField":          Inadmissible,
+		"SetReplicasFreshWriteBack":            Inadmissible,
+		"SetReplicasFreshMapWriteBack":         Inadmissible,
+		"SetReplicasOverwrittenWriteBack":      Inadmissible,
+		"AddItemViaLocalAndReplicas":           Append,
 		"AddGroupItemViaLocal":                 Append,
 		"AddItemViaVarLocal":                   Append,
 		"AddGroupItemCrossKey":                 Inadmissible,
@@ -1641,6 +1710,13 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemMultiAssignedCrossFieldLast":   "read from rows, back to o.Spec.Items",
 		"AddItemSwappedSameField":              "read from other, back to o.Spec.Items",
 		"AddItemSwapHidesWrite":                "bare write to tmp.Name",
+		// A write-back that is not class a is a bare write.
+		"SetReplicasCommaOkCrossField":    "bare write to o.Spec.Items",
+		"SetReplicasConvertedCrossField":  "bare write to o.Spec.Items",
+		"SetReplicasSlicedCrossField":     "bare write to o.Spec.Items",
+		"SetReplicasFreshWriteBack":       "bare write to o.Spec.Items",
+		"SetReplicasFreshMapWriteBack":    "bare write to o.Labels",
+		"SetReplicasOverwrittenWriteBack": "bare write to o.Spec.Items",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, reason, want)
