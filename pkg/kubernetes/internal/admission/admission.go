@@ -81,9 +81,18 @@
 // same local back to the same field it was read from, later in source order:
 // a local read from another field (items := o.Spec.Groups[k] written to
 // o.Spec.Items), passed in as a parameter, or written back to a second field
-// replaces that field's contents and is refused. Locals are tracked as
-// type-checker objects, so a shadowing declaration is a different local and
-// a name shared by two blocks conflates nothing.
+// replaces that field's contents and is refused. Every value the local is
+// declared or assigned from that may hold a caller's collection counts,
+// however it is spelled: with the local's name in parentheses or among
+// several names, or a slice expression, conversion, comma-ok read or range
+// clause over another field (items = o.Spec.Rows[0][:]; for _, items = range
+// o.Spec.Rows). A fresh value, such as the nil-init's empty map, is not one.
+// An append into the local must extend the local itself or the field it is
+// written back to: items = append(o.Spec.Rows[0], s) is refused, and so,
+// conservatively, is an append to a collection the helper built
+// (items = append([]string{}, s)). Locals are tracked as type-checker
+// objects, so a shadowing declaration is a different local and a name shared
+// by two blocks conflates nothing.
 //
 // A function literal's body is not the helper's own: an uncalled closure that
 // appends is a no-op no caller sees, so no walk descends into one.
@@ -509,17 +518,20 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	// A local counts for class a only when it came from the field it is
 	// written back to. A collection the helper made itself replaces whatever
 	// the field held, which is not adding to it; so does one read from another
-	// field or passed in by the caller (crossField), and a local written back
-	// to two fields replaces at least one of them. A local that was never
-	// rooted, or is not written back after the op, falls through to the bare
-	// write and extra checks below.
+	// field or passed in by the caller (crossField), however the local was
+	// assigned it (its rooted sources and its classAInputs, such as the slice
+	// an append into it extends), and a local written back to two fields
+	// replaces at least one of them. A local that was never rooted, or is not
+	// written back after the op, falls through to the bare write and extra
+	// checks below.
+	inputs := classAInputs(fn, info, rooted, mayReach)
 	var crossField []string
 	for obj, opPos := range localOps {
 		backs := writtenBack[obj]
 		if len(backs) == 0 || backs[len(backs)-1].pos <= opPos || !rooted.everRooted(obj) {
 			continue
 		}
-		if mismatch := sourceMismatch(rooted.sources(obj), backs, info); mismatch != "" {
+		if mismatch := sourceMismatch(append(rooted.sources(obj), inputs[obj]...), backs, info); mismatch != "" {
 			crossField = append(crossField, obj.Name()+", "+mismatch)
 			continue
 		}
@@ -1214,17 +1226,105 @@ func (r roots) at(obj types.Object, pos token.Pos) bool {
 
 // rootedObjects returns the objects through which fn can reach a caller's
 // object, with the position from which each does: its parameters from the
-// start, and every local from the point where it is declared or assigned a
-// selector, index, dereference or address-of chain rooted in one of them
+// start, and every local from the point where it is declared or assigned,
+// with its name in parentheses or not ((items) = o.Spec.Items), a selector,
+// index, dereference or address-of chain rooted in one of them
 // (spec := &o.Spec; labels := o.Labels). A local declared or assigned from
 // anything else (tmp := &Obj{}, x := f()) is a temporary from that point:
 // writes into it reach no caller-visible object and admit nothing. Each
 // rooted event keeps the value it came from, which class a compares with the
-// field the local is written back to. A parameter roots writes only when its
-// own type carries them (carriesWrites). A comma-ok map read is not followed
-// here; no helper needs it.
+// field the local is written back to (the other values a local may hold a
+// caller's collection from are classAInputs'). A parameter roots writes only
+// when its own type carries them (carriesWrites). A comma-ok map read and a
+// range clause are not followed here; no helper needs them.
 func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
-	return trackRoots(fn, info, rootObj, roots.at, func(e ast.Expr) ast.Expr { return e }, false)
+	return trackRoots(fn, info, rootObj, roots.at, false)
+}
+
+// classAInputs returns, per local, the values it is declared or assigned from
+// that may hold a caller's collection and that rootedObjects does not record
+// as a rooted source, which class a compares with the fields the local is
+// written back to as well. They are the input of an append into the local,
+// seen through nested appends, unless it is the local itself
+// (items = append(o.Spec.Rows[0], s), and a collection the helper built,
+// items = append([]string{}, s)), and a value that may reach a caller's
+// object (mayReach) through a slice expression, a conversion, a local
+// holding one, a comma-ok map read or a range clause (items =
+// o.Spec.Rows[0][:]; items = []string(o.Spec.Rows[0]); items, _ =
+// o.Spec.Groups[k]; for _, items = range o.Spec.Rows). Any other fresh value
+// (items = []string{}, the nil-init) is not an input. Destinations are
+// matched with their parentheses removed, as in trackRoots.
+func classAInputs(fn *ast.FuncDecl, info *types.Info, rooted, mayReach roots) map[types.Object][]ast.Expr {
+	inputs := map[types.Object][]ast.Expr{}
+	// record notes v as an input of the local id at pos; strict says whether
+	// rootedObjects saw v as this name's value, and so already recorded it as
+	// a rooted source when its root was rooted there.
+	record := func(id *ast.Ident, v ast.Expr, pos token.Pos, strict bool) {
+		obj := info.ObjectOf(id)
+		if obj == nil || v == nil {
+			return
+		}
+		if isAppend(v, info) {
+			if base := appendBase(v, info); !sameExpr(base, id, info) {
+				inputs[obj] = append(inputs[obj], base)
+			}
+			return
+		}
+		if strict && rooted.at(rootObj(v, info), pos) {
+			return
+		}
+		if mayReach.rootedBy(mayReachObj(v, info), pos) {
+			inputs[obj] = append(inputs[obj], v)
+		}
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if _, isLit := n.(*ast.FuncLit); isLit {
+			return false
+		}
+		switch s := n.(type) {
+		case *ast.DeclStmt:
+			gd, ok := s.Decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.VAR {
+				return true
+			}
+			for _, spec := range gd.Specs {
+				if vs, ok := spec.(*ast.ValueSpec); ok {
+					for i, id := range vs.Names {
+						v := assignedValue(vs.Values, len(vs.Names), i, info, true)
+						record(id, v, s.Pos(), len(vs.Values) == len(vs.Names))
+					}
+				}
+			}
+		case *ast.AssignStmt:
+			for i, lhs := range s.Lhs {
+				if id, ok := ast.Unparen(lhs).(*ast.Ident); ok {
+					v := assignedValue(s.Rhs, len(s.Lhs), i, info, true)
+					record(id, v, s.Pos(), len(s.Rhs) == len(s.Lhs))
+				}
+			}
+		case *ast.RangeStmt:
+			for _, x := range []ast.Expr{s.Key, s.Value} {
+				if id, ok := ast.Unparen(x).(*ast.Ident); ok {
+					record(id, s.X, s.Pos(), false)
+				}
+			}
+		}
+		return true
+	})
+	return inputs
+}
+
+// appendBase returns the slice an append extends, seen through nested appends
+// (o.Spec.Items in append(append(o.Spec.Items, a), b)).
+func appendBase(e ast.Expr, info *types.Info) ast.Expr {
+	for isAppend(e, info) {
+		call := ast.Unparen(e).(*ast.CallExpr)
+		if len(call.Args) == 0 {
+			break
+		}
+		e = call.Args[0]
+	}
+	return e
 }
 
 // mayReachCaller returns, for the read-modify-write check, the objects that
@@ -1233,9 +1333,9 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 // expressions (items := o.Spec.Items[:]) whose root reached a caller's object
 // at any point up to there. Queried with rootedBy, a local stays rooted
 // whatever it is reassigned to since, so a copy of a local a nil-init may
-// have replaced (q := p after `if p == nil { p = new(int32) }`) is rooted too,
-// and so is a local assigned with its name in parentheses ((q) = p), the
-// result of an append (items := append(o.Spec.Items, s)) or of a conversion
+// have replaced (q := p or (q) = p after `if p == nil { p = new(int32) }`) is
+// rooted too, and so is the result of an append
+// (items := append(o.Spec.Items, s)) or of a conversion
 // (p := (*int32)(o.Spec.Replicas)), the first name of a comma-ok map read
 // (items, ok := o.Spec.Groups[k]), and a range clause's variable that holds a
 // reference (for _, items := range o.Spec.Groups; for _, h := range
@@ -1243,18 +1343,19 @@ func rootedObjects(fn *ast.FuncDecl, info *types.Info) roots {
 // holds a reference anywhere in it (holdsReference): a struct or array copy
 // still shares what its map, slice or pointer fields refer to.
 func mayReachCaller(fn *ast.FuncDecl, info *types.Info) roots {
-	return trackRoots(fn, info, mayReachObj, roots.rootedBy, ast.Unparen, true)
+	return trackRoots(fn, info, mayReachObj, roots.rootedBy, true)
 }
 
 // trackRoots seeds fn's parameters and records, for each local declared or
 // assigned in its body, whether the object root finds in its value reaches a
 // caller's object at that statement, as held reads it, and on a rooted event
-// the value itself. dest normalises an assignment's destination before it is
-// matched as a local's name; copies also roots the first name of a comma-ok
-// map read and a range clause's variables, and seeds parameters and range
-// variables by holdsReference rather than carriesWrites.
+// the value itself. An assignment's destination is matched as a local's name
+// with its parentheses removed ((items) = v assigns items); copies also roots
+// the first name of a comma-ok map read and a range clause's variables, and
+// seeds parameters and range variables by holdsReference rather than
+// carriesWrites.
 func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.Info) types.Object,
-	held func(roots, types.Object, token.Pos) bool, dest func(ast.Expr) ast.Expr, copies bool,
+	held func(roots, types.Object, token.Pos) bool, copies bool,
 ) roots {
 	reaches := carriesWrites
 	if copies {
@@ -1295,7 +1396,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 			}
 		case *ast.AssignStmt:
 			for i, lhs := range s.Lhs {
-				id, ok := dest(lhs).(*ast.Ident)
+				id, ok := ast.Unparen(lhs).(*ast.Ident)
 				if !ok {
 					continue
 				}
@@ -1312,7 +1413,7 @@ func trackRoots(fn *ast.FuncDecl, info *types.Info, root func(ast.Expr, *types.I
 			}
 			rooted := held(r, root(s.X, info), s.Pos())
 			for _, x := range []ast.Expr{s.Key, s.Value} {
-				if id, ok := dest(x).(*ast.Ident); ok {
+				if id, ok := ast.Unparen(x).(*ast.Ident); ok {
 					obj := info.ObjectOf(id)
 					r.add(obj, s.Pos(), rooted && obj != nil && reaches(obj.Type()), s.X)
 				}
