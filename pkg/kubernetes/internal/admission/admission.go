@@ -182,6 +182,11 @@
 //     same parameter, or constants of one type and one value.
 //   - P5: a nil-init guard initialises a field, not an element.
 //   - P6: every nil-init is written through.
+//   - P7: behind the nearest nil-init guard ahead of it a write meets only
+//     what that guard assigned. Its first step there may follow that pointer
+//     or index that map; past that step it follows no pointer and indexes no
+//     map, and it indexes no slice at all. An append needs no slice and an
+//     array has its elements. A nil-init guard is itself such a write.
 //   - N1: a nil-init guard tests the path it assigns, with the same keys as
 //     under P4, and assigns T{}, &T{}, new(T) or a make with constant sizes.
 //   - V1: a value is an argument passed whole (a parameter other than the
@@ -198,7 +203,7 @@
 // The statements are read in source order and the first rule one breaks
 // names the refusal: S1; for an if S8, S2, S5, S4, and for a nil-init guard
 // P1, P2, P3, P5, N1; for a := S3, S2, S4; for any other assignment S7, P1,
-// P2, P3, V1, V3, V3b, V2. S6, P4, P6 and V4 are read off the whole body
+// P2, P3, V1, V3, V3b, V2. S6, P4, P6, P7 and V4 are read off the whole body
 // afterwards, in that order.
 package admission
 

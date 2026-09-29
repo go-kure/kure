@@ -41,13 +41,12 @@
 // that assigns nil to a field, writes a value the caller did not pass, or
 // takes its object by value, and a helper that returns anything or declares
 // type parameters, are inadmissible whatever else they do. A test classifies
-// every helper
-// with go/ast and fails on anything outside those classes that is not listed
-// in testdata/admission_exclusions.txt; that list held the legacy helpers
-// (bare forwarders, error-returning and validating setters) while the prune
-// work item of the builder-contract epic ran, and is now empty. It only ever
-// shrinks. Every helper here panics on a nil receiver, takes exactly the value
-// it writes, and never defaults or validates.
+// every helper with go/ast and fails on anything outside those classes that is
+// not listed in testdata/admission_exclusions.txt; that list held the legacy
+// helpers (bare forwarders, error-returning and validating setters) while the
+// prune work item of the builder-contract epic ran, and is now empty. It only
+// ever shrinks. Every helper here panics on a nil receiver, takes exactly the
+// value it writes, and never defaults or validates.
 //
 // # GVK Utilities
 //
