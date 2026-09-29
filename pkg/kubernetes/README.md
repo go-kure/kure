@@ -218,14 +218,14 @@ the name `nil`.
 
 | ID | Statements, at the top level of the body |
 |---|---|
-| S1 | A statement is an `if` or an assignment. A call statement, `var`, `defer`, `go`, a send, a loop, a `switch`, a `select`, a bare block, a label, `++`, `--` and an empty statement are refused. |
+| S1 | A statement is an `if` or an assignment. A call statement, `var`, `defer`, `go`, a send, a loop, a `switch`, a `select`, a bare block, a label, `++`, `--`, a `return`, a `goto` and an empty statement are refused. |
 | S2 | Nil guards that panic, locals and the guards on their errors come before the first nil-init guard or field write. |
 | S3 | A `:=` is exactly `v, err := json.Marshal(P)`: two new names, neither blank, and `P` a parameter other than the object. |
 | S4 | The statement directly after a local is the guard on its error, `if err != nil { panic(M) }`, and that guard appears nowhere else. |
 | S5 | A panic takes one argument: a string constant, or in the guard on an error `fmt.Sprintf(c, err)` with `c` a string constant. |
 | S6 | A nil guard that panics, `if P == nil { panic(c) }`, tests the object, or a parameter the body writes as `*P`. On any other parameter it makes `nil` unexpressible, which is validation (§4). |
 | S7 | Any other assignment has one target, one value and the token `=`: no tuple, no `op=`. |
-| S8 | An `if` has no init statement, no `else` and a one-statement body, and is one of three guards: the nil guard that panics, the guard on an error, the nil-init guard. `X == nil` and `nil == X` are the same test. |
+| S8 | An `if` has no init statement, no `else` and a one-statement body, and is one of three guards: the nil guard that panics, the guard on an error, the nil-init guard. `X == nil` and `nil == X` are the same test. An `if` that holds a `return` or a `goto` is refused as what it is: a write skipped on some paths. |
 | S9 | The body holds no function literal, wherever it stands. No rule reads the body of a closure, so it could hide any write; a constant that holds one, `len([1]func(){func() {}})`, is refused too. |
 | S10 | At most one statement appends or inserts. Class (a) is a single append or insert; a second one, into the same field or another, is refused at the statement that makes it. |
 | S11 | Every call of `append` is the whole value of an assignment. One anywhere else is no class (a) statement, whatever it extends: in a `var`, as an argument, sliced, nested in another `append`, or inside a constant, `unsafe.Sizeof(append(…))`. |

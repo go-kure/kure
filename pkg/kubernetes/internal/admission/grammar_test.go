@@ -973,6 +973,19 @@ func SetRefNameFromPointer(o *Obj, n *string) {
 	}
 	o.Spec.Ref.Name = *n
 }
+
+// S1: a return at the top level, after the write
+func SetReplicasThenReturn(o *Obj, n int32) {
+	o.Spec.Replicas = &n
+	return
+}
+
+// S1: a goto at the top level
+func SetReplicasGotoAhead(o *Obj, n int32) {
+	goto set
+set:
+	o.Spec.Replicas = &n
+}
 `
 
 // refusal is one fixture that only the grammar refuses.
@@ -1140,6 +1153,8 @@ var grammarBehind = map[string]string{
 	"SetDocPolicyNilLimit":                 "V1",
 	"SetReplicasAndPayloadAddr":            "V6",
 	"SetReplicasAndCountDeref":             "V6",
+	"SetReplicasThenReturn":                "S1",
+	"SetReplicasGotoAhead":                 "S1",
 	"AddDocErr":                            "V1",
 	"AddGroupItemCommaOkCrossKey":          "S3",
 	"AddGroupItemConstKey":                 "S3",
@@ -1516,6 +1531,39 @@ func TestClassify_GrammarRefusesBehind(t *testing.T) {
 		}
 		if f := verdicts[name]; !bodyRefused(f) {
 			t.Errorf("%s: %s (%s), want it refused other than by the grammar", name, f.Class, f.Reason)
+		}
+	}
+}
+
+// grammarWording lists fixtures whose refusal names its cause, with a
+// fragment of what the grammar alone answers for each: a return or a goto by
+// name at the top level (S1) and inside an if (S8), and each of the four
+// reasons a path is not the object's (P1).
+var grammarWording = map[string]string{
+	"SetReplicasThenReturn":       "a return is neither an if nor an assignment (grammar S1,",
+	"SetReplicasGotoAhead":        "a goto is neither an if nor an assignment (grammar S1,",
+	"SetReplicasNilReturn":        "if o == nil returns early instead of writing; a nil receiver panics and sugar has no conditional no-op (grammar S8,",
+	"SetRefGoto":                  `if n == "" jumps over the write with goto; sugar has no conditional no-op (grammar S8,`,
+	"SetNothing":                  "_ is not spelled from a parameter through selectors, indexes and dereferences (grammar P1,",
+	"SetReplicasTwoObjects":       "b.Spec.Name is spelled from b, not from a, the object of the first write (grammar P1,",
+	"SetReplicasByValue":          "o.Spec.Replicas is spelled from o, which is not a pointer, so the write reaches only the helper's copy (grammar P1,",
+	"SetRefDefaulted":             "ref is spelled from ref, which the body reassigns or takes the address of (grammar P1,",
+	"AddItemParenParamReassigned": "(o) is spelled from o, which the body reassigns or takes the address of (grammar P1,",
+}
+
+// TestClassify_GrammarWording reads what the grammar alone answers for the
+// fixtures grammarWording names. A check before the grammar refuses some of
+// them, so the verdict does not show the grammar's words.
+func TestClassify_GrammarWording(t *testing.T) {
+	own, _ := fixtureAlone(t)
+	for name, fragment := range grammarWording {
+		reason, read := own[name]
+		if !read {
+			t.Errorf("%s: the grammar did not read it", name)
+			continue
+		}
+		if !strings.Contains(reason, fragment) {
+			t.Errorf("%s: the grammar alone gives %q, want it to contain %q", name, reason, fragment)
 		}
 	}
 }
