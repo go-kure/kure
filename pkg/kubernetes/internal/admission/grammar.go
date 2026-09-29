@@ -53,6 +53,8 @@ type step struct {
 	field int
 	// index is the key or index expression of an indexStep.
 	index ast.Expr
+	// over is the type an indexStep indexes: a map, a slice or an array.
+	over types.Type
 }
 
 // write is one location the body writes, in source order.
@@ -501,10 +503,11 @@ func (b *helperBody) steps(e ast.Expr) ([]step, bool) {
 		if !ok || t == nil {
 			return nil, false
 		}
-		if _, isPtr := t.Underlying().(*types.Pointer); isPtr {
+		if array, isPtr := t.Underlying().(*types.Pointer); isPtr {
 			steps = append(steps, step{kind: derefStep})
+			t = array.Elem()
 		}
-		return append(steps, step{kind: indexStep, index: v.Index}), true
+		return append(steps, step{kind: indexStep, index: v.Index, over: t}), true
 	case *ast.SelectorExpr:
 		steps, ok := b.steps(v.X)
 		sel := b.info.Selections[v]
@@ -579,6 +582,51 @@ func (b *helperBody) sameIndex(x, y ast.Expr) bool {
 func (b *helperBody) initialises(early, later write) bool {
 	return early.nilInit && b.leads(early.steps, later.steps) &&
 		(len(early.steps) < len(later.steps) || later.appends)
+}
+
+// reaches returns the reason the write b.writes[i] cannot run behind the
+// nil-init it goes through (P7), or "". A nil-init assigns one pointer, one
+// map or one empty slice, and what lies past that holds its zero value. So
+// behind the nearest nil-init ahead of it a write may follow that pointer or
+// index that map, as its first step there, and past that step it follows no
+// pointer and indexes no map. It indexes no slice at all: an append needs
+// none. An array has its elements. The map behind &map[K]V{} is there and is
+// refused like the one behind new: the rule reads the path, not the value. A
+// nil-init is itself such a write behind the nil-init ahead of it.
+func (b *helperBody) reaches(i int) string {
+	w := b.writes[i]
+	from, init := -1, ""
+	for _, early := range b.writes[:i] {
+		if early.nilInit && len(early.steps) > from && b.leads(early.steps, w.steps) {
+			from, init = len(early.steps), early.text
+		}
+	}
+	if from < 0 {
+		return ""
+	}
+	for p := from; p < len(w.steps); p++ {
+		s := w.steps[p]
+		if s.kind == derefStep && p > from {
+			return refused("P7", "%s follows a pointer past what the nil-init of %s assigned", w.text, init)
+		}
+		if s.kind != indexStep {
+			continue
+		}
+		var over types.Type
+		if s.over != nil {
+			over = s.over.Underlying()
+		}
+		switch over.(type) {
+		case *types.Array:
+		case *types.Map:
+			if p > from {
+				return refused("P7", "%s indexes a map past what the nil-init of %s assigned", w.text, init)
+			}
+		default:
+			return refused("P7", "%s indexes a slice, which the nil-init of %s leaves empty", w.text, init)
+		}
+	}
+	return ""
 }
 
 // assignment checks an assignment that declares nothing: its form (S7), then
@@ -812,7 +860,8 @@ func (b *helperBody) count(e ast.Expr) {
 // object or a parameter a written value dereferences (S6), no location is
 // written after a write to it, to a prefix of it or to anything under it,
 // other than through a nil-init ahead of it (P4), every nil-init is written
-// through (P6), and every argument is written once (V4).
+// through (P6), a write behind a nil-init meets only what that nil-init
+// assigned (P7), and every argument is written once (V4).
 func (b *helperBody) whole() string {
 	for _, id := range b.guards {
 		if obj := b.info.ObjectOf(id); obj != b.object && !b.derefs[obj] {
@@ -838,6 +887,11 @@ func (b *helperBody) whole() string {
 	for i, w := range b.writes {
 		if !used[i] {
 			return refused("P6", "the nil-init of %s is not written through", w.text)
+		}
+	}
+	for i := range b.writes {
+		if reason := b.reaches(i); reason != "" {
+			return reason
 		}
 	}
 	seen := map[types.Object]bool{}

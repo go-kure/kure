@@ -39,7 +39,14 @@ type Plan struct {
 
 type Meta struct{ Labels map[string]string }
 
+type Shell struct {
+	Box   *Box
+	Hold  *Holder
+	Slots [3]*int32
+}
+
 type Doc struct {
+	Shell   *Shell
 	Meta
 	Blob    *Blob
 	Plan    Plan
@@ -170,6 +177,22 @@ func SetDocBlobGuardAfter(d *Doc, v map[string]any) {
 		panic("SetDocBlobGuardAfter: d must not be nil")
 	}
 	d.Blob = &Blob{Raw: raw}
+}
+
+// class a: an append behind a nil-init needs no slice there
+func AddHoldItemInit(o *Obj, s string) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	o.Spec.Hold.Items = append(o.Spec.Hold.Items, s)
+}
+
+// class b: an array behind a nil-init has its elements
+func SetDocShellSlot(d *Doc, i int, n int32) {
+	if d.Shell == nil {
+		d.Shell = &Shell{}
+	}
+	d.Shell.Slots[i] = &n
 }
 
 // P4: the nil-init is of element 1 and the write through element 2, two
@@ -408,6 +431,38 @@ func AddLabelFieldKey(o *Obj, v string) { o.Labels[o.Spec.Name] = v }
 // P3: the key is the object
 func AddDocKeyedSelf(d *Doc, n int32) { d.Keyed[d] = &n }
 
+// P3: the key is a local; a local has no place but a written value, and one
+// the body uses nowhere does not compile
+func AddDocKeyedLocal(d *Doc, v map[string]any, n int32) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("AddDocKeyedLocal: %v", err))
+	}
+	d.Keyed[raw] = &n
+}
+
+// S8: the local is tested, not written
+func AddDocKeyedLocalGuarded(d *Doc, v map[string]any, n int32) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("AddDocKeyedLocalGuarded: %v", err))
+	}
+	if raw == nil {
+		panic("AddDocKeyedLocalGuarded: v must not be empty")
+	}
+	d.Keyed["k"] = &n
+}
+
+// P1: the local is assigned to nothing
+func AddDocKeyedLocalDropped(d *Doc, v map[string]any, n int32) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("AddDocKeyedLocalDropped: %v", err))
+	}
+	_ = raw
+	d.Keyed["k"] = &n
+}
+
 // P4: an insert into the map the body just replaced
 func AddLabelAfterReplace(o *Obj, m map[string]string, k, v string) {
 	o.Labels = m
@@ -465,6 +520,69 @@ func SetReplicasUnusedInit(o *Obj, n int32) {
 		o.Labels = map[string]string{}
 	}
 	o.Spec.Replicas = &n
+}
+
+// P7: the slice the body initialised is empty, and the write indexes it
+func SetItemAtInit(o *Obj, i int, v string, n int32) {
+	if o.Spec.Items == nil {
+		o.Spec.Items = []string{}
+	}
+	o.Spec.Items[i] = v
+	o.Spec.Replicas = &n
+}
+
+// P7: the same slice, and the write appends to an element of it
+func AddRowItemInit(o *Obj, i int, s string) {
+	if o.Spec.Rows == nil {
+		o.Spec.Rows = [][]string{}
+	}
+	o.Spec.Rows[i] = append(o.Spec.Rows[i], s)
+}
+
+// P7: the slice behind the pointer the body initialised is nil
+func SetHoldItemAtInit(o *Obj, i int, v string, n int32) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	o.Spec.Hold.Items[i] = v
+	o.Spec.Replicas = &n
+}
+
+// P7: the map behind the pointer the body initialised is nil
+func AddHoldLabelOneInit(o *Obj, k, v string) {
+	if o.Spec.Hold == nil {
+		o.Spec.Hold = &Holder{}
+	}
+	o.Spec.Hold.Labels[k] = v
+}
+
+// P7: the pointer behind the pointer the body initialised is nil
+func SetDocShellBoxName(d *Doc, s string, ref *Ref) {
+	if d.Shell == nil {
+		d.Shell = &Shell{}
+	}
+	d.Shell.Box.Name = s
+	d.Ref = ref
+}
+
+// P7: the map the body initialised has no element to write through
+func SetDocHoldMapLabelsInit(d *Doc, k string, m map[string]string, ref *Ref) {
+	if d.HoldMap == nil {
+		d.HoldMap = map[string]*Holder{}
+	}
+	d.HoldMap[k].Labels = m
+	d.Ref = ref
+}
+
+// P7: the second nil-init is behind a pointer the first left nil
+func AddDocShellHoldLabel(d *Doc, k, v string) {
+	if d.Shell == nil {
+		d.Shell = &Shell{}
+	}
+	if d.Shell.Hold.Labels == nil {
+		d.Shell.Hold.Labels = map[string]string{}
+	}
+	d.Shell.Hold.Labels[k] = v
 }
 
 // N1: a call in the capacity of the nil-init
@@ -733,6 +851,9 @@ var grammarRefusals = map[string]refusal{
 	"SetObjWhole":                     {"P2", Composite},
 	"AddLabelFieldKey":                {"P3", Append},
 	"AddDocKeyedSelf":                 {"P3", Append},
+	"AddDocKeyedLocal":                {"P3", Append},
+	"AddDocKeyedLocalGuarded":         {"S8", Append},
+	"AddDocKeyedLocalDropped":         {"P1", Append},
 	"AddLabelAfterReplace":            {"P4", Append},
 	"AddHoldItemAfterCopy":            {"P4", Append},
 	"AddDocLabelAfterReplace":         {"P4", Append},
@@ -742,6 +863,13 @@ var grammarRefusals = map[string]refusal{
 	"SetDocHoldLabels":                {"P5", Append},
 	"AddGroupInit":                    {"P5", Append},
 	"SetReplicasUnusedInit":           {"P6", Pointer},
+	"SetItemAtInit":                   {"P7", Pointer},
+	"AddRowItemInit":                  {"P7", Append},
+	"SetHoldItemAtInit":               {"P7", Pointer},
+	"AddHoldLabelOneInit":             {"P7", Append},
+	"SetDocShellBoxName":              {"P7", Pointer},
+	"SetDocHoldMapLabelsInit":         {"P7", Pointer},
+	"AddDocShellHoldLabel":            {"P7", Append},
 	"AddItemGrow":                     {"N1", Append},
 	"SetDocPlanLimitGuardOtherIndex":  {"N1", Pointer},
 	"AddItemFromName":                 {"V1", Append},
@@ -779,6 +907,8 @@ var grammarAdmitted = map[string]Class{
 	"AddDocPlanFromPointer":            Append,
 	"SetDocBlobAndSpare":               Pointer,
 	"SetDocBlobGuardAfter":             Pointer,
+	"AddHoldItemInit":                  Append,
+	"SetDocShellSlot":                  Pointer,
 }
 
 // grammarBehind lists the fixtures a check before the grammar refuses, with

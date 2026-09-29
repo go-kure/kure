@@ -231,6 +231,7 @@ function.
 | P4 | No location is written twice, and none is written after a write to a location above or below it on the same path. Every pointer followed counts as a step of the path, written or not; a promoted field counts as its full spelling; any two keys may name the same element. The one exception is a nil-init guard ahead of the write it initialises, on the same path with the same keys: the same parameter, or constants of one type and one value, however each is spelled. |
 | P5 | A nil-init guard initialises a field, not an element of a map or slice. |
 | P6 | Every nil-init is written through: by a later write below it, or by the append that extends it. |
+| P7 | Behind a nil-init guard a write meets only what that guard assigned: one pointer, one map or one empty slice. As its first step there it may follow that pointer or index that map. Past that step it follows no pointer and indexes no map, because what lies behind holds its zero value, and it indexes no slice at all: `o.Spec.Items[i] = v` behind `o.Spec.Items = []string{}` has no element to write. An append needs no slice, and an array has its elements. The guard is the nearest one ahead of the write on the same path, and a nil-init guard is itself such a write behind the guard ahead of it. The rule reads the path, not the value, so the map behind `&map[K]V{}` is not indexed either. |
 | N1 | A nil-init guard tests the path it assigns, with the same keys as under P4, and assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. |
 
 | ID | Values: the element appended, the value inserted, the value of a field |
@@ -250,7 +251,8 @@ other call, the conversion of an argument included, refuses the helper.
 The statements are read in source order, and the first rule a statement breaks names
 the refusal: S1; for an `if` S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5,
 N1; for a `:=` S3, S2, S4; for any other assignment S7, P1, P2, P3, V1, V3, V3b, V2.
-S6, P4, P6 and V4 are read off the whole body after its last statement, in that order.
+S6, P4, P6, P7 and V4 are read off the whole body after its last statement, in that
+order.
 
 What the grammar does not see: an alias the caller made (a `*P` or `P` that points into
 the object, or two pointer fields of the object sharing one struct); the caller's code
