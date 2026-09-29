@@ -139,6 +139,9 @@ func SetReplicasParenGuard(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// class a: a key in parentheses is a key
+func AddLabelParenKey(o *Obj, k, v string) { o.Labels[(k)] = v }
+
 // class b: the address of a literal into a pointer field, beside another write
 func SetDocNameAndRef(d *Doc, s, name string) {
 	d.Name = s
@@ -404,6 +407,12 @@ func SetReplicasGuardInit(o *Obj, n int32) {
 func SetReplicasTwoObjects(a, b *Obj, n int32, s string) {
 	a.Spec.Replicas = &n
 	b.Spec.Name = s
+}
+
+// P1: a write through an argument the body also writes
+func SetRefAndRename(o *Obj, ref *Ref, name string) {
+	o.Spec.Ref = ref
+	ref.Name = name
 }
 
 // P1: the argument is replaced before it is written
@@ -694,6 +703,12 @@ func SetDocBlobAndAny(d *Doc, v map[string]any) {
 	d.Any = v
 }
 
+// V5: a parameter the body reads nowhere
+func SetRefIgnoring(o *Obj, ref *Ref, ignored string) { o.Spec.Ref = ref }
+
+// V5: a blank parameter has no place either
+func SetRefBlank(o *Obj, ref *Ref, _ string) { o.Spec.Ref = ref }
+
 // V1, behind the check on a value the caller did not supply: the error of a
 // local is appended
 func AddDocErr(d *Doc, v map[string]any) {
@@ -846,6 +861,7 @@ var grammarRefusals = map[string]refusal{
 	"SetReplicasGuardNotNil":          {"S8", Pointer},
 	"SetReplicasGuardInit":            {"S8", Pointer},
 	"SetReplicasTwoObjects":           {"P1", Pointer},
+	"SetRefAndRename":                 {"P1", Pointer},
 	"SetReplicasParamOverwritten":     {"P1", Pointer},
 	"SetRefDefaulted":                 {"P1", Pointer},
 	"SetObjWhole":                     {"P2", Composite},
@@ -889,6 +905,8 @@ var grammarRefusals = map[string]refusal{
 	"SetReplicasNameTwice":            {"V4", Pointer},
 	"SetNestedRefSameName":            {"V4", Composite},
 	"SetDocBlobAndAny":                {"V4", Pointer},
+	"SetRefIgnoring":                  {"V5", Pointer},
+	"SetRefBlank":                     {"V5", Pointer},
 }
 
 // grammarAdmitted lists the fixtures in grammarFixtureSource that stay
@@ -903,6 +921,7 @@ var grammarAdmitted = map[string]Class{
 	"SetDocPlanLimitGuardedConstIndex": Pointer,
 	"AddDocHeld":                       Append,
 	"SetReplicasParenGuard":            Pointer,
+	"AddLabelParenKey":                 Append,
 	"SetDocNameAndRef":                 Pointer,
 	"AddDocPlanFromPointer":            Append,
 	"SetDocBlobAndSpare":               Pointer,

@@ -199,12 +199,14 @@
 //   - V3b: every struct literal, at every depth, carries an argument.
 //   - V4: each argument occurs once over all written values and marshalled
 //     locals.
+//   - V5: every parameter, a blank one included, is the object, a key or
+//     index of a path, or an argument written or marshalled.
 //
 // The statements are read in source order and the first rule one breaks
 // names the refusal: S1; for an if S8, S2, S5, S4, and for a nil-init guard
 // P1, P2, P3, P5, N1; for a := S3, S2, S4; for any other assignment S7, P1,
-// P2, P3, V1, V3, V3b, V2. S6, P4, P6, P7 and V4 are read off the whole body
-// afterwards, in that order.
+// P2, P3, V1, V3, V3b, V2. S6, P4, P6, P7, V4 and V5 are read off the whole
+// body afterwards, in that order.
 package admission
 
 import (
