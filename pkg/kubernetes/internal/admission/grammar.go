@@ -409,7 +409,7 @@ func (b *helperBody) marshalled(s *ast.AssignStmt) (value, err types.Object, arg
 // nilInit checks the assignment of a nil-init guard: its target (P1, P2, P3,
 // P5), and that the guard tests the path it assigns, spelled alike, which is
 // a map, slice or pointer, and assigns it an empty value with constant sizes
-// (N1).
+// (N1) that does not read it (V7).
 func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	target := s.Lhs[0]
 	text := types.ExprString(target)
@@ -442,6 +442,9 @@ func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	// supply: the value is empty only at length 0 (isEmptyValue).
 	if !isEmptyValue(s.Rhs[0], b.info) {
 		return refused("N1", "%s is initialised with %s, a make whose length is not 0", text, types.ExprString(s.Rhs[0]))
+	}
+	if reason := b.readsItself(target, s.Rhs[0]); reason != "" {
+		return reason
 	}
 	b.writes = append(b.writes, write{steps: steps, text: text, nilInit: true})
 	return ""
@@ -686,7 +689,8 @@ func (b *helperBody) assignment(s *ast.AssignStmt) string {
 }
 
 // fieldWrite checks one write: its target (P1, P2, P3), that it is not a
-// second append or insert (S10), and the value it writes (V1, V3, V3b, V2).
+// second append or insert (S10), and the value it writes (V1, V3, V3b, V2,
+// V7).
 func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 	steps, reason := b.path(target)
 	if reason != "" {
@@ -713,7 +717,23 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 	if reason := b.value(value, target, element); reason != "" {
 		return reason
 	}
+	if reason := b.readsItself(target, rhs); reason != "" {
+		return reason
+	}
 	b.writes = append(b.writes, w)
+	return ""
+}
+
+// readsItself refuses a value that reads the target it is written to (V7),
+// wherever the read stands: in a constant, in the size of a make or in the
+// type of a literal. A value computed from what the target held is not the
+// caller's. The slice an append extends is not such a read (readsTarget).
+// The body declares no local but a marshalled one, which reaches nothing of
+// the caller's, so readsTarget is given no alias.
+func (b *helperBody) readsItself(target, value ast.Expr) string {
+	if readsTarget(target, value, b.info, func(ast.Expr) bool { return false }) {
+		return refused("V7", "%s is assigned %s, a value that reads it", types.ExprString(target), types.ExprString(value))
+	}
 	return ""
 }
 
