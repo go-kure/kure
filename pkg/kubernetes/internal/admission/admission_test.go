@@ -2188,6 +2188,9 @@ func TestClassify_Fixture(t *testing.T) {
 	for name := range grammarBehind {
 		want[name] = Inadmissible
 	}
+	for name := range grammarGaps {
+		want[name] = Inadmissible
+	}
 	maps.Copy(want, grammarAdmitted)
 	got := map[string]Finding{}
 	for _, f := range findings {
