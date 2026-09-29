@@ -2250,8 +2250,8 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetBoxChanMake":        "make(chan string) is written to o.Spec.Box.Ch, and make(chan string) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
 		"AddLabelConstant":      "\"fixed\" is written to o.Labels[k], and \"fixed\" is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
 		"SetReplicasZero":       "new(int32) is written to o.Spec.Replicas, and new(int32) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
-		"SetNestedRefConstant":  "Ref{…} is written to o.Spec.Nested.Ref, and \"a\" is not a named constant of a defined type (grammar V3,",
-		"SetItemsLiteral":       "[]string{…} is written to o.Spec.Items, and []string{…} is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetNestedRefConstant":  "Ref{Name: \"a\", Kind: \"b\"} is written to o.Spec.Nested.Ref, and \"a\" is not a named constant of a defined type (grammar V3,",
+		"SetItemsLiteral":       "[]string{a, b} is written to o.Spec.Items, and []string{a, b} is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
 		"SetReplicasByValue":    "o.Spec.Replicas is spelled from o, which is not a pointer (grammar P1,",
 		"SetReplicasNilReturn":  "returns early instead of writing",
 		"SetNameIfSet":          "returns early instead of writing",
@@ -2389,7 +2389,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelTwice":                 "makes 2 appends or inserts",
 		"SetReplicasMapParam":           "m[k] is spelled from m, which is not a pointer (grammar P1,",
 		"AddItemExplicitDeref":          "slice append or map insert (class a)",
-		"AddGroupItemLiteralKeysDirect": "o.Spec.Groups[string([]byte{…})] is indexed by string([]byte{…}), neither a parameter nor a constant (grammar P3,",
+		"AddGroupItemLiteralKeysDirect": "o.Spec.Groups[string([]byte{'b'})] is indexed by string([]byte{'b'}), neither a parameter nor a constant (grammar P3,",
 		// Two class (a) faults in one body: S11 is read off the whole body
 		// first, then the statements in source order.
 		"AddItemLocalThenIndirect":   "items := o.Spec.Rows[0] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",

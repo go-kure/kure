@@ -204,7 +204,8 @@ func SetDocShellSlot(d *Doc, i int, n int32) {
 }
 
 // P4: the nil-init is of element 1 and the write through element 2, two
-// constant indexes that print alike
+// constant indexes that types.ExprString prints alike; the reason prints them
+// apart
 func SetDocPlanLimitAbbreviatedIndex(d *Doc, limit int32) {
 	if d.Plans[len([...]int{1})].Policy.Limit == nil {
 		d.Plans[len([...]int{1})].Policy.Limit = new(int32)
@@ -213,7 +214,8 @@ func SetDocPlanLimitAbbreviatedIndex(d *Doc, limit int32) {
 }
 
 // N1: the guard tests element 1, and the body initialises element 2 and
-// writes through it, two constant indexes that print alike
+// writes through it, two constant indexes that types.ExprString prints alike;
+// the reason prints them apart
 func SetDocPlanLimitGuardOtherIndex(d *Doc, limit int32) {
 	if d.Plans[len([...]int{1})].Policy.Limit == nil {
 		d.Plans[len([...]int{1, 2})].Policy.Limit = new(int32)

@@ -56,7 +56,11 @@ type step struct {
 // write is one location the body writes, in source order.
 type write struct {
 	steps []step
-	// text is the target as written, for a reason.
+	// target is the expression written; a reason prints it (exprText).
+	target ast.Expr
+	// text is the target as types.ExprString prints it, a composite literal
+	// abbreviated to T{…}: the spelling the P6 text test compares
+	// (throughPointer).
 	text string
 	// nilInit marks the assignment of a nil-init guard.
 	nilInit bool
@@ -233,7 +237,7 @@ func (b *helperBody) statement(stmts []ast.Stmt, i int) string {
 func stmtKind(stmt ast.Stmt) string {
 	switch s := stmt.(type) {
 	case *ast.ExprStmt:
-		return "the call statement " + types.ExprString(s.X)
+		return "the call statement " + exprText(s.X)
 	case *ast.DeclStmt:
 		return "a declaration"
 	case *ast.DeferStmt:
@@ -255,7 +259,7 @@ func stmtKind(stmt ast.Stmt) string {
 	case *ast.LabeledStmt:
 		return "a labelled statement"
 	case *ast.IncDecStmt:
-		return "the increment or decrement of " + types.ExprString(s.X)
+		return "the increment or decrement of " + exprText(s.X)
 	case *ast.EmptyStmt:
 		return "an empty statement"
 	case *ast.ReturnStmt:
@@ -316,7 +320,7 @@ func (b *helperBody) ifStmt(stmts []ast.Stmt, i int, s *ast.IfStmt) string {
 	kind, tested := b.guard(s)
 	switch kind {
 	case noGuard:
-		cond, whole := types.ExprString(s.Cond), &ast.BlockStmt{List: []ast.Stmt{s}}
+		cond, whole := exprText(s.Cond), &ast.BlockStmt{List: []ast.Stmt{s}}
 		switch {
 		case hasEarlyReturn(whole):
 			return refused("S8", "if %s returns early instead of writing; a nil receiver panics and sugar has no conditional no-op", cond)
@@ -366,7 +370,7 @@ func (b *helperBody) message(call *ast.CallExpr, kind guardKind, tested *ast.Ide
 			return ""
 		}
 	}
-	return refused("S5", "the guard on %s panics with %s, neither a string constant nor fmt.Sprintf of one and the error it guards", tested.Name, types.ExprString(arg))
+	return refused("S5", "the guard on %s panics with %s, neither a string constant nor fmt.Sprintf of one and the error it guards", tested.Name, exprText(arg))
 }
 
 // isStringConst reports whether e is a constant of kind string.
@@ -423,7 +427,7 @@ func stmtText(s *ast.AssignStmt) string {
 	side := func(exprs []ast.Expr) string {
 		texts := make([]string, len(exprs))
 		for i, e := range exprs {
-			texts[i] = types.ExprString(e)
+			texts[i] = exprText(e)
 		}
 		return strings.Join(texts, ", ")
 	}
@@ -466,7 +470,7 @@ func (b *helperBody) marshalled(s *ast.AssignStmt) (value, err types.Object, arg
 // (N1) that does not read it (V7).
 func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	target := s.Lhs[0]
-	text := types.ExprString(target)
+	text := exprText(target)
 	steps, reason := b.path(target)
 	if reason != "" {
 		return reason
@@ -481,7 +485,7 @@ func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	of, ok := b.steps(tested)
 	if !ok || pathRoot(tested, b.info) != b.object || len(of) != len(steps) || !b.leads(of, steps) ||
 		types.ExprString(ast.Unparen(target)) != types.ExprString(ast.Unparen(tested)) {
-		return refused("N1", "the guard tests %s and initialises %s", types.ExprString(tested), text)
+		return refused("N1", "the guard tests %s and initialises %s", exprText(tested), text)
 	}
 	// What a nil-init initialises is a map, a slice or a pointer
 	// (initsField): an empty value in an interface or a channel is a value
@@ -490,17 +494,17 @@ func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 		return refused("N1", "the nil-init of %s initialises other than a map, slice or pointer", text)
 	}
 	if !b.isEmpty(s.Rhs[0]) {
-		return refused("N1", "%s is initialised with %s, not T{}, &T{}, new(T) or a make with constant sizes", text, types.ExprString(s.Rhs[0]))
+		return refused("N1", "%s is initialised with %s, not T{}, &T{}, new(T) or a make with constant sizes", text, exprText(s.Rhs[0]))
 	}
 	// A slice make with a length allocates elements the caller did not
 	// supply: the value is empty only at length 0 (isEmptyValue).
 	if !isEmptyValue(s.Rhs[0], b.info) {
-		return refused("N1", "%s is initialised with %s, a make whose length is not 0", text, types.ExprString(s.Rhs[0]))
+		return refused("N1", "%s is initialised with %s, a make whose length is not 0", text, exprText(s.Rhs[0]))
 	}
 	if reason := b.readsItself(target, s.Rhs[0]); reason != "" {
 		return reason
 	}
-	b.writes = append(b.writes, write{steps: steps, text: text, nilInit: true, pointer: pointerTyped(target, b.info)})
+	b.writes = append(b.writes, write{steps: steps, target: target, text: types.ExprString(target), nilInit: true, pointer: pointerTyped(target, b.info)})
 	return ""
 }
 
@@ -543,7 +547,7 @@ func (b *helperBody) isConst(e ast.Expr) bool {
 // object that is not a pointer, or from one the body reassigns or takes the
 // address of (stableParams).
 func (b *helperBody) path(e ast.Expr) ([]step, string) {
-	text := types.ExprString(e)
+	text := exprText(e)
 	root := pathRoot(e, b.info)
 	if root == nil || !b.params[root] {
 		return nil, refused("P1", "%s is not spelled from a parameter through selectors, indexes and dereferences", text)
@@ -577,7 +581,7 @@ func (b *helperBody) path(e ast.Expr) ([]step, string) {
 			continue
 		}
 		if !b.isKey(s.index) {
-			return nil, refused("P3", "%s is indexed by %s, neither a parameter nor a constant", text, types.ExprString(s.index))
+			return nil, refused("P3", "%s is indexed by %s, neither a parameter nor a constant", text, exprText(s.index))
 		}
 		if id, ok := ast.Unparen(s.index).(*ast.Ident); ok {
 			if obj := b.info.ObjectOf(id); b.params[obj] {
@@ -717,7 +721,7 @@ func (b *helperBody) reaches(i int) string {
 	from, init := -1, ""
 	for _, early := range b.writes[:i] {
 		if early.nilInit && len(early.steps) > from && b.leads(early.steps, w.steps) {
-			from, init = len(early.steps), early.text
+			from, init = len(early.steps), exprText(early.target)
 		}
 	}
 	if from < 0 {
@@ -726,7 +730,7 @@ func (b *helperBody) reaches(i int) string {
 	for p := from; p < len(w.steps); p++ {
 		s := w.steps[p]
 		if s.kind == derefStep && p > from {
-			return refused("P7", "%s follows a pointer past what the nil-init of %s assigned", w.text, init)
+			return refused("P7", "%s follows a pointer past what the nil-init of %s assigned", exprText(w.target), init)
 		}
 		if s.kind != indexStep {
 			continue
@@ -739,10 +743,10 @@ func (b *helperBody) reaches(i int) string {
 		case *types.Array:
 		case *types.Map:
 			if p > from {
-				return refused("P7", "%s indexes a map past what the nil-init of %s assigned", w.text, init)
+				return refused("P7", "%s indexes a map past what the nil-init of %s assigned", exprText(w.target), init)
 			}
 		default:
-			return refused("P7", "%s indexes a slice, which the nil-init of %s leaves empty", w.text, init)
+			return refused("P7", "%s indexes a slice, which the nil-init of %s leaves empty", exprText(w.target), init)
 		}
 	}
 	return ""
@@ -776,6 +780,7 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 	}
 	w := write{
 		steps:   steps,
+		target:  target,
 		text:    types.ExprString(target),
 		inserts: isMapIndex(target, b.info),
 		pointer: pointerTyped(target, b.info),
@@ -785,7 +790,7 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 	value, element := rhs, w.inserts
 	if call := appendCall(rhs, b.info); call != nil {
 		if !extendsByOne(call, target, b.info) {
-			return refused("V1", "%s is assigned %s, not an append of one value to itself", w.text, types.ExprString(rhs))
+			return refused("V1", "%s is assigned %s, not an append of one value to itself", exprText(target), exprText(rhs))
 		}
 		value, element, w.appends = call.Args[1], true, true
 	}
@@ -818,13 +823,13 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 // is never nil, so isNilValue is given no nil local.
 func (b *helperBody) nilled(target, rhs ast.Expr) string {
 	none := map[types.Object]bool{}
-	to := types.ExprString(target)
+	to := exprText(target)
 	if isNillable(b.info.TypeOf(target)) && isNilValue(rhs, b.info, none) {
-		return refused("V1", "%s is assigned %s, nil by name", to, types.ExprString(rhs))
+		return refused("V1", "%s is assigned %s, nil by name", to, exprText(rhs))
 	}
 	if lit := compositeOf(rhs); lit != nil {
 		if key := nilInLiteral(lit, b.info, none); key != "" {
-			return refused("V1", "%s is assigned %s, whose %s is nil by name", to, types.ExprString(rhs), key)
+			return refused("V1", "%s is assigned %s, whose %s is nil by name", to, exprText(rhs), key)
 		}
 	}
 	return ""
@@ -858,7 +863,7 @@ func (b *helperBody) bare(target, value ast.Expr, element bool) string {
 	if _, through := throughPointer(types.ExprString(target), pointers); through {
 		return ""
 	}
-	return refused("V6", "%s is written bare to %s, which is neither pointer-typed nor spelled through a pointer the body assigned", types.ExprString(value), types.ExprString(target))
+	return refused("V6", "%s is written bare to %s, which is neither pointer-typed nor spelled through a pointer the body assigned", exprText(value), exprText(target))
 }
 
 // readsItself refuses a value that reads the target it is written to (V7),
@@ -871,7 +876,7 @@ func (b *helperBody) bare(target, value ast.Expr, element bool) string {
 // o.Spec.Payload are two targets.
 func (b *helperBody) readsItself(target, value ast.Expr) string {
 	if readsTarget(target, value, b.info, func(ast.Expr) bool { return false }) {
-		return refused("V7", "%s is assigned %s, a value that reads it", types.ExprString(target), types.ExprString(value))
+		return refused("V7", "%s is assigned %s, a value that reads it", exprText(target), exprText(value))
 	}
 	return ""
 }
@@ -882,15 +887,15 @@ func (b *helperBody) readsItself(target, value ast.Expr) string {
 // inserted, as &T{...} into a pointer-typed field, or as the value of the
 // helper's only field write. It then counts the arguments v carries.
 func (b *helperBody) value(v, target ast.Expr, element bool) string {
-	text, to := types.ExprString(v), types.ExprString(target)
+	text, to := exprText(v), exprText(target)
 	if bad := b.malformed(v); bad != nil {
-		return refused("V1", "%s is written to %s, and %s is neither an argument passed whole nor a struct literal of arguments and constants", text, to, types.ExprString(bad))
+		return refused("V1", "%s is written to %s, and %s is neither an argument passed whole nor a struct literal of arguments and constants", text, to, exprText(bad))
 	}
 	if bad := b.unnamed(v); bad != nil {
-		return refused("V3", "%s is written to %s, and %s is not a named constant of a defined type", text, to, types.ExprString(bad))
+		return refused("V3", "%s is written to %s, and %s is not a named constant of a defined type", text, to, exprText(bad))
 	}
 	if bad := b.argless(v); bad != nil {
-		return refused("V3b", "%s is written to %s, and %s carries no argument", text, to, types.ExprString(bad))
+		return refused("V3b", "%s is written to %s, and %s carries no argument", text, to, exprText(bad))
 	}
 	if compositeOf(v) != nil && !element && b.fieldWrites != 1 {
 		_, addr := ast.Unparen(v).(*ast.UnaryExpr)
@@ -1096,7 +1101,7 @@ func (b *helperBody) whole() string {
 	for i, later := range b.writes {
 		for _, early := range b.writes[:i] {
 			if overlaps(early.steps, later.steps) && !b.initialises(early, later) {
-				return refused("P4", "%s is written after the write to %s, which it overlaps", later.text, early.text)
+				return refused("P4", "%s is written after the write to %s, which it overlaps", exprText(later.target), exprText(early.target))
 			}
 		}
 	}
@@ -1111,10 +1116,11 @@ func (b *helperBody) whole() string {
 	}
 	for i, w := range b.writes {
 		if !used[i] {
-			return refused("P6", "the nil-init of %s is not written through", w.text)
+			return refused("P6", "the nil-init of %s is not written through", exprText(w.target))
 		}
 		if w.nilInit && w.pointer && !b.spelledThrough(i) {
-			return refused("P6", "no write through the nil-init of %s is spelled %s.… or *%s", w.text, w.text, w.text)
+			text := exprText(w.target)
+			return refused("P6", "no write through the nil-init of %s is spelled %s.… or *%s", text, text, text)
 		}
 	}
 	for i := range b.writes {
