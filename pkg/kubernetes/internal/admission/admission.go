@@ -171,6 +171,7 @@
 //     guard that panics, the guard on an error or a nil-init guard.
 //   - S9: the body holds no function literal, a constant that holds one
 //     included.
+//   - S11: every call of append is the whole value of an assignment.
 //   - P1: a path is spelled from the object through field selectors, indexes
 //     and dereferences, and the object is a pointer parameter the body never
 //     reassigns or takes the address of.
@@ -204,8 +205,8 @@
 //   - V5: every parameter, a blank one included, is the object, a key or
 //     index of a path, or an argument written or marshalled.
 //
-// S9 is read off the whole body first. Then the statements are read in
-// source order and the first rule one breaks names the refusal: S1; for an if S8, S2, S5, S4, and for a nil-init guard
+// S9, then S11, are read off the whole body first. Then the statements are
+// read in source order and the first rule one breaks names the refusal: S1; for an if S8, S2, S5, S4, and for a nil-init guard
 // P1, P2, P3, P5, N1; for a := S3, S2, S4; for any other assignment S7, P1,
 // P2, P3, V1, V3, V3b, V2. S6, P4, P6, P7, V4 and V5 are read off the whole
 // body afterwards, in that order.
@@ -402,7 +403,6 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		bareWrites  = map[string]bool{} // field writes outside every class (see below)
 		offTarget   = map[string]bool{} // appends and inserts whose target is not a stable parameter's field
 		indirect    = map[string]bool{} // stable targets not written as F = append(F, v) or F[k] = v alone
-		stray       = map[string]bool{} // bases of appends that are not the whole value of an assignment
 		defaulted   []string            // admitted operations carrying a value the caller did not supply
 		locals      = nilLocals(fn, info)
 		rooted      = rootedObjects(fn, info)  // parameters writes reach the caller through, by position
@@ -619,26 +619,7 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		}
 		return true
 	})
-	// An append anywhere but as the whole value of an assignment
-	// (var items = append(...), an argument, a slice of its result) is not the
-	// class a statement, whatever it extends.
-	assigned := map[*ast.CallExpr]bool{}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		if s, ok := n.(*ast.AssignStmt); ok {
-			for _, rhs := range s.Rhs {
-				if call := appendCall(rhs, info); call != nil {
-					assigned[call] = true
-				}
-			}
-		}
-		return true
-	})
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		if call, ok := n.(*ast.CallExpr); ok && appendCall(call, info) == call && !assigned[call] && len(call.Args) > 0 {
-			stray[types.ExprString(call.Args[0])] = true
-		}
-		return true
-	})
+	stray := strayAppends(fn.Body, info)
 	// A pointer intermediate the body allocates but never writes through
 	// leaves the caller a zero value it did not ask for.
 	for path := range ptrInit {
@@ -947,6 +928,32 @@ func hasEarlyReturn(body *ast.BlockStmt) bool {
 		return true
 	})
 	return found
+}
+
+// strayAppends returns the bases of the calls of append in body that are not
+// the whole value of an assignment: var items = append(...), an argument, a
+// slice of its result, an append inside a constant. Such an append is not the
+// class a statement, whatever it extends.
+func strayAppends(body *ast.BlockStmt, info *types.Info) map[string]bool {
+	assigned := map[*ast.CallExpr]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		if s, ok := n.(*ast.AssignStmt); ok {
+			for _, rhs := range s.Rhs {
+				if call := appendCall(rhs, info); call != nil {
+					assigned[call] = true
+				}
+			}
+		}
+		return true
+	})
+	stray := map[string]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && appendCall(call, info) == call && !assigned[call] && len(call.Args) > 0 {
+			stray[types.ExprString(call.Args[0])] = true
+		}
+		return true
+	})
+	return stray
 }
 
 // hasFuncLit reports whether body contains a function literal. Its body is
