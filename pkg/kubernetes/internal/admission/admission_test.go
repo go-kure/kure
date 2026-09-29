@@ -2395,6 +2395,59 @@ func TestClassify_Fixture(t *testing.T) {
 	}
 }
 
+// reasonsGolden holds the class and the full reason of every fixture.
+const reasonsGolden = "testdata/reasons.golden"
+
+// TestClassify_Reasons compares the class and the full reason of every
+// fixture with reasonsGolden, so a changed reason shows as a diff of that
+// file. TestClassify_Fixture asserts a fragment of some reasons; this holds
+// all of them, whole.
+func TestClassify_Reasons(t *testing.T) {
+	findings, err := Classify(Options{
+		Dir:      writeFixture(t),
+		Patterns: []string{"."},
+		Exempt:   map[string]bool{"fixture.SetExempted": true},
+		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	b.WriteString("# The class and the reason of every fixture: name, class and reason,\n")
+	b.WriteString("# tab-separated. Written by TestClassify_Reasons with " + goldenEnv + "=1;\n")
+	b.WriteString("# review the diff.\n")
+	got := map[string]string{}
+	for _, f := range findings {
+		line := f.Name + "\t" + f.Class.String() + "\t" + f.Reason
+		b.WriteString(line + "\n")
+		got[f.Name] = line
+	}
+	if os.Getenv(goldenEnv) != "" {
+		writeGolden(t, reasonsGolden, b.String())
+		return
+	}
+	data, err := os.ReadFile(reasonsGolden)
+	if err != nil {
+		t.Fatalf("%v; write it with %s=1", err, goldenEnv)
+	}
+	want := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		if name, _, found := strings.Cut(line, "\t"); found && !strings.HasPrefix(line, "#") {
+			want[name] = line
+		}
+	}
+	for name, line := range got {
+		if want[name] != line {
+			t.Errorf("got  %q\nwant %q", line, want[name])
+		}
+	}
+	for name := range want {
+		if _, ok := got[name]; !ok {
+			t.Errorf("%s: in %s but not classified", name, reasonsGolden)
+		}
+	}
+}
+
 func TestClassify_FindingsAreSorted(t *testing.T) {
 	dir := writeFixture(t)
 	findings, err := Classify(Options{Dir: dir, Patterns: []string{"."}, Env: append(os.Environ(), "GOWORK=off")})
