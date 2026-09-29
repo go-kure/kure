@@ -198,7 +198,9 @@
 //     make with constant sizes, a slice make of length 0.
 //   - V1: a value is an argument passed whole (a parameter other than the
 //     object as P, &P or *P, or the first name of a local), a struct literal
-//     of arguments, constants and such literals, or the address of one.
+//     of arguments, constants and such literals, or the address of one. The
+//     name nil, as spelled, is not the value of a nillable target, nor a
+//     keyed element of a literal written as a field or inserted value.
 //   - V2: a struct literal is an appended or inserted element, &T{...} into a
 //     pointer-typed field, or the helper's only field write.
 //   - V3: a constant in a struct literal is a named constant of a defined
