@@ -408,7 +408,7 @@ func (b *helperBody) marshalled(s *ast.AssignStmt) (value, err types.Object, arg
 
 // nilInit checks the assignment of a nil-init guard: its target (P1, P2, P3,
 // P5), and that the guard tests the path it assigns and assigns it an empty
-// value (N1).
+// value with constant sizes (N1).
 func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	target := s.Lhs[0]
 	text := types.ExprString(target)
@@ -425,6 +425,11 @@ func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	}
 	if !b.isEmpty(s.Rhs[0]) {
 		return refused("N1", "%s is initialised with %s, not T{}, &T{}, new(T) or a make with constant sizes", text, types.ExprString(s.Rhs[0]))
+	}
+	// A slice make with a length allocates elements the caller did not
+	// supply: the value is empty only at length 0 (isEmptyValue).
+	if !isEmptyValue(s.Rhs[0], b.info) {
+		return refused("N1", "%s is initialised with %s, a make whose length is not 0", text, types.ExprString(s.Rhs[0]))
 	}
 	b.writes = append(b.writes, write{steps: steps, text: text, nilInit: true})
 	return ""

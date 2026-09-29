@@ -139,8 +139,8 @@ a value. An empty value (an empty literal or `make`, or `new(T)`) written into a
 other field, an interface, a struct or a channel, is one the caller did not supply and
 is refused as a default, including when it is written through a pointer the helper
 initialised. A `make` of a slice with a length other than a constant 0 may fill it with
-elements the caller did not supply, so it is conservatively not that init; a capacity
-or a map size hint is.
+elements the caller did not supply, so it is conservatively not that init; a constant
+capacity or map size hint is (the grammar below, N1).
 An increment, decrement or compound assignment of a field (`o.Spec.Count++`,
 `o.Spec.Count += n`) writes a value computed from what the field held rather than the
 caller's value, and is inadmissible for the same reason; so is the same write spelled
@@ -235,7 +235,7 @@ function.
 | P5 | A nil-init guard initialises a field, not an element of a map or slice. |
 | P6 | Every nil-init is written through: by a later write below it, or by the append that extends it. |
 | P7 | Behind a nil-init guard a write meets only what that guard assigned: one pointer, one map or one empty slice. As its first step there it may follow that pointer or index that map. Past that step it follows no pointer and indexes no map, because what lies behind holds its zero value, and it indexes no slice at all: `o.Spec.Items[i] = v` behind `o.Spec.Items = []string{}` has no element to write. An append needs no slice, and an array has its elements. The guard is the nearest one ahead of the write on the same path, and a nil-init guard is itself such a write behind the guard ahead of it. The rule reads the path, not the value, so the map behind `&map[K]V{}` is not indexed either. |
-| N1 | A nil-init guard tests the path it assigns, with the same keys as under P4, and assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. |
+| N1 | A nil-init guard tests the path it assigns, with the same keys as under P4, and assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. A slice `make` has length 0: `make([]T, 3)` allocates three elements the caller did not supply. |
 
 | ID | Values: the element appended, the value inserted, the value of a field |
 |---|---|
