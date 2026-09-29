@@ -245,18 +245,21 @@ function. Where a rule compares two paths as written, it says so: N1.
 | V3b | Every struct literal, at every depth, carries an argument. |
 | V4 | Each argument occurs once over all written values and marshalled locals: `&n` written to two fields gives them one pointer, and so does `T{A: p, B: p}`. Keys and guards do not count. |
 | V5 | Every parameter has a place: it is the object, a key or index of a path, or an argument written or marshalled. A parameter the body leaves out, a blank one included, is a value the caller passed and the helper dropped. |
+| V7 | No written value reads its target, the value of a nil-init included, wherever the read stands: in a constant (`unsafe.Sizeof(o.Spec.Items)`), in the size of a `make`, or in the type of a literal. A value computed from what the field held is not the caller's. The slice an append extends is not such a read. |
 
 A call therefore appears in six positions only: `append` as the whole value of a class
 (a) statement, `make` and `new` in a nil-init guard, `json.Marshal` in a local,
 `fmt.Sprintf` in the message of the guard on an error, and `panic` as the body of a
-guard. A constant is a constant however it is spelled (`int32(0)`, `len("ab")`); any
+guard. A constant is a constant however it is spelled (`int32(0)`, `len("ab")`), and
+holds no function literal (S9), no `append` (S11) and no read of the target (V7); any
 other call, the conversion of an argument included, refuses the helper.
 
 S9, then S11, are read off the whole body first. Then the statements are read in
 source order, and the first rule a statement breaks names the refusal: S1; for an
-`if` S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5, N1; for a `:=` S3, S2,
-S4; for any other assignment S7, P1, P2, P3, S10, V1, V3, V3b, V2. S6, P4, P6, P7,
-V4 and V5 are read off the whole body after its last statement, in that order.
+`if` S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5, N1, V7; for a `:=` S3,
+S2, S4; for any other assignment S7, P1, P2, P3, S10, V1, V3, V3b, V2, V7. S6, P4,
+P6, P7, V4 and V5 are read off the whole body after its last statement, in that
+order.
 
 What the grammar does not see: an alias the caller made (a `*P` or `P` that points into
 the object, or two pointer fields of the object sharing one struct); the caller's code
