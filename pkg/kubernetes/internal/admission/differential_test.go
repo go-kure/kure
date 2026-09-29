@@ -8,8 +8,10 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -828,9 +830,21 @@ func readDifferentialGolden(t *testing.T) (map[string]map[Class]bool, string) {
 		t.Fatalf("%v; write it with %s=1", err, goldenEnv)
 	}
 	defer func() { _ = f.Close() }()
+	want, header, err := parseDifferentialGolden(f)
+	if err != nil {
+		t.Fatalf("%s: %v", differentialGolden, err)
+	}
+	return want, header
+}
+
+// parseDifferentialGolden reads a golden in the form TestClassify_Differential
+// writes: comments, the count line, and one body per line with its class, or
+// unstable and every class seen. A line with no class is malformed, and the
+// error names it.
+func parseDifferentialGolden(r io.Reader) (map[string]map[Class]bool, string, error) {
 	want := map[string]map[Class]bool{}
 	header := ""
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Fields(line)
@@ -842,20 +856,66 @@ func readDifferentialGolden(t *testing.T) (map[string]map[Class]bool, string) {
 			continue
 		}
 		names := fields[1:]
-		if names[0] == "unstable" {
+		if len(names) > 0 && names[0] == "unstable" {
 			names = names[1:]
+		}
+		if len(names) == 0 {
+			return nil, "", fmt.Errorf("malformed line %q", line)
 		}
 		want[fields[0]] = map[Class]bool{}
 		for _, s := range names {
 			c, ok := classNamed(s)
 			if !ok {
-				t.Fatalf("%s: unknown class %q in %s", fields[0], s, differentialGolden)
+				return nil, "", fmt.Errorf("%s: unknown class %q", fields[0], s)
 			}
 			want[fields[0]][c] = true
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		return nil, "", err
+	}
+	return want, header, nil
+}
+
+// TestReadDifferentialGolden_MalformedLine reads goldens written to a
+// temporary directory through the parsing readDifferentialGolden uses: a
+// well-formed one, then one for each malformed shape a hand edit or a merge
+// can leave, a body with no class and a body marked unstable with no class.
+// The error names the malformed line.
+func TestReadDifferentialGolden_MalformedLine(t *testing.T) {
+	dir := t.TempDir()
+	parse := func(t *testing.T, content string) (map[string]map[Class]bool, string, error) {
+		t.Helper()
+		path := filepath.Join(dir, "differential.golden")
+		writeGolden(t, path, content)
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = f.Close() }()
+		return parseDifferentialGolden(f)
+	}
+
+	want, header, err := parse(t, "# comment\nbodies 2 generated, 2 well-typed\nSetX composite\nSetY unstable pointer composite\n")
+	if err != nil {
 		t.Fatal(err)
 	}
-	return want, header
+	if header != "bodies 2 generated, 2 well-typed" {
+		t.Errorf("header %q", header)
+	}
+	if !reflect.DeepEqual(want, map[string]map[Class]bool{
+		"SetX": {Composite: true},
+		"SetY": {Pointer: true, Composite: true},
+	}) {
+		t.Errorf("classes %v", want)
+	}
+
+	for _, line := range []string{"SetX unstable", "SetX"} {
+		t.Run(line, func(t *testing.T) {
+			_, _, err := parse(t, "bodies 1 generated, 1 well-typed\n"+line+"\n")
+			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("malformed line %q", line)) {
+				t.Errorf("error %v, want one naming the malformed line %q", err, line)
+			}
+		})
+	}
 }

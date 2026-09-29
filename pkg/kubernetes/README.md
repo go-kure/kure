@@ -218,8 +218,8 @@ A body is nil guards and marshalled locals first, then nil-init guards and field
 writes. *The object* is the parameter the first write in the body is spelled from.
 Parentheses change nothing, and names are resolved by what they declare: a local or a
 method called `panic` or `Marshal` is not the builtin or the function. Where a rule
-reads as written instead, it says so: N1, P6 and V6 compare two paths, and V1 reads
-the name `nil`.
+reads as written instead, it says so: N1, P6, V6 and V7 compare two paths, and V1
+reads the name `nil`.
 
 | ID | Statements, at the top level of the body |
 |---|---|
@@ -255,7 +255,7 @@ the name `nil`.
 | V4 | Each argument occurs once over all written values and marshalled locals: `&n` written to two fields gives them one pointer, and so does `T{A: p, B: p}`. Keys and guards do not count. |
 | V5 | Every parameter has a place: it is the object, a key or index of a path, or an argument written or marshalled. A parameter the body leaves out, a blank one included, is a value the caller passed and the helper dropped. |
 | V6 | `&P` and `*P` are the argument as the body took or followed its address, not as the caller passed it. Each is the element appended or inserted, the value of a pointer-typed field, or written to a path spelled through a pointer-typed field written earlier, `<its path>.…` or `*<its path>`, as written. Anywhere else it writes a field the caller did not name: `o.Spec.Count = *c` beside `o.Spec.Replicas = &n` is refused. |
-| V7 | No written value reads its target, the value of a nil-init included, wherever the read stands: in a constant (`unsafe.Sizeof(o.Spec.Items)`), in the size of a `make`, or in the type of a literal. A value computed from what the field held is not the caller's. The slice an append extends is not such a read. |
+| V7 | No written value reads its target, the value of a nil-init included, wherever the read stands: in a constant (`unsafe.Sizeof(o.Spec.Items)`), in the size of a `make`, or in the type of a literal. The target is read as written, parentheses aside: `unsafe.Sizeof(o.Spec.Payload)` in a value written to `(*o).Spec.Payload` is not a read of it. A value computed from what the field held is not the caller's. The slice an append extends is not such a read. |
 
 A call therefore appears in six positions only: `append` as the whole value of a class
 (a) statement, `make` and `new` in a nil-init guard, `json.Marshal` in a local,

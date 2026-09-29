@@ -872,6 +872,17 @@ func SetDocAnyReadsAny(d *Doc, n string, m Mode) {
 	}{Name: n, Mode: m}
 }
 
+// class c: V7 reads the target as written, parentheses aside; (*d).Any and
+// d.Any are one field in two spellings, and the type of the literal reads the
+// other spelling, which V7 does not equate with the target
+func SetDocAnyReadsAnyDerefObj(d *Doc, n string, m Mode) {
+	(*d).Any = struct {
+		A    [unsafe.Sizeof(d.Any)%1 + 1]int
+		Name string
+		Mode Mode
+	}{Name: n, Mode: m}
+}
+
 // class c: the type of the literal written reads another field
 func SetDocAnyReadsName(d *Doc, n string, m Mode) {
 	d.Any = struct {
@@ -1412,6 +1423,8 @@ var grammarAdmitted = map[string]Class{
 
 	"SetRefNameParenInit":          Pointer,
 	"SetDocPlanPositionalNilLimit": Composite,
+
+	"SetDocAnyReadsAnyDerefObj": Composite,
 }
 
 // grammarForwarders lists the fixtures the grammar admits and the class of
