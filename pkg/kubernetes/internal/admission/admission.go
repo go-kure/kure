@@ -641,8 +641,10 @@ func isStructLit(lit *ast.CompositeLit, info *types.Info) bool {
 // slice, a length of 0 (isEmptyMake).
 func isMake(e ast.Expr, info *types.Info) bool { return isBuiltinCall(e, info, "make") }
 
-// nilInLiteral returns the key of the first keyed element of lit, or of a
-// literal nested in it, whose value is nil; "" when there is none.
+// nilInLiteral returns the key of the first keyed element of lit whose value
+// is nil, or of a literal reached from lit through keyed elements only, as
+// key.key; "" when there is none. A positional element is not read, whatever
+// it holds.
 func nilInLiteral(lit *ast.CompositeLit, info *types.Info, locals map[types.Object]bool) string {
 	for _, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
