@@ -192,7 +192,8 @@
 //     map, and it indexes no slice at all. An append needs no slice and an
 //     array has its elements. A nil-init guard is itself such a write.
 //   - N1: a nil-init guard tests the path it assigns, with the same keys as
-//     under P4, and assigns T{}, &T{}, new(T) or a make with constant sizes.
+//     under P4, and assigns T{}, &T{}, new(T) or a make with constant sizes,
+//     a slice make of length 0.
 //   - V1: a value is an argument passed whole (a parameter other than the
 //     object as P, &P or *P, or the first name of a local), a struct literal
 //     of arguments, constants and such literals, or the address of one.
