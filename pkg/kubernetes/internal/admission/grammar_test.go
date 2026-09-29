@@ -1117,7 +1117,6 @@ var grammarAdmitted = map[string]Class{
 // it refuses, with the rule to come that refuses each: the bodies the grammar
 // does not yet read as the older checks do.
 var grammarGaps = map[string]string{
-	"AddDocKeyedFuncKey":        "S9",
 	"AddDocKeyedAppendKey":      "S11",
 	"AddItemAndRow":             "S10",
 	"AddItemAndLabel":           "S10",
@@ -1135,11 +1134,13 @@ var grammarGaps = map[string]string{
 	"SetReplicasAndCountDeref":  "V6",
 }
 
-// grammarBehind lists every fixture a check before the grammar refuses and
-// the grammar alone refuses too, with the rule it refuses by first. The
-// verdict does not show these rules: they are what keeps each body refused
-// once the checks ahead of them are gone.
+// grammarBehind lists every fixture refused for its body other than by the
+// grammar, by a check before it or by the fall-through, that the grammar
+// alone refuses too, with the rule it refuses by first. The verdict does not
+// show these rules: they are what keeps each body refused once the checks
+// ahead of them are gone.
 var grammarBehind = map[string]string{
+	"AddDocKeyedFuncKey":                   "S9",
 	"AddDocErr":                            "V1",
 	"AddGroupItemCommaOkCrossKey":          "S3",
 	"AddGroupItemConstKey":                 "S3",
@@ -1171,7 +1172,7 @@ var grammarBehind = map[string]string{
 	"AddItemFromRowDirect":                 "V1",
 	"AddItemFullSliceSource":               "S3",
 	"AddItemIfSet":                         "S8",
-	"AddItemInClosure":                     "S3",
+	"AddItemInClosure":                     "S9",
 	"AddItemIndirectBesideStray":           "V1",
 	"AddItemLocalBase":                     "S3",
 	"AddItemLocalOnly":                     "S3",
@@ -1339,7 +1340,7 @@ var grammarBehind = map[string]string{
 	"SetReplicasTempMapConcat":             "S3",
 	"SetReplicasTempMapInc":                "S3",
 	"SetReplicasTempMapRange":              "S3",
-	"SetReplicasViaClosure":                "S1",
+	"SetReplicasViaClosure":                "S9",
 	"SetReplicasZero":                      "V1",
 	"SetSpecNestedNil":                     "V1",
 	"SetSpecWithNilRef":                    "V1",
