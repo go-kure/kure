@@ -1117,9 +1117,6 @@ var grammarAdmitted = map[string]Class{
 // it refuses, with the rule to come that refuses each: the bodies the grammar
 // does not yet read as the older checks do.
 var grammarGaps = map[string]string{
-	"SetRefNameStarWrite":       "P6",
-	"SetDocText":                "P6",
-	"SetDocCell":                "P6",
 	"SetRefFromNilParam":        "V1",
 	"SetDocPolicyNilLimit":      "V1",
 	"SetReplicasAndPayloadAddr": "V6",
@@ -1141,6 +1138,9 @@ var grammarBehind = map[string]string{
 	"SetRefNameGuardDerefObj":              "N1",
 	"AddItemMakeCapReadsField":             "V7",
 	"SetDocAnyReadsAny":                    "V7",
+	"SetRefNameStarWrite":                  "P6",
+	"SetDocText":                           "P6",
+	"SetDocCell":                           "P6",
 	"AddDocErr":                            "V1",
 	"AddGroupItemCommaOkCrossKey":          "S3",
 	"AddGroupItemConstKey":                 "S3",
@@ -1248,7 +1248,7 @@ var grammarBehind = map[string]string{
 	"SetBoxPayloadNew":                     "V1",
 	"SetCountRangeKey":                     "S1",
 	"SetDocPlanLimitNewValue":              "N1",
-	"SetDocRawFirst":                       "P7",
+	"SetDocRawFirst":                       "P6",
 	"SetHoldCommaOkCrossField":             "S3",
 	"SetHoldFreshMapWriteBack":             "S3",
 	"SetHoldItemsConverted":                "S3",

@@ -185,7 +185,8 @@
 //     A guard is ahead of a write on the same path with the same keys: the
 //     same parameter, or constants of one type and one value.
 //   - P5: a nil-init guard initialises a field, not an element.
-//   - P6: every nil-init is written through.
+//   - P6: every nil-init is written through, a pointer nil-init by a later
+//     write spelled <its text>.… or *<its text> as written.
 //   - P7: behind the nearest nil-init guard ahead of it a write meets only
 //     what that guard assigned. Its first step there may follow that pointer
 //     or index that map; past that step it follows no pointer and indexes no
