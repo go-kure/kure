@@ -866,7 +866,9 @@ func (b *helperBody) bare(target, value ast.Expr, element bool) string {
 // type of a literal. A value computed from what the target held is not the
 // caller's. The slice an append extends is not such a read (readsTarget).
 // The body declares no local but a marshalled one, which reaches nothing of
-// the caller's, so readsTarget is given no alias.
+// the caller's, so readsTarget is given no alias: the target is read as
+// written, parentheses aside (sameTarget), and (*o).Spec.Payload and
+// o.Spec.Payload are two targets.
 func (b *helperBody) readsItself(target, value ast.Expr) string {
 	if readsTarget(target, value, b.info, func(ast.Expr) bool { return false }) {
 		return refused("V7", "%s is assigned %s, a value that reads it", types.ExprString(target), types.ExprString(value))

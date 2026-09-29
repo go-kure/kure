@@ -95,7 +95,7 @@ func SetNestedRef(o *Obj, name, kind string) { o.Spec.Nested.Ref = Ref{Name: nam
 // class c, nested literal
 func SetNested(o *Obj, a string) { o.Spec.Nested = Inner{Ref: Ref{Name: a}} }
 
-// inadmissible: two bare field writes are two forwarders, not a composite (no literal)
+// inadmissible: the one argument n is written to two fields (V4)
 func SetNameAndA(o *Obj, n string) {
 	o.Spec.Name = n
 	o.Spec.Nested.A = n
@@ -104,7 +104,8 @@ func SetNameAndA(o *Obj, n string) {
 // inadmissible: bare forwarder
 func SetName(o *Obj, n string) { o.Spec.Name = n }
 
-// inadmissible: same field written twice is still one field
+// inadmissible: n + "x", the value of the second write, is not an argument
+// passed whole (V1)
 func SetNameTwice(o *Obj, n string) {
 	o.Spec.Name = n
 	o.Spec.Name = n + "x"
@@ -113,10 +114,12 @@ func SetNameTwice(o *Obj, n string) {
 // inadmissible: one-field literal
 func SetNestedOneField(o *Obj, a string) { o.Spec.Nested = Inner{A: a} }
 
-// inadmissible: delegation only
+// inadmissible: the call statement SetName(o, n) is neither an if nor an
+// assignment (S1); the body writes nothing itself
 func SetViaDelegate(o *Obj, n string) { SetName(o, n) }
 
-// inadmissible: no write at all
+// inadmissible: _ = o writes to _, which is not spelled from a parameter (P1);
+// the body writes no field
 func SetNothing(o *Obj) { _ = o }
 
 // inadmissible: a receiver nil guard does not make a bare forwarder class b
@@ -181,8 +184,8 @@ func AddItemMakeLen(o *Obj, s string) {
 	o.Spec.Items = append(o.Spec.Items, s)
 }
 
-// inadmissible: a guard around a make that fills the slice is not the
-// nil-init guard, so the write under it is conditional
+// inadmissible: a make whose length is not 0 fills the slice, so the guard
+// around it is not a nil-init guard (N1)
 func AddItemGuardedMakeLen(o *Obj, s string) {
 	if o.Spec.Items == nil {
 		o.Spec.Items = make([]string, 1)
@@ -226,8 +229,8 @@ func AddLabelMakeHint(o *Obj, k, v string) {
 // inadmissible: the appended row is a non-empty make, whatever its capacity mentions
 func AddRowMakeLen(o *Obj, n int) { o.Spec.Rows = append(o.Spec.Rows, make([]string, 1, n)) }
 
-// inadmissible: an empty literal is the nil-init only of a map, slice or
-// pointer field; written into an interface field it is a default
+// inadmissible: an empty literal written unguarded into an interface field is
+// a default: it carries no argument (V3b)
 func SetRefPayloadDefault(o *Obj, r *Ref) {
 	o.Spec.Payload = &Ref{}
 	o.Spec.Ref = r
@@ -284,8 +287,8 @@ func SetBoxPayloadNew(o *Obj, name string) {
 	o.Spec.Box.Name = name
 }
 
-// inadmissible: an empty channel make through a pointer the body initialised;
-// a channel is not a field the zero-value init initialises
+// inadmissible: an empty channel make, unguarded through a pointer the body
+// initialised, is not an argument passed whole (V1)
 func SetBoxChanMake(o *Obj, name string) {
 	if o.Spec.Box == nil {
 		o.Spec.Box = &Box{}
@@ -344,20 +347,23 @@ func SetNameIfSet(o *Obj, n string) {
 // inadmissible: a typed nil conversion is still a clear
 func SetRefTypedNil(o *Obj) { o.Spec.Ref = (*Ref)(nil) }
 
-// inadmissible: a local declared without a value is nil, and clears the field
+// inadmissible: the declaration var r *Ref is neither an if nor an assignment
+// (S1); the nil it declares would clear the field
 func SetRefViaNilLocal(o *Obj) {
 	var r *Ref
 	o.Spec.Ref = r
 }
 
-// inadmissible: a local assigned nil later clears the field
+// inadmissible: r := &Ref{} is not a marshalled local (S3); the nil assigned
+// to it later would clear the field
 func SetRefViaAssignedNil(o *Obj) {
 	r := &Ref{}
 	r = nil
 	o.Spec.Ref = r
 }
 
-// inadmissible: a local declared with an explicit nil clears the field
+// inadmissible: the declaration var r *Ref = nil is neither an if nor an
+// assignment (S1); the nil it declares would clear the field
 func SetRefViaInitNil(o *Obj) {
 	var r *Ref = nil
 	o.Spec.Ref = r
@@ -366,7 +372,8 @@ func SetRefViaInitNil(o *Obj) {
 // inadmissible: an explicit nil inside the literal clears that field
 func SetSpecWithNilRef(o *Obj, n string) { o.Spec = Spec{Name: n, Ref: nil} }
 
-// inadmissible: a typed nil two literals down
+// inadmissible: a typed nil as a keyed element of the literal, beside a nested
+// literal, is nil by name (V1)
 func SetSpecNestedNil(o *Obj, n string) {
 	o.Spec = Spec{Nested: Inner{A: n, Ref: Ref{Name: n}}, Ref: (*Ref)(nil)}
 }
@@ -500,8 +507,8 @@ func AddLabelLocalThenName(o *Obj, k, v string) {
 	o.Spec.Name = k
 }
 
-// inadmissible as a bare forwarder, but not as a nil clear: a zero-valued
-// scalar local is not nil (only nillable fields count)
+// inadmissible: S1 refuses the declaration var name string, a statement that
+// is neither an if nor an assignment
 func SetNameViaZeroLocal(o *Obj, n string) {
 	var name string
 	name = n
@@ -628,7 +635,7 @@ func SetRefNameNilFirst(o *Obj, n string) {
 	o.Spec.Ref.Name = n
 }
 
-// inadmissible: new of a value is a set-if-unset, not a zero-init
+// inadmissible: new of a value is a set-if-unset, not a nil-init (N1)
 func SetRefIfUnsetNewValue(o *Obj, ref Ref, n string) {
 	if o.Spec.Ref == nil {
 		o.Spec.Ref = new(ref)
@@ -788,21 +795,24 @@ func SetReplicasAddCount(o *Obj, n int32, c int) {
 	o.Spec.Count += c
 }
 
-// inadmissible: a compound assignment through a rooted local map writes old + v
+// inadmissible: labels := o.Labels is not a marshalled local (S3); the compound
+// assignment through it would write old + v
 func AddLabelConcatViaLocal(o *Obj, k, v string) {
 	labels := o.Labels
 	labels[k] += v
 	o.Labels = labels
 }
 
-// inadmissible: a compound assignment to an element of a rooted local slice writes old + s
+// inadmissible: items := o.Spec.Items is not a marshalled local (S3); the
+// compound assignment to its element would write old + s
 func SetReplicasItemConcat(o *Obj, s string, n int32) {
 	items := o.Spec.Items
 	items[0] += s
 	o.Spec.Replicas = &n
 }
 
-// inadmissible: a range clause assigns an element of a rooted local slice once per element
+// inadmissible: items := o.Spec.Items is not a marshalled local (S3); the range
+// clause would assign its element once per element
 func SetReplicasItemRange(o *Obj, xs []string, n int32) {
 	items := o.Spec.Items
 	for _, items[0] = range xs {
@@ -1469,9 +1479,8 @@ func AddGroupItemCommaOkCrossKey(o *Obj, k, j, s string) {
 	o.Spec.Groups[j] = items
 }
 
-// inadmissible: the conversion written back through a pointer the body
-// initialised reads a local that may hold the target, a value the caller did
-// not supply (refused before the append into the local is)
+// inadmissible: S3 refuses items := o.Spec.Rows[0], a := that is not
+// v, err := json.Marshal(P)
 func SetHoldItemsConverted(o *Obj, s string) {
 	if o.Spec.Hold == nil {
 		o.Spec.Hold = &Holder{}
@@ -1555,7 +1564,8 @@ func AddItemPartialSliceSource(o *Obj, s string) {
 	o.Spec.Items = items
 }
 
-// inadmissible: a nested append extends the field by a constant first
+// inadmissible: the inner append is not the whole value of an assignment
+// (S11), whatever it extends the field by
 func AddItemNestedConstant(o *Obj, s string) {
 	o.Spec.Items = append(append(o.Spec.Items, "fixed"), s)
 }
@@ -1637,7 +1647,8 @@ func AddRowParenMakeLen(o *Obj, n int) {
 	o.Spec.Rows = append(o.Spec.Rows, (make)([]string, 1, n))
 }
 
-// inadmissible: a parenthesised local assigned nil still clears the field
+// inadmissible: r := ref is not a marshalled local (S3); the nil assigned to
+// (r) would clear the field
 func SetRefViaParenAssignedNil(o *Obj, ref *Ref) {
 	r := ref
 	(r) = nil
@@ -1724,7 +1735,9 @@ func SetReplicasViaClosure(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible: the tuple re-roots the alias the append goes through
+// inadmissible: spec := &Spec{} is not a marshalled local (S3); the tuple then
+// points it at the object, while its append goes through the local as first
+// evaluated, so the object is never written
 func AddItemTupleReroot(o *Obj, s string) {
 	spec := &Spec{}
 	spec, spec.Items = &o.Spec, append(spec.Items, s)
@@ -1744,7 +1757,8 @@ func AddItemConditionalAlias(o *Obj, s string, ok bool) {
 	spec.Items = append(spec.Items, s)
 }
 
-// inadmissible: the parameter is reassigned before the append
+// inadmissible: the if that reassigns the parameter is none of the three
+// guards (S8)
 func AddItemParamReassigned(o, other *Obj, s string, ok bool) {
 	if ok {
 		o = &Obj{}
@@ -1754,14 +1768,16 @@ func AddItemParamReassigned(o, other *Obj, s string, ok bool) {
 	o.Spec.Items = append(o.Spec.Items, s)
 }
 
-// inadmissible: a range clause reassigns the parameter
+// inadmissible: the range loop that reassigns the parameter is neither an if
+// nor an assignment (S1)
 func AddItemParamRanged(o *Obj, objs []*Obj, s string) {
 	for _, o = range objs {
 	}
 	o.Spec.Items = append(o.Spec.Items, s)
 }
 
-// inadmissible: the parameter's address is taken, and it is reassigned through it
+// inadmissible: p := &o is not a marshalled local (S3); the parameter is
+// reassigned through it
 func AddItemParamAddressTaken(o *Obj, s string) {
 	p := &o
 	*p = &Obj{Spec: Spec{Name: s}}
@@ -1805,7 +1821,8 @@ func AddItemExplicitDeref(o *Obj, s string) {
 	(*o).Spec.Items = append((*o).Spec.Items, s)
 }
 
-// inadmissible: two keys that print alike are not the same key, with no local
+// inadmissible: a key that is neither a parameter nor a constant (P3), with no
+// local; that the two keys print alike is never compared
 func AddGroupItemLiteralKeysDirect(o *Obj, s string) {
 	if o.Spec.Groups == nil {
 		o.Spec.Groups = map[string][]string{}
@@ -1854,7 +1871,8 @@ func AddLabelAddrDeref(o *Obj, k, v string) {
 	(*&o.Labels)[k] = v
 }
 
-// inadmissible: a key the comparison cannot equate, even spelled alike
+// inadmissible: the key string(k) is neither a parameter nor a constant (P3),
+// spelled alike on both sides or not
 func AddGroupItemConvKeyDirect(o *Obj, k, s string) {
 	if o.Spec.Groups == nil {
 		o.Spec.Groups = map[string][]string{}

@@ -173,6 +173,7 @@ SetBoxPayloadMake	inadmissible	make(map[string]string) is written to o.Spec.Box.
 SetBoxPayloadNew	inadmissible	new(Ref) is written to o.Spec.Box.Payload, and new(Ref) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1, purity §4)
 SetCountRangeKey	inadmissible	a range loop is neither an if nor an assignment (grammar S1, purity §4)
 SetDocAnyReadsAny	inadmissible	d.Any is assigned struct{A [unsafe.Sizeof(d.Any) % 1 + 1]int; Name string; Mode Mode}{…}, a value that reads it (grammar V7, purity §4)
+SetDocAnyReadsAnyDerefObj	composite	composite literal with two or more fields or nested (class c)
 SetDocAnyReadsName	composite	composite literal with two or more fields or nested (class c)
 SetDocAnyRef	composite	composite literal with two or more fields or nested (class c)
 SetDocBlob	pointer	pointer-typed field assignment (class b)

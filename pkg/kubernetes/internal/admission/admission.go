@@ -109,7 +109,8 @@
 //     pointer-typed target, or written to a target spelled <its text>.… or
 //     *<its text>, as written, of a pointer-typed target written earlier.
 //   - V7: no written value reads its target, the value of a nil-init
-//     included, in a constant, a make size or the type of a literal.
+//     included, in a constant, a make size or the type of a literal; the
+//     target is read as written, parentheses aside.
 //
 // S9, then S11, are read off the whole body first. Then the statements are
 // read in source order and the first rule one breaks names the refusal: S1;
