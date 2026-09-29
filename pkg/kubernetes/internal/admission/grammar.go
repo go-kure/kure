@@ -726,6 +726,9 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 		}
 		value, element, w.appends = call.Args[1], true, true
 	}
+	if reason := b.nilled(target, rhs); reason != "" {
+		return reason
+	}
 	if reason := b.value(value, target, element); reason != "" {
 		return reason
 	}
@@ -733,6 +736,27 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 		return reason
 	}
 	b.writes = append(b.writes, w)
+	return ""
+}
+
+// nilled refuses nil written where it clears what the caller did not name
+// (V1): as the value of a target that can hold nil, or as a keyed element, at
+// any depth, of a literal written as a field or inserted value. nil is read by
+// its name (isNilValue), so a parameter named nil is refused by it. An
+// appended element is not read: rhs is then the append. The body declares no
+// local but a marshalled one, which is never nil, so isNilValue is given no
+// nil local.
+func (b *helperBody) nilled(target, rhs ast.Expr) string {
+	none := map[types.Object]bool{}
+	to := types.ExprString(target)
+	if isNillable(b.info.TypeOf(target)) && isNilValue(rhs, b.info, none) {
+		return refused("V1", "%s is assigned %s, nil by name", to, types.ExprString(rhs))
+	}
+	if lit := compositeOf(rhs); lit != nil {
+		if key := nilInLiteral(lit, b.info, none); key != "" {
+			return refused("V1", "%s is assigned %s, whose %s is nil by name", to, types.ExprString(rhs), key)
+		}
+	}
 	return ""
 }
 

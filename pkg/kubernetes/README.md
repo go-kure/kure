@@ -162,11 +162,13 @@ write beside the one append or insert: each write is checked on its own by the g
 below, and the class is that of the append. A helper
 that returns anything, an `error` included, is inadmissible whatever its body does
 (§4 allows no error return: a nil receiver panics). A nil receiver guard admits
-nothing on its own. A body that assigns `nil` to any field,
-directly or as a keyed value inside a literal (the literal `nil`, a typed conversion
-of it, or a local known to be nil), is inadmissible whatever else it does, because it clears a field the caller did not name (§4); a
-helper that must replace one member of a one-of takes the whole one-of as its
-argument instead.
+nothing on its own. A body that assigns `nil` to a field that can hold it, or as a
+keyed value inside a literal it writes as a field or inserted value (the literal
+`nil`, a typed conversion of it, or a local known to be nil), is inadmissible whatever
+else it does, because it clears a field the caller did not name (§4). `nil` is no
+argument (V1), and the name is read as spelled: a parameter named `nil` is refused by
+that name. A helper that must replace one member of a one-of takes the whole one-of as
+its argument instead.
 
 A helper reaches the object it writes through one pointer parameter, which the body
 never reassigns and never takes the address of, and every write in every class is
@@ -208,9 +210,10 @@ not read.
 
 A body is nil guards and marshalled locals first, then nil-init guards and field
 writes. *The object* is the parameter the first write in the body is spelled from.
-Parentheses change nothing, and names are resolved by what they declare, never by
-spelling: a local or a method called `panic` or `Marshal` is not the builtin or the
-function. Where a rule compares two paths as written, it says so: N1, P6.
+Parentheses change nothing, and names are resolved by what they declare: a local or a
+method called `panic` or `Marshal` is not the builtin or the function. Where a rule
+reads as written instead, it says so: N1 and P6 compare two paths, and V1 reads the
+name `nil`.
 
 | ID | Statements, at the top level of the body |
 |---|---|
@@ -239,7 +242,7 @@ function. Where a rule compares two paths as written, it says so: N1, P6.
 
 | ID | Values: the element appended, the value inserted, the value of a field |
 |---|---|
-| V1 | A value is an argument passed whole, a struct literal, or the address of one. An argument is a parameter other than the object, written `P`, `&P` or `*P`, or the first name of a local; the error of a local is never a value. A struct literal, keyed or positional, holds arguments, constants, struct literals and their addresses. |
+| V1 | A value is an argument passed whole, a struct literal, or the address of one. An argument is a parameter other than the object, written `P`, `&P` or `*P`, or the first name of a local; the error of a local is never a value. A struct literal, keyed or positional, holds arguments, constants, struct literals and their addresses. The name `nil`, as spelled, is not the value of a field that can hold nil, nor a keyed element, at any depth, of a literal written as a field or inserted value: a parameter named `nil` is refused by that name. An appended element is not read for it. |
 | V2 | A struct literal is the element appended or inserted, `&T{...}` written to a pointer-typed field, or the value of the helper's only field write (nil-init guards not counted). A struct replaced beside another write loses fields the caller did not name. |
 | V3 | A constant in a struct literal is a named constant of a defined type (`corev1.ProtocolTCP`). An inline literal (`"Deployment"`, `true`, `3`) or a constant of a basic type is a default. |
 | V3b | Every struct literal, at every depth, carries an argument. |
