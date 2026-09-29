@@ -210,7 +210,7 @@ A body is nil guards and marshalled locals first, then nil-init guards and field
 writes. *The object* is the parameter the first write in the body is spelled from.
 Parentheses change nothing, and names are resolved by what they declare, never by
 spelling: a local or a method called `panic` or `Marshal` is not the builtin or the
-function.
+function. Where a rule compares two paths as written, it says so: N1.
 
 | ID | Statements, at the top level of the body |
 |---|---|
@@ -235,7 +235,7 @@ function.
 | P5 | A nil-init guard initialises a field, not an element of a map or slice. |
 | P6 | Every nil-init is written through: by a later write below it, or by the append that extends it. |
 | P7 | Behind a nil-init guard a write meets only what that guard assigned: one pointer, one map or one empty slice. As its first step there it may follow that pointer or index that map. Past that step it follows no pointer and indexes no map, because what lies behind holds its zero value, and it indexes no slice at all: `o.Spec.Items[i] = v` behind `o.Spec.Items = []string{}` has no element to write. An append needs no slice, and an array has its elements. The guard is the nearest one ahead of the write on the same path, and a nil-init guard is itself such a write behind the guard ahead of it. The rule reads the path, not the value, so the map behind `&map[K]V{}` is not indexed either. |
-| N1 | A nil-init guard tests the path it assigns, with the same keys as under P4, and assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. A slice `make` has length 0: `make([]T, 3)` allocates three elements the caller did not supply. |
+| N1 | A nil-init guard tests the path it assigns, spelled alike outer parentheses aside and with the same keys as under P4: `if (*o).Spec.Ref == nil { o.Spec.Ref = &Ref{} }` is refused. The path is a map, slice or pointer; an empty value in an interface or a channel is a default. The guard assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. A slice `make` has length 0: `make([]T, 3)` allocates three elements the caller did not supply. |
 
 | ID | Values: the element appended, the value inserted, the value of a field |
 |---|---|
