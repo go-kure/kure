@@ -407,8 +407,9 @@ func (b *helperBody) marshalled(s *ast.AssignStmt) (value, err types.Object, arg
 }
 
 // nilInit checks the assignment of a nil-init guard: its target (P1, P2, P3,
-// P5), and that the guard tests the path it assigns and assigns it an empty
-// value with constant sizes (N1).
+// P5), and that the guard tests the path it assigns, spelled alike, which is
+// a map, slice or pointer, and assigns it an empty value with constant sizes
+// (N1).
 func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	target := s.Lhs[0]
 	text := types.ExprString(target)
@@ -419,9 +420,20 @@ func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	if steps[len(steps)-1].kind != fieldStep {
 		return refused("P5", "the nil-init of %s initialises other than a field", text)
 	}
+	// The guard tests the path it assigns: the same steps and keys, and the
+	// same spelling, outer parentheses aside. (*o).Spec.Ref and o.Spec.Ref
+	// are one path spelled two ways, and a guard on one is not a guard on
+	// the other.
 	of, ok := b.steps(tested)
-	if !ok || pathRoot(tested, b.info) != b.object || len(of) != len(steps) || !b.leads(of, steps) {
+	if !ok || pathRoot(tested, b.info) != b.object || len(of) != len(steps) || !b.leads(of, steps) ||
+		types.ExprString(ast.Unparen(target)) != types.ExprString(ast.Unparen(tested)) {
 		return refused("N1", "the guard tests %s and initialises %s", types.ExprString(tested), text)
+	}
+	// What a nil-init initialises is a map, a slice or a pointer
+	// (initsField): an empty value in an interface or a channel is a value
+	// the caller did not supply.
+	if !initsField(b.info.TypeOf(target)) {
+		return refused("N1", "the nil-init of %s initialises other than a map, slice or pointer", text)
 	}
 	if !b.isEmpty(s.Rhs[0]) {
 		return refused("N1", "%s is initialised with %s, not T{}, &T{}, new(T) or a make with constant sizes", text, types.ExprString(s.Rhs[0]))
