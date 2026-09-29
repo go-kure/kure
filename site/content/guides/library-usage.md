@@ -58,7 +58,8 @@ Kure adds a helper only for one of a few write shapes: appending one item to a
 list, inserting one key into a map, setting a pointer field, or composing a
 small upstream struct. A helper never defaults, never validates, and never
 touches a field you did not name. A helper writes each argument as you pass
-it: it computes nothing from it and reads nothing back from the object.
+it, or as its JSON encoding where the field holds raw JSON
+(`fluxcd.SetHelmReleaseValuesFromMap`), and computes nothing else from it.
 
 <!-- doc-example: pkg/kubernetes Example_libraryUsageHelpers -->
 ```go
