@@ -200,9 +200,9 @@ empty. Entries only ever leave, and a stale entry fails the test.
 
 A helper the classes admit must also be written in a closed grammar: every top-level
 statement, every path it writes and every value it writes has one of the forms below,
-and anything else refuses the helper. The grammar only refuses. It reads a body the
-rules above admit, so the class of an admitted helper and the reason of every refusal
-above are unchanged, and a refusal it makes names its rule:
+and anything else refuses the helper. The grammar only refuses. Its verdict counts only
+for a body the rules above admit, so the class of an admitted helper and the reason of
+every refusal above are unchanged, and a refusal it makes names its rule:
 `<what was found> (grammar S3, purity §4)`. The four helpers admitted by name (§5) are
 not read.
 
@@ -228,10 +228,10 @@ function.
 | P1 | A path is spelled from the object through field selectors, indexes and dereferences, and the object is a pointer parameter the body never reassigns and never takes the address of. |
 | P2 | A path names a field: `*o = x` is refused. |
 | P3 | A key or index is a parameter other than the object, or a constant. |
-| P4 | No location is written twice, and none is written after a write to a location above or below it on the same path. Every pointer followed counts as a step of the path, written or not; a promoted field counts as its full spelling; any two keys may name the same element. The one exception is a nil-init guard ahead of the write it initialises. |
+| P4 | No location is written twice, and none is written after a write to a location above or below it on the same path. Every pointer followed counts as a step of the path, written or not; a promoted field counts as its full spelling; any two keys may name the same element. The one exception is a nil-init guard ahead of the write it initialises, on the same path with the same keys: the same parameter, or constants of one type and one value, however each is spelled. |
 | P5 | A nil-init guard initialises a field, not an element of a map or slice. |
 | P6 | Every nil-init is written through: by a later write below it, or by the append that extends it. |
-| N1 | A nil-init guard tests the path it assigns, and assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. |
+| N1 | A nil-init guard tests the path it assigns, with the same keys as under P4, and assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. |
 
 | ID | Values: the element appended, the value inserted, the value of a field |
 |---|---|

@@ -2,6 +2,8 @@ package admission
 
 import (
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"os"
 	"strings"
@@ -93,6 +95,25 @@ func SetNestedRefPositional(o *Obj, name, kind string) { o.Spec.Nested.Ref = Ref
 // class b: a constant index is a constant however it is spelled, a conversion
 // or a builtin the compiler evaluates included
 func SetDocPlanLimitConstIndex(d *Doc, limit int32) { d.Plans[int(len("a"))].Policy.Limit = &limit }
+
+// class b: a nil-init guard and the write through it, on the element a
+// constant index names; the index is a conversion, which is no literal and no
+// identifier, and is the same index each time by its value
+func SetDocPlanLimitGuardedConstIndex(d *Doc, limit int32) {
+	if d.Plans[int(0)].Policy.Limit == nil {
+		d.Plans[int(0)].Policy.Limit = new(int32)
+	}
+	*d.Plans[int(0)].Policy.Limit = limit
+}
+
+// P4: the nil-init is of element 1 and the write through element 2, two
+// constant indexes that print alike
+func SetDocPlanLimitAbbreviatedIndex(d *Doc, limit int32) {
+	if d.Plans[len([...]int{1})].Policy.Limit == nil {
+		d.Plans[len([...]int{1})].Policy.Limit = new(int32)
+	}
+	*d.Plans[len([...]int{1, 2})].Policy.Limit = limit
+}
 
 // S2: a receiver guard after the write
 func SetReplicasGuardLast(o *Obj, n int32) {
@@ -453,67 +474,69 @@ var grammarRefusals = map[string]refusal{
 	"SetRefNameViaParenLocal":      {"S1", Pointer},
 	"SetReplicasTempSliceExpanded": {"S3", Pointer},
 
-	"AddLabelDelete":              {"S1", Append},
-	"AddLabelMapsCopy":            {"S1", Append},
-	"AddItemMethodCall":           {"S1", Append},
-	"AddItemDeferred":             {"S1", Append},
-	"AddItemGo":                   {"S1", Append},
-	"AddItemSend":                 {"S1", Append},
-	"SetReplicasGuardLast":        {"S2", Pointer},
-	"SetDocBlobBlankErr":          {"S3", Pointer},
-	"SetDocBlobFromField":         {"S3", Pointer},
-	"SetDocBlobFromCall":          {"S3", Pointer},
-	"AddItemLaundered":            {"S3", Append},
-	"SetRefLaundered":             {"S3", Pointer},
-	"SetNestedRefLaundered":       {"S3", Composite},
-	"SetReplicasConditionalAlias": {"S3", Pointer},
-	"SetReplicasViaAddr":          {"S3", Pointer},
-	"SetDocBlobGuardApart":        {"S4", Pointer},
-	"SetReplicasPanicParam":       {"S5", Pointer},
-	"AddLabelPanicCall":           {"S5", Append},
-	"SetRefGuarded":               {"S6", Pointer},
-	"SetReplicasAndNameTuple":     {"S7", Pointer},
-	"SetReplicasTupleReroot":      {"S7", Pointer},
-	"SetReplicasParamBumped":      {"S7", Pointer},
-	"SetReplicasValidated":        {"S8", Pointer},
-	"SetReplicasGuardElse":        {"S8", Pointer},
-	"SetReplicasParamReassigned":  {"S8", Pointer},
-	"SetReplicasTwoObjects":       {"P1", Pointer},
-	"SetReplicasParamOverwritten": {"P1", Pointer},
-	"SetRefDefaulted":             {"P1", Pointer},
-	"SetObjWhole":                 {"P2", Composite},
-	"AddLabelFieldKey":            {"P3", Append},
-	"AddLabelAfterReplace":        {"P4", Append},
-	"AddHoldItemAfterCopy":        {"P4", Append},
-	"AddDocLabelAfterReplace":     {"P4", Append},
-	"SetRefNameThenReplace":       {"P4", Pointer},
-	"SetDocHoldLabels":            {"P5", Append},
-	"AddGroupInit":                {"P5", Append},
-	"SetReplicasUnusedInit":       {"P6", Pointer},
-	"AddItemGrow":                 {"N1", Append},
-	"AddItemFromName":             {"V1", Append},
-	"AddGroupFromGroup":           {"V1", Append},
-	"AddLabelCallValue":           {"V1", Append},
-	"SetBoxNameFixed":             {"V1", Pointer},
-	"AddItemAndLabels":            {"V1", Append},
-	"SetReplicasAndNestedA":       {"V2", Pointer},
-	"SetNestedRefKind":            {"V3", Composite},
-	"SetDocPlanFixedPolicy":       {"V3b", Composite},
-	"AddHoldItemUnguardedInit":    {"V3b", Append},
-	"SetBoxNameUnguardedInit":     {"V3b", Pointer},
-	"SetReplicasNameTwice":        {"V4", Pointer},
-	"SetNestedRefSameName":        {"V4", Composite},
+	"AddLabelDelete":                  {"S1", Append},
+	"AddLabelMapsCopy":                {"S1", Append},
+	"AddItemMethodCall":               {"S1", Append},
+	"AddItemDeferred":                 {"S1", Append},
+	"AddItemGo":                       {"S1", Append},
+	"AddItemSend":                     {"S1", Append},
+	"SetReplicasGuardLast":            {"S2", Pointer},
+	"SetDocBlobBlankErr":              {"S3", Pointer},
+	"SetDocBlobFromField":             {"S3", Pointer},
+	"SetDocBlobFromCall":              {"S3", Pointer},
+	"AddItemLaundered":                {"S3", Append},
+	"SetRefLaundered":                 {"S3", Pointer},
+	"SetNestedRefLaundered":           {"S3", Composite},
+	"SetReplicasConditionalAlias":     {"S3", Pointer},
+	"SetReplicasViaAddr":              {"S3", Pointer},
+	"SetDocBlobGuardApart":            {"S4", Pointer},
+	"SetReplicasPanicParam":           {"S5", Pointer},
+	"AddLabelPanicCall":               {"S5", Append},
+	"SetRefGuarded":                   {"S6", Pointer},
+	"SetReplicasAndNameTuple":         {"S7", Pointer},
+	"SetReplicasTupleReroot":          {"S7", Pointer},
+	"SetReplicasParamBumped":          {"S7", Pointer},
+	"SetReplicasValidated":            {"S8", Pointer},
+	"SetReplicasGuardElse":            {"S8", Pointer},
+	"SetReplicasParamReassigned":      {"S8", Pointer},
+	"SetReplicasTwoObjects":           {"P1", Pointer},
+	"SetReplicasParamOverwritten":     {"P1", Pointer},
+	"SetRefDefaulted":                 {"P1", Pointer},
+	"SetObjWhole":                     {"P2", Composite},
+	"AddLabelFieldKey":                {"P3", Append},
+	"AddLabelAfterReplace":            {"P4", Append},
+	"AddHoldItemAfterCopy":            {"P4", Append},
+	"AddDocLabelAfterReplace":         {"P4", Append},
+	"SetRefNameThenReplace":           {"P4", Pointer},
+	"SetDocPlanLimitAbbreviatedIndex": {"P4", Pointer},
+	"SetDocHoldLabels":                {"P5", Append},
+	"AddGroupInit":                    {"P5", Append},
+	"SetReplicasUnusedInit":           {"P6", Pointer},
+	"AddItemGrow":                     {"N1", Append},
+	"AddItemFromName":                 {"V1", Append},
+	"AddGroupFromGroup":               {"V1", Append},
+	"AddLabelCallValue":               {"V1", Append},
+	"SetBoxNameFixed":                 {"V1", Pointer},
+	"AddItemAndLabels":                {"V1", Append},
+	"SetReplicasAndNestedA":           {"V2", Pointer},
+	"SetNestedRefKind":                {"V3", Composite},
+	"SetDocPlanFixedPolicy":           {"V3b", Composite},
+	"AddHoldItemUnguardedInit":        {"V3b", Append},
+	"SetBoxNameUnguardedInit":         {"V3b", Pointer},
+	"SetReplicasNameTwice":            {"V4", Pointer},
+	"SetNestedRefSameName":            {"V4", Composite},
 }
 
 // grammarAdmitted lists the fixtures in grammarFixtureSource that stay
 // admitted: the shapes the grammar must not refuse.
 var grammarAdmitted = map[string]Class{
-	"SetDocBlob":                Pointer,
-	"AddItemFromPointer":        Append,
-	"AddDocPlan":                Append,
-	"AddHoldLabel":              Append,
-	"SetNestedRefPositional":    Composite,
-	"SetDocPlanLimitConstIndex": Pointer,
+	"SetDocBlob":                       Pointer,
+	"AddItemFromPointer":               Append,
+	"AddDocPlan":                       Append,
+	"AddHoldLabel":                     Append,
+	"SetNestedRefPositional":           Composite,
+	"SetDocPlanLimitConstIndex":        Pointer,
+	"SetDocPlanLimitGuardedConstIndex": Pointer,
 }
 
 // TestClassify_GrammarOnlyRefuses classifies the fixture with and without the
@@ -572,5 +595,75 @@ func TestClassify_GrammarOnlyRefuses(t *testing.T) {
 		if !seen[name] {
 			t.Errorf("%s: not classified at all", name)
 		}
+	}
+}
+
+// TestSameIndex pins what makes two keys or indexes the same one: the same
+// expression, or two constants of one type and one value however each is
+// spelled. The fixture cannot isolate the type: the checks before the grammar
+// compare a path by its text, and two constants of two types never print
+// alike.
+func TestSameIndex(t *testing.T) {
+	const src = `package p
+
+func f() int { return 0 }
+
+func g(m map[any]int, k string) {
+	_ = m[int32(0)]
+	_ = m[int32(1-1)]
+	_ = m[int64(0)]
+	_ = m[int32(1)]
+	_ = m[f()]
+	_ = m[f()]
+	_ = m[k]
+	_ = m[(k)]
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "p.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := &types.Info{
+		Types: map[ast.Expr]types.TypeAndValue{},
+		Defs:  map[*ast.Ident]types.Object{},
+		Uses:  map[*ast.Ident]types.Object{},
+	}
+	if _, err := (&types.Config{}).Check("p", fset, []*ast.File{file}, info); err != nil {
+		t.Fatal(err)
+	}
+	var keys []ast.Expr
+	ast.Inspect(file, func(n ast.Node) bool {
+		if index, ok := n.(*ast.IndexExpr); ok {
+			keys = append(keys, index.Index)
+		}
+		return true
+	})
+	if len(keys) != 8 {
+		t.Fatalf("read %d keys, want 8", len(keys))
+	}
+
+	b := &helperBody{info: info}
+	for _, tc := range []struct {
+		name string
+		x, y int
+		want bool
+	}{
+		{"one constant spelled two ways", 0, 1, true},
+		{"one value of two types", 0, 2, false},
+		{"two values of one type", 0, 3, false},
+		{"two calls that print alike", 4, 5, false},
+		{"one parameter, parenthesised or not", 6, 7, true},
+		{"a constant and a parameter", 0, 6, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			x, y := keys[tc.x], keys[tc.y]
+			if got := b.sameIndex(x, y); got != tc.want {
+				t.Errorf("sameIndex(%s, %s) = %t, want %t", types.ExprString(x), types.ExprString(y), got, tc.want)
+			}
+			if got := b.sameIndex(y, x); got != tc.want {
+				t.Errorf("sameIndex(%s, %s) = %t, want %t", types.ExprString(y), types.ExprString(x), got, tc.want)
+			}
+		})
 	}
 }

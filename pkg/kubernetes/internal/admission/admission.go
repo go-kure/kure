@@ -145,10 +145,10 @@
 // A body the checks above admit must also be written in a closed grammar
 // (grammar.go): every top-level statement, every path written and every value
 // written has one of the forms below, and anything else refuses the helper.
-// The grammar only refuses: it runs when the checks above would admit, so it
-// changes neither the class of an admitted helper nor the reason of a refusal
-// they make. Its reasons end in "(grammar <ID>, purity §4)". The README of
-// pkg/kubernetes states the rules in full, under the same IDs.
+// The grammar only refuses: its verdict counts only when the checks above
+// admit, so it changes neither the class of an admitted helper nor the reason
+// of a refusal they make. Its reasons end in "(grammar <ID>, purity §4)". The
+// README of pkg/kubernetes states the rules in full, under the same IDs.
 //
 // A body is nil guards and marshalled locals, then nil-init guards and field
 // writes. The object is the parameter the first write is spelled from.
@@ -178,10 +178,12 @@
 //     or below it on the same path, other than through a nil-init guard ahead
 //     of the write. Every pointer followed is a step of the path, a promoted
 //     field is its full spelling, and any two keys may be the same element.
+//     A guard is ahead of a write on the same path with the same keys: the
+//     same parameter, or constants of one type and one value.
 //   - P5: a nil-init guard initialises a field, not an element.
 //   - P6: every nil-init is written through.
-//   - N1: a nil-init guard tests the path it assigns, and assigns T{}, &T{},
-//     new(T) or a make with constant sizes.
+//   - N1: a nil-init guard tests the path it assigns, with the same keys as
+//     under P4, and assigns T{}, &T{}, new(T) or a make with constant sizes.
 //   - V1: a value is an argument passed whole (a parameter other than the
 //     object as P, &P or *P, or the first name of a local), a struct literal
 //     of arguments, constants and such literals, or the address of one.
@@ -637,9 +639,9 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	}
 	sort.Strings(defaulted)
 	extra := sortedKeys(bareWrites)
-	// The grammar is the last check and reads only a body the checks above
-	// would admit: it turns an admission into a refusal and changes nothing
-	// else.
+	// The grammar is the last check. It reads every body that carries an
+	// admitted operation, and its verdict is read below every refusal above:
+	// it turns an admission into a refusal and changes nothing else.
 	outside := ""
 	if appendOrMap || ptrAssign || bigLiteral {
 		outside = checkGrammar(fn, info)
