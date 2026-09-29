@@ -94,6 +94,8 @@ type helperBody struct {
 	// fieldWrites is the number of top-level assignments that declare
 	// nothing: the helper's field writes, nil-init guards not counted.
 	fieldWrites int
+	// ops is the number of field writes read so far that append or insert.
+	ops int
 	// uses holds every occurrence of an argument in a written value or as the
 	// argument of json.Marshal, in source order.
 	uses []*ast.Ident
@@ -666,12 +668,20 @@ func (b *helperBody) assignment(s *ast.AssignStmt) string {
 	return b.fieldWrite(s.Lhs[0], s.Rhs[0])
 }
 
-// fieldWrite checks one write: its target (P1, P2, P3) and the value it
-// writes (V1, V3, V3b, V2).
+// fieldWrite checks one write: its target (P1, P2, P3), that it is not a
+// second append or insert (S10), and the value it writes (V1, V3, V3b, V2).
 func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 	steps, reason := b.path(target)
 	if reason != "" {
 		return reason
+	}
+	// S10: class a is one statement. A second append or insert is refused
+	// whatever it extends, the same field or another.
+	if isMapIndex(target, b.info) || appendCall(rhs, b.info) != nil {
+		b.ops++
+		if b.ops > 1 {
+			return refused("S10", "makes %d appends or inserts; class a is a single one", b.ops)
+		}
 	}
 	w := write{steps: steps, text: types.ExprString(target)}
 	// The value written is the element appended or inserted, or the value of

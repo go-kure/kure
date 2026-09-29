@@ -1117,9 +1117,6 @@ var grammarAdmitted = map[string]Class{
 // it refuses, with the rule to come that refuses each: the bodies the grammar
 // does not yet read as the older checks do.
 var grammarGaps = map[string]string{
-	"AddItemAndRow":             "S10",
-	"AddItemAndLabel":           "S10",
-	"AddDocLabelAndHeld":        "S10",
 	"AddItemGuardedMakeLen":     "N1",
 	"SetRefNameGuardDerefObj":   "N1",
 	"AddItemMakeCapReadsField":  "V7",
@@ -1141,6 +1138,9 @@ var grammarGaps = map[string]string{
 var grammarBehind = map[string]string{
 	"AddDocKeyedFuncKey":                   "S9",
 	"AddDocKeyedAppendKey":                 "S11",
+	"AddItemAndRow":                        "S10",
+	"AddItemAndLabel":                      "S10",
+	"AddDocLabelAndHeld":                   "S10",
 	"AddDocErr":                            "V1",
 	"AddGroupItemCommaOkCrossKey":          "S3",
 	"AddGroupItemConstKey":                 "S3",
@@ -1207,8 +1207,8 @@ var grammarBehind = map[string]string{
 	"AddItemToTemp":                        "S3",
 	"AddItemTupleReroot":                   "S3",
 	"AddItemTupleThroughInit":              "S7",
-	"AddItemTwice":                         "P4",
-	"AddItemTwiceBesideBare":               "V1",
+	"AddItemTwice":                         "S10",
+	"AddItemTwiceBesideBare":               "S10",
 	"AddItemTwoValues":                     "V1",
 	"AddItemTwoWriteBacks":                 "S3",
 	"AddItemTwoWriteBacksLast":             "S3",
@@ -1239,7 +1239,7 @@ var grammarBehind = map[string]string{
 	"AddLabelLocalOnly":                    "S3",
 	"AddLabelLocalThenName":                "S3",
 	"AddLabelParenLocal":                   "S3",
-	"AddLabelTwice":                        "P4",
+	"AddLabelTwice":                        "S10",
 	"AddLabelViaLocal":                     "S3",
 	"AddRowMakeLen":                        "V1",
 	"AddRowParenMakeLen":                   "V1",

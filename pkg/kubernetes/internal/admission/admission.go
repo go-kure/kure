@@ -171,6 +171,7 @@
 //     guard that panics, the guard on an error or a nil-init guard.
 //   - S9: the body holds no function literal, a constant that holds one
 //     included.
+//   - S10: at most one statement appends or inserts.
 //   - S11: every call of append is the whole value of an assignment.
 //   - P1: a path is spelled from the object through field selectors, indexes
 //     and dereferences, and the object is a pointer parameter the body never
@@ -206,10 +207,11 @@
 //     index of a path, or an argument written or marshalled.
 //
 // S9, then S11, are read off the whole body first. Then the statements are
-// read in source order and the first rule one breaks names the refusal: S1; for an if S8, S2, S5, S4, and for a nil-init guard
-// P1, P2, P3, P5, N1; for a := S3, S2, S4; for any other assignment S7, P1,
-// P2, P3, V1, V3, V3b, V2. S6, P4, P6, P7, V4 and V5 are read off the whole
-// body afterwards, in that order.
+// read in source order and the first rule one breaks names the refusal: S1;
+// for an if S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5, N1; for
+// a := S3, S2, S4; for any other assignment S7, P1, P2, P3, S10, V1, V3, V3b,
+// V2. S6, P4, P6, P7, V4 and V5 are read off the whole body afterwards, in
+// that order.
 package admission
 
 import (
