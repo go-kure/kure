@@ -66,8 +66,15 @@ type write struct {
 	nilInit bool
 	// appends marks F = append(F, v).
 	appends bool
+	// inserts marks F[k] = v: a target that is a map element. A nil-init
+	// never inserts: what it initialises is a field (P5).
+	inserts bool
 	// pointer marks a pointer-typed target, a nil-init's included.
 	pointer bool
+	// composite marks a field value that is a struct literal, or the address
+	// of one, with two or more elements or a nested literal. An appended or
+	// inserted literal is an element, not the value of the field.
+	composite bool
 }
 
 // pointerTyped reports whether e has a pointer type.
@@ -117,22 +124,32 @@ type helperBody struct {
 	derefs map[types.Object]bool
 }
 
-// grammar returns the reason the body of fn is outside the grammar, or "". It
-// first reads the whole body for what no statement may hold anywhere, then
-// reads the top-level statements in source order and returns at the first
-// one a rule refuses, then checks what only the whole body shows.
+// grammar returns the reason the body of fn is outside the grammar, or "":
+// the reason read gives, else the reason whole gives.
 func grammar(fn *ast.FuncDecl, info *types.Info) string {
+	b, reason := read(fn, info)
+	if reason != "" {
+		return reason
+	}
+	return b.whole()
+}
+
+// read reads the body of fn and returns what it read, or the reason of the
+// first rule that refuses it. It first reads the whole body for what no
+// statement may hold anywhere, then reads the top-level statements in source
+// order and returns at the first one a rule refuses.
+func read(fn *ast.FuncDecl, info *types.Info) (*helperBody, string) {
 	// S9: a function literal has a body of its own that no rule reads, so a
 	// closure could hide any write. It is refused wherever it stands, a
 	// constant that holds one included.
 	if hasFuncLit(fn.Body) {
-		return refused("S9", "contains a function literal; its body is not checked, so sugar has none")
+		return nil, refused("S9", "contains a function literal; its body is not checked, so sugar has none")
 	}
 	// S11: an append is the whole value of an assignment. One anywhere else,
 	// an argument, a slice of its result or inside a constant, is no class a
 	// statement, whatever it extends.
 	if stray := strayAppends(fn.Body, info); len(stray) > 0 {
-		return refused("S11", "uses append on %s other than as the whole value of an assignment", strings.Join(sortedKeys(stray), ", "))
+		return nil, refused("S11", "uses append on %s other than as the whole value of an assignment", strings.Join(sortedKeys(stray), ", "))
 	}
 	b := &helperBody{
 		info:   info,
@@ -159,10 +176,36 @@ func grammar(fn *ast.FuncDecl, info *types.Info) string {
 	}
 	for i := range fn.Body.List {
 		if reason := b.statement(fn.Body.List, i); reason != "" {
-			return reason
+			return nil, reason
 		}
 	}
-	return b.whole()
+	return b, ""
+}
+
+// class returns the class of the writes read: class a when one appends or
+// inserts, else class b when one is pointer-typed, a nil-init included, else
+// class c when one writes a composite value. A body with none of these is a
+// forwarder: it writes fields bare.
+func (b *helperBody) class() (Class, string) {
+	var op, pointer, composite bool
+	for _, w := range b.writes {
+		op = op || w.appends || w.inserts
+		pointer = pointer || w.pointer
+		composite = composite || w.composite
+	}
+	switch {
+	case op:
+		return Append, "slice append or map insert (class a)"
+	case pointer:
+		return Pointer, "pointer-typed field assignment (class b)"
+	case composite:
+		return Composite, "composite literal with two or more fields or nested (class c)"
+	case len(b.writes) >= 2:
+		return Inadmissible, fmt.Sprintf("%d bare field writes and no composite literal (a forwarder per field, not class c)", len(b.writes))
+	case len(b.writes) == 1:
+		return Inadmissible, "single bare field assignment (a forwarder for the struct field)"
+	}
+	return Inadmissible, "no field write (delegation or no-op)"
 }
 
 // firstRoot returns the parameter the first path in stmts is spelled from:
@@ -745,15 +788,23 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 			return refused("S10", "makes %d appends or inserts; class a is a single one", b.ops)
 		}
 	}
-	w := write{steps: steps, text: types.ExprString(target), pointer: pointerTyped(target, b.info)}
+	w := write{
+		steps:   steps,
+		text:    types.ExprString(target),
+		inserts: isMapIndex(target, b.info),
+		pointer: pointerTyped(target, b.info),
+	}
 	// The value written is the element appended or inserted, or the value of
 	// the field.
-	value, element := rhs, isMapIndex(target, b.info)
+	value, element := rhs, w.inserts
 	if call := appendCall(rhs, b.info); call != nil {
 		if !extendsByOne(call, target, b.info) {
 			return refused("V1", "%s is assigned %s, not an append of one value to itself", w.text, types.ExprString(rhs))
 		}
 		value, element, w.appends = call.Args[1], true, true
+	}
+	if lit := compositeOf(value); !element && lit != nil {
+		w.composite = isStructLit(lit, b.info) && (len(lit.Elts) >= 2 || hasNestedLiteral(lit))
 	}
 	if reason := b.nilled(target, rhs); reason != "" {
 		return reason

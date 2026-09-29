@@ -986,6 +986,25 @@ func SetReplicasGotoAhead(o *Obj, n int32) {
 set:
 	o.Spec.Replicas = &n
 }
+
+// class b: a path through a map element is no insert; the write that makes
+// the class is the pointer-typed one
+func SetDocRefAndHoldMapLabels(d *Doc, k string, m map[string]string, ref *Ref) {
+	d.HoldMap[k].Labels = m
+	d.Ref = ref
+}
+
+// class c: a path through a pointer past the object is no pointer-typed
+// target
+func SetDocRefThrough(d *Doc, n, k string) { *d.Ref = Ref{Name: n, Kind: k} }
+
+// class b: a pointer-typed target whose value is a literal of two fields is
+// class b before class c
+func SetRefWhole(o *Obj, n, k string) { o.Spec.Ref = &Ref{Name: n, Kind: k} }
+
+// class c: an address written to a field that is no pointer is no
+// pointer-typed target
+func SetDocAnyRef(d *Doc, n, k string) { d.Any = &Ref{Name: n, Kind: k} }
 `
 
 // refusal is one fixture that only the grammar refuses.
@@ -1124,6 +1143,11 @@ var grammarAdmitted = map[string]Class{
 	"SetDocRawWhole":              Pointer,
 	"SetReplicasAndNilName":       Pointer,
 	"SetRefNameFromPointer":       Pointer,
+
+	"SetDocRefAndHoldMapLabels": Pointer,
+	"SetDocRefThrough":          Composite,
+	"SetRefWhole":               Pointer,
+	"SetDocAnyRef":              Composite,
 }
 
 // grammarGaps lists the fixtures the grammar alone admits and a check before
@@ -1602,6 +1626,96 @@ func TestClassify_GrammarGaps(t *testing.T) {
 			t.Errorf("%s: %s, and the grammar alone admits it; want it in grammarGaps", name, f.Reason)
 		}
 	}
+}
+
+// inTreeExempt is the set of in-tree helpers the contract admits by name, as
+// the test of pkg/kubernetes names them.
+var inTreeExempt = map[string]bool{
+	"github.com/go-kure/kure/pkg/kubernetes.SetLabels":      true,
+	"github.com/go-kure/kure/pkg/kubernetes.AddLabel":       true,
+	"github.com/go-kure/kure/pkg/kubernetes.SetAnnotations": true,
+	"github.com/go-kure/kure/pkg/kubernetes.AddAnnotation":  true,
+}
+
+// compareClasses loads the packages in dir matching patterns as Classify does
+// and, for every helper the verdict admits, compares the class the grammar
+// reads off its writes with the class of the verdict. Internal packages are
+// left out, as the test of pkg/kubernetes leaves them out.
+func compareClasses(t *testing.T, dir string, env []string, exempt map[string]bool, patterns ...string) {
+	t.Helper()
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
+			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+		Dir: dir,
+		Env: env,
+	}, patterns...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if packages.PrintErrors(pkgs) > 0 {
+		t.Fatal("the packages do not load")
+	}
+	compared := 0
+	for _, p := range pkgs {
+		if strings.Contains(p.PkgPath, "/internal/") {
+			continue
+		}
+		for _, file := range p.Syntax {
+			if strings.HasPrefix(filepath.Base(p.Fset.Position(file.Pos()).Filename), "zz_generated") {
+				continue
+			}
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || !isSugarHelper(fn) || exempt[p.PkgPath+"."+fn.Name.Name] {
+					continue
+				}
+				want, reason := classify(fn, p.TypesInfo)
+				if want == Inadmissible {
+					continue
+				}
+				compared++
+				b, refusal := read(fn, p.TypesInfo)
+				if refusal == "" {
+					refusal = b.whole()
+				}
+				if refusal != "" {
+					t.Errorf("%s: the grammar refuses a body the verdict admits as %s: %s", fn.Name.Name, want, refusal)
+					continue
+				}
+				if got, _ := b.class(); got != want {
+					t.Errorf("%s: the writes read as %s, the verdict is %s (%s)", fn.Name.Name, got, want, reason)
+				}
+			}
+		}
+	}
+	if compared == 0 {
+		t.Fatal("no helper is admitted, so nothing was compared")
+	}
+	t.Logf("compared the class of %d admitted helpers", compared)
+}
+
+// TestClassify_GrammarClass compares the class the grammar reads off the
+// writes of a body with the class of the verdict, for every body the verdict
+// admits: every fixture, every generated body and every in-tree helper. The
+// verdict still comes from the checks before the grammar; this is the class
+// the grammar gives once it alone decides.
+func TestClassify_GrammarClass(t *testing.T) {
+	env := append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	t.Run("fixture", func(t *testing.T) {
+		compareClasses(t, writeFixture(t), env, map[string]bool{"fixture.SetExempted": true}, ".")
+	})
+	t.Run("generated", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("classifies a generated package of some thousand helpers")
+		}
+		compareClasses(t, writeGenerated(t, genSource(wellTyped(t, generate()))), env, nil, ".")
+	})
+	t.Run("in-tree", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("loads every package under pkg/kubernetes with type information")
+		}
+		compareClasses(t, filepath.Join("..", ".."), nil, inTreeExempt, "./...")
+	})
 }
 
 // TestSameIndex pins what makes two keys or indexes the same one: the same
