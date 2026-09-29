@@ -114,6 +114,12 @@ func grammar(fn *ast.FuncDecl, info *types.Info) string {
 	if hasFuncLit(fn.Body) {
 		return refused("S9", "contains a function literal; its body is not checked, so sugar has none")
 	}
+	// S11: an append is the whole value of an assignment. One anywhere else,
+	// an argument, a slice of its result or inside a constant, is no class a
+	// statement, whatever it extends.
+	if stray := strayAppends(fn.Body, info); len(stray) > 0 {
+		return refused("S11", "uses append on %s other than as the whole value of an assignment", strings.Join(sortedKeys(stray), ", "))
+	}
 	b := &helperBody{
 		info:   info,
 		params: map[types.Object]bool{},

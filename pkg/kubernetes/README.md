@@ -223,6 +223,7 @@ function.
 | S7 | Any other assignment has one target, one value and the token `=`: no tuple, no `op=`. |
 | S8 | An `if` has no init statement, no `else` and a one-statement body, and is one of three guards: the nil guard that panics, the guard on an error, the nil-init guard. `X == nil` and `nil == X` are the same test. |
 | S9 | The body holds no function literal, wherever it stands. No rule reads the body of a closure, so it could hide any write; a constant that holds one, `len([1]func(){func() {}})`, is refused too. |
+| S11 | Every call of `append` is the whole value of an assignment. One anywhere else is no class (a) statement, whatever it extends: in a `var`, as an argument, sliced, nested in another `append`, or inside a constant, `unsafe.Sizeof(append(…))`. |
 
 | ID | Paths: the target of a field write or of a nil-init, and the slice an append extends |
 |---|---|
@@ -250,7 +251,7 @@ A call therefore appears in six positions only: `append` as the whole value of a
 guard. A constant is a constant however it is spelled (`int32(0)`, `len("ab")`); any
 other call, the conversion of an argument included, refuses the helper.
 
-S9 is read off the whole body first. Then the statements are read in source order, and
+S9, then S11, are read off the whole body first. Then the statements are read in source order, and
 the first rule a statement breaks names the refusal: S1; for an `if` S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5,
 N1; for a `:=` S3, S2, S4; for any other assignment S7, P1, P2, P3, V1, V3, V3b, V2.
 S6, P4, P6, P7, V4 and V5 are read off the whole body after its last statement, in

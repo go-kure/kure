@@ -1117,7 +1117,6 @@ var grammarAdmitted = map[string]Class{
 // it refuses, with the rule to come that refuses each: the bodies the grammar
 // does not yet read as the older checks do.
 var grammarGaps = map[string]string{
-	"AddDocKeyedAppendKey":      "S11",
 	"AddItemAndRow":             "S10",
 	"AddItemAndLabel":           "S10",
 	"AddDocLabelAndHeld":        "S10",
@@ -1141,6 +1140,7 @@ var grammarGaps = map[string]string{
 // ahead of them are gone.
 var grammarBehind = map[string]string{
 	"AddDocKeyedFuncKey":                   "S9",
+	"AddDocKeyedAppendKey":                 "S11",
 	"AddDocErr":                            "V1",
 	"AddGroupItemCommaOkCrossKey":          "S3",
 	"AddGroupItemConstKey":                 "S3",
@@ -1150,8 +1150,8 @@ var grammarBehind = map[string]string{
 	"AddGroupItemIndexReassigned":          "S3",
 	"AddGroupItemLiteralKeys":              "S3",
 	"AddGroupItemLiteralKeysDirect":        "P3",
-	"AddGroupItemSlicedAppend":             "V1",
-	"AddGroupItemVarAppend":                "S1",
+	"AddGroupItemSlicedAppend":             "S11",
+	"AddGroupItemVarAppend":                "S11",
 	"AddGroupItemViaLocal":                 "S3",
 	"AddHoldItemViaLocal":                  "S3",
 	"AddItemAliasMismatch":                 "S3",
@@ -1173,7 +1173,7 @@ var grammarBehind = map[string]string{
 	"AddItemFullSliceSource":               "S3",
 	"AddItemIfSet":                         "S8",
 	"AddItemInClosure":                     "S9",
-	"AddItemIndirectBesideStray":           "V1",
+	"AddItemIndirectBesideStray":           "S11",
 	"AddItemLocalBase":                     "S3",
 	"AddItemLocalOnly":                     "S3",
 	"AddItemLocalThenIndirect":             "S3",
@@ -1181,7 +1181,7 @@ var grammarBehind = map[string]string{
 	"AddItemMakeParamLen":                  "N1",
 	"AddItemMultiAssignedCrossField":       "S3",
 	"AddItemMultiAssignedCrossFieldLast":   "S3",
-	"AddItemNestedConstant":                "V1",
+	"AddItemNestedConstant":                "S11",
 	"AddItemParamAddressTaken":             "S3",
 	"AddItemParamRanged":                   "S1",
 	"AddItemParamReassigned":               "S8",
@@ -1200,7 +1200,7 @@ var grammarBehind = map[string]string{
 	"AddItemShadowedLocal":                 "S3",
 	"AddItemSliceParam":                    "P1",
 	"AddItemSliceReassignedCrossField":     "S3",
-	"AddItemStrayBesideTwice":              "V1",
+	"AddItemStrayBesideTwice":              "S11",
 	"AddItemStructCopy":                    "S3",
 	"AddItemSwapHidesWrite":                "S3",
 	"AddItemSwappedSameField":              "S3",
@@ -1222,7 +1222,7 @@ var grammarBehind = map[string]string{
 	"AddItemsAppendSource":                 "S3",
 	"AddItemsForLoop":                      "S1",
 	"AddItemsLoop":                         "S1",
-	"AddItemsNestedAppend":                 "S3",
+	"AddItemsNestedAppend":                 "S11",
 	"AddItemsSpread":                       "V1",
 	"AddLabelAddrDeref":                    "P1",
 	"AddLabelConcatNilInit":                "S3",
