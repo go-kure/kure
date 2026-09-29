@@ -1,6 +1,7 @@
 package admission
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -406,7 +407,8 @@ func AddItemViaAlias(o *Obj, s string) {
 	spec.Items = append(spec.Items, s)
 }
 
-// class b through a declared alias of the object
+// inadmissible, by the grammar alone: class b through a declared alias of the
+// object, and a var declaration is neither an if nor an assignment (S1)
 func SetReplicasViaAlias(o *Obj, n int32) {
 	var obj = o
 	obj.Spec.Replicas = &n
@@ -458,7 +460,8 @@ func SetRefBeforeAlias(o *Obj, n string) {
 	_ = tmp
 }
 
-// class b: an alias reassigned from the parameter counts from that point on
+// inadmissible, by the grammar alone: an alias reassigned from the parameter
+// counts from that point on, and a local is only a marshalled argument (S3)
 func SetRefAfterAlias(o *Obj, n string) {
 	tmp := &Obj{}
 	tmp = o
@@ -730,7 +733,8 @@ L:
 	}
 }
 
-// class b: a top-level bare block runs on every path
+// inadmissible, by the grammar alone: a top-level bare block runs on every
+// path, and is neither an if nor an assignment (S1)
 func SetRefBlock(o *Obj, ref *Ref) {
 	{
 		o.Spec.Ref = ref
@@ -833,7 +837,8 @@ func SetReplicasIncNilInit(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// class b: incrementing a temporary reaches no caller
+// inadmissible, by the grammar alone: incrementing a temporary reaches no
+// caller, and a local is only a marshalled argument (S3)
 func SetReplicasTempCount(o *Obj, n int32) {
 	tmp := Obj{}
 	tmp.Spec.Count++
@@ -962,7 +967,8 @@ func AddLabelExpandedFromAlias(o *Obj, k, v string) {
 	o.Labels[k] = labels[k] + v
 }
 
-// class a: a local that never reached the caller is not the target
+// inadmissible, by the grammar alone: a local that never reached the caller
+// is not the target, and a local is only a marshalled argument (S3)
 func AddLabelFromTemp(o *Obj, k, v string) {
 	m := map[string]string{}
 	if o.Labels == nil {
@@ -993,7 +999,8 @@ func SetReplicasRangeAliasConcat(o *Obj, v string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// class a: another parameter is the caller's own argument, not the target
+// inadmissible, by the grammar alone: another parameter is the caller's own
+// argument, not the target, and the value is computed from it (V1)
 func AddLabelFromOther(o, src *Obj, k string) {
 	if o.Labels == nil {
 		o.Labels = map[string]string{}
@@ -1001,7 +1008,8 @@ func AddLabelFromOther(o, src *Obj, k string) {
 	o.Labels[k] = src.Labels[k] + "x"
 }
 
-// class b: a range over a temporary reaches no caller
+// inadmissible, by the grammar alone: a range over a temporary reaches no
+// caller, and a range is neither an if nor an assignment (S1)
 func SetReplicasRangeTempConcat(o *Obj, v string, n int32) {
 	for _, items := range map[string][]string{} {
 		items[0] += v
@@ -1009,7 +1017,8 @@ func SetReplicasRangeTempConcat(o *Obj, v string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// class b: a range variable holding a struct is a copy
+// inadmissible, by the grammar alone: a range variable holding a struct is a
+// copy, and a range is neither an if nor an assignment (S1)
 func SetReplicasRangeCopyConcat(o *Obj, refs []Ref, n int32) {
 	for _, r := range refs {
 		r.Name += "x"
@@ -1026,7 +1035,8 @@ func AddGroupItem(o *Obj, k, s string) {
 	o.Spec.Groups[k] = append(o.Spec.Groups[k], s)
 }
 
-// class b: a comma-ok read of a temporary map reaches no caller
+// inadmissible, by the grammar alone: a comma-ok read of a temporary map
+// reaches no caller, and a local is only a marshalled argument (S3)
 func SetReplicasCommaOkTemp(o *Obj, k, s string, n int32) {
 	m := map[string][]string{}
 	items, _ := m[k]
@@ -1296,7 +1306,8 @@ func SetHoldFreshMapWriteBack(o *Obj, k, v string) {
 	o.Spec.Hold.Labels = labels
 }
 
-// class b: a computed value written through a pointer the body initialised
+// inadmissible, by the grammar alone: a computed value written through a
+// pointer the body initialised is not an argument passed whole (V1)
 func SetRefNameComputed(o *Obj, n string) {
 	if o.Spec.Ref == nil {
 		o.Spec.Ref = &Ref{}
@@ -1349,7 +1360,8 @@ func SetReplicasConvertedInc(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// class b: a call other than a conversion is not followed
+// inadmissible, by the grammar alone: a call other than a conversion is not
+// followed, and a local is only a marshalled argument (S3)
 func SetReplicasClonedInc(o *Obj, n int32) {
 	p := clonePtr(o.Spec.Replicas)
 	(*p)++
@@ -1364,7 +1376,8 @@ func AddLabelExpandedParenIndex(o *Obj, k, v string) {
 	o.Labels[k] = o.Labels[(k)] + v
 }
 
-// class a: another key is not the target
+// inadmissible, by the grammar alone: another key is not the target, and the
+// value is read back from the object (V1)
 func AddLabelFromOtherKey(o *Obj, k, j, v string) {
 	if o.Labels == nil {
 		o.Labels = map[string]string{}
@@ -1642,7 +1655,9 @@ func AddLabelParenTarget(o *Obj, k, v string) {
 	(o.Labels[k]) = v
 }
 
-// class b: a parenthesised local assigned a parameter carries the caller's value
+// inadmissible, by the grammar alone: a parenthesised local assigned a
+// parameter carries the caller's value, and a var declaration is neither an if
+// nor an assignment (S1)
 func SetRefNameViaParenLocal(o *Obj, n string) {
 	var name string
 	(name) = n
@@ -1666,7 +1681,8 @@ func AddItemAndReplicas(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// class b: an element of a temporary slice is not a map element
+// inadmissible, by the grammar alone: an element of a temporary slice is not
+// a map element, and a local is only a marshalled argument (S3)
 func SetReplicasTempSliceExpanded(o *Obj, v string, n int32) {
 	xs := []string{"a"}
 	xs[0] = xs[0] + v
@@ -1887,6 +1903,9 @@ func writeFixture(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(dir, "fixture.go"), []byte(fixtureSource), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "grammar.go"), []byte(grammarFixtureSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	return dir
 }
 
@@ -1962,11 +1981,11 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddLabelFreshMap":       Inadmissible,
 		"AddItemInClosure":       Inadmissible,
 		"AddItemViaAlias":        Inadmissible,
-		"SetReplicasViaAlias":    Pointer,
+		"SetReplicasViaAlias":    Inadmissible,
 		"AddItemWriteBackFirst":  Inadmissible,
 		"SetRefOnShadow":         Inadmissible,
 		"SetRefBeforeAlias":      Inadmissible,
-		"SetRefAfterAlias":       Pointer,
+		"SetRefAfterAlias":       Inadmissible,
 		"AddItemShadowedLocal":   Inadmissible,
 		"AddItemToTemp":          Inadmissible,
 		"SetRefOnTemp":           Inadmissible,
@@ -2001,7 +2020,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefNestedInit":         Inadmissible,
 		"SetRefBlockIf":            Inadmissible,
 		"SetRefLabeledLoop":        Inadmissible,
-		"SetRefBlock":              Pointer,
+		"SetRefBlock":              Inadmissible,
 		"SetRefNameShadowedNil":    Inadmissible,
 		// A range-clause target and a read-modify-write (#913).
 		"SetRefRangeValue":       Inadmissible,
@@ -2017,7 +2036,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasParenLabelConcat": Inadmissible,
 		"AddLabelConcatNilInit":       Inadmissible,
 		"SetReplicasIncNilInit":       Inadmissible,
-		"SetReplicasTempCount":        Pointer,
+		"SetReplicasTempCount":        Inadmissible,
 		// A target reached through a slice expression or a chain of aliases.
 		"SetReplicasSliceExprConcat":      Inadmissible,
 		"SetReplicasSliceExprRange":       Inadmissible,
@@ -2028,7 +2047,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasCommaOkConcat":    Inadmissible,
 		"SetReplicasCommaOkVarConcat": Inadmissible,
 		"SetReplicasCommaOkRange":     Inadmissible,
-		"SetReplicasCommaOkTemp":      Pointer,
+		"SetReplicasCommaOkTemp":      Inadmissible,
 		"AddItemCommaOkCrossField":    Inadmissible,
 		// An assignment whose value reads the target it overwrites.
 		"AddLabelExpandedConcat":        Inadmissible,
@@ -2039,13 +2058,13 @@ func TestClassify_Fixture(t *testing.T) {
 		// Aliases: a copy of the caller's path, an append result, a range variable.
 		"AddLabelExpandedCrossAlias":   Inadmissible,
 		"AddLabelExpandedFromAlias":    Inadmissible,
-		"AddLabelFromTemp":             Append,
+		"AddLabelFromTemp":             Inadmissible,
 		"SetReplicasAppendAliasConcat": Inadmissible,
 		"SetReplicasAppendTempConcat":  Inadmissible,
 		"SetReplicasRangeAliasConcat":  Inadmissible,
-		"SetReplicasRangeCopyConcat":   Pointer,
-		"AddLabelFromOther":            Append,
-		"SetReplicasRangeTempConcat":   Pointer,
+		"SetReplicasRangeCopyConcat":   Inadmissible,
+		"AddLabelFromOther":            Inadmissible,
+		"SetReplicasRangeTempConcat":   Inadmissible,
 		// An append into or insert into a local, whatever it is written back to.
 		"AddItemCrossField":           Inadmissible,
 		"AddItemRowCrossField":        Inadmissible,
@@ -2079,7 +2098,7 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetReplicasOverwrittenWriteBack":      Inadmissible,
 		"SetHoldCommaOkCrossField":             Inadmissible,
 		"SetHoldFreshMapWriteBack":             Inadmissible,
-		"SetRefNameComputed":                   Pointer,
+		"SetRefNameComputed":                   Inadmissible,
 		"AddHoldItemViaLocal":                  Inadmissible,
 		"AddItemViaLocalAndReplicas":           Inadmissible,
 		"AddGroupItemViaLocal":                 Inadmissible,
@@ -2089,9 +2108,9 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddGroupItemConstKey":                 Inadmissible,
 		// A conversion, a parenthesised index, a struct or array copy (#918).
 		"SetReplicasConvertedInc":      Inadmissible,
-		"SetReplicasClonedInc":         Pointer,
+		"SetReplicasClonedInc":         Inadmissible,
 		"AddLabelExpandedParenIndex":   Inadmissible,
-		"AddLabelFromOtherKey":         Append,
+		"AddLabelFromOtherKey":         Inadmissible,
 		"SetReplicasRangeHolderConcat": Inadmissible,
 		"SetReplicasRangeNestConcat":   Inadmissible,
 		"SetReplicasHolderParamConcat": Inadmissible,
@@ -2128,11 +2147,11 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefViaParenAssignedNil":     Inadmissible,
 		"AddItemParenBuiltin":           Append,
 		"AddLabelParenTarget":           Append,
-		"SetRefNameViaParenLocal":       Pointer,
+		"SetRefNameViaParenLocal":       Inadmissible,
 		"AddGroupItemConstKeyDirect":    Append,
 		"AddItemParenBase":              Append,
 		"AddItemAndReplicas":            Append,
-		"SetReplicasTempSliceExpanded":  Pointer,
+		"SetReplicasTempSliceExpanded":  Inadmissible,
 		"SetReplicasTempMapInc":         Inadmissible,
 		"SetReplicasTempMapRange":       Inadmissible,
 		"SetReplicasGenericMap":         Inadmissible,
@@ -2163,6 +2182,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemParenAppendValue":       Append,
 		"SetExempted":                   Exempt,
 	}
+	for name := range grammarRefusals {
+		want[name] = Inadmissible
+	}
+	maps.Copy(want, grammarAdmitted)
 	got := map[string]Finding{}
 	for _, f := range findings {
 		got[f.Name] = f
@@ -2321,11 +2344,9 @@ func TestClassify_Fixture(t *testing.T) {
 		"SetRefViaParenAssignedNil":     "assigns nil to o.Spec.Ref",
 		"AddItemParenBuiltin":           "slice append or map insert (class a)",
 		"AddLabelParenTarget":           "slice append or map insert (class a)",
-		"SetRefNameViaParenLocal":       "pointer-typed field assignment (class b)",
 		"AddGroupItemConstKeyDirect":    "slice append or map insert (class a)",
 		"AddItemParenBase":              "slice append or map insert (class a)",
 		"AddItemAndReplicas":            "slice append or map insert (class a)",
-		"SetReplicasTempSliceExpanded":  "pointer-typed field assignment (class b)",
 		"SetReplicasTempMapInc":         "appends to or inserts into m[k], not a field",
 		"SetReplicasTempMapRange":       "appends to or inserts into m[k], not a field",
 		"SetReplicasGenericMap":         "declares type parameters",
