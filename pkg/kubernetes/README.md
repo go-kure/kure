@@ -207,7 +207,10 @@ A helper that returns a value or declares type parameters is refused unread. Eve
 other body is read through a closed grammar and nothing else: every top-level
 statement, every path it writes and every value it writes has one of the forms below,
 and the first rule a body breaks is the verdict, which names the rule:
-`<what was found> (grammar S3, purity §4)`. The class of a body the grammar admits is
+`<what was found> (grammar S3, purity §4)`. What was found is printed as written,
+parentheses and the elements of a composite literal included, so two paths that differ
+only inside a literal, `d.Plans[len([...]int{1})]` and `d.Plans[len([...]int{1, 2})]`,
+read apart in the reason that names both. The class of a body the grammar admits is
 the class of its writes: (a) when one appends or inserts, else (b) when one is
 pointer-typed, a nil-init included, else (c) when one writes a struct literal of two or
 more fields or a nested one; a body with none of these forwards its arguments bare,

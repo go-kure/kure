@@ -37,7 +37,9 @@
 // closed grammar (grammar.go) and nothing else: every top-level statement,
 // every path written and every value written has one of the forms below, and
 // the first rule a body breaks is the verdict, with a reason ending in
-// "(grammar <ID>, purity §4)". A body the grammar admits is classified by its
+// "(grammar <ID>, purity §4)". What was found is printed as written, a
+// composite literal's elements included (exprText), so two paths that differ
+// only inside a literal read apart. A body the grammar admits is classified by its
 // writes: class a when one appends or inserts, else class b when one is
 // pointer-typed, a nil-init included, else class c when one writes a struct
 // literal of two or more fields or a nested one. A body with none of these
@@ -551,7 +553,7 @@ func strayAppends(body *ast.BlockStmt, info *types.Info) map[string]bool {
 	stray := map[string]bool{}
 	ast.Inspect(body, func(n ast.Node) bool {
 		if call, ok := n.(*ast.CallExpr); ok && appendCall(call, info) == call && !assigned[call] && len(call.Args) > 0 {
-			stray[types.ExprString(call.Args[0])] = true
+			stray[exprText(call.Args[0])] = true
 		}
 		return true
 	})
@@ -653,11 +655,11 @@ func nilInLiteral(lit *ast.CompositeLit, info *types.Info, locals map[types.Obje
 			continue
 		}
 		if isNilValue(kv.Value, info, locals) {
-			return types.ExprString(kv.Key)
+			return exprText(kv.Key)
 		}
 		if inner := compositeOf(kv.Value); inner != nil {
 			if key := nilInLiteral(inner, info, locals); key != "" {
-				return types.ExprString(kv.Key) + "." + key
+				return exprText(kv.Key) + "." + key
 			}
 		}
 	}
