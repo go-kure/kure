@@ -66,6 +66,18 @@ type write struct {
 	nilInit bool
 	// appends marks F = append(F, v).
 	appends bool
+	// pointer marks a pointer-typed target, a nil-init's included.
+	pointer bool
+}
+
+// pointerTyped reports whether e has a pointer type.
+func pointerTyped(e ast.Expr, info *types.Info) bool {
+	t := info.TypeOf(e)
+	if t == nil {
+		return false
+	}
+	_, ok := t.Underlying().(*types.Pointer)
+	return ok
 }
 
 // helperBody is what the grammar has read of one helper's body.
@@ -446,7 +458,7 @@ func (b *helperBody) nilInit(s *ast.AssignStmt, tested ast.Expr) string {
 	if reason := b.readsItself(target, s.Rhs[0]); reason != "" {
 		return reason
 	}
-	b.writes = append(b.writes, write{steps: steps, text: text, nilInit: true})
+	b.writes = append(b.writes, write{steps: steps, text: text, nilInit: true, pointer: pointerTyped(target, b.info)})
 	return ""
 }
 
@@ -704,7 +716,7 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 			return refused("S10", "makes %d appends or inserts; class a is a single one", b.ops)
 		}
 	}
-	w := write{steps: steps, text: types.ExprString(target)}
+	w := write{steps: steps, text: types.ExprString(target), pointer: pointerTyped(target, b.info)}
 	// The value written is the element appended or inserted, or the value of
 	// the field.
 	value, element := rhs, isMapIndex(target, b.info)
@@ -755,11 +767,7 @@ func (b *helperBody) value(v, target ast.Expr, element bool) string {
 	}
 	if compositeOf(v) != nil && !element && b.fieldWrites != 1 {
 		_, addr := ast.Unparen(v).(*ast.UnaryExpr)
-		toPointer := false
-		if t := b.info.TypeOf(target); t != nil {
-			_, toPointer = t.Underlying().(*types.Pointer)
-		}
-		if !addr || !toPointer {
+		if !addr || !pointerTyped(target, b.info) {
 			return refused("V2", "%s replaces %s beside another write; a struct literal is an appended or inserted element, &T{...} into a pointer-typed field, or the only write", text, to)
 		}
 	}
@@ -930,11 +938,26 @@ func (b *helperBody) count(e ast.Expr) {
 	}
 }
 
+// spelledThrough reports whether a write after b.writes[i] is spelled
+// through it: <its text>.… or *<its text>, as written (throughPointer). A
+// pointer nil-init is written through only as the path it assigned is
+// spelled, so (*o.Spec.Ref).Name, a promoted field of an embedded pointer
+// and an index of a pointer to an array are not. Any such write counts.
+func (b *helperBody) spelledThrough(i int) bool {
+	init := map[string]bool{b.writes[i].text: true}
+	for _, later := range b.writes[i+1:] {
+		if _, through := throughPointer(later.text, init); through {
+			return true
+		}
+	}
+	return false
+}
+
 // whole checks what only the whole body shows: every receiver guard tests the
 // object or a parameter a written value dereferences (S6), no location is
 // written after a write to it, to a prefix of it or to anything under it,
 // other than through a nil-init ahead of it (P4), every nil-init is written
-// through (P6), a write behind a nil-init meets only what that nil-init
+// through, a pointer one by a write spelled through it (P6), a write behind a nil-init meets only what that nil-init
 // assigned (P7), every argument is written once (V4), and every parameter is
 // the object, a key or an argument (V5).
 func (b *helperBody) whole() string {
@@ -962,6 +985,9 @@ func (b *helperBody) whole() string {
 	for i, w := range b.writes {
 		if !used[i] {
 			return refused("P6", "the nil-init of %s is not written through", w.text)
+		}
+		if w.nilInit && w.pointer && !b.spelledThrough(i) {
+			return refused("P6", "no write through the nil-init of %s is spelled %s.… or *%s", w.text, w.text, w.text)
 		}
 	}
 	for i := range b.writes {
