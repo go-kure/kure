@@ -542,7 +542,7 @@ func overlaps(a, c []step) bool {
 }
 
 // leads reports whether a is a prefix of c, or equal to it, with every index
-// the same expression (sameExpr).
+// the same one (sameIndex).
 func (b *helperBody) leads(a, c []step) bool {
 	if len(a) > len(c) {
 		return false
@@ -551,11 +551,27 @@ func (b *helperBody) leads(a, c []step) bool {
 		if a[i].kind != c[i].kind || a[i].field != c[i].field {
 			return false
 		}
-		if a[i].kind == indexStep && !sameExpr(a[i].index, c[i].index, b.info) {
+		if a[i].kind == indexStep && !b.sameIndex(a[i].index, c[i].index) {
 			return false
 		}
 	}
 	return true
+}
+
+// sameIndex reports whether x and y are the same key or index: the same
+// expression (sameExpr), or two constants of one type and one value, however
+// each is spelled. The type counts because a key of an interface type is the
+// same key only with the same dynamic type.
+func (b *helperBody) sameIndex(x, y ast.Expr) bool {
+	if sameExpr(x, y, b.info) {
+		return true
+	}
+	tx, okx := b.info.Types[ast.Unparen(x)]
+	ty, oky := b.info.Types[ast.Unparen(y)]
+	if !okx || !oky || tx.Value == nil || ty.Value == nil || tx.Type == nil || ty.Type == nil {
+		return false
+	}
+	return types.Identical(tx.Type, ty.Type) && constant.Compare(tx.Value, token.EQL, ty.Value)
 }
 
 // initialises reports whether the nil-init early is what the write later goes
