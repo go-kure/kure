@@ -73,6 +73,10 @@ type helperBody struct {
 	info *types.Info
 	// params holds every parameter of the helper.
 	params map[types.Object]bool
+	// names holds the name of every parameter, in declaration order.
+	names []*ast.Ident
+	// keys holds the parameters a path read so far is indexed by.
+	keys map[types.Object]bool
 	// object is the parameter the first path in the body is spelled from, or
 	// nil when that path is spelled from anything else.
 	object types.Object
@@ -106,6 +110,7 @@ func grammar(fn *ast.FuncDecl, info *types.Info) string {
 	b := &helperBody{
 		info:   info,
 		params: map[types.Object]bool{},
+		keys:   map[types.Object]bool{},
 		stable: stableParams(fn, info),
 		locals: map[types.Object]bool{},
 		errs:   map[types.Object]ast.Stmt{},
@@ -113,6 +118,7 @@ func grammar(fn *ast.FuncDecl, info *types.Info) string {
 	}
 	for _, field := range fn.Type.Params.List {
 		for _, name := range field.Names {
+			b.names = append(b.names, name)
 			if obj := info.Defs[name]; obj != nil {
 				b.params[obj] = true
 			}
@@ -462,8 +468,16 @@ func (b *helperBody) path(e ast.Expr) ([]step, string) {
 		return nil, refused("P2", "%s names no field", text)
 	}
 	for _, s := range steps {
-		if s.kind == indexStep && !b.isKey(s.index) {
+		if s.kind != indexStep {
+			continue
+		}
+		if !b.isKey(s.index) {
 			return nil, refused("P3", "%s is indexed by %s, neither a parameter nor a constant", text, types.ExprString(s.index))
+		}
+		if id, ok := ast.Unparen(s.index).(*ast.Ident); ok {
+			if obj := b.info.ObjectOf(id); b.params[obj] {
+				b.keys[obj] = true
+			}
 		}
 	}
 	return steps, ""
@@ -861,7 +875,8 @@ func (b *helperBody) count(e ast.Expr) {
 // written after a write to it, to a prefix of it or to anything under it,
 // other than through a nil-init ahead of it (P4), every nil-init is written
 // through (P6), a write behind a nil-init meets only what that nil-init
-// assigned (P7), and every argument is written once (V4).
+// assigned (P7), every argument is written once (V4), and every parameter is
+// the object, a key or an argument (V5).
 func (b *helperBody) whole() string {
 	for _, id := range b.guards {
 		if obj := b.info.ObjectOf(id); obj != b.object && !b.derefs[obj] {
@@ -901,6 +916,12 @@ func (b *helperBody) whole() string {
 			return refused("V4", "the argument %s is written more than once", id.Name)
 		}
 		seen[obj] = true
+	}
+	for _, name := range b.names {
+		obj := b.info.Defs[name]
+		if obj == nil || obj != b.object && !seen[obj] && !b.keys[obj] {
+			return refused("V5", "the parameter %s is not the object, not a key and not an argument written or marshalled", name.Name)
+		}
 	}
 	return ""
 }

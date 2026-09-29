@@ -37,10 +37,11 @@
 // takes its object by, not a local or alias. The body is written in a closed
 // grammar, which the README states rule by rule: nil guards that panic and
 // the marshalled form of an argument, then nil-init guards and single
-// assignments, each writing an argument passed whole and used once. A body
-// that assigns nil to a field, writes a value the caller did not pass, or
-// takes its object by value, and a helper that returns anything or declares
-// type parameters, are inadmissible whatever else they do. A test classifies
+// assignments, each writing an argument passed whole and used once, and
+// every parameter is the object, a key or such an argument. A body that
+// assigns nil to a field, writes a value the caller did not pass, or takes
+// its object by value, and a helper that returns anything or declares type
+// parameters, are inadmissible whatever else they do. A test classifies
 // every helper with go/ast and fails on anything outside those classes that is
 // not listed in testdata/admission_exclusions.txt; that list held the legacy
 // helpers (bare forwarders, error-returning and validating setters) while the
