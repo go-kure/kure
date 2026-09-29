@@ -104,9 +104,16 @@ type helperBody struct {
 }
 
 // grammar returns the reason the body of fn is outside the grammar, or "". It
-// reads the top-level statements in source order and returns at the first one
-// a rule refuses, then checks what only the whole body shows.
+// first reads the whole body for what no statement may hold anywhere, then
+// reads the top-level statements in source order and returns at the first
+// one a rule refuses, then checks what only the whole body shows.
 func grammar(fn *ast.FuncDecl, info *types.Info) string {
+	// S9: a function literal has a body of its own that no rule reads, so a
+	// closure could hide any write. It is refused wherever it stands, a
+	// constant that holds one included.
+	if hasFuncLit(fn.Body) {
+		return refused("S9", "contains a function literal; its body is not checked, so sugar has none")
+	}
 	b := &helperBody{
 		info:   info,
 		params: map[types.Object]bool{},
