@@ -6,11 +6,8 @@ import (
 	"go/token"
 	"go/types"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-
-	"golang.org/x/tools/go/packages"
 )
 
 // grammarFixtureSource is the second file of the fixture package: the helpers
@@ -728,7 +725,7 @@ func AddDocErr(d *Doc, v map[string]any) {
 	d.Errs = append(d.Errs, err)
 }
 
-// N1, behind the same check: the nil-init is new of a value, not of a type
+// N1: the nil-init is new of a value, not of a type
 func SetDocPlanLimitNewValue(d *Doc, limit int32) {
 	if d.Plan.Policy.Limit == nil {
 		d.Plan.Policy.Limit = new(int32(1))
@@ -1005,162 +1002,135 @@ func SetRefWhole(o *Obj, n, k string) { o.Spec.Ref = &Ref{Name: n, Kind: k} }
 // class c: an address written to a field that is no pointer is no
 // pointer-typed target
 func SetDocAnyRef(d *Doc, n, k string) { d.Any = &Ref{Name: n, Kind: k} }
+
+// class b: two nested pointer nil-inits, the outer written through by the
+// inner and the inner by the write
+func SetDocShellBoxNameTwoInits(d *Doc, n string) {
+	if d.Shell == nil {
+		d.Shell = &Shell{}
+	}
+	if d.Shell.Box == nil {
+		d.Shell.Box = &Box{}
+	}
+	d.Shell.Box.Name = n
+}
+
+// inadmissible: two arguments forwarded to two fields are two forwarders
+func SetNameAndATwoArgs(o *Obj, n, a string) {
+	o.Spec.Name = n
+	o.Spec.Nested.A = a
+}
+
+// inadmissible: a guard and no write
+func SetNothingButGuard(o *Obj) {
+	if o == nil {
+		panic("SetNothingButGuard: o must not be nil")
+	}
+}
 `
 
-// refusal is one fixture that only the grammar refuses.
-type refusal struct {
-	// rule is the grammar rule that refuses the fixture first.
-	rule string
-	// was is the class the checks before the grammar give it.
-	was Class
-}
+// grammarRules lists every fixture refused for its body, with the rule that
+// refuses it first. A fixture refused off its signature, for returning a
+// value or for declaring type parameters, is not read and is not here; the
+// forwarders, which the grammar admits and the class of their writes refuses,
+// are in grammarForwarders.
+var grammarRules = map[string]string{
+	"SetReplicasViaAlias":          "S1",
+	"SetRefAfterAlias":             "S3",
+	"SetRefBlock":                  "S1",
+	"SetReplicasTempCount":         "S3",
+	"AddLabelFromTemp":             "S3",
+	"AddLabelFromOther":            "V1",
+	"SetReplicasRangeTempConcat":   "S1",
+	"SetReplicasRangeCopyConcat":   "S1",
+	"SetReplicasCommaOkTemp":       "S3",
+	"SetRefNameComputed":           "V1",
+	"SetReplicasClonedInc":         "S3",
+	"AddLabelFromOtherKey":         "V1",
+	"SetRefNameViaParenLocal":      "S1",
+	"SetReplicasTempSliceExpanded": "S3",
 
-// grammarRefusals lists every fixture that only the grammar refuses. The
-// first 14 are in fixtureSource: the checks before the grammar admit them.
-var grammarRefusals = map[string]refusal{
-	"SetReplicasViaAlias":          {"S1", Pointer},
-	"SetRefAfterAlias":             {"S3", Pointer},
-	"SetRefBlock":                  {"S1", Pointer},
-	"SetReplicasTempCount":         {"S3", Pointer},
-	"AddLabelFromTemp":             {"S3", Append},
-	"AddLabelFromOther":            {"V1", Append},
-	"SetReplicasRangeTempConcat":   {"S1", Pointer},
-	"SetReplicasRangeCopyConcat":   {"S1", Pointer},
-	"SetReplicasCommaOkTemp":       {"S3", Pointer},
-	"SetRefNameComputed":           {"V1", Pointer},
-	"SetReplicasClonedInc":         {"S3", Pointer},
-	"AddLabelFromOtherKey":         {"V1", Append},
-	"SetRefNameViaParenLocal":      {"S1", Pointer},
-	"SetReplicasTempSliceExpanded": {"S3", Pointer},
+	"AddLabelDelete":                  "S1",
+	"AddLabelMapsCopy":                "S1",
+	"AddItemMethodCall":               "S1",
+	"AddItemDeferred":                 "S1",
+	"AddItemGo":                       "S1",
+	"AddItemSend":                     "S1",
+	"SetReplicasGuardLast":            "S2",
+	"SetDocBlobBlankErr":              "S3",
+	"SetDocBlobFromField":             "S3",
+	"SetDocBlobFromCall":              "S3",
+	"SetDocBlobFromSelf":              "S3",
+	"SetDocBlobOtherMarshal":          "S3",
+	"SetDocBlobErrReused":             "S3",
+	"AddItemLaundered":                "S3",
+	"SetRefLaundered":                 "S3",
+	"SetNestedRefLaundered":           "S3",
+	"SetReplicasConditionalAlias":     "S3",
+	"SetReplicasViaAddr":              "S3",
+	"SetDocBlobGuardApart":            "S4",
+	"SetDocBlobGuardTwice":            "S4",
+	"SetReplicasPanicParam":           "S5",
+	"AddLabelPanicCall":               "S5",
+	"SetDocBlobPanicValue":            "S5",
+	"SetReplicasPanicFormatted":       "S5",
+	"SetRefGuarded":                   "S6",
+	"SetReplicasAndNameTuple":         "S7",
+	"SetReplicasTupleReroot":          "S7",
+	"SetReplicasParamBumped":          "S7",
+	"SetReplicasValidated":            "S8",
+	"SetReplicasGuardElse":            "S8",
+	"SetReplicasParamReassigned":      "S8",
+	"SetReplicasGuardNotNil":          "S8",
+	"SetReplicasGuardInit":            "S8",
+	"SetReplicasTwoObjects":           "P1",
+	"SetRefAndRename":                 "P1",
+	"SetReplicasParamOverwritten":     "P1",
+	"SetRefDefaulted":                 "P1",
+	"SetObjWhole":                     "P2",
+	"AddLabelFieldKey":                "P3",
+	"AddDocKeyedSelf":                 "P3",
+	"AddDocKeyedLocal":                "P3",
+	"AddDocKeyedLocalGuarded":         "S8",
+	"AddDocKeyedLocalDropped":         "P1",
+	"AddLabelAfterReplace":            "P4",
+	"AddHoldItemAfterCopy":            "P4",
+	"AddDocLabelAfterReplace":         "P4",
+	"SetRefNameThenReplace":           "P4",
+	"SetLabelsAfterInit":              "P4",
+	"SetDocPlanLimitAbbreviatedIndex": "P4",
+	"SetDocHoldLabels":                "P5",
+	"AddGroupInit":                    "P5",
+	"SetReplicasUnusedInit":           "P6",
+	"SetItemAtInit":                   "P7",
+	"AddRowItemInit":                  "P7",
+	"SetHoldItemAtInit":               "P7",
+	"AddHoldLabelOneInit":             "P7",
+	"SetDocShellBoxName":              "P7",
+	"SetDocHoldMapLabelsInit":         "P7",
+	"AddDocShellHoldLabel":            "P7",
+	"AddItemGrow":                     "N1",
+	"SetDocPlanLimitGuardOtherIndex":  "N1",
+	"AddItemFromName":                 "V1",
+	"AddGroupFromGroup":               "V1",
+	"AddLabelCallValue":               "V1",
+	"SetBoxNameFixed":                 "V1",
+	"AddItemAndLabels":                "V1",
+	"SetDocRefAndAnySelf":             "V1",
+	"SetDocRawPointer":                "V1",
+	"SetReplicasAndNestedA":           "V2",
+	"SetDocRefAndAnyRef":              "V2",
+	"SetDocRefAndHold":                "V2",
+	"SetNestedRefKind":                "V3",
+	"SetDocPlanFixedPolicy":           "V3b",
+	"AddHoldItemUnguardedInit":        "V3b",
+	"SetBoxNameUnguardedInit":         "V3b",
+	"SetReplicasNameTwice":            "V4",
+	"SetNestedRefSameName":            "V4",
+	"SetDocBlobAndAny":                "V4",
+	"SetRefIgnoring":                  "V5",
+	"SetRefBlank":                     "V5",
 
-	"AddLabelDelete":                  {"S1", Append},
-	"AddLabelMapsCopy":                {"S1", Append},
-	"AddItemMethodCall":               {"S1", Append},
-	"AddItemDeferred":                 {"S1", Append},
-	"AddItemGo":                       {"S1", Append},
-	"AddItemSend":                     {"S1", Append},
-	"SetReplicasGuardLast":            {"S2", Pointer},
-	"SetDocBlobBlankErr":              {"S3", Pointer},
-	"SetDocBlobFromField":             {"S3", Pointer},
-	"SetDocBlobFromCall":              {"S3", Pointer},
-	"SetDocBlobFromSelf":              {"S3", Pointer},
-	"SetDocBlobOtherMarshal":          {"S3", Pointer},
-	"SetDocBlobErrReused":             {"S3", Pointer},
-	"AddItemLaundered":                {"S3", Append},
-	"SetRefLaundered":                 {"S3", Pointer},
-	"SetNestedRefLaundered":           {"S3", Composite},
-	"SetReplicasConditionalAlias":     {"S3", Pointer},
-	"SetReplicasViaAddr":              {"S3", Pointer},
-	"SetDocBlobGuardApart":            {"S4", Pointer},
-	"SetDocBlobGuardTwice":            {"S4", Pointer},
-	"SetReplicasPanicParam":           {"S5", Pointer},
-	"AddLabelPanicCall":               {"S5", Append},
-	"SetDocBlobPanicValue":            {"S5", Pointer},
-	"SetReplicasPanicFormatted":       {"S5", Pointer},
-	"SetRefGuarded":                   {"S6", Pointer},
-	"SetReplicasAndNameTuple":         {"S7", Pointer},
-	"SetReplicasTupleReroot":          {"S7", Pointer},
-	"SetReplicasParamBumped":          {"S7", Pointer},
-	"SetReplicasValidated":            {"S8", Pointer},
-	"SetReplicasGuardElse":            {"S8", Pointer},
-	"SetReplicasParamReassigned":      {"S8", Pointer},
-	"SetReplicasGuardNotNil":          {"S8", Pointer},
-	"SetReplicasGuardInit":            {"S8", Pointer},
-	"SetReplicasTwoObjects":           {"P1", Pointer},
-	"SetRefAndRename":                 {"P1", Pointer},
-	"SetReplicasParamOverwritten":     {"P1", Pointer},
-	"SetRefDefaulted":                 {"P1", Pointer},
-	"SetObjWhole":                     {"P2", Composite},
-	"AddLabelFieldKey":                {"P3", Append},
-	"AddDocKeyedSelf":                 {"P3", Append},
-	"AddDocKeyedLocal":                {"P3", Append},
-	"AddDocKeyedLocalGuarded":         {"S8", Append},
-	"AddDocKeyedLocalDropped":         {"P1", Append},
-	"AddLabelAfterReplace":            {"P4", Append},
-	"AddHoldItemAfterCopy":            {"P4", Append},
-	"AddDocLabelAfterReplace":         {"P4", Append},
-	"SetRefNameThenReplace":           {"P4", Pointer},
-	"SetLabelsAfterInit":              {"P4", Pointer},
-	"SetDocPlanLimitAbbreviatedIndex": {"P4", Pointer},
-	"SetDocHoldLabels":                {"P5", Append},
-	"AddGroupInit":                    {"P5", Append},
-	"SetReplicasUnusedInit":           {"P6", Pointer},
-	"SetItemAtInit":                   {"P7", Pointer},
-	"AddRowItemInit":                  {"P7", Append},
-	"SetHoldItemAtInit":               {"P7", Pointer},
-	"AddHoldLabelOneInit":             {"P7", Append},
-	"SetDocShellBoxName":              {"P7", Pointer},
-	"SetDocHoldMapLabelsInit":         {"P7", Pointer},
-	"AddDocShellHoldLabel":            {"P7", Append},
-	"AddItemGrow":                     {"N1", Append},
-	"SetDocPlanLimitGuardOtherIndex":  {"N1", Pointer},
-	"AddItemFromName":                 {"V1", Append},
-	"AddGroupFromGroup":               {"V1", Append},
-	"AddLabelCallValue":               {"V1", Append},
-	"SetBoxNameFixed":                 {"V1", Pointer},
-	"AddItemAndLabels":                {"V1", Append},
-	"SetDocRefAndAnySelf":             {"V1", Pointer},
-	"SetDocRawPointer":                {"V1", Pointer},
-	"SetReplicasAndNestedA":           {"V2", Pointer},
-	"SetDocRefAndAnyRef":              {"V2", Pointer},
-	"SetDocRefAndHold":                {"V2", Pointer},
-	"SetNestedRefKind":                {"V3", Composite},
-	"SetDocPlanFixedPolicy":           {"V3b", Composite},
-	"AddHoldItemUnguardedInit":        {"V3b", Append},
-	"SetBoxNameUnguardedInit":         {"V3b", Pointer},
-	"SetReplicasNameTwice":            {"V4", Pointer},
-	"SetNestedRefSameName":            {"V4", Composite},
-	"SetDocBlobAndAny":                {"V4", Pointer},
-	"SetRefIgnoring":                  {"V5", Pointer},
-	"SetRefBlank":                     {"V5", Pointer},
-}
-
-// grammarAdmitted lists the fixtures in grammarFixtureSource that stay
-// admitted: the shapes the grammar must not refuse.
-var grammarAdmitted = map[string]Class{
-	"SetDocBlob":                       Pointer,
-	"AddItemFromPointer":               Append,
-	"AddDocPlan":                       Append,
-	"AddHoldLabel":                     Append,
-	"SetNestedRefPositional":           Composite,
-	"SetDocPlanLimitConstIndex":        Pointer,
-	"SetDocPlanLimitGuardedConstIndex": Pointer,
-	"AddDocHeld":                       Append,
-	"SetReplicasParenGuard":            Pointer,
-	"AddLabelParenKey":                 Append,
-	"SetDocNameAndRef":                 Pointer,
-	"AddDocPlanFromPointer":            Append,
-	"SetDocBlobAndSpare":               Pointer,
-	"SetDocBlobGuardAfter":             Pointer,
-	"AddHoldItemInit":                  Append,
-	"SetDocShellSlot":                  Pointer,
-
-	"AddDocKeyedFuncTypeKey":      Append,
-	"SetRefNameParenGuardOperand": Pointer,
-	"SetRefNameDerefObj":          Pointer,
-	"SetDocAnyReadsName":          Composite,
-	"AddDocRawByte":               Append,
-	"SetDocRawWhole":              Pointer,
-	"SetReplicasAndNilName":       Pointer,
-	"SetRefNameFromPointer":       Pointer,
-
-	"SetDocRefAndHoldMapLabels": Pointer,
-	"SetDocRefThrough":          Composite,
-	"SetRefWhole":               Pointer,
-	"SetDocAnyRef":              Composite,
-}
-
-// grammarGaps lists the fixtures the grammar alone admits and a check before
-// it refuses, with the rule to come that refuses each: the bodies the grammar
-// does not yet read as the older checks do.
-var grammarGaps = map[string]string{}
-
-// grammarBehind lists every fixture refused for its body other than by the
-// grammar, by a check before it or by the fall-through, that the grammar
-// alone refuses too, with the rule it refuses by first. The verdict does not
-// show these rules: they are what keeps each body refused once the checks
-// ahead of them are gone.
-var grammarBehind = map[string]string{
 	"AddDocKeyedFuncKey":                   "S9",
 	"AddDocKeyedAppendKey":                 "S11",
 	"AddItemAndRow":                        "S10",
@@ -1385,88 +1355,60 @@ var grammarBehind = map[string]string{
 	"SetViaDelegate":                       "S1",
 }
 
-// signatureReasons are the two refusals read off the signature, not the body.
-var signatureReasons = []string{"returns a value;", "declares type parameters;"}
+// grammarAdmitted lists the fixtures in grammarFixtureSource that stay
+// admitted: the shapes the grammar must not refuse.
+var grammarAdmitted = map[string]Class{
+	"SetDocBlob":                       Pointer,
+	"AddItemFromPointer":               Append,
+	"AddDocPlan":                       Append,
+	"AddHoldLabel":                     Append,
+	"SetNestedRefPositional":           Composite,
+	"SetDocPlanLimitConstIndex":        Pointer,
+	"SetDocPlanLimitGuardedConstIndex": Pointer,
+	"AddDocHeld":                       Append,
+	"SetReplicasParenGuard":            Pointer,
+	"AddLabelParenKey":                 Append,
+	"SetDocNameAndRef":                 Pointer,
+	"AddDocPlanFromPointer":            Append,
+	"SetDocBlobAndSpare":               Pointer,
+	"SetDocBlobGuardAfter":             Pointer,
+	"AddHoldItemInit":                  Append,
+	"SetDocShellSlot":                  Pointer,
 
-// fallThroughReasons are the refusals of a body no check finds an admitted
-// operation in: it writes fields bare, or writes nothing. They stay outside
-// the grammar.
-var fallThroughReasons = []string{
-	"bare field writes and no composite literal",
-	"single bare field assignment",
-	"no field write (delegation or no-op)",
+	"AddDocKeyedFuncTypeKey":      Append,
+	"SetRefNameParenGuardOperand": Pointer,
+	"SetRefNameDerefObj":          Pointer,
+	"SetDocAnyReadsName":          Composite,
+	"AddDocRawByte":               Append,
+	"SetDocRawWhole":              Pointer,
+	"SetReplicasAndNilName":       Pointer,
+	"SetRefNameFromPointer":       Pointer,
+
+	"SetDocRefAndHoldMapLabels": Pointer,
+	"SetDocRefThrough":          Composite,
+	"SetRefWhole":               Pointer,
+	"SetDocAnyRef":              Composite,
+
+	"SetDocShellBoxNameTwoInits": Pointer,
 }
 
-// reasonIn reports whether reason holds one of fragments.
-func reasonIn(reason string, fragments []string) bool {
-	for _, fragment := range fragments {
-		if strings.Contains(reason, fragment) {
-			return true
-		}
-	}
-	return false
+// grammarForwarders lists the fixtures the grammar admits and the class of
+// their writes refuses, with a fragment of the reason: one bare write, two,
+// or none at all.
+var grammarForwarders = map[string]string{
+	"SetName":            "single bare field assignment",
+	"SetNameAndATwoArgs": "2 bare field writes and no composite literal",
+	"SetNothingButGuard": "no field write",
 }
 
-// bodyRefused reports whether f is refused for its body other than by a rule
-// of the grammar: by a check before the grammar, or by the fall-through.
-func bodyRefused(f Finding) bool {
-	return f.Class == Inadmissible && !strings.Contains(f.Reason, "(grammar ") &&
-		!reasonIn(f.Reason, signatureReasons)
-}
-
-// olderRefusal reports whether f is refused by a check before the grammar
-// that a rule of the grammar is to take over: bodyRefused, and not by the
-// fall-through.
-func olderRefusal(f Finding) bool {
-	return bodyRefused(f) && !reasonIn(f.Reason, fallThroughReasons)
-}
-
-// grammarAlone loads the package in dir as Classify does and returns what the
-// grammar alone answers for each helper Classify reads, the exempt ones aside.
-// Classify calls the grammar only for a body the checks before it admit an
-// operation in, so swapping checkGrammar cannot show this.
-func grammarAlone(t *testing.T, dir string, exempt map[string]bool) map[string]string {
+// fixtureVerdicts classifies the fixture and returns the verdict on each
+// helper, by name.
+func fixtureVerdicts(t *testing.T) map[string]Finding {
 	t.Helper()
-	pkgs, err := packages.Load(&packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-		Dir: dir,
-		Env: append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
-	}, ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if packages.PrintErrors(pkgs) > 0 {
-		t.Fatal("the package does not load")
-	}
-	own := map[string]string{}
-	for _, p := range pkgs {
-		for _, file := range p.Syntax {
-			if strings.HasPrefix(filepath.Base(p.Fset.Position(file.Pos()).Filename), "zz_generated") {
-				continue
-			}
-			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || !isSugarHelper(fn) || exempt[p.PkgPath+"."+fn.Name.Name] {
-					continue
-				}
-				own[fn.Name.Name] = grammar(fn, p.TypesInfo)
-			}
-		}
-	}
-	return own
-}
-
-// fixtureAlone returns what the grammar alone answers for every fixture, and
-// the verdict on each.
-func fixtureAlone(t *testing.T) (map[string]string, map[string]Finding) {
-	t.Helper()
-	dir := writeFixture(t)
-	exempt := map[string]bool{"fixture.SetExempted": true}
 	findings, err := Classify(Options{
-		Dir:      dir,
+		Dir:      writeFixture(t),
 		Patterns: []string{"."},
-		Exempt:   exempt,
+		Exempt:   map[string]bool{"fixture.SetExempted": true},
 		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
 	})
 	if err != nil {
@@ -1476,93 +1418,46 @@ func fixtureAlone(t *testing.T) (map[string]string, map[string]Finding) {
 	for _, f := range findings {
 		verdicts[f.Name] = f
 	}
-	return grammarAlone(t, dir, exempt), verdicts
+	return verdicts
 }
 
-// TestClassify_GrammarOnlyRefuses classifies the fixture with and without the
-// grammar. The grammar may turn an admission into a refusal, for the fixtures
-// grammarRefusals names and by the rule it names, and may change nothing else:
-// not the class of an admitted helper, and not the reason of a refusal the
-// checks before it already make.
-func TestClassify_GrammarOnlyRefuses(t *testing.T) {
-	dir := writeFixture(t)
-	classifyFixture := func() []Finding {
-		t.Helper()
-		findings, err := Classify(Options{
-			Dir:      dir,
-			Patterns: []string{"."},
-			Exempt:   map[string]bool{"fixture.SetExempted": true},
-			Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return findings
-	}
-	with := classifyFixture()
-
-	restore := checkGrammar
-	t.Cleanup(func() { checkGrammar = restore })
-	checkGrammar = func(*ast.FuncDecl, *types.Info) string { return "" }
-	without := classifyFixture()
-
-	if len(with) != len(without) {
-		t.Fatalf("%d findings with the grammar, %d without", len(with), len(without))
-	}
-	seen := map[string]bool{}
-	for i, before := range without {
-		after := with[i]
-		if before.Name != after.Name {
-			t.Fatalf("finding %d is %s without the grammar and %s with it", i, before.Name, after.Name)
-		}
-		seen[before.Name] = true
-		want, refused := grammarRefusals[before.Name]
-		if !refused {
-			if before.Class != after.Class || before.Reason != after.Reason {
-				t.Errorf("%s: %s (%s) without the grammar, %s (%s) with it",
-					before.Name, before.Class, before.Reason, after.Class, after.Reason)
-			}
-			continue
-		}
-		if before.Class != want.was {
-			t.Errorf("%s: class %s without the grammar, want %s (%s)", before.Name, before.Class, want.was, before.Reason)
-		}
-		if after.Class != Inadmissible || !strings.Contains(after.Reason, "(grammar "+want.rule+",") {
-			t.Errorf("%s: %s (%s) with the grammar, want it refused by rule %s", before.Name, after.Class, after.Reason, want.rule)
-		}
-	}
-	for name := range grammarRefusals {
-		if !seen[name] {
+// TestClassify_GrammarRules reads the verdict on every fixture grammarRules
+// names: refused, by the rule the table names. For the fixtures
+// grammarWording names it reads the words of the reason, and for those
+// grammarForwarders names the forwarder reason the class of the writes gives.
+func TestClassify_GrammarRules(t *testing.T) {
+	verdicts := fixtureVerdicts(t)
+	verdict := func(name string) (Finding, bool) {
+		f, classified := verdicts[name]
+		if !classified {
 			t.Errorf("%s: not classified at all", name)
 		}
+		return f, classified
 	}
-}
-
-// TestClassify_GrammarRefusesBehind reads what the grammar itself returns for
-// the fixtures grammarBehind names. A check before the grammar or the
-// fall-through refuses each of them, so the verdict does not show whether the
-// grammar would.
-func TestClassify_GrammarRefusesBehind(t *testing.T) {
-	own, verdicts := fixtureAlone(t)
-	for name, rule := range grammarBehind {
-		reason, read := own[name]
-		if !read {
-			t.Errorf("%s: the grammar did not read it", name)
-			continue
+	for name, rule := range grammarRules {
+		f, classified := verdict(name)
+		if classified && (f.Class != Inadmissible || !strings.Contains(f.Reason, "(grammar "+rule+",")) {
+			t.Errorf("%s: %s (%s), want it refused by rule %s", name, f.Class, f.Reason, rule)
 		}
-		if !strings.Contains(reason, "(grammar "+rule+",") {
-			t.Errorf("%s: the grammar alone gives %q, want it refused by rule %s", name, reason, rule)
+	}
+	for name, fragment := range grammarWording {
+		f, classified := verdict(name)
+		if classified && !strings.Contains(f.Reason, fragment) {
+			t.Errorf("%s: %s (%s), want the reason to contain %q", name, f.Class, f.Reason, fragment)
 		}
-		if f := verdicts[name]; !bodyRefused(f) {
-			t.Errorf("%s: %s (%s), want it refused other than by the grammar", name, f.Class, f.Reason)
+	}
+	for name, fragment := range grammarForwarders {
+		f, classified := verdict(name)
+		if classified && (f.Class != Inadmissible || !strings.Contains(f.Reason, fragment)) {
+			t.Errorf("%s: %s (%s), want it refused as a forwarder, %q", name, f.Class, f.Reason, fragment)
 		}
 	}
 }
 
 // grammarWording lists fixtures whose refusal names its cause, with a
-// fragment of what the grammar alone answers for each: a return or a goto by
-// name at the top level (S1) and inside an if (S8), and each of the four
-// reasons a path is not the object's (P1).
+// fragment of the reason: a return or a goto by name at the top level (S1)
+// and inside an if (S8), and each of the four reasons a path is not the
+// object's (P1).
 var grammarWording = map[string]string{
 	"SetReplicasThenReturn":       "a return is neither an if nor an assignment (grammar S1,",
 	"SetReplicasGotoAhead":        "a goto is neither an if nor an assignment (grammar S1,",
@@ -1575,154 +1470,10 @@ var grammarWording = map[string]string{
 	"AddItemParenParamReassigned": "(o) is spelled from o, which the body reassigns or takes the address of (grammar P1,",
 }
 
-// TestClassify_GrammarWording reads what the grammar alone answers for the
-// fixtures grammarWording names. A check before the grammar refuses some of
-// them, so the verdict does not show the grammar's words.
-func TestClassify_GrammarWording(t *testing.T) {
-	own, _ := fixtureAlone(t)
-	for name, fragment := range grammarWording {
-		reason, read := own[name]
-		if !read {
-			t.Errorf("%s: the grammar did not read it", name)
-			continue
-		}
-		if !strings.Contains(reason, fragment) {
-			t.Errorf("%s: the grammar alone gives %q, want it to contain %q", name, reason, fragment)
-		}
-	}
-}
-
-// TestClassify_GrammarGaps reads what the grammar alone answers for the
-// fixtures grammarGaps names: nothing, while a check before it refuses each.
-// Then it holds the two tables complete: a fixture refused for its body other
-// than by the grammar is in grammarBehind when the grammar alone refuses it,
-// and in grammarGaps when it does not and the refusal is not the
-// fall-through's.
-func TestClassify_GrammarGaps(t *testing.T) {
-	own, verdicts := fixtureAlone(t)
-	for name, rule := range grammarGaps {
-		reason, read := own[name]
-		if !read {
-			t.Errorf("%s: the grammar did not read it", name)
-			continue
-		}
-		if reason != "" {
-			t.Errorf("%s: the grammar alone gives %q, want it admitted until rule %s", name, reason, rule)
-		}
-		if f := verdicts[name]; !olderRefusal(f) {
-			t.Errorf("%s: %s (%s), want it refused by a check before the grammar", name, f.Class, f.Reason)
-		}
-	}
-	for name, f := range verdicts {
-		if !bodyRefused(f) {
-			continue
-		}
-		_, behind := grammarBehind[name]
-		_, gap := grammarGaps[name]
-		switch {
-		case own[name] != "" && !behind:
-			t.Errorf("%s: %s, and the grammar alone gives %q; want it in grammarBehind", name, f.Reason, own[name])
-		case own[name] == "" && olderRefusal(f) && !gap:
-			t.Errorf("%s: %s, and the grammar alone admits it; want it in grammarGaps", name, f.Reason)
-		}
-	}
-}
-
-// inTreeExempt is the set of in-tree helpers the contract admits by name, as
-// the test of pkg/kubernetes names them.
-var inTreeExempt = map[string]bool{
-	"github.com/go-kure/kure/pkg/kubernetes.SetLabels":      true,
-	"github.com/go-kure/kure/pkg/kubernetes.AddLabel":       true,
-	"github.com/go-kure/kure/pkg/kubernetes.SetAnnotations": true,
-	"github.com/go-kure/kure/pkg/kubernetes.AddAnnotation":  true,
-}
-
-// compareClasses loads the packages in dir matching patterns as Classify does
-// and, for every helper the verdict admits, compares the class the grammar
-// reads off its writes with the class of the verdict. Internal packages are
-// left out, as the test of pkg/kubernetes leaves them out.
-func compareClasses(t *testing.T, dir string, env []string, exempt map[string]bool, patterns ...string) {
-	t.Helper()
-	pkgs, err := packages.Load(&packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-		Dir: dir,
-		Env: env,
-	}, patterns...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if packages.PrintErrors(pkgs) > 0 {
-		t.Fatal("the packages do not load")
-	}
-	compared := 0
-	for _, p := range pkgs {
-		if strings.Contains(p.PkgPath, "/internal/") {
-			continue
-		}
-		for _, file := range p.Syntax {
-			if strings.HasPrefix(filepath.Base(p.Fset.Position(file.Pos()).Filename), "zz_generated") {
-				continue
-			}
-			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || !isSugarHelper(fn) || exempt[p.PkgPath+"."+fn.Name.Name] {
-					continue
-				}
-				want, reason := classify(fn, p.TypesInfo)
-				if want == Inadmissible {
-					continue
-				}
-				compared++
-				b, refusal := read(fn, p.TypesInfo)
-				if refusal == "" {
-					refusal = b.whole()
-				}
-				if refusal != "" {
-					t.Errorf("%s: the grammar refuses a body the verdict admits as %s: %s", fn.Name.Name, want, refusal)
-					continue
-				}
-				if got, _ := b.class(); got != want {
-					t.Errorf("%s: the writes read as %s, the verdict is %s (%s)", fn.Name.Name, got, want, reason)
-				}
-			}
-		}
-	}
-	if compared == 0 {
-		t.Fatal("no helper is admitted, so nothing was compared")
-	}
-	t.Logf("compared the class of %d admitted helpers", compared)
-}
-
-// TestClassify_GrammarClass compares the class the grammar reads off the
-// writes of a body with the class of the verdict, for every body the verdict
-// admits: every fixture, every generated body and every in-tree helper. The
-// verdict still comes from the checks before the grammar; this is the class
-// the grammar gives once it alone decides.
-func TestClassify_GrammarClass(t *testing.T) {
-	env := append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
-	t.Run("fixture", func(t *testing.T) {
-		compareClasses(t, writeFixture(t), env, map[string]bool{"fixture.SetExempted": true}, ".")
-	})
-	t.Run("generated", func(t *testing.T) {
-		if testing.Short() {
-			t.Skip("classifies a generated package of some thousand helpers")
-		}
-		compareClasses(t, writeGenerated(t, genSource(wellTyped(t, generate()))), env, nil, ".")
-	})
-	t.Run("in-tree", func(t *testing.T) {
-		if testing.Short() {
-			t.Skip("loads every package under pkg/kubernetes with type information")
-		}
-		compareClasses(t, filepath.Join("..", ".."), nil, inTreeExempt, "./...")
-	})
-}
-
 // TestSameIndex pins what makes two keys or indexes the same one: the same
 // expression, or two constants of one type and one value however each is
-// spelled. The fixture cannot isolate the type: the checks before the grammar
-// compare a path by its text, and two constants of two types never print
-// alike.
+// spelled. The fixture cannot isolate the type: two constants of two types
+// never print alike, so a comparison by text would tell them apart too.
 func TestSameIndex(t *testing.T) {
 	const src = `package p
 

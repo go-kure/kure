@@ -407,8 +407,8 @@ func AddItemViaAlias(o *Obj, s string) {
 	spec.Items = append(spec.Items, s)
 }
 
-// inadmissible, by the grammar alone: class b through a declared alias of the
-// object, and a var declaration is neither an if nor an assignment (S1)
+// inadmissible: a var declaration is neither an if nor an assignment (S1),
+// whatever alias of the object it declares
 func SetReplicasViaAlias(o *Obj, n int32) {
 	var obj = o
 	obj.Spec.Replicas = &n
@@ -460,8 +460,8 @@ func SetRefBeforeAlias(o *Obj, n string) {
 	_ = tmp
 }
 
-// inadmissible, by the grammar alone: an alias reassigned from the parameter
-// counts from that point on, and a local is only a marshalled argument (S3)
+// inadmissible: an alias reassigned from the parameter is a local, and a
+// local is only a marshalled argument (S3)
 func SetRefAfterAlias(o *Obj, n string) {
 	tmp := &Obj{}
 	tmp = o
@@ -733,8 +733,8 @@ L:
 	}
 }
 
-// inadmissible, by the grammar alone: a top-level bare block runs on every
-// path, and is neither an if nor an assignment (S1)
+// inadmissible: a top-level bare block is neither an if nor an assignment
+// (S1), on every path though it runs
 func SetRefBlock(o *Obj, ref *Ref) {
 	{
 		o.Spec.Ref = ref
@@ -837,8 +837,8 @@ func SetReplicasIncNilInit(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible, by the grammar alone: incrementing a temporary reaches no
-// caller, and a local is only a marshalled argument (S3)
+// inadmissible: a temporary is a local, and a local is only a marshalled
+// argument (S3), whatever the body increments in it
 func SetReplicasTempCount(o *Obj, n int32) {
 	tmp := Obj{}
 	tmp.Spec.Count++
@@ -967,8 +967,8 @@ func AddLabelExpandedFromAlias(o *Obj, k, v string) {
 	o.Labels[k] = labels[k] + v
 }
 
-// inadmissible, by the grammar alone: a local that never reached the caller
-// is not the target, and a local is only a marshalled argument (S3)
+// inadmissible: a local is only a marshalled argument (S3), whether or not
+// it ever reaches the caller
 func AddLabelFromTemp(o *Obj, k, v string) {
 	m := map[string]string{}
 	if o.Labels == nil {
@@ -999,8 +999,8 @@ func SetReplicasRangeAliasConcat(o *Obj, v string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible, by the grammar alone: another parameter is the caller's own
-// argument, not the target, and the value is computed from it (V1)
+// inadmissible: a value computed from another parameter's field is not an
+// argument passed whole (V1)
 func AddLabelFromOther(o, src *Obj, k string) {
 	if o.Labels == nil {
 		o.Labels = map[string]string{}
@@ -1008,8 +1008,8 @@ func AddLabelFromOther(o, src *Obj, k string) {
 	o.Labels[k] = src.Labels[k] + "x"
 }
 
-// inadmissible, by the grammar alone: a range over a temporary reaches no
-// caller, and a range is neither an if nor an assignment (S1)
+// inadmissible: a range is neither an if nor an assignment (S1), over a
+// temporary or not
 func SetReplicasRangeTempConcat(o *Obj, v string, n int32) {
 	for _, items := range map[string][]string{} {
 		items[0] += v
@@ -1017,8 +1017,8 @@ func SetReplicasRangeTempConcat(o *Obj, v string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible, by the grammar alone: a range variable holding a struct is a
-// copy, and a range is neither an if nor an assignment (S1)
+// inadmissible: a range is neither an if nor an assignment (S1), its
+// variable a struct copy or not
 func SetReplicasRangeCopyConcat(o *Obj, refs []Ref, n int32) {
 	for _, r := range refs {
 		r.Name += "x"
@@ -1035,8 +1035,8 @@ func AddGroupItem(o *Obj, k, s string) {
 	o.Spec.Groups[k] = append(o.Spec.Groups[k], s)
 }
 
-// inadmissible, by the grammar alone: a comma-ok read of a temporary map
-// reaches no caller, and a local is only a marshalled argument (S3)
+// inadmissible: a comma-ok read declares locals, and a local is only a
+// marshalled argument (S3)
 func SetReplicasCommaOkTemp(o *Obj, k, s string, n int32) {
 	m := map[string][]string{}
 	items, _ := m[k]
@@ -1306,8 +1306,8 @@ func SetHoldFreshMapWriteBack(o *Obj, k, v string) {
 	o.Spec.Hold.Labels = labels
 }
 
-// inadmissible, by the grammar alone: a computed value written through a
-// pointer the body initialised is not an argument passed whole (V1)
+// inadmissible: a computed value written through a pointer the body
+// initialised is not an argument passed whole (V1)
 func SetRefNameComputed(o *Obj, n string) {
 	if o.Spec.Ref == nil {
 		o.Spec.Ref = &Ref{}
@@ -1360,8 +1360,8 @@ func SetReplicasConvertedInc(o *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible, by the grammar alone: a call other than a conversion is not
-// followed, and a local is only a marshalled argument (S3)
+// inadmissible: the result of a call is a local, and a local is only a
+// marshalled argument (S3)
 func SetReplicasClonedInc(o *Obj, n int32) {
 	p := clonePtr(o.Spec.Replicas)
 	(*p)++
@@ -1376,8 +1376,8 @@ func AddLabelExpandedParenIndex(o *Obj, k, v string) {
 	o.Labels[k] = o.Labels[(k)] + v
 }
 
-// inadmissible, by the grammar alone: another key is not the target, and the
-// value is read back from the object (V1)
+// inadmissible: a value read back from the object under another key is not
+// an argument passed whole (V1)
 func AddLabelFromOtherKey(o *Obj, k, j, v string) {
 	if o.Labels == nil {
 		o.Labels = map[string]string{}
@@ -1655,9 +1655,8 @@ func AddLabelParenTarget(o *Obj, k, v string) {
 	(o.Labels[k]) = v
 }
 
-// inadmissible, by the grammar alone: a parenthesised local assigned a
-// parameter carries the caller's value, and a var declaration is neither an if
-// nor an assignment (S1)
+// inadmissible: a var declaration is neither an if nor an assignment (S1),
+// whatever value the parenthesised local then carries
 func SetRefNameViaParenLocal(o *Obj, n string) {
 	var name string
 	(name) = n
@@ -1681,8 +1680,8 @@ func AddItemAndReplicas(o *Obj, s string, n int32) {
 	o.Spec.Replicas = &n
 }
 
-// inadmissible, by the grammar alone: an element of a temporary slice is not
-// a map element, and a local is only a marshalled argument (S3)
+// inadmissible: a temporary slice is a local, and a local is only a
+// marshalled argument (S3)
 func SetReplicasTempSliceExpanded(o *Obj, v string, n int32) {
 	xs := []string{"a"}
 	xs[0] = xs[0] + v
@@ -1815,7 +1814,7 @@ func AddGroupItemLiteralKeysDirect(o *Obj, s string) {
 }
 
 // inadmissible: an append into a local, beside an append extending another
-// field (pins the off-target reason before the indirect one)
+// field (the local, first in source order, names the refusal: S3)
 func AddItemLocalThenIndirect(o *Obj, s string) {
 	items := o.Spec.Rows[0]
 	items = append(items, s)
@@ -1823,7 +1822,8 @@ func AddItemLocalThenIndirect(o *Obj, s string) {
 }
 
 // inadmissible: an append extending another field, beside an append passed as
-// an argument (indirect before stray)
+// an argument (the stray append, read off the whole body first, names the
+// refusal: S11)
 func AddItemIndirectBesideStray(o *Obj, s string) {
 	o.Spec.Items = append(o.Spec.Rows[0], s)
 	_ = len(append(o.Spec.Rows[1], s))
@@ -1838,7 +1838,8 @@ func AddItemStrayBesideTwice(o *Obj, s string) {
 }
 
 // inadmissible: two appends, beside a bare write of a computed value
-// (repeated before the bare write)
+// (the second append, before the bare write in source order, names the
+// refusal: S10)
 func AddItemTwiceBesideBare(o *Obj, s string) {
 	o.Spec.Items = append(o.Spec.Items, s)
 	o.Spec.Items = append(o.Spec.Items, s)
@@ -2182,13 +2183,10 @@ func TestClassify_Fixture(t *testing.T) {
 		"AddItemParenAppendValue":       Append,
 		"SetExempted":                   Exempt,
 	}
-	for name := range grammarRefusals {
+	for name := range grammarRules {
 		want[name] = Inadmissible
 	}
-	for name := range grammarBehind {
-		want[name] = Inadmissible
-	}
-	for name := range grammarGaps {
+	for name := range grammarForwarders {
 		want[name] = Inadmissible
 	}
 	maps.Copy(want, grammarAdmitted)
@@ -2209,179 +2207,183 @@ func TestClassify_Fixture(t *testing.T) {
 			t.Errorf("%s: bad finding metadata %+v", name, f)
 		}
 	}
-	// The reasons distinguish the rules a fixture exists for.
+	// The reasons distinguish the rules a fixture exists for: the rule that
+	// refuses it and what it names, up to the rule's ID.
 	for name, want := range map[string]string{
-		"SetNameViaZeroLocal":   "single bare field assignment",
+		"SetNameViaZeroLocal":   "a declaration is neither an if nor an assignment (grammar S1,",
 		"AddItemWithError":      "returns a value",
 		"SetReplicasReturning":  "returns a value",
-		"SetRefViaNilLocal":     "assigns nil",
-		"SetNameAndA":           "bare field writes",
-		"AddItemAndName":        "bare write to o.Spec.Name alongside",
-		"SetReplicasAndDefault": "bare write to o.Spec.Name alongside",
-		"SetReplicasAndDerived": "bare write to o.Spec.Name alongside",
-		"AddItemConstant":       "value the caller did not supply to o.Spec.Items",
-		"AddItemMakeLen":        "value the caller did not supply to o.Spec.Items",
-		"AddItemGuardedMakeLen": "writes o.Spec.Items (under if o.Spec.Items == nil) only on some paths",
-		"AddItemMakeParamLen":   "writes o.Spec.Items (under if o.Spec.Items == nil) only on some paths",
-		"AddRowMakeLen":         "value the caller did not supply to o.Spec.Rows",
-		"SetRefPayloadDefault":  "value the caller did not supply to o.Spec.Payload",
-		"SetRefPayloadGuarded":  "writes o.Spec.Payload (under if o.Spec.Payload == nil) only on some paths",
-		"SetRefNestedReset":     "value the caller did not supply to o.Spec.Nested",
-		"SetRefPayloadMake":     "value the caller did not supply to o.Spec.Payload",
-		"SetBoxPayloadMake":     "value the caller did not supply to o.Spec.Box.Payload",
-		"SetBoxPayloadNew":      "value the caller did not supply to o.Spec.Box.Payload",
-		"SetBoxChanMake":        "value the caller did not supply to o.Spec.Box.Ch",
-		"AddLabelConstant":      "value the caller did not supply to o.Labels[k]",
-		"SetReplicasZero":       "value the caller did not supply to o.Spec.Replicas",
-		"SetNestedRefConstant":  "value the caller did not supply to o.Spec.Nested.Ref",
-		"SetItemsLiteral":       "single bare field assignment",
-		"SetReplicasByValue":    "no field write",
+		"SetRefViaNilLocal":     "a declaration is neither an if nor an assignment (grammar S1,",
+		"SetNameAndA":           "the argument n is written more than once (grammar V4,",
+		"AddItemAndName":        "\"item\" is written to o.Spec.Name, and \"item\" is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetReplicasAndDefault": "\"web\" is written to o.Spec.Name, and \"web\" is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetReplicasAndDerived": "name + \"-x\" is written to o.Spec.Name, and name + \"-x\" is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"AddItemConstant":       "\"fixed\" is written to o.Spec.Items, and \"fixed\" is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"AddItemMakeLen":        "make([]string, 1) is written to o.Spec.Items, and make([]string, 1) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"AddItemGuardedMakeLen": "o.Spec.Items is initialised with make([]string, 1), a make whose length is not 0 (grammar N1,",
+		"AddItemMakeParamLen":   "o.Spec.Items is initialised with make([]string, n), not T{}, &T{}, new(T) or a make with constant sizes (grammar N1,",
+		"AddRowMakeLen":         "make([]string, 1, n) is written to o.Spec.Rows, and make([]string, 1, n) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetRefPayloadDefault":  "&Ref{} is written to o.Spec.Payload, and Ref{} carries no argument (grammar V3b,",
+		"SetRefPayloadGuarded":  "the nil-init of o.Spec.Payload initialises other than a map, slice or pointer (grammar N1,",
+		"SetRefNestedReset":     "Inner{} is written to o.Spec.Nested, and Inner{} carries no argument (grammar V3b,",
+		"SetRefPayloadMake":     "make(map[string]string) is written to o.Spec.Payload, and make(map[string]string) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetBoxPayloadMake":     "make(map[string]string) is written to o.Spec.Box.Payload, and make(map[string]string) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetBoxPayloadNew":      "new(Ref) is written to o.Spec.Box.Payload, and new(Ref) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetBoxChanMake":        "make(chan string) is written to o.Spec.Box.Ch, and make(chan string) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"AddLabelConstant":      "\"fixed\" is written to o.Labels[k], and \"fixed\" is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetReplicasZero":       "new(int32) is written to o.Spec.Replicas, and new(int32) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetNestedRefConstant":  "Ref{…} is written to o.Spec.Nested.Ref, and \"a\" is not a named constant of a defined type (grammar V3,",
+		"SetItemsLiteral":       "[]string{…} is written to o.Spec.Items, and []string{…} is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetReplicasByValue":    "o.Spec.Replicas is spelled from o, which is not a pointer, so the write reaches only the helper's copy (grammar P1,",
 		"SetReplicasNilReturn":  "returns early instead of writing",
 		"SetNameIfSet":          "returns early instead of writing",
-		"AddLabelFreshMap":      "appends to or inserts into labels[k], not a field",
+		"AddLabelFreshMap":      "labels := map[string]string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
 		"AddItemInClosure":      "contains a function literal",
-		"SetRefIfSet":           "writes o.Spec.Ref (under if ref != nil) only on some paths",
-		"SetRefNameNestedInit":  `(under if n != "")`,
+		"SetRefIfSet":           "if ref != nil is not a nil guard that panics, the guard on the error of a local, or a nil-init guard (grammar S8,",
+		"SetRefNameNestedInit":  "if n != \"\" is not a nil guard that panics, the guard on the error of a local, or a nil-init guard (grammar S8,",
 		"SetRefGoto":            "goto",
-		"SetRefNameShadowedNil": "writes o.Spec.Ref (under if o.Spec.Ref == nil) only on some paths",
-		// A range clause is conditional; a read-modify-write is a default.
-		"SetRefRangeValue":                "writes o.Spec.Ref (under range refs) only on some paths",
-		"SetCountRangeKey":                "o.Spec.Count (under range xs)",
-		"SetReplicasIncCount":             "value the caller did not supply to o.Spec.Count",
-		"SetReplicasIncOnly":              "value the caller did not supply to *o.Spec.Replicas",
-		"SetReplicasAddCount":             "value the caller did not supply to o.Spec.Count",
-		"AddLabelConcatViaLocal":          "value the caller did not supply to labels[k]",
-		"SetReplicasItemConcat":           "value the caller did not supply to items[0]",
-		"SetReplicasItemRange":            "items[0] (under range xs)",
-		"SetReplicasParenLabelConcat":     "value the caller did not supply to",
-		"AddLabelConcatNilInit":           "value the caller did not supply to labels[k]",
-		"SetReplicasIncNilInit":           "value the caller did not supply to *p",
-		"SetReplicasSliceExprConcat":      "value the caller did not supply to o.Spec.Items[:][0]",
-		"SetReplicasSliceExprRange":       "o.Spec.Items[:][0] (under range xs)",
-		"SetReplicasIncAliasNilInit":      "value the caller did not supply to (*q)",
-		"SetReplicasSlicedAliasConcat":    "value the caller did not supply to items[0]",
-		"SetReplicasIncParenAliasNilInit": "value the caller did not supply to (*q)",
-		"SetReplicasCommaOkConcat":        "value the caller did not supply to items[0]",
-		"SetReplicasCommaOkVarConcat":     "value the caller did not supply to items[0]",
-		"SetReplicasCommaOkRange":         "items[0] (under range xs)",
-		"AddLabelExpandedConcat":          "value the caller did not supply to o.Labels[k]",
-		"AddLabelExpandedViaLocal":        "value the caller did not supply to labels[k]",
-		"AddLabelExpandedParen":           "value the caller did not supply to",
-		"AddLabelExpandedCrossAlias":      "value the caller did not supply to labels[k]",
-		"AddLabelExpandedFromAlias":       "value the caller did not supply to o.Labels[k]",
-		"SetReplicasAppendAliasConcat":    "value the caller did not supply to items[0]",
-		"SetReplicasRangeAliasConcat":     "value the caller did not supply to items[0]",
+		"SetRefNameShadowedNil": "if o.Spec.Ref == nil is not a nil guard that panics, the guard on the error of a local, or a nil-init guard (grammar S8,",
+		// A range clause is a loop (S1); a read-modify-write is an increment
+		// (S1), a compound assignment (S7), a local of the body's own (S3) or
+		// a value that is not an argument (V1).
+		"SetRefRangeValue":                "a range loop is neither an if nor an assignment (grammar S1,",
+		"SetCountRangeKey":                "a range loop is neither an if nor an assignment (grammar S1,",
+		"SetReplicasIncCount":             "the increment or decrement of o.Spec.Count is neither an if nor an assignment (grammar S1,",
+		"SetReplicasIncOnly":              "the increment or decrement of *o.Spec.Replicas is neither an if nor an assignment (grammar S1,",
+		"SetReplicasAddCount":             "o.Spec.Count += c is not one target assigned one value with = (grammar S7,",
+		"AddLabelConcatViaLocal":          "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasItemConcat":           "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasItemRange":            "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasParenLabelConcat":     "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddLabelConcatNilInit":           "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasIncNilInit":           "p := o.Spec.Replicas is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasSliceExprConcat":      "o.Spec.Items[:][0] += s is not one target assigned one value with = (grammar S7,",
+		"SetReplicasSliceExprRange":       "a range loop is neither an if nor an assignment (grammar S1,",
+		"SetReplicasIncAliasNilInit":      "p := o.Spec.Replicas is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasSlicedAliasConcat":    "items := o.Spec.Items[:] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasIncParenAliasNilInit": "p := o.Spec.Replicas is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasCommaOkConcat":        "items, _ := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasCommaOkVarConcat":     "a declaration is neither an if nor an assignment (grammar S1,",
+		"SetReplicasCommaOkRange":         "items, ok := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddLabelExpandedConcat":          "o.Labels[k] + v is written to o.Labels[k], and o.Labels[k] + v is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"AddLabelExpandedViaLocal":        "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddLabelExpandedParen":           "o.Labels[k] + v is written to (o.Labels[k]), and o.Labels[k] + v is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"AddLabelExpandedCrossAlias":      "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddLabelExpandedFromAlias":       "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasAppendAliasConcat":    "items := append(o.Spec.Items, s) is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasRangeAliasConcat":     "a range loop is neither an if nor an assignment (grammar S1,",
 		// An append into or insert into a local, and the #918 spellings.
-		"AddItemCrossField":            "appends to or inserts into items, not a field",
-		"AddItemFromParam":             "appends to or inserts into items, not a field",
-		"AddGroupItemCrossKey":         "appends to or inserts into items, not a field",
-		"SetReplicasConvertedInc":      "value the caller did not supply to (*p)",
-		"AddLabelExpandedParenIndex":   "value the caller did not supply to o.Labels[k]",
-		"SetReplicasRangeHolderConcat": "value the caller did not supply to h.Items[0]",
+		"AddItemCrossField":            "items := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemFromParam":             "items is spelled from items, which is not a pointer, so the write reaches only the helper's copy (grammar P1,",
+		"AddGroupItemCrossKey":         "items := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasConvertedInc":      "p := (*int32)(o.Spec.Replicas) is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddLabelExpandedParenIndex":   "o.Labels[(k)] + v is written to o.Labels[k], and o.Labels[(k)] + v is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetReplicasRangeHolderConcat": "a range loop is neither an if nor an assignment (grammar S1,",
 		// Every spelling of such a local's sources and write-backs.
-		"AddItemReassignedCrossFieldLast":      "appends to or inserts into items, not a field",
-		"AddItemTwoWriteBacksLast":             "appends to or inserts into items, not a field",
-		"AddItemParenReassignedCrossField":     "appends to or inserts into items, not a field",
-		"AddItemParenMultiReassigned":          "appends to or inserts into items, not a field",
-		"AddItemVarParenCrossField":            "appends to or inserts into items, not a field",
-		"AddItemAppendCrossField":              "appends to or inserts into items, not a field",
-		"AddItemAppendFresh":                   "appends to or inserts into items, not a field",
-		"AddItemSliceReassignedCrossField":     "appends to or inserts into items, not a field",
-		"AddItemConvertedReassignedCrossField": "appends to or inserts into items, not a field",
-		"AddItemCopiedSliceCrossField":         "appends to or inserts into items, not a field",
-		"AddItemCommaOkReassignedCrossField":   "appends to or inserts into items, not a field",
-		"AddItemRangeReassignedCrossField":     "appends to or inserts into items, not a field",
-		"AddItemMultiAssignedCrossField":       "appends to or inserts into items, not a field",
-		"AddItemMultiAssignedCrossFieldLast":   "appends to or inserts into items, not a field",
-		"AddItemSwappedSameField":              "appends to or inserts into items, not a field",
-		"AddItemSwapHidesWrite":                "bare write to tmp.Name",
-		// An append into or insert into a local is refused beside any other write.
-		"SetReplicasCommaOkCrossField":    "appends to or inserts into items, not a field",
-		"SetReplicasConvertedCrossField":  "appends to or inserts into items, not a field",
-		"SetReplicasSlicedCrossField":     "appends to or inserts into items, not a field",
-		"SetReplicasFreshWriteBack":       "appends to or inserts into items, not a field",
-		"SetReplicasFreshMapWriteBack":    "appends to or inserts into labels[k], not a field",
-		"SetReplicasOverwrittenWriteBack": "appends to or inserts into items, next, not a field",
-		"SetHoldCommaOkCrossField":        "appends to or inserts into items, not a field",
-		"SetHoldFreshMapWriteBack":        "appends to or inserts into labels[k], not a field",
-		"AddLabelIfSetViaLocal":           "appends to or inserts into labels[k], not a field",
+		"AddItemReassignedCrossFieldLast":      "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemTwoWriteBacksLast":             "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemParenReassignedCrossField":     "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemParenMultiReassigned":          "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemVarParenCrossField":            "a declaration is neither an if nor an assignment (grammar S1,",
+		"AddItemAppendCrossField":              "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemAppendFresh":                   "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemSliceReassignedCrossField":     "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemConvertedReassignedCrossField": "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemCopiedSliceCrossField":         "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemCommaOkReassignedCrossField":   "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemRangeReassignedCrossField":     "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemMultiAssignedCrossField":       "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemMultiAssignedCrossFieldLast":   "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemSwappedSameField":              "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemSwapHidesWrite":                "spec := &o.Spec is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		// An append into or insert into a local is refused at the local.
+		"SetReplicasCommaOkCrossField":    "items, _ := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasConvertedCrossField":  "items := []string(o.Spec.Rows[0]) is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasSlicedCrossField":     "items := o.Spec.Rows[0][:] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasFreshWriteBack":       "items := []string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasFreshMapWriteBack":    "labels := map[string]string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasOverwrittenWriteBack": "items := []string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetHoldCommaOkCrossField":        "items, _ := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetHoldFreshMapWriteBack":        "labels := map[string]string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddLabelIfSetViaLocal":           "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
 		// The fixtures class a no longer admits.
-		"AddLabelViaLocal":              "appends to or inserts into labels[k], not a field",
-		"AddItemViaLocal":               "appends to or inserts into items, not a field",
-		"AddLabelParenLocal":            "appends to or inserts into (labels)[k], not a field",
-		"AddItemAppendWrittenBackField": "appends to or inserts into items, not a field",
-		"AddItemsNestedAppend":          "appends to or inserts into items, not a field",
-		"AddHoldItemViaLocal":           "appends to or inserts into items, not a field",
-		"AddItemViaLocalAndReplicas":    "appends to or inserts into items, not a field",
-		"AddGroupItemViaLocal":          "appends to or inserts into items, not a field",
-		"AddItemViaVarLocal":            "appends to or inserts into items, not a field",
-		"AddGroupItemConstKey":          "appends to or inserts into items, not a field",
-		"AddItemViaAlias":               "appends to or inserts into spec.Items, not a field",
-		"SetReplicasTempExpandedConcat": "appends to or inserts into m[k], not a field",
-		"SetReplicasAppendTempConcat":   "appends to or inserts into items, not a field",
+		"AddLabelViaLocal":              "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemViaLocal":               "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddLabelParenLocal":            "labels := o.Labels is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemAppendWrittenBackField": "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemsNestedAppend":          "uses append on items other than as the whole value of an assignment (grammar S11,",
+		"AddHoldItemViaLocal":           "items := o.Spec.Hold.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemViaLocalAndReplicas":    "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddGroupItemViaLocal":          "items := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemViaVarLocal":            "a declaration is neither an if nor an assignment (grammar S1,",
+		"AddGroupItemConstKey":          "items := o.Spec.Groups[\"a\"] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemViaAlias":               "spec := &o.Spec is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasTempExpandedConcat": "m := map[string]string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasAppendTempConcat":   "items := append([]string{}, s) is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
 		// Class a is one direct statement on a stable pointer parameter.
-		"AddItemFromRowDirect":          "writes o.Spec.Items other than as the one target",
-		"AddItemLocalBase":              "writes o.Spec.Items other than as the one target",
-		"AddItemSameFieldLocalBase":     "writes o.Spec.Items other than as the one target",
-		"AddGroupItemCommaOkCrossKey":   "appends to or inserts into items, not a field",
-		"SetHoldItemsConverted":         "value the caller did not supply to o.Spec.Hold.Items",
-		"SetHoldItemsFreshConverted":    "appends to or inserts into items, not a field",
-		"AddItemFreshReassigned":        "appends to or inserts into items, not a field",
-		"AddGroupItemIndexReassigned":   "appends to or inserts into items, not a field",
-		"AddItemTypeAssertSource":       "appends to or inserts into items, not a field",
-		"AddItemReceiveSource":          "appends to or inserts into items, not a field",
-		"AddItemFullSliceSource":        "appends to or inserts into items, not a field",
-		"AddItemConvertedSource":        "appends to or inserts into items, not a field",
-		"AddItemsAppendSource":          "appends to or inserts into items, not a field",
-		"AddItemPartialSliceSource":     "appends to or inserts into items, not a field",
-		"AddItemNestedConstant":         "writes o.Spec.Items other than as the one target",
-		"AddItemTwoValues":              "writes o.Spec.Items other than as the one target",
-		"AddItemsSpread":                "writes o.Spec.Items other than as the one target",
-		"AddGroupItemCrossKeyDirect":    "writes o.Spec.Groups[j] other than as the one target",
-		"AddItemAliasMismatch":          "appends to or inserts into spec.Items, not a field",
+		"AddItemFromRowDirect":          "o.Spec.Items is assigned append(o.Spec.Rows[0], s), not an append of one value to itself (grammar V1,",
+		"AddItemLocalBase":              "items := o.Spec.Rows[0] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemSameFieldLocalBase":     "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddGroupItemCommaOkCrossKey":   "items, _ := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetHoldItemsConverted":         "items := o.Spec.Rows[0] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetHoldItemsFreshConverted":    "items := []string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemFreshReassigned":        "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddGroupItemIndexReassigned":   "items := o.Spec.Groups[k] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemTypeAssertSource":       "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemReceiveSource":          "items := o.Spec.Items is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemFullSliceSource":        "items := o.Spec.Items[:] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemConvertedSource":        "items := []string(o.Spec.Items) is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemsAppendSource":          "items := append(o.Spec.Items, a) is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemPartialSliceSource":     "items := o.Spec.Items[1:] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemNestedConstant":         "uses append on o.Spec.Items other than as the whole value of an assignment (grammar S11,",
+		"AddItemTwoValues":              "o.Spec.Items is assigned append(o.Spec.Items, s, \"fixed\"), not an append of one value to itself (grammar V1,",
+		"AddItemsSpread":                "o.Spec.Items is assigned append(o.Spec.Items, xs...), not an append of one value to itself (grammar V1,",
+		"AddGroupItemCrossKeyDirect":    "o.Spec.Groups[j] is assigned append(o.Spec.Groups[k], s), not an append of one value to itself (grammar V1,",
+		"AddItemAliasMismatch":          "spec := &o.Spec is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
 		"AddGroupItemVarAppend":         "uses append on o.Spec.Groups[k] other than",
 		"AddGroupItemSlicedAppend":      "uses append on o.Spec.Groups[k] other than",
-		"SetReplicasBlankAppend":        "appends to or inserts into _, not a field",
-		"SetReplicasAppendTempField":    "appends to or inserts into tmp.Spec.Items, not a field",
-		"SetReplicasTempMapConcat":      "appends to or inserts into m[k], not a field",
-		"SetReplicasParenAppendLocal":   "appends to or inserts into items, not a field",
-		"SetReplicasParenMapTarget":     "appends to or inserts into (labels[k]), not a field",
-		"AddRowParenMakeLen":            "value the caller did not supply to o.Spec.Rows",
-		"SetRefViaParenAssignedNil":     "assigns nil to o.Spec.Ref",
+		"SetReplicasBlankAppend":        "_ is not spelled from a parameter through selectors, indexes and dereferences (grammar P1,",
+		"SetReplicasAppendTempField":    "tmp := &Obj{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasTempMapConcat":      "m := map[string]string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasParenAppendLocal":   "a declaration is neither an if nor an assignment (grammar S1,",
+		"SetReplicasParenMapTarget":     "labels := map[string]string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddRowParenMakeLen":            "(make)([]string, 1, n) is written to o.Spec.Rows, and (make)([]string, 1, n) is neither an argument passed whole nor a struct literal of arguments and constants (grammar V1,",
+		"SetRefViaParenAssignedNil":     "r := ref is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
 		"AddItemParenBuiltin":           "slice append or map insert (class a)",
 		"AddLabelParenTarget":           "slice append or map insert (class a)",
 		"AddGroupItemConstKeyDirect":    "slice append or map insert (class a)",
 		"AddItemParenBase":              "slice append or map insert (class a)",
 		"AddItemAndReplicas":            "slice append or map insert (class a)",
-		"SetReplicasTempMapInc":         "appends to or inserts into m[k], not a field",
-		"SetReplicasTempMapRange":       "appends to or inserts into m[k], not a field",
+		"SetReplicasTempMapInc":         "m := map[string]int{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"SetReplicasTempMapRange":       "m := map[string]string{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
 		"SetReplicasGenericMap":         "declares type parameters",
 		"AddItemGeneric":                "declares type parameters",
 		"SetReplicasViaClosure":         "contains a function literal",
-		"AddItemTupleReroot":            "appends to or inserts into spec.Items, not a field",
-		"AddItemTupleThroughInit":       "writes o.Spec.Hold.Items other than as the one target",
-		"AddItemConditionalAlias":       "appends to or inserts into spec.Items, not a field",
-		"AddItemParamReassigned":        "appends to or inserts into o.Spec.Items, not a field",
-		"AddItemParamRanged":            "appends to or inserts into o.Spec.Items, not a field",
-		"AddItemParamAddressTaken":      "appends to or inserts into o.Spec.Items, not a field",
-		"AddItemStructCopy":             "appends to or inserts into spec.Items, not a field",
-		"AddItemSliceParam":             "appends to or inserts into objs[0].Spec.Items, not a field",
+		"AddItemTupleReroot":            "spec := &Spec{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemTupleThroughInit":       "o.Spec.Hold, o.Spec.Hold.Items = &Holder{}, append(o.Spec.Hold.Items, s) is not one target assigned one value with = (grammar S7,",
+		"AddItemConditionalAlias":       "spec := &Spec{} is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemParamReassigned":        "if ok is not a nil guard that panics, the guard on the error of a local, or a nil-init guard (grammar S8,",
+		"AddItemParamRanged":            "a range loop is neither an if nor an assignment (grammar S1,",
+		"AddItemParamAddressTaken":      "p := &o is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemStructCopy":             "spec := o.Spec is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemSliceParam":             "objs[0].Spec.Items is spelled from objs, which is not a pointer, so the write reaches only the helper's copy (grammar P1,",
 		"AddItemTwice":                  "makes 2 appends or inserts",
 		"AddLabelTwice":                 "makes 2 appends or inserts",
-		"SetReplicasMapParam":           "appends to or inserts into m[k], not a field",
+		"SetReplicasMapParam":           "m[k] is spelled from m, which is not a pointer, so the write reaches only the helper's copy (grammar P1,",
 		"AddItemExplicitDeref":          "slice append or map insert (class a)",
-		"AddGroupItemLiteralKeysDirect": "writes o.Spec.Groups[string([]byte{…})] other than as the one target",
-		// Each adjacent pair of the class-a reasons, in order.
-		"AddItemLocalThenIndirect":   "appends to or inserts into items, not a field",
-		"AddItemIndirectBesideStray": "writes o.Spec.Items other than as the one target",
+		"AddGroupItemLiteralKeysDirect": "o.Spec.Groups[string([]byte{…})] is indexed by string([]byte{…}), neither a parameter nor a constant (grammar P3,",
+		// Two class (a) faults in one body: S11 is read off the whole body
+		// first, then the statements in source order.
+		"AddItemLocalThenIndirect":   "items := o.Spec.Rows[0] is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemIndirectBesideStray": "uses append on o.Spec.Rows[1] other than as the whole value of an assignment (grammar S11,",
 		"AddItemStrayBesideTwice":    "uses append on o.Spec.Items other than",
 		"AddItemTwiceBesideBare":     "makes 2 appends or inserts",
 		// A path through &, a key it cannot equate, a parenthesised parameter.
-		"AddLabelAddrDeref":           "appends to or inserts into (*&o.Labels)[k], not a field",
-		"AddGroupItemConvKeyDirect":   "writes o.Spec.Groups[string(k)] other than as the one target",
-		"AddItemParenParamReassigned": "appends to or inserts into o.Spec.Items, not a field",
-		"AddItemParenAddressTaken":    "appends to or inserts into o.Spec.Items, not a field",
-		"AddItemParamRedeclared":      "appends to or inserts into o.Spec.Items, not a field",
+		"AddLabelAddrDeref":           "(*&o.Labels)[k] is not spelled from a parameter through selectors, indexes and dereferences (grammar P1,",
+		"AddGroupItemConvKeyDirect":   "o.Spec.Groups[string(k)] is indexed by string(k), neither a parameter nor a constant (grammar P3,",
+		"AddItemParenParamReassigned": "(o) is spelled from o, which the body reassigns or takes the address of (grammar P1,",
+		"AddItemParenAddressTaken":    "p := &(o) is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
+		"AddItemParamRedeclared":      "o, n := other, 0 is not v, err := json.Marshal(P) with two new names and P a parameter other than the object (grammar S3,",
 		"AddItemParenAppendValue":     "slice append or map insert (class a)",
 	} {
 		if reason := got[name].Reason; !strings.Contains(reason, want) {
