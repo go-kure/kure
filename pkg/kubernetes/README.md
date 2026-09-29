@@ -146,14 +146,10 @@ An increment, decrement or compound assignment of a field (`o.Spec.Count++`,
 caller's value, and is inadmissible for the same reason; so is the same write spelled
 out (`o.Labels[k] = o.Labels[k] + v`), though extending a slice with
 `o.Spec.Items = append(o.Spec.Items, s)` is not. The same holds for a map or
-slice element reached through any chain of locals copied, sliced, appended or
-converted from the caller's object or bound to its elements by a range clause
-(`labels := o.Labels; labels[k] += v`, `items := o.Spec.Items[:]`,
-`items, ok := o.Spec.Groups[k]`, `items := append(o.Spec.Items, s)`,
-`p := (*int32)(o.Spec.Replicas)`, `for _, items := range o.Spec.Groups`, and
-`for _, h := range o.Spec.Holders`, a struct copy whose field shares the caller's
-data), even after a nil-init guard on one of them, and whichever of the two spellings
-reads the target (`labels[k] = o.Labels[k] + v`, or `o.Labels[(k)]`).
+slice element reached through a local or a range variable, however it was made
+(`labels := o.Labels; labels[k] += v`, `for _, items := range o.Spec.Groups`): a
+helper body declares no local but the marshalled form of an argument, and has no
+loop (the grammar below, S3 and S1).
 
 A body that is a single assignment to a non-pointer field is inadmissible regardless
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
@@ -161,7 +157,9 @@ and two such assignments in one body are two forwarders, not a composite. A bare
 assignment next to an admitted operation is inadmissible when its value is not an
 argument: an append that also sets a scalar to a literal or a computed value touches a
 field the caller did not name (§4). Forwarding a second argument alongside
-(`SetHPAMinMaxReplicas(hpa, 2, 10)`) leaves the class alone. A helper
+(`SetHPAMinMaxReplicas(hpa, 2, 10)`) leaves the class alone, and so does a pointer
+write beside the one append or insert: each write is checked on its own by the grammar
+below, and the class is that of the append. A helper
 that returns anything, an `error` included, is inadmissible whatever its body does
 (§4 allows no error return: a nil receiver panics). A nil receiver guard admits
 nothing on its own. A body that assigns `nil` to any field,
@@ -170,12 +168,13 @@ of it, or a local known to be nil), is inadmissible whatever else it does, becau
 helper that must replace one member of a one-of takes the whole one-of as its
 argument instead.
 
-A helper reaches the object it writes through a parameter that can carry the write back
-to the caller: a pointer, map, slice or interface, and for class (a) only a pointer
-parameter the body never reassigns or takes the address of. A struct taken by value is a
-copy, so a helper written that way changes nothing the caller can see and is
-inadmissible; a read-modify-write through such a copy's map, slice or pointer field
-still reaches the caller, and is refused as above.
+A helper reaches the object it writes through one pointer parameter, which the body
+never reassigns and never takes the address of, and every write in every class is
+spelled from it (the grammar below, P1). A map, slice or interface parameter is not
+such a root; the metadata helpers of §5 are admitted by name, not by class. A struct
+taken by value is a copy, so a helper written that way changes nothing the caller can
+see and is inadmissible; a read-modify-write through such a copy's map, slice or
+pointer field still reaches the caller, and is refused as above.
 
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
@@ -188,13 +187,76 @@ exception is the nil-init guard `if P == nil { P = <zero value> }` with nothing 
 it: no init statement, no `else`, one statement zero-initialising the map, slice or
 pointer path it tests. A set-if-unset (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`) is
 not that guard and is refused, and neither is a guard filling a nil interface field with
-an empty value, nor one around a slice `make` with a non-zero length. For classes (b) and
-(c), a conditionally created alias (`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`)
-is still not detected; that is caught by review and by the helper's own golden test.
-Class (a) refuses any alias. A helper containing a function literal, or declaring type
-parameters, is inadmissible. `pkg/kubernetes/testdata/admission_exclusions.txt` listed the
+an empty value, nor one around a slice `make` with a non-zero length. No class admits an
+alias: a conditionally created one
+(`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`) is refused at its first
+statement, which is not the one local the grammar below has a form for (S3). A helper
+containing a function literal, or declaring type parameters, is inadmissible.
+`pkg/kubernetes/testdata/admission_exclusions.txt` listed the
 helpers tolerated while the prune work item of the epic ran; that file is now empty and stays
 empty. Entries only ever leave, and a stale entry fails the test.
+
+### The grammar of a helper body
+
+A helper the classes admit must also be written in a closed grammar: every top-level
+statement, every path it writes and every value it writes has one of the forms below,
+and anything else refuses the helper. The grammar only refuses. It reads a body the
+rules above admit, so the class of an admitted helper and the reason of every refusal
+above are unchanged, and a refusal it makes names its rule:
+`<what was found> (grammar S3, purity §4)`. The four helpers admitted by name (§5) are
+not read.
+
+A body is nil guards and marshalled locals first, then nil-init guards and field
+writes. *The object* is the parameter the first write in the body is spelled from.
+Parentheses change nothing, and names are resolved by what they declare, never by
+spelling: a local or a method called `panic` or `Marshal` is not the builtin or the
+function.
+
+| ID | Statements, at the top level of the body |
+|---|---|
+| S1 | A statement is an `if` or an assignment. A call statement, `var`, `defer`, `go`, a send, a loop, a `switch`, a `select`, a bare block, a label, `++`, `--` and an empty statement are refused. |
+| S2 | Nil guards that panic, locals and the guards on their errors come before the first nil-init guard or field write. |
+| S3 | A `:=` is exactly `v, err := json.Marshal(P)`: two new names, neither blank, and `P` a parameter other than the object. |
+| S4 | The statement directly after a local is the guard on its error, `if err != nil { panic(M) }`, and that guard appears nowhere else. |
+| S5 | A panic takes one argument: a string constant, or in the guard on an error `fmt.Sprintf(c, err)` with `c` a string constant. |
+| S6 | A nil guard that panics, `if P == nil { panic(c) }`, tests the object, or a parameter the body writes as `*P`. On any other parameter it makes `nil` unexpressible, which is validation (§4). |
+| S7 | Any other assignment has one target, one value and the token `=`: no tuple, no `op=`. |
+| S8 | An `if` has no init statement, no `else` and a one-statement body, and is one of three guards: the nil guard that panics, the guard on an error, the nil-init guard. `X == nil` and `nil == X` are the same test. |
+
+| ID | Paths: the target of a field write or of a nil-init, and the slice an append extends |
+|---|---|
+| P1 | A path is spelled from the object through field selectors, indexes and dereferences, and the object is a pointer parameter the body never reassigns and never takes the address of. |
+| P2 | A path names a field: `*o = x` is refused. |
+| P3 | A key or index is a parameter other than the object, or a constant. |
+| P4 | No location is written twice, and none is written after a write to a location above or below it on the same path. Every pointer followed counts as a step of the path, written or not; a promoted field counts as its full spelling; any two keys may name the same element. The one exception is a nil-init guard ahead of the write it initialises. |
+| P5 | A nil-init guard initialises a field, not an element of a map or slice. |
+| P6 | Every nil-init is written through: by a later write below it, or by the append that extends it. |
+| N1 | A nil-init guard tests the path it assigns, and assigns `T{}`, `&T{}`, `new(T)` or a `make` with constant sizes. |
+
+| ID | Values: the element appended, the value inserted, the value of a field |
+|---|---|
+| V1 | A value is an argument passed whole, a struct literal, or the address of one. An argument is a parameter other than the object, written `P`, `&P` or `*P`, or the first name of a local; the error of a local is never a value. A struct literal, keyed or positional, holds arguments, constants, struct literals and their addresses. |
+| V2 | A struct literal is the element appended or inserted, `&T{...}` written to a pointer-typed field, or the value of the helper's only field write (nil-init guards not counted). A struct replaced beside another write loses fields the caller did not name. |
+| V3 | A constant in a struct literal is a named constant of a defined type (`corev1.ProtocolTCP`). An inline literal (`"Deployment"`, `true`, `3`) or a constant of a basic type is a default. |
+| V3b | Every struct literal, at every depth, carries an argument. |
+| V4 | Each argument occurs once over all written values and marshalled locals: `&n` written to two fields gives them one pointer, and so does `T{A: p, B: p}`. Keys and guards do not count. |
+
+A call therefore appears in six positions only: `append` as the whole value of a class
+(a) statement, `make` and `new` in a nil-init guard, `json.Marshal` in a local,
+`fmt.Sprintf` in the message of the guard on an error, and `panic` as the body of a
+guard. A constant is a constant however it is spelled (`int32(0)`, `len("ab")`); any
+other call, the conversion of an argument included, refuses the helper.
+
+The statements are read in source order, and the first rule a statement breaks names
+the refusal: S1; for an `if` S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5,
+N1; for a `:=` S3, S2, S4; for any other assignment S7, P1, P2, P3, V1, V3, V3b, V2.
+S6, P4, P6 and V4 are read off the whole body after its last statement, in that order.
+
+What the grammar does not see: an alias the caller made (a `*P` or `P` that points into
+the object, or two pointer fields of the object sharing one struct); the caller's code
+that `json.Marshal` and `%v` run; whether a constant key or index is the one the caller
+would have chosen; and whether the helper's name matches the field it writes. Those
+stay with review and with the helper's golden test.
 
 A second rule covers what a helper takes, not what it writes: **no exported function under
 `pkg/kubernetes/...` takes a kure-defined type where an upstream spec type exists.** A

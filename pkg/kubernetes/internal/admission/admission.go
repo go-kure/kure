@@ -51,7 +51,9 @@
 // only delegates. A helper that returns anything is inadmissible whatever its
 // body does: the purity rule (§4) allows no error return, and a nil receiver
 // panics rather than being reported, so a result slot has nothing to carry.
-// Validation that does not surface as a result is not detected. An admitted
+// Validation that does not surface as a result is refused by the grammar
+// below: an if that is none of its three guards (S8), and a nil guard on a
+// parameter the body does not dereference (S6). An admitted
 // operation does not cover the rest of the body: a bare write next to an
 // append, a pointer assignment or a literal is inadmissible when its value is
 // not a parameter (a literal, a call, a computed value, a local of the body's
@@ -74,10 +76,12 @@
 // (§5); callers pass those in.
 //
 // A field write counts only when, at the position of the write, it is rooted
-// in a parameter, directly or, for classes b and c, through a local that
-// aliases one (spec := &o.Spec; labels := o.Labels): a write into a temporary
-// the helper built itself reaches no caller-visible object and admits
-// nothing. Class a is stricter, because an append or insert through anything
+// in a parameter: a write into a temporary the helper built itself reaches no
+// caller-visible object and admits nothing. For classes b and c these checks
+// still follow a local that aliases a parameter (spec := &o.Spec;
+// labels := o.Labels) to find the write; the grammar below then refuses the
+// helper for the local (S3), so no class admits an alias. Class a is stricter
+// in its own right, because an append or insert through anything
 // but the field itself cannot be told apart from replacing the field with a
 // collection the body chose. It is admitted only as one closed statement,
 // F = append(F, v) or F[k] = v, and any other append call or assignment to a
@@ -128,11 +132,72 @@
 // The classifier is syntactic with type information (go/packages): it never
 // executes code, and it is deliberately conservative, so an unusual but
 // legitimate helper shows up as inadmissible rather than slipping through.
-// Its dataflow is bounded to what is described above; for classes b and c it
-// does not follow a conditionally created alias (a local assigned a parameter
-// inside a branch), calls other than append and conversions, or aliases
-// created any other way. A helper written to evade it is caught by its own
-// unit test and by review, not by this package.
+// The checks above refuse the spellings they recognise; the grammar below
+// admits only the spellings it has a form for, so a body neither knows is
+// refused. What no check sees is what the caller did before the call (an
+// argument that points into the object, two pointer fields of the object
+// sharing one struct) and what the caller's own code does when json.Marshal
+// or %v runs it. Those, and whether a helper's name matches the field it
+// writes, stay with the helper's unit test and with review.
+//
+// # Grammar
+//
+// A body the checks above admit must also be written in a closed grammar
+// (grammar.go): every top-level statement, every path written and every value
+// written has one of the forms below, and anything else refuses the helper.
+// The grammar only refuses: it runs when the checks above would admit, so it
+// changes neither the class of an admitted helper nor the reason of a refusal
+// they make. Its reasons end in "(grammar <ID>, purity §4)". The README of
+// pkg/kubernetes states the rules in full, under the same IDs.
+//
+// A body is nil guards and marshalled locals, then nil-init guards and field
+// writes. The object is the parameter the first write is spelled from.
+// Parentheses change nothing, and panic, append, make, new, json.Marshal and
+// fmt.Sprintf are resolved by object, not by name.
+//
+//   - S1: a statement is an if or an assignment.
+//   - S2: guards that panic and locals come before the first nil-init guard
+//     or field write.
+//   - S3: a := is exactly v, err := json.Marshal(P), both names new and
+//     neither blank, P a parameter other than the object.
+//   - S4: the statement directly after a local is the guard on its error, and
+//     that guard appears nowhere else.
+//   - S5: a panic takes one argument: a string constant, or in the guard on
+//     an error fmt.Sprintf(c, err).
+//   - S6: a nil guard that panics tests the object, or a parameter the body
+//     writes as *P.
+//   - S7: any other assignment has one target, one value and the token =.
+//   - S8: an if has no init, no else and a one-statement body, and is a nil
+//     guard that panics, the guard on an error or a nil-init guard.
+//   - P1: a path is spelled from the object through field selectors, indexes
+//     and dereferences, and the object is a pointer parameter the body never
+//     reassigns or takes the address of.
+//   - P2: a path names a field.
+//   - P3: a key or index is a parameter other than the object, or a constant.
+//   - P4: no location is written after a write to it, or to a location above
+//     or below it on the same path, other than through a nil-init guard ahead
+//     of the write. Every pointer followed is a step of the path, a promoted
+//     field is its full spelling, and any two keys may be the same element.
+//   - P5: a nil-init guard initialises a field, not an element.
+//   - P6: every nil-init is written through.
+//   - N1: a nil-init guard tests the path it assigns, and assigns T{}, &T{},
+//     new(T) or a make with constant sizes.
+//   - V1: a value is an argument passed whole (a parameter other than the
+//     object as P, &P or *P, or the first name of a local), a struct literal
+//     of arguments, constants and such literals, or the address of one.
+//   - V2: a struct literal is an appended or inserted element, &T{...} into a
+//     pointer-typed field, or the helper's only field write.
+//   - V3: a constant in a struct literal is a named constant of a defined
+//     type.
+//   - V3b: every struct literal, at every depth, carries an argument.
+//   - V4: each argument occurs once over all written values and marshalled
+//     locals.
+//
+// The statements are read in source order and the first rule one breaks
+// names the refusal: S1; for an if S8, S2, S5, S4, and for a nil-init guard
+// P1, P2, P3, P5, N1; for a := S3, S2, S4; for any other assignment S7, P1,
+// P2, P3, V1, V3, V3b, V2. S6, P4, P6 and V4 are read off the whole body
+// afterwards, in that order.
 package admission
 
 import (
@@ -572,6 +637,13 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 	}
 	sort.Strings(defaulted)
 	extra := sortedKeys(bareWrites)
+	// The grammar is the last check and reads only a body the checks above
+	// would admit: it turns an admission into a refusal and changes nothing
+	// else.
+	outside := ""
+	if appendOrMap || ptrAssign || bigLiteral {
+		outside = checkGrammar(fn, info)
+	}
 
 	switch {
 	case nilClear != "":
@@ -590,6 +662,8 @@ func classify(fn *ast.FuncDecl, info *types.Info) (Class, string) {
 		return Inadmissible, fmt.Sprintf("makes %d appends or inserts; class a is a single one (purity §4)", ops)
 	case len(extra) > 0 && (appendOrMap || ptrAssign || bigLiteral):
 		return Inadmissible, fmt.Sprintf("bare write to %s alongside the admitted operation, a field the caller did not name (purity §4)", strings.Join(extra, ", "))
+	case outside != "":
+		return Inadmissible, outside
 	case appendOrMap:
 		return Append, "slice append or map insert (class a)"
 	case ptrAssign:

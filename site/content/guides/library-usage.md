@@ -57,7 +57,8 @@ their signature, so a cluster-scoped kind takes only a name
 Kure adds a helper only for one of a few write shapes: appending one item to a
 list, inserting one key into a map, setting a pointer field, or composing a
 small upstream struct. A helper never defaults, never validates, and never
-touches a field you did not name.
+touches a field you did not name. A helper writes each argument as you pass
+it: it computes nothing from it and reads nothing back from the object.
 
 <!-- doc-example: pkg/kubernetes Example_libraryUsageHelpers -->
 ```go
