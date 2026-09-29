@@ -9,10 +9,6 @@ import (
 	"strings"
 )
 
-// checkGrammar is grammar. It is a variable so that the package's own test can
-// read the verdict of the checks that run before the grammar.
-var checkGrammar = grammar
-
 // refused formats the reason a body is outside the grammar: what was found,
 // and the rule that refuses it.
 func refused(rule, format string, args ...any) string {
@@ -122,16 +118,6 @@ type helperBody struct {
 	guards []*ast.Ident
 	// derefs holds the parameters a written value dereferences (*P).
 	derefs map[types.Object]bool
-}
-
-// grammar returns the reason the body of fn is outside the grammar, or "":
-// the reason read gives, else the reason whole gives.
-func grammar(fn *ast.FuncDecl, info *types.Info) string {
-	b, reason := read(fn, info)
-	if reason != "" {
-		return reason
-	}
-	return b.whole()
 }
 
 // read reads the body of fn and returns what it read, or the reason of the

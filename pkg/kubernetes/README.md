@@ -177,37 +177,42 @@ spelled from it (the grammar below, P1). A map, slice or interface parameter is 
 such a root; the metadata helpers of §5 are admitted by name, not by class. A struct
 taken by value is a copy, so a helper written that way changes nothing the caller can
 see and is inadmissible; a read-modify-write through such a copy's map, slice or
-pointer field still reaches the caller, and is refused as above.
+pointer field still reaches the caller, and is refused because the object is not a
+pointer parameter (P1).
 
 `TestAdmission_SugarHelpersAreClassAdmissible` classifies every helper with `go/ast`
 and type information (`pkg/kubernetes/internal/admission`) and fails naming any helper
-outside (a)-(c). It is syntactic and deliberately conservative. An admitted write
-inside an `if` (either branch), a loop, a `switch` or a `select`, or a range clause
-that assigns to the field or to such an element (`for _, o.Spec.Ref = range refs`),
-runs only on some paths and is inadmissible, as is a `goto`, which can jump over the write; so the
-optional-value guard `if name != "" { ... }` that §4 forbids is detected. The single
-exception is the nil-init guard `if P == nil { P = <zero value> }` with nothing else in
-it: no init statement, no `else`, one statement zero-initialising the map, slice or
-pointer path it tests. A set-if-unset (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`) is
-not that guard and is refused, and neither is a guard filling a nil interface field with
-an empty value, nor one around a slice `make` with a non-zero length. No class admits an
-alias: a conditionally created one
-(`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`) is refused at its first
-statement, which is not the one local the grammar below has a form for (S3). A helper
-containing a function literal, or declaring type parameters, is inadmissible.
+outside (a)-(c). It is syntactic and deliberately conservative: it reads a body
+through the grammar below and nothing else. A loop, a `switch`, a `select`, a bare
+block, a `return` and a `goto` are each refused as the statement they are (S1), and a
+write inside an `if` is refused unless the `if` is one of the three guards (S8), so
+the optional-value guard `if name != "" { ... }` that §4 forbids is refused, and so is
+an `if` that returns or jumps over the write. The one guard that writes is the nil-init
+guard `if P == nil { P = <zero value> }` with nothing else in it: no init statement, no
+`else`, one statement zero-initialising the map, slice or pointer path it tests (S8,
+N1). A set-if-unset (`if o.Spec.Ref == nil { o.Spec.Ref = ref }`) is not that guard and
+is refused, and neither is a guard filling a nil interface field with an empty value,
+nor one around a slice `make` with a non-zero length. No class admits an alias: a
+conditionally created one (`obj := &Obj{}; if ok { obj = o }; obj.Spec.Ref = ref`) is
+refused at its first statement, which is not the one local the grammar below has a
+form for (S3). A helper containing a function literal (S9), or declaring type
+parameters, is inadmissible.
 `pkg/kubernetes/testdata/admission_exclusions.txt` listed the
 helpers tolerated while the prune work item of the epic ran; that file is now empty and stays
 empty. Entries only ever leave, and a stale entry fails the test.
 
 ### The grammar of a helper body
 
-A helper the classes admit must also be written in a closed grammar: every top-level
+A helper that returns a value or declares type parameters is refused unread. Every
+other body is read through a closed grammar and nothing else: every top-level
 statement, every path it writes and every value it writes has one of the forms below,
-and anything else refuses the helper. The grammar only refuses. Its verdict counts only
-for a body the rules above admit, so the class of an admitted helper and the reason of
-every refusal above are unchanged, and a refusal it makes names its rule:
-`<what was found> (grammar S3, purity §4)`. The four helpers admitted by name (§5) are
-not read.
+and the first rule a body breaks is the verdict, which names the rule:
+`<what was found> (grammar S3, purity §4)`. The class of a body the grammar admits is
+the class of its writes: (a) when one appends or inserts, else (b) when one is
+pointer-typed, a nil-init included, else (c) when one writes a struct literal of two or
+more fields or a nested one; a body with none of these forwards its arguments bare,
+and one with no field write delegates or does nothing. The four helpers admitted by
+name (§5) are not read.
 
 A body is nil guards and marshalled locals first, then nil-init guards and field
 writes. *The object* is the parameter the first write in the body is spelled from.
@@ -262,9 +267,10 @@ other call, the conversion of an argument included, refuses the helper.
 S9, then S11, are read off the whole body first. Then the statements are read in
 source order, and the first rule a statement breaks names the refusal: S1; for an
 `if` S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5, N1, V7; for a `:=` S3,
-S2, S4; for any other assignment S7, P1, P2, P3, S10, V1, V3, V3b, V2, V6, V7. S6, P4,
-P6, P7, V4 and V5 are read off the whole body after its last statement, in that
-order.
+S2, S4; for any other assignment S7, P1, P2, P3, S10, V1, V3, V3b, V2, V6, V7. A body
+read to its end with no field write is refused as a delegation or no-op. S6, P4, P6,
+P7, V4 and V5 are then read off the whole body, in that order, and the class off its
+writes.
 
 What the grammar does not see: an alias the caller made (a `*P` or `P` that points into
 the object, or two pointer fields of the object sharing one struct); the caller's code

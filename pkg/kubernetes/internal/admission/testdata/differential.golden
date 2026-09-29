@@ -14,7 +14,7 @@ SetRef_NivNew_SecAppend append
 SetRef_NivNew_SecFwd pointer
 SetRef_NivNew_SecInsert append
 SetRef_NivNew_SecPtrLiteral pointer
-SetRef_NivNew_NestOn unstable inadmissible pointer
+SetRef_NivNew_NestOn pointer
 SetRef_NivNewParen pointer
 SetRef_NivNewParen_GsParen pointer
 SetRef_NivNewParen_GsReversed pointer
@@ -25,7 +25,7 @@ SetRef_NivNewParen_SecAppend append
 SetRef_NivNewParen_SecFwd pointer
 SetRef_NivNewParen_SecInsert append
 SetRef_NivNewParen_SecPtrLiteral pointer
-SetRef_NivNewParen_NestOn unstable inadmissible pointer
+SetRef_NivNewParen_NestOn pointer
 SetRef_NivNone_SecAppend append
 SetRef_NivNone_SecInsert append
 SetRef_NivNone_SecPtrLiteral pointer
@@ -37,7 +37,7 @@ SetRef_GsParen_SecAppend append
 SetRef_GsParen_SecFwd pointer
 SetRef_GsParen_SecInsert append
 SetRef_GsParen_SecPtrLiteral pointer
-SetRef_GsParen_NestOn unstable inadmissible pointer
+SetRef_GsParen_NestOn pointer
 SetRef_GsReversed pointer
 SetRef_GsReversed_WsWhole pointer
 SetRef_GsReversed_ValParen pointer
@@ -46,7 +46,7 @@ SetRef_GsReversed_SecAppend append
 SetRef_GsReversed_SecFwd pointer
 SetRef_GsReversed_SecInsert append
 SetRef_GsReversed_SecPtrLiteral pointer
-SetRef_GsReversed_NestOn unstable inadmissible pointer
+SetRef_GsReversed_NestOn pointer
 SetRef_TsParen_WsParen pointer
 SetRef_TsParen_WsWholeParen pointer
 SetRef_WsWhole pointer
@@ -64,22 +64,22 @@ SetRef_ValParen_SecAppend append
 SetRef_ValParen_SecFwd pointer
 SetRef_ValParen_SecInsert append
 SetRef_ValParen_SecPtrLiteral pointer
-SetRef_ValParen_NestOn unstable inadmissible pointer
+SetRef_ValParen_NestOn pointer
 SetRef_ValStar pointer
 SetRef_ValStar_SecAppend append
 SetRef_ValStar_SecFwd pointer
 SetRef_ValStar_SecInsert append
 SetRef_ValStar_SecPtrLiteral pointer
-SetRef_ValStar_NestOn unstable inadmissible pointer
+SetRef_ValStar_NestOn pointer
 SetRef_SecAppend append
-SetRef_SecAppend_NestOn unstable append inadmissible
+SetRef_SecAppend_NestOn append
 SetRef_SecFwd pointer
-SetRef_SecFwd_NestOn unstable inadmissible pointer
+SetRef_SecFwd_NestOn pointer
 SetRef_SecInsert append
-SetRef_SecInsert_NestOn unstable append inadmissible
+SetRef_SecInsert_NestOn append
 SetRef_SecPtrLiteral pointer
-SetRef_SecPtrLiteral_NestOn unstable inadmissible pointer
-SetRef_NestOn unstable inadmissible pointer
+SetRef_SecPtrLiteral_NestOn pointer
+SetRef_NestOn pointer
 SetNested pointer
 SetNested_NivNew pointer
 SetNested_NivNew_GsParen pointer
