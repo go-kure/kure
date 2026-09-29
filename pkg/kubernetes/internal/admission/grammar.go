@@ -557,7 +557,7 @@ func (b *helperBody) path(e ast.Expr) ([]step, string) {
 		}
 		return nil, refused("P1", "%s is spelled from %s, not from %s, the object of the first write", text, root.Name(), object)
 	case !pointer:
-		return nil, refused("P1", "%s is spelled from %s, which is not a pointer, so the write reaches only the helper's copy", text, root.Name())
+		return nil, refused("P1", "%s is spelled from %s, which is not a pointer", text, root.Name())
 	case !b.stable[root]:
 		return nil, refused("P1", "%s is spelled from %s, which the body reassigns or takes the address of", text, root.Name())
 	}
@@ -809,12 +809,13 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 }
 
 // nilled refuses nil written where it clears what the caller did not name
-// (V1): as the value of a target that can hold nil, or as a keyed element, at
-// any depth, of a literal written as a field or inserted value. nil is read by
-// its name (isNilValue), so a parameter named nil is refused by it. An
-// appended element is not read: rhs is then the append. The body declares no
-// local but a marshalled one, which is never nil, so isNilValue is given no
-// nil local.
+// (V1): as the value of a target that can hold nil, or as a keyed element of
+// a literal written as a field or inserted value, at any depth reached
+// through keyed elements (nilInLiteral); a positional element is not read
+// for it, whatever it holds. nil is read by its name (isNilValue), so a
+// parameter named nil is refused by it. An appended element is not read: rhs
+// is then the append. The body declares no local but a marshalled one, which
+// is never nil, so isNilValue is given no nil local.
 func (b *helperBody) nilled(target, rhs ast.Expr) string {
 	none := map[types.Object]bool{}
 	to := types.ExprString(target)

@@ -714,8 +714,7 @@ func SetRefIgnoring(o *Obj, ref *Ref, ignored string) { o.Spec.Ref = ref }
 // V5: a blank parameter has no place either
 func SetRefBlank(o *Obj, ref *Ref, _ string) { o.Spec.Ref = ref }
 
-// V1, behind the check on a value the caller did not supply: the error of a
-// local is appended
+// V1: the error of a local is never a value; here it is appended
 func AddDocErr(d *Doc, v map[string]any) {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -805,38 +804,34 @@ func AddItemSend(o *Obj, s string) {
 	o.Spec.Items = append(o.Spec.Items, s)
 }
 
-// gap, refused by the check on function literals alone: one inside a
-// constant key
+// S9: a function literal inside a constant key
 func AddDocKeyedFuncKey(d *Doc, n *int32) { d.Keyed[len([1]func(){func() {}})] = n }
 
 // class a: the type of a function inside a constant key is no function literal
 func AddDocKeyedFuncTypeKey(d *Doc, n *int32) { d.Keyed[len([1]func(){})] = n }
 
-// gap, refused by the check on stray appends alone: an append inside a
-// constant key
+// S11: an append inside a constant key
 func AddDocKeyedAppendKey(d *Doc, n *int32) { d.Keyed[unsafe.Sizeof(append([]int{}, 0))] = n }
 
-// gap, refused by the count of appends and inserts alone: two appends to two
-// fields
+// S10: two appends to two fields
 func AddItemAndRow(o *Obj, s string, r []string) {
 	o.Spec.Items = append(o.Spec.Items, s)
 	o.Spec.Rows = append(o.Spec.Rows, r)
 }
 
-// gap, the same: an append and an insert
+// S10: an append and an insert
 func AddItemAndLabel(o *Obj, s, k, v string) {
 	o.Spec.Items = append(o.Spec.Items, s)
 	o.Labels[k] = v
 }
 
-// gap, the same: two inserts into two maps
+// S10: two inserts into two maps
 func AddDocLabelAndHeld(d *Doc, k, v, j string, h Holder) {
 	d.Labels[k] = v
 	d.Held[j] = h
 }
 
-// gap, refused by the check on the nil-init guard alone: the guard is spelled
-// otherwise than the path it initialises
+// N1: the guard is spelled otherwise than the path it initialises
 func SetRefNameGuardDerefObj(o *Obj, n string) {
 	if (*o).Spec.Ref == nil {
 		o.Spec.Ref = &Ref{}
@@ -860,8 +855,7 @@ func SetRefNameDerefObj(o *Obj, n string) {
 	(*o).Spec.Ref.Name = n
 }
 
-// gap, refused by the check on a value that reads its target alone: the
-// nil-init's capacity reads the slice it initialises
+// V7: the nil-init's capacity reads the slice it initialises
 func AddItemMakeCapReadsField(o *Obj, s string) {
 	if o.Spec.Items == nil {
 		o.Spec.Items = make([]string, 0, unsafe.Sizeof(o.Spec.Items))
@@ -869,7 +863,7 @@ func AddItemMakeCapReadsField(o *Obj, s string) {
 	o.Spec.Items = append(o.Spec.Items, s)
 }
 
-// gap, the same: the type of the literal written reads the field it replaces
+// V7: the type of the literal written reads the field it replaces
 func SetDocAnyReadsAny(d *Doc, n string, m Mode) {
 	d.Any = struct {
 		A    [unsafe.Sizeof(d.Any)%1 + 1]int
@@ -887,8 +881,7 @@ func SetDocAnyReadsName(d *Doc, n string, m Mode) {
 	}{Name: n, Mode: m}
 }
 
-// gap, refused by the check on an allocated pointer nothing is written
-// through alone: the write through it is spelled (*F).x
+// P6: the write through the nil-init is spelled (*F).x, not F.x or *F
 func SetRefNameStarWrite(o *Obj, n string) {
 	if o.Spec.Ref == nil {
 		o.Spec.Ref = &Ref{}
@@ -896,7 +889,7 @@ func SetRefNameStarWrite(o *Obj, n string) {
 	(*o.Spec.Ref).Name = n
 }
 
-// gap, the same: the write through an embedded pointer names a promoted field
+// P6: the write through an embedded pointer names a promoted field
 func SetDocText(d *Doc, s string) {
 	if d.Note == nil {
 		d.Note = &Note{}
@@ -904,12 +897,29 @@ func SetDocText(d *Doc, s string) {
 	d.Text = s
 }
 
-// gap, the same: the write through a pointer to an array indexes it
+// P6: the write through a pointer to an array indexes it
 func SetDocCell(d *Doc, s string) {
 	if d.Cells == nil {
 		d.Cells = &[3]string{}
 	}
 	d.Cells[0] = s
+}
+
+// P6: the nil-init is spelled in parentheses and the write through it is not;
+// (o.Spec.Ref) and o.Spec.Ref are one path spelled two ways
+func SetRefNameParenInitPlainWrite(o *Obj, n string) {
+	if o.Spec.Ref == nil {
+		(o.Spec.Ref) = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// class b: the write through a parenthesised nil-init is spelled alike
+func SetRefNameParenInit(o *Obj, n string) {
+	if o.Spec.Ref == nil {
+		(o.Spec.Ref) = &Ref{}
+	}
+	(o.Spec.Ref).Name = n
 }
 
 // class a: an append behind the nil-init of a pointer to a slice
@@ -928,7 +938,9 @@ func SetDocRawWhole(d *Doc, raw []byte) {
 	*d.RawP = raw
 }
 
-// P7: an element of the slice behind the nil-init of a pointer to it
+// P6: an element of the slice behind the nil-init of a pointer to it; the
+// index (*d.RawP)[0] is not spelled d.RawP.… or *d.RawP, so the pointer
+// nil-init is not written through
 func SetDocRawFirst(d *Doc, c byte) {
 	if d.RawP == nil {
 		d.RawP = &[]byte{}
@@ -936,12 +948,19 @@ func SetDocRawFirst(d *Doc, c byte) {
 	(*d.RawP)[0] = c
 }
 
-// gap, refused by the check on nil values alone: a parameter named nil
+// V1: a parameter named nil, refused by that name
 func SetRefFromNilParam(o *Obj, nil *Ref) { o.Spec.Ref = nil }
 
-// gap, the same: a parameter named nil as a keyed element of the literal
+// V1: a parameter named nil as a keyed element of the literal
 func SetDocPolicyNilLimit(d *Doc, name string, nil *int32) {
 	d.Plan.Policy = Policy{Name: name, Limit: nil}
+}
+
+// class c: a parameter named nil as a keyed element of a literal that is a
+// positional element of the one written; a positional element is not read
+// for the name nil
+func SetDocPlanPositionalNilLimit(d *Doc, plan, policy string, nil *int32) {
+	d.Plan = Plan{plan, Policy{Name: policy, Limit: nil}}
 }
 
 // class b: a parameter named nil into a field that cannot hold nil
@@ -950,14 +969,13 @@ func SetReplicasAndNilName(o *Obj, n int32, nil string) {
 	o.Spec.Name = nil
 }
 
-// gap, refused by the check on bare writes alone: &P into a field that is not
-// pointer-typed, beside a pointer write
+// V6: &P into a field that is not pointer-typed, beside a pointer write
 func SetReplicasAndPayloadAddr(o *Obj, n int32, s string) {
 	o.Spec.Replicas = &n
 	o.Spec.Payload = &s
 }
 
-// gap, the same: *P
+// V6: the same, *P
 func SetReplicasAndCountDeref(o *Obj, n int32, c *int) {
 	o.Spec.Replicas = &n
 	o.Spec.Count = *c
@@ -1143,6 +1161,7 @@ var grammarRules = map[string]string{
 	"SetRefNameStarWrite":                  "P6",
 	"SetDocText":                           "P6",
 	"SetDocCell":                           "P6",
+	"SetRefNameParenInitPlainWrite":        "P6",
 	"SetRefFromNilParam":                   "V1",
 	"SetDocPolicyNilLimit":                 "V1",
 	"SetReplicasAndPayloadAddr":            "V6",
@@ -1390,6 +1409,9 @@ var grammarAdmitted = map[string]Class{
 	"SetDocAnyRef":              Composite,
 
 	"SetDocShellBoxNameTwoInits": Pointer,
+
+	"SetRefNameParenInit":          Pointer,
+	"SetDocPlanPositionalNilLimit": Composite,
 }
 
 // grammarForwarders lists the fixtures the grammar admits and the class of
@@ -1465,7 +1487,7 @@ var grammarWording = map[string]string{
 	"SetRefGoto":                  `if n == "" jumps over the write with goto; sugar has no conditional no-op (grammar S8,`,
 	"SetNothing":                  "_ is not spelled from a parameter through selectors, indexes and dereferences (grammar P1,",
 	"SetReplicasTwoObjects":       "b.Spec.Name is spelled from b, not from a, the object of the first write (grammar P1,",
-	"SetReplicasByValue":          "o.Spec.Replicas is spelled from o, which is not a pointer, so the write reaches only the helper's copy (grammar P1,",
+	"SetReplicasByValue":          "o.Spec.Replicas is spelled from o, which is not a pointer (grammar P1,",
 	"SetRefDefaulted":             "ref is spelled from ref, which the body reassigns or takes the address of (grammar P1,",
 	"AddItemParenParamReassigned": "(o) is spelled from o, which the body reassigns or takes the address of (grammar P1,",
 }
