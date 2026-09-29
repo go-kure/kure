@@ -210,6 +210,9 @@
 //     locals.
 //   - V5: every parameter, a blank one included, is the object, a key or
 //     index of a path, or an argument written or marshalled.
+//   - V6: &P and *P are an appended or inserted element, the value of a
+//     pointer-typed target, or written to a target spelled <its text>.… or
+//     *<its text>, as written, of a pointer-typed target written earlier.
 //   - V7: no written value reads its target, the value of a nil-init
 //     included, in a constant, a make size or the type of a literal.
 //
@@ -217,7 +220,7 @@
 // read in source order and the first rule one breaks names the refusal: S1;
 // for an if S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5, N1, V7;
 // for a := S3, S2, S4; for any other assignment S7, P1, P2, P3, S10, V1, V3,
-// V3b, V2, V7. S6, P4, P6, P7, V4 and V5 are read off the whole body
+// V3b, V2, V6, V7. S6, P4, P6, P7, V4 and V5 are read off the whole body
 // afterwards, in that order.
 package admission
 

@@ -702,7 +702,7 @@ func (b *helperBody) assignment(s *ast.AssignStmt) string {
 
 // fieldWrite checks one write: its target (P1, P2, P3), that it is not a
 // second append or insert (S10), and the value it writes (V1, V3, V3b, V2,
-// V7).
+// V6, V7).
 func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 	steps, reason := b.path(target)
 	if reason != "" {
@@ -732,6 +732,9 @@ func (b *helperBody) fieldWrite(target, rhs ast.Expr) string {
 	if reason := b.value(value, target, element); reason != "" {
 		return reason
 	}
+	if reason := b.bare(target, value, element); reason != "" {
+		return reason
+	}
 	if reason := b.readsItself(target, rhs); reason != "" {
 		return reason
 	}
@@ -758,6 +761,37 @@ func (b *helperBody) nilled(target, rhs ast.Expr) string {
 		}
 	}
 	return ""
+}
+
+// bare refuses &P or *P written bare (V6). Either is the argument as the body
+// took or followed its address, not as the caller passed it, so it has a place
+// only where a write carries a pointer or goes through one: as the element
+// appended or inserted, as the value of a pointer-typed target, or written to
+// a target spelled through a pointer-typed target written earlier, <its
+// text>.… or *<its text> as written (throughPointer). Anywhere else it writes
+// a field the caller did not name. P passed whole and a struct literal are not
+// bare.
+func (b *helperBody) bare(target, value ast.Expr, element bool) string {
+	if element || pointerTyped(target, b.info) {
+		return ""
+	}
+	e := ast.Unparen(value)
+	if _, whole := e.(*ast.Ident); whole {
+		return ""
+	}
+	if id, _ := b.arg(e); id == nil {
+		return ""
+	}
+	pointers := map[string]bool{}
+	for _, w := range b.writes {
+		if w.pointer {
+			pointers[w.text] = true
+		}
+	}
+	if _, through := throughPointer(types.ExprString(target), pointers); through {
+		return ""
+	}
+	return refused("V6", "%s is written bare to %s, which is neither pointer-typed nor spelled through a pointer the body assigned", types.ExprString(value), types.ExprString(target))
 }
 
 // readsItself refuses a value that reads the target it is written to (V7),

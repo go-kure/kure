@@ -1116,10 +1116,7 @@ var grammarAdmitted = map[string]Class{
 // grammarGaps lists the fixtures the grammar alone admits and a check before
 // it refuses, with the rule to come that refuses each: the bodies the grammar
 // does not yet read as the older checks do.
-var grammarGaps = map[string]string{
-	"SetReplicasAndPayloadAddr": "V6",
-	"SetReplicasAndCountDeref":  "V6",
-}
+var grammarGaps = map[string]string{}
 
 // grammarBehind lists every fixture refused for its body other than by the
 // grammar, by a check before it or by the fall-through, that the grammar
@@ -1141,6 +1138,8 @@ var grammarBehind = map[string]string{
 	"SetDocCell":                           "P6",
 	"SetRefFromNilParam":                   "V1",
 	"SetDocPolicyNilLimit":                 "V1",
+	"SetReplicasAndPayloadAddr":            "V6",
+	"SetReplicasAndCountDeref":             "V6",
 	"AddDocErr":                            "V1",
 	"AddGroupItemCommaOkCrossKey":          "S3",
 	"AddGroupItemConstKey":                 "S3",

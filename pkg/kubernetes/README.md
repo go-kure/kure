@@ -155,8 +155,9 @@ A body that is a single assignment to a non-pointer field is inadmissible regard
 of path depth: writing `Spec.Template.Spec.ServiceAccountName` is still one assignment,
 and two such assignments in one body are two forwarders, not a composite. A bare
 assignment next to an admitted operation is inadmissible when its value is not an
-argument: an append that also sets a scalar to a literal or a computed value touches a
-field the caller did not name (§4). Forwarding a second argument alongside
+argument written `P` or a marshalled local: an append that also sets a scalar to a
+literal or a computed value (V1), or to `&P` or `*P` (V6), touches a field the caller
+did not name (§4). Forwarding a second argument alongside
 (`SetHPAMinMaxReplicas(hpa, 2, 10)`) leaves the class alone, and so does a pointer
 write beside the one append or insert: each write is checked on its own by the grammar
 below, and the class is that of the append. A helper
@@ -212,8 +213,8 @@ A body is nil guards and marshalled locals first, then nil-init guards and field
 writes. *The object* is the parameter the first write in the body is spelled from.
 Parentheses change nothing, and names are resolved by what they declare: a local or a
 method called `panic` or `Marshal` is not the builtin or the function. Where a rule
-reads as written instead, it says so: N1 and P6 compare two paths, and V1 reads the
-name `nil`.
+reads as written instead, it says so: N1, P6 and V6 compare two paths, and V1 reads
+the name `nil`.
 
 | ID | Statements, at the top level of the body |
 |---|---|
@@ -248,6 +249,7 @@ name `nil`.
 | V3b | Every struct literal, at every depth, carries an argument. |
 | V4 | Each argument occurs once over all written values and marshalled locals: `&n` written to two fields gives them one pointer, and so does `T{A: p, B: p}`. Keys and guards do not count. |
 | V5 | Every parameter has a place: it is the object, a key or index of a path, or an argument written or marshalled. A parameter the body leaves out, a blank one included, is a value the caller passed and the helper dropped. |
+| V6 | `&P` and `*P` are the argument as the body took or followed its address, not as the caller passed it. Each is the element appended or inserted, the value of a pointer-typed field, or written to a path spelled through a pointer-typed field written earlier, `<its path>.…` or `*<its path>`, as written. Anywhere else it writes a field the caller did not name: `o.Spec.Count = *c` beside `o.Spec.Replicas = &n` is refused. |
 | V7 | No written value reads its target, the value of a nil-init included, wherever the read stands: in a constant (`unsafe.Sizeof(o.Spec.Items)`), in the size of a `make`, or in the type of a literal. A value computed from what the field held is not the caller's. The slice an append extends is not such a read. |
 
 A call therefore appears in six positions only: `append` as the whole value of a class
@@ -260,7 +262,7 @@ other call, the conversion of an argument included, refuses the helper.
 S9, then S11, are read off the whole body first. Then the statements are read in
 source order, and the first rule a statement breaks names the refusal: S1; for an
 `if` S8, S2, S5, S4, and for a nil-init guard P1, P2, P3, P5, N1, V7; for a `:=` S3,
-S2, S4; for any other assignment S7, P1, P2, P3, S10, V1, V3, V3b, V2, V7. S6, P4,
+S2, S4; for any other assignment S7, P1, P2, P3, S10, V1, V3, V3b, V2, V6, V7. S6, P4,
 P6, P7, V4 and V5 are read off the whole body after its last statement, in that
 order.
 
