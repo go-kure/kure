@@ -45,6 +45,15 @@ type Doc struct {
 	Plan    Plan
 	Plans   []Plan
 	HoldMap map[string]*Holder
+	Spare   *Blob
+	Name    string
+	Any     any
+	Keyed   map[any]*int32
+	RawP    *[]byte
+	Ref     *Ref
+	Holds   []Holder
+	Held    map[string]Holder
+	Errs    []error
 }
 
 func grow(o *Obj) int { return len(o.Spec.Items) }
@@ -52,6 +61,9 @@ func grow(o *Obj) int { return len(o.Spec.Items) }
 func glue(k *string, v string) string { return *k + v }
 
 func marshal(v any) ([]byte, error) { return json.Marshal(v) }
+
+// Marshal has the name of json.Marshal and is not it.
+func Marshal(v any) ([]byte, error) { return json.Marshal(v) }
 
 // class b: the marshalled local, its error guard and the literal carrying it
 func SetDocBlob(d *Doc, v map[string]any) {
@@ -106,11 +118,74 @@ func SetDocPlanLimitGuardedConstIndex(d *Doc, limit int32) {
 	*d.Plans[int(0)].Policy.Limit = limit
 }
 
+// class a: a struct literal is the inserted element, beside another write
+func AddDocHeld(d *Doc, k string, items []string, s string) {
+	d.Held[k] = Holder{Items: items}
+	d.Name = s
+}
+
+// class b: the condition of a guard in parentheses
+func SetReplicasParenGuard(o *Obj, n int32) {
+	if (o == nil) {
+		panic("SetReplicasParenGuard: o must not be nil")
+	}
+	o.Spec.Replicas = &n
+}
+
+// class b: the address of a literal into a pointer field, beside another write
+func SetDocNameAndRef(d *Doc, s, name string) {
+	d.Name = s
+	d.Ref = &Ref{Name: name}
+}
+
+// class a: a guard on a parameter the body dereferences inside a literal
+func AddDocPlanFromPointer(d *Doc, name *string) {
+	if name == nil {
+		panic("AddDocPlanFromPointer: name must not be nil")
+	}
+	d.Plans = append(d.Plans, Plan{Name: *name})
+}
+
+// class b: two locals, each with an error of its own
+func SetDocBlobAndSpare(d *Doc, v, w map[string]any) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobAndSpare: %v", err))
+	}
+	spare, err2 := json.Marshal(w)
+	if err2 != nil {
+		panic(fmt.Sprintf("SetDocBlobAndSpare: %v", err2))
+	}
+	d.Blob = &Blob{Raw: raw}
+	d.Spare = &Blob{Raw: spare}
+}
+
+// class b: a nil guard after a local and its error guard
+func SetDocBlobGuardAfter(d *Doc, v map[string]any) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobGuardAfter: %v", err))
+	}
+	if d == nil {
+		panic("SetDocBlobGuardAfter: d must not be nil")
+	}
+	d.Blob = &Blob{Raw: raw}
+}
+
 // P4: the nil-init is of element 1 and the write through element 2, two
 // constant indexes that print alike
 func SetDocPlanLimitAbbreviatedIndex(d *Doc, limit int32) {
 	if d.Plans[len([...]int{1})].Policy.Limit == nil {
 		d.Plans[len([...]int{1})].Policy.Limit = new(int32)
+	}
+	*d.Plans[len([...]int{1, 2})].Policy.Limit = limit
+}
+
+// N1: the guard tests element 1, and the body initialises element 2 and
+// writes through it, two constant indexes that print alike
+func SetDocPlanLimitGuardOtherIndex(d *Doc, limit int32) {
+	if d.Plans[len([...]int{1})].Policy.Limit == nil {
+		d.Plans[len([...]int{1, 2})].Policy.Limit = new(int32)
 	}
 	*d.Plans[len([...]int{1, 2})].Policy.Limit = limit
 }
@@ -147,6 +222,38 @@ func SetDocBlobFromCall(d *Doc, v map[string]any) {
 	d.Blob = &Blob{Raw: raw}
 }
 
+// S3: the local marshals the object
+func SetDocBlobFromSelf(d *Doc) {
+	raw, err := json.Marshal(d)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobFromSelf: %v", err))
+	}
+	d.Blob = &Blob{Raw: raw}
+}
+
+// S3: the local is the result of a Marshal that is not encoding/json's
+func SetDocBlobOtherMarshal(d *Doc, v map[string]any) {
+	raw, err := Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobOtherMarshal: %v", err))
+	}
+	d.Blob = &Blob{Raw: raw}
+}
+
+// S3: the second local declares one new name, its error is the first one's
+func SetDocBlobErrReused(d *Doc, v, w map[string]any) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobErrReused: %v", err))
+	}
+	spare, err := json.Marshal(w)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobErrReused: %v", err))
+	}
+	d.Blob = &Blob{Raw: raw}
+	d.Spare = &Blob{Raw: spare}
+}
+
 // S4: the error guard is not the statement after its local
 func SetDocBlobGuardApart(d *Doc, v map[string]any) {
 	raw, err := json.Marshal(v)
@@ -157,6 +264,35 @@ func SetDocBlobGuardApart(d *Doc, v map[string]any) {
 		panic(fmt.Sprintf("SetDocBlobGuardApart: %v", err))
 	}
 	d.Blob = &Blob{Raw: raw}
+}
+
+// S4: a second guard on the error, after the one that follows the local
+func SetDocBlobGuardTwice(d *Doc, v map[string]any) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobGuardTwice: %v", err))
+	}
+	if err != nil {
+		panic("SetDocBlobGuardTwice: again")
+	}
+	d.Blob = &Blob{Raw: raw}
+}
+
+// S5: the error guard formats another value than the error
+func SetDocBlobPanicValue(d *Doc, v map[string]any) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobPanicValue: %v", v))
+	}
+	d.Blob = &Blob{Raw: raw}
+}
+
+// S5: a nil guard formats its message
+func SetReplicasPanicFormatted(o *Obj, n int32) {
+	if o == nil {
+		panic(fmt.Sprintf("SetReplicasPanicFormatted: %v", o))
+	}
+	o.Spec.Replicas = &n
 }
 
 // S5: the panic message is an argument
@@ -225,6 +361,22 @@ func SetReplicasParamReassigned(o, p *Obj, n int32) {
 	o.Spec.Replicas = &n
 }
 
+// S8: a guard that panics when the object is set
+func SetReplicasGuardNotNil(o *Obj, n int32) {
+	if o != nil {
+		panic("SetReplicasGuardNotNil: o must be nil")
+	}
+	o.Spec.Replicas = &n
+}
+
+// S8: a guard with an init statement
+func SetReplicasGuardInit(o *Obj, n int32) {
+	if _ = n; o == nil {
+		panic("SetReplicasGuardInit: o must not be nil")
+	}
+	o.Spec.Replicas = &n
+}
+
 // P1: two objects
 func SetReplicasTwoObjects(a, b *Obj, n int32, s string) {
 	a.Spec.Replicas = &n
@@ -253,6 +405,9 @@ func SetObjWhole(o *Obj, m map[string]string, n string) {
 // P3: the key is read from the object
 func AddLabelFieldKey(o *Obj, v string) { o.Labels[o.Spec.Name] = v }
 
+// P3: the key is the object
+func AddDocKeyedSelf(d *Doc, n int32) { d.Keyed[d] = &n }
+
 // P4: an insert into the map the body just replaced
 func AddLabelAfterReplace(o *Obj, m map[string]string, k, v string) {
 	o.Labels = m
@@ -276,11 +431,17 @@ func AddDocLabelAfterReplace(d *Doc, m map[string]string, k, v string) {
 
 // P4: the pointer written through is replaced afterwards
 func SetRefNameThenReplace(o *Obj, n string, ref *Ref) {
-	if o.Spec.Ref == nil {
-		o.Spec.Ref = &Ref{}
-	}
 	o.Spec.Ref.Name = n
 	o.Spec.Ref = ref
+}
+
+// P4: the field a nil-init initialises is replaced, not written through
+func SetLabelsAfterInit(o *Obj, m map[string]string, n int32) {
+	if o.Labels == nil {
+		o.Labels = map[string]string{}
+	}
+	o.Labels = m
+	o.Spec.Replicas = &n
 }
 
 // P5: the nil-init of a map element is an insert of a value the body chose
@@ -337,10 +498,40 @@ func AddItemAndLabels(o *Obj, s, k, v string) {
 	o.Labels = map[string]string{k: v}
 }
 
+// V1: the value is the object
+func SetDocRefAndAnySelf(d *Doc, ref *Ref) {
+	d.Ref = ref
+	d.Any = d
+}
+
+// V1: the value is the address of a local
+func SetDocRawPointer(d *Doc, v map[string]any, s string) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocRawPointer: %v", err))
+	}
+	d.RawP = &raw
+	d.Name = s
+}
+
 // V2: a struct literal replaces a struct beside another write
 func SetReplicasAndNestedA(o *Obj, n int32, a string) {
 	o.Spec.Replicas = &n
 	o.Spec.Nested = Inner{A: a}
+}
+
+// V2: the address of a literal into a field that is no pointer, beside
+// another write
+func SetDocRefAndAnyRef(d *Doc, ref *Ref, name string) {
+	d.Ref = ref
+	d.Any = &Ref{Name: name}
+}
+
+// V2: a struct literal replaces an element of a slice beside another write;
+// the element of a slice is there already, that of a map is inserted
+func SetDocRefAndHold(d *Doc, ref *Ref, i int, items []string) {
+	d.Ref = ref
+	d.Holds[i] = Holder{Items: items}
 }
 
 // V3: an inline constant in the literal
@@ -374,6 +565,35 @@ func SetReplicasNameTwice(o *Obj, n int32, s string) {
 
 // V4: one argument twice in one literal
 func SetNestedRefSameName(o *Obj, n string) { o.Spec.Nested.Ref = Ref{Name: n, Kind: n} }
+
+// V4: the argument a local marshals is written as it is as well
+func SetDocBlobAndAny(d *Doc, v map[string]any) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("SetDocBlobAndAny: %v", err))
+	}
+	d.Blob = &Blob{Raw: raw}
+	d.Any = v
+}
+
+// V1, behind the check on a value the caller did not supply: the error of a
+// local is appended
+func AddDocErr(d *Doc, v map[string]any) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("AddDocErr: %v", err))
+	}
+	d.Blob = &Blob{Raw: raw}
+	d.Errs = append(d.Errs, err)
+}
+
+// N1, behind the same check: the nil-init is new of a value, not of a type
+func SetDocPlanLimitNewValue(d *Doc, limit int32) {
+	if d.Plan.Policy.Limit == nil {
+		d.Plan.Policy.Limit = new(int32(1))
+	}
+	*d.Plan.Policy.Limit = limit
+}
 
 // S3: a local carrying an argument is overwritten before the append
 func AddItemLaundered(o *Obj, s string) {
@@ -484,14 +704,20 @@ var grammarRefusals = map[string]refusal{
 	"SetDocBlobBlankErr":              {"S3", Pointer},
 	"SetDocBlobFromField":             {"S3", Pointer},
 	"SetDocBlobFromCall":              {"S3", Pointer},
+	"SetDocBlobFromSelf":              {"S3", Pointer},
+	"SetDocBlobOtherMarshal":          {"S3", Pointer},
+	"SetDocBlobErrReused":             {"S3", Pointer},
 	"AddItemLaundered":                {"S3", Append},
 	"SetRefLaundered":                 {"S3", Pointer},
 	"SetNestedRefLaundered":           {"S3", Composite},
 	"SetReplicasConditionalAlias":     {"S3", Pointer},
 	"SetReplicasViaAddr":              {"S3", Pointer},
 	"SetDocBlobGuardApart":            {"S4", Pointer},
+	"SetDocBlobGuardTwice":            {"S4", Pointer},
 	"SetReplicasPanicParam":           {"S5", Pointer},
 	"AddLabelPanicCall":               {"S5", Append},
+	"SetDocBlobPanicValue":            {"S5", Pointer},
+	"SetReplicasPanicFormatted":       {"S5", Pointer},
 	"SetRefGuarded":                   {"S6", Pointer},
 	"SetReplicasAndNameTuple":         {"S7", Pointer},
 	"SetReplicasTupleReroot":          {"S7", Pointer},
@@ -499,32 +725,42 @@ var grammarRefusals = map[string]refusal{
 	"SetReplicasValidated":            {"S8", Pointer},
 	"SetReplicasGuardElse":            {"S8", Pointer},
 	"SetReplicasParamReassigned":      {"S8", Pointer},
+	"SetReplicasGuardNotNil":          {"S8", Pointer},
+	"SetReplicasGuardInit":            {"S8", Pointer},
 	"SetReplicasTwoObjects":           {"P1", Pointer},
 	"SetReplicasParamOverwritten":     {"P1", Pointer},
 	"SetRefDefaulted":                 {"P1", Pointer},
 	"SetObjWhole":                     {"P2", Composite},
 	"AddLabelFieldKey":                {"P3", Append},
+	"AddDocKeyedSelf":                 {"P3", Append},
 	"AddLabelAfterReplace":            {"P4", Append},
 	"AddHoldItemAfterCopy":            {"P4", Append},
 	"AddDocLabelAfterReplace":         {"P4", Append},
 	"SetRefNameThenReplace":           {"P4", Pointer},
+	"SetLabelsAfterInit":              {"P4", Pointer},
 	"SetDocPlanLimitAbbreviatedIndex": {"P4", Pointer},
 	"SetDocHoldLabels":                {"P5", Append},
 	"AddGroupInit":                    {"P5", Append},
 	"SetReplicasUnusedInit":           {"P6", Pointer},
 	"AddItemGrow":                     {"N1", Append},
+	"SetDocPlanLimitGuardOtherIndex":  {"N1", Pointer},
 	"AddItemFromName":                 {"V1", Append},
 	"AddGroupFromGroup":               {"V1", Append},
 	"AddLabelCallValue":               {"V1", Append},
 	"SetBoxNameFixed":                 {"V1", Pointer},
 	"AddItemAndLabels":                {"V1", Append},
+	"SetDocRefAndAnySelf":             {"V1", Pointer},
+	"SetDocRawPointer":                {"V1", Pointer},
 	"SetReplicasAndNestedA":           {"V2", Pointer},
+	"SetDocRefAndAnyRef":              {"V2", Pointer},
+	"SetDocRefAndHold":                {"V2", Pointer},
 	"SetNestedRefKind":                {"V3", Composite},
 	"SetDocPlanFixedPolicy":           {"V3b", Composite},
 	"AddHoldItemUnguardedInit":        {"V3b", Append},
 	"SetBoxNameUnguardedInit":         {"V3b", Pointer},
 	"SetReplicasNameTwice":            {"V4", Pointer},
 	"SetNestedRefSameName":            {"V4", Composite},
+	"SetDocBlobAndAny":                {"V4", Pointer},
 }
 
 // grammarAdmitted lists the fixtures in grammarFixtureSource that stay
@@ -537,6 +773,21 @@ var grammarAdmitted = map[string]Class{
 	"SetNestedRefPositional":           Composite,
 	"SetDocPlanLimitConstIndex":        Pointer,
 	"SetDocPlanLimitGuardedConstIndex": Pointer,
+	"AddDocHeld":                       Append,
+	"SetReplicasParenGuard":            Pointer,
+	"SetDocNameAndRef":                 Pointer,
+	"AddDocPlanFromPointer":            Append,
+	"SetDocBlobAndSpare":               Pointer,
+	"SetDocBlobGuardAfter":             Pointer,
+}
+
+// grammarBehind lists the fixtures a check before the grammar refuses, with
+// the rule the grammar refuses them by on its own. No fixture reaches these
+// rules through the verdict: they are what keeps the body refused once the
+// check ahead of them is gone.
+var grammarBehind = map[string]string{
+	"AddDocErr":               "V1",
+	"SetDocPlanLimitNewValue": "N1",
 }
 
 // TestClassify_GrammarOnlyRefuses classifies the fixture with and without the
@@ -594,6 +845,46 @@ func TestClassify_GrammarOnlyRefuses(t *testing.T) {
 	for name := range grammarRefusals {
 		if !seen[name] {
 			t.Errorf("%s: not classified at all", name)
+		}
+	}
+}
+
+// TestClassify_GrammarRefusesBehind reads what the grammar itself returns for
+// the fixtures grammarBehind names. A check before the grammar refuses each of
+// them, so the verdict does not show whether the grammar would.
+func TestClassify_GrammarRefusesBehind(t *testing.T) {
+	own := map[string]string{}
+	restore := checkGrammar
+	t.Cleanup(func() { checkGrammar = restore })
+	checkGrammar = func(fn *ast.FuncDecl, info *types.Info) string {
+		reason := grammar(fn, info)
+		own[fn.Name.Name] = reason
+		return reason
+	}
+	findings, err := Classify(Options{
+		Dir:      writeFixture(t),
+		Patterns: []string{"."},
+		Exempt:   map[string]bool{"fixture.SetExempted": true},
+		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verdicts := map[string]Finding{}
+	for _, f := range findings {
+		verdicts[f.Name] = f
+	}
+	for name, rule := range grammarBehind {
+		reason, read := own[name]
+		if !read {
+			t.Errorf("%s: the grammar did not read it", name)
+			continue
+		}
+		if !strings.Contains(reason, "(grammar "+rule+",") {
+			t.Errorf("%s: the grammar alone gives %q, want it refused by rule %s", name, reason, rule)
+		}
+		if f := verdicts[name]; f.Class != Inadmissible || strings.Contains(f.Reason, "(grammar ") {
+			t.Errorf("%s: %s (%s), want it refused by a check before the grammar", name, f.Class, f.Reason)
 		}
 	}
 }
