@@ -12,7 +12,7 @@ hugo = "0.167.0"
 # CI reads this value directly from mise.toml at run time (ci.yml's and
 # deploy-docs.yml's "Read yq version from mise.toml" steps) -- bumping this
 # pin alone is sufficient, no other file needs a manual update.
-yq = "4.53.6"
+yq = "4.54.1"
 
 # CI reads this value directly from mise.toml at run time too (same
 # mechanism as yq above, ci.yml's "Read lychee version from mise.toml" step).
