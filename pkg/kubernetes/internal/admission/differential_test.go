@@ -663,8 +663,9 @@ func wellTyped(t *testing.T, bodies []genBody) []genBody {
 	return typed
 }
 
-// classifyGenerated classifies the generated package src, by helper name.
-func classifyGenerated(t *testing.T, src string) map[string]Finding {
+// writeGenerated writes the generated package src as a module of its own and
+// returns its directory.
+func writeGenerated(t *testing.T, src string) string {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module gen\n\ngo 1.26\n"), 0o600); err != nil {
@@ -673,6 +674,18 @@ func classifyGenerated(t *testing.T, src string) map[string]Finding {
 	if err := os.WriteFile(filepath.Join(dir, "gen.go"), []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	return dir
+}
+
+// classifyGenerated classifies the generated package src, by helper name.
+func classifyGenerated(t *testing.T, src string) map[string]Finding {
+	t.Helper()
+	return classifyDir(t, writeGenerated(t, src))
+}
+
+// classifyDir classifies the package in dir, by helper name.
+func classifyDir(t *testing.T, dir string) map[string]Finding {
+	t.Helper()
 	findings, err := Classify(Options{
 		Dir:      dir,
 		Patterns: []string{"."},

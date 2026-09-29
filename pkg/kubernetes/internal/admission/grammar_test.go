@@ -6,8 +6,11 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // grammarFixtureSource is the second file of the fixture package: the helpers
@@ -18,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"unsafe"
 )
 
 type Mode string
@@ -61,7 +65,11 @@ type Doc struct {
 	Holds   []Holder
 	Held    map[string]Holder
 	Errs    []error
+	*Note
+	Cells *[3]string
 }
+
+type Note struct{ Text string }
 
 func grow(o *Obj) int { return len(o.Spec.Items) }
 
@@ -799,6 +807,172 @@ func AddItemSend(o *Obj, s string) {
 	o.Spec.Box.Ch <- "x"
 	o.Spec.Items = append(o.Spec.Items, s)
 }
+
+// gap, refused by the check on function literals alone: one inside a
+// constant key
+func AddDocKeyedFuncKey(d *Doc, n *int32) { d.Keyed[len([1]func(){func() {}})] = n }
+
+// class a: the type of a function inside a constant key is no function literal
+func AddDocKeyedFuncTypeKey(d *Doc, n *int32) { d.Keyed[len([1]func(){})] = n }
+
+// gap, refused by the check on stray appends alone: an append inside a
+// constant key
+func AddDocKeyedAppendKey(d *Doc, n *int32) { d.Keyed[unsafe.Sizeof(append([]int{}, 0))] = n }
+
+// gap, refused by the count of appends and inserts alone: two appends to two
+// fields
+func AddItemAndRow(o *Obj, s string, r []string) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Spec.Rows = append(o.Spec.Rows, r)
+}
+
+// gap, the same: an append and an insert
+func AddItemAndLabel(o *Obj, s, k, v string) {
+	o.Spec.Items = append(o.Spec.Items, s)
+	o.Labels[k] = v
+}
+
+// gap, the same: two inserts into two maps
+func AddDocLabelAndHeld(d *Doc, k, v, j string, h Holder) {
+	d.Labels[k] = v
+	d.Held[j] = h
+}
+
+// gap, refused by the check on the nil-init guard alone: the guard is spelled
+// otherwise than the path it initialises
+func SetRefNameGuardDerefObj(o *Obj, n string) {
+	if (*o).Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// class b: the operand of the guard in parentheses is spelled as the path
+func SetRefNameParenGuardOperand(o *Obj, n string) {
+	if (o.Spec.Ref) == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = n
+}
+
+// class b: guard, nil-init and write all spelled from (*o)
+func SetRefNameDerefObj(o *Obj, n string) {
+	if (*o).Spec.Ref == nil {
+		(*o).Spec.Ref = &Ref{}
+	}
+	(*o).Spec.Ref.Name = n
+}
+
+// gap, refused by the check on a value that reads its target alone: the
+// nil-init's capacity reads the slice it initialises
+func AddItemMakeCapReadsField(o *Obj, s string) {
+	if o.Spec.Items == nil {
+		o.Spec.Items = make([]string, 0, unsafe.Sizeof(o.Spec.Items))
+	}
+	o.Spec.Items = append(o.Spec.Items, s)
+}
+
+// gap, the same: the type of the literal written reads the field it replaces
+func SetDocAnyReadsAny(d *Doc, n string, m Mode) {
+	d.Any = struct {
+		A    [unsafe.Sizeof(d.Any)%1 + 1]int
+		Name string
+		Mode Mode
+	}{Name: n, Mode: m}
+}
+
+// class c: the type of the literal written reads another field
+func SetDocAnyReadsName(d *Doc, n string, m Mode) {
+	d.Any = struct {
+		A    [unsafe.Sizeof(d.Name)%1 + 1]int
+		Name string
+		Mode Mode
+	}{Name: n, Mode: m}
+}
+
+// gap, refused by the check on an allocated pointer nothing is written
+// through alone: the write through it is spelled (*F).x
+func SetRefNameStarWrite(o *Obj, n string) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	(*o.Spec.Ref).Name = n
+}
+
+// gap, the same: the write through an embedded pointer names a promoted field
+func SetDocText(d *Doc, s string) {
+	if d.Note == nil {
+		d.Note = &Note{}
+	}
+	d.Text = s
+}
+
+// gap, the same: the write through a pointer to an array indexes it
+func SetDocCell(d *Doc, s string) {
+	if d.Cells == nil {
+		d.Cells = &[3]string{}
+	}
+	d.Cells[0] = s
+}
+
+// class a: an append behind the nil-init of a pointer to a slice
+func AddDocRawByte(d *Doc, c byte) {
+	if d.RawP == nil {
+		d.RawP = &[]byte{}
+	}
+	*d.RawP = append(*d.RawP, c)
+}
+
+// class b: the slice behind the nil-init of a pointer to it, replaced whole
+func SetDocRawWhole(d *Doc, raw []byte) {
+	if d.RawP == nil {
+		d.RawP = &[]byte{}
+	}
+	*d.RawP = raw
+}
+
+// P7: an element of the slice behind the nil-init of a pointer to it
+func SetDocRawFirst(d *Doc, c byte) {
+	if d.RawP == nil {
+		d.RawP = &[]byte{}
+	}
+	(*d.RawP)[0] = c
+}
+
+// gap, refused by the check on nil values alone: a parameter named nil
+func SetRefFromNilParam(o *Obj, nil *Ref) { o.Spec.Ref = nil }
+
+// gap, the same: a parameter named nil as a keyed element of the literal
+func SetDocPolicyNilLimit(d *Doc, name string, nil *int32) {
+	d.Plan.Policy = Policy{Name: name, Limit: nil}
+}
+
+// class b: a parameter named nil into a field that cannot hold nil
+func SetReplicasAndNilName(o *Obj, n int32, nil string) {
+	o.Spec.Replicas = &n
+	o.Spec.Name = nil
+}
+
+// gap, refused by the check on bare writes alone: &P into a field that is not
+// pointer-typed, beside a pointer write
+func SetReplicasAndPayloadAddr(o *Obj, n int32, s string) {
+	o.Spec.Replicas = &n
+	o.Spec.Payload = &s
+}
+
+// gap, the same: *P
+func SetReplicasAndCountDeref(o *Obj, n int32, c *int) {
+	o.Spec.Replicas = &n
+	o.Spec.Count = *c
+}
+
+// class b: *P written through the pointer the nil-init allocated
+func SetRefNameFromPointer(o *Obj, n *string) {
+	if o.Spec.Ref == nil {
+		o.Spec.Ref = &Ref{}
+	}
+	o.Spec.Ref.Name = *n
+}
 `
 
 // refusal is one fixture that only the grammar refuses.
@@ -928,15 +1102,342 @@ var grammarAdmitted = map[string]Class{
 	"SetDocBlobGuardAfter":             Pointer,
 	"AddHoldItemInit":                  Append,
 	"SetDocShellSlot":                  Pointer,
+
+	"AddDocKeyedFuncTypeKey":      Append,
+	"SetRefNameParenGuardOperand": Pointer,
+	"SetRefNameDerefObj":          Pointer,
+	"SetDocAnyReadsName":          Composite,
+	"AddDocRawByte":               Append,
+	"SetDocRawWhole":              Pointer,
+	"SetReplicasAndNilName":       Pointer,
+	"SetRefNameFromPointer":       Pointer,
 }
 
-// grammarBehind lists the fixtures a check before the grammar refuses, with
-// the rule the grammar refuses them by on its own. No fixture reaches these
-// rules through the verdict: they are what keeps the body refused once the
-// check ahead of them is gone.
+// grammarGaps lists the fixtures the grammar alone admits and a check before
+// it refuses, with the rule to come that refuses each: the bodies the grammar
+// does not yet read as the older checks do.
+var grammarGaps = map[string]string{
+	"AddDocKeyedFuncKey":        "S9",
+	"AddDocKeyedAppendKey":      "S11",
+	"AddItemAndRow":             "S10",
+	"AddItemAndLabel":           "S10",
+	"AddDocLabelAndHeld":        "S10",
+	"AddItemGuardedMakeLen":     "N1",
+	"SetRefNameGuardDerefObj":   "N1",
+	"AddItemMakeCapReadsField":  "V7",
+	"SetDocAnyReadsAny":         "V7",
+	"SetRefNameStarWrite":       "P6",
+	"SetDocText":                "P6",
+	"SetDocCell":                "P6",
+	"SetRefFromNilParam":        "V1",
+	"SetDocPolicyNilLimit":      "V1",
+	"SetReplicasAndPayloadAddr": "V6",
+	"SetReplicasAndCountDeref":  "V6",
+}
+
+// grammarBehind lists every fixture a check before the grammar refuses and
+// the grammar alone refuses too, with the rule it refuses by first. The
+// verdict does not show these rules: they are what keeps each body refused
+// once the checks ahead of them are gone.
 var grammarBehind = map[string]string{
-	"AddDocErr":               "V1",
-	"SetDocPlanLimitNewValue": "N1",
+	"AddDocErr":                            "V1",
+	"AddGroupItemCommaOkCrossKey":          "S3",
+	"AddGroupItemConstKey":                 "S3",
+	"AddGroupItemConvKeyDirect":            "P3",
+	"AddGroupItemCrossKey":                 "S3",
+	"AddGroupItemCrossKeyDirect":           "V1",
+	"AddGroupItemIndexReassigned":          "S3",
+	"AddGroupItemLiteralKeys":              "S3",
+	"AddGroupItemLiteralKeysDirect":        "P3",
+	"AddGroupItemSlicedAppend":             "V1",
+	"AddGroupItemVarAppend":                "S1",
+	"AddGroupItemViaLocal":                 "S3",
+	"AddHoldItemViaLocal":                  "S3",
+	"AddItemAliasMismatch":                 "S3",
+	"AddItemAndName":                       "V1",
+	"AddItemAppendCrossField":              "S3",
+	"AddItemAppendFresh":                   "S3",
+	"AddItemAppendWrittenBackField":        "S3",
+	"AddItemCommaOkCrossField":             "S3",
+	"AddItemCommaOkReassignedCrossField":   "S3",
+	"AddItemConditionalAlias":              "S3",
+	"AddItemConstant":                      "V1",
+	"AddItemConvertedReassignedCrossField": "S3",
+	"AddItemConvertedSource":               "S3",
+	"AddItemCopiedSliceCrossField":         "S3",
+	"AddItemCrossField":                    "S3",
+	"AddItemFreshReassigned":               "S3",
+	"AddItemFromParam":                     "P1",
+	"AddItemFromRowDirect":                 "V1",
+	"AddItemFullSliceSource":               "S3",
+	"AddItemIfSet":                         "S8",
+	"AddItemInClosure":                     "S3",
+	"AddItemIndirectBesideStray":           "V1",
+	"AddItemLocalBase":                     "S3",
+	"AddItemLocalOnly":                     "S3",
+	"AddItemLocalThenIndirect":             "S3",
+	"AddItemMakeLen":                       "V1",
+	"AddItemMakeParamLen":                  "N1",
+	"AddItemMultiAssignedCrossField":       "S3",
+	"AddItemMultiAssignedCrossFieldLast":   "S3",
+	"AddItemNestedConstant":                "V1",
+	"AddItemParamAddressTaken":             "S3",
+	"AddItemParamRanged":                   "S1",
+	"AddItemParamReassigned":               "S8",
+	"AddItemParamRedeclared":               "S3",
+	"AddItemParenAddressTaken":             "S3",
+	"AddItemParenMultiReassigned":          "S3",
+	"AddItemParenParamReassigned":          "P1",
+	"AddItemParenReassignedCrossField":     "S3",
+	"AddItemPartialSliceSource":            "S3",
+	"AddItemRangeReassignedCrossField":     "S3",
+	"AddItemReassignedCrossField":          "S3",
+	"AddItemReassignedCrossFieldLast":      "S3",
+	"AddItemReceiveSource":                 "S3",
+	"AddItemRowCrossField":                 "S3",
+	"AddItemSameFieldLocalBase":            "S3",
+	"AddItemShadowedLocal":                 "S3",
+	"AddItemSliceParam":                    "P1",
+	"AddItemSliceReassignedCrossField":     "S3",
+	"AddItemStrayBesideTwice":              "V1",
+	"AddItemStructCopy":                    "S3",
+	"AddItemSwapHidesWrite":                "S3",
+	"AddItemSwappedSameField":              "S3",
+	"AddItemToTemp":                        "S3",
+	"AddItemTupleReroot":                   "S3",
+	"AddItemTupleThroughInit":              "S7",
+	"AddItemTwice":                         "P4",
+	"AddItemTwiceBesideBare":               "V1",
+	"AddItemTwoValues":                     "V1",
+	"AddItemTwoWriteBacks":                 "S3",
+	"AddItemTwoWriteBacksLast":             "S3",
+	"AddItemTypeAssertSource":              "S3",
+	"AddItemVarParenCrossField":            "S1",
+	"AddItemViaAlias":                      "S3",
+	"AddItemViaLocal":                      "S3",
+	"AddItemViaLocalAndReplicas":           "S3",
+	"AddItemViaVarLocal":                   "S1",
+	"AddItemWriteBackFirst":                "S3",
+	"AddItemsAppendSource":                 "S3",
+	"AddItemsForLoop":                      "S1",
+	"AddItemsLoop":                         "S1",
+	"AddItemsNestedAppend":                 "S3",
+	"AddItemsSpread":                       "V1",
+	"AddLabelAddrDeref":                    "P1",
+	"AddLabelConcatNilInit":                "S3",
+	"AddLabelConcatViaLocal":               "S3",
+	"AddLabelConstant":                     "V1",
+	"AddLabelExpandedConcat":               "V1",
+	"AddLabelExpandedCrossAlias":           "S3",
+	"AddLabelExpandedFromAlias":            "S3",
+	"AddLabelExpandedParen":                "V1",
+	"AddLabelExpandedParenIndex":           "V1",
+	"AddLabelExpandedViaLocal":             "S3",
+	"AddLabelFreshMap":                     "S3",
+	"AddLabelIfSetViaLocal":                "S3",
+	"AddLabelLocalOnly":                    "S3",
+	"AddLabelLocalThenName":                "S3",
+	"AddLabelParenLocal":                   "S3",
+	"AddLabelTwice":                        "P4",
+	"AddLabelViaLocal":                     "S3",
+	"AddRowMakeLen":                        "V1",
+	"AddRowParenMakeLen":                   "V1",
+	"SetBoxChanMake":                       "V1",
+	"SetBoxPayloadMake":                    "V1",
+	"SetBoxPayloadNew":                     "V1",
+	"SetCountRangeKey":                     "S1",
+	"SetDocPlanLimitNewValue":              "N1",
+	"SetDocRawFirst":                       "P7",
+	"SetHoldCommaOkCrossField":             "S3",
+	"SetHoldFreshMapWriteBack":             "S3",
+	"SetHoldItemsConverted":                "S3",
+	"SetHoldItemsFreshConverted":           "S3",
+	"SetItemsLiteral":                      "V1",
+	"SetNameAndA":                          "V4",
+	"SetNameIfSet":                         "S8",
+	"SetNameTwice":                         "V1",
+	"SetNameViaZeroLocal":                  "S1",
+	"SetNestedRefConstant":                 "V3",
+	"SetNestedRefIfSet":                    "S8",
+	"SetNestedRefOnTemp":                   "S1",
+	"SetNothing":                           "P1",
+	"SetRefAndReplicasInGuard":             "S8",
+	"SetRefBeforeAlias":                    "S3",
+	"SetRefBlockIf":                        "S1",
+	"SetRefElse":                           "S8",
+	"SetRefGoto":                           "S8",
+	"SetRefGuardedByOther":                 "N1",
+	"SetRefIfSet":                          "S8",
+	"SetRefIfUnsetNewValue":                "N1",
+	"SetRefLabeledLoop":                    "S1",
+	"SetRefNameElse":                       "S8",
+	"SetRefNameGuardExtra":                 "S8",
+	"SetRefNameIfInit":                     "S8",
+	"SetRefNameIfNotNil":                   "S8",
+	"SetRefNameNestedInit":                 "S8",
+	"SetRefNameShadowedNil":                "S8",
+	"SetRefNestedInit":                     "S8",
+	"SetRefNestedReset":                    "V3b",
+	"SetRefOnShadow":                       "S1",
+	"SetRefOnTemp":                         "S3",
+	"SetRefPayloadDefault":                 "V3b",
+	"SetRefPayloadGuarded":                 "P6",
+	"SetRefPayloadMake":                    "V1",
+	"SetRefRangeValue":                     "S1",
+	"SetRefSelect":                         "S1",
+	"SetRefSelectComm":                     "S1",
+	"SetRefTypeSwitch":                     "S1",
+	"SetRefTypedNil":                       "V1",
+	"SetRefUnlessSet":                      "N1",
+	"SetRefViaAssignedNil":                 "S3",
+	"SetRefViaInitNil":                     "S1",
+	"SetRefViaNilLocal":                    "S1",
+	"SetRefViaParenAssignedNil":            "S3",
+	"SetReplicasAddCount":                  "S7",
+	"SetReplicasAndDefault":                "V1",
+	"SetReplicasAndDerived":                "V1",
+	"SetReplicasAppendAliasConcat":         "S3",
+	"SetReplicasAppendTempConcat":          "S3",
+	"SetReplicasAppendTempField":           "S3",
+	"SetReplicasArrayParamConcat":          "S7",
+	"SetReplicasBlankAppend":               "P1",
+	"SetReplicasByValue":                   "P1",
+	"SetReplicasClearingRef":               "V1",
+	"SetReplicasCommaOkConcat":             "S3",
+	"SetReplicasCommaOkCrossField":         "S3",
+	"SetReplicasCommaOkRange":              "S3",
+	"SetReplicasCommaOkVarConcat":          "S1",
+	"SetReplicasConvertedCrossField":       "S3",
+	"SetReplicasConvertedInc":              "S3",
+	"SetReplicasDecCount":                  "S1",
+	"SetReplicasForPost":                   "S1",
+	"SetReplicasFreshMapWriteBack":         "S3",
+	"SetReplicasFreshWriteBack":            "S3",
+	"SetReplicasHolderParamConcat":         "S7",
+	"SetReplicasIncAliasNilInit":           "S3",
+	"SetReplicasIncCount":                  "S1",
+	"SetReplicasIncNilInit":                "S3",
+	"SetReplicasIncOnly":                   "S1",
+	"SetReplicasIncParenAliasNilInit":      "S3",
+	"SetReplicasItemConcat":                "S3",
+	"SetReplicasItemRange":                 "S3",
+	"SetReplicasMapParam":                  "P1",
+	"SetReplicasNilReturn":                 "S8",
+	"SetReplicasOverwrittenWriteBack":      "S3",
+	"SetReplicasParenAppendLocal":          "S1",
+	"SetReplicasParenLabelConcat":          "S3",
+	"SetReplicasParenMapTarget":            "S3",
+	"SetReplicasRangeAliasConcat":          "S1",
+	"SetReplicasRangeHolderConcat":         "S1",
+	"SetReplicasRangeNestConcat":           "S1",
+	"SetReplicasSliceExprConcat":           "S7",
+	"SetReplicasSliceExprRange":            "S1",
+	"SetReplicasSlicedAliasConcat":         "S3",
+	"SetReplicasSlicedCrossField":          "S3",
+	"SetReplicasSwitch":                    "S1",
+	"SetReplicasTempExpandedConcat":        "S3",
+	"SetReplicasTempMapConcat":             "S3",
+	"SetReplicasTempMapInc":                "S3",
+	"SetReplicasTempMapRange":              "S3",
+	"SetReplicasViaClosure":                "S1",
+	"SetReplicasZero":                      "V1",
+	"SetSpecNestedNil":                     "V1",
+	"SetSpecWithNilRef":                    "V1",
+	"SetViaDelegate":                       "S1",
+}
+
+// signatureReasons are the two refusals read off the signature, not the body.
+var signatureReasons = []string{"returns a value;", "declares type parameters;"}
+
+// fallThroughReasons are the refusals of a body no check finds an admitted
+// operation in: it writes fields bare, or writes nothing. They stay outside
+// the grammar.
+var fallThroughReasons = []string{
+	"bare field writes and no composite literal",
+	"single bare field assignment",
+	"no field write (delegation or no-op)",
+}
+
+// reasonIn reports whether reason holds one of fragments.
+func reasonIn(reason string, fragments []string) bool {
+	for _, fragment := range fragments {
+		if strings.Contains(reason, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+// bodyRefused reports whether f is refused for its body other than by a rule
+// of the grammar: by a check before the grammar, or by the fall-through.
+func bodyRefused(f Finding) bool {
+	return f.Class == Inadmissible && !strings.Contains(f.Reason, "(grammar ") &&
+		!reasonIn(f.Reason, signatureReasons)
+}
+
+// olderRefusal reports whether f is refused by a check before the grammar
+// that a rule of the grammar is to take over: bodyRefused, and not by the
+// fall-through.
+func olderRefusal(f Finding) bool {
+	return bodyRefused(f) && !reasonIn(f.Reason, fallThroughReasons)
+}
+
+// grammarAlone loads the package in dir as Classify does and returns what the
+// grammar alone answers for each helper Classify reads, the exempt ones aside.
+// Classify calls the grammar only for a body the checks before it admit an
+// operation in, so swapping checkGrammar cannot show this.
+func grammarAlone(t *testing.T, dir string, exempt map[string]bool) map[string]string {
+	t.Helper()
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
+			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+		Dir: dir,
+		Env: append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
+	}, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if packages.PrintErrors(pkgs) > 0 {
+		t.Fatal("the package does not load")
+	}
+	own := map[string]string{}
+	for _, p := range pkgs {
+		for _, file := range p.Syntax {
+			if strings.HasPrefix(filepath.Base(p.Fset.Position(file.Pos()).Filename), "zz_generated") {
+				continue
+			}
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || !isSugarHelper(fn) || exempt[p.PkgPath+"."+fn.Name.Name] {
+					continue
+				}
+				own[fn.Name.Name] = grammar(fn, p.TypesInfo)
+			}
+		}
+	}
+	return own
+}
+
+// fixtureAlone returns what the grammar alone answers for every fixture, and
+// the verdict on each.
+func fixtureAlone(t *testing.T) (map[string]string, map[string]Finding) {
+	t.Helper()
+	dir := writeFixture(t)
+	exempt := map[string]bool{"fixture.SetExempted": true}
+	findings, err := Classify(Options{
+		Dir:      dir,
+		Patterns: []string{"."},
+		Exempt:   exempt,
+		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verdicts := map[string]Finding{}
+	for _, f := range findings {
+		verdicts[f.Name] = f
+	}
+	return grammarAlone(t, dir, exempt), verdicts
 }
 
 // TestClassify_GrammarOnlyRefuses classifies the fixture with and without the
@@ -999,30 +1500,11 @@ func TestClassify_GrammarOnlyRefuses(t *testing.T) {
 }
 
 // TestClassify_GrammarRefusesBehind reads what the grammar itself returns for
-// the fixtures grammarBehind names. A check before the grammar refuses each of
-// them, so the verdict does not show whether the grammar would.
+// the fixtures grammarBehind names. A check before the grammar or the
+// fall-through refuses each of them, so the verdict does not show whether the
+// grammar would.
 func TestClassify_GrammarRefusesBehind(t *testing.T) {
-	own := map[string]string{}
-	restore := checkGrammar
-	t.Cleanup(func() { checkGrammar = restore })
-	checkGrammar = func(fn *ast.FuncDecl, info *types.Info) string {
-		reason := grammar(fn, info)
-		own[fn.Name.Name] = reason
-		return reason
-	}
-	findings, err := Classify(Options{
-		Dir:      writeFixture(t),
-		Patterns: []string{"."},
-		Exempt:   map[string]bool{"fixture.SetExempted": true},
-		Env:      append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verdicts := map[string]Finding{}
-	for _, f := range findings {
-		verdicts[f.Name] = f
-	}
+	own, verdicts := fixtureAlone(t)
 	for name, rule := range grammarBehind {
 		reason, read := own[name]
 		if !read {
@@ -1032,8 +1514,44 @@ func TestClassify_GrammarRefusesBehind(t *testing.T) {
 		if !strings.Contains(reason, "(grammar "+rule+",") {
 			t.Errorf("%s: the grammar alone gives %q, want it refused by rule %s", name, reason, rule)
 		}
-		if f := verdicts[name]; f.Class != Inadmissible || strings.Contains(f.Reason, "(grammar ") {
+		if f := verdicts[name]; !bodyRefused(f) {
+			t.Errorf("%s: %s (%s), want it refused other than by the grammar", name, f.Class, f.Reason)
+		}
+	}
+}
+
+// TestClassify_GrammarGaps reads what the grammar alone answers for the
+// fixtures grammarGaps names: nothing, while a check before it refuses each.
+// Then it holds the two tables complete: a fixture refused for its body other
+// than by the grammar is in grammarBehind when the grammar alone refuses it,
+// and in grammarGaps when it does not and the refusal is not the
+// fall-through's.
+func TestClassify_GrammarGaps(t *testing.T) {
+	own, verdicts := fixtureAlone(t)
+	for name, rule := range grammarGaps {
+		reason, read := own[name]
+		if !read {
+			t.Errorf("%s: the grammar did not read it", name)
+			continue
+		}
+		if reason != "" {
+			t.Errorf("%s: the grammar alone gives %q, want it admitted until rule %s", name, reason, rule)
+		}
+		if f := verdicts[name]; !olderRefusal(f) {
 			t.Errorf("%s: %s (%s), want it refused by a check before the grammar", name, f.Class, f.Reason)
+		}
+	}
+	for name, f := range verdicts {
+		if !bodyRefused(f) {
+			continue
+		}
+		_, behind := grammarBehind[name]
+		_, gap := grammarGaps[name]
+		switch {
+		case own[name] != "" && !behind:
+			t.Errorf("%s: %s, and the grammar alone gives %q; want it in grammarBehind", name, f.Reason, own[name])
+		case own[name] == "" && olderRefusal(f) && !gap:
+			t.Errorf("%s: %s, and the grammar alone admits it; want it in grammarGaps", name, f.Reason)
 		}
 	}
 }
