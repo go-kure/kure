@@ -229,6 +229,10 @@ func stmtKind(stmt ast.Stmt) string {
 		return "the increment or decrement of " + types.ExprString(s.X)
 	case *ast.EmptyStmt:
 		return "an empty statement"
+	case *ast.ReturnStmt:
+		return "a return"
+	case *ast.BranchStmt:
+		return "a " + s.Tok.String()
 	}
 	return "a statement"
 }
@@ -276,12 +280,21 @@ func (b *helperBody) guard(s *ast.IfStmt) (guardKind, ast.Expr) {
 }
 
 // ifStmt checks the if statement stmts[i]: its form (S8), and for a guard
-// that panics its place (S2, S4) and its message (S5).
+// that panics its place (S2, S4) and its message (S5). An if that is no guard
+// is named by what it does when it holds a return or a goto: either skips the
+// write on some paths, which no guard does.
 func (b *helperBody) ifStmt(stmts []ast.Stmt, i int, s *ast.IfStmt) string {
 	kind, tested := b.guard(s)
 	switch kind {
 	case noGuard:
-		return refused("S8", "if %s is not a nil guard that panics, the guard on the error of a local, or a nil-init guard", types.ExprString(s.Cond))
+		cond, whole := types.ExprString(s.Cond), &ast.BlockStmt{List: []ast.Stmt{s}}
+		switch {
+		case hasEarlyReturn(whole):
+			return refused("S8", "if %s returns early instead of writing; a nil receiver panics and sugar has no conditional no-op", cond)
+		case hasGoto(whole):
+			return refused("S8", "if %s jumps over the write with goto; sugar has no conditional no-op", cond)
+		}
+		return refused("S8", "if %s is not a nil guard that panics, the guard on the error of a local, or a nil-init guard", cond)
 	case nilInitGuard:
 		b.wrote = true
 		return b.nilInit(s.Body.List[0].(*ast.AssignStmt), tested)
@@ -496,12 +509,28 @@ func (b *helperBody) isConst(e ast.Expr) bool {
 
 // path returns the steps of the target e, or the reason it is not a path of
 // the object (P1), names no field (P2) or is indexed by other than a
-// parameter or a constant (P3).
+// parameter or a constant (P3). P1 names which of its four causes it is: e
+// is spelled from no parameter, from one other than the object, from an
+// object that is not a pointer, or from one the body reassigns or takes the
+// address of (stableParams).
 func (b *helperBody) path(e ast.Expr) ([]step, string) {
 	text := types.ExprString(e)
 	root := pathRoot(e, b.info)
-	if root == nil || root != b.object || !b.stable[root] {
-		return nil, refused("P1", "%s is not spelled from the one pointer parameter the body writes through, never reassigned and its address never taken", text)
+	if root == nil || !b.params[root] {
+		return nil, refused("P1", "%s is not spelled from a parameter through selectors, indexes and dereferences", text)
+	}
+	_, pointer := root.Type().Underlying().(*types.Pointer)
+	switch {
+	case b.object == nil || root != b.object:
+		object := "no parameter"
+		if b.object != nil {
+			object = b.object.Name()
+		}
+		return nil, refused("P1", "%s is spelled from %s, not from %s, the object of the first write", text, root.Name(), object)
+	case !pointer:
+		return nil, refused("P1", "%s is spelled from %s, which is not a pointer, so the write reaches only the helper's copy", text, root.Name())
+	case !b.stable[root]:
+		return nil, refused("P1", "%s is spelled from %s, which the body reassigns or takes the address of", text, root.Name())
 	}
 	steps, ok := b.steps(e)
 	if !ok {
