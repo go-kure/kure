@@ -1192,13 +1192,17 @@ jobs:
 
     - name: Analyze Go changes
       if: steps.changed-files.outputs.any_changed == 'true'
+      env:
+        BASE_REF: ${{ github.base_ref }}
       run: |
         echo "Changed Go-related files:"
         echo "${{ steps.changed-files.outputs.all_changed_files }}"
 
-        # Count lines of code changes
-        ADDED_LINES=$(git diff --numstat origin/main...HEAD | awk '{added+=$1} END {print added+0}')
-        REMOVED_LINES=$(git diff --numstat origin/main...HEAD | awk '{removed+=$2} END {print removed+0}')
+        # Count lines of code changes against the PR's own base, not main: a
+        # cherry-pick PR to a release/vX.Y branch would otherwise count every
+        # commit that branch does not share with main.
+        ADDED_LINES=$(git diff --numstat "origin/$BASE_REF...HEAD" | awk '{added+=$1} END {print added+0}')
+        REMOVED_LINES=$(git diff --numstat "origin/$BASE_REF...HEAD" | awk '{removed+=$2} END {print removed+0}')
 
         echo "Lines added: $ADDED_LINES"
         echo "Lines removed: $REMOVED_LINES"
