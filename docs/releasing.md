@@ -354,10 +354,10 @@ Why the rows split this way:
   id or on the releases page, never by tag: `gh release delete <tag>` can resolve the tag to the
   published release.
 
-`release-state.sh` gives the cautious form of this table: its advice for `never-published` is
-always the full re-run, with a warning against `--failed`. On a stable tag it also lists every
-stable release (`gh` lists 30 unless given `--limit`) and says to escalate before re-running when
-a newer one exists ([go-kure/.github#239](https://github.com/go-kure/.github/issues/239)).
+`release-state.sh` gives the cautious form of this table: its advice for `never-published` is the
+full re-run, with a warning against `--failed`, and the dispatch when a newer tag of the same line
+exists or the run is over 30 days old. It asks for no check before re-running a stable tag behind a
+newer release: Publish decides the docs slot and both `latest` pointers from the tags.
 
 #### Recovery when the release exists and publishing succeeded
 
@@ -396,9 +396,9 @@ re-run, in any form**: while the release exists every path into publication refu
 1. Check the release's assets against the tag's own `.goreleaser.yml`. If anything is missing (a
    leftover draft someone published by hand, say), escalate.
 2. Do the follow-up work by hand with the commands above. `release-state.sh` prints them for the
-   tag, except that for a stable tag that is not the newest stable release it says to escalate
-   instead of deploying the docs
-   ([go-kure/.github#239](https://github.com/go-kure/.github/issues/239)).
+   tag, taking the docs decision from `scripts/release/publish-policy.sh docs` and `latest` in
+   `go-kure/.github` — the script Publish itself runs — instead of the tag listings, so an older
+   stable tag gets its slot, or nothing, without an escalation.
 
 The state stays `partial` afterwards: it describes the run record, which these steps do not
 change, and they may already have been done. Repeating them is safe: a docs deploy rebuilds the
@@ -420,6 +420,15 @@ by hand once its provenance is settled.
 - **A Publish wrapper that is broken at the tag cannot be recovered by either path.** A dispatch
   takes the wrapper from the tag, and a full re-run re-resolves only the called shared workflow.
   Escalate.
+- **An abandoned newer tag keeps its line's docs slot.** The slot belongs to the highest stable tag
+  of the line whether or not its release ever published, so while that tag's own recovery is
+  pending, an older patch deploys nothing there. If the newer tag will never publish, deploy the
+  older patch's slot by hand (the dispatch above, `set_latest` from `publish-policy.sh latest`); do
+  not delete the tag once the Go module proxy may have seen it.
+- **The docs decision is taken when Publish runs, not when the docs deploy.** The callers'
+  `deploy-docs.yml` runs one deploy per slot at a time, not one overall, so an older tag's
+  `set_latest=true` deploy still queued when a newer release publishes and deploys can replace the
+  docs root afterwards. Closing that needs a check at deploy time in the callers.
 - **If a `latest` pointer ends up on the wrong release anyway**, point both back at the highest
   stable tag. Wait for any docs deploy still running first: deploys of different slots do not wait
   for each other, and the one that pushes second can fail.
