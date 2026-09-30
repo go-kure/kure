@@ -1,20 +1,17 @@
 name: Release / Publish
 
+# Keep this file name: the shared Release workflow waits for this workflow by
+# it after pushing a tag.
 on:
   push:
     tags:
       - 'v*'
-  # Manual re-publish for a tag whose publish run failed before the release
-  # object was created. The re-run paths do not always recover that state:
-  #   * `gh run rerun --failed <id>`, and a single-job re-run, resolve the
-  #     reusable workflow at the commit SHA of the FIRST attempt, so they cannot
-  #     pick up a fix landed on go-kure/.github main afterwards. Measured on
-  #     v0.2.0-beta.11: a --failed re-run 102s after the fix merged still ran
-  #     the pre-fix command.
-  #   * a full `gh run rerun <id>` does re-resolve `@main`, but only inside
-  #     GitHub's 30-day re-run window, and only while a failed run still exists.
-  # Moving or deleting a release tag is not an option, so dispatch is what is
-  # left. Pass `--ref <tag>`: the shared workflow checks out github.ref.
+  # Manual re-publish of a tag whose publish run failed before the release
+  # object was created. `gh run rerun --failed` and single-job re-runs resolve
+  # the shared publisher at the FIRST attempt's commit, so they cannot pick up
+  # a fix landed on go-kure/.github main afterwards; a dispatch does. Pass
+  # `--ref <tag>`: the shared workflow checks out github.ref. The recovery
+  # procedure is in docs/releasing.md.
   workflow_dispatch:
 
 permissions:
@@ -22,39 +19,19 @@ permissions:
   id-token: write
   actions: write
 
-# guard-tag-ref's release probe is not atomic with the publication it guards.
-# The shared publisher declares its own `concurrency: release-${{ github.ref }}`
-# (go-kure/.github release-publish.yml:11-13), but that covers only the called
-# workflow's jobs -- guard-tag-ref runs in this wrapper, outside it. Two
-# dispatches of one tag can therefore both probe while the release is still
-# absent, both see 404, and the second republish over what the first created,
-# which is exactly what the guard exists to prevent.
-#
-# Serialising the wrapper closes that window: the second run queues before its
-# guard job starts, so it probes only after the first run has finished
-# publishing, sees the release, and refuses.
-#
-# Deliberately NOT the shared publisher's own group name. A called workflow's
-# concurrency is evaluated in the caller's repository context, so reusing
-# `release-${{ github.ref }}` here would risk this run holding a group that its
-# own `release` job then has to wait on.
-concurrency:
-  group: release-publish-wrapper-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   # A workflow_dispatch can name any ref, including a branch. Handing the
   # privileged publisher a branch would publish that tree under the release
   # path. Refuse instead of skipping: a job gated off with `if:` leaves the run
   # reading green, and an operator recovering a failed publish would take that
   # as a successful re-publish while the release object still does not exist.
+  #
+  # The release-exists probe that used to follow here now runs inside the
+  # shared publisher, as the first step of its goreleaser job, where every
+  # re-run mode (`--failed` included) executes it.
   guard-tag-ref:
     name: Guard tag ref
     runs-on: autops-kube-kure
-    # The workflow-level block grants the publisher contents/id-token/actions
-    # write. This job only inspects the ref and the release list, so it takes
-    # read access and nothing else; inheriting the publisher's write scopes
-    # would put release-capable credentials on an extra job on every tag push.
     permissions:
       contents: read
     steps:
@@ -65,162 +42,6 @@ jobs:
         run: |
           echo "::error::release-publish must run against a v* tag; got $REF"
           exit 1
-
-      # A dispatch re-publishes a tag that already exists, and the documented
-      # scope is a run that failed BEFORE goreleaser created the release
-      # object. Nothing in the UI or CLI enforces that, so dispatching a tag
-      # whose release is already present hands the privileged publisher a live
-      # release to republish over. Refuse, and refuse equally when the answer
-      # cannot be determined: a wrong "proceed" mutates a published release,
-      # a wrong "refuse" costs a retry.
-      #
-      # The probe runs on EVERY path, attempt 1 of a tag push included. What
-      # varies between paths is only what an UNDETERMINED answer does.
-      #
-      # It was previously skipped outright on attempt 1 of a tag push, on the
-      # premise that a first publication cannot have a release yet. The wrapper
-      # concurrency group above falsifies that premise: a dispatch for a
-      # freshly pushed tag can take the slot first and publish, and the queued
-      # push run then arrives at a tag that DOES have a release while still
-      # reporting `event_name == 'push'` and `run_attempt == 1`. Skipping made
-      # the second serialised publication the one path the guard cannot see --
-      # and serialising the two runs is what creates that ordering in the first
-      # place.
-      #
-      # The reason the exemption existed is still real, so it survives in a
-      # narrower form: a first publication must not be blocked by an API
-      # hiccup. On attempt 1 of a tag push an UNDETERMINED answer therefore
-      # warns and proceeds, while "the release exists" refuses there as
-      # everywhere. On every other path -- any dispatch, any attempt 2+ --
-      # undetermined still refuses, because those are re-publications, where a
-      # wrong "proceed" mutates a live release and a wrong "refuse" costs a
-      # retry.
-      #
-      # A re-run replays the ORIGINAL event context, so `github.event_name`
-      # stays `push` on attempt 2+ -- the same frozen-context behaviour ci.yml
-      # documents at :420-423 from an earlier incident, and the same reason the
-      # shared publisher's workflow_dispatch exemption does not cover a re-run.
-      # That is why FIRST_PUBLICATION tests the attempt as well as the event,
-      # and why it is written as the exact complement of the old
-      # `run_attempt > 1` gate.
-      #
-      # KNOWN LIMIT -- this guard covers a FULL re-run, never `--failed`. On
-      # `gh run rerun --failed`, GitHub reschedules only jobs that concluded
-      # `failure` plus their downstream jobs; `guard-tag-ref` concluded
-      # `success`, so it is carried over and NONE of its steps execute, this one
-      # included. `release` declares `needs: guard-tag-ref`, and a carried-over
-      # `needs:` still satisfies the dependency. So a `--failed` re-run of a
-      # publisher that failed AFTER creating the release object re-enters
-      # publication with this probe never evaluated. The runbook does not
-      # prescribe `--failed` in that state (it is an escalation), but nothing
-      # here enforces that. The durable fix is a release-existence probe inside
-      # the shared publisher itself, which IS rescheduled by `--failed`; it
-      # belongs in `go-kure/.github`, not here.
-      #
-      # Measured shapes of the probe: release present -> exit 0, no stderr;
-      # absent -> exit 1 with "gh: Not Found (HTTP 404)". Any other non-zero
-      # exit is an UNDETERMINED answer -- never read as absent. So a change in
-      # that error format degrades to undetermined rather than to "no release".
-      # Undetermined refuses on every path except a first publication, where it
-      # warns and proceeds (see FIRST_PUBLICATION below); on that one path a
-      # format change would therefore cost a warning, not a blocked release.
-      - name: Refuse a re-publish over a tag that already has a release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-          # The exact complement of the gate this step used to carry
-          # (`github.event_name == 'workflow_dispatch' || github.run_attempt > 1`).
-          # Written with the same `> 1` comparison rather than `== 1`, so it does
-          # not depend on how the expression language coerces run_attempt, which
-          # is a string.
-          FIRST_PUBLICATION: ${{ github.event_name == 'push' && !(github.run_attempt > 1) }}
-        run: |
-          # Probe up to 3 times, 5s apart, stopping at the first DETERMINATE
-          # answer. This is not generic flake tolerance: the first-publication
-          # waiver at the bottom of this step is only defensible if
-          # "undetermined" means PERSISTENTLY undetermined. Without retries a
-          # single 403/429/network blip is indistinguishable from an API that
-          # genuinely cannot answer, and the waiver would ride on the blip.
-          attempt=0
-          while : ; do
-            attempt=$((attempt + 1))
-            set +e
-            err=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>&1 >/dev/null)
-            rc=$?
-            set -e
-            case "${rc}:${err}" in
-              0:*|*"(HTTP 404)"*) break ;;
-            esac
-            if [ "$attempt" -ge 3 ]; then
-              break
-            fi
-            echo "Probe attempt ${attempt} for $TAG was undetermined ($err); retrying in 5s"
-            sleep 5
-          done
-          if [ "$rc" -eq 0 ]; then
-            # This message states ONE observable fact -- the release object
-            # exists -- and asserts nothing about publication. Everything it
-            # could add is beyond what this step can see:
-            #   * whether publication SUCCEEDED. goreleaser creates the release
-            #     object before the job finishes, so a run that died part-way
-            #     leaves a release here too; the runbook says as much where it
-            #     rules out the asset count as a completeness oracle. Saying
-            #     "publication succeeded" would send an operator hunting a
-            #     failed follow-up job when the real state is an incomplete
-            #     release needing escalation.
-            #   * which RE-RUN MODE to use. That depends on how the failed job
-            #     concluded -- `--failed` selects only `failure`, so it silently
-            #     does nothing for `cancelled` or `timed_out` -- and this step
-            #     cannot see that conclusion either.
-            # Both belong to the runbook's decision tree, which has the run's
-            # per-attempt conclusions in front of it. Route there; do not guess.
-            echo "::error::$TAG already has a GitHub release, so this" \
-                 "${GITHUB_EVENT_NAME} (attempt ${GITHUB_RUN_ATTEMPT}) would re-publish over a" \
-                 "live release object. This does not by itself mean publication succeeded --" \
-                 "a run that died part-way leaves a release object too. Determine the state and" \
-                 "the recovery from the decision tree in docs/github-workflows.md before" \
-                 "re-running anything."
-            exit 1
-          fi
-          case "$err" in
-            *"(HTTP 404)"*)
-              # Says "publication", not "re-publish": this branch is now also
-              # reached on attempt 1 of a tag push, which is a first publication.
-              echo "No release exists for $TAG; proceeding with publication"
-              ;;
-            *)
-              if [ "$FIRST_PUBLICATION" = "true" ]; then
-                # Attempt 1 of a tag push, with the probe still undetermined
-                # after every retry above.
-                #
-                # THIS WAIVER HAS A RESIDUAL HOLE, stated plainly because the
-                # comment that first stood here denied it: if a concurrent
-                # dispatch published this tag AND the API cannot answer, the
-                # release exists and this branch proceeds anyway. The `rc=0`
-                # refusal catches that race only while the API is answering --
-                # which is precisely what reaching this branch rules out.
-                #
-                # Accepted, not closed. Refusing here would block every first
-                # publication on an API outage: a certain cost on the normal
-                # release path, traded against the intersection of two
-                # independent unlikely events. This branch is also strictly
-                # better than what preceded it, which skipped the probe on this
-                # path entirely and so missed the race whatever the API was
-                # doing, and the retries above narrow the hole to a PERSISTENT
-                # outage rather than a single blip.
-                #
-                # Closing it properly needs a probe inside the shared publisher,
-                # atomic with the publication it guards -- see KNOWN LIMIT above.
-                echo "::warning::could not determine whether $TAG already has a release: $err"
-                echo "Proceeding anyway: attempt 1 of a tag push is a first publication," \
-                     "which must not be blocked by an API error. A release that does exist" \
-                     "is still refused above; only an UNDETERMINED answer is waived here."
-              else
-                echo "::error::could not determine whether $TAG already has a release: $err"
-                exit 1
-              fi
-              ;;
-          esac
 
   release:
     needs: guard-tag-ref

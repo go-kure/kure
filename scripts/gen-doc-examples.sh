@@ -53,6 +53,7 @@ ENABLED_PAGES=(
 	docs/oci-layout.md
 	docs/puzl-cloud-kubesdk-review.md
 	docs/quickstart.md
+	docs/releasing.md
 	examples/README.md
 	examples/demo/README.md
 	examples/demo/clusters/umbrella/README.md

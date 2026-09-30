@@ -59,6 +59,10 @@ Enforced via the `main-protection` [repository ruleset](https://github.com/go-ku
 - **Branch deletion**: disabled
 - **Bypass actors**: `kure-release-bot` (GitHub App) — allowed to push release commits directly
 
+Release branches (`release/vX.Y`) have their own `release-protection` ruleset with the same rules,
+required checks and bot bypass, but no merge queue: a pull request must be up to date with the
+branch before it merges. See [Releasing](/contributing/releasing/).
+
 ## Development Workflow
 
 ### 1. Initial Setup
@@ -184,31 +188,15 @@ The project uses several GitHub Actions workflows:
 - **Purpose**: Static analysis with JetBrains Qodana
 - **Uses**: `make deps` for setup
 
-### Create Release (`.github/workflows/release-create.yml`)
-- **Triggers**: Manual (`workflow_dispatch`)
-- **Inputs**: `dry_run` only — the version being cut comes from the `VERSION` file on `main`, not
-  from a workflow input
-- **Purpose**: Creates release commits and tags on `main`, pushes atomically
-- **Auth**: Uses GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`); the `kure-release-bot` App is listed as a bypass actor in the `main-protection` repository ruleset, allowing it to push release commits directly to `main`
-- **Concurrency**: Only one release at a time (`release-create` group)
+### Release (`.github/workflows/release.yml`) and Release / Publish (`.github/workflows/release-publish.yml`)
 
-To create a release:
-1. Set the target version in `VERSION` on `main` (this is what decides the release type)
-2. Go to Actions > "Create Release" > Run workflow
-3. Optionally enable `dry_run` for a preview
-4. Click "Run workflow"
-
-The pushed tag triggers the release pipeline below.
-
-### Release Pipeline (`.github/workflows/release-publish.yml`)
-- **Triggers**: Version tags (`v*`); `workflow_dispatch` to re-publish an existing tag
-- **Jobs**: `guard-tag-ref`, then the shared publisher from `go-kure/.github`:
-  - Full test run with race detection
-  - Tag format, changelog and version progression validation
-  - GitHub release creation via `goreleaser` (kure is a library — `.goreleaser.yml` sets
-    `builds: skip: true`, so a complete release carries no assets; the tag is the artifact)
-  - Go proxy refresh
-  - Versioned docs deploy
+Run **Release** from the Actions tab: pick the branch (`main`, or `release/vX.Y` for a patch), what
+to do (`release` by default), and tick **Dry run** for a preview. It makes the release commits and
+the tag, and **Release / Publish** then runs by itself on the tag. Nothing is tagged by hand. The
+[Releasing](/contributing/releasing/) page (`docs/releasing.md`, shared by every go-kure
+repository) explains every option, release branches, and what to do when a release fails. kure's
+Publish creates the GitHub release object only: kure is a library, so a complete release carries no
+assets and the tag is the artifact.
 
 ### PR Checks (`.github/workflows/pr-checks.yml`)
 - **Triggers**: PR events
@@ -296,9 +284,9 @@ For the full dependency update process (review, bundling, version tracking), see
 - `precommit` - Run all pre-commit checks
 
 ### Release
-- `release TYPE=<type>` - Preview release (dry-run); types: alpha, beta, rc, stable, bump
-- `release-check` - Check if ready for release
-- `release-build` - Build release artifacts for multiple platforms
+No target releases or previews a release: run the **Release** workflow, with **Dry run** ticked for
+a preview ([Releasing](/contributing/releasing/)). `changelog-preview` prints the unreleased
+changelog entries.
 ### Utilities
 - `generate` - Run go generate
 - `mod-graph` - Display module dependency graph

@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-08-21
+**Last Updated:** 2026-09-30
 
 ---
 
@@ -13,10 +13,8 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [CI](#ci-workflow) | `ci.yml` | push, PR, schedule, manual | Comprehensive testing, linting, building, security |
 | [Deploy Docs](#deploy-docs-workflow) | `deploy-docs.yml` | push to main (docs paths), `workflow_dispatch` | Multi-version docs deployment |
 | [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
-| [Release / Create](#release--create-workflow) | `release-create.yml` | manual | Auto-infer release type from VERSION, create tag |
-| [Release / Promote](#release--promote-workflow) | `release-promote.yml` | manual | Promote to explicit release type (beta/rc/stable) |
-| [Release / Bump](#release--bump-workflow) | `release-bump.yml` | manual | Advance version cycle (minor/major/prerelease), no tag |
-| [Release / Publish](#release--publish-workflow) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser (release object only — no artifacts), docs deploy, proxy refresh |
+| [Release](/contributing/releasing/) | `release.yml` | manual | The one manual release workflow: release, promote, or start the next version |
+| [Release / Publish](/contributing/releasing/) (automatic on tag) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser (release object only — no artifacts, see [Releasing](#releasing)), docs deploy, proxy refresh |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
 
 ---
@@ -102,7 +100,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 |-----|------------|---------|--------------|---------|
 | `validate` | `lint` | 25 min | changes | Go fmt, tidy, vet, lint, tool-version parity (golangci-lint pin across Makefile/ci.yml/docs), govulncheck doc parity; `sync-versions.sh check`; `scripts/gen-builders.sh check` (fails when the generated constructor wrappers under `pkg/kubernetes` are stale against the registered scheme); syntax-check on the version-sync scripts, `sh -n` or `bash -n` per each script's own shebang; `scripts/test/run-tests.sh` (hermetic mutation-matrix guard tests for `sync-versions.sh`'s own six guards, no network); caches goimports + yq binaries |
 | `action-pins` | `action-pins` | 2 min | — | Fails if any third-party `uses:` ref is not pinned to a 40-char commit SHA (`go-kure/.github` canonical checker) |
-| `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard against `go-kure/.github` at a ref derived from the guard action's own pin (go-kure/kure#813) |
+| `forbidden-terms` | `forbidden-terms` | 2 min | — | Runs the canonical full-tree downstream-reference guard on every workflow event and verifies the vendored release guard and release guide against `go-kure/.github` at a ref derived from the guard action's own pin (go-kure/kure#813) |
 | `test` | `test` | 20 min | changes | Unit tests with race detection and coverage; `-race` compilation takes ~5 min on the in-cluster runner, so 20 min allows compilation + 15 min for test execution |
 | `security` | `Security` | 15 min | changes | govulncheck (`-scan symbol`, v1.8.0), gated on reachable advisories via the canonical `govulncheck-gate` action from `go-kure/.github` — blocking, not informational |
 | `coverage-check` | `Coverage Check` | 5 min | test | Two separate gates — 90% total coverage, and 90% on each individual package — plus Codecov upload and PR comment |
@@ -254,9 +252,10 @@ temporary branch — the merged result — before the PR is allowed to land.
   comes from `site/hugo.toml`'s `baseURL`. The step runs `--self-test` first, which pins the URL
   classifier and those failure paths against a synthetic tree
 - **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
-  tracked tree and keeps the release script's vendored guard byte-identical to the canonical
-  action, checked out at a ref derived from that action's own `uses:@<sha>` pin rather than a
-  second, independently-tracked pin (go-kure/kure#813)
+  tracked tree and keeps the release script's vendored guard and the vendored release guide
+  (`docs/releasing.md`) byte-identical to their canonical files, checked out at a ref derived from
+  the guard action's own `uses:@<sha>` pin rather than a second, independently-tracked pin
+  (go-kure/kure#813)
 - **Pin-impact gate** - `pin-impact` renders a `go-kure/.github` pin bump's real effect (which
   `scripts/*.sh` a referenced action actually runs, whether the compare touches any of them) into
   the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed
@@ -420,506 +419,25 @@ commit (see [Triggers](#triggers)).
 
 ---
 
-## Release / Create Workflow
-
-**File:** `.github/workflows/release-create.yml`
-**Name:** `Release / Create`
-
-### Triggers
-
-- Manual dispatch with input: `dry_run` (boolean)
-
-### How It Works
-
-The release type is **auto-inferred from the VERSION file** by `release.sh`. No `type` or `scope` inputs are needed. The regression guard in `release.sh` blocks invalid transitions automatically.
-
-### Pre-release Test Gate
-
-The workflow runs a full test suite (with race detection) **before** creating the tag. This prevents tags from being pushed when tests fail.
-
-```
-workflow_dispatch
-  → test job (go test -race ./...)
-    → release job (needs: test)
-      → release.sh (auto-infer type from VERSION) → creates tag + pushes
-        → triggers release-publish.yml (tag push)
-```
-
-If the pre-release test fails, the release job never runs and no tag is created.
-
-### Jobs
-
-1. **test** — Full test run with race detection and CGO enabled (`build-essential` + `CGO_ENABLED=1`)
-2. **release** — Runs `scripts/release.sh` to generate changelog, commit, create tag, and push.
-   The changelog step renders only the section for the version being cut
-   (`git-cliff --unreleased --tag <version> --prepend CHANGELOG.md`) and inserts it below the header.
-   Published sections are never regenerated, so a later `cliff.toml` postprocessor change cannot
-   rewrite them (go-kure/kure#774). Nothing else writes `CHANGELOG.md`; `changelog-preview` only
-   prints the unreleased entries.
-
-### Authentication
-
-Uses a GitHub App token (`RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`) so that the tag push triggers subsequent workflows (tag-triggered `release-publish.yml`).
-
-### Usage
-
-```bash
-# Preview release (auto-infer from VERSION)
-./scripts/release-trigger.sh
-
-# Create release via CI:
-#   Actions > "Release / Create" > Run workflow (type is auto-inferred)
-```
-
----
-
-## Release / Promote Workflow
-
-**File:** `.github/workflows/release-promote.yml`
-**Name:** `Release / Promote`
-
-### Triggers
-
-- Manual dispatch with inputs: `to` (beta/rc/stable) and `dry_run`
-
-### Purpose
-
-Explicit type transition (e.g., beta → rc). The regression guard in `release.sh` blocks invalid downgrade transitions (e.g., rc → beta will fail with an error).
-
-### Usage
-
-```bash
-# Preview promotion to rc
-./scripts/release-trigger.sh promote rc
-
-# Execute via CI:
-#   Actions > "Release / Promote" > to=rc > Run workflow
-./scripts/release-trigger.sh promote rc --do-it
-```
-
----
-
-## Release / Bump Workflow
-
-**File:** `.github/workflows/release-bump.yml`
-**Name:** `Release / Bump`
-
-### Triggers
-
-- Manual dispatch with inputs: `scope` (minor/major/prerelease) and `dry_run`
-
-### Purpose
-
-Advance the version cycle without creating a tag. Use before starting a new prerelease cycle (e.g., after a stable release, to begin the next minor version's alpha).
-
-### Usage
-
-```bash
-# Preview minor version bump
-./scripts/release-trigger.sh bump minor
-
-# Execute via CI:
-#   Actions > "Release / Bump" > scope=minor > Run workflow
-./scripts/release-trigger.sh bump minor --do-it
-```
-
----
-
-## Release / Publish Workflow
-
-**File:** `.github/workflows/release-publish.yml`
-**Name:** `Release / Publish`
-
-### Triggers
-
-- Push tags: `v*` (e.g., v1.0.0, v0.1.0-beta.2)
-- `workflow_dispatch` — manual re-publish of an existing tag
-
-#### Re-publishing a tag after a failed run
-
-**Scope: runs that failed _before_ `goreleaser` created the GitHub release.** `goreleaser` runs
-ahead of `deploy-docs` and `post-release` (see Jobs below) and publishes a non-draft release, so a
-failure in either of those later jobs leaves the release object already created. Dispatching a
-fresh publish in that case would redo release publication instead of recovering the failed step.
-Check before doing anything:
-
-```bash
-gh api repos/go-kure/kure/releases/tags/<tag> > /dev/null
-echo "rc=$?"
-```
-
-This is the same probe `guard-tag-ref` runs, so the two read the same evidence, and it has exactly
-**three** outcomes — not two:
-
-| Outcome | Meaning | What to do |
-| --- | --- | --- |
-| `rc=0` | The release exists | Continue below. It does **not** mean publication succeeded |
-| `rc≠0` **and** the message contains `(HTTP 404)` | The release is provably absent | Go to the recovery table below |
-| `rc≠0` with any other message — `HTTP 401`, `HTTP 403`, a rate-limit notice, a network error | **Undetermined.** Authentication, rate limiting and transient API failures all land here | **Stop.** Fix access and re-run the probe |
-
-**An undetermined answer is not an absent release.** Treating it as one enters the no-release
-recovery below against a tag that may already be published, which is the state that recovery is
-supposed to avoid creating. `guard-tag-ref` refuses on exactly this distinction rather than reading
-any non-zero exit as absence; the procedure holds itself to the same standard. Re-running the probe
-after `gh auth status` clears it in the ordinary case, and a persistent undetermined answer is an
-escalation — you cannot establish the release state, so you cannot choose a recovery.
-
-Once `rc=0`, do **not** conclude the publish succeeded — `goreleaser` creates the release object
-before it finishes. Read the **job conclusions** of the publish run:
-
-```bash
-gh run view <run-id> --repo go-kure/kure --json attempt,startedAt,jobs \
-  --jq '.startedAt as $a | "attempt \(.attempt) started \($a)",
-        (.jobs[] | "  \(.name): \(.conclusion)"
-                 + (if .startedAt < $a then "   <- CARRIED OVER (started \(.startedAt))" else "" end))'
-```
-
-Run against `v0.2.0-beta.11`'s publish run that prints:
-
-```
-attempt 3 started 2026-09-11T06:08:55Z
-  release / Test: failure
-  release / Validate tag and changelog: success   <- CARRIED OVER (started 2026-09-10T18:04:11Z)
-  release / goreleaser: skipped
-  release / post-release: skipped
-  release / Deploy versioned docs: skipped
-```
-
-> ⚠ **A re-run makes the job list a mixture of attempts, and the default output does not say so.**
-> `gh run view` reports the latest attempt, and a re-run of failed jobs carries the jobs it did not
-> re-run into that attempt unchanged — original conclusion, original timestamps. Above, `Validate
-> tag and changelog` is listed under attempt 3 while reporting attempt 1's start.
->
-> **No job goes missing.** The hazard is the opposite and worse: a missing job sends you looking and
-> you notice, whereas a carried-over row hands you a conclusion from an attempt you are not looking
-> at, and it reads exactly like a current one. A carried-over `goreleaser: success` describes a
-> publication that happened in some earlier attempt, not the one you are recovering.
->
-> The comparison is what the `--jq` above does for you — the run-level `startedAt` is the attempt's
-> own start, so any job starting before it belongs to an earlier attempt. Do not do this by eye; the
-> two timestamps differ by a field the bare `--json jobs` form never prints.
-
-Add `--attempt <n>` to inspect an older attempt; without it the command reports the latest one.
-
-> ⛔ **`goreleaser: skipped` in the latest attempt does not mean it never ran.** It declares
-> `needs: [test, validate]`, so *any* re-run whose `test` fails skips it again — while a release
-> object created by an **earlier** attempt is still there. A `skipped` publisher next to an existing
-> release means the two disagree, which is an escalation rather than a conclusion about publication.
-
-**Confirm the run you are reading published this tag.** The run id is supplied independently of the
-tag, and both tag pushes and manual dispatches create publish runs, so nothing so far has tied the
-two together:
-
-```bash
-gh run view <run-id> --repo go-kure/kure --json headBranch,headSha,event
-```
-
-`headBranch` carries the tag name on a tag-triggered run — `v0.2.0-beta.11`'s publish run reports
-`headBranch: v0.2.0-beta.11` and `headSha: 38f721dd6e14bce266b667cf4fde5f7d6430cbcf`, the tagged
-commit. **If `headBranch` is not the tag you are recovering, you are reading the wrong run.**
-
-> ⛔ **Never infer completeness from the release's asset count in this repo.** kure is a Go library:
-> `.goreleaser.yml` sets `builds: skip: true` and `checksum: disable: true` and declares no SBOM or
-> signing stanza, so **a fully successful kure release carries zero assets.** The tag is the
-> artifact — `go get` resolves from the tag, not from the release object. An asset count cannot
-> distinguish a complete release from one whose `goreleaser` job died right after creating it, and
-> reading zero assets as "artifacts are missing" is wrong here.
-
-**If the release object exists, this runbook covers exactly one recovery.** It applies when
-`goreleaser` concluded `success` in the attempt you are reading and only a follow-up job failed:
-
-- **`goreleaser` concluded `success`** — publication finished and only a follow-up job failed.
-  Do not re-publish; recovery depends on why the follow-up failed:
-  - *Transient failure, and the follow-up job concluded `failure`* —
-    `gh run rerun --failed <run-id>`. This does not re-run `goreleaser`:
-    `--failed` re-runs the failed jobs and the jobs *downstream* of them, carrying successful
-    upstream jobs over untouched. Measured on `v0.2.0-beta.11`'s run — attempt 3 lists
-    `Validate tag and changelog: success` with attempt 1's `started_at`, unchanged, even though it
-    is a declared `needs:` of a job that was re-run. (The `--failed` help text reads "including
-    dependencies", which invites the opposite reading; the API endpoint is `rerun-failed-jobs`.)
-  - *Transient failure, but the follow-up job concluded `cancelled` or `timed_out`* — **`--failed`
-    selects nothing and the command reports success having re-run no job at all**, because it
-    selects only jobs whose conclusion is `failure` (the same mechanism the recovery table below
-    splits its rows on). A full re-run is not the answer either: it would redo publication against
-    the release that already exists. Drive the follow-up work directly, exactly as in the next
-    bullet.
-  - *The shared workflow itself needs a fix* — `--failed` pins the reusable workflow to the first
-    attempt's SHA and so cannot pick the fix up, while a full re-run would redo publication against
-    the release that already exists. Neither works. Drive the follow-up work directly instead:
-
-    ```bash
-    # deploy-docs. --ref is required: without it the workflow runs from the default branch and
-    # deploys main's content into the version slot. set_latest defaults to false, so pass true
-    # only when this tag is the latest stable.
-    gh workflow run deploy-docs.yml --repo go-kure/kure --ref <tag> \
-      -f version_slot=<slot> -f version_label=<tag> -f set_latest=<true|false>
-
-    # post-release (Go proxy refresh) — request the module so the proxy fetches it
-    curl -fsS https://proxy.golang.org/github.com/go-kure/kure/@v/<tag>.info
-    ```
-
-    > ⚠ **Known limitation — this does not recover a broken `deploy-docs.yml`.** `--ref` selects
-    > both the workflow version *and* the content: `deploy-docs.yml` takes `version_slot`,
-    > `version_label` and `set_latest` only, and its checkout has no `ref:`, so it builds whatever
-    > the event ref points at. If the docs deploy failed because `deploy-docs.yml` or a docs script
-    > **at that tag** is itself faulty, `--ref <tag>` re-runs the faulty version, and omitting
-    > `--ref` builds `main`'s content into the version slot. There is no combination that pairs a
-    > fixed workflow with the tag's content. Closing that needs a checkout-ref input on
-    > `deploy-docs.yml`; until then this bullet only covers a *transient* or *environmental* docs
-    > failure, not a defect baked into the tag.
-
-**Every other shape stops here — escalate, do not delete.** A release object that exists while
-`goreleaser` concluded anything other than `success` — `failure`, `cancelled`, `timed_out`,
-`action_required`, or `skipped` in every attempt — means the release and the job that should own it
-disagree. Resolving that requires deciding whether the object is this run's to remove, and every
-signal available from the command line is too weak to carry a deletion:
-
-- `author` does not separate two runs of the same automation, and a release created through the
-  automation's token by a human action reads as the automation.
-- A `publishedAt` inside a `goreleaser` execution window needs both ends of that window, and picking
-  *which* attempt's window to compare against is itself the question being asked.
-- `createdAt` is not the release object's creation time at all — **it tracks the tag.** On
-  `v0.2.0-beta.11` it reads `2026-09-10T18:03:56Z`, before the publish run started, while the object
-  was created at `publishedAt: 2026-09-11T07:41:30Z` by `author: srgvg`, a human. That release is
-  exactly this case: hand-created after three publish runs failed.
-
-Collect the tag, the run id, and the job conclusions from the command above — repeated with
-`--attempt <n>` for each earlier attempt — and hand them to a maintainer. **Do not delete the
-release object, and never move or delete the tag.** Deleting the wrong release is unrecoverable in
-a way that waiting is not, and a release object can be replaced by hand once its provenance is
-settled.
-
-> Determining this state reliably is tracked as an extraction into a tested script shared by both
-> repos, rather than a procedure re-derived by a reader — see `go-kure/.github#205`.
-
-> ⚠ **The wrapper's own guard does not backstop you here.** `guard-tag-ref` refuses a re-publish
-> over a tag that already has a release, and that check runs on every path — dispatch, first tag
-> push, and every re-run alike. It still does not reach this state, for a reason that has nothing to
-> do with which paths it covers: on
-> `gh run rerun --failed`, GitHub reschedules only jobs that concluded `failure` and their
-> downstream jobs — `guard-tag-ref` concluded `success`, so it is carried over and none of its steps
-> run, while the carried-over result still satisfies `release`'s `needs:`. A `--failed` re-run of a
-> publisher that failed *after* creating the release object therefore re-enters publication with the
-> probe never evaluated. This is why the state above is an escalation and not a self-service re-run:
-> the escalation is the control, not the guard. A release-existence probe inside the shared
-> publisher — which `--failed` does reschedule — is the durable fix and belongs in
-> `go-kure/.github`.
-
-If the release does **not** exist, recover it. Which path applies depends on why the run failed:
-
-| Situation | Recovery |
-| --- | --- |
-| Transient, `goreleaser` concluded `failure`; the shared workflow needs no change | `gh run rerun --failed <run-id>` |
-| Transient, but `goreleaser` was `skipped` because an upstream job (`test`, `validate`) concluded `failure` | `gh run rerun --failed <run-id>` — the upstream failure is what to recover. `goreleaser` re-runs as a job downstream of it, so no separate step is needed |
-| Transient, but `goreleaser` was `skipped` because an upstream job concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` would select neither the upstream job nor its skipped publisher, so nothing re-runs at all |
-| Transient, but `goreleaser` itself concluded `cancelled` or `timed_out` | `gh run rerun <run-id>` — a **full** re-run. `--failed` selects jobs whose conclusion is `failure`, so a publisher that concluded some other way is never re-run and the release stays absent while the run reports done |
-| `guard-tag-ref` itself concluded `failure` — its release probe could not reach the API, so it exited with `could not determine whether <tag> already has a release` rather than a 404 | `gh run rerun --failed <run-id>`. The guard is wrapper-local, not one of the publisher's jobs, so the `test`/`validate` row above does not cover it. It concluded `failure`, so `--failed` selects it, and `release` re-runs as a job downstream of it. The probe is re-evaluated on the new attempt, so a release created in the meantime is still caught, and an answer that is *still* undetermined refuses again rather than proceeding — the first-publication waiver does not apply to a re-run |
-| The shared workflow needed a fix, and the failed run is under 30 days old | `gh run rerun <run-id>` — a **full** re-run, not `--failed` |
-| No failed run remains, or it is over 30 days old | `gh workflow run release-publish.yml --repo go-kure/kure --ref <tag>` |
-
-The full-versus-failed distinction is load-bearing. GitHub resolves a reusable workflow referenced
-by branch differently per re-run mode: re-running **all** jobs uses the called workflow from the
-specified reference — here `@main`, so it picks up a fix — while re-running **failed jobs or a
-single job** uses the called workflow from the commit SHA of the first attempt, so it does not.
-Re-runs stay available for 30 days after the initial run.
-
-> ⚠ **Every re-run row above holds only while fewer than two newer `v*` tags exist.** A re-run
-> refreshes the workflow but **keeps the original event**, so a re-run of a tag-push run is still
-> `event=push` — and the shared publisher exempts only `workflow_dispatch` from its
-> version-progression check (`go-kure/.github` `release-publish.yml:89-98`). That check derives the
-> previous tag as `git tag --list 'v*' --sort=-v:refname | sed -n '2p'`, which picks a tag *newer*
-> than the one being recovered as soon as two or more newer tags exist; `validate` then exits 1 and
-> `goreleaser` never runs, because it declares `needs: [test, validate]`. With exactly one newer
-> tag, position 2 is the recovered tag itself and the check passes against itself — so the failure
-> is latent until the second newer tag lands.
->
-> This is the same mechanism that made dispatch unusable before `go-kure/.github#204`, reaching the
-> re-run paths instead, which that fix does not cover. **If two or more newer `v*` tags exist, skip
-> the re-run rows and use the dispatch row**, which is exempt. Check before choosing a row:
->
-> ```bash
-> git tag --list 'v*' --sort=-v:refname | grep -n -m3 .
-> ```
->
-> If the tag you are recovering is not in position 1 or 2, only dispatch will work.
-
-The dispatch row depends on the shared workflow skipping its version-progression check for
-`workflow_dispatch`. That check derives the previous tag as the second entry of
-`git tag --sort=-v:refname`, which assumes the tag being released sorts first — true for a pushed
-tag, false for a re-publish. Without the skip, a dispatch of an older tag fails `validate` as soon
-as **two or more** newer tags exist (with exactly one, position 2 is the tag itself and the check
-passes), and `goreleaser` never runs because it declares `needs: [test, validate]` — breaking the
-dispatch path in precisely the long-lived case it exists for.
-
-The tag itself must never be moved or deleted to force a fresh `push` event.
-
-On the dispatch path, `--ref` must be the tag being published: the shared workflow checks out
-`github.ref`, so dispatching from a branch would build that branch rather than the release. The
-wrapper-local `guard-tag-ref` job refuses a non-tag ref outright rather than skipping, so a
-mistaken dispatch fails loudly instead of leaving a green-looking run, and it also refuses a tag
-that already has a release — re-publishing over a live release object is outside the recovery scope
-above, and neither the UI nor the CLI enforces that on its own. That second check needs the release
-to be provably absent: a `404` proceeds and an existing release refuses. An API error that answers
-neither is treated as *undetermined* — never as absence — and on a re-publication it refuses too.
-
-The check itself runs on **every** path — dispatch, first tag push, and every re-run. What differs
-between them is only what an undetermined answer does. On attempt 1 of a tag push it warns and
-proceeds; everywhere else it refuses. A first publication must not be blocked by an API hiccup,
-while a re-publication that cannot establish the release state is exactly the case where proceeding
-mutates something live.
-
-The probe retries up to three times before an answer counts as undetermined, so that waiver rides
-on a persistent outage rather than a single blip. It still leaves a residual hole, recorded here
-rather than hidden: if a concurrent dispatch published the tag **and** the API cannot answer, the
-existing-release refusal never fires and the push run proceeds over a live release. That is
-accepted — refusing instead would block every first publication on an API outage — and it is
-strictly narrower than the previous behaviour, which skipped the probe on this path entirely and so
-missed the race whatever the API was doing. Closing it needs a probe inside the shared publisher,
-atomic with the publication it guards.
-
-An existing release refuses on every path, attempt 1 of a tag push included, because that attempt
-is not always a first publication. The wrapper's `concurrency` group serialises runs for one tag
-without making the later one re-check what the earlier one did: a dispatch for a freshly pushed tag
-can take the slot first and publish, leaving the queued push run to arrive at a tag that now has a
-release while still reporting `event_name == 'push'` and `run_attempt == 1`. Skipping the check
-there would make the second serialised publication the one path the guard could not see.
-
-The attempt is part of the test, not just the event, because a re-run replays the *original* event
-context — `github.event_name` stays `push` on attempt 2. Keying on the event alone would let the
-full re-run prescribed above take the first-publication branch and waive an undetermined answer on
-a tag an earlier attempt may already have published. This is the same frozen-event-context
-behaviour that stops the shared publisher's `workflow_dispatch` exemption from covering a re-run,
-noted in the re-run caveat above.
-
-That probe is not atomic with the publication it guards, so the wrapper carries its own
-`concurrency` group (`release-publish-wrapper-<ref>`, `cancel-in-progress: false`). The shared
-publisher's own `release-<ref>` group covers only the called workflow's jobs, which leaves
-`guard-tag-ref` outside it — without the wrapper group, two dispatches of one tag could both probe
-while the release was still absent and the second would republish over the first. The wrapper group
-is deliberately named differently from the publisher's: a called workflow's concurrency is evaluated
-in the caller's context, so reusing the name would risk the wrapper holding a group its own
-`release` job then waits on.
-
-> ⚠ **Known limitation — a wrapper broken _at the tag_ is not recoverable by either path.** The
-> trigger has to be present in `.github/workflows/release-publish.yml` *at that tag*, so dispatch
-> only works for tags cut after it was added — and that is the specific case of a general one.
-> `gh workflow run --ref <tag>` takes the workflow file from `<tag>`, and a full re-run re-resolves
-> only the *called* `@main` workflow while still using the wrapper from the original run's commit.
-> So if the wrapper itself is faulty at that tag, every documented path runs the faulty version.
-> Same shape as the `deploy-docs.yml` limitation above, and the same remedy is out of scope here:
-> closing it needs a default-branch recovery workflow taking the target tag as an input. Until
-> then this is an escalation, not a self-service recovery.
-
-> ⚠ **Recovering an older *stable* tag rolls back two separate `latest` pointers.** They have
-> different owners and need repairing separately.
->
-> **The docs site.** A successful publish triggers `deploy-docs.yml` with `set_latest=true`
-> unconditionally — the shared publisher hardcodes it (`go-kure/.github` `release-publish.yml:191`)
-> rather than comparing the tag against the newest release. So recovering `v1.2.0` after `v1.3.0`
-> has already shipped republishes the `v1.2` slot *and* repoints the docs `latest` at `v1.2.0`.
-> Nothing fails; the docs site simply regresses.
->
-> **GitHub's Latest release.** `.goreleaser.yml` does not set `make_latest`, so it keeps GoReleaser's
-> default of `true` and every publish claims the Latest-release pointer. Recovering `v1.2.0` after
-> `v1.3.0` therefore also moves `/releases/latest` back to `v1.2.0`. kure is a library and its
-> releases carry no assets, so nothing downloads the wrong file — what regresses is the release
-> notes and version that `/releases/latest`, the repository landing page and anything reading that
-> endpoint report as current. Again nothing fails.
->
-> Both only fire on stable tags, for different reasons — so neither is a check the other covers.
-> The docs job is gated `if: "!contains(github.ref_name, '-')"` (`release-publish.yml:172`), so a
-> prerelease such as `v0.2.0-beta.11` never triggers a docs deploy at all. The release pointer is
-> separately safe because `.goreleaser.yml` sets `prerelease: auto`, and GitHub never points Latest
-> at a release marked prerelease. Recovering a prerelease is unaffected either way.
->
-> **When recovering a stable tag that is not the newest stable tag, re-deploy the docs afterwards**
-> so `latest` points where it should. **The two deploys do not serialise — wait for the recovered
-> tag's own `Deploy Docs` run to conclude before starting the corrective one.** `deploy-docs.yml`
-> scopes `concurrency` per version slot (`group: deploy-docs-${{ inputs.version_slot || 'dev' }}`,
-> `deploy-docs.yml:35-37`), so a deploy for the old slot and one for the new slot sit in *different*
-> groups and run at the same time. Both check out `go-kure/go-kure.github.io` independently and end
-> in a plain `git push` with no retry (`deploy-docs.yml:199-200`), so the second one to push fails
-> non-fast-forward and its content is never applied. If the corrective deploy is the one that loses,
-> `latest` stays pointing at the older tag — and the run you are most likely to be looking at, the
-> republish, is green.
->
-> ```bash
-> # 1. Wait for the recovered tag's docs deploy. The republish creates it, so it may not be listed
-> #    for a few seconds -- re-run the list until a run appears rather than watching an older id.
-> gh run list --repo go-kure/kure --workflow deploy-docs.yml \
->   --branch <recovered-tag> --limit 5
-> gh run watch <id-of-the-in-flight-run> --repo go-kure/kure
->
-> # 2. Then re-point the docs latest at the newest stable tag.
-> gh workflow run deploy-docs.yml --repo go-kure/kure --ref <newest-stable-tag> \
->   -f version_slot=<newest-minor> -f version_label=<newest-stable-tag> -f set_latest=true
->
-> # 3. Wait for THAT run too. `gh workflow run` dispatches and returns; it does not wait. The
-> #    corrective deploy ends in the same unretried `git push` as the one above, so it can lose a
-> #    race of its own and leave the docs root on the older version while every later step reports
-> #    success.
-> gh run list --repo go-kure/kure --workflow deploy-docs.yml \
->   --branch <newest-stable-tag> --limit 5
-> gh run watch <id-of-the-in-flight-run> --repo go-kure/kure
->
-> # 4. Independently, re-mark the newest stable release as GitHub's Latest. This is a separate
-> #    pointer from the docs slot above and step 2 does not touch it.
-> gh release edit <newest-stable-tag> --repo go-kure/kure --latest
->
-> # 5. Confirm. With no tag argument this resolves through /releases/latest -- the same endpoint
-> #    consumers read -- so it checks the pointer rather than the request.
-> gh release view --repo go-kure/kure --json tagName --jq .tagName
-> ```
->
-> Confirm **both** docs deploys from their own run logs rather than from `gh run watch`, which exits
-> `0` on a red run. Steps 4 and 5 need no run to watch — `gh release edit` applies immediately.
->
-> Step 4 is safe to run unconditionally, including when you are unsure whether the pointer moved:
-> re-marking the tag that is already Latest is a no-op.
->
-> Making the publisher skip `set_latest` for a non-newest tag, and setting `make_latest` from the
-> same comparison, are the durable fixes for the two halves. Both belong in `go-kure/.github` and
-> `.goreleaser.yml` respectively, not in this procedure.
-
-### Jobs
-
-1. **guard-tag-ref** - Fails the run unless `github.ref` is a `v*` tag, and — on every path —
-   also unless the tag has no release yet. An answer the probe cannot determine refuses too,
-   except on attempt 1 of a tag push, where it warns and proceeds so an API hiccup cannot block a
-   first publication (wrapper-local; blocks the publisher when a dispatch names a branch, or when
-   any run would re-publish over a live release). Takes `contents: read` only, not the publisher's
-   write scopes
-2. **test** - Full test run with race detection
-3. **validate** - Strict tag format, changelog, and version progression validation
-4. **goreleaser** - Create the GitHub release object. kure is a library, so `.goreleaser.yml` skips
-   builds and disables checksums and declares no SBOM or signing stanza: **no artifacts are
-   produced and a successful release carries zero assets**
-5. **deploy-docs** - Trigger versioned docs deployment (stable tags only)
-6. **post-release** - Go proxy refresh
-
-### Configuration
-
-- Go Version: read from `mise.toml`
-- Tag Format: `^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+|-beta\.[0-9]+|-rc\.[0-9]+)?$`
-- Changelog: Required (must have `## [0.1.0]` section — version without `v` prefix, in square brackets)
-
-### Release Management
-
-```bash
-# Preview release (auto-infer from VERSION)
-./scripts/release-trigger.sh
-
-# Preview type promotion
-./scripts/release-trigger.sh promote rc
-
-# Preview version bump
-./scripts/release-trigger.sh bump minor
-
-# Execute via CI (add --do-it to any of the above)
-./scripts/release-trigger.sh --do-it
-./scripts/release-trigger.sh promote rc --do-it
-./scripts/release-trigger.sh bump minor --do-it
-```
+## Releasing
+
+**Release** (`.github/workflows/release.yml`) is the one manual release workflow: pick the branch,
+what to do, and whether it is a dry run. It calls `go-kure/.github`'s shared `release.yml`, whose
+script makes the release commits, the tag and, when `main` moves to a new line, the release branch.
+**Release / Publish** (`.github/workflows/release-publish.yml`) then runs by itself on the tag.
+How to release, what each option does, release branches and the recovery procedure for a failed
+publish are on the [Releasing](/contributing/releasing/) page, which is the same text in every
+go-kure repository: `docs/releasing.md` is vendored from `go-kure/.github` and CI's
+`forbidden-terms` job byte-compares it at the pinned revision.
+
+What is specific to kure:
+
+- **What Publish produces:** a GitHub release object and nothing else. kure is a library, so
+  `.goreleaser.yml` skips builds, disables checksums and declares no SBOM or signing stanza: **a
+  complete release carries zero assets**; the tag is the artifact.
+- **`guard-tag-ref`:** the wrapper's own job refuses a `workflow_dispatch` on anything but a `v*`
+  tag before the privileged publisher starts. The check that a tag has no release yet runs inside
+  the shared publisher.
 
 ---
 
@@ -1037,7 +555,7 @@ The workflow uses `continue-on-error: true` so review failures never block PR me
 
 Per-slot concurrency group (`deploy-docs-<slot>`) with `cancel-in-progress: false` — two deploys **to the same slot** queue rather than cancel, so neither is dropped.
 
-**This does not serialise deploys to *different* slots, and they are not independent.** The group name includes the slot, so a `v1.2` deploy and a `v1.3` deploy sit in different groups and run at the same time. Both check out the same docs repository and both end in a plain `git push` with no retry (`deploy-docs.yml:199-200`), so the second to push fails non-fast-forward and its content is never applied — a real race, just not one this concurrency key can see. Sequence cross-slot deploys yourself: wait for the first to conclude before starting the second. The release-recovery procedure above does exactly that, and explains why the run you are most likely to be looking at is the one that stays green.
+**This does not serialise deploys to *different* slots, and they are not independent.** The group name includes the slot, so a `v1.2` deploy and a `v1.3` deploy sit in different groups and run at the same time. Both check out the same docs repository and both end in a plain `git push` with no retry (`deploy-docs.yml:199-200`), so the second to push fails non-fast-forward and its content is never applied — a real race, just not one this concurrency key can see. Sequence cross-slot deploys yourself: wait for the first to conclude before starting the second, as the recovery procedure on the [Releasing](/contributing/releasing/) page does.
 
 ### Preservation
 
@@ -1085,8 +603,8 @@ The docs site supports multiple documentation versions at different URL paths.
 
 | Path | Content | Updated By |
 |------|---------|------------|
-| `/` | Latest stable release | Release workflow (`set_latest=true`) |
-| `/vX.Y/` | Specific stable version | Release workflow or manual dispatch |
+| `/` | Latest stable release | Release / Publish of the highest stable tag (`set_latest=true`) |
+| `/vX.Y/` | Specific stable version | Release / Publish of the line's highest stable tag, or manual dispatch |
 | `/dev/` | Development (from `main`) | Every push to `main` that touches docs |
 
 ### Version Switcher

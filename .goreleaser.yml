@@ -15,6 +15,10 @@ release:
     name: kure
   draft: false
   prerelease: auto
+  # Set by the shared publisher on every run: true only for the highest stable
+  # tag, so a prerelease, or a patch below a newer line's stable tag, never
+  # becomes GitHub's Latest.
+  make_latest: "{{ .Env.MAKE_LATEST }}"
 
 # Disable built-in changelog — we use git-cliff for CHANGELOG.md.
 changelog:

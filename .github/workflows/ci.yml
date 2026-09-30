@@ -406,6 +406,12 @@ jobs:
     - name: Verify vendored guard matches canonical
       run: diff -u .tmp/go-kure-dot-github/scripts/check-forbidden-terms.sh site/scripts/check-forbidden-terms.sh
 
+    # The release guide is written once, in go-kure/.github, and published by
+    # every repository that releases with the shared workflow; this copy is
+    # re-vendored by scripts/vendor-guard.sh at the same pin as the guard.
+    - name: Verify vendored release guide matches canonical
+      run: diff -u .tmp/go-kure-dot-github/standards/release-process.md docs/releasing.md
+
   pin-impact:
     name: pin-impact
     runs-on: autops-kube-kure

@@ -1,0 +1,40 @@
+name: Release
+
+# The one manual release workflow: pick the branch, what to do, and whether it
+# is a dry run. Release / Publish then runs by itself on the tag this pushes.
+# The work happens in go-kure/.github's shared workflow and its release script;
+# docs/releasing.md explains every option.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'What to do'
+        required: true
+        type: choice
+        default: release
+        options:
+          - release
+          - release-as-beta
+          - release-as-rc
+          - release-as-stable
+          - start-next-minor
+          - start-next-major
+          - skip-prerelease-number
+      dry_run:
+        description: 'Dry run: preview only, change nothing'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    uses: go-kure/.github/.github/workflows/release.yml@main
+    with:
+      action: ${{ inputs.action }}
+      dry_run: ${{ inputs.dry_run }}
+    secrets: inherit
