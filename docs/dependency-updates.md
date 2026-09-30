@@ -469,20 +469,21 @@ reach another bundle's objects. A bump can therefore change which patches kure r
 two on the same version, and review a bump against the patch-scope tests
 (`TestGenerateFromLayout_Patch*`) as well as the written-tree builds.
 
-### Vendored `go-kure/.github` Guard
+### Vendored `go-kure/.github` Files
 
-`.github/workflows/ci.yml`'s `forbidden-terms` job byte-compares a vendored copy,
-`site/scripts/check-forbidden-terms.sh`, against the canonical script in `go-kure/.github`,
-checked out at a ref the job resolves from the `check-forbidden-terms` action's own
-`uses:@<sha>` pin — the single pin Renovate's `github-actions` manager already tracks.
-No second, independently-tracked pin exists to drift out of step with it.
+`.github/workflows/ci.yml`'s `forbidden-terms` job byte-compares two vendored copies against
+their canonical files in `go-kure/.github`: `site/scripts/check-forbidden-terms.sh` (from
+`scripts/check-forbidden-terms.sh`) and the release guide `docs/releasing.md` (from
+`standards/release-process.md`). Both are checked out at a ref the job resolves from the
+`check-forbidden-terms` action's own `uses:@<sha>` pin — the single pin Renovate's
+`github-actions` manager already tracks. No second, independently-tracked pin exists to drift out
+of step with it. Edit the guide in `go-kure/.github`, never here.
 
 `renovate.json`'s `matchDepNames: ["go-kure/.github"]` `packageRules` entry runs
 `postUpgradeTasks: ./scripts/vendor-guard.sh` on the bot's branch whenever that dependency
 bumps. `vendor-guard.sh` extracts the same `uses:@<sha>` pin the CI resolver step uses,
-re-fetches `scripts/check-forbidden-terms.sh` from `go-kure/.github` at that revision, and
-re-vendors it to `site/scripts/`. The script is idempotent — a re-run against an
-already-synced tree makes no further change.
+re-fetches both files from `go-kure/.github` at that revision, and re-vendors them. The script
+is idempotent — a re-run against an already-synced tree makes no further change.
 
 See [go-kure/.github's docs/standards.md § "Adopting the trusted Actions lane"](https://github.com/go-kure/.github/blob/main/docs/standards.md#adopting-the-trusted-actions-lane)
 for the full mechanism, and go-kure/kure#813 for the original migration off a two-pin design.

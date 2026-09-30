@@ -58,16 +58,12 @@ run = "sh scripts/check-govulncheck-docs.sh"
 description = "Sync govulncheck doc mentions (docs/github-workflows.md) from ci.yml"
 run = "sh scripts/sync-govulncheck-docs.sh"
 
-# No task writes CHANGELOG.md: scripts/release.sh prepends each release's
-# section and published sections are never regenerated (go-kure/kure#774).
+# No task writes CHANGELOG.md: the shared Release workflow's release script
+# prepends each release's section and published sections are never
+# regenerated (go-kure/kure#774). Releasing: docs/releasing.md.
 [tasks.changelog-preview]
 description = "Preview changelog changes"
 run = "git cliff --unreleased"
-
-[tasks.release]
-description = "Release workflow (dry-run by default, --do-it to trigger CI)"
-run = "./scripts/release-trigger.sh"
-raw = true
 
 [tasks."versions:check"]
 description = "Validate version consistency across all files"

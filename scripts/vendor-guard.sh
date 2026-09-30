@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# vendor-guard.sh — keep the vendored copy of go-kure/.github's forbidden-terms
-# guard in sync with the check-forbidden-terms action pin in
-# .github/workflows/ci.yml.
+# vendor-guard.sh — keep the vendored copies of go-kure/.github's forbidden-terms
+# guard and release guide (docs/releasing.md) in sync with the
+# check-forbidden-terms action pin in .github/workflows/ci.yml.
 #
 # .github/workflows/ci.yml's forbidden-terms job checks out go-kure/.github a
 # second time (to byte-compare the vendored guard against its canonical
@@ -9,13 +9,13 @@
 # action's own `uses:@<sha>` pin (go-kure/kure#813) — the same single pin
 # Renovate's github-actions manager already tracks, so there is nothing left
 # for this script to independently extract from a second `ref:` literal.
-# This script re-fetches the canonical guard script from go-kure/.github at
-# that same pin and re-vendors it, so the vendored copy and the pin move
-# together.
+# This script re-fetches the canonical guard script and release guide from
+# go-kure/.github at that same pin and re-vendors them, so the vendored copies
+# and the pin move together.
 #
 # Invoked as a Renovate postUpgradeTasks command (renovate.json) whenever the
 # go-kure/.github dependency bumps; safe to run by hand too. Idempotent: a
-# no-op re-run leaves the vendored file untouched.
+# no-op re-run leaves the vendored files untouched.
 #
 # Usage: ./scripts/vendor-guard.sh
 
@@ -25,6 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
 VENDORED="$REPO_ROOT/site/scripts/check-forbidden-terms.sh"
+VENDORED_GUIDE="$REPO_ROOT/docs/releasing.md"
 
 # Pull the ref out of the check-forbidden-terms action's own uses:@<sha> pin
 # — the same pin Renovate's github-actions manager tracks, and the exact
@@ -72,8 +73,6 @@ if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
     exit 1
 fi
 
-url="https://raw.githubusercontent.com/go-kure/.github/${sha}/scripts/check-forbidden-terms.sh"
-
 fetched="$(mktemp)" || {
     echo "vendor-guard: mktemp failed -- either the mktemp binary is missing, or it could not create a file (check \$TMPDIR and free space)" >&2
     exit 1
@@ -86,25 +85,35 @@ if [[ -z "$fetched" || ! -f "$fetched" ]]; then
 fi
 trap 'rm -f "$fetched"' EXIT
 
-if ! curl -fsSL "$url" -o "$fetched"; then
-    echo "vendor-guard: failed to fetch $url" >&2
-    exit 1
-fi
+# vendor <path in go-kure/.github> <vendored file> <mode> re-fetches one file
+# at $sha and writes it only when its content differs, so a second run against
+# an already-synced tree makes no further change.
+vendor() {
+    local src="$1" dest="$2" mode="$3"
+    local url="https://raw.githubusercontent.com/go-kure/.github/${sha}/${src}"
 
-if [[ ! -s "$fetched" ]]; then
-    echo "vendor-guard: fetched file from $url is empty" >&2
-    exit 1
-fi
+    if ! curl -fsSL "$url" -o "$fetched"; then
+        echo "vendor-guard: failed to fetch $url" >&2
+        exit 1
+    fi
 
-# Idempotent by construction: only write (and re-chmod) when the fetched
-# content actually differs from what's vendored, so a second run against an
-# already-synced tree makes no further change to $VENDORED.
-if [[ -f "$VENDORED" ]] && cmp -s "$fetched" "$VENDORED"; then
-    echo "vendor-guard: $VENDORED already matches go-kure/.github@${sha} — no change"
-    exit 0
-fi
+    if [[ ! -s "$fetched" ]]; then
+        echo "vendor-guard: fetched file from $url is empty" >&2
+        exit 1
+    fi
 
-mkdir -p "$(dirname "$VENDORED")"
-cp "$fetched" "$VENDORED"
-chmod +x "$VENDORED"
-echo "vendor-guard: re-vendored $VENDORED from go-kure/.github@${sha}"
+    if [[ -f "$dest" ]] && cmp -s "$fetched" "$dest"; then
+        echo "vendor-guard: $dest already matches go-kure/.github@${sha} — no change"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$dest")"
+    cp "$fetched" "$dest"
+    chmod "$mode" "$dest"
+    echo "vendor-guard: re-vendored $dest from go-kure/.github@${sha}"
+}
+
+vendor scripts/check-forbidden-terms.sh "$VENDORED" 755
+# The release guide, published on this repository's site as
+# contributing/releasing; ci.yml byte-compares it at the same pin.
+vendor standards/release-process.md "$VENDORED_GUIDE" 644

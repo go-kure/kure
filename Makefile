@@ -366,25 +366,13 @@ clean: ## Clean build artifacts and caches
 # Changelog
 # =============================================================================
 
-# No target writes CHANGELOG.md: scripts/release.sh prepends each release's
-# section and published sections are never regenerated (go-kure/kure#774).
+# No target writes CHANGELOG.md: the shared Release workflow's release script
+# prepends each release's section and published sections are never
+# regenerated (go-kure/kure#774). Releasing: docs/releasing.md.
 .PHONY: changelog-preview
 changelog-preview: ## Preview unreleased changelog entries
 	@echo "$(COLOR_YELLOW)Previewing unreleased changes...$(COLOR_RESET)"
 	git cliff --unreleased
-
-# =============================================================================
-# Release Management
-# =============================================================================
-
-.PHONY: release
-release: ## Preview release (dry-run)
-	@if [ -z "$(TYPE)" ]; then \
-		echo "Usage: make release TYPE={alpha|beta|rc|stable}"; \
-		echo "       make release TYPE=bump SCOPE={minor|major|prerelease}"; \
-		exit 1; \
-	fi
-	@DRY_RUN=1 ./scripts/release.sh $(TYPE) $(SCOPE)
 
 # =============================================================================
 # Default target
