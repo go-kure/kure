@@ -16,6 +16,215 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.14] - 2026-09-30
+
+### Breaking
+
+- Make Namespace the parent path; same-name layouts nest
+- Record origins in the walkers; refuse lossy nodeFlat merges
+- Derive every Kustomization spec.path from the layout tree
+- Take Application paths from the walked layout
+- Honour every grouping axis with one merge rule
+- Emit one Kustomization per directory that renders bundles
+- Give every reconciliation unit one owner
+- KustomizationRecursive writes no kustomization.yaml
+
+### Added
+
+- Record layout origins and index them with IndexOrigins
+- Generate pkg/kubernetes README Go blocks from Example functions
+- Generate the remaining pkg README Go blocks from Example functions
+- Generate the docs and site Go blocks from Example functions
+
+### Build
+
+- Update dependency hugo to v0.167.0
+- Update dependency yq to v4.54.1
+
+### CI
+
+- Raise the lint job timeout from 15 to 25 minutes
+
+### Documentation
+
+- Add parent-path migration guidance to the flux-workflow guide
+- Correct the ClusterName and unnamed-root migration notes
+- Note that an unnamed root's grandchildren now nest
+- Document Kustomization paths derived from the layout tree
+- Mark the removed-API note as deliberate for the doc API check
+- Match the unit, dependency and re-integration docs to the code
+- An AppFileSingle root lists its children in its Namespace
+- Name the AI review check and the real approval rule for main
+- State the approval rule and required checks the same way everywhere
+- Complete the layout structs and past-tense the retired volsync notes
+- Address review of the doc-example pages
+- Address review of the docs and site doc-example pages
+- Complete the two-versions sentence in the build-identity paragraph
+- Bring the single-child comments in line with the Name refusal
+- List the pin-impact shapes left uncovered and the remaining false aborts
+- Scope the flattened-root refusal to the writers that reach it
+- Record root-hosted Sources and the wrapper refusal in the Flux workflow guide
+- Say a non-constant slice length may allocate elements
+- Say the library-usage guide's append and insert shapes take one value
+
+### Fixed
+
+- Coalesce excluded-node wrappers under in-package parents
+- Keep an unnamed root at cluster/ when no ClusterName is set
+- Keep a package's out-of-package root wrapper at cluster/
+- Index doc API references by parsing Go source
+- Skip testdata in the doc API index and correct two comments
+- Transfer origins when FlattenSingleTier collapses a tier
+- Give the ClusterName wrapper layout its FluxPlacement
+- Apply hosted Sources in Recursive mode; refuse duplicate CRs already in the tree
+- Refuse a Source that collides by identity with a different one
+- Check CR identity against every Kustomization in the tree, in every placement
+- Keep an earlier flux-system child only when nothing was added beneath it
+- Write a kustomization.yaml for every layout that renders a bundle
+- Write a kustomization.yaml for every directory a PerLayout CR targets
+- Write "resources: []" for a kustomization that lists nothing
+- Keep an earlier flux-system child only in the directory its parent references
+- Give every written directory a kustomization.yaml
+- Treat an omitted namespace as "default" in the identity check
+- Check a List's items, not its envelope, for identity
+- Skip objects without a kind in the identity check
+- Keep node and bundle layouts out of Config's AppFileSingle
+- Resolve unit dependencies by name and include readiness waits
+- Remap every Kustomization reference a merge changes
+- Refuse any Kustomization set that can never become Ready
+- Scope the reconcile-order check to what kure generates
+- Wait on every applied CR; compare layout sources effectively
+- Check separate placement and re-integrated CRs for deadlocks
+- Keep a refused separate integration from passing on retry
+- Emit a shared Source once and match it by effective namespace
+- Keep PerLayout CR targets out of Config single-file mode
+- Pin every PerLayout CR target to its own directory
+- Place layouts without a placement per layout like their parent
+- Apply the integration's placement to the whole tree
+- Keep an integrated tree's placement; put it back on refusal
+- List hosted Flux objects in every placement; compare only emitted source fields
+- Refuse a patch that reaches another bundle in a shared directory
+- Count only placed Kustomizations; roll back a refused call; match kustomize namespaces
+- Count AppFileSingle application files in a PerLayout unit's patch scope
+- Report a merged unit's label conflict before its annotation conflict
+- Check Flux object identity across the whole integration pass
+- Refuse an existing Source of a generated identity under FluxSeparate
+- Compare Sources by content whatever their Go type
+- Keep the parent's kustomization.yaml when a child is AppFileSingle
+- Refuse an AppFileSingle child with children; list only written files
+- Refuse an AppFileSingle file that replaces a file in its directory
+- Refuse a single file over another layout's extra file
+- Refuse an extra file clash before writing anything
+- A resource-less single child reserves no file name
+- A resource-less single child still reserves its directory
+- Name one owner when an extra file takes a needed directory
+- Host a shared Source once per kustomize build
+- Check every name a page qualifies with a kure package
+- Scope the retired-layer markers to their own lines
+- Read output comments and Go fences as go test does; document the doc-example check
+- Refuse files the Flux build of a Recursive directory reads differently
+- Refuse an unlisted single-file child in a Recursive build
+- Word a control-named unlisted file as never listed
+- Refuse an unlisted child directory in a Recursive build
+- Compare PackageRef values, not pointers, when skipping a cross-package child
+- Close the four pin-impact script gaps from #731 rounds 8-9
+- Refuse the pin-impact shapes the review found still read as inert
+- Bound the pin-impact exemptions and SCRIPT_DIR definitions
+- Refuse a single layout's file that needs a directory where another path is a file
+- Check single layouts' directories against written files; accept extras in a child's directory
+- Refuse only the kustomization.yaml a layout writes as a directory clash
+- Refuse one object in two layouts of one kustomize build
+- Match kustomize's object identity in the build check
+- Refuse one object held twice by one layout in the build check
+- List an AppFileSingle child's file by its path below the parent
+- List single children only where the path matches what is written
+- Find a single child above a root whose directory is "."
+- Fail closed on the pin-impact shapes the line scan cannot read
+- Close the pin-impact gaps the review found
+- Close the remaining pin-impact gaps and state the threat model
+- Count flow-mapping run steps and read no pin from a block scalar
+- Read no key from an action's run body, and accept a step's dash alone on its line
+- Quote a kustomization entry kustomize would read as a bool, null or number
+- Refuse dropped and duplicate ConfigMapGenerators
+- Name the generator refusal by the child's file, and document every path it covers
+- State where the package walk refuses generators, and pin the refusal's file
+- Read a checkout's repository only in its with: mapping
+- Refuse generators on a root that writes no kustomization.yaml
+- Refuse generators on an AppFileSingle Recursive root
+- Save Go module cache from main only
+- Refuse a generated Flux Kustomization over an empty Recursive directory
+- Compare filled directories exactly and count an AppFileSingle root's files
+- Refuse an empty marked AppFileSingle Recursive root
+- Host every generated Source once, in the root layout
+- Host generated Sources in the root node's layout, not a ClusterName wrapper
+- Keep a caller's Source in a ClusterName wrapper's build
+- Refuse a caller's Source in a wrapper build that holds the root's
+- Refuse a root-bundle patch or postBuild that changes a hosted Source
+- Refuse a root postBuild reading a substituteFrom var
+- Refuse a conditionally executed admitted write
+- Resolve nil in the nil-init guard through type information
+- Count a slice make as a zero value only at constant length 0
+- Count a zero value as the nil-init only for a map, slice or pointer field
+
+### Maintenance
+
+- Update go-kure/.github digest to f074d4b
+- Update go-kure/.github digest to 1d74851
+- Update go-kure/.github digest to 7c4928e
+- Update go-kure/.github digest to b85115b
+
+### Testing
+
+- Pin case-folded refusal, WriteManifest no-write, argocd placement
+- Pin every Flux and ArgoCD path to the layout directory
+- Migrate tests off the removed path derivation
+- Cover the refusal paths of the layout-derived generation
+- Report a listed directory without kustomization.yaml instead of aborting
+- A caller's Source copy below the integration's is kept
+- Cover AppFileSingle files in a Source build; say depth-first
+- Skip nil children when counting Source copies
+- Pin one Source per build under Recursive; reword the bundle-mode comment
+- Give the subdirectory extra-file fixture its own object
+- Build a resource file whose name needs quoting, and bound yamlString to valid UTF-8
+- Pin the with: key of a checkout's repository and ref
+- Cover each half of the AppFileSingle root's filled directories
+- Refuse range-clause and read-modify-write field writes
+- Count indexed, parenthesised and nil-initialised read-modify-write targets
+- Trace slice expressions and alias chains for read-modify-write targets
+- Unparenthesise alias destinations in read-modify-write tracking
+- Track a comma-ok map read as a copy of the caller's element
+- Root a comma-ok map read only for read-modify-write targets
+- Refuse a spelled-out read-modify-write of a caller's element
+- Follow append results, range variables and alias spellings in read-modify-write checks
+- Match class-a write-backs to their source and follow conversions and reference-holding copies
+- Check class-a append inputs and parenthesised reassignments against the write-back field
+- Evaluate a multi-assignment's sources before its updates in class-a tracking
+- Count the write-back of a local class a refused as a bare write
+- Count a refused write-back through an initialised pointer as a bare write
+- Admit class a only as one direct statement
+- Admit a helper body only through a closed grammar
+- Compare constant indexes by value in the helper grammar
+- Pin each branch of the helper grammar with its own fixture
+- Refuse a write that meets more than its nil-init assigned
+- Refuse a helper that leaves a parameter out
+- Freeze the verdict of generated helper bodies
+- Record what the helper grammar alone answers
+- Refuse a function literal in the helper grammar
+- Refuse a stray append in the helper grammar
+- Count appends and inserts in the helper grammar
+- Refuse a slice make with a length in a nil-init
+- Compare a nil-init guard with its path as written
+- Refuse a written value that reads its target
+- Read a write through a pointer nil-init as spelled
+- Refuse a value named nil in the helper grammar
+- Refuse a bare &P or *P in the helper grammar
+- Name the cause of an S1, S8 or P1 refusal
+- Read the class of a helper off the writes of the grammar
+- Read a helper body through the grammar only
+- State three spelling rules as the grammar reads them
+- Say that V7 reads its target as written
+- Print a reason's expressions as written
+
 ## [0.2.0-beta.13] - 2026-09-24
 
 ### Breaking
