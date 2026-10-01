@@ -43,6 +43,7 @@ spec:
       scale:
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.replicas
+        labelSelectorPath: .status.selector
     schema:
       openAPIV3Schema:
         type: object
@@ -87,11 +88,17 @@ spec:
                       type: string
                     port:
                       type: integer
+              template:
+                type: object
+                x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
           status:
             type: object
             properties:
               replicas:
                 type: integer
+              selector:
+                type: string
 `
 
 // gadgetCRD is cluster-scoped, has no subresources and no rules.
@@ -305,8 +312,43 @@ func TestValidateChecksListTypes(t *testing.T) {
 }
 
 func TestValidateChecksScalePaths(t *testing.T) {
-	want(t, validate(t, validator(t), strings.Replace(validWidget, "replicas: 2", "replicas: -1", 1)),
+	v := validator(t)
+	want(t, validate(t, v, strings.Replace(validWidget, "replicas: 2", "replicas: -1", 1)),
 		`Invalid .spec.replicas: should be a non-negative integer`)
+	want(t, validate(t, v, strings.Replace(validWidget, "replicas: 2", "replicas: 3000000000", 1)),
+		`Invalid .spec.replicas: should be less than or equal to 2147483647`)
+	// the schema reports the type, and the scale path reports what it could not read
+	want(t, validate(t, v, strings.Replace(validWidget, "replicas: 2", "replicas: two", 1)),
+		`TypeInvalid spec.replicas`,
+		`Invalid .spec.replicas: `,
+		`Invalid <nil>: some validation rules were not checked`)
+}
+
+func TestValidateReportsMetadataTheServerCannotDecode(t *testing.T) {
+	v := validator(t)
+	want(t, validate(t, v, strings.Replace(validWidget, "metadata:\n  name: w\n  namespace: default\n", "metadata: w\n", 1)),
+		`Invalid metadata`)
+	want(t, validate(t, v, strings.Replace(validWidget, "  name: w\n", "  name: 5\n", 1)),
+		`Invalid metadata`)
+	// an embedded resource's metadata is held to the same rule
+	want(t, validate(t, v, validWidget+"  template:\n    apiVersion: v1\n    kind: Pod\n    metadata: nope\n"),
+		`Invalid spec.template.metadata`)
+}
+
+func TestValidateCannotAnswerWhenTheSchemaWouldNotBeServed(t *testing.T) {
+	c := crd(t, gadgetCRD)
+	c.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["loose"] = apiextensionsv1.JSONSchemaProps{Description: "no type"}
+	v, err := New([]*apiextensionsv1.CustomResourceDefinition{c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = v.Validate(context.Background(), object(t, "apiVersion: example.com/v1\nkind: Gadget\nmetadata:\n  name: g\n"))
+	if err == nil || !strings.Contains(err.Error(), "not structural") {
+		t.Errorf("Validate: %v, want the compile error", err)
+	}
+	if err := v.Compile(schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Gizmo"}); err == nil || !strings.Contains(err.Error(), "no definition for Gizmo.example.com") {
+		t.Errorf("Compile of an unknown kind: %v", err)
+	}
 }
 
 func TestValidateAppliesTheRequestNamespaceRule(t *testing.T) {
@@ -412,4 +454,6 @@ func TestValidateObjectMeta(t *testing.T) {
 	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  namespace: web\n"), false), `Forbidden metadata.namespace`)
 	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  annotations:\n    'bad key!': x\n"), true), `Invalid metadata.annotations`)
 	want(t, ValidateObjectMeta(ctx, object(t, "apiVersion: apps/v1\nkind: Deployment\nmetadata: nope\n"), true), `Invalid metadata`)
+	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  labels: nope\n"), true), `Invalid metadata`)
+	want(t, ValidateObjectMeta(ctx, object(t, "apiVersion: apps/v1\nkind: Deployment\n"), true), `Required metadata.name`)
 }
