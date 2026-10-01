@@ -624,8 +624,8 @@ carries (`internal/gotk`): 73 against the current pins. Uncovered kinds have no
 definition to hold them to — the built-in kinds of `k8s.io/api` and
 `k8s.io/apiextensions-apiserver`, whose validation the apiserver implements in Go,
 and the external-secrets and prometheus-operator kinds, whose API modules ship no
-manifests — and get the server's ObjectMeta validation and nothing more: 55 against
-the current pins. A kind in neither table, a stale table entry, a definition whose
+manifests — and get the server's ObjectMeta validation under the kind's own name rule,
+and nothing more: 55 against the current pins. A kind in neither table, a stale table entry, a definition whose
 scope disagrees with the kinds table, or an uncovered module that starts shipping
 definitions all turn the test red. Why the validation is in process and what it leaves
 to a real apiserver is recorded in `docs/history/20261001-DESIGN-schema-validation.md`.

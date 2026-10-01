@@ -343,12 +343,43 @@ func TestValidateCannotAnswerWhenTheSchemaWouldNotBeServed(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = v.Validate(context.Background(), object(t, "apiVersion: example.com/v1\nkind: Gadget\nmetadata:\n  name: g\n"))
-	if err == nil || !strings.Contains(err.Error(), "not structural") {
-		t.Errorf("Validate: %v, want the compile error", err)
+	if err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "properties[loose].type") {
+		t.Errorf("Validate: %v, want the server's refusal naming the untyped property", err)
 	}
-	if err := v.Compile(schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Gizmo"}); err == nil || !strings.Contains(err.Error(), "no definition for Gizmo.example.com") {
+	if err := v.Compile(context.Background(), schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Gizmo"}); err == nil || !strings.Contains(err.Error(), "no definition for Gizmo.example.com") {
 		t.Errorf("Compile of an unknown kind: %v", err)
 	}
+}
+
+// A rule that does not compile is the server's refusal of the definition,
+// not an error on every object that reaches the rule.
+func TestCompileRejectsARuleThatDoesNotCompile(t *testing.T) {
+	c := crd(t, gadgetCRD)
+	c.Spec.Versions[0].Schema.OpenAPIV3Schema.XValidations = apiextensionsv1.ValidationRules{{Rule: "self.nonsense(", Message: "never"}}
+	v, err := New([]*apiextensionsv1.CustomResourceDefinition{c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gvk := schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Gadget"}
+	err = v.Compile(context.Background(), gvk)
+	if err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "x-kubernetes-validations[0].rule") {
+		t.Errorf("Compile: %v, want the server's refusal naming the rule", err)
+	}
+	errs, err := v.Validate(context.Background(), object(t, "apiVersion: example.com/v1\nkind: Gadget\nmetadata:\n  name: g\n"))
+	if err == nil || len(errs) != 0 {
+		t.Errorf("Validate answered with %v, %v; want the same refusal and no object errors", errs, err)
+	}
+}
+
+// The server generates the name from generateName before it validates
+// (Store.create, then BeforeCreate); an object with only generateName is
+// not one with no name. One with neither is, and the Required error blocks
+// the rules as the server's does.
+func TestValidateGeneratesTheName(t *testing.T) {
+	v := validator(t)
+	want(t, validate(t, v, strings.Replace(validWidget, "name: w", "generateName: w-", 1)))
+	want(t, validate(t, v, strings.Replace(validWidget, "  name: w\n", "", 1)),
+		`Required metadata.name`, `Invalid <nil>: some validation rules were not checked`)
 }
 
 func TestValidateAppliesTheRequestNamespaceRule(t *testing.T) {
@@ -380,10 +411,10 @@ func TestValidateRejectsAnUnservedVersion(t *testing.T) {
 	v := validator(t)
 	want(t, validate(t, v, strings.Replace(validWidget, "example.com/v1", "example.com/v1alpha1", 1)),
 		`NotSupported apiVersion`)
-	if err := v.Compile(schema.GroupVersionKind{Group: "example.com", Version: "v1alpha1", Kind: "Widget"}); err == nil || !strings.Contains(err.Error(), "does not serve v1alpha1") {
+	if err := v.Compile(context.Background(), schema.GroupVersionKind{Group: "example.com", Version: "v1alpha1", Kind: "Widget"}); err == nil || !strings.Contains(err.Error(), "does not serve v1alpha1") {
 		t.Errorf("Compile of an unserved version: %v", err)
 	}
-	if err := v.Compile(schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Widget"}); err != nil {
+	if err := v.Compile(context.Background(), schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Widget"}); err != nil {
 		t.Errorf("Compile of a served version: %v", err)
 	}
 }
@@ -415,13 +446,15 @@ func TestNewRejectsTwoDefinitionsForOneKind(t *testing.T) {
 	}
 }
 
+// Each case is a definition the server refuses on create; the error names
+// the field the server names.
 func TestCompileRejectsWhatTheServerWouldNotServe(t *testing.T) {
 	gvk := schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Gadget"}
 	t.Run("no schema", func(t *testing.T) {
 		c := crd(t, gadgetCRD)
 		c.Spec.Versions[0].Schema = nil
 		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
-		if err := v.Compile(gvk); err == nil || !strings.Contains(err.Error(), "has no schema") {
+		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "spec.versions[0].schema.openAPIV3Schema") {
 			t.Errorf("Compile: %v", err)
 		}
 	})
@@ -429,7 +462,7 @@ func TestCompileRejectsWhatTheServerWouldNotServe(t *testing.T) {
 		c := crd(t, gadgetCRD)
 		c.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["loose"] = apiextensionsv1.JSONSchemaProps{Description: "no type"}
 		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
-		if err := v.Compile(gvk); err == nil || !strings.Contains(err.Error(), "not structural") {
+		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "properties[loose].type") {
 			t.Errorf("Compile: %v", err)
 		}
 	})
@@ -437,7 +470,15 @@ func TestCompileRejectsWhatTheServerWouldNotServe(t *testing.T) {
 		c := crd(t, gadgetCRD)
 		c.Spec.PreserveUnknownFields = true
 		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
-		if err := v.Compile(gvk); err == nil || !strings.Contains(err.Error(), "preserves unknown fields") {
+		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "spec.preserveUnknownFields") {
+			t.Errorf("Compile: %v", err)
+		}
+	})
+	t.Run("name is not plural.group", func(t *testing.T) {
+		c := crd(t, gadgetCRD)
+		c.Name = "gadget.example.com"
+		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
+		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "metadata.name") {
 			t.Errorf("Compile: %v", err)
 		}
 	})
@@ -448,12 +489,23 @@ func TestValidateObjectMeta(t *testing.T) {
 	deployment := func(meta string) *unstructured.Unstructured {
 		return object(t, "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n"+meta)
 	}
-	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n"), true))
-	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  namespace: web\n"), true))
-	want(t, ValidateObjectMeta(ctx, deployment("  name: Not_A_Subdomain\n"), true), `Invalid metadata.name`)
-	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  namespace: web\n"), false), `Forbidden metadata.namespace`)
-	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  annotations:\n    'bad key!': x\n"), true), `Invalid metadata.annotations`)
-	want(t, ValidateObjectMeta(ctx, object(t, "apiVersion: apps/v1\nkind: Deployment\nmetadata: nope\n"), true), `Invalid metadata`)
-	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  labels: nope\n"), true), `Invalid metadata`)
-	want(t, ValidateObjectMeta(ctx, object(t, "apiVersion: apps/v1\nkind: Deployment\n"), true), `Required metadata.name`)
+	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n"), true, nil))
+	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  namespace: web\n"), true, nil))
+	want(t, ValidateObjectMeta(ctx, deployment("  name: Not_A_Subdomain\n"), true, nil), `Invalid metadata.name`)
+	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  namespace: web\n"), false, nil), `Forbidden metadata.namespace`)
+	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  annotations:\n    'bad key!': x\n"), true, nil), `Invalid metadata.annotations`)
+	want(t, ValidateObjectMeta(ctx, object(t, "apiVersion: apps/v1\nkind: Deployment\nmetadata: nope\n"), true, nil), `Invalid metadata`)
+	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n  labels: nope\n"), true, nil), `Invalid metadata`)
+	want(t, ValidateObjectMeta(ctx, object(t, "apiVersion: apps/v1\nkind: Deployment\n"), true, nil), `Required metadata.name`)
+	// the server generates the name before it validates
+	want(t, ValidateObjectMeta(ctx, deployment("  generateName: d-\n"), true, nil))
+	// the kind's own name rule is the caller's: here one that refuses "d"
+	noD := func(name string, _ bool) []string {
+		if name == "d" {
+			return []string{"may not be d"}
+		}
+		return nil
+	}
+	want(t, ValidateObjectMeta(ctx, deployment("  name: d\n"), true, noD), `Invalid metadata.name: may not be d`)
+	want(t, ValidateObjectMeta(ctx, deployment("  name: not:a:subdomain\n"), true, noD))
 }

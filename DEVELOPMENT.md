@@ -151,7 +151,8 @@ A fixture the pinned schema rejects is a defect in the test or the builder, not 
 update. The validator reads each pinned module's definitions from the module cache through
 `go list`, so it needs the module graph as `go.mod` states it: under a parent `go.work` that
 replaces a pinned module, the version check fails and its message names `GOWORK=off` (the
-Makefile exports it already). The same validation runs on the Flux bootstrap output of
+Makefile exports it already), and a `replace` directive that changes a pinned module's path or
+version is refused the same way. The same validation runs on the Flux bootstrap output of
 `pkg/stack/fluxcd` and on everything `examples/getting-started` writes, so a generator that
 drifts from the pinned schema fails `make test`, not a cluster. Which kinds are held to a
 schema and which get ObjectMeta validation only is listed in `pkg/kubernetes/README.md`

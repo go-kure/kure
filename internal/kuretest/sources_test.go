@@ -7,8 +7,42 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/tools/go/packages"
+
 	"github.com/go-kure/kure/internal/gotk"
+	"github.com/go-kure/kure/pkg/kubernetes"
 )
+
+// moduleDir holds a resolved module to the registry's pin: the version must
+// be the one the kinds table was generated from, and the directory must be
+// that version's. A replace directive keeps the version and swaps the
+// directory, so one that changes path or version is refused too.
+func TestModuleDirHoldsTheDirectoryToThePin(t *testing.T) {
+	pin := kubernetes.KindInfo{ImportPath: "github.com/backube/volsync/api/v1alpha1", Module: "github.com/backube/volsync", ModuleVersion: "v0.16.0"}
+	for name, c := range map[string]struct {
+		m    *packages.Module
+		want string // "" for the directory
+	}{
+		"pinned":              {&packages.Module{Path: pin.Module, Version: pin.ModuleVersion, Dir: "/cache/volsync@v0.16.0"}, ""},
+		"no module":           {nil, "GOWORK=off"},
+		"no directory":        {&packages.Module{Path: pin.Module, Version: pin.ModuleVersion}, "GOWORK=off"},
+		"another version":     {&packages.Module{Path: pin.Module, Version: "v0.17.0", Dir: "/cache/volsync@v0.17.0"}, "generated from github.com/backube/volsync v0.16.0"},
+		"replaced by a path":  {&packages.Module{Path: pin.Module, Version: pin.ModuleVersion, Dir: "/src/volsync", Replace: &packages.Module{Path: "../volsync", Dir: "/src/volsync"}}, "replaced by ../volsync"},
+		"replaced by a fork":  {&packages.Module{Path: pin.Module, Version: pin.ModuleVersion, Dir: "/cache/fork@v0.16.0", Replace: &packages.Module{Path: "example.com/fork", Version: "v0.16.0", Dir: "/cache/fork@v0.16.0"}}, "replaced by example.com/fork v0.16.0"},
+		"replaced by itself":  {&packages.Module{Path: pin.Module, Version: pin.ModuleVersion, Dir: "/cache/volsync@v0.16.0", Replace: &packages.Module{Path: pin.Module, Version: pin.ModuleVersion, Dir: "/cache/volsync@v0.16.0"}}, ""},
+		"replaced by a newer": {&packages.Module{Path: pin.Module, Version: pin.ModuleVersion, Dir: "/cache/volsync@v0.17.0", Replace: &packages.Module{Path: pin.Module, Version: "v0.17.0", Dir: "/cache/volsync@v0.17.0"}}, "replaced by github.com/backube/volsync v0.17.0"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir, err := moduleDir(pin.ImportPath, c.m, pin)
+			switch {
+			case c.want == "" && (err != nil || dir != c.m.Dir):
+				t.Errorf("moduleDir = %q, %v; want %q", dir, err, c.m.Dir)
+			case c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)):
+				t.Errorf("moduleDir = %q, %v; want an error naming %q", dir, err, c.want)
+			}
+		})
+	}
+}
 
 // ciliumNetworkPolicyCRD is the smallest definition of a kind another module
 // already defines.

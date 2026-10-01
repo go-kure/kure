@@ -14,11 +14,12 @@ import (
 	"github.com/go-kure/kure/internal/kuretest"
 )
 
-// The fixtures under testdata were written by the config-struct layer this
-// package used to carry (Cluster(&ClusterConfig{...}), Database, ObjectStore,
-// ScheduledBackup, Pooler) before it was retired. Each test below builds the
-// same object on the generated constructor plus the upstream struct and must
-// reproduce that output byte for byte. Every value the layer used to invent —
+// The fixtures under testdata descend from the ones the config-struct layer
+// this package used to carry (Cluster(&ClusterConfig{...}), Database,
+// ObjectStore, ScheduledBackup, Pooler) wrote before it was retired, less
+// the ObjectStore serverName its definition forbids. Each test below builds
+// its object on the generated constructor plus the upstream struct and must
+// reproduce the fixture byte for byte. Every value the layer used to invent —
 // enablePDB from the instance count, primaryUpdateStrategy, the S3 key names,
 // the barman-cloud plugin entry, the pooler type and its empty pgbouncer
 // block, an extension's ensure — is now a line the caller writes, and each is
