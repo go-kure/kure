@@ -79,7 +79,8 @@ Boxes are job ids from `ci.yml`; where a job's check name differs, it follows in
              └──────────────────┘
 
 No needs, start at once:  action-pins, forbidden-terms
-PR-only, no needs:        doc-gate, pin-impact, analyze-changes (Analyze Changes)
+PR-only, no needs:        doc-gate, analyze-changes (Analyze Changes)
+PR and queue, no needs:   pin-impact
 
                  ┌───────┐
                  │ build │  ← aggregation gate (if: always()): validate, test, coverage-check,
@@ -87,9 +88,10 @@ PR-only, no needs:        doc-gate, pin-impact, analyze-changes (Analyze Changes
                               pin-impact
 ```
 
-The PR-only jobs `doc-gate` and `pin-impact` still feed `build`; on a push or merge-queue run they
-are skipped, and `build` accepts `skipped` from every job except `forbidden-terms`.
-`analyze-changes` is informational and feeds nothing.
+The PR-only job `doc-gate` still feeds `build`; on a push or merge-queue run it is skipped, and
+`build` accepts `skipped` from every job except `forbidden-terms`. `pin-impact` is skipped on a
+push; on a merge-queue run it checks only that the merged tree's `go-kure/.github` pins agree (see
+the pin-impact gate below). `analyze-changes` is informational and feeds nothing.
 
 On `merge_group` events (merge queue), `lint`/`test`/`build` run against the queue's
 temporary branch — the merged result — before the PR is allowed to land.
@@ -108,7 +110,7 @@ temporary branch — the merged result — before the PR is allowed to land.
 | `analyze-changes` | `Analyze Changes` | 5 min | - | Changed files analysis, line counts against the PR's own base branch (for example `main` or a `release/vX.Y` branch), breaking change warnings (PR only) |
 | `docs-build` | `docs-build` | 15 min | changes | Hugo build; separate Go + Hugo caches; validates the docs map and rendered internal links via the canonical `check-doc-sync`/`check-links` actions from `go-kure/.github`, the documented API references via `scripts/check-doc-api-refs.sh`, the Go blocks of every documentation page, generated from `Example` functions or marked as excerpts, via `scripts/gen-doc-examples.sh`, and absolute links to the site itself via `scripts/check-site-self-links.sh` |
 | `doc-gate` | `doc-gate` | 5 min | — | API changes need docs check (PR only; no `needs`, not path-filtered); runs the canonical `check-doc-gate` action from `go-kure/.github`. Bypass via the maintainer `docs-skip` label, or automatically for a generated-table row whose only change is a provenance field (`ModuleVersion` — pure version churn from a dependency bump); adding, removing, or re-scoping a kind is not exempt |
-| `pin-impact` | `pin-impact` | 3 min | — | PR only; resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and the sibling scripts those `source` or run, transitively) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
+| `pin-impact` | `pin-impact` | 3 min | — | On a merge-queue run, only checks that every `go-kure/.github` reference in the merged tree pins the same commit. On a PR, resolves every `go-kure/.github` action kure's workflows reference to the `scripts/*.sh` (and the sibling scripts those `source` or run, transitively) each runs, compares base vs. head, and fails if the pin bump touched a path kure actually executes — vendored `scripts/check-pin-impact.sh` (not a canonical action: it must run at the SHA it's vetting, not the SHA a bump would move it to) |
 
 ### Configuration
 
@@ -388,8 +390,8 @@ temporary branch — the merged result — before the PR is allowed to land.
     `GITHUB_ACTION_PATH`, and a `$GITHUB_ACTION_PATH/<path>` command behind a wrapper (`env`,
     `timeout`), an environment assignment (`VAR=1 "$GITHUB_ACTION_PATH/…"`), a shell option
     (`bash --noprofile`), a `{ …; }` group or a `case` arm.
-  The refusal paths, plus the no-change, inert, affected and acknowledged outcomes, are pinned by hermetic
-  cases in `scripts/test/cases/`
+  The refusal paths, plus the no-change, inert, affected and acknowledged outcomes and the
+  merge-queue mode, are pinned by hermetic cases in `scripts/test/cases/`
   (`pin-impact-lib.sh` stubs `curl` and builds a throwaway git repo; no network). A maintainer who
   has reviewed a real hit and judged it safe adds
   the `pin-impact-ack` label to merge anyway — same convention as `check-doc-gate`'s `docs-skip`
@@ -403,6 +405,15 @@ temporary branch — the merged result — before the PR is allowed to land.
   separately forces `PIN_IMPACT_ACK=false` unconditionally on forks; a fork PR has no acknowledgment
   path regardless of labels. Add (or re-add) the label rather than rerunning, on a same-repo PR; full
   writeup in `go-kure/.github`'s `docs/standards.md` § "Pin-impact-ack"
+
+  **In the merge queue** the job runs `check-pin-impact.sh --consistency` instead. It checks only
+  that every `go-kure/.github` reference in the merged tree pins the same commit. It reads no base,
+  fetches nothing and has no label override. Two PRs that each passed on their own can combine
+  into mixed pins: one adds a reference at the old pin while the other bumps the rest. On `main`,
+  that tree is every later PR's base, and the gate refuses an inconsistent base before it reads the
+  label, so it would refuse the repair PR too (go-kure/kure#951). The queue now ejects the PR
+  instead; rebase it onto `main` and align its pins. The impact itself is still checked only on
+  the PR (go-kure/kure#730).
 
 ### Draft PRs
 
