@@ -64,24 +64,18 @@ jobs:
       with:
         repository: go-kure/go-kure.github.io
         token: ${{ secrets.DEPLOY_TOKEN }}
+        path: deploy-target
 
+    # The shared step removes kure/<slot>/ from the pages branch's current tip
+    # and retries a push rejected because another slot's deploy landed first;
+    # a slot that does not exist there fails the step.
     - name: Remove version directory
-      env:
-        SLOT: ${{ inputs.version_slot }}
-      run: |
-        set -euo pipefail
-        DIR="kure/${SLOT}"
-        if [[ ! -d "$DIR" ]]; then
-          echo "::error::Directory /${DIR}/ does not exist"
-          exit 1
-        fi
-        echo "Removing /${DIR}/..."
-        git rm -r -q -- "$DIR"
-
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git commit -m "docs: remove /${DIR}/ version"
-        git push
+      uses: go-kure/.github/.github/actions/deploy-docs-push@177d4275c2e54463ad21721b06d74d48031ef697 # main
+      with:
+        target-path: deploy-target
+        site-subdir: kure
+        slot: ${{ inputs.version_slot }}
+        remove: "true"
 
   rebuild-version:
     name: Rebuild version
