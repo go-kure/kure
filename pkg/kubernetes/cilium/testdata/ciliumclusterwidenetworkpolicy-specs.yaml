@@ -4,3 +4,7 @@ metadata:
   name: multi-rule
 specs:
   - description: r1
+    ingress:
+      - fromEntities:
+          - host
+    nodeSelector: {}

@@ -7,7 +7,12 @@ spec:
     - 0.0.0.0/0
   egressGateway:
     interface: eth0
-    nodeSelector: null
+    nodeSelector:
+      matchLabels:
+        node-role.kubernetes.io/egress: ""
   excludedCIDRs:
     - 10.0.0.0/8
-  selectors: null
+  selectors:
+    - podSelector:
+        matchLabels:
+          app: crawler
