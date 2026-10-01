@@ -80,11 +80,11 @@ func ExampleCreateCiliumLocalRedirectPolicy() {
 	lrp := cilium.CreateCiliumLocalRedirectPolicy("dns-redirect", "kube-system")
 	lrp.Spec = ciliumv2.CiliumLocalRedirectPolicySpec{
 		RedirectFrontend: ciliumv2.RedirectFrontend{
-			AddressMatcher: &ciliumv2.Frontend{IP: "169.254.20.10", ToPorts: []ciliumv2.PortInfo{{Port: "53", Protocol: "ANY"}}},
+			AddressMatcher: &ciliumv2.Frontend{IP: "169.254.20.10", ToPorts: []ciliumv2.PortInfo{{Port: "53", Protocol: "UDP"}}},
 		},
 		RedirectBackend: ciliumv2.RedirectBackend{
 			LocalEndpointSelector: slimv1.LabelSelector{MatchLabels: map[string]string{"k8s-app": "coredns"}},
-			ToPorts:               []ciliumv2.PortInfo{{Port: "53", Protocol: "ANY"}},
+			ToPorts:               []ciliumv2.PortInfo{{Port: "53", Protocol: "UDP"}},
 		},
 	}
 	fmt.Println(lrp.Spec.RedirectFrontend.AddressMatcher.IP, lrp.Spec.RedirectBackend.LocalEndpointSelector.MatchLabels["k8s-app"])
