@@ -239,8 +239,21 @@ partly publish, or never publish — and what is the safe recovery? Answering th
 the run page is unreliable, because six separate facts have to be held at once and each one
 is a route to a confidently wrong conclusion.
 **[`scripts/release-state.sh`](https://github.com/go-kure/.github/blob/main/scripts/release-state.sh)
-answers it instead**. It lives in `go-kure/.github` alongside the shared publish workflow, and is
-run from a checkout of that repository:
+answers it instead**. Run it from the release repository's own **Release / State** workflow: no
+checkout and no token of your own, because it runs under that repository's token.
+
+```bash
+gh workflow run release-state.yml --repo go-kure/<repo> -f tag=v0.2.0-beta.11
+gh run watch --repo go-kure/<repo> <run ID from the URL the previous command printed>
+```
+
+Watch the run that command created, by the ID at the end of the URL it prints. Do not pick the
+newest run from the list: another dispatch, possibly for another tag, can be newer. Or, in the
+repository, open Actions, then **Release / State**, then **Run workflow** with the tag, and open
+the run whose title names that tag (the repository's workflow sets the title from the tag). The
+verdict is in the run's job summary. A red run means no state was determined (below): do not
+branch on it. From a checkout of `go-kure/.github`, with a token that can read the repository's
+runs and releases, the script runs directly as well:
 
 ```bash
 scripts/release-state.sh go-kure/<repo> v0.2.0-beta.11
@@ -434,7 +447,8 @@ by hand once its provenance is settled.
   or the checked-out commit is not the tag's, the step fails instead of putting another commit's
   docs at the root. A push rejected
   because another slot's deploy landed first is written again on the new tip and retried a bounded
-  number of times. The slot decision is still the one Publish took. A deploy runs the
+  number of times; a slot removal through the action's `remove` input retries the same way. The
+  slot decision is still the one Publish took. A deploy runs the
   `deploy-docs.yml` of its `--ref`, so a tag cut before its repository adopted the action deploys
   without either: an older tag's `set_latest=true` deploy can then replace the root after a newer
   release's, and the second of two concurrent pushes fails.
