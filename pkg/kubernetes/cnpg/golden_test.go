@@ -218,10 +218,11 @@ func TestGolden_Database(t *testing.T) {
 func TestGolden_ObjectStore(t *testing.T) {
 	obj := CreateObjectStore("backup-store", "databases")
 	obj.Spec = barmanv1.ObjectStoreSpec{
+		// the CRD forbids spec.configuration.serverName on an ObjectStore: the
+		// server name is the Cluster's "serverName" plugin parameter
 		Configuration: barmanapi.BarmanObjectStoreConfiguration{
 			DestinationPath: "s3://bucket/pg/",
 			EndpointURL:     "https://s3.example.com",
-			ServerName:      "pg-main",
 		},
 		RetentionPolicy: "30d",
 	}

@@ -14,7 +14,6 @@ spec:
       secretAccessKey:
         key: MY_SECRET_KEY
         name: backup-creds
-    serverName: pg-main
   instanceSidecarConfiguration:
     resources: {}
   retentionPolicy: 30d
