@@ -10,10 +10,10 @@ spec:
         k8s-app: coredns
     toPorts:
       - port: "53"
-        protocol: ANY
+        protocol: UDP
   redirectFrontend:
     addressMatcher:
       ip: 169.254.20.10
       toPorts:
         - port: "53"
-          protocol: ANY
+          protocol: UDP
