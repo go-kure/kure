@@ -1,18 +1,14 @@
 package prometheus
 
 import (
-	"flag"
-	"os"
-	"path/filepath"
 	"testing"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	kureio "github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
@@ -21,36 +17,6 @@ import (
 // PodMonitor, PrometheusRule) before it was retired. Each test below builds
 // the same object on the generated constructor plus the upstream struct and
 // must reproduce that output byte for byte.
-
-var update = flag.Bool("update", false, "update golden files")
-
-func goldenTest(t *testing.T, filename string, obj client.Object) {
-	t.Helper()
-	objects := []*client.Object{&obj}
-	got, err := kureio.EncodeObjectsToYAMLWithOptions(objects, kureio.EncodeOptions{
-		KubernetesFieldOrder: true,
-	})
-	if err != nil {
-		t.Fatalf("encoding to YAML: %v", err)
-	}
-	golden := filepath.Join("testdata", filename)
-	if *update {
-		if err := os.MkdirAll("testdata", 0o755); err != nil {
-			t.Fatalf("creating testdata dir: %v", err)
-		}
-		if err := os.WriteFile(golden, got, 0o644); err != nil {
-			t.Fatalf("updating golden file: %v", err)
-		}
-		return
-	}
-	want, err := os.ReadFile(golden)
-	if err != nil {
-		t.Fatalf("reading golden file (run with -update to create): %v", err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("output does not match golden file %s\n\ngot:\n%s\nwant:\n%s", golden, got, want)
-	}
-}
 
 func TestGolden_ServiceMonitor(t *testing.T) {
 	obj := CreateServiceMonitor("my-app", "monitoring")
@@ -63,7 +29,7 @@ func TestGolden_ServiceMonitor(t *testing.T) {
 		NamespaceSelector: monitoringv1.NamespaceSelector{MatchNames: []string{"prod", "staging"}},
 	}
 	SetServiceMonitorSampleLimit(obj, 5000)
-	goldenTest(t, "servicemonitor.yaml", obj)
+	kuretest.Golden(t, "servicemonitor.yaml", obj)
 }
 
 func TestGolden_PodMonitor(t *testing.T) {
@@ -77,7 +43,7 @@ func TestGolden_PodMonitor(t *testing.T) {
 		NamespaceSelector:   monitoringv1.NamespaceSelector{Any: true},
 	}
 	SetPodMonitorSampleLimit(obj, 1000)
-	goldenTest(t, "podmonitor.yaml", obj)
+	kuretest.Golden(t, "podmonitor.yaml", obj)
 }
 
 func TestGolden_PrometheusRule(t *testing.T) {
@@ -93,5 +59,5 @@ func TestGolden_PrometheusRule(t *testing.T) {
 			Labels: map[string]string{"severity": "critical"},
 		}},
 	})
-	goldenTest(t, "prometheusrule.yaml", obj)
+	kuretest.Golden(t, "prometheusrule.yaml", obj)
 }

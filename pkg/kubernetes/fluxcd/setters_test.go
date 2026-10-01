@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	sigsyaml "sigs.k8s.io/yaml"
 
+	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/kubernetes"
 )
 
@@ -149,7 +150,7 @@ func TestHelmRepository_HTTP(t *testing.T) {
 	hr.Spec.PassCredentials = true
 	SetHelmRepositoryTimeout(hr, &metav1.Duration{Duration: 60 * time.Second})
 	SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "bitnami-auth"})
-	goldenTest(t, "helmrepository_http.yaml", hr)
+	kuretest.Golden(t, "helmrepository_http.yaml", hr)
 }
 
 func TestHelmRepository_OCI(t *testing.T) {
@@ -160,7 +161,7 @@ func TestHelmRepository_OCI(t *testing.T) {
 	hr.Spec.Insecure = false
 	hr.Spec.Interval = metav1.Duration{Duration: 5 * time.Minute}
 	SetHelmRepositorySecretRef(hr, &meta.LocalObjectReference{Name: "ghcr-auth"})
-	goldenTest(t, "helmrepository_oci.yaml", hr)
+	kuretest.Golden(t, "helmrepository_oci.yaml", hr)
 }
 
 // Bucket setters
@@ -1292,7 +1293,7 @@ func TestHelmRelease_FullSpec(t *testing.T) {
 	k := CreatePostRendererKustomize()
 	AddPostRendererKustomizeImage(k, kustomize.Image{Name: "redis", NewTag: "7.0"})
 	AddHelmReleasePostRenderer(hr, helmv2.PostRenderer{Kustomize: k})
-	goldenTest(t, "helmrelease_full_spec.yaml", hr)
+	kuretest.Golden(t, "helmrelease_full_spec.yaml", hr)
 }
 
 // Provider setters

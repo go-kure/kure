@@ -1,9 +1,6 @@
 package cilium
 
 import (
-	"flag"
-	"os"
-	"path/filepath"
 	"testing"
 
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -12,9 +9,8 @@ import (
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	"google.golang.org/protobuf/types/known/anypb"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	kureio "github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/internal/kuretest"
 )
 
 // The fixtures under testdata were written by the config-struct layer this
@@ -22,36 +18,6 @@ import (
 // and its twelve siblings) before it was retired. Each test below builds the
 // same object on the generated constructor plus the upstream struct and must
 // reproduce that output byte for byte.
-
-var update = flag.Bool("update", false, "update golden files")
-
-func goldenTest(t *testing.T, filename string, obj client.Object) {
-	t.Helper()
-	objects := []*client.Object{&obj}
-	got, err := kureio.EncodeObjectsToYAMLWithOptions(objects, kureio.EncodeOptions{
-		KubernetesFieldOrder: true,
-	})
-	if err != nil {
-		t.Fatalf("encoding to YAML: %v", err)
-	}
-	golden := filepath.Join("testdata", filename)
-	if *update {
-		if err := os.MkdirAll("testdata", 0o755); err != nil {
-			t.Fatalf("creating testdata dir: %v", err)
-		}
-		if err := os.WriteFile(golden, got, 0o644); err != nil {
-			t.Fatalf("updating golden file: %v", err)
-		}
-		return
-	}
-	want, err := os.ReadFile(golden)
-	if err != nil {
-		t.Fatalf("reading golden file (run with -update to create): %v", err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("output does not match golden file %s\n\ngot:\n%s\nwant:\n%s", golden, got, want)
-	}
-}
 
 func TestGolden_CiliumNetworkPolicySpec(t *testing.T) {
 	obj := CreateCiliumNetworkPolicy("allow-internal", "default")
@@ -62,7 +28,7 @@ func TestGolden_CiliumNetworkPolicySpec(t *testing.T) {
 			IngressCommonRule: api.IngressCommonRule{FromEndpoints: []api.EndpointSelector{api.NewESFromLabels()}},
 		}},
 	})
-	goldenTest(t, "ciliumnetworkpolicy-spec.yaml", obj)
+	kuretest.Golden(t, "ciliumnetworkpolicy-spec.yaml", obj)
 }
 
 func TestGolden_CiliumNetworkPolicySpecs(t *testing.T) {
@@ -82,7 +48,7 @@ func TestGolden_CiliumNetworkPolicySpecs(t *testing.T) {
 			EgressCommonRule: api.EgressCommonRule{ToEntities: []api.Entity{api.EntityWorld}},
 		}},
 	})
-	goldenTest(t, "ciliumnetworkpolicy-specs.yaml", obj)
+	kuretest.Golden(t, "ciliumnetworkpolicy-specs.yaml", obj)
 }
 
 func TestGolden_CiliumClusterwideNetworkPolicySpec(t *testing.T) {
@@ -93,7 +59,7 @@ func TestGolden_CiliumClusterwideNetworkPolicySpec(t *testing.T) {
 			IngressCommonRule: api.IngressCommonRule{FromEntities: []api.Entity{api.EntityHost}},
 		}},
 	})
-	goldenTest(t, "ciliumclusterwidenetworkpolicy-spec.yaml", obj)
+	kuretest.Golden(t, "ciliumclusterwidenetworkpolicy-spec.yaml", obj)
 }
 
 func TestGolden_CiliumClusterwideNetworkPolicySpecs(t *testing.T) {
@@ -105,13 +71,13 @@ func TestGolden_CiliumClusterwideNetworkPolicySpecs(t *testing.T) {
 			IngressCommonRule: api.IngressCommonRule{FromEntities: []api.Entity{api.EntityHost}},
 		}},
 	})
-	goldenTest(t, "ciliumclusterwidenetworkpolicy-specs.yaml", obj)
+	kuretest.Golden(t, "ciliumclusterwidenetworkpolicy-specs.yaml", obj)
 }
 
 func TestGolden_CiliumCIDRGroup(t *testing.T) {
 	obj := CreateCiliumCIDRGroup("internal-ranges")
 	obj.Spec.ExternalCIDRs = []api.CIDR{"10.0.0.0/8", "192.168.0.0/16"}
-	goldenTest(t, "ciliumcidrgroup.yaml", obj)
+	kuretest.Golden(t, "ciliumcidrgroup.yaml", obj)
 }
 
 func TestGolden_CiliumEgressGatewayPolicy(t *testing.T) {
@@ -125,7 +91,7 @@ func TestGolden_CiliumEgressGatewayPolicy(t *testing.T) {
 			Interface:    "eth0",
 		},
 	}
-	goldenTest(t, "ciliumegressgatewaypolicy.yaml", obj)
+	kuretest.Golden(t, "ciliumegressgatewaypolicy.yaml", obj)
 }
 
 func TestGolden_CiliumLocalRedirectPolicy(t *testing.T) {
@@ -139,7 +105,7 @@ func TestGolden_CiliumLocalRedirectPolicy(t *testing.T) {
 			ToPorts:               []ciliumv2.PortInfo{{Port: "53", Protocol: "UDP"}},
 		},
 	}
-	goldenTest(t, "ciliumlocalredirectpolicy.yaml", obj)
+	kuretest.Golden(t, "ciliumlocalredirectpolicy.yaml", obj)
 }
 
 func TestGolden_CiliumLoadBalancerIPPool(t *testing.T) {
@@ -148,7 +114,7 @@ func TestGolden_CiliumLoadBalancerIPPool(t *testing.T) {
 		Blocks:          []ciliumv2.CiliumLoadBalancerIPPoolIPBlock{{Cidr: "203.0.113.0/24"}},
 		ServiceSelector: &slimv1.LabelSelector{MatchLabels: map[string]string{"svc": "lb"}},
 	}
-	goldenTest(t, "ciliumloadbalancerippool.yaml", obj)
+	kuretest.Golden(t, "ciliumloadbalancerippool.yaml", obj)
 }
 
 // listener is an Envoy listener carried the way cilium carries every xDS
@@ -174,7 +140,7 @@ func TestGolden_CiliumEnvoyConfig(t *testing.T) {
 		BackendServices: []*ciliumv2.Service{{Name: "backend", Namespace: "default"}},
 		Resources:       []ciliumv2.XDSResource{listener(t, "my-proxy-listener")},
 	}
-	goldenTest(t, "ciliumenvoyconfig.yaml", obj)
+	kuretest.Golden(t, "ciliumenvoyconfig.yaml", obj)
 }
 
 func TestGolden_CiliumClusterwideEnvoyConfig(t *testing.T) {
@@ -183,7 +149,7 @@ func TestGolden_CiliumClusterwideEnvoyConfig(t *testing.T) {
 		Services:  []*ciliumv2.ServiceListener{{Name: "my-svc", Namespace: "default"}},
 		Resources: []ciliumv2.XDSResource{listener(t, "cluster-proxy-listener")},
 	}
-	goldenTest(t, "ciliumclusterwideenvoyconfig.yaml", obj)
+	kuretest.Golden(t, "ciliumclusterwideenvoyconfig.yaml", obj)
 }
 
 func TestGolden_CiliumBGPClusterConfig(t *testing.T) {
@@ -192,7 +158,7 @@ func TestGolden_CiliumBGPClusterConfig(t *testing.T) {
 		NodeSelector: &slimv1.LabelSelector{MatchLabels: map[string]string{"bgp": "enabled"}},
 		BGPInstances: []ciliumv2.CiliumBGPInstance{{Name: "instance-65000"}},
 	}
-	goldenTest(t, "ciliumbgpclusterconfig.yaml", obj)
+	kuretest.Golden(t, "ciliumbgpclusterconfig.yaml", obj)
 }
 
 func TestGolden_CiliumBGPPeerConfig(t *testing.T) {
@@ -203,7 +169,7 @@ func TestGolden_CiliumBGPPeerConfig(t *testing.T) {
 			CiliumBGPFamily: ciliumv2.CiliumBGPFamily{Afi: "ipv4", Safi: "unicast"},
 		}},
 	}
-	goldenTest(t, "ciliumbgppeerconfig.yaml", obj)
+	kuretest.Golden(t, "ciliumbgppeerconfig.yaml", obj)
 }
 
 func TestGolden_CiliumBGPAdvertisement(t *testing.T) {
@@ -211,7 +177,7 @@ func TestGolden_CiliumBGPAdvertisement(t *testing.T) {
 	obj.Spec = ciliumv2.CiliumBGPAdvertisementSpec{
 		Advertisements: []ciliumv2.BGPAdvertisement{{AdvertisementType: ciliumv2.BGPPodCIDRAdvert}},
 	}
-	goldenTest(t, "ciliumbgpadvertisement.yaml", obj)
+	kuretest.Golden(t, "ciliumbgpadvertisement.yaml", obj)
 }
 
 func TestGolden_CiliumBGPNodeConfig(t *testing.T) {
@@ -219,7 +185,7 @@ func TestGolden_CiliumBGPNodeConfig(t *testing.T) {
 	obj.Spec = ciliumv2.CiliumBGPNodeSpec{
 		BGPInstances: []ciliumv2.CiliumBGPNodeInstance{{Name: "instance-65000"}},
 	}
-	goldenTest(t, "ciliumbgpnodeconfig.yaml", obj)
+	kuretest.Golden(t, "ciliumbgpnodeconfig.yaml", obj)
 }
 
 func TestGolden_CiliumBGPNodeConfigOverride(t *testing.T) {
@@ -227,5 +193,5 @@ func TestGolden_CiliumBGPNodeConfigOverride(t *testing.T) {
 	obj.Spec = ciliumv2.CiliumBGPNodeConfigOverrideSpec{
 		BGPInstances: []ciliumv2.CiliumBGPNodeConfigInstanceOverride{{Name: "instance-65000", RouterID: ptr.To("10.0.0.1")}},
 	}
-	goldenTest(t, "ciliumbgpnodeconfigoverride.yaml", obj)
+	kuretest.Golden(t, "ciliumbgpnodeconfigoverride.yaml", obj)
 }
