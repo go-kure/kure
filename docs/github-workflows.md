@@ -577,7 +577,7 @@ During deployment, existing version subdirectories (`dev/`, `v*/`), `CNAME`, and
 
 - **Manual dispatch only** with inputs: `action`, `version_slot`
 
-`version_slot` must be `dev` or `vX.Y`; any other value fails the run before anything is changed. Both jobs read it through `env:`, never interpolated into a script.
+`version_slot` must be `dev` or `vX.Y`. A `validate` job checks it and both actions wait for that job, so any other value fails the run before anything is changed or any concurrency group is joined. Every job reads it through `env:`, never interpolated into a script.
 
 ### Actions
 
