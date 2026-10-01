@@ -9,7 +9,6 @@ on:
         type: choice
         options:
           - remove-version
-          - set-latest
           - rebuild-version
       version_slot:
         description: 'Target version slot (e.g., v0.1, dev)'
@@ -53,26 +52,6 @@ jobs:
         git add -A
         git commit -m "docs: remove /${SLOT}/ version"
         git push
-
-  set-latest:
-    name: Set latest version
-    runs-on: autops-kube-kure
-    timeout-minutes: 5
-    if: inputs.action == 'set-latest'
-
-    steps:
-    - name: Trigger deploy-docs with set_latest
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        SLOT="${{ inputs.version_slot }}"
-        # For set-latest, use the slot as the version label
-        echo "Setting /${SLOT}/ as latest (deploying to root)..."
-        gh workflow run deploy-docs.yml \
-          --repo "${{ github.repository }}" \
-          -f version_slot="${SLOT}" \
-          -f version_label="${SLOT}" \
-          -f set_latest=true
 
   rebuild-version:
     name: Rebuild version

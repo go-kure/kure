@@ -154,48 +154,19 @@ jobs:
         token: ${{ secrets.DEPLOY_TOKEN }}
         path: deploy-target
 
+    # Writes /kure/<slot>/ and, when set_latest asks for it, the /kure/ root, then
+    # pushes. The root is written only if the label is still the highest stable
+    # tag when the root is written (tags fetched again), so an older release's
+    # deploy that lands last cannot replace a newer release's root; a push
+    # rejected because another slot's deploy landed first is written again on
+    # the new tip and retried.
     - name: Deploy to go-kure.github.io
-      run: |
-        cd deploy-target
-        SLOT="${{ steps.version.outputs.slot }}"
-        SET_LATEST="${{ steps.version.outputs.set_latest }}"
-
-        # Ensure deployment infrastructure files exist
-        echo "www.gokure.dev" > CNAME
-        touch .nojekyll
-
-        # --- Deploy versioned slot to kure/{slot}/ ---
-        echo "Deploying to /kure/${SLOT}/..."
-        mkdir -p kure
-        rm -rf "kure/${SLOT}"
-        cp -r ../site/public-slot "kure/${SLOT}"
-
-        # --- Deploy to kure/ root (latest stable) ---
-        if [[ "$SET_LATEST" == "true" ]]; then
-          echo "Deploying to /kure/ (latest stable)..."
-          # Remove kure/ root content but preserve version subdirectories
-          find kure -maxdepth 1 -mindepth 1 \
-            -not -name 'dev' \
-            -not -name 'v*' \
-            -exec rm -rf {} +
-          cp -r ../site/public-root/* kure/
-        fi
-
-        # Get kure commit info for the deploy message
-        KURE_SHA=$(cd .. && git rev-parse --short HEAD)
-
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add -A
-        if git diff --staged --quiet; then
-          echo "No changes to deploy"
-        else
-          LABEL="${{ steps.version.outputs.label }}"
-          if [[ "$SET_LATEST" == "true" ]]; then
-            MSG="deploy: ${LABEL} → /kure/${SLOT}/ + /kure/ (latest) from kure@${KURE_SHA}"
-          else
-            MSG="deploy: ${LABEL} → /kure/${SLOT}/ from kure@${KURE_SHA}"
-          fi
-          git commit -m "$MSG"
-          git push
-        fi
+      uses: go-kure/.github/.github/actions/deploy-docs-push@233676b5b8f46397d47b4a1ac3d7de0afbcb1bd7 # main
+      with:
+        target-path: deploy-target
+        site-subdir: kure
+        slot: ${{ steps.version.outputs.slot }}
+        label: ${{ steps.version.outputs.label }}
+        set-latest: ${{ steps.version.outputs.set_latest }}
+        slot-site: site/public-slot
+        root-site: site/public-root
