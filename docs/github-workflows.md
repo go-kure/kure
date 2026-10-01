@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-09-30
+**Last Updated:** 2026-10-01
 
 ---
 
@@ -12,7 +12,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 |----------|------|----------|---------|
 | [CI](#ci-workflow) | `ci.yml` | push, PR, schedule, manual | Comprehensive testing, linting, building, security |
 | [Deploy Docs](#deploy-docs-workflow) | `deploy-docs.yml` | push to main (docs paths), `workflow_dispatch` | Multi-version docs deployment |
-| [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove, rebuild, or re-point doc versions |
+| [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove or rebuild doc versions |
 | [Release](/contributing/releasing/) | `release.yml` | manual | The one manual release workflow: release, promote, or start the next version |
 | [Release / Publish](/contributing/releasing/) (automatic on tag) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser (release object only — no artifacts, see [Releasing](#releasing)), docs deploy, proxy refresh |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
@@ -243,7 +243,7 @@ temporary branch — the merged result — before the PR is allowed to land.
   are also read outside the site, may link to the dev slot; every other page links
   version-relatively. `check-links` cannot see these: it runs
   lychee `--offline`, which skips every `http(s)` URL. They break because the release root is
-  rebuilt only by `set-latest` (see [Versioned Documentation](#versioned-documentation)), so an
+  rebuilt only by a `set_latest=true` deploy (see [Versioned Documentation](#versioned-documentation)), so an
   absolute link into it 404s for every page added since the last release. The page set is every
   package README with a `mount:` block and every extra mount in `site/docs-map.yaml` (needs
   `yq`), every file under `site/content/`, and `cliff.toml`, whose header template writes the
@@ -541,7 +541,7 @@ The workflow uses `continue-on-error: true` so review failures never block PR me
 
 1. Runs `scripts/gen-versions-toml.sh` to generate a versioned Hugo config overlay
 2. Builds the Hugo site with `--config hugo.toml,versions.toml`
-3. Deploys the built site to a subdirectory of `go-kure.github.io`
+3. Deploys the built site to a subdirectory of `go-kure.github.io` through the shared `deploy-docs-push` action from `go-kure/.github`. The slot must be `dev` or start with `v` (the names a root write keeps); the action refuses any other.
 
 ### Trigger Matrix
 
@@ -549,13 +549,18 @@ The workflow uses `continue-on-error: true` so review failures never block PR me
 |-------|-------------|------|---------|
 | Push to `main` (docs paths) | Dev docs | `/dev/` | `www.gokure.dev/dev/` |
 | `workflow_dispatch` | Versioned | `/vX.Y/` | `www.gokure.dev/vX.Y/` |
-| `workflow_dispatch` + `set_latest=true` | Versioned + root | `/vX.Y/` + `/` | Both |
+| `workflow_dispatch` + `set_latest=true` | Versioned + root (root only if the label is still the highest stable tag) | `/vX.Y/` + `/` | Both |
 
 ### Concurrency
 
 Per-slot concurrency group (`deploy-docs-<slot>`) with `cancel-in-progress: false` — two deploys **to the same slot** queue rather than cancel, so neither is dropped.
 
-**This does not serialise deploys to *different* slots, and they are not independent.** The group name includes the slot, so a `v1.2` deploy and a `v1.3` deploy sit in different groups and run at the same time. Both check out the same docs repository and both end in a plain `git push` with no retry (`deploy-docs.yml:199-200`), so the second to push fails non-fast-forward and its content is never applied — a real race, just not one this concurrency key can see. Sequence cross-slot deploys yourself: wait for the first to conclude before starting the second, as the recovery procedure on the [Releasing](/contributing/releasing/) page does.
+**This does not serialise deploys to *different* slots.** The group name includes the slot, so a `v1.2` deploy and a `v1.3` deploy sit in different groups and run at the same time against the same docs repository. The `deploy-docs-push` step handles both consequences at the write:
+
+- **The root is decided again.** Publish decides `set_latest` when it runs; by the time the deploy writes, a newer stable tag may exist. When the root is requested, the action fetches the tags and writes the root only if the label is still the highest stable tag (`publish-policy.sh latest`, the rule Publish uses); otherwise it deploys the slot alone and logs a notice. A policy error fails the step.
+- **A push that loses the race is retried.** A push rejected because the branch moved is written again on the new tip, keeping the other slot's content, and pushed again, up to 5 attempts; any other push failure fails the step at once.
+
+A deploy runs the `deploy-docs.yml` of the ref it was dispatched at, so a tag cut before this step existed deploys with the old plain `git push`: no root re-check, no retry. Sequence cross-slot deploys of such tags yourself, as the recovery procedure on the [Releasing](/contributing/releasing/) page does.
 
 ### Preservation
 
@@ -577,15 +582,13 @@ During deployment, existing version subdirectories (`dev/`, `v*/`), `CNAME`, and
 | Action | Description | Implementation |
 |--------|-------------|----------------|
 | `remove-version` | Delete a version's docs | Removes `/vX.Y/` directory from deploy target |
-| `set-latest` | Change root `/` to a specific version | Triggers `deploy-docs.yml` with `set_latest=true` |
 | `rebuild-version` | Re-trigger a docs build | Triggers `deploy-docs.yml` for the specified version |
+
+There is no action that points the root `/` at a chosen version: the root is only ever the highest stable tag's docs, and the deploy step refuses to write it for any other label. To put the root back on the highest stable tag, follow the recovery on the [Releasing](/contributing/releasing/) page, which dispatches `deploy-docs.yml` with `--ref` set to that tag.
 
 ### Common Scenarios
 
 ```bash
-# Roll back latest to an older version:
-#   Actions > "Manage Docs" > action=set-latest > version_slot=v0.1
-
 # Remove a yanked version:
 #   Actions > "Manage Docs" > action=remove-version > version_slot=v0.2
 
@@ -635,7 +638,7 @@ The development version shows a warning banner linking to the latest stable vers
 ### Links Between Pages
 
 Each slot is built separately, and only `/dev/` follows `main`. The root `/` is rebuilt only by a
-`set-latest` run, so it lacks every page added since that release. Link between site pages with a
+`set_latest=true` deploy, so it lacks every page added since that release. Link between site pages with a
 version-relative path such as `/api-reference/kubernetes-builders/`; Hugo resolves it inside the
 version being built. Text that is also read outside the site (`CHANGELOG.md` on GitHub, and the
 `cliff.toml` header that writes it) links to the dev slot, the site's base URL followed by

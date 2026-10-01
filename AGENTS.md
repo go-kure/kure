@@ -424,7 +424,7 @@ checkout for local use.
 - `check-links` — all internal links resolve in a root-relative Hugo build of the site
   (lychee, blocking, `docs-build` job). It skips every `http(s)` URL, so link to another
   site page with a version-relative path (`/api-reference/kubernetes-builders/`), never
-  `https://www.gokure.dev/kure/...`: the release root is rebuilt only on `set-latest` and
+  `https://www.gokure.dev/kure/...`: the release root is rebuilt only by a `set_latest=true` deploy and
   lacks newer pages. Text also read on GitHub (`CHANGELOG.md`, `cliff.toml`) uses the dev
   slot, `https://www.gokure.dev/kure/dev/...`. Kure-local `scripts/check-site-self-links.sh`
   enforces this, and rejects a dev-slot link from any other page (blocking, `docs-build`
