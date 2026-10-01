@@ -7,6 +7,12 @@ spec:
   backendServices:
     - name: backend
       namespace: default
+  resources:
+    - '@type': type.googleapis.com/envoy.config.listener.v3.Listener
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+      name: my-proxy-listener
   services:
     - name: my-svc
       namespace: default

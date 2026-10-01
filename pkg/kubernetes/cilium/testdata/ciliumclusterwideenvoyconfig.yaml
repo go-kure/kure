@@ -3,6 +3,12 @@ kind: CiliumClusterwideEnvoyConfig
 metadata:
   name: cluster-proxy
 spec:
+  resources:
+    - '@type': type.googleapis.com/envoy.config.listener.v3.Listener
+      filterChains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+      name: cluster-proxy-listener
   services:
     - name: my-svc
       namespace: default

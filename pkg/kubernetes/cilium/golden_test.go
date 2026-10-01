@@ -9,6 +9,8 @@ import (
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/policy/api"
+	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	"google.golang.org/protobuf/types/known/anypb"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -65,8 +67,21 @@ func TestGolden_CiliumNetworkPolicySpec(t *testing.T) {
 
 func TestGolden_CiliumNetworkPolicySpecs(t *testing.T) {
 	obj := CreateCiliumNetworkPolicy("multi-rule", "default")
-	AddCiliumNetworkPolicySpec(obj, &api.Rule{Description: "r1"})
-	AddCiliumNetworkPolicySpec(obj, &api.Rule{Description: "r2"})
+	// every rule needs a subject selector and at least one traffic direction
+	AddCiliumNetworkPolicySpec(obj, &api.Rule{
+		Description:      "r1",
+		EndpointSelector: api.NewESFromLabels(),
+		Ingress: []api.IngressRule{{
+			IngressCommonRule: api.IngressCommonRule{FromEndpoints: []api.EndpointSelector{api.NewESFromLabels()}},
+		}},
+	})
+	AddCiliumNetworkPolicySpec(obj, &api.Rule{
+		Description:      "r2",
+		EndpointSelector: api.NewESFromLabels(),
+		Egress: []api.EgressRule{{
+			EgressCommonRule: api.EgressCommonRule{ToEntities: []api.Entity{api.EntityWorld}},
+		}},
+	})
 	goldenTest(t, "ciliumnetworkpolicy-specs.yaml", obj)
 }
 
@@ -83,7 +98,13 @@ func TestGolden_CiliumClusterwideNetworkPolicySpec(t *testing.T) {
 
 func TestGolden_CiliumClusterwideNetworkPolicySpecs(t *testing.T) {
 	obj := CreateCiliumClusterwideNetworkPolicy("multi-rule")
-	AddCiliumClusterwideNetworkPolicySpec(obj, &api.Rule{Description: "r1"})
+	AddCiliumClusterwideNetworkPolicySpec(obj, &api.Rule{
+		Description:  "r1",
+		NodeSelector: api.NewESFromLabels(),
+		Ingress: []api.IngressRule{{
+			IngressCommonRule: api.IngressCommonRule{FromEntities: []api.Entity{api.EntityHost}},
+		}},
+	})
 	goldenTest(t, "ciliumclusterwidenetworkpolicy-specs.yaml", obj)
 }
 
@@ -96,9 +117,13 @@ func TestGolden_CiliumCIDRGroup(t *testing.T) {
 func TestGolden_CiliumEgressGatewayPolicy(t *testing.T) {
 	obj := CreateCiliumEgressGatewayPolicy("prod-egress")
 	obj.Spec = ciliumv2.CiliumEgressGatewayPolicySpec{
+		Selectors:        []ciliumv2.EgressRule{{PodSelector: &slimv1.LabelSelector{MatchLabels: map[string]string{"app": "crawler"}}}},
 		DestinationCIDRs: []ciliumv2.CIDR{"0.0.0.0/0"},
 		ExcludedCIDRs:    []ciliumv2.CIDR{"10.0.0.0/8"},
-		EgressGateway:    &ciliumv2.EgressGateway{Interface: "eth0"},
+		EgressGateway: &ciliumv2.EgressGateway{
+			NodeSelector: &slimv1.LabelSelector{MatchLabels: map[string]string{"node-role.kubernetes.io/egress": ""}},
+			Interface:    "eth0",
+		},
 	}
 	goldenTest(t, "ciliumegressgatewaypolicy.yaml", obj)
 }
@@ -126,11 +151,28 @@ func TestGolden_CiliumLoadBalancerIPPool(t *testing.T) {
 	goldenTest(t, "ciliumloadbalancerippool.yaml", obj)
 }
 
+// listener is an Envoy listener carried the way cilium carries every xDS
+// resource: a protobuf Any, which XDSResource marshals with protojson.
+func listener(t *testing.T, name string) ciliumv2.XDSResource {
+	t.Helper()
+	res, err := anypb.New(&listenerv3.Listener{
+		Name: name,
+		FilterChains: []*listenerv3.FilterChain{{
+			Filters: []*listenerv3.Filter{{Name: "envoy.filters.network.http_connection_manager"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("wrapping the listener: %v", err)
+	}
+	return ciliumv2.XDSResource{Any: res}
+}
+
 func TestGolden_CiliumEnvoyConfig(t *testing.T) {
 	obj := CreateCiliumEnvoyConfig("my-proxy", "default")
 	obj.Spec = ciliumv2.CiliumEnvoyConfigSpec{
 		Services:        []*ciliumv2.ServiceListener{{Name: "my-svc", Namespace: "default"}},
 		BackendServices: []*ciliumv2.Service{{Name: "backend", Namespace: "default"}},
+		Resources:       []ciliumv2.XDSResource{listener(t, "my-proxy-listener")},
 	}
 	goldenTest(t, "ciliumenvoyconfig.yaml", obj)
 }
@@ -138,7 +180,8 @@ func TestGolden_CiliumEnvoyConfig(t *testing.T) {
 func TestGolden_CiliumClusterwideEnvoyConfig(t *testing.T) {
 	obj := CreateCiliumClusterwideEnvoyConfig("cluster-proxy")
 	obj.Spec = ciliumv2.CiliumEnvoyConfigSpec{
-		Services: []*ciliumv2.ServiceListener{{Name: "my-svc", Namespace: "default"}},
+		Services:  []*ciliumv2.ServiceListener{{Name: "my-svc", Namespace: "default"}},
+		Resources: []ciliumv2.XDSResource{listener(t, "cluster-proxy-listener")},
 	}
 	goldenTest(t, "ciliumclusterwideenvoyconfig.yaml", obj)
 }

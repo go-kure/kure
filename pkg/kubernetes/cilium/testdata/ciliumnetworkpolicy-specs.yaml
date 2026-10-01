@@ -5,4 +5,12 @@ metadata:
   namespace: default
 specs:
   - description: r1
+    endpointSelector: {}
+    ingress:
+      - fromEndpoints:
+          - {}
   - description: r2
+    egress:
+      - toEntities:
+          - world
+    endpointSelector: {}
