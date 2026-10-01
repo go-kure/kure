@@ -251,3 +251,57 @@ func TestAssertValidDir(t *testing.T) {
 		t.Errorf("want only bad.yml named, got %q", f.fatal)
 	}
 }
+
+// What stops validation itself is a failure, never a pass.
+func TestAssertValidDirFailsOnWhatItCannotRead(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	if f := run(func(tb testing.TB) { AssertValidDir(tb, missing) }); !strings.Contains(f.fatal, missing) {
+		t.Errorf("a directory that does not exist must fail, got %q", f.fatal)
+	}
+	broken := t.TempDir()
+	if err := os.WriteFile(filepath.Join(broken, "broken.yaml"), []byte("metadata: [not a mapping\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if f := run(func(tb testing.TB) { AssertValidDir(tb, broken) }); !strings.Contains(f.fatal, "broken.yaml") || !strings.Contains(f.fatal, "document 0") {
+		t.Errorf("a manifest that does not decode must fail, got %q", f.fatal)
+	}
+	unreadable := t.TempDir()
+	if err := os.Symlink(filepath.Join(unreadable, "gone.yaml"), filepath.Join(unreadable, "dangling.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if f := run(func(tb testing.TB) { AssertValidDir(tb, unreadable) }); !strings.Contains(f.fatal, "dangling.yaml") {
+		t.Errorf("a manifest that cannot be read must fail, got %q", f.fatal)
+	}
+}
+
+func TestAssertValidYAMLFailsOnWhatDoesNotDecode(t *testing.T) {
+	if f := run(func(tb testing.TB) { AssertValidYAML(tb, []byte("metadata: [not a mapping\n")) }); !strings.Contains(f.fatal, "document 0") {
+		t.Errorf("want the decode error, got %q", f.fatal)
+	}
+}
+
+func TestGoldenReportsAFixtureItCannotReadOrWrite(t *testing.T) {
+	f := run(func(tb testing.TB) { Golden(tb, "no-such-fixture.yaml", configMap("a")) })
+	if !strings.Contains(f.fatal, "run with -update to create") {
+		t.Errorf("want the missing fixture reported, got %q", f.fatal)
+	}
+	*update = true
+	t.Cleanup(func() { *update = false })
+	f = run(func(tb testing.TB) { Golden(tb, filepath.Join("no-such-dir", "x.yaml"), configMap("a")) })
+	if !strings.Contains(f.fatal, "updating golden file") {
+		t.Errorf("want the write failure reported, got %q", f.fatal)
+	}
+}
+
+func TestDecodeRejectsADocumentThatIsNotAnObject(t *testing.T) {
+	for _, doc := range []string{"k: v\n", "- a\n- b\n"} {
+		if _, err := validateYAML([]byte(doc)); err == nil {
+			t.Errorf("%q passed as an object", doc)
+		}
+	}
+	// a document holding only a comment is nothing to validate
+	findings, err := validateYAML([]byte("# nothing here\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ok\n"))
+	if err != nil || len(findings) != 0 {
+		t.Errorf("a comment-only document: findings %v, err %v", findings, err)
+	}
+}

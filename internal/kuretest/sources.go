@@ -2,6 +2,7 @@ package kuretest
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -68,15 +69,21 @@ var (
 
 // validator builds the pinned validator once per test binary.
 func validator() (*crdvalidate.Validator, error) {
-	buildOnce.Do(func() { built, buildErr = build() })
+	buildOnce.Do(func() {
+		dirs, err := moduleDirs()
+		if err != nil {
+			buildErr = err
+			return
+		}
+		built, buildErr = build(dirs, gotk.Open())
+	})
 	return built, buildErr
 }
 
-func build() (*crdvalidate.Validator, error) {
-	dirs, err := moduleDirs()
-	if err != nil {
-		return nil, err
-	}
+// build reads every definition the table names — each module's from its
+// directory in dirs, keyed by module path, and the Flux toolkit's from
+// bundle — and indexes them.
+func build(dirs map[string]string, bundle io.Reader) (*crdvalidate.Validator, error) {
 	var defs []*apiextensionsv1.CustomResourceDefinition
 	for _, module := range sortedModules() {
 		src := modules[module]
@@ -95,7 +102,7 @@ func build() (*crdvalidate.Validator, error) {
 			defs = append(defs, d.CRD)
 		}
 	}
-	bundled, err := crds.Archive(gotk.Open())
+	bundled, err := crds.Archive(bundle)
 	if err != nil {
 		return nil, errors.Wrap(err, "kuretest: the Flux bundle")
 	}
