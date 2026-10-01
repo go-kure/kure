@@ -25,19 +25,16 @@ concurrency:
 
 # kure's docs live under kure/ in go-kure.github.io: kure/dev/, kure/vX.Y/ and,
 # at kure/ itself, the latest stable release. The slot is read through env, never
-# interpolated into a script, and must be dev or vX.Y before anything runs.
+# interpolated into a script, and must be dev or vX.Y before either action runs.
 
 jobs:
-  remove-version:
-    name: Remove version
+  # A job of its own, so an invalid slot fails before remove-version joins a
+  # deploy-docs-<slot> group. Group names are case-insensitive, so even DEV
+  # would join deploy-docs-dev and replace a deploy waiting there.
+  validate:
+    name: Validate version slot
     runs-on: autops-kube-kure
     timeout-minutes: 5
-    if: inputs.action == 'remove-version'
-    # Deploy Docs' group for this slot: a removal never overlaps a deploy of the
-    # same slot, which would otherwise push the slot back after the removal.
-    concurrency:
-      group: deploy-docs-${{ inputs.version_slot }}
-      cancel-in-progress: false
 
     steps:
     - name: Validate version slot
@@ -49,6 +46,19 @@ jobs:
           exit 1
         fi
 
+  remove-version:
+    name: Remove version
+    needs: validate
+    runs-on: autops-kube-kure
+    timeout-minutes: 5
+    if: inputs.action == 'remove-version'
+    # Deploy Docs' group for this slot: a removal never overlaps a deploy of the
+    # same slot, which would otherwise push the slot back after the removal.
+    concurrency:
+      group: deploy-docs-${{ inputs.version_slot }}
+      cancel-in-progress: false
+
+    steps:
     - name: Checkout go-kure.github.io
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
@@ -75,20 +85,12 @@ jobs:
 
   rebuild-version:
     name: Rebuild version
+    needs: validate
     runs-on: autops-kube-kure
     timeout-minutes: 5
     if: inputs.action == 'rebuild-version'
 
     steps:
-    - name: Validate version slot
-      env:
-        SLOT: ${{ inputs.version_slot }}
-      run: |
-        if [[ ! "$SLOT" =~ ^(dev|v[0-9]+\.[0-9]+)$ ]]; then
-          echo "::error::version_slot must be dev or vX.Y (e.g., v0.1)"
-          exit 1
-        fi
-
     # dev is built from main, as a docs push to main builds it. A vX.Y slot holds
     # the docs of that line's highest stable tag, so it is rebuilt from that tag
     # with the tag as label, the way Release / Publish deploys it.
