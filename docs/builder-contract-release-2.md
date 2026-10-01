@@ -224,7 +224,8 @@ reproduced byte for byte.
 | `ExtensionOptions.Name`, `.Ensure` | `cnpgv1.ExtensionSpec{DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{Name, Ensure}}` |
 | `ObjectStoreConfig.Name`, `.Namespace` | `CreateObjectStore(name, namespace)` |
 | `ObjectStoreConfig.Options *ObjectStoreOptions` | `store.Spec` (`barmanv1.ObjectStoreSpec`) |
-| `ObjectStoreOptions.DestinationPath`, `.EndpointURL`, `.ServerName` | `Spec.Configuration.DestinationPath`, `.EndpointURL`, `.ServerName` |
+| `ObjectStoreOptions.DestinationPath`, `.EndpointURL` | `Spec.Configuration.DestinationPath`, `.EndpointURL` |
+| `ObjectStoreOptions.ServerName` | the `serverName` parameter of the Cluster's barman-cloud plugin entry (the `ClusterOptions.ObjectStoreName` row above), not `Spec.Configuration.ServerName`: the ObjectStore CRD forbids `spec.configuration.serverName` with a CEL rule whose message is "use the 'serverName' plugin parameter in the Cluster resource". The layer wrote it anyway, and the `objectstore.yaml` fixture carried it until schema validation of the fixtures caught it |
 | `ObjectStoreOptions.SecretName`, `.AccessKeyIDKey`, `.SecretAccessKeyKey` | `SetObjectStoreS3Credentials(store, &barmanapi.S3Credentials{...})` with the two `machineryapi.SecretKeySelector` references spelled out — only when `SecretName` is non-empty; the layer left `AWS` nil otherwise |
 | `ObjectStoreOptions.RetentionPolicy` | `Spec.RetentionPolicy` |
 | `ScheduledBackupConfig.Name`, `.Namespace`, `.Spec` | `CreateScheduledBackup(name, namespace)`; `backup.Spec = spec` |
