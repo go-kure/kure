@@ -136,6 +136,27 @@ make test-benchmark
 make test-integration
 ```
 
+#### Golden fixtures and schema validation
+
+The builder families under `pkg/kubernetes` keep their expected output as golden fixtures in
+`testdata/`. `internal/kuretest.Golden` validates an object against the pinned
+CustomResourceDefinition schema (and the API server's ObjectMeta rules) before comparing it
+with its fixture, and rewrites the fixture under `-update` only when it validates:
+
+```bash
+GOWORK=off go test ./pkg/kubernetes/cnpg/ -run TestGolden -update
+```
+
+A fixture the pinned schema rejects is a defect in the test or the builder, not a fixture to
+update. The validator reads each pinned module's definitions from the module cache through
+`go list`, so it needs the module graph as `go.mod` states it: under a parent `go.work` that
+replaces a pinned module, the version check fails and its message names `GOWORK=off` (the
+Makefile exports it already). The same validation runs on the Flux bootstrap output of
+`pkg/stack/fluxcd` and on everything `examples/getting-started` writes, so a generator that
+drifts from the pinned schema fails `make test`, not a cluster. Which kinds are held to a
+schema and which get ObjectMeta validation only is listed in `pkg/kubernetes/README.md`
+§ Schema validation test.
+
 ### 4. Code Quality
 
 ```bash
@@ -319,6 +340,8 @@ Treat 90 as the number that matters.
 - Use `make test-coverage` to check coverage before PRs
 - Use `make test-race` to catch concurrency issues
 - Use `make check` for quick pre-commit validation
+- Refresh a golden fixture with `-update` (Golden fixtures and schema validation, above); the
+  helper refuses to write one the pinned schema rejects
 
 ### Code Quality
 - CI gates test coverage — see the `COVERAGE_THRESHOLD` note above for the number that applies

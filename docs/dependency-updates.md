@@ -430,13 +430,15 @@ judgment.
 #### The vendored gotk manifests base
 
 `gotk` bootstrap mode builds the Flux controllers from the flux2 release's install
-manifests base, embedded as `pkg/stack/fluxcd/gotk_manifests.tar.gz` and named in
-`GotkVersion`, so generation with `FluxVersion` empty or naming that release downloads
-nothing (go-kure/kure#794); any other `FluxVersion` is an explicit opt-in to the upstream
-download. A `flux2/v2`
-bump in `go.mod` therefore has three companion edits: the tarball (the release's
+manifests base, embedded as `internal/gotk/manifests.tar.gz` and named in `gotk.Version`
+(re-exported as `pkg/stack/fluxcd.GotkVersion`), so generation with `FluxVersion` empty or
+naming that release downloads nothing (go-kure/kure#794); any other `FluxVersion` is an
+explicit opt-in to the upstream download. The same bundle is where the test suite reads the
+Flux toolkit CustomResourceDefinitions it validates kure's Flux output against
+(`internal/kuretest`), so a bump also moves the schemas the fixtures are held to. A
+`flux2/v2` bump in `go.mod` therefore has three companion edits: the tarball (the release's
 `manifests.tar.gz` asset), the constant, and the "currently **vX.Y.Z**" mention in
-`pkg/stack/fluxcd/README.md`; the `GotkVersion` doc comment lists the steps. No script
+`pkg/stack/fluxcd/README.md`; the `gotk.Version` doc comment lists the steps. No script
 makes them yet, so the Flux group's bump PR fails `TestVendoredPinsMatchGoMod` until they
 are made: the test compares `GotkVersion` and `FluxOperatorVersion` with `go.mod`, and
 each controller image in the vendored gotk bundle that has a controller API module with

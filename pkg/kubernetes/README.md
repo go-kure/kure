@@ -429,7 +429,8 @@ the ones whose prose mentions the words about something else — claim nothing.
 ## 9. Where scope and maturity come from
 
 Both are derived from the pinned upstream module sources, not kept by hand beside
-them. Five internal packages do it, and none of them is part of the public API:
+them. Five internal packages do it — four under `pkg/kubernetes/internal`, one at the
+module root — and none of them is part of the public API:
 
 - `internal/markers` parses the controller-gen markers kure reads —
   `+kubebuilder:resource` for scope, `+featureGate` for maturity. Pure text, no I/O.
@@ -439,11 +440,13 @@ them. Five internal packages do it, and none of them is part of the public API:
   it is not serialised, so it has no name a manifest could carry, and recording it
   would file it under the name `-` and make its type reachable in the maturity walk
   (cilium's `XDSResource` embeds `*anypb.Any` that way).
-- `internal/crds` reads the `CustomResourceDefinition` manifests a module ships in
-  that directory, which is where the scope comes from for a type carrying no marker.
-  Each module directory is walked once per process and its index kept: the walk
-  decodes every manifest the module ships, and a module-cache directory never
-  changes under a fixed version. A walk that fails is not kept.
+- `internal/crds` (the module root's, `github.com/go-kure/kure/internal/crds`) reads
+  the `CustomResourceDefinition` manifests a module ships in that directory, which is
+  where the scope comes from for a type carrying no marker. Each module directory is
+  walked once per process and its index kept: the walk decodes every manifest the
+  module ships, and a module-cache directory never changes under a fixed version. A
+  walk that fails is not kept. The same reader returns whole definitions, which is
+  what the schema validation test below holds kure's output to.
 - `internal/kinds` resolves a scope per registered kind; `internal/maturity` walks
   the type graph for the field table.
 
@@ -599,6 +602,33 @@ calls its generated wrapper and compares the result with `reflect.DeepEqual` aga
 a zero value carrying only GVK, name and (when namespaced) namespace. Any injected
 label, selector or default turns it red. `TestIdentity_EveryRegisteredKindHasAWrapper`
 fails on a registered kind with no wrapper and on a wrapper with no registered kind.
+
+## Schema validation test
+
+Every golden fixture under a family's `testdata/`, the Flux bootstrap and Kustomization
+output `pkg/stack/fluxcd` emits in its tests, and every manifest the getting-started
+example writes are validated as the YAML a user would apply: against the
+`CustomResourceDefinition` of the exact module version the kinds table pins, with the
+API server's own create-time routines — schema, defaults, pruning of unknown fields,
+ObjectMeta, list invariants and the `x-kubernetes-validations` CEL rules — in process
+and offline. The helper is `internal/kuretest`: `Golden` validates before it compares
+or rewrites a fixture, so `-update` can never write one a cluster would reject;
+`AssertValid`, `AssertValidYAML` and `AssertValidDir` take objects, bytes and a
+written tree.
+
+`TestEveryKindHasOneSource` names every registered kind as schema-backed or uncovered,
+with the reason. Schema-backed kinds are the ones whose module ships its definitions
+(cert-manager, cilium, cloudnative-pg, plugin-barman-cloud, flux-operator,
+gateway-api, metallb, volsync) or whose definitions the vendored Flux install bundle
+carries (`internal/gotk`): 73 against the current pins. Uncovered kinds have no
+definition to hold them to — the built-in kinds of `k8s.io/api` and
+`k8s.io/apiextensions-apiserver`, whose validation the apiserver implements in Go,
+and the external-secrets and prometheus-operator kinds, whose API modules ship no
+manifests — and get the server's ObjectMeta validation and nothing more: 55 against
+the current pins. A kind in neither table, a stale table entry, a definition whose
+scope disagrees with the kinds table, or an uncovered module that starts shipping
+definitions all turn the test red. Why the validation is in process and what it leaves
+to a real apiserver is recorded in `docs/history/20261001-DESIGN-schema-validation.md`.
 
 ## GVK utilities and scheme
 
