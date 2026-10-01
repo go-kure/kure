@@ -129,9 +129,12 @@ pi_compare() {
     } >"$PI_ROOT/api/${PI_OLD}...${PI_NEW}.json"
 }
 
-# pi_run -- run the checker in CI mode against the `base` branch.
+# pi_run [<arg>...] -- run the checker with <arg>s, by default in CI mode
+# against the `base` branch.
 pi_run() {
-    PI_OUT=$(cd "$PI_ROOT/repo" && env "${PI_GIT_UNSET[@]}" bash scripts/check-pin-impact.sh --base-ref base 2>&1)
+    local args=("$@")
+    [[ ${#args[@]} -gt 0 ]] || args=(--base-ref base)
+    PI_OUT=$(cd "$PI_ROOT/repo" && env "${PI_GIT_UNSET[@]}" bash scripts/check-pin-impact.sh "${args[@]}" 2>&1)
     PI_RC=$?
 }
 

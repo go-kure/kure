@@ -18,7 +18,7 @@
 # that intersection and fails when it's non-empty, so a bump that touches a
 # path kure actually executes cannot merge unreviewed.
 #
-# Two modes:
+# Three modes:
 #   --base-ref REF   CI mode. NEW pin state is read from the working tree's
 #                    own .github/workflows/*.yml (must be internally
 #                    consistent — every occurrence pinning the same SHA).
@@ -33,6 +33,14 @@
 #                    only which SHA their content is fetched at is overridden.
 #                    Lets a bump be checked against arbitrary historical SHAs
 #                    without checking out that exact repo state.
+#   --consistency    Merge-queue mode. Reads only the working tree's own
+#                    .github/workflows/*.yml, scanned and refused exactly as
+#                    in CI mode, and passes when every go-kure/.github
+#                    reference pins the same SHA. No base, no fetch, no ack:
+#                    the impact was gated on each PR, and this refuses only
+#                    the combined tree two such PRs can produce, whose mixed
+#                    pins would make every later PR's base inconsistent
+#                    (go-kure/kure#951).
 #
 # CI images do not have mise installed (see check-tool-versions.sh) and this
 # job runs bare like action-pins/forbidden-terms — no yq, no python. Plain
@@ -205,6 +213,7 @@
 #
 # Usage: check-pin-impact.sh --base-ref origin/main
 #        check-pin-impact.sh --old <40-hex> --new <40-hex>
+#        check-pin-impact.sh --consistency
 
 set -euo pipefail
 
@@ -217,21 +226,27 @@ WORKFLOW_FILES=(.github/workflows/*.yml .github/workflows/*.yaml)
 BASE_REF=""
 OLD_SHA=""
 NEW_SHA=""
+CONSISTENCY=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base-ref) BASE_REF="${2:-}"; [[ -n "$BASE_REF" ]] || { echo "check-pin-impact: --base-ref needs a REF" >&2; exit 2; }; shift 2 ;;
     --old) OLD_SHA="${2:-}"; [[ -n "$OLD_SHA" ]] || { echo "check-pin-impact: --old needs a SHA" >&2; exit 2; }; shift 2 ;;
     --new) NEW_SHA="${2:-}"; [[ -n "$NEW_SHA" ]] || { echo "check-pin-impact: --new needs a SHA" >&2; exit 2; }; shift 2 ;;
+    --consistency) CONSISTENCY=true; shift ;;
     -h|--help) sed -n '2,/^$/{/^$/q;p;}' "$0"; exit 0 ;;
     *) echo "check-pin-impact: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+if [[ "$CONSISTENCY" == "true" && ( -n "$BASE_REF" || -n "$OLD_SHA" || -n "$NEW_SHA" ) ]]; then
+  echo "check-pin-impact: --consistency takes no --base-ref or --old/--new" >&2
+  exit 2
+fi
 if [[ -n "$BASE_REF" && ( -n "$OLD_SHA" || -n "$NEW_SHA" ) ]]; then
   echo "check-pin-impact: --base-ref and --old/--new are mutually exclusive" >&2
   exit 2
 fi
-if [[ -z "$BASE_REF" && ( -z "$OLD_SHA" || -z "$NEW_SHA" ) ]]; then
-  echo "usage: $0 --base-ref REF | --old SHA --new SHA" >&2
+if [[ "$CONSISTENCY" == "false" && -z "$BASE_REF" && ( -z "$OLD_SHA" || -z "$NEW_SHA" ) ]]; then
+  echo "usage: $0 --base-ref REF | --old SHA --new SHA | --consistency" >&2
   exit 2
 fi
 
@@ -531,6 +546,17 @@ action_names="$(for f in "${!scan_new[@]}"; do printf '%s\n' "${scan_new[$f]}" |
 if [[ -z "$action_names" ]]; then
   echo "check-pin-impact: no go-kure/.github action references found in ${WORKFLOW_FILES[*]}" >&2
   exit 1
+fi
+
+# --- Merge-queue mode: the working tree's pins must agree, nothing else ---
+if [[ "$CONSISTENCY" == "true" ]]; then
+  tree_shas=()
+  for f in "${!scan_new[@]}"; do
+    while IFS= read -r s; do [[ -n "$s" ]] && tree_shas+=("$s"); done < <(printf '%s\n' "${scan_new[$f]}" | scan_field pin)
+  done
+  TREE_SHA="$(resolve_pin "current working tree" "${tree_shas[@]}")"
+  echo "check-pin-impact: every go-kure/.github reference pins ${TREE_SHA:0:8} — OK"
+  exit 0
 fi
 
 # --- Resolve OLD/NEW SHAs ---
