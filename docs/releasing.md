@@ -429,7 +429,10 @@ by hand once its provenance is settled.
 - **Only the docs root is decided again when the docs deploy.** The callers' `deploy-docs.yml`
   runs one deploy per slot at a time, not one overall. Its deploy step, once it is the shared
   `deploy-docs-push` action, fetches the tags right before it writes the root and writes it only
-  if the tag is still the highest stable tag (`publish-policy.sh latest`), and a push rejected
+  if the tag is still the highest stable tag (`publish-policy.sh latest`) and the deploy's checkout
+  is that tag's commit. When the policy says the root should be written but the label is no tag,
+  or the checked-out commit is not the tag's, the step fails instead of putting another commit's
+  docs at the root. A push rejected
   because another slot's deploy landed first is written again on the new tip and retried a bounded
   number of times. The slot decision is still the one Publish took. A deploy runs the
   `deploy-docs.yml` of its `--ref`, so a tag cut before its repository adopted the action deploys
