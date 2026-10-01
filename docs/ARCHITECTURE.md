@@ -1294,12 +1294,17 @@ pkg/
 │   ├── identity_test.go         # the contract: constructors emit identity only
 │   ├── zz_generated_kinds_test.go   # the frozen kind/scope fixture (generated)
 │   ├── fluxcd/ certmanager/ …   # one _test.go beside each builder file
-│   └── internal/…               # kinds, markers, upstream, crds, maturity, gen
+│   └── internal/…               # kinds, markers, upstream, maturity, gen, admission
 ├── stack/
 │   ├── application_test.go
 │   ├── bundle_test.go
 │   └── ...
 └── ...
+internal/                        # module-root packages the tests share; not public API
+├── crds/                        # reads the CustomResourceDefinition manifests a pinned module ships
+├── crdvalidate/                 # the API server's create-time validation, in process
+├── gotk/                        # the vendored flux2 install bundle
+└── kuretest/                    # Golden and AssertValid*: output held to the pinned schemas
 ```
 
 CI enforces a repository floor of 90% statement coverage and the same 90% for every package outside
@@ -1440,7 +1445,19 @@ func TestValidationErrors(t *testing.T) {
 
 ### Test Utilities
 
-Common test utilities for consistent testing:
+`internal/kuretest` is the shared test helper: it holds kure's output to what a cluster would
+accept. `Golden(t, file, obj)` encodes an object the way the fixtures are written, validates it
+and compares it with `testdata/<file>` — or rewrites the file under `-update`, validation
+first, so an invalid fixture can never be written. `AssertValid(t, objs...)`,
+`AssertValidYAML(t, data)` and `AssertValidDir(t, dir)` validate objects, bytes and a written
+tree. Validation is the API server's own create-time sequence (`internal/crdvalidate`) against
+the CustomResourceDefinitions of the exact module versions the kinds table pins, read from the
+module cache (`internal/crds`) and from the vendored Flux install bundle (`internal/gotk`); a
+kind with no definition gets ObjectMeta validation only, and `TestEveryKindHasOneSource` names
+each one with the reason. The design and what it leaves out are in
+`docs/history/20261001-DESIGN-schema-validation.md`.
+
+Other helpers stay local to the package that needs them:
 
 <!-- doc-example:excerpt test-helper outlines with elided bodies -->
 ```go
@@ -1517,6 +1534,7 @@ Additional design documentation available in the repository:
 
 - `pkg/kubernetes/README.md`: The builder contract (ADR-038) — normative
 - `docs/history/20260905-DESIGN-builder-contract.md`: Why the contract replaced three builder layers
+- `docs/history/20261001-DESIGN-schema-validation.md`: Why kure's output is validated against the pinned CRD schemas in process, and what that leaves to a real apiserver
 - `docs/builder-contract-release-1.md`: Release-1 migration ledger — every removed helper and its replacement
 - `docs/api-tables.md`: Generated kinds, scope and field-maturity tables
 - `pkg/stack/layout/README.md`: Layout system overview
