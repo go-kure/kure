@@ -163,7 +163,7 @@ jobs:
     # rejected because another slot's deploy landed first is written again on
     # the new tip and retried.
     - name: Deploy to go-kure.github.io
-      uses: go-kure/.github/.github/actions/deploy-docs-push@233676b5b8f46397d47b4a1ac3d7de0afbcb1bd7 # main
+      uses: go-kure/.github/.github/actions/deploy-docs-push@ab9eec3e3a2619c4f2ed2048d62adebf3a7347dd # main
       with:
         target-path: deploy-target
         site-subdir: kure
