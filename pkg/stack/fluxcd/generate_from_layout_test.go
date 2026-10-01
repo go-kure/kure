@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/yaml"
 
+	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -562,6 +563,7 @@ func TestGenerateForBundle_UsesCallerPath(t *testing.T) {
 	if len(objs) != 2 {
 		t.Fatalf("got %d objects, want the Kustomization and its GitRepository", len(objs))
 	}
+	kuretest.AssertValid(t, objs...)
 	k, ok := objs[0].(*kustv1.Kustomization)
 	if !ok {
 		t.Fatalf("first object is %T, want a Kustomization", objs[0])
@@ -633,6 +635,7 @@ func TestGenerateFromCluster_DefaultRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	kuretest.AssertValid(t, objs...)
 	got := map[string]string{}
 	for _, o := range objs {
 		if k, ok := o.(*kustv1.Kustomization); ok {

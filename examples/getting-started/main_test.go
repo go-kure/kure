@@ -3,15 +3,19 @@ package main
 import (
 	"testing"
 
+	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/stack"
 )
 
-// TestRun exercises the complete getting-started pipeline end-to-end.
-// It uses a temp directory for output so no cleanup is needed.
+// TestRun exercises the complete getting-started pipeline end-to-end and
+// holds every manifest it writes to what a cluster would accept.
 func TestRun(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("OUT_DIR", dir)
 	if err := run(); err != nil {
 		t.Fatalf("run() error = %v", err)
 	}
+	kuretest.AssertValidDir(t, dir)
 }
 
 // TestRedisConfigGenerate exercises the RedisConfig.Generate method.
