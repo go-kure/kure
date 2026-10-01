@@ -118,7 +118,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Validate docs map (code↔docs sync)
-      uses: go-kure/.github/.github/actions/check-doc-sync@ab9eec3e3a2619c4f2ed2048d62adebf3a7347dd # main
+      uses: go-kure/.github/.github/actions/check-doc-sync@8c18551bf6a672fa6c26eacde401c413764526cc # main
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
@@ -157,13 +157,14 @@ jobs:
     # Writes /kure/<slot>/ and, when set_latest asks for it, the /kure/ root, then
     # pushes. The root is written only if no stable tag higher than the label
     # exists when the root is written (tags fetched again), so an older release's
-    # deploy that lands last cannot replace a newer release's root. The label
-    # itself is not checked to be a tag, so a manual dispatch with set_latest
-    # must name the real highest stable tag. A push
+    # deploy that lands last cannot replace a newer release's root. When the root
+    # is to be written, the label must be an existing tag whose commit is this
+    # checkout's HEAD, or the step fails, so a manual dispatch with set_latest
+    # runs with --ref set to that tag. A push
     # rejected because another slot's deploy landed first is written again on
     # the new tip and retried.
     - name: Deploy to go-kure.github.io
-      uses: go-kure/.github/.github/actions/deploy-docs-push@ab9eec3e3a2619c4f2ed2048d62adebf3a7347dd # main
+      uses: go-kure/.github/.github/actions/deploy-docs-push@8c18551bf6a672fa6c26eacde401c413764526cc # main
       with:
         target-path: deploy-target
         site-subdir: kure
