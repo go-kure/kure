@@ -584,7 +584,7 @@ During deployment, existing version subdirectories (`dev/`, `v*/`), `CNAME`, and
 | `remove-version` | Delete a version's docs | Removes `/vX.Y/` directory from deploy target |
 | `rebuild-version` | Re-trigger a docs build | Triggers `deploy-docs.yml` for the specified version |
 
-There is no action that points the root `/` at a chosen version: the root is only ever the highest stable tag's docs, and the deploy step refuses to write it for any other label. To put the root back on the highest stable tag, follow the recovery on the [Releasing](/contributing/releasing/) page, which dispatches `deploy-docs.yml` with `--ref` set to that tag.
+There is no action that points the root `/` at a chosen version: the root is meant to hold the highest stable tag's docs, and the deploy step refuses to write it for any other label (a tag cut before this step existed deploys with the old step, which does not check; see the Deploy Docs concurrency notes above). To put the root back on the highest stable tag, follow the recovery on the [Releasing](/contributing/releasing/) page, which dispatches `deploy-docs.yml` with `--ref` set to that tag.
 
 ### Common Scenarios
 
