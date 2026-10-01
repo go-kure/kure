@@ -10,6 +10,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
 )
@@ -131,6 +132,7 @@ func TestGenerateFluxOperatorBootstrap(t *testing.T) {
 	if len(resources) == 0 {
 		t.Error("expected at least one resource for flux-operator mode")
 	}
+	kuretest.AssertValid(t, resources...)
 }
 
 func TestGenerateFluxOperatorBootstrapWithComponents(t *testing.T) {
@@ -255,6 +257,7 @@ func TestFluxOperatorSourceKindOCIDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
 	}
+	kuretest.AssertValid(t, resources...)
 
 	fi := findFluxInstance(t, resources)
 
@@ -304,9 +307,13 @@ func TestGotkSourceKindGitRepository(t *testing.T) {
 
 	rootNode := &stack.Node{Name: "cluster"}
 
-	// gotk mode may fail for component generation, but we can check
-	// it doesn't panic. The source generation path uses SourceKind.
-	_, _ = bg.GenerateBootstrap(config, rootNode)
+	// the whole gotk output: the install bundle, the GitRepository the
+	// SourceKind selects, and the bootstrap Kustomization
+	resources, err := bg.GenerateBootstrap(config, rootNode)
+	if err != nil {
+		t.Fatalf("GenerateBootstrap() error = %v", err)
+	}
+	kuretest.AssertValid(t, resources...)
 }
 
 func TestGotkSourceKindOCIDefault(t *testing.T) {
@@ -410,6 +417,7 @@ func TestGotkBootstrapKustomizationReferencesTheEmittedSource(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GenerateBootstrap() error = %v", err)
 			}
+			kuretest.AssertValid(t, resources...)
 
 			var kust *kustv1.Kustomization
 			var source *sourcev1.GitRepository
