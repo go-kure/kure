@@ -155,9 +155,11 @@ jobs:
         path: deploy-target
 
     # Writes /kure/<slot>/ and, when set_latest asks for it, the /kure/ root, then
-    # pushes. The root is written only if the label is still the highest stable
-    # tag when the root is written (tags fetched again), so an older release's
-    # deploy that lands last cannot replace a newer release's root; a push
+    # pushes. The root is written only if no stable tag higher than the label
+    # exists when the root is written (tags fetched again), so an older release's
+    # deploy that lands last cannot replace a newer release's root. The label
+    # itself is not checked to be a tag, so a manual dispatch with set_latest
+    # must name the real highest stable tag. A push
     # rejected because another slot's deploy landed first is written again on
     # the new tip and retried.
     - name: Deploy to go-kure.github.io
