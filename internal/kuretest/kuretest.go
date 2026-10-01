@@ -3,8 +3,8 @@
 // apply, against the CustomResourceDefinitions of the exact module versions
 // the kinds registry pins, with the API server's own validation routines
 // ([crdvalidate]). A kind whose module ships no definition gets the
-// server's ObjectMeta validation and nothing more; TestEveryKindHasOneSource
-// names each such kind and why.
+// server's ObjectMeta validation under the kind's own name rule, and
+// nothing more; TestEveryKindHasOneSource names each such kind and why.
 //
 // It is for tests only: it registers the -update flag and reads the module
 // cache through go list.
@@ -86,12 +86,16 @@ func AssertValid(t testing.TB, objs ...client.Object) {
 }
 
 // AssertValidYAML validates every document in data and fails the test with
-// all of the findings at once.
+// all of the findings at once. Data with no object in it fails too: there
+// is nothing a pass could be about.
 func AssertValidYAML(t testing.TB, data []byte) {
 	t.Helper()
-	findings, err := validateYAML(data)
+	findings, objects, err := validateYAML(data)
 	if err != nil {
 		t.Fatalf("kuretest: %v", err)
+	}
+	if objects == 0 {
+		t.Fatalf("kuretest: no objects in the YAML")
 	}
 	if len(findings) > 0 {
 		t.Fatalf("%s", format(findings))
@@ -99,11 +103,11 @@ func AssertValidYAML(t testing.TB, data []byte) {
 }
 
 // AssertValidDir validates every .yaml and .yml file under dir. A directory
-// with no manifests fails: there is nothing a pass could be about.
+// whose files hold no object fails: there is nothing a pass could be about.
 func AssertValidDir(t testing.TB, dir string) {
 	t.Helper()
 	var all []finding
-	files := 0
+	objects := 0
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -111,15 +115,15 @@ func AssertValidDir(t testing.TB, dir string) {
 		if d.IsDir() || (filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml") {
 			return nil
 		}
-		files++
 		data, err := os.ReadFile(path) //nolint:gosec // a test output file under the directory named
 		if err != nil {
 			return err
 		}
-		findings, err := validateYAML(data)
+		findings, n, err := validateYAML(data)
 		if err != nil {
 			return errors.Wrap(err, path)
 		}
+		objects += n
 		for _, f := range findings {
 			f.doc = path + ": " + f.doc
 			all = append(all, f)
@@ -129,8 +133,8 @@ func AssertValidDir(t testing.TB, dir string) {
 	if err != nil {
 		t.Fatalf("kuretest: %v", err)
 	}
-	if files == 0 {
-		t.Fatalf("kuretest: no manifests under %s", dir)
+	if objects == 0 {
+		t.Fatalf("kuretest: no objects under %s", dir)
 	}
 	if len(all) > 0 {
 		t.Fatalf("%s", format(all))
@@ -156,24 +160,31 @@ func format(findings []finding) string {
 }
 
 // validateYAML decodes data as the server decodes a request body and
-// validates each object. The error is for what stops validation itself: a
-// document that does not decode, or a validator that cannot be built.
-func validateYAML(data []byte) ([]finding, error) {
+// validates each object, returning the findings and the number of objects
+// validated — kustomize's configuration is read past, not counted. The
+// error is for what stops validation itself: a document that does not
+// decode, or a validator that cannot be built.
+func validateYAML(data []byte) ([]finding, int, error) {
 	objs, err := decode(data)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var findings []finding
+	objects := 0
 	for i, u := range objs {
+		if u.GroupVersionKind().Group == kustomizeGroup {
+			continue
+		}
+		objects++
 		errs, err := validateObject(u)
 		if err != nil {
-			return nil, errors.Wrapf(err, "object %d", i)
+			return nil, 0, errors.Wrapf(err, "object %d", i)
 		}
 		if len(errs) > 0 {
 			findings = append(findings, finding{doc: describe(i, u), errs: errs})
 		}
 	}
-	return findings, nil
+	return findings, objects, nil
 }
 
 // describe names an object by its position in decode order (a list counts
@@ -187,7 +198,10 @@ func describe(i int, u *unstructured.Unstructured) string {
 }
 
 // decode is the unstructured path of pkg/io: every document, through the
-// server's own JSON decoder, with a list flattened to its items.
+// server's own JSON decoder, into an object — or, when its kind says so,
+// into a list flattened to its items. The decoder's own guess, that any
+// document with an items field is a list, is not taken: on an object,
+// items is a field the server validates like any other.
 func decode(data []byte) ([]*unstructured.Unstructured, error) {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
 	var out []*unstructured.Unstructured
@@ -202,31 +216,30 @@ func decode(data []byte) ([]*unstructured.Unstructured, error) {
 		if len(bytes.TrimSpace(raw.Raw)) == 0 {
 			continue
 		}
-		obj, _, err := unstructured.UnstructuredJSONScheme.Decode(raw.Raw, nil, nil)
-		if err != nil {
+		obj := &unstructured.Unstructured{}
+		if _, _, err := unstructured.UnstructuredJSONScheme.Decode(raw.Raw, nil, obj); err != nil {
 			return nil, errors.Wrapf(err, "document %d", i)
 		}
-		switch o := obj.(type) {
-		case *unstructured.UnstructuredList:
-			for j := range o.Items {
-				out = append(out, &o.Items[j])
-			}
-		case *unstructured.Unstructured:
-			out = append(out, o)
-		default:
-			return nil, errors.Errorf("document %d decoded to %T", i, obj)
+		if !strings.HasSuffix(obj.GetKind(), "List") {
+			out = append(out, obj)
+			continue
+		}
+		list := &unstructured.UnstructuredList{}
+		if _, _, err := unstructured.UnstructuredJSONScheme.Decode(raw.Raw, nil, list); err != nil {
+			return nil, errors.Wrapf(err, "document %d", i)
+		}
+		for j := range list.Items {
+			out = append(out, &list.Items[j])
 		}
 	}
 }
 
 // validateObject holds one object to its kind's source: the pinned
-// definition, or ObjectMeta alone for a kind that has none. A kind kure does
-// not register is a finding: kure cannot have produced it on purpose.
+// definition, or ObjectMeta under the kind's own name rule for a kind that
+// has none. A kind kure does not register is a finding: kure cannot have
+// produced it on purpose.
 func validateObject(u *unstructured.Unstructured) (field.ErrorList, error) {
 	gvk := u.GroupVersionKind()
-	if gvk.Group == kustomizeGroup {
-		return nil, nil
-	}
 	info, ok := kubernetes.KindFor(u.GetAPIVersion(), u.GetKind())
 	if !ok {
 		return field.ErrorList{field.Invalid(field.NewPath("kind"), u.GetKind(), fmt.Sprintf("%s is not a kind kure registers", gvk))}, nil
@@ -236,7 +249,7 @@ func validateObject(u *unstructured.Unstructured) (field.ErrorList, error) {
 		return nil, errors.Errorf("%s comes from %s, which the source table does not name", gvk, info.Module)
 	}
 	if src.Uncovered != "" {
-		return crdvalidate.ValidateObjectMeta(context.Background(), u, info.Namespaced), nil
+		return crdvalidate.ValidateObjectMeta(context.Background(), u, info.Namespaced, nameRule(u)), nil
 	}
 	v, err := validator()
 	if err != nil {

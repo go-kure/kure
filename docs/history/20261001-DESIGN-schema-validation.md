@@ -18,8 +18,12 @@ Kure's own test suite validates what kure emits the way a cluster would, in proc
   server's own create-time routines (`k8s.io/apiextensions-apiserver` v0.37.1: decode-time
   coercion with strict field validation, defaulting, status dropped behind a status subresource,
   schema, ObjectMeta, scale paths, embedded ObjectMeta, list set and map invariants, and the
-  `x-kubernetes-validations` CEL rules unless a blocking schema error stands). A kind whose
-  module ships no definition gets the server's ObjectMeta validation and nothing more. A coverage
+  `x-kubernetes-validations` CEL rules unless a blocking schema error stands). Each definition
+  is first checked as the server checks a `CustomResourceDefinition` create, so one the server
+  would refuse is reported, never validated against. A kind whose module ships no definition
+  gets the server's ObjectMeta validation under the kind's own name rule (the RBAC kinds,
+  `Namespace`, `Service`, `StatefulSet`, `IPAddress` and `CustomResourceDefinition` have one),
+  and nothing more. A coverage
   test names every registered kind as schema-backed or uncovered, with the reason, and goes red
   when a table entry is stale, a definition's scope disagrees with the kinds table, or an
   uncovered module starts shipping definitions.
@@ -85,8 +89,9 @@ Start a real kube-apiserver with the pinned definitions and create every object.
 everything the server catches, built-in kinds included. Rejected for now: binaries to download per
 Kubernetes version, tens of seconds of start-up per test binary against a 15-minute race-detector
 budget, and a network dependency in the ordinary test job — for a gain that, on the evidence, is
-the built-in kinds' per-kind Go rules (name formats stricter than a DNS subdomain for `Service` and
-`Namespace`, for example), where no kure defect has been observed. Deferred with a reopen trigger.
+the built-in kinds' per-kind Go rules beyond ObjectMeta (a `Service` spec, a `Deployment`
+selector against its template, for example; the name formats are held in process already),
+where no kure defect has been observed. Deferred with a reopen trigger.
 
 ### 3. The apiserver's validation routines in process — chosen
 
@@ -113,7 +118,8 @@ cilium fixtures carry.
 ## What this does not solve
 
 - Built-in kinds (`k8s.io/api`, 43 kinds) and the `CustomResourceDefinition` kind: ObjectMeta
-  validation only. Their per-kind rules live in the apiserver's Go code, not in a schema.
+  validation under the kind's own name rule only. Their other per-kind rules live in the
+  apiserver's Go code, not in a schema.
 - external-secrets and prometheus-operator kinds (11): their API modules ship no definitions; the
   coverage test turns red the day they do.
 - Admission webhooks, which several of the pinned operators run.

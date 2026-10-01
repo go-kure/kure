@@ -11,21 +11,29 @@
 //     without a default are dropped, and embedded metadata is coerced
 //     (pkg/apiserver/customresource_handler.go, unstructuredSchemaCoercer);
 //  2. defaulting from the schema (unstructuredDefaulter);
-//  3. the request namespace rule (k8s.io/apiserver/pkg/registry/rest
+//  3. the name is generated from generateName when none is set
+//     (k8s.io/apiserver/pkg/registry/generic/registry, Store.create);
+//  4. the request namespace rule (k8s.io/apiserver/pkg/registry/rest
 //     BeforeCreate) — see [Validator.Validate] for the one place this
 //     package is stricter than the server;
-//  4. PrepareForCreate: status is dropped when the definition serves a status
+//  5. PrepareForCreate: status is dropped when the definition serves a status
 //     subresource, and the generation is set
 //     (pkg/registry/customresource/strategy.go);
-//  5. Validate: the schema, ObjectMeta, scale paths, embedded ObjectMeta,
+//  6. Validate: the schema, ObjectMeta, scale paths, embedded ObjectMeta,
 //     list set and map invariants, and the x-kubernetes-validations CEL
 //     rules unless a blocking schema error already stands (strategy.go,
 //     validator.go).
 //
-// Each served version is compiled on first use as the server compiles it
-// when it starts serving the definition: converted to the internal schema,
-// made structural, defaults pruned, an OpenAPI validator and a CEL validator
-// built from it.
+// Before any of that, a definition is checked once as the server checks a
+// CustomResourceDefinition create — PrepareForCreate, then
+// ValidateCustomResourceDefinition (pkg/registry/customresourcedefinition/
+// strategy.go, pkg/apis/apiextensions/validation) — which compiles every CEL
+// rule among everything else. A definition the server would refuse is one
+// this package cannot answer for, and says so instead of reporting the
+// definition's defects as the object's. Each served version is then compiled
+// on first use as the server compiles it when it starts serving the
+// definition: converted to the internal schema, made structural, defaults
+// pruned, an OpenAPI validator and a CEL validator built from it.
 //
 // What this cannot know: admission webhooks, the apiserver's per-kind Go
 // validation for built-in kinds, and versions the definition does not serve.
@@ -42,6 +50,7 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
 	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
 	structuraldefaulting "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/defaulting"
@@ -58,6 +67,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	celconfig "k8s.io/apiserver/pkg/apis/cel"
 	"k8s.io/apiserver/pkg/features"
+	"k8s.io/apiserver/pkg/storage/names"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 )
 
@@ -70,7 +80,12 @@ type Validator struct {
 type definition struct {
 	crd *apiextensionsv1.CustomResourceDefinition
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// checked says the definition went through the server's own check once;
+	// checkErr is its outcome, held so a refused definition is refused on
+	// every call without running the check again.
+	checked  bool
+	checkErr error
 	versions map[string]*compiled
 }
 
@@ -86,11 +101,16 @@ type compiled struct {
 	scale  *apiextensions.CustomResourceSubresourceScale
 }
 
-// New indexes the definitions by group and kind. Two definitions for one
-// kind are an error, not a merge: the caller decides which one is canonical.
+// New indexes the definitions by group and kind, each defaulted on a copy
+// as the server defaults a definition it decodes (singular and list kind
+// names, the conversion strategy; pkg/apis/apiextensions/v1/defaults.go).
+// Two definitions for one kind are an error, not a merge: the caller
+// decides which one is canonical.
 func New(defs []*apiextensionsv1.CustomResourceDefinition) (*Validator, error) {
 	v := &Validator{byKind: map[schema.GroupKind]*definition{}}
 	for _, crd := range defs {
+		crd = crd.DeepCopy()
+		apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(crd)
 		gk := schema.GroupKind{Group: crd.Spec.Group, Kind: crd.Spec.Names.Kind}
 		if gk.Group == "" || gk.Kind == "" {
 			return nil, fmt.Errorf("crdvalidate: definition %q names no group or kind", crd.Name)
@@ -114,12 +134,12 @@ func (v *Validator) Definition(gk schema.GroupKind) *apiextensionsv1.CustomResou
 // Compile prepares the version that objects of gvk are validated against and
 // returns what stops it: no definition for the kind, a version the definition
 // does not serve, or a schema the server would not serve either.
-func (v *Validator) Compile(gvk schema.GroupVersionKind) error {
+func (v *Validator) Compile(ctx context.Context, gvk schema.GroupVersionKind) error {
 	def, err := v.definition(gvk)
 	if err != nil {
 		return err
 	}
-	_, err = def.compile(gvk.Version)
+	_, err = def.compile(ctx, gvk.Version)
 	return err
 }
 
@@ -148,7 +168,7 @@ func (v *Validator) Validate(ctx context.Context, obj *unstructured.Unstructured
 	if !apihelpers.HasVersionServed(def.crd, gvk.Version) {
 		return field.ErrorList{field.NotSupported(field.NewPath("apiVersion"), obj.GetAPIVersion(), def.servedAPIVersions())}, nil
 	}
-	c, err := def.compile(gvk.Version)
+	c, err := def.compile(ctx, gvk.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -168,6 +188,7 @@ func (v *Validator) Validate(ctx context.Context, obj *unstructured.Unstructured
 		return errs, nil
 	}
 	structuraldefaulting.Default(u.Object, c.structural)
+	generateName(u)
 	requestNamespace(u, namespaced)
 	if c.status {
 		delete(u.Object, "status")
@@ -191,14 +212,21 @@ func (v *Validator) Validate(ctx context.Context, obj *unstructured.Unstructured
 // ValidateObjectMeta validates obj's metadata as the server validates it on
 // create, for a kind this package holds no definition for. namespaced says
 // whether the kind takes a namespace; the request namespace rule of
-// [Validator.Validate] applies.
-func ValidateObjectMeta(ctx context.Context, obj *unstructured.Unstructured, namespaced bool) field.ErrorList {
+// [Validator.Validate] applies. name is the kind's own name rule, the one
+// the server's per-kind validation passes to ValidateObjectMeta (a DNS
+// label for a Namespace, a path segment for a Role); nil is the rule every
+// custom resource gets, a DNS subdomain.
+func ValidateObjectMeta(ctx context.Context, obj *unstructured.Unstructured, namespaced bool, name validation.ValidateNameFunc) field.ErrorList {
 	meta, errs := objectMeta(obj)
 	if len(errs) > 0 {
 		return errs
 	}
+	if name == nil {
+		name = validation.NameIsDNSSubdomain
+	}
+	generateName(meta)
 	requestNamespace(meta, namespaced)
-	return validateObjectMeta(ctx, meta, namespaced)
+	return validateObjectMeta(ctx, meta, namespaced, name)
 }
 
 func (v *Validator) definition(gvk schema.GroupVersionKind) (*definition, error) {
@@ -220,10 +248,18 @@ func (d *definition) servedAPIVersions() []string {
 	return out
 }
 
-// compile prepares a version once; later calls return the same compilation.
-func (d *definition) compile(version string) (*compiled, error) {
+// compile checks the definition once and prepares a version once; later
+// calls return the same outcome.
+func (d *definition) compile(ctx context.Context, version string) (*compiled, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if !d.checked {
+		d.checkErr = checkDefinition(ctx, d.crd)
+		d.checked = true
+	}
+	if d.checkErr != nil {
+		return nil, d.checkErr
+	}
 	if c, ok := d.versions[version]; ok {
 		return c, nil
 	}
@@ -235,8 +271,34 @@ func (d *definition) compile(version string) (*compiled, error) {
 	return c, nil
 }
 
+// checkDefinition is the server's create path for the definition itself:
+// the strategy's PrepareForCreate (status cleared, the storage version
+// recorded as stored), then ValidateCustomResourceDefinition — names,
+// structural schema, pruned defaults, list types, subresource paths and
+// every x-kubernetes-validations rule compiled. The server would not serve
+// what fails here, so the validator cannot answer for the kind.
+func checkDefinition(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
+	internal := &apiextensions.CustomResourceDefinition{}
+	if err := apiextensionsv1.Convert_v1_CustomResourceDefinition_To_apiextensions_CustomResourceDefinition(crd, internal, nil); err != nil {
+		return fmt.Errorf("crdvalidate: %s: convert definition: %w", crd.Name, err)
+	}
+	internal.Status = apiextensions.CustomResourceDefinitionStatus{}
+	internal.Generation = 1
+	for _, v := range internal.Spec.Versions {
+		if v.Storage {
+			internal.Status.StoredVersions = append(internal.Status.StoredVersions, v.Name)
+			break
+		}
+	}
+	if errs := apiextensionsvalidation.ValidateCustomResourceDefinition(ctx, internal); len(errs) > 0 {
+		return fmt.Errorf("crdvalidate: %s: the server would not accept the definition: %w", crd.Name, errs.ToAggregate())
+	}
+	return nil
+}
+
 // newCompiled follows pkg/apiserver/customresource_handler.go, the
-// structuralSchemas loop and the per-version storage setup.
+// structuralSchemas loop and the per-version storage setup, for a
+// definition checkDefinition accepted.
 func newCompiled(crd *apiextensionsv1.CustomResourceDefinition, version string) (*compiled, error) {
 	if !apihelpers.HasVersionServed(crd, version) {
 		return nil, fmt.Errorf("crdvalidate: %s does not serve %s", crd.Name, version)
@@ -248,9 +310,6 @@ func newCompiled(crd *apiextensionsv1.CustomResourceDefinition, version string) 
 	if val == nil || val.OpenAPIV3Schema == nil {
 		return nil, fmt.Errorf("crdvalidate: %s %s has no schema", crd.Name, version)
 	}
-	if crd.Spec.PreserveUnknownFields {
-		return nil, fmt.Errorf("crdvalidate: %s preserves unknown fields, which a v1 definition cannot", crd.Name)
-	}
 	internal := &apiextensions.CustomResourceValidation{}
 	if err := apiextensionsv1.Convert_v1_CustomResourceValidation_To_apiextensions_CustomResourceValidation(val, internal, nil); err != nil {
 		return nil, fmt.Errorf("crdvalidate: %s %s: convert schema: %w", crd.Name, version, err)
@@ -258,9 +317,6 @@ func newCompiled(crd *apiextensionsv1.CustomResourceDefinition, version string) 
 	s, err := structuralschema.NewStructural(internal.OpenAPIV3Schema)
 	if err != nil {
 		return nil, fmt.Errorf("crdvalidate: %s %s: schema is not structural: %w", crd.Name, version, err)
-	}
-	if errs := structuralschema.ValidateStructural(nil, s); len(errs) > 0 {
-		return nil, fmt.Errorf("crdvalidate: %s %s: schema is not structural: %w", crd.Name, version, errs.ToAggregate())
 	}
 	s = s.DeepCopy()
 	if err := structuraldefaulting.PruneDefaults(s); err != nil {
@@ -331,6 +387,17 @@ func coerce(u *unstructured.Unstructured, s *structuralschema.Structural) ([]str
 	return unknown, nil
 }
 
+// generateName is Store.create's name generation (k8s.io/apiserver
+// pkg/registry/generic/registry/store.go): an object with generateName and
+// no name gets one from the strategy's generator before BeforeCreate
+// requires it. Every custom resource and the built-in kinds use
+// names.SimpleNameGenerator.
+func generateName(obj metav1.Object) {
+	if obj.GetName() == "" && obj.GetGenerateName() != "" {
+		obj.SetName(names.SimpleNameGenerator.GenerateName(obj.GetGenerateName()))
+	}
+}
+
 // requestNamespace is rest.BeforeCreate's namespace rule for a request sent
 // the way kubectl sends one: a namespaced object with no namespace lands in
 // the default namespace. A namespace on a cluster-scoped object is left for
@@ -350,7 +417,7 @@ func validateResource(ctx context.Context, u *unstructured.Unstructured, c *comp
 	if len(errs) > 0 {
 		return errs
 	}
-	errs = validateObjectMeta(ctx, meta, namespaced)
+	errs = validateObjectMeta(ctx, meta, namespaced, validation.NameIsDNSSubdomain)
 	errs = append(errs, apiservervalidation.ValidateCustomResource(nil, u.Object, c.schemaValidator)...)
 	errs = append(errs, validateScale(u, c.scale)...)
 	return errs
@@ -374,9 +441,10 @@ func objectMeta(u *unstructured.Unstructured) (*metav1.ObjectMeta, field.ErrorLi
 }
 
 // validateObjectMeta is validator.go's validateObjectMetaDeclaratively on
-// create, under the same feature gate the server reads.
-func validateObjectMeta(ctx context.Context, meta *metav1.ObjectMeta, namespaced bool) field.ErrorList {
-	return validation.ValidateObjectMetaDeclaratively(ctx, operation.Create, meta, nil, namespaced, validation.NameIsDNSSubdomain, field.NewPath("metadata"), utilfeature.DefaultFeatureGate.Enabled(features.DeclarativeValidationBeta))
+// create, under the same feature gate the server reads, with the name rule
+// the kind's validation passes.
+func validateObjectMeta(ctx context.Context, meta *metav1.ObjectMeta, namespaced bool, name validation.ValidateNameFunc) field.ErrorList {
+	return validation.ValidateObjectMetaDeclaratively(ctx, operation.Create, meta, nil, namespaced, name, field.NewPath("metadata"), utilfeature.DefaultFeatureGate.Enabled(features.DeclarativeValidationBeta))
 }
 
 // validateScale is validator.go's ValidateScaleSpec and ValidateScaleStatus.

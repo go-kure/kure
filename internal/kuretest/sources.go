@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"golang.org/x/tools/go/packages"
@@ -144,22 +145,37 @@ func moduleDirs() (map[string]string, error) {
 		if !ok {
 			return nil, errors.Errorf("kuretest: go list returned %s, which no registered kind imports", p.PkgPath)
 		}
-		m := p.Module
-		if m == nil || m.Dir == "" {
-			return nil, errors.Errorf("kuretest: %s: no module directory; run the tests from the module root with GOWORK=off", p.PkgPath)
+		dir, err := moduleDir(p.PkgPath, p.Module, k)
+		if err != nil {
+			return nil, err
 		}
-		if m.Path != k.Module || m.Version != k.ModuleVersion {
-			return nil, errors.Errorf("kuretest: %s resolves to %s %s, but the kinds table was generated from %s %s; regenerate it", p.PkgPath, m.Path, m.Version, k.Module, k.ModuleVersion)
+		if prev, dup := dirs[k.Module]; dup && prev != dir {
+			return nil, errors.Errorf("kuretest: %s resolves to both %s and %s", k.Module, prev, dir)
 		}
-		if prev, dup := dirs[m.Path]; dup && prev != m.Dir {
-			return nil, errors.Errorf("kuretest: %s resolves to both %s and %s", m.Path, prev, m.Dir)
-		}
-		dirs[m.Path] = m.Dir
+		dirs[k.Module] = dir
 	}
 	if len(dirs) != len(sortedModules()) {
 		return nil, fmt.Errorf("kuretest: resolved %d modules, the table names %d", len(dirs), len(sortedModules()))
 	}
 	return dirs, nil
+}
+
+// moduleDir is the directory of the module go list resolved pkgPath to,
+// held to the pin k records for it. go list reports a replaced module under
+// its required version with the replacement's directory, so a replace that
+// changes the path or the version is refused as well: that directory is not
+// the pinned release's.
+func moduleDir(pkgPath string, m *packages.Module, k kubernetes.KindInfo) (string, error) {
+	if m == nil || m.Dir == "" {
+		return "", errors.Errorf("kuretest: %s: no module directory; run the tests from the module root with GOWORK=off", pkgPath)
+	}
+	if m.Path != k.Module || m.Version != k.ModuleVersion {
+		return "", errors.Errorf("kuretest: %s resolves to %s %s, but the kinds table was generated from %s %s; regenerate it", pkgPath, m.Path, m.Version, k.Module, k.ModuleVersion)
+	}
+	if r := m.Replace; r != nil && (r.Path != m.Path || r.Version != m.Version) {
+		return "", errors.Errorf("kuretest: %s %s is replaced by %s, not the pinned release", m.Path, m.Version, strings.TrimSpace(r.Path+" "+r.Version))
+	}
+	return m.Dir, nil
 }
 
 func sortedModules() []string {

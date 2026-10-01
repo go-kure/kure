@@ -13,11 +13,15 @@ import (
 	"github.com/go-kure/kure/internal/kuretest"
 )
 
-// The fixtures under testdata were written by the config-struct layer this
-// package used to carry (CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{...})
-// and its twelve siblings) before it was retired. Each test below builds the
-// same object on the generated constructor plus the upstream struct and must
-// reproduce that output byte for byte.
+// The fixtures under testdata descend from the ones the config-struct layer
+// this package used to carry (CiliumNetworkPolicy(&CiliumNetworkPolicyConfig{...})
+// and its twelve siblings) wrote before it was retired: five were completed
+// to objects the pinned definitions accept (a network policy's specs need a
+// selector and a rule, an egress gateway policy its selectors and node
+// selector, an Envoy config its resources), and the redirect policy's
+// protocol was corrected. Each test below builds its object on the
+// generated constructor plus the upstream struct and must reproduce the
+// fixture byte for byte.
 
 func TestGolden_CiliumNetworkPolicySpec(t *testing.T) {
 	obj := CreateCiliumNetworkPolicy("allow-internal", "default")
