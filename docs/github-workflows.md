@@ -577,12 +577,14 @@ During deployment, existing version subdirectories (`dev/`, `v*/`), `CNAME`, and
 
 - **Manual dispatch only** with inputs: `action`, `version_slot`
 
+`version_slot` must be `dev` or `vX.Y`; any other value fails the run before anything is changed. Both jobs read it through `env:`, never interpolated into a script.
+
 ### Actions
 
 | Action | Description | Implementation |
 |--------|-------------|----------------|
-| `remove-version` | Delete a version's docs | Removes `/vX.Y/` directory from deploy target |
-| `rebuild-version` | Re-trigger a docs build | Triggers `deploy-docs.yml` for the specified version |
+| `remove-version` | Delete a version's docs | Removes `kure/<slot>/` from `go-kure.github.io` and pushes; fails if that directory does not exist |
+| `rebuild-version` | Re-trigger a docs build | Dispatches `deploy-docs.yml` with `set_latest=false`: `dev` from `main`; `vX.Y` from the line's highest stable `vX.Y.Z` tag, with that tag as the label, as Release / Publish deploys it. Fails if the line has no stable tag |
 
 There is no action that points the root `/` at a chosen version: the root is meant to hold the highest stable tag's docs, and the deploy step writes it only for a stable label that no existing stable tag exceeds. That check does not confirm the label is a tag, and a tag cut before this step existed deploys with the old step, which does not check at all; see the Deploy Docs concurrency notes above. To put the root back on the highest stable tag, follow the recovery on the [Releasing](/contributing/releasing/) page, which dispatches `deploy-docs.yml` with `--ref` set to that tag.
 
