@@ -4,8 +4,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/go-kure/kure/internal/crds"
 	"github.com/go-kure/kure/pkg/errors"
-	"github.com/go-kure/kure/pkg/kubernetes/internal/crds"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/markers"
 	"github.com/go-kure/kure/pkg/kubernetes/internal/upstream"
 )
