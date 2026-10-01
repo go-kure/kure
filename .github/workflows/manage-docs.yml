@@ -33,6 +33,11 @@ jobs:
     runs-on: autops-kube-kure
     timeout-minutes: 5
     if: inputs.action == 'remove-version'
+    # Deploy Docs' group for this slot: a removal never overlaps a deploy of the
+    # same slot, which would otherwise push the slot back after the removal.
+    concurrency:
+      group: deploy-docs-${{ inputs.version_slot }}
+      cancel-in-progress: false
 
     steps:
     - name: Validate version slot
