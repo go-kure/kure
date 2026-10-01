@@ -9,7 +9,7 @@
 #
 # Why: the site is versioned. A push to main rebuilds only the dev slot
 # (<base>/dev/); the release root (<base>) is rebuilt only when a release is
-# marked latest (.github/workflows/manage-docs.yml -> deploy-docs.yml). An
+# marked latest (Release / Publish -> deploy-docs.yml with set_latest). An
 # absolute link such as https://www.gokure.dev/kure/concepts/new-page/ therefore
 # points at the last release build, and 404s for every page added since. The
 # rendered-site link check (check-links, lychee --offline) cannot see this: it

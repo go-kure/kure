@@ -11,7 +11,7 @@ on:
           - remove-version
           - rebuild-version
       version_slot:
-        description: 'Target version slot (e.g., v0.1, dev)'
+        description: 'Target version slot: dev or vX.Y (e.g., v0.1)'
         required: true
         type: string
 
@@ -23,6 +23,10 @@ concurrency:
   group: manage-docs
   cancel-in-progress: false
 
+# kure's docs live under kure/ in go-kure.github.io: kure/dev/, kure/vX.Y/ and,
+# at kure/ itself, the latest stable release. The slot is read through env, never
+# interpolated into a script, and must be dev or vX.Y before anything runs.
+
 jobs:
   remove-version:
     name: Remove version
@@ -31,6 +35,15 @@ jobs:
     if: inputs.action == 'remove-version'
 
     steps:
+    - name: Validate version slot
+      env:
+        SLOT: ${{ inputs.version_slot }}
+      run: |
+        if [[ ! "$SLOT" =~ ^(dev|v[0-9]+\.[0-9]+)$ ]]; then
+          echo "::error::version_slot must be dev or vX.Y (e.g., v0.1)"
+          exit 1
+        fi
+
     - name: Checkout go-kure.github.io
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
@@ -38,19 +51,21 @@ jobs:
         token: ${{ secrets.DEPLOY_TOKEN }}
 
     - name: Remove version directory
+      env:
+        SLOT: ${{ inputs.version_slot }}
       run: |
-        SLOT="${{ inputs.version_slot }}"
-        if [[ ! -d "$SLOT" ]]; then
-          echo "::error::Directory /${SLOT}/ does not exist"
+        set -euo pipefail
+        DIR="kure/${SLOT}"
+        if [[ ! -d "$DIR" ]]; then
+          echo "::error::Directory /${DIR}/ does not exist"
           exit 1
         fi
-        echo "Removing /${SLOT}/..."
-        rm -rf "$SLOT"
+        echo "Removing /${DIR}/..."
+        git rm -r -q -- "$DIR"
 
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add -A
-        git commit -m "docs: remove /${SLOT}/ version"
+        git commit -m "docs: remove /${DIR}/ version"
         git push
 
   rebuild-version:
@@ -60,14 +75,42 @@ jobs:
     if: inputs.action == 'rebuild-version'
 
     steps:
+    - name: Validate version slot
+      env:
+        SLOT: ${{ inputs.version_slot }}
+      run: |
+        if [[ ! "$SLOT" =~ ^(dev|v[0-9]+\.[0-9]+)$ ]]; then
+          echo "::error::version_slot must be dev or vX.Y (e.g., v0.1)"
+          exit 1
+        fi
+
+    # dev is built from main, as a docs push to main builds it. A vX.Y slot holds
+    # the docs of that line's highest stable tag, so it is rebuilt from that tag
+    # with the tag as label, the way Release / Publish deploys it.
     - name: Trigger deploy-docs rebuild
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SLOT: ${{ inputs.version_slot }}
       run: |
-        SLOT="${{ inputs.version_slot }}"
-        echo "Rebuilding /${SLOT}/..."
+        set -euo pipefail
+        if [[ "$SLOT" == "dev" ]]; then
+          REF="main"
+          LABEL="dev"
+        else
+          LABEL=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/tags/${SLOT}." --jq '.[].ref' \
+            | sed 's#^refs/tags/##' \
+            | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } \
+            | sort -V | tail -n 1)
+          if [[ -z "$LABEL" ]]; then
+            echo "::error::No stable ${SLOT}.Z tag exists, so there is no /kure/${SLOT}/ release to rebuild"
+            exit 1
+          fi
+          REF="$LABEL"
+        fi
+        echo "Rebuilding /kure/${SLOT}/ from ${REF}..."
         gh workflow run deploy-docs.yml \
-          --repo "${{ github.repository }}" \
-          -f version_slot="${SLOT}" \
-          -f version_label="${SLOT}" \
+          --repo "$GITHUB_REPOSITORY" \
+          --ref "$REF" \
+          -f version_slot="$SLOT" \
+          -f version_label="$LABEL" \
           -f set_latest=false
