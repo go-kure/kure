@@ -1,11 +1,17 @@
 package crds
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
 // write puts one file in dir, creating parent directories as needed, and
@@ -290,5 +296,216 @@ func TestLoadIgnoresAForeignAPIGroup(t *testing.T) {
 	}
 	if len(index) != 0 {
 		t.Errorf("index = %v, want nothing", index)
+	}
+}
+
+// schemaCRD is a definition with the parts the full reading is for: a served
+// version and a schema with a constraint in it.
+const schemaCRD = `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.example.com
+spec:
+  group: example.com
+  names:
+    kind: Widget
+    plural: widgets
+  scope: Cluster
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              size:
+                type: integer
+                minimum: 1
+`
+
+// patchFragment is the kustomize patch cnpg ships per kind: it names a CRD and
+// defines nothing.
+const patchFragment = `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: $(NS)/$(NAME)
+  name: widgets.example.com
+`
+
+func TestDefinitionsReadsWholeDefinitions(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "config/crd/bases/widget.yaml", schemaCRD)
+	defs, err := Definitions(dir)
+	if err != nil {
+		t.Fatalf("Definitions: %v", err)
+	}
+	if len(defs) != 1 {
+		t.Fatalf("got %d definitions, want 1", len(defs))
+	}
+	d := defs[0]
+	if want := filepath.Join(dir, "config/crd/bases/widget.yaml"); d.Path != want {
+		t.Errorf("Path = %q, want %q", d.Path, want)
+	}
+	if d.CRD.Name != "widgets.example.com" || d.CRD.Spec.Scope != apiextensionsv1.ClusterScoped {
+		t.Errorf("read %s scoped %q, want widgets.example.com scoped Cluster", d.CRD.Name, d.CRD.Spec.Scope)
+	}
+	if len(d.CRD.Spec.Versions) != 1 || !d.CRD.Spec.Versions[0].Served {
+		t.Fatalf("versions = %+v, want one served v1", d.CRD.Spec.Versions)
+	}
+	size := d.CRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["size"]
+	if size.Minimum == nil || *size.Minimum != 1 {
+		t.Errorf("spec.size minimum = %v, want 1: the schema was not read whole", size.Minimum)
+	}
+}
+
+// The two views select the same documents, so a kind the index answers for is
+// exactly a kind the definitions can be validated against.
+func TestDefinitionsAndLoadSelectTheSameDocuments(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "crds.yaml", schemaCRD+"---\n"+namespacedCRD+"---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: x\n")
+	write(t, dir, "config/crd/patches/cainjection.yaml", patchFragment)
+	write(t, dir, "templates/crd.yaml", "{{- if .Values.crds }}\nkind: CustomResourceDefinition\n{{- end }}\n")
+	write(t, dir, "vendor/other/crd.yaml", clusterCRD)
+	index, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defs, err := Definitions(dir)
+	if err != nil {
+		t.Fatalf("Definitions: %v", err)
+	}
+	var fromIndex, fromDefs []string
+	for key := range index {
+		fromIndex = append(fromIndex, key)
+	}
+	for _, d := range defs {
+		fromDefs = append(fromDefs, d.CRD.Spec.Group+"/"+d.CRD.Spec.Names.Kind)
+	}
+	sort.Strings(fromIndex)
+	sort.Strings(fromDefs)
+	if len(fromDefs) != 2 || strings.Join(fromIndex, ",") != strings.Join(fromDefs, ",") {
+		t.Errorf("Load selected %v, Definitions %v; want the same two", fromIndex, fromDefs)
+	}
+}
+
+func TestParseRejectsADefinitionInAnotherVersion(t *testing.T) {
+	old := strings.Replace(clusterCRD, "apiextensions.k8s.io/v1", "apiextensions.k8s.io/v1beta1", 1)
+	_, err := Parse([]byte(old), "crd.yaml")
+	if err == nil {
+		t.Fatal("Parse read a v1beta1 definition as v1")
+	}
+	for _, want := range []string{"crd.yaml", "v1beta1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error must name %q: %v", want, err)
+		}
+	}
+}
+
+func TestParseRejectsAnUnrecognisedScope(t *testing.T) {
+	_, err := Parse([]byte(strings.Replace(schemaCRD, "scope: Cluster", "scope: Nonsense", 1)), "crd.yaml")
+	if err == nil || !strings.Contains(err.Error(), "unrecognised spec.scope") {
+		t.Errorf("error = %v, want it to name the scope", err)
+	}
+}
+
+// A document whose header reads as a definition but whose body is not the v1
+// type is an error, not a definition with the unreadable parts missing.
+func TestParseRejectsADefinitionThatDoesNotDecodeInFull(t *testing.T) {
+	mapping := strings.Replace(schemaCRD, "  versions:\n  - name: v1", "  versions:\n    name: v1", 1)
+	_, err := Parse([]byte(mapping), "crd.yaml")
+	if err == nil {
+		t.Fatal("Parse accepted a definition whose versions are not a list")
+	}
+	if !strings.Contains(err.Error(), "does not decode as a apiextensions.k8s.io/v1 CustomResourceDefinition") {
+		t.Errorf("error = %v, want it to say the document is not the v1 type", err)
+	}
+}
+
+// archive builds a gzip-compressed tar of the entries, in name order.
+func archive(t *testing.T, entries map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		body := entries[name]
+		if err := tw.WriteHeader(&tar.Header{Name: name, Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(body))}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// The vendored Flux bundle's shape: flat manifest entries, most of them not
+// definitions, read without unpacking.
+func TestArchiveReadsTheManifestEntries(t *testing.T) {
+	buf := archive(t, map[string]string{
+		"source-controller.yaml": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: flux-system\n---\n" + schemaCRD,
+		"README.md":              schemaCRD,
+		"templates/x.yaml":       "{{ .Values }}\nkind: CustomResourceDefinition\n",
+		"policies.yaml":          "apiVersion: admissionregistration.k8s.io/v1\nkind: ValidatingAdmissionPolicy\nmetadata:\n  name: x\n",
+	})
+	defs, err := Archive(bytes.NewReader(buf))
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	if len(defs) != 1 || defs[0].Path != "source-controller.yaml" || defs[0].CRD.Name != "widgets.example.com" {
+		t.Errorf("read %+v, want the one definition in source-controller.yaml", defs)
+	}
+}
+
+func TestArchiveRejectsWhatIsNotAnArchive(t *testing.T) {
+	if _, err := Archive(strings.NewReader("not gzip")); err == nil || !strings.Contains(err.Error(), "not gzip") {
+		t.Errorf("plain text: error = %v, want it to say the input is not gzip", err)
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write([]byte("plain text")); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Archive(&buf); err == nil || !strings.Contains(err.Error(), "not a tar") {
+		t.Errorf("gzip of plain text: error = %v, want it to say the input is not a tar", err)
+	}
+}
+
+// An entry that does not decode fails the read and names the entry, as a file
+// does on the walk.
+func TestArchiveRejectsAnUndecodableEntry(t *testing.T) {
+	buf := archive(t, map[string]string{"crd.yaml": "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nspec: [this: is, not: a, mapping\n"})
+	_, err := Archive(bytes.NewReader(buf))
+	if err == nil || !strings.Contains(err.Error(), "crd.yaml") {
+		t.Errorf("error = %v, want it to name the entry", err)
+	}
+}
+
+func TestDefinitionsOnNoDirectory(t *testing.T) {
+	defs, err := Definitions("")
+	if err != nil || len(defs) != 0 {
+		t.Errorf("Definitions(\"\") = %v, %v; want nothing", defs, err)
+	}
+	if _, err := Definitions(filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Error("Definitions accepted a directory that does not exist")
 	}
 }
