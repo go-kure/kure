@@ -225,6 +225,7 @@ what the error names and run Release again.
 | Tag … already exists | That version is tagged already. If its Publish failed, recover it as below. Then move `VERSION` past it: `skip-prerelease-number` on `main`, a pull request setting the next patch on a release branch |
 | The tree contains downstream references | Fix the source, or the `cliff.toml` postprocessor that let a name into `CHANGELOG.md` |
 | The push was refused | Nothing was published; read the push error (branch protection, a moved branch) and run Release again |
+| install-git-cliff: refusing to install git-cliff | The downloaded git-cliff release did not verify against the pinned signing key (see "git-cliff binary" under Reference). Do not bypass the check; report it in `go-kure/.github` |
 
 ### The tag is pushed and Publish failed
 
@@ -425,13 +426,19 @@ by hand once its provenance is settled.
   pending, an older patch deploys nothing there. If the newer tag will never publish, deploy the
   older patch's slot by hand (the dispatch above, `set_latest` from `publish-policy.sh latest`); do
   not delete the tag once the Go module proxy may have seen it.
-- **The docs decision is taken when Publish runs, not when the docs deploy.** The callers'
-  `deploy-docs.yml` runs one deploy per slot at a time, not one overall, so an older tag's
-  `set_latest=true` deploy still queued when a newer release publishes and deploys can replace the
-  docs root afterwards. Closing that needs a check at deploy time in the callers.
+- **Only the docs root is decided again when the docs deploy.** The callers' `deploy-docs.yml`
+  runs one deploy per slot at a time, not one overall. Its deploy step, once it is the shared
+  `deploy-docs-push` action, fetches the tags right before it writes the root and writes it only
+  if the tag is still the highest stable tag (`publish-policy.sh latest`), and a push rejected
+  because another slot's deploy landed first is written again on the new tip and retried a bounded
+  number of times. The slot decision is still the one Publish took. A deploy runs the
+  `deploy-docs.yml` of its `--ref`, so a tag cut before its repository adopted the action deploys
+  without either: an older tag's `set_latest=true` deploy can then replace the root after a newer
+  release's, and the second of two concurrent pushes fails.
 - **If a `latest` pointer ends up on the wrong release anyway**, point both back at the highest
   stable tag. Wait for any docs deploy still running first: deploys of different slots do not wait
-  for each other, and the one that pushes second can fail.
+  for each other, and on a tag cut before the action was adopted the one that pushes second can
+  fail.
 
   ```bash
   gh workflow run deploy-docs.yml --repo go-kure/<repo> --ref <highest-stable-tag> \
@@ -452,6 +459,16 @@ by hand once its provenance is settled.
   sections are never rewritten. `--use-branch-tags` counts only tags on the current branch, which
   keeps a release branch's patches out of `main`'s changelog. The release notes are the same
   section, rendered by Publish with `git-cliff --latest --use-branch-tags --strip header`.
+- **git-cliff binary.** Release and Publish install git-cliff with
+  [`scripts/release/install-git-cliff.sh`](https://github.com/go-kure/.github/blob/main/scripts/release/install-git-cliff.sh)
+  from `go-kure/.github`. It downloads the release archive and its `.sig` from the upstream
+  `orhun/git-cliff` release, and installs the binary only when the signature is good and its signing
+  key's primary fingerprint equals the one pinned in the script (`1D2D410A…B6619297`, git-cliff's
+  published release key, shipped next to the script as `git-cliff-signing-key.asc`). A failed check
+  fails the job before anything is installed. Renovate bumps only the version; if upstream rotates
+  its signing key, the next bump fails this check until a pull request in `go-kure/.github` replaces
+  both the key file and the pinned fingerprint, after checking the new fingerprint against
+  git-cliff's own installation docs.
 - **Identity.** Release commits and tags are pushed by the `kure-release-bot` GitHub App (secrets
   `KURE_BOT_APP_ID` and `KURE_BOT_APP_PRIVATE_KEY`), the one actor allowed to push past the
   protection of `main` and `release/*`. Automation reuses this identity rather than minting a new
