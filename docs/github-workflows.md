@@ -15,6 +15,7 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Manage Docs](#manage-docs-workflow) | `manage-docs.yml` | `workflow_dispatch` | Remove or rebuild doc versions |
 | [Release](/contributing/releasing/) | `release.yml` | manual | The one manual release workflow: release, promote, or start the next version |
 | [Release / Publish](/contributing/releasing/) (automatic on tag) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser (release object only — no artifacts, see [Releasing](#releasing)), docs deploy, proxy refresh |
+| [Release / State](/contributing/releasing/) | `release-state.yml` | `workflow_dispatch` (tag) | Read-only report of what a tag's publish run did, in the job summary |
 | [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
 
 ---
@@ -436,7 +437,9 @@ commit (see [Triggers](#triggers)).
 what to do, and whether it is a dry run. It calls `go-kure/.github`'s shared `release.yml`, whose
 script makes the release commits, the tag and, when `main` moves to a new line, the release branch.
 **Release / Publish** (`.github/workflows/release-publish.yml`) then runs by itself on the tag.
-How to release, what each option does, release branches and the recovery procedure for a failed
+**Release / State** (`.github/workflows/release-state.yml`) is dispatched with a tag and reports
+what that tag's publish run did; it calls the shared `release-state.yml` and sets the
+`Release state <tag>` run title the guide relies on. How to release, what each option does, release branches and the recovery procedure for a failed
 publish are on the [Releasing](/contributing/releasing/) page, which is the same text in every
 go-kure repository: `docs/releasing.md` is vendored from `go-kure/.github` and CI's
 `forbidden-terms` job byte-compares it at the pinned revision.

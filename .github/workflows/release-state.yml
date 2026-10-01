@@ -1,0 +1,28 @@
+name: Release / State
+
+# Reports what a tag's publish run actually did, without a checkout or a token
+# of your own: `gh workflow run release-state.yml -f tag=<tag>`. The verdict and
+# its evidence are in the run's job summary; the recovery for each state is in
+# docs/releasing.md. Read-only.
+#
+# The shared workflow relies on this run-name: each run's title names its tag,
+# so the release guide can point at a run in the Actions tab.
+run-name: Release state ${{ inputs.tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The release tag to inspect (e.g. v0.2.0-beta.11)'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  state:
+    uses: go-kure/.github/.github/workflows/release-state.yml@main
+    with:
+      tag: ${{ inputs.tag }}
