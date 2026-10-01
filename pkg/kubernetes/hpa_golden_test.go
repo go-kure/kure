@@ -3,6 +3,7 @@ package kubernetes_test
 import (
 	"testing"
 
+	"github.com/go-kure/kure/internal/kuretest"
 	. "github.com/go-kure/kure/pkg/kubernetes"
 )
 
@@ -13,5 +14,5 @@ import (
 func TestSetHPAScaleTargetRef_Golden(t *testing.T) {
 	hpa := CreateHorizontalPodAutoscaler("web", "default")
 	SetHPAScaleTargetRef(hpa, "apps/v1", "Deployment", "web")
-	goldenTest(t, "hpa-scale-target-ref.yaml", hpa)
+	kuretest.Golden(t, "hpa-scale-target-ref.yaml", hpa)
 }

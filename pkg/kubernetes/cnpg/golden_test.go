@@ -1,9 +1,6 @@
 package cnpg
 
 import (
-	"flag"
-	"os"
-	"path/filepath"
 	"testing"
 
 	barmanapi "github.com/cloudnative-pg/barman-cloud/pkg/api"
@@ -13,9 +10,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	kureio "github.com/go-kure/kure/pkg/io"
+	"github.com/go-kure/kure/internal/kuretest"
 )
 
 // The fixtures under testdata were written by the config-struct layer this
@@ -27,36 +23,6 @@ import (
 // the barman-cloud plugin entry, the pooler type and its empty pgbouncer
 // block, an extension's ensure — is now a line the caller writes, and each is
 // marked "formerly injected" where it appears.
-
-var update = flag.Bool("update", false, "update golden files")
-
-func goldenTest(t *testing.T, filename string, obj client.Object) {
-	t.Helper()
-	objects := []*client.Object{&obj}
-	got, err := kureio.EncodeObjectsToYAMLWithOptions(objects, kureio.EncodeOptions{
-		KubernetesFieldOrder: true,
-	})
-	if err != nil {
-		t.Fatalf("encoding to YAML: %v", err)
-	}
-	golden := filepath.Join("testdata", filename)
-	if *update {
-		if err := os.MkdirAll("testdata", 0o755); err != nil {
-			t.Fatalf("creating testdata dir: %v", err)
-		}
-		if err := os.WriteFile(golden, got, 0o644); err != nil {
-			t.Fatalf("updating golden file: %v", err)
-		}
-		return
-	}
-	want, err := os.ReadFile(golden)
-	if err != nil {
-		t.Fatalf("reading golden file (run with -update to create): %v", err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("output does not match golden file %s\n\ngot:\n%s\nwant:\n%s", golden, got, want)
-	}
-}
 
 // s3Credentials is the upstream pair of secret key references the old
 // ObjectStoreOptions / S3CredentialOptions built from a secret name and two
@@ -159,7 +125,7 @@ func TestGolden_ClusterFull(t *testing.T) {
 			}},
 		},
 	}
-	goldenTest(t, "cluster-full.yaml", obj)
+	kuretest.Golden(t, "cluster-full.yaml", obj)
 }
 
 func TestGolden_ClusterMinimal(t *testing.T) {
@@ -171,7 +137,7 @@ func TestGolden_ClusterMinimal(t *testing.T) {
 		// formerly injected: primaryUpdateStrategy was pinned to unsupervised
 		PrimaryUpdateStrategy: cnpgv1.PrimaryUpdateStrategyUnsupervised,
 	}
-	goldenTest(t, "cluster-minimal.yaml", obj)
+	kuretest.Golden(t, "cluster-minimal.yaml", obj)
 }
 
 func TestGolden_ClusterBackupDefaultKeys(t *testing.T) {
@@ -193,7 +159,7 @@ func TestGolden_ClusterBackupDefaultKeys(t *testing.T) {
 			PgBaseBackup: &cnpgv1.BootstrapPgBaseBackup{Source: "pg-main"},
 		},
 	}
-	goldenTest(t, "cluster-backup-default-keys.yaml", obj)
+	kuretest.Golden(t, "cluster-backup-default-keys.yaml", obj)
 }
 
 func TestGolden_Database(t *testing.T) {
@@ -212,7 +178,7 @@ func TestGolden_Database(t *testing.T) {
 	AddDatabaseExtension(obj, cnpgv1.ExtensionSpec{
 		DatabaseObjectSpec: cnpgv1.DatabaseObjectSpec{Name: "pgvector", Ensure: cnpgv1.EnsureAbsent},
 	})
-	goldenTest(t, "database.yaml", obj)
+	kuretest.Golden(t, "database.yaml", obj)
 }
 
 func TestGolden_ObjectStore(t *testing.T) {
@@ -227,7 +193,7 @@ func TestGolden_ObjectStore(t *testing.T) {
 		RetentionPolicy: "30d",
 	}
 	SetObjectStoreS3Credentials(obj, s3Credentials("backup-creds", "MY_ACCESS_KEY", "MY_SECRET_KEY"))
-	goldenTest(t, "objectstore.yaml", obj)
+	kuretest.Golden(t, "objectstore.yaml", obj)
 }
 
 func TestGolden_ObjectStoreDefaultKeys(t *testing.T) {
@@ -235,7 +201,7 @@ func TestGolden_ObjectStoreDefaultKeys(t *testing.T) {
 	obj.Spec.Configuration.DestinationPath = "s3://bucket/pg/"
 	// formerly injected: the key names ACCESS_KEY_ID / SECRET_ACCESS_KEY
 	SetObjectStoreS3Credentials(obj, s3Credentials("backup-creds", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY"))
-	goldenTest(t, "objectstore-default-keys.yaml", obj)
+	kuretest.Golden(t, "objectstore-default-keys.yaml", obj)
 }
 
 func TestGolden_ScheduledBackup(t *testing.T) {
@@ -245,7 +211,7 @@ func TestGolden_ScheduledBackup(t *testing.T) {
 		Cluster:  cnpgv1.LocalObjectReference{Name: "pg-main"},
 		Method:   cnpgv1.BackupMethodPlugin,
 	}
-	goldenTest(t, "scheduledbackup.yaml", obj)
+	kuretest.Golden(t, "scheduledbackup.yaml", obj)
 }
 
 func TestGolden_PoolerFull(t *testing.T) {
@@ -259,7 +225,7 @@ func TestGolden_PoolerFull(t *testing.T) {
 			Parameters: map[string]string{"max_client_conn": "100"},
 		},
 	}
-	goldenTest(t, "pooler-full.yaml", obj)
+	kuretest.Golden(t, "pooler-full.yaml", obj)
 }
 
 func TestGolden_PoolerDefault(t *testing.T) {
@@ -271,7 +237,7 @@ func TestGolden_PoolerDefault(t *testing.T) {
 		// formerly injected: pgbouncer was always an empty block
 		PgBouncer: &cnpgv1.PgBouncerSpec{},
 	}
-	goldenTest(t, "pooler-default.yaml", obj)
+	kuretest.Golden(t, "pooler-default.yaml", obj)
 }
 
 // TestGolden_ClusterAffinityDisabled pins the one CNPG pointer the retired
@@ -295,7 +261,7 @@ func TestGolden_ClusterAffinityDisabled(t *testing.T) {
 			TopologyKey:           "kubernetes.io/hostname",
 		},
 	}
-	goldenTest(t, "cluster-affinity-disabled.yaml", obj)
+	kuretest.Golden(t, "cluster-affinity-disabled.yaml", obj)
 }
 
 // TestGolden_ClusterEmptyBootstrap pins the bootstrap guard of the retired
@@ -314,5 +280,5 @@ func TestGolden_ClusterEmptyBootstrap(t *testing.T) {
 		PrimaryUpdateStrategy: cnpgv1.PrimaryUpdateStrategyUnsupervised,
 		// no Bootstrap: neither source was set
 	}
-	goldenTest(t, "cluster-empty-bootstrap.yaml", obj)
+	kuretest.Golden(t, "cluster-empty-bootstrap.yaml", obj)
 }
