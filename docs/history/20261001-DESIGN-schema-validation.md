@@ -22,7 +22,8 @@ Kure's own test suite validates what kure emits the way a cluster would, in proc
   is first checked as the server checks a `CustomResourceDefinition` create, so one the server
   would refuse is reported, never validated against. A kind whose module ships no definition
   gets the server's ObjectMeta validation under the kind's own name rule (the RBAC kinds,
-  `Namespace`, `Service`, `StatefulSet`, `IPAddress` and `CustomResourceDefinition` have one),
+  `Namespace`, `Service`, `StatefulSet`, `CronJob`, `IPAddress`, `PodDisruptionBudget` and
+  `CustomResourceDefinition` have one),
   and nothing more. A coverage
   test names every registered kind as schema-backed or uncovered, with the reason, and goes red
   when a table entry is stale, a definition's scope disagrees with the kinds table, or an
