@@ -213,9 +213,9 @@ type tree struct {
 }
 
 // readTree reads every kustomization file under root, then decodes every
-// other .yaml and .yml file but the data those files name, in walk order.
-// A symbolic link, and a file named as Flux's generator names its backup,
-// are findings on the tree (refuse).
+// other .yaml and .yml file, in walk order, but one those files name as
+// data and none names as a resource. A symbolic link, and a file named as
+// Flux's generator names its backup, are findings on the tree (refuse).
 func readTree(root string) (*tree, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
