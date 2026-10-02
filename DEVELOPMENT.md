@@ -158,6 +158,12 @@ drifts from the pinned schema fails `make test`, not a cluster. Which kinds are 
 schema and which get ObjectMeta validation only is listed in `pkg/kubernetes/README.md`
 § Schema validation test.
 
+A second pass holds the objects to each other rather than to a schema: `AssertConsistent`,
+`AssertConsistentYAML` and `AssertConsistentDir` fail when a Flux `sourceRef`, `chartRef` or
+`dependsOn` names nothing in the tree, or an object or a Kustomization's `targetNamespace`
+names a namespace the tree does not create — unless the test declares it with `External` or
+`Namespace`, or it is one the cluster makes itself.
+
 ### 4. Code Quality
 
 ```bash

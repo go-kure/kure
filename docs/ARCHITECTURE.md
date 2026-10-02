@@ -1450,7 +1450,11 @@ accept. `Golden(t, file, obj)` encodes an object the way the fixtures are writte
 and compares it with `testdata/<file>` — or rewrites the file under `-update`, validation
 first, so an invalid fixture can never be written. `AssertValid(t, objs...)`,
 `AssertValidYAML(t, data)` and `AssertValidDir(t, dir)` validate objects, bytes and a written
-tree. Validation is the API server's own create-time sequence (`internal/crdvalidate`) against
+tree. `AssertConsistent(t, objs, declared...)`, `AssertConsistentYAML(t, data, declared...)`
+and `AssertConsistentDir(t, root, declared...)` check that the same inputs agree with
+themselves: every Flux `sourceRef`, `chartRef` and `dependsOn` resolves, and every namespace
+an object applies into exists, in the tree or declared with `kuretest.External` or
+`kuretest.Namespace`. Validation is the API server's own create-time sequence (`internal/crdvalidate`) against
 the CustomResourceDefinitions of the exact module versions the kinds table pins, read from the
 module cache (`internal/crds`) and from the vendored Flux install bundle (`internal/gotk`); a
 kind with no definition gets ObjectMeta validation only, and `TestEveryKindHasOneSource` names
