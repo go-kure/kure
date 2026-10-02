@@ -304,13 +304,16 @@ func kustomizationRefs(t *testing.T, path string) []string {
 	return refs
 }
 
-// checkWrittenTree asserts, for one writer's output: every resources entry
-// exists; every file holding a Flux Kustomization is applied — reached from the
-// top kustomization(s) through resources entries and through the spec.path of
-// every Flux Kustomization already reached, as Flux applies them — or sits in
-// flux-system; every expected directory was written; and a directory some
-// Flux Kustomization applies is never also pulled in by a kustomization
-// reference: it would be applied, and owned, twice.
+// checkWrittenTree asserts, for one writer's output: every file holding a Flux
+// Kustomization is applied — reached from the top kustomization(s) through
+// resources entries and through the spec.path of every Flux Kustomization
+// already reached, as Flux applies them — or sits in flux-system; every
+// expected directory was written with a kustomization.yaml; and a directory
+// some Flux Kustomization applies is never also pulled in by a kustomization
+// reference: it would be applied, and owned, twice. Then the tree is held to
+// kuretest.AssertConsistentDir: every reference, namespace, path and entry
+// resolves, and every Flux Kustomization builds as kustomize-controller
+// builds it.
 func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string) {
 	t.Helper()
 	// Every directory has one owner: a Kustomization's directory is applied
@@ -351,8 +354,7 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string)
 			p := filepath.Join(filepath.Dir(kust), ref)
 			info, err := os.Stat(p)
 			if err != nil {
-				rel, _ := filepath.Rel(w.root, p)
-				t.Errorf("%s: %s lists %q, which does not exist", writer, kust, rel)
+				// AssertConsistentDir names the entry
 				continue
 			}
 			if info.IsDir() {
@@ -391,11 +393,13 @@ func checkWrittenTree(t *testing.T, writer string, w writtenTree, dirs []string)
 			// An empty directory is not a directory in Git (or in most
 			// artifacts built from one): Flux would find nothing there.
 			t.Errorf("%s: spec.path %q has no kustomization.yaml", writer, d)
-		} else if err := kustomizeBuild(filepath.Join(w.root, d)); err != nil {
-			// What the kustomize-controller does with the directory.
-			t.Errorf("%s: spec.path %q does not build: %v", writer, d, err)
 		}
 	}
+	// Every generated Kustomization lives in flux-system and names testSR's
+	// GitRepository, which the bootstrap creates and no tree here holds.
+	kuretest.AssertConsistentDir(t, w.root,
+		kuretest.Namespace("flux-system"),
+		kuretest.External("GitRepository", "flux-system", "flux-system"))
 }
 
 // holdsFluxSource reports whether a manifest file holds a Flux source
@@ -564,6 +568,8 @@ func TestGenerateForBundle_UsesCallerPath(t *testing.T) {
 		t.Fatalf("got %d objects, want the Kustomization and its GitRepository", len(objs))
 	}
 	kuretest.AssertValid(t, objs...)
+	// the sourceRef names the GitRepository emitted beside it
+	kuretest.AssertConsistent(t, objs, kuretest.Namespace("flux-system"))
 	k, ok := objs[0].(*kustv1.Kustomization)
 	if !ok {
 		t.Fatalf("first object is %T, want a Kustomization", objs[0])
@@ -636,6 +642,8 @@ func TestGenerateFromCluster_DefaultRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	kuretest.AssertValid(t, objs...)
+	// testSR names a GitRepository it gives no URL, so none is emitted
+	kuretest.AssertConsistent(t, objs, kuretest.Namespace("flux-system"), kuretest.External("GitRepository", "flux-system", "flux-system"))
 	got := map[string]string{}
 	for _, o := range objs {
 		if k, ok := o.(*kustv1.Kustomization); ok {
