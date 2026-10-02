@@ -421,12 +421,20 @@ var userAt = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*@`)
 // github.com/ or github.com: host; and an entry with a user@ prefix — the
 // three that pass Flux's test and that kustomize's parser takes for a
 // repository, which it clones before it looks in the tree, for a directory
-// at once and for a file once the file fails to load. Those three are
-// compared on the whole string lowercased, as kustomize's parser compares
-// them: Flux's test lowercases a byte window, which a multi-byte capital
-// that lowercases to ASCII (İ, U+0130) slips through. A name without a
-// scheme, a user@ prefix or a github host — a : included — kustomize never
-// parses as a repository, so the tree decides.
+// at once and for a file once the file fails to load. This predicate
+// compares the github host and the file:// base on the whole string
+// lowercased, and matches user@ at the start of the entry as written.
+// Kustomize's parser compares only the github host on the whole string
+// lowercased: it takes a scheme off a byte window lowercased, as Flux's
+// test does, and a username as an ASCII class, with no lowercasing. For
+// the github host the whole string is the reason: Flux's test lowercases a
+// byte window, which a multi-byte capital that lowercases to ASCII (İ,
+// U+0130) slips through and kustomize's whole-string compare catches. For
+// file:// the whole string is this predicate's own policy: it can refuse a
+// multi-byte spelling kustomize would read as a local name, and never
+// admits one kustomize would clone. A name without a scheme, a user@
+// prefix or a github host — a : included — kustomize never parses as a
+// repository, so the tree decides.
 func isLocal(entry string) bool {
 	lower := strings.ToLower(entry)
 	return fluxkustomize.IsLocalRelativePath(entry) &&
