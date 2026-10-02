@@ -489,9 +489,9 @@ What it does, its configuration and the incident switch are on
 
 | Event | What Deploys | Path | BaseURL |
 |-------|-------------|------|---------|
-| Push to `main` (docs paths) | Dev docs | `/dev/` | `www.gokure.dev/dev/` |
-| `workflow_dispatch` | Versioned | `/vX.Y/` | `www.gokure.dev/vX.Y/` |
-| `workflow_dispatch` + `set_latest=true` | Versioned + root (root only if no stable tag is higher than the label; the label must then be a tag at the dispatched commit) | `/vX.Y/` + `/` | Both |
+| Push to `main` (docs paths) | Dev docs | `kure/dev/` | `www.gokure.dev/kure/dev/` |
+| `workflow_dispatch` | Versioned | `kure/vX.Y/` | `www.gokure.dev/kure/vX.Y/` |
+| `workflow_dispatch` + `set_latest=true` | Versioned + root (root only if no stable tag is higher than the label; the label must then be a tag at the dispatched commit) | `kure/vX.Y/` + `kure/` | Both |
 
 ### Concurrency and Preservation
 
@@ -629,8 +629,9 @@ the pipeline passing is not `make ci` passing.
 
 ### Go Version
 
-All jobs use `go-version-file: go.mod` — the `go` directive in `go.mod` is the single
-source of truth (kept in sync with `mise.toml` via `make check-go-version`).
+CI jobs use `go-version-file: go.mod` — the `go` directive in `go.mod` is the single
+source of truth (kept in sync with `mise.toml` via `make check-go-version`). Deploy Docs reads
+the `go` line from `mise.toml` and passes it as `go-version`.
 
 ### yq and lychee Versions
 
@@ -794,7 +795,7 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
 |----------|---------------------|---------------------|
 | PR opened | ~8 min (duplicate work) | ~4 min |
 | Push to main | ~5 min | ~4 min |
-| PR merge | ~5 min (full re-run) | ~0 min (same SHA, skipped) |
+| PR merge | ~5 min (full re-run) | a full run on the merge queue's branch, then the push run on `main` |
 
 ---
 
