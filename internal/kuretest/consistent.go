@@ -147,8 +147,10 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 // A file kustomize recognizes as a kustomization file is read as its
 // configuration, not as objects, and a file one names as data — a
 // configMapGenerator or secretGenerator files, envs or env entry, a
-// patches path — is not decoded. Every other manifest decodes or fails the
-// test. A tree whose files hold no object fails.
+// patches path — is not decoded, unless a kustomization file also names it
+// as a resources entry: kustomize applies it as a manifest then, so it is
+// read as one. Every other manifest decodes or fails the test. A tree whose
+// files hold no object fails.
 func AssertConsistentDir(t testing.TB, root string, declared ...Declared) {
 	t.Helper()
 	tr, err := readTree(root)
@@ -230,7 +232,7 @@ func readTree(root string) (*tree, error) {
 	if err != nil {
 		return nil, err
 	}
-	data := map[string]bool{}
+	data, resources := map[string]bool{}, map[string]bool{}
 	for _, path := range kfiles {
 		raw, err := os.ReadFile(path) //nolint:gosec // a kustomization file under the directory named
 		if err != nil {
@@ -241,12 +243,18 @@ func readTree(root string) (*tree, error) {
 			return nil, errors.Wrap(err, path)
 		}
 		tr.kustomizations = append(tr.kustomizations, kf)
+		dir := filepath.Dir(path)
 		for _, e := range kf.dataEntries() {
-			data[filepath.Join(filepath.Dir(path), e.file)] = true
+			data[filepath.Join(dir, e.file)] = true
+		}
+		for _, r := range kf.k.Resources {
+			resources[filepath.Join(dir, r)] = true
 		}
 	}
 	for _, path := range manifests {
-		if data[path] {
+		// a file named as data is not decoded — unless a kustomization file
+		// also names it as a resource, which kustomize applies as a manifest
+		if data[path] && !resources[path] {
 			continue
 		}
 		raw, err := os.ReadFile(path) //nolint:gosec // a manifest under the directory named

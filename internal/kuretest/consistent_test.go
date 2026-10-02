@@ -893,6 +893,30 @@ func TestAssertConsistentDirLeavesALinkedTreeAsItWas(t *testing.T) {
 	}
 }
 
+// A file a kustomization file names as data and as a resources entry is
+// applied as a manifest by kustomize, so it is decoded and its objects are
+// held to every check like any other's.
+func TestAssertConsistentDirDecodesAFileNamedAsAResourceAndAsData(t *testing.T) {
+	runDir(t, map[string]dirCase{
+		// the tree builds: kustomize reads the file in both roles
+		"a HelmRelease that is also a generator source": {
+			files: with(builds(), map[string]string{
+				"app/kustomization.yaml": "resources: [cm.yaml, release.yaml]\nconfigMapGenerator:\n- name: v\n  files: [release.yaml]\n",
+				"app/release.yaml":       helmRelease("flux-system", "web", "  chartRef:\n    kind: OCIRepository\n    name: chart\n"),
+			}),
+			want: []string{"{root}/app/release.yaml: object 0: HelmRelease flux-system/web", `spec.chartRef: Not found: "OCIRepository/flux-system/chart"`},
+		},
+		"a Kustomization that is also a patch": {
+			files: map[string]string{
+				"app/kustomization.yaml": "resources: [cm.yaml, flux.yaml]\npatches:\n- path: flux.yaml\n  target: {kind: ConfigMap}\n",
+				"app/cm.yaml":            cm("default", "a"),
+				"app/flux.yaml":          applying("inner", "./missing", ""),
+			},
+			want: []string{"{root}/app/flux.yaml: object 0: Kustomization flux-system/inner", `spec.path: Not found: "./missing"`},
+		},
+	})
+}
+
 // The copy is made under TMPDIR, as kuretest-consistent-*, and is gone once
 // the call returns, whether the tree passes or not.
 func TestAssertConsistentDirRemovesItsCopy(t *testing.T) {
