@@ -118,7 +118,7 @@ jobs:
       run: echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Validate docs map (code↔docs sync)
-      uses: go-kure/.github/.github/actions/check-doc-sync@9ba85b38af33f5b416491be805990192f8b1b8cd # main
+      uses: go-kure/.github/.github/actions/check-doc-sync@a81814decce9d5df3a1e6e85be32ab334b55509e # main
 
     - name: Inject front matter
       run: bash site/scripts/inject-frontmatter.sh
@@ -164,7 +164,7 @@ jobs:
     # rejected because another slot's deploy landed first is written again on
     # the new tip and retried.
     - name: Deploy to go-kure.github.io
-      uses: go-kure/.github/.github/actions/deploy-docs-push@9ba85b38af33f5b416491be805990192f8b1b8cd # main
+      uses: go-kure/.github/.github/actions/deploy-docs-push@a81814decce9d5df3a1e6e85be32ab334b55509e # main
       with:
         target-path: deploy-target
         site-subdir: kure
