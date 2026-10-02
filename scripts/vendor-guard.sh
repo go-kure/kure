@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # vendor-guard.sh — keep the vendored copies of go-kure/.github's forbidden-terms
-# guard and release guide (docs/releasing.md) in sync with the
-# check-forbidden-terms action pin in .github/workflows/ci.yml.
+# guard, release guide (docs/releasing.md) and shared workflows guide
+# (docs/shared-workflows.md) in sync with the check-forbidden-terms action pin
+# in .github/workflows/ci.yml.
 #
 # .github/workflows/ci.yml's forbidden-terms job checks out go-kure/.github a
 # second time (to byte-compare the vendored guard against its canonical
@@ -9,7 +10,7 @@
 # action's own `uses:@<sha>` pin (go-kure/kure#813) — the same single pin
 # Renovate's github-actions manager already tracks, so there is nothing left
 # for this script to independently extract from a second `ref:` literal.
-# This script re-fetches the canonical guard script and release guide from
+# This script re-fetches the canonical guard script and both guides from
 # go-kure/.github at that same pin and re-vendors them, so the vendored copies
 # and the pin move together.
 #
@@ -26,6 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
 VENDORED="$REPO_ROOT/site/scripts/check-forbidden-terms.sh"
 VENDORED_GUIDE="$REPO_ROOT/docs/releasing.md"
+VENDORED_WORKFLOWS="$REPO_ROOT/docs/shared-workflows.md"
 
 # Pull the ref out of the check-forbidden-terms action's own uses:@<sha> pin
 # — the same pin Renovate's github-actions manager tracks, and the exact
@@ -117,3 +119,6 @@ vendor scripts/check-forbidden-terms.sh "$VENDORED" 755
 # The release guide, published on this repository's site as
 # contributing/releasing; ci.yml byte-compares it at the same pin.
 vendor standards/release-process.md "$VENDORED_GUIDE" 644
+# The shared workflows guide, published on this repository's site as
+# contributing/shared-workflows; ci.yml byte-compares it at the same pin.
+vendor standards/github-workflows.md "$VENDORED_WORKFLOWS" 644

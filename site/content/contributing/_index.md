@@ -9,6 +9,7 @@ Resources for contributing to Kure.
 
 - [Development Guide](/contributing/guide/) - Setup, testing, code quality, and CI/CD workflows
 - [GitHub Workflows](/contributing/github-workflows/) - CI/CD pipeline documentation
+- [Shared Workflows](/contributing/shared-workflows/) - PR review, merge queue, shared CI checks and docs deploy
 
 ## Quick Start
 

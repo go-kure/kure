@@ -151,11 +151,14 @@ extra_mounts:
   # by scripts/vendor-guard.sh; edit it there, not here.
   - {source: docs/releasing.md, target: contributing/releasing.md, title: Releasing, weight: 15}
   - {source: docs/github-workflows.md, target: contributing/github-workflows.md, title: GitHub Workflows, weight: 20}
+  # Vendored byte-identical from go-kure/.github's standards/github-workflows.md
+  # by scripts/vendor-guard.sh; edit it there, not here.
+  - {source: docs/shared-workflows.md, target: contributing/shared-workflows.md, title: Shared Workflows, weight: 25}
   - {source: docs/dependency-updates.md, target: contributing/dependency-updates.md, title: Dependency Updates, weight: 30}
   - {source: CHANGELOG.md, target: changelog/releases.md, title: Releases, weight: 10}
 
 # Extra reverse-map rows for non-package paths (no README mount, review-only).
 review_mappings:
-  - {change: "`.github/workflows/`", reference: "—", guides: "`contributing/github-workflows`, `contributing/releasing`"}
+  - {change: "`.github/workflows/`", reference: "—", guides: "`contributing/github-workflows`, `contributing/shared-workflows`, `contributing/releasing`"}
   - {change: "`go.mod` / `versions.yaml`", reference: "—", guides: "`docs/dependency-updates`, `docs/compatibility`"}
   - {change: "`scripts/gen-versions-toml.sh`", reference: "—", guides: "`contributing/github-workflows`"}

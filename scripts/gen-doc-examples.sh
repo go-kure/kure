@@ -54,6 +54,7 @@ ENABLED_PAGES=(
 	docs/puzl-cloud-kubesdk-review.md
 	docs/quickstart.md
 	docs/releasing.md
+	docs/shared-workflows.md
 	examples/README.md
 	examples/demo/README.md
 	examples/demo/clusters/umbrella/README.md

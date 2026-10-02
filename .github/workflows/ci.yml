@@ -412,6 +412,12 @@ jobs:
     - name: Verify vendored release guide matches canonical
       run: diff -u .tmp/go-kure-dot-github/standards/release-process.md docs/releasing.md
 
+    # The shared workflows guide is written once, in go-kure/.github, and
+    # published by every repository that uses the shared workflows; this copy is
+    # re-vendored by scripts/vendor-guard.sh at the same pin as the guard.
+    - name: Verify vendored shared workflows guide matches canonical
+      run: diff -u .tmp/go-kure-dot-github/standards/github-workflows.md docs/shared-workflows.md
+
   pin-impact:
     name: pin-impact
     runs-on: autops-kube-kure
