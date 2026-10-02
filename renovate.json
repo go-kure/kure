@@ -80,11 +80,11 @@
       }
     },
     {
-      "description": "Re-vendor scripts/check-forbidden-terms.sh and the release guide (standards/release-process.md -> docs/releasing.md) whenever the go-kure/.github github-actions dependency bumps (go-kure/kure#813). No groupName override needed any more: the checkout ci.yml byte-compares both vendored copies against is now derived from this same uses: pin at CI-run time, so there is no second, independently-tracked dependency left to fold in -- this depName already lands in the shared preset's github-actions group. Both files are in fileFilters: a silent fileFilters drop would leave ci.yml's byte-compare red on the bot's own PR.",
+      "description": "Re-vendor scripts/check-forbidden-terms.sh, the release guide (standards/release-process.md -> docs/releasing.md) and the shared workflows guide (standards/github-workflows.md -> docs/shared-workflows.md) whenever the go-kure/.github github-actions dependency bumps (go-kure/kure#813). No groupName override needed any more: the checkout ci.yml byte-compares all three vendored copies against is now derived from this same uses: pin at CI-run time, so there is no second, independently-tracked dependency left to fold in -- this depName already lands in the shared preset's github-actions group. All three files are in fileFilters: a silent fileFilters drop would leave ci.yml's byte-compare red on the bot's own PR.",
       "matchDepNames": ["go-kure/.github"],
       "postUpgradeTasks": {
         "commands": ["./scripts/vendor-guard.sh"],
-        "fileFilters": ["site/scripts/check-forbidden-terms.sh", "docs/releasing.md"],
+        "fileFilters": ["site/scripts/check-forbidden-terms.sh", "docs/releasing.md", "docs/shared-workflows.md"],
         "executionMode": "branch"
       }
     },

@@ -2,7 +2,7 @@
 
 This document provides an overview of all GitHub Actions workflows used in the kure project.
 
-**Last Updated:** 2026-10-01
+**Last Updated:** 2026-10-02
 
 ---
 
@@ -16,7 +16,8 @@ This document provides an overview of all GitHub Actions workflows used in the k
 | [Release](/contributing/releasing/) | `release.yml` | manual | The one manual release workflow: release, promote, or start the next version |
 | [Release / Publish](/contributing/releasing/) (automatic on tag) | `release-publish.yml` | tag push, `workflow_dispatch` | GoReleaser (release object only — no artifacts, see [Releasing](#releasing)), docs deploy, proxy refresh |
 | [Release / State](/contributing/releasing/) | `release-state.yml` | `workflow_dispatch` (tag) | Read-only report of what a tag's publish run did, in the job summary |
-| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | Two-pass AI code review via claude-max-proxy |
+| [PR Review](#pr-review-workflow) | `pr-review.yml` | pull_request, merge_group | AI code review via the shared workflow; see [Shared Workflows](/contributing/shared-workflows/) |
+| [Claude](/contributing/shared-workflows/) | `claude.yml` | issue/PR comments, reviews, issues opened or assigned | `@claude` assistant via the shared workflow |
 
 ---
 
@@ -155,9 +156,8 @@ temporary branch — the merged result — before the PR is allowed to land.
   order — on every run observed, those ten were all from this workflow file itself. It was removed
   in go-kure/kure#788, which records the full analysis
 - **goimports** - Installed as a tool dependency for the formatting check (`goimports -l`)
-- **Doc-sync checks** - `docs-build` and `doc-gate` run the canonical
-  `check-doc-sync`, `check-links` and `check-doc-gate` actions from `go-kure/.github`; kure no
-  longer vendors its own copies under `site/scripts/`
+- **Doc-sync checks** - `docs-build` and `doc-gate` run the shared `check-doc-sync`,
+  `check-links` and `check-doc-gate` actions; see [Shared Workflows](/contributing/shared-workflows/)
 - **API-reference check** - `docs-build` also runs `scripts/check-doc-api-refs.sh`, which fails
   when a live page names a `Create*`/`Set*`/`Add*` function `pkg/**` no longer exports, or any
   exported name it qualifies with the base name of a package under `pkg/` (`layout.Config`,
@@ -254,11 +254,10 @@ temporary branch — the merged result — before the PR is allowed to land.
   A page lister that fails part-way stops the run rather than shortening the set. The site base
   comes from `site/hugo.toml`'s `baseURL`. The step runs `--self-test` first, which pins the URL
   classifier and those failure paths against a synthetic tree
-- **Downstream-reference guard** - the unconditional `forbidden-terms` job scans the complete
-  tracked tree and keeps the release script's vendored guard and the vendored release guide
-  (`docs/releasing.md`) byte-identical to their canonical files, checked out at a ref derived from
-  the guard action's own `uses:@<sha>` pin rather than a second, independently-tracked pin
-  (go-kure/kure#813)
+- **Downstream-reference guard** - the unconditional `forbidden-terms` job runs the shared guard
+  and byte-compares the three vendored copies (`site/scripts/check-forbidden-terms.sh`,
+  `docs/releasing.md`, `docs/shared-workflows.md`); the mechanism is on
+  [Shared Workflows](/contributing/shared-workflows/)
 - **Pin-impact gate** - `pin-impact` renders a `go-kure/.github` pin bump's real effect (which
   `scripts/*.sh` a referenced action actually runs, whether the compare touches any of them) into
   the job summary and fails on a match, so a bump touching consumed code cannot merge unreviewed
@@ -418,11 +417,8 @@ temporary branch — the merged result — before the PR is allowed to land.
 
 ### Draft PRs
 
-No job carries a `draft == false` condition (removed 2026-08-19 for parity with the downstream
-GitLab CI template this workflow was ported from, which reviews/tests every merge-request
-pipeline regardless of draft status). A draft PR gets
-the identical `lint`/`test`/`Security`/`coverage-check`/`build` run as a ready one; draft blocks
-merge only, via branch protection — it does not change what CI runs.
+CI and PR Review run on draft PRs the same as on ready ones; see
+[Shared Workflows](/contributing/shared-workflows/).
 
 `edited` is deliberately not in the type list: it fires on every title and body edit, which
 would run the full suite for text-only changes. A PR retargeted to another base also sends
@@ -457,87 +453,19 @@ What is specific to kure:
 
 ## Merge Queue
 
-kure merges through GitHub's native **merge queue** (configured in the `main-protection`
-ruleset, not a workflow file). This replaced the former `rebase-check` job and `auto-rebase.yml`
-workflow — it is the native equivalent of GitLab's merged-results pipelines.
-
-### How It Works
-
-1. A reviewed PR is added to the queue ("Merge when ready").
-2. The queue creates a temporary branch combining `main` + the PR and fires a `merge_group`
-   event; `lint`/`test`/`build` run against that **merged result**.
-3. If green, the PR lands on `main` with the **rebase** merge method (linear history preserved).
-   If the merged result fails, the PR is dropped from the queue and `main` stays green.
-
-### Why
-
-- Tests the actual merged result, which `rebase-check` (ancestry-only) could not.
-- No force-pushing contributor branches and no per-merge auto-rebase storm — the queue rebases
-  once, at merge time.
-
-### Configuration (ruleset `merge_queue` rule)
-
-- **Merge method:** `REBASE` (linear history)
-- **Grouping:** `ALLGREEN` (a failing entry is dropped from the group)
-- **Batch size:** 1 (conservative; tune after observing runner load)
-- **Required checks on the queue:** `lint`, `test`, `build`, `pr-review / AI Code Review` (each must also trigger on `merge_group`)
-
-Auto-merge is **not** enabled — every PR is reviewed and queued manually. The merge queue rule is
-managed centrally in `go-kure/.github` (`governance/repository-settings-policy.yaml`).
+kure merges through the merge queue. How it works, its settings and the required checks are on
+[Shared Workflows](/contributing/shared-workflows/).
 
 ---
 
 ## PR Review Workflow
 
-**File:** `.github/workflows/pr-review.yml`
-**Name:** `PR Review`
+**File:** `.github/workflows/pr-review.yml`, calling `go-kure/.github`'s `pr-review.yml@main`.
+What it does, its configuration and the incident switch are on
+[Shared Workflows](/contributing/shared-workflows/). kure's `pr_review_context`:
 
-### Triggers
-
-- Pull requests: `opened`, `synchronize`, `reopened`, on GitHub's default types
-- `merge_group` (no filters): required so this check reports on the merge queue's temporary
-  ref once it becomes a required status check — the queue payload has no `pull_request` field,
-  so the existing fork skip below evaluates false and the job reports `skipped`/success as a
-  no-op
-- Runs on draft PRs the same as ready ones (2026-08-19, GitLab `mr-review` parity — see
-  [Draft PRs](#draft-prs)); skips fork PRs (self-hosted runner security)
-- `ready_for_review` is not declared, same reasoning as `ci.yml`: it was kept as a rollout-window
-  safety net while the callee (`pr-review.yml@main`, in `go-kure/.github`) still gated on
-  `draft == false` (its own parity fix landed 2026-08-19, `46dfc88`) and dropped once that window
-  closed.
-
-### How It Works
-
-Uses a two-pass AI review system via the in-cluster claude-max-proxy (ported from the GitLab `mr-review.yml` template):
-
-1. **Pass 1 — Review:** Sends the PR diff + project context (`AGENTS.md`, `.claude/CLAUDE.md`) to the review model (default: `claude-opus-4`). Anti-hallucination rules prevent the model from inventing standards or referencing code not in the diff. The model returns up to 3 findings ranked by severity in a structured table. Posted as a PR comment.
-
-2. **Pass 2 — Assessment:** If the review found issues (not LGTM), sends the review + diff to an assessment model (default: `claude-sonnet-4-6`) which fact-checks each finding against the actual diff and project context. Includes standards verification — claims about "standards violations" are checked against actually-provided standards. Catches hallucinations and false positives. Posted as a second PR comment.
-
-### Requirements
-
-- **Self-hosted runner:** Runs on `autops-kube-kure` label (ARC runner with in-cluster access)
-- **claude-max-proxy:** Reachable at `http://openclaw-claude-proxy.openclaw.svc:3456` from the runner pod
-- **No API keys needed:** the proxy handles model authentication
-
-### Configuration
-
-Configurable via repository variables or workflow env defaults:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `PR_REVIEW_MODEL` | `claude-opus-4` | Model for code review pass (cosmetic label; backend ignores the model field) |
-| `PR_REVIEW_MAX_DIFF_CHARS` | `50000` | Truncation threshold for large diffs |
-| `PR_REVIEW_MAX_TOKENS` | `1500` | Max response tokens for review |
-| `PR_REVIEW_CONTEXT` | kure project description | Additional system prompt context |
-| `PR_REVIEW_ASSESS_ENABLED` | `true` | Enable/disable assessment pass |
-| `PR_REVIEW_ASSESS_MODEL` | `claude-sonnet-4-6` | Model for hallucination checking |
-| `PR_REVIEW_ASSESS_MAX_TOKENS` | `4096` | Max response tokens for assessment |
-| `PR_REVIEW_AGENTS_FILE` | `AGENTS.md` | Project context file path |
-
-### Non-Blocking
-
-The workflow uses `continue-on-error: true` so review failures never block PR merges.
+> Upstream Go library for programmatically building Kubernetes resources. Uses typed builders
+> instead of templates.
 
 ---
 
@@ -555,7 +483,7 @@ The workflow uses `continue-on-error: true` so review failures never block PR me
 
 1. Runs `scripts/gen-versions-toml.sh` to generate a versioned Hugo config overlay
 2. Builds the Hugo site with `--config hugo.toml,versions.toml`
-3. Deploys the built site to a subdirectory of `go-kure.github.io` through the shared `deploy-docs-push` action from `go-kure/.github`. The slot must be `dev` or start with `v` (the names a root write keeps); the action refuses any other.
+3. Deploys the built site to `kure/<slot>/` in `go-kure.github.io` through the shared `deploy-docs-push` action; see [Shared Workflows](/contributing/shared-workflows/)
 
 ### Trigger Matrix
 
@@ -565,20 +493,10 @@ The workflow uses `continue-on-error: true` so review failures never block PR me
 | `workflow_dispatch` | Versioned | `/vX.Y/` | `www.gokure.dev/vX.Y/` |
 | `workflow_dispatch` + `set_latest=true` | Versioned + root (root only if no stable tag is higher than the label; the label must then be a tag at the dispatched commit) | `/vX.Y/` + `/` | Both |
 
-### Concurrency
+### Concurrency and Preservation
 
-Per-slot concurrency group (`deploy-docs-<slot>`) with `cancel-in-progress: false` — two deploys **to the same slot** queue rather than cancel, so neither is dropped.
-
-**This does not serialise deploys to *different* slots.** The group name includes the slot, so a `v1.2` deploy and a `v1.3` deploy sit in different groups and run at the same time against the same docs repository. The `deploy-docs-push` step handles both consequences at the write:
-
-- **The root is decided again.** Publish decides `set_latest` when it runs; by the time the deploy writes, a newer stable tag may exist. When the root is requested, the action fetches the tags and writes the root only if the label is a stable `vX.Y.Z` version and no existing stable tag is higher (`publish-policy.sh latest`, the rule Publish uses); otherwise it deploys the slot alone and logs a notice. A policy error fails the step. When the root is to be written, the label must also be an existing tag whose commit is the deploy's checkout, or the step fails rather than putting another commit's docs at the root, so dispatch with `--ref` set to that tag. A ref whose `deploy-docs.yml` pins an older action applies the same highest-stable rule but not this tag check.
-- **A push that loses the race is retried.** A push rejected because the branch moved is written again on the new tip, keeping the other slot's content, and pushed again, up to 5 attempts; any other push failure fails the step at once.
-
-A deploy runs the `deploy-docs.yml` of the ref it was dispatched at, so a tag cut before this step existed deploys with the old plain `git push`: no root re-check, no retry. Sequence cross-slot deploys of such tags yourself, as the recovery procedure on the [Releasing](/contributing/releasing/) page does.
-
-### Preservation
-
-During deployment, existing version subdirectories (`dev/`, `v*/`), `CNAME`, and `.nojekyll` are preserved. Only the target slot is replaced.
+Per-slot concurrency group `deploy-docs-<slot>`. Root re-check, retry and what a deploy keeps are
+on [Shared Workflows](/contributing/shared-workflows/).
 
 ---
 
@@ -882,13 +800,9 @@ The `changes` job uses `dorny/paths-filter` to skip jobs when unrelated files ch
 
 ## Self-Hosted Runner Requirements
 
-All jobs run on the `autops-kube-kure` GitHub ARC scale-set, which uses a custom runner image
-(`ghcr.io/ginsys/opsmaster/actions-runner:latest`) — a minimal Ubuntu image that includes
-`curl` and `git` but **not** `make` or `wget`.
-
-To account for this:
-- Every job that calls `make` includes an explicit install step: `sudo apt-get install -y --no-install-recommends make`
-- All `wget` calls have been replaced with `curl -fsSL -o`
+The runner is described on [Shared Workflows](/contributing/shared-workflows/). Its image lacks
+`make`, so every job that calls `make` includes an explicit install step:
+`sudo apt-get install -y --no-install-recommends make`
 
 ---
 

@@ -474,7 +474,7 @@ the map and run `bash site/scripts/gen-docs-tables.sh`.
 | `pkg/errors/` | `api-reference/errors` | — |
 | `pkg/logger/` | `api-reference/logger` | — |
 | `pkg/versions/` | `api-reference/versions` | — |
-| `.github/workflows/` | — | `contributing/github-workflows`, `contributing/releasing` |
+| `.github/workflows/` | — | `contributing/github-workflows`, `contributing/shared-workflows`, `contributing/releasing` |
 | `go.mod` / `versions.yaml` | — | `docs/dependency-updates`, `docs/compatibility` |
 | `scripts/gen-versions-toml.sh` | — | `contributing/github-workflows` |
 <!-- END GENERATED: reverse-mapping -->
@@ -522,7 +522,9 @@ The go-kure org governance, design documents, and community files are maintained
 - **Contributing**: [CONTRIBUTING.md](https://github.com/go-kure/.github/blob/main/CONTRIBUTING.md)
 - **Reusable workflows**: release (`release.yml`, `release-publish.yml`, `release-state.yml`), pr-review, claude — all
   hosted in go-kure/.github. Releasing: `docs/releasing.md`, vendored from go-kure/.github's
-  `standards/release-process.md` by `scripts/vendor-guard.sh` — edit it there, never here
+  `standards/release-process.md` by `scripts/vendor-guard.sh` — edit it there, never here. Shared
+  workflow behaviour: `docs/shared-workflows.md`, vendored from go-kure/.github's
+  `standards/github-workflows.md` by the same script — edit it there, never here
 
 ## Questions?
 
