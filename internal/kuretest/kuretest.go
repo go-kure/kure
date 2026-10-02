@@ -9,6 +9,9 @@
 // A second pass holds the objects to each other: AssertConsistent,
 // AssertConsistentYAML and AssertConsistentDir check that what a tree
 // references and the namespaces it applies into exist in it or are declared.
+// On a written tree, AssertConsistentDir also resolves every path the tree
+// names and builds what each Flux Kustomization applies, as
+// kustomize-controller builds it.
 //
 // It is for tests only: it registers the -update flag and reads the module
 // cache through go list.
