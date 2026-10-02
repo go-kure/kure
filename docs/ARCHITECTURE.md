@@ -1454,7 +1454,9 @@ tree. `AssertConsistent(t, objs, declared...)`, `AssertConsistentYAML(t, data, d
 and `AssertConsistentDir(t, root, declared...)` check that the same inputs agree with
 themselves: every Flux `sourceRef`, `chartRef` and `dependsOn` resolves, and every namespace
 an object applies into exists, in the tree or declared with `kuretest.External` or
-`kuretest.Namespace`. Validation is the API server's own create-time sequence (`internal/crdvalidate`) against
+`kuretest.Namespace`; on a directory, every Kustomization `spec.path` and `kustomization.yaml`
+entry resolves in the tree, and each Flux Kustomization builds as kustomize-controller builds
+it. Validation is the API server's own create-time sequence (`internal/crdvalidate`) against
 the CustomResourceDefinitions of the exact module versions the kinds table pins, read from the
 module cache (`internal/crds`) and from the vendored Flux install bundle (`internal/gotk`); a
 kind with no definition gets ObjectMeta validation only, and `TestEveryKindHasOneSource` names

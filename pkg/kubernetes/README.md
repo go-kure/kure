@@ -616,7 +616,8 @@ or rewrites a fixture, so `-update` can never write one a cluster would reject;
 `AssertValid`, `AssertValidYAML` and `AssertValidDir` take objects, bytes and a
 written tree. `AssertConsistent`, `AssertConsistentYAML` and `AssertConsistentDir`
 take the same three and hold the objects to each other instead: every Flux reference
-resolves and every namespace exists, in the tree or declared by the test.
+resolves and every namespace exists, in the tree or declared by the test. On a written
+tree, every path it names resolves too, and what each Flux Kustomization applies builds.
 
 `TestEveryKindHasOneSource` names every registered kind as schema-backed or uncovered,
 with the reason. Schema-backed kinds are the ones whose module ships its definitions
