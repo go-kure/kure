@@ -1,7 +1,6 @@
 package kuretest
 
 import (
-	"fmt"
 	"io"
 	"path/filepath"
 	"sort"
@@ -155,7 +154,7 @@ func moduleDirs() (map[string]string, error) {
 		dirs[k.Module] = dir
 	}
 	if len(dirs) != len(sortedModules()) {
-		return nil, fmt.Errorf("kuretest: resolved %d modules, the table names %d", len(dirs), len(sortedModules()))
+		return nil, errors.Errorf("kuretest: resolved %d modules, the table names %d", len(dirs), len(sortedModules()))
 	}
 	return dirs, nil
 }

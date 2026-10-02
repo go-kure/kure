@@ -69,6 +69,8 @@ import (
 	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/storage/names"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+
+	"github.com/go-kure/kure/pkg/errors"
 )
 
 // Validator validates objects against a fixed set of definitions.
@@ -113,10 +115,10 @@ func New(defs []*apiextensionsv1.CustomResourceDefinition) (*Validator, error) {
 		apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(crd)
 		gk := schema.GroupKind{Group: crd.Spec.Group, Kind: crd.Spec.Names.Kind}
 		if gk.Group == "" || gk.Kind == "" {
-			return nil, fmt.Errorf("crdvalidate: definition %q names no group or kind", crd.Name)
+			return nil, errors.Errorf("crdvalidate: definition %q names no group or kind", crd.Name)
 		}
 		if prev, dup := v.byKind[gk]; dup {
-			return nil, fmt.Errorf("crdvalidate: %s is defined twice, by %s and %s", gk, prev.crd.Name, crd.Name)
+			return nil, errors.Errorf("crdvalidate: %s is defined twice, by %s and %s", gk, prev.crd.Name, crd.Name)
 		}
 		v.byKind[gk] = &definition{crd: crd, versions: map[string]*compiled{}}
 	}
@@ -232,7 +234,7 @@ func ValidateObjectMeta(ctx context.Context, obj *unstructured.Unstructured, nam
 func (v *Validator) definition(gvk schema.GroupVersionKind) (*definition, error) {
 	def := v.byKind[gvk.GroupKind()]
 	if def == nil {
-		return nil, fmt.Errorf("crdvalidate: no definition for %s", gvk.GroupKind())
+		return nil, errors.Errorf("crdvalidate: no definition for %s", gvk.GroupKind())
 	}
 	return def, nil
 }
@@ -280,7 +282,7 @@ func (d *definition) compile(ctx context.Context, version string) (*compiled, er
 func checkDefinition(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
 	internal := &apiextensions.CustomResourceDefinition{}
 	if err := apiextensionsv1.Convert_v1_CustomResourceDefinition_To_apiextensions_CustomResourceDefinition(crd, internal, nil); err != nil {
-		return fmt.Errorf("crdvalidate: %s: convert definition: %w", crd.Name, err)
+		return errors.Wrapf(err, "crdvalidate: %s: convert definition", crd.Name)
 	}
 	internal.Status = apiextensions.CustomResourceDefinitionStatus{}
 	internal.Generation = 1
@@ -291,7 +293,7 @@ func checkDefinition(ctx context.Context, crd *apiextensionsv1.CustomResourceDef
 		}
 	}
 	if errs := apiextensionsvalidation.ValidateCustomResourceDefinition(ctx, internal); len(errs) > 0 {
-		return fmt.Errorf("crdvalidate: %s: the server would not accept the definition: %w", crd.Name, errs.ToAggregate())
+		return errors.Wrapf(errs.ToAggregate(), "crdvalidate: %s: the server would not accept the definition", crd.Name)
 	}
 	return nil
 }
@@ -301,30 +303,30 @@ func checkDefinition(ctx context.Context, crd *apiextensionsv1.CustomResourceDef
 // definition checkDefinition accepted.
 func newCompiled(crd *apiextensionsv1.CustomResourceDefinition, version string) (*compiled, error) {
 	if !apihelpers.HasVersionServed(crd, version) {
-		return nil, fmt.Errorf("crdvalidate: %s does not serve %s", crd.Name, version)
+		return nil, errors.Errorf("crdvalidate: %s does not serve %s", crd.Name, version)
 	}
 	val, err := apihelpers.GetSchemaForVersion(crd, version)
 	if err != nil {
-		return nil, fmt.Errorf("crdvalidate: %w", err)
+		return nil, errors.Wrap(err, "crdvalidate")
 	}
 	if val == nil || val.OpenAPIV3Schema == nil {
-		return nil, fmt.Errorf("crdvalidate: %s %s has no schema", crd.Name, version)
+		return nil, errors.Errorf("crdvalidate: %s %s has no schema", crd.Name, version)
 	}
 	internal := &apiextensions.CustomResourceValidation{}
 	if err := apiextensionsv1.Convert_v1_CustomResourceValidation_To_apiextensions_CustomResourceValidation(val, internal, nil); err != nil {
-		return nil, fmt.Errorf("crdvalidate: %s %s: convert schema: %w", crd.Name, version, err)
+		return nil, errors.Wrapf(err, "crdvalidate: %s %s: convert schema", crd.Name, version)
 	}
 	s, err := structuralschema.NewStructural(internal.OpenAPIV3Schema)
 	if err != nil {
-		return nil, fmt.Errorf("crdvalidate: %s %s: schema is not structural: %w", crd.Name, version, err)
+		return nil, errors.Wrapf(err, "crdvalidate: %s %s: schema is not structural", crd.Name, version)
 	}
 	s = s.DeepCopy()
 	if err := structuraldefaulting.PruneDefaults(s); err != nil {
-		return nil, fmt.Errorf("crdvalidate: %s %s: prune defaults: %w", crd.Name, version, err)
+		return nil, errors.Wrapf(err, "crdvalidate: %s %s: prune defaults", crd.Name, version)
 	}
 	schemaValidator, _, err := apiservervalidation.NewSchemaValidator(internal.OpenAPIV3Schema)
 	if err != nil {
-		return nil, fmt.Errorf("crdvalidate: %s %s: schema validator: %w", crd.Name, version, err)
+		return nil, errors.Wrapf(err, "crdvalidate: %s %s: schema validator", crd.Name, version)
 	}
 	c := &compiled{
 		structural:      s,
@@ -333,14 +335,14 @@ func newCompiled(crd *apiextensionsv1.CustomResourceDefinition, version string) 
 	}
 	sub, err := apihelpers.GetSubresourcesForVersion(crd, version)
 	if err != nil {
-		return nil, fmt.Errorf("crdvalidate: %w", err)
+		return nil, errors.Wrap(err, "crdvalidate")
 	}
 	if sub != nil {
 		c.status = sub.Status != nil
 		if sub.Scale != nil {
 			c.scale = &apiextensions.CustomResourceSubresourceScale{}
 			if err := apiextensionsv1.Convert_v1_CustomResourceSubresourceScale_To_apiextensions_CustomResourceSubresourceScale(sub.Scale, c.scale, nil); err != nil {
-				return nil, fmt.Errorf("crdvalidate: %s %s: convert scale subresource: %w", crd.Name, version, err)
+				return nil, errors.Wrapf(err, "crdvalidate: %s %s: convert scale subresource", crd.Name, version)
 			}
 		}
 	}
