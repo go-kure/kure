@@ -56,6 +56,9 @@ func Golden(t testing.TB, filename string, obj client.Object) {
 
 	golden := filepath.Join("testdata", filename)
 	if *update {
+		if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil { //nolint:gosec // a test fixture directory, world-readable by design
+			t.Fatalf("creating the golden directory: %v", err)
+		}
 		if err := os.WriteFile(golden, got, 0o644); err != nil { //nolint:gosec // a test fixture, world-readable by design
 			t.Fatalf("updating golden file: %v", err)
 		}
@@ -198,10 +201,13 @@ func describe(i int, u *unstructured.Unstructured) string {
 }
 
 // decode is the unstructured path of pkg/io: every document, through the
-// server's own JSON decoder, into an object — or, when its kind says so,
-// into a list flattened to its items. The decoder's own guess, that any
-// document with an items field is a list, is not taken: on an object,
-// items is a field the server validates like any other.
+// server's own JSON decoder, into an object — or, when its kind ends in
+// List and it carries an items field, into a list flattened to its items,
+// which is how kustomize reads a layout (api/resource, Factory's
+// inlineAnyEmbeddedLists). The decoder's own guess, that any document with
+// an items field is a list, is not taken: on an object, items is a field
+// the server validates like any other; and a List kind without items is an
+// object the cluster refuses, not an empty list to read past.
 func decode(data []byte) ([]*unstructured.Unstructured, error) {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
 	var out []*unstructured.Unstructured
@@ -220,7 +226,7 @@ func decode(data []byte) ([]*unstructured.Unstructured, error) {
 		if _, _, err := unstructured.UnstructuredJSONScheme.Decode(raw.Raw, nil, obj); err != nil {
 			return nil, errors.Wrapf(err, "document %d", i)
 		}
-		if !strings.HasSuffix(obj.GetKind(), "List") {
+		if _, hasItems := obj.Object["items"]; !hasItems || !strings.HasSuffix(obj.GetKind(), "List") {
 			out = append(out, obj)
 			continue
 		}

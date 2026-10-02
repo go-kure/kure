@@ -132,21 +132,27 @@ func TestValidateYAMLHoldsBuiltInKindsToObjectMeta(t *testing.T) {
 
 // A built-in kind's name is held to the rule the apiserver's validation for
 // that kind passes to ValidateObjectMeta, not to the custom-resource
-// default: a path segment for the RBAC kinds, a DNS label for a Namespace,
-// a Service and a StatefulSet, an IP for an IPAddress, plural.group for a
-// definition.
+// default: a path segment for the RBAC kinds and a PodDisruptionBudget, a
+// DNS label for a Namespace, a Service and a StatefulSet, a canonical IP
+// for an IPAddress, the subdomain capped at 52 for a CronJob, plural.group
+// for a definition.
 func TestValidateYAMLHoldsBuiltInKindsToTheirNameRule(t *testing.T) {
 	const crdHead = "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nmetadata:\n  name: %s\nspec:\n  group: example.com\n  names:\n    kind: Widget\n    plural: widgets\n"
 	for name, c := range map[string]struct{ doc, want string }{
 		"rbac path segment":          {"apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: system:reader\n", ""},
 		"rbac binding path segment":  {"apiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: system:reader\n", ""},
 		"rbac slash":                 {"apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: a/b\n", "metadata.name: Invalid value"},
+		"pdb path segment":           {"apiVersion: policy/v1\nkind: PodDisruptionBudget\nmetadata:\n  name: Not_A_Subdomain\n", ""},
+		"pdb slash":                  {"apiVersion: policy/v1\nkind: PodDisruptionBudget\nmetadata:\n  name: a/b\n", "metadata.name: Invalid value"},
 		"namespace label":            {"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: a.b\n", "metadata.name: Invalid value"},
 		"namespace ok":               {"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: a-b\n", ""},
 		"service label":              {"apiVersion: v1\nkind: Service\nmetadata:\n  name: a.b\n", "metadata.name: Invalid value"},
 		"statefulset label":          {"apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: a.b\n", "metadata.name: Invalid value"},
 		"deployment subdomain":       {"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: a.b\n", ""},
+		"cronjob 52":                 {"apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: " + strings.Repeat("a", 53) + "\n", "must be no more than 52 characters"},
+		"cronjob ok":                 {"apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: " + strings.Repeat("a", 52) + "\n", ""},
 		"ipaddress ip":               {"apiVersion: networking.k8s.io/v1\nkind: IPAddress\nmetadata:\n  name: not-an-ip\n", "metadata.name: Invalid value"},
+		"ipaddress canonical":        {"apiVersion: networking.k8s.io/v1\nkind: IPAddress\nmetadata:\n  name: 2001:db8::0001\n", "must be in canonical form"},
 		"ipaddress ok":               {"apiVersion: networking.k8s.io/v1\nkind: IPAddress\nmetadata:\n  name: 10.0.0.1\n", ""},
 		"definition plural.group":    {fmt.Sprintf(crdHead, "widget.example.com"), "metadata.name: Invalid value"},
 		"definition plural.group ok": {fmt.Sprintf(crdHead, "widgets.example.com"), ""},
@@ -209,6 +215,23 @@ func TestDecodeKeepsItemsOnAnObject(t *testing.T) {
 	}
 	if len(findings) != 1 || !strings.Contains(format(findings), "object 0: ConfigMap Bad_Name") {
 		t.Errorf("want the list's item validated, got:\n%s", format(findings))
+	}
+}
+
+// kustomize reads a List kind without an items field as a resource of its
+// own, which a cluster then refuses; one whose items is null is an empty
+// list. This reads both the same way.
+func TestDecodeKeepsAListKindWithoutItems(t *testing.T) {
+	findings, objects, err := validateYAML([]byte("apiVersion: v1\nkind: ConfigMapList\nmetadata:\n  name: x\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if objects != 1 || len(findings) != 1 || !strings.Contains(format(findings), "ConfigMapList is not a kind kure registers") {
+		t.Errorf("want the document validated as an object, got %d object(s):\n%s", objects, format(findings))
+	}
+	findings, objects, err = validateYAML([]byte("apiVersion: v1\nkind: ConfigMapList\nitems: null\n"))
+	if err != nil || objects != 0 || len(findings) != 0 {
+		t.Errorf("want an empty list read past: %d object(s), %v, err %v", objects, findings, err)
 	}
 }
 
@@ -365,9 +388,25 @@ func TestGoldenReportsAFixtureItCannotReadOrWrite(t *testing.T) {
 	}
 	*update = true
 	t.Cleanup(func() { *update = false })
-	f = run(func(tb testing.TB) { Golden(tb, filepath.Join("no-such-dir", "x.yaml"), configMap("a")) })
-	if !strings.Contains(f.fatal, "updating golden file") {
+	// a fixture under a path that is a file, not a directory
+	f = run(func(tb testing.TB) { Golden(tb, filepath.Join("objectstore.yaml", "x.yaml"), configMap("a")) })
+	if !strings.Contains(f.fatal, "creating the golden directory") {
 		t.Errorf("want the write failure reported, got %q", f.fatal)
+	}
+}
+
+// A package's first golden test has no testdata directory yet; -update
+// creates it, as the helpers this one replaced did.
+func TestGoldenCreatesTheFixtureDirectory(t *testing.T) {
+	dir := filepath.Join("testdata", "new-dir")
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	*update = true
+	t.Cleanup(func() { *update = false })
+	if f := run(func(tb testing.TB) { Golden(tb, filepath.Join("new-dir", "x.yaml"), configMap("a")) }); f.fatal != "" {
+		t.Fatalf("Golden did not create the directory under -update: %q", f.fatal)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "x.yaml")); err != nil {
+		t.Error(err)
 	}
 }
 
