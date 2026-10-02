@@ -128,12 +128,17 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 //     The builds run in walk order on one copy of the tree, which each
 //     leaves as it found it, so the tree itself is never written.
 //
-// Nothing is built when a path could take the build past the tree: an entry
-// that is not a local path — kustomize would fetch it — or a kustomization
-// field whose loads the pass does not resolve (bases, crds, openapi,
-// configurations, generators, transformers, validators, the helm fields,
-// patchesStrategicMerge, patchesJson6902, replacements). Each of those is a
-// finding.
+// Nothing is built when a path could take a build past the tree, or a
+// write past the copy: an entry that is not a local path — kustomize would
+// fetch it; a kustomization field whose loads the pass does not resolve
+// (bases, crds, openapi, configurations, generators, transformers,
+// validators, the helm fields, patchesStrategicMerge, patchesJson6902,
+// replacements); a symbolic link anywhere under root — the copy keeps it
+// as a link, and Flux's generator and kustomize write through one; or a
+// file named <kustomization file>.original, which Flux's generator
+// overwrites with its own backup and then consumes. Each of those is a
+// finding. A link is still read as what its name says, so the other checks
+// run.
 //
 // root is the directory the Flux source serves, the one every spec.path is
 // relative to: for layout.WriteManifest(base, cfg, ml) that is
@@ -159,7 +164,7 @@ func AssertConsistentDir(t testing.TB, root string, declared ...Declared) {
 	if err := tr.checkPaths(); err != nil {
 		t.Fatalf("kuretest: %v", err)
 	}
-	if findings := collect(tr.objects, tr.kustomizations); len(findings) > 0 {
+	if findings := tr.findings(); len(findings) > 0 {
 		t.Fatalf("%s", formatWith(disagreeHeadline, findings))
 	}
 }
@@ -190,20 +195,30 @@ type tree struct {
 	root           string
 	objects        []*object
 	kustomizations []*kustomizationFile
+	// errs are the findings on the tree itself: an entry a build would
+	// write through or consume, by its path under root.
+	errs field.ErrorList
 }
 
 // readTree reads every kustomization file under root, then decodes every
 // other .yaml and .yml file but the data those files name, in walk order.
+// A symbolic link, and a file named as Flux's generator names its backup,
+// are findings on the tree (refuse).
 func readTree(root string) (*tree, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
+	tr := &tree{root: abs}
 	var kfiles, manifests []string
 	err = filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-		switch {
-		case err != nil:
+		if err != nil {
 			return err
+		}
+		if err := tr.refuse(path, d); err != nil {
+			return err
+		}
+		switch {
 		case d.IsDir():
 		case slices.Contains(konfig.RecognizedKustomizationFileNames(), d.Name()):
 			kfiles = append(kfiles, path)
@@ -215,7 +230,6 @@ func readTree(root string) (*tree, error) {
 	if err != nil {
 		return nil, err
 	}
-	tr := &tree{root: abs}
 	data := map[string]bool{}
 	for _, path := range kfiles {
 		raw, err := os.ReadFile(path) //nolint:gosec // a kustomization file under the directory named
@@ -250,6 +264,41 @@ func readTree(root string) (*tree, error) {
 		}
 	}
 	return tr, nil
+}
+
+// original reports whether name is one Flux's generator keeps its backup
+// under: a recognized kustomization file name with .original appended.
+func original(name string) bool {
+	base, ok := strings.CutSuffix(name, ".original")
+	return ok && slices.Contains(konfig.RecognizedKustomizationFileNames(), base)
+}
+
+// refuse records a finding on an entry of the tree that no build may run
+// over: a symbolic link — the copy the builds run on keeps it as a link,
+// and Flux's generator and kustomize write through one — or an entry named
+// as Flux's generator names its backup, which it overwrites and then
+// consumes. The entry is still read as what its name says, as kustomize
+// reads it, so every other check runs.
+func (tr *tree) refuse(path string, d fs.DirEntry) error {
+	link := d.Type()&fs.ModeSymlink != 0
+	if !link && !original(d.Name()) {
+		return nil
+	}
+	rel, err := filepath.Rel(tr.root, path)
+	if err != nil {
+		return err
+	}
+	at := field.NewPath(rel)
+	if !link {
+		tr.errs = append(tr.errs, field.Forbidden(at, anOriginal))
+		return nil
+	}
+	target, err := os.Readlink(path)
+	if err != nil {
+		return err
+	}
+	tr.errs = append(tr.errs, field.Invalid(at, target, aLink))
+	return nil
 }
 
 // entry is one path a kustomization file names, where it names it, and the
@@ -327,6 +376,13 @@ func (kf *kustomizationFile) unresolved() []string {
 // notLocal is the finding on an entry kustomize would fetch.
 const notLocal = "not a local path, so nothing is built: kustomize would fetch it"
 
+// aLink is the finding on a symbolic link under root.
+const aLink = "a symbolic link, which a build would write through, so nothing is built"
+
+// anOriginal is the finding on a file named as Flux's generator names the
+// backup it keeps.
+const anOriginal = "Flux's generator keeps its backup under this name and consumes it, so nothing is built"
+
 // isLocal reports whether kustomize reads entry from the tree rather than
 // fetching it: Flux's own test, narrowed by the scp-style user@host:path and
 // the file:// base that pass it and that kustomize clones all the same.
@@ -335,9 +391,10 @@ func isLocal(entry string) bool {
 }
 
 // checkPaths resolves every path the tree names, then builds what each Flux
-// Kustomization applies — unless a path could take a build past the tree.
+// Kustomization applies — unless a path could take a build past the tree,
+// or the tree holds an entry a build would write through (refuse).
 func (tr *tree) checkPaths() error {
-	contained := true
+	contained := len(tr.errs) == 0
 	for _, o := range tr.objects {
 		if o.kustomization == nil {
 			continue
@@ -672,6 +729,16 @@ func (o *object) checkNamespaces(index map[string]bool) {
 	if k := o.kustomization; k != nil && k.Spec.TargetNamespace != "" && !exists(k.Spec.TargetNamespace) {
 		o.errs = append(o.errs, field.NotFound(field.NewPath("spec", "targetNamespace"), k.Spec.TargetNamespace))
 	}
+}
+
+// findings returns collect's findings on the tree's objects and
+// kustomization files, then one on the tree itself when it has errors.
+func (tr *tree) findings() []finding {
+	out := collect(tr.objects, tr.kustomizations)
+	if len(tr.errs) > 0 {
+		out = append(out, finding{doc: tr.root, errs: tr.errs})
+	}
+	return out
 }
 
 // collect returns one finding per object, then per kustomization file, that
