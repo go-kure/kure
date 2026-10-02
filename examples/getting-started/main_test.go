@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -9,8 +10,10 @@ import (
 	"github.com/go-kure/kure/pkg/stack"
 )
 
-// TestRun exercises the complete getting-started pipeline end-to-end and
-// holds every manifest it writes to what a cluster would accept.
+// TestRun exercises the complete getting-started pipeline end-to-end, holds
+// every manifest it writes to what a cluster would accept, and holds the tree
+// to itself: every reference, namespace and path resolves, and what Flux
+// applies builds.
 func TestRun(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("OUT_DIR", dir)
@@ -18,6 +21,11 @@ func TestRun(t *testing.T) {
 		t.Fatalf("run() error = %v", err)
 	}
 	kuretest.AssertValidDir(t, dir)
+	// The Kustomizations live in flux-system and name the OCIRepository the
+	// bootstrap creates; the example creates every other namespace itself.
+	kuretest.AssertConsistentDir(t, filepath.Join(dir, "clusters"),
+		kuretest.Namespace("flux-system"),
+		kuretest.External("OCIRepository", "flux-system", "manifests"))
 }
 
 // TestRedisConfigGenerate exercises the RedisConfig.Generate method.
