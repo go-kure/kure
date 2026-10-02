@@ -453,12 +453,28 @@ func with(base, files map[string]string) map[string]string {
 	return out
 }
 
+// writeLinks writes symbolic links, keyed by their path under dir, to their
+// target as written.
+func writeLinks(t *testing.T, dir string, links map[string]string) {
+	t.Helper()
+	for name, target := range links {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // dirCase is a tree written under a temporary directory and what
 // AssertConsistentDir on its root, with pathDeclared, must say. A want or
 // absent text may name {root}, the root's absolute path.
 type dirCase struct {
 	files    map[string]string
-	root     string // relative to the temporary directory; empty is the directory itself
+	links    map[string]string // symbolic links, keyed like files, to their target as written
+	root     string            // relative to the temporary directory; empty is the directory itself
 	want     []string
 	absent   []string
 	findings int
@@ -470,6 +486,7 @@ func runDir(t *testing.T, cases map[string]dirCase) {
 		t.Run(name, func(t *testing.T) {
 			tmp := t.TempDir()
 			writeTree(t, tmp, c.files)
+			writeLinks(t, tmp, c.links)
 			root := filepath.Join(tmp, c.root)
 			at := func(texts []string) []string {
 				out := make([]string, len(texts))
@@ -732,13 +749,18 @@ func TestAssertConsistentDirTakesDotAsTheRoot(t *testing.T) {
 	consistentCase{want: []string{filepath.Join(dir, "flux.yaml") + ": object 0: Kustomization flux-system/root", `spec.path: Invalid value: "./": the build fails: `}}.check(t, f)
 }
 
-// snapshot reads every directory and file under dir.
+// snapshot reads every directory, link and file under dir; a link is read
+// as its target, not through it.
 func snapshot(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
+			return err
+		case d.Type()&fs.ModeSymlink != 0:
+			target, err := os.Readlink(p)
+			out[p] = "a link to " + target
 			return err
 		case d.IsDir():
 			out[p] = "a directory"
@@ -776,6 +798,98 @@ func TestAssertConsistentDirLeavesTheTreeAsItWas(t *testing.T) {
 	}
 	if after := snapshot(t, dir); !maps.Equal(before, after) {
 		t.Errorf("the tree changed:\nbefore %v\nafter  %v", before, after)
+	}
+}
+
+// A symbolic link anywhere under root, or a file named as Flux's generator
+// names the backup it keeps, is a finding on the tree and nothing is built:
+// the copy the builds run on would keep the link and a build would write
+// through it, and the generator overwrites and then consumes the backup.
+// failing's Kustomization would add a finding of its own were anything
+// built. A link is still read as what its name says, so the other checks
+// run.
+func TestAssertConsistentDirBuildsNothingThroughALink(t *testing.T) {
+	cases := map[string]dirCase{
+		// Codex's trace: building a would write its patch through the link
+		// into b's kustomization file, which the restore leaves amended, so
+		// b's own build would apply the removal twice and fail — though Flux
+		// reconciles both.
+		"a kustomization file that is a link": {
+			files: map[string]string{
+				"flux.yaml":            string(docs(applying("a", "./a", removeLabel("x")), applying("b", "./b", removeLabel("x")))),
+				"a/cm.yaml":            labelled("a"),
+				"b/kustomization.yaml": "resources: [cm.yaml]\n",
+				"b/cm.yaml":            labelled("b"),
+			},
+			links: map[string]string{"a/kustomization.yaml": "../b/kustomization.yaml"},
+			want:  []string{"  {root}\n    a/kustomization.yaml: Invalid value: \"../b/kustomization.yaml\": " + aLink},
+		},
+		"a kustomization file that is a link is still read, from where it is": {
+			files: with(failing(), map[string]string{
+				"a/cm.yaml":            cm("default", "c"),
+				"b/kustomization.yaml": "resources: [cm.yaml, missing.yaml]\n",
+				"b/cm.yaml":            cm("default", "b"),
+			}),
+			links: map[string]string{"a/kustomization.yaml": "../b/kustomization.yaml"},
+			want: []string{
+				"  {root}/a/kustomization.yaml\n    resources[1]: Not found: \"missing.yaml\"",
+				"  {root}/b/kustomization.yaml\n    resources[1]: Not found: \"missing.yaml\"",
+				"  {root}\n    a/kustomization.yaml: Invalid value: \"../b/kustomization.yaml\": " + aLink,
+			},
+			findings: 3,
+		},
+		"a directory that is a link": {
+			files: failing(),
+			links: map[string]string{"linked": "app"},
+			want:  []string{"  {root}\n    linked: Invalid value: \"app\": " + aLink},
+		},
+		"a manifest that is a link": {
+			files: failing(),
+			links: map[string]string{"app/c.yaml": "a.yaml"},
+			want:  []string{"  {root}\n    app/c.yaml: Invalid value: \"a.yaml\": " + aLink},
+		},
+	}
+	for _, name := range []string{"kustomization.yaml", "kustomization.yml", "Kustomization"} {
+		cases["a "+name+".original"] = dirCase{
+			files: with(failing(), map[string]string{"app/" + name + ".original": "resources: [a.yaml]\n"}),
+			want:  []string{"  {root}\n    app/" + name + ".original: Forbidden: " + anOriginal},
+		}
+	}
+	for name, c := range cases {
+		c.absent = append(c.absent, "the build fails")
+		cases[name] = c
+	}
+	runDir(t, cases)
+}
+
+// A link named as Flux's generator names its backup, pointing outside the
+// tree, is what the generator's save would write through: nothing is built,
+// and neither the tree nor the link's target is touched.
+func TestAssertConsistentDirLeavesALinkedTreeAsItWas(t *testing.T) {
+	outside := t.TempDir()
+	target := filepath.Join(outside, "kustomization.yaml")
+	body := "resources: [outside.yaml]\n"
+	if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	writeTree(t, dir, failing())
+	writeLinks(t, dir, map[string]string{"app/kustomization.yaml.original": target})
+	before := snapshot(t, dir)
+	f := run(func(tb testing.TB) { AssertConsistentDir(tb, dir, pathDeclared...) })
+	consistentCase{
+		want:   []string{"  " + dir + "\n    app/kustomization.yaml.original: Invalid value: " + fmt.Sprintf("%q", target) + ": " + aLink},
+		absent: []string{"the build fails"},
+	}.check(t, f)
+	if after := snapshot(t, dir); !maps.Equal(before, after) {
+		t.Errorf("the tree changed:\nbefore %v\nafter  %v", before, after)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != body {
+		t.Errorf("the link's target changed:\nbefore %q\nafter  %q", body, got)
 	}
 }
 
