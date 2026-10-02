@@ -796,10 +796,12 @@ func TestAssertConsistentDirReadsWhatKustomizeCannotParseAsARepository(t *testin
 
 // isLocal refuses what Flux's own test refuses and the three forms that
 // pass it which kustomize parses as a repository before it looks in the
-// tree, compared on the whole string lowercased as kustomize compares — a
-// capital I with a dot above (U+0130) lowercases to an ASCII i and slips
-// Flux's byte window; a user@ prefix counts at the start only, as
-// kustomize's username does.
+// tree. The github host is compared on the whole string lowercased, as
+// kustomize compares it — a capital I with a dot above (U+0130) lowercases
+// to an ASCII i and slips Flux's byte window; the file:// base is compared
+// the same way as this predicate's own policy, where kustomize lowercases
+// a byte window; a user@ prefix counts at the start only, on the entry as
+// written, as kustomize's username does.
 func TestIsLocal(t *testing.T) {
 	for entry, want := range map[string]bool{
 		"cm.yaml":                         true,
