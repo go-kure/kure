@@ -139,12 +139,16 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 // by what exists at the path; a kustomization field whose loads the pass
 // does not resolve (bases, crds, openapi, configurations, generators,
 // transformers, validators, the helm fields, patchesStrategicMerge,
-// patchesJson6902, replacements); a symbolic link anywhere under root —
+// patchesJson6902, replacements); a Kustomization's spec.components entry
+// that, resolved against its spec.path, leaves the tree; a symbolic link
+// anywhere under root —
 // the copy keeps it as a link, and Flux's generator and kustomize write
 // through one; or a file named <kustomization file>.original, which
 // Flux's generator overwrites with its own backup and then consumes. Each
 // of those is a finding. A link is still read as what its name says, so
-// the other checks run.
+// the other checks run once it reads and decodes — one whose read fails,
+// a link to a directory under a manifest's name, fails the test on that
+// read, before its finding is reported.
 //
 // Three rules are stricter than a Flux build, because the pass holds a
 // tree to the layout kure writes; a hand-written tree that breaks one gets
@@ -466,8 +470,24 @@ func (tr *tree) checkPaths() error {
 			return err
 		}
 		for i, c := range o.kustomization.Spec.Components {
+			at := field.NewPath("spec", "components").Index(i)
 			if !isLocal(c) {
-				o.errs = append(o.errs, field.Invalid(field.NewPath("spec", "components").Index(i), c, notLocal))
+				o.errs = append(o.errs, field.Invalid(at, c, notLocal))
+				contained = false
+				continue
+			}
+			// resolved against spec.path, as a kustomization file's entry is
+			// against its directory; a Kustomization whose path names no
+			// directory is not built, so its entries resolve nowhere
+			if o.dir == "" {
+				continue
+			}
+			inTree, err := within(tr.root, filepath.Join(tr.root, o.dir, c))
+			if err != nil {
+				return err
+			}
+			if !inTree {
+				o.errs = append(o.errs, field.Invalid(at, c, "outside the tree"))
 				contained = false
 			}
 		}

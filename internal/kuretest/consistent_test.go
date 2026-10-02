@@ -700,6 +700,21 @@ func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
 			}),
 			want: []string{`resources[1]: Invalid value: "cluster-clusterrole-a@b.yaml": ` + notLocal},
 		},
+		// a Kustomization's components entry is resolved against its
+		// spec.path and held to the tree, as a kustomization file's is to
+		// its directory: the finding is the pass's own, not the build's
+		"a component on a Kustomization outside the tree": {
+			root: "tree",
+			files: map[string]string{
+				"tree/flux.yaml":              applying("app", "./app", "  components:\n  - ../../outside\n"),
+				"tree/app/kustomization.yaml": "resources: [cm.yaml]\n",
+				"tree/app/cm.yaml":            cm("default", "a"),
+				"outside/kustomization.yaml":  "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\nresources: [cm.yaml]\n",
+				"outside/cm.yaml":             cm("default", "b"),
+			},
+			want:     []string{"{root}/flux.yaml: object 0: Kustomization flux-system/app", `spec.components[0]: Invalid value: "../../outside": outside the tree`},
+			findings: 1,
+		},
 		// a components entry is a directory to kustomize, which parses it as
 		// a repository before it looks for one
 		"a components entry with a user prefix that names a file": {
