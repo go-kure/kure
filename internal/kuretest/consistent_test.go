@@ -313,8 +313,8 @@ func TestAssertConsistentDir(t *testing.T) {
 }
 
 // A file a kustomization file names as a generator's source or a patch is
-// data, not an object: it is not decoded, so a kind-less one passes. Every
-// other manifest still decodes or fails.
+// data, not an object: outside a directory Flux scans, it is not decoded, so
+// a kind-less one passes. Every other manifest still decodes or fails.
 func TestAssertConsistentDirSkipsTheDataAKustomizationNames(t *testing.T) {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
@@ -347,8 +347,104 @@ patches:
 	}
 }
 
-// The data a Kustomization file names as such is skipped wherever that file
-// sits, under every name kustomize recognizes, the extension-less one included.
+// scanning is a tree whose one Flux Kustomization applies sub, and whose root
+// kustomization file names files, a YAML list, as a configMapGenerator's
+// sources.
+func scanning(files string) map[string]string {
+	return map[string]string{
+		"kustomization.yaml": "resources: [cm.yaml]\nconfigMapGenerator:\n- name: g\n  files: " + files + "\n",
+		"cm.yaml":            cm("default", "a"),
+		"flux.yaml":          applying("sub", "./sub", ""),
+	}
+}
+
+// Under a Flux Kustomization's spec.path that holds no kustomization file,
+// Flux's generator lists every .yaml and .yml file, so one a kustomization
+// file names as data is applied there and read as a manifest: not past a
+// subdirectory holding its own kustomization file, once however many paths
+// reach it, and a Kustomization so read is followed to its own path.
+func TestAssertConsistentDirReadsTheDataFluxScans(t *testing.T) {
+	runDir(t, map[string]dirCase{
+		"a namespace in a data file": {files: with(scanning("[sub/namespace.yaml]"), map[string]string{
+			"sub/namespace.yaml": ns("app"),
+			"sub/deploy.yaml":    cm("app", "web"),
+		})},
+		// Flux scans no directory that holds a kustomization file: were
+		// namespace.yaml decoded, it would fail on document 0
+		"a directory holding a kustomization file": {files: with(scanning("[sub/namespace.yaml]"), map[string]string{
+			"sub/kustomization.yaml": "resources: [deploy.yaml]\n",
+			"sub/namespace.yaml":     "k: v\n",
+			"sub/deploy.yaml":        cm("default", "web"),
+		})},
+		"a workload in a data file": {
+			files: with(scanning("[sub/deploy.yaml]"), map[string]string{"sub/deploy.yaml": cm("app", "web")}),
+			want:  []string{"{root}/sub/deploy.yaml: object 0: ConfigMap app/web", `metadata.namespace: Not found: "app"`},
+		},
+		"a Kustomization in a data file, followed to its path": {
+			files: with(scanning("[sub/flux.yaml, other/deploy.yaml]"), map[string]string{
+				"sub/flux.yaml":     fluxKustomization("flux-system", "inner", "  path: ./other\n  sourceRef:\n    kind: GitRepository\n    name: nowhere\n"),
+				"other/deploy.yaml": cm("app", "web"),
+			}),
+			want: []string{
+				"{root}/sub/flux.yaml: object 0: Kustomization flux-system/inner", `spec.sourceRef: Not found: "GitRepository/flux-system/nowhere"`,
+				"{root}/other/deploy.yaml: object 0: ConfigMap app/web", `metadata.namespace: Not found: "app"`,
+			},
+			findings: 2,
+		},
+		// Flux lists a subdirectory holding a kustomization file whole: that
+		// file decides, and values.yaml, were it decoded, would fail
+		"a subdirectory holding a kustomization file": {files: with(scanning("[sub/inner/values.yaml]"), map[string]string{
+			"sub/deploy.yaml":              cm("default", "web"),
+			"sub/inner/kustomization.yaml": "resources: [b.yaml]\n",
+			"sub/inner/b.yaml":             cm("default", "b"),
+			"sub/inner/values.yaml":        "k: v\n",
+		})},
+		// both paths scan a/b: the file is read once
+		"nested paths, the outer first": {
+			files: with(scanning("[a/b/deploy.yaml]"), map[string]string{
+				"flux.yaml":       string(docs(applying("a", "./a", ""), applying("b", "./a/b", ""))),
+				"a/b/deploy.yaml": cm("app", "web"),
+			}),
+			want: []string{"{root}/a/b/deploy.yaml: object 0: ConfigMap app/web", `metadata.namespace: Not found: "app"`},
+		},
+		"nested paths, the inner first": {
+			files: with(scanning("[a/b/deploy.yaml]"), map[string]string{
+				"flux.yaml":       string(docs(applying("b", "./a/b", ""), applying("a", "./a", ""))),
+				"a/b/deploy.yaml": cm("app", "web"),
+			}),
+			want: []string{"{root}/a/b/deploy.yaml: object 0: ConfigMap app/web", `metadata.namespace: Not found: "app"`},
+		},
+		// read once, as the resource it also is
+		"a file named as data and as a resource": {
+			files: with(scanning("[sub/deploy.yaml]"), map[string]string{
+				"kustomization.yaml": "resources: [cm.yaml, sub/deploy.yaml]\nconfigMapGenerator:\n- name: g\n  files: [sub/deploy.yaml]\n",
+				"sub/deploy.yaml":    cm("app", "web"),
+			}),
+			want: []string{"{root}/sub/deploy.yaml: object 0: ConfigMap app/web", `metadata.namespace: Not found: "app"`},
+		},
+		// Flux lists .yml as it lists .yaml, and no other suffix
+		"a .yml data file, and an env file": {files: with(scanning("[sub/ns.yml]"), map[string]string{
+			"kustomization.yaml": "resources: [cm.yaml]\nconfigMapGenerator:\n- name: g\n  files: [sub/ns.yml]\n  envs: [sub/app.env]\n",
+			"sub/ns.yml":         ns("app"),
+			"sub/app.env":        "K=V\n",
+			"sub/deploy.yaml":    cm("app", "web"),
+		})},
+	})
+	// a data file under a scanned path is a manifest, so it decodes or fails
+	// the test, as it fails Flux's scan
+	t.Run("a data file that does not decode", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTree(t, dir, with(scanning("[sub/values.yaml]"), map[string]string{"sub/values.yaml": "k: v\n"}))
+		f := run(func(tb testing.TB) { AssertConsistentDir(tb, dir, pathDeclared...) })
+		if !strings.Contains(f.fatal, "kuretest: ") || !strings.Contains(f.fatal, filepath.Join("sub", "values.yaml")+": document 0") {
+			t.Errorf("want a kuretest failure naming sub/values.yaml: document 0, got %q", f.fatal)
+		}
+	})
+}
+
+// The data a Kustomization file names as such is skipped outside a directory
+// Flux scans, wherever that file sits, under every name kustomize recognizes,
+// the extension-less one included.
 func TestAssertConsistentDirReadsEveryKustomizationFileName(t *testing.T) {
 	for _, name := range []string{"kustomization.yaml", "kustomization.yml", "Kustomization"} {
 		t.Run(name, func(t *testing.T) {
