@@ -575,16 +575,6 @@ secretGenerator:
 			},
 			absent: []string{"resources[1]", "{root}/base/kustomization.yaml"},
 		},
-		"an entry outside the tree": {
-			root: "tree",
-			files: map[string]string{
-				"tree/kustomization.yaml":    "resources: [cm.yaml, ../outside]\n",
-				"tree/cm.yaml":               cm("default", "a"),
-				"outside/kustomization.yaml": "resources: [cm.yaml]\n",
-				"outside/cm.yaml":            cm("default", "b"),
-			},
-			want: []string{`resources[1]: Invalid value: "../outside": outside the tree`},
-		},
 	})
 }
 
@@ -700,9 +690,25 @@ func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
 			}),
 			want: []string{`resources[1]: Invalid value: "cluster-clusterrole-a@b.yaml": ` + notLocal},
 		},
-		// a Kustomization's components entry is resolved against its
-		// spec.path and held to the tree, as a kustomization file's is to
-		// its directory: the finding is the pass's own, not the build's
+		// an entry of a kustomization file is held to the tree, and a
+		// Kustomization's components entry, resolved against its spec.path,
+		// the same way: the finding is the pass's own, not the build's
+		"an entry outside the tree": {
+			root: "tree",
+			files: map[string]string{
+				"tree/flux.yaml":              applying("app", "./app", ""),
+				"tree/app/kustomization.yaml": "resources: [a.yaml, b.yaml]\n",
+				"tree/app/a.yaml":             cm("default", "a"),
+				"tree/app/b.yaml":             cm("default", "a"),
+				"tree/kustomization.yaml":     "resources: [cm.yaml, ../outside]\n",
+				"tree/cm.yaml":                cm("default", "c"),
+				"outside/kustomization.yaml":  "resources: [cm.yaml]\n",
+				"outside/cm.yaml":             cm("default", "b"),
+			},
+			want:     []string{"{root}/kustomization.yaml", `resources[1]: Invalid value: "../outside": outside the tree`},
+			absent:   []string{"the build fails"},
+			findings: 1,
+		},
 		"a component on a Kustomization outside the tree": {
 			root: "tree",
 			files: map[string]string{

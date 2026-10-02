@@ -139,9 +139,9 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 // by what exists at the path; a kustomization field whose loads the pass
 // does not resolve (bases, crds, openapi, configurations, generators,
 // transformers, validators, the helm fields, patchesStrategicMerge,
-// patchesJson6902, replacements); a Kustomization's spec.components entry
-// that, resolved against its spec.path, leaves the tree; a symbolic link
-// anywhere under root —
+// patchesJson6902, replacements); an entry of a kustomization file, or a
+// Kustomization's spec.components entry resolved against its spec.path,
+// that leaves the tree; a symbolic link anywhere under root —
 // the copy keeps it as a link, and Flux's generator and kustomize write
 // through one; or a file named <kustomization file>.original, which
 // Flux's generator overwrites with its own backup and then consumes. Each
@@ -540,8 +540,8 @@ const (
 )
 
 // checkEntries resolves every entry of a kustomization file, and reports
-// whether every one is a local path and every field one the pass resolves,
-// so that a build reads nothing past the tree.
+// whether every one is a local path in the tree and every field one the
+// pass resolves, so that a build reads nothing past the tree.
 func (tr *tree) checkEntries(kf *kustomizationFile) (bool, error) {
 	contained := true
 	check := func(at *field.Path, e string, n names) error {
@@ -573,8 +573,8 @@ func (tr *tree) checkEntries(kf *kustomizationFile) (bool, error) {
 
 // checkEntry records a finding unless the entry e, at its place in kf, is a
 // local path in the tree to what n allows, and reports whether it is a
-// local path. A file stays in or below kf's directory; a directory holds a
-// kustomization file.
+// local path in the tree. A file stays in or below kf's directory; a
+// directory holds a kustomization file.
 func (tr *tree) checkEntry(kf *kustomizationFile, at *field.Path, e string, n names) (bool, error) {
 	if !isLocal(e) {
 		kf.errs = append(kf.errs, field.Invalid(at, e, notLocal))
@@ -588,7 +588,7 @@ func (tr *tree) checkEntry(kf *kustomizationFile, at *field.Path, e string, n na
 	}
 	if !inTree {
 		kf.errs = append(kf.errs, field.Invalid(at, e, "outside the tree"))
-		return true, nil
+		return false, nil
 	}
 	info, err := os.Stat(target)
 	if stderrors.Is(err, fs.ErrNotExist) {

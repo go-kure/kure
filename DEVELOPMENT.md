@@ -165,9 +165,10 @@ names a namespace the tree does not create — unless the test declares it with 
 `Namespace`, or it is one the cluster makes itself. On a written directory, `AssertConsistentDir`
 reads every `.yaml` and `.yml` file but one a `kustomization.yaml` names as data only, and every
 file one lists as a resource whatever its name, as kustomize applies it; it also fails when a
-Kustomization's `spec.path` or `spec.components` entry, or an entry of a `kustomization.yaml`,
-names nothing in the tree, and builds what each Flux Kustomization applies the way
-kustomize-controller builds it, on a copy of the tree.
+Kustomization's `spec.path` or an entry of a `kustomization.yaml` names nothing in the tree, or an
+entry of a `kustomization.yaml` or of a Kustomization's `spec.components` leaves it, and builds
+what each Flux Kustomization applies the way kustomize-controller builds it, on a copy of the
+tree — nothing, once an entry leaves the tree.
 
 ### 4. Code Quality
 
