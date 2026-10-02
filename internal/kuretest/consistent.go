@@ -110,9 +110,10 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 	}
 }
 
-// AssertConsistentDir holds every .yaml and .yml file under root to
-// AssertConsistentYAML, as one set of objects, then holds the tree to the
-// paths it names and builds what each Flux Kustomization in it applies:
+// AssertConsistentDir holds every .yaml and .yml file under root, and every
+// file a kustomization file names as a resources entry whatever its name,
+// to AssertConsistentYAML, as one set of objects, then holds the tree to
+// the paths it names and builds what each Flux Kustomization in it applies:
 //
 //   - every Flux Kustomization's spec.path is a directory in the tree;
 //   - every resources and components entry of a kustomization file is a
@@ -168,8 +169,13 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 // configMapGenerator or secretGenerator files, envs or env entry, a
 // patches path — is not decoded, unless a kustomization file also names it
 // as a resources entry: kustomize applies it as a manifest then, so it is
-// read as one. Every other manifest decodes or fails the test. A tree whose
-// files hold no object fails.
+// read as one. A file a kustomization file names as a resources entry is
+// read as a manifest whatever its name — kustomize applies it by name, not
+// by suffix — so one a layout Config.ManifestFileName names without .yaml
+// or .yml is read where Flux's own scan of a directory would skip it; a
+// file no kustomization file names is read under those two suffixes only.
+// Every manifest so read decodes or fails the test. A tree whose files hold
+// no object fails.
 func AssertConsistentDir(t testing.TB, root string, declared ...Declared) {
 	t.Helper()
 	tr, err := readTree(root)
@@ -221,17 +227,18 @@ type tree struct {
 	errs field.ErrorList
 }
 
-// readTree reads every kustomization file under root, then decodes every
-// other .yaml and .yml file, in walk order, but one those files name as
-// data and none names as a resource. A symbolic link, and a file named as
-// Flux's generator names its backup, are findings on the tree (refuse).
+// readTree reads every kustomization file under root, then decodes, in walk
+// order, every other .yaml and .yml file but one those files name as data
+// and none names as a resource, and every file one names as a resource
+// whatever its name. A symbolic link, and a file named as Flux's generator
+// names its backup, are findings on the tree (refuse).
 func readTree(root string) (*tree, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
 	tr := &tree{root: abs}
-	var kfiles, manifests []string
+	var kfiles, files []string
 	err = filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -243,8 +250,8 @@ func readTree(root string) (*tree, error) {
 		case d.IsDir():
 		case slices.Contains(konfig.RecognizedKustomizationFileNames(), d.Name()):
 			kfiles = append(kfiles, path)
-		case filepath.Ext(path) == ".yaml" || filepath.Ext(path) == ".yml":
-			manifests = append(manifests, path)
+		default:
+			files = append(files, path)
 		}
 		return nil
 	})
@@ -270,10 +277,12 @@ func readTree(root string) (*tree, error) {
 			resources[filepath.Join(dir, r)] = true
 		}
 	}
-	for _, path := range manifests {
-		// a file named as data is not decoded — unless a kustomization file
-		// also names it as a resource, which kustomize applies as a manifest
-		if data[path] && !resources[path] {
+	for _, path := range files {
+		// a .yaml or .yml file is a manifest, unless a kustomization file
+		// names it as data; a file one names as a resource is a manifest
+		// whatever its name, since kustomize applies it as one
+		manifest := filepath.Ext(path) == ".yaml" || filepath.Ext(path) == ".yml"
+		if !resources[path] && (!manifest || data[path]) {
 			continue
 		}
 		raw, err := os.ReadFile(path) //nolint:gosec // a manifest under the directory named
