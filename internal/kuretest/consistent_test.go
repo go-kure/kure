@@ -680,31 +680,46 @@ func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
 			}),
 			want: []string{"{root}/flux.yaml: object 1: Kustomization flux-system/remote", `spec.components[0]: Invalid value: "https://example.com/component": ` + notLocal},
 		},
-		// a directory holding : or @ is parsed as a repository before it is
-		// confirmed a directory, and an entry that names nothing the same,
-		// where a file so named is read (TestAssertConsistentDirReadsAFileWhateverItsName)
-		"a directory entry holding a colon": {
-			files: with(failing(), map[string]string{
-				"other/kustomization.yaml":          `resources: [cm.yaml, "sub: dir"]` + "\n",
-				"other/cm.yaml":                     cm("default", "b"),
-				"other/sub: dir/kustomization.yaml": "resources: [cm.yaml]\n",
-				"other/sub: dir/cm.yaml":            cm("default", "c"),
-			}),
-			want: []string{"{root}/other/kustomization.yaml", `resources[1]: Invalid value: "sub: dir": ` + notLocal},
-		},
-		"a directory entry holding an at sign": {
+		// an entry with a user@ prefix is kustomize's scp-style repository,
+		// which it tries before a directory, and before a file once that
+		// fails to load — so what exists under the name does not admit it
+		"a directory entry with a user prefix": {
 			files: with(failing(), map[string]string{
 				"other/kustomization.yaml":         "resources: [cm.yaml, sub@dir]\n",
 				"other/cm.yaml":                    cm("default", "b"),
 				"other/sub@dir/kustomization.yaml": "resources: [cm.yaml]\n",
 				"other/sub@dir/cm.yaml":            cm("default", "c"),
 			}),
-			want: []string{`resources[1]: Invalid value: "sub@dir": ` + notLocal},
+			want: []string{"{root}/other/kustomization.yaml", `resources[1]: Invalid value: "sub@dir": ` + notLocal},
 		},
-		"a resources entry holding a colon that names nothing": {
-			files:  with(failing(), map[string]string{"other/kustomization.yaml": `resources: [cm.yaml, "missing: file.yaml"]` + "\n", "other/cm.yaml": cm("default", "b")}),
-			want:   []string{`resources[1]: Invalid value: "missing: file.yaml": ` + notLocal},
-			absent: []string{"Not found"},
+		"a resources entry with a user prefix that names a file": {
+			files: with(failing(), map[string]string{
+				"other/kustomization.yaml":           "resources: [cm.yaml, cluster-clusterrole-a@b.yaml]\n",
+				"other/cm.yaml":                      cm("default", "b"),
+				"other/cluster-clusterrole-a@b.yaml": meta("rbac.authorization.k8s.io/v1", "ClusterRole", "", "a@b"),
+			}),
+			want: []string{`resources[1]: Invalid value: "cluster-clusterrole-a@b.yaml": ` + notLocal},
+		},
+		// a components entry is a directory to kustomize, which parses it as
+		// a repository before it looks for one
+		"a components entry with a user prefix that names a file": {
+			files: with(failing(), map[string]string{
+				"other/kustomization.yaml":          "resources: [cm.yaml]\ncomponents: [deploy@example.com:org/repo]\n",
+				"other/cm.yaml":                     cm("default", "b"),
+				"other/deploy@example.com:org/repo": "k: v\n",
+			}),
+			want: []string{`components[0]: Invalid value: "deploy@example.com:org/repo": ` + notLocal},
+		},
+		// a resources entry that reads as a file but fails to load — here
+		// an identity the directory already holds — is tried as a repository
+		"a resources entry with a user prefix that names a file whose load fails": {
+			files: with(failing(), map[string]string{
+				"other/kustomization.yaml":          "resources: [cm.yaml, deploy@example.com:org/repo]\n",
+				"other/cm.yaml":                     cm("default", "b"),
+				"other/deploy@example.com:org/repo": cm("default", "b"),
+			}),
+			want:   []string{`resources[1]: Invalid value: "deploy@example.com:org/repo": ` + notLocal},
+			absent: []string{"already registered id"},
 		},
 	}
 	for name, body := range map[string]string{
@@ -734,34 +749,65 @@ func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
 	runDir(t, cases)
 }
 
-// kure names a resource file after its object, and a ClusterRole's name may
-// hold : or @ (pkg/stack/layout writes one named a: b), so the file name and
-// the entry naming it do too. kustomize reads an entry as a file before it
-// parses it as a repository to clone, so a file in the tree is read whatever
-// its name: the pass reports nothing on the entry, and builds the directory.
-func TestAssertConsistentDirReadsAFileWhateverItsName(t *testing.T) {
+// A name kustomize cannot parse as a repository — no scheme, no user@
+// prefix, no github host, a : included — is read whatever it holds. kure
+// names a resource file after its object, and a ClusterRole's name may hold
+// : (pkg/stack/layout writes one named a: b), so the file name and the entry
+// naming it do too: the pass reports nothing on the entry, and the directory
+// is built; a directory so named is confirmed, and nothing under the name
+// is Not found.
+func TestAssertConsistentDirReadsWhatKustomizeCannotParseAsARepository(t *testing.T) {
+	role := meta("rbac.authorization.k8s.io/v1", "ClusterRole", "", `"a: b"`)
 	cases := map[string]dirCase{}
-	for _, c := range []struct{ what, name, file string }{
-		{"a colon", "a: b", "cluster-clusterrole-a: b.yaml"},
-		{"an at sign", "a@b", "cluster-clusterrole-a@b.yaml"},
+	for _, c := range []struct {
+		what, entry string
+		files       map[string]string
+	}{
+		{"a resources entry holding a colon", "cluster-clusterrole-a: b.yaml", map[string]string{"app/cluster-clusterrole-a: b.yaml": role}},
+		{"a directory entry holding a colon", "sub: dir", map[string]string{"app/sub: dir/kustomization.yaml": "resources: [cm.yaml]\n", "app/sub: dir/cm.yaml": cm("default", "c")}},
 	} {
-		role := meta("rbac.authorization.k8s.io/v1", "ClusterRole", "", fmt.Sprintf("%q", c.name))
-		cases["a resources entry holding "+c.what] = dirCase{files: with(builds(), map[string]string{
-			"app/kustomization.yaml": fmt.Sprintf("resources: [cm.yaml, %q]\n", c.file),
-			"app/" + c.file:          role,
-		})}
+		clean := with(builds(), c.files)
+		clean["app/kustomization.yaml"] = fmt.Sprintf("resources: [cm.yaml, %q]\n", c.entry)
+		cases[c.what] = dirCase{files: clean}
 		// the directory is built: failing's own finding is reported, and
 		// nothing on the kustomization file
-		cases["a build through a resources entry holding "+c.what] = dirCase{
-			files: with(failing(), map[string]string{
-				"app/kustomization.yaml": fmt.Sprintf("resources: [a.yaml, b.yaml, %q]\n", c.file),
-				"app/" + c.file:          role,
-			}),
+		fails := with(failing(), c.files)
+		fails["app/kustomization.yaml"] = fmt.Sprintf("resources: [a.yaml, b.yaml, %q]\n", c.entry)
+		cases["a build through "+c.what] = dirCase{
+			files:  fails,
 			want:   []string{"{root}/flux.yaml: object 0: Kustomization flux-system/app", `spec.path: Invalid value: "./app": the build fails: `, "already registered id"},
 			absent: []string{notLocal, "{root}/app/kustomization.yaml"},
 		}
 	}
+	cases["a resources entry holding a colon that names nothing"] = dirCase{
+		files:  map[string]string{"app/kustomization.yaml": `resources: [cm.yaml, "missing: file.yaml"]` + "\n", "app/cm.yaml": cm("default", "a")},
+		want:   []string{"{root}/app/kustomization.yaml", `resources[1]: Not found: "missing: file.yaml"`},
+		absent: []string{notLocal},
+	}
 	runDir(t, cases)
+}
+
+// isLocal refuses what Flux's own test refuses and the two forms that pass
+// it which kustomize parses as a repository before it looks in the tree; a
+// user@ prefix counts at the start only, as kustomize's username does.
+func TestIsLocal(t *testing.T) {
+	for entry, want := range map[string]bool{
+		"cm.yaml":                         true,
+		"sub: dir":                        true,
+		"cluster-clusterrole-a: b.yaml":   true,
+		"sub/deploy@example.com:org/repo": true,
+		"file://sub":                      false,
+		"FILE://sub":                      false,
+		"a@b":                             false,
+		"deploy@example.com:org/repo":     false,
+		"git@github.com:org/repo":         false,
+		"https://example.com/app.yaml":    false,
+		"/app":                            false,
+	} {
+		if got := isLocal(entry); got != want {
+			t.Errorf("isLocal(%q) = %v, want %v", entry, got, want)
+		}
+	}
 }
 
 // Every Flux Kustomization is built on the one copy as it was before any
