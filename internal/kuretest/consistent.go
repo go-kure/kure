@@ -125,8 +125,10 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 //     kustomize-controller builds it: Flux generates or amends the
 //     directory's kustomization file with the Kustomization's own fields,
 //     then kustomize builds it, plugins off, loading anywhere in the tree.
-//     The builds run in walk order on one copy of the tree, which each
-//     leaves as it found it, so the tree itself is never written.
+//     The builds run in the order the Kustomizations are read — walk order,
+//     then those found under a scanned path (below) — on one copy of the
+//     tree, which each leaves as it found it, so the tree itself is never
+//     written.
 //
 // Nothing is built when a path could take a build past the tree, or a
 // write past the copy: an entry of a form kustomize's parser can take for
@@ -172,14 +174,20 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 // configuration, not as objects, and a file one names as data — a
 // configMapGenerator or secretGenerator files, envs or env entry, a
 // patches path — is not decoded, unless a kustomization file also names it
-// as a resources entry: kustomize applies it as a manifest then, so it is
-// read as one. A file a kustomization file names as a resources entry is
-// read as a manifest whatever its name — kustomize applies it by name, not
-// by suffix — so one a layout Config.ManifestFileName names without .yaml
-// or .yml is read where Flux's own scan of a directory would skip it; a
-// file no kustomization file names is read under those two suffixes only.
-// Every manifest so read decodes or fails the test. A tree whose files hold
-// no object fails.
+// as a resources entry or Flux's generator lists it under a Kustomization's
+// spec.path (below): kustomize applies it as a manifest then, so it is read
+// as one. A file a kustomization file names as a resources entry is read as
+// a manifest whatever its name — kustomize applies it by name, not by
+// suffix — so one a layout Config.ManifestFileName names without .yaml or
+// .yml is read where Flux's own scan of a directory would skip it; a file no
+// kustomization file names is read under those two suffixes only. A
+// data-named .yaml or .yml file is read all the same where Flux's generator
+// lists it: under a Flux Kustomization's spec.path that holds no
+// kustomization file, Flux scans the directory and writes one naming every
+// .yaml and .yml file below — a subdirectory holding its own left to that
+// file — so the data file is applied as a manifest. A Kustomization read
+// that way is followed to its own path. Every manifest so read decodes or
+// fails the test. A tree whose files hold no object fails.
 func AssertConsistentDir(t testing.TB, root string, declared ...Declared) {
 	t.Helper()
 	tr, err := readTree(root)
@@ -234,7 +242,9 @@ type tree struct {
 // readTree reads every kustomization file under root, then decodes, in walk
 // order, every other .yaml and .yml file but one those files name as data
 // and none names as a resource, and every file one names as a resource
-// whatever its name. A symbolic link, and a file named as Flux's generator
+// whatever its name — then, after those, the data-named files Flux's scan
+// lists under a Flux Kustomization's spec.path that holds no kustomization
+// file (readScanned). A symbolic link, and a file named as Flux's generator
 // names its backup, are findings on the tree (refuse).
 func readTree(root string) (*tree, error) {
 	abs, err := filepath.Abs(root)
@@ -289,21 +299,108 @@ func readTree(root string) (*tree, error) {
 		if !resources[path] && (!manifest || data[path]) {
 			continue
 		}
-		raw, err := os.ReadFile(path) //nolint:gosec // a manifest under the directory named
-		if err != nil {
+		if err := tr.decodeFile(path); err != nil {
 			return nil, err
 		}
-		decoded, err := decode(raw)
-		if err != nil {
-			return nil, errors.Wrap(err, path)
+	}
+	if err := tr.readScanned(data, resources); err != nil {
+		return nil, err
+	}
+	return tr, nil
+}
+
+// decodeFile decodes the manifest at path and adds its objects, but
+// kustomize's own configuration, to the tree's.
+func (tr *tree) decodeFile(path string) error {
+	raw, err := os.ReadFile(path) //nolint:gosec // a manifest under the directory named
+	if err != nil {
+		return err
+	}
+	decoded, err := decode(raw)
+	if err != nil {
+		return errors.Wrap(err, path)
+	}
+	for i, u := range decoded {
+		if u.GroupVersionKind().Group != kustomizeGroup {
+			tr.objects = append(tr.objects, &object{doc: path + ": " + describe(i, u), u: u})
 		}
-		for i, u := range decoded {
-			if u.GroupVersionKind().Group != kustomizeGroup {
-				tr.objects = append(tr.objects, &object{doc: path + ": " + describe(i, u), u: u})
+	}
+	return nil
+}
+
+// readScanned decodes, for each Flux Kustomization whose spec.path is a
+// directory in the tree holding no kustomization file, every .yaml and .yml
+// file under it that the first read skipped as data: kustomize-controller
+// generates a kustomization file there naming every such file, not entering
+// a subdirectory that holds its own, and reads no ignore file while it does.
+// A Kustomization so read is followed by the same loop; a file two such
+// directories hold is decoded once; one that does not decode fails the read,
+// as it fails Flux's scan. A path naming no directory reads nothing: that is
+// checkSpecPath's finding.
+func (tr *tree) readScanned(data, resources map[string]bool) error {
+	scanned, read := map[string]bool{}, map[string]bool{}
+	for i := 0; i < len(tr.objects); i++ { // by index: objects appended below are reached
+		o := tr.objects[i]
+		if err := o.convert(); err != nil {
+			return err
+		}
+		if o.kustomization == nil {
+			continue
+		}
+		dir, problem, err := tr.specDir(o)
+		if err != nil {
+			return err
+		}
+		if problem != nil || scanned[dir] {
+			continue
+		}
+		scanned[dir] = true
+		abs := filepath.Join(tr.root, dir)
+		// Flux generates only where none is held
+		held, err := holdsKustomization(abs)
+		if err != nil {
+			return err
+		}
+		if held {
+			continue
+		}
+		// decoded after the walk, as readTree does
+		var paths []string
+		err = filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				// the root holds none: checked above
+				held, err := holdsKustomization(path)
+				if err != nil {
+					return err
+				}
+				if held {
+					return fs.SkipDir // Flux lists it whole: its file decides
+				}
+				return nil
+			}
+			// Flux lists .yaml and .yml files only; every other one the
+			// first read decoded already, or skips as Flux does
+			ext := filepath.Ext(path)
+			if (ext != ".yaml" && ext != ".yml") || !data[path] || resources[path] || read[path] {
+				return nil
+			}
+			read[path] = true
+			paths = append(paths, path)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		for _, path := range paths {
+			if err := tr.decodeFile(path); err != nil {
+				return err
 			}
 		}
 	}
-	return tr, nil
+	return nil
 }
 
 // original reports whether name is one Flux's generator keeps its backup
@@ -506,28 +603,40 @@ func (tr *tree) checkPaths() error {
 }
 
 // checkSpecPath records the directory a Flux Kustomization's spec.path names
-// in the tree, or a finding when it names none. An empty path and ./ are the
-// root.
+// in the tree, or a finding when it names none (specDir).
 func (tr *tree) checkSpecPath(o *object) error {
-	at := field.NewPath("spec", "path")
-	path := o.kustomization.Spec.Path
-	dir := filepath.Clean(path)
-	if !filepath.IsLocal(dir) {
-		o.errs = append(o.errs, field.Invalid(at, path, "not a path inside the tree"))
-		return nil
-	}
-	info, err := os.Stat(filepath.Join(tr.root, dir))
+	dir, problem, err := tr.specDir(o)
 	switch {
-	case stderrors.Is(err, fs.ErrNotExist):
-		o.errs = append(o.errs, field.NotFound(at, path))
 	case err != nil:
 		return err
-	case !info.IsDir():
-		o.errs = append(o.errs, field.Invalid(at, path, "not a directory"))
+	case problem != nil:
+		o.errs = append(o.errs, problem)
 	default:
 		o.dir = dir
 	}
 	return nil
+}
+
+// specDir returns the directory a Flux Kustomization's spec.path names in the
+// tree, cleaned, or the finding when it names none. An empty path and ./ are
+// the root, ".".
+func (tr *tree) specDir(o *object) (string, *field.Error, error) {
+	at := field.NewPath("spec", "path")
+	path := o.kustomization.Spec.Path
+	dir := filepath.Clean(path)
+	if !filepath.IsLocal(dir) {
+		return "", field.Invalid(at, path, "not a path inside the tree"), nil
+	}
+	info, err := os.Stat(filepath.Join(tr.root, dir))
+	switch {
+	case stderrors.Is(err, fs.ErrNotExist):
+		return "", field.NotFound(at, path), nil
+	case err != nil:
+		return "", nil, err
+	case !info.IsDir():
+		return "", field.Invalid(at, path, "not a directory"), nil
+	}
+	return dir, nil, nil
 }
 
 // names is what an entry of a kustomization file may name.
@@ -653,12 +762,12 @@ func holdsKustomization(dir string) (bool, error) {
 }
 
 // build applies every Flux Kustomization whose spec.path is a directory in
-// the tree, in walk order, to one copy of the tree, as kustomize-controller
-// does, and records a finding on each that Flux cannot generate a
-// kustomization file for or that does not build. Each build leaves the copy
-// as it found it, for the next: Flux's generator keeps the kustomization
-// file it amends as .original, and CleanDirectory puts it back or removes
-// the one it generated.
+// the tree, in the order they are read, to one copy of the tree, as
+// kustomize-controller does, and records a finding on each that Flux cannot
+// generate a kustomization file for or that does not build. Each build
+// leaves the copy as it found it, for the next: Flux's generator keeps the
+// kustomization file it amends as .original, and CleanDirectory puts it back
+// or removes the one it generated.
 func (tr *tree) build() (err error) {
 	work, err := os.MkdirTemp("", "kuretest-consistent-*")
 	if err != nil {
