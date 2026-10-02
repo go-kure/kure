@@ -118,9 +118,7 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 //     file or a directory holding a kustomization file (a components entry
 //     a directory only), anywhere in the tree; every patches path and
 //     configMapGenerator or secretGenerator files, envs or env entry is a
-//     file. A file entry stays in or below its kustomization file's
-//     directory, which kustomize's default load restriction asks and a Flux
-//     build does not;
+//     file;
 //   - every Flux Kustomization with such a path builds as
 //     kustomize-controller builds it: Flux generates or amends the
 //     directory's kustomization file with the Kustomization's own fields,
@@ -139,6 +137,18 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 // overwrites with its own backup and then consumes. Each of those is a
 // finding. A link is still read as what its name says, so the other checks
 // run.
+//
+// Three rules are stricter than a Flux build, because the pass holds a
+// tree to the layout kure writes; a hand-written tree that breaks one gets
+// a finding where Flux would build. A file entry stays in or below its
+// kustomization file's directory — kustomize's default load restriction,
+// which Flux lifts to the source root. An entry holding : or @ is read as
+// one kustomize would fetch — the scp-style and file:// forms it clones
+// before any load restriction applies — though a local file so named
+// would be read. And spec.path is a relative path that stays in the tree,
+// where Flux joins an absolute or escaping one under the source root. kure
+// writes relative paths and names holding neither character, so none of
+// its trees breaks one.
 //
 // root is the directory the Flux source serves, the one every spec.path is
 // relative to: for layout.WriteManifest(base, cfg, ml) that is
