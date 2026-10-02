@@ -6,6 +6,10 @@
 // server's ObjectMeta validation under the kind's own name rule, and
 // nothing more; TestEveryKindHasOneSource names each such kind and why.
 //
+// A second pass holds the objects to each other: AssertConsistent,
+// AssertConsistentYAML and AssertConsistentDir check that what a tree
+// references and the namespaces it applies into exist in it or are declared.
+//
 // It is for tests only: it registers the -update flag and reads the module
 // cache through go list.
 package kuretest
@@ -150,9 +154,15 @@ type finding struct {
 	errs field.ErrorList
 }
 
-func format(findings []finding) string {
+// rejectHeadline heads the findings of validation.
+const rejectHeadline = "%d object(s) a cluster would reject:"
+
+func format(findings []finding) string { return formatWith(rejectHeadline, findings) }
+
+// formatWith lists the findings under headline, a format taking their count.
+func formatWith(headline string, findings []finding) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d object(s) a cluster would reject:\n", len(findings))
+	fmt.Fprintf(&b, headline+"\n", len(findings))
 	for _, f := range findings {
 		fmt.Fprintf(&b, "  %s\n", f.doc)
 		for _, e := range f.errs {
