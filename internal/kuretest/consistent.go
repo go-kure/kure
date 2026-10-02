@@ -128,31 +128,36 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 //     leaves as it found it, so the tree itself is never written.
 //
 // Nothing is built when a path could take a build past the tree, or a
-// write past the copy: an entry that is not a local path — a URL or git
-// form Flux's own test refuses, a file:// base, or an entry with a user@
-// prefix, which kustomize parses as a repository before it looks in the
-// tree; a kustomization field whose loads the pass does not resolve
-// (bases, crds, openapi, configurations, generators, transformers,
-// validators, the helm fields, patchesStrategicMerge, patchesJson6902,
-// replacements); a symbolic link anywhere under root — the copy keeps it
-// as a link, and Flux's generator and kustomize write through one; or a
-// file named <kustomization file>.original, which Flux's generator
-// overwrites with its own backup and then consumes. Each of those is a
-// finding. A link is still read as what its name says, so the other checks
-// run.
+// write past the copy: an entry of a form kustomize's parser can take for
+// a repository — a URL or git form Flux's own test refuses, a file://
+// base, a github.com host, or a user@ prefix — wherever it appears, where
+// kustomize would only read it as a file (a patch or generator source)
+// and where it could not complete the repository (a bare user@ name)
+// included, since kustomize tries the repository before a directory, and
+// before a file once the file fails to load: the refusal is by form, not
+// by what exists at the path; a kustomization field whose loads the pass
+// does not resolve (bases, crds, openapi, configurations, generators,
+// transformers, validators, the helm fields, patchesStrategicMerge,
+// patchesJson6902, replacements); a symbolic link anywhere under root —
+// the copy keeps it as a link, and Flux's generator and kustomize write
+// through one; or a file named <kustomization file>.original, which
+// Flux's generator overwrites with its own backup and then consumes. Each
+// of those is a finding. A link is still read as what its name says, so
+// the other checks run.
 //
 // Three rules are stricter than a Flux build, because the pass holds a
 // tree to the layout kure writes; a hand-written tree that breaks one gets
 // a finding where Flux would build. A file entry stays in or below its
 // kustomization file's directory — kustomize's default load restriction,
-// which Flux lifts to the source root. An entry with a user@ prefix is
-// refused even when a file or directory so named exists: kustomize tries
-// the repository before a directory, and before a file once it fails to
-// load. And spec.path is a relative path that stays in the tree, where
-// Flux joins an absolute or escaping one under the source root. kure
-// writes relative paths, so none of its trees breaks one, short of a file
-// named for an object whose name puts an @ where a username goes — the
-// finding then says so.
+// which Flux lifts to the source root. The repository forms above are
+// refused as a policy, on every position: even when a file or directory
+// so named exists, and even where kustomize would only read the entry as
+// a file; a name with a : and no such form is read whatever it holds. And
+// spec.path is a relative path that stays in the tree, where Flux joins an
+// absolute or escaping one under the source root. kure writes relative
+// paths, so none of its trees breaks one, short of a file named for an
+// object whose name puts an @ where a username goes — the finding names
+// the form.
 //
 // root is the directory the Flux source serves, the one every spec.path is
 // relative to: for layout.WriteManifest(base, cfg, ml) that is
@@ -395,8 +400,9 @@ func (kf *kustomizationFile) unresolved() []string {
 	return out
 }
 
-// notLocal is the finding on an entry kustomize would fetch.
-const notLocal = "not a local path, so nothing is built: kustomize would fetch it"
+// notLocal is the finding on an entry of a form kustomize's parser can take
+// for a repository, wherever it appears.
+const notLocal = "not a local path, so nothing is built: a form kustomize can take for a repository"
 
 // aLink is the finding on a symbolic link under root.
 const aLink = "a symbolic link, which a build would write through, so nothing is built"
@@ -410,16 +416,23 @@ const anOriginal = "Flux's generator keeps its backup under this name and consum
 var userAt = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*@`)
 
 // isLocal reports whether kustomize reads entry from the tree rather than
-// fetching it. Three forms it does not: a URL, a known git form or an
-// absolute path, which Flux's own test refuses; a file:// base; and an
-// entry with a user@ prefix — the two that pass Flux's test and that
-// kustomize's parser takes for a repository, which it clones before it
-// looks in the tree, for a directory at once and for a file once the file
-// fails to load. A name without a scheme, a user@ prefix or a github host
-// — a : included — it never parses as one, so the tree decides.
+// fetching it. Four forms it does not: a URL, a known git form or an
+// absolute path, which Flux's own test refuses; a file:// base; a
+// github.com/ or github.com: host; and an entry with a user@ prefix — the
+// three that pass Flux's test and that kustomize's parser takes for a
+// repository, which it clones before it looks in the tree, for a directory
+// at once and for a file once the file fails to load. Those three are
+// compared on the whole string lowercased, as kustomize's parser compares
+// them: Flux's test lowercases a byte window, which a multi-byte capital
+// that lowercases to ASCII (İ, U+0130) slips through. A name without a
+// scheme, a user@ prefix or a github host — a : included — kustomize never
+// parses as a repository, so the tree decides.
 func isLocal(entry string) bool {
+	lower := strings.ToLower(entry)
 	return fluxkustomize.IsLocalRelativePath(entry) &&
-		!strings.HasPrefix(strings.ToLower(entry), "file://") &&
+		!strings.HasPrefix(lower, "file://") &&
+		!strings.HasPrefix(lower, "github.com/") &&
+		!strings.HasPrefix(lower, "github.com:") &&
 		!userAt.MatchString(entry)
 }
 

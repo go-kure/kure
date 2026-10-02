@@ -721,6 +721,13 @@ func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
 			want:   []string{`resources[1]: Invalid value: "deploy@example.com:org/repo": ` + notLocal},
 			absent: []string{"already registered id"},
 		},
+		// kustomize lowercases the whole entry before it looks for a github
+		// host, where Flux's own test lowercases a byte window: a capital I
+		// with a dot above (U+0130) lowercases to an ASCII i and slips it
+		"a github host entry with a capital I with a dot above": {
+			files: with(failing(), map[string]string{"other/kustomization.yaml": "resources: [cm.yaml, gİthub.com:org/repo]\n", "other/cm.yaml": cm("default", "b")}),
+			want:  []string{`resources[1]: Invalid value: "gİthub.com:org/repo": ` + notLocal},
+		},
 	}
 	for name, body := range map[string]string{
 		"openapi":                     "openapi:\n  path: schema.json\n",
@@ -787,20 +794,27 @@ func TestAssertConsistentDirReadsWhatKustomizeCannotParseAsARepository(t *testin
 	runDir(t, cases)
 }
 
-// isLocal refuses what Flux's own test refuses and the two forms that pass
-// it which kustomize parses as a repository before it looks in the tree; a
-// user@ prefix counts at the start only, as kustomize's username does.
+// isLocal refuses what Flux's own test refuses and the three forms that
+// pass it which kustomize parses as a repository before it looks in the
+// tree, compared on the whole string lowercased as kustomize compares — a
+// capital I with a dot above (U+0130) lowercases to an ASCII i and slips
+// Flux's byte window; a user@ prefix counts at the start only, as
+// kustomize's username does.
 func TestIsLocal(t *testing.T) {
 	for entry, want := range map[string]bool{
 		"cm.yaml":                         true,
 		"sub: dir":                        true,
 		"cluster-clusterrole-a: b.yaml":   true,
 		"sub/deploy@example.com:org/repo": true,
+		"ghub.com:org/repo":               true,
 		"file://sub":                      false,
 		"FILE://sub":                      false,
 		"a@b":                             false,
 		"deploy@example.com:org/repo":     false,
 		"git@github.com:org/repo":         false,
+		"GitHub.com:org/repo":             false,
+		"gİthub.com:org/repo":             false,
+		"gİthub.com/org/repo":             false,
 		"https://example.com/app.yaml":    false,
 		"/app":                            false,
 	} {
