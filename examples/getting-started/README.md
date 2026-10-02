@@ -56,6 +56,8 @@ clusters/
   staging/
     infrastructure/
       cache-deployment-redis.yaml
+      cluster-namespace-cache.yaml
+      cluster-namespace-web.yaml
       web-deployment-web-app.yaml
       web-service-web-app.yaml
       kustomization.yaml

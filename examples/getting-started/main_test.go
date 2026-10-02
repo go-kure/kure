@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/go-kure/kure/internal/kuretest"
 	"github.com/go-kure/kure/pkg/stack"
 )
@@ -29,8 +31,11 @@ func TestRedisConfigGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if len(objs) != 1 {
-		t.Fatalf("expected 1 object, got %d", len(objs))
+	if len(objs) != 2 {
+		t.Fatalf("expected 2 objects (Namespace+Deployment), got %d", len(objs))
+	}
+	if ns, ok := (*objs[0]).(*corev1.Namespace); !ok || ns.Name != "cache" {
+		t.Fatalf("first object = %T %q, want the Namespace %q", *objs[0], (*objs[0]).GetName(), "cache")
 	}
 }
 
@@ -47,8 +52,11 @@ func TestWebAppConfigGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if len(objs) != 2 {
-		t.Fatalf("expected 2 objects (Deployment+Service), got %d", len(objs))
+	if len(objs) != 3 {
+		t.Fatalf("expected 3 objects (Namespace+Deployment+Service), got %d", len(objs))
+	}
+	if ns, ok := (*objs[0]).(*corev1.Namespace); !ok || ns.Name != "web" {
+		t.Fatalf("first object = %T %q, want the Namespace %q", *objs[0], (*objs[0]).GetName(), "web")
 	}
 }
 

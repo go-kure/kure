@@ -147,13 +147,14 @@ func run() error {
 // a Generate method that returns Kubernetes objects.
 // ---------------------------------------------------------------
 
-// RedisConfig generates a Deployment for a Redis instance.
+// RedisConfig generates the Namespace and a Deployment for a Redis instance.
 type RedisConfig struct {
 	Namespace string
 	Image     string
 }
 
-// Generate produces a single-replica Redis Deployment.
+// Generate produces the Namespace the instance runs in and a single-replica
+// Redis Deployment.
 func (c *RedisConfig) Generate(app *stack.Application) ([]*client.Object, error) {
 	labels := map[string]string{"app": app.Name}
 	replicas := int32(1)
@@ -187,10 +188,14 @@ func (c *RedisConfig) Generate(app *stack.Application) ([]*client.Object, error)
 		},
 	}
 
-	return []*client.Object{pkgkubernetes.ToClientObject(dep)}, nil
+	return []*client.Object{
+		pkgkubernetes.ToClientObject(pkgkubernetes.CreateNamespace(c.Namespace)),
+		pkgkubernetes.ToClientObject(dep),
+	}, nil
 }
 
-// WebAppConfig generates a Deployment and a Service for a web application.
+// WebAppConfig generates the Namespace, a Deployment and a Service for a web
+// application.
 type WebAppConfig struct {
 	Namespace string
 	Image     string
@@ -198,7 +203,8 @@ type WebAppConfig struct {
 	Port      int32
 }
 
-// Generate produces a Deployment and a ClusterIP Service.
+// Generate produces the Namespace the application runs in, a Deployment and a
+// ClusterIP Service.
 func (c *WebAppConfig) Generate(app *stack.Application) ([]*client.Object, error) {
 	labels := map[string]string{"app": app.Name}
 
@@ -253,6 +259,7 @@ func (c *WebAppConfig) Generate(app *stack.Application) ([]*client.Object, error
 	}
 
 	return []*client.Object{
+		pkgkubernetes.ToClientObject(pkgkubernetes.CreateNamespace(c.Namespace)),
 		pkgkubernetes.ToClientObject(dep),
 		pkgkubernetes.ToClientObject(svc),
 	}, nil
