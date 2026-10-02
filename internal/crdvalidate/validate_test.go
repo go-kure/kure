@@ -446,41 +446,40 @@ func TestNewRejectsTwoDefinitionsForOneKind(t *testing.T) {
 	}
 }
 
-// Each case is a definition the server refuses on create; the error names
-// the field the server names.
+// Each case is a definition the server refuses on create; New indexes it
+// (the refusal is Compile's), and the error names the field the server
+// names.
 func TestCompileRejectsWhatTheServerWouldNotServe(t *testing.T) {
 	gvk := schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Gadget"}
+	refused := func(t *testing.T, c *apiextensionsv1.CustomResourceDefinition, field string) {
+		t.Helper()
+		v, err := New([]*apiextensionsv1.CustomResourceDefinition{c})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), field) {
+			t.Errorf("Compile: %v", err)
+		}
+	}
 	t.Run("no schema", func(t *testing.T) {
 		c := crd(t, gadgetCRD)
 		c.Spec.Versions[0].Schema = nil
-		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
-		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "spec.versions[0].schema.openAPIV3Schema") {
-			t.Errorf("Compile: %v", err)
-		}
+		refused(t, c, "spec.versions[0].schema.openAPIV3Schema")
 	})
 	t.Run("not structural", func(t *testing.T) {
 		c := crd(t, gadgetCRD)
 		c.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["loose"] = apiextensionsv1.JSONSchemaProps{Description: "no type"}
-		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
-		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "properties[loose].type") {
-			t.Errorf("Compile: %v", err)
-		}
+		refused(t, c, "properties[loose].type")
 	})
 	t.Run("preserves unknown fields", func(t *testing.T) {
 		c := crd(t, gadgetCRD)
 		c.Spec.PreserveUnknownFields = true
-		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
-		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "spec.preserveUnknownFields") {
-			t.Errorf("Compile: %v", err)
-		}
+		refused(t, c, "spec.preserveUnknownFields")
 	})
 	t.Run("name is not plural.group", func(t *testing.T) {
 		c := crd(t, gadgetCRD)
 		c.Name = "gadget.example.com"
-		v, _ := New([]*apiextensionsv1.CustomResourceDefinition{c})
-		if err := v.Compile(context.Background(), gvk); err == nil || !strings.Contains(err.Error(), "would not accept the definition") || !strings.Contains(err.Error(), "metadata.name") {
-			t.Errorf("Compile: %v", err)
-		}
+		refused(t, c, "metadata.name")
 	})
 }
 
