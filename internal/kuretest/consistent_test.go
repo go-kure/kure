@@ -2,6 +2,8 @@ package kuretest
 
 import (
 	"fmt"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,11 +43,12 @@ func ns(name string) string { return meta("v1", "Namespace", "", name) }
 func docs(d ...string) []byte { return []byte(strings.Join(d, "---\n")) }
 
 // consistentCase is one call and what its failure must say: nothing, or
-// every listed text plus the headline's count.
+// every want text, none of the absent ones, and the headline's count.
 type consistentCase struct {
 	docs     []string
 	declared []Declared
 	want     []string
+	absent   []string
 	findings int
 }
 
@@ -60,6 +63,11 @@ func (c consistentCase) check(t *testing.T, f *fakeTB) {
 	for _, w := range c.want {
 		if !strings.Contains(f.fatal, w) {
 			t.Errorf("want %q in:\n%s", w, f.fatal)
+		}
+	}
+	for _, a := range c.absent {
+		if strings.Contains(f.fatal, a) {
+			t.Errorf("want no %q in:\n%s", a, f.fatal)
 		}
 	}
 	n := c.findings
@@ -392,5 +400,420 @@ func TestAssertConsistentDirFailsOnWhatItCannotRead(t *testing.T) {
 	writeTree(t, notADoc, map[string]string{"app.yaml": fluxKustomization("flux-system", "app", "  dependsOn: base\n")})
 	if f := run(func(tb testing.TB) { AssertConsistentDir(tb, notADoc) }); !strings.Contains(f.fatal, "kuretest: ") || !strings.Contains(f.fatal, "Kustomization flux-system/app") {
 		t.Errorf("a Kustomization the pass cannot read must fail, got %q", f.fatal)
+	}
+}
+
+// pathDeclared admits the namespace and the Source every Flux Kustomization
+// in the path tests relies on.
+var pathDeclared = []Declared{Namespace("flux-system"), External("GitRepository", "flux-system", "src")}
+
+// applying is a Flux Kustomization in flux-system that applies path from the
+// GitRepository src; extra holds more spec lines, indented by two spaces.
+func applying(name, path, extra string) string {
+	return fluxKustomization("flux-system", name, "  path: "+path+"\n  sourceRef:\n    kind: GitRepository\n    name: src\n"+extra)
+}
+
+// labelled is a ConfigMap in default that carries the label x.
+func labelled(name string) string { return cm("default", name) + "  labels:\n    x: \"1\"\n" }
+
+// removeLabel is a Flux Kustomization's patch that removes the label key
+// from every ConfigMap; it fails on one without that label.
+func removeLabel(key string) string {
+	return "  patches:\n  - patch: '[{\"op\": \"remove\", \"path\": \"/metadata/labels/" + key + "\"}]'\n    target:\n      kind: ConfigMap\n"
+}
+
+// builds is a tree whose one Flux Kustomization applies app, which builds.
+func builds() map[string]string {
+	return map[string]string{
+		"flux.yaml":              applying("app", "./app", ""),
+		"app/kustomization.yaml": "resources: [cm.yaml]\n",
+		"app/cm.yaml":            cm("default", "a"),
+	}
+}
+
+// failing is a tree whose one Flux Kustomization applies app, which does not
+// build though every file decodes: two ConfigMaps share one identity.
+func failing() map[string]string {
+	return map[string]string{
+		"flux.yaml":              applying("app", "./app", ""),
+		"app/kustomization.yaml": "resources: [a.yaml, b.yaml]\n",
+		"app/a.yaml":             cm("default", "a"),
+		"app/b.yaml":             cm("default", "a"),
+	}
+}
+
+// with is base plus files, which win on a shared path.
+func with(base, files map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, m := range []map[string]string{base, files} {
+		for k, v := range m {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// dirCase is a tree written under a temporary directory and what
+// AssertConsistentDir on its root, with pathDeclared, must say. A want or
+// absent text may name {root}, the root's absolute path.
+type dirCase struct {
+	files    map[string]string
+	root     string // relative to the temporary directory; empty is the directory itself
+	want     []string
+	absent   []string
+	findings int
+}
+
+func runDir(t *testing.T, cases map[string]dirCase) {
+	t.Helper()
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			tmp := t.TempDir()
+			writeTree(t, tmp, c.files)
+			root := filepath.Join(tmp, c.root)
+			at := func(texts []string) []string {
+				out := make([]string, len(texts))
+				for i, s := range texts {
+					out[i] = strings.ReplaceAll(s, "{root}", root)
+				}
+				return out
+			}
+			f := run(func(tb testing.TB) { AssertConsistentDir(tb, root, pathDeclared...) })
+			consistentCase{want: at(c.want), absent: at(c.absent), findings: c.findings}.check(t, f)
+		})
+	}
+}
+
+func TestAssertConsistentDirResolvesEveryEntry(t *testing.T) {
+	runDir(t, map[string]dirCase{
+		"every entry resolves": {files: map[string]string{
+			"kustomization.yaml":      "resources: [cm.yaml, sub]\ncomponents: [comp]\n",
+			"cm.yaml":                 cm("default", "a"),
+			"sub/kustomization.yaml":  "resources: [cm.yaml]\n",
+			"sub/cm.yaml":             cm("default", "b"),
+			"comp/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1alpha1\nkind: Component\n",
+		}},
+		"a resources entry that is missing": {
+			files: map[string]string{"kustomization.yaml": "resources: [cm.yaml, missing.yaml]\n", "cm.yaml": cm("default", "a")},
+			want:  []string{"{root}/kustomization.yaml", `resources[1]: Not found: "missing.yaml"`},
+		},
+		"a resources directory without a kustomization file": {
+			files: map[string]string{"kustomization.yaml": "resources: [cm.yaml, sub]\n", "cm.yaml": cm("default", "a"), "sub/cm.yaml": cm("default", "b")},
+			want:  []string{`resources[1]: Invalid value: "sub": a directory without a kustomization file`},
+		},
+		"a components entry that is missing": {
+			files: map[string]string{"kustomization.yaml": "resources: [cm.yaml]\ncomponents: [comp]\n", "cm.yaml": cm("default", "a")},
+			want:  []string{`components[0]: Not found: "comp"`},
+		},
+		"a component that is a file": {
+			files: map[string]string{"kustomization.yaml": "resources: [cm.yaml]\ncomponents: [cm.yaml]\n", "cm.yaml": cm("default", "a")},
+			want:  []string{`components[0]: Invalid value: "cm.yaml": a file, where a component is a directory`},
+		},
+		"a patch file that is missing": {
+			files: map[string]string{"kustomization.yaml": "resources: [cm.yaml]\npatches:\n- path: patch.yaml\n  target: {kind: ConfigMap}\n", "cm.yaml": cm("default", "a")},
+			want:  []string{`patches[0].path: Not found: "patch.yaml"`},
+		},
+		"generator sources that are missing": {
+			files: map[string]string{
+				"kustomization.yaml": `resources: [cm.yaml]
+configMapGenerator:
+- name: v
+  files: [values.yaml, key=other.yaml]
+  envs: [env.yaml]
+secretGenerator:
+- name: s
+  files: [s.yaml, k=t.yaml]
+  env: secret.env
+`,
+				"cm.yaml": cm("default", "a"),
+			},
+			want: []string{
+				`configMapGenerator[0].files[0]: Not found: "values.yaml"`,
+				`configMapGenerator[0].files[1]: Not found: "other.yaml"`,
+				`configMapGenerator[0].envs[0]: Not found: "env.yaml"`,
+				`secretGenerator[0].files[0]: Not found: "s.yaml"`,
+				`secretGenerator[0].files[1]: Not found: "t.yaml"`,
+				`secretGenerator[0].env: Not found: "secret.env"`,
+			},
+		},
+		"a generator source that is a directory": {
+			files: map[string]string{"kustomization.yaml": "resources: [cm.yaml]\nconfigMapGenerator:\n- name: v\n  files: [sub]\n", "cm.yaml": cm("default", "a"), "sub/cm.yaml": cm("default", "b")},
+			want:  []string{`configMapGenerator[0].files[0]: Invalid value: "sub": a directory, where a file is named`},
+		},
+		// a file entry stays in or below its kustomization file's directory,
+		// as kustomize's default load restriction has it; a directory entry
+		// may name any directory in the tree
+		"a file entry that leaves its directory beside a directory entry that may": {
+			files: map[string]string{
+				"app/kustomization.yaml":  "resources: [../shared/cm.yaml, ../base]\npatches:\n- path: ../patch.yaml\n  target: {kind: ConfigMap}\n",
+				"shared/cm.yaml":          cm("default", "a"),
+				"base/kustomization.yaml": "resources: [cm.yaml]\n",
+				"base/cm.yaml":            cm("default", "b"),
+				"patch.yaml":              "- op: remove\n  path: /metadata/labels\n",
+			},
+			want: []string{
+				"{root}/app/kustomization.yaml",
+				`resources[0]: Invalid value: "../shared/cm.yaml": a file outside the kustomization file's directory`,
+				`patches[0].path: Invalid value: "../patch.yaml": a file outside the kustomization file's directory`,
+			},
+			absent: []string{"resources[1]", "{root}/base/kustomization.yaml"},
+		},
+		"an entry outside the tree": {
+			root: "tree",
+			files: map[string]string{
+				"tree/kustomization.yaml":    "resources: [cm.yaml, ../outside]\n",
+				"tree/cm.yaml":               cm("default", "a"),
+				"outside/kustomization.yaml": "resources: [cm.yaml]\n",
+				"outside/cm.yaml":            cm("default", "b"),
+			},
+			want: []string{`resources[1]: Invalid value: "../outside": outside the tree`},
+		},
+	})
+}
+
+// The entries of every file kustomize recognizes are resolved, the
+// extension-less one included, which the object walk never decodes.
+func TestAssertConsistentDirResolvesUnderEveryKustomizationFileName(t *testing.T) {
+	cases := map[string]dirCase{}
+	for _, name := range []string{"kustomization.yaml", "kustomization.yml", "Kustomization"} {
+		cases[name] = dirCase{
+			files: map[string]string{"app/" + name: "resources: [cm.yaml, missing.yaml]\n", "app/cm.yaml": cm("default", "a")},
+			want:  []string{"{root}/app/" + name, `resources[1]: Not found: "missing.yaml"`},
+		}
+	}
+	runDir(t, cases)
+}
+
+func TestAssertConsistentDirBuildsWhatFluxApplies(t *testing.T) {
+	runDir(t, map[string]dirCase{
+		"a path that builds": {files: builds()},
+		"a path that is missing": {
+			files: with(builds(), map[string]string{"flux.yaml": applying("app", "./missing", "")}),
+			want:  []string{"{root}/flux.yaml: object 0: Kustomization flux-system/app", `spec.path: Not found: "./missing"`},
+		},
+		"a path that is not a directory": {
+			files: with(builds(), map[string]string{"flux.yaml": applying("app", "./app/cm.yaml", "")}),
+			want:  []string{`spec.path: Invalid value: "./app/cm.yaml": not a directory`},
+		},
+		"a path that leaves the tree": {
+			files: with(builds(), map[string]string{"flux.yaml": applying("app", "../app", "")}),
+			want:  []string{`spec.path: Invalid value: "../app": not a path inside the tree`},
+		},
+		"an absolute path": {
+			files: with(builds(), map[string]string{"flux.yaml": applying("app", "/app", "")}),
+			want:  []string{`spec.path: Invalid value: "/app": not a path inside the tree`},
+		},
+		"a path that does not build": {
+			files: failing(),
+			want:  []string{"{root}/flux.yaml: object 0: Kustomization flux-system/app", `spec.path: Invalid value: "./app": the build fails: `, "already registered id"},
+		},
+		// Flux generates the kustomization file: every manifest in the
+		// directory, and a subdirectory holding a kustomization file whole —
+		// were dup.yaml read on its own, ConfigMap a would be there twice
+		"a directory without a kustomization file": {files: map[string]string{
+			"flux.yaml":                  applying("app", "./app", ""),
+			"app/cm.yaml":                cm("default", "a"),
+			"app/sub/kustomization.yaml": "resources: [b.yaml]\n",
+			"app/sub/b.yaml":             cm("default", "b"),
+			"app/sub/dup.yaml":           cm("default", "a"),
+		}},
+		// the Flux Kustomization's own fields reach the build
+		"a component the Kustomization names and the tree lacks": {
+			files: with(builds(), map[string]string{"flux.yaml": applying("app", "./app", "  components:\n  - absent-component\n")}),
+			want:  []string{`spec.path: Invalid value: "./app": the build fails: `, "absent-component"},
+		},
+		// patchesJson6902 is a field v1 dropped and the generator still reads;
+		// the next Kustomization is still built
+		"a Kustomization Flux cannot generate a kustomization file for": {
+			files: with(failing(), map[string]string{
+				"flux.yaml":   string(docs(applying("gen", "./gen", "  patchesJson6902: not-a-list\n"), applying("app", "./app", ""))),
+				"gen/cm.yaml": cm("default", "g"),
+			}),
+			want: []string{
+				"{root}/flux.yaml: object 0: Kustomization flux-system/gen",
+				`spec.path: Invalid value: "./gen": Flux cannot generate its kustomization file: `, "patchesJson6902",
+				"{root}/flux.yaml: object 1: Kustomization flux-system/app", `spec.path: Invalid value: "./app": the build fails: `,
+			},
+			findings: 2,
+		},
+	})
+}
+
+// A path the pass does not resolve could take the build past the tree, so
+// it builds nothing: failing's Kustomization would add a finding of its own.
+func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
+	notLocal := "not a local path, so nothing is built"
+	cases := map[string]dirCase{
+		"a remote resources entry": {
+			files: with(failing(), map[string]string{"other/kustomization.yaml": "resources: [cm.yaml, https://example.com/app.yaml]\n", "other/cm.yaml": cm("default", "b")}),
+			want:  []string{"{root}/other/kustomization.yaml", `resources[1]: Invalid value: "https://example.com/app.yaml": ` + notLocal},
+		},
+		"an scp-style resources entry": {
+			files: with(failing(), map[string]string{"other/kustomization.yaml": "resources: [cm.yaml, deploy@example.com:org/repo]\n", "other/cm.yaml": cm("default", "b")}),
+			want:  []string{`resources[1]: Invalid value: "deploy@example.com:org/repo": ` + notLocal},
+		},
+		"a remote generator source": {
+			files: with(failing(), map[string]string{"other/kustomization.yaml": "resources: [cm.yaml]\nconfigMapGenerator:\n- name: v\n  files: [https://example.com/values.yaml]\n", "other/cm.yaml": cm("default", "b")}),
+			want:  []string{`configMapGenerator[0].files[0]: Invalid value: "https://example.com/values.yaml": ` + notLocal},
+		},
+		"a remote component on a Kustomization": {
+			files: with(failing(), map[string]string{
+				"flux.yaml":     string(docs(applying("app", "./app", ""), applying("remote", "./other", "  components:\n  - https://example.com/component\n"))),
+				"other/cm.yaml": cm("default", "b"),
+			}),
+			want: []string{"{root}/flux.yaml: object 1: Kustomization flux-system/remote", `spec.components[0]: Invalid value: "https://example.com/component": ` + notLocal},
+		},
+	}
+	for name, body := range map[string]string{
+		"openapi":                     "openapi:\n  path: schema.json\n",
+		"patchesStrategicMerge":       "patchesStrategicMerge: [patch.yaml]\n",
+		"patchesJson6902":             "patchesJson6902:\n- path: patch.yaml\n  target: {kind: ConfigMap, name: b}\n",
+		"replacements":                "replacements:\n- path: replacement.yaml\n",
+		"crds":                        "crds: [crd.yaml]\n",
+		"bases":                       "bases: [../app]\n",
+		"helmGlobals":                 "helmGlobals:\n  chartHome: charts\n",
+		"helmCharts":                  "helmCharts:\n- name: web\n",
+		"helmChartInflationGenerator": "helmChartInflationGenerator:\n- chartName: web\n",
+		"configurations":              "configurations: [config.yaml]\n",
+		"generators":                  "generators: [generator.yaml]\n",
+		"transformers":                "transformers: [transformer.yaml]\n",
+		"validators":                  "validators: [validator.yaml]\n",
+	} {
+		cases["a "+name+" field"] = dirCase{
+			files: with(failing(), map[string]string{"other/kustomization.yaml": "resources: [cm.yaml]\n" + body, "other/cm.yaml": cm("default", "b")}),
+			want:  []string{"{root}/other/kustomization.yaml", name + ": Forbidden: the pass does not resolve what this field loads, so nothing is built"},
+		}
+	}
+	for name, c := range cases {
+		c.absent = append(c.absent, "the build fails")
+		cases[name] = c
+	}
+	runDir(t, cases)
+}
+
+// Every Flux Kustomization is built on the one copy as it was before any
+// other: an inner one built first, whose own patch would fail the outer
+// build were it left behind, and one whose build fails, which would fail
+// the outer had its patch stayed. Each with the kustomization files the tree
+// holds, then with none, which Flux generates and removes.
+func TestAssertConsistentDirRestoresTheTreeBetweenBuilds(t *testing.T) {
+	cases := map[string]dirCase{}
+	for variant, kfiles := range map[string]map[string]string{
+		"with kustomization files": {"outer/kustomization.yaml": "resources: [inner]\n", "outer/inner/kustomization.yaml": "resources: [cm.yaml]\n"},
+		"without":                  {},
+	} {
+		cases[variant+": a patch built before"] = dirCase{files: with(kfiles, map[string]string{
+			"flux.yaml":           string(docs(applying("inner", "./outer/inner", removeLabel("x")), applying("outer", "./outer", removeLabel("x")))),
+			"outer/inner/cm.yaml": labelled("c"),
+		})}
+		cases[variant+": a build that failed before"] = dirCase{
+			files: with(kfiles, map[string]string{
+				"flux.yaml":           string(docs(applying("inner", "./outer/inner", removeLabel("missing")), applying("outer", "./outer", ""))),
+				"outer/inner/cm.yaml": labelled("c"),
+			}),
+			want:   []string{"{root}/flux.yaml: object 0: Kustomization flux-system/inner", `spec.path: Invalid value: "./outer/inner": the build fails: `},
+			absent: []string{"flux-system/outer"},
+		}
+	}
+	runDir(t, cases)
+}
+
+// spec.path ./ is the root, and so is a root of "." passed relative to the
+// working directory.
+func TestAssertConsistentDirTakesDotAsTheRoot(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{"flux.yaml": applying("root", "./", ""), "cm.yaml": cm("default", "a")})
+	t.Chdir(dir)
+	if f := run(func(tb testing.TB) { AssertConsistentDir(tb, ".", pathDeclared...) }); f.fatal != "" {
+		t.Errorf("want a pass, got:\n%s", f.fatal)
+	}
+	writeTree(t, dir, map[string]string{"dup.yaml": cm("default", "a")})
+	f := run(func(tb testing.TB) { AssertConsistentDir(tb, ".", pathDeclared...) })
+	consistentCase{want: []string{filepath.Join(dir, "flux.yaml") + ": object 0: Kustomization flux-system/root", `spec.path: Invalid value: "./": the build fails: `}}.check(t, f)
+}
+
+// snapshot reads every directory and file under dir.
+func snapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case d.IsDir():
+			out[p] = "a directory"
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		out[p] = string(b)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// The builds write into a copy; the caller's tree is as it was.
+func TestAssertConsistentDirLeavesTheTreeAsItWas(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, with(failing(), map[string]string{
+		"flux.yaml": string(docs(
+			applying("app", "./app", removeLabel("x")),
+			applying("inner", "./outer/inner", removeLabel("missing")),
+			applying("outer", "./outer", ""),
+			applying("plain", "./plain", removeLabel("x")),
+		)),
+		"outer/kustomization.yaml":       "resources: [inner]\n",
+		"outer/inner/kustomization.yaml": "resources: [cm.yaml]\n",
+		"outer/inner/cm.yaml":            labelled("c"),
+		"plain/cm.yaml":                  labelled("p"),
+	}))
+	before := snapshot(t, dir)
+	f := run(func(tb testing.TB) { AssertConsistentDir(tb, dir, pathDeclared...) })
+	if !strings.Contains(f.fatal, "the build fails") {
+		t.Fatalf("want the builds run and a failing one reported, got %q", f.fatal)
+	}
+	if after := snapshot(t, dir); !maps.Equal(before, after) {
+		t.Errorf("the tree changed:\nbefore %v\nafter  %v", before, after)
+	}
+}
+
+// The copy is made under TMPDIR, as kuretest-consistent-*, and is gone once
+// the call returns, whether the tree passes or not.
+func TestAssertConsistentDirRemovesItsCopy(t *testing.T) {
+	for name, c := range map[string]struct {
+		files map[string]string
+		want  string
+	}{
+		"a tree that builds":         {builds(), ""},
+		"a tree that does not build": {failing(), "the build fails"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTree(t, dir, c.files)
+			copies := t.TempDir()
+			t.Setenv("TMPDIR", copies)
+			f := run(func(tb testing.TB) { AssertConsistentDir(tb, dir, pathDeclared...) })
+			if !strings.Contains(f.fatal, c.want) || (c.want == "") != (f.fatal == "") {
+				t.Fatalf("want %q, got %q", c.want, f.fatal)
+			}
+			left, err := os.ReadDir(copies)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range left {
+				t.Errorf("left behind under TMPDIR: %s", e.Name())
+			}
+		})
+	}
+	// where TMPDIR cannot hold the copy, the call fails rather than passing
+	// unbuilt
+	dir := t.TempDir()
+	writeTree(t, dir, builds())
+	missing := filepath.Join(t.TempDir(), "missing")
+	t.Setenv("TMPDIR", missing)
+	if f := run(func(tb testing.TB) { AssertConsistentDir(tb, dir, pathDeclared...) }); !strings.Contains(f.fatal, "kuretest: ") || !strings.Contains(f.fatal, missing) {
+		t.Errorf("want a kuretest failure naming %s, got %q", missing, f.fatal)
 	}
 }

@@ -1,6 +1,7 @@
 package kuretest
 
 import (
+	stderrors "errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,6 +11,8 @@ import (
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
+	fluxkustomize "github.com/fluxcd/pkg/kustomize"
+	securefs "github.com/fluxcd/pkg/kustomize/filesys"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -17,7 +20,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/konfig"
+	"sigs.k8s.io/kustomize/api/krusty"
 	kusttypes "sigs.k8s.io/kustomize/api/types"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/yaml"
 
 	"github.com/go-kure/kure/pkg/errors"
@@ -105,7 +110,30 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 }
 
 // AssertConsistentDir holds every .yaml and .yml file under root to
-// AssertConsistentYAML, as one set of objects.
+// AssertConsistentYAML, as one set of objects, then holds the tree to the
+// paths it names and builds what each Flux Kustomization in it applies:
+//
+//   - every Flux Kustomization's spec.path is a directory in the tree;
+//   - every resources and components entry of a kustomization file is a
+//     file or a directory holding a kustomization file (a components entry
+//     a directory only), anywhere in the tree; every patches path and
+//     configMapGenerator or secretGenerator files, envs or env entry is a
+//     file. A file entry stays in or below its kustomization file's
+//     directory, which kustomize's default load restriction asks and a Flux
+//     build does not;
+//   - every Flux Kustomization with such a path builds as
+//     kustomize-controller builds it: Flux generates or amends the
+//     directory's kustomization file with the Kustomization's own fields,
+//     then kustomize builds it, plugins off, loading anywhere in the tree.
+//     The builds run in walk order on one copy of the tree, which each
+//     leaves as it found it, so the tree itself is never written.
+//
+// Nothing is built when a path could take the build past the tree: an entry
+// that is not a local path — kustomize would fetch it — or a kustomization
+// field whose loads the pass does not resolve (bases, crds, openapi,
+// configurations, generators, transformers, validators, the helm fields,
+// patchesStrategicMerge, patchesJson6902, replacements). Each of those is a
+// finding.
 //
 // root is the directory the Flux source serves, the one every spec.path is
 // relative to: for layout.WriteManifest(base, cfg, ml) that is
@@ -128,6 +156,9 @@ func AssertConsistentDir(t testing.TB, root string, declared ...Declared) {
 	if err := agree(tr.objects, declared); err != nil {
 		t.Fatalf("kuretest: %v", err)
 	}
+	if err := tr.checkPaths(); err != nil {
+		t.Fatalf("kuretest: %v", err)
+	}
 	if findings := collect(tr.objects, tr.kustomizations); len(findings) > 0 {
 		t.Fatalf("%s", formatWith(disagreeHeadline, findings))
 	}
@@ -140,7 +171,10 @@ type object struct {
 	u             *unstructured.Unstructured
 	kustomization *kustv1.Kustomization
 	release       *helmv2.HelmRelease
-	errs          field.ErrorList
+	// dir is a Flux Kustomization's spec.path, cleaned, once it names a
+	// directory in the tree: "." for the root, empty until then.
+	dir  string
+	errs field.ErrorList
 }
 
 // kustomizationFile is one file kustomize recognizes, read as its
@@ -257,6 +291,290 @@ func (kf *kustomizationFile) dataEntries() []entry {
 		}
 	}
 	return out
+}
+
+// unresolved names the fields of the kustomization that load something the
+// pass does not resolve, in the order the type declares them.
+func (kf *kustomizationFile) unresolved() []string {
+	k := kf.k
+	var out []string
+	for _, f := range []struct {
+		name string
+		set  bool
+	}{
+		// a deprecated field is read because kustomize still loads it
+		{"openapi", len(k.OpenAPI) > 0},
+		{"patchesStrategicMerge", len(k.PatchesStrategicMerge) > 0}, //nolint:staticcheck // deprecated, still loaded
+		{"patchesJson6902", len(k.PatchesJson6902) > 0},             //nolint:staticcheck // deprecated, still loaded
+		{"replacements", len(k.Replacements) > 0},
+		{"crds", len(k.Crds) > 0},
+		{"bases", len(k.Bases) > 0}, //nolint:staticcheck // deprecated, still loaded
+		{"helmGlobals", k.HelmGlobals != nil},
+		{"helmCharts", len(k.HelmCharts) > 0},
+		{"helmChartInflationGenerator", len(k.HelmChartInflationGenerator) > 0},
+		{"configurations", len(k.Configurations) > 0},
+		{"generators", len(k.Generators) > 0},
+		{"transformers", len(k.Transformers) > 0},
+		{"validators", len(k.Validators) > 0},
+	} {
+		if f.set {
+			out = append(out, f.name)
+		}
+	}
+	return out
+}
+
+// notLocal is the finding on an entry kustomize would fetch.
+const notLocal = "not a local path, so nothing is built: kustomize would fetch it"
+
+// isLocal reports whether kustomize reads entry from the tree rather than
+// fetching it: Flux's own test, narrowed by the scp-style user@host:path and
+// the file:// base that pass it and that kustomize clones all the same.
+func isLocal(entry string) bool {
+	return fluxkustomize.IsLocalRelativePath(entry) && !strings.ContainsAny(entry, ":@")
+}
+
+// checkPaths resolves every path the tree names, then builds what each Flux
+// Kustomization applies — unless a path could take a build past the tree.
+func (tr *tree) checkPaths() error {
+	contained := true
+	for _, o := range tr.objects {
+		if o.kustomization == nil {
+			continue
+		}
+		if err := tr.checkSpecPath(o); err != nil {
+			return err
+		}
+		for i, c := range o.kustomization.Spec.Components {
+			if !isLocal(c) {
+				o.errs = append(o.errs, field.Invalid(field.NewPath("spec", "components").Index(i), c, notLocal))
+				contained = false
+			}
+		}
+	}
+	for _, kf := range tr.kustomizations {
+		ok, err := tr.checkEntries(kf)
+		if err != nil {
+			return err
+		}
+		contained = contained && ok
+	}
+	if !contained {
+		return nil
+	}
+	return tr.build()
+}
+
+// checkSpecPath records the directory a Flux Kustomization's spec.path names
+// in the tree, or a finding when it names none. An empty path and ./ are the
+// root.
+func (tr *tree) checkSpecPath(o *object) error {
+	at := field.NewPath("spec", "path")
+	path := o.kustomization.Spec.Path
+	dir := filepath.Clean(path)
+	if !filepath.IsLocal(dir) {
+		o.errs = append(o.errs, field.Invalid(at, path, "not a path inside the tree"))
+		return nil
+	}
+	info, err := os.Stat(filepath.Join(tr.root, dir))
+	switch {
+	case stderrors.Is(err, fs.ErrNotExist):
+		o.errs = append(o.errs, field.NotFound(at, path))
+	case err != nil:
+		return err
+	case !info.IsDir():
+		o.errs = append(o.errs, field.Invalid(at, path, "not a directory"))
+	default:
+		o.dir = dir
+	}
+	return nil
+}
+
+// names is what an entry of a kustomization file may name.
+type names int
+
+const (
+	fileOrDirectory names = iota // a resources entry
+	directory                    // a components entry
+	file                         // a generator source or a patch
+)
+
+// checkEntries resolves every entry of a kustomization file, and reports
+// whether every one is a local path and every field one the pass resolves,
+// so that a build reads nothing past the tree.
+func (tr *tree) checkEntries(kf *kustomizationFile) (bool, error) {
+	contained := true
+	check := func(at *field.Path, e string, n names) error {
+		local, err := tr.checkEntry(kf, at, e, n)
+		contained = contained && local
+		return err
+	}
+	for i, r := range kf.k.Resources {
+		if err := check(field.NewPath("resources").Index(i), r, fileOrDirectory); err != nil {
+			return false, err
+		}
+	}
+	for i, c := range kf.k.Components {
+		if err := check(field.NewPath("components").Index(i), c, directory); err != nil {
+			return false, err
+		}
+	}
+	for _, e := range kf.dataEntries() {
+		if err := check(e.at, e.file, file); err != nil {
+			return false, err
+		}
+	}
+	for _, name := range kf.unresolved() {
+		kf.errs = append(kf.errs, field.Forbidden(field.NewPath(name), "the pass does not resolve what this field loads, so nothing is built"))
+		contained = false
+	}
+	return contained, nil
+}
+
+// checkEntry records a finding unless the entry e, at its place in kf, is a
+// local path in the tree to what n allows, and reports whether it is a
+// local path. A file stays in or below kf's directory; a directory holds a
+// kustomization file.
+func (tr *tree) checkEntry(kf *kustomizationFile, at *field.Path, e string, n names) (bool, error) {
+	if !isLocal(e) {
+		kf.errs = append(kf.errs, field.Invalid(at, e, notLocal))
+		return false, nil
+	}
+	base := filepath.Dir(kf.path)
+	target := filepath.Join(base, e)
+	inTree, err := within(tr.root, target)
+	if err != nil {
+		return false, err
+	}
+	if !inTree {
+		kf.errs = append(kf.errs, field.Invalid(at, e, "outside the tree"))
+		return true, nil
+	}
+	info, err := os.Stat(target)
+	if stderrors.Is(err, fs.ErrNotExist) {
+		kf.errs = append(kf.errs, field.NotFound(at, e))
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	problem := ""
+	switch {
+	case info.IsDir() && n == file:
+		problem = "a directory, where a file is named"
+	case info.IsDir():
+		held, err := holdsKustomization(target)
+		if err != nil {
+			return false, err
+		}
+		if !held {
+			problem = "a directory without a kustomization file"
+		}
+	case n == directory:
+		problem = "a file, where a component is a directory"
+	default:
+		inDir, err := within(base, target)
+		if err != nil {
+			return false, err
+		}
+		if !inDir {
+			problem = "a file outside the kustomization file's directory"
+		}
+	}
+	if problem != "" {
+		kf.errs = append(kf.errs, field.Invalid(at, e, problem))
+	}
+	return true, nil
+}
+
+// within reports whether target is base or below it.
+func within(base, target string) (bool, error) {
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return false, err
+	}
+	return filepath.IsLocal(rel), nil
+}
+
+// holdsKustomization reports whether dir holds a file kustomize recognizes
+// as a kustomization file.
+func holdsKustomization(dir string) (bool, error) {
+	for _, name := range konfig.RecognizedKustomizationFileNames() {
+		info, err := os.Stat(filepath.Join(dir, name))
+		switch {
+		case stderrors.Is(err, fs.ErrNotExist):
+		case err != nil:
+			return false, err
+		case !info.IsDir():
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// build applies every Flux Kustomization whose spec.path is a directory in
+// the tree, in walk order, to one copy of the tree, as kustomize-controller
+// does, and records a finding on each that Flux cannot generate a
+// kustomization file for or that does not build. Each build leaves the copy
+// as it found it, for the next: Flux's generator keeps the kustomization
+// file it amends as .original, and CleanDirectory puts it back or removes
+// the one it generated.
+func (tr *tree) build() (err error) {
+	work, err := os.MkdirTemp("", "kuretest-consistent-*")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rmErr := os.RemoveAll(work); err == nil {
+			err = rmErr
+		}
+	}()
+	if err = os.CopyFS(work, os.DirFS(tr.root)); err != nil {
+		return err
+	}
+	fsys, err := securefs.MakeFsOnDiskSecure(work)
+	if err != nil {
+		return err
+	}
+	// the copy's path, in what Flux and kustomize say, is the tree's
+	inTree := func(e error) string { return strings.ReplaceAll(e.Error(), work, tr.root) }
+	at := field.NewPath("spec", "path")
+	for _, o := range tr.objects {
+		if o.dir == "" {
+			continue
+		}
+		dir := filepath.Join(work, o.dir)
+		action, genErr := fluxkustomize.NewGenerator(work, *o.u).WriteFile(dir, fluxkustomize.WithSaveOriginalKustomization())
+		if genErr != nil {
+			// nothing was written, or WriteFile removed it itself
+			o.errs = append(o.errs, field.Invalid(at, o.kustomization.Spec.Path, "Flux cannot generate its kustomization file: "+inTree(genErr)))
+			continue
+		}
+		buildErr := buildLikeFlux(fsys, dir)
+		if err = fluxkustomize.CleanDirectory(dir, action); err != nil {
+			return err
+		}
+		if buildErr != nil {
+			o.errs = append(o.errs, field.Invalid(at, o.kustomization.Spec.Path, "the build fails: "+inTree(buildErr)))
+		}
+	}
+	return nil
+}
+
+// buildLikeFlux is kustomize's build with the options of Flux's own — no
+// load restriction, plugins off — and its recovery, since kustomize panics
+// on some accidental data.
+func buildLikeFlux(fsys filesys.FileSystem, dir string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("recovered from kustomize build panic: %v", r)
+		}
+	}()
+	_, err = krusty.MakeKustomizer(&krusty.Options{
+		LoadRestrictions: kusttypes.LoadRestrictionsNone,
+		PluginConfig:     kusttypes.DisabledPluginConfig(),
+	}).Run(fsys, dir)
+	return err
 }
 
 // agree runs the reference and namespace checks over objs, which are also

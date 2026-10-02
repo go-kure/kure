@@ -162,7 +162,10 @@ A second pass holds the objects to each other rather than to a schema: `AssertCo
 `AssertConsistentYAML` and `AssertConsistentDir` fail when a Flux `sourceRef`, `chartRef` or
 `dependsOn` names nothing in the tree, or an object or a Kustomization's `targetNamespace`
 names a namespace the tree does not create — unless the test declares it with `External` or
-`Namespace`, or it is one the cluster makes itself.
+`Namespace`, or it is one the cluster makes itself. On a written directory, `AssertConsistentDir`
+also fails when a Kustomization's `spec.path` or an entry of a `kustomization.yaml` names
+nothing in the tree, and builds what each Flux Kustomization applies the way
+kustomize-controller builds it, on a copy of the tree.
 
 ### 4. Code Quality
 
