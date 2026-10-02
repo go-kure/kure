@@ -680,6 +680,32 @@ func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
 			}),
 			want: []string{"{root}/flux.yaml: object 1: Kustomization flux-system/remote", `spec.components[0]: Invalid value: "https://example.com/component": ` + notLocal},
 		},
+		// a directory holding : or @ is parsed as a repository before it is
+		// confirmed a directory, and an entry that names nothing the same,
+		// where a file so named is read (TestAssertConsistentDirReadsAFileWhateverItsName)
+		"a directory entry holding a colon": {
+			files: with(failing(), map[string]string{
+				"other/kustomization.yaml":          `resources: [cm.yaml, "sub: dir"]` + "\n",
+				"other/cm.yaml":                     cm("default", "b"),
+				"other/sub: dir/kustomization.yaml": "resources: [cm.yaml]\n",
+				"other/sub: dir/cm.yaml":            cm("default", "c"),
+			}),
+			want: []string{"{root}/other/kustomization.yaml", `resources[1]: Invalid value: "sub: dir": ` + notLocal},
+		},
+		"a directory entry holding an at sign": {
+			files: with(failing(), map[string]string{
+				"other/kustomization.yaml":         "resources: [cm.yaml, sub@dir]\n",
+				"other/cm.yaml":                    cm("default", "b"),
+				"other/sub@dir/kustomization.yaml": "resources: [cm.yaml]\n",
+				"other/sub@dir/cm.yaml":            cm("default", "c"),
+			}),
+			want: []string{`resources[1]: Invalid value: "sub@dir": ` + notLocal},
+		},
+		"a resources entry holding a colon that names nothing": {
+			files:  with(failing(), map[string]string{"other/kustomization.yaml": `resources: [cm.yaml, "missing: file.yaml"]` + "\n", "other/cm.yaml": cm("default", "b")}),
+			want:   []string{`resources[1]: Invalid value: "missing: file.yaml": ` + notLocal},
+			absent: []string{"Not found"},
+		},
 	}
 	for name, body := range map[string]string{
 		"openapi":                     "openapi:\n  path: schema.json\n",
@@ -704,6 +730,36 @@ func TestAssertConsistentDirBuildsNothingItCannotResolve(t *testing.T) {
 	for name, c := range cases {
 		c.absent = append(c.absent, "the build fails")
 		cases[name] = c
+	}
+	runDir(t, cases)
+}
+
+// kure names a resource file after its object, and a ClusterRole's name may
+// hold : or @ (pkg/stack/layout writes one named a: b), so the file name and
+// the entry naming it do too. kustomize reads an entry as a file before it
+// parses it as a repository to clone, so a file in the tree is read whatever
+// its name: the pass reports nothing on the entry, and builds the directory.
+func TestAssertConsistentDirReadsAFileWhateverItsName(t *testing.T) {
+	cases := map[string]dirCase{}
+	for _, c := range []struct{ what, name, file string }{
+		{"a colon", "a: b", "cluster-clusterrole-a: b.yaml"},
+		{"an at sign", "a@b", "cluster-clusterrole-a@b.yaml"},
+	} {
+		role := meta("rbac.authorization.k8s.io/v1", "ClusterRole", "", fmt.Sprintf("%q", c.name))
+		cases["a resources entry holding "+c.what] = dirCase{files: with(builds(), map[string]string{
+			"app/kustomization.yaml": fmt.Sprintf("resources: [cm.yaml, %q]\n", c.file),
+			"app/" + c.file:          role,
+		})}
+		// the directory is built: failing's own finding is reported, and
+		// nothing on the kustomization file
+		cases["a build through a resources entry holding "+c.what] = dirCase{
+			files: with(failing(), map[string]string{
+				"app/kustomization.yaml": fmt.Sprintf("resources: [a.yaml, b.yaml, %q]\n", c.file),
+				"app/" + c.file:          role,
+			}),
+			want:   []string{"{root}/flux.yaml: object 0: Kustomization flux-system/app", `spec.path: Invalid value: "./app": the build fails: `, "already registered id"},
+			absent: []string{notLocal, "{root}/app/kustomization.yaml"},
+		}
 	}
 	runDir(t, cases)
 }

@@ -144,11 +144,12 @@ func AssertConsistentYAML(t testing.TB, data []byte, declared ...Declared) {
 // kustomization file's directory — kustomize's default load restriction,
 // which Flux lifts to the source root. An entry holding : or @ is read as
 // one kustomize would fetch — the scp-style and file:// forms it clones
-// before any load restriction applies — though a local file so named
-// would be read. And spec.path is a relative path that stays in the tree,
-// where Flux joins an absolute or escaping one under the source root. kure
-// writes relative paths and names holding neither character, so none of
-// its trees breaks one.
+// before any load restriction applies — unless it names a file in the
+// tree, which kustomize reads before it parses an entry as a repository;
+// a directory so named, or nothing, it looks for only after. And spec.path
+// is a relative path that stays in the tree, where Flux joins an absolute
+// or escaping one under the source root. kure writes relative paths and
+// files that exist, so none of its trees breaks one.
 //
 // root is the directory the Flux source serves, the one every spec.path is
 // relative to: for layout.WriteManifest(base, cfg, ml) that is
@@ -403,9 +404,36 @@ const anOriginal = "Flux's generator keeps its backup under this name and consum
 
 // isLocal reports whether kustomize reads entry from the tree rather than
 // fetching it: Flux's own test, narrowed by the scp-style user@host:path and
-// the file:// base that pass it and that kustomize clones all the same.
+// the file:// base that pass it and that kustomize clones all the same. The
+// narrowing is a directory's — a Flux Kustomization's components, and a
+// kustomization file's entry that names a directory or nothing — where a
+// file so named is read before any clone (readsFile).
 func isLocal(entry string) bool {
 	return fluxkustomize.IsLocalRelativePath(entry) && !strings.ContainsAny(entry, ":@")
+}
+
+// readsFile reports whether entry — a kustomization file's entry that
+// isLocal refuses, joined to that file's directory as target — is read from
+// the tree after all: kustomize tries an entry as a file before it parses
+// it as a repository to clone, so a file in the tree is read whatever its
+// name. A directory, or nothing, under that name is parsed first, as
+// isLocal has it, and a form Flux's own test refuses is not looked for.
+func (tr *tree) readsFile(entry, target string) (bool, error) {
+	if !fluxkustomize.IsLocalRelativePath(entry) {
+		return false, nil
+	}
+	inTree, err := within(tr.root, target)
+	if err != nil || !inTree {
+		return false, err
+	}
+	info, err := os.Stat(target)
+	switch {
+	case stderrors.Is(err, fs.ErrNotExist):
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+	return info.Mode().IsRegular(), nil
 }
 
 // checkPaths resolves every path the tree names, then builds what each Flux
@@ -511,12 +539,18 @@ func (tr *tree) checkEntries(kf *kustomizationFile) (bool, error) {
 // local path. A file stays in or below kf's directory; a directory holds a
 // kustomization file.
 func (tr *tree) checkEntry(kf *kustomizationFile, at *field.Path, e string, n names) (bool, error) {
-	if !isLocal(e) {
-		kf.errs = append(kf.errs, field.Invalid(at, e, notLocal))
-		return false, nil
-	}
 	base := filepath.Dir(kf.path)
 	target := filepath.Join(base, e)
+	if !isLocal(e) {
+		reads, err := tr.readsFile(e, target)
+		if err != nil {
+			return false, err
+		}
+		if !reads {
+			kf.errs = append(kf.errs, field.Invalid(at, e, notLocal))
+			return false, nil
+		}
+	}
 	inTree, err := within(tr.root, target)
 	if err != nil {
 		return false, err
