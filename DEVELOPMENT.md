@@ -164,9 +164,10 @@ A second pass holds the objects to each other rather than to a schema: `AssertCo
 names a namespace the tree does not create — unless the test declares it with `External` or
 `Namespace`, or it is one the cluster makes itself. On a written directory, `AssertConsistentDir`
 reads every `.yaml` and `.yml` file but one a `kustomization.yaml` names as data only, and every
-file one lists as a resource whatever its name, as kustomize applies it, and one named as data
-under a Flux Kustomization's `spec.path` that has no `kustomization.yaml`, since Flux's generator
-lists it there; it also fails when a Kustomization's `spec.path` or an entry of a
+file one lists as a resource whatever its name, as kustomize applies it, and a `.yaml` or `.yml`
+one named as data under a Flux Kustomization's `spec.path` that has no `kustomization.yaml`, but
+not in a subdirectory with its own, since Flux's generator lists it there and takes such a
+subdirectory whole; it also fails when a Kustomization's `spec.path` or an entry of a
 `kustomization.yaml` names nothing in the tree, or an entry of a `kustomization.yaml` or of a
 Kustomization's `spec.components` leaves it, and builds what each Flux Kustomization applies the
 way kustomize-controller builds it, on a copy of the tree — nothing, once an entry leaves the tree.
