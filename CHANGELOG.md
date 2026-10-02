@@ -16,6 +16,106 @@ All notable changes to this project will be documented in this file.
 > `DNS01Provider`, `SourceMover` and `DestinationMover` sums and the values that layer injected.
 > Every removed function, type and field is mapped to the upstream field that replaces it in
 > [Builder contract: release 2 migration notes](https://www.gokure.dev/kure/dev/concepts/builder-contract-release-2/).
+## [0.2.0-beta.15] - 2026-10-02
+
+### Added
+
+- Release through the shared Release workflow
+- Add crdvalidate, an apiserver-faithful CRD validator
+- Create the namespaces getting-started applies into
+
+### Build
+
+- Update sigs.k8s.io to v0.21.2
+- Update module github.com/cloudnative-pg/plugin-barman-cloud to v0.15.1
+- Update module sigs.k8s.io/controller-runtime to v0.25.2
+- Update module golang.org/x/tools to v0.51.0
+
+### CI
+
+- Remove a docs slot through the shared deploy-docs-push step
+- Add the Release / State dispatch workflow
+- Waive GO-2026-6596, a cilium advisory the pinned v1.20.2 is outside of
+
+### Changed
+
+- Move the vendored Flux bundle to internal/gotk
+- Lift the CRD reader to internal/crds and read whole definitions
+
+### Documentation
+
+- Name the analyze-changes base branches as examples
+- Qualify the docs-root guarantee for tags cut before the deploy action
+- Say the root check does not confirm the label is a tag
+- Say a waiting removal can also cancel a waiting deploy
+- Name the per-slot group the slot check precedes
+- State the older action's root rule and the tag check exactly
+- Say pin-impact checked the PR's recorded base, not the merge base
+- Describe schema validation and the moved readers
+- Vendor the shared workflows guide
+- Correct three statements in the workflows page
+- Name the path check and the build in the package summary
+- Name every rule stricter than a Flux build
+- Say which named data readTree still decodes
+- Say what isLocal compares and what kustomize compares
+- Bound the data files the scanned read takes
+
+### Fixed
+
+- Count analyze-changes lines against the PR's own base
+- Deploy docs through the shared deploy-docs-push action
+- Make Manage Docs act on kure's own docs slots
+- Serialize Manage Docs removals with deploys of the same slot
+- Validate the Manage Docs slot before joining a deploy group
+- Refuse mixed go-kure/.github pins in the merge queue
+- Drop the ObjectStore serverName the CRD forbids
+- Use a protocol the LocalRedirectPolicy CRD accepts
+- Hold validation to the server's definition check, name rules and decoder
+- Route validator errors through pkg/errors
+- Mirror kustomize's List rule, two more name rules, create the fixture dir
+- Refuse a symbolic link or a stale .original before building
+- Decode a file named both as a resource and as data
+- Read an entry that names a file whatever its name
+- Refuse an entry by kustomize's parser, not by what exists
+- Compare a github host as kustomize does, and refuse by form
+- Decode every file a kustomization file lists, whatever its name
+- Hold a Kustomization's components to the tree
+- Build nothing after an entry leaves the tree
+- Read the data-named files Flux's scan applies
+
+### Maintenance
+
+- Update go-kure/.github digest to 64e5348
+- Update go-kure/.github digest to 31e5d57
+- Update go-kure/.github digest to d9fae71
+- Update go-kure/.github digest to acd114e
+- Update go-kure/.github digest to 4252fb3
+- Update go-kure/.github digest to 592439e
+- Update go-kure/.github digest to 59f8799
+- Update go-kure/.github digest to 233676b
+- Update go-kure/.github digest to ab9eec3
+- Pin deploy-docs-push at the same go-kure/.github commit as the other actions
+- Update go-kure/.github to 8c18551
+- Update go-kure/.github digest to ea181d3
+- Update go-kure/.github digest to 19ff5ba
+- Bump go-kure/.github to 177d427 and re-vendor the release guide
+- Update go-kure/.github digest to 9ba85b3
+- Update go-kure/.github digest to a81814d
+- Update go-kure/.github digest to 9a5c7fa
+
+### Testing
+
+- Wire the pinned CRDs into kuretest
+- Complete the five partial fixtures
+- Share one schema-validating golden helper
+- Validate bootstrap, cluster output and getting-started
+- Exercise the refusal paths of crdvalidate and kuretest
+- Check New's error before compiling a refused definition
+- Check a tree's references and namespaces against what it holds
+- Check every path a tree names and build what Flux applies
+- Read the written tree through kuretest
+- Hold the getting-started tree to the consistency pass
+
 ## [0.2.0-beta.14] - 2026-09-30
 
 ### Breaking
