@@ -1035,6 +1035,50 @@ func TestAssertConsistentDirDecodesAFileNamedAsAResourceAndAsData(t *testing.T) 
 	})
 }
 
+// A file a kustomization file names as a resources entry is applied as a
+// manifest by kustomize whatever its name — a layout Config.ManifestFileName
+// can name one without .yaml or .yml — so it is decoded; a file no
+// kustomization file names is read only under those suffixes.
+func TestAssertConsistentDirDecodesEveryListedResourceFile(t *testing.T) {
+	nsJSON := `{"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "web"}}`
+	runDir(t, map[string]dirCase{
+		"a listed .json file": {
+			files: map[string]string{
+				"kustomization.yaml": "resources: [cm.yaml, ns.json]\n",
+				"ns.json":            nsJSON,
+				"cm.yaml":            cm("web", "a"),
+			},
+		},
+		"a listed file without an extension": {
+			files: map[string]string{
+				"kustomization.yaml":    "resources: [cm.yaml, cluster-namespace-web]\n",
+				"cluster-namespace-web": ns("web"),
+				"cm.yaml":               cm("web", "a"),
+			},
+		},
+		"an unlisted .json file is not read": {
+			files: map[string]string{
+				"kustomization.yaml": "resources: [cm.yaml]\n",
+				"ns.json":            nsJSON,
+				"notes.json":         `{"k": "v"}`,
+				"cm.yaml":            cm("web", "a"),
+			},
+			want:   []string{"{root}/cm.yaml: object 0: ConfigMap web/a", `metadata.namespace: Not found: "web"`},
+			absent: []string{"ns.json", "notes.json"},
+		},
+	})
+	// a listed file that holds no object fails like any other manifest
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"kustomization.yaml": "resources: [cm.yaml, values.json]\n",
+		"values.json":        `{"k": "v"}`,
+		"cm.yaml":            cm("default", "a"),
+	})
+	if f := run(func(tb testing.TB) { AssertConsistentDir(tb, dir) }); !strings.Contains(f.fatal, filepath.Join(dir, "values.json")) || !strings.Contains(f.fatal, "document 0") {
+		t.Errorf("a listed file that does not decode must fail, got %q", f.fatal)
+	}
+}
+
 // The copy is made under TMPDIR, as kuretest-consistent-*, and is gone once
 // the call returns, whether the tree passes or not.
 func TestAssertConsistentDirRemovesItsCopy(t *testing.T) {
