@@ -51,7 +51,7 @@ Flux objects to that tree in one of three placements: `FluxSeparate` (the defaul
 | Node directory | node name, nested by tree (`NodeGrouping: GroupByName`, the default). `GroupFlat` merges descendant nodes' bundles into the first-level node's directory. | `walker.go:259-312` |
 | Bundle directory | none by default: the bundle renders into its node's directory. `BundleGrouping: GroupByName` adds `<node>/<bundle name>`. | `walker.go:317-344` |
 | Umbrella child directory | `<parent dir>/<child bundle name>`, marked `UmbrellaChild` | `walker.go:353-376` |
-| Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. An application whose config is a `LayoutAugmenter` gets its own directory under either grouping, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false. | `walker.go:386-421`, `:452-468` |
+| Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. Under the default flat grouping an application whose config is a `LayoutAugmenter` still gets its own directory, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false; it is then merged like any other application. | `walker.go:386-421`, `:452-468` |
 | Resource file | `WriteToDisk` and `WriteToTar` name by the layout's own FileNaming: default `{namespace}-{kind}-{name}.yaml` (empty namespace: `cluster`); `FileNamingKindName` gives `{kind}-{name}.yaml`. `WriteManifest` names every layout's files from its `Config` instead. | `pkg/stack/layout/config.go:62-70`, `writerplan.go:228-250`, `:299-306` |
 | Generated Kustomization file | under `WriteToDisk` and `WriteToTar`, named by the host layout's FileNaming; the `flux-system/` layout of `FluxSeparate` has no FileNaming, so it always uses the default (`flux-system-kustomization-<name>.yaml`). Layouts an augmenter adds do not inherit FileNaming. | `manifest.go:88-95`, `pkg/stack/fluxcd/layout_integrator.go:1384-1389` |
 | `kustomization.yaml` child entries | a child directory is listed unless it is an `UmbrellaChild`, renders a bundle, or the parent is `FluxIntegratedPerLayout` | `writerplan.go:69-89` |
@@ -336,7 +336,8 @@ gotk mode is unchanged.
 
 ### FileNaming applied everywhere ([#976](https://github.com/go-kure/kure/issues/976))
 
-**Target.** `LayoutRules.FileNaming` names every file kure writes for that tree.
+**Target.** `LayoutRules.FileNaming` names every file `WriteToDisk` and `WriteToTar` write for
+that tree.
 
 **Design outline.**
 
