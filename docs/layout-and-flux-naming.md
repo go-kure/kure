@@ -51,7 +51,7 @@ Flux objects to that tree in one of three placements: `FluxSeparate` (the defaul
 | Node directory | node name, nested by tree (`NodeGrouping: GroupByName`, the default). `GroupFlat` merges descendant nodes' bundles into the first-level node's directory. | `walker.go:259-312` |
 | Bundle directory | none by default: the bundle renders into its node's directory. `BundleGrouping: GroupByName` adds `<node>/<bundle name>`. | `walker.go:317-344` |
 | Umbrella child directory | `<parent dir>/<child bundle name>`, marked `UmbrellaChild` | `walker.go:353-376` |
-| Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. Under the default flat grouping an application whose config is a `LayoutAugmenter` still gets its own directory, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false; it is then merged like any other application. | `walker.go:386-421`, `:452-468` |
+| Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. Under the default flat grouping an application whose config is a `LayoutAugmenter` still gets its own directory, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false; it is then merged like any other application. | `walker.go:386-421`, `:452-469` |
 | Resource file | `WriteToDisk` and `WriteToTar` name by the layout's own FileNaming: default `{namespace}-{kind}-{name}.yaml` (empty namespace: `cluster`); `FileNamingKindName` gives `{kind}-{name}.yaml`. `WriteManifest` names every layout's files from its `Config` instead. | `pkg/stack/layout/config.go:62-70`, `writerplan.go:228-250`, `:299-306` |
 | Generated Kustomization file | under `WriteToDisk` and `WriteToTar`, named by the host layout's FileNaming; the `flux-system/` layout of `FluxSeparate` has no FileNaming, so it always uses the default (`flux-system-kustomization-<name>.yaml`). Layouts an augmenter adds do not inherit FileNaming. | `manifest.go:88-95`, `pkg/stack/fluxcd/layout_integrator.go:1384-1389` |
 | `kustomization.yaml` child entries | a child directory is listed unless it is an `UmbrellaChild`, renders a bundle, or the parent is `FluxIntegratedPerLayout` | `writerplan.go:69-89` |
@@ -113,7 +113,7 @@ is the one path built with it.
 |---|---|---|
 | `LayoutIntegrator` (all placements), `GenerateFromLayout` | the directory of the layout that renders the bundle: `applications/shop/shop-infra` | `resource_generator.go:139` |
 | `GenerateForBundle(b, path)` | `path` verbatim | `resource_generator.go:445-468` |
-| `GenerateFromCluster(c)` | walks with `DefaultLayoutRules()`, so the consumer's `ClusterName` is ignored: `cluster/applications/shop` | `resource_generator.go:64-77` |
+| `GenerateFromCluster(c)` | walks with `DefaultLayoutRules()`, so the consumer's layout rules, `ClusterName` included, are ignored: `cluster/applications/shop` | `resource_generator.go:64-77` |
 | `FluxIntegratedPerLayout` node Kustomization | the layout's directory | `resource_generator.go:645-671` |
 | Bootstrap, gotk mode | `manifests/<root>` | `pkg/stack/fluxcd/bootstrap_generator.go:322` |
 | Bootstrap, FluxInstance `sync.path` | `./<root>`, or `./` for an unnamed root | `bootstrap_generator.go:414-417` |
@@ -264,8 +264,8 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
   bundle rendered into its node's directory has no directory of its own; that directory is
   `Node.Name`.
 - **Unchanged:** `spec.path` keeps following `FullRepoPath`, and the duplicate-directory check
-  stays. Its message names the two bundles; today it prints the two layouts' paths, which for one
-  directory is the same path twice (`treecheck.go:64-67`).
+  stays. Its message names the two bundles; today it prints the two layouts' paths, which can be
+  the same path twice (`treecheck.go:64-67`).
 - **The rename route closes:** `IndexOrigins` refuses a layout that is a bundle's own directory
   (an umbrella child, or a `GroupByName` bundle layout) when its name differs from the bundle's
   directory name. A node layout that renders a bundle keeps `Node.Name`, whatever the bundle is
@@ -293,6 +293,11 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
   Under the other placements, on a node that `NodeGrouping: GroupFlat` merges away, and on a node
   whose layout renders a bundle, setting these fields is refused, not silently ignored.
 - **Unset fields change nothing for nodes:** a node Kustomization keeps its `<path>-node` name.
+- **Collisions:** a node `KustomizationName` equal to a bundle's effective Kustomization name is
+  refused, as any name used twice is today (`layout_integrator.go:1198-1204`).
+- **Reconciliation settings:** a node Kustomization takes the generator's interval and prune and
+  sets no `wait` today (`resource_generator.go:645-671`). The ticket decides whether a node
+  carries its own.
 - **Application and augmenter layouts, a breaking rename:** under `FluxIntegratedPerLayout` they
   get Kustomizations named after the layout (`layout_integrator.go:1209-1214`). These collide with
   the bundle's whenever the application shares the bundle's name (section 1.7). The default
@@ -302,8 +307,9 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
     `resource_generator.go:666-669`), are translated to the new names;
   - the test that pins the old names (`pkg/stack/fluxcd/layout_integrator_test.go:707-718`) and
     the README sentence "The CR is named after the layout" (`pkg/stack/fluxcd/README.md:650`).
-- **Override for the new default:** the name is carried on `ManifestLayout` and is settable, by an
-  augmenter for the layouts it creates and by a consumer on a walked layout before integration. A
+- **Override for the new default:** a new field, proposed `ManifestLayout.KustomizationName`,
+  separate from the layout's `Name`; the ticket settles the name. An augmenter sets it for the
+  layouts it creates, and a consumer sets it on a walked layout before integration. A
   default longer than the limit of [#978](https://github.com/go-kure/kure/issues/978) is refused
   with a message naming the layout and the field to set; kure does not shorten it.
 
@@ -423,9 +429,9 @@ rejects it.
   value is limited to 63 characters; the ticket verifies this against kustomize-controller.
 - **Names that become directories** (node names, bundle and `DirName`, application names under
   `ApplicationGrouping: GroupByName`) must be non-empty, contain no `/`, and not be `.` or `..`.
-  The unnamed root is exempt: it has no directory of its own (`walker.go:28-39`,
-  `pkg/stack/layout/parentpath_test.go:436-446`).
-- **Where:** bundle and node names are validated in `Bundle.Validate` (`bundle.go:174-275`) and
+  The unnamed root is exempt: an empty root name is valid and never becomes a directory name
+  (section 1.2, cluster wrapper; `walker.go:28-39`, `pkg/stack/layout/parentpath_test.go:436-446`).
+- **Where:** bundle and node names are validated in `Bundle.Validate` (`bundle.go:174-270`) and
   `ValidateCluster` (`pkg/stack/validate.go:29`). An application name becomes a directory only
   where the application gets its own layout, which depends on the layout rules
   (`ApplicationGrouping: GroupByName`, or an augmenter that takes its own layout).
@@ -435,7 +441,7 @@ rejects it.
   (`pkg/stack/fluxcd/fluxcd_test.go:621-631` uses `Y-infra`, `Y-services` and `Y-apps`).
 
 **Acceptance.** A 64-character Kustomization name, a name with `/`, and an upper-case name are each
-refused, naming the path. Dotted names stay accepted.
+refused, naming the path. Dotted names and an unnamed root stay accepted.
 
 ### Behaviour bugs ([#979](https://github.com/go-kure/kure/issues/979))
 
@@ -454,7 +460,7 @@ refused, naming the path. Dotted names stay accepted.
      would apply it.
    - Expected: a Source is hosted in a build that is applied before any Kustomization that
      references it, never inside a directory delivered through it.
-3. **`GenerateFromCluster` ignores `ClusterName`.**
+3. **`GenerateFromCluster` ignores the consumer's layout rules.**
    - Current: it walks with the default rules (`resource_generator.go:64-77`), so its paths disagree
      with the layout a consumer writes.
    - Expected: it takes the consumer's `LayoutRules`, or is removed in favour of `WalkCluster` plus
@@ -499,5 +505,8 @@ The fluxcd README claims tied to the behaviour bugs change with
 
 The ticket decides each new dependency.
 
-**Acceptance.** Every kind above has a constructor that sets identity only, covered by the
-whole-object identity test, and appears in the generated kind tables.
+**Acceptance.** Every kind above that the `k8s.io/api` version in use provides has a constructor
+that sets identity only, covered by the whole-object identity test, and appears in the generated
+kind tables. For `APIService`, `VerticalPodAutoscaler`, `ImageRepository` and `ImagePolicy` the
+ticket decides per kind; a kind that is added meets the same criteria, and a kind that is not is
+listed with its reason.
