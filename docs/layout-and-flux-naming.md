@@ -51,9 +51,9 @@ Flux objects to that tree in one of three placements: `FluxSeparate` (the defaul
 | Node directory | node name, nested by tree (`NodeGrouping: GroupByName`, the default). `GroupFlat` merges descendant nodes' bundles into the first-level node's directory. | `walker.go:259-312` |
 | Bundle directory | none by default: the bundle renders into its node's directory. `BundleGrouping: GroupByName` adds `<node>/<bundle name>`. | `walker.go:317-344` |
 | Umbrella child directory | `<parent dir>/<child bundle name>`, marked `UmbrellaChild` | `walker.go:353-376` |
-| Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. An application whose config is a `LayoutAugmenter` always gets its own directory. | `walker.go:386-421` |
-| Resource file | default `{namespace}-{kind}-{name}.yaml` (empty namespace: `cluster`); `FileNamingKindName` gives `{kind}-{name}.yaml`. | `pkg/stack/layout/config.go:62-70`, `writerplan.go:228-250` |
-| Generated Kustomization file | named by the host layout's FileNaming; the `flux-system/` layout of `FluxSeparate` has no FileNaming, so it always uses the default (`flux-system-kustomization-<name>.yaml`). Layouts an augmenter adds do not inherit FileNaming. | `manifest.go:88-95`, `pkg/stack/fluxcd/layout_integrator.go:1384-1389` |
+| Application directory | none by default. `ApplicationGrouping: GroupByName` adds `<bundle dir>/<app name>`. An application whose config is a `LayoutAugmenter` gets its own directory under either grouping, unless the config also implements `LayoutIntentAugmenter` and `WantsOwnLayout()` returns false. | `walker.go:386-421`, `:452-468` |
+| Resource file | `WriteToDisk` and `WriteToTar` name by the layout's own FileNaming: default `{namespace}-{kind}-{name}.yaml` (empty namespace: `cluster`); `FileNamingKindName` gives `{kind}-{name}.yaml`. `WriteManifest` names every layout's files from its `Config` instead. | `pkg/stack/layout/config.go:62-70`, `writerplan.go:228-250`, `:299-306` |
+| Generated Kustomization file | under `WriteToDisk` and `WriteToTar`, named by the host layout's FileNaming; the `flux-system/` layout of `FluxSeparate` has no FileNaming, so it always uses the default (`flux-system-kustomization-<name>.yaml`). Layouts an augmenter adds do not inherit FileNaming. | `manifest.go:88-95`, `pkg/stack/fluxcd/layout_integrator.go:1384-1389` |
 | `kustomization.yaml` child entries | a child directory is listed unless it is an `UmbrellaChild`, renders a bundle, or the parent is `FluxIntegratedPerLayout` | `writerplan.go:69-89` |
 
 `LayoutRules.FlattenSingleTier` (default false) collapses one layer, and only at the walked root:
@@ -166,14 +166,15 @@ directly under the walked root (`layout_integrator.go:1384-1389`).
 
 | Input | Result | Source |
 |---|---|---|
-| Two bundles with the same name | refused, all placements and walk-only | `origin.go:123` |
+| Two bundles with the same name | refused wherever the origin index is built: the integrator under every placement, `GenerateFromLayout` and the ArgoCD workflow. `WalkCluster` and the writers alone do not check it. | `origin.go:122-123`; callers `layout_integrator.go:306`, `resource_generator.go:90`, `pkg/stack/argocd/argo.go:68` |
 | A payload Kustomization named like its bundle | refused under every placement | `layout_integrator.go:1013-1016`, `:1329` |
 | A Kustomization name used twice | refused by the integrator | `layout_integrator.go:1198-1204` |
 | `FluxIntegratedPerLayout` with `ApplicationGrouping: GroupByName`, application named like its bundle (the common case) | refused as a name used twice | same |
 | `FluxIntegratedPerLayout`, augmenter application named like its bundle | refused as a name used twice | same |
 | Two layouts resolving to one directory | refused by the writers | `pkg/stack/layout/treecheck.go:67` |
 | Dotted names, names over 63 characters | accepted unchanged | none |
-| A hand-built tree with a duplicate Kustomization name | written: the writers do not check Kustomization names | none |
+| A hand-built tree with the same Kustomization twice in one layout, or in layouts one kustomize build includes | refused by the writers, as for any object held twice | `treecheck.go:74`, `:365-378` (one layout), `:111`, `:139` (one build) |
+| A hand-built tree with the same Kustomization in layouts that separate builds apply | written: the writers have no tree-wide check of Kustomization names | none |
 | An `UmbrellaChild` layout no Kustomization applies | written, and listed by nobody | none |
 
 ### 1.8 What a consumer cannot control today
@@ -185,8 +186,11 @@ directly under the walked root (`layout_integrator.go:1384-1389`).
    Kustomization are both the child bundle's name (`walker.go:358`, `resource_generator.go:496`).
    Renaming the walked layout before `IntegrateWithLayout` separates them and is accepted, but no
    document or test covers that route.
-4. **Ordering between groups.** A group gets a Kustomization only under `FluxIntegratedPerLayout`,
-   with a fixed name and no `dependsOn`; `Node` has no dependency field.
+4. **Ordering between groups, from the model.** A group gets a Kustomization only under
+   `FluxIntegratedPerLayout`, with a fixed name, and `Node` has no dependency field. The one route
+   to a `dependsOn` is on the layout, not the model: set `DependsOn` (Kustomization names, as
+   strings) on the walked group layout before `IntegrateWithLayout`, which copies it
+   (`layout_integrator.go:892-923`, `resource_generator.go:666-669`).
 5. **Engine annotations per application.** There is no field for prune protection or force replace,
    so a consumer writes Flux annotations onto objects itself.
 
@@ -201,18 +205,19 @@ What a consumer can do today:
    `pkg/stack/layout/types.go:154-163` and `walker.go:42-43`
    (`layout_integrator.go:1410-1413`); neither is the code it names.
 2. **SourceRef message.** It says "FluxIntegratedPerLayout mode requires a SourceRef" when
-   `FluxIntegratedPerBundle` triggers it too (`pkg/stack/fluxcd/validate.go:50`,
-   `layout_integrator.go:985`).
+   `FluxIntegratedPerBundle` triggers it too (`pkg/stack/fluxcd/validate.go:50`, reached for both
+   placements from `layout_integrator.go:217-221`).
 3. **The "every layout" claim.** The fluxcd README says `FluxIntegratedPerLayout` gives a
    Kustomization to every layout, augmenter layouts included. An augmenter application named like
    its bundle is refused instead.
 4. **FileNaming.** `LayoutRules.FileNaming` is documented as the naming for manifest files
-   (`types.go:138-140`). It does not reach `flux-system/` or augmenter layouts.
+   (`types.go:138-140`). Under `WriteToDisk` and `WriteToTar` it does not reach `flux-system/` or
+   augmenter layouts.
 5. **Helm hook groups.** The helm README says each hook group "becomes one FluxCD Kustomization,
    deployed in order". Nothing in kure converts a `HookGroup`.
-6. **`ManifestLayout.DependsOn`.** It is documented as becoming `spec.dependsOn`
-   (`manifest.go:44-48`). That happens only for layouts that get their own Kustomization under
-   `FluxIntegratedPerLayout`; under `FluxIntegratedPerBundle` it is dropped.
+6. **`ManifestLayout.DependsOn`.** It is documented as becoming `spec.dependsOn` in
+   `FluxIntegratedPerLayout` mode (`manifest.go:44-48`). Left unsaid: that holds only for a layout
+   that gets its own Kustomization, and every other case drops the field without an error.
 
 ## Part 2: target behaviour
 
@@ -340,6 +345,8 @@ gotk mode is unchanged.
 - Layouts an augmenter adds inherit their parent's FileNaming when they leave it unset.
 - This is done in the walker, after the augmenter runs (`augmentAppLayout`, `walker.go:438-451`).
   `resolveManifestFileName` (`manifest.go:88-95`) has no parent to read.
+- `WriteManifest` already names every layout's files from its `Config`, so the gap exists only
+  under `WriteToDisk` and `WriteToTar`.
 
 **Acceptance.** With `FileNamingKindName`, no file in `flux-system/` or in an augmenter layout is
 named `{namespace}-{kind}-{name}.yaml`, unless that layout sets its own FileNaming.
@@ -358,7 +365,9 @@ which two Kustomizations share a name.
   not marked and are unaffected. Their placement cannot tell them apart, because the ArgoCD walk
   uses `FluxSeparate` (`pkg/stack/argocd/argo.go:168-172`). A consumer that places its own
   Kustomizations marks its tree the same way.
-- **A duplicate Kustomization namespace/name anywhere in the tree.** The layout package cannot
+- **A duplicate Kustomization namespace/name anywhere in the tree.** Today the writers refuse one
+  object held twice only within a layout or within one kustomize build (section 1.7); two
+  Kustomizations of one name in separately applied directories pass. The layout package cannot
   import fluxcd (fluxcd imports layout), so the integrator's `claim`
   (`layout_integrator.go:1198-1204`) cannot be reused. The check matches the group
   `kustomize.toolkit.fluxcd.io`, kind `Kustomization`, by GVK.
@@ -426,7 +435,7 @@ refused, naming the path. Dotted names stay accepted.
 4. the FileNaming doc, which becomes true with [#976](https://github.com/go-kure/kure/issues/976)
    (if that lands first, nothing remains here);
 5. the hook-group sentence in the helm README, rewritten as what a consumer may build;
-6. `ManifestLayout.DependsOn`, stating the placement it applies to.
+6. `ManifestLayout.DependsOn`, stating which layouts it applies to and that it is dropped elsewhere.
 
 The fluxcd README claims tied to the behaviour bugs change with
 [#979](https://github.com/go-kure/kure/issues/979).
