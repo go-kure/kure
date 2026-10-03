@@ -50,6 +50,7 @@ ENABLED_PAGES=(
 	docs/compatibility.md
 	docs/dependency-updates.md
 	docs/github-workflows.md
+	docs/layout-and-flux-naming.md
 	docs/oci-layout.md
 	docs/puzl-cloud-kubesdk-review.md
 	docs/quickstart.md
