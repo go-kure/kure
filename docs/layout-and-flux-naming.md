@@ -3,7 +3,7 @@
 This page records how kure names, places and wires the directories and Flux objects it generates
 from the stack model, and what each planned change makes of it. Part 1 is the behaviour of
 `v0.2.0-beta.15`, confirmed by rendering small clusters to disk and to tar. Part 2 is the target,
-one section per planned change (K1 to K11).
+one section per planned change, each tracked by an issue.
 
 kure, its consumers and their output are pre-release: names, paths and output may change, and
 live-cluster upgrade effects are not a constraint.
@@ -216,10 +216,10 @@ What a consumer can do today:
 
 ## Part 2: target behaviour
 
-Each section names the change, the target, a design outline and the acceptance criteria. The IDs
-K1 to K11 are provisional and will be replaced by issue references.
+Each section names the change, the target, a design outline and the acceptance criteria. The
+linked issue tracks the implementation.
 
-### K1: Kustomization name separate from the bundle name
+### Kustomization name separate from the bundle name ([#971](https://github.com/go-kure/kure/issues/971))
 
 **Target.** A consumer can name a bundle's Kustomization without renaming the bundle.
 
@@ -245,7 +245,7 @@ K1 to K11 are provisional and will be replaced by issue references.
 - Two bundles with different names but the same effective name are refused, naming both.
 - An umbrella's health checks and its children's `dependsOn` use the children's effective names.
 
-### K2: directory name separate from the Kustomization name
+### Directory name separate from the Kustomization name ([#972](https://github.com/go-kure/kure/issues/972))
 
 **Target.** A bundle that gets its own directory can name that directory independently of its
 Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
@@ -268,7 +268,7 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
 - Two siblings with the same `DirName` are refused.
 - A walked layout renamed before integration is refused.
 
-### K3: ordering and naming for node-level Kustomizations
+### Ordering and naming for node-level Kustomizations ([#973](https://github.com/go-kure/kure/issues/973))
 
 **Target.** A group (a node without a bundle) can have a named Kustomization with dependencies.
 
@@ -293,7 +293,7 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
 - The same input under `FluxIntegratedPerBundle` is refused with a message naming the node.
 - `FluxIntegratedPerLayout` with an application named like its bundle is accepted.
 
-### K4: delivery intent on applications
+### Delivery intent on applications ([#974](https://github.com/go-kure/kure/issues/974))
 
 **Target.** An application can ask for prune protection or force replace without writing a
 delivery engine's annotations. The Flux workflow turns that intent into the Flux annotations.
@@ -319,7 +319,7 @@ delivery engine's annotations. The Flux workflow turns that intent into the Flux
 - The same holds for force replace.
 - A conflicting existing annotation is refused.
 
-### K5: bootstrap refuses an empty distribution
+### Bootstrap refuses an empty distribution ([#975](https://github.com/go-kure/kure/issues/975))
 
 **Target.** flux-operator mode no longer writes `registry: ""` or `version: ""`.
 
@@ -329,7 +329,7 @@ gotk mode is unchanged.
 
 **Acceptance.** Each empty field is refused with its name; set values still render verbatim.
 
-### K6: FileNaming applied everywhere
+### FileNaming applied everywhere ([#976](https://github.com/go-kure/kure/issues/976))
 
 **Target.** `LayoutRules.FileNaming` names every file kure writes for that tree.
 
@@ -344,7 +344,7 @@ gotk mode is unchanged.
 **Acceptance.** With `FileNamingKindName`, no file in `flux-system/` or in an augmenter layout is
 named `{namespace}-{kind}-{name}.yaml`, unless that layout sets its own FileNaming.
 
-### K7: the writers validate a Flux-delivered tree
+### The writers validate a Flux-delivered tree ([#977](https://github.com/go-kure/kure/issues/977))
 
 **Target.** The writers refuse a tree in which something is written that nothing applies, or in
 which two Kustomizations share a name.
@@ -369,7 +369,7 @@ which two Kustomizations share a name.
   directories.
 - An ArgoCD tree with umbrella children still writes.
 
-### K8: name validation
+### Name validation ([#978](https://github.com/go-kure/kure/issues/978))
 
 **Target.** A name that cannot work is refused when the model is validated, not after the cluster
 rejects it.
@@ -388,7 +388,7 @@ rejects it.
 **Acceptance.** A 64-character Kustomization name, a name with `/`, and an upper-case name are each
 refused, naming the path. Dotted names stay accepted.
 
-### K9: behaviour bugs
+### Behaviour bugs ([#979](https://github.com/go-kure/kure/issues/979))
 
 1. **A root bundle's Kustomization applies its own directory.**
    - Current: when the walked root renders a bundle (`ClusterName ""` with a named root, or after a
@@ -416,22 +416,24 @@ refused, naming the path. Dotted names stay accepted.
 
 **Acceptance.** Each case has a test rendering the input above and asserting the expected tree.
 
-### K10: documentation corrections
+### Documentation corrections ([#980](https://github.com/go-kure/kure/issues/980))
 
 **Target.** Section 1.9 corrected:
 
 1. the stale line references;
 2. the SourceRef message, which names the placement actually in use;
-3. the "every layout" claim, restated with the K3 naming;
-4. the FileNaming doc, which becomes true with K6 (if K6 lands first, nothing remains here);
+3. the "every layout" claim, restated with the naming from [#973](https://github.com/go-kure/kure/issues/973);
+4. the FileNaming doc, which becomes true with [#976](https://github.com/go-kure/kure/issues/976)
+   (if that lands first, nothing remains here);
 5. the hook-group sentence in the helm README, rewritten as what a consumer may build;
 6. `ManifestLayout.DependsOn`, stating the placement it applies to.
 
-The fluxcd README claims tied to K9 change with K9.
+The fluxcd README claims tied to the behaviour bugs change with
+[#979](https://github.com/go-kure/kure/issues/979).
 
 **Acceptance.** No sentence in section 1.9 remains true of the code after the change.
 
-### K11: builders for missing base kinds
+### Builders for missing base kinds ([#981](https://github.com/go-kure/kure/issues/981))
 
 **Target.** kure supports every base object with its full spec. Each kind below gets a generated
 `Create<Kind>` from its registered scheme (`mise run builders:generate`).
