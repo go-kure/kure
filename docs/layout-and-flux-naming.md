@@ -240,7 +240,7 @@ linked issue tracks the implementation.
   - unit naming (`UnitName`, `UnitOfName`, `origin.go:166-181`);
   - dependency translation (`UnitDependencies`, `origin.go:187-197`; `resource_generator.go:171-196`,
     `:616-626`);
-  - the ArgoCD Application name.
+  - the ArgoCD Application name (`pkg/stack/argocd/argo.go:107`).
 - **Name lookups:** the origin index keys its by-name map on the effective name, so
   `NamedDependsOn` and health checks name Kustomizations, never bundles.
 - **Uniqueness:** checked on the effective name (`origin.go:123`). `Bundle.Name` stays unique as
@@ -264,15 +264,18 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
   bundle rendered into its node's directory has no directory of its own; that directory is
   `Node.Name`.
 - **Unchanged:** `spec.path` keeps following `FullRepoPath`, and the duplicate-directory check
-  (`treecheck.go:67`) stays.
-- **The rename route closes:** `IndexOrigins` refuses a bundle-rendering layout whose name differs
-  from its bundle's directory name.
+  stays. Its message names the two bundles; today it prints the two layouts' paths, which for one
+  directory is the same path twice (`treecheck.go:64-67`).
+- **The rename route closes:** `IndexOrigins` refuses a layout that is a bundle's own directory
+  (an umbrella child, or a `GroupByName` bundle layout) when its name differs from the bundle's
+  directory name. A node layout that renders a bundle keeps `Node.Name`, whatever the bundle is
+  called, and is not refused.
 
 **Acceptance.**
 - The umbrella child directory is `DirName` and its Kustomization is the effective Kustomization
   name.
-- Two siblings with the same `DirName` are refused.
-- A walked layout renamed before integration is refused.
+- Two siblings with the same `DirName` are refused, naming both bundles.
+- A walked umbrella child or `GroupByName` bundle layout renamed before integration is refused.
 
 ### Ordering and naming for node-level Kustomizations ([#973](https://github.com/go-kure/kure/issues/973))
 
@@ -286,18 +289,34 @@ Kustomization (for example `00-infra` for the Kustomization `shop-infra`).
   (`resource_generator.go:645-671`). `KustomizationName` replaces the fixed `<path>-node` name
   (`layout_integrator.go:1209-1214`) when set.
 - **Placements:** node-level Kustomizations exist only under `FluxIntegratedPerLayout`
-  (`layout_integrator.go:892-923`). Under the other placements, and on a node that
-  `NodeGrouping: GroupFlat` merges away, setting these fields is refused, not silently ignored.
-- **Application and augmenter layouts:** under `FluxIntegratedPerLayout` they get Kustomizations
-  named after the layout. These collide with the bundle's whenever the application shares the
-  bundle's name (section 1.7). The default becomes `<unit name>-<layout name>`; the ticket
-  confirms it.
+  (`layout_integrator.go:892-923`), and only for a node whose layout renders no bundle (`:894`).
+  Under the other placements, on a node that `NodeGrouping: GroupFlat` merges away, and on a node
+  whose layout renders a bundle, setting these fields is refused, not silently ignored.
+- **Unset fields change nothing for nodes:** a node Kustomization keeps its `<path>-node` name.
+- **Application and augmenter layouts, a breaking rename:** under `FluxIntegratedPerLayout` they
+  get Kustomizations named after the layout (`layout_integrator.go:1209-1214`). These collide with
+  the bundle's whenever the application shares the bundle's name (section 1.7). The default
+  becomes `<unit name>-<layout name>`, which renames these Kustomizations even when no new field
+  is set. Changing with it:
+  - sibling `dependsOn` entries, which name layouts (`ManifestLayout.DependsOn`, copied at
+    `resource_generator.go:666-669`), are translated to the new names;
+  - the test that pins the old names (`pkg/stack/fluxcd/layout_integrator_test.go:707-718`) and
+    the README sentence "The CR is named after the layout" (`pkg/stack/fluxcd/README.md:650`).
+- **Override for the new default:** the name is carried on `ManifestLayout` and is settable, by an
+  augmenter for the layouts it creates and by a consumer on a walked layout before integration. A
+  default longer than the limit of [#978](https://github.com/go-kure/kure/issues/978) is refused
+  with a message naming the layout and the field to set; kure does not shorten it.
 
 **Acceptance.**
-- A node with `KustomizationName` and `DependsOn` renders a Kustomization with that name and those
-  dependencies.
-- The same input under `FluxIntegratedPerBundle` is refused with a message naming the node.
+- A node with `KustomizationName` and `NamedDependsOn` renders a Kustomization with that name and
+  those dependencies.
+- Each of the three refusals has a test and an error naming the node: the fields set under a
+  placement other than `FluxIntegratedPerLayout`, on a node that `NodeGrouping: GroupFlat` merges
+  away, and on a node whose layout renders a bundle.
 - `FluxIntegratedPerLayout` with an application named like its bundle is accepted.
+- An augmenter layout's `dependsOn` names its sibling's new Kustomization name.
+- A layout with the name set renders its Kustomization under that name; a default over the limit
+  is refused, naming the layout and the field.
 
 ### Delivery intent on applications ([#974](https://github.com/go-kure/kure/issues/974))
 
@@ -306,8 +325,8 @@ delivery engine's annotations. The Flux workflow turns that intent into the Flux
 
 **Design outline.**
 
-- **New field:** `stack.Application` gains an engine-neutral intent, for example
-  `Delivery DeliveryIntent` with `PruneProtection` and `ForceReplace` booleans.
+- **New field:** `stack.Application` gains an engine-neutral intent, `Delivery DeliveryIntent`,
+  with `PruneProtection` and `ForceReplace` booleans.
 - **Per-application attribution:** today objects are attributed per bundle, not per application:
   `origin.objects` is keyed by bundle (`origin.go:17-29`), and only an application with its own
   layout is recorded. The walker therefore records each application's objects (it has both in
@@ -316,6 +335,10 @@ delivery engine's annotations. The Flux workflow turns that intent into the Flux
   and `kustomize.toolkit.fluxcd.io/force: enabled` on those objects. A refused integration restores
   them, as it restores the rest of the tree.
 - **Conflicts:** an object that already carries the annotation with another value is refused.
+- **Generated ConfigMaps:** a ConfigMap built by a `configMapGenerator` has no object to annotate.
+  Its spec is a name and a file list (`manifest.go:80-83`), and the walker holds only a stand-in
+  for it (`walker.go:415-417`). The ticket decides between writing the generator's
+  `options.annotations` in `kustomization.yaml` and documenting the exception.
 - **ArgoCD:** its mapping is out of scope. Until it exists, the ArgoCD workflow refuses a set
   intent instead of dropping it.
 
@@ -324,16 +347,23 @@ delivery engine's annotations. The Flux workflow turns that intent into the Flux
   Flux placement and grouping, and no other application's objects do.
 - The same holds for force replace.
 - A conflicting existing annotation is refused.
+- A generated ConfigMap behaves as the ticket decides, with a test for it.
 
 ### Bootstrap refuses an empty distribution ([#975](https://github.com/go-kure/kure/issues/975))
 
 **Target.** flux-operator mode no longer writes `registry: ""` or `version: ""`.
 
-**Design outline.** `GenerateBootstrap` in flux-operator mode returns a validation error naming
-the field when `Registry` or `FluxVersion` is empty (`bootstrap_generator.go:74-93`, `:399-434`).
-gotk mode is unchanged.
+**Design outline.** Building a FluxInstance returns a validation error naming the field when
+`Registry` or `FluxVersion` is empty. Two entry points build one, and both validate:
+`GenerateBootstrap` in flux-operator mode, through `generateFluxOperatorBootstrap`
+(`bootstrap_generator.go:74-93`, `:146`), and the public `GenerateFluxInstance` (`:386-396`). Both
+call `generateFluxInstance` (`:399-434`), which returns no error today and gains one.
+gotk mode is unchanged. It reads both fields too, but an empty value is valid there: an empty
+`FluxVersion` builds from the vendored version without a download, and an empty `Registry` keeps
+the default (`:187-208`).
 
-**Acceptance.** Each empty field is refused with its name; set values still render verbatim.
+**Acceptance.** Through both entry points, each empty field is refused with its name; set values
+still render verbatim.
 
 ### FileNaming applied everywhere ([#976](https://github.com/go-kure/kure/issues/976))
 
@@ -355,8 +385,8 @@ named `{namespace}-{kind}-{name}.yaml`, unless that layout sets its own FileNami
 
 ### The writers validate a Flux-delivered tree ([#977](https://github.com/go-kure/kure/issues/977))
 
-**Target.** The writers refuse a tree in which something is written that nothing applies, or in
-which two Kustomizations share a name.
+**Target.** The writers refuse a Flux-built tree in which something is written that nothing
+applies, and any tree in which two Kustomizations share a name.
 
 **Design outline.** Two new refusals in `checkLayoutTree` (`treecheck.go:46`, called from
 `manifest.go:216`, `write.go:32`, `tar.go:23`):
@@ -393,8 +423,16 @@ rejects it.
   value is limited to 63 characters; the ticket verifies this against kustomize-controller.
 - **Names that become directories** (node names, bundle and `DirName`, application names under
   `ApplicationGrouping: GroupByName`) must be non-empty, contain no `/`, and not be `.` or `..`.
-- **Where:** bundles are validated in `Bundle.Validate` (`bundle.go:174-275`), nodes in cluster
-  validation. The error names the bundle's or node's path.
+  The unnamed root is exempt: it has no directory of its own (`walker.go:28-39`,
+  `pkg/stack/layout/parentpath_test.go:436-446`).
+- **Where:** bundle and node names are validated in `Bundle.Validate` (`bundle.go:174-275`) and
+  `ValidateCluster` (`pkg/stack/validate.go:29`). An application name becomes a directory only
+  where the application gets its own layout, which depends on the layout rules
+  (`ApplicationGrouping: GroupByName`, or an augmenter that takes its own layout).
+  `ValidateCluster` takes no rules, and `pkg/stack` cannot import the layout package, so that
+  check runs in the walker. The error names the bundle's or node's path.
+- **Existing fixtures** with a name the rules refuse are renamed in the same change
+  (`pkg/stack/fluxcd/fluxcd_test.go:621-631` uses `Y-infra`, `Y-services` and `Y-apps`).
 
 **Acceptance.** A 64-character Kustomization name, a name with `/`, and an upper-case name are each
 refused, naming the path. Dotted names stay accepted.
@@ -454,7 +492,7 @@ The fluxcd README claims tied to the behaviour bugs change with
 | Kinds | Upstream API | New dependency |
 |---|---|---|
 | `PriorityClass` (scheduling/v1), `EndpointSlice` (discovery/v1), `Lease` (coordination/v1), `RuntimeClass` (node/v1) | `k8s.io/api` | no |
-| `MutatingWebhookConfiguration`, `ValidatingWebhookConfiguration`, `ValidatingAdmissionPolicy`, `ValidatingAdmissionPolicyBinding` (admissionregistration/v1) | `k8s.io/api` | no |
+| `MutatingWebhookConfiguration`, `ValidatingWebhookConfiguration`, `ValidatingAdmissionPolicy`, `ValidatingAdmissionPolicyBinding`, `MutatingAdmissionPolicy`, `MutatingAdmissionPolicyBinding` (admissionregistration/v1; registering the group version brings all six) | `k8s.io/api` | no |
 | `APIService` | `k8s.io/kube-aggregator` | yes |
 | `VerticalPodAutoscaler` | `k8s.io/autoscaler/vertical-pod-autoscaler` | yes; not an upstream core API |
 | `ImageRepository`, `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api` | yes; kure has only image-automation-controller today |
