@@ -106,7 +106,8 @@ kustomization.yaml                                 # [applications, backend]
 
 ### 1.4 `spec.path`
 
-No entry point adds a leading `./`.
+No entry point adds a leading `./` to a Kustomization's `spec.path`. The FluxInstance `sync.path`
+is the one path built with it.
 
 | Entry point | `spec.path` | Source |
 |---|---|---|
