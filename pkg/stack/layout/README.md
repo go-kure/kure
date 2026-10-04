@@ -489,8 +489,9 @@ reach another bundle sharing the directory.
 objects and its own layout: the objects are what the application emitted plus, for an application
 with its own directory, what a `LayoutAugmenter` added there or below; the layout is nil for an
 application written into its bundle's directory. The records are on the layout that renders the
-application's bundle, under every grouping, and a `FlattenSingleTier` collapse moves them with the
-rest. A workflow uses them to apply an application's `Delivery` intent to exactly its objects.
+application's bundle, under every grouping, and a `FlattenSingleTier` collapse leaves them there:
+it collapses no directory that renders a bundle (go-kure/kure#979). A workflow uses them to apply
+an application's `Delivery` intent to exactly its objects.
 
 `IndexOrigins(root, cluster)` resolves a cluster's bundles and nodes to those layouts
 (`BundleLayout`, `NodeLayout`, `Parent`, `Bundles` in layout pre-order) and

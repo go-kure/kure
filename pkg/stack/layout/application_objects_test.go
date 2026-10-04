@@ -111,10 +111,16 @@ func TestOriginApplicationObjects_EveryGrouping(t *testing.T) {
 			if len(core.Objects) != 1 {
 				t.Fatalf("core objects = %v, want its one ConfigMap", objectNames(core.Objects))
 			}
-			// The record holds the very object the layout writes.
-			holder := ml
-			if core.Layout != nil {
-				holder = core.Layout
+			// The record holds the very object the layout writes: the
+			// application's own layout or, with ApplicationGrouping flat, the
+			// directory that renders its bundle. For the root node's bundle
+			// that is the root layout's unit (go-kure/kure#979).
+			holder := core.Layout
+			if holder == nil {
+				holder = ml.OriginUnit()
+			}
+			if holder == nil {
+				t.Fatalf("core has no layout of its own and the root layout has no unit: %v", collectRepoPaths(ml))
 			}
 			if !slices.Contains(holder.Resources, core.Objects[0]) {
 				t.Errorf("core's recorded object is not the one in layout %q", holder.FullRepoPath())
@@ -167,56 +173,60 @@ func TestOriginApplicationObjects_HandBuiltLayoutHasNone(t *testing.T) {
 	}
 }
 
-// TestOriginApplicationObjects_FlattenSingleTier: the collapse moves the
-// absorbed layout's records to the surviving one, and a record whose layout
-// was absorbed names the survivor.
+// TestOriginApplicationObjects_FlattenSingleTier: the option collapses no
+// directory that renders a bundle (go-kure/kure#979), so the records stay on
+// the layout that renders the bundle and name the layouts they named. Each
+// shape below collapsed before that change.
 func TestOriginApplicationObjects_FlattenSingleTier(t *testing.T) {
-	t.Run("absorbed bundle layout", func(t *testing.T) {
+	t.Run("child node's bundle layout", func(t *testing.T) {
 		web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", Applications: []*stack.Application{configMapApp("frontend")}}}
 		c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Children: []*stack.Node{web}}}
 		rules := nodeOnly
 		rules.FlattenSingleTier = true
 		ml := walk(t, c, rules)
-		if len(ml.Children) != 0 {
-			t.Fatalf("the tree did not collapse: %v", collectRepoPaths(ml))
+		if got := ml.OriginApplicationObjects(); len(got) != 0 {
+			t.Errorf("the root layout, which renders no bundle, records %d applications", len(got))
 		}
-		recs := ml.OriginApplicationObjects()
+		unit := layoutAt(t, ml, "platform/web")
+		recs := unit.OriginApplicationObjects()
 		if len(recs) != 1 || recs[0].Application.Name != "frontend" || recs[0].Layout != nil {
-			t.Fatalf("records after the collapse = %+v, want frontend, written into the surviving directory", recs)
+			t.Fatalf("records of platform/web = %+v, want frontend, written into that directory", recs)
 		}
-		if len(recs[0].Objects) != 1 || !slices.Contains(ml.Resources, recs[0].Objects[0]) {
-			t.Errorf("frontend's recorded object is not in the surviving layout")
+		if len(recs[0].Objects) != 1 || !slices.Contains(unit.Resources, recs[0].Objects[0]) {
+			t.Errorf("frontend's recorded object is not in the layout that renders its bundle")
 		}
 	})
-	t.Run("application layout with children is kept", func(t *testing.T) {
+	t.Run("root bundle with an augmenter application", func(t *testing.T) {
 		b := &stack.Bundle{Name: "platform", Applications: []*stack.Application{stack.NewApplication("chart", "default", &hookConfig{name: "chart"})}}
 		c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: b}}
 		rules := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName, FlattenSingleTier: true}
 		ml := walk(t, c, rules)
-		recs := ml.OriginApplicationObjects()
-		if len(recs) != 1 {
-			t.Fatalf("records = %+v, want the chart application", recs)
+		if got := ml.OriginApplicationObjects(); len(got) != 0 {
+			t.Errorf("the root layout, which renders no bundle, records %d applications", len(got))
 		}
-		// The augmenter's child layout keeps the application layout from
-		// collapsing, so the record still names it.
+		recs := layoutAt(t, ml, "platform/platform").OriginApplicationObjects()
+		if len(recs) != 1 {
+			t.Fatalf("records of platform/platform = %+v, want the chart application", recs)
+		}
 		if recs[0].Layout == nil || recs[0].Layout.OriginApplication() != recs[0].Application {
 			t.Errorf("chart.Layout = %v, want the layout that renders it", recs[0].Layout)
 		}
 	})
-	t.Run("absorbed plain application layout", func(t *testing.T) {
+	t.Run("root bundle with a plain application", func(t *testing.T) {
 		b := &stack.Bundle{Name: "platform", Applications: []*stack.Application{configMapApp("core")}}
 		c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: b}}
 		rules := layout.LayoutRules{BundleGrouping: layout.GroupFlat, ApplicationGrouping: layout.GroupByName, FlattenSingleTier: true}
 		ml := walk(t, c, rules)
-		if len(ml.Children) != 0 {
-			t.Fatalf("the tree did not collapse: %v", collectRepoPaths(ml))
+		if got := ml.OriginApplicationObjects(); len(got) != 0 {
+			t.Errorf("the root layout, which renders no bundle, records %d applications", len(got))
 		}
-		recs := ml.OriginApplicationObjects()
-		if len(recs) != 1 || recs[0].Layout != ml {
-			t.Fatalf("records = %+v, want core with the surviving layout as its own", recs)
+		recs := layoutAt(t, ml, "platform/platform").OriginApplicationObjects()
+		own := layoutAt(t, ml, "platform/platform/core")
+		if len(recs) != 1 || recs[0].Layout != own {
+			t.Fatalf("records of platform/platform = %+v, want core with its own layout", recs)
 		}
-		if ml.OriginApplication() != recs[0].Application {
-			t.Errorf("the surviving layout does not render the recorded application")
+		if own.OriginApplication() != recs[0].Application {
+			t.Errorf("platform/platform/core does not render the recorded application")
 		}
 	})
 }
