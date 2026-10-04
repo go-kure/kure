@@ -250,9 +250,15 @@ func rootName(rootNode *stack.Node) string {
 }
 
 // bootstrapDir returns the directory both bootstrap modes point Flux at,
-// relative to the root of the source: the root node's directory as a walk
-// without a ClusterName writes it (layout.WalkCluster), so the root node's
-// name, and "" — the root of the source — for an unnamed or absent root node.
+// relative to the root of the source: the root node's name, which is the
+// directory a walk without a ClusterName writes a named root node to
+// (layout.WalkCluster), and "" — the root of the source — for an unnamed or
+// absent root node.
+//
+// The bootstrap is given the root node, not the layout rules, so the directory
+// does not follow them: a walk with a ClusterName puts the root under the
+// cluster directory, and a walk of an unnamed root puts it at "cluster", not
+// at the root of the source.
 //
 // Each mode spells that one directory its own way. The gotk bootstrap
 // Kustomization's spec.path is the directory itself with no "./" prefix, and

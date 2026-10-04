@@ -16,7 +16,7 @@ import (
 // Tests for the directory the bootstrap points Flux at (go-kure/kure#979): the
 // gotk bootstrap Kustomization's spec.path and the FluxInstance's sync.path
 // name the same directory for the same root node, the one a walk without a
-// ClusterName writes that node to.
+// ClusterName writes a named root node to.
 
 // bootstrapPaths returns the gotk bootstrap Kustomization's spec.path and the
 // FluxInstance's sync.path for root. gotk builds from the vendored bundle
