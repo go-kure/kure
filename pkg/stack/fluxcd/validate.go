@@ -7,6 +7,8 @@ import (
 
 // validateSourceRefsForFluxIntegrated checks that every bundle reachable from
 // the cluster node tree has a complete SourceRef before layout walking begins.
+// CreateLayoutWithResources calls it for both integrated placements,
+// FluxIntegratedPerLayout and FluxIntegratedPerBundle.
 //
 // Coverage:
 //   - node.Bundle for every node in the tree
@@ -47,7 +49,7 @@ func validateBundleSourceRefs(b *stack.Bundle) error {
 	if b.SourceRef == nil || b.SourceRef.Kind == "" || b.SourceRef.Name == "" {
 		return errors.ResourceValidationError(
 			"Bundle", b.Name, "sourceRef",
-			"FluxIntegratedPerLayout mode requires a SourceRef with Kind and Name; "+
+			"an integrated Flux placement (FluxIntegratedPerLayout or FluxIntegratedPerBundle) requires a SourceRef with Kind and Name; "+
 				"omitting it produces a Kustomization CR without spec.sourceRef, which Flux rejects",
 			nil,
 		)

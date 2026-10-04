@@ -88,7 +88,8 @@ metadata:
 
 	groups := helm.SplitByHookWeight(parsed)
 	for _, g := range groups {
-		// each group becomes one FluxCD Kustomization, deployed in order
+		// groups come in deployment order; turning each into its own FluxCD
+		// Kustomization is the caller's job: kure does not convert a HookGroup
 		fmt.Printf("phase=%q weight=%d resources=%d\n", g.Phase, g.Weight, len(g.Resources))
 	}
 	// Output:
