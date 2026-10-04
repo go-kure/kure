@@ -484,6 +484,22 @@ func TestWriters_TypedListRawItems(t *testing.T) {
 				other := fluxKs("kustomize.toolkit.fluxcd.io/v1", "flux-system", "cart")
 				writtenFiles(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(rawJSON(t, other))))
 			})
+			// An item that carries both raw JSON and an object is serialized
+			// from the raw JSON, so that is the object the tree holds.
+			t.Run("raw Kustomization beside an object of another name/"+name, func(t *testing.T) {
+				item := rawJSON(t, shopKs())
+				item.Object = fluxKs("kustomize.toolkit.fluxcd.io/v1", "flux-system", "cart")
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(item)))
+				want := `layouts "p" and "p/c" both hold the Flux Kustomization flux-system/shop`
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("err = %v, want it to contain %q", err, want)
+				}
+			})
+			t.Run("raw Kustomization of another name beside a duplicate object/"+name, func(t *testing.T) {
+				item := rawJSON(t, fluxKs("kustomize.toolkit.fluxcd.io/v1", "flux-system", "cart"))
+				item.Object = shopKs()
+				writtenFiles(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(item)))
+			})
 			t.Run("empty item/"+name, func(t *testing.T) {
 				writtenFiles(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(runtime.RawExtension{})))
 			})
