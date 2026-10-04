@@ -49,6 +49,18 @@ func validateBundleName(name string) error {
 	return nil
 }
 
+// validateKustomizationNameField reports whether name can be a bundle's
+// KustomizationName whatever engine delivers the bundle: the field names the
+// same object the bundle's Name names without it, so it meets the same rule, a
+// DNS-1123 subdomain. It is no directory name. The 63-character limit is the
+// Flux workflow's to check, on the name in effect (Bundle.UnitName).
+func validateKustomizationNameField(name string) error {
+	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
+		return errors.Errorf("%q is not a valid name for the bundle's Flux Kustomization or ArgoCD Application: %s", name, strings.Join(problems, "; "))
+	}
+	return nil
+}
+
 // ValidateDirectoryName reports whether name can be the name of one directory
 // in a rendered tree: a single path segment. It refuses an empty name, "."
 // and "..", a name containing a path separator, and a name containing a NUL
