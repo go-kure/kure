@@ -82,6 +82,9 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (undo func(), err error) {
 						undos = append(undos, u)
 					}
 				}
+				if err := verifyWritten(obj, want); err != nil {
+					return errors.Wrapf(err, "application %q", rec.Application.Name)
+				}
 			}
 			us, err := annotateGenerators(rec.Application, rec.Layout, want)
 			undos = append(undos, us...)
@@ -201,8 +204,8 @@ func describeObject(obj client.Object) string {
 // ending in "List" without items; items set to null hold nothing. For a typed
 // object the field is read from its written form, so one left out when empty
 // counts as absent. The items are the List's own, so a change to one is a
-// change to the List; a typed List whose written items cannot be reached that
-// way is refused.
+// change to the List. For a typed List they are the ones its Go value gives
+// access to; verifyWritten refuses a written item that is not among them.
 func builtObjects(r client.Object) ([]client.Object, error) {
 	self := []client.Object{r}
 	if !strings.HasSuffix(r.GetObjectKind().GroupVersionKind().Kind, "List") {
@@ -239,28 +242,23 @@ func builtObjects(r client.Object) ([]client.Object, error) {
 		if held == nil {
 			return nil, nil
 		}
-		written, ok := held.([]any)
-		if !ok {
+		if _, ok := held.([]any); !ok {
 			// Not an array: kustomize refuses the file when it builds it.
 			return self, nil
 		}
-		unreachable := errors.Errorf("%s is written as a List, but its items cannot be reached to annotate them", describeObject(r))
-		if !meta.IsListType(r) {
-			return nil, unreachable
-		}
-		extracted, err := meta.ExtractList(r)
-		if err != nil {
-			return nil, errors.Wrap(err, unreachable.Error())
-		}
-		if len(extracted) != len(written) {
-			return nil, unreachable
-		}
-		for _, item := range extracted {
-			obj, ok := item.(client.Object)
-			if !ok {
-				return nil, unreachable
+		// What the Go value gives access to. Whether that is all the
+		// written items is checked afterwards, on the written form
+		// (verifyWritten).
+		if meta.IsListType(r) {
+			extracted, err := meta.ExtractList(r)
+			if err != nil {
+				return nil, err
 			}
-			items = append(items, obj)
+			for _, item := range extracted {
+				if obj, ok := item.(client.Object); ok {
+					items = append(items, obj)
+				}
+			}
 		}
 	}
 	var out []client.Object
@@ -274,18 +272,81 @@ func builtObjects(r client.Object) ([]client.Object, error) {
 	return out, nil
 }
 
-// writtenItems returns the items field of a typed object as it is written
-// (the writers marshal an object to JSON first), and whether the written form
-// has one: an items field left out when empty is not there for kustomize.
-func writtenItems(r client.Object) (items any, present bool, err error) {
+// writtenForm returns a typed object as it is written: the writers marshal an
+// object to JSON first.
+func writtenForm(r client.Object) (map[string]any, error) {
 	data, err := json.Marshal(r)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "marshal %s", describeObject(r))
+		return nil, errors.Wrapf(err, "marshal %s", describeObject(r))
 	}
 	var written map[string]any
 	if err := json.Unmarshal(data, &written); err != nil {
-		return nil, false, errors.Wrapf(err, "read %s as written", describeObject(r))
+		return nil, errors.Wrapf(err, "read %s as written", describeObject(r))
+	}
+	return written, nil
+}
+
+// writtenItems returns the items field of a typed object as it is written,
+// and whether the written form has one: an items field left out when empty is
+// not there for kustomize.
+func writtenItems(r client.Object) (items any, present bool, err error) {
+	written, err := writtenForm(r)
+	if err != nil {
+		return nil, false, err
 	}
 	items, present = written["items"]
 	return items, present, nil
+}
+
+// writtenObjects is builtObjects on a written form: the objects kustomize
+// builds from it.
+func writtenObjects(m map[string]any) []map[string]any {
+	self := []map[string]any{m}
+	if kind, _ := m["kind"].(string); !strings.HasSuffix(kind, "List") {
+		return self
+	}
+	held, ok := m["items"]
+	if !ok {
+		return self
+	}
+	if held == nil {
+		return nil
+	}
+	items, ok := held.([]any)
+	if !ok {
+		return self
+	}
+	var out []map[string]any
+	for _, item := range items {
+		if obj, ok := item.(map[string]any); ok {
+			out = append(out, writtenObjects(obj)...)
+		}
+	}
+	return out
+}
+
+// verifyWritten checks, once the annotations are set, what they were set for:
+// that every object kustomize builds from r's written form carries want. It
+// fails for a typed object whose written form holds something its Go value
+// gave no access to — a List that writes its items from a field apimachinery
+// does not take for them, say. An unstructured object is its own written
+// form, so there is nothing to check.
+func verifyWritten(r client.Object, want map[string]string) error {
+	if _, ok := r.(*unstructured.Unstructured); ok {
+		return nil
+	}
+	written, err := writtenForm(r)
+	if err != nil {
+		return err
+	}
+	for _, built := range writtenObjects(written) {
+		have, _, _ := unstructured.NestedStringMap(built, "metadata", "annotations")
+		for _, key := range slices.Sorted(maps.Keys(want)) {
+			if have[key] != want[key] {
+				return errors.Errorf("%s is written with %s lacking annotation %s: %q; the integrator cannot reach that object to set it",
+					describeObject(r), describeObject(&unstructured.Unstructured{Object: built}), key, want[key])
+			}
+		}
+	}
+	return nil
 }
