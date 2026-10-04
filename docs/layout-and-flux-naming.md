@@ -599,7 +599,8 @@ symbol name instead of by line.
    `FluxIntegratedPerBundle mode requires …`. This is the one change to output: the text of an
    error.
 3. The fluxcd README says which layouts get a Kustomization under `FluxIntegratedPerLayout`
-   (one per layout that renders bundles, one per bundle-less child layout), and that a layout
+   (one per layout that renders bundles, one per bundle-less child layout that is neither an
+   umbrella child nor `AppFileSingle`), and that a layout
    whose Kustomization name is taken is refused. It keeps today's names; the
    naming from [go-kure/kure#973](https://github.com/go-kure/kure/issues/973) is restated there
    when that ships.
