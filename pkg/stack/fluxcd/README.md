@@ -137,7 +137,10 @@ come back as a list and are placed nowhere, and the list is the same under `Flux
 that placement lists no directory child in its parent's `kustomization.yaml`, and the
 Kustomizations that apply those children (application, augmenter and bundle-less node
 directories) exist only where the integrator places them, so the list would leave them applied by
-nothing. Use `CreateLayoutWithResources` with those rules instead. On
+nothing. Use `CreateLayoutWithResources` with those rules instead. A cluster in which an
+application sets a [delivery intent](#delivery-intent) is refused as well, after the walk and so
+after the placement refusal and any walk error: the list holds none of the application's objects,
+so the intent could not reach the output. On
 `WorkflowEngine` (the `stack.Workflow` interface) the rules arrive as a
 `stack.LayoutRulesProvider` and must be a `layout.LayoutRules` value: anything else, `nil`
 included, is refused, never replaced by the defaults.
@@ -593,8 +596,13 @@ Things to know:
   that returns the same object pointers on every `Generate` call therefore keeps them after a
   successful integration, also when the intent is cleared afterwards; return fresh objects per call
   to avoid that.
-- The integrator applies the intent. A layout that is walked and written without
-  `IntegrateWithLayout` or `CreateLayoutWithResources` carries none.
+- The integrator applies the intent. `GenerateFromCluster` returns Kustomizations and Sources and
+  none of the application's objects, so it refuses a cluster in which an application sets an
+  intent, with an error naming the application and pointing to `CreateLayoutWithResources`.
+  `GenerateFromLayout` does not refuse: its caller holds the layout, and the list it returns
+  carries no intent by itself. The intent is applied by `IntegrateWithLayout` or
+  `CreateLayoutWithResources` on the layout, and a layout that is walked and written without
+  either carries none.
 - A bundle patch runs after the build: `Bundle.Patches` become the Kustomization's `spec.patches`,
   which Flux applies to what the directory builds. A patch can therefore still change or remove a
   delivery annotation on the applied object; kure does not read patch bodies and does not override

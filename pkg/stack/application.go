@@ -20,7 +20,9 @@ type Application struct {
 // objects, stated without naming the engine. The workflow that renders the
 // application maps it its own way: the Flux workflow sets Flux's per-object
 // annotations (see the fluxcd package); a workflow with no mapping refuses a
-// set intent rather than dropping it.
+// set intent rather than dropping it, and so does the Flux workflow's
+// GenerateFromCluster, which walks the cluster itself and returns none of the
+// application's objects.
 type DeliveryIntent struct {
 	// PruneProtection keeps the application's objects in the cluster when
 	// they are removed from the source.

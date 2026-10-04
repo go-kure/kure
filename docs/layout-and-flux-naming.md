@@ -442,6 +442,12 @@ engine's annotations. The Flux workflow turns that intent into the Flux annotati
   and `kustomize.toolkit.fluxcd.io/force: enabled` on those objects, under every placement
   (`applyDeliveryIntents` in `delivery.go`). Only the integrator applies the intent: a layout
   written without `IntegrateWithLayout` or `CreateLayoutWithResources` carries none.
+- **`GenerateFromCluster` refuses a set intent:** the call returns Kustomizations and Sources and
+  none of the application's objects, so the intent could not reach its output. After the walk,
+  and so after its placement refusal and any walk error, it returns an error naming the
+  application and pointing to `CreateLayoutWithResources` (`refuseDeliveryIntent` in
+  `delivery.go`). `GenerateFromLayout` does not refuse: its caller holds the layout and may have
+  integrated it, and the list it returns carries no intent by itself.
 - **Lists:** a `List` contributes what it holds, a `List` inside it included, never the envelope.
   What is a `List` is decided as kustomize decides on the written file: a kind ending in `List`
   that has an `items` field. A typed object whose written form still holds an object without the
@@ -469,7 +475,12 @@ engine's annotations. The Flux workflow turns that intent into the Flux annotati
 **Tests.** `pkg/stack/fluxcd/delivery_intent_test.go` covers both flags under every placement and
 grouping, on disk and in tar, the objects of an augmenter's child layout, a generated ConfigMap,
 the conflict refusals, the rollback after a later refusal, and the unchanged output without an
-intent. The delivery-intent tests in `pkg/stack/argocd` cover the ArgoCD refusal.
+intent. `TestDeliveryIntent_GenerateFromClusterRefused` covers the `GenerateFromCluster` refusal
+with the intent set and unset. The delivery-intent tests in `pkg/stack/argocd` cover the ArgoCD
+refusal.
+
+**Not breaking.** `Delivery` is new with this change, so no existing caller sets an intent, and
+`GenerateFromCluster` returns what it returned for a cluster without one.
 
 ### Bootstrap refuses an empty distribution ([go-kure/kure#975](https://github.com/go-kure/kure/issues/975))
 

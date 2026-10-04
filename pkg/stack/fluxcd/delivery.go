@@ -123,6 +123,28 @@ func applyDeliveryIntents(ml *layout.ManifestLayout) (sources map[string]map[str
 	return sources, undo, nil
 }
 
+// refuseDeliveryIntent fails when an application the tree under ml records
+// sets a delivery intent. It is for GenerateFromCluster, which returns a list
+// of Kustomizations and Sources and no layout: the intent is annotations on
+// the application's objects, and that list holds none of them.
+func refuseDeliveryIntent(ml *layout.ManifestLayout) error {
+	if ml == nil {
+		return nil
+	}
+	for _, rec := range ml.OriginApplicationObjects() {
+		if rec.Application != nil && !rec.Application.Delivery.IsZero() {
+			return errors.Errorf("GenerateFromCluster cannot apply the delivery intent of application %q (rendered in %q): the intent is set as annotations on the application's objects, and this list holds only Kustomizations and Sources; use CreateLayoutWithResources, which sets them on the layout it returns",
+				rec.Application.Name, ml.FullRepoPath())
+		}
+	}
+	for _, child := range ml.Children {
+		if err := refuseDeliveryIntent(child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // annotateObject adds want to obj's annotations and returns how to take that
 // back, or nil when obj already carries all of want. It changes nothing when
 // one of them is present with another value.

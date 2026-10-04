@@ -1029,6 +1029,80 @@ func TestDeliveryIntent_SourceAlsoDerivedFromSourceRef(t *testing.T) {
 	}
 }
 
+// TestDeliveryIntent_GenerateFromClusterRefused: GenerateFromCluster returns
+// Kustomizations and Sources and none of an application's objects, so it has
+// nowhere to set a delivery intent. The generator and the engine refuse a set
+// one under the three grouping rule sets and both placements the call accepts,
+// naming the application and CreateLayoutWithResources; without an intent the
+// same cluster generates. Under FluxIntegratedPerLayout the placement refusal
+// comes first. GenerateFromLayout does not refuse: its caller holds the layout.
+func TestDeliveryIntent_GenerateFromClusterRefused(t *testing.T) {
+	intents := map[string]stack.DeliveryIntent{
+		"prune": {PruneProtection: true},
+		"force": {ForceReplace: true},
+		"both":  {PruneProtection: true, ForceReplace: true},
+	}
+	calls := map[string]func(*stack.Cluster, layout.LayoutRules) ([]client.Object, error){
+		"generator": func(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+			return fluxstack.NewResourceGenerator().GenerateFromCluster(c, rules)
+		},
+		"engine": func(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+			return fluxstack.NewWorkflowEngine().GenerateFromCluster(c, rules)
+		},
+	}
+	for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerBundle} {
+		for grouping := range propertyGroupings {
+			rules := recursiveRules(grouping, placement)
+			for cname, call := range calls {
+				where := cname + "/" + string(placement) + "/" + grouping
+				for iname, intent := range intents {
+					objs, err := call(deliveryCluster(intent), rules)
+					if err == nil {
+						t.Errorf("%s/%s: accepted a delivery intent", where, iname)
+						continue
+					}
+					for _, want := range []string{`application "web-app"`, "delivery intent", "CreateLayoutWithResources"} {
+						if !strings.Contains(err.Error(), want) {
+							t.Errorf("%s/%s: error %q does not contain %q", where, iname, err, want)
+						}
+					}
+					if objs != nil {
+						t.Errorf("%s/%s: got %d objects with the refusal", where, iname, len(objs))
+					}
+				}
+				objs, err := call(deliveryCluster(stack.DeliveryIntent{}), rules)
+				if err != nil {
+					t.Errorf("%s: without an intent: %v", where, err)
+				} else if len(objs) == 0 {
+					t.Errorf("%s: without an intent: no object generated", where)
+				}
+			}
+		}
+	}
+
+	prune := stack.DeliveryIntent{PruneProtection: true}
+	for grouping := range propertyGroupings {
+		rules := recursiveRules(grouping, layout.FluxIntegratedPerLayout)
+		_, err := fluxstack.NewResourceGenerator().GenerateFromCluster(deliveryCluster(prune), rules)
+		if err == nil || !strings.Contains(err.Error(), "FluxPlacement") || strings.Contains(err.Error(), "delivery intent") {
+			t.Errorf("per-layout/%s: got %v, want the placement refusal, which comes first", grouping, err)
+		}
+
+		separate := recursiveRules(grouping, layout.FluxSeparate)
+		c := deliveryCluster(prune)
+		ml, err := layout.WalkCluster(c, separate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		objs, err := fluxstack.NewResourceGenerator().GenerateFromLayout(ml, c)
+		if err != nil {
+			t.Errorf("GenerateFromLayout/%s: %v", grouping, err)
+		} else if len(objs) == 0 {
+			t.Errorf("GenerateFromLayout/%s: no object generated", grouping)
+		}
+	}
+}
+
 // writtenFiles writes ml to disk and returns every file's content by path.
 func writtenFiles(t *testing.T, ml *layout.ManifestLayout) map[string]string {
 	t.Helper()
