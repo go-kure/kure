@@ -315,6 +315,13 @@ What changed, and what to do:
   `substitute` does not set), is refused: the bootstrap
   applies that directory without either, and the two would keep overwriting each other's Source.
   Narrow the patch target or move the patch or postBuild to a bundle below the root node.
+  A Kustomization already in the tree that the integration keeps in place of its own (same name
+  and `spec.path`, in the layout that would host it) is held to the same refusals as a generated
+  one, whether it is typed, unstructured or inside a `List`: two copies of a generated Source
+  that the integration did not add, in the build of its directory; a root-build patch or
+  postBuild that changes a hosted Source; and a cycle through its `dependsOn`, `wait` or health
+  checks. One that cannot be read as a Flux Kustomization (a field of the wrong type, for one) is
+  refused, naming its layout.
 - **Grouping axes.** `NodeGrouping`, `BundleGrouping` and `ApplicationGrouping` are independent;
   they used to take effect only when bundles and applications were both flat, and a `ClusterName`
   always flattened the root bundle. Combinations that were silently rendered fully nested now
