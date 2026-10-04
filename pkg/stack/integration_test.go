@@ -309,8 +309,10 @@ func TestMultiNodeClusterGeneration(t *testing.T) {
 	gitOpsConfig := &stack.GitOpsConfig{
 		Type: "flux",
 		Bootstrap: &stack.BootstrapConfig{
-			Enabled:  true,
-			FluxMode: "flux-operator",
+			Enabled:     true,
+			FluxMode:    "flux-operator",
+			FluxVersion: "v2.4.0",
+			Registry:    "ghcr.io/fluxcd",
 		},
 	}
 
@@ -471,6 +473,7 @@ func TestBootstrapModes(t *testing.T) {
 				Enabled:     true,
 				FluxMode:    "flux-operator",
 				FluxVersion: "v2.3.0",
+				Registry:    "ghcr.io/fluxcd",
 				SourceURL:   "oci://ghcr.io/flux/manifests",
 			},
 		},

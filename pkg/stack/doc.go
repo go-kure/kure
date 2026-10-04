@@ -85,8 +85,10 @@
 //		WithGitOps(&stack.GitOpsConfig{
 //			Type: "flux",
 //			Bootstrap: &stack.BootstrapConfig{
-//				Enabled:   true,
-//				FluxMode:  "flux-operator",
+//				Enabled:     true,
+//				FluxMode:    "flux-operator",
+//				FluxVersion: "2.x",            // required in flux-operator mode
+//				Registry:    "ghcr.io/fluxcd", // required in flux-operator mode
 //			},
 //		}).
 //		WithNode("infrastructure").

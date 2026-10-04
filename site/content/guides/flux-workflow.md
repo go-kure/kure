@@ -498,6 +498,11 @@ Generate Flux system bootstrap manifests. Two modes are available:
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
+`"flux-operator"` mode needs both `FluxVersion` and `Registry`: they become the `FluxInstance`'s
+distribution version and registry, and Kure has no default for either. If one is empty,
+`GenerateBootstrap` returns an error naming the missing field and emits nothing, rather than a
+`FluxInstance` that cannot work. `"gotk"` mode accepts both empty.
+
 The `"flux-operator"` bundle is vendored from one specific upstream flux-operator release
 (`FluxOperatorVersion`), so upgrading Kure can also change the CRDs it installs. A CRD that
 tightens validation rejects objects the previous release accepted — for example a
@@ -524,8 +529,9 @@ rootNode := &stack.Node{Name: "prod"}
 
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
-    FluxMode:    "flux-operator", // or "gotk"; empty defaults to "flux-operator"
-    FluxVersion: "v2.8.2",
+    FluxMode:    "flux-operator",  // or "gotk"; empty defaults to "flux-operator"
+    FluxVersion: "v2.8.2",         // required in flux-operator mode
+    Registry:    "ghcr.io/fluxcd", // required in flux-operator mode
     SourceURL:   "oci://registry.example.com/fleet",
     SourceRef:   "latest",
 }
@@ -558,7 +564,11 @@ through the engine rather than building a second generator the call never reads:
 ```go
 engine := fluxcd.Engine()
 rootNode := &stack.Node{Name: "production"}
-bootstrapConfig := &stack.BootstrapConfig{Enabled: true}
+bootstrapConfig := &stack.BootstrapConfig{
+    Enabled:     true,
+    FluxVersion: "v2.8.2",
+    Registry:    "ghcr.io/fluxcd",
+}
 
 engine.GetBootstrapGenerator().DefaultNamespace = "custom-flux" // default: "flux-system"
 
@@ -611,10 +621,12 @@ engine := fluxcd.Engine()
 rootNode := &stack.Node{Name: "prod"}
 
 bootstrapConfig := &stack.BootstrapConfig{
-    Enabled:   true,
-    SourceURL: "oci://registry.example.com/fleet",
-    SourceRef: "latest",
-    SyncName:  "fleet",
+    Enabled:     true,
+    FluxVersion: "v2.8.2",
+    Registry:    "ghcr.io/fluxcd",
+    SourceURL:   "oci://registry.example.com/fleet",
+    SourceRef:   "latest",
+    SyncName:    "fleet",
 }
 
 fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)

@@ -58,11 +58,15 @@ func TestBootstrapNameIsOverrideable(t *testing.T) {
 	bg := NewBootstrapGenerator()
 	bg.BootstrapName = "gitops"
 
+	// FluxVersion and Registry are for the GenerateFluxInstance call below, which
+	// requires both; GotkVersion keeps the gotk call on the vendored bundle.
 	config := &stack.BootstrapConfig{
-		Enabled:    true,
-		FluxMode:   "gotk",
-		SourceKind: "GitRepository",
-		SourceURL:  "https://github.com/org/fleet.git",
+		Enabled:     true,
+		FluxMode:    "gotk",
+		FluxVersion: GotkVersion,
+		Registry:    "ghcr.io/fluxcd",
+		SourceKind:  "GitRepository",
+		SourceURL:   "https://github.com/org/fleet.git",
 	}
 	objs, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"})
 	if err != nil {
@@ -107,11 +111,15 @@ func TestBootstrapNameEmptyFallsBackToTheDefault(t *testing.T) {
 		DefaultInterval:  DefaultInterval,
 	}
 
+	// FluxVersion and Registry are for the GenerateFluxInstance call below, which
+	// requires both; GotkVersion keeps the gotk call on the vendored bundle.
 	config := &stack.BootstrapConfig{
-		Enabled:    true,
-		FluxMode:   ModeGotk,
-		SourceKind: "GitRepository",
-		SourceURL:  "https://github.com/org/fleet.git",
+		Enabled:     true,
+		FluxMode:    ModeGotk,
+		FluxVersion: GotkVersion,
+		Registry:    "ghcr.io/fluxcd",
+		SourceKind:  "GitRepository",
+		SourceURL:   "https://github.com/org/fleet.git",
 	}
 	objs, err := bg.GenerateBootstrap(config, &stack.Node{Name: "prod"})
 	if err != nil {
@@ -154,9 +162,11 @@ func TestBootstrapNameEmptyFallsBackToTheDefault(t *testing.T) {
 // (struct literal), and the value that happens to equal the CRD's.
 func TestFluxInstanceNameIsFluxRegardlessOfBootstrapName(t *testing.T) {
 	config := &stack.BootstrapConfig{
-		Enabled:   true,
-		FluxMode:  DefaultFluxMode,
-		SourceURL: "oci://registry.example.com/fleet",
+		Enabled:     true,
+		FluxMode:    DefaultFluxMode,
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
+		SourceURL:   "oci://registry.example.com/fleet",
 	}
 	node := &stack.Node{Name: "prod"}
 
@@ -256,14 +266,25 @@ func TestFluxInstanceNameMatchesVendoredCRDRule(t *testing.T) {
 func TestDefaultFluxModeDrivesTheDispatch(t *testing.T) {
 	bg := NewBootstrapGenerator()
 
+	// A config every mode accepts, so that a rejection below is about the mode.
+	// flux-operator mode requires FluxVersion and Registry, and GotkVersion keeps
+	// gotk mode on the vendored bundle.
+	configFor := func(mode string) *stack.BootstrapConfig {
+		return &stack.BootstrapConfig{
+			Enabled:     true,
+			FluxMode:    mode,
+			FluxVersion: GotkVersion,
+			Registry:    "ghcr.io/fluxcd",
+		}
+	}
+
 	// An empty FluxMode must reach the same branch DefaultFluxMode names, and
 	// that branch must not be the error branch.
-	empty, err := bg.GenerateBootstrap(&stack.BootstrapConfig{Enabled: true}, &stack.Node{Name: "prod"})
+	empty, err := bg.GenerateBootstrap(configFor(""), &stack.Node{Name: "prod"})
 	if err != nil {
 		t.Fatalf("an empty FluxMode must resolve to DefaultFluxMode (%q): %v", DefaultFluxMode, err)
 	}
-	named, err := bg.GenerateBootstrap(
-		&stack.BootstrapConfig{Enabled: true, FluxMode: DefaultFluxMode}, &stack.Node{Name: "prod"})
+	named, err := bg.GenerateBootstrap(configFor(DefaultFluxMode), &stack.Node{Name: "prod"})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap with FluxMode=DefaultFluxMode: %v", err)
 	}
@@ -278,8 +299,7 @@ func TestDefaultFluxModeDrivesTheDispatch(t *testing.T) {
 		t.Errorf("SupportedBootstrapModes() = %v, want [%q %q]", modes, DefaultFluxMode, ModeGotk)
 	}
 	for _, mode := range modes {
-		if _, err := bg.GenerateBootstrap(
-			&stack.BootstrapConfig{Enabled: true, FluxMode: mode}, &stack.Node{Name: "prod"}); err != nil {
+		if _, err := bg.GenerateBootstrap(configFor(mode), &stack.Node{Name: "prod"}); err != nil {
 			t.Errorf("SupportedBootstrapModes reports %q but GenerateBootstrap rejects it: %v", mode, err)
 		}
 	}
@@ -640,6 +660,8 @@ func TestFluxInstanceSyncRefMatchesGotkSource(t *testing.T) {
 			if err != nil {
 				t.Fatalf("generateSource() error = %v", err)
 			}
+			// the FluxInstance requires a distribution; the source does not read it
+			cfg.FluxVersion, cfg.Registry = "v2.4.0", "ghcr.io/fluxcd"
 			fi, err := bg.GenerateFluxInstance(&cfg, node)
 			if err != nil {
 				t.Fatalf("GenerateFluxInstance() error = %v", err)
@@ -674,9 +696,11 @@ func TestFluxInstanceSyncRefMatchesGotkSource(t *testing.T) {
 func TestFluxInstanceSyncRefKeepsAFullGitRef(t *testing.T) {
 	for _, ref := range []string{"refs/heads/release", "refs/tags/v1.0.0"} {
 		fi, err := NewBootstrapGenerator().GenerateFluxInstance(&stack.BootstrapConfig{
-			SourceKind: "GitRepository",
-			SourceURL:  "https://example.test/repo.git",
-			SourceRef:  ref,
+			FluxVersion: "v2.4.0",
+			Registry:    "ghcr.io/fluxcd",
+			SourceKind:  "GitRepository",
+			SourceURL:   "https://example.test/repo.git",
+			SourceRef:   ref,
 		}, nil)
 		if err != nil {
 			t.Fatalf("GenerateFluxInstance(%q) error = %v", ref, err)

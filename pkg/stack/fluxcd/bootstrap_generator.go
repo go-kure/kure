@@ -150,9 +150,14 @@ func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.Bootst
 			fmt.Sprintf("failed to load vendored flux-operator install bundle: %v", err), err)
 	}
 
+	fluxInstance, err := bg.generateFluxInstance(config, rootNode)
+	if err != nil {
+		return nil, err
+	}
+
 	resources := make([]client.Object, 0, len(installObjs)+1)
 	resources = append(resources, installObjs...)
-	resources = append(resources, bg.generateFluxInstance(config, rootNode))
+	resources = append(resources, fluxInstance)
 	return resources, nil
 }
 
@@ -383,11 +388,15 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 // the given bootstrap settings, without the full Flux Operator install bundle.
 // Returns (nil, nil) when config is nil. Unlike GenerateBootstrap, this method
 // does not check config.Enabled — the caller is responsible for that gate.
+// An empty FluxVersion or Registry is an error, as on the bootstrap path.
 func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (*fluxv1.FluxInstance, error) {
 	if config == nil {
 		return nil, nil
 	}
-	obj := bg.generateFluxInstance(config, rootNode)
+	obj, err := bg.generateFluxInstance(config, rootNode)
+	if err != nil {
+		return nil, err
+	}
 	fi, ok := obj.(*fluxv1.FluxInstance)
 	if !ok {
 		return nil, errors.Errorf("internal error: generateFluxInstance returned unexpected type %T", obj)
@@ -395,8 +404,38 @@ func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig
 	return fi, nil
 }
 
-// generateFluxInstance creates a FluxInstance for flux-operator mode.
-func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+// requireDistribution returns an error naming each of FluxVersion and Registry
+// that config leaves empty. Both go verbatim into the FluxInstance's
+// spec.distribution, and a FluxInstance with an empty version or registry
+// cannot work; it used to be written anyway, as `version: ""` and
+// `registry: ""`. No default is filled in: the caller supplies both.
+//
+// This is flux-operator mode only. gotk mode reads the same two fields, and
+// there an empty FluxVersion means the vendored release and an empty Registry
+// the upstream one.
+func requireDistribution(config *stack.BootstrapConfig) error {
+	var keys, fields []string
+	if config.FluxVersion == "" {
+		keys, fields = append(keys, "fluxVersion"), append(fields, "FluxVersion")
+	}
+	if config.Registry == "" {
+		keys, fields = append(keys, "registry"), append(fields, "Registry")
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return errors.ResourceValidationError("BootstrapConfig", FluxInstanceName, strings.Join(keys, ", "),
+		fmt.Sprintf("flux-operator mode requires %s for the FluxInstance distribution; there is no default",
+			strings.Join(fields, " and ")), nil)
+}
+
+// generateFluxInstance creates a FluxInstance for flux-operator mode. It is the
+// one place both entry points build it, so the distribution check lives here.
+func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (client.Object, error) {
+	if err := requireDistribution(config); err != nil {
+		return nil, err
+	}
+
 	spec := fluxv1.FluxInstanceSpec{
 		Distribution: fluxv1.Distribution{
 			Version:  config.FluxVersion,
@@ -430,5 +469,5 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 	// and rejects anything else at admission.
 	fi := pubfluxcd.CreateFluxInstance(FluxInstanceName, bg.DefaultNamespace)
 	fi.Spec = spec
-	return fi
+	return fi, nil
 }
