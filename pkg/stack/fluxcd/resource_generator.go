@@ -442,13 +442,13 @@ func objectName(obj client.Object) string {
 // whose spec.path is path, verbatim, and a Source when b.SourceRef has a URL.
 // Umbrella Children are not recursed. The generator computes no path: take
 // it from the layout that renders b (layout.OriginIndex.KustomizationPath).
-// A DependsOn bundle, a child or a NamedDependsOn entry with b's own
-// Kustomization name is an error: the Kustomization would refer to itself.
+// A DependsOn bundle, a child, a NamedDependsOn entry or a health check with
+// b's own Kustomization name is an error: the Kustomization would refer to itself.
 func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]client.Object, error) {
 	if b == nil {
 		return nil, nil
 	}
-	if err := checkOwnUnitName(b); err != nil {
+	if err := g.checkOwnUnitName(b); err != nil {
 		return nil, err
 	}
 
@@ -728,11 +728,12 @@ func (g *ResourceGenerator) GetVersion() string {
 
 // checkOwnUnitName refuses a DependsOn bundle or an umbrella child that would
 // get b's own Kustomization name (Bundle.UnitName), and b itself or that
-// name among its own dependencies. The cluster and layout entry points have
+// name among its own dependencies or, as a Flux Kustomization in the
+// generator's namespace, its health checks. The cluster and layout entry points have
 // layout.IndexOrigins refuse two rendered bundles with one name and drop a
 // unit's reference to itself; GenerateForBundle has no index, and without
 // this check it would emit a Kustomization that depends on or waits for itself.
-func checkOwnUnitName(b *stack.Bundle) error {
+func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
 	refuse := func(field string, other *stack.Bundle) error {
 		return errors.ResourceValidationError("Bundle", b.Name, field,
 			fmt.Sprintf("bundles %q and %q would both get a Flux Kustomization named %q: that name, the bundle's KustomizationName or else its Name, must be unique",
@@ -754,6 +755,15 @@ func checkOwnUnitName(b *stack.Bundle) error {
 	for _, name := range b.NamedDependsOn {
 		if name == b.UnitName() {
 			return own("namedDependsOn", "NamedDependsOn")
+		}
+	}
+	for _, hc := range b.HealthChecks {
+		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
+			effectiveNS(hc.Namespace, g.DefaultNamespace) == effectiveNS(g.DefaultNamespace, "") &&
+			hc.Name == b.UnitName() {
+			return errors.ResourceValidationError("Bundle", b.Name, "healthChecks",
+				fmt.Sprintf("bundle %q has its own Flux Kustomization %q in HealthChecks: the Kustomization would wait for itself",
+					b.GetPath(), b.UnitName()), nil)
 		}
 	}
 	if len(b.Children) > 0 {
