@@ -537,9 +537,20 @@ func TestDeliveryIntent_KeepsOtherAnnotations(t *testing.T) {
 		"noted":   {"example.com/note": "x", pruneKey: "disabled", forceKey: "enabled"},
 		"already": {pruneKey: "disabled", forceKey: "enabled"},
 	}
+	found := map[string]bool{}
 	for _, o := range objs {
-		if w, ok := want[o.GetName()]; ok && !mapsEqual(o.GetAnnotations(), w) {
+		w, ok := want[o.GetName()]
+		if !ok {
+			continue
+		}
+		found[o.GetName()] = true
+		if !mapsEqual(o.GetAnnotations(), w) {
 			t.Errorf("%q has annotations %v, want %v", o.GetName(), o.GetAnnotations(), w)
+		}
+	}
+	for name := range want {
+		if !found[name] {
+			t.Errorf("%q is not in the layout", name)
 		}
 	}
 }
