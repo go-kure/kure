@@ -80,8 +80,10 @@ func TestWorkflowInterface(t *testing.T) {
 				GitOps: &stack.GitOpsConfig{
 					Type: provider,
 					Bootstrap: &stack.BootstrapConfig{
-						Enabled:  true,
-						FluxMode: "flux-operator",
+						Enabled:     true,
+						FluxMode:    "flux-operator",
+						FluxVersion: "v2.4.0",
+						Registry:    "ghcr.io/fluxcd",
 					},
 				},
 			}

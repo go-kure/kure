@@ -157,8 +157,9 @@ func ExampleWorkflowEngine_GenerateBootstrap() {
 
 	bootstrapConfig := &stack.BootstrapConfig{
 		Enabled:     true,
-		FluxMode:    "flux-operator", // or "gotk"; empty defaults to "flux-operator"
-		FluxVersion: "v2.8.2",
+		FluxMode:    "flux-operator",  // or "gotk"; empty defaults to "flux-operator"
+		FluxVersion: "v2.8.2",         // required in flux-operator mode
+		Registry:    "ghcr.io/fluxcd", // required in flux-operator mode
 		SourceURL:   "oci://registry.example.com/fleet",
 		SourceRef:   "latest",
 	}
@@ -180,10 +181,12 @@ func ExampleBootstrapGenerator_GenerateFluxInstance() {
 	rootNode := &stack.Node{Name: "prod"}
 
 	bootstrapConfig := &stack.BootstrapConfig{
-		Enabled:   true,
-		SourceURL: "oci://registry.example.com/fleet",
-		SourceRef: "latest",
-		SyncName:  "fleet",
+		Enabled:     true,
+		FluxVersion: "v2.8.2",
+		Registry:    "ghcr.io/fluxcd",
+		SourceURL:   "oci://registry.example.com/fleet",
+		SourceRef:   "latest",
+		SyncName:    "fleet",
 	}
 
 	fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)

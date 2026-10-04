@@ -477,6 +477,14 @@ Generate Flux system bootstrap manifests. Two modes are supported:
 
 When `FluxMode` is empty, it defaults to `"flux-operator"`.
 
+In `"flux-operator"` mode `FluxVersion` and `Registry` are both required. They go verbatim into
+the `FluxInstance`'s `spec.distribution`, and a `FluxInstance` with an empty version or registry
+cannot work, so `GenerateBootstrap` and `GenerateFluxInstance` return a validation error naming
+each missing field instead of emitting one, and no part of the bundle is returned with it. There
+is no default for either: the caller supplies both, which is why the defaults table above has no
+row for them. `"gotk"` mode reads the same two fields and keeps accepting them empty: there an
+empty `FluxVersion` means the vendored release and an empty `Registry` the upstream registry.
+
 The `"flux-operator"` bundle is vendored from the upstream flux-operator release and pinned
 in lockstep with the `github.com/controlplaneio-fluxcd/flux-operator` Go module
 (`FluxOperatorVersion`, currently **v0.58.1**). Renovate re-vendors the bundle and updates
@@ -505,8 +513,9 @@ rootNode := &stack.Node{Name: "prod"}
 
 bootstrapConfig := &stack.BootstrapConfig{
     Enabled:     true,
-    FluxMode:    "flux-operator", // or "gotk"; empty defaults to "flux-operator"
-    FluxVersion: "v2.8.2",
+    FluxMode:    "flux-operator",  // or "gotk"; empty defaults to "flux-operator"
+    FluxVersion: "v2.8.2",         // required in flux-operator mode
+    Registry:    "ghcr.io/fluxcd", // required in flux-operator mode
     SourceURL:   "oci://registry.example.com/fleet",
     SourceRef:   "latest",
 }
@@ -538,10 +547,12 @@ engine := fluxcd.Engine()
 rootNode := &stack.Node{Name: "prod"}
 
 bootstrapConfig := &stack.BootstrapConfig{
-    Enabled:   true,
-    SourceURL: "oci://registry.example.com/fleet",
-    SourceRef: "latest",
-    SyncName:  "fleet",
+    Enabled:     true,
+    FluxVersion: "v2.8.2",
+    Registry:    "ghcr.io/fluxcd",
+    SourceURL:   "oci://registry.example.com/fleet",
+    SourceRef:   "latest",
+    SyncName:    "fleet",
 }
 
 fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)
