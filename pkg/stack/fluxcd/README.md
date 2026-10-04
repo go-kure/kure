@@ -263,8 +263,9 @@ that instead of generating it:
 
 - an untargeted patch in a shared directory is refused;
 - a targeted patch is refused when its `Target` selects any object another bundle in that
-  directory renders, a ConfigMap an augmenter's `configMapGenerator` makes included (matched with
-  the annotations its entry sets, those of a [delivery intent](#delivery-intent) among them). Matching is
+  directory renders, a ConfigMap an augmenter's `configMapGenerator` makes included, in the
+  application's own layout or a child layout below it (matched with the annotations its entry
+  sets, those of a [delivery intent](#delivery-intent) among them). Matching is
   kustomize's own: `Group`, `Version`, `Kind`, `Name` and `Namespace` are anchored regular
   expressions (an empty one matches anything; `Namespace` is matched against the object's
   effective namespace, `default` for a namespaced object that names none), `LabelSelector` and
@@ -586,6 +587,10 @@ Things to know:
   to avoid that.
 - The integrator applies the intent. A layout that is walked and written without
   `IntegrateWithLayout` or `CreateLayoutWithResources` carries none.
+- A bundle patch runs after the build: `Bundle.Patches` become the Kustomization's `spec.patches`,
+  which Flux applies to what the directory builds. A patch can therefore still change or remove a
+  delivery annotation on the applied object; kure does not read patch bodies and does not override
+  an explicit patch.
 - kustomize names a generated ConfigMap after its content. With `PruneProtection`, each content
   change therefore leaves the previous ConfigMap in the cluster instead of pruning it; remove old
   ones by hand, or leave the intent off an application whose generated values change often.

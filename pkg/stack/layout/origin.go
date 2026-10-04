@@ -46,8 +46,33 @@ type ApplicationObjects struct {
 	// application's objects were written into its bundle's directory.
 	Layout *ManifestLayout
 	// generated are the stand-ins OriginBundleObjects holds for the
-	// ConfigMaps Layout's own ConfigMapGenerators build (generatedConfigMap).
-	generated []client.Object
+	// ConfigMaps the ConfigMapGenerators of Layout and of the layouts below
+	// it build.
+	generated []generatedStandIn
+}
+
+// generatedStandIn is the stand-in (generatedConfigMap) for the ConfigMap a
+// configMapGenerator entry of layout makes, the entry being the one with the
+// stand-in's name.
+type generatedStandIn struct {
+	object client.Object
+	layout *ManifestLayout
+}
+
+// generatedStandIns returns a stand-in for every configMapGenerator entry of l
+// and of the layouts below it.
+func generatedStandIns(l *ManifestLayout) []generatedStandIn {
+	if l == nil {
+		return nil
+	}
+	var out []generatedStandIn
+	for _, gen := range l.ConfigMapGenerators {
+		out = append(out, generatedStandIn{object: generatedConfigMap(gen.Name), layout: l})
+	}
+	for _, child := range l.Children {
+		out = append(out, generatedStandIns(child)...)
+	}
+	return out
 }
 
 // syncGenerated gives every generated ConfigMap's stand-in the annotations its
@@ -56,18 +81,15 @@ type ApplicationObjects struct {
 // can gain some after the walk (a workflow applying a delivery intent).
 func (o *origin) syncGenerated() {
 	for _, rec := range o.apps {
-		if rec.Layout == nil {
-			continue
-		}
 		for _, standIn := range rec.generated {
-			for _, gen := range rec.Layout.ConfigMapGenerators {
-				if gen.Name != standIn.GetName() {
+			for _, gen := range standIn.layout.ConfigMapGenerators {
+				if gen.Name != standIn.object.GetName() {
 					continue
 				}
 				if len(gen.Annotations) == 0 {
-					standIn.SetAnnotations(nil)
+					standIn.object.SetAnnotations(nil)
 				} else {
-					standIn.SetAnnotations(gen.Annotations)
+					standIn.object.SetAnnotations(gen.Annotations)
 				}
 			}
 		}

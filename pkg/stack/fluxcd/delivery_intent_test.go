@@ -420,41 +420,75 @@ func (a *annotatedGenerator) AugmentLayout(ml *layout.ManifestLayout) error {
 	return nil
 }
 
-// TestDeliveryIntent_PatchScopeSeesGeneratedAnnotations: kustomize puts a
-// generator's options.annotations on the ConfigMap it generates, so in a
-// directory several bundles share, another bundle's patch that selects by one
-// of them reaches that ConfigMap and is refused as for a written object,
-// whether the delivery intent or the generator itself set the annotation.
-func TestDeliveryIntent_PatchScopeSeesGeneratedAnnotations(t *testing.T) {
+// childGenerator is hookAugmenter with a configMapGenerator in the child
+// layout it appends, too.
+type childGenerator struct{ hookAugmenter }
+
+func (c *childGenerator) AugmentLayout(ml *layout.ManifestLayout) error {
+	if err := c.hookAugmenter.AugmentLayout(ml); err != nil {
+		return err
+	}
+	hooks := ml.Children[len(ml.Children)-1]
+	hooks.ExtraFiles = append(hooks.ExtraFiles, layout.ExtraFile{Name: "child.yaml", Content: []byte("k: v\n")})
+	hooks.ConfigMapGenerators = append(hooks.ConfigMapGenerators, layout.ConfigMapGeneratorSpec{Name: c.app + "-child-values", Files: []string{"child.yaml"}})
+	return nil
+}
+
+// TestDeliveryIntent_PatchScopeSeesGeneratedConfigMaps: in a directory several
+// bundles share, another bundle's patch that reaches a ConfigMap a
+// configMapGenerator builds is refused as for a written object. That holds
+// for a generator in a child layout the augmenter appended, and for a target
+// that selects by an annotation: kustomize puts a generator's
+// options.annotations on the ConfigMap, whether the delivery intent or the
+// generator itself set them.
+func TestDeliveryIntent_PatchScopeSeesGeneratedConfigMaps(t *testing.T) {
+	prune := stack.DeliveryIntent{PruneProtection: true}
+	hook := func(intent stack.DeliveryIntent, config stack.ApplicationConfig) func() *stack.Application {
+		return func() *stack.Application {
+			app := stack.NewApplication("hook", "default", config)
+			app.Delivery = intent
+			return app
+		}
+	}
+	plain := func() stack.ApplicationConfig { return &hookAugmenter{app: "hook"} }
+	child := func() stack.ApplicationConfig { return &childGenerator{hookAugmenter{app: "hook"}} }
+	// Every target names the generated ConfigMap, which keeps it off hook's
+	// written objects.
 	tests := map[string]struct {
-		app      func() *stack.Application
-		selector string
-		refused  bool
+		app     func() *stack.Application
+		target  stack.PatchSelector
+		reaches string // the ConfigMap the refusal names; "" when accepted
 	}{
-		"set by the delivery intent": {
-			app: func() *stack.Application {
-				hook := stack.NewApplication("hook", "default", &hookAugmenter{app: "hook"})
-				hook.Delivery = stack.DeliveryIntent{PruneProtection: true}
-				return hook
-			},
-			selector: pruneKey + "=disabled",
-			refused:  true,
+		"annotation set by the delivery intent": {
+			app:     hook(prune, plain()),
+			target:  stack.PatchSelector{Name: "hook-values", AnnotationSelector: pruneKey + "=disabled"},
+			reaches: "hook-values",
 		},
-		"no intent, nothing to select": {
-			app: func() *stack.Application {
-				return stack.NewApplication("hook", "default", &hookAugmenter{app: "hook"})
-			},
-			selector: pruneKey + "=disabled",
+		"no intent, no annotation to select": {
+			app:    hook(stack.DeliveryIntent{}, plain()),
+			target: stack.PatchSelector{Name: "hook-values", AnnotationSelector: pruneKey + "=disabled"},
 		},
-		"set by the generator": {
-			app: func() *stack.Application {
-				return stack.NewApplication("hook", "default", &annotatedGenerator{
-					hookAugmenter: hookAugmenter{app: "hook"},
-					annotations:   map[string]string{"tier": "backend"},
-				})
-			},
-			selector: "tier=backend",
-			refused:  true,
+		"annotation set by the generator": {
+			app: hook(stack.DeliveryIntent{}, &annotatedGenerator{
+				hookAugmenter: hookAugmenter{app: "hook"},
+				annotations:   map[string]string{"tier": "backend"},
+			}),
+			target:  stack.PatchSelector{Name: "hook-values", AnnotationSelector: "tier=backend"},
+			reaches: "hook-values",
+		},
+		"child layout's generator, by name": {
+			app:     hook(stack.DeliveryIntent{}, child()),
+			target:  stack.PatchSelector{Kind: "ConfigMap", Name: "hook-child-values"},
+			reaches: "hook-child-values",
+		},
+		"child layout's generator, by the intent's annotation": {
+			app:     hook(prune, child()),
+			target:  stack.PatchSelector{Name: "hook-child-values", AnnotationSelector: pruneKey + "=disabled"},
+			reaches: "hook-child-values",
+		},
+		"child layout's generator, no intent, no annotation to select": {
+			app:    hook(stack.DeliveryIntent{}, child()),
+			target: stack.PatchSelector{Name: "hook-child-values", AnnotationSelector: pruneKey + "=disabled"},
 		},
 	}
 	for name, tt := range tests {
@@ -462,13 +496,13 @@ func TestDeliveryIntent_PatchScopeSeesGeneratedAnnotations(t *testing.T) {
 			t.Run(name+"/"+string(placement), func(t *testing.T) {
 				c := mergedCluster(func(_, b1, b2 *stack.Bundle) {
 					b2.Applications = append(b2.Applications, tt.app())
-					// The name keeps the target off hook's written objects.
-					b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &stack.PatchSelector{Name: "hook-values", AnnotationSelector: tt.selector}}}
+					target := tt.target
+					b1.Patches = []stack.Patch{{Patch: "- op: add", Target: &target}}
 				})
 				rules := allFlat
 				rules.FluxPlacement = placement
 				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
-				if !tt.refused {
+				if tt.reaches == "" {
 					if err != nil {
 						t.Fatalf("CreateLayoutWithResources: %v", err)
 					}
@@ -477,7 +511,7 @@ func TestDeliveryIntent_PatchScopeSeesGeneratedAnnotations(t *testing.T) {
 				if err == nil {
 					t.Fatal("the integration accepted a patch that reaches another bundle's generated ConfigMap")
 				}
-				for _, want := range []string{`"b1"`, `"b2"`, "hook-values"} {
+				for _, want := range []string{`"b1"`, `"b2"`, `ConfigMap "` + tt.reaches + `"`} {
 					if !strings.Contains(err.Error(), want) {
 						t.Errorf("error %q does not contain %q", err, want)
 					}

@@ -424,13 +424,13 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 			return nil, err
 		}
 		inheritFileNaming(appLayout)
-		var generated []client.Object
-		for _, gen := range appLayout.ConfigMapGenerators {
-			generated = append(generated, generatedConfigMap(gen.Name))
+		// Taken after the augmenter ran: what it added to the layout, or in
+		// a layout below it, is the application's too, the ConfigMaps its
+		// generators build included.
+		generated := generatedStandIns(appLayout)
+		for _, standIn := range generated {
+			all = append(all, standIn.object)
 		}
-		all = append(all, generated...)
-		// Recorded after the augmenter ran: what it added to the layout, or
-		// in a layout below it, is the application's too.
 		target.origin.apps = append(target.origin.apps, ApplicationObjects{Application: app, Objects: subtreeResources(appLayout), Layout: appLayout, generated: generated})
 		target.Children = append(target.Children, appLayout)
 	}

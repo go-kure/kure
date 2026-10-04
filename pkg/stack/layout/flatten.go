@@ -64,11 +64,18 @@ func flattenSingleTier(root *ManifestLayout, rules LayoutRules) *ManifestLayout 
 	}
 	// The absorbed layout's application records are root's now, and a record
 	// whose own layout was the absorbed one names root: that is where the
-	// application's resources and generators live.
+	// application's resources and generators live. The same goes for the
+	// stand-ins of the generators root took over.
 	root.origin.apps = append(root.origin.apps, child.origin.apps...)
 	for i := range root.origin.apps {
-		if root.origin.apps[i].Layout == child {
-			root.origin.apps[i].Layout = root
+		rec := &root.origin.apps[i]
+		if rec.Layout == child {
+			rec.Layout = root
+		}
+		for j := range rec.generated {
+			if rec.generated[j].layout == child {
+				rec.generated[j].layout = root
+			}
 		}
 	}
 
