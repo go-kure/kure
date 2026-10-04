@@ -186,9 +186,9 @@ func (ix *OriginIndex) UnitName(b *stack.Bundle) string {
 // UnitOfName maps the name of a rendered bundle's Kustomization or
 // Application (Bundle.UnitName) to the name of the unit that applies the
 // bundle; a name no rendered bundle has in effect (an external Kustomization,
-// say, or the Name of a bundle that sets KustomizationName) is returned
-// unchanged. References to a bundle's Kustomization by name — health checks,
-// dependencies — resolve through it.
+// say) is returned unchanged. A bundle's Name is not looked up: it resolves
+// only where it is some bundle's name in effect. References to a bundle's
+// Kustomization by name — health checks, dependencies — resolve through it.
 func (ix *OriginIndex) UnitOfName(name string) string {
 	if b := ix.byUnitName[name]; b != nil {
 		return ix.unitOf(b)

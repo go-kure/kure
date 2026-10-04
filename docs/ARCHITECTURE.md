@@ -224,14 +224,15 @@ Deployment units typically corresponding to single GitOps resources:
 <!-- doc-example:excerpt the type declaration from pkg/stack/bundle.go, abridged to its structural fields -->
 ```go
 type Bundle struct {
-    Name           string
-    ParentPath     string
-    DependsOn      []*Bundle
-    NamedDependsOn []string
-    Children       []*Bundle
-    Interval       string
-    SourceRef      *SourceRef
-    Applications   []*Application
+    Name              string
+    KustomizationName string
+    ParentPath        string
+    DependsOn         []*Bundle
+    NamedDependsOn    []string
+    Children          []*Bundle
+    Interval          string
+    SourceRef         *SourceRef
+    Applications      []*Application
     // ... labels, annotations and the Flux reconciliation settings
 }
 ```

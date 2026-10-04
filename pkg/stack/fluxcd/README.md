@@ -161,7 +161,7 @@ the bundle's Kustomization uses it:
 | `metadata.name` of the bundle's Kustomization | the bundle's `KustomizationName`, or its `Name` |
 | `spec.dependsOn` of a bundle that lists it in `DependsOn` | the same name |
 | an umbrella's health check on it as a child | the same name |
-| a `NamedDependsOn` entry | it names a Kustomization, not a bundle: a bundle that sets `KustomizationName` is reached by that value, and its `Name` is then kept as written, like any name no generated Kustomization has |
+| a `NamedDependsOn` entry | it names a Kustomization, not a bundle: a bundle that sets `KustomizationName` is reached by that value. Its `Name` then reaches whichever bundle's Kustomization has that name, and is kept as written when none has, like any name no generated Kustomization has |
 
 Two bundles whose Kustomizations would get one name are refused, and the error names both bundles
 by their paths. `Bundle.Name` stays unique too. A bundle may hold an object that is itself a Flux
@@ -215,7 +215,7 @@ The bundles merged into one directory combine as follows:
 | `Labels`, `Annotations` | combined; one key with two values is an error |
 | `Patches` | combined, but only when every patch has a `Target` that selects none of the other merged bundles' objects (see [Patches in a shared directory](#patches-in-a-shared-directory)) |
 | `DependsOn` | mapped to the Kustomization that applies each dependency; dependencies between the merged bundles are dropped |
-| `NamedDependsOn` | combined and mapped like `DependsOn`: a name that is a rendered bundle's becomes the name of the Kustomization that applies it (dropped when that is this one); any other name is kept as given |
+| `NamedDependsOn` | combined and mapped like `DependsOn`: a name that is a rendered bundle's Kustomization name (see [Kustomization names](#kustomization-names)) becomes the name of the Kustomization that applies it (dropped when that is this one); any other name is kept as given |
 
 `GenerateFromLayout` and the integrator refuse a set of Kustomizations kure generates that can
 never all become Ready. Applying waits for every `dependsOn` to be Ready; becoming Ready waits for

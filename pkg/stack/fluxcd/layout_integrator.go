@@ -1266,7 +1266,7 @@ func crKey(namespace, name string) string {
 // purpose: every Kustomization this pass generates is placed in
 // g.DefaultNamespace (kustomizationForBundle, createKustomizationForLayout),
 // so name and namespace/name identify the same object here, and a bundle's
-// name is its CR identity (IndexOrigins refuses two bundles with one name).
+// CR identity is its Bundle.UnitName (IndexOrigins refuses two with one).
 // Objects already in the tree may sit in other namespaces; those are keyed by
 // crKey in indexExistingKustomizations.
 func (p *integratedPlacement) claim(name, path string) error {

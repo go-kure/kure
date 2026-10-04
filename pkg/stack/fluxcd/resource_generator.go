@@ -169,8 +169,8 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 		}
 	}
 	// A health check on a Flux Kustomization this pass generates names a
-	// bundle; it follows the merge to that bundle's unit, and one on the
-	// unit itself is dropped (it would wait for itself).
+	// bundle's Kustomization; it follows the merge to that bundle's unit,
+	// and one on the unit itself is dropped (it would wait for itself).
 	var checks []metaapi.NamespacedObjectKindReference
 	for _, hc := range unit.Spec.HealthChecks {
 		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
