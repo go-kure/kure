@@ -16,7 +16,9 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
@@ -637,7 +639,7 @@ func TestGenerateFromLayout_Order(t *testing.T) {
 func TestGenerateFromCluster_DefaultRules(t *testing.T) {
 	web := &stack.Node{Name: "web", Bundle: srBundle("web-bundle", cmApp("web-app"))}
 	c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform-bundle"), Children: []*stack.Node{web}}}
-	objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c)
+	objs, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1135,8 +1137,8 @@ func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
 
 	// A Source already in the tree at another API version is the same
 	// identity: the generated v1 one is compared with it, not added beside
-	// it, also when it sits inside a List.
-	for _, wrap := range []string{"top-level", "List"} {
+	// it, also when it sits inside a List, or a List inside a List.
+	for _, wrap := range []string{"top-level", "List", "nested List"} {
 		for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
 			t.Run("v1beta2/"+wrap+"/"+string(placement), func(t *testing.T) {
 				old := &unstructured.Unstructured{}
@@ -1146,8 +1148,11 @@ func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
 				old.SetNamespace("flux-system")
 				_ = unstructured.SetNestedField(old.Object, "https://example.com/old.git", "spec", "url")
 				var obj client.Object = old
-				if wrap == "List" {
+				switch wrap {
+				case "List":
 					obj = wrapInList(old)
+				case "nested List":
+					obj = wrapInList(wrapInList(old))
 				}
 				webRef := &stack.SourceRef{Kind: "GitRepository", Name: "web-git", Namespace: "flux-system", URL: "https://example.com/web.git", Branch: "main"}
 				web := &stack.Node{Name: "web", Bundle: &stack.Bundle{Name: "web", SourceRef: webRef, Applications: []*stack.Application{cmApp("web-app")}}}
@@ -1172,7 +1177,7 @@ func TestIntegrateWithLayout_ConflictingSourcesErrors(t *testing.T) {
 }
 
 // wrapInList returns a v1/List holding items, as an application may emit one.
-func wrapInList(items ...*unstructured.Unstructured) client.Object {
+func wrapInList(items ...*unstructured.Unstructured) *unstructured.Unstructured {
 	list := &unstructured.UnstructuredList{}
 	list.SetAPIVersion("v1")
 	list.SetKind("List")
@@ -1195,7 +1200,7 @@ func TestIntegrateWithLayout_RejectsListWrappedCRCollision(t *testing.T) {
 			if !ok {
 				t.Fatal("fluxKustomization is not unstructured")
 			}
-			list := wrapInList(ks)
+			var list client.Object = wrapInList(ks)
 			platformApp := stack.NewApplication("platform-ks", "default", &fakeAppConfig{objs: []*client.Object{&list}})
 			web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
 			c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
@@ -1206,6 +1211,186 @@ func TestIntegrateWithLayout_RejectsListWrappedCRCollision(t *testing.T) {
 				t.Errorf("got %v, want an error naming the List-wrapped web Kustomization", err)
 			}
 		})
+	}
+}
+
+// TestIntegrateWithLayout_OpensListsAsKustomizeDoes: the integrator reads an
+// application's objects as kustomize builds them (go-kure/kure#977). A List
+// is an object whose kind ends in "List" and that has items, and a List among
+// its items is opened as well, so a Flux Kustomization two Lists deep is the
+// same identity collision as a top-level one. A kind that does not end in
+// "List" is one object whatever fields it has: a Kustomization with an items
+// field still collides, and what a non-List kind holds in items is not read.
+func TestIntegrateWithLayout_OpensListsAsKustomizeDoes(t *testing.T) {
+	webKs := func(t *testing.T) *unstructured.Unstructured {
+		t.Helper()
+		ks, ok := fluxKustomization("web", "elsewhere").(*unstructured.Unstructured)
+		if !ok {
+			t.Fatal("fluxKustomization is not unstructured")
+		}
+		return ks
+	}
+	cases := map[string]struct {
+		// emitted builds the object in the subtest that uses it.
+		emitted  func(t *testing.T) client.Object
+		collides bool
+	}{
+		"a List in a List": {
+			emitted:  func(t *testing.T) client.Object { return wrapInList(wrapInList(webKs(t))) },
+			collides: true,
+		},
+		"a KustomizationList in a List": {
+			emitted: func(t *testing.T) client.Object {
+				inner := wrapInList(webKs(t))
+				inner.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
+				inner.SetKind("KustomizationList")
+				return wrapInList(inner)
+			},
+			collides: true,
+		},
+		"a Kustomization with an items field": {
+			emitted: func(t *testing.T) client.Object {
+				ks := webKs(t)
+				ks.Object["items"] = []any{}
+				return ks
+			},
+			collides: true,
+		},
+		"a non-List kind holding a Kustomization in items": {
+			emitted: func(t *testing.T) client.Object {
+				holder := wrapInList(webKs(t))
+				holder.SetAPIVersion("example.com/v1")
+				holder.SetKind("Holder")
+				holder.SetName("holder")
+				holder.SetNamespace("default")
+				return holder
+			},
+		},
+		"a List kind without items": {
+			emitted: func(t *testing.T) client.Object {
+				u := &unstructured.Unstructured{}
+				u.SetAPIVersion("example.com/v1")
+				u.SetKind("AllowList")
+				u.SetName("allow")
+				u.SetNamespace("default")
+				return u
+			},
+		},
+		"a List with null items": {
+			emitted: func(t *testing.T) client.Object {
+				return &unstructured.Unstructured{Object: map[string]any{"apiVersion": "v1", "kind": "List", "items": nil}}
+			},
+		},
+		"a List whose items are not a list": {
+			emitted: func(t *testing.T) client.Object {
+				return &unstructured.Unstructured{Object: map[string]any{"apiVersion": "v1", "kind": "List", "items": "web"}}
+			},
+		},
+		"a typed List": {
+			emitted:  func(t *testing.T) client.Object { return typedListOf("HolderList", webKs(t)) },
+			collides: true,
+		},
+		"a typed List holding a List": {
+			emitted:  func(t *testing.T) client.Object { return typedListOf("HolderList", wrapInList(webKs(t))) },
+			collides: true,
+		},
+		"a typed non-List kind with items": {
+			emitted: func(t *testing.T) client.Object { return typedListOf("Holder", webKs(t)) },
+		},
+		// A typed list that sets no kind is written without one, so kustomize
+		// has no List to open.
+		"a typed list without a kind": {
+			emitted: func(t *testing.T) client.Object { return typedListOf("", webKs(t)) },
+		},
+		// A typed List can hold an item as raw JSON; the writers serialize it
+		// as the object it encodes.
+		"a typed List holding a raw Kustomization": {
+			emitted: func(t *testing.T) client.Object {
+				raw, err := webKs(t).MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Raw: raw})
+			},
+			collides: true,
+		},
+		"a typed List holding a List with a raw Kustomization": {
+			emitted: func(t *testing.T) client.Object {
+				raw, err := webKs(t).MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Object: rawListOf(runtime.RawExtension{Raw: raw})})
+			},
+			collides: true,
+		},
+		// An item that carries both raw JSON and an object is serialized from
+		// the raw JSON, so that is the object the layout holds.
+		"a typed List holding a raw Kustomization beside another object": {
+			emitted: func(t *testing.T) client.Object {
+				raw, err := webKs(t).MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Raw: raw, Object: fluxKustomization("other", "platform")})
+			},
+			collides: true,
+		},
+		"a typed List holding another raw Kustomization beside the object": {
+			emitted: func(t *testing.T) client.Object {
+				other := webKs(t)
+				other.SetName("other")
+				raw, err := other.MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Raw: raw, Object: webKs(t)})
+			},
+		},
+		"a typed List with an empty item": {
+			emitted: func(t *testing.T) client.Object { return rawListOf(runtime.RawExtension{}) },
+		},
+		// A List among the items need not carry object metadata: metav1.List
+		// has list metadata only.
+		"a typed List holding a metav1.List with a raw Kustomization": {
+			emitted: func(t *testing.T) client.Object {
+				raw, err := webKs(t).MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				inner := &metav1.List{
+					TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"},
+					Items:    []runtime.RawExtension{{Raw: raw}},
+				}
+				return rawListOf(runtime.RawExtension{Object: rawListOf(runtime.RawExtension{Object: inner})})
+			},
+			collides: true,
+		},
+		// Nor need an item that is not a List: it is read as the object the
+		// writers serialize for it.
+		"a typed List holding a Kustomization without metadata methods": {
+			emitted:  func(t *testing.T) client.Object { return rawListOf(runtime.RawExtension{Object: bareOf(t, webKs(t))}) },
+			collides: true,
+		},
+	}
+	for name, tc := range cases {
+		for _, placement := range []layout.FluxPlacement{layout.FluxSeparate, layout.FluxIntegratedPerLayout, layout.FluxIntegratedPerBundle} {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				obj := tc.emitted(t)
+				platformApp := stack.NewApplication("platform-ks", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+				web := &stack.Node{Name: "web", Bundle: srBundle("web", cmApp("web-app"))}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", platformApp), Children: []*stack.Node{web}}}
+				rules := propertyGroupings["nodeOnly"]
+				rules.FluxPlacement = placement
+				_, err := fluxstack.NewLayoutIntegrator(fluxstack.NewResourceGenerator()).CreateLayoutWithResources(c, rules)
+				switch {
+				case tc.collides && (err == nil || !strings.Contains(err.Error(), `already has Flux Kustomization "web"`)):
+					t.Errorf("got %v, want an error naming the web Kustomization", err)
+				case !tc.collides && err != nil:
+					t.Errorf("got %v, want the tree integrated: the object holds no Kustomization kustomize builds", err)
+				}
+			})
+		}
 	}
 }
 

@@ -161,6 +161,10 @@ func TestScope(t *testing.T) {
 		{"crd-is-cluster", typedCRD("example.com", "Widget"), ScopeCluster},
 		{"builtin-namespaced", &appsv1.Deployment{TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}}, ScopeNamespaced},
 		{"builtin-cluster", &corev1.Namespace{TypeMeta: metav1.TypeMeta{Kind: "Namespace", APIVersion: "v1"}}, ScopeCluster},
+		{"builtin-cluster-priorityclass", unstructuredObj("scheduling.k8s.io/v1", "PriorityClass", "pc"), ScopeCluster},
+		{"builtin-cluster-webhook", unstructuredObj("admissionregistration.k8s.io/v1", "ValidatingWebhookConfiguration", "vwc"), ScopeCluster},
+		{"builtin-namespaced-endpointslice", unstructuredObj("discovery.k8s.io/v1", "EndpointSlice", "es"), ScopeNamespaced},
+		{"builtin-cluster-apiservice", unstructuredObj("apiregistration.k8s.io/v1", "APIService", "v1.example.com"), ScopeCluster},
 		{"cr-namespaced-from-crd", unstructuredObj("example.com/v1", "Widget", "w1"), ScopeNamespaced},
 		{"cr-cluster-from-crd", unstructuredObj("example.com/v1", "Cluster", "c1"), ScopeCluster},
 		{"unknown-gvk", unstructuredObj("unknown.io/v1", "Mystery", "m1"), ScopeUnknown},
@@ -200,14 +204,15 @@ func TestScopeLetsASuppliedCRDGovernCustomResources(t *testing.T) {
 		t.Errorf("a built-in's scope is not a CRD's to redefine: Scope = %v, want %v", got, ScopeNamespaced)
 	}
 
-	// The same for the cluster-scoped built-ins kure does not register: they
-	// are named in the residual set for the same reason, and a CRD entry must
-	// not move them either.
-	priorityClass := unstructuredObj("scheduling.k8s.io/v1", "PriorityClass", "pc")
-	claimingResidual := map[schema.GroupKind]apiextv1.ResourceScope{
-		{Group: "scheduling.k8s.io", Kind: "PriorityClass"}: apiextv1.NamespaceScoped,
+	// The same for a cluster-scoped built-in whose Go type lives outside
+	// k8s.io/api. APIService was in the residual set until kure registered it
+	// from k8s.io/kube-aggregator; the generated table answers for it now, as a
+	// built-in, and a CRD entry must not move it either.
+	apiService := unstructuredObj("apiregistration.k8s.io/v1", "APIService", "v1.example.com")
+	claimingAPIService := map[schema.GroupKind]apiextv1.ResourceScope{
+		{Group: "apiregistration.k8s.io", Kind: "APIService"}: apiextv1.NamespaceScoped,
 	}
-	if got := Scope(priorityClass, claimingResidual); got != ScopeCluster {
-		t.Errorf("the residual set outranks a CRD entry too: Scope = %v, want %v", got, ScopeCluster)
+	if got := Scope(apiService, claimingAPIService); got != ScopeCluster {
+		t.Errorf("a built-in from kube-aggregator outranks a CRD entry too: Scope = %v, want %v", got, ScopeCluster)
 	}
 }

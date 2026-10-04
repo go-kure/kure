@@ -51,20 +51,18 @@ func ObjectGroupKind(o client.Object) schema.GroupKind {
 // clusterScopedUnregisteredKinds lists the cluster-scoped kinds this package
 // must recognise that the generated table cannot answer for, because kure's
 // scheme does not register them and so nothing derives their scope from an
-// upstream source. Without them an APIService or a PriorityClass would come
-// back ScopeUnknown, and a caller failing closed would demand a
-// metadata.namespace on an object that must not carry one.
+// upstream source. Without its entry such a kind would come back ScopeUnknown,
+// and a caller failing closed would demand a metadata.namespace on an object
+// that must not carry one.
 //
-// This set only shrinks. Every entry is a kind kure has no builders for;
-// registering one moves its scope to the derived table, and
-// TestClusterScopedUnregisteredKindsAreNotInTheGeneratedTable fires so the
-// entry is removed rather than left behind as a second, competing answer.
-var clusterScopedUnregisteredKinds = map[string]bool{
-	"scheduling.k8s.io/PriorityClass":                             true,
-	"apiregistration.k8s.io/APIService":                           true,
-	"admissionregistration.k8s.io/ValidatingWebhookConfiguration": true,
-	"admissionregistration.k8s.io/MutatingWebhookConfiguration":   true,
-}
+// The set is empty: APIService, its last entry, is registered and the
+// generated table answers for it. It only ever shrank. Every entry was a kind
+// kure had no builders for; registering one moved its scope to the derived
+// table, and TestClusterScopedUnregisteredKindsAreNotInTheGeneratedTable fired
+// so the entry was removed rather than left behind as a second, competing
+// answer. The set and its place in [Scope] stay for a cluster-scoped built-in
+// kure has to recognise before it registers it.
+var clusterScopedUnregisteredKinds = map[string]bool{}
 
 // IsNamespacedBuiltinKind reports whether a (group-aware) apiVersion+kind is a
 // known namespaced built-in type that must declare metadata.namespace.
@@ -120,9 +118,10 @@ const (
 //
 //  1. A CustomResourceDefinition is cluster-scoped.
 //  2. A built-in kind takes its scope from the generated table, derived from the
-//     pinned upstream sources — see pkg/kubernetes/README.md § 9 — as do the few
-//     cluster-scoped built-ins kure does not register, named above. The
-//     Kubernetes API defines those scopes and no manifest can redefine them.
+//     pinned upstream sources — see pkg/kubernetes/README.md § 9 — as would a
+//     cluster-scoped built-in kure does not register, if the set above named
+//     one; it names none today. The Kubernetes API defines those scopes and no
+//     manifest can redefine them.
 //  3. A custom resource takes its scope from crdScopes when a CRD in the same
 //     context defines it. That definition governs even for a kind kure
 //     registers: the CRD names the scope the target cluster will actually

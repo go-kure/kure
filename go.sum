@@ -120,6 +120,8 @@ github.com/fluxcd/helm-controller/api v1.6.4 h1:jDgB87F6RRNF0QEZDAw+8+HPU13toF5I
 github.com/fluxcd/helm-controller/api v1.6.4/go.mod h1:mYa4WKwgCCE59dMdYzOJI6B17/wofN6wtmtjWWEQesQ=
 github.com/fluxcd/image-automation-controller/api v1.2.5 h1:dermKv30IuWWOUwGK8Y4T3V2UX8pvRt6E8BZTP0uipI=
 github.com/fluxcd/image-automation-controller/api v1.2.5/go.mod h1:z8IZdILMX7ODNaezSMCSO9DuxAH4z223QAvHGX+nzAk=
+github.com/fluxcd/image-reflector-controller/api v1.2.5 h1:3lUBpBuefeO1UtVmGnvJOP5iSI2B2Lm6+CnPRdb8F54=
+github.com/fluxcd/image-reflector-controller/api v1.2.5/go.mod h1:90RGazjs5cq7Ivbc3J8c/ZLJHb+k3Z+7KbXwTsMf5SE=
 github.com/fluxcd/kustomize-controller/api v1.9.5 h1:Z4CA0cpC9rQmWiJWT9PCNO7+v3PVbAOK+5byHdbtFt8=
 github.com/fluxcd/kustomize-controller/api v1.9.5/go.mod h1:oRSEvNgNs07P6Tu3xtRigWxnxLkUCqatxbDv+gG3tLI=
 github.com/fluxcd/notification-controller/api v1.9.4 h1:vuBufiFTkgysHUorjgsfgMOMQgCWDjZ10KA4uJl2oNM=
@@ -541,6 +543,8 @@ k8s.io/component-base v0.37.1 h1:93DMmlENnK7gNLkL4pMqLO5M/HVf3p3sM4q/GasLveY=
 k8s.io/component-base v0.37.1/go.mod h1:bBrdziT4dreQG5lzTaPVxBwsZe1oxphG+ZVdD56dQWQ=
 k8s.io/klog/v2 v2.140.0 h1:Tf+J3AH7xnUzZyVVXhTgGhEKnFqye14aadWv7bzXdzc=
 k8s.io/klog/v2 v2.140.0/go.mod h1:o+/RWfJ6PwpnFn7OyAG3QnO47BFsymfEfrz6XyYSSp0=
+k8s.io/kube-aggregator v0.37.1 h1:P5ksohEbY6xbSyHgZcd+ofhCekMN9zqeCeSylrLHnCY=
+k8s.io/kube-aggregator v0.37.1/go.mod h1:7rWjY2B0eVUqzXwPkdI/RCeyyTt25F6jvz/6hjPfGIg=
 k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 h1:z5+pcu1jTyKK5mNTe2/+x+U6Uuv9jRVOJQLaBJJMpeI=
 k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098/go.mod h1:0/mqHCVhlumdJ3BhCfnjSZQE037nAhNodh1/hK0T8/I=
 k8s.io/streaming v0.37.1 h1:TpzVfQeFuVndn2g9mFqxy1UcUYPwDzqjUmwR/IzJCWc=

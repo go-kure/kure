@@ -38,21 +38,41 @@ func loadRegistered(t *testing.T) ([]Kind, map[string]upstream.Type) {
 // It is a fixture, not a source: nothing reads it outside this test. Its job is
 // to keep the crossover proof alive now that its oracle is gone. The derivation
 // fails silently by construction — an absent, unread or detached
-// +kubebuilder:resource marker resolves to Namespaced, which is also the correct
-// answer for 95 of the 128 kinds — so a regression that reverted internal/upstream
-// to reading GenDecl.Doc alone would turn 31 of these 33 namespaced with nothing
-// else going red. Against this literal it goes red.
+// +kubebuilder:resource marker resolves to Namespaced, which was also the correct
+// answer for 95 of the 128 kinds it was frozen with — so a regression that
+// reverted internal/upstream to reading GenDecl.Doc alone would have turned 31 of
+// those 33 namespaced with nothing else going red. Against this literal it goes
+// red.
 //
 // A legitimate upstream change to any of these — a kind re-scoped, added or
 // removed by a pin bump — is a deliberate edit here, made with the upstream
 // change named in the commit message. Never edit it to make the test pass.
+//
+// Registering more of k8s.io/api is the other deliberate edit. The eight
+// admissionregistration.k8s.io, node.k8s.io and scheduling.k8s.io entries were
+// added when kure registered those group versions (k8s.io/api v0.37.1), each
+// checked against the +genclient:nonNamespaced tag its upstream type carries;
+// EndpointSlice and Lease, registered in the same change, carry no such tag and
+// are namespaced. None of the eight was in the hand-seeded table. That makes 41
+// entries.
+//
+// APIService is the forty-second: kure registered apiregistration.k8s.io/v1
+// from k8s.io/kube-aggregator v0.37.1, where the type carries
+// +genclient:nonNamespaced.
 var frozenClusterScoped = set(
 	"/ComponentStatus",
 	"/Namespace",
 	"/Node",
 	"/PersistentVolume",
 	"/RangeAllocation",
+	"admissionregistration.k8s.io/MutatingAdmissionPolicy",
+	"admissionregistration.k8s.io/MutatingAdmissionPolicyBinding",
+	"admissionregistration.k8s.io/MutatingWebhookConfiguration",
+	"admissionregistration.k8s.io/ValidatingAdmissionPolicy",
+	"admissionregistration.k8s.io/ValidatingAdmissionPolicyBinding",
+	"admissionregistration.k8s.io/ValidatingWebhookConfiguration",
 	"apiextensions.k8s.io/CustomResourceDefinition",
+	"apiregistration.k8s.io/APIService",
 	"cert-manager.io/ClusterIssuer",
 	"cilium.io/CiliumBGPAdvertisement",
 	"cilium.io/CiliumBGPClusterConfig",
@@ -72,9 +92,11 @@ var frozenClusterScoped = set(
 	"networking.k8s.io/IPAddress",
 	"networking.k8s.io/IngressClass",
 	"networking.k8s.io/ServiceCIDR",
+	"node.k8s.io/RuntimeClass",
 	"postgresql.cnpg.io/ClusterImageCatalog",
 	"rbac.authorization.k8s.io/ClusterRole",
 	"rbac.authorization.k8s.io/ClusterRoleBinding",
+	"scheduling.k8s.io/PriorityClass",
 	"storage.k8s.io/CSIDriver",
 	"storage.k8s.io/CSINode",
 	"storage.k8s.io/StorageClass",

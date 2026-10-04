@@ -34,7 +34,6 @@ func LayoutRulesForPreset(p LayoutPreset) (LayoutRules, error) {
 			NodeGrouping:        GroupFlat,
 			BundleGrouping:      GroupFlat,
 			ApplicationGrouping: GroupFlat,
-			ApplicationFileMode: AppFilePerResource,
 			FilePer:             FilePerResource,
 			FluxPlacement:       FluxSeparate,
 			FileNaming:          FileNamingKindName,
@@ -45,7 +44,6 @@ func LayoutRulesForPreset(p LayoutPreset) (LayoutRules, error) {
 			NodeGrouping:        GroupByName,
 			BundleGrouping:      GroupFlat,
 			ApplicationGrouping: GroupFlat,
-			ApplicationFileMode: AppFilePerResource,
 			FilePer:             FilePerResource,
 			FluxPlacement:       FluxSeparate,
 		}, nil
@@ -55,7 +53,6 @@ func LayoutRulesForPreset(p LayoutPreset) (LayoutRules, error) {
 			NodeGrouping:        GroupByName,
 			BundleGrouping:      GroupFlat,
 			ApplicationGrouping: GroupFlat,
-			ApplicationFileMode: AppFilePerResource,
 			FilePer:             FilePerResource,
 			FluxPlacement:       FluxIntegratedPerLayout,
 		}, nil

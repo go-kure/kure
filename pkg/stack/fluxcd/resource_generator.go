@@ -50,28 +50,47 @@ func NewResourceGenerator() *ResourceGenerator {
 }
 
 // GenerateFromCluster creates Flux Kustomizations and Sources from a cluster
-// definition. It runs stack.ValidateCluster first to fail fast on structural
-// errors (umbrella cycles, disjointness violations, etc.), then walks the
-// cluster with layout.DefaultLayoutRules and generates from that layout (see
-// GenerateFromLayout).
+// definition: it walks the cluster with rules and generates from that layout
+// (see GenerateFromLayout).
 //
-// The spec.path values are therefore the directories WalkCluster writes under
-// the default rules: the root node at <root>, its children at <root>/<child>.
-// Callers that write the layout with other rules must generate from the
-// layout they write instead — CreateLayoutWithResources, or GenerateFromLayout
-// on their own WalkCluster result. The walk renders every application and
-// runs every LayoutAugmenter, so their errors surface here.
-func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
+// It refuses, in this order: FluxIntegratedPerLayout rules (below), whatever
+// the cluster; invalid rules with an absent or empty cluster, which otherwise
+// yields nothing; a cluster stack.ValidateCluster refuses (umbrella cycles,
+// disjointness violations, etc.), before the walk; and rules the walk refuses
+// (layout.LayoutRules.Validate), reported like every other walk error. Invalid
+// rules are therefore an error whatever the cluster is.
+//
+// The spec.path values are the directories WalkCluster writes under rules, so
+// rules must be the ones the caller writes the tree with: with
+// layout.DefaultLayoutRules, the root node at <root> and its children at
+// <root>/<child>. The objects are returned as a list and placed nowhere
+// (CreateLayoutWithResources places them in the layout it walks), and the list
+// is the same under FluxSeparate and FluxIntegratedPerBundle.
+//
+// FluxIntegratedPerLayout is refused. A tree written with it lists no
+// directory child in its parent, and the Kustomizations that apply those
+// children (application, augmenter and bundle-less node directories) exist
+// only where the integrator places them, so this list would leave them applied
+// by nothing: use CreateLayoutWithResources with those rules.
+//
+// The walk renders every application and runs every LayoutAugmenter, so their
+// errors surface here.
+func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+	if rules.FluxPlacement == layout.FluxIntegratedPerLayout {
+		return nil, errors.Errorf("GenerateFromCluster does not support FluxPlacement %q: the Kustomizations that apply a per-layout tree's child directories exist only in a layout; use CreateLayoutWithResources with these rules", rules.FluxPlacement)
+	}
 	if c == nil || c.Node == nil {
-		return nil, nil
+		// Nothing to generate; the walk still refuses rules it would not walk.
+		_, err := layout.WalkCluster(nil, rules)
+		return nil, err
 	}
 	if err := stack.ValidateCluster(c); err != nil {
 		return nil, err
 	}
-	ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
+	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
-			fmt.Sprintf("failed to walk the cluster with the default layout rules: %v", err), err)
+			fmt.Sprintf("failed to walk the cluster with the given layout rules: %v", err), err)
 	}
 	return g.GenerateFromLayout(ml, c)
 }
@@ -169,8 +188,8 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 		}
 	}
 	// A health check on a Flux Kustomization this pass generates names a
-	// bundle; it follows the merge to that bundle's unit, and one on the
-	// unit itself is dropped (it would wait for itself).
+	// bundle's Kustomization; it follows the merge to that bundle's unit,
+	// and one on the unit itself is dropped (it would wait for itself).
 	var checks []metaapi.NamespacedObjectKindReference
 	for _, hc := range unit.Spec.HealthChecks {
 		if hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
@@ -442,9 +461,16 @@ func objectName(obj client.Object) string {
 // whose spec.path is path, verbatim, and a Source when b.SourceRef has a URL.
 // Umbrella Children are not recursed. The generator computes no path: take
 // it from the layout that renders b (layout.OriginIndex.KustomizationPath).
+// A DependsOn bundle, a child, a NamedDependsOn entry or a health check with
+// b's own Kustomization name is an error: the Kustomization would refer to
+// itself. So are two children with one Kustomization name. The health check
+// is accepted when b.Wait is true, where Flux ignores spec.healthChecks.
 func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]client.Object, error) {
 	if b == nil {
 		return nil, nil
+	}
+	if err := g.checkOwnUnitName(b); err != nil {
+		return nil, err
 	}
 
 	kustomization, err := g.kustomizationForBundle(b, path)
@@ -468,7 +494,10 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 }
 
 // kustomizationForBundle creates a Flux Kustomization resource from a bundle,
-// with spec.path set to path. An empty Interval takes g.DefaultInterval and an empty Timeout or
+// with spec.path set to path. It is named by the bundle's KustomizationName,
+// or its Name without one (Bundle.UnitName), and names the bundles it refers
+// to the same way: each umbrella child in a health check, each DependsOn
+// bundle in spec.dependsOn. An empty Interval takes g.DefaultInterval and an empty Timeout or
 // RetryInterval leaves the field unset; a non-empty value that does not parse
 // is an error, never a silent fallback. Bundle.Validate reports the same
 // error earlier; checking here as well covers callers that generate without
@@ -513,7 +542,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 			Kind:       "Kustomization",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        b.Name,
+			Name:        b.UnitName(),
 			Namespace:   g.DefaultNamespace,
 			Labels:      b.Labels,
 			Annotations: b.Annotations,
@@ -586,7 +615,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
 				APIVersion: kustv1.GroupVersion.String(),
 				Kind:       "Kustomization",
-				Name:       child.Name,
+				Name:       child.UnitName(),
 				Namespace:  g.DefaultNamespace,
 			})
 		}
@@ -642,7 +671,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 			return nil, err
 		}
 		kust.Spec.DependsOn = append(kust.Spec.DependsOn, kustv1.DependencyReference{
-			Name: dep.Name,
+			Name: dep.UnitName(),
 		})
 	}
 	for _, name := range b.NamedDependsOn {
@@ -752,4 +781,75 @@ func (g *ResourceGenerator) GetName() string {
 // GetVersion returns the version of this resource generator.
 func (g *ResourceGenerator) GetVersion() string {
 	return "v1.0.0"
+}
+
+// checkOwnUnitName refuses a DependsOn bundle or an umbrella child that would
+// get b's own Kustomization name (Bundle.UnitName), two children that would
+// get one name, b itself among its Children, and b itself or its name among
+// its own dependencies or, as a Flux Kustomization in the generator's
+// namespace and unless b.Wait is true, its health checks. A longer cycle of
+// Children is Bundle.Validate's to refuse. The cluster and layout entry
+// points have layout.IndexOrigins refuse two rendered bundles with one name
+// and drop a unit's reference to itself; GenerateForBundle has no index, and
+// without this check it would emit a Kustomization that depends on or waits
+// for itself.
+func (g *ResourceGenerator) checkOwnUnitName(b *stack.Bundle) error {
+	refuse := func(field string, first, second *stack.Bundle) error {
+		return errors.ResourceValidationError("Bundle", b.Name, field,
+			fmt.Sprintf("bundles %q and %q would both get a Flux Kustomization named %q: that name, the bundle's KustomizationName or else its Name, must be unique",
+				first.GetPath(), second.GetPath(), first.UnitName()), nil)
+	}
+	own := func(field, list string) error {
+		return errors.ResourceValidationError("Bundle", b.Name, field,
+			fmt.Sprintf("bundle %q names its own Flux Kustomization %q in %s: the Kustomization would depend on itself",
+				b.GetPath(), b.UnitName(), list), nil)
+	}
+	for _, dep := range b.DependsOn {
+		if dep == b {
+			return own("dependsOn", "DependsOn")
+		}
+		if dep != nil && dep.UnitName() == b.UnitName() {
+			return refuse("dependsOn", b, dep)
+		}
+	}
+	for _, name := range b.NamedDependsOn {
+		if name == b.UnitName() {
+			return own("namedDependsOn", "NamedDependsOn")
+		}
+	}
+	for _, hc := range b.HealthChecks {
+		// With spec.wait true Flux ignores spec.healthChecks: the check
+		// is inert and is written as given.
+		if !waitValue(b.Wait) &&
+			hc.Kind == "Kustomization" && strings.HasPrefix(hc.APIVersion, kustv1.GroupVersion.Group+"/") &&
+			effectiveNS(hc.Namespace, g.DefaultNamespace) == effectiveNS(g.DefaultNamespace, "") &&
+			hc.Name == b.UnitName() {
+			return errors.ResourceValidationError("Bundle", b.Name, "healthChecks",
+				fmt.Sprintf("bundle %q has its own Flux Kustomization %q in HealthChecks: the Kustomization would wait for itself",
+					b.GetPath(), b.UnitName()), nil)
+		}
+	}
+	// Before InitializeUmbrella, which follows Children and would not
+	// return from a bundle that is its own child.
+	if slices.Contains(b.Children, b) {
+		return errors.ResourceValidationError("Bundle", b.Name, "children",
+			fmt.Sprintf("bundle %q lists itself in Children: an umbrella cannot be its own child", b.Name), nil)
+	}
+	if len(b.Children) > 0 {
+		b.InitializeUmbrella()
+	}
+	children := make(map[string]*stack.Bundle, len(b.Children))
+	for _, child := range b.Children {
+		if child == nil {
+			continue
+		}
+		if child.UnitName() == b.UnitName() {
+			return refuse("children", b, child)
+		}
+		if first, ok := children[child.UnitName()]; ok && first != child {
+			return refuse("children", first, child)
+		}
+		children[child.UnitName()] = child
+	}
+	return nil
 }

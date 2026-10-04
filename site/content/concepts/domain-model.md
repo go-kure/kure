@@ -18,7 +18,7 @@ Cluster
 
 ### Cluster
 
-The root of the hierarchy, representing a target Kubernetes cluster. A cluster has a name, a tree of nodes, and GitOps configuration specifying which workflow engine to use (Flux or ArgoCD). That configuration can also carry a bootstrap: how Flux itself is installed (in `gotk` mode, from the flux2 release Kure vendors unless `FluxVersion` names another) and which source it syncs from, including — for flux-operator — the name of the sync source and Kustomization the operator creates (`BootstrapConfig.SyncName`).
+The root of the hierarchy, representing a target Kubernetes cluster. A cluster has a name, a tree of nodes, and GitOps configuration specifying which workflow engine to use (Flux or ArgoCD). That configuration can also carry a bootstrap: how Flux itself is installed (in `gotk` mode, from the flux2 release Kure vendors unless `FluxVersion` names another) and which source it syncs from, including — for flux-operator — the name of the sync source and Kustomization the operator creates (`BootstrapConfig.SyncName`). In flux-operator mode, the default, `BootstrapConfig.FluxVersion` and `Registry` are both required: they become the `FluxInstance` distribution, an empty value is an error, and no default is filled in.
 
 ### Node
 
@@ -43,6 +43,7 @@ A deployment unit corresponding to a single GitOps reconciliation resource (e.g.
 - **Umbrella composition** via `Children` (see below)
 - **Reconciliation settings**: interval, pruning, timeouts. `Interval`, `Timeout` and `RetryInterval` are Go duration strings (`"10m"`); empty means the default, and a value that does not parse is a validation error rather than a silent fallback
 - **Labels and annotations** for metadata
+- **A name for the generated resource** via `KustomizationName`: the Flux Kustomization (or ArgoCD Application) is named after the bundle unless this is set. The bundle's `Name` stays its identity and its directory, and a `NamedDependsOn` entry names the generated resource, so it uses this value when one is set. A `DependsOn` entry that is a copy of a bundle of the cluster (same `Name`) is that bundle: it leaves `KustomizationName` empty or sets the name of the bundle's generated resource
 
 #### Umbrella Bundles
 
@@ -159,7 +160,7 @@ clusters/
         api/                     # Application → K8s manifests
 ```
 
-The [Layout Engine](/api-reference/layout) handles this mapping, and the [Flux Engine](/api-reference/flux-engine) generates the corresponding Flux Kustomization resources — by default in a separate `flux-system` directory, not beside each bundle.
+The [Layout Engine](/api-reference/layout) handles this mapping, and the [Flux Engine](/api-reference/flux-engine) generates the corresponding Flux Kustomization resources — by default in a separate `flux-system` directory, not beside each bundle. The workflow entry points take the same `rules`: `GenerateFromCluster(cluster, rules)` returns the Flux resources as a list placed nowhere (the Kustomizations and any Sources generated for them), each Kustomization's `spec.path` a directory a walk with those rules writes, so pass the rules the tree is written with; `CreateLayoutWithResources(cluster, rules)` returns them placed in the layout it walks.
 
 ## Further Reading
 

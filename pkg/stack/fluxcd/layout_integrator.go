@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"path"
@@ -51,6 +52,9 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 //
 // Placement is driven by rules.FluxPlacement. FluxUnset is treated as
 // FluxSeparate to match DefaultLayoutRules and the walker's normalization.
+// The rules are validated first, as given, by the check the walks use
+// (layout.LayoutRules.Validate): this call reads the placement and the file
+// naming of a tree it did not walk.
 //
 // Every placement first indexes the layout's origins (layout.IndexOrigins): a
 // hand-built, partial or other-cluster tree is refused rather than matched by
@@ -60,6 +64,9 @@ func NewLayoutIntegrator(generator *ResourceGenerator) *LayoutIntegrator {
 // would host it is kept; one with the same name elsewhere or with another
 // path is an error.
 func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
+	if err := rules.Validate(); err != nil {
+		return err
+	}
 	if ml == nil || c == nil || c.Node == nil {
 		return nil
 	}
@@ -73,10 +80,6 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	// already holds Flux Kustomizations placed outside its applications (an
 	// earlier integration's, or a caller's) was placed by them, so it is not
 	// re-placed; and a refused call puts the tree back as it was.
-	if !isFluxPlacement(rules.FluxPlacement) {
-		return errors.NewValidationError("fluxPlacement", string(rules.FluxPlacement), "LayoutRules",
-			[]string{string(layout.FluxIntegratedPerLayout), string(layout.FluxIntegratedPerBundle), string(layout.FluxSeparate)})
-	}
 	if ml.FluxPlacement != rules.FluxPlacement {
 		if placed := placedKustomization(ml); placed != "" {
 			return errors.Errorf("layout %q already holds Flux Kustomization %q, placed for %q: it cannot be integrated again as %q", ml.FullRepoPath(), placed, ml.FluxPlacement, rules.FluxPlacement)
@@ -87,7 +90,7 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 
 	var err error
 	if rules.FluxPlacement == layout.FluxSeparate {
-		err = li.addSeparateFluxToLayout(ml, c)
+		err = li.addSeparateFluxToLayout(ml, c, rules.FileNaming)
 	} else {
 		// Both inline placements put Flux CRs in the tree. They differ only
 		// in granularity: PerLayout emits a CR for every layout node (incl.
@@ -176,11 +179,6 @@ func placedKustomization(ml *layout.ManifestLayout) string {
 	return find(ml)
 }
 
-// isFluxPlacement reports whether p is one of the three placements.
-func isFluxPlacement(p layout.FluxPlacement) bool {
-	return p == layout.FluxSeparate || p == layout.FluxIntegratedPerLayout || p == layout.FluxIntegratedPerBundle
-}
-
 // setPlacement sets placement on l and every layout below it, augmenter
 // children included.
 func setPlacement(l *layout.ManifestLayout, placement layout.FluxPlacement) {
@@ -199,9 +197,13 @@ func setPlacement(l *layout.ManifestLayout, placement layout.FluxPlacement) {
 // (FluxUnset -> FluxSeparate) and the normalized rules are passed to the
 // SourceRef validation gate, WalkCluster, and IntegrateWithLayout. This
 // guarantees a single placement authority per call.
+//
+// The rules are validated by the walk, not here (layout.LayoutRules.Validate),
+// also for a nil cluster: invalid rules are an error whatever the cluster is.
 func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules layout.LayoutRules) (*layout.ManifestLayout, error) {
 	if c == nil {
-		return nil, nil
+		// Nothing to build; the walk still refuses rules it would not walk.
+		return layout.WalkCluster(nil, rules)
 	}
 
 	// Fail fast on umbrella / disjointness / multi-package violations before
@@ -216,7 +218,7 @@ func (li *LayoutIntegrator) CreateLayoutWithResources(c *stack.Cluster, rules la
 	// so both require every reachable bundle to have a valid SourceRef.
 	if rules.FluxPlacement == layout.FluxIntegratedPerLayout ||
 		rules.FluxPlacement == layout.FluxIntegratedPerBundle {
-		if err := validateSourceRefsForFluxIntegrated(c); err != nil {
+		if err := validateSourceRefsForFluxIntegrated(c, rules.FluxPlacement); err != nil {
 			return nil, err
 		}
 	}
@@ -339,36 +341,47 @@ func (li *LayoutIntegrator) addIntegratedFluxToLayout(ml *layout.ManifestLayout,
 	if err := checkPlacedReconcileOrder(ml, p.generated); err != nil {
 		return err
 	}
-	markFluxBuilds(ml, p.generated)
-	return nil
+	return markFluxBuilds(ml, p.generated)
 }
 
 // markFluxBuilds marks, with SetFluxBuild, the directory each Kustomization
 // this integration generated builds (generated: their namespace/name keys),
 // and the root when it generated any: the Flux bootstrap applies the root. The
 // writers check a KustomizationRecursive directory so marked against what
-// Flux builds from it. A Kustomization a caller or an application placed marks
-// nothing.
-func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) {
+// Flux builds from it. A Kustomization the integration kept in place of one of
+// its own (add) has that key and marks its directory in whatever form it has:
+// typed, unstructured or inside a List (go-kure/kure#977). Any other
+// Kustomization a caller or an application placed marks nothing.
+func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) error {
 	layoutAt := map[string]*layout.ManifestLayout{}
 	var paths []string
-	var walk func(l *layout.ManifestLayout)
-	walk = func(l *layout.ManifestLayout) {
+	var walk func(l *layout.ManifestLayout) error
+	walk = func(l *layout.ManifestLayout) error {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
-		for _, obj := range l.Resources {
-			if k, ok := obj.(*kustv1.Kustomization); ok && generated[crKey(k.Namespace, k.Name)] {
-				paths = append(paths, k.Spec.Path)
+		objs, err := resourceItems(l)
+		if err != nil {
+			return err
+		}
+		for _, obj := range objs {
+			if p, ok := fluxKustomizationPath(obj); ok && generated[crKey(obj.GetNamespace(), obj.GetName())] {
+				paths = append(paths, p)
 			}
 		}
 		for _, c := range l.Children {
-			if c != nil {
-				walk(c)
+			if c == nil {
+				continue
+			}
+			if err := walk(c); err != nil {
+				return err
 			}
 		}
+		return nil
 	}
-	walk(root)
+	if err := walk(root); err != nil {
+		return err
+	}
 	if len(paths) == 0 {
-		return
+		return nil
 	}
 	root.SetFluxBuild(true)
 	for _, p := range paths {
@@ -376,10 +389,12 @@ func markFluxBuilds(root *layout.ManifestLayout, generated map[string]bool) {
 			l.SetFluxBuild(true)
 		}
 	}
+	return nil
 }
 
 // checkPlacedReconcileOrder runs checkReconcileOrder over the Kustomizations
-// this integration placed (generated: their namespace/name keys), with the
+// this integration placed or kept (generated: their namespace/name keys; a
+// kept one in whatever form it has, generatedKustomizations), with the
 // creation rule integrated placement adds: a CR exists only once the
 // Kustomization whose directory references reach its file has applied, and a
 // CR the root directory reaches is created by the Flux bootstrap. Under
@@ -389,22 +404,29 @@ func checkPlacedReconcileOrder(root *layout.ManifestLayout, generated map[string
 	var kusts []*kustv1.Kustomization
 	hostOf := map[string]*layout.ManifestLayout{}
 	layoutAt := map[string]*layout.ManifestLayout{}
-	var index func(l *layout.ManifestLayout)
-	index = func(l *layout.ManifestLayout) {
+	var index func(l *layout.ManifestLayout) error
+	index = func(l *layout.ManifestLayout) error {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
-		for _, obj := range l.Resources {
-			if k, ok := obj.(*kustv1.Kustomization); ok && generated[crKey(k.Namespace, k.Name)] {
-				kusts = append(kusts, k)
-				hostOf[crKey(k.Namespace, k.Name)] = l
-			}
+		own, err := generatedKustomizations(l, generated)
+		if err != nil {
+			return err
+		}
+		for _, k := range own {
+			kusts = append(kusts, k)
+			hostOf[crKey(k.Namespace, k.Name)] = l
 		}
 		for _, child := range l.Children {
 			if child != nil {
-				index(child)
+				if err := index(child); err != nil {
+					return err
+				}
 			}
 		}
+		return nil
 	}
-	index(root)
+	if err := index(root); err != nil {
+		return err
+	}
 
 	reach := func(l *layout.ManifestLayout, into map[*layout.ManifestLayout]bool) {
 		for _, b := range buildDirectories(l) {
@@ -504,7 +526,10 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 	if len(p.derived) == 0 {
 		return nil
 	}
-	layoutAt, crs := p.indexGenerated(top)
+	layoutAt, crs, err := p.indexGenerated(top)
+	if err != nil {
+		return err
+	}
 	builds := []*layout.ManifestLayout{top}
 	seen := map[*layout.ManifestLayout]bool{top: true}
 	if !seen[p.root] {
@@ -566,26 +591,31 @@ func (p *integratedPlacement) hostSourcesOncePerBuild(top *layout.ManifestLayout
 
 // indexGenerated maps every layout under top by its directory, and returns in
 // depth-first layout order every Kustomization this pass placed or kept
-// (generated).
-func (p *integratedPlacement) indexGenerated(top *layout.ManifestLayout) (map[string]*layout.ManifestLayout, []*kustv1.Kustomization) {
+// (generated), in typed form whatever form it has (generatedKustomizations).
+func (p *integratedPlacement) indexGenerated(top *layout.ManifestLayout) (map[string]*layout.ManifestLayout, []*kustv1.Kustomization, error) {
 	layoutAt := map[string]*layout.ManifestLayout{}
 	var crs []*kustv1.Kustomization
-	var index func(l *layout.ManifestLayout)
-	index = func(l *layout.ManifestLayout) {
+	var index func(l *layout.ManifestLayout) error
+	index = func(l *layout.ManifestLayout) error {
 		layoutAt[path.Clean(l.FullRepoPath())] = l
-		for _, obj := range l.Resources {
-			if k, ok := obj.(*kustv1.Kustomization); ok && p.generated[crKey(k.Namespace, k.Name)] {
-				crs = append(crs, k)
-			}
+		own, err := generatedKustomizations(l, p.generated)
+		if err != nil {
+			return err
 		}
+		crs = append(crs, own...)
 		for _, child := range l.Children {
 			if child != nil {
-				index(child)
+				if err := index(child); err != nil {
+					return err
+				}
 			}
 		}
+		return nil
 	}
-	index(top)
-	return layoutAt, crs
+	if err := index(top); err != nil {
+		return nil, nil, err
+	}
+	return layoutAt, crs, nil
 }
 
 // buildScope returns the layouts whose objects a kustomize build of b holds:
@@ -638,7 +668,10 @@ func (p *integratedPlacement) checkRootBuildKeepsHostedSources(top *layout.Manif
 	if len(hosted) == 0 {
 		return nil
 	}
-	layoutAt, crs := p.indexGenerated(top)
+	layoutAt, crs, err := p.indexGenerated(top)
+	if err != nil {
+		return err
+	}
 	rf := provider.NewDefaultDepProvider().GetResourceFactory()
 	for _, k := range crs {
 		b := layoutAt[path.Clean(k.Spec.Path)]
@@ -1114,37 +1147,98 @@ func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedO
 	return out, walk(ml)
 }
 
-// resourceItems returns l's resources with every List replaced by its items:
-// a List is an envelope, and kustomize builds the items.
+// resourceItems returns l's resources as kustomize builds them, the rule the
+// layout package's pre-write check reads them by (go-kure/kure#977): a List is
+// an envelope, and kustomize builds its items. A List is an object whose kind
+// ends in "List" and that has items; a List among the items is opened as
+// well, and one whose items are null holds nothing. Any other object is
+// returned as itself, whatever fields it has: a kind that does not end in
+// "List", a List kind without an items field, and one whose items are not a
+// list.
 func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 	var out []client.Object
+	// keep returns a built object. An item of a typed List need not carry
+	// object metadata (a client.Object): one that does not is returned as the
+	// object the writers serialize for it.
+	keep := func(obj runtime.Object) error {
+		if o, ok := obj.(client.Object); ok {
+			out = append(out, o)
+			return nil
+		}
+		raw, err := json.Marshal(obj)
+		if err != nil {
+			return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		u := &unstructured.Unstructured{}
+		if err := json.Unmarshal(raw, &u.Object); err != nil {
+			return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		out = append(out, u)
+		return nil
+	}
+	queue := make([]runtime.Object, 0, len(l.Resources))
 	for _, r := range l.Resources {
-		if r == nil {
+		if r != nil {
+			queue = append(queue, r)
+		}
+	}
+	for len(queue) > 0 {
+		obj := queue[0]
+		queue = queue[1:]
+		if !strings.HasSuffix(obj.GetObjectKind().GroupVersionKind().Kind, "List") {
+			if err := keep(obj); err != nil {
+				return nil, err
+			}
 			continue
 		}
-		if u, ok := r.(*unstructured.Unstructured); ok && u.IsList() {
-			list, err := u.ToList()
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for i := range list.Items {
-				out = append(out, &list.Items[i])
-			}
-			continue
-		}
-		if meta.IsListType(r) {
-			items, err := meta.ExtractList(r)
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for _, item := range items {
-				if obj, ok := item.(client.Object); ok {
-					out = append(out, obj)
+		if u, ok := obj.(*unstructured.Unstructured); ok {
+			raw, has := u.Object["items"]
+			switch {
+			case has && raw == nil:
+				// A List that holds nothing.
+			case !u.IsList():
+				out = append(out, u)
+			default:
+				list, err := u.ToList()
+				if err != nil {
+					return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+				}
+				for i := range list.Items {
+					queue = append(queue, &list.Items[i])
 				}
 			}
 			continue
 		}
-		out = append(out, r)
+		if !meta.IsListType(obj) {
+			if err := keep(obj); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		items, err := typedListItems(obj)
+		if err != nil {
+			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		// A typed List can hold an item as raw JSON (runtime.RawExtension),
+		// which the writers serialize as the object it encodes: it is read
+		// as that object. An empty item holds nothing. Any other item is
+		// read as it is, a List that has no object metadata of its own
+		// (metav1.List, for one) included.
+		for _, item := range items {
+			switch o := item.(type) {
+			case nil:
+			case *runtime.Unknown:
+				u := &unstructured.Unstructured{}
+				if err := json.Unmarshal(o.Raw, &u.Object); err != nil {
+					return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+				}
+				if u.Object != nil {
+					queue = append(queue, u)
+				}
+			default:
+				queue = append(queue, o)
+			}
+		}
 	}
 	return out, nil
 }
@@ -1192,7 +1286,7 @@ func crKey(namespace, name string) string {
 // purpose: every Kustomization this pass generates is placed in
 // g.DefaultNamespace (kustomizationForBundle, createKustomizationForLayout),
 // so name and namespace/name identify the same object here, and a bundle's
-// name is its CR identity (IndexOrigins refuses two bundles with one name).
+// CR identity is its Bundle.UnitName (IndexOrigins refuses two with one).
 // Objects already in the tree may sit in other namespaces; those are keyed by
 // crKey in indexExistingKustomizations.
 func (p *integratedPlacement) claim(name, path string) error {
@@ -1295,8 +1389,9 @@ func effectiveNamespace(obj client.Object) string {
 // resources, generated from the layout itself (GenerateFromLayout) so every
 // spec.path is a directory this layout writes. A flux-system child left by an
 // earlier integration is kept when it holds the same resources and is an
-// error when it does not.
-func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster) error {
+// error when it does not. A directory this call creates names its files by
+// fileNaming, the rules'; left unset, by ml's own.
+func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c *stack.Cluster, fileNaming layout.FileNamingMode) error {
 	fluxResources, err := li.Generator.GenerateFromLayout(ml, c)
 	if err != nil {
 		return errors.ResourceValidationError("Cluster", c.Name, "flux-resources",
@@ -1363,8 +1458,7 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 			if err := checkPlacedReconcileOrder(ml, generated); err != nil {
 				return err
 			}
-			markFluxBuilds(ml, generated)
-			return nil
+			return markFluxBuilds(ml, generated)
 		}
 		return errors.Errorf("layout %q already has a %s child with other Flux resources; integrate a freshly walked layout", ml.FullRepoPath(), DefaultFluxDirName)
 	}
@@ -1381,11 +1475,19 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 	// this layout as a child, so it must sit below ml. Joined onto
 	// ml.Namespace instead, it landed beside ml when ml had a Name, and the
 	// reference dangled (go-kure/kure#771).
+	//
+	// FileNaming is the rules', so the directory's files are named like the
+	// rest of the tree; rules that leave it unset take ml's, the parent's
+	// (go-kure/kure#976).
+	if fileNaming == layout.FileNamingUnset {
+		fileNaming = ml.FileNaming
+	}
 	fluxLayout := &layout.ManifestLayout{
-		Name:      DefaultFluxDirName,
-		Namespace: ml.FullRepoPath(),
-		FilePer:   layout.DefaultLayoutRules().FilePer,
-		Resources: fluxResources,
+		Name:       DefaultFluxDirName,
+		Namespace:  ml.FullRepoPath(),
+		FilePer:    layout.DefaultLayoutRules().FilePer,
+		FileNaming: fileNaming,
+		Resources:  fluxResources,
 	}
 
 	ml.Children = append(ml.Children, fluxLayout)
@@ -1398,7 +1500,10 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 		ml.Children = ml.Children[:len(ml.Children)-1]
 		return err
 	}
-	markFluxBuilds(ml, generated)
+	if err := markFluxBuilds(ml, generated); err != nil {
+		ml.Children = ml.Children[:len(ml.Children)-1]
+		return err
+	}
 	return nil
 }
 
@@ -1407,14 +1512,86 @@ func (li *LayoutIntegrator) addSeparateFluxToLayout(ml *layout.ManifestLayout, c
 // SourceRef validation gate, and the walker all read from this normalized value
 // so they cannot disagree on what "unset" means.
 //
-// The default is read from layout.DefaultLayoutRules (pkg/stack/layout/types.go:154-163)
-// rather than named here, because that function is where the layout package
-// declares it and the walker resolves unset options from the same call
-// (pkg/stack/layout/walker.go:42-43). A constant in this package would be a
-// second copy of a value this package does not own.
+// The default is read from layout.DefaultLayoutRules rather than named here,
+// because that function is where the layout package declares it and
+// layout.WalkCluster resolves an unset placement from the same call. A
+// constant in this package would be a second copy of a value this package
+// does not own.
 func normalizeRulesPlacement(rules layout.LayoutRules) layout.LayoutRules {
 	if rules.FluxPlacement == layout.FluxUnset {
 		rules.FluxPlacement = layout.DefaultLayoutRules().FluxPlacement
 	}
 	return rules
+}
+
+// typedListItems returns the items of a typed List as the writers serialize
+// them, the rule the layout package's pre-write check reads them by
+// (resourceItems). An item held as a runtime.RawExtension is serialized from
+// its raw JSON when it has any and from its object otherwise
+// (RawExtension.MarshalJSON), so it is read in that order: meta.ExtractList
+// reads the object first, and would name an object the written file does not
+// hold when the two differ. The raw JSON is returned as a runtime.Unknown.
+//
+// meta.ExtractList reads the list, so whatever it accepts as a list of items
+// is accepted here and whatever it refuses (an Items pointer that is nil,
+// among others) is refused with its error. It decides by the element type of
+// the Items slice, and so does the correction: a named slice type and a
+// pointer to the slice are read alike. An empty item is a nil entry.
+func typedListItems(list runtime.Object) ([]runtime.Object, error) {
+	items, err := meta.ExtractList(list)
+	if err != nil || len(items) == 0 {
+		return items, err
+	}
+	ptr, err := meta.GetItemsPtr(list)
+	if err != nil {
+		return nil, err
+	}
+	slice := reflect.ValueOf(ptr).Elem()
+	if slice.Type().Elem() != reflect.TypeFor[runtime.RawExtension]() {
+		return items, nil
+	}
+	for i := range items {
+		if raw := slice.Index(i).Interface().(runtime.RawExtension).Raw; raw != nil {
+			items[i] = &runtime.Unknown{Raw: raw}
+		}
+	}
+	return items, nil
+}
+
+// generatedKustomizations returns, in typed form and in the order kustomize
+// builds them, the Flux Kustomizations of l that this integration placed or
+// kept (generated: their namespace/name keys). It reads l as kustomize builds
+// it (resourceItems), so one the integration kept in place of its own (add)
+// counts in whatever form it has: typed, unstructured or inside a List. One
+// that is not typed is converted through its JSON, and a conversion failure is
+// an error naming the layout and the object, never a Kustomization the
+// integrator's checks leave out (go-kure/kure#979).
+func generatedKustomizations(l *layout.ManifestLayout, generated map[string]bool) ([]*kustv1.Kustomization, error) {
+	objs, err := resourceItems(l)
+	if err != nil {
+		return nil, err
+	}
+	var out []*kustv1.Kustomization
+	for _, obj := range objs {
+		if _, ok := fluxKustomizationPath(obj); !ok {
+			continue
+		}
+		key := crKey(obj.GetNamespace(), obj.GetName())
+		if !generated[key] {
+			continue
+		}
+		k, ok := obj.(*kustv1.Kustomization)
+		if !ok {
+			raw, err := json.Marshal(obj)
+			if err == nil {
+				k = &kustv1.Kustomization{}
+				err = json.Unmarshal(raw, k)
+			}
+			if err != nil {
+				return nil, errors.Wrapf(err, "layout %q: read Flux Kustomization %q in typed form", l.FullRepoPath(), key)
+			}
+		}
+		out = append(out, k)
+	}
+	return out, nil
 }

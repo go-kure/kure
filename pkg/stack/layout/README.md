@@ -117,6 +117,33 @@ lists it, or a sibling that parent lists), and so are
 two generators named `x` in one layout or in two layouts of one build. A ConfigMap `x` in another
 namespace, or a generator `x` in a child its parent does not list, is written.
 
+In a tree Flux delivers, the writers refuse a directory that is written and that nothing applies
+(go-kure/kure#977). A tree is one Flux delivers when its root is marked with `SetFluxBuild`: the
+fluxcd integrator marks the root of every tree it generated a Kustomization for, and a caller that
+places Flux Kustomizations itself marks its tree the same way. In such a tree every child its
+parent's `kustomization.yaml` does not list (the children named above: an umbrella child, one that
+renders bundles, a directory child of a `FluxIntegratedPerLayout` parent, and under `WriteToDisk`
+and `WriteToTar` a directory child of another package) is applied only by a Flux Kustomization
+whose `spec.path` names its directory, so it must be marked as well. An unmarked one is refused,
+naming the layout and its parent. A child of another package is not exempt: those two writers
+write its directory into the tree and nothing in the tree lists it. An `AppFileSingle` child
+without resources writes no file and is not checked. A tree whose root is not marked, an Argo CD
+tree included, is not checked.
+
+The writers also refuse two Flux Kustomizations with one namespace and name anywhere in a tree,
+marked or not (go-kure/kure#977). The checks above refuse one object held twice in what one
+kustomize build takes in; two Kustomizations in directories that are applied separately pass
+those, yet they are one object in the cluster, where each apply replaces what the other wrote. A
+Kustomization is matched by the group `kustomize.toolkit.fluxcd.io` and its kind, at any version,
+and an omitted namespace counts as `default`. The error names both layouts. A Kustomization inside
+a List counts, where a List is what kustomize opens as one: an object whose kind ends in `List`
+and that has an `items` field, opened again when an item is itself such a List. A kind that does
+not end in `List` is one object, whatever fields it has, and so is a List kind without `items`; a
+List whose `items` is null holds nothing. An item a typed List holds as raw JSON
+(`runtime.RawExtension`) is read as the object it encodes, also when the item carries an object
+beside the raw JSON: the raw JSON is what is written. A Flux Kustomization without object
+metadata, which an item of a typed List can be, is refused: its namespace and name cannot be read.
+
 ### 2. LayoutRules Configuration
 - **NodeGrouping**: whether each child node gets a directory (`GroupByName`, default) or merges into its parent's (`GroupFlat`; the root keeps its directory)
 - **BundleGrouping**: whether each bundle gets a directory inside its node's (`GroupByName`) or renders in the node's directory (`GroupFlat`, default)
@@ -145,6 +172,27 @@ error names the application and the directory it would have been created in.
 - **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; application children included as directories)
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
 - **ClusterName**: Optional cluster name prefix for cluster-aware directory paths
+
+The rules carry no application file mode: no walk sets one on the layouts it builds. Whether an
+application is written as one file is the layout's own `ApplicationFileMode` (every writer), or
+`Config.ApplicationFileMode` as the default for application layouts in `WriteManifest`.
+
+`WalkCluster` and `WalkClusterByPackage` validate the rules they are given before they build
+anything (`LayoutRules.Validate`), so no caller has to and no entry point that walks checks on its
+own. The rules are validated as given, then unset values take their defaults: an unset value is
+valid. Two things are refused, each with an error naming the field and the value:
+
+- an unknown value of `NodeGrouping`, `BundleGrouping`, `ApplicationGrouping`, `FilePer`,
+  `FluxPlacement` or `FileNaming`. It is not walked as if it were another value;
+- a `ClusterName` with a `..` path segment (`../prod`, `clusters/../prod`). The cluster directory
+  is the top layout's `Namespace`, which the writers refuse with such a segment, so the walk
+  refuses it first. This is stricter than the writers in one case, by design: `x/../platform`
+  over a root node `platform` would be cleaned to `platform` and written, and is refused all the
+  same. Every other spelling is accepted and written: `.`, a nested or rooted path, a trailing
+  slash, dots inside a segment (`a..b`).
+
+The rules are checked whatever the cluster is: a nil cluster with invalid rules returns the rules
+error, not a nil layout.
 
 ### 3. Two Main Walker Functions
 - **WalkCluster()**: Standard hierarchical layout (Node → Bundle → App structure)
@@ -227,6 +275,28 @@ Controls how resource YAML files are named:
 
 `FileNamingKindName` drops the namespace prefix, which is useful when each application already has its own directory (e.g., Pattern A / CentralizedControlPlane). The naming mode is propagated through all writers: `WriteManifest`, `WriteToDisk`, and `WriteToTar`.
 
+`WriteManifest` names every layout's files from its `Config`. `WriteToDisk` and `WriteToTar` name
+each layout's files from that layout's own `FileNaming`, which `LayoutRules.FileNaming` sets across
+the tree:
+
+- every layout a walker creates carries the rules' `FileNaming`;
+- a layout an augmenter adds and leaves unset takes its parent's, at any depth;
+- the `flux-system/` directory of `FluxSeparate` takes the rules' (the root layout's when the rules
+  passed to `IntegrateWithLayout` leave it unset);
+- a layout that sets its own `FileNaming` keeps it, and the layouts below it inherit that one.
+
+A layout added to a tree by hand, outside a walker, is not touched: set its `FileNaming` yourself.
+A layout `FlattenSingleTier` absorbs into the root has no directory of its own any more: its files
+take the root's `FileNaming`, and its own only when the root's is unset.
+
+**Breaking change (go-kure/kure#976).** Before, the `flux-system/` directory and the layouts an
+augmenter added always used the default pattern unless the augmenter set `FileNaming` itself. With
+`FileNamingKindName` (the `CentralizedControlPlane` preset included) those files are renamed:
+`flux-system/flux-system-kustomization-<name>.yaml` becomes `flux-system/kustomization-<name>.yaml`,
+and an augmenter layout's `<namespace>-<kind>-<name>.yaml` becomes `<kind>-<name>.yaml`. Each
+directory's `kustomization.yaml` lists the new names. Update anything outside kure that reads those
+files by name. An augmenter that needs the old names sets `FileNamingDefault` on the layouts it adds.
+
 ### Kustomization Generation
 - **KustomizationExplicit**: Lists all manifest files explicitly
 - **KustomizationRecursive**: Writes no `kustomization.yaml` into the layout's directory; every
@@ -241,7 +311,9 @@ Controls how resource YAML files are named:
   A Flux Kustomization kure generated builds a directory when `SetFluxBuild` marks it: the fluxcd
   integrator marks each generated `spec.path` layout, and the root, which the Flux bootstrap
   applies. Nothing else marks: a caller placing Flux Kustomizations from `GenerateFromLayout` or its
-  own code calls `SetFluxBuild` on their `spec.path` layouts to get these checks.
+  own code calls `SetFluxBuild` on the root and on their `spec.path` layouts to get these checks.
+  Once the root is marked, every directory its parent does not list must be marked too (see
+  "Layout paths" above): an unmarked one is a directory nothing applies.
 
   A marked Recursive directory that holds no file is refused (go-kure/kure#904): no resource file,
   extra file, `AppFileSingle` child file, file of a layout below it or `kustomization.yaml` a
@@ -367,7 +439,8 @@ bundle sharing the directory.
 `KustomizationPath(b)` is the directory of the layout that renders `b` — the one path every Flux
 Kustomization and ArgoCD Application kure emits for a bundle uses. It refuses a tree it cannot
 resolve: an object rendered twice, a rendered set that differs from what the cluster reaches
-(hand-built, partial or other-cluster trees), two bundles with one name, a node or bundle
+(hand-built, partial or other-cluster trees), two bundles with one name, two bundles whose
+Kustomization or Application would get one name (`Bundle.UnitName`), a node or bundle
 layout set to `AppFileSingle` mode, and a dependency cycle between units. `WriteManifest` refuses a
 node or bundle layout whose own `ApplicationFileMode` is `AppFileSingle` too: its files would go
 into its `Namespace`, so no directory would exist at its path. `Config.ApplicationFileMode` is only
@@ -375,12 +448,18 @@ the default for application (and hand-built) layouts, so `ArgoProfile`'s `AppFil
 file per application while nodes and bundles keep their directories.
 
 `Units()` returns the layouts that render bundles: each is one reconciliation unit, the directory a
-Flux Kustomization or ArgoCD Application applies. `UnitName(b)` is the unit that applies `b` (the
-first bundle its directory renders), and `UnitDependencies(l)` / `UnitNamedDependencies(l)` map the
-bundles' `DependsOn` / `NamedDependsOn` to units, dropping dependencies inside `l`'s own unit.
+Flux Kustomization or ArgoCD Application applies. `UnitName(b)` is the unit that applies `b`: the
+name in effect (`Bundle.UnitName`: `KustomizationName`, or `Name` without it) of the first bundle
+its directory renders. `UnitOfName(name)` maps a Kustomization name to its unit, and returns a name
+no rendered bundle has in effect unchanged. `UnitDependencies(l)` / `UnitNamedDependencies(l)` map
+the bundles' `DependsOn` / `NamedDependsOn` to units, dropping dependencies inside `l`'s own unit.
 `IndexOrigins` refuses a cycle in those dependencies; waits a workflow adds on top (Flux health
 checks, creation order) are checked by that workflow.
-Bundles are resolved by name, which is unique, so a copy of a bundle resolves like the original.
+Bundles are resolved by `Name`, which is unique, so a copy of a bundle resolves like the original.
+A `DependsOn` copy that leaves `KustomizationName` empty or sets the rendered bundle's name in
+effect (`UnitName()`) is that bundle. `IndexOrigins` refuses one that sets another name, naming
+both, and one that stands for a bundle whose Kustomization name is also in the dependant's
+`NamedDependsOn` (one dependency in both lists), in the words `stack.ValidateCluster` uses.
 
 `NodeGrouping: GroupFlat` (as in the `CentralizedControlPlane` preset) moves a merged node's
 umbrella children and augmenter layouts under the absorbing node, where they keep their own
@@ -405,9 +484,11 @@ children included; anything under it, or a file on the way to it) or the `<name>
 `AppFileSingle` child with resources, or another extra file (listed twice); nor may it use any of those files as
 a directory (`kustomization.yaml/x`), or be a file where one of them needs a directory. A child's
 output directory is the one its writer uses (for `WriteManifest`, after applying the `Config`
-defaults). All names are compared case-insensitively, as on default macOS volumes. When a layout
-has extra files, a `..` segment in its `Namespace` or `Name`, in a direct child's `Namespace` or
-`Name`, or in a generated file name refuses the tree before any file is written; a
+defaults). All names are compared case-insensitively, as on default macOS volumes. A `..` segment
+in the `Namespace` or `Name` of any layout of the tree refuses it before any file is written,
+whether or not the layout has extra files (go-kure/kure#977): an augmenter can rename its layout
+after the walk, and the final value is what the writers join into a path. When a layout has extra
+files, a `..` segment in a generated file name refuses the tree as well. A
 rooted name (`/x`) is not refused, since every writer joins it under its base. Previously such an
 extra file silently replaced the generated one on disk, or shadowed it as a later tar entry, while
 `kustomization.yaml` still listed the path.
@@ -443,6 +524,9 @@ type LayoutIntentAugmenter interface {
 
 A config that implements only `LayoutAugmenter` keeps today's presence-only behaviour unchanged.
 
+After `AugmentLayout` returns, every layout below the per-app layout that leaves `FileNaming` unset
+takes its parent's (see [File Naming Modes](#file-naming-modes)).
+
 #### Sub-Layout Children and Flux Integration
 
 Augmenters may attach sub-layouts as `Children` of a per-app `ManifestLayout`. In `FluxIntegratedPerLayout` mode each such child that is eligible (see below) receives a Flux `Kustomization` CR automatically placed in the parent layout's `Resources`.
@@ -465,7 +549,7 @@ Augmenters are responsible for ensuring uniqueness. The recommended convention i
 
 #### DependsOn
 
-Set `ManifestLayout.DependsOn` to a list of sibling layout names. In `FluxIntegratedPerLayout` mode the layout integrator translates these into `spec.dependsOn` entries on the child's `Kustomization` CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install).
+Set `ManifestLayout.DependsOn` to the names of the `Kustomization` CRs that must reconcile first. In `FluxIntegratedPerLayout` mode the layout integrator copies them verbatim into `spec.dependsOn` on the child's own CR, enabling ordered reconciliation between hook groups (e.g. pre-install → hooks → post-install). A hook-group or application layout's CR is named after the layout, so a sibling's layout name is its CR name; the CR of a node layout that renders no bundle is named `<path with "/" replaced by "-">-node`. The field applies only to a child layout that gets a CR of its own (not an umbrella child, not `AppFileSingle`, rendering no bundle); in every other case, and under the other placements, it is dropped without an error.
 
 ### ClusterName-Aware Layouts
 

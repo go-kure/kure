@@ -257,7 +257,11 @@ func Example_fluxWorkflowDependsOn() {
 func Example_fluxWorkflowBootstrapNamespace() {
 	engine := fluxcd.Engine()
 	rootNode := &stack.Node{Name: "production"}
-	bootstrapConfig := &stack.BootstrapConfig{Enabled: true}
+	bootstrapConfig := &stack.BootstrapConfig{
+		Enabled:     true,
+		FluxVersion: "v2.8.2",
+		Registry:    "ghcr.io/fluxcd",
+	}
 
 	engine.GetBootstrapGenerator().DefaultNamespace = "custom-flux" // default: "flux-system"
 

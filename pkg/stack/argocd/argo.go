@@ -38,20 +38,39 @@ func Engine() *WorkflowEngine {
 // ResourceGenerator interface implementation
 
 // GenerateFromCluster creates ArgoCD Applications from a cluster definition:
-// it walks the cluster with layout.DefaultLayoutRules and generates from that
-// layout (see generateFromLayout), so each source.path is the directory a
-// default-rules walk writes the bundle to. Callers writing the layout with
-// other rules use CreateLayoutWithResources, which generates from the layout
-// it walks.
-func (w *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
-	if c == nil || c.Node == nil {
-		return nil, nil
+// it walks the cluster with the rules and generates from that layout (see
+// generateFromLayout), so each source.path is the directory a walk with those
+// rules writes the bundle to. The rules must be the ones the caller writes
+// the tree with, and are held to what CreateLayoutWithResources accepts (see
+// layoutRules, then the walk's layout.LayoutRules.Validate). An absent or
+// empty cluster is walked too, so invalid rules are an error whatever the
+// cluster is; with valid rules it yields nothing.
+func (w *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rulesInterface stack.LayoutRulesProvider) ([]client.Object, error) {
+	rules, err := layoutRules(rulesInterface)
+	if err != nil {
+		return nil, err
 	}
-	ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
+	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, err
 	}
 	return w.generateFromLayout(ml, c)
+}
+
+// layoutRules returns the layout.LayoutRules behind a cluster-level entry
+// point's rules, and refuses anything else (nil included) and an integrated
+// Flux placement: that asks the writer to reference child layouts through
+// Flux CRs, and an Argo layout has none, so the argocd/ directory and the
+// child layouts of a tree written with such rules would never be applied.
+func layoutRules(rulesInterface stack.LayoutRulesProvider) (layout.LayoutRules, error) {
+	rules, ok := rulesInterface.(layout.LayoutRules)
+	if !ok {
+		return layout.LayoutRules{}, errors.New("rules must be of type layout.LayoutRules")
+	}
+	if rules.FluxPlacement == layout.FluxIntegratedPerLayout || rules.FluxPlacement == layout.FluxIntegratedPerBundle {
+		return layout.LayoutRules{}, errors.Errorf("ArgoCD layouts do not support FluxPlacement %q: no Flux Kustomization exists to apply the argocd directory; use FluxSeparate or leave it unset", rules.FluxPlacement)
+	}
+	return rules, nil
 }
 
 // generateFromLayout creates one Application for every reconciliation unit of
@@ -99,12 +118,14 @@ func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stac
 }
 
 // applicationForBundle creates an ArgoCD Application for b whose
-// spec.source.path is path, verbatim.
+// spec.source.path is path, verbatim. The Application is named by b's
+// KustomizationName, or its Name without one (Bundle.UnitName), and
+// spec.dependencies names each DependsOn bundle the same way.
 func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (client.Object, error) {
 	app := &unstructured.Unstructured{}
 	app.SetAPIVersion("argoproj.io/v1alpha1")
 	app.SetKind("Application")
-	app.SetName(b.Name)
+	app.SetName(b.UnitName())
 	app.SetNamespace(w.DefaultNamespace)
 
 	// Set labels if provided
@@ -136,7 +157,7 @@ func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (cli
 	if len(b.DependsOn) > 0 {
 		var deps []string
 		for _, d := range b.DependsOn {
-			deps = append(deps, d.Name)
+			deps = append(deps, d.UnitName())
 		}
 		if err := unstructured.SetNestedStringSlice(app.Object, deps, "spec", "dependencies"); err != nil {
 			return nil, errors.Wrap(err, "failed to set spec.dependencies")
@@ -158,15 +179,9 @@ func (w *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack
 
 // CreateLayoutWithResources creates a new layout that includes ArgoCD Applications.
 func (w *WorkflowEngine) CreateLayoutWithResources(c *stack.Cluster, rulesInterface stack.LayoutRulesProvider) (stack.ManifestLayoutResult, error) {
-	rules, ok := rulesInterface.(layout.LayoutRules)
-	if !ok {
-		return nil, errors.New("rules must be of type layout.LayoutRules")
-	}
-	// An integrated Flux placement asks the writer to reference child layouts
-	// through Flux CRs, and an Argo layout has none: the argocd/ directory
-	// and the child layouts would never be applied.
-	if rules.FluxPlacement == layout.FluxIntegratedPerLayout || rules.FluxPlacement == layout.FluxIntegratedPerBundle {
-		return nil, errors.Errorf("ArgoCD layouts do not support FluxPlacement %q: no Flux Kustomization exists to apply the argocd directory; use FluxSeparate or leave it unset", rules.FluxPlacement)
+	rules, err := layoutRules(rulesInterface)
+	if err != nil {
+		return nil, err
 	}
 	// Generate the base manifest layout
 	ml, err := layout.WalkCluster(c, rules)

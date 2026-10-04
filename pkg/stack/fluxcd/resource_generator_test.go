@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-kure/kure/pkg/stack"
 	fluxstack "github.com/go-kure/kure/pkg/stack/fluxcd"
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 func TestResourceGenerator_NewDefaults(t *testing.T) {
@@ -25,7 +26,7 @@ func TestResourceGenerator_NewDefaults(t *testing.T) {
 
 func TestGenerateFromCluster_Nil(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
-	objs, err := gen.GenerateFromCluster(nil)
+	objs, err := gen.GenerateFromCluster(nil, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +38,7 @@ func TestGenerateFromCluster_Nil(t *testing.T) {
 func TestGenerateFromCluster_NilNode(t *testing.T) {
 	gen := fluxstack.NewResourceGenerator()
 	c := &stack.Cluster{Name: "test-cluster"}
-	objs, err := gen.GenerateFromCluster(c)
+	objs, err := gen.GenerateFromCluster(c, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestGenerateFromCluster_WithBundle(t *testing.T) {
 		},
 	}
 
-	objs, err := gen.GenerateFromCluster(c)
+	objs, err := gen.GenerateFromCluster(c, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -118,7 +119,7 @@ func TestGenerateFromCluster_Recursive(t *testing.T) {
 		},
 	}
 
-	objs, err := gen.GenerateFromCluster(&stack.Cluster{Name: "c", Node: root})
+	objs, err := gen.GenerateFromCluster(&stack.Cluster{Name: "c", Node: root}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -469,7 +470,7 @@ func TestGenerateFromCluster_InvalidUmbrellaRejected(t *testing.T) {
 	c := &stack.Cluster{Name: "c", Node: root}
 
 	gen := fluxstack.NewResourceGenerator()
-	_, err := gen.GenerateFromCluster(c)
+	_, err := gen.GenerateFromCluster(c, layout.DefaultLayoutRules())
 	if err == nil {
 		t.Fatal("expected invalid umbrella cluster to be rejected by GenerateFromCluster")
 	}

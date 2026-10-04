@@ -80,14 +80,16 @@ func TestWorkflowInterface(t *testing.T) {
 				GitOps: &stack.GitOpsConfig{
 					Type: provider,
 					Bootstrap: &stack.BootstrapConfig{
-						Enabled:  true,
-						FluxMode: "flux-operator",
+						Enabled:     true,
+						FluxMode:    "flux-operator",
+						FluxVersion: "v2.4.0",
+						Registry:    "ghcr.io/fluxcd",
 					},
 				},
 			}
 
 			// Test GenerateFromCluster
-			_, err = wf.GenerateFromCluster(cluster)
+			_, err = wf.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 			if err != nil {
 				t.Errorf("GenerateFromCluster() error = %v", err)
 			}

@@ -91,8 +91,13 @@ func TestFullPipelineFlux(t *testing.T) {
 		t.Fatalf("failed to create flux workflow: %v", err)
 	}
 
+	// One set of rules for both calls: the paths in the resources are the
+	// directories the layout is written to
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "production-cluster"
+
 	// Generate resources from cluster
-	resources, err := workflow.GenerateFromCluster(cluster)
+	resources, err := workflow.GenerateFromCluster(cluster, rules)
 	if err != nil {
 		t.Fatalf("GenerateFromCluster failed: %v", err)
 	}
@@ -101,9 +106,6 @@ func TestFullPipelineFlux(t *testing.T) {
 	t.Logf("Generated %d resources from cluster", len(resources))
 
 	// Test CreateLayoutWithResources
-	rules := layout.DefaultLayoutRules()
-	rules.ClusterName = "production-cluster"
-
 	layoutResult, err := workflow.CreateLayoutWithResources(cluster, rules)
 	if err != nil {
 		t.Fatalf("CreateLayoutWithResources failed: %v", err)
@@ -172,8 +174,13 @@ func TestFullPipelineArgoCD(t *testing.T) {
 		t.Fatalf("failed to create argocd workflow: %v", err)
 	}
 
+	// One set of rules for both calls: the paths in the resources are the
+	// directories the layout is written to
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "staging-cluster"
+
 	// Generate resources from cluster
-	resources, err := workflow.GenerateFromCluster(cluster)
+	resources, err := workflow.GenerateFromCluster(cluster, rules)
 	if err != nil {
 		t.Fatalf("GenerateFromCluster failed: %v", err)
 	}
@@ -181,9 +188,6 @@ func TestFullPipelineArgoCD(t *testing.T) {
 	t.Logf("Generated %d ArgoCD resources", len(resources))
 
 	// Test CreateLayoutWithResources
-	rules := layout.DefaultLayoutRules()
-	rules.ClusterName = "staging-cluster"
-
 	layoutResult, err := workflow.CreateLayoutWithResources(cluster, rules)
 	if err != nil {
 		t.Fatalf("CreateLayoutWithResources failed: %v", err)
@@ -309,8 +313,10 @@ func TestMultiNodeClusterGeneration(t *testing.T) {
 	gitOpsConfig := &stack.GitOpsConfig{
 		Type: "flux",
 		Bootstrap: &stack.BootstrapConfig{
-			Enabled:  true,
-			FluxMode: "flux-operator",
+			Enabled:     true,
+			FluxMode:    "flux-operator",
+			FluxVersion: "v2.4.0",
+			Registry:    "ghcr.io/fluxcd",
 		},
 	}
 
@@ -346,7 +352,12 @@ func TestMultiNodeClusterGeneration(t *testing.T) {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
 
-	resources, err := workflow.GenerateFromCluster(cluster)
+	// One set of rules for both calls: the paths in the resources are the
+	// directories the layout is written to
+	rules := layout.DefaultLayoutRules()
+	rules.ClusterName = "multi-env-cluster"
+
+	resources, err := workflow.GenerateFromCluster(cluster, rules)
 	if err != nil {
 		t.Fatalf("GenerateFromCluster failed: %v", err)
 	}
@@ -354,9 +365,6 @@ func TestMultiNodeClusterGeneration(t *testing.T) {
 	t.Logf("Generated %d resources for multi-node cluster", len(resources))
 
 	// Test layout generation
-	rules := layout.DefaultLayoutRules()
-	rules.ClusterName = "multi-env-cluster"
-
 	layoutResult, err := workflow.CreateLayoutWithResources(cluster, rules)
 	if err != nil {
 		t.Fatalf("CreateLayoutWithResources failed: %v", err)
@@ -428,15 +436,17 @@ func TestWorkflowSwitching(t *testing.T) {
 				}
 			}
 
-			resources, err := workflow.GenerateFromCluster(cluster)
+			// One set of rules for both calls: the paths in the resources
+			// are the directories the layout is written to
+			rules := layout.DefaultLayoutRules()
+			rules.ClusterName = "flexible-cluster"
+
+			resources, err := workflow.GenerateFromCluster(cluster, rules)
 			if err != nil {
 				t.Fatalf("GenerateFromCluster failed for %s: %v", provider, err)
 			}
 
 			t.Logf("%s generated %d resources", provider, len(resources))
-
-			rules := layout.DefaultLayoutRules()
-			rules.ClusterName = "flexible-cluster"
 
 			layoutResult, err := workflow.CreateLayoutWithResources(cluster, rules)
 			if err != nil {
@@ -471,6 +481,7 @@ func TestBootstrapModes(t *testing.T) {
 				Enabled:     true,
 				FluxMode:    "flux-operator",
 				FluxVersion: "v2.3.0",
+				Registry:    "ghcr.io/fluxcd",
 				SourceURL:   "oci://ghcr.io/flux/manifests",
 			},
 		},

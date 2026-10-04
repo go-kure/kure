@@ -279,12 +279,14 @@ func TestWriters_AcceptSameObjectInSeparateBuilds(t *testing.T) {
 			return r
 		},
 		// r's Flux build takes in c as a whole, and c's kustomization.yaml
-		// does not list its umbrella child u.
+		// does not list its umbrella child u, which a Flux Kustomization of
+		// its own builds.
 		"marked Recursive build shielded by an Explicit directory": func() *layout.ManifestLayout {
 			r := recursiveTree()
 			r.SetFluxBuild(true)
 			u := child(r.Children[0], "u", layout.KustomizationExplicit)
 			u.UmbrellaChild = true
+			u.SetFluxBuild(true)
 			u.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
 			return r
 		},
@@ -297,6 +299,7 @@ func TestWriters_AcceptSameObjectInSeparateBuilds(t *testing.T) {
 			g := child(r.Children[0], "g", layout.KustomizationUnset)
 			g.ApplicationFileMode = layout.AppFileSingle
 			g.UmbrellaChild = true
+			g.SetFluxBuild(true)
 			g.Resources = []client.Object{testObj("v1", "ConfigMap", "a")}
 			return r
 		},

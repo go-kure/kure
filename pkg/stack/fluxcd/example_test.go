@@ -65,8 +65,9 @@ func ExampleEngine() {
 	// to the layout call, not on the engine — see Layout Integration below.
 	engine := fluxcd.Engine()
 
-	// Generate all Flux resources for a cluster (paths of a default-rules walk)
-	objects, err := engine.GenerateFromCluster(cluster)
+	// Generate all Flux resources for a cluster: each spec.path is a directory
+	// a walk with the rules you pass writes
+	objects, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		panic(err)
 	}
@@ -92,8 +93,8 @@ func ExampleResourceGenerator_GenerateFromLayout() {
 	rules := layout.DefaultLayoutRules()
 	bundle := cluster.Node.Bundle
 
-	// From an entire cluster: walks it with layout.DefaultLayoutRules()
-	objects, err := engine.GenerateFromCluster(cluster)
+	// From an entire cluster: walks it with the rules you write the tree with
+	objects, err := engine.GenerateFromCluster(cluster, rules)
 	if err != nil {
 		panic(err)
 	}
@@ -120,6 +121,21 @@ func ExampleResourceGenerator_GenerateFromLayout() {
 	// web apps
 	// web apps
 	// web clusters/prod/apps
+}
+
+func ExampleResourceGenerator_GenerateForBundle() {
+	// The bundles keep their names and directories; their Kustomizations
+	// get the names set here.
+	db := &stack.Bundle{Name: "db", KustomizationName: "apps-db"}
+	shop := &stack.Bundle{Name: "shop", KustomizationName: "apps-shop", DependsOn: []*stack.Bundle{db}}
+
+	objects, err := fluxcd.NewResourceGenerator().GenerateForBundle(shop, "clusters/prod/shop")
+	if err != nil {
+		panic(err)
+	}
+	kust := objects[0].(*kustv1.Kustomization)
+	fmt.Println(kust.Name, kust.Spec.Path, kust.Spec.DependsOn[0].Name)
+	// Output: apps-shop clusters/prod/shop apps-db
 }
 
 func ExampleWorkflowEngine_CreateLayoutWithResources() {
@@ -157,8 +173,9 @@ func ExampleWorkflowEngine_GenerateBootstrap() {
 
 	bootstrapConfig := &stack.BootstrapConfig{
 		Enabled:     true,
-		FluxMode:    "flux-operator", // or "gotk"; empty defaults to "flux-operator"
-		FluxVersion: "v2.8.2",
+		FluxMode:    "flux-operator",  // or "gotk"; empty defaults to "flux-operator"
+		FluxVersion: "v2.8.2",         // required in flux-operator mode
+		Registry:    "ghcr.io/fluxcd", // required in flux-operator mode
 		SourceURL:   "oci://registry.example.com/fleet",
 		SourceRef:   "latest",
 	}
@@ -180,10 +197,12 @@ func ExampleBootstrapGenerator_GenerateFluxInstance() {
 	rootNode := &stack.Node{Name: "prod"}
 
 	bootstrapConfig := &stack.BootstrapConfig{
-		Enabled:   true,
-		SourceURL: "oci://registry.example.com/fleet",
-		SourceRef: "latest",
-		SyncName:  "fleet",
+		Enabled:     true,
+		FluxVersion: "v2.8.2",
+		Registry:    "ghcr.io/fluxcd",
+		SourceURL:   "oci://registry.example.com/fleet",
+		SourceRef:   "latest",
+		SyncName:    "fleet",
 	}
 
 	fi, err := engine.GetBootstrapGenerator().GenerateFluxInstance(bootstrapConfig, rootNode)

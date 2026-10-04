@@ -20,10 +20,14 @@ type ManifestLayout struct {
 	FilePer             FileExportMode
 	ApplicationFileMode ApplicationFileMode
 	Mode                KustomizationMode
-	FluxPlacement       FluxPlacement  // Track flux placement mode for kustomization generation
-	FileNaming          FileNamingMode // Controls resource file naming pattern
-	Resources           []client.Object
-	Children            []*ManifestLayout
+	FluxPlacement       FluxPlacement // Track flux placement mode for kustomization generation
+	// FileNaming is the naming pattern of this layout's resource files under
+	// WriteToDisk and WriteToTar. The writers read it from the layout itself,
+	// never from its parent: the walkers set it from LayoutRules.FileNaming,
+	// and give a layout an augmenter added and left unset its parent's.
+	FileNaming FileNamingMode
+	Resources  []client.Object
+	Children   []*ManifestLayout
 	// ExtraFiles are arbitrary files written alongside resource YAMLs in this
 	// layout's directory. Typical use: a values.yaml referenced by a
 	// configMapGenerator entry. Augmenters (LayoutAugmenter) attach these.
@@ -41,10 +45,22 @@ type ManifestLayout struct {
 	// in flux-system (separate placement), with spec.path = this layout's
 	// directory.
 	UmbrellaChild bool
-	// DependsOn lists sibling layout names whose Kustomization CRs must reconcile
-	// before this layout's CR. In FluxIntegratedPerLayout mode the layout integrator
-	// translates these into spec.dependsOn on the emitted Kustomization CR.
-	// Augmenters (LayoutAugmenter) set this field; the integrator reads it.
+	// DependsOn lists the names of the Flux Kustomization CRs that must
+	// reconcile before this layout's CR. Augmenters (LayoutAugmenter) set this
+	// field. The Flux layout integrator copies each entry verbatim into
+	// spec.dependsOn; it does not resolve a layout to its CR. An application
+	// or augmenter layout's CR is named after the layout, so a sibling's
+	// layout name is its CR name; the CR of a node layout that renders no
+	// bundle is named "<path with / replaced by ->-node" instead, and that is
+	// the name to list.
+	//
+	// The integrator writes spec.dependsOn only on the Kustomization CR it
+	// generates for this layout itself, which it does only under
+	// FluxIntegratedPerLayout and only for a child layout that is not an
+	// umbrella child, is not AppFileSingle and renders no bundle. In every
+	// other case the field is dropped without an error: under
+	// FluxIntegratedPerBundle and FluxSeparate an augmenter's ordering
+	// produces nothing.
 	DependsOn []string
 	// origin records the stack objects this layout renders (see origin.go).
 	// Set only by the walkers and FlattenSingleTier; never serialised.

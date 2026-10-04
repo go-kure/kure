@@ -380,6 +380,7 @@ All `github.com/fluxcd/*` packages must be upgraded together. Flux releases coor
 - `notification-controller/api`
 - `source-controller/api`
 - `image-automation-controller/api`
+- `image-reflector-controller/api`
 - `pkg/apis/meta`, `pkg/apis/kustomize`
 
 Renovate enforces this with the `fluxcd` group in the shared
@@ -449,6 +450,8 @@ controller unchanged still relies on the refresh procedure.
 ### Kubernetes (`k8s.io/*`)
 
 All `k8s.io/` packages must stay at the same patch release. Kure uses `replace` directives in `go.mod` to enforce this. See the comment block in `go.mod` for details.
+
+`k8s.io/kube-aggregator` is one of them. Kure requires it for the `APIService` type alone and imports only its API package (`pkg/apis/apiregistration/v1`), so the aggregator's server dependencies stay out of `go.mod`. It is pinned in the same `replace` block and moves with the other `k8s.io/` packages in the `kubernetes` update group.
 
 **When can replace directives be removed?** Only when ALL direct and transitive dependencies converge on the same `k8s.io/` minor version. Check with:
 

@@ -222,12 +222,89 @@
       "scopeSource": "marker"
     },
     {
+      "group": "admissionregistration.k8s.io",
+      "version": "v1",
+      "kind": "MutatingAdmissionPolicy",
+      "goType": "MutatingAdmissionPolicy",
+      "importPath": "k8s.io/api/admissionregistration/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "admissionregistration.k8s.io",
+      "version": "v1",
+      "kind": "MutatingAdmissionPolicyBinding",
+      "goType": "MutatingAdmissionPolicyBinding",
+      "importPath": "k8s.io/api/admissionregistration/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "admissionregistration.k8s.io",
+      "version": "v1",
+      "kind": "MutatingWebhookConfiguration",
+      "goType": "MutatingWebhookConfiguration",
+      "importPath": "k8s.io/api/admissionregistration/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "admissionregistration.k8s.io",
+      "version": "v1",
+      "kind": "ValidatingAdmissionPolicy",
+      "goType": "ValidatingAdmissionPolicy",
+      "importPath": "k8s.io/api/admissionregistration/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "admissionregistration.k8s.io",
+      "version": "v1",
+      "kind": "ValidatingAdmissionPolicyBinding",
+      "goType": "ValidatingAdmissionPolicyBinding",
+      "importPath": "k8s.io/api/admissionregistration/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "admissionregistration.k8s.io",
+      "version": "v1",
+      "kind": "ValidatingWebhookConfiguration",
+      "goType": "ValidatingWebhookConfiguration",
+      "importPath": "k8s.io/api/admissionregistration/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
       "group": "apiextensions.k8s.io",
       "version": "v1",
       "kind": "CustomResourceDefinition",
       "goType": "CustomResourceDefinition",
       "importPath": "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
       "module": "k8s.io/apiextensions-apiserver",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "apiregistration.k8s.io",
+      "version": "v1",
+      "kind": "APIService",
+      "goType": "APIService",
+      "importPath": "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1",
+      "module": "k8s.io/kube-aggregator",
       "moduleVersion": "v0.37.1",
       "namespaced": false,
       "scopeSource": "builtin"
@@ -563,6 +640,28 @@
       "scopeSource": "marker"
     },
     {
+      "group": "coordination.k8s.io",
+      "version": "v1",
+      "kind": "Lease",
+      "goType": "Lease",
+      "importPath": "k8s.io/api/coordination/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": true,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "discovery.k8s.io",
+      "version": "v1",
+      "kind": "EndpointSlice",
+      "goType": "EndpointSlice",
+      "importPath": "k8s.io/api/discovery/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": true,
+      "scopeSource": "builtin"
+    },
+    {
       "group": "external-secrets.io",
       "version": "v1",
       "kind": "ClusterExternalSecret",
@@ -768,6 +867,28 @@
       "importPath": "github.com/fluxcd/helm-controller/api/v2",
       "module": "github.com/fluxcd/helm-controller/api",
       "moduleVersion": "v1.6.4",
+      "namespaced": true,
+      "scopeSource": "marker"
+    },
+    {
+      "group": "image.toolkit.fluxcd.io",
+      "version": "v1",
+      "kind": "ImagePolicy",
+      "goType": "ImagePolicy",
+      "importPath": "github.com/fluxcd/image-reflector-controller/api/v1",
+      "module": "github.com/fluxcd/image-reflector-controller/api",
+      "moduleVersion": "v1.2.5",
+      "namespaced": true,
+      "scopeSource": "marker"
+    },
+    {
+      "group": "image.toolkit.fluxcd.io",
+      "version": "v1",
+      "kind": "ImageRepository",
+      "goType": "ImageRepository",
+      "importPath": "github.com/fluxcd/image-reflector-controller/api/v1",
+      "module": "github.com/fluxcd/image-reflector-controller/api",
+      "moduleVersion": "v1.2.5",
       "namespaced": true,
       "scopeSource": "marker"
     },
@@ -1025,6 +1146,17 @@
       "scopeSource": "builtin"
     },
     {
+      "group": "node.k8s.io",
+      "version": "v1",
+      "kind": "RuntimeClass",
+      "goType": "RuntimeClass",
+      "importPath": "k8s.io/api/node/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
+      "scopeSource": "builtin"
+    },
+    {
       "group": "notification.toolkit.fluxcd.io",
       "version": "v1beta3",
       "kind": "Alert",
@@ -1242,6 +1374,17 @@
       "module": "k8s.io/api",
       "moduleVersion": "v0.37.1",
       "namespaced": true,
+      "scopeSource": "builtin"
+    },
+    {
+      "group": "scheduling.k8s.io",
+      "version": "v1",
+      "kind": "PriorityClass",
+      "goType": "PriorityClass",
+      "importPath": "k8s.io/api/scheduling/v1",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1",
+      "namespaced": false,
       "scopeSource": "builtin"
     },
     {
@@ -1783,6 +1926,29 @@
       "goField": "Scheduling",
       "gates": [
         "WorkloadWithJob"
+      ],
+      "stability": "alpha",
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1"
+    },
+    {
+      "importPath": "k8s.io/api/coordination/v1",
+      "typeName": "LeaseSpec",
+      "field": "preferredHolder",
+      "goField": "PreferredHolder",
+      "gates": [
+        "CoordinatedLeaderElection"
+      ],
+      "module": "k8s.io/api",
+      "moduleVersion": "v0.37.1"
+    },
+    {
+      "importPath": "k8s.io/api/coordination/v1",
+      "typeName": "LeaseSpec",
+      "field": "strategy",
+      "goField": "Strategy",
+      "gates": [
+        "CoordinatedLeaderElection"
       ],
       "stability": "alpha",
       "module": "k8s.io/api",

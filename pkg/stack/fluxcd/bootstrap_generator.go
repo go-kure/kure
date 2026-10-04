@@ -2,7 +2,6 @@ package fluxcd
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -158,9 +157,14 @@ func (bg *BootstrapGenerator) generateFluxOperatorBootstrap(config *stack.Bootst
 			fmt.Sprintf("failed to load vendored flux-operator install bundle: %v", err), err)
 	}
 
+	fluxInstance, err := bg.generateFluxInstance(config, rootNode)
+	if err != nil {
+		return nil, err
+	}
+
 	resources := make([]client.Object, 0, len(installObjs)+1)
 	resources = append(resources, installObjs...)
-	resources = append(resources, bg.generateFluxInstance(config, rootNode))
+	resources = append(resources, fluxInstance)
 	return resources, nil
 }
 
@@ -253,6 +257,30 @@ func rootName(rootNode *stack.Node) string {
 	return rootNode.Name
 }
 
+// bootstrapDir returns the directory both bootstrap modes point Flux at,
+// relative to the root of the source: the root node's name, which is the
+// directory a walk without a ClusterName writes a named root node to
+// (layout.WalkCluster), and "" — the root of the source — for an unnamed or
+// absent root node.
+//
+// The bootstrap is given the root node, not the layout rules, so the directory
+// does not follow them, and the walked root can be somewhere else: a walk with
+// a ClusterName puts the root in or under the cluster directory, and a walk
+// without one puts an unnamed root at "cluster", not at the root of the source.
+//
+// Each mode spells that one directory its own way. The gotk bootstrap
+// Kustomization's spec.path is the directory itself with no "./" prefix, and
+// "." for the root of the source, as layout.ManifestLayout.FullRepoPath
+// spells every other spec.path the package writes. The FluxInstance's
+// sync.path is [DefaultSyncPath] followed by the directory.
+//
+// The gotk path used to be "manifests/<root>", a prefix no writer of the
+// package produces, while the FluxInstance named "./<root>": two directories
+// for one root.
+func bootstrapDir(rootNode *stack.Node) string {
+	return rootName(rootNode)
+}
+
 // sourceName returns the name a generated GitRepository or OCIRepository
 // carries: the root node's name when it has one, [DefaultSourceName] otherwise.
 // The bootstrap Kustomization's sourceRef must resolve through this same
@@ -343,7 +371,13 @@ func resolvedSyncRef(config *stack.BootstrapConfig) string {
 }
 
 // generateFluxSystemKustomization creates a Kustomization for the flux-system.
+// Its spec.path is the directory bootstrapDir names, "." for the root of the
+// source.
 func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+	dir := bootstrapDir(rootNode)
+	if dir == "" {
+		dir = "."
+	}
 	kust := &kustv1.Kustomization{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: kustv1.GroupVersion.String(),
@@ -355,7 +389,7 @@ func (bg *BootstrapGenerator) generateFluxSystemKustomization(config *stack.Boot
 		},
 		Spec: kustv1.KustomizationSpec{
 			Interval: metav1.Duration{Duration: bg.DefaultInterval},
-			Path:     filepath.ToSlash(filepath.Join(DefaultBootstrapPathRoot, rootName(rootNode))),
+			Path:     dir,
 			Prune:    pruneValue(config.Prune),
 			SourceRef: kustv1.CrossNamespaceSourceReference{
 				Kind: resolvedSourceKind(config),
@@ -419,6 +453,7 @@ func (bg *BootstrapGenerator) generateOCISource(config *stack.BootstrapConfig, r
 // the given bootstrap settings, without the full Flux Operator install bundle.
 // Returns (nil, nil) when config is nil. Unlike GenerateBootstrap, this method
 // does not check config.Enabled — the caller is responsible for that gate.
+// An empty FluxVersion or Registry is an error, as on the bootstrap path.
 func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (*fluxv1.FluxInstance, error) {
 	if err := validateSyncRootName(config, rootNode); err != nil {
 		return nil, err
@@ -426,7 +461,10 @@ func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig
 	if config == nil {
 		return nil, nil
 	}
-	obj := bg.generateFluxInstance(config, rootNode)
+	obj, err := bg.generateFluxInstance(config, rootNode)
+	if err != nil {
+		return nil, err
+	}
 	fi, ok := obj.(*fluxv1.FluxInstance)
 	if !ok {
 		return nil, errors.Errorf("internal error: generateFluxInstance returned unexpected type %T", obj)
@@ -434,8 +472,38 @@ func (bg *BootstrapGenerator) GenerateFluxInstance(config *stack.BootstrapConfig
 	return fi, nil
 }
 
-// generateFluxInstance creates a FluxInstance for flux-operator mode.
-func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) client.Object {
+// requireDistribution returns an error naming each of FluxVersion and Registry
+// that config leaves empty. Both go verbatim into the FluxInstance's
+// spec.distribution, and a FluxInstance with an empty version or registry
+// cannot work; it used to be written anyway, as `version: ""` and
+// `registry: ""`. No default is filled in: the caller supplies both.
+//
+// This is flux-operator mode only. gotk mode reads the same two fields, and
+// there an empty FluxVersion means the vendored release and an empty Registry
+// the upstream one.
+func requireDistribution(config *stack.BootstrapConfig) error {
+	var keys, fields []string
+	if config.FluxVersion == "" {
+		keys, fields = append(keys, "fluxVersion"), append(fields, "FluxVersion")
+	}
+	if config.Registry == "" {
+		keys, fields = append(keys, "registry"), append(fields, "Registry")
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return errors.ResourceValidationError("BootstrapConfig", FluxInstanceName, strings.Join(keys, ", "),
+		fmt.Sprintf("flux-operator mode requires %s for the FluxInstance distribution; there is no default",
+			strings.Join(fields, " and ")), nil)
+}
+
+// generateFluxInstance creates a FluxInstance for flux-operator mode. It is the
+// one place both entry points build it, so the distribution check lives here.
+func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig, rootNode *stack.Node) (client.Object, error) {
+	if err := requireDistribution(config); err != nil {
+		return nil, err
+	}
+
 	spec := fluxv1.FluxInstanceSpec{
 		Distribution: fluxv1.Distribution{
 			Version:  config.FluxVersion,
@@ -450,17 +518,12 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 
 	// Add sync configuration if source is provided
 	if config.SourceURL != "" {
-		path := DefaultSyncPath
-		if name := rootName(rootNode); name != "" {
-			path = DefaultSyncPath + name
-		}
-
 		spec.Sync = &fluxv1.Sync{
 			Name:     config.SyncName,
 			Kind:     resolvedSourceKind(config),
 			URL:      config.SourceURL,
 			Ref:      resolvedSyncRef(config),
-			Path:     path,
+			Path:     DefaultSyncPath + bootstrapDir(rootNode),
 			Interval: &metav1.Duration{Duration: bg.DefaultInterval},
 		}
 	}
@@ -469,5 +532,5 @@ func (bg *BootstrapGenerator) generateFluxInstance(config *stack.BootstrapConfig
 	// and rejects anything else at admission.
 	fi := pubfluxcd.CreateFluxInstance(FluxInstanceName, bg.DefaultNamespace)
 	fi.Spec = spec
-	return fi
+	return fi, nil
 }

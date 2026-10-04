@@ -4,17 +4,28 @@
 package kubernetes
 
 import (
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	nodev1 "k8s.io/api/node/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
+
+// CreateAPIService returns a cluster-scoped apiregistration.k8s.io/v1 APIService carrying TypeMeta and identity only.
+func CreateAPIService(name string) *apiregistrationv1.APIService {
+	return Create[apiregistrationv1.APIService](name, "")
+}
 
 // CreateBackendTLSPolicy returns a gateway.networking.k8s.io/v1 BackendTLSPolicy carrying TypeMeta and identity only.
 func CreateBackendTLSPolicy(name, namespace string) *gatewayapiv1.BackendTLSPolicy {
@@ -86,6 +97,11 @@ func CreateDeployment(name, namespace string) *appsv1.Deployment {
 	return Create[appsv1.Deployment](name, namespace)
 }
 
+// CreateEndpointSlice returns a discovery.k8s.io/v1 EndpointSlice carrying TypeMeta and identity only.
+func CreateEndpointSlice(name, namespace string) *discoveryv1.EndpointSlice {
+	return Create[discoveryv1.EndpointSlice](name, namespace)
+}
+
 // CreateEndpoints returns a v1 Endpoints carrying TypeMeta and identity only.
 func CreateEndpoints(name, namespace string) *corev1.Endpoints {
 	return Create[corev1.Endpoints](name, namespace)
@@ -146,6 +162,11 @@ func CreateJob(name, namespace string) *batchv1.Job {
 	return Create[batchv1.Job](name, namespace)
 }
 
+// CreateLease returns a coordination.k8s.io/v1 Lease carrying TypeMeta and identity only.
+func CreateLease(name, namespace string) *coordinationv1.Lease {
+	return Create[coordinationv1.Lease](name, namespace)
+}
+
 // CreateLimitRange returns a v1 LimitRange carrying TypeMeta and identity only.
 func CreateLimitRange(name, namespace string) *corev1.LimitRange {
 	return Create[corev1.LimitRange](name, namespace)
@@ -154,6 +175,21 @@ func CreateLimitRange(name, namespace string) *corev1.LimitRange {
 // CreateListenerSet returns a gateway.networking.k8s.io/v1 ListenerSet carrying TypeMeta and identity only.
 func CreateListenerSet(name, namespace string) *gatewayapiv1.ListenerSet {
 	return Create[gatewayapiv1.ListenerSet](name, namespace)
+}
+
+// CreateMutatingAdmissionPolicy returns a cluster-scoped admissionregistration.k8s.io/v1 MutatingAdmissionPolicy carrying TypeMeta and identity only.
+func CreateMutatingAdmissionPolicy(name string) *admissionregistrationv1.MutatingAdmissionPolicy {
+	return Create[admissionregistrationv1.MutatingAdmissionPolicy](name, "")
+}
+
+// CreateMutatingAdmissionPolicyBinding returns a cluster-scoped admissionregistration.k8s.io/v1 MutatingAdmissionPolicyBinding carrying TypeMeta and identity only.
+func CreateMutatingAdmissionPolicyBinding(name string) *admissionregistrationv1.MutatingAdmissionPolicyBinding {
+	return Create[admissionregistrationv1.MutatingAdmissionPolicyBinding](name, "")
+}
+
+// CreateMutatingWebhookConfiguration returns a cluster-scoped admissionregistration.k8s.io/v1 MutatingWebhookConfiguration carrying TypeMeta and identity only.
+func CreateMutatingWebhookConfiguration(name string) *admissionregistrationv1.MutatingWebhookConfiguration {
+	return Create[admissionregistrationv1.MutatingWebhookConfiguration](name, "")
 }
 
 // CreateNamespace returns a cluster-scoped v1 Namespace carrying TypeMeta and identity only.
@@ -196,6 +232,11 @@ func CreatePodTemplate(name, namespace string) *corev1.PodTemplate {
 	return Create[corev1.PodTemplate](name, namespace)
 }
 
+// CreatePriorityClass returns a cluster-scoped scheduling.k8s.io/v1 PriorityClass carrying TypeMeta and identity only.
+func CreatePriorityClass(name string) *schedulingv1.PriorityClass {
+	return Create[schedulingv1.PriorityClass](name, "")
+}
+
 // CreateRangeAllocation returns a cluster-scoped v1 RangeAllocation carrying TypeMeta and identity only.
 func CreateRangeAllocation(name string) *corev1.RangeAllocation {
 	return Create[corev1.RangeAllocation](name, "")
@@ -229,6 +270,11 @@ func CreateRole(name, namespace string) *rbacv1.Role {
 // CreateRoleBinding returns a rbac.authorization.k8s.io/v1 RoleBinding carrying TypeMeta and identity only.
 func CreateRoleBinding(name, namespace string) *rbacv1.RoleBinding {
 	return Create[rbacv1.RoleBinding](name, namespace)
+}
+
+// CreateRuntimeClass returns a cluster-scoped node.k8s.io/v1 RuntimeClass carrying TypeMeta and identity only.
+func CreateRuntimeClass(name string) *nodev1.RuntimeClass {
+	return Create[nodev1.RuntimeClass](name, "")
 }
 
 // CreateSecret returns a v1 Secret carrying TypeMeta and identity only.
@@ -274,6 +320,21 @@ func CreateTLSRoute(name, namespace string) *gatewayapiv1.TLSRoute {
 // CreateUDPRoute returns a gateway.networking.k8s.io/v1 UDPRoute carrying TypeMeta and identity only.
 func CreateUDPRoute(name, namespace string) *gatewayapiv1.UDPRoute {
 	return Create[gatewayapiv1.UDPRoute](name, namespace)
+}
+
+// CreateValidatingAdmissionPolicy returns a cluster-scoped admissionregistration.k8s.io/v1 ValidatingAdmissionPolicy carrying TypeMeta and identity only.
+func CreateValidatingAdmissionPolicy(name string) *admissionregistrationv1.ValidatingAdmissionPolicy {
+	return Create[admissionregistrationv1.ValidatingAdmissionPolicy](name, "")
+}
+
+// CreateValidatingAdmissionPolicyBinding returns a cluster-scoped admissionregistration.k8s.io/v1 ValidatingAdmissionPolicyBinding carrying TypeMeta and identity only.
+func CreateValidatingAdmissionPolicyBinding(name string) *admissionregistrationv1.ValidatingAdmissionPolicyBinding {
+	return Create[admissionregistrationv1.ValidatingAdmissionPolicyBinding](name, "")
+}
+
+// CreateValidatingWebhookConfiguration returns a cluster-scoped admissionregistration.k8s.io/v1 ValidatingWebhookConfiguration carrying TypeMeta and identity only.
+func CreateValidatingWebhookConfiguration(name string) *admissionregistrationv1.ValidatingWebhookConfiguration {
+	return Create[admissionregistrationv1.ValidatingWebhookConfiguration](name, "")
 }
 
 // CreateVolumeAttachment returns a cluster-scoped storage.k8s.io/v1 VolumeAttachment carrying TypeMeta and identity only.

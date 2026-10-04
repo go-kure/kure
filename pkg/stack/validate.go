@@ -27,6 +27,12 @@ import (
 //     bundle in the cluster has umbrella Children, the cluster is rejected.
 //     Cross-package umbrella semantics are follow-up work.
 //
+// Before the bundles are validated (1), it checks the DependsOn bundles that
+// are copies of the cluster's bundles, which Bundle.Validate cannot tell from
+// any other bundle (see validateDependencyCopies): a copy that sets another
+// KustomizationName than the bundle it stands for is refused, and so is one
+// that stands for a bundle whose Kustomization is also in NamedDependsOn.
+//
 // ValidateCluster is safe to call with a nil cluster or a cluster with no
 // root node (it returns nil in both cases).
 func ValidateCluster(c *Cluster) error {
@@ -96,6 +102,10 @@ func ValidateCluster(c *Cluster) error {
 		return err
 	}
 
+	if err := validateDependencyCopies(c, nodeOrder); err != nil {
+		return err
+	}
+
 	// 1. Validate every Node bundle. Bundle.Validate recursively walks the
 	//    umbrella Children subtree, and checks the name of each bundle in it.
 	for b, n := range nodeBundles {
@@ -150,4 +160,88 @@ func ValidateCluster(c *Cluster) error {
 	}
 
 	return nil
+}
+
+// validateDependencyCopies checks the DependsOn bundles that are copies of
+// the cluster's bundles: not one of them, but with the Name of one. A layout
+// resolves a DependsOn bundle by its Name (layout.OriginIndex.UnitName), so a
+// copy stands for the cluster's bundle of that name and the dependency is on
+// that bundle's Kustomization, whatever the copy says. Two inputs are refused:
+//
+//   - a copy that sets a KustomizationName other than the name in effect of
+//     the bundle (Bundle.UnitName). A copy that leaves it empty says nothing,
+//     and is the bundle;
+//   - a copy standing for a bundle whose Kustomization name (Bundle.UnitName)
+//     is also in the dependant's NamedDependsOn: one dependency in both lists.
+//
+// Bundle.Validate compares a DependsOn bundle with NamedDependsOn on the name
+// that bundle carries itself, so for a copy it reports the wrong name or
+// misses the pair. This runs before it for that reason, and layout.IndexOrigins
+// refuses the same inputs in the same words for a tree walked earlier.
+//
+// The cluster's bundles are each node's bundle and its umbrella descendants,
+// nodes in the order given. Nothing is validated yet, so the walk ends on an
+// umbrella cycle by itself and skips what Bundle.Validate refuses later (a nil
+// child, a bundle without a name). Where two of the cluster's bundles have one
+// Name a copy of that name stands for neither: that pair is the layout's to
+// refuse.
+func validateDependencyCopies(c *Cluster, nodeOrder []*Node) error {
+	var bundles []*Bundle
+	inCluster := make(map[*Bundle]bool)
+	var collect func(b *Bundle)
+	collect = func(b *Bundle) {
+		if b == nil || inCluster[b] {
+			return
+		}
+		inCluster[b] = true
+		bundles = append(bundles, b)
+		for _, child := range b.Children {
+			collect(child)
+		}
+	}
+	for _, n := range nodeOrder {
+		collect(n.Bundle)
+	}
+	byName := make(map[string]*Bundle, len(bundles))
+	shared := make(map[string]bool)
+	for _, b := range bundles {
+		if _, dup := byName[b.Name]; dup {
+			shared[b.Name] = true
+		}
+		byName[b.Name] = b
+	}
+	for _, b := range bundles {
+		for _, dep := range b.DependsOn {
+			if dep == nil || dep.Name == "" || inCluster[dep] || shared[dep.Name] {
+				continue
+			}
+			of := byName[dep.Name]
+			if of == nil {
+				continue
+			}
+			if reason := dependencyCopyRefusal(b, dep, of); reason != "" {
+				return errors.ResourceValidationError("Cluster", c.Name, "bundles", reason, nil)
+			}
+		}
+	}
+	return nil
+}
+
+// dependencyCopyRefusal returns why dep, a copy of the cluster's bundle of in
+// the DependsOn of b, is refused, or "" when it is not. layout.IndexOrigins
+// reports the same two reasons in the same words.
+//
+// The names in effect are compared, not the fields: a copy that sets as its
+// KustomizationName the Name of a bundle that sets none names the same
+// Kustomization as that bundle.
+func dependencyCopyRefusal(b, dep, of *Bundle) string {
+	if dep.KustomizationName != "" && dep.UnitName() != of.UnitName() {
+		return fmt.Sprintf("bundle %q depends on a copy of bundle %q with KustomizationName %q, but that bundle has KustomizationName %q: a DependsOn bundle is resolved by its Name, so a copy leaves KustomizationName empty or sets the bundle's",
+			b.GetPath(), of.GetPath(), dep.KustomizationName, of.KustomizationName)
+	}
+	if slices.Contains(b.NamedDependsOn, of.UnitName()) {
+		return fmt.Sprintf("bundle %q: dependency %q appears in both DependsOn and NamedDependsOn: its DependsOn bundle %q is resolved by its Name to the bundle whose Kustomization has that name",
+			b.GetPath(), of.UnitName(), dep.Name)
+	}
+	return ""
 }

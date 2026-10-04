@@ -64,11 +64,15 @@ type BootstrapConfig struct {
 	// "vX.Y.Z" value, and the latest release for anything else ("latest", or a
 	// version without its "v"), as upstream flux2 resolves it. In
 	// flux-operator mode it is the FluxInstance
-	// distribution version.
-	FluxVersion     string   `yaml:"fluxVersion,omitempty"`
-	Components      []string `yaml:"components,omitempty"`
-	Registry        string   `yaml:"registry,omitempty"`
-	ImagePullSecret string   `yaml:"imagePullSecret,omitempty"`
+	// distribution version, and required: an empty value is an error.
+	FluxVersion string   `yaml:"fluxVersion,omitempty"`
+	Components  []string `yaml:"components,omitempty"`
+	// Registry is the container registry the Flux images are pulled from. In
+	// gotk mode empty means the upstream registry. In flux-operator mode it is
+	// the FluxInstance distribution registry, and required: an empty value is an
+	// error, and no default is filled in.
+	Registry        string `yaml:"registry,omitempty"`
+	ImagePullSecret string `yaml:"imagePullSecret,omitempty"`
 
 	// Source configuration
 	SourceKind string `yaml:"sourceKind,omitempty"` // "GitRepository" or "OCIRepository"

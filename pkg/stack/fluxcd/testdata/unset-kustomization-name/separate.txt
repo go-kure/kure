@@ -1,0 +1,189 @@
+=== platform/apps/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: []
+=== platform/apps/shop/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - shop-app
+=== platform/apps/shop/shop-api/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - shop-api-app
+=== platform/apps/shop/shop-api/shop-api-app/default-configmap-shop-api-app-cm.yaml ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-api-app-cm
+  namespace: default
+=== platform/apps/shop/shop-api/shop-api-app/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - default-configmap-shop-api-app-cm.yaml
+=== platform/apps/shop/shop-app/default-configmap-shop-app-cm.yaml ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-app-cm
+  namespace: default
+=== platform/apps/shop/shop-app/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - default-configmap-shop-app-cm.yaml
+=== platform/apps/shop/shop-db/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - shop-db-app
+=== platform/apps/shop/shop-db/shop-db-app/default-configmap-shop-db-app-cm.yaml ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-db-app-cm
+  namespace: default
+=== platform/apps/shop/shop-db/shop-db-app/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - default-configmap-shop-db-app-cm.yaml
+=== platform/flux-system/flux-system-kustomization-monitoring.yaml ===
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: monitoring
+  namespace: flux-system
+spec:
+  dependsOn:
+  - name: shop
+  - name: shop-db
+  - name: external
+  interval: 1h0m0s
+  path: platform/ops/monitoring
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+=== platform/flux-system/flux-system-kustomization-platform.yaml ===
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: platform
+  namespace: flux-system
+spec:
+  interval: 1h0m0s
+  path: platform/platform
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+=== platform/flux-system/flux-system-kustomization-shop-api.yaml ===
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: shop-api
+  namespace: flux-system
+spec:
+  dependsOn:
+  - name: shop-db
+  interval: 1h0m0s
+  path: platform/apps/shop/shop-api
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+=== platform/flux-system/flux-system-kustomization-shop-db.yaml ===
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: shop-db
+  namespace: flux-system
+spec:
+  interval: 1h0m0s
+  path: platform/apps/shop/shop-db
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+=== platform/flux-system/flux-system-kustomization-shop.yaml ===
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: shop
+  namespace: flux-system
+spec:
+  healthChecks:
+  - apiVersion: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    name: shop-db
+    namespace: flux-system
+  - apiVersion: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    name: shop-api
+    namespace: flux-system
+  interval: 1h0m0s
+  path: platform/apps/shop
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+=== platform/flux-system/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - flux-system-kustomization-monitoring.yaml
+  - flux-system-kustomization-platform.yaml
+  - flux-system-kustomization-shop-api.yaml
+  - flux-system-kustomization-shop-db.yaml
+  - flux-system-kustomization-shop.yaml
+=== platform/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - apps
+  - ops
+  - flux-system
+=== platform/ops/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: []
+=== platform/ops/monitoring/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - monitoring-app
+=== platform/ops/monitoring/monitoring-app/default-configmap-monitoring-app-cm.yaml ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-app-cm
+  namespace: default
+=== platform/ops/monitoring/monitoring-app/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - default-configmap-monitoring-app-cm.yaml
+=== platform/platform/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - platform-app
+=== platform/platform/platform-app/default-configmap-platform-app-cm.yaml ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-app-cm
+  namespace: default
+=== platform/platform/platform-app/kustomization.yaml ===
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - default-configmap-platform-app-cm.yaml

@@ -117,7 +117,9 @@ func WithNamespace(namespace string) RenderOption
 ## SplitByHookWeight
 
 Groups a slice of rendered Helm objects by `helm.sh/hook` phase and
-`helm.sh/hook-weight` for ordered FluxCD Kustomization generation.
+`helm.sh/hook-weight`, in deployment order. That is all it does: nothing in kure turns a
+`HookGroup` into a Flux Kustomization, a bundle or a layout. A consumer that wants one
+Kustomization per group, applied in that order, builds them from the groups itself.
 
 `io.ParseYAML` turns the multi-doc YAML `RenderChart` returns into the `[]client.Object` this
 takes. Here the `test` hook is excluded, as the table below says:
@@ -152,7 +154,8 @@ if err != nil {
 
 groups := helm.SplitByHookWeight(parsed)
 for _, g := range groups {
-    // each group becomes one FluxCD Kustomization, deployed in order
+    // groups come in deployment order; turning each into its own FluxCD
+    // Kustomization is the caller's job: kure does not convert a HookGroup
     fmt.Printf("phase=%q weight=%d resources=%d\n", g.Phase, g.Weight, len(g.Resources))
 }
 ```

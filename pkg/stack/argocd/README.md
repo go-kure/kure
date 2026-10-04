@@ -69,8 +69,9 @@ fmt.Println(engine.GetName(), engine.RepoURL, engine.DefaultNamespace)
 cluster := exampleCluster()
 engine := argocd.Engine()
 
-// Generate ArgoCD Applications from a cluster
-objects, err := engine.GenerateFromCluster(cluster)
+// Generate ArgoCD Applications from a cluster: each source.path is a
+// directory a walk with the rules you pass writes
+objects, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 if err != nil {
     panic(err)
 }
@@ -81,9 +82,9 @@ for _, obj := range objects {
 ```
 <!-- doc-example:end -->
 
-`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()` and produces one ArgoCD `Application` (`argoproj.io/v1alpha1`) per directory that renders bundles, umbrella children included. Each Application's `spec.source.path` is that directory (`layout.OriginIndex.KustomizationPath`), not a path guessed from bundle names. `spec.destination.server` defaults to `https://kubernetes.default.svc`.
+`GenerateFromCluster` walks the cluster with the `layout.LayoutRules` you pass (the ones you write the tree with) and produces one ArgoCD `Application` (`argoproj.io/v1alpha1`) per directory that renders bundles, umbrella children included. Each Application's `spec.source.path` is that directory (`layout.OriginIndex.KustomizationPath`), not a path guessed from bundle names. `spec.destination.server` defaults to `https://kubernetes.default.svc`. The rules are held to what `CreateLayoutWithResources` accepts: a value that is not `layout.LayoutRules` (`nil` included) and an integrated `FluxPlacement` are refused, and so is every rule the walk refuses (`layout.LayoutRules.Validate`), also when the cluster is nil or has no root node: such a cluster yields no Application only with valid rules.
 
-When a `GroupFlat` axis or `FlattenSingleTier` merges several bundles into one directory, they share one Application, as they share one Flux Kustomization (see the fluxcd package's "One Kustomization per directory"). It is named after the first bundle. Their labels are combined, and one label key with two values is an error. `spec.dependencies` names the Applications of the directories each bundle's `DependsOn` renders, and dependencies between the merged bundles are dropped. With the default rules every bundle has its own directory, so this is one Application per bundle.
+When a `GroupFlat` axis or `FlattenSingleTier` merges several bundles into one directory, they share one Application, as they share one Flux Kustomization (see the fluxcd package's "One Kustomization per directory"). It is named after the first bundle. An Application takes its bundle's `KustomizationName` when the bundle sets one, and `spec.dependencies` names a dependency the same way (`Bundle.UnitName`); `source.path` stays the bundle's directory. Their labels are combined, and one label key with two values is an error. `spec.dependencies` names the Applications of the directories each bundle's `DependsOn` renders, and dependencies between the merged bundles are dropped. With the default rules every bundle has its own directory, so this is one Application per bundle.
 
 ## Layout Integration
 
@@ -112,7 +113,7 @@ for _, child := range ml.Children {
 ```
 <!-- doc-example:end -->
 
-`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster` with the caller's rules, generates the Applications from that same layout (so every `source.path` is a directory it writes), then appends an `argocd/` child layout containing them. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it. An integrated `FluxPlacement` (`FluxIntegratedPerLayout`, `FluxIntegratedPerBundle`) is refused: the writer would then reference child layouts through Flux CRs, which an Argo layout does not have, so nothing would apply `argocd/`.
+`CreateLayoutWithResources` generates the base manifest layout via `layout.WalkCluster` with the caller's rules, generates the Applications from that same layout (so every `source.path` is a directory it writes), then appends an `argocd/` child layout containing them. The `argocd/` directory sits inside the root layout's own directory, where the root's `kustomization.yaml` references it. An integrated `FluxPlacement` (`FluxIntegratedPerLayout`, `FluxIntegratedPerBundle`) is refused: the writer would then reference child layouts through Flux CRs, which an Argo layout does not have, so nothing would apply `argocd/`. Every other rule is validated by the walk (`layout.LayoutRules.Validate`): an unknown option value or a `ClusterName` with a `..` path segment is an error naming the field, and no layout is returned.
 
 A `KustomizationRecursive` layout gets no `kustomization.yaml`, and the Applications do not set
 `source.directory.recurse` (go-kure/kure#144), so Argo CD applies only the manifest files at the

@@ -117,6 +117,7 @@ func TestGenerateFluxOperatorBootstrap(t *testing.T) {
 		Enabled:     true,
 		FluxMode:    "flux-operator",
 		FluxVersion: "v2.0.0",
+		Registry:    "ghcr.io/fluxcd",
 		SourceURL:   "oci://registry.example.com/flux-system",
 		SourceRef:   "latest",
 	}
@@ -139,9 +140,11 @@ func TestGenerateFluxOperatorBootstrapWithComponents(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
 	config := &stack.BootstrapConfig{
-		Enabled:    true,
-		FluxMode:   "flux-operator",
-		Components: []string{"source-controller", "kustomize-controller"},
+		Enabled:     true,
+		FluxMode:    "flux-operator",
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
+		Components:  []string{"source-controller", "kustomize-controller"},
 	}
 
 	rootNode := &stack.Node{Name: "test-cluster"}
@@ -160,8 +163,10 @@ func TestGenerateFluxOperatorBootstrapNoSourceURL(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
 	config := &stack.BootstrapConfig{
-		Enabled:  true,
-		FluxMode: "flux-operator",
+		Enabled:     true,
+		FluxMode:    "flux-operator",
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
 		// No SourceURL
 	}
 
@@ -185,6 +190,7 @@ func TestGenerateBootstrapDefaultMode(t *testing.T) {
 	config := &stack.BootstrapConfig{
 		Enabled:     true,
 		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
 		SourceURL:   "oci://registry.example.com/flux-system",
 		SourceRef:   "latest",
 	}
@@ -210,6 +216,7 @@ func TestFluxOperatorSourceKindGitRepository(t *testing.T) {
 		Enabled:     true,
 		FluxMode:    "flux-operator",
 		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
 		SourceKind:  "GitRepository",
 		SourceURL:   "https://github.com/example/fleet.git",
 		SourceRef:   "main",
@@ -247,6 +254,7 @@ func TestFluxOperatorSourceKindOCIDefault(t *testing.T) {
 		Enabled:     true,
 		FluxMode:    "flux-operator",
 		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
 		SourceURL:   "oci://registry.example.com/flux-system",
 		SourceRef:   "latest",
 	}
@@ -273,11 +281,13 @@ func TestFluxOperatorSourceKindExplicitOCI(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
 	config := &stack.BootstrapConfig{
-		Enabled:    true,
-		FluxMode:   "flux-operator",
-		SourceKind: "OCIRepository",
-		SourceURL:  "oci://registry.example.com/flux-system",
-		SourceRef:  "v1.0.0",
+		Enabled:     true,
+		FluxMode:    "flux-operator",
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
+		SourceKind:  "OCIRepository",
+		SourceURL:   "oci://registry.example.com/flux-system",
+		SourceRef:   "v1.0.0",
 	}
 
 	rootNode := &stack.Node{Name: "prod"}
@@ -368,6 +378,7 @@ func TestGotkGitRepositorySourceGeneration(t *testing.T) {
 		Enabled:     true,
 		FluxMode:    "flux-operator",
 		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
 		SourceKind:  "GitRepository",
 		SourceURL:   "https://github.com/org/fleet.git",
 		SourceRef:   "main",
@@ -523,10 +534,12 @@ func TestGenerateFluxInstanceSyncFromSourceURL(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
 	config := &stack.BootstrapConfig{
-		Enabled:    true,
-		SourceURL:  "https://github.com/example/fleet.git",
-		SourceRef:  "main",
-		SourceKind: "GitRepository",
+		Enabled:     true,
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
+		SourceURL:   "https://github.com/example/fleet.git",
+		SourceRef:   "main",
+		SourceKind:  "GitRepository",
 	}
 	rootNode := &stack.Node{Name: "production"}
 
@@ -573,9 +586,11 @@ func TestGenerateFluxInstanceSyncName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			bg := fluxstack.NewBootstrapGenerator()
 			fi, err := bg.GenerateFluxInstance(&stack.BootstrapConfig{
-				Enabled:   true,
-				SourceURL: tc.sourceURL,
-				SyncName:  tc.syncName,
+				Enabled:     true,
+				FluxVersion: "v2.4.0",
+				Registry:    "ghcr.io/fluxcd",
+				SourceURL:   tc.sourceURL,
+				SyncName:    tc.syncName,
 			}, &stack.Node{Name: "production"})
 			if err != nil {
 				t.Fatalf("GenerateFluxInstance() error = %v", err)
@@ -605,11 +620,13 @@ func TestGenerateFluxInstanceSyncName(t *testing.T) {
 func TestFluxOperatorBootstrapCarriesSyncName(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 	resources, err := bg.GenerateBootstrap(&stack.BootstrapConfig{
-		Enabled:   true,
-		FluxMode:  "flux-operator",
-		SourceURL: "oci://registry.example.com/fleet",
-		SourceRef: "latest",
-		SyncName:  "stack",
+		Enabled:     true,
+		FluxMode:    "flux-operator",
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
+		SourceURL:   "oci://registry.example.com/fleet",
+		SourceRef:   "latest",
+		SyncName:    "stack",
 	}, &stack.Node{Name: "production"})
 	if err != nil {
 		t.Fatalf("GenerateBootstrap() error = %v", err)
@@ -662,6 +679,7 @@ func TestGenerateFluxInstanceNoSyncWhenNoSourceURL(t *testing.T) {
 	config := &stack.BootstrapConfig{
 		Enabled:     true,
 		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
 		// No SourceURL
 	}
 
@@ -730,8 +748,10 @@ func TestGenerateFluxInstance_ComponentsBranch(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
 	config := &stack.BootstrapConfig{
-		Enabled:    true,
-		Components: []string{"source-controller", "kustomize-controller"},
+		Enabled:     true,
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
+		Components:  []string{"source-controller", "kustomize-controller"},
 	}
 
 	fi, err := bg.GenerateFluxInstance(config, nil)
@@ -801,8 +821,10 @@ func TestFluxOperatorBootstrapIncludesInstallBundle(t *testing.T) {
 	bg := fluxstack.NewBootstrapGenerator()
 
 	config := &stack.BootstrapConfig{
-		Enabled:  true,
-		FluxMode: "flux-operator",
+		Enabled:     true,
+		FluxMode:    "flux-operator",
+		FluxVersion: "v2.4.0",
+		Registry:    "ghcr.io/fluxcd",
 	}
 	rootNode := &stack.Node{Name: "test"}
 
@@ -912,8 +934,8 @@ func TestGotkBootstrapAcceptsANilRootNode(t *testing.T) {
 	if kust == nil {
 		t.Fatal("bootstrap emitted no Kustomization")
 	}
-	if got, want := kust.Spec.Path, fluxstack.DefaultBootstrapPathRoot; got != want {
-		t.Errorf("spec.path = %q, want %q — a nameless root must not add a path segment", got, want)
+	if got, want := kust.Spec.Path, "."; got != want {
+		t.Errorf("spec.path = %q, want %q (the root of the source) — a nameless root must not add a path segment", got, want)
 	}
 	if got, want := kust.Spec.SourceRef.Name, fluxstack.DefaultSourceName; got != want {
 		t.Errorf("sourceRef.name = %q, want DefaultSourceName (%q)", got, want)

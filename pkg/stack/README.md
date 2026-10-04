@@ -54,7 +54,8 @@ fmt.Println(cluster.GetName(), cluster.GetNode().Name, cluster.GetGitOps().Type)
 `GitOpsConfig.Bootstrap` takes a `BootstrapConfig`: the Flux mode (`flux-operator` by default, or
 `gotk`), the Flux version (in `gotk` mode, empty or the vendored `fluxcd.GotkVersion` builds
 offline; any other value downloads manifests — the named release for `vX.Y.Z`, the latest
-release otherwise) and components, and the sync
+release otherwise; in `flux-operator` mode it is required, as is `Registry`, and an empty value
+is an error) and components, and the sync
 source — `SourceKind`, `SourceURL`,
 `SourceRef` and, in `flux-operator` mode, `SyncName`, the name the operator gives the sync source
 and Kustomization it creates (empty leaves it to the operator, which uses the `FluxInstance`
@@ -81,6 +82,27 @@ fmt.Println(node.Name, node.Children[0].Name, node.Bundle.Name)
 ### Bundle
 
 A deployment unit corresponding to a single GitOps resource (e.g., a Flux Kustomization). Bundles support dependency ordering via `DependsOn` (pointer-based) or `NamedDependsOn` (name-based, for cross-scope references).
+
+The generated resource is named after the bundle. `KustomizationName` gives it another name
+without renaming the bundle or moving its directory; `UnitName()` returns the name in effect.
+Under the ArgoCD workflow the same value names the Application. A `NamedDependsOn` entry names
+such a resource, so it reaches a bundle that sets `KustomizationName` by that value.
+
+A `DependsOn` entry need not be the cluster's own bundle: another `Bundle` value with the same
+`Name` is a copy of it, and a cluster resolves it by `Name` to that bundle, so the dependency is on
+that bundle's Kustomization. Leave `KustomizationName` empty on a copy, or set the name of the
+bundle's Kustomization (its `UnitName()`: the bundle's `KustomizationName`, or its `Name` when it
+sets none). `ValidateCluster` refuses, before it validates the bundles one by one:
+
+- a copy that sets a `KustomizationName` other than that name, naming both;
+- a copy of a bundle whose Kustomization name is also in the dependant's `NamedDependsOn`: one
+  dependency in both lists.
+
+`Bundle.Validate` sees one bundle and no cluster, so it compares a `DependsOn` entry with
+`NamedDependsOn` on the name that entry carries itself. One valid input is refused for that reason:
+a name-only copy of a bundle that sets `KustomizationName`, beside a `NamedDependsOn` entry equal
+to the bundle's `Name` (which then means another Kustomization), is reported as one dependency in
+both lists. Set the bundle's `KustomizationName` on the copy to say which one is meant.
 
 `NewBundle` validates the bundle it builds; fields set afterwards are checked by
 `Bundle.Validate`:
@@ -334,8 +356,9 @@ if err != nil {
     panic(err)
 }
 
-// Generate GitOps resources from the cluster definition
-objects, err := wf.GenerateFromCluster(cluster)
+// Generate GitOps resources from the cluster definition, with the layout
+// rules the tree is written with
+objects, err := wf.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 if err != nil {
     panic(err)
 }
@@ -345,10 +368,15 @@ for _, obj := range objects {
 ```
 <!-- doc-example:end -->
 
-`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()`: every Flux
-Kustomization `spec.path` and ArgoCD Application `source.path` is a directory that walk writes.
-To write the layout with other rules, use `CreateLayoutWithResources`, which generates from the
-layout it walks.
+`GenerateFromCluster` walks the cluster with the layout rules you pass: every Flux
+Kustomization `spec.path` and ArgoCD Application `source.path` is a directory that walk writes,
+so pass the rules you write the tree with (`layout.DefaultLayoutRules()` for the defaults). The
+rules must be a `layout.LayoutRules` value; anything else, `nil` included, is refused. Neither
+engine returns a list for rules with `FluxIntegratedPerLayout` (the Flux Kustomizations that
+apply that tree's child directories exist only in a layout): use `CreateLayoutWithResources`
+with the Flux engine for that placement.
+`CreateLayoutWithResources` takes the same rules and also returns the layout it walked, with
+the resources placed in it.
 
 Supported workflow providers: `"flux"` / `"fluxcd"` and `"argo"` / `"argocd"`. Each is registered by
 importing its package, and `NewWorkflow` returns that package's `*fluxcd.WorkflowEngine` or

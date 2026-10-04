@@ -6,7 +6,7 @@
 Generated from the modules this build pins. Every row names the module and
 version it was read from, so a table entry is always traceable to a pin.
 
-## Kinds (128)
+## Kinds (141)
 
 `Scope from` is what stated the scope: the kind's own `+kubebuilder:resource`
 marker, the `CustomResourceDefinition` its module ships, or the built-in table
@@ -34,7 +34,14 @@ for the kinds whose scope the API server defines.
 | `v1` | `ServiceAccount` | Namespaced | `builtin` | `ServiceAccount` | `k8s.io/api@v0.37.1` |
 | `acme.cert-manager.io/v1` | `Challenge` | Namespaced | `marker` | `Challenge` | `github.com/cert-manager/cert-manager@v1.21.2` |
 | `acme.cert-manager.io/v1` | `Order` | Namespaced | `marker` | `Order` | `github.com/cert-manager/cert-manager@v1.21.2` |
+| `admissionregistration.k8s.io/v1` | `MutatingAdmissionPolicy` | Cluster | `builtin` | `MutatingAdmissionPolicy` | `k8s.io/api@v0.37.1` |
+| `admissionregistration.k8s.io/v1` | `MutatingAdmissionPolicyBinding` | Cluster | `builtin` | `MutatingAdmissionPolicyBinding` | `k8s.io/api@v0.37.1` |
+| `admissionregistration.k8s.io/v1` | `MutatingWebhookConfiguration` | Cluster | `builtin` | `MutatingWebhookConfiguration` | `k8s.io/api@v0.37.1` |
+| `admissionregistration.k8s.io/v1` | `ValidatingAdmissionPolicy` | Cluster | `builtin` | `ValidatingAdmissionPolicy` | `k8s.io/api@v0.37.1` |
+| `admissionregistration.k8s.io/v1` | `ValidatingAdmissionPolicyBinding` | Cluster | `builtin` | `ValidatingAdmissionPolicyBinding` | `k8s.io/api@v0.37.1` |
+| `admissionregistration.k8s.io/v1` | `ValidatingWebhookConfiguration` | Cluster | `builtin` | `ValidatingWebhookConfiguration` | `k8s.io/api@v0.37.1` |
 | `apiextensions.k8s.io/v1` | `CustomResourceDefinition` | Cluster | `builtin` | `CustomResourceDefinition` | `k8s.io/apiextensions-apiserver@v0.37.1` |
+| `apiregistration.k8s.io/v1` | `APIService` | Cluster | `builtin` | `APIService` | `k8s.io/kube-aggregator@v0.37.1` |
 | `apps/v1` | `ControllerRevision` | Namespaced | `builtin` | `ControllerRevision` | `k8s.io/api@v0.37.1` |
 | `apps/v1` | `DaemonSet` | Namespaced | `builtin` | `DaemonSet` | `k8s.io/api@v0.37.1` |
 | `apps/v1` | `Deployment` | Namespaced | `builtin` | `Deployment` | `k8s.io/api@v0.37.1` |
@@ -65,6 +72,8 @@ for the kinds whose scope the API server defines.
 | `cilium.io/v2` | `CiliumNetworkPolicy` | Namespaced | `marker` | `CiliumNetworkPolicy` | `github.com/cilium/cilium@v1.20.2` |
 | `cilium.io/v2` | `CiliumNode` | Cluster | `marker` | `CiliumNode` | `github.com/cilium/cilium@v1.20.2` |
 | `cilium.io/v2` | `CiliumNodeConfig` | Namespaced | `marker` | `CiliumNodeConfig` | `github.com/cilium/cilium@v1.20.2` |
+| `coordination.k8s.io/v1` | `Lease` | Namespaced | `builtin` | `Lease` | `k8s.io/api@v0.37.1` |
+| `discovery.k8s.io/v1` | `EndpointSlice` | Namespaced | `builtin` | `EndpointSlice` | `k8s.io/api@v0.37.1` |
 | `external-secrets.io/v1` | `ClusterExternalSecret` | Cluster | `marker` | `ClusterExternalSecret` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20260918141056-e8f12e1f1646` |
 | `external-secrets.io/v1` | `ClusterSecretStore` | Cluster | `marker` | `ClusterSecretStore` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20260918141056-e8f12e1f1646` |
 | `external-secrets.io/v1` | `ExternalSecret` | Namespaced | `marker` | `ExternalSecret` | `github.com/external-secrets/external-secrets/apis@v0.0.0-20260918141056-e8f12e1f1646` |
@@ -84,6 +93,8 @@ for the kinds whose scope the API server defines.
 | `gateway.networking.k8s.io/v1` | `TLSRoute` | Namespaced | `marker` | `TLSRoute` | `sigs.k8s.io/gateway-api@v1.6.2` |
 | `gateway.networking.k8s.io/v1` | `UDPRoute` | Namespaced | `marker` | `UDPRoute` | `sigs.k8s.io/gateway-api@v1.6.2` |
 | `helm.toolkit.fluxcd.io/v2` | `HelmRelease` | Namespaced | `marker` | `HelmRelease` | `github.com/fluxcd/helm-controller/api@v1.6.4` |
+| `image.toolkit.fluxcd.io/v1` | `ImagePolicy` | Namespaced | `marker` | `ImagePolicy` | `github.com/fluxcd/image-reflector-controller/api@v1.2.5` |
+| `image.toolkit.fluxcd.io/v1` | `ImageRepository` | Namespaced | `marker` | `ImageRepository` | `github.com/fluxcd/image-reflector-controller/api@v1.2.5` |
 | `image.toolkit.fluxcd.io/v1` | `ImageUpdateAutomation` | Namespaced | `marker` | `ImageUpdateAutomation` | `github.com/fluxcd/image-automation-controller/api@v1.2.5` |
 | `kustomize.toolkit.fluxcd.io/v1` | `Kustomization` | Namespaced | `marker` | `Kustomization` | `github.com/fluxcd/kustomize-controller/api@v1.9.5` |
 | `metallb.io/v1beta1` | `BFDProfile` | Namespaced | `crd` | `BFDProfile` | `go.universe.tf/metallb@v0.16.1` |
@@ -107,6 +118,7 @@ for the kinds whose scope the API server defines.
 | `networking.k8s.io/v1` | `IngressClass` | Cluster | `builtin` | `IngressClass` | `k8s.io/api@v0.37.1` |
 | `networking.k8s.io/v1` | `NetworkPolicy` | Namespaced | `builtin` | `NetworkPolicy` | `k8s.io/api@v0.37.1` |
 | `networking.k8s.io/v1` | `ServiceCIDR` | Cluster | `builtin` | `ServiceCIDR` | `k8s.io/api@v0.37.1` |
+| `node.k8s.io/v1` | `RuntimeClass` | Cluster | `builtin` | `RuntimeClass` | `k8s.io/api@v0.37.1` |
 | `notification.toolkit.fluxcd.io/v1beta3` | `Alert` | Namespaced | `marker` | `Alert` | `github.com/fluxcd/notification-controller/api@v1.9.4` |
 | `notification.toolkit.fluxcd.io/v1beta3` | `Provider` | Namespaced | `marker` | `Provider` | `github.com/fluxcd/notification-controller/api@v1.9.4` |
 | `notification.toolkit.fluxcd.io/v1` | `Receiver` | Namespaced | `marker` | `Receiver` | `github.com/fluxcd/notification-controller/api@v1.9.4` |
@@ -127,6 +139,7 @@ for the kinds whose scope the API server defines.
 | `rbac.authorization.k8s.io/v1` | `ClusterRoleBinding` | Cluster | `builtin` | `ClusterRoleBinding` | `k8s.io/api@v0.37.1` |
 | `rbac.authorization.k8s.io/v1` | `Role` | Namespaced | `builtin` | `Role` | `k8s.io/api@v0.37.1` |
 | `rbac.authorization.k8s.io/v1` | `RoleBinding` | Namespaced | `builtin` | `RoleBinding` | `k8s.io/api@v0.37.1` |
+| `scheduling.k8s.io/v1` | `PriorityClass` | Cluster | `builtin` | `PriorityClass` | `k8s.io/api@v0.37.1` |
 | `source.extensions.fluxcd.io/v1beta1` | `ArtifactGenerator` | Namespaced | `marker` | `ArtifactGenerator` | `github.com/fluxcd/source-watcher/api/v2@v2.2.4` |
 | `source.toolkit.fluxcd.io/v1` | `Bucket` | Namespaced | `marker` | `Bucket` | `github.com/fluxcd/source-controller/api@v1.9.5` |
 | `source.toolkit.fluxcd.io/v1` | `ExternalArtifact` | Namespaced | `marker` | `ExternalArtifact` | `github.com/fluxcd/source-controller/api@v1.9.5` |
@@ -143,7 +156,7 @@ for the kinds whose scope the API server defines.
 | `volsync.backube/v1alpha1` | `ReplicationDestination` | Namespaced | `marker` | `ReplicationDestination` | `github.com/backube/volsync@v0.16.0` |
 | `volsync.backube/v1alpha1` | `ReplicationSource` | Namespaced | `marker` | `ReplicationSource` | `github.com/backube/volsync@v0.16.0` |
 
-## Field maturity (126)
+## Field maturity (128)
 
 kure neither warns nor filters on any of this: it reports, and a consumer with
 cluster knowledge decides. For built-in types the API server does not reject a
@@ -196,6 +209,8 @@ by a caller.
 | `apps/v1.RollingUpdateStatefulSetStrategy` | `maxUnavailable` | beta | `MaxUnavailableStatefulSet` | `k8s.io/api@v0.37.1` |
 | `autoscaling/v2.HPAScalingRules` | `tolerance` | stable | `HPAConfigurableTolerance` | `k8s.io/api@v0.37.1` |
 | `batch/v1.JobSpec` | `scheduling` | alpha | `WorkloadWithJob` | `k8s.io/api@v0.37.1` |
+| `coordination/v1.LeaseSpec` | `preferredHolder` | stable | `CoordinatedLeaderElection` | `k8s.io/api@v0.37.1` |
+| `coordination/v1.LeaseSpec` | `strategy` | alpha | `CoordinatedLeaderElection` | `k8s.io/api@v0.37.1` |
 | `core/v1.ClusterTrustBundleProjection` | `user` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
 | `core/v1.ConfigMapVolumeSource` | `defaultUser` | alpha | `AtomicWriteVolumeUserFields` | `k8s.io/api@v0.37.1` |
 | `core/v1.Container` | `resizePolicy` | stable | `InPlacePodVerticalScaling` | `k8s.io/api@v0.37.1` |

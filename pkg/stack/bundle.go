@@ -24,13 +24,23 @@ const (
 type Bundle struct {
 	// Name identifies the application set.
 	Name string
+	// KustomizationName names the Flux Kustomization generated for the
+	// bundle, and with it every reference to that Kustomization: dependsOn
+	// entries of bundles that depend on this one, and an umbrella's health
+	// check on this child. Empty means Name. Under the ArgoCD workflow the
+	// same value names the Application and its spec.dependencies entries.
+	// Name stays the bundle's identity and its directory; UnitName returns
+	// the name in effect.
+	KustomizationName string
 	// ParentPath is the hierarchical path to the parent bundle (e.g., "cluster/infrastructure")
 	// Empty for root bundles. This avoids circular references while maintaining hierarchy.
 	ParentPath string
 	// DependsOn lists other bundles this bundle depends on
 	DependsOn []*Bundle
 	// NamedDependsOn lists names of kustomizations this bundle depends on, by name.
-	// Unlike DependsOn, names need not resolve to in-scope Bundle objects.
+	// Unlike DependsOn, names need not resolve to in-scope Bundle objects. A
+	// name is a Kustomization's: for a bundle that sets KustomizationName it
+	// is that value, not the bundle's Name.
 	// Both fields are merged into Kustomization.Spec.DependsOn.
 	NamedDependsOn []string
 	// Children holds bundles whose Flux Kustomization CRs are rendered into
@@ -168,6 +178,19 @@ func NewBundle(name string, resources []*Application, labels map[string]string) 
 	return a, nil
 }
 
+// UnitName returns the name of the reconciliation unit generated for the
+// bundle, the object the delivery engine applies it with: a Flux
+// Kustomization, or an ArgoCD Application. It is KustomizationName when that
+// is set and Name otherwise. Bundles a layout grouping merges into one
+// directory share one unit, named after the first of them; the layout's
+// origin index resolves that (layout.OriginIndex.UnitName).
+func (a *Bundle) UnitName() string {
+	if a.KustomizationName != "" {
+		return a.KustomizationName
+	}
+	return a.Name
+}
+
 // Validate performs basic sanity checks on the Bundle. When the bundle has
 // umbrella Children, Validate recursively walks the child subtree checking for
 // cycles, duplicate names, and DependsOn contradictions.
@@ -225,6 +248,18 @@ func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
 // detection, duration syntax, nil/self/duplicate/empty-name checks, and
 // DependsOn/Children disjointness. Cycle detection uses a visited pointer set
 // shared across the whole recursion.
+//
+// Two kinds of name are compared. A bundle's own identity is its Name: a
+// child without one, a child named like its parent and two children with one
+// name are refused on Name. A reference to a bundle's Kustomization is
+// compared on UnitName, the name that Kustomization gets: a DependsOn bundle
+// against a NamedDependsOn entry, a child against the bundle's DependsOn and
+// NamedDependsOn, and a child's NamedDependsOn against its parent. With a
+// KustomizationName set, a NamedDependsOn entry equal to the bundle's Name
+// therefore names another Kustomization, and one equal to its
+// KustomizationName names the bundle's own. A child against the bundle's
+// DependsOn is compared on both: a DependsOn bundle is resolved by its Name,
+// so one with a child's Name is that child whatever KustomizationName it has.
 func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 	if visited[a] {
 		return errors.ResourceValidationError("Bundle", a.Name, "children",
@@ -235,9 +270,11 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 		return err
 	}
 	depNames := make(map[string]bool, len(a.DependsOn))
+	depBundleNames := make(map[string]bool, len(a.DependsOn))
 	for _, dep := range a.DependsOn {
 		if dep != nil {
-			depNames[dep.Name] = true
+			depNames[dep.UnitName()] = true
+			depBundleNames[dep.Name] = true
 		}
 	}
 	// Validate NamedDependsOn: empty names, duplicates, cross-field duplicates.
@@ -280,11 +317,11 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 				fmt.Sprintf("duplicate child name %q", c.Name), nil)
 		}
 		childNames[c.Name] = true
-		if depNames[c.Name] {
+		if depBundleNames[c.Name] || depNames[c.UnitName()] {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q also appears in dependsOn", c.Name), nil)
 		}
-		if namedDepNames[c.Name] {
+		if namedDepNames[c.UnitName()] {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q also appears in namedDependsOn", c.Name), nil)
 		}
@@ -292,7 +329,7 @@ func (a *Bundle) validateChildren(visited map[*Bundle]bool) error {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q depends on parent %q", c.Name, a.Name), nil)
 		}
-		if slices.Contains(c.NamedDependsOn, a.Name) {
+		if slices.Contains(c.NamedDependsOn, a.UnitName()) {
 			return errors.ResourceValidationError("Bundle", a.Name, "children",
 				fmt.Sprintf("child %q has parent %q in namedDependsOn", c.Name, a.Name), nil)
 		}

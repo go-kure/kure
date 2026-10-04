@@ -3,6 +3,9 @@
 package layout
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/go-kure/kure/pkg/errors"
 )
 
@@ -122,10 +125,6 @@ type LayoutRules struct {
 	// its own layout gets a directory either way, and so does every umbrella
 	// child bundle. The three axes are independent. Defaults to GroupFlat.
 	ApplicationGrouping GroupingMode
-	// ApplicationFileMode controls whether application resources are
-	// combined into a single file or split per resource. Defaults to
-	// AppFilePerResource.
-	ApplicationFileMode ApplicationFileMode
 	// FilePer sets the default file export mode for resources. Defaults to
 	// FilePerResource.
 	FilePer FileExportMode
@@ -135,8 +134,13 @@ type LayoutRules struct {
 	// FluxPlacement determines how Flux Kustomizations are placed.
 	// Defaults to FluxSeparate.
 	FluxPlacement FluxPlacement
-	// FileNaming controls the file naming pattern for manifest files.
-	// Defaults to FileNamingDefault ({namespace}-{kind}-{name}.yaml).
+	// FileNaming is the naming pattern of the manifest files WriteToDisk and
+	// WriteToTar write, for every layout of the tree: those the walkers
+	// create, the layouts an augmenter adds and leaves unset (each takes its
+	// parent's) and the flux-system directory of FluxSeparate. A layout that
+	// sets its own FileNaming keeps it. WriteManifest names files from its
+	// Config instead. Defaults to FileNamingDefault
+	// ({namespace}-{kind}-{name}.yaml).
 	FileNaming FileNamingMode
 
 	// FlattenSingleTier collapses a vestigial intermediate directory layer
@@ -168,13 +172,16 @@ func DefaultLayoutRules() LayoutRules {
 		NodeGrouping:        GroupByName,
 		BundleGrouping:      GroupFlat, // Avoid bundle/app/app nesting
 		ApplicationGrouping: GroupFlat, // Avoid double nesting
-		ApplicationFileMode: AppFilePerResource,
 		FilePer:             FilePerResource,
 		FluxPlacement:       FluxSeparate,
 	}
 }
 
-// Validate ensures the LayoutRules contain known option values.
+// Validate ensures the LayoutRules contain known option values and a
+// ClusterName the writers can write: one without a ".." path segment. An unset
+// value is valid; it takes its documented default. WalkCluster and
+// WalkClusterByPackage validate the rules they are given before they build
+// anything, so no caller has to (go-kure/kure#979).
 func (lr LayoutRules) Validate() error {
 	validGrouping := func(g GroupingMode) bool {
 		switch g {
@@ -193,13 +200,6 @@ func (lr LayoutRules) Validate() error {
 	}
 	if !validGrouping(lr.ApplicationGrouping) {
 		return errors.NewValidationError("ApplicationGrouping", string(lr.ApplicationGrouping), "LayoutRules", []string{string(GroupByName), string(GroupFlat)})
-	}
-
-	switch lr.ApplicationFileMode {
-	case AppFilePerResource, AppFileSingle, AppFileUnset:
-		// valid
-	default:
-		return errors.NewValidationError("ApplicationFileMode", string(lr.ApplicationFileMode), "LayoutRules", []string{string(AppFilePerResource), string(AppFileSingle)})
 	}
 
 	switch lr.FilePer {
@@ -221,6 +221,18 @@ func (lr LayoutRules) Validate() error {
 		// valid
 	default:
 		return errors.NewValidationError("FileNaming", string(lr.FileNaming), "LayoutRules", []string{string(FileNamingDefault), string(FileNamingKindName)})
+	}
+
+	// The cluster directory is the Namespace of the walked tree's top layout,
+	// and every writer refuses a layout whose directory has a ".." segment
+	// (checkLayoutIdentity). A name the walk would clean to one without it
+	// ("x/../prod") is refused as well: one rule, whatever the tree.
+	for _, seg := range strings.Split(filepath.ToSlash(lr.ClusterName), "/") {
+		if seg == ".." {
+			err := errors.NewValidationError("ClusterName", lr.ClusterName, "LayoutRules", nil)
+			err.Message += `: it must not contain a ".." path segment`
+			return err
+		}
 	}
 
 	return nil

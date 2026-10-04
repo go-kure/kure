@@ -23,9 +23,9 @@ import (
 // [stack.Bundle] or the root [stack.Node] — the per-identifier comments below say
 // which input each one yields to.
 //
-// Three have no override at all: [DefaultSyncPath], [DefaultBootstrapPathRoot]
-// and [DefaultFluxDirName]. Each is a fixed structural segment of a path the
-// package builds, not a value a caller replaces, and their comments say so.
+// Two have no override at all: [DefaultSyncPath] and [DefaultFluxDirName].
+// Each is a fixed structural segment of a path the package builds, not a
+// value a caller replaces, and their comments say so.
 // They are named here anyway so the value is greppable and reviewable rather
 // than a literal inside the function that emits it. [FluxInstanceName] is
 // likewise fixed but is not a default of any kind: the flux-operator CRD
@@ -71,11 +71,6 @@ const (
 	// the directory. It has no override.
 	DefaultFluxDirName = "flux-system"
 
-	// DefaultBootstrapPathRoot is the first segment of the bootstrap
-	// Kustomization's spec.path; the root node's name is joined onto it. It is a
-	// fixed segment with no override — rename the root node to change the path.
-	DefaultBootstrapPathRoot = "manifests"
-
 	// DefaultFluxMode is the bootstrap mode used when BootstrapConfig.FluxMode
 	// is empty. It is also the mode GenerateBootstrap dispatches on and the
 	// first entry [BootstrapGenerator.SupportedBootstrapModes] reports, so
@@ -113,7 +108,8 @@ const (
 	// DefaultSyncPath is the path a FluxInstance sync block uses when the root
 	// node has no name, and the prefix its name is appended to when it has one.
 	// It has no override: it is the prefix a sync path is built from, not a
-	// value a caller replaces.
+	// value a caller replaces. The gotk bootstrap Kustomization names the same
+	// directory without this prefix (bootstrapDir).
 	DefaultSyncPath = "./"
 )
 

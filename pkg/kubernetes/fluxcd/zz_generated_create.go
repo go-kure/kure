@@ -7,6 +7,7 @@ import (
 	fluxoperatorv1 "github.com/controlplaneio-fluxcd/flux-operator/api/v1"
 	helmcontrollerv2 "github.com/fluxcd/helm-controller/api/v2"
 	imageautomationcontrollerv1 "github.com/fluxcd/image-automation-controller/api/v1"
+	imagereflectorcontrollerv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	kustomizecontrollerv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	notificationcontrollerv1 "github.com/fluxcd/notification-controller/api/v1"
 	notificationcontrollerv1beta3 "github.com/fluxcd/notification-controller/api/v1beta3"
@@ -64,6 +65,16 @@ func CreateHelmRelease(name, namespace string) *helmcontrollerv2.HelmRelease {
 // CreateHelmRepository returns a source.toolkit.fluxcd.io/v1 HelmRepository carrying TypeMeta and identity only.
 func CreateHelmRepository(name, namespace string) *sourcecontrollerv1.HelmRepository {
 	return kubernetes.Create[sourcecontrollerv1.HelmRepository](name, namespace)
+}
+
+// CreateImagePolicy returns a image.toolkit.fluxcd.io/v1 ImagePolicy carrying TypeMeta and identity only.
+func CreateImagePolicy(name, namespace string) *imagereflectorcontrollerv1.ImagePolicy {
+	return kubernetes.Create[imagereflectorcontrollerv1.ImagePolicy](name, namespace)
+}
+
+// CreateImageRepository returns a image.toolkit.fluxcd.io/v1 ImageRepository carrying TypeMeta and identity only.
+func CreateImageRepository(name, namespace string) *imagereflectorcontrollerv1.ImageRepository {
+	return kubernetes.Create[imagereflectorcontrollerv1.ImageRepository](name, namespace)
 }
 
 // CreateImageUpdateAutomation returns a image.toolkit.fluxcd.io/v1 ImageUpdateAutomation carrying TypeMeta and identity only.

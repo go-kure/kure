@@ -490,7 +490,7 @@ func TestGenerateFromCluster_UmbrellaClosure(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n})
+	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -533,7 +533,7 @@ func TestGenerateFromCluster_NestedUmbrellaClosure(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n})
+	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -563,7 +563,7 @@ func TestGenerateFromCluster_UmbrellaChildWithSource(t *testing.T) {
 		},
 	}
 
-	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n})
+	objs, err := wf.GenerateFromCluster(&stack.Cluster{Name: "c", Node: n}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -900,7 +900,7 @@ func TestNewWorkflowEngine_Components(t *testing.T) {
 
 func TestWorkflowEngine_GenerateFromCluster_Delegation(t *testing.T) {
 	we := fluxstack.NewWorkflowEngine()
-	objs, err := we.GenerateFromCluster(nil)
+	objs, err := we.GenerateFromCluster(nil, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

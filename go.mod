@@ -25,6 +25,7 @@ replace (
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.37.1
 	k8s.io/client-go => k8s.io/client-go v0.37.1
 	k8s.io/component-base => k8s.io/component-base v0.37.1
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.37.1
 )
 
 require (
@@ -41,6 +42,7 @@ require (
 	github.com/fluxcd/flux2/v2 v2.9.5
 	github.com/fluxcd/helm-controller/api v1.6.4
 	github.com/fluxcd/image-automation-controller/api v1.2.5
+	github.com/fluxcd/image-reflector-controller/api v1.2.5
 	github.com/fluxcd/kustomize-controller/api v1.9.5
 	github.com/fluxcd/notification-controller/api v1.9.4
 	github.com/fluxcd/pkg/apis/acl v0.11.0
@@ -62,6 +64,7 @@ require (
 	k8s.io/apimachinery v0.37.1
 	k8s.io/apiserver v0.37.1
 	k8s.io/cli-runtime v0.37.1
+	k8s.io/kube-aggregator v0.37.1
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.6.2

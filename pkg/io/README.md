@@ -44,7 +44,39 @@ for _, obj := range append(objects, more...) {
 
 By default, only GVKs registered in the kure scheme are accepted. To parse
 arbitrary Kubernetes YAML (CRDs, custom operators, etc.) use
-`ParseYAMLWithOptions` or `ParseFileWithOptions` with `AllowUnstructured`:
+`ParseYAMLWithOptions` or `ParseFileWithOptions` with `AllowUnstructured`.
+
+Which kinds are typed follows the scheme, so it widens when kure registers more.
+`PriorityClass`, `EndpointSlice`, `Lease`, `RuntimeClass`, the two webhook
+configurations and the four admission policy kinds are registered and come back as
+their `k8s.io/api` types in both modes; a caller that matched them as
+`*unstructured.Unstructured` must match the typed object instead. The same holds for
+`APIService`, typed as its `k8s.io/kube-aggregator` type, and for the Flux
+`ImageRepository` and `ImagePolicy`. `VerticalPodAutoscaler` is not registered and
+still needs `AllowUnstructured`. The full list is the
+[generated table](/api-reference/api-tables/).
+
+A list document is flattened into its items; the list itself is never returned.
+The items come back in the list's order and take the list's place in a
+multi-document stream, and an empty list yields nothing.
+
+- A `<Kind>List` of a registered kind (`DeploymentList`, `PriorityClassList`) yields
+  typed items in both modes. An item may leave `apiVersion` and `kind` out, as the
+  API server's own list responses do; an item that states them must state the kind
+  the list holds.
+- A generic `v1` `List` is read item by item, each as a document of its own: a
+  registered kind comes back typed, an unregistered one follows `AllowUnstructured`,
+  and a list inside the list is flattened where it stands. A list may sit inside
+  eight Lists; one nested deeper is refused.
+- A `<Kind>List` of a kind that is not registered is refused by a strict parse and
+  flattened into unstructured items with `AllowUnstructured`.
+
+Each item is decoded by itself, in both list shapes. An item that cannot be decoded,
+a `null` among them, is reported with its position (`item 1 of List`,
+`item 1 of DeploymentList`), and the items beside it are still returned, as the
+documents of a stream are. Only the items are read: the list's own `metadata` is not.
+
+The fallback in use:
 
 <!-- doc-example: pkg/io ExampleParseYAMLWithOptions -->
 ```go

@@ -77,6 +77,46 @@ generated from the scheme and the scope table in `pkg/kubernetes/internal/kinds`
 are never hand-written. A kind registered in the scheme without a wrapper fails the
 identity test; a wrapper that sets anything beyond identity fails it too.
 
+### Base kinds covered
+
+A base kind has a wrapper when kure registers the group version that defines it. From
+`k8s.io/api` those are `core/v1`, `apps/v1`, `autoscaling/v2`, `batch/v1`, `policy/v1`,
+`networking.k8s.io/v1`, `rbac.authorization.k8s.io/v1`, `storage.k8s.io/v1`,
+`scheduling.k8s.io/v1` (`PriorityClass`), `discovery.k8s.io/v1` (`EndpointSlice`),
+`coordination.k8s.io/v1` (`Lease`), `node.k8s.io/v1` (`RuntimeClass`) and
+`admissionregistration.k8s.io/v1` (`MutatingWebhookConfiguration`,
+`ValidatingWebhookConfiguration`, `ValidatingAdmissionPolicy`,
+`ValidatingAdmissionPolicyBinding`, `MutatingAdmissionPolicy`,
+`MutatingAdmissionPolicyBinding`), plus `CustomResourceDefinition` from
+`k8s.io/apiextensions-apiserver`. Registering a group version brings every kind it
+defines; the [generated table](/api-reference/api-tables/) lists each one with its scope.
+
+The Flux image kinds are covered with the other Flux kinds, in `pkg/kubernetes/fluxcd`:
+`ImageRepository` and `ImagePolicy` come from
+`github.com/fluxcd/image-reflector-controller/api`, `ImageUpdateAutomation` from
+`github.com/fluxcd/image-automation-controller/api`, all three in
+`image.toolkit.fluxcd.io/v1`.
+
+`APIService` (`apiregistration.k8s.io/v1`, cluster-scoped) is covered as a built-in whose
+Go type lives outside `k8s.io/api`, in `k8s.io/kube-aggregator`. kure imports that
+module's API package only, and the module is pinned to the same release as the other
+`k8s.io` modules.
+
+`VerticalPodAutoscaler` (`autoscaling.k8s.io/v1`) is out of scope, for three reasons:
+
+- Its Go type lives in `k8s.io/autoscaler/vertical-pod-autoscaler`, which is the whole
+  autoscaler component and not an API-only module, and the kind is not part of the
+  Kubernetes API: a cluster serves it only where the autoscaler's
+  `CustomResourceDefinition` is installed.
+- Requiring that module moves the versions of 17 indirect dependencies kure shares with
+  its other modules (measured at v1.8.0).
+- Registering its group version also registers `VerticalPodAutoscalerCheckpoint`, the
+  autoscaler's internal state, which would get a constructor nobody should call.
+
+What stays available: parse it with `AllowUnstructured` and supply its
+`CustomResourceDefinition` for the scope, or build it with the module's own types in the
+calling program.
+
 Sub-types that are not `client.Object` (`Container`, `PodSpec`,
 `ResourceRequirements`, an `IngressRule`, a PVC used as a template) get no generated
 constructor. A struct literal is the idiom: build the value directly, as
@@ -413,10 +453,10 @@ Status types are not entered. A kind's status is reported by the cluster and nev
 constructed by a caller, so a gate there says nothing about whether a manifest kure
 builds applies as written — and that is where most of the markers are.
 
-Against the current pins, the walk finds 126 maturity-carrying construction-side
-fields, of which 41 require a feature gate (40 in `k8s.io/api`, one in
-`k8s.io/apiextensions-apiserver`); 24 are documented alpha, 14 beta and 66
-deprecated, the remaining 22 are gated without a documented stability claim, and 92
+Against the current pins, the walk finds 128 maturity-carrying construction-side
+fields, of which 43 require a feature gate (42 in `k8s.io/api`, one in
+`k8s.io/apiextensions-apiserver`); 25 are documented alpha, 14 beta and 66
+deprecated, the remaining 23 are gated without a documented stability claim, and 96
 distinct status types are skipped. No CRD module kure pins uses `+featureGate` at
 all. These numbers move with the pins and are not asserted by any test; the pins
 themselves are not restated here — every generated row carries the module and
@@ -452,8 +492,8 @@ module root — and none of them is part of the public API:
 
 Every resolved scope records which of three sources answered — `marker`, `builtin`
 or `crd`, surfaced on `KindInfo.ScopeSource` — so a wrong scope can be traced to the
-thing that claimed it. Against the current pins that is 65 from the kind's own
-marker, 44 from the built-in table and 19 from a shipped CRD. The source is part of
+thing that claimed it. Against the current pins that is 67 from the kind's own
+marker, 55 from the built-in table and 19 from a shipped CRD. The source is part of
 the public answer and not only a debugging aid: `builtin` is what makes a kind a
 built-in, so a caller asking specifically about built-ins reads it rather than
 keeping a list.
@@ -466,10 +506,12 @@ where it asks about built-ins specifically. The cluster-scoped half of
 the old table survives as a frozen fixture in the `internal/kinds` tests, dated to
 the pins it was taken at. That is deliberate: the derivation fails silently by
 construction — an absent, unread or detached marker resolves to `Namespaced`, which
-is also the right answer for 95 of the 128 kinds — so without a literal to compare
-against, a regression in the comment reattachment below would turn 31 kinds
-namespaced with nothing going red. A pin bump that legitimately re-scopes a kind is
-an edit to that fixture, made with the upstream change named in the commit message.
+is also the right answer for 99 of the 141 kinds — so without a literal to compare
+against, a regression in the comment reattachment below would turn cluster-scoped
+kinds namespaced with nothing going red. A pin bump that legitimately re-scopes a kind
+is an edit to that fixture, made with the upstream change named in the commit message.
+So is registering a built-in group version that defines a cluster-scoped kind: its
+entry goes into the fixture and into the built-in table in the same change.
 
 Three things about that derivation are worth knowing before changing it.
 
@@ -484,17 +526,18 @@ other values contain braced commas.
 
 **controller-gen separates its marker block from the type's prose doc comment with a
 blank line**, which detaches the markers from the declaration's `Doc` in `go/ast` and
-files them as free-floating comments on the file. Reading `Doc` alone derives 31 of
-the 33 cluster-scoped kinds as namespaced — silently, since every wrong answer is the
-default. `internal/upstream` reattaches the preceding comment group, bounded by the
+files them as free-floating comments on the file. Reading `Doc` alone derived 31 of
+the 33 kinds that were cluster-scoped when this was measured as namespaced — silently,
+since every wrong answer is the default. `internal/upstream` reattaches the preceding comment group, bounded by the
 end of the previous declaration, and drops it for grouped `type (...)` blocks where it
 cannot be attributed to one spec.
 
 **Many types carry no `+kubebuilder:resource` marker at all**, and none of them gets
 the default handed to it:
 
-- The built-in modules (`k8s.io/api`, `k8s.io/apiextensions-apiserver`) have no
-  markers because the API server, not a generator, defines their scope. Sixteen
+- The built-in modules (`k8s.io/api`, `k8s.io/apiextensions-apiserver`,
+  `k8s.io/kube-aggregator`) have no
+  markers because the API server, not a generator, defines their scope. Twenty-five
   explicit entries in `internal/kinds` name the cluster-scoped built-ins; every other
   built-in kind is namespaced.
 - A CRD module marks a type only when it needs a non-default setting, so an unmarked
@@ -623,12 +666,13 @@ tree, every path it names resolves too, and what each Flux Kustomization applies
 with the reason. Schema-backed kinds are the ones whose module ships its definitions
 (cert-manager, cilium, cloudnative-pg, plugin-barman-cloud, flux-operator,
 gateway-api, metallb, volsync) or whose definitions the vendored Flux install bundle
-carries (`internal/gotk`): 73 against the current pins. Uncovered kinds have no
-definition to hold them to — the built-in kinds of `k8s.io/api` and
-`k8s.io/apiextensions-apiserver`, whose validation the apiserver implements in Go,
+carries (`internal/gotk`): 75 against the current pins. Uncovered kinds have no
+definition to hold them to — the built-in kinds of `k8s.io/api`,
+`k8s.io/apiextensions-apiserver` and `k8s.io/kube-aggregator`, whose validation the
+apiserver implements in Go,
 and the external-secrets and prometheus-operator kinds, whose API modules ship no
 manifests — and get the server's ObjectMeta validation under the kind's own name rule,
-and nothing more: 55 against the current pins. A kind in neither table, a stale table entry, a definition whose
+and nothing more: 66 against the current pins. A kind in neither table, a stale table entry, a definition whose
 scope disagrees with the kinds table, or an uncovered module that starts shipping
 definitions all turn the test red. Why the validation is in process and what it leaves
 to a real apiserver is recorded in `docs/history/20261001-DESIGN-schema-validation.md`.

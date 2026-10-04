@@ -83,7 +83,7 @@ func TestGenerateFromLayout_RejectsInvalidDurationOnNestedUmbrellaChild(t *testi
 
 func TestGenerateFromCluster_RejectsInvalidInterval(t *testing.T) {
 	c := &stack.Cluster{Name: "c", Node: &stack.Node{Name: "n", Bundle: &stack.Bundle{Name: "b", Interval: "5"}}}
-	if _, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c); err == nil {
+	if _, err := fluxstack.NewResourceGenerator().GenerateFromCluster(c, layout.DefaultLayoutRules()); err == nil {
 		t.Fatal("expected an error for an unparsable interval")
 	}
 }

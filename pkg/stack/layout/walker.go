@@ -103,8 +103,13 @@ func (g grouping) newLayout(name, dir string) *ManifestLayout {
 
 // WalkCluster traverses a stack.Cluster and builds a ManifestLayout tree that
 // mirrors the node, bundle and application hierarchy. Each grouping axis of
-// rules decides whether its level gets a directory (see grouping).
+// rules decides whether its level gets a directory (see grouping). The rules
+// are validated first, as given (LayoutRules.Validate); unset values then take
+// their defaults.
 func WalkCluster(c *stack.Cluster, rules LayoutRules) (*ManifestLayout, error) {
+	if err := rules.Validate(); err != nil {
+		return nil, err
+	}
 	if c == nil || c.Node == nil {
 		return nil, nil
 	}
@@ -236,7 +241,12 @@ func walkClusterWithClusterName(c *stack.Cluster, rules LayoutRules, g grouping)
 // and values are the corresponding ManifestLayout trees. Nodes without PackageRef inherit
 // from their parent, with nil representing the default package. The grouping
 // axes apply as in WalkCluster; the package trees carry no Flux placement.
+// The rules are validated first, as in WalkCluster, including the options
+// this walk does not use.
 func WalkClusterByPackage(c *stack.Cluster, rules LayoutRules) (map[string]*ManifestLayout, error) {
+	if err := rules.Validate(); err != nil {
+		return nil, err
+	}
 	if c == nil || c.Node == nil {
 		return nil, nil
 	}
@@ -455,6 +465,7 @@ func renderApps(apps []*stack.Application, target *ManifestLayout, g grouping) (
 		if err := augmentAppLayout(app, appLayout); err != nil {
 			return nil, err
 		}
+		inheritFileNaming(appLayout)
 		for _, gen := range appLayout.ConfigMapGenerators {
 			all = append(all, generatedConfigMap(gen.Name))
 		}
@@ -490,6 +501,22 @@ func augmentAppLayout(app *stack.Application, ml *ManifestLayout) error {
 		return errors.Wrapf(err, "augment layout for application %q", app.Name)
 	}
 	return nil
+}
+
+// inheritFileNaming gives every layout below ml that leaves FileNaming unset
+// its parent's, so the layouts an augmenter added are named like the tree
+// they sit in. A layout that sets its own keeps it, and passes it on to the
+// layouts below it.
+func inheritFileNaming(ml *ManifestLayout) {
+	for _, child := range ml.Children {
+		if child == nil {
+			continue
+		}
+		if child.FileNaming == FileNamingUnset {
+			child.FileNaming = ml.FileNaming
+		}
+		inheritFileNaming(child)
+	}
 }
 
 // wantsOwnLayout reports whether an augmenting config wants its own layout.
