@@ -78,19 +78,31 @@ func TestValidateDirectoryName(t *testing.T) {
 	}
 }
 
-// TestBundleValidate_Names: a bundle's name becomes a Flux Kustomization name
-// and a directory name, so Validate refuses one that is not valid as both,
-// and names the bundle by its path from the bundle Validate was called on.
+// TestBundleValidate_Names: a bundle's name becomes the name of the object a
+// delivery engine applies it with and a directory name, so Validate refuses
+// one that is not a DNS-1123 subdomain and a single path segment, and names
+// the bundle by its path from the bundle Validate was called on. The
+// 63-character limit of a Flux Kustomization name is not checked here: it is
+// the Flux workflow's, and a longer name is valid for another engine.
 func TestBundleValidate_Names(t *testing.T) {
-	long := strings.Repeat("a", KustomizationNameMaxLength+1)
+	overFlux := strings.Repeat("a", KustomizationNameMaxLength+1)
+	longest := strings.Repeat("a", 253)
+	long := strings.Repeat("a", 254)
 	tests := []struct {
 		name    string
 		bundle  *Bundle
 		wantErr []string // every substring must be in the error; nil means valid
 	}{
 		{"dotted subdomain", &Bundle{Name: "my.app"}, nil},
-		{"at the limit", &Bundle{Name: strings.Repeat("a", KustomizationNameMaxLength)}, nil},
-		{"over the limit", &Bundle{Name: long}, []string{long, "at most 63 characters"}},
+		{"at the Flux limit", &Bundle{Name: strings.Repeat("a", KustomizationNameMaxLength)}, nil},
+		{"over the Flux limit", &Bundle{Name: overFlux}, nil},
+		{"at the subdomain limit", &Bundle{Name: longest}, nil},
+		{"over the subdomain limit", &Bundle{Name: long}, []string{long, "no more than 253 characters"}},
+		{
+			"umbrella child over the Flux limit",
+			&Bundle{Name: "platform", Children: []*Bundle{{Name: overFlux}}},
+			nil,
+		},
 		{"uppercase", &Bundle{Name: "Y-infra"}, []string{`'Y-infra'`, "RFC 1123 subdomain"}},
 		{"slash", &Bundle{Name: "apps/web"}, []string{`'apps/web'`, "path separator"}},
 		{"backslash", &Bundle{Name: `..\outside`}, []string{"path separator"}},
@@ -100,9 +112,9 @@ func TestBundleValidate_Names(t *testing.T) {
 			[]string{`'platform/Services'`, "RFC 1123 subdomain"},
 		},
 		{
-			"umbrella grandchild over the limit",
+			"umbrella grandchild over the subdomain limit",
 			&Bundle{Name: "platform", Children: []*Bundle{{Name: "infra", Children: []*Bundle{{Name: long}}}}},
-			[]string{"'platform/infra/" + long + "'", "at most 63 characters"},
+			[]string{"'platform/infra/" + long + "'", "no more than 253 characters"},
 		},
 		{
 			// The older check on Children refuses this one first: it names
@@ -137,7 +149,8 @@ func TestBundleValidate_Names(t *testing.T) {
 // refuses one that is not a single path segment, with the node's path; a
 // refused bundle name is reported with the path of the node that carries it.
 func TestValidateCluster_Names(t *testing.T) {
-	long := strings.Repeat("a", KustomizationNameMaxLength+1)
+	overFlux := strings.Repeat("a", KustomizationNameMaxLength+1)
+	long := strings.Repeat("a", 254)
 	tests := []struct {
 		name    string
 		root    *Node
@@ -179,9 +192,15 @@ func TestValidateCluster_Names(t *testing.T) {
 			[]string{`node ".."`, `".."`},
 		},
 		{
-			"bundle name over the limit",
+			// Flux's limit, checked by the Flux workflow and not here.
+			"bundle name over the Flux limit",
+			&Node{Name: "platform", Children: []*Node{{Name: "apps", Bundle: &Bundle{Name: overFlux}}}},
+			nil,
+		},
+		{
+			"bundle name over the subdomain limit",
 			&Node{Name: "platform", Children: []*Node{{Name: "apps", Bundle: &Bundle{Name: long}}}},
-			[]string{`node "platform/apps"`, long, "at most 63 characters"},
+			[]string{`node "platform/apps"`, long, "no more than 253 characters"},
 		},
 		{
 			"uppercase umbrella child",

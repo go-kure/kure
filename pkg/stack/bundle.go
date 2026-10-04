@@ -220,9 +220,13 @@ func (a *Bundle) Validate() error {
 }
 
 // validateNames checks the name of the bundle and of every umbrella
-// descendant against both rules a bundle name has to meet: it is the name of
-// the bundle's Flux Kustomization and, under layout.GroupByName, of its
-// directory. path is the bundle's path from the bundle Validate was called on,
+// descendant against both rules a bundle name has to meet for every delivery
+// engine: it is the name of the object the engine applies the bundle with, a
+// DNS-1123 subdomain, and, under layout.GroupByName, of its directory. The
+// 63-character limit of a Flux Kustomization name is Flux's and is checked by
+// the Flux workflow where it builds the Kustomization, not here: a longer
+// name is valid for the ArgoCD workflow.
+// path is the bundle's path from the bundle Validate was called on,
 // so the error names the bundle and not only its last segment. It runs after
 // validateChildren, which has already refused a nil child, a child without a
 // name (reported with its parent and index, not with this path) and a cycle;
@@ -235,7 +239,7 @@ func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
 	if err := ValidateDirectoryName(a.Name); err != nil {
 		return errors.ResourceValidationError("Bundle", path, "name", err.Error(), nil)
 	}
-	if err := ValidateKustomizationName(a.Name); err != nil {
+	if err := validateBundleName(a.Name); err != nil {
 		return errors.ResourceValidationError("Bundle", path, "name", err.Error(), nil)
 	}
 	for _, c := range a.Children {

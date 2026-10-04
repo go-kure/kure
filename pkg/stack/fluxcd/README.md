@@ -858,10 +858,18 @@ a bundle's dependency or health check on itself instead.
 
 A bundle's name is its Kustomization's name, so the generator refuses one that
 `stack.ValidateKustomizationName` refuses: not a DNS-1123 subdomain, or longer
-than 63 characters. `GenerateFromCluster` gets that from `stack.ValidateCluster`.
-The name is checked again wherever a Kustomization is built from a bundle,
-which is what covers `GenerateForBundle`: it takes a bundle no validation has
-seen.
+than 63 characters. The check runs wherever a Kustomization is built from a
+bundle, umbrella children included, and before anything is written: in
+`GenerateFromCluster`, `GenerateFromLayout`, `GenerateForBundle` and the
+layout integrator under every `FluxPlacement`. The 63-character limit is
+checked only there. It is Flux's, so `stack.ValidateCluster` and
+`Bundle.Validate` accept a bundle name of up to 253 characters, which the
+ArgoCD workflow renders; they do refuse a name that is not a DNS-1123
+subdomain, so that refusal reaches `GenerateFromCluster` and
+`CreateLayoutWithResources` from cluster validation first. `GenerateForBundle` takes a bundle no
+validation has seen and gets the whole rule from the generator. The error
+names the bundle by `Bundle.GetPath`: an umbrella child of a walked cluster is
+reported with its umbrella's path before its own name (`platform/platform-infra`).
 
 ### Placement in layouts
 

@@ -632,7 +632,10 @@ rejects it.
   value is limited to 63 characters. Verified: kustomize-controller v1.9.5 passes the
   Kustomization's name as owner (`internal/controller/kustomization_controller.go:462`) and
   `fluxcd/pkg/ssa` v0.76.2 writes it as the value of the `kustomize.toolkit.fluxcd.io/name`
-  label (`manager.go:66-78`).
+  label (`manager.go:66-78`). The limit is Flux's and is applied by the Flux workflow where it
+  builds a Kustomization, not by the model: a bundle name itself must be a DNS-1123 subdomain
+  (up to 253 characters), which is what every delivery engine needs for the object it names
+  after the bundle.
 - **Names that become directories** (node names, bundle and `DirName`, application names under
   `ApplicationGrouping: GroupByName`) must be non-empty, contain neither `/` nor `\` nor a NUL
   byte, and not be `.` or `..` (`stack.ValidateDirectoryName`). Both separators are refused
@@ -651,7 +654,13 @@ rejects it.
   therefore refused also where `NodeGrouping: GroupFlat` gives the node no directory.
 - **Where:** bundle and node names are validated in `Bundle.Validate` (the bundle and every
   umbrella descendant) and `ValidateCluster`, so the walker, the integrator and the generator
-  all get them. An application name becomes a directory only
+  all get them. What `Bundle.Validate` checks holds for every delivery engine: a DNS-1123
+  subdomain and a directory name. The 63-character limit is checked where the Flux workflow
+  builds a Kustomization from a bundle (`kustomizationForBundle`, reached from
+  `GenerateFromLayout`, the layout integrator and `GenerateForBundle`), before anything is
+  written and with the bundle's path in the error, an umbrella child included. A bundle name
+  of 64 to 253 characters therefore validates and renders an Application in the ArgoCD
+  workflow. An application name becomes a directory only
   where the application gets its own layout, which depends on the layout rules
   (`ApplicationGrouping: GroupByName`, or an augmenter that takes its own layout).
   `ValidateCluster` takes no rules, and `pkg/stack` cannot import the layout package, so that
@@ -672,9 +681,11 @@ rejects it.
   become lower-case, `webA` and `webB` become `web-a` and `web-b`, and two unnamed child nodes
   in an ArgoCD test get names.
 
-**Acceptance.** A 64-character Kustomization name, an upper-case name, and a directory name with
-`/`, with `\` or with a NUL byte are each refused, naming the path. Dotted names and an unnamed
-root stay accepted.
+**Acceptance.** An upper-case name and a directory name with `/`, with `\` or with a NUL byte are
+each refused at validation, naming the path. A bundle name over 63 characters is refused by the
+Flux workflow where it builds the Kustomization, before anything is written and naming the
+bundle's path, an umbrella child included; the same name validates and renders in the ArgoCD
+workflow. Dotted names and an unnamed root stay accepted.
 
 ### Behaviour bugs ([go-kure/kure#979](https://github.com/go-kure/kure/issues/979))
 

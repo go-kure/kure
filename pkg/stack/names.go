@@ -36,6 +36,19 @@ func ValidateKustomizationName(name string) error {
 	return nil
 }
 
+// validateBundleName reports whether name can be a bundle's whatever engine
+// delivers it: a DNS-1123 subdomain, the rule Kubernetes sets for the name of
+// the object an engine applies the bundle with (a Flux Kustomization, an
+// ArgoCD Application). A limit that only one engine has is that workflow's to
+// check: the Flux workflow applies ValidateKustomizationName where it builds
+// a Kustomization.
+func validateBundleName(name string) error {
+	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
+		return errors.Errorf("%q is not a valid bundle name: %s", name, strings.Join(problems, "; "))
+	}
+	return nil
+}
+
 // ValidateDirectoryName reports whether name can be the name of one directory
 // in a rendered tree: a single path segment. It refuses an empty name, "."
 // and "..", a name containing a path separator, and a name containing a NUL
