@@ -166,8 +166,9 @@ node that `NodeGrouping: GroupFlat` absorbs into its parent's directory is check
 its name is a segment of the node's path in the model. An application name is checked by the walk
 itself, and only where the rules give the application a directory: under `GroupByName`, or for an
 augmenter application that takes its own layout under either grouping. An application written
-into its bundle's directory keeps any name. The error names the application and the directory it
-would have been created in.
+into its bundle's directory keeps any name, and so does one whose own directory
+`FlattenSingleTier` merged into its parent's: the check runs on the tree the walk returns. The
+error names the application and the directory it would have been created in.
 - **FilePer**: How resources are written (FilePerResource vs FilePerKind)
 - **FluxPlacement**: Where/at what granularity Flux Kustomizations go — `FluxSeparate`, `FluxIntegratedPerLayout` (a CR per layout node), or `FluxIntegratedPerBundle` (CRs at bundle boundaries; application children included as directories)
 - **FileNaming**: Resource file naming pattern (see [File Naming Modes](#file-naming-modes))
