@@ -764,25 +764,44 @@ written as given: Flux ignores `spec.healthChecks` under `spec.wait`, so
 nothing waits for itself. `GenerateFromLayout` and `GenerateFromCluster` drop
 a bundle's dependency or health check on itself instead.
 
-A bundle's name is its Kustomization's name, so the generator refuses one that
-`stack.ValidateKustomizationName` refuses: not a DNS-1123 subdomain, or longer
-than 63 characters. The check runs wherever a Kustomization is built from a
-bundle, umbrella children included, and before anything is written: in
+The name a Kustomization gets is the bundle's name in effect (`UnitName()`:
+its `KustomizationName`, or its `Name` without one), so the generator refuses
+one that `stack.ValidateKustomizationName` refuses: not a DNS-1123 subdomain,
+or longer than 63 characters. The check runs before anything is written: in
 `GenerateFromCluster`, `GenerateFromLayout`, `GenerateForBundle` and the
 layout integrator under every `FluxPlacement`. The 63-character limit is
 checked only there. It is Flux's, so `stack.ValidateCluster` and
-`Bundle.Validate` accept a bundle name of up to 253 characters, which the
-ArgoCD workflow renders; they do refuse a name that is not a DNS-1123
-subdomain, so that refusal reaches `GenerateFromCluster` and
-`CreateLayoutWithResources` from cluster validation first. `GenerateForBundle` takes a bundle no
-validation has seen and gets the whole rule from the generator. The same
-check covers the bundles a Kustomization refers to: each umbrella child, named
-in a health check, and each `DependsOn` bundle, named in `spec.dependsOn`.
-`GenerateForBundle` builds no Kustomization for them, so it refuses an
-umbrella whose child's name Flux cannot reconcile instead of returning a
-reference to it. A `NamedDependsOn` entry is written as given. The error
-names the bundle by `Bundle.GetPath`: an umbrella child of a walked cluster is
-reported with its umbrella's path before its own name (`platform/platform-infra`).
+`Bundle.Validate` accept a name of up to 253 characters, which the
+ArgoCD workflow renders; they do refuse a `Name` or `KustomizationName` that
+is not a DNS-1123 subdomain, so that refusal reaches `GenerateFromCluster` and
+`CreateLayoutWithResources` from cluster validation first. A `Name` over 63
+characters beside a `KustomizationName` within the limit generates: that
+`Name` is no Kustomization's. The error names the bundle by `Bundle.GetPath`,
+an umbrella child of a walked cluster with its umbrella's path before its own
+name (`platform/platform-infra`), and the field that holds the name.
+
+Which names are checked follows from what the entry point returns:
+
+- `GenerateForBundle` takes a bundle no validation has seen and returns one
+  Kustomization. It checks the bundle's own name and the names that
+  Kustomization refers to: each umbrella child, named in a health check, and
+  each `DependsOn` bundle, named in `spec.dependsOn`. It builds no
+  Kustomization for them, so it refuses an umbrella whose child's name Flux
+  cannot reconcile instead of returning a reference to it.
+- `GenerateFromCluster`, `GenerateFromLayout` and the layout integrator build
+  one Kustomization per directory that renders bundles, and check that
+  Kustomization's name, which is its first bundle's (see "One Kustomization
+  per directory"). The name of a bundle merged into it is written nowhere and
+  is not checked. A reference to one of the cluster's bundles, an umbrella
+  child or a `DependsOn` bundle, is written as the name of the Kustomization
+  that applies that bundle, which the same call builds and checks. A
+  `DependsOn` bundle that is not one of the cluster's bundles gets no
+  Kustomization from the call and is written under its own name, so that name
+  is checked like the bundle's own.
+- A `NamedDependsOn` entry and a health check the caller lists are not
+  checked. `GenerateForBundle` writes them as given; the other entry points
+  write one that names a rendered bundle's Kustomization as the name of the
+  Kustomization that applies that bundle, and any other as given.
 
 ### Placement in layouts
 

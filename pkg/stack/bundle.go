@@ -30,7 +30,9 @@ type Bundle struct {
 	// check on this child. Empty means Name. Under the ArgoCD workflow the
 	// same value names the Application and its spec.dependencies entries.
 	// Name stays the bundle's identity and its directory; UnitName returns
-	// the name in effect.
+	// the name in effect. A value set here must be a DNS-1123 subdomain
+	// (Validate); the Flux workflow also limits the name in effect to 63
+	// characters (ValidateKustomizationName).
 	KustomizationName string
 	// ParentPath is the hierarchical path to the parent bundle (e.g., "cluster/infrastructure")
 	// Empty for root bundles. This avoids circular references while maintaining hierarchy.
@@ -216,10 +218,13 @@ func (a *Bundle) Validate() error {
 // validateNames checks the name of the bundle and of every umbrella
 // descendant against both rules a bundle name has to meet for every delivery
 // engine: it is the name of the object the engine applies the bundle with, a
-// DNS-1123 subdomain, and, under layout.GroupByName, of its directory. The
+// DNS-1123 subdomain, and, under layout.GroupByName, of its directory. A
+// KustomizationName, when set, names that object instead and is checked as a
+// DNS-1123 subdomain too; Name is checked as before, being still the bundle's
+// identity and its directory. The
 // 63-character limit of a Flux Kustomization name is Flux's and is checked by
-// the Flux workflow where it builds the Kustomization, not here: a longer
-// name is valid for the ArgoCD workflow.
+// the Flux workflow where it builds the Kustomization, on the name in effect
+// (UnitName), not here: a longer name is valid for the ArgoCD workflow.
 // path is the bundle's path from the bundle Validate was called on,
 // so the error names the bundle and not only its last segment. It runs after
 // validateChildren, which has already refused a nil child, a child without a
@@ -235,6 +240,11 @@ func (a *Bundle) validateNames(path string, seen map[*Bundle]bool) error {
 	}
 	if err := validateBundleName(a.Name); err != nil {
 		return errors.ResourceValidationError("Bundle", path, "name", err.Error(), nil)
+	}
+	if a.KustomizationName != "" {
+		if err := validateKustomizationNameField(a.KustomizationName); err != nil {
+			return errors.ResourceValidationError("Bundle", path, "kustomizationName", err.Error(), nil)
+		}
 	}
 	for _, c := range a.Children {
 		if err := c.validateNames(path+"/"+c.Name, seen); err != nil {

@@ -1282,7 +1282,7 @@ guesses a name it was handed cannot be composed with a caller that generates nam
 | Layer | What it checks | Where |
 |---|---|---|
 | Constructors | Nothing. An unregistered type panics — a programming error, not input | `pkg/kubernetes/create.go` |
-| Domain model | Bundle rules: name present, no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`; no cycle in the `Node` tree | `stack.ValidateCluster`, `Bundle.Validate` |
+| Domain model | Bundle rules: name present, a DNS-1123 subdomain and one path segment; a `KustomizationName`, when set, a DNS-1123 subdomain; no nil application, no cycle or duplicate name among umbrella `Bundle.Children`, and no bundle owned by two umbrellas or by both an umbrella and a `Node`. Node rules: no cycle in the `Node` tree, and every node name one path segment, the root alone may be unnamed | `stack.ValidateCluster`, `Bundle.Validate` |
 | Layout rules | Known option values, and a `ClusterName` without a `..` path segment; run by both walks on the rules as given, and by the Flux `IntegrateWithLayout` | `layout.LayoutRules.Validate` |
 | Explicit validators | Opt-in checks a caller runs when it wants them | `kubernetes.ValidatePodSpecPSA`, `gvk.ValidateGVK`, `io.ValidateOutputFormat` |
 | The cluster | Schema, admission, CRD structural rules | apply time |
@@ -1295,9 +1295,12 @@ same walk checks every node name. A node name is a segment of the node's path in
 the check does not depend on the layout rules: it must be one path segment (not empty, not `.` or
 `..`, no `/`, `\` or NUL byte), and only the root may be unnamed, since it adds no segment. A
 bundle name is checked as a directory name too, and as a DNS-1123 subdomain, which is what every
-delivery engine needs for the object it names after the bundle. The 63-character limit of a Flux
+delivery engine needs for the object it names after the bundle. A `KustomizationName` names that
+object instead, so it is checked as a DNS-1123 subdomain as well, and not as a directory name.
+The 63-character limit of a Flux
 Kustomization name, the limit of the label value Flux writes the name into, is not part of this
-layer: the Flux workflow checks it where it builds a Kustomization from a bundle, so a longer
+layer: the Flux workflow checks it where it builds a Kustomization from a bundle, on the name
+that Kustomization gets (`Bundle.UnitName`), so a longer
 name stays valid for the ArgoCD workflow. A refused name is reported with its node or bundle path and is never
 shortened; `pkg/stack/README.md` has the rules in full. An application name is not part of this
 layer: whether it becomes a directory depends on the layout rules, so the layout walk checks it.

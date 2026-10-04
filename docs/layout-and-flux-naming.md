@@ -321,8 +321,9 @@ and describes what the code does now.
 - **The payload collision:** the integrator compares a payload Kustomization with the generated
   name, so a payload Kustomization named like the bundle no longer collides once the generated
   one has another name, and one named like the generated Kustomization still does.
-- **Not checked yet:** the value is not held to the rules for a Kubernetes object name;
-  go-kure/kure#978 adds that check.
+- **The value is checked:** a `KustomizationName` must be a DNS-1123 subdomain (`Bundle.Validate`),
+  and in the Flux workflow the name in effect must be at most 63 characters; see the section on
+  go-kure/kure#978.
 
 **Breaking.** With the field unset, every object and path generated for a model that was valid is
 unchanged. `GenerateForBundle` does not call `Bundle.Validate`, and it used to return a
@@ -594,33 +595,95 @@ per-build identity checks are unchanged.
 
 ### Name validation ([go-kure/kure#978](https://github.com/go-kure/kure/issues/978))
 
-**Target.** A name that cannot work is refused when the model is validated, not after the cluster
-rejects it.
+**Shipped.** A name that cannot work is refused before anything is written, not after the cluster
+rejects it: when the model is validated, or, for a limit only Flux has, when the Flux workflow
+generates. kure shortens and rewrites nothing; the caller chooses a valid name.
 
-**Design outline.**
+**What it does.**
 
-- **Names that become Kustomization names** (`Bundle.Name` or `KustomizationName`,
-  `Node.KustomizationName`) must be DNS-1123 subdomains of at most 63 characters. The extra limit
-  exists because Flux labels the objects it applies with the Kustomization's name, and a label
-  value is limited to 63 characters; the ticket verifies this against kustomize-controller.
-- **Names that become directories** (node names, bundle and `DirName`, application names under
-  `ApplicationGrouping: GroupByName`) must be non-empty, contain neither `/` nor `\`, and not be
-  `.` or `..`. Both separators are refused because `FullRepoPath` joins the name with
-  `filepath.Join` (`manifest.go:105-111`), which treats `\` as a separator on Windows: a name such
-  as `..\outside` would otherwise leave the layout directory.
-  The unnamed root is exempt: an empty root name is valid and never becomes a directory name
-  (section 1.2, cluster wrapper; `walker.go:28-39`, `pkg/stack/layout/parentpath_test.go:436-446`).
-- **Where:** bundle and node names are validated in `Bundle.Validate` (`bundle.go:174-270`) and
-  `ValidateCluster` (`pkg/stack/validate.go:29`). An application name becomes a directory only
-  where the application gets its own layout, which depends on the layout rules
-  (`ApplicationGrouping: GroupByName`, or an augmenter that takes its own layout).
-  `ValidateCluster` takes no rules, and `pkg/stack` cannot import the layout package, so that
-  check runs in the walker. The error names the bundle's or node's path.
-- **Existing fixtures** with a name the rules refuse are renamed in the same change
-  (`pkg/stack/fluxcd/fluxcd_test.go:621-631` uses `Y-infra`, `Y-services` and `Y-apps`).
+- **Three rules, two of them exported** (`pkg/stack/names.go`):
+  - a bundle name is a DNS-1123 subdomain of up to 253 characters, which every delivery engine
+    needs for the object it applies the bundle with (`validateBundleName`). `my.app` is valid,
+    `My-App` is not;
+  - a Flux Kustomization name is a DNS-1123 subdomain of at most 63 characters
+    (`ValidateKustomizationName`, `KustomizationNameMaxLength`);
+  - a directory name is one path segment: not empty, not `.` or `..`, without `/`, `\` or a NUL
+    byte (`ValidateDirectoryName`). Both separators are refused on every platform, because
+    `ManifestLayout.FullRepoPath` joins names with `filepath.Join`, which reads `\` as a separator
+    on Windows: `..\outside` would otherwise leave its directory. A NUL byte is refused because
+    such a directory cannot be created. Characters that only some file systems refuse are not
+    checked.
+- **Why 63.** Flux labels every object it applies with the Kustomization's name, and a label
+  value is at most 63 characters. Verified in kustomize-controller v1.9.5, the version this module
+  pins: the reconciler hands the name to the apply manager as the owner of the objects
+  (`internal/controller/kustomization_controller.go:462`), and the manager writes it as the value
+  of the `kustomize.toolkit.fluxcd.io/name` label (`github.com/fluxcd/pkg/ssa` v0.76.2,
+  `manager.go:66-78`). The API server admits a longer name and every apply then fails.
+- **The model** (`Bundle.Validate`, `ValidateCluster`): a bundle's `Name`, and that of every
+  umbrella descendant, is a bundle name and a directory name (`Bundle.validateNames`). A
+  `KustomizationName`, when set, is a DNS-1123 subdomain as well, since it names the same object;
+  `Name` is checked as before, being still the bundle's identity and its directory. A node name is
+  a directory name. The 63-character limit is not the model's: a name of 64 to 253 characters
+  validates, and the ArgoCD workflow renders an Application named after it.
+- **Node names are checked under every layout grouping.** A node name is a segment of the node's
+  path in the model before it is a directory: `Node.GetPath` and the path map join node names
+  with `/`, whatever the layout rules are. Two unnamed children of one node share a path, and so
+  do a node named `a/b` and a node `b` below its sibling `a`. Such a cluster is refused also where
+  `NodeGrouping: GroupFlat` gives the node no directory. The unnamed root is exempt: it adds no
+  segment and has no directory of its own.
+- **The Flux workflow** checks the 63-character limit on the name a Kustomization gets, the
+  bundle's name in effect (`Bundle.UnitName`; `checkKustomizationName` in
+  `resource_generator.go`). The error names the bundle by its path, an umbrella child with its
+  umbrella's, and the field that holds the name. A `Name` over the limit next to a
+  `KustomizationName` within it generates. Which names are checked depends on what the entry
+  point returns:
+  - `GenerateForBundle` returns one Kustomization and builds none of those it refers to, so it
+    checks the bundle's own name, each umbrella child's (written as a health check) and each
+    `DependsOn` bundle's (written as a dependency);
+  - `GenerateFromCluster`, `GenerateFromLayout` and the layout integrator build one Kustomization
+    per directory that renders bundles (`generateForUnit`). They check that unit's name, which is
+    its first bundle's. The name of a bundle merged into the unit is written nowhere and is not
+    checked. A reference to a rendered bundle, an umbrella child or a `DependsOn` bundle with the
+    `Name` of one, is written as the name of that bundle's unit, which the same pass generates
+    and checks. A `DependsOn` bundle that is not one of the cluster's bundles gets no
+    Kustomization from the pass and its name is written as it is, so it is checked there;
+  - a `NamedDependsOn` entry and a caller's own health check are references the caller supplies,
+    and are not checked: one that names a rendered bundle's Kustomization is written as the name
+    of that bundle's unit, any other as given.
+- **Application names** become directories only where the layout rules give the application one:
+  `ApplicationGrouping: GroupByName`, or an augmenter application that takes its own layout.
+  `ValidateCluster` takes no rules and `pkg/stack` cannot import the layout package, so the walk
+  checks them, on the tree it returns (`checkApplicationDirs` in `walker.go`): an application
+  whose directory `FlattenSingleTier` merged into its parent's keeps any name.
+- **Entry points that run no cluster validation** check for themselves. `GenerateForBundle` does
+  as above. The bootstrap generator checks a non-empty root node name as a directory name where
+  it builds a path from it (`validateRootName` and `validateSyncRootName` in
+  `bootstrap_generator.go`): always in gotk mode (the bootstrap Kustomization's `spec.path`), and
+  in flux-operator mode and `GenerateFluxInstance` only when a sync is built, that is when
+  `SourceURL` is set (the FluxInstance's `sync.path`). Without a sync the root name is not read.
+- **Not covered here:** a name kure derives is checked where it is derived
+  ([go-kure/kure#973](https://github.com/go-kure/kure/issues/973)); a layout name changed after
+  the walk is contained by the writers' check
+  ([go-kure/kure#977](https://github.com/go-kure/kure/issues/977)). Names of payload objects are
+  out of scope.
 
-**Acceptance.** A 64-character Kustomization name, an upper-case name, and a directory name with
-`/` or with `\` are each refused, naming the path. Dotted names and an unnamed root stay accepted.
+**Breaking.** A model that was written out before can now be refused: a bundle name or
+`KustomizationName` that is not a DNS-1123 subdomain (an upper-case letter, an underscore); a
+bundle or node name that is not one path segment; an unnamed node below the root; an application
+name that is not one path segment where the application gets a directory; in the Flux workflow, a
+Kustomization name over 63 characters; a root node name that is not one path segment where the
+bootstrap builds a path from it. None of these could be applied or written safely. Existing
+fixtures with such names are renamed in the same change: the upper-case bundles `Y-infra`,
+`Y-services` and `Y-apps` in `pkg/stack/fluxcd/fluxcd_test.go` become lower-case, `webA` and `webB`
+become `web-a` and `web-b`, and two unnamed child nodes in an ArgoCD test get names.
+
+**Tests.** `pkg/stack/names_test.go` holds the rule tables and the model's checks, the
+`KustomizationName` value included. `bundle_names_test.go` in `pkg/stack/fluxcd` covers the
+63-character limit at every entry point: a bundle and an umbrella descendant, the name in effect,
+a merged bundle's name, and a reference outside the cluster. `bootstrap_names_test.go` covers the
+root name, `pkg/stack/layout/names_test.go` and `flatten_test.go` the application names, and
+`pkg/stack/argocd` (`argo_test.go`, `kustomization_name_test.go`) the names over 63 characters
+that the ArgoCD workflow renders.
 
 ### Behaviour bugs ([go-kure/kure#979](https://github.com/go-kure/kure/issues/979))
 

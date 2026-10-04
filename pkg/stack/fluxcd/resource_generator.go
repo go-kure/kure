@@ -150,6 +150,18 @@ func (g *ResourceGenerator) GenerateFromLayout(root *layout.ManifestLayout, c *s
 // (checkPatchScope); and
 // spec.dependsOn is the units they depend on (OriginIndex.UnitDependencies)
 // plus their NamedDependsOn.
+//
+// The 63-character limit of a Kustomization name (checkKustomizationName) is
+// checked on the names that reach the output and that nothing else checks:
+// the unit's own, which is its first bundle's name in effect, and that of a
+// DependsOn bundle the index does not render, which is written as it is. The
+// name of a bundle merged into the unit is written nowhere. A reference to a
+// bundle the index renders, a DependsOn bundle or an umbrella child (the
+// index renders every umbrella descendant, IndexOrigins refuses a tree that
+// does not), is written as the name of that bundle's unit, and this function
+// runs for every unit of the index in the pass that calls it
+// (GenerateFromLayout, the integrator's placement), so that name is checked
+// as that unit's own.
 func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout.OriginIndex) ([]client.Object, error) {
 	bundles := l.OriginBundles()
 	if len(bundles) == 0 {
@@ -157,13 +169,26 @@ func (g *ResourceGenerator) generateForUnit(l *layout.ManifestLayout, ix *layout
 	}
 	path := l.FullRepoPath()
 	first := bundles[0]
-	obj, err := g.kustomizationForBundle(first, path)
+	if err := checkKustomizationName(first); err != nil {
+		return nil, err
+	}
+	for _, b := range bundles {
+		for _, dep := range b.DependsOn {
+			if dep == nil || rendersBundleNamed(ix, dep.Name) {
+				continue
+			}
+			if err := checkKustomizationName(dep); err != nil {
+				return nil, err
+			}
+		}
+	}
+	obj, err := g.kustomizationForBundle(first, path, false)
 	if err != nil {
 		return nil, err
 	}
 	unit := obj.(*kustv1.Kustomization)
 	for _, b := range bundles[1:] {
-		o, err := g.kustomizationForBundle(b, path)
+		o, err := g.kustomizationForBundle(b, path, false)
 		if err != nil {
 			return nil, err
 		}
@@ -473,7 +498,7 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 		return nil, err
 	}
 
-	kustomization, err := g.kustomizationForBundle(b, path)
+	kustomization, err := g.kustomizationForBundle(b, path, true)
 	if err != nil {
 		return nil, err
 	}
@@ -503,24 +528,27 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 // error earlier; checking here as well covers callers that generate without
 // validating first.
 //
-// The bundle's name becomes the Kustomization's and is checked here with
-// stack.ValidateKustomizationName. This is the only place the 63-character
-// limit is checked: it is Flux's, so Bundle.Validate and stack.ValidateCluster
-// accept a longer name, which another engine can deliver. Every Kustomization
-// built from a bundle is built here, umbrella children included, before
-// anything is written. The same check covers the other bundles this
-// Kustomization names: each umbrella child, written as a health check, and
-// each DependsOn bundle, written as a dependency. Their own Kustomizations
-// are not built here (GenerateForBundle builds none of them), so a reference
-// to a name Flux cannot reconcile would otherwise be returned unchecked. A
-// NamedDependsOn entry is a caller-supplied reference that need not name a
-// bundle kure builds, and is written as given. The error names the bundle by
-// its path (Bundle.GetPath), which for an umbrella child of a walked cluster
-// holds its umbrella's. path is the caller's, so no directory rule applies to
-// the name here.
-func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string) (client.Object, error) {
-	if err := checkKustomizationName(b); err != nil {
-		return nil, err
+// With checkNames, the names this Kustomization is written with are checked
+// with stack.ValidateKustomizationName (checkKustomizationName): the bundle's
+// own name in effect, and that of the other bundles the Kustomization names,
+// each umbrella child, written as a health check, and each DependsOn bundle,
+// written as a dependency. The 63-character limit is checked nowhere but in
+// this package: it is Flux's, so Bundle.Validate and stack.ValidateCluster
+// accept a longer name, which another engine can deliver. GenerateForBundle
+// asks for the check: it returns this Kustomization as it is and builds none
+// of the ones it refers to, so a reference to a name Flux cannot reconcile
+// would otherwise be returned unchecked. generateForUnit does not: what it
+// returns is named after the unit's first bundle and refers to units, so it
+// checks those names itself. A NamedDependsOn entry is a caller-supplied
+// reference that need not name a bundle kure builds, and is not checked.
+// The error names the bundle by its path (Bundle.GetPath), which for an
+// umbrella child of a walked cluster holds its umbrella's. path is the
+// caller's, so no directory rule applies to the name here.
+func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string, checkNames bool) (client.Object, error) {
+	if checkNames {
+		if err := checkKustomizationName(b); err != nil {
+			return nil, err
+		}
 	}
 
 	interval := g.DefaultInterval
@@ -609,8 +637,10 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 			if child == nil {
 				continue
 			}
-			if err := checkKustomizationName(child); err != nil {
-				return nil, err
+			if checkNames {
+				if err := checkKustomizationName(child); err != nil {
+					return nil, err
+				}
 			}
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
 				APIVersion: kustv1.GroupVersion.String(),
@@ -667,8 +697,10 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 
 	// Add dependencies
 	for _, dep := range b.DependsOn {
-		if err := checkKustomizationName(dep); err != nil {
-			return nil, err
+		if checkNames {
+			if err := checkKustomizationName(dep); err != nil {
+				return nil, err
+			}
 		}
 		kust.Spec.DependsOn = append(kust.Spec.DependsOn, kustv1.DependencyReference{
 			Name: dep.UnitName(),
@@ -683,14 +715,28 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 	return kust, nil
 }
 
-// checkKustomizationName refuses a bundle whose name cannot be a Flux
-// Kustomization's (stack.ValidateKustomizationName), naming the bundle by its
-// path.
+// checkKustomizationName refuses a bundle whose name in effect
+// (Bundle.UnitName) cannot be a Flux Kustomization's
+// (stack.ValidateKustomizationName), naming the bundle by its path and the
+// field that holds that name: kustomizationName when it is set, name
+// otherwise. A Name over the limit next to a KustomizationName within it is
+// accepted: the Name is then no Kustomization's.
 func checkKustomizationName(b *stack.Bundle) error {
-	if err := stack.ValidateKustomizationName(b.Name); err != nil {
-		return errors.ResourceValidationError("Bundle", b.GetPath(), "name", err.Error(), nil)
+	if err := stack.ValidateKustomizationName(b.UnitName()); err != nil {
+		field := "name"
+		if b.KustomizationName != "" {
+			field = "kustomizationName"
+		}
+		return errors.ResourceValidationError("Bundle", b.GetPath(), field, err.Error(), nil)
 	}
 	return nil
+}
+
+// rendersBundleNamed reports whether ix renders a bundle with that Name: a
+// DependsOn bundle with it resolves to that bundle's unit
+// (layout.OriginIndex.UnitName), any other keeps its own name.
+func rendersBundleNamed(ix *layout.OriginIndex, name string) bool {
+	return slices.ContainsFunc(ix.Bundles(), func(b *stack.Bundle) bool { return b.Name == name })
 }
 
 // parseBundleDuration parses one of a bundle's duration fields, returning a
