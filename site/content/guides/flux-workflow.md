@@ -91,7 +91,9 @@ root node may be unnamed. In the Flux workflow a bundle name also becomes the na
 Kustomization, so it must be at most 63 characters: Flux writes the name into a label value on
 every object it applies. That limit is Flux's, so cluster validation does not apply it; the Flux
 generator refuses a longer name when it builds the Kustomization, which is still before anything
-is written. A refused name is reported with its node or bundle path, and Kure never shortens one.
+is written. A bundle that sets `KustomizationName` gives its Kustomization that name instead: the
+value must be a DNS-1123 subdomain as well, and the 63-character limit then applies to it and not
+to the bundle name. A refused name is reported with its node or bundle path, and Kure never shortens one.
 See the [Stack reference](/api-reference/stack/) for the rules in full.
 
 The fluent builder (`stack.NewClusterBuilder`) builds a single path from the root, not a tree

@@ -123,6 +123,39 @@ func TestBundleValidate_Names(t *testing.T) {
 			&Bundle{Name: "platform", Children: []*Bundle{{Name: "infra", Children: []*Bundle{{Name: ""}}}}},
 			[]string{"'infra'", "child at index 0 has empty name"},
 		},
+		// KustomizationName is the name of the same object when it is set, so
+		// it meets the same rule; the bundle is still named by its path, and
+		// the field says which of its two names is refused.
+		{"KustomizationName dotted subdomain", &Bundle{Name: "web", KustomizationName: "my.app"}, nil},
+		{"KustomizationName over the Flux limit", &Bundle{Name: "web", KustomizationName: overFlux}, nil},
+		{"KustomizationName at the subdomain limit", &Bundle{Name: "web", KustomizationName: longest}, nil},
+		{
+			"KustomizationName over the subdomain limit",
+			&Bundle{Name: "web", KustomizationName: long},
+			[]string{"'web'", "field 'kustomizationName'", long, "no more than 253 characters"},
+		},
+		{
+			"KustomizationName uppercase",
+			&Bundle{Name: "web", KustomizationName: "Web-CR"},
+			[]string{"'web'", "field 'kustomizationName'", `"Web-CR"`, "RFC 1123 subdomain"},
+		},
+		{
+			"KustomizationName with a slash",
+			&Bundle{Name: "web", KustomizationName: "apps/web"},
+			[]string{"'web'", "field 'kustomizationName'", `"apps/web"`, "RFC 1123 subdomain"},
+		},
+		{
+			"umbrella child KustomizationName",
+			&Bundle{Name: "platform", Children: []*Bundle{{Name: "infra", KustomizationName: "Infra"}}},
+			[]string{"'platform/infra'", "field 'kustomizationName'", `"Infra"`, "RFC 1123 subdomain"},
+		},
+		{
+			// With a valid KustomizationName the Name is still the bundle's
+			// identity and its directory, and is checked as before.
+			"uppercase Name next to a valid KustomizationName",
+			&Bundle{Name: "Y-infra", KustomizationName: "y-infra"},
+			[]string{`'Y-infra'`, "field 'name'", "RFC 1123 subdomain"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -206,6 +239,22 @@ func TestValidateCluster_Names(t *testing.T) {
 			"uppercase umbrella child",
 			&Node{Name: "platform", Bundle: &Bundle{Name: "y", Children: []*Bundle{{Name: "Y-infra"}}}},
 			[]string{`node "platform"`, `'y/Y-infra'`, "RFC 1123 subdomain"},
+		},
+		{
+			// Flux's limit applies to the name in effect, and is not checked here.
+			"KustomizationName over the Flux limit",
+			&Node{Name: "platform", Children: []*Node{{Name: "apps", Bundle: &Bundle{Name: "web", KustomizationName: overFlux}}}},
+			nil,
+		},
+		{
+			"uppercase KustomizationName",
+			&Node{Name: "platform", Children: []*Node{{Name: "apps", Bundle: &Bundle{Name: "web", KustomizationName: "Web-CR"}}}},
+			[]string{`node "platform/apps"`, "'web'", "field 'kustomizationName'", `"Web-CR"`, "RFC 1123 subdomain"},
+		},
+		{
+			"uppercase KustomizationName of an umbrella child",
+			&Node{Name: "platform", Bundle: &Bundle{Name: "y", Children: []*Bundle{{Name: "infra", KustomizationName: "Y-infra"}}}},
+			[]string{`node "platform"`, `'y/infra'`, "field 'kustomizationName'", "RFC 1123 subdomain"},
 		},
 	}
 	for _, tt := range tests {

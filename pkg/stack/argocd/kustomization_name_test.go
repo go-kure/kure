@@ -88,6 +88,39 @@ func TestApplicationForBundle_KustomizationName(t *testing.T) {
 	}
 }
 
+// TestGenerateFromCluster_KustomizationNameValue: a KustomizationName is
+// checked as the name of the object it names. One between 64 and 253
+// characters validates and names the Application, the 63-character limit
+// being Flux's; one that is no DNS-1123 subdomain is refused before anything
+// is generated, with the bundle and the field.
+func TestGenerateFromCluster_KustomizationNameValue(t *testing.T) {
+	cluster := func(name string) *stack.Cluster {
+		return &stack.Cluster{Name: "c", Node: &stack.Node{Name: "platform", Children: []*stack.Node{
+			{Name: "apps", Bundle: &stack.Bundle{Name: "web", KustomizationName: name}},
+		}}}
+	}
+	for _, n := range []int{stack.KustomizationNameMaxLength + 1, 253} {
+		long := strings.Repeat("a", n)
+		objs, err := Engine().GenerateFromCluster(cluster(long), layout.DefaultLayoutRules())
+		if err != nil {
+			t.Fatalf("GenerateFromCluster with a %d-character KustomizationName = %v, want nil", n, err)
+		}
+		if got := appPaths(t, objs); len(got) != 1 || got[long] == "" {
+			t.Errorf("Application paths = %v, want one Application named after the %d-character KustomizationName", got, n)
+		}
+	}
+
+	objs, err := Engine().GenerateFromCluster(cluster("Web-CR"), layout.DefaultLayoutRules())
+	if err == nil || objs != nil {
+		t.Fatalf("GenerateFromCluster = %v, %v; want the refusal of an uppercase KustomizationName and nothing to write", objs, err)
+	}
+	for _, want := range []string{"'web'", "field 'kustomizationName'", `"Web-CR"`, "RFC 1123 subdomain"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %s", err, want)
+		}
+	}
+}
+
 // TestGenerateFromCluster_DuplicateKustomizationName: two bundles whose
 // Applications would get one name are refused, naming both bundles.
 func TestGenerateFromCluster_DuplicateKustomizationName(t *testing.T) {
