@@ -620,7 +620,7 @@ README.
 Controls where Flux Kustomization resources are placed:
 
 - `FluxSeparate` - Flux resources collected in a separate `flux-system/` directory inside the root layout's own directory (where the root's `kustomization.yaml` references it); children referenced as directories, except those that render bundles, which their own CRs apply. `WriteToDisk` and `WriteToTar` name its files by `LayoutRules.FileNaming`, like the rest of the tree: `flux-system-kustomization-<name>.yaml` by default, `kustomization-<name>.yaml` with `FileNamingKindName` (go-kure/kure#976; before, always the default pattern). Rules passed to `IntegrateWithLayout` that leave `FileNaming` unset take the root layout's.
-- `FluxIntegratedPerLayout` - a Flux Kustomization CR for **every** layout (incl. augmenter-added child layouts), hosted in its parent layout; the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Finest granularity.
+- `FluxIntegratedPerLayout` - a Flux Kustomization CR for every bundle and for every child layout that is not an umbrella child, not `AppFileSingle` and renders no bundle (augmenter-added child layouts included), hosted in its parent layout; the parent's `kustomization.yaml` lists those CR files as its own resources and references no child directory. Not literally every layout: a layout whose CR name is already taken, such as an augmenter application named like its bundle, is refused instead (see [Non-Bundle Child Layout CRs](#non-bundle-child-layout-crs)). Finest granularity.
 - `FluxIntegratedPerBundle` - Flux Kustomization CRs at **bundle boundaries only**, each hosted in its parent layout; a bundle's interior (application and augmenter-added child layouts) is a single kustomize build, with those children referenced as directories. A child that renders bundles is not referenced: its own CR applies it. Coarser: Flux reconciles per bundle, kustomize handles the interior.
 
 External augmenters may add child layouts that are not represented in the bundle model; integrated placement discovers those layouts and emits the required Flux resources.
@@ -709,7 +709,9 @@ This checks that every bundle
 reachable from the cluster node tree — node bundles and umbrella child bundles
 recursively — has a complete `SourceRef` with both `Kind` and `Name` set. A nil,
 zero-value, or partially-populated `SourceRef` is rejected before layout walking
-begins. The integrator also enforces this at CR-creation time as defense in
+begins, and the error names the placement in use (`FluxIntegratedPerLayout mode
+requires a SourceRef …` or `FluxIntegratedPerBundle mode requires a SourceRef …`).
+The integrator also enforces this at CR-creation time as defense in
 depth. `FluxSeparate` and non-Flux paths are unaffected.
 
 ## Related Packages
