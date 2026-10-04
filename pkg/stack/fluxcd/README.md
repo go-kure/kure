@@ -120,6 +120,7 @@ fmt.Println(objects[0].GetName(), objects[0].(*kustv1.Kustomization).Spec.Path)
 
 Each directory that renders bundles produces one Flux Kustomization resource (see
 [One Kustomization per directory](#one-kustomization-per-directory)) with:
+- `metadata.name` from the bundle (see [Kustomization names](#kustomization-names))
 - `spec.path` = that directory
 - Source reference from `Bundle.SourceRef` (and a Source when it has a `URL`)
 - Dependency ordering from `Bundle.DependsOn` and `Bundle.NamedDependsOn`
@@ -140,6 +141,47 @@ nothing. Use `CreateLayoutWithResources` with those rules instead. On
 `WorkflowEngine` (the `stack.Workflow` interface) the rules arrive as a
 `stack.LayoutRulesProvider` and must be a `layout.LayoutRules` value: anything else, `nil`
 included, is refused, never replaced by the defaults.
+
+## Kustomization names
+
+A bundle's Kustomization is named after the bundle, unless the bundle sets `KustomizationName`:
+
+<!-- doc-example: pkg/stack/fluxcd ExampleResourceGenerator_GenerateForBundle -->
+```go
+// The bundles keep their names and directories; their Kustomizations
+// get the names set here.
+db := &stack.Bundle{Name: "db", KustomizationName: "apps-db"}
+shop := &stack.Bundle{Name: "shop", KustomizationName: "apps-shop", DependsOn: []*stack.Bundle{db}}
+
+objects, err := fluxcd.NewResourceGenerator().GenerateForBundle(shop, "clusters/prod/shop")
+if err != nil {
+    panic(err)
+}
+kust := objects[0].(*kustv1.Kustomization)
+fmt.Println(kust.Name, kust.Spec.Path, kust.Spec.DependsOn[0].Name)
+```
+<!-- doc-example:end -->
+
+`Bundle.Name` stays the bundle's identity and its directory, so `spec.path` is the same with and
+without the field. `Bundle.UnitName()` returns the name in effect, and everything that refers to
+the bundle's Kustomization uses it:
+
+| Reference | Written as |
+|---|---|
+| `metadata.name` of the bundle's Kustomization | the bundle's `KustomizationName`, or its `Name` |
+| `spec.dependsOn` of a bundle that lists it in `DependsOn` | the same name |
+| an umbrella's health check on it as a child | the same name |
+| a `NamedDependsOn` entry | it names a Kustomization, not a bundle: a bundle that sets `KustomizationName` is reached by that value, and its `Name` is then kept as written, like any name no generated Kustomization has |
+
+Two bundles whose Kustomizations would get one name are refused, and the error names both bundles
+by their paths. `Bundle.Name` stays unique too. A bundle may hold an object that is itself a Flux
+Kustomization named like the bundle (a component that delivers its own content): give the bundle
+another `KustomizationName` and the generated Kustomization no longer collides with it.
+
+`Bundle.Validate` compares the names in effect wherever it compares against a Kustomization
+reference. A bundle that lists the bundle `db` in `DependsOn` and the name `db` in
+`NamedDependsOn` is valid when `db` sets `KustomizationName: "db-cr"`: the two are different
+Kustomizations. The entry `db-cr` is then the duplicate.
 
 ## Kustomization paths
 
@@ -165,7 +207,8 @@ base, or `<basePath>/<ManifestsDir>` for `layout.WriteManifest`. Root the Flux s
 A directory is what a Flux Kustomization applies, so kure emits exactly one per directory that
 renders bundles. When a `GroupFlat` axis (or `FlattenSingleTier`) merges several bundles into one
 directory, they share that Kustomization, named after the first of them (the absorbing node's own
-bundle when it has one).
+bundle when it has one), by its `KustomizationName` when it sets one. A reference to any of the
+merged bundles' Kustomization names resolves to the shared one.
 
 Each such directory has **one owner**: it is applied by its own Kustomization and by nothing else.
 No parent `kustomization.yaml` lists a child directory that renders bundles, in any placement, so
@@ -234,7 +277,7 @@ pointed it at the parent bundle's directory, whose kustomization excludes the ch
 
 `IndexOrigins` refuses a tree it cannot resolve unambiguously: a hand-built, partial or
 other-cluster tree (the rendered set is not what the cluster reaches), a bundle or node rendered
-twice, two bundles with one name (the name is the Kustomization's identity), and a node or bundle
+twice, two bundles with one name or with one Kustomization name, and a node or bundle
 layout in `AppFileSingle` mode (written into its `Namespace`, not its own directory). Build the
 tree with `layout.WalkCluster`. Not covered: a bundle whose `SourceRef.URL` names another
 artifact — its path is relative to that artifact.
@@ -670,7 +713,8 @@ umbrella contains.
 
 `ResourceGenerator.GenerateForBundle` detects umbrella bundles and:
 - prepends one `HealthChecks` entry per direct child (referencing the child's
-  own Kustomization by name/namespace)
+  own Kustomization by name/namespace; the name is the child's `KustomizationName` when it sets
+  one)
 - leaves user-supplied `HealthChecks` appended after the auto entries
 
 `spec.wait` is **not** forced to `true` here; it is the caller's `Bundle.Wait` input like any

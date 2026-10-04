@@ -118,12 +118,14 @@ func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stac
 }
 
 // applicationForBundle creates an ArgoCD Application for b whose
-// spec.source.path is path, verbatim.
+// spec.source.path is path, verbatim. The Application is named by b's
+// KustomizationName, or its Name without one (Bundle.UnitName), and
+// spec.dependencies names each DependsOn bundle the same way.
 func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (client.Object, error) {
 	app := &unstructured.Unstructured{}
 	app.SetAPIVersion("argoproj.io/v1alpha1")
 	app.SetKind("Application")
-	app.SetName(b.Name)
+	app.SetName(b.UnitName())
 	app.SetNamespace(w.DefaultNamespace)
 
 	// Set labels if provided
@@ -155,7 +157,7 @@ func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (cli
 	if len(b.DependsOn) > 0 {
 		var deps []string
 		for _, d := range b.DependsOn {
-			deps = append(deps, d.Name)
+			deps = append(deps, d.UnitName())
 		}
 		if err := unstructured.SetNestedStringSlice(app.Object, deps, "spec", "dependencies"); err != nil {
 			return nil, errors.Wrap(err, "failed to set spec.dependencies")

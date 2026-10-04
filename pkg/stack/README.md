@@ -83,6 +83,11 @@ fmt.Println(node.Name, node.Children[0].Name, node.Bundle.Name)
 
 A deployment unit corresponding to a single GitOps resource (e.g., a Flux Kustomization). Bundles support dependency ordering via `DependsOn` (pointer-based) or `NamedDependsOn` (name-based, for cross-scope references).
 
+The generated resource is named after the bundle. `KustomizationName` gives it another name
+without renaming the bundle or moving its directory; `UnitName()` returns the name in effect.
+Under the ArgoCD workflow the same value names the Application. A `NamedDependsOn` entry names
+such a resource, so it reaches a bundle that sets `KustomizationName` by that value.
+
 `NewBundle` validates the bundle it builds; fields set afterwards are checked by
 `Bundle.Validate`:
 

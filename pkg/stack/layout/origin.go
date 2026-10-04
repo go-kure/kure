@@ -75,7 +75,10 @@ type OriginIndex struct {
 	bundles      []*stack.Bundle
 	nodes        []*stack.Node
 	units        []*ManifestLayout
-	byName       map[string]*stack.Bundle
+	// byName finds a rendered bundle by its Name, byUnitName by the name its
+	// Kustomization or Application gets (Bundle.UnitName). Both are unique.
+	byName     map[string]*stack.Bundle
+	byUnitName map[string]*stack.Bundle
 }
 
 // IndexOrigins indexes a layout tree walked from cluster c (WalkCluster) by
@@ -85,8 +88,11 @@ type OriginIndex struct {
 //     from c (node bundles plus their umbrella descendants), naming what is
 //     missing or foreign — so a hand-built, partial or other-cluster tree is
 //     refused;
-//   - two bundles with one Name: a bundle's Flux Kustomization and ArgoCD
-//     Application are named after it, so the name is its identity;
+//   - two bundles with one Name: the name is the bundle's identity, by which
+//     a copy of it is resolved;
+//   - two bundles whose Flux Kustomization or ArgoCD Application would get
+//     one name (Bundle.UnitName: KustomizationName, or Name without it),
+//     naming both bundles by their paths;
 //   - a layout rendering a node or bundle in AppFileSingle mode: it is
 //     written into its Namespace, not into its own directory;
 //   - a dependency cycle between reconciliation units (see Units).
@@ -100,6 +106,7 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 		parent:       map[*ManifestLayout]*ManifestLayout{},
 	}
 	byName := map[string]*stack.Bundle{}
+	byUnitName := map[string]*stack.Bundle{}
 	var walk func(l, parent *ManifestLayout) error
 	walk = func(l, parent *ManifestLayout) error {
 		if parent != nil {
@@ -120,9 +127,13 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 				return errors.Errorf("bundle %q is rendered by two layouts: %q and %q", b.Name, other.FullRepoPath(), l.FullRepoPath())
 			}
 			if other, dup := byName[b.Name]; dup && other != b {
-				return errors.Errorf("two bundles are named %q (at %q and %q): the name is the Flux Kustomization and ArgoCD Application identity, so it must be unique", b.Name, ix.bundleLayout[other].FullRepoPath(), l.FullRepoPath())
+				return errors.Errorf("two bundles are named %q (at %q and %q): the name is the bundle's identity, so it must be unique", b.Name, ix.bundleLayout[other].FullRepoPath(), l.FullRepoPath())
+			}
+			if other, dup := byUnitName[b.UnitName()]; dup && other != b {
+				return errors.Errorf("bundles %q and %q (at %q and %q) would both get a Flux Kustomization or ArgoCD Application named %q: that name, the bundle's KustomizationName or else its Name, must be unique", other.GetPath(), b.GetPath(), ix.bundleLayout[other].FullRepoPath(), l.FullRepoPath(), b.UnitName())
 			}
 			byName[b.Name] = b
+			byUnitName[b.UnitName()] = b
 			ix.bundleLayout[b] = l
 			ix.bundles = append(ix.bundles, b)
 		}
@@ -143,6 +154,7 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 		return nil, err
 	}
 	ix.byName = byName
+	ix.byUnitName = byUnitName
 	if err := ix.checkCoverage(c); err != nil {
 		return nil, err
 	}
@@ -159,25 +171,37 @@ func IndexOrigins(root *ManifestLayout, c *stack.Cluster) (*OriginIndex, error) 
 func (ix *OriginIndex) Units() []*ManifestLayout { return ix.units }
 
 // UnitName returns the name of the reconciliation unit that applies bundle b:
-// the first bundle the layout rendering b renders. b is resolved by name,
-// which IndexOrigins proves unique, so a copy of a rendered bundle (the
-// fluent builder copies bundles) resolves like the original. A bundle outside
-// the index keeps its own name.
+// the name in effect (Bundle.UnitName) of the first bundle the layout
+// rendering b renders. b is resolved by its Name, which IndexOrigins proves
+// unique, so a copy of a rendered bundle (the fluent builder copies bundles)
+// resolves like the original. A bundle outside the index keeps its own name
+// in effect.
 func (ix *OriginIndex) UnitName(b *stack.Bundle) string {
-	return ix.UnitOfName(b.Name)
+	if rendered := ix.byName[b.Name]; rendered != nil {
+		return ix.unitOf(rendered)
+	}
+	return b.UnitName()
 }
 
-// UnitOfName maps a bundle name to the name of the unit that applies it; a
-// name no rendered bundle has (an external Kustomization, say) is returned
+// UnitOfName maps the name of a rendered bundle's Kustomization or
+// Application (Bundle.UnitName) to the name of the unit that applies the
+// bundle; a name no rendered bundle has in effect (an external Kustomization,
+// say, or the Name of a bundle that sets KustomizationName) is returned
 // unchanged. References to a bundle's Kustomization by name — health checks,
 // dependencies — resolve through it.
 func (ix *OriginIndex) UnitOfName(name string) string {
-	if b := ix.byName[name]; b != nil {
-		if l := ix.bundleLayout[b]; l != nil && len(l.origin.bundles) > 0 {
-			return l.origin.bundles[0].Name
-		}
+	if b := ix.byUnitName[name]; b != nil {
+		return ix.unitOf(b)
 	}
 	return name
+}
+
+// unitOf returns the name of the unit that applies rendered bundle b.
+func (ix *OriginIndex) unitOf(b *stack.Bundle) string {
+	if l := ix.bundleLayout[b]; l != nil && len(l.origin.bundles) > 0 {
+		return l.origin.bundles[0].UnitName()
+	}
+	return b.UnitName()
 }
 
 // UnitDependencies returns the units the unit of layout l depends on through
@@ -189,33 +213,37 @@ func (ix *OriginIndex) UnitDependencies(l *ManifestLayout) []string {
 	for _, b := range l.origin.bundles {
 		for _, d := range b.DependsOn {
 			if d != nil {
-				names = append(names, d.Name)
+				names = append(names, ix.UnitName(d))
 			}
 		}
 	}
-	return ix.mapToUnits(l, names)
+	return ix.withoutSelf(l, names)
 }
 
 // UnitNamedDependencies is UnitDependencies for the bundles' NamedDependsOn:
-// a name that is a rendered bundle's is mapped to its unit (and dropped when
-// that is l's own), any other name is kept as the external dependency it is.
+// a name that is a rendered bundle's Kustomization name is mapped to its unit
+// (and dropped when that is l's own), any other name is kept as the external
+// dependency it is.
 func (ix *OriginIndex) UnitNamedDependencies(l *ManifestLayout) []string {
 	var names []string
 	for _, b := range l.origin.bundles {
-		names = append(names, b.NamedDependsOn...)
+		for _, name := range b.NamedDependsOn {
+			names = append(names, ix.UnitOfName(name))
+		}
 	}
-	return ix.mapToUnits(l, names)
+	return ix.withoutSelf(l, names)
 }
 
-func (ix *OriginIndex) mapToUnits(l *ManifestLayout, names []string) []string {
+// withoutSelf returns units in order, without repeats and without the unit
+// of layout l itself.
+func (ix *OriginIndex) withoutSelf(l *ManifestLayout, units []string) []string {
 	if l == nil || len(l.origin.bundles) == 0 {
 		return nil // not a unit
 	}
-	self := ix.UnitOfName(l.origin.bundles[0].Name)
-	seen := map[string]bool{self: true}
+	seen := map[string]bool{l.origin.bundles[0].UnitName(): true}
 	var out []string
-	for _, name := range names {
-		if unit := ix.UnitOfName(name); !seen[unit] {
+	for _, unit := range units {
+		if !seen[unit] {
 			seen[unit] = true
 			out = append(out, unit)
 		}
