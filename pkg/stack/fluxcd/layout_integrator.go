@@ -2,6 +2,7 @@ package fluxcd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"path"
@@ -1175,9 +1176,21 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 		}
+		// A typed List can hold an item as raw JSON (runtime.RawExtension),
+		// which the writers serialize as the object it encodes: it is read
+		// as that object. An empty item holds nothing.
 		for _, item := range items {
-			if o, ok := item.(client.Object); ok {
+			switch o := item.(type) {
+			case client.Object:
 				queue = append(queue, o)
+			case *runtime.Unknown:
+				u := &unstructured.Unstructured{}
+				if err := json.Unmarshal(o.Raw, &u.Object); err != nil {
+					return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+				}
+				if u.Object != nil {
+					queue = append(queue, u)
+				}
 			}
 		}
 	}

@@ -88,6 +88,36 @@ func typedListOf(kind, name string, items ...*unstructured.Unstructured) *typedI
 	return l
 }
 
+// rawItems is a typed List whose items are runtime.RawExtension values, each
+// either an object or the raw JSON of one, as the core v1 List holds them.
+type rawItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []runtime.RawExtension `json:"items"`
+}
+
+func (l *rawItems) DeepCopyObject() runtime.Object {
+	c := *l
+	c.Items = slices.Clone(l.Items)
+	return &c
+}
+
+func rawListOf(name string, items ...runtime.RawExtension) *rawItems {
+	l := &rawItems{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"}, Items: items}
+	l.Name, l.Namespace = name, "default"
+	return l
+}
+
+// rawJSON is obj as the raw JSON item of a typed List.
+func rawJSON(t *testing.T, obj *unstructured.Unstructured) runtime.RawExtension {
+	t.Helper()
+	b, err := obj.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+	return runtime.RawExtension{Raw: b}
+}
+
 // TestWriters_FluxTreeRefusesUnappliedLayout: in a tree Flux delivers (its
 // root marked with SetFluxBuild) a layout its parent's kustomization.yaml does
 // not list is applied only by a Flux Kustomization of its own, so one that is
@@ -392,6 +422,41 @@ func TestWriters_RefuseDuplicateFluxKustomizationInOneLayout(t *testing.T) {
 		want := `layout "p" holds the Flux Kustomization flux-system/shop twice`
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want it to contain %q", writer, err, want)
+		}
+	}
+}
+
+// TestWriters_TypedListRawItems: a typed List inside a typed List can hold an
+// item as raw JSON, which the writers serialize as the object it encodes, so a
+// Kustomization held that way is one of the tree's. An empty item holds
+// nothing and the tree is written.
+func TestWriters_TypedListRawItems(t *testing.T) {
+	nested := func(item runtime.RawExtension) client.Object {
+		return rawListOf("outer", runtime.RawExtension{Object: rawListOf("inner", item)})
+	}
+	for _, marked := range []bool{false, true} {
+		for _, writer := range allWriters {
+			name := map[bool]string{false: "unmarked", true: "marked"}[marked] + "/" + writer
+			t.Run("raw Kustomization/"+name, func(t *testing.T) {
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(rawJSON(t, shopKs()))))
+				want := `layouts "p" and "p/c" both hold the Flux Kustomization flux-system/shop`
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("err = %v, want it to contain %q", err, want)
+				}
+			})
+			t.Run("raw Kustomization of another name/"+name, func(t *testing.T) {
+				other := fluxKs("kustomize.toolkit.fluxcd.io/v1", "flux-system", "cart")
+				writtenFiles(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(rawJSON(t, other))))
+			})
+			t.Run("empty item/"+name, func(t *testing.T) {
+				writtenFiles(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(runtime.RawExtension{})))
+			})
+			t.Run("raw item that is no JSON/"+name, func(t *testing.T) {
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(runtime.RawExtension{Raw: []byte("{")})))
+				if err == nil || !strings.Contains(err.Error(), "read list items") {
+					t.Fatalf("err = %v, want a list read error", err)
+				}
+			})
 		}
 	}
 }

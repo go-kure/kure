@@ -257,10 +257,12 @@ What changed, and what to do:
   layout a resource, or write it `KustomizationExplicit`, which writes it `resources: []`.
 - **Directories nothing applies are refused.** In a tree with generated Flux Kustomizations, a
   directory its parent's `kustomization.yaml` does not list is applied only by a Kustomization
-  whose `spec.path` names it. The integrator marks every directory its Kustomizations build, so a
-  tree it built passes. A tree changed afterwards, or one you place Kustomizations in yourself, is
-  refused where such a directory is not marked with `SetFluxBuild`: its files would be committed
-  and never applied.
+  whose `spec.path` names it. The integrator marks the root and every directory its
+  Kustomizations build (`SetFluxBuild`), so a tree it built passes. The check runs only when the
+  root is marked: a marked tree changed afterwards is refused where such a directory is not
+  marked, since its files would be committed and never applied. A tree you place Kustomizations
+  in yourself is checked once you mark its root, and then needs the mark on each directory a
+  Kustomization of yours builds.
 - **Kustomization names are unique in a tree.** Two Flux Kustomizations with one namespace and
   name are refused wherever they sit, also in directories that are applied separately and inside
   a `List`: they are one object in the cluster.

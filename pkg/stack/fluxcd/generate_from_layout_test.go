@@ -17,6 +17,7 @@ import (
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
@@ -1292,6 +1293,31 @@ func TestIntegrateWithLayout_OpensListsAsKustomizeDoes(t *testing.T) {
 		},
 		"a typed non-List kind with items": {
 			emitted: func() client.Object { return typedListOf("Holder", webKs()) },
+		},
+		// A typed List can hold an item as raw JSON; the writers serialize it
+		// as the object it encodes.
+		"a typed List holding a raw Kustomization": {
+			emitted: func() client.Object {
+				raw, err := webKs().MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Raw: raw})
+			},
+			collides: true,
+		},
+		"a typed List holding a List with a raw Kustomization": {
+			emitted: func() client.Object {
+				raw, err := webKs().MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				return rawListOf(runtime.RawExtension{Object: rawListOf(runtime.RawExtension{Raw: raw})})
+			},
+			collides: true,
+		},
+		"a typed List with an empty item": {
+			emitted: func() client.Object { return rawListOf(runtime.RawExtension{}) },
 		},
 	}
 	for name, tc := range cases {

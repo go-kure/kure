@@ -421,7 +421,8 @@ resources, nothing beneath it — is kept rather than a second one appended; any
 by an earlier integration, by the caller or emitted by an application, top-level or inside a
 `List` (kustomize builds a List's items; a List is an object whose kind ends in `List` and that
 has an `items` field, and a List among the items is opened too, while a kind that does not end in
-`List` is one object whatever fields it has): an identity (namespace/name) present twice, or taken by
+`List` is one object whatever fields it has; an item a typed List holds as raw JSON is read as
+the object it encodes): an identity (namespace/name) present twice, or taken by
 a generated CR elsewhere, is refused in every placement, since the kustomize build would register
 the id twice. A generated Source has one definition across the whole pass: every Source of its
 identity — kind, namespace and name, whatever the API version (a `v1beta2` `GitRepository` is the
