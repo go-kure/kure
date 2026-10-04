@@ -300,8 +300,13 @@ What changed, and what to do:
 - **Removed APIs.** `GenerateFromBundle`, `GenerateFromNode`, `EngineWithMode`, `EngineWithConfig`,
   `NewWorkflowEngineWithConfig`, `SetKustomizationMode` and `ResourceGenerator.Mode` are gone. <!-- doc-api-refs:ignore removed in this release -->
   Generate from a walked layout (`ResourceGenerator.GenerateFromLayout`) or for one bundle at a path
-  you supply (`GenerateForBundle`). `GenerateFromCluster` stays and uses the directories of a
-  default-rules walk.
+  you supply (`GenerateForBundle`).
+- **`GenerateFromCluster` takes the layout rules.** It walked with `layout.DefaultLayoutRules()`
+  whatever rules the caller wrote the tree with, so with a `ClusterName` or other groupings its
+  paths named directories the tree did not have. It now takes the rules as a second argument, on
+  `stack.Workflow` and on both engines, and each path is a directory a walk with those rules
+  writes. Pass the rules you write the tree with; `layout.DefaultLayoutRules()` keeps the paths it
+  returned before.
 - **Integrate walked layouts only.** `IntegrateWithLayout` refuses a layout `layout.WalkCluster`
   did not build from the same cluster — build the tree with `WalkCluster` instead of by hand.
 - **PerLayout hosts.** Under `FluxIntegratedPerLayout` a node bundle's CR now sits in the parent of

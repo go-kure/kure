@@ -88,7 +88,7 @@ func TestSupportedBootstrapModes(t *testing.T) {
 func TestGenerateFromCluster_NilCluster(t *testing.T) {
 	engine := Engine()
 
-	objs, err := engine.GenerateFromCluster(nil)
+	objs, err := engine.GenerateFromCluster(nil, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestGenerateFromCluster_NilNode(t *testing.T) {
 	engine := Engine()
 	cluster := &stack.Cluster{Node: nil}
 
-	objs, err := engine.GenerateFromCluster(cluster)
+	objs, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestGenerateFromCluster_Success(t *testing.T) {
 		Node: node,
 	}
 
-	objs, err := engine.GenerateFromCluster(cluster)
+	objs, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestGenerateFromCluster_WithBundle(t *testing.T) {
 		Bundle: bundle,
 	}
 
-	objs, err := engine.GenerateFromCluster(&stack.Cluster{Node: node})
+	objs, err := engine.GenerateFromCluster(&stack.Cluster{Node: node}, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestGenerateFromCluster_WithChildren(t *testing.T) {
 	}
 	cluster := &stack.Cluster{Node: parent}
 
-	objs, err := engine.GenerateFromCluster(cluster)
+	objs, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -597,7 +597,7 @@ func argoTestCluster() *stack.Cluster {
 // path is the directory the default-rules walk writes its bundle to, and
 // umbrella children get Applications too.
 func TestGenerateFromCluster_ApplicationPathIsLayoutDir(t *testing.T) {
-	objs, err := Engine().GenerateFromCluster(argoTestCluster())
+	objs, err := Engine().GenerateFromCluster(argoTestCluster(), layout.DefaultLayoutRules())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -718,7 +718,7 @@ func TestCreateLayoutWithResources_UmbrellaTreeWrites(t *testing.T) {
 // identity) both reach the caller.
 func TestGenerateFromCluster_Refusals(t *testing.T) {
 	invalid := &stack.Cluster{Name: "c", Node: &stack.Node{Name: "n", Bundle: &stack.Bundle{Name: ""}}}
-	if _, err := Engine().GenerateFromCluster(invalid); err == nil {
+	if _, err := Engine().GenerateFromCluster(invalid, layout.DefaultLayoutRules()); err == nil {
 		t.Error("GenerateFromCluster accepted a bundle without a name")
 	}
 	dupNames := func() *stack.Cluster {
@@ -727,7 +727,7 @@ func TestGenerateFromCluster_Refusals(t *testing.T) {
 			{Name: "b", Bundle: &stack.Bundle{Name: "web"}},
 		}}}
 	}
-	if _, err := Engine().GenerateFromCluster(dupNames()); err == nil || !strings.Contains(err.Error(), `two bundles are named "web"`) {
+	if _, err := Engine().GenerateFromCluster(dupNames(), layout.DefaultLayoutRules()); err == nil || !strings.Contains(err.Error(), `two bundles are named "web"`) {
 		t.Errorf("GenerateFromCluster: got %v, want the duplicate-name refusal", err)
 	}
 	if _, err := Engine().CreateLayoutWithResources(dupNames(), layout.LayoutRules{}); err == nil || !strings.Contains(err.Error(), `two bundles are named "web"`) {
@@ -753,7 +753,7 @@ func TestGenerateFromLayout_UmbrellaDependencyChain(t *testing.T) {
 	pn.SetParent(r)
 	bn.SetParent(r)
 	cluster := &stack.Cluster{Name: "demo", Node: r}
-	if _, err := Engine().GenerateFromCluster(cluster); err != nil {
+	if _, err := Engine().GenerateFromCluster(cluster, layout.DefaultLayoutRules()); err != nil {
 		t.Fatalf("acyclic ArgoCD dependencies refused: %v", err)
 	}
 }
@@ -769,7 +769,7 @@ func TestGenerateFromCluster_ArgoNamedDependenciesMatchValidation(t *testing.T) 
 	r := &stack.Node{Name: "r", Children: []*stack.Node{an, bn}}
 	an.SetParent(r)
 	bn.SetParent(r)
-	if _, err := Engine().GenerateFromCluster(&stack.Cluster{Name: "demo", Node: r}); err != nil {
+	if _, err := Engine().GenerateFromCluster(&stack.Cluster{Name: "demo", Node: r}, layout.DefaultLayoutRules()); err != nil {
 		t.Fatalf("ArgoCD refused for named dependencies it does not emit: %v", err)
 	}
 }

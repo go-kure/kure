@@ -65,8 +65,9 @@ func ExampleEngine() {
 	// to the layout call, not on the engine — see Layout Integration below.
 	engine := fluxcd.Engine()
 
-	// Generate all Flux resources for a cluster (paths of a default-rules walk)
-	objects, err := engine.GenerateFromCluster(cluster)
+	// Generate all Flux resources for a cluster: each spec.path is a directory
+	// a walk with the rules you pass writes
+	objects, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		panic(err)
 	}
@@ -92,8 +93,8 @@ func ExampleResourceGenerator_GenerateFromLayout() {
 	rules := layout.DefaultLayoutRules()
 	bundle := cluster.Node.Bundle
 
-	// From an entire cluster: walks it with layout.DefaultLayoutRules()
-	objects, err := engine.GenerateFromCluster(cluster)
+	// From an entire cluster: walks it with the rules you write the tree with
+	objects, err := engine.GenerateFromCluster(cluster, rules)
 	if err != nil {
 		panic(err)
 	}

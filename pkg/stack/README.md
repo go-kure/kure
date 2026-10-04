@@ -272,8 +272,9 @@ if err != nil {
     panic(err)
 }
 
-// Generate GitOps resources from the cluster definition
-objects, err := wf.GenerateFromCluster(cluster)
+// Generate GitOps resources from the cluster definition, with the layout
+// rules the tree is written with
+objects, err := wf.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 if err != nil {
     panic(err)
 }
@@ -283,10 +284,12 @@ for _, obj := range objects {
 ```
 <!-- doc-example:end -->
 
-`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()`: every Flux
-Kustomization `spec.path` and ArgoCD Application `source.path` is a directory that walk writes.
-To write the layout with other rules, use `CreateLayoutWithResources`, which generates from the
-layout it walks.
+`GenerateFromCluster` walks the cluster with the layout rules you pass: every Flux
+Kustomization `spec.path` and ArgoCD Application `source.path` is a directory that walk writes,
+so pass the rules you write the tree with (`layout.DefaultLayoutRules()` for the defaults). The
+rules must be a `layout.LayoutRules` value; anything else, `nil` included, is refused.
+`CreateLayoutWithResources` takes the same rules and also returns the layout it walked, with
+the resources placed in it.
 
 Supported workflow providers: `"flux"` / `"fluxcd"` and `"argo"` / `"argocd"`. Each is registered by
 importing its package, and `NewWorkflow` returns that package's `*fluxcd.WorkflowEngine` or

@@ -52,26 +52,26 @@ func NewResourceGenerator() *ResourceGenerator {
 // GenerateFromCluster creates Flux Kustomizations and Sources from a cluster
 // definition. It runs stack.ValidateCluster first to fail fast on structural
 // errors (umbrella cycles, disjointness violations, etc.), then walks the
-// cluster with layout.DefaultLayoutRules and generates from that layout (see
-// GenerateFromLayout).
+// cluster with rules and generates from that layout (see GenerateFromLayout).
 //
 // The spec.path values are therefore the directories WalkCluster writes under
-// the default rules: the root node at <root>, its children at <root>/<child>.
-// Callers that write the layout with other rules must generate from the
-// layout they write instead — CreateLayoutWithResources, or GenerateFromLayout
-// on their own WalkCluster result. The walk renders every application and
-// runs every LayoutAugmenter, so their errors surface here.
-func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
+// rules, so rules must be the ones the caller writes the tree with: with
+// layout.DefaultLayoutRules, the root node at <root> and its children at
+// <root>/<child>. The objects are returned as a list and placed nowhere, so
+// rules.FluxPlacement changes nothing here; CreateLayoutWithResources places
+// them in the layout it walks. The walk renders every application and runs
+// every LayoutAugmenter, so their errors surface here.
+func (g *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
 	if c == nil || c.Node == nil {
 		return nil, nil
 	}
 	if err := stack.ValidateCluster(c); err != nil {
 		return nil, err
 	}
-	ml, err := layout.WalkCluster(c, layout.DefaultLayoutRules())
+	ml, err := layout.WalkCluster(c, rules)
 	if err != nil {
 		return nil, errors.ResourceValidationError("Cluster", c.Name, "layout",
-			fmt.Sprintf("failed to walk the cluster with the default layout rules: %v", err), err)
+			fmt.Sprintf("failed to walk the cluster with the given layout rules: %v", err), err)
 	}
 	return g.GenerateFromLayout(ml, c)
 }

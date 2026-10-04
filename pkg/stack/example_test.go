@@ -11,6 +11,7 @@ import (
 	"github.com/go-kure/kure/pkg/kubernetes"
 	"github.com/go-kure/kure/pkg/stack"
 	_ "github.com/go-kure/kure/pkg/stack/fluxcd" // registers the "flux" workflow provider
+	"github.com/go-kure/kure/pkg/stack/layout"
 )
 
 // The README's Go blocks are generated from these functions
@@ -141,8 +142,9 @@ func ExampleNewWorkflow() {
 		panic(err)
 	}
 
-	// Generate GitOps resources from the cluster definition
-	objects, err := wf.GenerateFromCluster(cluster)
+	// Generate GitOps resources from the cluster definition, with the layout
+	// rules the tree is written with
+	objects, err := wf.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		panic(err)
 	}

@@ -101,8 +101,9 @@ func ExampleWorkflowEngine_GenerateFromCluster() {
 	cluster := exampleCluster()
 	engine := argocd.Engine()
 
-	// Generate ArgoCD Applications from a cluster
-	objects, err := engine.GenerateFromCluster(cluster)
+	// Generate ArgoCD Applications from a cluster: each source.path is a
+	// directory a walk with the rules you pass writes
+	objects, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 	if err != nil {
 		panic(err)
 	}

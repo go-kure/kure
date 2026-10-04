@@ -309,7 +309,7 @@ type ManifestLayoutResult interface { // implemented by *layout.ManifestLayout
 }
 
 type Workflow interface {
-    GenerateFromCluster(*Cluster) ([]client.Object, error)
+    GenerateFromCluster(*Cluster, LayoutRulesProvider) ([]client.Object, error)
     CreateLayoutWithResources(*Cluster, LayoutRulesProvider) (ManifestLayoutResult, error)
     GenerateBootstrap(*BootstrapConfig, *Node) ([]client.Object, error)
 }
@@ -437,18 +437,18 @@ All four are declared in `pkg/errors/errors.go`.
 ### Error Wrapping Strategy
 
 Kure follows Go's error wrapping conventions while adding structured context. The method below
-illustrates the convention; the Flux engine's own `GenerateFromCluster` delegates to its
-`ResourceGen` unchanged:
+illustrates the convention; the Flux engine's own `GenerateFromCluster` checks that the rules are
+a `layout.LayoutRules` value and delegates to its `ResourceGen`, whose errors it returns unchanged:
 
 <!-- doc-example:excerpt an illustrative method body for a hypothetical engine, not the current source -->
 ```go
-func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
+func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
     if c == nil {
         return nil, errors.ResourceValidationError("Cluster", "", "cluster", 
                                                    "cluster cannot be nil", nil)
     }
     
-    resources, err := we.ResourceGen.GenerateFromCluster(c)
+    resources, err := we.ResourceGen.GenerateFromCluster(c, rules)
     if err != nil {
         return nil, errors.Wrapf(err, "failed to generate resources for cluster %s", c.Name)
     }
@@ -1017,8 +1017,8 @@ type ResourceGenerator struct {
     // Tool-specific configuration
 }
 
-func (rg *ResourceGenerator) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
-    // Tool-specific resource generation
+func (rg *ResourceGenerator) GenerateFromCluster(c *stack.Cluster, rules layout.LayoutRules) ([]client.Object, error) {
+    // Tool-specific resource generation, from a walk of c with rules
 }
 
 // Implement other ResourceGenerator methods
@@ -1094,7 +1094,7 @@ func TestWorkflowGeneration(t *testing.T) {
     
     // Generate with workflow
     engine := fluxcd.Engine()
-    resources, err := engine.GenerateFromCluster(cluster)
+    resources, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
     
     // Validate generated resources
     // Test layout integration
@@ -1138,7 +1138,7 @@ func (n *Node) InitializePathMap() {
 #### 2. Batch Operations
 <!-- doc-example:excerpt a method outline with an elided body, not the current source -->
 ```go
-func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster) ([]client.Object, error) {
+func (we *WorkflowEngine) GenerateFromCluster(c *stack.Cluster, rules stack.LayoutRulesProvider) ([]client.Object, error) {
     // Generate all resources in single pass
     // Minimize allocation overhead
 }
@@ -1416,7 +1416,7 @@ func TestFluxWorkflowGeneration(t *testing.T) {
     
     // Test resource generation
     engine := fluxcd.Engine()
-    resources, err := engine.GenerateFromCluster(cluster)
+    resources, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
     
     if err != nil {
         t.Fatalf("unexpected error: %v", err)

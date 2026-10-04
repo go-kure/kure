@@ -69,8 +69,9 @@ fmt.Println(engine.GetName(), engine.RepoURL, engine.DefaultNamespace)
 cluster := exampleCluster()
 engine := argocd.Engine()
 
-// Generate ArgoCD Applications from a cluster
-objects, err := engine.GenerateFromCluster(cluster)
+// Generate ArgoCD Applications from a cluster: each source.path is a
+// directory a walk with the rules you pass writes
+objects, err := engine.GenerateFromCluster(cluster, layout.DefaultLayoutRules())
 if err != nil {
     panic(err)
 }
@@ -81,7 +82,7 @@ for _, obj := range objects {
 ```
 <!-- doc-example:end -->
 
-`GenerateFromCluster` walks the cluster with `layout.DefaultLayoutRules()` and produces one ArgoCD `Application` (`argoproj.io/v1alpha1`) per directory that renders bundles, umbrella children included. Each Application's `spec.source.path` is that directory (`layout.OriginIndex.KustomizationPath`), not a path guessed from bundle names. `spec.destination.server` defaults to `https://kubernetes.default.svc`.
+`GenerateFromCluster` walks the cluster with the `layout.LayoutRules` you pass (the ones you write the tree with) and produces one ArgoCD `Application` (`argoproj.io/v1alpha1`) per directory that renders bundles, umbrella children included. Each Application's `spec.source.path` is that directory (`layout.OriginIndex.KustomizationPath`), not a path guessed from bundle names. `spec.destination.server` defaults to `https://kubernetes.default.svc`. The rules are held to what `CreateLayoutWithResources` accepts: a value that is not `layout.LayoutRules` (`nil` included) and an integrated `FluxPlacement` are refused.
 
 When a `GroupFlat` axis or `FlattenSingleTier` merges several bundles into one directory, they share one Application, as they share one Flux Kustomization (see the fluxcd package's "One Kustomization per directory"). It is named after the first bundle. Their labels are combined, and one label key with two values is an error. `spec.dependencies` names the Applications of the directories each bundle's `DependsOn` renders, and dependencies between the merged bundles are dropped. With the default rules every bundle has its own directory, so this is one Application per bundle.
 
