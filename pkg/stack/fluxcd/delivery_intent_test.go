@@ -522,17 +522,105 @@ func TestDeliveryIntent_ResourceWithItemsField(t *testing.T) {
 	}
 }
 
-// typedList is a typed object that is a list type: a client.Object with Items.
-type typedList struct {
-	metav1.TypeMeta
-	metav1.ObjectMeta
-	Items []corev1.ConfigMap
+// typedConfigMapItems is a typed object with an Items field: a list type for
+// apimachinery, whatever its kind.
+type typedConfigMapItems struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Items             []corev1.ConfigMap `json:"items"`
 }
 
-func (l *typedList) DeepCopyObject() runtime.Object {
+func (l *typedConfigMapItems) DeepCopyObject() runtime.Object {
 	c := *l
 	c.Items = slices.Clone(l.Items)
 	return &c
+}
+
+// TestDeliveryIntent_ListIsDecidedByKind: what is a List is what kustomize
+// takes for one when it builds the written file — a kind ending in "List"
+// that has an items field — for typed and unstructured objects alike. A kind
+// ending in "List" without items, and another kind with items, are each one
+// object and carry the annotation themselves.
+func TestDeliveryIntent_ListIsDecidedByKind(t *testing.T) {
+	want := map[string]string{pruneKey: "disabled"}
+	typedCM := func(name string) corev1.ConfigMap {
+		return corev1.ConfigMap{
+			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		}
+	}
+	cases := map[string]struct {
+		obj client.Object
+		// self is the kind applied as one object, carrying the annotation;
+		// items are the ConfigMaps applied from inside it, carrying it.
+		self  string
+		items []string
+	}{
+		"unstructured kind ending in List without items": {
+			obj: &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "example.com/v1",
+				"kind":       "ShoppingList",
+				"metadata":   map[string]any{"name": "shopping", "namespace": "default"},
+				"spec":       map[string]any{"buy": "milk"},
+			}},
+			self: "ShoppingList",
+		},
+		"typed list": {
+			obj: &typedConfigMapItems{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMapList"},
+				Items:    []corev1.ConfigMap{typedCM("l1"), typedCM("l2")},
+			},
+			items: []string{"l1", "l2"},
+		},
+		"typed object of another kind with items": {
+			obj: &typedConfigMapItems{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "example.com/v1", Kind: "Inventory"},
+				ObjectMeta: metav1.ObjectMeta{Name: "inventory", Namespace: "default"},
+				Items:      []corev1.ConfigMap{typedCM("held")},
+			},
+			self: "Inventory",
+		},
+	}
+	for name, tc := range cases {
+		for _, placement := range placements {
+			t.Run(name+"/"+string(placement), func(t *testing.T) {
+				obj := tc.obj.DeepCopyObject().(client.Object)
+				app := stack.NewApplication("listed", "default", &fakeAppConfig{objs: []*client.Object{&obj}})
+				app.Delivery = stack.DeliveryIntent{PruneProtection: true}
+				c := &stack.Cluster{Name: "demo", Node: &stack.Node{Name: "platform", Bundle: srBundle("platform", app)}}
+				ml := integrated(t, c, recursiveRules("nodeOnly", placement))
+				for writer, w := range writeAll(t, ml) {
+					applied := appliedObjects(t, w, ml)
+					checkApplied(t, writer, applied, tc.items, want)
+					found := 0
+					for i := range applied {
+						o := &applied[i]
+						if o.GetKind() != tc.self {
+							if tc.self != "" && o.GetKind() == "ConfigMap" {
+								t.Errorf("%s: ConfigMap %q is applied on its own; it is the %s's data", writer, o.GetName(), tc.self)
+							}
+							continue
+						}
+						found++
+						if got := deliveryAnnotations(o); !mapsEqual(got, want) {
+							t.Errorf("%s: %s is applied with delivery annotations %v, want %v", writer, tc.self, got, want)
+						}
+						held, _, _ := unstructured.NestedSlice(o.Object, "items")
+						for _, h := range held {
+							if m, _ := h.(map[string]any); m != nil {
+								if ann, ok, _ := unstructured.NestedMap(m, "metadata", "annotations"); ok {
+									t.Errorf("%s: the %s's own data carries annotations %v", writer, tc.self, ann)
+								}
+							}
+						}
+					}
+					if tc.self != "" && found != 1 {
+						t.Errorf("%s: %s is applied %d times, want once", writer, tc.self, found)
+					}
+				}
+			})
+		}
+	}
 }
 
 // TestDeliveryIntent_TypedObjects: typed objects are annotated like
@@ -560,21 +648,6 @@ func TestDeliveryIntent_TypedObjects(t *testing.T) {
 	}
 	if noted.Annotations["example.com/note"] != "x" {
 		t.Errorf("b lost its own annotation: %v", noted.Annotations)
-	}
-
-	// A typed list is an envelope too: its items carry the annotation.
-	list := &typedList{Items: []corev1.ConfigMap{
-		{ObjectMeta: metav1.ObjectMeta{Name: "l1", Namespace: "default"}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "l2", Namespace: "default"}},
-	}}
-	integrated(t, cluster(list), rules)
-	for i := range list.Items {
-		if got := list.Items[i].Annotations; got[pruneKey] != "disabled" {
-			t.Errorf("typed list item %q has annotations %v, want the prune annotation", list.Items[i].Name, got)
-		}
-	}
-	if list.Annotations != nil {
-		t.Errorf("the typed list envelope carries annotations %v", list.Annotations)
 	}
 
 	clash := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "d", Namespace: "default", Annotations: map[string]string{pruneKey: "enabled"}}}
