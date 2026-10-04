@@ -270,13 +270,17 @@ What changed, and what to do:
   `Namespace` has a `..` path segment, with or without extra files.
 - **The walk validates its rules.** `WalkCluster` and `WalkClusterByPackage` run
   `LayoutRules.Validate` on the rules they are given, and so does every entry point that walks
-  (`CreateLayoutWithResources`). An unknown value of a grouping, `ApplicationFileMode`, `FilePer`,
-  `FluxPlacement` or `FileNaming` is now an error; before, it was walked as if it were another
-  value. A `ClusterName` with a `..` path segment is refused at the walk instead of at write, also
-  one the walk would have cleaned away (`x/../platform`). An unset value is still valid and takes
-  its default. Fix the value the error names. The Flux `IntegrateWithLayout` runs the same check
-  in place of its own placement check, so its error for an unknown placement now names the field
-  `FluxPlacement` (it was `fluxPlacement`).
+  (`CreateLayoutWithResources`). An unknown value of a grouping, `FilePer`, `FluxPlacement` or
+  `FileNaming` is now an error; before, it was walked as if it were another value. A `ClusterName`
+  with a `..` path segment is refused at the walk instead of at write, also one the walk would
+  have cleaned away (`x/../platform`). An unset value is still valid and takes its default. Fix
+  the value the error names. The Flux `IntegrateWithLayout` runs the same check in place of its
+  own placement check, so its error for an unknown placement now names the field `FluxPlacement`
+  (it was `fluxPlacement`).
+- **`LayoutRules` has no `ApplicationFileMode`.** No walk ever applied it, so a value set there
+  changed nothing; the field is removed. Code that sets it no longer compiles: delete the line,
+  the output stays the same. To write an application as one file, set
+  `Config.ApplicationFileMode` for `WriteManifest`, or the layout's own `ApplicationFileMode`.
 
 See the [Layout Engine reference](/api-reference/layout/) for the full rule.
 

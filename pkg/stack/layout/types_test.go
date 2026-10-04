@@ -1,6 +1,7 @@
 package layout_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/go-kure/kure/pkg/stack/layout"
@@ -18,7 +19,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupByName,
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.AppFilePerResource,
 				FilePer:             layout.FilePerResource,
 				FluxPlacement:       layout.FluxSeparate,
 			},
@@ -30,7 +30,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupUnset,
 				BundleGrouping:      layout.GroupUnset,
 				ApplicationGrouping: layout.GroupUnset,
-				ApplicationFileMode: layout.AppFileUnset,
 				FilePer:             layout.FilePerUnset,
 				FluxPlacement:       layout.FluxUnset,
 			},
@@ -42,7 +41,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupFlat,
 				BundleGrouping:      layout.GroupByName,
 				ApplicationGrouping: layout.GroupByName,
-				ApplicationFileMode: layout.AppFileSingle,
 				FilePer:             layout.FilePerKind,
 				FluxPlacement:       layout.FluxIntegratedPerLayout,
 			},
@@ -76,22 +74,11 @@ func TestLayoutRules_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "invalid application file mode",
-			rules: layout.LayoutRules{
-				NodeGrouping:        layout.GroupByName,
-				BundleGrouping:      layout.GroupFlat,
-				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.ApplicationFileMode("invalid"),
-			},
-			wantErr: true,
-		},
-		{
 			name: "invalid file per",
 			rules: layout.LayoutRules{
 				NodeGrouping:        layout.GroupByName,
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.AppFilePerResource,
 				FilePer:             layout.FileExportMode("invalid"),
 			},
 			wantErr: true,
@@ -102,7 +89,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupByName,
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.AppFilePerResource,
 				FilePer:             layout.FilePerResource,
 				FluxPlacement:       layout.FluxPlacement("invalid"),
 			},
@@ -114,7 +100,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupByName,
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.AppFilePerResource,
 				FilePer:             layout.FilePerResource,
 				FluxPlacement:       layout.FluxSeparate,
 				ClusterName:         "my-cluster",
@@ -127,7 +112,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupByName,
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.AppFilePerResource,
 				FilePer:             layout.FilePerResource,
 				FluxPlacement:       layout.FluxSeparate,
 				FileNaming:          layout.FileNamingKindName,
@@ -140,7 +124,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupByName,
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.AppFilePerResource,
 				FilePer:             layout.FilePerResource,
 				FluxPlacement:       layout.FluxSeparate,
 				FileNaming:          layout.FileNamingUnset,
@@ -153,7 +136,6 @@ func TestLayoutRules_Validate(t *testing.T) {
 				NodeGrouping:        layout.GroupByName,
 				BundleGrouping:      layout.GroupFlat,
 				ApplicationGrouping: layout.GroupFlat,
-				ApplicationFileMode: layout.AppFilePerResource,
 				FilePer:             layout.FilePerResource,
 				FluxPlacement:       layout.FluxSeparate,
 				FileNaming:          layout.FileNamingMode("invalid"),
@@ -175,6 +157,16 @@ func TestLayoutRules_Validate(t *testing.T) {
 	}
 }
 
+// TestLayoutRules_HasNoApplicationFileMode pins that the rules carry no
+// application file mode (go-kure/kure#979): the walk never applied one, so a
+// value set there changed nothing. The mode is a layout's own
+// ApplicationFileMode, or Config's default in WriteManifest.
+func TestLayoutRules_HasNoApplicationFileMode(t *testing.T) {
+	if _, ok := reflect.TypeOf(layout.LayoutRules{}).FieldByName("ApplicationFileMode"); ok {
+		t.Error("LayoutRules has an ApplicationFileMode field, which no walk applies")
+	}
+}
+
 func TestDefaultLayoutRules(t *testing.T) {
 	rules := layout.DefaultLayoutRules()
 
@@ -192,9 +184,6 @@ func TestDefaultLayoutRules(t *testing.T) {
 	}
 	if rules.ApplicationGrouping != layout.GroupFlat {
 		t.Errorf("expected ApplicationGrouping=%s, got %s", layout.GroupFlat, rules.ApplicationGrouping)
-	}
-	if rules.ApplicationFileMode != layout.AppFilePerResource {
-		t.Errorf("expected ApplicationFileMode=%s, got %s", layout.AppFilePerResource, rules.ApplicationFileMode)
 	}
 	if rules.FilePer != layout.FilePerResource {
 		t.Errorf("expected FilePer=%s, got %s", layout.FilePerResource, rules.FilePer)

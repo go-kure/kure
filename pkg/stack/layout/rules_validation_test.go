@@ -24,7 +24,6 @@ func invalidRules() map[string]struct {
 		"node grouping":        {layout.LayoutRules{NodeGrouping: "nested"}, "NodeGrouping", "nested"},
 		"bundle grouping":      {layout.LayoutRules{BundleGrouping: "nested"}, "BundleGrouping", "nested"},
 		"application grouping": {layout.LayoutRules{ApplicationGrouping: "nested"}, "ApplicationGrouping", "nested"},
-		"application file":     {layout.LayoutRules{ApplicationFileMode: "bundle"}, "ApplicationFileMode", "bundle"},
 		"file per":             {layout.LayoutRules{FilePer: "namespace"}, "FilePer", "namespace"},
 		"flux placement":       {layout.LayoutRules{FluxPlacement: "inline"}, "FluxPlacement", "inline"},
 		"file naming":          {layout.LayoutRules{FileNaming: "name-kind"}, "FileNaming", "name-kind"},

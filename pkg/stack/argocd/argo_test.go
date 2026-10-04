@@ -655,7 +655,6 @@ func TestCreateLayoutWithResources_RefusesInvalidRules(t *testing.T) {
 		"node grouping":        {layout.LayoutRules{NodeGrouping: "nested"}, "NodeGrouping"},
 		"bundle grouping":      {layout.LayoutRules{BundleGrouping: "nested"}, "BundleGrouping"},
 		"application grouping": {layout.LayoutRules{ApplicationGrouping: "nested"}, "ApplicationGrouping"},
-		"application file":     {layout.LayoutRules{ApplicationFileMode: "bundle"}, "ApplicationFileMode"},
 		"file per":             {layout.LayoutRules{FilePer: "namespace"}, "FilePer"},
 		"flux placement":       {layout.LayoutRules{FluxPlacement: "inline"}, "FluxPlacement"},
 		"file naming":          {layout.LayoutRules{FileNaming: "name-kind"}, "FileNaming"},

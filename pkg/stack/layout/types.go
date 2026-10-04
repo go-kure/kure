@@ -125,10 +125,6 @@ type LayoutRules struct {
 	// its own layout gets a directory either way, and so does every umbrella
 	// child bundle. The three axes are independent. Defaults to GroupFlat.
 	ApplicationGrouping GroupingMode
-	// ApplicationFileMode controls whether application resources are
-	// combined into a single file or split per resource. Defaults to
-	// AppFilePerResource.
-	ApplicationFileMode ApplicationFileMode
 	// FilePer sets the default file export mode for resources. Defaults to
 	// FilePerResource.
 	FilePer FileExportMode
@@ -176,7 +172,6 @@ func DefaultLayoutRules() LayoutRules {
 		NodeGrouping:        GroupByName,
 		BundleGrouping:      GroupFlat, // Avoid bundle/app/app nesting
 		ApplicationGrouping: GroupFlat, // Avoid double nesting
-		ApplicationFileMode: AppFilePerResource,
 		FilePer:             FilePerResource,
 		FluxPlacement:       FluxSeparate,
 	}
@@ -205,13 +200,6 @@ func (lr LayoutRules) Validate() error {
 	}
 	if !validGrouping(lr.ApplicationGrouping) {
 		return errors.NewValidationError("ApplicationGrouping", string(lr.ApplicationGrouping), "LayoutRules", []string{string(GroupByName), string(GroupFlat)})
-	}
-
-	switch lr.ApplicationFileMode {
-	case AppFilePerResource, AppFileSingle, AppFileUnset:
-		// valid
-	default:
-		return errors.NewValidationError("ApplicationFileMode", string(lr.ApplicationFileMode), "LayoutRules", []string{string(AppFilePerResource), string(AppFileSingle)})
 	}
 
 	switch lr.FilePer {

@@ -658,7 +658,6 @@ type LayoutRules struct {
     NodeGrouping        GroupingMode
     BundleGrouping      GroupingMode
     ApplicationGrouping GroupingMode
-    ApplicationFileMode ApplicationFileMode
     FilePer             FileExportMode
     ClusterName         string
     FluxPlacement       FluxPlacement
