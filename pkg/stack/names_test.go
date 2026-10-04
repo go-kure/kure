@@ -58,6 +58,9 @@ func TestValidateDirectoryName(t *testing.T) {
 		// On Windows filepath.Join reads the backslash as a separator, so
 		// this name would leave the directory it is joined under.
 		{"backslash traversal", `..\outside`, "path separator"},
+		// A directory with a NUL byte in its name cannot be created: the
+		// write would fail after validation had passed.
+		{"NUL byte", "a\x00b", "NUL byte"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -205,4 +208,72 @@ func TestValidateCluster_Names(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateCluster_NodeNameIsPathSegment pins why a node name is checked
+// whatever the layout rules are, flat node grouping included: the model itself
+// joins node names with "/" into the node's path and the path-map key
+// (Node.GetPath, Node.InitializePathMap). A name holding "/" gives two
+// different nodes one key, and so does an unnamed child, long before any
+// directory is made.
+func TestValidateCluster_NodeNameIsPathSegment(t *testing.T) {
+	tree := func(children ...*Node) *Node {
+		root := &Node{Name: "p", Children: children}
+		var link func(parent *Node)
+		link = func(parent *Node) {
+			for _, c := range parent.Children {
+				c.SetParent(parent)
+				link(c)
+			}
+		}
+		link(root)
+		return root
+	}
+	count := func(n *Node) int {
+		total := 0
+		var walk func(*Node)
+		walk = func(n *Node) {
+			total++
+			for _, c := range n.Children {
+				walk(c)
+			}
+		}
+		walk(n)
+		return total
+	}
+
+	t.Run("separator in a name", func(t *testing.T) {
+		slashed := &Node{Name: "a/b"}
+		nested := &Node{Name: "b"}
+		root := tree(slashed, &Node{Name: "a", Children: []*Node{nested}})
+
+		if slashed.GetPath() != nested.GetPath() {
+			t.Fatalf("paths %q and %q: want the same path for two nodes", slashed.GetPath(), nested.GetPath())
+		}
+		root.InitializePathMap()
+		if got, nodes := len(root.pathMap), count(root); got >= nodes {
+			t.Fatalf("path map holds %d keys for %d nodes: want fewer keys than nodes", got, nodes)
+		}
+		err := ValidateCluster(&Cluster{Name: "c", Node: root})
+		if err == nil || !strings.Contains(err.Error(), `node "p/a/b"`) || !strings.Contains(err.Error(), "path separator") {
+			t.Fatalf("ValidateCluster() = %v, want the node refused for its separator", err)
+		}
+	})
+
+	t.Run("unnamed children", func(t *testing.T) {
+		first, second := &Node{}, &Node{}
+		root := tree(first, second)
+
+		if first.GetPath() != "p/" || second.GetPath() != "p/" {
+			t.Fatalf("paths %q and %q: want both unnamed children at %q", first.GetPath(), second.GetPath(), "p/")
+		}
+		root.InitializePathMap()
+		if got, nodes := len(root.pathMap), count(root); got >= nodes {
+			t.Fatalf("path map holds %d keys for %d nodes: want fewer keys than nodes", got, nodes)
+		}
+		err := ValidateCluster(&Cluster{Name: "c", Node: root})
+		if err == nil || !strings.Contains(err.Error(), `node "p/"`) || !strings.Contains(err.Error(), "empty") {
+			t.Fatalf("ValidateCluster() = %v, want the unnamed child refused", err)
+		}
+	})
 }
