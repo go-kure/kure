@@ -26,6 +26,37 @@ type origin struct {
 	// inside this one included: what a Kustomization for this directory
 	// builds, attributed to the bundle whose applications emitted it.
 	objects map[*stack.Bundle][]client.Object
+	// apps records, for a layout that renders bundles, what each of their
+	// applications rendered, in emission order.
+	apps []ApplicationObjects
+}
+
+// ApplicationObjects is what one application rendered in a walked layout.
+type ApplicationObjects struct {
+	// Application is the application.
+	Application *stack.Application
+	// Objects are the objects the application's directory builds for it, the
+	// same values the layouts hold: those it emitted and, when it has a layout
+	// of its own, those a LayoutAugmenter added to that layout or below it. A
+	// ConfigMap that a configMapGenerator builds is not among them: it exists
+	// only once kustomize has built the directory (see Layout).
+	Objects []client.Object
+	// Layout is the application's own layout, whose ConfigMapGenerators (and
+	// those of the layouts below it) are the application's. Nil when the
+	// application's objects were written into its bundle's directory.
+	Layout *ManifestLayout
+}
+
+// subtreeResources returns the resources of l and of every layout below it.
+func subtreeResources(l *ManifestLayout) []client.Object {
+	if l == nil {
+		return nil
+	}
+	out := slices.Clone(l.Resources)
+	for _, child := range l.Children {
+		out = append(out, subtreeResources(child)...)
+	}
+	return out
 }
 
 // addObjects records objs as rendered by bundle b.
@@ -53,6 +84,13 @@ func (ml *ManifestLayout) OriginBundleObjects(b *stack.Bundle) []client.Object {
 
 // OriginApplication returns the application a per-app layout renders, or nil.
 func (ml *ManifestLayout) OriginApplication() *stack.Application { return ml.origin.app }
+
+// OriginApplicationObjects returns, for a layout that renders bundles, what
+// each application of those bundles rendered, in emission order: the record a
+// workflow uses to act on one application's objects (a delivery intent, say).
+// The layout package applies nothing to them. Nil for a hand-built layout and
+// for a layout that renders no bundle.
+func (ml *ManifestLayout) OriginApplicationObjects() []ApplicationObjects { return ml.origin.apps }
 
 // rendersBundle reports whether a bundle's resources live in this layout's
 // directory. A Flux Kustomization or ArgoCD Application names that directory,

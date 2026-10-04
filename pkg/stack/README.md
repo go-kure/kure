@@ -167,6 +167,24 @@ fmt.Println(len(resources), (*resources[0]).GetName())
 ```
 <!-- doc-example:end -->
 
+#### Delivery intent
+
+`Application.Delivery` states how the delivery engine should treat the application's objects,
+in engine-neutral terms. Both fields default to off, and an application that sets neither renders
+exactly as before.
+
+| Field | Meaning |
+|---|---|
+| `PruneProtection` | Keep the application's objects in the cluster when they are removed from the source. |
+| `ForceReplace` | Allow an object to be deleted and recreated when a change touches an immutable field. |
+
+The intent covers every object the application emits, the objects a layout augmenter adds to the
+application's own directory, and the ConfigMaps built from that directory's `configMapGenerator`
+entries. Each workflow engine maps it to its own mechanism: the Flux workflow writes per-object
+annotations (see [Flux Engine](/api-reference/flux-engine/)); the ArgoCD workflow has no mapping
+yet and refuses an application that sets one. `Bundle.Prune` and `Bundle.Force` stay the
+bundle-wide switches on the generated Flux Kustomization and are independent of this field.
+
 ### ApplicationConfig Interface
 
 Implement this interface to define how an application generates its Kubernetes resources:

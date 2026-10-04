@@ -17,6 +17,12 @@ const (
 	// AnnotationFluxPruneDisabled is the value that prevents a resource from
 	// being pruned during Flux garbage collection.
 	AnnotationFluxPruneDisabled = "disabled"
+	// AnnotationFluxForceKey is the Flux kustomize-controller annotation key
+	// that controls, per resource, whether an immutable-field change is
+	// applied by deleting and recreating the resource.
+	AnnotationFluxForceKey = "kustomize.toolkit.fluxcd.io/force"
+	// AnnotationFluxForceEnabled is the value that allows that recreation.
+	AnnotationFluxForceEnabled = "enabled"
 )
 
 // Bundle represents a unit of deployment, typically the resources that

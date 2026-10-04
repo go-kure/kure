@@ -489,6 +489,60 @@ clusters/production/prod/
       kustomization.yaml
 ```
 
+## Delivery Intent per Application
+
+`Bundle.Prune` and `Bundle.Force` apply to a whole Flux Kustomization. To protect one application
+from pruning, or to allow delete-and-recreate for one application, set its `Delivery`:
+
+<!-- doc-example: pkg/stack/fluxcd Example_fluxWorkflowDeliveryIntent -->
+```go
+database := stack.NewApplication("database", "data", databaseConfig)
+database.Delivery = stack.DeliveryIntent{
+    PruneProtection: true, // keep its objects when they leave the source
+    ForceReplace:    true, // delete and recreate on an immutable-field change
+}
+cache := stack.NewApplication("cache", "data", cacheConfig)
+
+dataTier, err := stack.NewBundle("data-tier", []*stack.Application{database, cache}, nil)
+if err != nil {
+    panic(err)
+}
+dataTier.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: "flux-system"}
+cluster := stack.NewCluster("production", &stack.Node{Name: "production", Bundle: dataTier})
+
+// The Flux engine annotates the database's objects, and only those.
+ml, err := fluxcd.Engine().CreateLayoutWithResources(cluster, layout.DefaultLayoutRules())
+if err != nil {
+    panic(err)
+}
+var show func(l *layout.ManifestLayout)
+show = func(l *layout.ManifestLayout) {
+    for _, rec := range l.OriginApplicationObjects() {
+        for _, obj := range rec.Objects {
+            kind := obj.GetObjectKind().GroupVersionKind().Kind
+            fmt.Println(rec.Application.Name, kind, len(obj.GetAnnotations()))
+            for _, key := range slices.Sorted(maps.Keys(obj.GetAnnotations())) {
+                fmt.Printf("  %s: %s\n", key, obj.GetAnnotations()[key])
+            }
+        }
+    }
+    for _, child := range l.Children {
+        show(child)
+    }
+}
+show(ml.(*layout.ManifestLayout))
+```
+<!-- doc-example:end -->
+
+The engine writes `kustomize.toolkit.fluxcd.io/prune: disabled` and
+`kustomize.toolkit.fluxcd.io/force: enabled` on that application's objects under every placement
+and grouping, including the objects an augmenter adds to the application's own layout and the
+ConfigMaps its `configMapGenerator` entries build. An object that already carries one of the two
+annotations with another value is refused with an error naming it. The annotations are applied by
+`IntegrateWithLayout` and `CreateLayoutWithResources`; see the
+[Flux Engine reference](/api-reference/flux-engine/) for the full rule, including what prune
+protection means for generated ConfigMaps.
+
 ## Bootstrap
 
 Generate Flux system bootstrap manifests. Two modes are available:

@@ -122,7 +122,8 @@ top of such a directory.
 
 - **Bootstrap not implemented**: `GenerateBootstrap` returns `nil, nil` when `config` is nil or disabled; returns an error when bootstrap is enabled. `SupportedBootstrapModes()` returns nil.
 - Applications are generated as `unstructured.Unstructured` objects; ArgoCD CRD types are not imported.
-- `IntegrateWithLayout` is a no-op (ArgoCD Applications reference external repos and do not require layout integration).
+- `IntegrateWithLayout` adds nothing (ArgoCD Applications reference external repos and do not require layout integration).
+- **No delivery intent**: an application that sets `Application.Delivery` (prune protection, force replace) is refused by `GenerateFromCluster`, `CreateLayoutWithResources` and `IntegrateWithLayout`, with an error naming the application. This workflow has no mapping for the intent yet, and rendering the application without it would drop what it asked for. Leave `Delivery` unset, or use the Flux workflow.
 
 ## Related Packages
 

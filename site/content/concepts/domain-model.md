@@ -62,6 +62,12 @@ umbrellas in the current release.
 
 An individual Kubernetes workload or resource set. Applications implement the `ApplicationConfig` interface, which defines how to generate Kubernetes resource objects.
 
+An application can also state a **delivery intent** (`Application.Delivery`): `PruneProtection`
+keeps its objects in the cluster when they are removed from the source, and `ForceReplace` allows
+delete-and-recreate when a change touches an immutable field. The intent is engine-neutral and
+applies to that application's objects only; the Flux workflow writes it as per-object annotations,
+and the ArgoCD workflow refuses it.
+
 ## Fluent Builder API
 
 For ergonomic construction of a single path through the tree:

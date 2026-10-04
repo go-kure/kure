@@ -65,6 +65,9 @@ func (w *WorkflowEngine) generateFromLayout(root *layout.ManifestLayout, c *stac
 	if root == nil || c == nil || c.Node == nil {
 		return nil, nil
 	}
+	if err := refuseDeliveryIntent(root); err != nil {
+		return nil, err
+	}
 	ix, err := layout.IndexOrigins(root, c)
 	if err != nil {
 		return nil, err
@@ -150,9 +153,33 @@ func (w *WorkflowEngine) applicationForBundle(b *stack.Bundle, path string) (cli
 
 // IntegrateWithLayout adds ArgoCD Applications to an existing manifest layout.
 // For ArgoCD, this is typically not needed as Applications reference external repos.
+// It adds nothing, and refuses a layout whose applications set a delivery
+// intent (see refuseDeliveryIntent).
 func (w *WorkflowEngine) IntegrateWithLayout(ml *layout.ManifestLayout, c *stack.Cluster, rules layout.LayoutRules) error {
 	// ArgoCD Applications typically don't need layout integration
 	// as they reference external repositories
+	return refuseDeliveryIntent(ml)
+}
+
+// refuseDeliveryIntent fails when an application rendered in the walked tree
+// under root sets a delivery intent. This workflow has no mapping for one yet
+// (ArgoCD states pruning and replacement through its own sync options), and
+// rendering the application without it would silently drop what it asked for.
+func refuseDeliveryIntent(root *layout.ManifestLayout) error {
+	if root == nil {
+		return nil
+	}
+	for _, rec := range root.OriginApplicationObjects() {
+		if rec.Application != nil && !rec.Application.Delivery.IsZero() {
+			return errors.Errorf("application %q (rendered in %q) sets a delivery intent, which the ArgoCD workflow cannot express yet; leave Application.Delivery unset or use the Flux workflow",
+				rec.Application.Name, root.FullRepoPath())
+		}
+	}
+	for _, child := range root.Children {
+		if err := refuseDeliveryIntent(child); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

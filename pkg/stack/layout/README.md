@@ -350,6 +350,12 @@ application has no origin of its own. Hand-built layouts have none.
 or its per-app directories (plus a kind-and-name stand-in for each ConfigMap an augmenter's
 `configMapGenerator` makes): the Flux generator uses it to refuse a patch that would reach another
 bundle sharing the directory.
+`OriginApplicationObjects()` returns, per application rendered in a layout, the application, its
+objects and its own layout: the objects are what the application emitted plus, for an application
+with its own directory, what a `LayoutAugmenter` added there or below; the layout is nil for an
+application written into its bundle's directory. The records are on the layout that renders the
+application's bundle, under every grouping, and a `FlattenSingleTier` collapse moves them with the
+rest. A workflow uses them to apply an application's `Delivery` intent to exactly its objects.
 
 `IndexOrigins(root, cluster)` resolves a cluster's bundles and nodes to those layouts
 (`BundleLayout`, `NodeLayout`, `Parent`, `Bundles` in layout pre-order) and
@@ -383,6 +389,10 @@ A generator needs a `kustomization.yaml` the writer writes, so the writers refus
 `KustomizationRecursive` layout, an `AppFileSingle` child, or a root that writes no
 `kustomization.yaml`, and they refuse a generated ConfigMap
 whose identity its build already holds (see "Layout paths").
+
+`ConfigMapGeneratorSpec.Annotations` is written as the entry's `options.annotations`, in key order,
+so the ConfigMap kustomize builds carries them. An entry without annotations is written as before,
+with no `options` block.
 
 An `ExtraFile.Name` is a relative path of `/`-separated segments made of letters, digits, `.`, `_`
 and `-`, with no `.` or `..` segment; a name in a subdirectory (`assets/dashboard.json`) creates

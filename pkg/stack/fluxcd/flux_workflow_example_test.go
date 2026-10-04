@@ -2,8 +2,10 @@ package fluxcd_test
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -35,6 +37,8 @@ var (
 	certManagerConfig stack.ApplicationConfig = workloadApp{}
 	frontendConfig    stack.ApplicationConfig = workloadApp{}
 	apiConfig         stack.ApplicationConfig = workloadApp{}
+	databaseConfig    stack.ApplicationConfig = workloadApp{}
+	cacheConfig       stack.ApplicationConfig = workloadApp{}
 )
 
 // productionCluster is the cluster Example_fluxWorkflowDefine builds, for the
@@ -238,6 +242,53 @@ func Example_fluxWorkflowUmbrella() {
 	// Kustomization flux-system platform-infra
 	// Kustomization flux-system platform-services
 	// Kustomization flux-system platform-apps
+}
+
+func Example_fluxWorkflowDeliveryIntent() {
+	database := stack.NewApplication("database", "data", databaseConfig)
+	database.Delivery = stack.DeliveryIntent{
+		PruneProtection: true, // keep its objects when they leave the source
+		ForceReplace:    true, // delete and recreate on an immutable-field change
+	}
+	cache := stack.NewApplication("cache", "data", cacheConfig)
+
+	dataTier, err := stack.NewBundle("data-tier", []*stack.Application{database, cache}, nil)
+	if err != nil {
+		panic(err)
+	}
+	dataTier.SourceRef = &stack.SourceRef{Kind: "GitRepository", Name: "flux-system"}
+	cluster := stack.NewCluster("production", &stack.Node{Name: "production", Bundle: dataTier})
+
+	// The Flux engine annotates the database's objects, and only those.
+	ml, err := fluxcd.Engine().CreateLayoutWithResources(cluster, layout.DefaultLayoutRules())
+	if err != nil {
+		panic(err)
+	}
+	var show func(l *layout.ManifestLayout)
+	show = func(l *layout.ManifestLayout) {
+		for _, rec := range l.OriginApplicationObjects() {
+			for _, obj := range rec.Objects {
+				kind := obj.GetObjectKind().GroupVersionKind().Kind
+				fmt.Println(rec.Application.Name, kind, len(obj.GetAnnotations()))
+				for _, key := range slices.Sorted(maps.Keys(obj.GetAnnotations())) {
+					fmt.Printf("  %s: %s\n", key, obj.GetAnnotations()[key])
+				}
+			}
+		}
+		for _, child := range l.Children {
+			show(child)
+		}
+	}
+	show(ml.(*layout.ManifestLayout))
+	// Output:
+	// database Deployment 2
+	//   kustomize.toolkit.fluxcd.io/force: enabled
+	//   kustomize.toolkit.fluxcd.io/prune: disabled
+	// database Service 2
+	//   kustomize.toolkit.fluxcd.io/force: enabled
+	//   kustomize.toolkit.fluxcd.io/prune: disabled
+	// cache Deployment 0
+	// cache Service 0
 }
 
 func Example_fluxWorkflowDependsOn() {

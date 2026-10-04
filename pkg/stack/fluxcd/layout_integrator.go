@@ -13,7 +13,6 @@ import (
 	"github.com/fluxcd/pkg/envsubst"
 	fluxkustomize "github.com/fluxcd/pkg/kustomize"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -85,7 +84,16 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 	restore := saveLayouts(ml)
 	setPlacement(ml, rules.FluxPlacement)
 
-	var err error
+	// An application's delivery intent becomes Flux's per-object annotations
+	// on its objects, whatever the placement. They are set in place, which
+	// saveLayouts does not cover (it keeps the same objects), so a refusal
+	// takes them back through undoDelivery.
+	undoDelivery, err := applyDeliveryIntents(ml)
+	if err != nil {
+		restore()
+		return err
+	}
+
 	if rules.FluxPlacement == layout.FluxSeparate {
 		err = li.addSeparateFluxToLayout(ml, c)
 	} else {
@@ -97,6 +105,7 @@ func (li *LayoutIntegrator) IntegrateWithLayout(ml *layout.ManifestLayout, c *st
 		err = li.addIntegratedFluxToLayout(ml, c, rules.FluxPlacement == layout.FluxIntegratedPerLayout)
 	}
 	if err != nil {
+		undoDelivery()
 		restore()
 	}
 	return err
@@ -1122,29 +1131,11 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 		if r == nil {
 			continue
 		}
-		if u, ok := r.(*unstructured.Unstructured); ok && u.IsList() {
-			list, err := u.ToList()
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for i := range list.Items {
-				out = append(out, &list.Items[i])
-			}
-			continue
+		items, err := objectItems(r)
+		if err != nil {
+			return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
 		}
-		if meta.IsListType(r) {
-			items, err := meta.ExtractList(r)
-			if err != nil {
-				return nil, errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
-			}
-			for _, item := range items {
-				if obj, ok := item.(client.Object); ok {
-					out = append(out, obj)
-				}
-			}
-			continue
-		}
-		out = append(out, r)
+		out = append(out, items...)
 	}
 	return out, nil
 }
