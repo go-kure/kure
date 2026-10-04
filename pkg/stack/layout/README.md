@@ -204,7 +204,8 @@ rendered into one directory inside it, named after the first of them:
 | `platform` | `core` | `GroupByName` | `platform/core`, as for every node |
 
 They stay one unit: one directory and one Flux Kustomization or ArgoCD Application, named after
-the first bundle. `ManifestLayout.OriginUnit()` on the root node's layout returns that directory's
+the first bundle. The directory takes that bundle's `Name`; its `KustomizationName`, when it sets
+one, names the Kustomization or Application alone. `ManifestLayout.OriginUnit()` on the root node's layout returns that directory's
 layout. Every other node is unchanged: its bundle renders in the node's directory. Both walkers do
 this, `WalkClusterByPackage` in the tree of the package the root node is in. The unnamed wrapper `WalkClusterByPackage` builds for a package the root node is not in is
 not the root node's directory and is unchanged: under `NodeGrouping: GroupFlat` it renders the
