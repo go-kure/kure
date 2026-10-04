@@ -468,7 +468,10 @@ func (g *ResourceGenerator) GenerateForBundle(b *stack.Bundle, path string) ([]c
 }
 
 // kustomizationForBundle creates a Flux Kustomization resource from a bundle,
-// with spec.path set to path. An empty Interval takes g.DefaultInterval and an empty Timeout or
+// with spec.path set to path. It is named by the bundle's KustomizationName,
+// or its Name without one (Bundle.UnitName), and names the bundles it refers
+// to the same way: each umbrella child in a health check, each DependsOn
+// bundle in spec.dependsOn. An empty Interval takes g.DefaultInterval and an empty Timeout or
 // RetryInterval leaves the field unset; a non-empty value that does not parse
 // is an error, never a silent fallback. Bundle.Validate reports the same
 // error earlier; checking here as well covers callers that generate without
@@ -493,7 +496,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 			Kind:       "Kustomization",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        b.Name,
+			Name:        b.UnitName(),
 			Namespace:   g.DefaultNamespace,
 			Labels:      b.Labels,
 			Annotations: b.Annotations,
@@ -563,7 +566,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 			kust.Spec.HealthChecks = append(kust.Spec.HealthChecks, metaapi.NamespacedObjectKindReference{
 				APIVersion: kustv1.GroupVersion.String(),
 				Kind:       "Kustomization",
-				Name:       child.Name,
+				Name:       child.UnitName(),
 				Namespace:  g.DefaultNamespace,
 			})
 		}
@@ -616,7 +619,7 @@ func (g *ResourceGenerator) kustomizationForBundle(b *stack.Bundle, path string)
 	// Add dependencies
 	for _, dep := range b.DependsOn {
 		kust.Spec.DependsOn = append(kust.Spec.DependsOn, kustv1.DependencyReference{
-			Name: dep.Name,
+			Name: dep.UnitName(),
 		})
 	}
 	for _, name := range b.NamedDependsOn {

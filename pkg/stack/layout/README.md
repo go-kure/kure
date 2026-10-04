@@ -407,7 +407,8 @@ bundle sharing the directory.
 `KustomizationPath(b)` is the directory of the layout that renders `b` — the one path every Flux
 Kustomization and ArgoCD Application kure emits for a bundle uses. It refuses a tree it cannot
 resolve: an object rendered twice, a rendered set that differs from what the cluster reaches
-(hand-built, partial or other-cluster trees), two bundles with one name, a node or bundle
+(hand-built, partial or other-cluster trees), two bundles with one name, two bundles whose
+Kustomization or Application would get one name (`Bundle.UnitName`), a node or bundle
 layout set to `AppFileSingle` mode, and a dependency cycle between units. `WriteManifest` refuses a
 node or bundle layout whose own `ApplicationFileMode` is `AppFileSingle` too: its files would go
 into its `Namespace`, so no directory would exist at its path. `Config.ApplicationFileMode` is only
@@ -415,12 +416,14 @@ the default for application (and hand-built) layouts, so `ArgoProfile`'s `AppFil
 file per application while nodes and bundles keep their directories.
 
 `Units()` returns the layouts that render bundles: each is one reconciliation unit, the directory a
-Flux Kustomization or ArgoCD Application applies. `UnitName(b)` is the unit that applies `b` (the
-first bundle its directory renders), and `UnitDependencies(l)` / `UnitNamedDependencies(l)` map the
-bundles' `DependsOn` / `NamedDependsOn` to units, dropping dependencies inside `l`'s own unit.
+Flux Kustomization or ArgoCD Application applies. `UnitName(b)` is the unit that applies `b`: the
+name in effect (`Bundle.UnitName`: `KustomizationName`, or `Name` without it) of the first bundle
+its directory renders. `UnitOfName(name)` maps a Kustomization name to its unit, and returns a name
+no rendered bundle has in effect unchanged. `UnitDependencies(l)` / `UnitNamedDependencies(l)` map
+the bundles' `DependsOn` / `NamedDependsOn` to units, dropping dependencies inside `l`'s own unit.
 `IndexOrigins` refuses a cycle in those dependencies; waits a workflow adds on top (Flux health
 checks, creation order) are checked by that workflow.
-Bundles are resolved by name, which is unique, so a copy of a bundle resolves like the original.
+Bundles are resolved by `Name`, which is unique, so a copy of a bundle resolves like the original.
 
 `NodeGrouping: GroupFlat` (as in the `CentralizedControlPlane` preset) moves a merged node's
 umbrella children and augmenter layouts under the absorbing node, where they keep their own
