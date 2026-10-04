@@ -730,8 +730,10 @@ umbrella closure, because the walker renders every umbrella child as a layout
 of its own. It builds no origin index either, so it cannot see every bundle
 that shares a Kustomization name; what it does see it checks: a `DependsOn`
 bundle or a child that would get `b`'s own Kustomization name
-(`KustomizationName`, or `Name` without it) is an error, since the
-Kustomization would otherwise depend on itself or wait for itself.
+(`KustomizationName`, or `Name` without it), `b` itself in `DependsOn`, or
+that name in `NamedDependsOn`, is an error, since the Kustomization would
+otherwise depend on itself or wait for itself. `GenerateFromLayout` and
+`GenerateFromCluster` drop a bundle's dependency on itself instead.
 
 ### Placement in layouts
 
