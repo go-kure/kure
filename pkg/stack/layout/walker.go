@@ -84,7 +84,9 @@ type rootUnit struct {
 // so a name that differs only in case, or one that resolves to the same
 // directory ("/web", "./web"), is refused here too, not when the tree is
 // written. A bundle name that resolves to the root node's directory itself
-// (".", "/") is refused the same way: it names no directory inside it.
+// (".", "/") is refused the same way: it names no directory inside it. So is
+// one that resolves to the directory of a layout further down the tree
+// ("web/api" beside the nodes web and api): see checkBelow.
 func (r *rootUnit) checkRootUnitName() error {
 	if r == nil || r.unit == nil {
 		return nil
@@ -101,7 +103,50 @@ func (r *rootUnit) checkRootUnitName() error {
 					child.Name, r.unit.Name, r.unit.FullRepoPath()), nil)
 		}
 	}
+	for _, child := range r.layout.Children {
+		if child == nil || child == r.unit {
+			continue
+		}
+		if err := r.checkBelow(child); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// checkBelow refuses a layout below l that is rendered to the directory of the
+// root's bundles: a bundle name with a path separator can resolve to the
+// directory of a nested node, or of one of its bundles or applications. The
+// unit's own layouts are not walked: they lie below its directory.
+func (r *rootUnit) checkBelow(l *ManifestLayout) error {
+	for _, child := range l.Children {
+		if child == nil {
+			continue
+		}
+		if child.SameDirectory(r.unit) {
+			return errors.ResourceValidationError("Bundle", r.unit.Name, "name",
+				fmt.Sprintf("bundle %q would be rendered to directory %q, which %s further down the tree already takes: the root node's bundle has a directory named after it inside the root node's directory, so its name must name a directory nothing else is rendered to",
+					r.unit.Name, r.unit.FullRepoPath(), child.origin.describe(child)), nil)
+		}
+		if err := r.checkBelow(child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// describe says, for an error, what the walked layout l with origin o is the
+// directory of: its application, its first node or its first bundle.
+func (o origin) describe(l *ManifestLayout) string {
+	switch {
+	case o.app != nil:
+		return fmt.Sprintf("application %q", o.app.Name)
+	case len(o.nodes) > 0:
+		return fmt.Sprintf("node %q", o.nodes[0].Name)
+	case len(o.bundles) > 0:
+		return fmt.Sprintf("bundle %q", o.bundles[0].Name)
+	}
+	return fmt.Sprintf("layout %q", l.Name)
 }
 
 // newGrouping resolves rules, with unset options taking their documented
