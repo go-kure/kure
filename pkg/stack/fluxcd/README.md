@@ -131,9 +131,12 @@ so its paths are the directories `WalkCluster` writes under those rules: pass th
 the tree with. Under `layout.DefaultLayoutRules()` that is the root node at `<root>` and its
 children at `<root>/<child>`, which is also what the bootstrap sync path `./<root>` expects; with
 `ClusterName: "."` and an unnamed root node it is the root of the tree, not `cluster`. The objects
-come back as a list and are placed nowhere, so `FluxPlacement` moves no path and no object in this
-call; it still decides which objects a merged bundle's patches may select (under
-`FluxIntegratedPerLayout` a per-application directory is not built by the unit). On
+come back as a list and are placed nowhere, and the list is the same under `FluxSeparate` and
+`FluxIntegratedPerBundle`. Rules with `FluxIntegratedPerLayout` are refused: a tree written with
+that placement lists no directory child in its parent's `kustomization.yaml`, and the
+Kustomizations that apply those children (application, augmenter and bundle-less node
+directories) exist only where the integrator places them, so the list would leave them applied by
+nothing. Use `CreateLayoutWithResources` with those rules instead. On
 `WorkflowEngine` (the `stack.Workflow` interface) the rules arrive as a
 `stack.LayoutRulesProvider` and must be a `layout.LayoutRules` value: anything else, `nil`
 included, is refused, never replaced by the defaults.

@@ -144,6 +144,99 @@ func TestGenerateFromCluster_UnnamedRootUnderClusterName(t *testing.T) {
 	}
 }
 
+// TestGenerateFromCluster_RefusesPerLayout: under FluxIntegratedPerLayout a
+// written tree lists no directory child in its parent's kustomization.yaml,
+// and only the integrator creates the Kustomization that applies one. A list
+// of the bundle directories' Kustomizations would leave those children applied
+// by nothing, so the generator and the engine refuse the placement and name
+// the entry point that places the per-layout Kustomizations.
+func TestGenerateFromCluster_RefusesPerLayout(t *testing.T) {
+	byName := layout.DefaultLayoutRules()
+	byName.ApplicationGrouping = layout.GroupByName
+	rules := byName
+	rules.FluxPlacement = layout.FluxIntegratedPerLayout
+	build := func() *stack.Cluster { return threeTier("platform", "apps", "web", nil) }
+
+	// The case the refusal is for: written to disk and to tar, the tree these
+	// rules walk leaves directories out of their parents' kustomization.yaml
+	// that the separate placement's tree lists (the application directories).
+	unlisted := func(r layout.LayoutRules) map[string]int {
+		ml, err := layout.WalkCluster(build(), r)
+		if err != nil {
+			t.Fatalf("WalkCluster: %v", err)
+		}
+		out := map[string]int{}
+		for writer, w := range writeAll(t, ml) {
+			files := treeFiles(t, w.root)
+			for p := range files {
+				dir := filepath.Dir(p)
+				parent, ok := files[filepath.Join(filepath.Dir(dir), "kustomization.yaml")]
+				if filepath.Base(p) != "kustomization.yaml" || !ok {
+					continue
+				}
+				if !bytes.Contains(parent, []byte("- "+filepath.Base(dir)+"\n")) {
+					out[writer]++
+				}
+			}
+		}
+		return out
+	}
+	separate, perLayout := unlisted(byName), unlisted(rules)
+	for _, writer := range []string{"WriteToDisk", "WriteToTar"} {
+		if perLayout[writer] <= separate[writer] {
+			t.Fatalf("%s: the per-layout tree leaves %d directories unlisted, the separate tree %d: want more, or the list would be complete",
+				writer, perLayout[writer], separate[writer])
+		}
+	}
+
+	// The placement is refused whatever the groupings: which directories a
+	// per-layout tree leaves unlisted depends on the cluster's content.
+	flat := layout.DefaultLayoutRules()
+	flat.FluxPlacement = layout.FluxIntegratedPerLayout
+	calls := map[string]func() ([]client.Object, error){
+		"generator": func() ([]client.Object, error) {
+			return fluxstack.NewResourceGenerator().GenerateFromCluster(build(), rules)
+		},
+		"generator, flat applications": func() ([]client.Object, error) {
+			return fluxstack.NewResourceGenerator().GenerateFromCluster(build(), flat)
+		},
+		"engine": func() ([]client.Object, error) {
+			return fluxstack.NewWorkflowEngine().GenerateFromCluster(build(), rules)
+		},
+	}
+	for name, call := range calls {
+		objs, err := call()
+		if err == nil || !strings.Contains(err.Error(), "FluxPlacement") || !strings.Contains(err.Error(), "CreateLayoutWithResources") {
+			t.Errorf("%s: got %v, want a refusal of the placement that names CreateLayoutWithResources", name, err)
+		}
+		if objs != nil {
+			t.Errorf("%s: got %d objects with the refusal", name, len(objs))
+		}
+	}
+}
+
+// TestGenerateFromCluster_PerBundleMatchesSeparate: a per-bundle tree lists
+// every application directory in its bundle's kustomization.yaml, so the
+// bundle directories' Kustomizations reconcile it and the placement changes
+// nothing in the returned list.
+func TestGenerateFromCluster_PerBundleMatchesSeparate(t *testing.T) {
+	build := func() *stack.Cluster { return threeTier("platform", "apps", "web", nil) }
+	separate, err := fluxstack.NewResourceGenerator().GenerateFromCluster(build(), layout.DefaultLayoutRules())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := layout.DefaultLayoutRules()
+	rules.FluxPlacement = layout.FluxIntegratedPerBundle
+	perBundle, err := fluxstack.NewResourceGenerator().GenerateFromCluster(build(), rules)
+	if err != nil {
+		t.Fatalf("GenerateFromCluster: %v", err)
+	}
+	if len(perBundle) != len(separate) || !mapsEqual(specPaths(perBundle), specPaths(separate)) {
+		t.Errorf("per-bundle list = %v (%d objects), want the separate placement's %v (%d objects)",
+			specPaths(perBundle), len(perBundle), specPaths(separate), len(separate))
+	}
+}
+
 // notLayoutRules satisfies stack.LayoutRulesProvider without being
 // layout.LayoutRules.
 type notLayoutRules struct{}
