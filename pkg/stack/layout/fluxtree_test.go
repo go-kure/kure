@@ -118,6 +118,18 @@ func rawJSON(t *testing.T, obj *unstructured.Unstructured) runtime.RawExtension 
 	return runtime.RawExtension{Raw: b}
 }
 
+// bareKs is a Flux Kustomization as a runtime.Object without object metadata
+// methods: a typed List can hold one as an item.
+type bareKs struct {
+	metav1.TypeMeta `json:",inline"`
+	Metadata        map[string]string `json:"metadata"`
+}
+
+func (b *bareKs) DeepCopyObject() runtime.Object {
+	c := *b
+	return &c
+}
+
 // TestWriters_FluxTreeRefusesUnappliedLayout: in a tree Flux delivers (its
 // root marked with SetFluxBuild) a layout its parent's kustomization.yaml does
 // not list is applied only by a Flux Kustomization of its own, so one that is
@@ -442,6 +454,30 @@ func TestWriters_TypedListRawItems(t *testing.T) {
 				want := `layouts "p" and "p/c" both hold the Flux Kustomization flux-system/shop`
 				if err == nil || !strings.Contains(err.Error(), want) {
 					t.Fatalf("err = %v, want it to contain %q", err, want)
+				}
+			})
+			// A List among the items need not carry object metadata.
+			t.Run("raw Kustomization in a metav1.List/"+name, func(t *testing.T) {
+				inner := &metav1.List{
+					TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"},
+					Items:    []runtime.RawExtension{rawJSON(t, shopKs())},
+				}
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(runtime.RawExtension{Object: inner})))
+				want := `layouts "p" and "p/c" both hold the Flux Kustomization flux-system/shop`
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("err = %v, want it to contain %q", err, want)
+				}
+			})
+			// A Kustomization whose namespace and name cannot be read cannot
+			// be told from another: it is refused, not passed over.
+			t.Run("Kustomization without object metadata/"+name, func(t *testing.T) {
+				bare := &bareKs{
+					TypeMeta: metav1.TypeMeta{APIVersion: "kustomize.toolkit.fluxcd.io/v1", Kind: "Kustomization"},
+					Metadata: map[string]string{"namespace": "flux-system", "name": "cart"},
+				}
+				err := writeRefused(t, writer, layout.DefaultLayoutConfig(), separately(marked, shopKs(), nested(runtime.RawExtension{Object: bare})))
+				if err == nil || !strings.Contains(err.Error(), "read object metadata") {
+					t.Fatalf("err = %v, want a metadata read error", err)
 				}
 			})
 			t.Run("raw Kustomization of another name/"+name, func(t *testing.T) {

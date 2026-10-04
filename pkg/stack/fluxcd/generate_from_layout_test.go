@@ -16,6 +16,7 @@ import (
 
 	kustv1 "github.com/fluxcd/kustomize-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1318,6 +1319,28 @@ func TestIntegrateWithLayout_OpensListsAsKustomizeDoes(t *testing.T) {
 		},
 		"a typed List with an empty item": {
 			emitted: func() client.Object { return rawListOf(runtime.RawExtension{}) },
+		},
+		// A List among the items need not carry object metadata: metav1.List
+		// has list metadata only.
+		"a typed List holding a metav1.List with a raw Kustomization": {
+			emitted: func() client.Object {
+				raw, err := webKs().MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON: %v", err)
+				}
+				inner := &metav1.List{
+					TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "List"},
+					Items:    []runtime.RawExtension{{Raw: raw}},
+				}
+				return rawListOf(runtime.RawExtension{Object: rawListOf(runtime.RawExtension{Object: inner})})
+			},
+			collides: true,
+		},
+		// Nor need an item that is not a List: it is read as the object the
+		// writers serialize for it.
+		"a typed List holding a Kustomization without metadata methods": {
+			emitted:  func() client.Object { return rawListOf(runtime.RawExtension{Object: bareOf(t, webKs())}) },
+			collides: true,
 		},
 	}
 	for name, tc := range cases {

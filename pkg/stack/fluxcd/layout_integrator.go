@@ -1137,7 +1137,26 @@ func indexExistingSources(ml, skip *layout.ManifestLayout) (map[string][]hostedO
 // list.
 func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 	var out []client.Object
-	queue := make([]client.Object, 0, len(l.Resources))
+	// keep returns a built object. An item of a typed List need not carry
+	// object metadata (a client.Object): one that does not is returned as the
+	// object the writers serialize for it.
+	keep := func(obj runtime.Object) error {
+		if o, ok := obj.(client.Object); ok {
+			out = append(out, o)
+			return nil
+		}
+		raw, err := json.Marshal(obj)
+		if err != nil {
+			return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		u := &unstructured.Unstructured{}
+		if err := json.Unmarshal(raw, &u.Object); err != nil {
+			return errors.Wrapf(err, "layout %q: read list items", l.FullRepoPath())
+		}
+		out = append(out, u)
+		return nil
+	}
+	queue := make([]runtime.Object, 0, len(l.Resources))
 	for _, r := range l.Resources {
 		if r != nil {
 			queue = append(queue, r)
@@ -1147,7 +1166,9 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 		obj := queue[0]
 		queue = queue[1:]
 		if !strings.HasSuffix(obj.GetObjectKind().GroupVersionKind().Kind, "List") {
-			out = append(out, obj)
+			if err := keep(obj); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if u, ok := obj.(*unstructured.Unstructured); ok {
@@ -1156,7 +1177,7 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 			case has && raw == nil:
 				// A List that holds nothing.
 			case !u.IsList():
-				out = append(out, obj)
+				out = append(out, u)
 			default:
 				list, err := u.ToList()
 				if err != nil {
@@ -1169,7 +1190,9 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 			continue
 		}
 		if !meta.IsListType(obj) {
-			out = append(out, obj)
+			if err := keep(obj); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		items, err := meta.ExtractList(obj)
@@ -1178,11 +1201,12 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 		}
 		// A typed List can hold an item as raw JSON (runtime.RawExtension),
 		// which the writers serialize as the object it encodes: it is read
-		// as that object. An empty item holds nothing.
+		// as that object. An empty item holds nothing. Any other item is
+		// read as it is, a List that has no object metadata of its own
+		// (metav1.List, for one) included.
 		for _, item := range items {
 			switch o := item.(type) {
-			case client.Object:
-				queue = append(queue, o)
+			case nil:
 			case *runtime.Unknown:
 				u := &unstructured.Unstructured{}
 				if err := json.Unmarshal(o.Raw, &u.Object); err != nil {
@@ -1191,6 +1215,8 @@ func resourceItems(l *layout.ManifestLayout) ([]client.Object, error) {
 				if u.Object != nil {
 					queue = append(queue, u)
 				}
+			default:
+				queue = append(queue, o)
 			}
 		}
 	}
